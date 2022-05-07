@@ -171,3 +171,15 @@ func (p *IPFSPort) SendBytes(buff []byte) error {
 	_, err := p.c.Write(buff)
 	return err
 }
+
+func (p *IPFSPort) ReadBhtes(numBytes int) ([]byte, error) {
+	if p.c == nil {
+		return nil, fmt.Errorf("no connection exist")
+	}
+	buff := make([]byte, numBytes)
+	l, err := p.c.Read(buff)
+	if err != nil {
+		return nil, err
+	}
+	return buff[:l], err
+}

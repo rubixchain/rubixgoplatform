@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -69,10 +70,40 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			c.log.Error("unable to add bootstrap", "err", err)
 			return err
 		}
+		err = c.configIPFS()
+		if err != nil {
+			c.log.Error("unable to do ipfs configuration", "err", err)
+			return err
+		}
 		time.Sleep(2 * time.Second)
 		c.stopIPFS()
 		c.log.Info("IPFS Initialized")
 		return nil
+	}
+	return nil
+}
+
+func (c *Core) configIPFS() error {
+	http.Ser
+	// experimental := make(map[string]interface{})
+	// experimental["Libp2pStreamMounting"] = true
+
+	// j, err := json.Marshal(experimental)
+	// if err != nil {
+	// 	return err
+	// }
+	// body = bytes.NewBuffer(j)
+
+	req := c.ipfs.Request("config", "Experimental.Libp2pStreamMounting", "true")
+	resp, err := req.Option("bool", true).Send(context.Background())
+
+	//resp, err := c.ipfs.Request("config", "Experimental.Libp2pStreamMounting", "true").Send(context.Background())
+
+	if err != nil {
+		return err
+	}
+	if resp.Error != nil {
+		return resp.Error
 	}
 	return nil
 }
