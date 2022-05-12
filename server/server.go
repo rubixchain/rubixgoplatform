@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	APIStart string = "/api/start"
-	APIPing  string = "/api/ping"
+	APIStart     string = "/api/start"
+	APIPing      string = "/api/ping"
+	APICreateDID string = "/api/create"
 )
 
 // Server defines server handle
@@ -69,6 +70,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute("/", "GET", s.Index)
 	s.AddRoute(APIStart, "GET", s.APIStart)
 	s.AddRoute(APIPing, "GET", s.APIPing)
+	s.AddRoute(APICreateDID, "POST", s.APICreateDID)
 	fmt.Println(APIStart)
 }
 

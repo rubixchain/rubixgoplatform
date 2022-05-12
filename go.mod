@@ -3,19 +3,19 @@ module github.com/rubixchain/rubixgoplatform
 go 1.17
 
 require (
-	github.com/EnsurityTechnologies/apiconfig v0.0.0-20210906114541-96162857fc84
-	github.com/EnsurityTechnologies/config v0.0.0-20211122152017-a1352196a3f3
-	github.com/EnsurityTechnologies/ensweb v0.0.0-20220107045832-0cc2e88f22aa
-	github.com/EnsurityTechnologies/logger v0.0.0-20210607114953-381c7b36486d
+	github.com/EnsurityTechnologies/apiconfig v1.0.0
+	github.com/EnsurityTechnologies/config v1.0.0
+	github.com/EnsurityTechnologies/ensweb v1.0.0
+	github.com/EnsurityTechnologies/helper v1.0.0
+	github.com/EnsurityTechnologies/logger v1.0.0
+	github.com/EnsurityTechnologies/uuid v1.0.0
 	github.com/ipfs/go-ipfs-api v0.3.0
 	golang.org/x/crypto v0.0.0-20191205180655-e7c4368fe9dd
 )
 
 require (
-	github.com/EnsurityTechnologies/adapter v0.0.0-20210920090052-8c923180e235 // indirect
-	github.com/EnsurityTechnologies/helper v0.0.0-20220106070212-724c7c0687c5 // indirect
-	github.com/EnsurityTechnologies/uuid v0.0.0-20201030080551-27737c18713b // indirect
-	github.com/EnsurityTechnologies/wraperr v0.0.0-20210607115233-e866828d783e // indirect
+	github.com/EnsurityTechnologies/adapter v1.0.0 // indirect
+	github.com/EnsurityTechnologies/wraperr v1.0.0 // indirect
 	github.com/btcsuite/btcd v0.20.1-beta // indirect
 	github.com/crackcomm/go-gitignore v0.0.0-20170627025303-887ab5e44cc3 // indirect
 	github.com/denisenkom/go-mssqldb v0.0.0-20191124224453-732737034ffd // indirect
@@ -56,5 +56,3 @@ require (
 	go.opencensus.io v0.22.4 // indirect
 	golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd // indirect
 )
-
-replace github.com/EnsurityTechnologies/ensweb => ../../EnsurityTechnologies/ensweb

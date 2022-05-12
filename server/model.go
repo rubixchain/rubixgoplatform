@@ -5,6 +5,10 @@ const (
 )
 
 const (
+	SecretField string = "secret"
+)
+
+const (
 	ReponseMsgHdr string = "response"
 )
 
@@ -13,7 +17,11 @@ type Request struct {
 
 // Response used as model for the API responses
 type Repsonse struct {
-	Data    map[string]string `json:"data"`
-	Message string            `jsom:"message"`
-	Status  string            `jsom:"status"`
+	Status  bool        `json:"status"`
+	Message string      `json:"message"`
+	Result  interface{} `json:"result"`
+}
+
+type DIDResponse struct {
+	DID string `json:"did"`
 }

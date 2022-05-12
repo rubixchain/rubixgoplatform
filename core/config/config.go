@@ -68,6 +68,7 @@ type ConfigData struct {
 	SyncConfig    SyncConfig    `json:"SYNCCONFIG"`
 	ConsensusData ConsensusData `json:"CONSENSUS"`
 	QuorumList    QuorumList    `json:"QUORUM_LIST"`
+	DIDList       []string      `json:"DID_LIST"`
 	BootStrap     []string      `json:"BOOTSTRAP"`
 }
 

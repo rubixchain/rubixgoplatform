@@ -2,37 +2,47 @@ package core
 
 import (
 	"context"
-	"fmt"
-	"net"
+	"net/http"
 
+	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 func getPingAppName(prefix string) string {
 	return prefix + "Ping"
 }
 
-func (c *Core) handlePing(conn net.Conn) {
-	buff := make([]byte, 128)
-	l, err := conn.Read(buff)
+type PingRequest struct {
+	Message string `json:"message"`
+}
+
+type PingResponse struct {
+	model.BasicResponse
+}
+
+func (c *Core) PingSetup() {
+	c.l.AddRoute(APIPingPath, "POST", c.PingRecevied)
+}
+
+func (c *Core) PingRecevied(req *ensweb.Request) *ensweb.Result {
+	var pingReq PingRequest
+	err := c.l.ParseJSON(req, &pingReq)
 	if err != nil {
-		conn.Close()
-		return
+		return c.l.RenderJSONError(req, http.StatusBadRequest, InvalidPasringErr, InvalidPasringErr)
 	}
-	if string(buff[:l]) == "PingCheck" {
-		fmt.Printf("Ping received\n")
-		conn.Write([]byte("PingResponse"))
-		conn.Close()
-	} else {
-		fmt.Printf("Failed to recevie\n")
-		conn.Close()
+	resp := &PingResponse{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "Ping Received",
+		},
 	}
+	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
 func (c *Core) PingPeer(peerdID string) (string, error) {
 	cfg := &ipfsport.Config{
 		AppName: getPingAppName(peerdID),
-		Listner: false,
 		Port:    c.cfg.CfgData.Ports.ReceiverPort + 11,
 		PeerID:  peerdID,
 	}
@@ -42,22 +52,19 @@ func (c *Core) PingPeer(peerdID string) (string, error) {
 		c.log.Error("Failed to connect swarm peer", "err", err)
 		return "", err
 	}
-	p, err := ipfsport.NewIPFSPort(cfg, c.ipfs, c.log, nil)
+	cl, err := ipfsport.NewClient(cfg, c.log, c.ipfs)
 	if err != nil {
 		return "", err
 	}
-	err = p.Start()
+	// Close the p2p before exit
+	defer cl.Close()
+	pingReq := &PingRequest{
+		Message: "Ping Request",
+	}
+	var pingResp PingResponse
+	err = cl.SendJSONRequest(APIPingPath, "POST", pingReq, &pingResp)
 	if err != nil {
 		return "", err
 	}
-	err = p.SendBytes([]byte("PingCheck"))
-	if err != nil {
-		return "", err
-	}
-	buff, err := p.ReadBhtes(30)
-	if err != nil {
-		return "", err
-	}
-	fmt.Printf("Received : %s\n", string(buff))
-	return "", nil
+	return pingResp.Message, nil
 }

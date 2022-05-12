@@ -84,15 +84,6 @@ func (c *Core) initIPFS(ipfsdir string) error {
 }
 
 func (c *Core) configIPFS() error {
-	http.Ser
-	// experimental := make(map[string]interface{})
-	// experimental["Libp2pStreamMounting"] = true
-
-	// j, err := json.Marshal(experimental)
-	// if err != nil {
-	// 	return err
-	// }
-	// body = bytes.NewBuffer(j)
 
 	req := c.ipfs.Request("config", "Experimental.Libp2pStreamMounting", "true")
 	resp, err := req.Option("bool", true).Send(context.Background())

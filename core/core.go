@@ -10,10 +10,20 @@ import (
 
 	"github.com/EnsurityTechnologies/apiconfig"
 	"github.com/EnsurityTechnologies/logger"
+	"github.com/EnsurityTechnologies/uuid"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/config"
+	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/quorum"
+)
+
+const (
+	APIPingPath string = "/api/ping"
+)
+
+const (
+	InvalidPasringErr string = "invalid json parsing"
 )
 
 const (
@@ -41,7 +51,8 @@ type Core struct {
 	ipfsState   bool
 	ipfsChan    chan bool
 	alphaQuorum *quorum.Quorum
-	pingPort    *ipfsport.IPFSPort
+	d           *did.DID
+	l           *ipfsport.Listener
 	started     bool
 	ipfsApp     string
 }
@@ -122,11 +133,13 @@ func NewCore(cfg *config.Config, log logger.Logger) (*Core, error) {
 // SetupCore will setup all core ports
 func (c *Core) SetupCore() error {
 	var err error
-	cfg := &ipfsport.Config{AppName: getPingAppName(c.peerID), Listner: true, Port: c.cfg.CfgData.Ports.ReceiverPort + 10}
-	c.pingPort, err = ipfsport.NewIPFSPort(cfg, c.ipfs, c.log, c.handlePing)
+	cfg := &ipfsport.Config{AppName: getPingAppName(c.peerID), Port: c.cfg.CfgData.Ports.ReceiverPort + 10}
+	c.l, err = ipfsport.NewListener(cfg, c.log, c.ipfs)
 	if err != nil {
 		return err
 	}
+	c.d = did.InitDID(c.cfg, c.log, c.ipfs)
+	c.PingSetup()
 	return nil
 }
 
@@ -142,27 +155,16 @@ func (c *Core) SetStartStatus() {
 	c.started = true
 }
 
-func (c *Core) Start() (string, string) {
+func (c *Core) Start() (bool, string) {
 	if c.GetStartStatus() {
-		return "true", "Already Setup"
+		return true, "Already Setup"
 	}
-	err := c.pingPort.Start()
+	err := c.l.Start()
 	if err != nil {
 		c.log.Error("failed to start ping port", "err", err)
-		return "false", "Failed to start ping port"
+		return false, "Failed to start ping port"
 	}
-
-	// // TODO:: Need to start all quorum consensus
-	// var err error
-	// c.alphaQuorum, err = quorum.NewQuorum(&quorum.Config{Name: "alpha", ConnType: "tcp", Host: "localhost", Port: "11070"}, c.log, c.HandleQuorum)
-	// if err != nil {
-	// 	return "false", "Failed to Setup Alpha Quorum"
-	// }
-	// err = c.alphaQuorum.Start()
-	// if err != nil {
-	// 	return "false", "Failed to Start Alpha Quorum"
-	// }
-	return "true", "Setup Complete"
+	return true, "Setup Complete"
 }
 
 func (c *Core) StopCore() {
@@ -170,11 +172,21 @@ func (c *Core) StopCore() {
 	if c.alphaQuorum != nil {
 		c.alphaQuorum.Stop()
 	}
-	if c.pingPort != nil {
-		c.pingPort.Stop()
+	if c.l != nil {
+		c.l.Shutdown()
 	}
+}
+
+func (c *Core) CreateTempFolder() (string, error) {
+	folderName := c.cfg.DirPath + "temp/" + uuid.New().String()
+	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
+	return folderName, err
 }
 
 func (c *Core) HandleQuorum(conn net.Conn) {
 
+}
+
+func (c *Core) CreateDID(secret string, fileName string) (string, error) {
+	return c.d.CreateDID(secret, fileName)
 }
