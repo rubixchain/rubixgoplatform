@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
 )
@@ -21,6 +22,18 @@ func (s *Server) BasicResponse(req *ensweb.Request, status bool, msg string, res
 func (s *Server) APIStart(req *ensweb.Request) *ensweb.Result {
 	status, msg := s.c.Start()
 	return s.BasicResponse(req, status, msg, nil)
+}
+
+// APIStart will setup the core
+func (s *Server) APIShutdown(req *ensweb.Request) *ensweb.Result {
+	go s.shutDown()
+	return s.BasicResponse(req, true, "Shutting down...", nil)
+}
+
+func (s *Server) shutDown() {
+	s.log.Info("Shutting down...")
+	time.Sleep(2 * time.Second)
+	s.sc <- true
 }
 
 // APIPing will ping to given peer

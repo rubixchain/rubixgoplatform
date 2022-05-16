@@ -13,9 +13,12 @@ import (
 )
 
 const (
-	APIStart     string = "/api/start"
-	APIPing      string = "/api/ping"
-	APICreateDID string = "/api/create"
+	APIStart             string = "/api/start"
+	APIShutdown          string = "/api/shutdown"
+	APIPing              string = "/api/ping"
+	APICreateDID         string = "/api/create"
+	APISubscribeExplorer string = "/api/subscribe/explorer"
+	APIPublishExplorer   string = "/api/publish/explorer"
 )
 
 // Server defines server handle
@@ -23,11 +26,12 @@ type Server struct {
 	ensweb.Server
 	log logger.Logger
 	c   *core.Core
+	sc  chan bool
 }
 
 // NewServer create new server instances
-func NewServer(cfg *config.Config, log logger.Logger) (*Server, error) {
-	s := &Server{}
+func NewServer(cfg *config.Config, log logger.Logger, start bool, sc chan bool) (*Server, error) {
+	s := &Server{sc: sc}
 	var err error
 	s.log = log.Named("Rubixplatform")
 	s.c, err = core.NewCore(cfg, s.log)
@@ -60,8 +64,14 @@ func NewServer(cfg *config.Config, log logger.Logger) (*Server, error) {
 		return nil, err
 	}
 	//s.CreateSessionStore(sessionStore, cfg.ClientSecret, sessions.Options{})
+	if start {
+		ok, _ := s.c.Start()
+		if !ok {
+			s.log.Error("failed to start core")
+			return nil, fmt.Errorf("failed to start core")
+		}
+	}
 	s.RegisterRoutes()
-
 	return s, nil
 }
 
@@ -69,8 +79,11 @@ func NewServer(cfg *config.Config, log logger.Logger) (*Server, error) {
 func (s *Server) RegisterRoutes() {
 	s.AddRoute("/", "GET", s.Index)
 	s.AddRoute(APIStart, "GET", s.APIStart)
+	s.AddRoute(APIShutdown, "POST", s.APIShutdown)
 	s.AddRoute(APIPing, "GET", s.APIPing)
 	s.AddRoute(APICreateDID, "POST", s.APICreateDID)
+	s.AddRoute(APISubscribeExplorer, "POST", s.APISubscribeExplorer)
+	s.AddRoute(APIPublishExplorer, "POST", s.APIPublishExplorer)
 	fmt.Println(APIStart)
 }
 

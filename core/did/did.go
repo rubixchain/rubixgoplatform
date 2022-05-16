@@ -82,7 +82,6 @@ func (d *DID) CreateDID(message string, imgFile string) (string, error) {
 		d.log.Error("failed to create directory", "err", err)
 		return "", err
 	}
-
 	err = util.CreatePNGImage(outPixels, w, h, dirName+"/public/DID.png")
 	if err != nil {
 		d.log.Error("failed to create image", "err", err)

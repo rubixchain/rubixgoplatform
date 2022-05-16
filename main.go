@@ -39,6 +39,7 @@ var commandsHelp = []string{"To get tool version",
 type MainHandle struct {
 	cfg     config.Config
 	encKey  string
+	start   bool
 	node    uint
 	runDir  string
 	cfgFile string
@@ -73,8 +74,8 @@ func RunApp(h *MainHandle) {
 
 	// Override directory path
 	h.cfg.DirPath = h.runDir
-
-	s, err := server.NewServer(&h.cfg, h.log)
+	sc := make(chan bool, 1)
+	s, err := server.NewServer(&h.cfg, h.log, h.start, sc)
 	if err != nil {
 		h.log.Error("Failed to create server")
 		return
@@ -85,8 +86,10 @@ func RunApp(h *MainHandle) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGTERM)
 	signal.Notify(c, syscall.SIGINT)
-
-	<-c
+	select {
+	case <-c:
+	case <-sc:
+	}
 	s.Shutdown()
 	h.log.Info("Shutting down...")
 }
@@ -123,6 +126,7 @@ func main() {
 	flag.StringVar(&h.cfgFile, "c", ConfigFile, "Configuration file for the core")
 	flag.UintVar(&h.node, "n", 0, "Node number")
 	flag.StringVar(&h.encKey, "k", "TestKeyBasic#2022", "Config file encryption key")
+	flag.BoolVar(&h.start, "s", false, "Start the core")
 
 	// fp, err := os.OpenFile(cfg.LogFile,
 	// 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

@@ -15,6 +15,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
+	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/quorum"
 )
 
@@ -53,6 +54,7 @@ type Core struct {
 	alphaQuorum *quorum.Quorum
 	d           *did.DID
 	l           *ipfsport.Listener
+	ps          *pubsub.PubSub
 	started     bool
 	ipfsApp     string
 }
@@ -133,12 +135,17 @@ func NewCore(cfg *config.Config, log logger.Logger) (*Core, error) {
 // SetupCore will setup all core ports
 func (c *Core) SetupCore() error {
 	var err error
+	c.log.Info("Setting up the core")
 	cfg := &ipfsport.Config{AppName: getPingAppName(c.peerID), Port: c.cfg.CfgData.Ports.ReceiverPort + 10}
 	c.l, err = ipfsport.NewListener(cfg, c.log, c.ipfs)
 	if err != nil {
 		return err
 	}
 	c.d = did.InitDID(c.cfg, c.log, c.ipfs)
+	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
+	if err != nil {
+		return err
+	}
 	c.PingSetup()
 	return nil
 }
@@ -159,6 +166,7 @@ func (c *Core) Start() (bool, string) {
 	if c.GetStartStatus() {
 		return true, "Already Setup"
 	}
+	c.log.Info("Starting the core")
 	err := c.l.Start()
 	if err != nil {
 		c.log.Error("failed to start ping port", "err", err)

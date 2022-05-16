@@ -12,8 +12,15 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/rubixchain/rubixgoplatform/core/util"
 )
 
+const (
+	IPFSConfigFilename string = "config"
+	SwarmKeyFilename   string = "swarm.key"
+)
+
+// initIPFS wiill initialize IPFS configuration
 func (c *Core) initIPFS(ipfsdir string) error {
 	c.ipfsApp = "ipfs"
 	if runtime.GOOS == "windows" {
@@ -28,7 +35,7 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			return err
 		}
 		time.Sleep(2 * time.Second)
-		ipfsConfigFile := ipfsdir + "/config"
+		ipfsConfigFile := ipfsdir + "/" + IPFSConfigFilename
 		configData, err := ioutil.ReadFile(ipfsConfigFile)
 		if err != nil {
 			c.log.Error("failed to read ipfs config file", "err", err)
@@ -50,6 +57,10 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			return err
 		}
 		f.Close()
+		_, err = util.Filecopy(SwarmKeyFilename, ipfsdir+"/"+SwarmKeyFilename)
+		if err != nil {
+			return err
+		}
 		time.Sleep(1 * time.Second)
 		c.runIPFS()
 		c.ipfs = ipfsnode.NewLocalShell()
@@ -58,14 +69,11 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			return fmt.Errorf("failed create ipfs shell")
 		}
 		_, err = c.ipfs.BootstrapRmAll()
-
 		if err != nil {
 			c.log.Error("unable to remove bootstrap", "err", err)
 			return err
 		}
-
 		_, err = c.ipfs.BootstrapAdd(c.cfg.CfgData.BootStrap)
-
 		if err != nil {
 			c.log.Error("unable to add bootstrap", "err", err)
 			return err
@@ -83,13 +91,11 @@ func (c *Core) initIPFS(ipfsdir string) error {
 	return nil
 }
 
+// configIPFS will configure IPFS
 func (c *Core) configIPFS() error {
 
 	req := c.ipfs.Request("config", "Experimental.Libp2pStreamMounting", "true")
 	resp, err := req.Option("bool", true).Send(context.Background())
-
-	//resp, err := c.ipfs.Request("config", "Experimental.Libp2pStreamMounting", "true").Send(context.Background())
-
 	if err != nil {
 		return err
 	}
@@ -99,10 +105,9 @@ func (c *Core) configIPFS() error {
 	return nil
 }
 
+// runIPFS will run the IPFS
 func (c *Core) runIPFS() {
-	cmd := exec.Command(c.ipfsApp, "daemon")
-	//cmd.Env = append(cmd.Env, "IPFS_PATH")
-
+	cmd := exec.Command(c.ipfsApp, "daemon", "--enable-pubsub-experiment")
 	done := make(chan error, 1)
 	c.SetIPFSState(true)
 
@@ -128,6 +133,7 @@ func (c *Core) runIPFS() {
 	time.Sleep(15 * time.Second)
 }
 
+// RunIPFS will run the IPFS daemon
 func (c *Core) RunIPFS() error {
 	os.Setenv("IPFS_PATH", c.cfg.DirPath+".ipfs")
 	err := c.initIPFS(c.cfg.DirPath + ".ipfs")
@@ -155,18 +161,21 @@ func (c *Core) RunIPFS() error {
 	return nil
 }
 
+// GetIPFSState will get the IPFS running state
 func (c *Core) GetIPFSState() bool {
 	c.ipfsLock.RLock()
 	defer c.ipfsLock.RUnlock()
 	return c.ipfsState
 }
 
+// SetIPFSState will set the IPFS running state
 func (c *Core) SetIPFSState(state bool) {
 	c.ipfsLock.Lock()
 	defer c.ipfsLock.Unlock()
 	c.ipfsState = state
 }
 
+// stopIPFS is called to stop IPFS daemon
 func (c *Core) stopIPFS() {
 	if !c.GetIPFSState() {
 		return
