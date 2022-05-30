@@ -16,17 +16,17 @@ func (c *Core) OracleSubscribe() error {
 }
 
 func (c *Core) oracleCallback(data []byte) {
-	var exp model.ExploreModel
-	err := json.Unmarshal(data, &exp)
+	var input model.AssignCredits
+	err := json.Unmarshal(data, &input)
 	if err != nil {
 		c.log.Error("failed to parse pubsub data", "err", err)
 		return
 	}
-	fmt.Printf("Message : %v\n", exp)
+	fmt.Printf("Message : %v\n", input)
 }
 
-func (c *Core) PublishOracle(exp model.ExploreModel) error {
-	b, err := json.Marshal(exp)
+func (c *Core) PublishOracle(input model.AssignCredits) error {
+	b, err := json.Marshal(input)
 	if err != nil {
 		return err
 	}

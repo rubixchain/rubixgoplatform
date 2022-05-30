@@ -14,12 +14,12 @@ func (s *Server) APISubscribeOracle(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIPublishOracle(req *ensweb.Request) *ensweb.Result {
-	var exp model.ExploreModel
-	err := s.ParseJSON(req, &exp)
+	var input model.AssignCredits
+	err := s.ParseJSON(req, &input)
 	if err != nil {
-		return s.BasicResponse(req, false, "failed to parse explorer data", nil)
+		return s.BasicResponse(req, false, "failed to parse oracle data", nil)
 	}
-	err = s.c.PublishOracle(exp)
+	err = s.c.PublishOracle(input)
 	if err != nil {
 		return s.BasicResponse(req, false, "failed to publish explorer", nil)
 	}
