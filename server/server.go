@@ -19,6 +19,8 @@ const (
 	APICreateDID         string = "/api/create"
 	APISubscribeExplorer string = "/api/subscribe/explorer"
 	APIPublishExplorer   string = "/api/publish/explorer"
+	APISubscribeOracle   string = "/api/subscribe/oracle"
+	APIPublishOracle     string = "/api/publish/oracle"
 )
 
 // Server defines server handle
@@ -84,6 +86,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APICreateDID, "POST", s.APICreateDID)
 	s.AddRoute(APISubscribeExplorer, "POST", s.APISubscribeExplorer)
 	s.AddRoute(APIPublishExplorer, "POST", s.APIPublishExplorer)
+	s.AddRoute(APISubscribeOracle, "POST", s.APISubscribeOracle)
+	s.AddRoute(APIPublishOracle, "POST", s.APIPublishOracle)
 	fmt.Println(APIStart)
 }
 
