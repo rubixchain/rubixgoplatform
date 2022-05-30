@@ -11,8 +11,8 @@ type Input struct {
 }
 
 type TokenID struct {
-	Token string `json:"token"`
-	Level string `json:"level"`
+	Token int `json:"token"`
+	Level int `json:"level"`
 }
 
 type NodeID struct {
@@ -23,12 +23,12 @@ type NodeID struct {
 
 type UpdateMine struct {
 	DIDHash string `json:"didhash"`
-	Credits string `json:"credits"`
+	Credits int    `json:"credits"`
 }
 
 type AssignCredits struct {
 	DIDHash string `json:"didHash"`
-	Credits string `json:"credits"`
+	Credits int    `json:"credits"`
 }
 
 type GetQuorum struct {
