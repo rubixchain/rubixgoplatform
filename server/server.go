@@ -9,7 +9,6 @@ import (
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/core"
-	"github.com/rubixchain/rubixgoplatform/core/config"
 )
 
 const (
@@ -30,21 +29,14 @@ type Server struct {
 }
 
 // NewServer create new server instances
-func NewServer(cfg *config.Config, log logger.Logger, start bool, sc chan bool) (*Server, error) {
-	s := &Server{sc: sc}
+func NewServer(c *core.Core, scfg *srvcfg.Config, log logger.Logger, start bool, sc chan bool) (*Server, error) {
+	s := &Server{sc: sc, c: c}
 	var err error
 	s.log = log.Named("Rubixplatform")
-	s.c, err = core.NewCore(cfg, s.log)
 	if err != nil {
 		s.log.Error("failed to create core", "err", err)
 		return nil, err
 	}
-
-	scfg := &srvcfg.Config{
-		HostAddress: cfg.NodeAddress,
-		HostPort:    cfg.NodePort,
-	}
-
 	s.Server, err = ensweb.NewServer(scfg, nil, log, ensweb.SetServerTimeout(time.Minute*10))
 	if err != nil {
 		s.log.Error("failed to create server", "err", err)

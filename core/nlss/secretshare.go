@@ -220,21 +220,22 @@ func NewSecretShare(s int) *SecretShare {
 func (ss *SecretShare) GenArray(arr [][]int, size int) []int {
 	var temp []int
 	r := GetRandNumber(len(arr))
-	for i := 0; i < size; i++ {
-		temp = append(temp, arr[r][i])
-	}
+	temp = arr[r]
+	// for i := 0; i < size; i++ {
+	// 	temp = append(temp, arr[r][i])
+	// }
 	return temp
 }
 
 // MultMatrix ...
 func (ss *SecretShare) MultMatrix(firstMatrix []int, secondMatrix [][]int, c1 int, c2 int) []int {
-	var product []int
+	product := make([]int, c2)
 	for i := 0; i < c2; i++ {
 		sum := 0
 		for j := 0; j < c1; j++ {
 			sum = sum + secondMatrix[j][i]*firstMatrix[j]
 		}
-		product = append(product, sum)
+		product[i] = sum
 	}
 	return product
 }
@@ -266,10 +267,10 @@ func (ss *SecretShare) Starts() {
 	ss.y1 = ss.GenArray(V8, 8)
 	//ss.y2 = ss.GenArray(V8, 8)
 	tempMat := ss.MultMatrix(ss.x1, G, 4, 8)
-	var s0 []int
+	s0 := make([]int, len(ss.alpha1))
 	for i := 0; i < len(ss.alpha1); i++ {
 		temp := (tempMat[i] + ss.alpha1[i]) % 2
-		s0 = append(s0, temp)
+		s0[i] = temp
 	}
 
 	ss.y1 = ss.CheckComply(ss.y1, s0)

@@ -5,7 +5,7 @@ const (
 )
 
 const (
-	SecretField string = "secret"
+	DIDConfigField string = "did_config"
 )
 
 const (

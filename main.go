@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/EnsurityTechnologies/apiconfig"
+	srvcfg "github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
@@ -75,7 +76,16 @@ func RunApp(h *MainHandle) {
 	// Override directory path
 	h.cfg.DirPath = h.runDir
 	sc := make(chan bool, 1)
-	s, err := server.NewServer(&h.cfg, h.log, h.start, sc)
+	c, err := core.NewCore(&h.cfg, h.runDir+h.cfgFile, h.encKey, h.log)
+	if err != nil {
+		h.log.Error("failed to create core")
+		return
+	}
+	scfg := &srvcfg.Config{
+		HostAddress: h.cfg.NodeAddress,
+		HostPort:    h.cfg.NodePort,
+	}
+	s, err := server.NewServer(c, scfg, h.log, h.start, sc)
 	if err != nil {
 		h.log.Error("Failed to create server")
 		return
@@ -83,11 +93,11 @@ func RunApp(h *MainHandle) {
 	h.log.Info("Starting server...")
 	go s.Start()
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGTERM)
-	signal.Notify(c, syscall.SIGINT)
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGTERM)
+	signal.Notify(ch, syscall.SIGINT)
 	select {
-	case <-c:
+	case <-ch:
 	case <-sc:
 	}
 	s.Shutdown()
