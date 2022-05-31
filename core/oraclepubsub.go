@@ -22,6 +22,7 @@ func (c *Core) oracleCallback(data []byte) {
 		c.log.Error("failed to parse pubsub data", "err", err)
 		return
 	}
+	c.oracle(input)
 	fmt.Printf("Message : %v\n", input)
 }
 
