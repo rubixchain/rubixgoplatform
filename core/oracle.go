@@ -11,7 +11,7 @@ import (
 )
 
 func (c *Core) oracle(input model.Input, peerID peer.ID) {
-	fmt.Println("Sender's peerID is", peerID)
+	fmt.Println("Sender's peerID is")
 	port := map[string]string{"did": "9090", "adv": "9595"}
 	var MethodType string
 	if input.Input == nil {
