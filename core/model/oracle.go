@@ -1,13 +1,19 @@
 package model
 
+// type Input struct {
+// 	Server             string        `json:"server"`
+// 	Function           string        `json:"function"`
+// 	AddInput           []NodeID      `json:"addInput"`
+// 	AssignCreditsInput AssignCredits `json:"assignCredits"`
+// 	UpdateMineInput    UpdateMine    `json:"updateMine"`
+// 	GetQuorumInput     GetQuorum     `json:"getQuorum"`
+// 	UpdateQuorumInput  UpdateQuorum  `json:"updateQuorum"`
+// }
+
 type Input struct {
-	Server             string        `json:"server"`
-	Function           string        `json:"function"`
-	AddInput           []NodeID      `json:"addInput"`
-	AssignCreditsInput AssignCredits `json:"assignCredits"`
-	UpdateMineInput    UpdateMine    `json:"updateMine"`
-	GetQuorumInput     GetQuorum     `json:"getQuorum"`
-	UpdateQuorumInput  UpdateQuorum  `json:"updateQuorum"`
+	Server   string      `json:"server"`
+	Function string      `json:"function"`
+	Input    interface{} `json:"input"`
 }
 
 type TokenID struct {
