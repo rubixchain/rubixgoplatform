@@ -44,6 +44,8 @@ const (
 
 type Core struct {
 	cfg         *config.Config
+	cfgFile     string
+	encKey      string
 	log         logger.Logger
 	peerID      string
 	lock        sync.RWMutex
@@ -53,6 +55,7 @@ type Core struct {
 	ipfsChan    chan bool
 	alphaQuorum *quorum.Quorum
 	d           *did.DID
+	pm          *ipfsport.PeerManager
 	l           *ipfsport.Listener
 	ps          *pubsub.PubSub
 	started     bool
@@ -120,9 +123,11 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 	return nil
 }
 
-func NewCore(cfg *config.Config, log logger.Logger) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger) (*Core, error) {
 	c := &Core{
-		cfg: cfg,
+		cfg:     cfg,
+		cfgFile: cfgFile,
+		encKey:  encKey,
 	}
 
 	c.log = log.Named("Core")
@@ -132,15 +137,20 @@ func NewCore(cfg *config.Config, log logger.Logger) (*Core, error) {
 	return c, nil
 }
 
+func (c *Core) getCoreAppName(peerID string) string {
+	return peerID + "RubixCore"
+}
+
 // SetupCore will setup all core ports
 func (c *Core) SetupCore() error {
 	var err error
 	c.log.Info("Setting up the core")
-	cfg := &ipfsport.Config{AppName: getPingAppName(c.peerID), Port: c.cfg.CfgData.Ports.ReceiverPort + 10}
+	cfg := &ipfsport.Config{AppName: c.getCoreAppName(c.peerID), Port: c.cfg.CfgData.Ports.ReceiverPort + 10}
 	c.l, err = ipfsport.NewListener(cfg, c.log, c.ipfs)
 	if err != nil {
 		return err
 	}
+	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, 100, c.ipfs, c.log)
 	c.d = did.InitDID(c.cfg, c.log, c.ipfs)
 	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
 	if err != nil {
@@ -195,6 +205,18 @@ func (c *Core) HandleQuorum(conn net.Conn) {
 
 }
 
-func (c *Core) CreateDID(secret string, fileName string) (string, error) {
-	return c.d.CreateDID(secret, fileName)
+func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
+	did, err := c.d.CreateDID(didCreate)
+	if err != nil {
+		return "", err
+	}
+	cfgBytes, err := json.Marshal(*c.cfg)
+	if err != nil {
+		return "", err
+	}
+	err = apiconfig.CreateAPIConfig(c.cfgFile, c.encKey, cfgBytes)
+	if err != nil {
+		return "", err
+	}
+	return did, nil
 }

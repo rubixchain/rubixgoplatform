@@ -57,3 +57,16 @@ func Filecopy(src, dst string) (int64, error) {
 	nBytes, err := io.Copy(destination, source)
 	return nBytes, err
 }
+
+func FileWrite(fileName string, data []byte) error {
+	f, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if err != nil {
+		return err
+	}
+	f.Close()
+	return nil
+}

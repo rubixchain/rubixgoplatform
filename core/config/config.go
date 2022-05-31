@@ -61,15 +61,21 @@ type QuorumList struct {
 	Quorum7 string `json:"QUORUM_7"`
 }
 
+type DIDConfigType struct {
+	Type   int                    `json:"TYPE"`
+	Config map[string]interface{} `json:"CONFIG"`
+}
+
 // ConfigData defines configuration data
 type ConfigData struct {
-	Paths         Paths         `json:"PATHS"`
-	Ports         Ports         `json:"PORTS"`
-	SyncConfig    SyncConfig    `json:"SYNCCONFIG"`
-	ConsensusData ConsensusData `json:"CONSENSUS"`
-	QuorumList    QuorumList    `json:"QUORUM_LIST"`
-	DIDList       []string      `json:"DID_LIST"`
-	BootStrap     []string      `json:"BOOTSTRAP"`
+	Paths         Paths                    `json:"PATHS"`
+	Ports         Ports                    `json:"PORTS"`
+	SyncConfig    SyncConfig               `json:"SYNCCONFIG"`
+	ConsensusData ConsensusData            `json:"CONSENSUS"`
+	QuorumList    QuorumList               `json:"QUORUM_LIST"`
+	DIDList       []string                 `json:"DID_LIST"`
+	DIDConfig     map[string]DIDConfigType `json:"DID_CONFIG"`
+	BootStrap     []string                 `json:"BOOTSTRAP"`
 }
 
 type Config struct {

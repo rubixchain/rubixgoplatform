@@ -1,11 +1,14 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/rubixchain/rubixgoplatform/core/did"
 )
 
 // BasicResponse will send basic mode response
@@ -64,12 +67,34 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to parse request", "err", err)
 		return s.BasicResponse(req, false, "failed to create DID", nil)
 	}
-	fields := fieldNames[SecretField]
-	if len(fileNames) == 0 || len(fields) == 0 {
-		s.log.Error("missing secret or image file")
-		return s.BasicResponse(req, false, "missing secret or image file", nil)
+	fields := fieldNames[DIDConfigField]
+	if len(fields) == 0 {
+		s.log.Error("missing did configuration")
+		return s.BasicResponse(req, false, "missing did configuration", nil)
 	}
-	did, err := s.c.CreateDID(fieldNames[SecretField][0], fileNames[0])
+	var didCreate did.DIDCreate
+	err = json.Unmarshal([]byte(fields[0]), &didCreate)
+	if err != nil {
+		s.log.Error("failed to parse did configuration", "err", err)
+		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
+	}
+
+	for _, fileName := range fileNames {
+		if strings.Contains(fileName, did.ImgFileName) {
+			didCreate.ImgFile = fileName
+		}
+		if strings.Contains(fileName, did.DIDImgFileName) {
+			didCreate.DIDImgFile = fileName
+		}
+		if strings.Contains(fileName, did.PubShareFileName) {
+			didCreate.PubImgFile = fileName
+		}
+		if strings.Contains(fileName, did.PubShareFileName) {
+			didCreate.PubKeyFile = fileName
+		}
+	}
+
+	did, err := s.c.CreateDID(&didCreate)
 	if err != nil {
 		s.log.Error("failed to create did", "err", err)
 		return s.BasicResponse(req, false, err.Error(), nil)

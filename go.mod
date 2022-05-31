@@ -5,12 +5,13 @@ go 1.17
 require (
 	github.com/EnsurityTechnologies/apiconfig v1.0.0
 	github.com/EnsurityTechnologies/config v1.0.0
+	github.com/EnsurityTechnologies/enscrypt v1.0.0
 	github.com/EnsurityTechnologies/ensweb v1.0.0
 	github.com/EnsurityTechnologies/helper v1.0.0
 	github.com/EnsurityTechnologies/logger v1.0.0
 	github.com/EnsurityTechnologies/uuid v1.0.0
 	github.com/ipfs/go-ipfs-api v0.3.0
-	golang.org/x/crypto v0.0.0-20191205180655-e7c4368fe9dd
+	golang.org/x/crypto v0.0.0-20220518034528-6f7dac969898
 )
 
 require (
@@ -54,5 +55,5 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/whyrusleeping/tar-utils v0.0.0-20180509141711-8c6c8ba81d5c // indirect
 	go.opencensus.io v0.22.4 // indirect
-	golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd // indirect
+	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1 // indirect
 )
