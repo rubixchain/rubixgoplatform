@@ -16,7 +16,7 @@ func (c *Core) OracleSubscribe() error {
 }
 
 func (c *Core) oracleCallback(data []byte) {
-	var input model.AssignCredits
+	var input model.Input
 	err := json.Unmarshal(data, &input)
 	if err != nil {
 		c.log.Error("failed to parse pubsub data", "err", err)
@@ -25,7 +25,7 @@ func (c *Core) oracleCallback(data []byte) {
 	fmt.Printf("Message : %v\n", input)
 }
 
-func (c *Core) PublishOracle(input model.AssignCredits) error {
+func (c *Core) PublishOracle(input model.Input) error {
 	b, err := json.Marshal(input)
 	if err != nil {
 		return err

@@ -14,7 +14,7 @@ func (s *Server) APISubscribeOracle(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIPublishOracle(req *ensweb.Request) *ensweb.Result {
-	var input model.AssignCredits
+	var input model.Input
 	err := s.ParseJSON(req, &input)
 	if err != nil {
 		return s.BasicResponse(req, false, "failed to parse oracle data", nil)
