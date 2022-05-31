@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
@@ -15,8 +16,9 @@ func (c *Core) OracleSubscribe() error {
 	return c.ps.SubscribeTopic(OracleTopic, c.oracleCallback)
 }
 
-func (c *Core) oracleCallback(data []byte) {
+func (c *Core) oracleCallback(msg *ipfsnode.Message) {
 	var input model.Input
+	var data []byte = msg.Data
 	err := json.Unmarshal(data, &input)
 	if err != nil {
 		c.log.Error("failed to parse pubsub data", "err", err)

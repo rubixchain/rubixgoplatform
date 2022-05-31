@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
@@ -15,8 +16,9 @@ func (c *Core) ExploreSubscribe() error {
 	return c.ps.SubscribeTopic(ExploreTopic, c.exploreCallback)
 }
 
-func (c *Core) exploreCallback(data []byte) {
+func (c *Core) exploreCallback(msg *ipfsnode.Message) {
 	var exp model.ExploreModel
+	var data []byte = msg.Data
 	err := json.Unmarshal(data, &exp)
 	if err != nil {
 		c.log.Error("failed to parse pubsub data", "err", err)
