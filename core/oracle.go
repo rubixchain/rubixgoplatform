@@ -11,7 +11,25 @@ import (
 )
 
 func (c *Core) oracle(input model.Input, peerID peer.ID) {
-	fmt.Println("Sender's peerID is")
+	fmt.Println("Sender's peerID is", peerID)
+	p, err := c.pm.OpenPeerConn(peerID.String(), c.getCoreAppName(peerID.String()))
+	if err != nil {
+		fmt.Println("Error connecting to the publisher", err)
+		fmt.Println(err)
+		return
+	}
+	defer p.Close()
+
+	fmt.Println("About to send req")
+	var pingResp PingResponse
+	err = p.SendJSONRequest("GET", APIPingPath, nil, &pingResp)
+	if err != nil {
+		fmt.Println("Error sending request")
+		return
+	}
+	fmt.Println(pingResp)
+	fmt.Println("Request Passed")
+
 	port := map[string]string{"did": "9090", "adv": "9595"}
 	var MethodType string
 	if input.Input == nil {
