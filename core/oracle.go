@@ -6,11 +6,12 @@ import (
 	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/helper/jsonutil"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
-func (c *Core) oracle(input model.Input) {
-
+func (c *Core) oracle(input model.Input, peerID peer.ID) {
+	fmt.Println("Sender's peerID is", peerID)
 	port := map[string]string{"did": "9090", "adv": "9595"}
 	var MethodType string
 	if input.Input == nil {

@@ -2,9 +2,9 @@ package core
 
 import (
 	"encoding/json"
-	"fmt"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
@@ -19,13 +19,13 @@ func (c *Core) OracleSubscribe() error {
 func (c *Core) oracleCallback(msg *ipfsnode.Message) {
 	var input model.Input
 	var data []byte = msg.Data
+	var peerID peer.ID = msg.From
 	err := json.Unmarshal(data, &input)
 	if err != nil {
 		c.log.Error("failed to parse pubsub data", "err", err)
 		return
 	}
-	c.oracle(input)
-	fmt.Printf("Message : %v\n", input)
+	c.oracle(input, peerID)
 }
 
 func (c *Core) PublishOracle(input model.Input) error {
