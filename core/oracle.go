@@ -11,7 +11,7 @@ import (
 )
 
 func (c *Core) oracle(input model.Input, peerID peer.ID) {
-	fmt.Println("Sender's peerID is", peerID)
+	//fmt.Println("Sender's peerID is", peerID)
 	p, err := c.pm.OpenPeerConn(peerID.String(), c.getCoreAppName(peerID.String()))
 	if err != nil {
 		fmt.Println("Error connecting to the publisher", err)
@@ -19,15 +19,6 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 		return
 	}
 	defer p.Close()
-
-	// var msg2 = &OracleRequest{Message: "From Oracle Function"}
-	// var oracleResp OracleResponse
-	// err = p.SendJSONRequest("GET", APIPublisherPath, msg2, &oracleResp)
-	// if err != nil {
-	// 	fmt.Println("Error sending request")
-	// 	return
-	// }
-	// fmt.Println("Response from Oracle", oracleResp)
 
 	port := map[string]string{"did": "9090", "adv": "9595"}
 	var MethodType string
@@ -67,6 +58,16 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			return
 		}
 		fmt.Println(response)
+
+		var oracleResp OracleResponse
+		err = p.SendJSONRequest("GET", APIUpdates, response, &oracleResp)
+		if err != nil {
+			fmt.Println("Error sending request")
+			fmt.Println(err)
+			return
+		}
+		fmt.Println("Response from Oracle", oracleResp)
+
 	case "/getQuorum":
 		var response []string
 		err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
@@ -75,6 +76,15 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			return
 		}
 		fmt.Println(response)
+
+		var oracleResp OracleResponse
+		err = p.SendJSONRequest("GET", APIGetQuorum, response, &oracleResp)
+		if err != nil {
+			fmt.Println("Error sending request")
+			return
+		}
+		fmt.Println("Response from Oracle", oracleResp)
+
 	case "/get":
 		var response []model.NodeID
 		err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
@@ -83,6 +93,14 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			return
 		}
 		fmt.Println(response)
+
+		var oracleResp OracleResponse
+		err = p.SendJSONRequest("GET", APIGet, response, &oracleResp)
+		if err != nil {
+			fmt.Println("Error sending request")
+			return
+		}
+		fmt.Println("Response from Oracle", oracleResp)
 	case "/getCurrentLevel":
 		var response model.TokenID
 		err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
@@ -91,6 +109,15 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			return
 		}
 		fmt.Println(response)
+
+		var oracleResp OracleResponse
+		err = p.SendJSONRequest("GET", APIGetCurrentLevel, response, &oracleResp)
+		if err != nil {
+			fmt.Println("Error sending request")
+			return
+		}
+		fmt.Println("Response from Oracle", oracleResp)
+
 	case "/getTokenToMine":
 		var response []model.TokenID
 		err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
@@ -101,7 +128,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 		fmt.Println(response)
 
 		var oracleResp OracleResponse
-		err = p.SendJSONRequest("GET", APIPublisherPath, response, &oracleResp)
+		err = p.SendJSONRequest("GET", APIGetTokenToMine, response, &oracleResp)
 		if err != nil {
 			fmt.Println("Error sending request")
 			return

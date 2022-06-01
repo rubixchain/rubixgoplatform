@@ -20,8 +20,7 @@ import (
 )
 
 const (
-	APIPingPath      string = "/api/ping"
-	APIPublisherPath string = "/api/oracle/publisher"
+	APIPingPath string = "/api/ping"
 )
 
 const (
