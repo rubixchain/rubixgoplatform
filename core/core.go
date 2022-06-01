@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	APIPingPath string = "/api/ping"
+	APIPingPath      string = "/api/ping"
+	APIPublisherPath string = "/api/oracle/publisher"
 )
 
 const (
@@ -157,6 +158,7 @@ func (c *Core) SetupCore() error {
 		return err
 	}
 	c.PingSetup()
+	c.OracleSetup()
 	return nil
 }
 

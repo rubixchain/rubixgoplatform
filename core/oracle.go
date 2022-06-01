@@ -20,15 +20,14 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 	}
 	defer p.Close()
 
-	fmt.Println("About to send req")
-	var pingResp PingResponse
-	err = p.SendJSONRequest("GET", APIPingPath, nil, &pingResp)
-	if err != nil {
-		fmt.Println("Error sending request")
-		return
-	}
-	fmt.Println(pingResp)
-	fmt.Println("Request Passed")
+	// var msg2 = &OracleRequest{Message: "From Oracle Function"}
+	// var oracleResp OracleResponse
+	// err = p.SendJSONRequest("GET", APIPublisherPath, msg2, &oracleResp)
+	// if err != nil {
+	// 	fmt.Println("Error sending request")
+	// 	return
+	// }
+	// fmt.Println("Response from Oracle", oracleResp)
 
 	port := map[string]string{"did": "9090", "adv": "9595"}
 	var MethodType string
@@ -100,5 +99,14 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			return
 		}
 		fmt.Println(response)
+
+		var oracleResp OracleResponse
+		err = p.SendJSONRequest("GET", APIPublisherPath, response, &oracleResp)
+		if err != nil {
+			fmt.Println("Error sending request")
+			return
+		}
+		fmt.Println("Response from Oracle", oracleResp)
+
 	}
 }
