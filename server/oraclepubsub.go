@@ -1,6 +1,8 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
@@ -20,6 +22,7 @@ func (s *Server) APIPublishOracle(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "failed to parse oracle data", nil)
 	}
 	err = s.c.PublishOracle(input)
+	fmt.Println("Published data")
 	if err != nil {
 		return s.BasicResponse(req, false, "failed to publish explorer", nil)
 	}

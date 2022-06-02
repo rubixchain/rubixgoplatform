@@ -15,6 +15,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/quorum"
 )
@@ -60,6 +61,7 @@ type Core struct {
 	ps          *pubsub.PubSub
 	started     bool
 	ipfsApp     string
+	param       []model.TokenID
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {

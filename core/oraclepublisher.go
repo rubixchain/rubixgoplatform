@@ -56,6 +56,7 @@ func (c *Core) GetCurrentLevel(req *ensweb.Request) *ensweb.Result {
 	var msg model.TokenID
 	c.l.ParseJSON(req, &msg)
 	fmt.Println(msg)
+	c.param = append(c.param, msg)
 	resp.Message = "Message Sent Back"
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
