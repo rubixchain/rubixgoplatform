@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -10,7 +11,8 @@ import (
 )
 
 const (
-	OracleTopic string = "oracle"
+	OracleTopic    string = "oracle"
+	ResponsesCount int    = 3
 )
 
 func (c *Core) OracleSubscribe() error {
@@ -36,5 +38,35 @@ func (c *Core) PublishOracle(input model.Input) error {
 		return err
 	}
 
-	return c.ps.Publish(OracleTopic, string(b))
+	err = c.ps.Publish(OracleTopic, string(b))
+
+	if err != nil {
+		return err
+	}
+
+	result := make(chan bool, 1)
+
+	go func() {
+		result <- c.CheckParamLen(c.param)
+	}()
+	select {
+	case <-time.After(3 * time.Second):
+		fmt.Println("Timed out, couldn't fetch ", ResponsesCount, "responses")
+		c.param = nil
+		return err
+	case <-result:
+		fmt.Println("Printing on the server side", c.param)
+		c.param = nil
+		return err
+	}
+
+}
+
+func (c *Core) CheckParamLen(item []interface{}) bool {
+	for true {
+		if len(c.param) >= ResponsesCount {
+			break
+		}
+	}
+	return true
 }

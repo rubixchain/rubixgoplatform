@@ -42,6 +42,7 @@ func (c *Core) GetTokenToMine(req *ensweb.Request) *ensweb.Result {
 	var msg []model.TokenID
 	c.l.ParseJSON(req, &msg)
 	fmt.Println(msg)
+	c.param = append(c.param, msg)
 	resp.Message = "Message Sent Back"
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
@@ -57,7 +58,6 @@ func (c *Core) GetCurrentLevel(req *ensweb.Request) *ensweb.Result {
 	c.l.ParseJSON(req, &msg)
 	fmt.Println(msg)
 	c.param = append(c.param, msg)
-	fmt.Println("Appended array", c.param)
 	resp.Message = "Message Sent Back"
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
@@ -72,6 +72,7 @@ func (c *Core) Get(req *ensweb.Request) *ensweb.Result {
 	var msg []model.NodeID
 	c.l.ParseJSON(req, &msg)
 	fmt.Println(msg)
+	c.param = append(c.param, msg)
 	resp.Message = "Message Sent Back"
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
@@ -86,7 +87,9 @@ func (c *Core) GetQuorum(req *ensweb.Request) *ensweb.Result {
 	var msg []string
 	c.l.ParseJSON(req, &msg)
 	fmt.Println(msg)
+	c.param = append(c.param, msg)
 	resp.Message = "Message Sent Back"
+	c.param = append(c.param, msg)
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
@@ -100,6 +103,8 @@ func (c *Core) Updates(req *ensweb.Request) *ensweb.Result {
 	var msg model.BasicResponse
 	c.l.ParseJSON(req, &msg)
 	fmt.Println(msg)
+	c.param = append(c.param, msg)
 	resp.Message = "Message Sent Back"
+	c.param = append(c.param, msg)
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
