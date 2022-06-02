@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -25,6 +26,7 @@ func (c *Core) oracleCallback(msg *ipfsnode.Message) {
 		c.log.Error("failed to parse pubsub data", "err", err)
 		return
 	}
+	fmt.Printf("%+v\n", input)
 	c.oracle(input, peerID)
 }
 
