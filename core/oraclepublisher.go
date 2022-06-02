@@ -57,6 +57,7 @@ func (c *Core) GetCurrentLevel(req *ensweb.Request) *ensweb.Result {
 	c.l.ParseJSON(req, &msg)
 	fmt.Println(msg)
 	c.param = append(c.param, msg)
+	fmt.Println("Appended array", c.param)
 	resp.Message = "Message Sent Back"
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
