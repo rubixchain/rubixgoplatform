@@ -12,7 +12,7 @@ import (
 
 const (
 	OracleTopic    string = "oracle"
-	ResponsesCount int    = 3
+	ResponsesCount int    = 2
 )
 
 func (c *Core) OracleSubscribe() error {
@@ -37,7 +37,8 @@ func (c *Core) PublishOracle(input model.Input) error {
 	if err != nil {
 		return err
 	}
-
+	c.oracleFlag = true
+	c.param = nil
 	err = c.ps.Publish(OracleTopic, string(b))
 
 	if err != nil {
@@ -45,18 +46,17 @@ func (c *Core) PublishOracle(input model.Input) error {
 	}
 
 	result := make(chan bool, 1)
-
 	go func() {
 		result <- c.CheckParamLen(c.param)
 	}()
 	select {
 	case <-time.After(3 * time.Second):
-		fmt.Println("Timed out, couldn't fetch ", ResponsesCount, "responses")
-		c.param = nil
+		fmt.Println("Timed out, couldn't fetch ", ResponsesCount, "responses", "Param now, ", c.param)
+		c.oracleFlag = false
 		return err
 	case <-result:
-		fmt.Println("Printing on the server side", c.param)
-		c.param = nil
+		fmt.Println("Server side", c.param)
+		c.oracleFlag = false
 		return err
 	}
 
@@ -64,7 +64,7 @@ func (c *Core) PublishOracle(input model.Input) error {
 
 func (c *Core) CheckParamLen(item []interface{}) bool {
 	for true {
-		if len(c.param) >= ResponsesCount {
+		if len(c.param) == ResponsesCount {
 			break
 		}
 	}

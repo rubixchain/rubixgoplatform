@@ -61,6 +61,8 @@ type Core struct {
 	started     bool
 	ipfsApp     string
 	param       []interface{}
+	oracleLock  sync.RWMutex
+	oracleFlag  bool
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {

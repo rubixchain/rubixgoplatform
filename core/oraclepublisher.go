@@ -38,14 +38,18 @@ func (c *Core) GetTokenToMine(req *ensweb.Request) *ensweb.Result {
 			Status: false,
 		},
 	}
-	resp.Status = true
+	resp.Status = false
+	resp.Message = "Value not added"
 	var msg []model.TokenID
 	c.l.ParseJSON(req, &msg)
-	if len(c.param) < ResponsesCount {
+	c.oracleLock.Lock()
+	if len(c.param) < ResponsesCount && c.oracleFlag == true {
 		fmt.Println(msg)
 		c.param = append(c.param, msg)
+		resp.Status = true
+		resp.Message = "Value accepted"
 	}
-	resp.Message = "Message Sent Back"
+	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
@@ -55,14 +59,18 @@ func (c *Core) GetCurrentLevel(req *ensweb.Request) *ensweb.Result {
 			Status: false,
 		},
 	}
-	resp.Status = true
+	resp.Status = false
+	resp.Message = "Value not added"
 	var msg model.TokenID
 	c.l.ParseJSON(req, &msg)
-	if len(c.param) < ResponsesCount {
+	c.oracleLock.Lock()
+	if len(c.param) < ResponsesCount && c.oracleFlag == true {
 		fmt.Println(msg)
 		c.param = append(c.param, msg)
+		resp.Status = true
+		resp.Message = "Value accepted"
 	}
-	resp.Message = "Message Sent Back"
+	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
@@ -72,14 +80,18 @@ func (c *Core) Get(req *ensweb.Request) *ensweb.Result {
 			Status: false,
 		},
 	}
-	resp.Status = true
+	resp.Status = false
+	resp.Message = "Value not added"
 	var msg []model.NodeID
 	c.l.ParseJSON(req, &msg)
-	if len(c.param) < ResponsesCount {
+	c.oracleLock.Lock()
+	if len(c.param) < ResponsesCount && c.oracleFlag == true {
 		fmt.Println(msg)
 		c.param = append(c.param, msg)
+		resp.Status = true
+		resp.Message = "Value accepted"
 	}
-	resp.Message = "Message Sent Back"
+	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
@@ -89,15 +101,18 @@ func (c *Core) GetQuorum(req *ensweb.Request) *ensweb.Result {
 			Status: false,
 		},
 	}
-	resp.Status = true
+	resp.Status = false
+	resp.Message = "Value not added"
 	var msg []string
 	c.l.ParseJSON(req, &msg)
-	if len(c.param) < ResponsesCount {
+	c.oracleLock.Lock()
+	if len(c.param) < ResponsesCount && c.oracleFlag == true {
 		fmt.Println(msg)
 		c.param = append(c.param, msg)
+		resp.Status = true
+		resp.Message = "Value accepted"
 	}
-	resp.Message = "Message Sent Back"
-	c.param = append(c.param, msg)
+	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
@@ -107,14 +122,17 @@ func (c *Core) Updates(req *ensweb.Request) *ensweb.Result {
 			Status: false,
 		},
 	}
-	resp.Status = true
+	resp.Status = false
+	resp.Message = "Value not added"
 	var msg model.BasicResponse
 	c.l.ParseJSON(req, &msg)
-	if len(c.param) < ResponsesCount {
+	c.oracleLock.Lock()
+	if len(c.param) < ResponsesCount && c.oracleFlag == true {
 		fmt.Println(msg)
 		c.param = append(c.param, msg)
+		resp.Status = true
+		resp.Message = "Value accepted"
 	}
-	resp.Message = "Message Sent Back"
-	c.param = append(c.param, msg)
+	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
