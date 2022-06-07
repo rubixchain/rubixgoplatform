@@ -7,8 +7,8 @@ type Input struct {
 }
 
 type TokenID struct {
-	Token int `json:"token"`
 	Level int `json:"level"`
+	Token int `json:"token"`
 }
 
 type NodeID struct {

@@ -12,7 +12,7 @@ import (
 
 const (
 	OracleTopic    string = "oracle"
-	ResponsesCount int    = 2
+	ResponsesCount int    = 3
 )
 
 func (c *Core) OracleSubscribe() error {
@@ -50,16 +50,15 @@ func (c *Core) PublishOracle(input model.Input) error {
 		result <- c.CheckParamLen(c.param)
 	}()
 	select {
-	case <-time.After(3 * time.Second):
+	case <-time.After(10 * time.Second):
 		fmt.Println("Timed out, couldn't fetch ", ResponsesCount, "responses", "Param now, ", c.param)
 		c.oracleFlag = false
-		return err
 	case <-result:
 		fmt.Println("Server side", c.param)
 		c.oracleFlag = false
-		return err
 	}
-
+	c.ValidateResponses(input, c.param)
+	return err
 }
 
 func (c *Core) CheckParamLen(item []interface{}) bool {

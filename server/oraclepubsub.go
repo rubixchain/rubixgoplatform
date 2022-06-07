@@ -8,7 +8,7 @@ import (
 func (s *Server) APISubscribeOracle(req *ensweb.Request) *ensweb.Result {
 	err := s.c.OracleSubscribe()
 	if err != nil {
-		return s.BasicResponse(req, false, "failed to subscribe explorer", nil)
+		return s.BasicResponse(req, false, "failed to subscribe oracle", nil)
 	}
 	return s.BasicResponse(req, true, "Oracle subscribed successfully", nil)
 }
@@ -21,7 +21,7 @@ func (s *Server) APIPublishOracle(req *ensweb.Request) *ensweb.Result {
 	}
 	err = s.c.PublishOracle(input)
 	if err != nil {
-		return s.BasicResponse(req, false, "failed to publish explorer", nil)
+		return s.BasicResponse(req, false, "failed to publish to the oracle", nil)
 	}
 	return s.BasicResponse(req, true, "Oracle data published successfully", nil)
 }
