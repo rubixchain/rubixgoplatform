@@ -51,10 +51,10 @@ func (c *Core) PublishOracle(input model.Input) error {
 	}()
 	select {
 	case <-time.After(10 * time.Second):
-		fmt.Println("Timed out, couldn't fetch ", ResponsesCount, "responses", "Param now, ", c.param)
+		fmt.Println("Timed out, couldn't fetch ", ResponsesCount, "responses", "Responses fetched in 10 seconds: ", c.param)
 		c.oracleFlag = false
 	case <-result:
-		fmt.Println("Server side", c.param)
+		fmt.Println("Received", ResponsesCount, " number of responses: ", c.param)
 		c.oracleFlag = false
 	}
 	c.ValidateResponses(input, c.param)
