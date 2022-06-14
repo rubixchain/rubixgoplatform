@@ -55,7 +55,6 @@ func (c *Core) PublishOracle(input model.Input) error {
 		fmt.Println("Fetched ", len(c.param), "responses.")
 		c.oracleFlag = false
 	case <-result:
-		//fmt.Println("Received", ResponsesCount, " number of responses: ", c.param)
 		fmt.Println("Received ", len(c.param), "responses.")
 		c.oracleFlag = false
 	}

@@ -38,64 +38,39 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 		return
 	}
 
-	switch input.Function {
-	case "/syncdataTable":
-		req, err := cl.JSONRequest(MethodType, "/get", input.Input)
-		if err != nil {
-			return
-		}
-		resp, err := cl.Do(req)
-		if err != nil {
-			return
-		}
-		var response interface{}
-		err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
-		if err != nil {
-			fmt.Println("Invalid response")
-			return
-		}
-		var oracleResp OracleResponse
-		err = p.SendJSONRequest("GET", APISyncDatatable, response, &oracleResp)
-		if err != nil {
-			fmt.Println("Error sending request")
-			fmt.Println(err)
-			return
-		}
-		fmt.Println("Response from Oracle", oracleResp)
+	funcName := map[string]string{"/syncdataTable": "/get", "/syncQuorum": "/fetchQuorum"}
 
-	case "/syncQuorum":
-		req, err := cl.JSONRequest(MethodType, "/fetchQuorum", input.Input)
-		if err != nil {
-			return
-		}
-		resp, err := cl.Do(req)
-		if err != nil {
-			return
-		}
-		var response interface{}
-		err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
-		if err != nil {
-			fmt.Println("Invalid response")
-			return
-		}
-		var oracleResp OracleResponse
-		err = p.SendJSONRequest("GET", APISyncQuorum, response, &oracleResp)
-		if err != nil {
-			fmt.Println("Error sending request")
-			fmt.Println(err)
-			return
-		}
-		fmt.Println("Response from Oracle", oracleResp)
+	req, err := cl.JSONRequest(MethodType, funcName[input.Function], input.Input)
+	if err != nil {
+		return
 	}
+	resp, err := cl.Do(req)
+	if err != nil {
+		return
+	}
+	var response interface{}
+	err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
+	if err != nil {
+		fmt.Println("Invalid response")
+		return
+	}
+	var oracleResp OracleResponse
+	err = p.SendJSONRequest("GET", APISync, response, &oracleResp)
+	if err != nil {
+		fmt.Println("Error sending request")
+		fmt.Println(err)
+		return
+	}
+	fmt.Println("Response from Oracle", oracleResp)
 
 	//Covering remaining cases
-	req, err := cl.JSONRequest(MethodType, input.Function, input.Input)
+	req, err = cl.JSONRequest(MethodType, input.Function, input.Input)
 	if err != nil {
 		fmt.Println("Error during sending request", err)
 		fmt.Println(err)
 		return
 	}
-	resp, err := cl.Do(req)
+	resp, err = cl.Do(req)
 	if err != nil {
 		return
 	}

@@ -13,8 +13,7 @@ const (
 	APIGet             string = "/api/oracle/get"
 	APIGetQuorum       string = "/api/oracle/getQuorum"
 	APIUpdates         string = "/api/oracle/updates"
-	APISyncQuorum      string = "/api/oracle/syncQuorum"
-	APISyncDatatable   string = "/api/oracle/syncDataTable"
+	APISync            string = "/api/oracle/sync"
 )
 
 type OracleRequest struct {
@@ -31,8 +30,7 @@ func (c *Core) OracleSetup() {
 	c.l.AddRoute(APIGet, "GET", c.Get)
 	c.l.AddRoute(APIGetQuorum, "GET", c.GetQuorum)
 	c.l.AddRoute(APIUpdates, "GET", c.Updates)
-	c.l.AddRoute(APISyncQuorum, "GET", c.Sync)
-	c.l.AddRoute(APISyncDatatable, "GET", c.Sync)
+	c.l.AddRoute(APISync, "GET", c.Sync)
 }
 
 func (c *Core) Sync(req *ensweb.Request) *ensweb.Result {
