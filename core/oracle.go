@@ -38,39 +38,40 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 		return
 	}
 
-	funcName := map[string]string{"/syncdataTable": "/get", "/syncQuorum": "/fetchQuorum"}
+	if input.Function == "/syncdataTable" || input.Function == "/syncQuorum" {
+		funcName := map[string]string{"/syncdataTable": "/get", "/syncQuorum": "/fetchQuorum"}
 
-	req, err := cl.JSONRequest(MethodType, funcName[input.Function], input.Input)
-	if err != nil {
-		return
+		req, err := cl.JSONRequest(MethodType, funcName[input.Function], input.Input)
+		if err != nil {
+			return
+		}
+		resp, err := cl.Do(req)
+		if err != nil {
+			return
+		}
+		var response interface{}
+		err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
+		if err != nil {
+			fmt.Println("Invalid response")
+			return
+		}
+		var oracleResp OracleResponse
+		err = p.SendJSONRequest("GET", APISync, response, &oracleResp)
+		if err != nil {
+			fmt.Println("Error sending request")
+			fmt.Println(err)
+			return
+		}
+		fmt.Println("Response from Publisher", oracleResp)
 	}
-	resp, err := cl.Do(req)
-	if err != nil {
-		return
-	}
-	var response interface{}
-	err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
-	if err != nil {
-		fmt.Println("Invalid response")
-		return
-	}
-	var oracleResp OracleResponse
-	err = p.SendJSONRequest("GET", APISync, response, &oracleResp)
-	if err != nil {
-		fmt.Println("Error sending request")
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("Response from Oracle", oracleResp)
-
 	//Covering remaining cases
-	req, err = cl.JSONRequest(MethodType, input.Function, input.Input)
+	req, err := cl.JSONRequest(MethodType, input.Function, input.Input)
 	if err != nil {
 		fmt.Println("Error during sending request", err)
 		fmt.Println(err)
 		return
 	}
-	resp, err = cl.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return
 	}
@@ -83,7 +84,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			fmt.Println("Invalid response")
 			return
 		}
-		fmt.Println(response)
+		fmt.Println("Response from oracle", response)
 
 		var oracleResp OracleResponse
 		err = p.SendJSONRequest("GET", APIUpdates, response, &oracleResp)
@@ -92,7 +93,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			fmt.Println(err)
 			return
 		}
-		fmt.Println("Response from Oracle", oracleResp)
+		fmt.Println("Response from Publisher", oracleResp)
 
 	case "/getQuorum":
 		var response []string
@@ -101,7 +102,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			fmt.Println("Invalid response")
 			return
 		}
-		fmt.Println(response)
+		fmt.Println("Response from oracle", response)
 
 		var oracleResp OracleResponse
 		err = p.SendJSONRequest("GET", APIGetQuorum, response, &oracleResp)
@@ -109,7 +110,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			fmt.Println("Error sending request")
 			return
 		}
-		fmt.Println("Response from Oracle", oracleResp)
+		fmt.Println("Response from Publisher", oracleResp)
 
 	case "/get":
 		var response []model.NodeID
@@ -118,7 +119,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			fmt.Println("Invalid response")
 			return
 		}
-		fmt.Println(response)
+		fmt.Println("Response from oracle", response)
 
 		var oracleResp OracleResponse
 		err = p.SendJSONRequest("GET", APIGet, response, &oracleResp)
@@ -126,7 +127,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			fmt.Println("Error sending request")
 			return
 		}
-		fmt.Println("Response from Oracle", oracleResp)
+		fmt.Println("Response from Publisher", oracleResp)
 	case "/getCurrentLevel":
 		var response model.TokenID
 		err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
@@ -134,7 +135,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			fmt.Println("Invalid response")
 			return
 		}
-		fmt.Println(response)
+		fmt.Println("Response from oracle", response)
 
 		var oracleResp OracleResponse
 		err = p.SendJSONRequest("GET", APIGetCurrentLevel, response, &oracleResp)
@@ -142,7 +143,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			fmt.Println("Error sending request")
 			return
 		}
-		fmt.Println("Response from Oracle", oracleResp)
+		fmt.Println("Response from Publisher", oracleResp)
 
 	case "/getTokenToMine":
 		var response []model.TokenID
@@ -151,7 +152,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			fmt.Println("Invalid response")
 			return
 		}
-		fmt.Println(response)
+		fmt.Println("Response from oracle", response)
 
 		var oracleResp OracleResponse
 		err = p.SendJSONRequest("GET", APIGetTokenToMine, response, &oracleResp)
@@ -159,7 +160,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			fmt.Println("Error sending request")
 			return
 		}
-		fmt.Println("Response from Oracle", oracleResp)
+		fmt.Println("Response from Publisher", oracleResp)
 
 	}
 }

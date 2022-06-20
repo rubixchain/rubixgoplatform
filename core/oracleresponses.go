@@ -52,66 +52,63 @@ func (c *Core) ValidateResponses(input model.Input, resp []interface{}) {
 		}
 		fmt.Println("Response received from oracle:", response)
 	case "/getCurrentLevel":
-		//respArray stores the responses in the structure
-		//var respArray []model.TokenID
-		dict := make(map[model.TokenID]int)
-		var maxOccur model.TokenID
-		maxOccur = resp[0].(model.TokenID)
+		dict := make(map[string]int)
 		var maxCount = 0
+		var maxOccur model.TokenID
 		for _, obj := range resp {
-			response := obj.(model.TokenID)
-			//respArray = append(respArray, response)
-			dict[response] = dict[response] + 1
-			if dict[response] > maxCount {
-				maxCount = dict[response]
-				maxOccur = response
+			str := fmt.Sprintf("%v", obj)
+			dict[str] = dict[str] + 1
+			if dict[str] > maxCount {
+				maxCount = dict[str]
+				maxOccur = obj.(model.TokenID)
 			}
 		}
-
-		fmt.Println(dict)
-		fmt.Println("Max occuring element is", maxOccur, "Times: ", maxCount)
+		fmt.Println("Maximum occuring response is ", maxOccur, "Times:", maxCount)
 
 	case "/getTokenToMine":
-
-		// resp = append(resp, append([]model.TokenID(nil), model.TokenID{Level: 4, Token: 3}))
-		// resp = append(resp, append([]model.TokenID(nil), model.TokenID{Level: 4, Token: 3}))
-		// resp = append(resp, append([]model.TokenID(nil), model.TokenID{Level: 4, Token: 3}))
-		// resp = append(resp, append([]model.TokenID(nil), model.TokenID{Level: 4, Token: 3}))
-
-		//var respArray [][]model.TokenID
-		dict := make(map[model.TokenID]int)
-
-		maxOccur := resp[0].([]model.TokenID)[0]
+		dict := make(map[string]int)
 		var maxCount = 0
+		var maxOccur []model.TokenID
 		for _, obj := range resp {
-			response := obj.([]model.TokenID)
-			fmt.Println(response[0])
-			//respArray = append(respArray, response)
-			dict[response[0]] = dict[response[0]] + 1
-			if dict[response[0]] > maxCount {
-				maxCount = dict[response[0]]
-				maxOccur = response[0]
+			str := fmt.Sprintf("%v", obj)
+			dict[str] = dict[str] + 1
+			if dict[str] > maxCount {
+				maxCount = dict[str]
+				maxOccur = obj.([]model.TokenID)
 			}
+
 		}
-		maxOccurFormatted := append([]model.TokenID(nil), maxOccur)
-		fmt.Println(dict)
-		fmt.Println("Max occuring element is", maxOccurFormatted, "Times: ", maxCount)
+		fmt.Println("Maximum occuring response is ", maxOccur, "Times:", maxCount)
 
 	case "/updateQuorum", "/assigncredits", "/updatemine", "/add":
-		var respArray []model.BasicResponse
-		for i := 0; i < len(resp); i++ {
-			response := resp[i].(model.BasicResponse)
-			respArray = append(respArray, response)
+		dict := make(map[string]int)
+		var maxCount = 0
+		var maxOccur model.BasicResponse
+		for _, obj := range resp {
+			str := fmt.Sprintf("%v", obj)
+			dict[str] = dict[str] + 1
+			if dict[str] > maxCount {
+				maxCount = dict[str]
+				maxOccur = obj.(model.BasicResponse)
+			}
+
 		}
-		fmt.Println("Printing responses", respArray)
+		fmt.Println("Maximum occuring response is ", maxOccur, "Times:", maxCount)
 
 	case "/getQuorum":
-		var respArray [][]string
+		dict := make(map[string]int)
+		var maxCount = 0
+		var maxOccur []string
 		for _, obj := range resp {
-			response := obj.([]string)
-			respArray = append(respArray, response)
+			str := fmt.Sprintf("%v", obj)
+			dict[str] = dict[str] + 1
+			if dict[str] > maxCount {
+				maxCount = dict[str]
+				maxOccur = obj.([]string)
+			}
+
 		}
-		fmt.Println("Printing responses", respArray)
+		fmt.Println("Most occuring response is", maxOccur, "Times:", maxCount)
 
 	case "/get":
 
@@ -127,7 +124,7 @@ func (c *Core) ValidateResponses(input model.Input, resp []interface{}) {
 			}
 
 		}
-		fmt.Println("Maximum occuring array is ", maxOccur, "times", maxCount)
+		fmt.Println("Maximum occuring array is ", maxOccur, "Times:", maxCount)
 
 	}
 }
