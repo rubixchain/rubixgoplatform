@@ -63,6 +63,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			return
 		}
 		fmt.Println("Response from Publisher", oracleResp)
+		return
 	}
 	//Covering remaining cases
 	req, err := cl.JSONRequest(MethodType, input.Function, input.Input)
@@ -77,7 +78,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 	}
 
 	switch input.Function {
-	case "/updateQuorum", "/assigncredits", "/updatemine", "/add":
+	case "/updateQuorum", "/updatemine", "/add":
 		var response model.BasicResponse
 		err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
 		if err != nil {
