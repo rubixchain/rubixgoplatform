@@ -25,12 +25,12 @@ type OracleResponse struct {
 }
 
 func (c *Core) OracleSetup() {
-	c.l.AddRoute(APIGetTokenToMine, "GET", c.GetTokenToMine)
-	c.l.AddRoute(APIGetCurrentLevel, "GET", c.GetCurrentLevel)
-	c.l.AddRoute(APIGet, "GET", c.Get)
-	c.l.AddRoute(APIGetQuorum, "GET", c.GetQuorum)
-	c.l.AddRoute(APIUpdates, "GET", c.Updates)
-	c.l.AddRoute(APISync, "GET", c.Sync)
+	c.l.AddRoute(APIGetTokenToMine, "POST", c.GetTokenToMine)
+	c.l.AddRoute(APIGetCurrentLevel, "POST", c.GetCurrentLevel)
+	c.l.AddRoute(APIGet, "POST", c.Get)
+	c.l.AddRoute(APIGetQuorum, "POST", c.GetQuorum)
+	c.l.AddRoute(APIUpdates, "POST", c.Updates)
+	c.l.AddRoute(APISync, "POST", c.Sync)
 }
 
 func (c *Core) Sync(req *ensweb.Request) *ensweb.Result {

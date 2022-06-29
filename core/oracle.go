@@ -56,7 +56,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 			return
 		}
 		var oracleResp OracleResponse
-		err = p.SendJSONRequest("GET", APISync, response, &oracleResp)
+		err = p.SendJSONRequest("POST", APISync, response, &oracleResp)
 		if err != nil {
 			fmt.Println("Error sending request")
 			fmt.Println(err)
@@ -88,7 +88,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 		fmt.Println("Response from oracle", response)
 
 		var oracleResp OracleResponse
-		err = p.SendJSONRequest("GET", APIUpdates, response, &oracleResp)
+		err = p.SendJSONRequest("POST", APIUpdates, response, &oracleResp)
 		if err != nil {
 			fmt.Println("Error sending request")
 			fmt.Println(err)
@@ -106,7 +106,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 		fmt.Println("Response from oracle", response)
 
 		var oracleResp OracleResponse
-		err = p.SendJSONRequest("GET", APIGetQuorum, response, &oracleResp)
+		err = p.SendJSONRequest("POST", APIGetQuorum, response, &oracleResp)
 		if err != nil {
 			fmt.Println("Error sending request")
 			return
@@ -123,7 +123,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 		fmt.Println("Response from oracle", response)
 
 		var oracleResp OracleResponse
-		err = p.SendJSONRequest("GET", APIGet, response, &oracleResp)
+		err = p.SendJSONRequest("POST", APIGet, response, &oracleResp)
 		if err != nil {
 			fmt.Println("Error sending request")
 			return
@@ -139,7 +139,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 		fmt.Println("Response from oracle", response)
 
 		var oracleResp OracleResponse
-		err = p.SendJSONRequest("GET", APIGetCurrentLevel, response, &oracleResp)
+		err = p.SendJSONRequest("POST", APIGetCurrentLevel, response, &oracleResp)
 		if err != nil {
 			fmt.Println("Error sending request")
 			return
@@ -156,7 +156,7 @@ func (c *Core) oracle(input model.Input, peerID peer.ID) {
 		fmt.Println("Response from oracle", response)
 
 		var oracleResp OracleResponse
-		err = p.SendJSONRequest("GET", APIGetTokenToMine, response, &oracleResp)
+		err = p.SendJSONRequest("POST", APIGetTokenToMine, response, &oracleResp)
 		if err != nil {
 			fmt.Println("Error sending request")
 			return
