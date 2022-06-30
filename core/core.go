@@ -43,26 +43,27 @@ const (
 )
 
 type Core struct {
-	cfg         *config.Config
-	cfgFile     string
-	encKey      string
-	log         logger.Logger
-	peerID      string
-	lock        sync.RWMutex
-	ipfsLock    sync.RWMutex
-	ipfs        *ipfsnode.Shell
-	ipfsState   bool
-	ipfsChan    chan bool
-	alphaQuorum *quorum.Quorum
-	d           *did.DID
-	pm          *ipfsport.PeerManager
-	l           *ipfsport.Listener
-	ps          *pubsub.PubSub
-	started     bool
-	ipfsApp     string
-	param       []interface{}
-	oracleLock  sync.RWMutex
-	oracleFlag  bool
+	cfg            *config.Config
+	cfgFile        string
+	encKey         string
+	log            logger.Logger
+	peerID         string
+	lock           sync.RWMutex
+	ipfsLock       sync.RWMutex
+	ipfs           *ipfsnode.Shell
+	ipfsState      bool
+	ipfsChan       chan bool
+	alphaQuorum    *quorum.Quorum
+	d              *did.DID
+	pm             *ipfsport.PeerManager
+	l              *ipfsport.Listener
+	ps             *pubsub.PubSub
+	started        bool
+	ipfsApp        string
+	param          []interface{}
+	oracleLock     sync.RWMutex
+	oracleFlag     bool
+	expectedLength chan bool
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {

@@ -49,6 +49,9 @@ func (c *Core) Sync(req *ensweb.Request) *ensweb.Result {
 		resp.Status = true
 		resp.Message = "Value accepted"
 	}
+	if len(c.param) == ResponsesCount {
+		c.expectedLength <- true
+	}
 	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
@@ -68,6 +71,9 @@ func (c *Core) GetTokenToMine(req *ensweb.Request) *ensweb.Result {
 		c.param = append(c.param, msg)
 		resp.Status = true
 		resp.Message = "Value accepted"
+	}
+	if len(c.param) == ResponsesCount {
+		c.expectedLength <- true
 	}
 	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
@@ -89,6 +95,9 @@ func (c *Core) GetCurrentLevel(req *ensweb.Request) *ensweb.Result {
 		resp.Status = true
 		resp.Message = "Value accepted"
 	}
+	if len(c.param) == ResponsesCount {
+		c.expectedLength <- true
+	}
 	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
@@ -109,6 +118,9 @@ func (c *Core) Get(req *ensweb.Request) *ensweb.Result {
 		resp.Status = true
 		resp.Message = "Value accepted"
 	}
+	if len(c.param) == ResponsesCount {
+		c.expectedLength <- true
+	}
 	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
@@ -128,6 +140,10 @@ func (c *Core) GetQuorum(req *ensweb.Request) *ensweb.Result {
 		c.param = append(c.param, msg)
 		resp.Status = true
 		resp.Message = "Value accepted"
+
+	}
+	if len(c.param) == ResponsesCount {
+		c.expectedLength <- true
 	}
 	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
@@ -148,6 +164,9 @@ func (c *Core) Updates(req *ensweb.Request) *ensweb.Result {
 		c.param = append(c.param, msg)
 		resp.Status = true
 		resp.Message = "Value accepted"
+	}
+	if len(c.param) == ResponsesCount {
+		c.expectedLength <- true
 	}
 	c.oracleLock.Unlock()
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
