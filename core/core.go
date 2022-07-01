@@ -107,8 +107,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 					ConsensusStatus: true,
 					QuorumCount:     21,
 				},
-				BootStrap: []string{"/ip4/13.76.134.226/tcp/4001/ipfs/QmYthCYD5WFVm6coBsPRGvknGexpf9icBUpw28t18fBnib",
-					"/ip4/183.82.0.114/tcp/4001/p2p/QmcjERi3TqKfLdQp4ViSPMyfGj9oxWKZRAprkppxQc2uMm"},
+				BootStrap: []string{"/ip4/115.124.117.37/tcp/4001/p2p/QmWXELAoKJsCMFoW3j6pFmXEhouwKgWiK7wN6uLyuX6ULV"},
 			},
 		}
 		cfgBytes, err := json.Marshal(cfg)
