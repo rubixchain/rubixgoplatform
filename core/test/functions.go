@@ -105,17 +105,27 @@ func intArraytoStr(intArray []int) string {
 	return result.String()
 }
 
-/* func getSignFromShares(filePath string, hash string) string {
+func getSignFromShares(filePath string, hash string) string {
 
-	byteImg,err := util.GetPNGImagePixels(filePath)
+	byteImg, err := util.GetPNGImagePixels(filePath)
 
-	if err!= nil{
+	if err != nil {
 		fmt.Println(err)
+		return "Could not read File " + err.Error()
 	}
 
+	privateIntegerArray1 := byteArraytoIntArray(byteImg)
 
-	return ""
-} */
+	var randPosObject randPosObj
+	P := randomPositions("signer", hash, 32, privateIntegerArray1)
+
+	json.Unmarshal(P, &randPosObject)
+
+	var finalPos []int = randPosObject.posForSign
+	var p1Sign []int = getPrivatePositions(finalPos, privateIntegerArray1)
+
+	return intArraytoStr(p1Sign)
+}
 
 func main() {
 	byteImg, err := util.GetPNGImagePixels("/Applications/Rubix/DATA/QmU2hWEpeRhTCE9V7FDQvGj4twfN25A4ofZJU6mXLo1NDq/PrivateShare.png")
