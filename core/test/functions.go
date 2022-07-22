@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/util"
@@ -36,21 +38,25 @@ func main() {
 
 	} */
 
-	hash := util.CalculateHash([]byte("testingGOPvtShareSignature"), "SHA3-256")
+	hash := HexToStr(util.CalculateHash([]byte("testingGOPvtShareSignature"), "SHA3-256"))
+	fmt.Println(hash)
 
+	/* fmt.Println(util.CalculateHash([]byte("testingGOPvtShareSignature"), "SHA3-256"))
 	fmt.Println("hash calulated", hash)
 
-	pubimag, err := util.GetPNGImagePixels("/Applications/Rubix/DATA/QmU2hWEpeRhTCE9V7FDQvGj4twfN25A4ofZJU6mXLo1NDq/DID.png")
+	fmt.Println("hash calulated hex ", HexToStr(util.CalculateHash([]byte("testingGOPvtShareSignature"), "SHA3-256")))
+	*/
+	/* pubimag, err := util.GetPNGImagePixels("/Applications/Rubix/DATA/QmU2hWEpeRhTCE9V7FDQvGj4twfN25A4ofZJU6mXLo1NDq/DID.png")
 	if err != nil {
 		fmt.Println(err)
 	}
-	writeStringToFile(intArraytoStr(byteArraytoIntArray(pubimag)))
-
-	/* signature := getSignFromShares("/Applications/Rubix/DATA/QmU2hWEpeRhTCE9V7FDQvGj4twfN25A4ofZJU6mXLo1NDq/PrivateShare.png", string(hash))
+	riteStringToFile(intArraytoStr(byteArraytoIntArray(pubimag)))
+	*/
+	signature := GetSignFromShares("/Applications/Rubix/DATA/QmU2hWEpeRhTCE9V7FDQvGj4twfN25A4ofZJU6mXLo1NDq/PrivateShare.png", (hash))
 
 	fmt.Println("\n signature using private share : ", signature)
-	signverifyData := SignVerifyObj{
-		Did: "QmU2hWEpeRhTCE9V7FDQvGj4twfN25A4ofZJU6mXLo1NDq", Hash: string(hash), Signature: signature}
+	/* signverifyData := SignVerifyObj{
+		Did: "QmU2hWEpeRhTCE9V7FDQvGj4twfN25A4ofZJU6mXLo1NDq", Hash: (hash), Signature: signature}
 
 	signverifyDataObj, err := json.Marshal(signverifyData)
 
@@ -58,10 +64,10 @@ func main() {
 		fmt.Println(err)
 	}
 
-	fmt.Println("\nverifying signature : ", verifySignature(signverifyDataObj)) */
+	fmt.Println("\nverifying signature : ", VerifySignature(signverifyDataObj)) */
 }
 
-func randomPositions(role string, hash string, numOfPositions int, pvt1 []int) []byte {
+func RandomPositions(role string, hash string, numOfPositions int, pvt1 []int) []byte {
 	var u, l, m int = 0, 0, 0
 
 	hashCharacters := make([]int, 256)
@@ -71,8 +77,15 @@ func randomPositions(role string, hash string, numOfPositions int, pvt1 []int) [
 	originalPos := make([]int, 32)
 	posForSign := make([]int, 32*8)
 
+	//fmt.Println("hashCharacter 0", hash[0])
 	for k := 0; k < numOfPositions; k++ {
-		hashCharacters[k] = int(hash[k])
+
+		temp, err := strconv.ParseInt(string(hash[k]), 16, 32)
+		if err != nil {
+			fmt.Println(err)
+		}
+		hashCharacters[k] = int(temp)
+		fmt.Println(string(hash[k]), " ", hashCharacters[k])
 		randomPositions[k] = (((2402 + hashCharacters[k]) * 2709) + ((k + 2709) + hashCharacters[(k)])) % 2048
 		originalPos[k] = (randomPositions[k] / 8) * 8
 
@@ -97,10 +110,10 @@ func randomPositions(role string, hash string, numOfPositions int, pvt1 []int) [
 		}
 
 		if strings.Compare(role, "signer") == 0 {
-			//fmt.Println(role)
-			var p1 []int = getPrivatePositions(finalPositions, pvt1)
+			//fmt.Println(finalPositions)
+			var p1 []int = GetPrivatePositions(finalPositions, pvt1)
 
-			hash = string(util.CalculateHash([]byte(hash+intArraytoStr(finalPositions)+intArraytoStr(p1)), "SHA3-256"))
+			hash = HexToStr(util.CalculateHash([]byte(hash+IntArraytoStr(finalPositions)+IntArraytoStr(p1)), "SHA3-256"))
 
 		} else {
 			p1 := make([]int, 8)
@@ -109,7 +122,7 @@ func randomPositions(role string, hash string, numOfPositions int, pvt1 []int) [
 				p1[i] = pvt1[m]
 				m++
 			}
-			hash = string(util.CalculateHash([]byte(hash+intArraytoStr(finalPositions)+intArraytoStr(p1)), "SHA3-256"))
+			hash = HexToStr(util.CalculateHash([]byte(hash+IntArraytoStr(finalPositions)+IntArraytoStr(p1)), "SHA3-256"))
 
 		}
 	}
@@ -125,7 +138,7 @@ func randomPositions(role string, hash string, numOfPositions int, pvt1 []int) [
 	return result_obj
 }
 
-func getPrivatePositions(positions []int, privateArray []int) []int {
+func GetPrivatePositions(positions []int, privateArray []int) []int {
 
 	//var length int = len(positions)
 	privatePositions := make([]int, len(positions))
@@ -136,10 +149,12 @@ func getPrivatePositions(positions []int, privateArray []int) []int {
 
 		privatePositions[k] = b
 	}
+
+	//fmt.Println("private positions", privatePositions)
 	return privatePositions
 }
 
-func intArraytoStr(intArray []int) string {
+func IntArraytoStr(intArray []int) string {
 	var result bytes.Buffer
 	for i := 0; i < len(intArray); i++ {
 		if intArray[i] == 1 {
@@ -151,7 +166,7 @@ func intArraytoStr(intArray []int) string {
 	return result.String()
 }
 
-func stringToIntArray(data string) []int {
+func StringToIntArray(data string) []int {
 
 	reuslt := make([]int, len(data))
 	for i := 0; i < len(data); i++ {
@@ -164,7 +179,7 @@ func stringToIntArray(data string) []int {
 	return reuslt
 }
 
-func getSignFromShares(filePath string, hash string) string {
+func GetSignFromShares(filePath string, hash string) string {
 
 	byteImg, err := util.GetPNGImagePixels(filePath)
 
@@ -173,20 +188,22 @@ func getSignFromShares(filePath string, hash string) string {
 		return "Could not read File " + err.Error()
 	}
 
-	privateIntegerArray1 := byteArraytoIntArray(byteImg)
+	privateIntegerArray1 := ByteArraytoIntArray(byteImg)
+
+	//fmt.Println(privateIntegerArray1)
 
 	var randPosObject RandPosObj
-	P := randomPositions("signer", hash, 32, privateIntegerArray1)
+	P := RandomPositions("signer", hash, 32, privateIntegerArray1)
 
 	json.Unmarshal([]byte(P), &randPosObject)
 
 	var finalPos []int = randPosObject.PosForSign
-	var p1Sign []int = getPrivatePositions(finalPos, privateIntegerArray1)
+	var p1Sign []int = GetPrivatePositions(finalPos, privateIntegerArray1)
 
-	return intArraytoStr(p1Sign)
+	return IntArraytoStr(p1Sign)
 }
 
-func byteArraytoIntArray(byteArray []byte) []int {
+func ByteArraytoIntArray(byteArray []byte) []int {
 
 	result := make([]int, len(byteArray)*8)
 	for i, b := range byteArray {
@@ -197,7 +214,11 @@ func byteArraytoIntArray(byteArray []byte) []int {
 	return result
 }
 
-func writeStringToFile(data string) {
+func ByteArraytostr(byteArray []byte) string {
+	return bytes.NewBuffer(byteArray).String()
+}
+
+func WriteStringToFile(data string) {
 	f, err := os.Create("/Users/rubix_1/Documents/RubixGO/rubixgoplatform/core/test/c.txt")
 
 	if err != nil {
@@ -215,7 +236,7 @@ func writeStringToFile(data string) {
 	fmt.Println("done")
 }
 
-func verifySignature(detailsString []byte) bool {
+func VerifySignature(detailsString []byte) bool {
 
 	var result bool
 	// make ipfs connection -> to do
@@ -243,17 +264,17 @@ func verifySignature(detailsString []byte) bool {
 		fmt.Println(wIdByteImgerr)
 	}
 
-	senderDIDBin := intArraytoStr(byteArraytoIntArray(didByteImg))
+	senderDIDBin := IntArraytoStr(ByteArraytoIntArray(didByteImg))
 
-	walletID := intArraytoStr(byteArraytoIntArray(wIdByteImg))
+	walletID := IntArraytoStr(ByteArraytoIntArray(wIdByteImg))
 
 	var senderWalletID strings.Builder
 
-	senderSign := stringToIntArray(signature)
+	senderSign := StringToIntArray(signature)
 
 	var randomPositionsObject RandPosObj
 
-	P := randomPositions("verifier", hash, 32, senderSign)
+	P := RandomPositions("verifier", hash, 32, senderSign)
 
 	json.Unmarshal([]byte(P), &randomPositionsObject)
 
@@ -264,7 +285,7 @@ func verifySignature(detailsString []byte) bool {
 		senderWalletID.WriteString(string(walletID[i]))
 	}
 
-	recombinedResult := getPos(senderWalletID.String(), signature)
+	recombinedResult := GetPos(senderWalletID.String(), signature)
 
 	positionsLevelZero := make([]int, 32)
 
@@ -286,7 +307,7 @@ func verifySignature(detailsString []byte) bool {
 	return result
 }
 
-func getPos(s1, s2 string) string {
+func GetPos(s1, s2 string) string {
 	var i, j, temp, temp1, sum int
 
 	if len(s1) != len(s2) || len(s1) < 1 {
@@ -307,4 +328,11 @@ func getPos(s1, s2 string) string {
 	}
 
 	return tempo.String()
+}
+
+func HexToStr(ByteArray []byte) string {
+	dst := make([]byte, hex.EncodedLen(len(ByteArray)))
+	hex.Encode(dst, ByteArray)
+
+	return string(dst)
 }
