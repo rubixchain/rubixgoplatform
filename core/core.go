@@ -28,18 +28,13 @@ const (
 )
 
 const (
-	NodePort         uint16 = 14500
-	SendPort         uint16 = 15010
-	RecvPort         uint16 = 15011
-	IPFSPort         uint16 = 5001
-	SwarmPort        uint16 = 4001
-	IPFSAPIPort      uint16 = 8080
-	QuorumPort       uint16 = 15040
-	AppPort          uint16 = 15090
-	SenderQuorumPort uint16 = 15030
-	GossipSenderPort uint16 = 15080
-	GossipRecvrPort  uint16 = 15081
-	PortOffset       uint16 = 100
+	NodePort    uint16 = 20000
+	SendPort    uint16 = 21000
+	RecvPort    uint16 = 22000
+	IPFSPort    uint16 = 5002
+	SwarmPort   uint16 = 4002
+	IPFSAPIPort uint16 = 8081
+	MaxPeerConn uint16 = 1000
 )
 
 type Core struct {
@@ -65,50 +60,20 @@ type Core struct {
 func InitConfig(configFile string, encKey string, node uint16) error {
 	if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
 		nodePort := NodePort + node
-		portOffset := PortOffset * node
+		portOffset := MaxPeerConn * node
 		cfg := config.Config{
 			NodeAddress: "localhost",
 			NodePort:    fmt.Sprintf("%d", nodePort),
 			DirPath:     "./",
 			CfgData: config.ConfigData{
-				Paths: config.Paths{
-					TokensPath:     "Rubix/Wallet/TOKENS/",
-					TokenChainPath: "Rubix/Wallet/TOKENCHAINS/",
-					PaymentsPath:   "Rubix/PaymentsApp/",
-					WalletDataPath: "Rubix/Wallet/WALLET_DATA/",
-					DataPath:       "Rubix/DATA/",
-					LogPath:        "Rubix/LOGGER/",
-				},
 				Ports: config.Ports{
-					SendPort:           (SendPort + portOffset),
-					ReceiverPort:       (RecvPort + portOffset),
-					GossipReceiverPort: (GossipRecvrPort + portOffset),
-					GossipSenderPort:   (GossipSenderPort + portOffset),
-					QuorumPort:         (QuorumPort + portOffset),
-					Sender2Q1Port:      (SenderQuorumPort + portOffset),
-					Sender2Q2Port:      (SenderQuorumPort + portOffset + 1),
-					Sender2Q3Port:      (SenderQuorumPort + portOffset + 2),
-					Sender2Q4Port:      (SenderQuorumPort + portOffset + 3),
-					Sender2Q5Port:      (SenderQuorumPort + portOffset + 4),
-					Sender2Q6Port:      (SenderQuorumPort + portOffset + 5),
-					Sender2Q7Port:      (SenderQuorumPort + portOffset + 6),
-					IPFSPort:           (IPFSPort + node),
-					SwarmPort:          (SwarmPort + node),
-					IPFSAPIPort:        (IPFSAPIPort + node),
-					AppPort:            (AppPort + portOffset),
+					SendPort:     (SendPort + node),
+					ReceiverPort: (RecvPort + portOffset),
+					IPFSPort:     (IPFSPort + node),
+					SwarmPort:    (SwarmPort + node),
+					IPFSAPIPort:  (IPFSAPIPort + node),
 				},
-				SyncConfig: config.SyncConfig{
-					SyncIP:     "http://13.76.134.226:9090",
-					ExplorerIP: "https://explorer.rubix.network/api/services/app/Rubix",
-					AdvisoryIP: "http://13.76.134.226:9595",
-					UserDIDIP:  "127.0.0.1",
-				},
-				ConsensusData: config.ConsensusData{
-					ConsensusStatus: true,
-					QuorumCount:     21,
-				},
-				BootStrap: []string{"/ip4/13.76.134.226/tcp/4001/ipfs/QmYthCYD5WFVm6coBsPRGvknGexpf9icBUpw28t18fBnib",
-					"/ip4/183.82.0.114/tcp/4001/p2p/QmcjERi3TqKfLdQp4ViSPMyfGj9oxWKZRAprkppxQc2uMm"},
+				BootStrap: []string{"/ip4/115.124.117.37/tcp/4001/p2p/QmWXELAoKJsCMFoW3j6pFmXEhouwKgWiK7wN6uLyuX6ULV"},
 			},
 		}
 		cfgBytes, err := json.Marshal(cfg)

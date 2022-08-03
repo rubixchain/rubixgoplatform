@@ -28,3 +28,8 @@ type DIDCreate struct {
 	PubImgFile string                 `json:"pub_img_file"`
 	PubKeyFile string                 `json:"pub_key_file"`
 }
+
+type DIDSignature struct {
+	Pixels    []byte
+	Signature []byte
+}

@@ -3,8 +3,11 @@ package util
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
+	"path"
+	"strings"
 
 	"golang.org/x/crypto/sha3"
 )
@@ -69,4 +72,47 @@ func FileWrite(fileName string, data []byte) error {
 	}
 	f.Close()
 	return nil
+}
+
+func DirCopy(src string, dst string) error {
+	var err error
+	var fds []os.FileInfo
+	var srcinfo os.FileInfo
+
+	if srcinfo, err = os.Stat(src); err != nil {
+		return err
+	}
+
+	if err = os.MkdirAll(dst, srcinfo.Mode()); err != nil {
+		return err
+	}
+
+	if fds, err = ioutil.ReadDir(src); err != nil {
+		return err
+	}
+	for _, fd := range fds {
+		srcfp := path.Join(src, fd.Name())
+		dstfp := path.Join(dst, fd.Name())
+
+		if fd.IsDir() {
+			err = os.MkdirAll(dstfp, srcinfo.Mode())
+			if err != nil {
+				return err
+			}
+		} else {
+			if _, err = Filecopy(srcfp, dstfp); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// SanitizeDirPath will check for proper directory path
+func SanitizeDirPath(path string) string {
+	if strings.HasSuffix(path, "/") || strings.HasSuffix(path, "\\") {
+		return path
+	} else {
+		return path + "/"
+	}
 }
