@@ -5,10 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/EnsurityTechnologies/enscrypt"
 	"github.com/rubixchain/rubixgoplatform/core/util"
 )
 
@@ -23,13 +25,26 @@ type SignVerifyObj struct {
 	Signature string `json:"signature"`
 }
 
+type DIDBasic struct {
+	did  string
+	path string
+	pwd  string
+}
+
 func main() {
+	//hash := HexToStr(util.CalculateHash([]byte("Boom"), "SHA3-256"))
 
-	hash := HexToStr(util.CalculateHash([]byte("KiranFinishedGo"), "SHA3-256"))
-	signature := GetSignFromShares("/Applications/Rubix/DATA/bafybmig3qzwpjksxeyxk4vck7l7qs3f42rmwhw7ow3lmxwlvfnxesufova/pvtShare.png", (hash))
+	fmt.Println(util.CalculateHash([]byte("Boom"), "SHA3-256"))
+	/* signature, err := basics.Sign("/Users/rubix_1/Downloads/PrivateShare.png", (hash))
 
-	fmt.Println("\n signature using private share : ", signature)
-	signverifyData := SignVerifyObj{
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println("\n hash of boom: ", hash)
+
+	fmt.Println("\n signature using private share : ", signature) */
+	/* signverifyData := SignVerifyObj{
 		Did: "bafybmig3qzwpjksxeyxk4vck7l7qs3f42rmwhw7ow3lmxwlvfnxesufova", Hash: (hash), Signature: signature}
 
 	signverifyDataObj, err := json.Marshal(signverifyData)
@@ -38,7 +53,7 @@ func main() {
 		fmt.Println(err)
 	}
 
-	fmt.Println("\nverifying signature : ", VerifySignature(signverifyDataObj))
+	fmt.Println("\nverifying signature : ", VerifySignature(signverifyDataObj)) */
 }
 
 func RandomPositions(role string, hash string, numOfPositions int, pvt1 []int) []byte {
@@ -83,6 +98,7 @@ func RandomPositions(role string, hash string, numOfPositions int, pvt1 []int) [
 		}
 		if strings.Compare(role, "signer") == 0 {
 			var p1 []int = GetPrivatePositions(finalPositions, pvt1)
+			fmt.Println("originalpos :::: ", IntArraytoStr(originalPos))
 			hash = HexToStr(util.CalculateHash([]byte(hash+IntArraytoStr(originalPos)+IntArraytoStr(p1)), "SHA3-256"))
 
 		} else {
@@ -147,13 +163,13 @@ func StringToIntArray(data string) []int {
 	return reuslt
 }
 
-func GetSignFromShares(filePath string, hash string) string {
+func (d *DIDBasic) GetSignFromShares(filePath string, hash string) (string, error) {
 
 	byteImg, err := util.GetPNGImagePixels(filePath)
 
 	if err != nil {
 		fmt.Println(err)
-		return "Could not read File " + err.Error()
+		return "Could not read File ", err
 	}
 
 	privateIntegerArray1 := ByteArraytoIntArray(byteImg)
@@ -166,7 +182,16 @@ func GetSignFromShares(filePath string, hash string) string {
 	var finalPos []int = randPosObject.PosForSign
 	var p1Sign []int = GetPrivatePositions(finalPos, privateIntegerArray1)
 
-	return IntArraytoStr(p1Sign)
+	//create a signature using the private key
+	//1. read and extrqct the private key
+	privKey, err := ioutil.ReadFile(d.path + "/" + d.did + "/pvtKey.pem")
+	if err != nil {
+		return "Could not read PvtKey.pem file", err
+	}
+	pubKey, err := ioutil.ReadFile(d.path + "/" + d.did + "/pubKey.pem")
+	enscrypt.DecodeKeyPair(d.pwd, privKey, pubKey)
+
+	return IntArraytoStr(p1Sign), err
 }
 
 func ByteArraytoIntArray(byteArray []byte) []int {
@@ -221,8 +246,8 @@ func VerifySignature(detailsString []byte) bool {
 	//get walletahs from datatable based on did and call node data
 
 	// read senderDID
-	didByteImg, didByteImgerr := util.GetPNGImagePixels("/Applications/Rubix/DATA/" + decentralizedID + "/DID.png")
-	wIdByteImg, wIdByteImgerr := util.GetPNGImagePixels("/Applications/Rubix/DATA/" + decentralizedID + "/pubShare.png")
+	didByteImg, didByteImgerr := util.GetPNGImagePixels("/Users/rubix_1/Downloads/DID.png")
+	wIdByteImg, wIdByteImgerr := util.GetPNGImagePixels("/Users/rubix_1/Downloads/PublicShare.png")
 
 	if didByteImgerr != nil {
 		fmt.Println(didByteImgerr)
