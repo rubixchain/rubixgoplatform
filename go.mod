@@ -3,7 +3,7 @@ module github.com/rubixchain/rubixgoplatform
 go 1.17
 
 require (
-	github.com/EnsurityTechnologies/apiconfig v1.0.0
+	github.com/EnsurityTechnologies/apiconfig v1.0.1
 	github.com/EnsurityTechnologies/config v1.0.0
 	github.com/EnsurityTechnologies/enscrypt v1.0.0
 	github.com/EnsurityTechnologies/ensweb v1.0.0
@@ -18,6 +18,7 @@ require (
 require (
 	github.com/EnsurityTechnologies/adapter v1.0.2 // indirect
 	github.com/EnsurityTechnologies/wraperr v1.0.0 // indirect
+	github.com/Kubuxu/go-ipfs-swarm-key-gen v0.0.0-20170218193930-0ee739ec6d32 // indirect
 	github.com/aead/siphash v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.23.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.1.3 // indirect

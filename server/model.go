@@ -1,5 +1,7 @@
 package server
 
+import "github.com/rubixchain/rubixgoplatform/core/model"
+
 const (
 	InvalidRequestErr string = "Invalid Request"
 )
@@ -16,10 +18,17 @@ type Request struct {
 }
 
 // Response used as model for the API responses
-type Repsonse struct {
+type Response struct {
 	Status  bool        `json:"status"`
 	Message string      `json:"message"`
 	Result  interface{} `json:"result"`
+}
+
+// BootStrapResponse used as model for the API responses
+type BootStrapResponse struct {
+	Status  bool                 `json:"status"`
+	Message string               `json:"message"`
+	Result  model.BootStrapPeers `json:"result"`
 }
 
 type DIDResponse struct {
