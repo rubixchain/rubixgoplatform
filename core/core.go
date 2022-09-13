@@ -7,7 +7,9 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
+	"github.com/EnsurityTechnologies/adapter"
 	"github.com/EnsurityTechnologies/apiconfig"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/EnsurityTechnologies/uuid"
@@ -15,12 +17,14 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/quorum"
 )
 
 const (
-	APIPingPath string = "/api/ping"
+	APIPingPath   string = "/api/ping"
+	APIPeerStatus string = "/api/peerstatus"
 )
 
 const (
@@ -38,23 +42,28 @@ const (
 )
 
 type Core struct {
-	cfg         *config.Config
-	cfgFile     string
-	encKey      string
-	log         logger.Logger
-	peerID      string
-	lock        sync.RWMutex
-	ipfsLock    sync.RWMutex
-	ipfs        *ipfsnode.Shell
-	ipfsState   bool
-	ipfsChan    chan bool
-	alphaQuorum *quorum.Quorum
-	d           *did.DID
-	pm          *ipfsport.PeerManager
-	l           *ipfsport.Listener
-	ps          *pubsub.PubSub
-	started     bool
-	ipfsApp     string
+	cfg            *config.Config
+	cfgFile        string
+	encKey         string
+	log            logger.Logger
+	peerID         string
+	lock           sync.RWMutex
+	ipfsLock       sync.RWMutex
+	ipfs           *ipfsnode.Shell
+	ipfsState      bool
+	ipfsChan       chan bool
+	alphaQuorum    *quorum.Quorum
+	d              *did.DID
+	pm             *ipfsport.PeerManager
+	l              *ipfsport.Listener
+	ps             *pubsub.PubSub
+	started        bool
+	ipfsApp        string
+	testNet        bool
+	testNetKey     string
+	explorerStatus bool
+	exploreDB      *adapter.Adapter
+	version        string
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {
@@ -73,7 +82,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 					SwarmPort:    (SwarmPort + node),
 					IPFSAPIPort:  (IPFSAPIPort + node),
 				},
-				BootStrap: []string{"/ip4/115.124.117.37/tcp/4001/p2p/QmWXELAoKJsCMFoW3j6pFmXEhouwKgWiK7wN6uLyuX6ULV"},
+				BootStrap: []string{"/ip4/174.141.238.73/tcp/4001/p2p/QmZbukm4Dbhb2LUwMomBPmaiepLroLGueCPTxN1SEUq15u", "/ip4/103.60.213.76/tcp/4023/p2p/12D3KooWE3fSQSb7aTNjS7CRLytWBxL46MeQd1HpBBUtPGz2HAeA"},
 			},
 		}
 		cfgBytes, err := json.Marshal(cfg)
@@ -88,11 +97,13 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string) (*Core, error) {
 	c := &Core{
-		cfg:     cfg,
-		cfgFile: cfgFile,
-		encKey:  encKey,
+		cfg:        cfg,
+		cfgFile:    cfgFile,
+		encKey:     encKey,
+		testNet:    testNet,
+		testNetKey: testNetKey,
 	}
 
 	c.log = log.Named("Core")
@@ -115,11 +126,21 @@ func (c *Core) SetupCore() error {
 	if err != nil {
 		return err
 	}
-	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, 100, c.ipfs, c.log)
+	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, 100, c.ipfs, c.log, c.cfg.CfgData.BootStrap)
 	c.d = did.InitDID(c.cfg, c.log, c.ipfs)
 	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
 	if err != nil {
 		return err
+	}
+	if c.cfg.CfgData.Services != nil {
+		ecfg, ok := c.cfg.CfgData.Services[ExploreTopic]
+		if ok {
+			err = c.initExplorer(ecfg)
+			if err != nil {
+				c.log.Error("Failed to setup explorer DB", "err", err)
+				return err
+			}
+		}
 	}
 	c.PingSetup()
 	return nil
@@ -142,15 +163,49 @@ func (c *Core) Start() (bool, string) {
 		return true, "Already Setup"
 	}
 	c.log.Info("Starting the core")
+
 	err := c.l.Start()
 	if err != nil {
 		c.log.Error("failed to start ping port", "err", err)
 		return false, "Failed to start ping port"
 	}
+	exp := model.ExploreModel{
+		Cmd:    ExpPeerStatusCmd,
+		PeerID: c.peerID,
+		Status: "On",
+	}
+	err = c.PublishExplorer(&exp)
+	if err != nil {
+		c.log.Error("Failed to publish message to explorer", "err", err)
+		return false, "Failed to publish message to explorer"
+	}
+	if len(c.cfg.CfgData.DIDList) > 0 {
+		exp = model.ExploreModel{
+			Cmd:     ExpDIDPeerMapCmd,
+			PeerID:  c.peerID,
+			DIDList: c.cfg.CfgData.DIDList,
+		}
+		err = c.PublishExplorer(&exp)
+		if err != nil {
+			c.log.Error("Failed to publish message to explorer", "err", err)
+			return false, "Failed to publish message to explorer"
+		}
+	}
 	return true, "Setup Complete"
 }
 
 func (c *Core) StopCore() {
+	exp := model.ExploreModel{
+		Cmd:    ExpPeerStatusCmd,
+		PeerID: c.peerID,
+		Status: "Off",
+	}
+	err := c.PublishExplorer(&exp)
+	if err != nil {
+		c.log.Error("Failed to publish explorer model", "err", err)
+		return
+	}
+	time.Sleep(time.Second)
 	c.stopIPFS()
 	if c.alphaQuorum != nil {
 		c.alphaQuorum.Stop()
@@ -170,16 +225,41 @@ func (c *Core) HandleQuorum(conn net.Conn) {
 
 }
 
+func (c *Core) updateConfig() error {
+	cfgBytes, err := json.Marshal(*c.cfg)
+	if err != nil {
+		c.log.Error("Failed to update config file", "err", err)
+		return err
+	}
+	err = os.Remove(c.cfgFile)
+	if err != nil {
+		c.log.Error("Failed to update config file", "err", err)
+		return err
+	}
+	err = apiconfig.CreateAPIConfig(c.cfgFile, c.encKey, cfgBytes)
+	if err != nil {
+		c.log.Error("Failed to update config file", "err", err)
+		return err
+	}
+	return nil
+}
+
 func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	did, err := c.d.CreateDID(didCreate)
 	if err != nil {
 		return "", err
 	}
-	cfgBytes, err := json.Marshal(*c.cfg)
+	err = c.updateConfig()
 	if err != nil {
 		return "", err
 	}
-	err = apiconfig.CreateAPIConfig(c.cfgFile, c.encKey, cfgBytes)
+	exp := model.ExploreModel{
+		Cmd:     ExpDIDPeerMapCmd,
+		DIDList: []string{did},
+		PeerID:  c.peerID,
+		Message: "DID Created Successfully",
+	}
+	err = c.PublishExplorer(&exp)
 	if err != nil {
 		return "", err
 	}

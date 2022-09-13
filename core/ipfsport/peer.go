@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"path"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ type PeerManager struct {
 	ipfs      *ipfsnode.Shell
 	log       logger.Logger
 	startPort uint16
+	bootStrap []string
 }
 
 type Peer struct {
@@ -31,12 +33,13 @@ type Peer struct {
 	pm   *PeerManager
 }
 
-func NewPeerManager(startPort uint16, maxNumPort uint16, ipfs *ipfsnode.Shell, log logger.Logger) *PeerManager {
+func NewPeerManager(startPort uint16, maxNumPort uint16, ipfs *ipfsnode.Shell, log logger.Logger, bootStrap []string) *PeerManager {
 	p := &PeerManager{
 		ipfs:      ipfs,
 		log:       log.Named("PeerManager"),
 		ps:        make([]bool, maxNumPort),
 		startPort: startPort,
+		bootStrap: bootStrap,
 	}
 	return p
 }
@@ -64,11 +67,32 @@ func (pm *PeerManager) releasePeerPort(port uint16) bool {
 	return false
 }
 
-func (pm *PeerManager) OpenPeerConn(peerdID string, appname string) (*Peer, error) {
-	err := pm.ipfs.SwarmConnect(context.Background(), "/ipfs/"+peerdID)
-	if err != nil {
-		pm.log.Error("Failed to connect swarm peer", "err", err)
-		return nil, err
+func (pm *PeerManager) SwarmConnect(peerID string) bool {
+	err := pm.ipfs.SwarmConnect(context.Background(), "/ipfs/"+peerID)
+	if err == nil {
+		return true
+	}
+	for _, bs := range pm.bootStrap {
+		_, bsID := path.Split(bs)
+		err := pm.ipfs.SwarmConnect(context.Background(), "/ipfs/"+bsID)
+		if err != nil {
+			pm.log.Error("failed to connect bootstrap peer", "BootStrap", bsID, "err", err)
+			continue
+		}
+		err = pm.ipfs.SwarmConnect(context.Background(), "/ipfs/"+bsID+"/p2p-circuit/ipfs/"+peerID)
+		if err == nil {
+			return true
+		} else {
+			pm.log.Error("failed to connect peer", "BootStrap", bsID, "err", err)
+		}
+	}
+	return false
+}
+
+func (pm *PeerManager) OpenPeerConn(peerID string, appname string) (*Peer, error) {
+	if !pm.SwarmConnect(peerID) {
+		pm.log.Error("Failed to connect swarm peer", "peerID", peerID)
+		return nil, fmt.Errorf("failed to connect swarm peer")
 	}
 	portNum := pm.getPeerPort()
 	if portNum == 0 {
@@ -81,11 +105,11 @@ func (pm *PeerManager) OpenPeerConn(peerdID string, appname string) (*Peer, erro
 	p := &Peer{
 		port: portNum,
 		pm:   pm,
-		log:  pm.log.Named(peerdID),
+		log:  pm.log.Named(peerID),
 	}
 	proto := "/x/" + appname + "/1.0"
 	addr := "/ip4/127.0.0.1/tcp/" + fmt.Sprintf("%d", portNum)
-	peer := "/p2p/" + peerdID
+	peer := "/p2p/" + peerID
 	resp, err := pm.ipfs.Request("p2p/forward", proto, addr, peer).Send(context.Background())
 	if err != nil {
 		pm.log.Error("failed make forward request")
@@ -106,10 +130,15 @@ func (pm *PeerManager) OpenPeerConn(peerdID string, appname string) (*Peer, erro
 	return p, nil
 }
 
-func (p *Peer) SendJSONRequest(method string, path string, req interface{}, resp interface{}, timeout ...time.Duration) error {
+func (p *Peer) SendJSONRequest(method string, path string, querry map[string]string, req interface{}, resp interface{}, timeout ...time.Duration) error {
 	httpReq, err := p.JSONRequest(method, path, req)
 	if err != nil {
 		return err
+	}
+	for k, v := range querry {
+		q := httpReq.URL.Query()
+		q.Add(k, v)
+		httpReq.URL.RawQuery = q.Encode()
 	}
 	httpResp, err := p.Do(httpReq, timeout...)
 	if err != nil {

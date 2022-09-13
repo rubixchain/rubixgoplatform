@@ -37,17 +37,6 @@ type ConsensusData struct {
 	QuorumCount     int  `json:"QUORUM_COUNT"`
 }
 
-// QuorumList defines quorum list
-type QuorumList struct {
-	Quorum1 string `json:"QUORUM_1"`
-	Quorum2 string `json:"QUORUM_2"`
-	Quorum3 string `json:"QUORUM_3"`
-	Quorum4 string `json:"QUORUM_4"`
-	Quorum5 string `json:"QUORUM_5"`
-	Quorum6 string `json:"QUORUM_6"`
-	Quorum7 string `json:"QUORUM_7"`
-}
-
 type DIDConfigType struct {
 	Type   int                    `json:"TYPE"`
 	Config map[string]interface{} `json:"CONFIG"`
@@ -55,10 +44,18 @@ type DIDConfigType struct {
 
 // ConfigData defines configuration data
 type ConfigData struct {
-	Ports     Ports                    `json:"ports"`
-	DIDList   []string                 `json:"did_list"`
-	DIDConfig map[string]DIDConfigType `json:"did_config"`
-	BootStrap []string                 `json:"bootstrap"`
+	Ports      Ports                    `json:"ports"`
+	DIDList    []string                 `json:"did_list"`
+	DIDConfig  map[string]DIDConfigType `json:"did_config"`
+	BootStrap  []string                 `json:"bootstrap"`
+	Services   map[string]string        `json:"services"`
+	QuorumList QuorumList               `json:"quorumr_list"`
+}
+
+type QuorumList struct {
+	Alpha []string `json:"alpha"`
+	Beta  []string `json:"beta"`
+	Gamma []string `json:"gamma"`
 }
 
 type Config struct {
@@ -66,4 +63,13 @@ type Config struct {
 	NodePort    string     `json:"node_port"`
 	DirPath     string     `json:"dir_path"`
 	CfgData     ConfigData `json:"cfg_data"`
+}
+
+type ExplorerConfig struct {
+	DBName     string `json:"db_name"`      // DBName is the name of the db.
+	DBAddress  string `json:"db_address"`   // DBPath is the name of the database itself.
+	DBPort     string `json:"db_port"`      // DBPath is the name of the database itself.
+	DBType     string `json:"db_type"`      // DBType is type of database to use
+	DBUserName string `json:"db_user_name"` // DBUserName is the user name for the DB
+	DBPassword string `json:"db_password"`  // DBPassword is the password  for the user
 }

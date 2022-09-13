@@ -22,9 +22,9 @@ const (
 
 // initIPFS wiill initialize IPFS configuration
 func (c *Core) initIPFS(ipfsdir string) error {
-	c.ipfsApp = "ipfs"
+	c.ipfsApp = "./ipfs"
 	if runtime.GOOS == "windows" {
-		c.ipfsApp = "ipfs.exe"
+		c.ipfsApp = "./ipfs.exe"
 	}
 	if _, err := os.Stat(ipfsdir); errors.Is(err, os.ErrNotExist) {
 		c.log.Info("Initializing IPFS")
@@ -57,7 +57,11 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			return err
 		}
 		f.Close()
-		_, err = util.Filecopy(SwarmKeyFilename, ipfsdir+"/"+SwarmKeyFilename)
+		if c.testNet {
+			_, err = util.Filecopy(c.testNetKey, ipfsdir+"/"+SwarmKeyFilename)
+		} else {
+			_, err = util.Filecopy(SwarmKeyFilename, ipfsdir+"/"+SwarmKeyFilename)
+		}
 		if err != nil {
 			return err
 		}
@@ -87,6 +91,17 @@ func (c *Core) initIPFS(ipfsdir string) error {
 		c.stopIPFS()
 		c.log.Info("IPFS Initialized")
 		return nil
+	} else {
+		if c.testNet {
+			_, err = util.Filecopy(c.testNetKey, ipfsdir+"/"+SwarmKeyFilename)
+			time.Sleep(2 * time.Second)
+		} else {
+			_, err = util.Filecopy(SwarmKeyFilename, ipfsdir+"/"+SwarmKeyFilename)
+		}
+		if err != nil {
+			c.log.Error("failed to copy the test net key", "err", err)
+			return err
+		}
 	}
 	return nil
 }
@@ -124,9 +139,9 @@ func (c *Core) runIPFS() {
 			if err := cmd.Process.Kill(); err != nil {
 				c.log.Error("failed to kill ipfs daemon", "err", err)
 			}
-			c.log.Debug("IPFS daemon requested to close")
+			c.log.Info("IPFS daemon requested to close")
 		}
-		c.log.Debug("IPFS daemon finished")
+		c.log.Info("IPFS daemon finished")
 		c.SetIPFSState(false)
 	}()
 	c.log.Info("Waiting for IPFS daemon to start")
@@ -136,6 +151,7 @@ func (c *Core) runIPFS() {
 // RunIPFS will run the IPFS daemon
 func (c *Core) RunIPFS() error {
 	os.Setenv("IPFS_PATH", c.cfg.DirPath+".ipfs")
+	os.Setenv("LIBP2P_FORCE_PNET", "1")
 	err := c.initIPFS(c.cfg.DirPath + ".ipfs")
 	if err != nil {
 		c.log.Error("failed to initialize IPFS", "err", err)
@@ -157,7 +173,7 @@ func (c *Core) RunIPFS() error {
 		return err
 	}
 	c.peerID = idoutput.ID
-	c.log.Debug("Got the Peer ID", "PeerdID", idoutput.ID)
+	c.log.Info("Node PeerID : " + idoutput.ID)
 	return nil
 }
 
@@ -188,4 +204,65 @@ func (c *Core) stopIPFS() {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
+}
+
+func (c *Core) AddBootStrap(peers []string) error {
+	c.cfg.CfgData.BootStrap = append(c.cfg.CfgData.BootStrap, peers...)
+	err := c.updateConfig()
+	if err != nil {
+		return err
+	}
+	_, err = c.ipfs.BootstrapAdd(peers)
+	return err
+}
+
+func (c *Core) RemoveBootStrap(peers []string) error {
+	updated := false
+	for _, peer := range peers {
+		newitems := []string{}
+		update := false
+		for _, i := range c.cfg.CfgData.BootStrap {
+			if i != peer {
+				newitems = append(newitems, i)
+			} else {
+				update = true
+			}
+		}
+		if update {
+			c.cfg.CfgData.BootStrap = newitems
+			updated = true
+		}
+	}
+	if updated {
+		err := c.updateConfig()
+		if err != nil {
+			return err
+		}
+		_, err = c.ipfs.BootstrapRmAll()
+		if err != nil {
+			return err
+		}
+		if len(c.cfg.CfgData.BootStrap) != 0 {
+			_, err = c.ipfs.BootstrapAdd(c.cfg.CfgData.BootStrap)
+		}
+		return err
+	}
+	return nil
+}
+
+func (c *Core) RemoveAllBootStrap() error {
+	c.cfg.CfgData.BootStrap = make([]string, 0)
+	err := c.updateConfig()
+	if err != nil {
+		return err
+	}
+	_, err = c.ipfs.BootstrapRmAll()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Core) GetAllBootStrap() []string {
+	return c.cfg.CfgData.BootStrap
 }

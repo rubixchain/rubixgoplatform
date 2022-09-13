@@ -116,3 +116,22 @@ func SanitizeDirPath(path string) string {
 		return path + "/"
 	}
 }
+
+// ParseAddress will parse the addrees and split inot Peer ID  & DID
+func ParseAddress(addr string) (string, string, bool) {
+	peerID := ""
+	did := ""
+	// check if addr contains the peer ID
+	if strings.Contains(addr, ".") {
+		str := strings.Split(addr, ".")
+		if len(str) != 2 {
+			return "", "", false
+		}
+		peerID = str[0]
+		did = str[1]
+	} else {
+		did = addr
+	}
+	//TODO:: Validation
+	return peerID, did, true
+}
