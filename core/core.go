@@ -82,7 +82,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 					SwarmPort:    (SwarmPort + node),
 					IPFSAPIPort:  (IPFSAPIPort + node),
 				},
-				BootStrap: []string{"/ip4/174.141.238.73/tcp/4001/p2p/QmZbukm4Dbhb2LUwMomBPmaiepLroLGueCPTxN1SEUq15u", "/ip4/103.60.213.76/tcp/4023/p2p/12D3KooWE3fSQSb7aTNjS7CRLytWBxL46MeQd1HpBBUtPGz2HAeA"},
+      BootStrap: []string{"/ip4/174.141.238.73/tcp/4001/p2p/QmZbukm4Dbhb2LUwMomBPmaiepLroLGueCPTxN1SEUq15u", "/ip4/103.60.213.76/tcp/4023/p2p/12D3KooWE3fSQSb7aTNjS7CRLytWBxL46MeQd1HpBBUtPGz2HAeA"},
 			},
 		}
 		cfgBytes, err := json.Marshal(cfg)
