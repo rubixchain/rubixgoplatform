@@ -12,12 +12,16 @@ import (
 )
 
 const (
-	APIStart             string = "/api/start"
-	APIShutdown          string = "/api/shutdown"
-	APIPing              string = "/api/ping"
-	APICreateDID         string = "/api/create"
-	APISubscribeExplorer string = "/api/subscribe/explorer"
-	APIPublishExplorer   string = "/api/publish/explorer"
+	APIStart               string = "/api/start"
+	APIShutdown            string = "/api/shutdown"
+	APIPing                string = "/api/ping"
+	APICreateDID           string = "/api/create"
+	APIAddBootStrap        string = "/api/add-bootstrap"
+	APIRemoveBootStrap     string = "/api/remove-bootstrap"
+	APIRemoveAllBootStrap  string = "/api/remove-all-bootstrap"
+	APIGetAllBootStrap     string = "/api/get-all-bootstrap"
+	APIEnableExplorer      string = "/api/enable-explorer"
+	APIInitiateRBTTransfer string = "/api/initiate-rbt-transfer"
 )
 
 // Server defines server handle
@@ -73,10 +77,13 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIStart, "GET", s.APIStart)
 	s.AddRoute(APIShutdown, "POST", s.APIShutdown)
 	s.AddRoute(APIPing, "GET", s.APIPing)
+	s.AddRoute(APIAddBootStrap, "POST", s.APIAddBootStrap)
+	s.AddRoute(APIRemoveBootStrap, "POST", s.APIRemoveBootStrap)
+	s.AddRoute(APIRemoveAllBootStrap, "POST", s.APIRemoveAllBootStrap)
+	s.AddRoute(APIGetAllBootStrap, "GET", s.APIGetAllBootStrap)
 	s.AddRoute(APICreateDID, "POST", s.APICreateDID)
-	s.AddRoute(APISubscribeExplorer, "POST", s.APISubscribeExplorer)
-	s.AddRoute(APIPublishExplorer, "POST", s.APIPublishExplorer)
-	fmt.Println(APIStart)
+	s.AddRoute(APIEnableExplorer, "POST", s.APIEnableExplorer)
+	s.AddRoute(APIInitiateRBTTransfer, "POST", s.APIInitiateRBTTransfer)
 }
 
 func (s *Server) ExitFunc() error {

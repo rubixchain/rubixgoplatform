@@ -7,7 +7,7 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
-type PubSubCallback func(data []byte)
+type PubSubCallback func(peerID string, data []byte)
 
 type PubSub struct {
 	ipfs *ipfsnode.Shell
@@ -41,10 +41,9 @@ func (ps *PubSub) receivePub(topic string, p *ipfsnode.PubSubSubscription) {
 			ps.log.Error("failed to read message", "err", err)
 			continue
 		}
-		ps.log.Debug("message received")
 		cb := ps.sub[topic]
 		if cb != nil {
-			go cb(m.Data)
+			go cb(m.From.String(), m.Data)
 		}
 	}
 }

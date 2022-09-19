@@ -36,15 +36,15 @@ func (c *Core) PingRecevied(req *ensweb.Request) *ensweb.Result {
 }
 
 // PingPeer will ping the peer & get the response
-func (c *Core) PingPeer(peerdID string) (string, error) {
-	p, err := c.pm.OpenPeerConn(peerdID, c.getCoreAppName(peerdID))
+func (c *Core) PingPeer(peerID string) (string, error) {
+	p, err := c.pm.OpenPeerConn(peerID, c.getCoreAppName(peerID))
 	if err != nil {
 		return "", err
 	}
 	// Close the p2p before exit
 	defer p.Close()
 	var pingResp PingResponse
-	err = p.SendJSONRequest("GET", APIPingPath, nil, &pingResp, 2*time.Minute)
+	err = p.SendJSONRequest("GET", APIPingPath, nil, nil, &pingResp, 2*time.Minute)
 	if err != nil {
 		return "", err
 	}

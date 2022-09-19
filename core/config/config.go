@@ -15,24 +15,11 @@ type Paths struct {
 
 // Ports defines varies ports used
 type Ports struct {
-	SendPort           uint16 `json:"SEND_PORT"`
-	ReceiverPort       uint16 `json:"RECEIVER_PORT"`
-	SellerPort         uint16 `json:"SELLER_PORT"`
-	BuyerPort          uint16 `json:"BUYER_PORT"`
-	GossipReceiverPort uint16 `json:"GOSSIP_RECEIVER"`
-	GossipSenderPort   uint16 `json:"GOSSIP_SENDER"`
-	QuorumPort         uint16 `json:"QUORUM_PORT"`
-	Sender2Q1Port      uint16 `json:"SENDER2Q1"`
-	Sender2Q2Port      uint16 `json:"SENDER2Q2"`
-	Sender2Q3Port      uint16 `json:"SENDER2Q3"`
-	Sender2Q4Port      uint16 `json:"SENDER2Q4"`
-	Sender2Q5Port      uint16 `json:"SENDER2Q5"`
-	Sender2Q6Port      uint16 `json:"SENDER2Q6"`
-	Sender2Q7Port      uint16 `json:"SENDER2Q7"`
-	IPFSPort           uint16 `json:"IPFS_PORT"`
-	SwarmPort          uint16 `json:"SWARM_PORT"`
-	IPFSAPIPort        uint16 `json:"IPFS_API_PORT"`
-	AppPort            uint16 `json:"APPLICATION_PORT"`
+	SendPort     uint16 `json:"sender_port"`
+	ReceiverPort uint16 `json:"receiver_port"`
+	IPFSPort     uint16 `json:"ipfs_port"`
+	SwarmPort    uint16 `json:"swarm_port"`
+	IPFSAPIPort  uint16 `json:"ipfs_api_port"`
 }
 
 // SyncConfig defines varies IPs
@@ -50,17 +37,6 @@ type ConsensusData struct {
 	QuorumCount     int  `json:"QUORUM_COUNT"`
 }
 
-// QuorumList defines quorum list
-type QuorumList struct {
-	Quorum1 string `json:"QUORUM_1"`
-	Quorum2 string `json:"QUORUM_2"`
-	Quorum3 string `json:"QUORUM_3"`
-	Quorum4 string `json:"QUORUM_4"`
-	Quorum5 string `json:"QUORUM_5"`
-	Quorum6 string `json:"QUORUM_6"`
-	Quorum7 string `json:"QUORUM_7"`
-}
-
 type DIDConfigType struct {
 	Type   int                    `json:"TYPE"`
 	Config map[string]interface{} `json:"CONFIG"`
@@ -68,19 +44,32 @@ type DIDConfigType struct {
 
 // ConfigData defines configuration data
 type ConfigData struct {
-	Paths         Paths                    `json:"PATHS"`
-	Ports         Ports                    `json:"PORTS"`
-	SyncConfig    SyncConfig               `json:"SYNCCONFIG"`
-	ConsensusData ConsensusData            `json:"CONSENSUS"`
-	QuorumList    QuorumList               `json:"QUORUM_LIST"`
-	DIDList       []string                 `json:"DID_LIST"`
-	DIDConfig     map[string]DIDConfigType `json:"DID_CONFIG"`
-	BootStrap     []string                 `json:"BOOTSTRAP"`
+	Ports      Ports                    `json:"ports"`
+	DIDList    []string                 `json:"did_list"`
+	DIDConfig  map[string]DIDConfigType `json:"did_config"`
+	BootStrap  []string                 `json:"bootstrap"`
+	Services   map[string]string        `json:"services"`
+	QuorumList QuorumList               `json:"quorumr_list"`
+}
+
+type QuorumList struct {
+	Alpha []string `json:"alpha"`
+	Beta  []string `json:"beta"`
+	Gamma []string `json:"gamma"`
 }
 
 type Config struct {
-	NodeAddress string
-	NodePort    string
-	DirPath     string
-	CfgData     ConfigData
+	NodeAddress string     `json:"node_address"`
+	NodePort    string     `json:"node_port"`
+	DirPath     string     `json:"dir_path"`
+	CfgData     ConfigData `json:"cfg_data"`
+}
+
+type ExplorerConfig struct {
+	DBName     string `json:"db_name"`      // DBName is the name of the db.
+	DBAddress  string `json:"db_address"`   // DBPath is the name of the database itself.
+	DBPort     string `json:"db_port"`      // DBPath is the name of the database itself.
+	DBType     string `json:"db_type"`      // DBType is type of database to use
+	DBUserName string `json:"db_user_name"` // DBUserName is the user name for the DB
+	DBPassword string `json:"db_password"`  // DBPassword is the password  for the user
 }

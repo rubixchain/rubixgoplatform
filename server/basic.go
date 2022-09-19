@@ -9,11 +9,12 @@ import (
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/did"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 // BasicResponse will send basic mode response
 func (s *Server) BasicResponse(req *ensweb.Request, status bool, msg string, result interface{}) *ensweb.Result {
-	resp := Repsonse{
+	resp := Response{
 		Status:  status,
 		Message: msg,
 		Result:  result,
@@ -48,6 +49,52 @@ func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, str, nil)
 	}
 	return s.BasicResponse(req, true, str, nil)
+}
+
+// APIAddBootStrap will add bootstrap peers to the configuration
+func (s *Server) APIAddBootStrap(req *ensweb.Request) *ensweb.Result {
+	var m model.BootStrapPeers
+	err := s.ParseJSON(req, &m)
+	if err != nil {
+		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	err = s.c.AddBootStrap(m.Peers)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to add bootstrap peers, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "Boostrap peers added successfully", nil)
+}
+
+// APIRemoveBootStrap will remove bootstrap peers from the configuration
+func (s *Server) APIRemoveBootStrap(req *ensweb.Request) *ensweb.Result {
+	var m model.BootStrapPeers
+	err := s.ParseJSON(req, &m)
+	if err != nil {
+		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	err = s.c.RemoveBootStrap(m.Peers)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to remove bootstrap peers, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "Boostrap peers removed successfully", nil)
+}
+
+// APIRemoveAllBootStrap will remove all bootstrap peers from the configuration
+func (s *Server) APIRemoveAllBootStrap(req *ensweb.Request) *ensweb.Result {
+	err := s.c.RemoveAllBootStrap()
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to remove all bootstrap peers, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "All boostrap peers removed successfully", nil)
+}
+
+// APIRemoveAllBootStrap will remove all bootstrap peers from the configuration
+func (s *Server) APIGetAllBootStrap(req *ensweb.Request) *ensweb.Result {
+	peers := s.c.GetAllBootStrap()
+	m := model.BootStrapPeers{
+		Peers: peers,
+	}
+	return s.BasicResponse(req, true, "Got all the bootstrap peers successfully", m)
 }
 
 // APICreateDID will create new DID
@@ -89,7 +136,7 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		if strings.Contains(fileName, did.PubShareFileName) {
 			didCreate.PubImgFile = fileName
 		}
-		if strings.Contains(fileName, did.PubShareFileName) {
+		if strings.Contains(fileName, did.PubKeyFileName) {
 			didCreate.PubKeyFile = fileName
 		}
 	}

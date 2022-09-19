@@ -21,10 +21,25 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/util"
 )
 
+const (
+	DIDImgFile       string = "DID.png"
+	PvtShareImgFile  string = "pvtShare.png"
+	PubShareImgFile  string = "pubShare.png"
+	PvtKeyFile       string = "pvtKey.pem"
+	PubKeyFile       string = "pubKey.pem"
+	QuorumPvtKeyFile string = "quorumPrivKey.pem"
+	QuorumPubKeyFile string = "quorumPubKey.pem"
+)
+
 type DID struct {
 	cfg  *config.Config
 	log  logger.Logger
 	ipfs *ipfsnode.Shell
+}
+
+type DIDCrypto interface {
+	Sign(coord []int) (*DIDSignature, error)
+	Verify(coord []int, didSig *DIDSignature) (bool, error)
 }
 
 func InitDID(cfg *config.Config, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
@@ -95,7 +110,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			}
 		}
 
-		err = util.CreatePNGImage(outPixels, w, h, dirName+"/public/DID.png")
+		err = util.CreatePNGImage(outPixels, w, h, dirName+"/public/"+DIDImgFile)
 		if err != nil {
 			d.log.Error("failed to create image", "err", err)
 			return "", err
@@ -108,24 +123,24 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			pvtShare = append(pvtShare, pvS...)
 			pubShare = append(pubShare, pbS...)
 		}
-		err = util.CreatePNGImage(pvtShare, w*4, h*2, dirName+"/private/pvtShare.png")
+		err = util.CreatePNGImage(pvtShare, w*4, h*2, dirName+"/private/"+PvtShareImgFile)
 		if err != nil {
 			d.log.Error("failed to create image", "err", err)
 			return "", err
 		}
-		err = util.CreatePNGImage(pubShare, w*4, h*2, dirName+"/public/pubShare.png")
+		err = util.CreatePNGImage(pubShare, w*4, h*2, dirName+"/public/"+PubShareFileName)
 		if err != nil {
 			d.log.Error("failed to create image", "err", err)
 			return "", err
 		}
 	}
 	if didCreate.Type == WalletDIDMode {
-		_, err := util.Filecopy(didCreate.DIDImgFile, dirName+"/public/DID.png")
+		_, err := util.Filecopy(didCreate.DIDImgFile, dirName+"/public/"+DIDImgFile)
 		if err != nil {
 			d.log.Error("failed to copy did image", "err", err)
 			return "", err
 		}
-		_, err = util.Filecopy(didCreate.PubImgFile, dirName+"/public/pubShare.png")
+		_, err = util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
 		if err != nil {
 			d.log.Error("failed to copy public share image", "err", err)
 			return "", err
@@ -141,16 +156,16 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			d.log.Error("failed to create keypair", "err", err)
 			return "", err
 		}
-		err = util.FileWrite(dirName+"/private/pvtKey.pem", pvtKey)
+		err = util.FileWrite(dirName+"/private/"+PvtKeyFile, pvtKey)
 		if err != nil {
 			return "", err
 		}
-		err = util.FileWrite(dirName+"/public/pubKey.pem", pubKey)
+		err = util.FileWrite(dirName+"/public/"+PubKeyFile, pubKey)
 		if err != nil {
 			return "", err
 		}
 	} else {
-		_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/pubKey.pem")
+		_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFile)
 		if err != nil {
 			d.log.Error("failed to copy pub key", "err", err)
 			return "", err
@@ -170,11 +185,11 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		d.log.Error("failed to create keypair", "err", err)
 		return "", err
 	}
-	err = util.FileWrite(dirName+"/private/quorumPrivKey.pem", pvtKey)
+	err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFile, pvtKey)
 	if err != nil {
 		return "", err
 	}
-	err = util.FileWrite(dirName+"/public/quorumPubKey.pem", pubKey)
+	err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFile, pubKey)
 	if err != nil {
 		return "", err
 	}
@@ -185,10 +200,26 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	}
 
 	newDIrName := d.cfg.DirPath + "Rubix/" + did
-	err = os.Rename(dirName, newDIrName)
+
+	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
 	if err != nil {
+		d.log.Error("failed to create directory", "err", err)
 		return "", err
 	}
+
+	err = util.DirCopy(dirName+"/public", newDIrName)
+	if err != nil {
+		d.log.Error("failed to copy directory", "err", err)
+		return "", err
+	}
+
+	err = util.DirCopy(dirName+"/private", newDIrName)
+	if err != nil {
+		d.log.Error("failed to copy directory", "err", err)
+		return "", err
+	}
+	os.RemoveAll(dirName)
+
 	d.cfg.CfgData.DIDList = append(d.cfg.CfgData.DIDList, did)
 	if d.cfg.CfgData.DIDConfig == nil {
 		d.cfg.CfgData.DIDConfig = make(map[string]config.DIDConfigType)
