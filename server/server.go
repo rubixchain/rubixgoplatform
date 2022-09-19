@@ -15,11 +15,14 @@ const (
 	APIStart               string = "/api/start"
 	APIShutdown            string = "/api/shutdown"
 	APIPing                string = "/api/ping"
-	APICreateDID           string = "/api/create"
 	APIAddBootStrap        string = "/api/add-bootstrap"
 	APIRemoveBootStrap     string = "/api/remove-bootstrap"
 	APIRemoveAllBootStrap  string = "/api/remove-all-bootstrap"
 	APIGetAllBootStrap     string = "/api/get-all-bootstrap"
+	APICreateDID           string = "/api/createdid"
+	APIGetAllDID           string = "/api/getalldid"
+	APIAddQuorum           string = "/api/addquorum"
+	APIGetAllQuorum        string = "/api/getallquorum"
 	APIEnableExplorer      string = "/api/enable-explorer"
 	APIInitiateRBTTransfer string = "/api/initiate-rbt-transfer"
 )
@@ -82,6 +85,9 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIRemoveAllBootStrap, "POST", s.APIRemoveAllBootStrap)
 	s.AddRoute(APIGetAllBootStrap, "GET", s.APIGetAllBootStrap)
 	s.AddRoute(APICreateDID, "POST", s.APICreateDID)
+	s.AddRoute(APIGetAllDID, "GET", s.APIGetAllDID)
+	s.AddRoute(APIAddQuorum, "POST", s.APIAddQuorum)
+	s.AddRoute(APIGetAllQuorum, "GET", s.APIGetAllQuorum)
 	s.AddRoute(APIEnableExplorer, "POST", s.APIEnableExplorer)
 	s.AddRoute(APIInitiateRBTTransfer, "POST", s.APIInitiateRBTTransfer)
 }

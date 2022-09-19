@@ -59,12 +59,12 @@ func (pm *PeerManager) getPeerPort() uint16 {
 func (pm *PeerManager) releasePeerPort(port uint16) bool {
 	pm.lock.Lock()
 	defer pm.lock.Unlock()
-	offset := pm.startPort - uint16(port)
+	offset := uint16(port) - pm.startPort
 	if int(offset) >= len(pm.ps) {
 		return false
 	}
 	pm.ps[offset] = false
-	return false
+	return true
 }
 
 func (pm *PeerManager) SwarmConnect(peerID string) bool {
@@ -159,6 +159,7 @@ func (p *Peer) SendJSONRequest(method string, path string, querry map[string]str
 }
 
 func (p *Peer) Close() error {
+	defer p.pm.releasePeerPort(p.port)
 	addr := "/ip4/127.0.0.1/tcp/" + fmt.Sprintf("%d", p.port)
 	req := p.pm.ipfs.Request("p2p/close")
 	resp, err := req.Option("listen-address", addr).Send(context.Background())
@@ -170,6 +171,6 @@ func (p *Peer) Close() error {
 		p.log.Error("failed to close ipfs port", "err", resp.Error)
 		return resp.Error
 	}
-	p.pm.releasePeerPort(p.port)
+
 	return nil
 }

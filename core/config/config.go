@@ -1,5 +1,7 @@
 package config
 
+import "github.com/rubixchain/rubixgoplatform/core/wallet"
+
 // Paths defines varies path
 type Paths struct {
 	LogPath           string `json:"LOGGER_PATH"`
@@ -44,12 +46,14 @@ type DIDConfigType struct {
 
 // ConfigData defines configuration data
 type ConfigData struct {
-	Ports      Ports                    `json:"ports"`
-	DIDList    []string                 `json:"did_list"`
-	DIDConfig  map[string]DIDConfigType `json:"did_config"`
-	BootStrap  []string                 `json:"bootstrap"`
-	Services   map[string]string        `json:"services"`
-	QuorumList QuorumList               `json:"quorumr_list"`
+	Ports            Ports                    `json:"ports"`
+	DIDList          []string                 `json:"did_list"`
+	DIDConfig        map[string]DIDConfigType `json:"did_config"`
+	BootStrap        []string                 `json:"bootstrap"`
+	Services         map[string]string        `json:"services"`
+	QuorumList       QuorumList               `json:"quorumr_list"`
+	MainWalletConfig wallet.WalletConfig      `json:"main_wallet_config"`
+	TestWalletConfig wallet.WalletConfig      `json:"test_wallet_config"`
 }
 
 type QuorumList struct {

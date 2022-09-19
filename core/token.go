@@ -1,7 +1,6 @@
 package core
 
 func (c *Core) getTokens(did string, amount float64) ([]string, []string, bool) {
-	// ::TODO:: get the required tokens & lock the tokens untill transaction is over
 	return nil, nil, true
 }
 

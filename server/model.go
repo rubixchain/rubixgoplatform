@@ -31,6 +31,20 @@ type BootStrapResponse struct {
 	Result  model.BootStrapPeers `json:"result"`
 }
 
+// GetDIDResponse used for get DID response
+type GetDIDResponse struct {
+	Status  bool     `json:"status"`
+	Message string   `json:"message"`
+	Result  []string `json:"result"`
+}
+
 type DIDResponse struct {
 	DID string `json:"did"`
+}
+
+// QuorumListResponse used as model for the API responses
+type QuorumListResponse struct {
+	Status  bool             `json:"status"`
+	Message string           `json:"message"`
+	Result  model.QuorumList `json:"result"`
 }

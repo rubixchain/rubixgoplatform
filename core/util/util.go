@@ -296,3 +296,8 @@ func ParseAddress(addr string) (string, string, bool) {
 	//TODO:: Validation
 	return peerID, did, true
 }
+
+// CreateAddress will create the addrees fromt Peer ID  & DID
+func CreateAddress(peerID string, did string) string {
+	return peerID + "." + did
+}
