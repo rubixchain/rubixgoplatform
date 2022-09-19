@@ -2,6 +2,7 @@ package command
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/EnsurityTechnologies/helper/jsonutil"
@@ -120,8 +121,37 @@ func (cmd *Command) CreateDID() {
 		return
 	}
 	if !response.Status {
-		cmd.log.Error("Failed to enable explorer service", "message", response.Message)
+		cmd.log.Error("Failed to create DID", "message", response.Message)
 		return
 	}
-	cmd.log.Info("Explorer service enabled successfully")
+	cmd.log.Info("DID Created successfully")
+}
+
+func (cmd *Command) GetAllDID() {
+	c, r, err := cmd.basicClient("GET", server.APIGetAllDID, nil)
+	if err != nil {
+		cmd.log.Error("Failed to create http client", "err", err)
+		return
+	}
+	resp, err := c.Do(r)
+	if err != nil {
+		cmd.log.Error("Failed to get response from the node", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+	var response server.GetDIDResponse
+	err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
+	if err != nil {
+		cmd.log.Error("Invalid response from the node", "err", err)
+		return
+	}
+	if !response.Status {
+		cmd.log.Error("Failed to get DIDs", "message", response.Message)
+		return
+	}
+	fmt.Printf("Response : %v\n", response)
+	for i := range response.Result {
+		fmt.Printf("Address : %s\n", response.Result[i])
+	}
+	cmd.log.Info("Got all DID successfully")
 }

@@ -37,6 +37,10 @@ const (
 	RemoveAllBootStrapCmd string = "removeallbootstrap"
 	GetAllBootStrapCmd    string = "getallbootstrap"
 	CreateDIDCmd          string = "createdid"
+	GetAllDIDCmd          string = "getalldid"
+	AddQuorumCmd          string = "addquorum"
+	GetAllQuorumCmd       string = "getallquorum"
+	TransferRBTCmd        string = "transferrbt"
 	EnableExplorerCmd     string = "enableexplorer"
 )
 
@@ -49,6 +53,10 @@ var commands = []string{VersionCmd,
 	RemoveAllBootStrapCmd,
 	GetAllBootStrapCmd,
 	CreateDIDCmd,
+	GetAllDIDCmd,
+	AddQuorumCmd,
+	GetAllQuorumCmd,
+	TransferRBTCmd,
 	EnableExplorerCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -59,36 +67,45 @@ var commandsHelp = []string{"To get tool version",
 	"This command will remove all bootstrap peers from the configuration",
 	"This command will get all bootstrap peers from the configuration",
 	"This command will create DID",
+	"This command will get all DID address",
+	"This command will add quorurm list to node",
+	"This command will trasnfer RBT",
 	"This command enable explorer service on the node"}
 
 type Command struct {
-	cfg        config.Config
-	encKey     string
-	start      bool
-	node       uint
-	runDir     string
-	cfgFile    string
-	testNet    bool
-	testNetKey string
-	addr       string
-	port       string
-	peerID     string
-	peers      []string
-	log        logger.Logger
-	didType    int
-	didSecret  string
-	privPWD    string
-	quorumPWD  string
-	imgFile    string
-	didImgFile string
-	pubImgFile string
-	pubKeyFile string
-	dbName     string
-	dbType     string
-	dbAddress  string
-	dbPort     string
-	dbUserName string
-	dbPassword string
+	cfg          config.Config
+	encKey       string
+	start        bool
+	node         uint
+	runDir       string
+	cfgFile      string
+	testNet      bool
+	testNetKey   string
+	addr         string
+	port         string
+	peerID       string
+	peers        []string
+	log          logger.Logger
+	didType      int
+	didSecret    string
+	privPWD      string
+	quorumPWD    string
+	imgFile      string
+	didImgFile   string
+	pubImgFile   string
+	pubKeyFile   string
+	quorumList   string
+	dbName       string
+	dbType       string
+	dbAddress    string
+	dbPort       string
+	dbUserName   string
+	dbPassword   string
+	senderAddr   string
+	receiverAddr string
+	rbtAmount    float64
+	transComment string
+	transType    int
 }
 
 func showVersion() {
@@ -198,12 +215,18 @@ func Run(args []string, log logger.Logger) {
 	flag.StringVar(&cmd.didImgFile, "didImgFile", did.DIDImgFile, "DID image")
 	flag.StringVar(&cmd.pubImgFile, "pubImgFile", did.PubShareFileName, "DID public share image")
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
+	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
 	flag.StringVar(&cmd.dbName, "dbName", "ExplorerDB", "Explorer database name")
 	flag.StringVar(&cmd.dbType, "dbType", "SQLServer", "DB Type, supported database are SQLServer, PostgressSQL, MySQL & Sqlite3")
 	flag.StringVar(&cmd.dbAddress, "dbAddress", "localhost", "Database address")
 	flag.StringVar(&cmd.dbPort, "dbPort", "1433", "Database port number")
 	flag.StringVar(&cmd.dbUserName, "dbUsername", "sa", "Database username")
 	flag.StringVar(&cmd.dbPassword, "dbPassword", "password", "Database password")
+	flag.StringVar(&cmd.senderAddr, "senderAddr", "", "Sender address")
+	flag.StringVar(&cmd.receiverAddr, "receiverAddr", "", "Receiver address")
+	flag.Float64Var(&cmd.rbtAmount, "rbtAmount", 0.0, "RBT amount")
+	flag.StringVar(&cmd.transComment, "transComment", "Test tranasaction", "Transaction comment")
+	flag.IntVar(&cmd.transType, "transType", 2, "Transaction type")
 
 	if len(os.Args) < 2 {
 		cmd.log.Error("Invalid Command")
@@ -246,8 +269,16 @@ func Run(args []string, log logger.Logger) {
 		cmd.getAllBootStrap()
 	case CreateDIDCmd:
 		cmd.CreateDID()
+	case GetAllDIDCmd:
+		cmd.GetAllDID()
+	case AddQuorumCmd:
+		cmd.AddQuorurm()
+	case GetAllQuorumCmd:
+		cmd.GetAllQuorum()
 	case EnableExplorerCmd:
 		cmd.EnableExplorer()
+	case TransferRBTCmd:
+		cmd.TransferRBT()
 	default:
 		cmd.log.Error("Invalid command")
 	}

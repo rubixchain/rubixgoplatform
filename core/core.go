@@ -20,6 +20,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/quorum"
+	"github.com/rubixchain/rubixgoplatform/core/storage"
+	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
 const (
@@ -49,6 +52,7 @@ type Core struct {
 	peerID         string
 	lock           sync.RWMutex
 	ipfsLock       sync.RWMutex
+	qlock          sync.RWMutex
 	ipfs           *ipfsnode.Shell
 	ipfsState      bool
 	ipfsChan       chan bool
@@ -64,6 +68,8 @@ type Core struct {
 	explorerStatus bool
 	exploreDB      *adapter.Adapter
 	version        string
+	quorumRequest  map[string]*ConsensusStatus
+	w              *wallet.Wallet
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {
@@ -82,7 +88,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 					SwarmPort:    (SwarmPort + node),
 					IPFSAPIPort:  (IPFSAPIPort + node),
 				},
-				BootStrap: []string{"/ip4/174.141.238.73/tcp/4001/p2p/QmZbukm4Dbhb2LUwMomBPmaiepLroLGueCPTxN1SEUq15u", "/ip4/103.60.213.76/tcp/4023/p2p/12D3KooWE3fSQSb7aTNjS7CRLytWBxL46MeQd1HpBBUtPGz2HAeA"},
+				BootStrap: []string{"/ip4/46.166.163.226/tcp/4001/p2p/Qmb9vLM1cNDeMq5i5e8xwWMt7vr4QCAt17RWh2zp1cjRpY"},
 			},
 		}
 		cfgBytes, err := json.Marshal(cfg)
@@ -98,17 +104,62 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 }
 
 func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string) (*Core, error) {
+	update := false
+	if cfg.CfgData.MainWalletConfig.StorageType == 0 {
+		cfg.CfgData.MainWalletConfig.StorageType = storage.StorageDBType
+		cfg.CfgData.MainWalletConfig.DBAddress = cfg.DirPath + "Rubix/MainNet/wallet.db"
+		cfg.CfgData.MainWalletConfig.DBType = "Sqlite3"
+		update = true
+
+	}
+	if cfg.CfgData.TestWalletConfig.StorageType == 0 {
+		cfg.CfgData.TestWalletConfig.StorageType = storage.StorageDBType
+		cfg.CfgData.TestWalletConfig.DBAddress = cfg.DirPath + "Rubix/TestNet/wallet.db"
+		cfg.CfgData.TestWalletConfig.DBType = "Sqlite3"
+		update = true
+	}
+
 	c := &Core{
-		cfg:        cfg,
-		cfgFile:    cfgFile,
-		encKey:     encKey,
-		testNet:    testNet,
-		testNetKey: testNetKey,
+		cfg:           cfg,
+		cfgFile:       cfgFile,
+		encKey:        encKey,
+		testNet:       testNet,
+		testNetKey:    testNetKey,
+		quorumRequest: make(map[string]*ConsensusStatus),
 	}
 
 	c.log = log.Named("Core")
 
 	c.ipfsChan = make(chan bool)
+
+	if update {
+		c.updateConfig()
+	}
+	if _, err := os.Stat(cfg.DirPath + "Rubix/MainNet"); os.IsNotExist(err) {
+		err := os.MkdirAll(cfg.DirPath+"Rubix/MainNet", os.ModeDir|os.ModePerm)
+		if err != nil {
+			c.log.Error("Failed to create main net directory", "err", err)
+			return nil, err
+		}
+	}
+	wcfg := &cfg.CfgData.MainWalletConfig
+	if testNet {
+		if _, err := os.Stat(cfg.DirPath + "Rubix/TestNet"); os.IsNotExist(err) {
+			err := os.MkdirAll(cfg.DirPath+"Rubix/TestNet", os.ModeDir|os.ModePerm)
+			if err != nil {
+				c.log.Error("Failed to create test net directory", "err", err)
+				return nil, err
+			}
+		}
+		wcfg = &cfg.CfgData.TestWalletConfig
+	}
+
+	w, err := wallet.InitWallet(wcfg, c.log)
+	if err != nil {
+		c.log.Error("Failed to setup wallet", "err", err)
+		return nil, err
+	}
+	c.w = w
 
 	return c, nil
 }
@@ -143,6 +194,7 @@ func (c *Core) SetupCore() error {
 		}
 	}
 	c.PingSetup()
+	c.PeerStatusSetup()
 	return nil
 }
 
@@ -264,4 +316,12 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		return "", err
 	}
 	return did, nil
+}
+
+func (c *Core) GetAllDID() []string {
+	str := make([]string, 0)
+	for _, did := range c.cfg.CfgData.DIDList {
+		str = append(str, util.CreateAddress(c.peerID, did))
+	}
+	return str
 }
