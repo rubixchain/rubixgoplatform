@@ -31,7 +31,6 @@ func GetPNGImagePixels(file string) ([]byte, error) {
 	}
 	return pixels, nil
 }
-
 func CreatePNGImage(pixels []byte, width int, height int, file string) error {
 	if len(pixels) != width*height*3 {
 		return fmt.Errorf("invalid pixel buffer")
