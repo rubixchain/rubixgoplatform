@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/util"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
@@ -27,6 +28,46 @@ func (c *Core) removeTokens(did string, wholeTokens []string, partTokens []strin
 func (c *Core) releaseTokens(did string, wholeTokens []string, partTokens []string) error {
 	// ::TODO:: releae the tokens which is lokced for the transaction
 	return nil
+}
+
+func (c *Core) GetAccountInfo(did string) (*model.RBTInfo, error) {
+	wt, err := c.w.GetAllWholeTokens(did)
+	if err != nil {
+		c.log.Error("Failed to get tokens", "err", err)
+		return nil, fmt.Errorf("Failed to get tokens")
+	}
+	pt, err := c.w.GetAllPartTokens(did)
+	if err != nil {
+		c.log.Error("Failed to get tokens", "err", err)
+		return nil, fmt.Errorf("Failed to get tokens")
+	}
+	info := &model.RBTInfo{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "RBT accoutn info",
+		},
+	}
+	for _, t := range wt {
+		switch t.TokenStatus {
+		case wallet.TokenIsFree:
+			info.WholeRBT++
+		case wallet.TokenIsLocked:
+			info.LockedWholeRBT++
+		case wallet.TokenIsPledged:
+			info.PledgedWholeRBT++
+		}
+	}
+	for _, t := range pt {
+		switch t.TokenStatus {
+		case wallet.TokenIsFree:
+			info.PartRBT++
+		case wallet.TokenIsLocked:
+			info.LockedPartRBT++
+		case wallet.TokenIsPledged:
+			info.PledgedPartRBT++
+		}
+	}
+	return info, nil
 }
 
 func (c *Core) GenerateTestTokens(reqID string, num int, did string) error {

@@ -34,7 +34,9 @@ const (
 
 type DIDChan struct {
 	ID      string
-	Chan    chan interface{}
+	InChan  chan interface{}
+	OutChan chan interface{}
+	Finish  chan bool
 	Req     *ensweb.Request
 	Timeout time.Duration
 }

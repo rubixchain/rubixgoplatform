@@ -362,7 +362,9 @@ func (c *Core) AddWebReq(req *ensweb.Request) {
 	defer c.rlock.Unlock()
 	c.webReq[req.ID] = &did.DIDChan{
 		ID:      req.ID,
-		Chan:    make(chan interface{}),
+		InChan:  make(chan interface{}),
+		OutChan: make(chan interface{}),
+		Finish:  make(chan bool),
 		Req:     req,
 		Timeout: 3 * time.Minute,
 	}

@@ -32,6 +32,7 @@ const (
 	APIEnableExplorer      string = "/api/enable-explorer"
 	APIGenerateTestToken   string = "/api/generate-test-token"
 	APIInitiateRBTTransfer string = "/api/initiate-rbt-transfer"
+	APIGetAccountInfo      string = "/api/get-account-info"
 	APISignatureResponse   string = "/api/signature-response"
 )
 
@@ -196,6 +197,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIEnableExplorer, "POST", s.AuthHandle(s.APIEnableExplorer, s.ErrorFunc))
 	s.AddRoute(APIGenerateTestToken, "POST", s.AuthHandle(s.APIGenerateTestToken, s.ErrorFunc))
 	s.AddRoute(APIInitiateRBTTransfer, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, s.ErrorFunc))
+	s.AddRoute(APIGetAccountInfo, "GET", s.AuthHandle(s.APIGetAccountInfo, s.ErrorFunc))
 	s.AddRoute(APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, s.ErrorFunc))
 
 }

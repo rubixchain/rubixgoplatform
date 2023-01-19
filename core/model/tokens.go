@@ -22,3 +22,13 @@ type RBTTransferReply struct {
 	Comment    string `json:"comment"`
 	Type       int    `json:"type"`
 }
+
+type RBTInfo struct {
+	BasicResponse
+	WholeRBT        int `json:"whole_rbt"`
+	PledgedWholeRBT int `json:"pledged_whole_rbt"`
+	LockedWholeRBT  int `json:"locked_whole_rbt"`
+	PartRBT         int `json:"part_rbt"`
+	PledgedPartRBT  int `json:"pledged_part_rbt"`
+	LockedPartRBT   int `json:"locked_part_rbt"`
+}

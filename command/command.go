@@ -44,6 +44,7 @@ const (
 	SetupQuorumCmd        string = "setupquorum"
 	GenerateTestRBTCmd    string = "generatetestrbt"
 	TransferRBTCmd        string = "transferrbt"
+	GetAccountInfoCmd     string = "getaccountinfo"
 	EnableExplorerCmd     string = "enableexplorer"
 )
 
@@ -63,6 +64,7 @@ var commands = []string{VersionCmd,
 	SetupQuorumCmd,
 	GenerateTestRBTCmd,
 	TransferRBTCmd,
+	GetAccountInfoCmd,
 	EnableExplorerCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -80,6 +82,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will setup node as quorurm",
 	"This command will generate test RBT token",
 	"This command will trasnfer RBT",
+	"This command will help to get account information",
 	"This command enable explorer service on the node"}
 
 type Command struct {
@@ -314,6 +317,8 @@ func Run(args []string, log logger.Logger) {
 		cmd.GenerateTestRBT()
 	case TransferRBTCmd:
 		cmd.TransferRBT()
+	case GetAccountInfoCmd:
+		cmd.GetAccountInfo()
 	default:
 		cmd.log.Error("Invalid command")
 	}

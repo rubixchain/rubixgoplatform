@@ -108,6 +108,26 @@ func (w *Wallet) PledgeWholeToken(did string, token string, tcb map[string]inter
 	return nil
 }
 
+func (w *Wallet) GetAllWholeTokens(did string) ([]Token, error) {
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "did=?", did)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
+
+func (w *Wallet) GetAllPartTokens(did string) ([]PartToken, error) {
+	var t []PartToken
+	err := w.s.Read(PartTokenStorage, &t, "did=?", did)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
+
 func (w *Wallet) GetWholeTokens(did string, num int) ([]Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -224,6 +244,10 @@ func (w *Wallet) TokensTransferred(did string, wt []string, pt []string, tcb map
 		}
 		t.TokenChainID = ha.(string)
 		t.TokenStatus = TokenIsTransferred
+		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, wt[i])
+		if err != nil {
+			return err
+		}
 		w.AddLatestTokenBlock(wt[i], tcb)
 	}
 	for i := range pt {
@@ -238,6 +262,10 @@ func (w *Wallet) TokensTransferred(did string, wt []string, pt []string, tcb map
 		}
 		t.TokenChainID = ha.(string)
 		t.TokenStatus = TokenIsTransferred
+		err = w.s.Update(PartTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
+		if err != nil {
+			return err
+		}
 		w.AddLatestTokenBlock(pt[i], tcb)
 	}
 	return nil
@@ -254,6 +282,10 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, tcb map[st
 				TokenID: wt[i],
 				DID:     did,
 			}
+			err = w.s.Write(TokenStorage, &t)
+			if err != nil {
+				return err
+			}
 		}
 		ha, ok := tcb[TCBlockHashKey]
 		if !ok {
@@ -261,6 +293,10 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, tcb map[st
 		}
 		t.TokenChainID = ha.(string)
 		t.TokenStatus = TokenIsFree
+		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, wt[i])
+		if err != nil {
+			return err
+		}
 		w.AddLatestTokenBlock(wt[i], tcb)
 	}
 	// for i := range pt {

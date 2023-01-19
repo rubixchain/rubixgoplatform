@@ -6,11 +6,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/util"
 )
 
-func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.RBTTransferReply {
-	resp := &model.RBTTransferReply{
-		BasicResponse: model.BasicResponse{
-			Status: false,
-		},
+func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
+	resp := &model.BasicResponse{
+		Status: false,
 	}
 	_, did, ok := util.ParseAddress(req.Sender)
 	if !ok {

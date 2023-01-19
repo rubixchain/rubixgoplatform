@@ -2,10 +2,8 @@ package did
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"time"
 
 	"github.com/EnsurityTechnologies/enscrypt"
@@ -26,15 +24,17 @@ func InitDIDBasic(did string, baseDir string, ch *DIDChan) *DIDBasic {
 	return &DIDBasic{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
 }
 
+func InitDIDBasicWithPassword(did string, baseDir string, pwd string) *DIDBasic {
+	return &DIDBasic{did: did, dir: baseDir, pwd: pwd}
+}
+
 func (d *DIDBasic) getPassword() (string, error) {
 	if d.pwd != "" {
 		return d.pwd, nil
 	}
-	if d.ch == nil || d.ch.Chan == nil {
+	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
 		return "", fmt.Errorf("Invalid configuration")
 	}
-	w := d.ch.Req.GetHTTPWritter()
-	w.Header().Set("Content-Type", "application/json")
 	sr := &SignResponse{
 		Status:  true,
 		Message: "Password needed",
@@ -43,15 +43,10 @@ func (d *DIDBasic) getPassword() (string, error) {
 			Mode: BasicDIDMode,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	enc := json.NewEncoder(w)
-	enc.Encode(sr)
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
+	d.ch.OutChan <- sr
 	var ch interface{}
 	select {
-	case ch = <-d.ch.Chan:
+	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
 		return "", fmt.Errorf("Timeout, failed to get password")
 	}
