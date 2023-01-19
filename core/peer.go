@@ -40,14 +40,14 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 		// ::TODO:: get the peer id using the pubsub
 		return nil, fmt.Errorf("invalid address")
 	}
-	p, err := c.pm.OpenPeerConn(peerID, c.getCoreAppName(peerID))
+	p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
 	if err != nil {
 		return nil, err
 	}
 	q := make(map[string]string)
 	q["did"] = did
 	var ps model.PeerStatusResponse
-	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps)
+	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps, false)
 	if err != nil {
 		return nil, err
 	}

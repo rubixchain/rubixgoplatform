@@ -33,3 +33,21 @@ type DIDSignature struct {
 	Pixels    []byte
 	Signature []byte
 }
+
+type SignReqData struct {
+	ID   string `json:"id"`
+	Mode int    `json:"mode"`
+}
+
+type SignRespData struct {
+	ID       string `json:"id"`
+	Mode     int    `json:"mode"`
+	Password string `json:"password"`
+}
+
+// BootStrapResponse used as model for the API responses
+type SignResponse struct {
+	Status  bool        `json:"status"`
+	Message string      `json:"message"`
+	Result  SignReqData `json:"result"`
+}

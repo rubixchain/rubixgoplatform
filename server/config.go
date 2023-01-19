@@ -5,10 +5,24 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
+
+const (
+	SessionAuthMethod string = "SessionAuth"
+	APIKeyAuthMethod  string = "APIKeyAuth"
+)
+
+type Config struct {
+	config.Config
+	EnableAuth  bool   `json:"enable_auth"`
+	AuthMethod  string `json:"auth_method"`
+	SessionName string `json:"session_name"`
+	SessionKey  string `json:"session_key"`
+}
 
 // APIAddBootStrap will add bootstrap peers to the configuration
 func (s *Server) APIAddBootStrap(req *ensweb.Request) *ensweb.Result {
@@ -134,5 +148,14 @@ func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
 // APIGetAllQuorum will get quorum list from node
 func (s *Server) APIGetAllQuorum(req *ensweb.Request) *ensweb.Result {
 	ql := s.c.GetAllQuorum()
-	return s.BasicResponse(req, true, "GOt all quorums successfully", ql)
+	return s.BasicResponse(req, true, "Got all quorums successfully", ql)
+}
+
+// APIRemoveAllQuorum will remove quorum list from node
+func (s *Server) APIRemoveAllQuorum(req *ensweb.Request) *ensweb.Result {
+	err := s.c.RemoveAllQuorum()
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to remove all quorums", nil)
+	}
+	return s.BasicResponse(req, true, "Removed all quorums successfully", nil)
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/enscrypt"
+	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/EnsurityTechnologies/uuid"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
@@ -31,6 +32,13 @@ const (
 	QuorumPubKeyFile string = "quorumPubKey.pem"
 )
 
+type DIDChan struct {
+	ID      string
+	Chan    chan interface{}
+	Req     *ensweb.Request
+	Timeout time.Duration
+}
+
 type DID struct {
 	cfg  *config.Config
 	log  logger.Logger
@@ -38,8 +46,10 @@ type DID struct {
 }
 
 type DIDCrypto interface {
-	Sign(coord []int) (*DIDSignature, error)
-	Verify(coord []int, didSig *DIDSignature) (bool, error)
+	Sign(hash string) ([]byte, []byte, error)
+	Verify(hash string, didSig []byte, pvtSig []byte) (bool, error)
+	PvtSign(hash []byte) ([]byte, error)
+	PvtVerify(hash []byte, sign []byte) (bool, error)
 }
 
 func InitDID(cfg *config.Config, log logger.Logger, ipfs *ipfsnode.Shell) *DID {

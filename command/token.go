@@ -7,15 +7,12 @@ import (
 	"github.com/rubixchain/rubixgoplatform/server"
 )
 
-func (cmd *Command) TransferRBT() {
-	rt := model.RBTTransferRequest{
-		Receiver:   cmd.receiverAddr,
-		Sender:     cmd.senderAddr,
-		TokenCount: cmd.rbtAmount,
-		Type:       cmd.transType,
-		Comment:    cmd.transComment,
+func (cmd *Command) GenerateTestRBT() {
+	rt := model.RBTGenerateRequest{
+		NumberOfTokens: cmd.numTokens,
+		DID:            cmd.did,
 	}
-	c, r, err := cmd.basicClient("POST", server.APIInitiateRBTTransfer, &rt)
+	c, r, err := cmd.basicClient("POST", server.APIGenerateTestToken, &rt)
 	if err != nil {
 		cmd.log.Error("Failed to create http client", "err", err)
 		return
@@ -59,16 +56,15 @@ func (cmd *Command) TransferRBT() {
 	}
 	defer sresp.Body.Close()
 
-	var response model.RBTTransferReply
-	err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
+	var response model.BasicResponse
+	err = jsonutil.DecodeJSONFromReader(sresp.Body, &response)
 	if err != nil {
 		cmd.log.Error("Invalid response from the node", "err", err)
 		return
 	}
 	if !response.Status {
-		cmd.log.Error("Failed to trasnfer RBT", "message", response.Message)
+		cmd.log.Error("Failed to generate RBT", "message", response.Message)
 		return
 	}
-
-	cmd.log.Info("RBT transfered successfully")
+	cmd.log.Info("Test RBT generated successfully")
 }

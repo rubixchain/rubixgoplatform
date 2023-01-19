@@ -12,20 +12,23 @@ import (
 const (
 	TokenStorage     string = "Tokens"
 	PartTokenStorage string = "PartTokens"
+	CreditStorage    string = "Credits"
 )
 
 type WalletConfig struct {
-	StorageType int    `json:"stroage_type"`
-	DBName      string `json:"db_name"`
-	DBAddress   string `json:"db_address"`
-	DBPort      string `json:"db_port"`
-	DBType      string `json:"db_type"`
-	DBUserName  string `json:"db_user_name"`
-	DBPassword  string `json:"db_password"`
+	StorageType   int    `json:"stroage_type"`
+	DBName        string `json:"db_name"`
+	DBAddress     string `json:"db_address"`
+	DBPort        string `json:"db_port"`
+	DBType        string `json:"db_type"`
+	DBUserName    string `json:"db_user_name"`
+	DBPassword    string `json:"db_password"`
+	TokenChainDir string `json:"token_chain_dir"`
 }
 
 type Wallet struct {
 	s   storage.Storage
+	ts  storage.Storage
 	l   sync.Mutex
 	log logger.Logger
 }
@@ -37,6 +40,10 @@ func InitWallet(cfg *WalletConfig, log logger.Logger) (*Wallet, error) {
 	var err error
 	w := &Wallet{
 		log: log,
+	}
+	w.ts, err = storage.NewStorageLDB(cfg.TokenChainDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure token chain storage")
 	}
 	switch cfg.StorageType {
 	case storage.StorageDBType:
@@ -64,6 +71,11 @@ func InitWallet(cfg *WalletConfig, log logger.Logger) (*Wallet, error) {
 	err = w.s.Init(PartTokenStorage, &PartToken{})
 	if err != nil {
 		w.log.Error("Failed to initialize part token storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(CreditStorage, &Credit{})
+	if err != nil {
+		w.log.Error("Failed to initialize credit storage", "err", err)
 		return nil, err
 	}
 	return w, nil

@@ -31,7 +31,7 @@ const (
 	VersionCmd            string = "-v"
 	HelpCmd               string = "-h"
 	RunCmd                string = "run"
-	PinCmd                string = "ping"
+	PingCmd               string = "ping"
 	AddBootStrapCmd       string = "addbootstrap"
 	RemoveBootStrapCmd    string = "removebootstrap"
 	RemoveAllBootStrapCmd string = "removeallbootstrap"
@@ -40,6 +40,9 @@ const (
 	GetAllDIDCmd          string = "getalldid"
 	AddQuorumCmd          string = "addquorum"
 	GetAllQuorumCmd       string = "getallquorum"
+	RemoveAllQuorumCmd    string = "removeallquorum"
+	SetupQuorumCmd        string = "setupquorum"
+	GenerateTestRBTCmd    string = "generatetestrbt"
 	TransferRBTCmd        string = "transferrbt"
 	EnableExplorerCmd     string = "enableexplorer"
 )
@@ -47,7 +50,7 @@ const (
 var commands = []string{VersionCmd,
 	HelpCmd,
 	RunCmd,
-	PinCmd,
+	PingCmd,
 	AddBootStrapCmd,
 	RemoveBootStrapCmd,
 	RemoveAllBootStrapCmd,
@@ -56,6 +59,9 @@ var commands = []string{VersionCmd,
 	GetAllDIDCmd,
 	AddQuorumCmd,
 	GetAllQuorumCmd,
+	RemoveAllQuorumCmd,
+	SetupQuorumCmd,
+	GenerateTestRBTCmd,
 	TransferRBTCmd,
 	EnableExplorerCmd}
 var commandsHelp = []string{"To get tool version",
@@ -69,6 +75,10 @@ var commandsHelp = []string{"To get tool version",
 	"This command will create DID",
 	"This command will get all DID address",
 	"This command will add quorurm list to node",
+	"This command will get all quorurm list from node",
+	"This command will delete all quorurm list from node",
+	"This command will setup node as quorurm",
+	"This command will generate test RBT token",
 	"This command will trasnfer RBT",
 	"This command enable explorer service on the node"}
 
@@ -88,6 +98,7 @@ type Command struct {
 	log          logger.Logger
 	didType      int
 	didSecret    string
+	forcePWD     bool
 	privPWD      string
 	quorumPWD    string
 	imgFile      string
@@ -106,6 +117,9 @@ type Command struct {
 	rbtAmount    float64
 	transComment string
 	transType    int
+	numTokens    int
+	enableAuth   bool
+	did          string
 }
 
 func showVersion() {
@@ -142,10 +156,21 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("failed to create core")
 		return
 	}
-	scfg := &srvcfg.Config{
-		HostAddress: cmd.cfg.NodeAddress,
-		HostPort:    cmd.cfg.NodePort,
+	scfg := &server.Config{
+		Config: srvcfg.Config{
+			HostAddress: cmd.cfg.NodeAddress,
+			HostPort:    cmd.cfg.NodePort,
+		},
 	}
+	scfg.EnableAuth = cmd.enableAuth
+	if cmd.enableAuth {
+		scfg.DBType = "Sqlite3"
+		scfg.DBAddress = cmd.cfg.DirPath + "rubix.db"
+	}
+	// scfg := &srvcfg.Config{
+	// 	HostAddress: cmd.cfg.NodeAddress,
+	// 	HostPort:    cmd.cfg.NodePort,
+	// }
 	s, err := server.NewServer(c, scfg, cmd.log, cmd.start, sc)
 	if err != nil {
 		cmd.log.Error("Failed to create server")
@@ -209,6 +234,7 @@ func Run(args []string, log logger.Logger) {
 	flag.StringVar(&peers, "peers", "", "Bootstrap peers, mutiple peers will be seprated by comma")
 	flag.IntVar(&cmd.didType, "didType", 0, "DID Creation type")
 	flag.StringVar(&cmd.didSecret, "didSecret", "My DID Secret", "DID creation secret")
+	flag.BoolVar(&cmd.forcePWD, "fp", false, "Force password entry")
 	flag.StringVar(&cmd.privPWD, "privPWD", "mypassword", "Private key password")
 	flag.StringVar(&cmd.quorumPWD, "quorumPWD", "mypassword", "Quorum key password")
 	flag.StringVar(&cmd.imgFile, "imgFile", did.ImgFileName, "DID creation image")
@@ -227,6 +253,9 @@ func Run(args []string, log logger.Logger) {
 	flag.Float64Var(&cmd.rbtAmount, "rbtAmount", 0.0, "RBT amount")
 	flag.StringVar(&cmd.transComment, "transComment", "Test tranasaction", "Transaction comment")
 	flag.IntVar(&cmd.transType, "transType", 2, "Transaction type")
+	flag.IntVar(&cmd.numTokens, "numTokens", 1, "Number of tokens")
+	flag.StringVar(&cmd.did, "did", "", "DID")
+	flag.BoolVar(&cmd.enableAuth, "enableAuth", false, "Enable authentication")
 
 	if len(os.Args) < 2 {
 		cmd.log.Error("Invalid Command")
@@ -257,7 +286,7 @@ func Run(args []string, log logger.Logger) {
 		showHelp()
 	case RunCmd:
 		cmd.runApp()
-	case PinCmd:
+	case PingCmd:
 		cmd.ping()
 	case AddBootStrapCmd:
 		cmd.addBootStrap()
@@ -275,8 +304,14 @@ func Run(args []string, log logger.Logger) {
 		cmd.AddQuorurm()
 	case GetAllQuorumCmd:
 		cmd.GetAllQuorum()
+	case RemoveAllQuorumCmd:
+		cmd.RemoveAllQuorum()
+	case SetupQuorumCmd:
+		cmd.SetupQuorum()
 	case EnableExplorerCmd:
 		cmd.EnableExplorer()
+	case GenerateTestRBTCmd:
+		cmd.GenerateTestRBT()
 	case TransferRBTCmd:
 		cmd.TransferRBT()
 	default:

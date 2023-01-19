@@ -48,3 +48,9 @@ type QuorumListResponse struct {
 	Message string           `json:"message"`
 	Result  model.QuorumList `json:"result"`
 }
+
+type LoginRequest struct {
+	UserName string `json:"user_Name"`
+	Password string `json:"password"`
+}
+

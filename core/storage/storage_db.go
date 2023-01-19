@@ -22,28 +22,28 @@ func NewStorageDB(cfg *config.Config) (*StorageDB, error) {
 }
 
 // Init will initialize storage
-func (s *StorageDB) Init(storageName string, vaule interface{}) error {
-	return s.ad.InitTable(storageName, vaule)
+func (s *StorageDB) Init(storageName string, value interface{}) error {
+	return s.ad.InitTable(storageName, value)
 }
 
 // Write will write into storage
-func (s *StorageDB) Write(storageName string, vaule interface{}) error {
-	return s.ad.Create(storageName, vaule)
+func (s *StorageDB) Write(storageName string, value interface{}) error {
+	return s.ad.Create(storageName, value)
 }
 
 // Update will update the storage
-func (s *StorageDB) Update(stroageName string, vaule interface{}, querryString string, querryVaule ...interface{}) error {
-	return s.ad.UpdateNew(uuid.Nil, stroageName, querryString, vaule, querryVaule)
+func (s *StorageDB) Update(stroageName string, value interface{}, querryString string, querryVaule ...interface{}) error {
+	return s.ad.UpdateNew(uuid.Nil, stroageName, querryString, value, querryVaule...)
 }
 
 // Delete will delet the data from the storage
-func (s *StorageDB) Delete(stroageName string, vaule interface{}, querryString string, querryVaule ...interface{}) error {
-	return s.ad.DeleteNew(uuid.Nil, stroageName, querryString, vaule, querryVaule)
+func (s *StorageDB) Delete(stroageName string, value interface{}, querryString string, querryVaule ...interface{}) error {
+	return s.ad.DeleteNew(uuid.Nil, stroageName, querryString, value, querryVaule...)
 }
 
 // Read will read from the storage
-func (s *StorageDB) Read(stroageName string, vaule interface{}, querryString string, querryVaule ...interface{}) error {
-	return s.ad.FindNew(uuid.Nil, stroageName, querryString, vaule, querryVaule)
+func (s *StorageDB) Read(stroageName string, value interface{}, querryString string, querryVaule ...interface{}) error {
+	return s.ad.FindNew(uuid.Nil, stroageName, querryString, value, querryVaule...)
 }
 
 // Close will close the stroage BD

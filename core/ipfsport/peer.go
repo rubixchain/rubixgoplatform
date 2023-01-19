@@ -28,9 +28,11 @@ type PeerManager struct {
 
 type Peer struct {
 	ensweb.Client
-	port uint16
-	log  logger.Logger
-	pm   *PeerManager
+	port   uint16
+	log    logger.Logger
+	pm     *PeerManager
+	peerID string
+	did    string
 }
 
 func NewPeerManager(startPort uint16, maxNumPort uint16, ipfs *ipfsnode.Shell, log logger.Logger, bootStrap []string) *PeerManager {
@@ -89,7 +91,7 @@ func (pm *PeerManager) SwarmConnect(peerID string) bool {
 	return false
 }
 
-func (pm *PeerManager) OpenPeerConn(peerID string, appname string) (*Peer, error) {
+func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (*Peer, error) {
 	if !pm.SwarmConnect(peerID) {
 		pm.log.Error("Failed to connect swarm peer", "peerID", peerID)
 		return nil, fmt.Errorf("failed to connect swarm peer")
@@ -103,9 +105,11 @@ func (pm *PeerManager) OpenPeerConn(peerID string, appname string) (*Peer, error
 		ServerPort:    fmt.Sprintf("%d", portNum),
 	}
 	p := &Peer{
-		port: portNum,
-		pm:   pm,
-		log:  pm.log.Named(peerID),
+		port:   portNum,
+		pm:     pm,
+		log:    pm.log.Named(peerID),
+		peerID: peerID,
+		did:    did,
 	}
 	proto := "/x/" + appname + "/1.0"
 	addr := "/ip4/127.0.0.1/tcp/" + fmt.Sprintf("%d", portNum)
@@ -130,10 +134,15 @@ func (pm *PeerManager) OpenPeerConn(peerID string, appname string) (*Peer, error
 	return p, nil
 }
 
-func (p *Peer) SendJSONRequest(method string, path string, querry map[string]string, req interface{}, resp interface{}, timeout ...time.Duration) error {
+func (p *Peer) SendJSONRequest(method string, path string, querry map[string]string, req interface{}, resp interface{}, did bool, timeout ...time.Duration) error {
 	httpReq, err := p.JSONRequest(method, path, req)
 	if err != nil {
 		return err
+	}
+	if did {
+		q := httpReq.URL.Query()
+		q.Add("did", p.did)
+		httpReq.URL.RawQuery = q.Encode()
 	}
 	for k, v := range querry {
 		q := httpReq.URL.Query()
@@ -173,4 +182,8 @@ func (p *Peer) Close() error {
 	}
 
 	return nil
+}
+
+func (p *Peer) GetPeerDID() string {
+	return p.did
 }

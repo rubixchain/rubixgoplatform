@@ -6,7 +6,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/util"
 )
 
-func (c *Core) InitiateRBTTransfer(req *model.RBTTransferRequest) *model.RBTTransferReply {
+func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.RBTTransferReply {
 	resp := &model.RBTTransferReply{
 		BasicResponse: model.BasicResponse{
 			Status: false,
@@ -17,11 +17,18 @@ func (c *Core) InitiateRBTTransfer(req *model.RBTTransferRequest) *model.RBTTran
 		resp.Message = "Invalid sender DID"
 		return resp
 	}
+
+	rpeerid, rdid, ok := util.ParseAddress(req.Receiver)
+	if !ok {
+		resp.Message = "Invalid receiver DID"
+		return resp
+	}
 	// Get the required tokens from the DID bank
 	// this method locks the token needs to be released or
 	// removed once it done with the trasnfer
 	wt, pt, err := c.w.GetTokens(did, req.TokenCount)
 	if err != nil {
+		c.log.Error("Failed to get tkens", "err", err)
 		resp.Message = "Insufficient tokens or tokens are locked"
 		return resp
 	}
@@ -35,11 +42,52 @@ func (c *Core) InitiateRBTTransfer(req *model.RBTTransferRequest) *model.RBTTran
 		return resp
 	}
 	defer p.Close()
-	cr := ConensusRequest{
-		ReqID: uuid.New().String(),
-		Type:  req.Type,
+	wta := make([]string, 0)
+	wtca := make([]string, 0)
+	for i := range wt {
+		wta = append(wta, wt[i].TokenID)
+		wtca = append(wtca, wt[i].TokenChainID)
 	}
-	err = c.initiateConsensus(cr)
+	pta := make([]string, 0)
+	ptca := make([]string, 0)
+	for i := range pt {
+		pta = append(pta, pt[i].TokenID)
+		ptca = append(ptca, pt[i].TokenChainID)
+	}
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		resp.Message = "Failed to setup DID, " + err.Error()
+		return resp
+	}
+	authHash := util.CalculateHashString(util.ConvertToJson(wta)+util.ConvertToJson(wtca)+util.ConvertToJson(pta)+util.ConvertToJson(ptca)+rdid+did+req.Comment, "SHA3-256")
+	ssig, psig, err := dc.Sign(authHash)
+	if err != nil {
+		c.log.Error("Failed to get signature", "err", err)
+		resp.Message = "Failed to get signature, " + err.Error()
+		return resp
+	}
+	cr := &ConensusRequest{
+		ReqID:           uuid.New().String(),
+		Type:            req.Type,
+		SenderPeerID:    c.peerID,
+		ReceiverPeerID:  rpeerid,
+		SenderDID:       did,
+		ReceiverDID:     rdid,
+		WholeTokens:     wta,
+		WholeTokenChain: wtca,
+		PartTokens:      pta,
+		PartTokenChain:  ptca,
+		Comment:         req.Comment,
+		ShareSig:        ssig,
+		PrivSig:         psig,
+	}
+	err = util.CreateDir(c.cfg.DirPath + "Temp/" + cr.ReqID)
+	if err != nil {
+		c.log.Error("Failed to create directory", "err", err)
+		resp.Message = "Failed to create directory, " + err.Error()
+		return resp
+	}
+	err = c.initiateConsensus(cr, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		resp.Message = "Consensus failed, " + err.Error()

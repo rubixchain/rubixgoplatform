@@ -20,6 +20,18 @@ const (
 	SwarmKeyFilename   string = "swarm.key"
 )
 
+type DHTAddr struct {
+	Addrs []string `json:"Addrs"`
+	ID    string   `json:"ID"`
+}
+
+type DHTResponse struct {
+	Extra     string    `json:"Extra"`
+	ID        string    `json:"ID"`
+	Responses []DHTAddr `json:"Responses"`
+	Type      int       `json:"Type"`
+}
+
 // initIPFS wiill initialize IPFS configuration
 func (c *Core) initIPFS(ipfsdir string) error {
 	c.ipfsApp = "./ipfs"
@@ -265,4 +277,34 @@ func (c *Core) RemoveAllBootStrap() error {
 
 func (c *Core) GetAllBootStrap() []string {
 	return c.cfg.CfgData.BootStrap
+}
+
+func (c *Core) GetDHTddrs(cid string) ([]string, error) {
+	resp, err := c.ipfs.Request("dht/findprovs", cid).Send(context.Background())
+	if err != nil {
+		c.log.Error("failed get dht", "err", err)
+		return nil, err
+	} else {
+		var dht DHTResponse
+		err := resp.Decode(&dht)
+		resp.Close()
+		if err != nil {
+			c.log.Error("failed parse dht response", "err", err)
+			return nil, err
+		}
+		ids := make([]string, 0)
+		c.log.Debug("DHT Addr", "dht", dht)
+		if dht.ID != "" {
+			ids = append(ids, dht.ID)
+			return ids, nil
+		} else if dht.Responses != nil {
+			for i := range dht.Responses {
+				ids = append(ids, dht.Responses[i].ID)
+			}
+			return ids, nil
+		} else {
+			c.log.Error("No dht found", "cid", cid)
+			return nil, fmt.Errorf("no dht found")
+		}
+	}
 }

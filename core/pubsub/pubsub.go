@@ -1,6 +1,7 @@
 package pubsub
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/EnsurityTechnologies/logger"
@@ -48,6 +49,10 @@ func (ps *PubSub) receivePub(topic string, p *ipfsnode.PubSubSubscription) {
 	}
 }
 
-func (ps *PubSub) Publish(topic string, data string) error {
-	return ps.ipfs.PubSubPublish(topic, data)
+func (ps *PubSub) Publish(topic string, model interface{}) error {
+	b, err := json.Marshal(model)
+	if err != nil {
+		return err
+	}
+	return ps.ipfs.PubSubPublish(topic, string(b))
 }

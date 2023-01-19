@@ -80,3 +80,59 @@ func (cmd *Command) GetAllQuorum() {
 	}
 	cmd.log.Info("Got all quorum list successfully")
 }
+
+func (cmd *Command) RemoveAllQuorum() {
+	c, r, err := cmd.basicClient("GET", server.APIRemoveAllQuorum, nil)
+	if err != nil {
+		cmd.log.Error("Failed to create http client", "err", err)
+		return
+	}
+	resp, err := c.Do(r)
+	if err != nil {
+		cmd.log.Error("Failed to get response from the node", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+	var response model.BasicResponse
+	err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
+	if err != nil {
+		cmd.log.Error("Invalid response from the node", "err", err)
+		return
+	}
+
+	if !response.Status {
+		cmd.log.Error("Failed to remove quorum list", "msg", response.Message)
+		return
+	}
+	cmd.log.Info(response.Message)
+}
+
+func (cmd *Command) SetupQuorum() {
+	qs := model.QuorumSetup{
+		DID:      cmd.did,
+		Password: cmd.quorumPWD,
+	}
+	c, r, err := cmd.basicClient("POST", server.APISetupQuorum, &qs)
+	if err != nil {
+		cmd.log.Error("Failed to create http client", "err", err)
+		return
+	}
+	resp, err := c.Do(r)
+	if err != nil {
+		cmd.log.Error("Failed to get response from the node", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+	var response model.BasicResponse
+	err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
+	if err != nil {
+		cmd.log.Error("Invalid response from the node", "err", err)
+		return
+	}
+
+	if !response.Status {
+		cmd.log.Error("Failed to setup quorum", "msg", response.Message)
+		return
+	}
+	cmd.log.Info("Quorum setup successfully")
+}

@@ -14,3 +14,12 @@ type Quorum struct {
 type QuorumList struct {
 	Quorum []Quorum `json:"quorum"`
 }
+
+type CreditStatus struct {
+	Score int `json:"score"`
+}
+
+type QuorumSetup struct {
+	DID      string `json:"did"`
+	Password string `json:"password"`
+}

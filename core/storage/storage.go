@@ -12,3 +12,8 @@ type Storage interface {
 	Read(storageName string, vaule interface{}, querryString string, querryVaule ...interface{}) error
 	Close() error
 }
+
+type StorageType struct {
+	Key   string
+	Value string
+}

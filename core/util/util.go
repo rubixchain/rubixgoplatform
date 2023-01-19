@@ -2,6 +2,7 @@ package util
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -9,16 +10,22 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"strconv"
 	"path"
+	"strconv"
 	"strings"
 
 	"golang.org/x/crypto/sha3"
 )
 
-type RandPosObj struct {
+type RandPos struct {
 	OriginalPos []int `json:"originalPos"`
 	PosForSign  []int `json:"posForSign"`
+}
+
+func GetRandBytes(num int) []byte {
+	d := make([]byte, num)
+	rand.Read(d)
+	return d
 }
 
 func CalculateHash(data []byte, method string) []byte {
@@ -29,6 +36,18 @@ func CalculateHash(data []byte, method string) []byte {
 		return h.Sum(nil)
 	default:
 		return nil
+	}
+}
+
+func CalculateHashString(msg string, method string) string {
+	switch method {
+	case "SHA3-256":
+		h := sha3.New256()
+		h.Write([]byte(msg))
+		b := h.Sum(nil)
+		return HexToStr(b)
+	default:
+		return ""
 	}
 }
 
@@ -83,10 +102,10 @@ func FileWrite(fileName string, data []byte) error {
 	return nil
 }
 
-func RandomPositions(role string, hash string, numOfPositions int, pvt1 []int) ([]byte, error) {
+func RandomPositions(role string, hash string, numOfPositions int, pvt1 []int) *RandPos {
 	var u, l, m int = 0, 0, 0
 
-	hashCharacters := make([]int, 256)
+	hashCharacters := make([]int, 32)
 	randomPositions := make([]int, 32)
 	randPos := make([]int, 256)
 	var finalPositions, pos []int
@@ -97,7 +116,7 @@ func RandomPositions(role string, hash string, numOfPositions int, pvt1 []int) (
 
 		temp, err := strconv.ParseInt(string(hash[k]), 16, 32)
 		if err != nil {
-			fmt.Println(err)
+			return nil
 		}
 		hashCharacters[k] = int(temp)
 		randomPositions[k] = (((2402 + hashCharacters[k]) * 2709) + ((k + 2709) + hashCharacters[(k)])) % 2048
@@ -123,33 +142,21 @@ func RandomPositions(role string, hash string, numOfPositions int, pvt1 []int) (
 				l = 0
 			}
 		}
-		if strings.Compare(role, "signer") == 0 {
+		if role == "signer" {
 			var p1 []int = GetPrivatePositions(finalPositions, pvt1)
-			fmt.Println("originalpos :::: ", IntArraytoStr(originalPos))
 			hash = HexToStr(CalculateHash([]byte(hash+IntArraytoStr(originalPos)+IntArraytoStr(p1)), "SHA3-256"))
 
 		} else {
 			p1 := make([]int, 8)
-
 			for i := 0; i < 8; i++ {
 				p1[i] = pvt1[m]
 				m++
 			}
 			hash = HexToStr(CalculateHash([]byte(hash+IntArraytoStr(originalPos)+IntArraytoStr(p1)), "SHA3-256"))
-
 		}
 	}
-	result := RandPosObj{
+	return &RandPos{
 		OriginalPos: originalPos, PosForSign: posForSign}
-
-	result_obj, err := json.Marshal(result)
-
-	if err != nil {
-		var emptyresult []byte
-		return emptyresult, err
-	}
-
-	return result_obj, err
 }
 
 func GetPrivatePositions(positions []int, privateArray []int) []int {
@@ -300,4 +307,241 @@ func ParseAddress(addr string) (string, string, bool) {
 // CreateAddress will create the addrees fromt Peer ID  & DID
 func CreateAddress(peerID string, did string) string {
 	return peerID + "." + did
+}
+
+func ConvertToJson(d interface{}) string {
+	b, err := json.Marshal(d)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func ConvertToJsonString(d interface{}) string {
+	b, err := json.MarshalIndent(d, "", "   ")
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func BitstreamToBytes(stream string) ([]byte, error) {
+	result := make([]byte, 0)
+	str := stream
+	for {
+		l := 0
+		if len(str) > 8 {
+			l = len(str) - 8
+		}
+		temp, err := strconv.ParseInt(str[l:], 2, 64)
+		if err != nil {
+			return nil, err
+		}
+		result = append([]byte{byte(temp)}, result...)
+		if l == 0 {
+			break
+		} else {
+			str = str[:l]
+		}
+	}
+	return result, nil
+}
+
+func BytesToBitstream(data []byte) string {
+	var str string
+	for _, d := range data {
+		str = str + fmt.Sprintf("%08b", d)
+	}
+	return str
+}
+
+func CreateDir(dirPath string) error {
+	return os.MkdirAll(dirPath, os.ModeDir|os.ModePerm)
+}
+
+func ParseJsonFile(fileName string, m interface{}) error {
+	b, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, m)
+}
+
+func marshal(str string, m interface{}, keys []string) (string, error) {
+	var err error
+	switch mt := m.(type) {
+	case []map[string]interface{}:
+		str = str + "["
+		c1 := false
+		for i := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			str = str + "{"
+			firstElem := true
+			for _, k := range keys {
+				v, ok := mt[i][k]
+				if ok {
+					if !firstElem {
+						str = str + ","
+					}
+					firstElem = false
+					str = str + "\"" + k + "\":"
+					s, ok := v.(string)
+					if ok {
+						str = str + "\"" + s + "\""
+					} else {
+						if k == "distributedObject" {
+							str, err = marshal(str, v, nil)
+							if err != nil {
+								return "", err
+							}
+						} else {
+							str, err = marshal(str, v, []string{"node", "tokens"})
+							if err != nil {
+								return "", err
+							}
+						}
+
+					}
+				}
+			}
+			str = str + "}"
+		}
+		str = str + "]"
+	case map[string]interface{}:
+		str = str + "{"
+		c1 := false
+		if keys == nil {
+			for k, v := range mt {
+				if c1 {
+					str = str + ","
+				}
+				c1 = true
+				str = str + "\"" + k + "\":"
+				s, ok := v.(string)
+				if ok {
+					str = str + "\"" + s + "\""
+				} else {
+					str, err = marshal(str, v, keys)
+					if err != nil {
+						return "", err
+					}
+				}
+			}
+		} else {
+			for _, k := range keys {
+				v, ok := mt[k]
+				if ok {
+					if c1 {
+						str = str + ","
+					}
+					c1 = true
+					str = str + "\"" + k + "\":"
+					s, ok := v.(string)
+					if ok {
+						str = str + "\"" + s + "\""
+					} else {
+						str, err = marshal(str, v, keys)
+						if err != nil {
+							return "", err
+						}
+					}
+				}
+			}
+		}
+		str = str + "}"
+	case []interface{}:
+		str = str + "["
+		c1 := false
+		for _, mf := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			s, ok := mf.(string)
+			if ok {
+				str = str + "\"" + s + "\""
+			} else {
+				str, err = marshal(str, mf, keys)
+				if err != nil {
+					return "", err
+				}
+			}
+		}
+		str = str + "]"
+	default:
+		return "", fmt.Errorf("invalid type %T", mt)
+	}
+	return str, nil
+}
+
+func CalcTokenChainHash(tc []map[string]interface{}) string {
+	l := len(tc)
+	if l == 0 {
+		return ""
+	}
+	_, ok := tc[l-1]["hash"]
+	if ok {
+		delete(tc[l-1], "hash")
+	}
+	_, ok = tc[l-1]["pvtShareBits"]
+	if ok {
+		delete(tc[l-1], "pvtShareBits")
+	}
+
+	keys := []string{"owner", "tokensPledgedWith", "tokensPledgedFor", "receiver", "sender", "senderSign", "comment", "distributedObject", "tid", "pledgeToken", "hash", "group", "pvtShareBits"}
+
+	var err error
+	str := ""
+	str, err = marshal(str, tc, keys)
+	if err != nil {
+		fmt.Printf("Failed %s", err.Error())
+		return ""
+	}
+
+	// return str
+
+	// str := "["
+	// c1 := false
+	// for i := range tc {
+	// 	if c1 {
+	// 		str = str + ","
+	// 	}
+	// 	c1 = true
+	// 	str = str + "{"
+	// 	firstElem := true
+	// 	for _, k := range keys {
+	// 		v, ok := tc[i][k]
+	// 		if ok {
+	// 			if !firstElem {
+	// 				str = str + ","
+	// 			}
+	// 			firstElem = false
+	// 			str = str + "\"" + k + "\":"
+	// 			s, ok := v.(string)
+	// 			if ok {
+	// 				str = str + "\"" + s + "\""
+	// 			} else {
+	// 				sa, ok := v.([]interface{})
+	// 				if ok {
+	// 					str = str + "["
+	// 					comma := false
+	// 					for _, s := range sa {
+	// 						if comma {
+	// 							str = str + ","
+	// 						}
+	// 						comma = true
+	// 						str = str + "\"" + s.(string) + "\""
+	// 					}
+	// 					str = str + "]"
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// 	str = str + "}"
+	// }
+	// str = str + "]"
+	return str
 }

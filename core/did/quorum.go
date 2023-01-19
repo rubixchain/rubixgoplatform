@@ -2,70 +2,28 @@ package did
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
-	"time"
 
 	"github.com/EnsurityTechnologies/enscrypt"
 	"github.com/rubixchain/rubixgoplatform/core/nlss"
 	"github.com/rubixchain/rubixgoplatform/core/util"
 )
 
-// DIDBasic will handle basic DID
-type DIDBasic struct {
+// DIDQuorum will handle basic DID
+type DIDQuorum struct {
 	did string
 	dir string
-	ch  *DIDChan
 	pwd string
 }
 
 // InitDIDBasic will return the basic did handle
-func InitDIDBasic(did string, baseDir string, ch *DIDChan) *DIDBasic {
-	return &DIDBasic{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
-}
-
-func (d *DIDBasic) getPassword() (string, error) {
-	if d.pwd != "" {
-		return d.pwd, nil
-	}
-	if d.ch == nil || d.ch.Chan == nil {
-		return "", fmt.Errorf("Invalid configuration")
-	}
-	w := d.ch.Req.GetHTTPWritter()
-	w.Header().Set("Content-Type", "application/json")
-	sr := &SignResponse{
-		Status:  true,
-		Message: "Password needed",
-		Result: SignReqData{
-			ID:   d.ch.ID,
-			Mode: BasicDIDMode,
-		},
-	}
-	w.WriteHeader(http.StatusOK)
-	enc := json.NewEncoder(w)
-	enc.Encode(sr)
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
-	var ch interface{}
-	select {
-	case ch = <-d.ch.Chan:
-	case <-time.After(d.ch.Timeout):
-		return "", fmt.Errorf("Timeout, failed to get password")
-	}
-
-	srd, ok := ch.(SignRespData)
-	if !ok {
-		return "", fmt.Errorf("Invalid data received on the channel")
-	}
-	d.pwd = srd.Password
-	return d.pwd, nil
+func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
+	return &DIDQuorum{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 }
 
 // Sign will return the singature of the DID
-func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
+func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareImgFile)
 
 	if err != nil {
@@ -83,15 +41,12 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 
 	//create a signature using the private key
 	//1. read and extrqct the private key
-	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFile)
+	privKey, err := ioutil.ReadFile(d.dir + QuorumPvtKeyFile)
 	if err != nil {
 		return nil, nil, err
 	}
-	pwd, err := d.getPassword()
-	if err != nil {
-		return nil, nil, err
-	}
-	PrivateKey, _, err := enscrypt.DecodeKeyPair(pwd, privKey, nil)
+
+	PrivateKey, _, err := enscrypt.DecodeKeyPair(d.pwd, privKey, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -108,7 +63,7 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // Sign will verifyt he signature
-func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDQuorum) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFile)
 	if err != nil {
@@ -145,7 +100,7 @@ func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bo
 
 	//create a signature using the private key
 	//1. read and extrqct the private key
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFile)
+	pubKey, err := ioutil.ReadFile(d.dir + QuorumPubKeyFile)
 	if err != nil {
 		return false, err
 	}
@@ -160,36 +115,9 @@ func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bo
 	return true, nil
 }
 
-func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
-	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFile)
-	if err != nil {
-		return nil, err
-	}
-	pwd, err := d.getPassword()
-	if err != nil {
-		return nil, err
-	}
-	PrivateKey, _, err := enscrypt.DecodeKeyPair(pwd, privKey, nil)
-	if err != nil {
-		return nil, err
-	}
-	pvtKeySign, err := enscrypt.Sign(PrivateKey, hash)
-	if err != nil {
-		return nil, err
-	}
-	return pvtKeySign, nil
+func (d *DIDQuorum) PvtSign(hash []byte) ([]byte, error) {
+	return nil, nil
 }
-func (d *DIDBasic) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFile)
-	if err != nil {
-		return false, err
-	}
-	_, pubKeyByte, err := enscrypt.DecodeKeyPair("", nil, pubKey)
-	if err != nil {
-		return false, err
-	}
-	if !enscrypt.Verify(pubKeyByte, hash, sign) {
-		return false, fmt.Errorf("failed to verify private key singature")
-	}
-	return true, nil
+func (d *DIDQuorum) PvtVerify(hash []byte, sign []byte) (bool, error) {
+	return false, nil
 }

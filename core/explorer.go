@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	ExploreTopic    string = "explorer"
 	NodeStatusTable string = "NodeStatusTable"
 	NodeDIDMapTable string = "NodeDIDMapTable"
 )
@@ -71,12 +70,7 @@ func (c *Core) initExplorer(cfg string) error {
 
 func (c *Core) PublishExplorer(exp *model.ExploreModel) error {
 	if c.ps != nil {
-		b, err := json.Marshal(exp)
-		if err != nil {
-			c.log.Error("Failed to parse explorer model", "err", err)
-			return err
-		}
-		err = c.ps.Publish(ExploreTopic, string(b))
+		err := c.ps.Publish(ExploreTopic, exp)
 		if err != nil {
 			c.log.Error("Failed to publish message to explorer", "err", err)
 			return err

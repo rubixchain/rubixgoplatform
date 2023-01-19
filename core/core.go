@@ -11,6 +11,7 @@ import (
 
 	"github.com/EnsurityTechnologies/adapter"
 	"github.com/EnsurityTechnologies/apiconfig"
+	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/EnsurityTechnologies/uuid"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
@@ -26,12 +27,23 @@ import (
 )
 
 const (
-	APIPingPath   string = "/api/ping"
-	APIPeerStatus string = "/api/peerstatus"
+	APIPingPath          string = "/api/ping"
+	APIPeerStatus        string = "/api/peerstatus"
+	APICreditStatus      string = "/api/creditstatus"
+	APIQuorumConsensus   string = "/api/quorum-conensus"
+	APIQuorumCredit      string = "/api/quorum-credit"
+	APIReqPledgeToken    string = "/api/req-pledge-token"
+	APIUpdatePledgeToken string = "/api/update-pledge-token"
+	APISendReceiverToken string = "/api/send-receiver-token"
 )
 
 const (
 	InvalidPasringErr string = "invalid json parsing"
+)
+
+const (
+	ExploreTopic     string = "explorer"
+	TokenStatusTopic string = "token_status"
 )
 
 const (
@@ -53,6 +65,7 @@ type Core struct {
 	lock           sync.RWMutex
 	ipfsLock       sync.RWMutex
 	qlock          sync.RWMutex
+	rlock          sync.Mutex
 	ipfs           *ipfsnode.Shell
 	ipfsState      bool
 	ipfsChan       chan bool
@@ -69,7 +82,10 @@ type Core struct {
 	exploreDB      *adapter.Adapter
 	version        string
 	quorumRequest  map[string]*ConsensusStatus
+	pd             map[string]*PledgeDetials
+	webReq         map[string]*did.DIDChan
 	w              *wallet.Wallet
+	qc             map[string]did.DIDCrypto
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {
@@ -110,12 +126,19 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		cfg.CfgData.MainWalletConfig.DBAddress = cfg.DirPath + "Rubix/MainNet/wallet.db"
 		cfg.CfgData.MainWalletConfig.DBType = "Sqlite3"
 		update = true
-
+	}
+	if cfg.CfgData.MainWalletConfig.TokenChainDir == "" {
+		cfg.CfgData.MainWalletConfig.TokenChainDir = cfg.DirPath + "Rubix/MainNet/"
+		update = true
 	}
 	if cfg.CfgData.TestWalletConfig.StorageType == 0 {
 		cfg.CfgData.TestWalletConfig.StorageType = storage.StorageDBType
 		cfg.CfgData.TestWalletConfig.DBAddress = cfg.DirPath + "Rubix/TestNet/wallet.db"
 		cfg.CfgData.TestWalletConfig.DBType = "Sqlite3"
+		update = true
+	}
+	if cfg.CfgData.TestWalletConfig.TokenChainDir == "" {
+		cfg.CfgData.TestWalletConfig.TokenChainDir = cfg.DirPath + "Rubix/TestNet/"
 		update = true
 	}
 
@@ -126,6 +149,9 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		testNet:       testNet,
 		testNetKey:    testNetKey,
 		quorumRequest: make(map[string]*ConsensusStatus),
+		pd:            make(map[string]*PledgeDetials),
+		webReq:        make(map[string]*did.DIDChan),
+		qc:            make(map[string]did.DIDCrypto),
 	}
 
 	c.log = log.Named("Core")
@@ -183,6 +209,10 @@ func (c *Core) SetupCore() error {
 	if err != nil {
 		return err
 	}
+	err = c.ps.SubscribeTopic(TokenStatusTopic, c.tokenStatusCallback)
+	if err != nil {
+		return err
+	}
 	if c.cfg.CfgData.Services != nil {
 		ecfg, ok := c.cfg.CfgData.Services[ExploreTopic]
 		if ok {
@@ -195,6 +225,7 @@ func (c *Core) SetupCore() error {
 	}
 	c.PingSetup()
 	c.PeerStatusSetup()
+	c.QuroumSetup()
 	return nil
 }
 
@@ -324,4 +355,79 @@ func (c *Core) GetAllDID() []string {
 		str = append(str, util.CreateAddress(c.peerID, did))
 	}
 	return str
+}
+
+func (c *Core) AddWebReq(req *ensweb.Request) {
+	c.rlock.Lock()
+	defer c.rlock.Unlock()
+	c.webReq[req.ID] = &did.DIDChan{
+		ID:      req.ID,
+		Chan:    make(chan interface{}),
+		Req:     req,
+		Timeout: 3 * time.Minute,
+	}
+}
+
+func (c *Core) GetWebReq(reqID string) *did.DIDChan {
+	c.rlock.Lock()
+	defer c.rlock.Unlock()
+	req, ok := c.webReq[reqID]
+	if !ok {
+		return nil
+	}
+	return req
+}
+
+func (c *Core) UpateWebReq(reqID string, req *ensweb.Request) error {
+	c.rlock.Lock()
+	defer c.rlock.Unlock()
+	dc, ok := c.webReq[reqID]
+	if !ok {
+		return fmt.Errorf("Request does not exist")
+	}
+	dc.Req = req
+	return nil
+}
+
+func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
+	c.rlock.Lock()
+	defer c.rlock.Unlock()
+	req, ok := c.webReq[reqID]
+	if !ok {
+		return nil
+	}
+	delete(c.webReq, reqID)
+	return req.Req
+}
+
+func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
+	cfg, ok := c.cfg.CfgData.DIDConfig[didStr]
+	if !ok {
+		c.log.Error("DID does not exist", "did", didStr)
+		return nil, fmt.Errorf("DID does not exist")
+	}
+	dc := c.GetWebReq(reqID)
+	switch cfg.Type {
+	case did.BasicDIDMode:
+		return did.InitDIDBasic(didStr, c.cfg.DirPath+"/Rubix", dc), nil
+	default:
+		return nil, fmt.Errorf("DID Type is not supported")
+	}
+}
+
+func (c *Core) SetupForienDID(didStr string) did.DIDCrypto {
+	return did.InitDIDBasic(didStr, c.cfg.DirPath+"/Rubix", nil)
+}
+
+func (c *Core) FetchDID(did string) error {
+	_, err := os.Stat(c.cfg.DirPath + "Rubix/" + did)
+	if err != nil {
+		err = os.MkdirAll(c.cfg.DirPath+"Rubix/"+did, os.ModeDir|os.ModePerm)
+		if err != nil {
+			c.log.Error("failed to create directory", "err", err)
+			return err
+		}
+		err = c.ipfs.Get(did, c.cfg.DirPath+"Rubix/"+did+"/")
+	}
+	return err
 }

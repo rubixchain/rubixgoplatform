@@ -14,7 +14,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/util"
 )
 
-type RandPosObj struct {
+type RandPos struct {
 	OriginalPos []int `json:"originalPos"`
 	PosForSign  []int `json:"posForSign"`
 }
@@ -112,7 +112,7 @@ func RandomPositions(role string, hash string, numOfPositions int, pvt1 []int) [
 
 		}
 	}
-	result := RandPosObj{
+	result := RandPos{
 		OriginalPos: originalPos, PosForSign: posForSign}
 
 	result_obj, err := json.Marshal(result)
@@ -174,7 +174,7 @@ func (d *DIDBasic) GetSignFromShares(filePath string, hash string) (string, erro
 
 	privateIntegerArray1 := ByteArraytoIntArray(byteImg)
 
-	var randPosObject RandPosObj
+	var randPosObject RandPos
 	P := RandomPositions("signer", hash, 32, privateIntegerArray1)
 
 	json.Unmarshal([]byte(P), &randPosObject)
@@ -263,7 +263,7 @@ func VerifySignature(detailsString []byte) bool {
 
 	senderSign := StringToIntArray(signature)
 
-	var randomPositionsObject RandPosObj
+	var randomPositionsObject RandPos
 
 	P := RandomPositions("verifier", hash, 32, senderSign)
 
