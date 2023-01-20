@@ -133,7 +133,7 @@ func showVersion() {
 
 func showHelp() {
 	if runtime.GOOS == "windows" {
-		fmt.Printf("\nrubixgpplatform.exe <cmd>\n")
+		fmt.Printf("\nrubixgoplatform.exe <cmd>\n")
 	} else {
 		fmt.Printf("\nrubixgoplatform <cmd>\n")
 	}
