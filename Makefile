@@ -14,6 +14,6 @@ compile-mac:
 	go env -w GOOS=darwin
 	go env -w GOARCH=arm64
 	go env -w CGO_ENABLED=1
-	go build -o mac/rubixgoplatform
+	go build -o mac/rubixgoplatform.dmg
 
 all: compile-linux compile-windows compile-mac
