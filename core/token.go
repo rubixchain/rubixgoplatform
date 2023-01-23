@@ -169,7 +169,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) error {
 	return nil
 }
 
-func (c *Core) tokenStatusCallback(peerID string, data []byte) {
+func (c *Core) tokenStatusCallback(peerID string, topic string, data []byte) {
 	// c.log.Debug("Recevied token status request")
 	// var tp TokenPublish
 	// err := json.Unmarshal(data, &tp)

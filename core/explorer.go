@@ -101,7 +101,7 @@ func (c *Core) ConfigureExplorer(cfg *config.ExplorerConfig) error {
 	return nil
 }
 
-func (c *Core) exploreCallback(peerID string, data []byte) {
+func (c *Core) exploreCallback(peerID string, topic string, data []byte) {
 	var exp model.ExploreModel
 	err := json.Unmarshal(data, &exp)
 	if err != nil {

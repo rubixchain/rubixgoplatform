@@ -69,11 +69,14 @@ type Config struct {
 	CfgData     ConfigData `json:"cfg_data"`
 }
 
-type ExplorerConfig struct {
-	DBName     string `json:"db_name"`      // DBName is the name of the db.
-	DBAddress  string `json:"db_address"`   // DBPath is the name of the database itself.
-	DBPort     string `json:"db_port"`      // DBPath is the name of the database itself.
-	DBType     string `json:"db_type"`      // DBType is type of database to use
-	DBUserName string `json:"db_user_name"` // DBUserName is the user name for the DB
-	DBPassword string `json:"db_password"`  // DBPassword is the password  for the user
+type ServiceConfig struct {
+	ServiceSettings string `json:"service_settings"` // ServiceSettings settings for the service
+	ServiceName     string `json:"service_name"`     // ServiceName name of the service
+	DBName          string `json:"db_name"`          // DBName is the name of the db.
+	DBAddress       string `json:"db_address"`       // DBPath is the name of the database itself.
+	DBPort          string `json:"db_port"`          // DBPath is the name of the database itself.
+	DBType          string `json:"db_type"`          // DBType is type of database to use
+	DBUserName      string `json:"db_user_name"`     // DBUserName is the user name for the DB
+	DBPassword      string `json:"db_password"`      // DBPassword is the password  for the user
+
 }
