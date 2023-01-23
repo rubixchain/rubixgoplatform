@@ -14,3 +14,9 @@ api_config.json
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+.DS_Store
+ipfs
+linux/
+mac/
+windows/
