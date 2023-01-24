@@ -19,6 +19,7 @@ compile-mac:
 	go env -w CGO_ENABLED=1
 	go build -o mac/rubixgoplatform_amd64
 
-
+clean:
+	rm -f linux/rubixgoplatform windows/rubixgoplatform.exe mac/rubixgoplatform_arm64 mac/rubixgoplatform_amd64
 
 all: compile-linux compile-windows compile-mac
