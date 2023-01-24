@@ -21,6 +21,6 @@ compile-mac:
 	go build -o mac/rubixgoplatform_amd64
 
 clean:
-	rm -f linux/rubixgoplatform windows/rubixgoplatform.exe mac/rubixgoplatform_arm64 mac/rubixgoplatform_amd64
+	rm -f linux windows mac
 
 all: compile-linux compile-windows compile-mac
