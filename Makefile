@@ -15,6 +15,7 @@ compile-mac:
 	go env -w GOARCH=arm64
 	go env -w CGO_ENABLED=1
 	go build -o mac/rubixgoplatform_arm64
+	echo "Compiling for MacOS amd64"
 	go env -w GOARCH=amd64
 	go env -w CGO_ENABLED=1
 	go build -o mac/rubixgoplatform_amd64
