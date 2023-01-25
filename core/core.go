@@ -417,7 +417,7 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	}
 }
 
-func (c *Core) SetupForienDID(didStr string) did.DIDCrypto {
+func (c *Core) SetupForeignDID(didStr string) did.DIDCrypto {
 	return did.InitDIDBasic(didStr, c.cfg.DirPath+"/Rubix", nil)
 }
 

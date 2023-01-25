@@ -22,6 +22,6 @@ package did
 // 		t.Fatalf("Failed to verify signature : %s", err.Error())
 // 	}
 // 	if !b {
-// 		t.Fatal("Failed to verify singature")
+// 		t.Fatal("Failed to verify signature")
 // 	}
 // }

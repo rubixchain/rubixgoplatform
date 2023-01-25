@@ -187,15 +187,15 @@ func IntArraytoStr(intArray []int) string {
 
 func StringToIntArray(data string) []int {
 
-	reuslt := make([]int, len(data))
+	result := make([]int, len(data))
 	for i := 0; i < len(data); i++ {
 		if data[i] == '1' {
-			reuslt[i] = 1
+			result[i] = 1
 		} else {
-			reuslt[i] = 0
+			result[i] = 0
 		}
 	}
-	return reuslt
+	return result
 }
 
 func ByteArraytoIntArray(byteArray []byte) []int {

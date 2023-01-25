@@ -31,11 +31,11 @@ func (cmd *Command) GenerateTestRBT() {
 		return
 	}
 	if !dresp.Status {
-		cmd.log.Error("Failed to trasnfer RBT", "message", dresp.Message)
+		cmd.log.Error("Failed to transfer RBT", "message", dresp.Message)
 		return
 	}
 	if cmd.forcePWD {
-		cmd.log.Error("Failed to trasnfer RBT", "message", dresp.Message)
+		cmd.log.Error("Failed to transfer RBT", "message", dresp.Message)
 		return
 	}
 	sr := did.SignRespData{

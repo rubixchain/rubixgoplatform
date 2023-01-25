@@ -59,7 +59,7 @@ func (d *DIDBasic) getPassword() (string, error) {
 	return d.pwd, nil
 }
 
-// Sign will return the singature of the DID
+// Sign will return the signature of the DID
 func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareImgFile)
 
@@ -77,7 +77,7 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 	pvtPosStr := util.IntArraytoStr(pvtPos)
 
 	//create a signature using the private key
-	//1. read and extrqct the private key
+	//1. read and extract the private key
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFile)
 	if err != nil {
 		return nil, nil, err
@@ -150,7 +150,7 @@ func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bo
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
 	if !enscrypt.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify private key singature")
+		return false, fmt.Errorf("failed to verify private key signature")
 	}
 	return true, nil
 }
@@ -184,7 +184,7 @@ func (d *DIDBasic) PvtVerify(hash []byte, sign []byte) (bool, error) {
 		return false, err
 	}
 	if !enscrypt.Verify(pubKeyByte, hash, sign) {
-		return false, fmt.Errorf("failed to verify private key singature")
+		return false, fmt.Errorf("failed to verify private key signature")
 	}
 	return true, nil
 }

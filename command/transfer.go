@@ -67,11 +67,11 @@ func (cmd *Command) TransferRBT() {
 		return
 	}
 	if !dresp.Status {
-		cmd.log.Error("Failed to trasnfer RBT", "message", dresp.Message)
+		cmd.log.Error("Failed to transfer RBT", "message", dresp.Message)
 		return
 	}
 	if cmd.forcePWD {
-		cmd.log.Error("Failed to trasnfer RBT", "message", dresp.Message)
+		cmd.log.Error("Failed to transfer RBT", "message", dresp.Message)
 		return
 	}
 	sr := did.SignRespData{
@@ -99,9 +99,9 @@ func (cmd *Command) TransferRBT() {
 		return
 	}
 	if !response.Status {
-		cmd.log.Error("Failed to trasnfer RBT", "message", response.Message)
+		cmd.log.Error("Failed to transfer RBT", "message", response.Message)
 		return
 	}
 
-	cmd.log.Info("RBT transfered successfully")
+	cmd.log.Info("RBT transferred successfully")
 }

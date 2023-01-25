@@ -76,7 +76,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) error {
 	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
-		return fmt.Errorf("DID is not exist")
+		return fmt.Errorf("DID does not exist")
 	}
 
 	for i := 0; i < num; i++ {

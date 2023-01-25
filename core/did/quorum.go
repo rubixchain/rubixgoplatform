@@ -22,7 +22,7 @@ func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
 	return &DIDQuorum{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 }
 
-// Sign will return the singature of the DID
+// Sign will return the signature of the DID
 func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareImgFile)
 
@@ -110,7 +110,7 @@ func (d *DIDQuorum) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (b
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
 	if !enscrypt.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify private key singature")
+		return false, fmt.Errorf("failed to verify private key signature")
 	}
 	return true, nil
 }

@@ -234,7 +234,7 @@ func Run(args []string, log logger.Logger) {
 	flag.StringVar(&cmd.addr, "addr", "localhost", "Server/Host Address")
 	flag.StringVar(&cmd.port, "port", "20000", "Server/Host port")
 	flag.StringVar(&cmd.peerID, "peerID", "", "Peerd ID")
-	flag.StringVar(&peers, "peers", "", "Bootstrap peers, mutiple peers will be seprated by comma")
+	flag.StringVar(&peers, "peers", "", "Bootstrap peers, multiple peers will be separated by comma")
 	flag.IntVar(&cmd.didType, "didType", 0, "DID Creation type")
 	flag.StringVar(&cmd.didSecret, "didSecret", "My DID Secret", "DID creation secret")
 	flag.BoolVar(&cmd.forcePWD, "fp", false, "Force password entry")

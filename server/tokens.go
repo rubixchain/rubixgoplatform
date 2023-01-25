@@ -97,9 +97,9 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	if resp.Mode == did.BasicDIDMode {
 		s.c.UpateWebReq(resp.ID, req)
 	}
-	s.log.Debug("Received Singature response", "resp", resp)
+	s.log.Debug("Received Signature response", "resp", resp)
 	dc.InChan <- resp
-	s.log.Debug("Singature trasnfered", "resp", resp)
+	s.log.Debug("Signature transferred", "resp", resp)
 	if resp.Mode == did.BasicDIDMode {
 		s.handleWebRequest(resp.ID)
 		return nil

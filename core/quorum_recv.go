@@ -37,7 +37,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	// setup the did to verify the signature
-	dc := c.SetupForienDID(cr.SenderDID)
+	dc := c.SetupForeignDID(cr.SenderDID)
 	authHash := util.CalculateHashString(util.ConvertToJson(cr.WholeTokens)+util.ConvertToJson(cr.WholeTokenChain)+util.ConvertToJson(cr.PartTokens)+util.ConvertToJson(cr.PartTokenChain)+cr.ReceiverDID+cr.SenderDID+cr.Comment, "SHA3-256")
 	ok, err := dc.Verify(authHash, cr.ShareSig, cr.PrivSig)
 	if err != nil || !ok {

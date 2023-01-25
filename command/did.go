@@ -27,7 +27,7 @@ func (cmd *Command) CreateDID() {
 	switch cmd.didType {
 	case did.BasicDIDMode:
 		if cmd.imgFile == "" {
-			cmd.log.Error("Image file requried")
+			cmd.log.Error("Image file required")
 			return
 		}
 		if !strings.Contains(cmd.imgFile, did.ImgFileName) {
@@ -39,11 +39,11 @@ func (cmd *Command) CreateDID() {
 		cmd.pubKeyFile = ""
 	case did.StandardDIDMode:
 		if cmd.imgFile == "" {
-			cmd.log.Error("Image file requried")
+			cmd.log.Error("Image file required")
 			return
 		}
 		if cmd.pubKeyFile == "" {
-			cmd.log.Error("Public key file requried")
+			cmd.log.Error("Public key file required")
 			return
 		}
 		if !strings.Contains(cmd.imgFile, did.ImgFileName) {
@@ -58,15 +58,15 @@ func (cmd *Command) CreateDID() {
 		cmd.pubImgFile = ""
 	case did.WalletDIDMode:
 		if cmd.didImgFile == "" {
-			cmd.log.Error("DID image file requried")
+			cmd.log.Error("DID image file required")
 			return
 		}
 		if cmd.pubImgFile == "" {
-			cmd.log.Error("DID public share image file requried")
+			cmd.log.Error("DID public share image file required")
 			return
 		}
 		if cmd.pubKeyFile == "" {
-			cmd.log.Error("Public key file requried")
+			cmd.log.Error("Public key file required")
 			return
 		}
 		if !strings.Contains(cmd.didImgFile, did.DIDImgFileName) {
