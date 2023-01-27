@@ -21,16 +21,22 @@ const (
 
 const (
 	TCTransTypeKey         string = "transactionType"
+	TCBlockNumber          string = "blockNumber"
 	TCOwnerKey             string = "owner"
-	TCTokenIDKey           string = "tokenID"
 	TCSenderDIDKey         string = "sender"
 	TCReceiverDIDKey       string = "receiver"
 	TCCommentKey           string = "comment"
 	TCTIDKey               string = "tid"
 	TCGroupKey             string = "group"
+	TCWholeTokensKey       string = "wholeTokens"
+	TCWholeTokensIDKey     string = "wholeTokensID"
+	TCPartTokensKey        string = "partTokens"
+	TCPartTokensIDKey      string = "partTokensID"
+	TCQuorumSignatureKey   string = "quorumSignature"
 	TCPledgeTokenKey       string = "pledgeToken"
 	TCTokensPledgedForKey  string = "tokensPledgedFor"
 	TCTokensPledgedWithKey string = "tokensPledgedWith"
+	TCTokensPledgeMapKey   string = "tokensPledgeMap"
 	TCDistributedObjectKey string = "distributedObject"
 	TCPreviousHashKey      string = "previousHash"
 	TCBlockHashKey         string = "hash"
@@ -42,26 +48,26 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType   string            `json:"transactionType"`
-	TokenID           string            `json:"token_id"`
-	SenderDID         string            `json:"sender"`
-	ReceiverDID       string            `json:"receiver"`
-	Comment           string            `json:"comment"`
-	TID               string            `json:"tid"`
-	Group             []string          `json:"group"`
-	PledgeToken       string            `json:"pledgeToken"`
-	TokensPledgedFor  []string          `json:"tokensPledgedFor"`
-	TokensPledgedWith []string          `json:"tokensPledgedWith"`
-	DistributedObject map[string]string `json:"distributedObject"`
-	PreviousHash      string            `json:"previousHash"`
-	BlockHash         string            `json:"blockHash"`
-	Nonce             string            `json:"nonce"`
-	Signature         string            `json:"signature"`
+	TransactionType   string                 `json:"transactionType"`
+	TokenOwner        string                 `json:"owner"`
+	SenderDID         string                 `json:"sender"`
+	ReceiverDID       string                 `json:"receiver"`
+	Comment           string                 `json:"comment"`
+	TID               string                 `json:"tid"`
+	WholeTokens       []string               `json:"wholeTokens"`
+	WholeTokensID     []string               `json:"wholeTokensID"`
+	PartTokens        []string               `json:"partTokens"`
+	PartTokensID      []string               `json:"partTokensID"`
+	QuorumSignature   []string               `json:"quorumSignature"`
+	TokensPledgedFor  []string               `json:"tokensPledgedFor"`
+	TokensPledgedWith []string               `json:"tokensPledgedWith"`
+	TokensPledgeMap   []string               `json:"tokensPledgeMap"`
+	TokenChainDetials map[string]interface{} `json:"tokenChainBlock"`
 }
 
 type TokenChainStatus struct {
 	TransactionType string `json:"transactionType"`
-	BlockHash       string `json:"blockHash"`
+	BlockID         string `json:"blockID"`
 	TokenOwner      string `json:"owner"`
 }
 
@@ -92,7 +98,7 @@ func (w *Wallet) GetLatestTokenBlock(token string) (map[string]interface{}, erro
 	if err != nil {
 		return nil, fmt.Errorf("Invalid token chain block, " + err.Error())
 	}
-	err = w.ts.Read(token, &kv, "key=?", ts.BlockHash)
+	err = w.ts.Read(token, &kv, "key=?", ts.BlockID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,11 +113,11 @@ func (w *Wallet) GetLatestTokenBlock(token string) (map[string]interface{}, erro
 // AddTokenBlock will write token block into storage
 func (w *Wallet) AddTokenBlock(token string, tcb map[string]interface{}) error {
 	var kv storage.StorageType
-	hash, ok := tcb[TCBlockHashKey]
-	if !ok {
-		return fmt.Errorf("block hash is missing")
+	bid, err := GetBlockID(token, tcb)
+	if err != nil {
+		return err
 	}
-	kv.Key = hash.(string)
+	kv.Key = bid
 	jb, err := json.Marshal(tcb)
 	if err != nil {
 		fmt.Errorf("Failed to marshal json, " + err.Error())
@@ -127,9 +133,9 @@ func (w *Wallet) AddLatestTokenBlock(token string, tcb map[string]interface{}) e
 	if !ok {
 		return fmt.Errorf("invalid token chain block")
 	}
-	hash, ok := tcb[TCBlockHashKey]
-	if !ok {
-		return fmt.Errorf("invalid token chain block")
+	bid, err := GetBlockID(token, tcb)
+	if err != nil {
+		return err
 	}
 	owner, ok := tcb[TCOwnerKey]
 	if !ok {
@@ -137,7 +143,7 @@ func (w *Wallet) AddLatestTokenBlock(token string, tcb map[string]interface{}) e
 	}
 	ts := TokenChainStatus{
 		TransactionType: transType.(string),
-		BlockHash:       hash.(string),
+		BlockID:         bid,
 		TokenOwner:      owner.(string),
 	}
 	tsb, err := json.Marshal(ts)
@@ -155,7 +161,7 @@ func (w *Wallet) AddLatestTokenBlock(token string, tcb map[string]interface{}) e
 	if err != nil {
 		return err
 	}
-	kv.Key = hash.(string)
+	kv.Key = bid
 	kv.Value = string(jb)
 	return w.ts.Write(token, &kv)
 }

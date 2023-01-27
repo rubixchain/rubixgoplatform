@@ -236,12 +236,19 @@ func GetPos(s1, s2 string) string {
 	return tempo.String()
 }
 
-func HexToStr(ByteArray []byte) string {
-	dst := make([]byte, hex.EncodedLen(len(ByteArray)))
-	hex.Encode(dst, ByteArray)
+func HexToStr(d []byte) string {
+	dst := make([]byte, hex.EncodedLen(len(d)))
+	hex.Encode(dst, d)
 
 	return string(dst)
 }
+
+func StrToHex(s string) []byte {
+	dst := make([]byte, hex.DecodedLen(len(s)))
+	hex.Decode(dst, []byte(s))
+	return dst
+}
+
 func DirCopy(src string, dst string) error {
 	var err error
 	var fds []os.FileInfo
