@@ -29,7 +29,7 @@ const (
 	APIGetAllQuorum        string = "/api/getallquorum"
 	APIRemoveAllQuorum     string = "/api/removeallquorum"
 	APISetupQuorum         string = "/api/setup-quorum"
-	APIEnableExplorer      string = "/api/enable-explorer"
+	APISetupService        string = "/api/setup-service"
 	APIGenerateTestToken   string = "/api/generate-test-token"
 	APIInitiateRBTTransfer string = "/api/initiate-rbt-transfer"
 	APIGetAccountInfo      string = "/api/get-account-info"
@@ -150,6 +150,11 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 				return nil, err
 			}
 		}
+		err = s.AddEntity(DIDUserTable, &DIDUserMap{})
+		if err != nil {
+			s.log.Error("failed to init DID user table", "err", err)
+			return nil, err
+		}
 	}
 
 	s.SetShutdown(s.ExitFunc)
@@ -194,7 +199,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIGetAllQuorum, "GET", s.AuthHandle(s.APIGetAllQuorum, s.ErrorFunc))
 	s.AddRoute(APIRemoveAllQuorum, "GET", s.AuthHandle(s.APIRemoveAllQuorum, s.ErrorFunc))
 	s.AddRoute(APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, s.ErrorFunc))
-	s.AddRoute(APIEnableExplorer, "POST", s.AuthHandle(s.APIEnableExplorer, s.ErrorFunc))
+	s.AddRoute(APISetupService, "POST", s.AuthHandle(s.APISetupService, s.ErrorFunc))
 	s.AddRoute(APIGenerateTestToken, "POST", s.AuthHandle(s.APIGenerateTestToken, s.ErrorFunc))
 	s.AddRoute(APIInitiateRBTTransfer, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, s.ErrorFunc))
 	s.AddRoute(APIGetAccountInfo, "GET", s.AuthHandle(s.APIGetAccountInfo, s.ErrorFunc))

@@ -3,6 +3,7 @@ package command
 import (
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -45,7 +46,7 @@ const (
 	GenerateTestRBTCmd    string = "generatetestrbt"
 	TransferRBTCmd        string = "transferrbt"
 	GetAccountInfoCmd     string = "getaccountinfo"
-	EnableExplorerCmd     string = "enableexplorer"
+	SetupServiceCmd       string = "setupservice"
 )
 
 var commands = []string{VersionCmd,
@@ -65,7 +66,7 @@ var commands = []string{VersionCmd,
 	GenerateTestRBTCmd,
 	TransferRBTCmd,
 	GetAccountInfoCmd,
-	EnableExplorerCmd}
+	SetupServiceCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -91,6 +92,8 @@ type Command struct {
 	start        bool
 	node         uint
 	runDir       string
+	logFile      string
+	logLevel     string
 	cfgFile      string
 	testNet      bool
 	testNetKey   string
@@ -109,6 +112,7 @@ type Command struct {
 	pubImgFile   string
 	pubKeyFile   string
 	quorumList   string
+	srvName      string
 	dbName       string
 	dbType       string
 	dbAddress    string
@@ -217,14 +221,14 @@ func (cmd *Command) validateOptions() bool {
 	return false
 }
 
-func Run(args []string, log logger.Logger) {
+func Run(args []string) {
 
-	cmd := &Command{
-		log: log,
-	}
+	cmd := &Command{}
 	var peers string
 
 	flag.StringVar(&cmd.runDir, "p", "./", "Working directory path")
+	flag.StringVar(&cmd.logFile, "logFile", "", "Log file name")
+	flag.StringVar(&cmd.logLevel, "logLevel", "debug", "Log level")
 	flag.StringVar(&cmd.cfgFile, "c", ConfigFile, "Configuration file for the core")
 	flag.UintVar(&cmd.node, "n", 0, "Node number")
 	flag.StringVar(&cmd.encKey, "k", "TestKeyBasic#2022", "Config file encryption key")
@@ -245,7 +249,8 @@ func Run(args []string, log logger.Logger) {
 	flag.StringVar(&cmd.pubImgFile, "pubImgFile", did.PubShareFileName, "DID public share image")
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
 	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
-	flag.StringVar(&cmd.dbName, "dbName", "ExplorerDB", "Explorer database name")
+	flag.StringVar(&cmd.srvName, "srvName", "explorer_service", "Service name")
+	flag.StringVar(&cmd.dbName, "dbName", "ServiceDB", "Service database name")
 	flag.StringVar(&cmd.dbType, "dbType", "SQLServer", "DB Type, supported database are SQLServer, PostgressSQL, MySQL & Sqlite3")
 	flag.StringVar(&cmd.dbAddress, "dbAddress", "localhost", "Database address")
 	flag.StringVar(&cmd.dbPort, "dbPort", "1433", "Database port number")
@@ -261,7 +266,7 @@ func Run(args []string, log logger.Logger) {
 	flag.BoolVar(&cmd.enableAuth, "enableAuth", false, "Enable authentication")
 
 	if len(os.Args) < 2 {
-		cmd.log.Error("Invalid Command")
+		fmt.Println("Invalid Command")
 		showHelp()
 		return
 	}
@@ -278,9 +283,41 @@ func Run(args []string, log logger.Logger) {
 	}
 
 	if !cmd.validateOptions() {
-		cmd.log.Error("Validate options failed")
+		fmt.Println("Validate options failed")
 		return
 	}
+
+	if cmd.logFile == "" {
+		cmd.logFile = cmd.runDir + "log.txt"
+	}
+
+	level := logger.Debug
+
+	fp, err := os.OpenFile(cmd.logFile,
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+
+	switch strings.ToLower(cmd.logLevel) {
+	case "error":
+		level = logger.Error
+	case "info":
+		level = logger.Info
+	case "debug":
+		level = logger.Debug
+	default:
+		level = logger.Debug
+	}
+
+	logOptions := &logger.LoggerOptions{
+		Name:   "Main",
+		Level:  level,
+		Color:  []logger.ColorOption{logger.AutoColor, logger.ColorOff},
+		Output: []io.Writer{logger.DefaultOutput, fp},
+	}
+
+	cmd.log = logger.New(logOptions)
 
 	switch cmdName {
 	case VersionCmd:
@@ -311,8 +348,8 @@ func Run(args []string, log logger.Logger) {
 		cmd.RemoveAllQuorum()
 	case SetupQuorumCmd:
 		cmd.SetupQuorum()
-	case EnableExplorerCmd:
-		cmd.EnableExplorer()
+	case SetupServiceCmd:
+		cmd.SetupService()
 	case GenerateTestRBTCmd:
 		cmd.GenerateTestRBT()
 	case TransferRBTCmd:

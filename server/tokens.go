@@ -9,6 +9,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/util"
 )
 
 type Token struct {
@@ -23,6 +24,9 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 	err := s.ParseJSON(req, &tr)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	if !s.validateDIDUserMapping(req, tr.DID) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
 	go s.handleWebRequest(req.ID)
@@ -46,6 +50,13 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	err := s.ParseJSON(req, &rbtReq)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	_, did, ok := util.ParseAddress(rbtReq.Sender)
+	if !ok {
+		return s.BasicResponse(req, false, "Invalid sender address", nil)
+	}
+	if !s.validateDIDUserMapping(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
 	go s.handleWebRequest(req.ID)
@@ -80,6 +91,9 @@ func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	info, err := s.c.GetAccountInfo(did)
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	if !s.validateDIDUserMapping(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	return s.RenderJSON(req, info, http.StatusOK)
 }

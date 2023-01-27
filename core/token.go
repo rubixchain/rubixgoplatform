@@ -44,7 +44,7 @@ func (c *Core) GetAccountInfo(did string) (*model.RBTInfo, error) {
 	info := &model.RBTInfo{
 		BasicResponse: model.BasicResponse{
 			Status:  true,
-			Message: "RBT accoutn info",
+			Message: "RBT account info",
 		},
 	}
 	for _, t := range wt {
@@ -122,40 +122,51 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) error {
 			return err
 		}
 
-		tc := make(map[string]interface{})
+		tcb := wallet.TokenChainBlock{
+			TransactionType: wallet.TokenGeneratedType,
+			TokenOwner:      did,
+			Comment:         "Token generated at " + time.Now().String(),
+		}
 
-		rb = util.GetRandBytes(16)
+		ctcb := make(map[string]interface{})
+		ctcb[id] = nil
 
-		tc[wallet.TCTransTypeKey] = wallet.TokenGeneratedType
-		tc[wallet.TCOwnerKey] = did
-		tc[wallet.TCCommentKey] = "Token generated at " + time.Now().String()
-		tc[wallet.TCTokenIDKey] = id
-		tc[wallet.TCNonceKey] = base64.RawURLEncoding.EncodeToString(rb)
+		ntcb := wallet.CreateTCBlock(ctcb, &tcb)
 
-		hash, err := wallet.TC2HashString(tc)
+		if ntcb == nil {
+			c.log.Error("Failed to create new token chain block")
+			return fmt.Errorf("Failed to create new token chain block")
+		}
+
+		hash, ok := ntcb[wallet.TCBlockHashKey]
+		if !ok {
+			c.log.Error("Invalid new token chain block, missing block hash")
+			return fmt.Errorf("Invalid new token chain block, missing block hash")
+		}
+
+		bid, err := wallet.GetBlockID(id, ntcb)
 
 		if err != nil {
-			c.log.Error("Failed to calculate token chain hash", "err", err)
-			return err
+			c.log.Error("Failed to get block id", "err", err)
+			return fmt.Errorf("Failed to get block id")
 		}
-		tc[wallet.TCBlockHashKey] = hash
 
-		_, sig, err = dc.Sign(hash)
+		sig, err = dc.PvtSign([]byte(hash.(string)))
 		if err != nil {
 			c.log.Error("Failed to get did signature", "err", err)
 			return fmt.Errorf("Failed to get did signature")
 		}
 
-		tc[wallet.TCSignatureKey] = util.HexToStr(sig)
+		ntcb[wallet.TCSignatureKey] = util.HexToStr(sig)
 
 		t := &wallet.Token{
 			TokenID:      id,
 			TokenDetials: string(tb),
 			DID:          did,
-			TokenChainID: hash,
+			TokenChainID: bid,
 			TokenStatus:  wallet.TokenIsFree,
 		}
-		err = c.w.AddLatestTokenBlock(id, tc)
+		err = c.w.AddLatestTokenBlock(id, ntcb)
 		if err != nil {
 			c.log.Error("Failed to add token chain", "err", err)
 			return err

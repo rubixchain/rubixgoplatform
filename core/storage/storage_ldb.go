@@ -26,15 +26,26 @@ func NewStorageLDB(dirPath string) (*StorageLDB, error) {
 
 // Init will initialize storage
 func (s *StorageLDB) Init(storageName string, value interface{}) error {
+	s.l.Lock()
+	_, ok := s.sm[storageName]
+	if !ok {
+		s.sm[storageName] = false
+	}
+	s.l.Unlock()
 	return nil
 }
 
 func (s *StorageLDB) getStorage(storageName string) {
+	wait := true
 	for {
-		wait := true
 		s.l.Lock()
-		_, ok := s.sm[storageName]
-		if !ok {
+		status, ok := s.sm[storageName]
+		if ok {
+			if !status {
+				s.sm[storageName] = true
+				wait = false
+			}
+		} else {
 			s.sm[storageName] = true
 			wait = false
 		}
@@ -50,7 +61,7 @@ func (s *StorageLDB) releaseStorage(storageName string) {
 	s.l.Lock()
 	_, ok := s.sm[storageName]
 	if ok {
-		delete(s.sm, storageName)
+		s.sm[storageName] = false
 	}
 	s.l.Unlock()
 }

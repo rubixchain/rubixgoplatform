@@ -88,12 +88,12 @@ func (w *Wallet) PledgeWholeToken(did string, token string, tcb map[string]inter
 		w.log.Error("Token is not locked")
 		return fmt.Errorf("token is not locked")
 	}
-	h, ok := tcb[TCBlockHashKey]
-	if !ok {
-		w.log.Error("Invalid token chain block")
-		return fmt.Errorf("Invalid token chain block")
+	bid, err := GetBlockID(token, tcb)
+	if err != nil {
+		w.log.Error("Invalid token chain block", "err", err)
+		return err
 	}
-	t.TokenChainID = h.(string)
+	t.TokenChainID = bid
 	t.TokenStatus = TokenIsPledged
 	err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, token)
 	if err != nil {
@@ -238,11 +238,11 @@ func (w *Wallet) TokensTransferred(did string, wt []string, pt []string, tcb map
 		if err != nil {
 			return err
 		}
-		ha, ok := tcb[TCBlockHashKey]
-		if !ok {
-			return fmt.Errorf("invalid token chain block")
+		bid, err := GetBlockID(wt[i], tcb)
+		if err != nil {
+			return err
 		}
-		t.TokenChainID = ha.(string)
+		t.TokenChainID = bid
 		t.TokenStatus = TokenIsTransferred
 		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, wt[i])
 		if err != nil {
@@ -256,11 +256,11 @@ func (w *Wallet) TokensTransferred(did string, wt []string, pt []string, tcb map
 		if err != nil {
 			return err
 		}
-		ha, ok := tcb[TCBlockHashKey]
-		if !ok {
-			return fmt.Errorf("invalid token chain block")
+		bid, err := GetBlockID(pt[i], tcb)
+		if err != nil {
+			return err
 		}
-		t.TokenChainID = ha.(string)
+		t.TokenChainID = bid
 		t.TokenStatus = TokenIsTransferred
 		err = w.s.Update(PartTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
 		if err != nil {
@@ -287,11 +287,11 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, tcb map[st
 				return err
 			}
 		}
-		ha, ok := tcb[TCBlockHashKey]
-		if !ok {
-			return fmt.Errorf("invalid token chain block")
+		bid, err := GetBlockID(wt[i], tcb)
+		if err != nil {
+			return err
 		}
-		t.TokenChainID = ha.(string)
+		t.TokenChainID = bid
 		t.TokenStatus = TokenIsFree
 		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, wt[i])
 		if err != nil {

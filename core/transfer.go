@@ -42,9 +42,16 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	defer p.Close()
 	wta := make([]string, 0)
 	wtca := make([]string, 0)
+	wtcb := make([]map[string]interface{}, 0)
 	for i := range wt {
 		wta = append(wta, wt[i].TokenID)
 		wtca = append(wtca, wt[i].TokenChainID)
+		tcb, err := c.w.GetLatestTokenBlock(wt[i].TokenID)
+		if err != nil {
+			resp.Message = "Failed to get latest token chain block"
+			return resp
+		}
+		wtcb = append(wtcb, tcb)
 	}
 	pta := make([]string, 0)
 	ptca := make([]string, 0)
@@ -73,6 +80,7 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		ReceiverDID:     rdid,
 		WholeTokens:     wta,
 		WholeTokenChain: wtca,
+		WholeTCBlocks:   wtcb,
 		PartTokens:      pta,
 		PartTokenChain:  ptca,
 		Comment:         req.Comment,

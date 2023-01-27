@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
 	didcrypto "github.com/rubixchain/rubixgoplatform/core/did"
@@ -187,27 +188,43 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to setup quorum crypto"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-
+	tcb := wallet.TokenChainBlock{
+		TransactionType:   wallet.TokenPledgedType,
+		TokenOwner:        did,
+		Comment:           "Token is pledged at " + time.Now().String(),
+		TokenChainDetials: ur.TokenChainBlock,
+	}
+	ctcb := make(map[string]interface{})
 	for _, t := range ur.PledgedTokens {
-		tcb := make(map[string]interface{})
-		tcb[wallet.TCTransTypeKey] = wallet.TokenPledgedType
-		tcb[wallet.TCOwnerKey] = did
-		tcb[wallet.TCTokenChainBlockKey] = ur.TokenChainBlock
-		hs, err := wallet.TC2HashString(tcb)
+		ptcb, err := c.w.GetLatestTokenBlock(t)
 		if err != nil {
-			c.log.Error("Failed to caculate token chain block hash", "err", err)
-			crep.Message = "Failed to caculate token chain block hash"
+			c.log.Error("Failed to get token chain block", "err", err)
+			crep.Message = "Failed to get token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		tcb[wallet.TCBlockHashKey] = hs
-		sig, err := dc.PvtSign([]byte(hs))
-		if err != nil {
-			c.log.Error("Failed to get quorum signature", "err", err)
-			crep.Message = "Failed to get quorum signature"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		tcb[wallet.TCPvtShareKey] = util.HexToStr(sig)
-		err = c.w.PledgeWholeToken(did, t, tcb)
+		ctcb[t] = ptcb
+	}
+	ntcb := wallet.CreateTCBlock(ctcb, &tcb)
+	if ntcb == nil {
+		c.log.Error("Failed to create new token chain block")
+		crep.Message = "Failed to create new token chain block"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	ha, ok := ntcb[wallet.TCBlockHashKey]
+	if !ok {
+		c.log.Error("Invalid new token chain block, missing block hash")
+		crep.Message = "Invalid new token chain block, missing block hash"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	sig, err := dc.PvtSign([]byte(ha.(string)))
+	if err != nil {
+		c.log.Error("Failed to get quorum signature", "err", err)
+		crep.Message = "Failed to get quorum signature"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	ntcb[wallet.TCPvtShareKey] = util.HexToStr(sig)
+	for _, t := range ur.PledgedTokens {
+		err = c.w.PledgeWholeToken(did, t, ntcb)
 		if err != nil {
 			c.log.Error("Failed to update pledge token", "err", err)
 			crep.Message = "Failed to update pledge token"
@@ -248,3 +265,4 @@ func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
 	crep.Message = "Credit accepted"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
+
