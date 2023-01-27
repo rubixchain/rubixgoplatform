@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/EnsurityTechnologies/adapter"
 	"github.com/EnsurityTechnologies/apiconfig"
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
@@ -42,11 +41,6 @@ const (
 )
 
 const (
-	ExploreTopic     string = "explorer"
-	TokenStatusTopic string = "token_status"
-)
-
-const (
 	NodePort    uint16 = 20000
 	SendPort    uint16 = 21000
 	RecvPort    uint16 = 22000
@@ -57,35 +51,34 @@ const (
 )
 
 type Core struct {
-	cfg            *config.Config
-	cfgFile        string
-	encKey         string
-	log            logger.Logger
-	peerID         string
-	lock           sync.RWMutex
-	ipfsLock       sync.RWMutex
-	qlock          sync.RWMutex
-	rlock          sync.Mutex
-	ipfs           *ipfsnode.Shell
-	ipfsState      bool
-	ipfsChan       chan bool
-	alphaQuorum    *quorum.Quorum
-	d              *did.DID
-	pm             *ipfsport.PeerManager
-	l              *ipfsport.Listener
-	ps             *pubsub.PubSub
-	started        bool
-	ipfsApp        string
-	testNet        bool
-	testNetKey     string
-	explorerStatus bool
-	exploreDB      *adapter.Adapter
-	version        string
-	quorumRequest  map[string]*ConsensusStatus
-	pd             map[string]*PledgeDetials
-	webReq         map[string]*did.DIDChan
-	w              *wallet.Wallet
-	qc             map[string]did.DIDCrypto
+	cfg           *config.Config
+	cfgFile       string
+	encKey        string
+	log           logger.Logger
+	peerID        string
+	lock          sync.RWMutex
+	ipfsLock      sync.RWMutex
+	qlock         sync.RWMutex
+	rlock         sync.Mutex
+	ipfs          *ipfsnode.Shell
+	ipfsState     bool
+	ipfsChan      chan bool
+	alphaQuorum   *quorum.Quorum
+	d             *did.DID
+	pm            *ipfsport.PeerManager
+	l             *ipfsport.Listener
+	ps            *pubsub.PubSub
+	started       bool
+	ipfsApp       string
+	testNet       bool
+	testNetKey    string
+	version       string
+	quorumRequest map[string]*ConsensusStatus
+	pd            map[string]*PledgeDetials
+	webReq        map[string]*did.DIDChan
+	w             *wallet.Wallet
+	qc            map[string]did.DIDCrypto
+	sd            map[string]*ServiceDetials
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {
@@ -152,6 +145,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		pd:            make(map[string]*PledgeDetials),
 		webReq:        make(map[string]*did.DIDChan),
 		qc:            make(map[string]did.DIDCrypto),
+		sd:            make(map[string]*ServiceDetials),
 	}
 
 	c.log = log.Named("Core")
@@ -209,19 +203,10 @@ func (c *Core) SetupCore() error {
 	if err != nil {
 		return err
 	}
-	err = c.ps.SubscribeTopic(TokenStatusTopic, c.tokenStatusCallback)
+	err = c.initServices()
 	if err != nil {
+		c.log.Error("Failed to setup services", "err", err)
 		return err
-	}
-	if c.cfg.CfgData.Services != nil {
-		ecfg, ok := c.cfg.CfgData.Services[ExploreTopic]
-		if ok {
-			err = c.initExplorer(ecfg)
-			if err != nil {
-				c.log.Error("Failed to setup explorer DB", "err", err)
-				return err
-			}
-		}
 	}
 	c.PingSetup()
 	c.PeerStatusSetup()

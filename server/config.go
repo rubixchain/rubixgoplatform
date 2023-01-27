@@ -1,13 +1,8 @@
 package server
 
 import (
-	"encoding/json"
-	"fmt"
-	"strings"
-
 	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/ensweb"
-	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
@@ -68,67 +63,6 @@ func (s *Server) APIGetAllBootStrap(req *ensweb.Request) *ensweb.Result {
 		Peers: peers,
 	}
 	return s.BasicResponse(req, true, "Got all the bootstrap peers successfully", m)
-}
-
-// APICreateDID will create new DID
-func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
-
-	folderName, err := s.c.CreateTempFolder()
-	if err != nil {
-		s.log.Error("failed to create folder")
-		return s.BasicResponse(req, false, "failed to create folder", nil)
-	}
-
-	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
-
-	fmt.Printf("Field : %v, Files : %v\n", fileNames, fieldNames)
-
-	if err != nil {
-		s.log.Error("failed to parse request", "err", err)
-		return s.BasicResponse(req, false, "failed to create DID", nil)
-	}
-	fields := fieldNames[DIDConfigField]
-	if len(fields) == 0 {
-		s.log.Error("missing did configuration")
-		return s.BasicResponse(req, false, "missing did configuration", nil)
-	}
-	var didCreate did.DIDCreate
-	err = json.Unmarshal([]byte(fields[0]), &didCreate)
-	if err != nil {
-		s.log.Error("failed to parse did configuration", "err", err)
-		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
-	}
-
-	for _, fileName := range fileNames {
-		if strings.Contains(fileName, did.ImgFileName) {
-			didCreate.ImgFile = fileName
-		}
-		if strings.Contains(fileName, did.DIDImgFileName) {
-			didCreate.DIDImgFile = fileName
-		}
-		if strings.Contains(fileName, did.PubShareFileName) {
-			didCreate.PubImgFile = fileName
-		}
-		if strings.Contains(fileName, did.PubKeyFileName) {
-			didCreate.PubKeyFile = fileName
-		}
-	}
-
-	did, err := s.c.CreateDID(&didCreate)
-	if err != nil {
-		s.log.Error("failed to create did", "err", err)
-		return s.BasicResponse(req, false, err.Error(), nil)
-	}
-	didResp := DIDResponse{
-		DID: did,
-	}
-	return s.BasicResponse(req, true, "DID created successfully", &didResp)
-}
-
-// APIGetAllDID will get all DID
-func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
-	ids := s.c.GetAllDID()
-	return s.BasicResponse(req, true, "Got all DIDs", ids)
 }
 
 // APIAddQuorum will add quorum list to node

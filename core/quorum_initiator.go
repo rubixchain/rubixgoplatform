@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -28,20 +29,22 @@ const (
 )
 
 type ConensusRequest struct {
-	ReqID           string   `json:"req_id"`
-	Type            int      `json:"type"`
-	Mode            int      `json:"mode"`
-	SenderPeerID    string   `json:"sender_peerd_id"`
-	ReceiverPeerID  string   `json:"receiver_peerd_id"`
-	SenderDID       string   `json:"sender_did"`
-	ReceiverDID     string   `json:"receiver_did"`
-	WholeTokens     []string `json:"whole_tokens"`
-	WholeTokenChain []string `json:"whole_token_chain"`
-	PartTokens      []string `json:"part_tokens"`
-	PartTokenChain  []string `json:"part_token_chain"`
-	Comment         string   `json:"comment"`
-	ShareSig        []byte   `json:"share_sig"`
-	PrivSig         []byte   `json:"priv_sig"`
+	ReqID           string                   `json:"req_id"`
+	Type            int                      `json:"type"`
+	Mode            int                      `json:"mode"`
+	SenderPeerID    string                   `json:"sender_peerd_id"`
+	ReceiverPeerID  string                   `json:"receiver_peerd_id"`
+	SenderDID       string                   `json:"sender_did"`
+	ReceiverDID     string                   `json:"receiver_did"`
+	WholeTokens     []string                 `json:"whole_tokens"`
+	WholeTokenChain []string                 `json:"whole_token_chain"`
+	WholeTCBlocks   []map[string]interface{} `json:"whole_tc_blocks"`
+	PartTokens      []string                 `json:"part_tokens"`
+	PartTokenChain  []string                 `json:"part_token_chain"`
+	PartTCBlocks    []map[string]interface{} `json:"part_tc_blocks"`
+	Comment         string                   `json:"comment"`
+	ShareSig        []byte                   `json:"share_sig"`
+	PrivSig         []byte                   `json:"priv_sig"`
 }
 
 type ConensusReply struct {
@@ -404,45 +407,6 @@ func (c *Core) finishConensus(id string, qt int, p *ipfsport.Peer, status bool, 
 	}
 }
 
-func (c *Core) validateTokenOwnership(cr *ConensusRequest) bool {
-	// ::TODO:: Need to implement
-	for i := range cr.WholeTokens {
-		c.log.Debug("Finding dht", "token", cr.WholeTokens[i])
-		ids, err := c.GetDHTddrs(cr.WholeTokens[i])
-		if err != nil || len(ids) == 0 {
-			continue
-		}
-	}
-	// for i := range cr.WholeTokens {
-	// 	c.log.Debug("Requesting Token status")
-	// 	ts := TokenPublish{
-	// 		Token: cr.WholeTokens[i],
-	// 	}
-	// 	c.ps.Publish(TokenStatusTopic, &ts)
-	// 	c.log.Debug("Finding dht", "token", cr.WholeTokens[i])
-	// 	ids, err := c.GetDHTddrs(cr.WholeTokens[i])
-	// 	if err != nil || len(ids) == 0 {
-	// 		c.log.Error("Failed to find token owner", "err", err)
-	// 		crep.Message = "Failed to find token owner"
-	// 		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	// 	}
-	// 	if len(ids) > 1 {
-	// 		// ::TODO:: to more check to findout right pwner
-	// 		c.log.Error("Mutiple owner found for the token", "token", cr.WholeTokens, "owners", ids)
-	// 		crep.Message = "Mutiple owner found for the token"
-	// 		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	// 	} else {
-	// 		//:TODO:: get peer from the table
-	// 		if cr.SenderPeerID != ids[0] {
-	// 			c.log.Error("Token peer id mismatched", "expPeerdID", cr.SenderPeerID, "peerID", ids[0])
-	// 			crep.Message = "Token peer id mismatched"
-	// 			return c.l.RenderJSON(req, &crep, http.StatusOK)
-	// 		}
-	// 	}
-	// }
-	return true
-}
-
 func (c *Core) checkQuroumCredits(p *ipfsport.Peer, cr *ConensusRequest, qt int) error {
 	var cs model.CreditStatus
 	err := p.SendJSONRequest("GET", APICreditStatus, nil, nil, &cs, true)
@@ -499,23 +463,37 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, tid string, dc did.DIDCryp
 		c.log.Error("Invalid pledge request")
 		return nil, fmt.Errorf("invalid pledge request")
 	}
-	ntcb := make(map[string]interface{})
-	ntcb[wallet.TCTransTypeKey] = wallet.TokenTransferredType
-	ntcb[wallet.TCOwnerKey] = cr.ReceiverDID
-	ntcb[wallet.TCTokensPledgedWithKey] = pd.TokenList
 	tokenList := make([]string, 0)
 	tokenList = append(tokenList, cr.WholeTokens...)
+	credit := make([]string, 0)
+	for _, csig := range cs.Credit.Credit {
+		jb, err := json.Marshal(csig)
+		if err != nil {
+			c.log.Error("Failed to parse quorum credit", "err", err)
+			return nil, fmt.Errorf("Failed to parse quorum credit")
+		}
+		credit = append(credit, string(jb))
+	}
+
 	//tokenList = append(tokenList, cr.PartTokens...)
-	ntcb[wallet.TCTokensPledgedForKey] = tokenList
-	ntcb[wallet.TCSenderDIDKey] = cr.SenderDID
-	ntcb[wallet.TCGroupKey] = tokenList
-	ntcb[wallet.TCCommentKey] = cr.Comment
-	ntcb[wallet.TCTIDKey] = tid
-	ntcb[wallet.TCReceiverDIDKey] = cr.ReceiverDID
-	do := make(map[string]string)
+	tcb := wallet.TokenChainBlock{
+		TransactionType:   wallet.TokenTransferredType,
+		TokenOwner:        cr.ReceiverDID,
+		TokensPledgedWith: pd.TokenList,
+		TokensPledgedFor:  tokenList,
+		SenderDID:         cr.SenderDID,
+		WholeTokens:       cr.WholeTokens,
+		WholeTokensID:     cr.WholeTokenChain,
+		PartTokens:        cr.PartTokens,
+		PartTokensID:      cr.PartTokenChain,
+		QuorumSignature:   credit,
+		Comment:           cr.Comment,
+		TID:               tid,
+		ReceiverDID:       cr.ReceiverDID,
+	}
+	pm := make([]string, 0)
 	index := 0
-	l := len(tokenList)
-	phm := make(map[string]string)
+	ctcb := make(map[string]interface{})
 	for _, v := range pd.PledgedTokens {
 		for _, t := range v {
 			tcb, err := c.w.GetLatestTokenBlock(tokenList[index])
@@ -523,29 +501,23 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, tid string, dc did.DIDCryp
 				c.log.Error("Failed to get latest token chain block", "err", err)
 				return nil, fmt.Errorf("Failed to get latest token chain block")
 			}
-			ph, ok := tcb[wallet.TCBlockHashKey]
-			if !ok {
-				c.log.Error("Failed to get block hash")
-				return nil, fmt.Errorf("Failed to get block hash")
-			}
-			phm[tokenList[index]] = ph.(string)
-			if index >= l {
-				c.log.Error("Not enough pledged token")
-				return nil, fmt.Errorf("Not enough pledged token")
-			}
-			do[tokenList[index]] = t
+			ctcb[tokenList[index]] = tcb
+			pm = append(pm, tokenList[index]+" "+t)
 			index++
 		}
 	}
-	ntcb[wallet.TCPreviousHashKey] = phm
-	hs, err := wallet.TC2HashString(ntcb)
-	if err != nil {
-		c.log.Error("Failed to get token chain hash", "err", err)
-		return nil, fmt.Errorf("Failed to get token chain hash")
+	tcb.TokensPledgeMap = pm
+	ntcb := wallet.CreateTCBlock(ctcb, &tcb)
+	if ntcb == nil {
+		c.log.Error("Failed to create new token chain block")
+		return nil, fmt.Errorf("Failed to create new token chain block")
 	}
-	ntcb[wallet.TCBlockHashKey] = hs
-
-	sig, err := dc.PvtSign([]byte(hs))
+	hs, ok := ntcb[wallet.TCBlockHashKey]
+	if !ok {
+		c.log.Error("Failed to create new token chain block")
+		return nil, fmt.Errorf("Failed to create new token chain block")
+	}
+	sig, err := dc.PvtSign([]byte(hs.(string)))
 	if err != nil {
 		c.log.Error("Failed to get did signature", "err", err)
 		return nil, fmt.Errorf("Failed to get did signature")

@@ -6,16 +6,17 @@ import (
 	"github.com/rubixchain/rubixgoplatform/server"
 )
 
-func (cmd *Command) EnableExplorer() {
-	exp := config.ExplorerConfig{
-		DBName:     cmd.dbName,
-		DBType:     cmd.dbType,
-		DBAddress:  cmd.dbAddress,
-		DBPort:     cmd.dbPort,
-		DBUserName: cmd.dbUserName,
-		DBPassword: cmd.dbPassword,
+func (cmd *Command) SetupService() {
+	exp := config.ServiceConfig{
+		ServiceName: cmd.srvName,
+		DBName:      cmd.dbName,
+		DBType:      cmd.dbType,
+		DBAddress:   cmd.dbAddress,
+		DBPort:      cmd.dbPort,
+		DBUserName:  cmd.dbUserName,
+		DBPassword:  cmd.dbPassword,
 	}
-	c, r, err := cmd.basicClient("POST", server.APIEnableExplorer, &exp)
+	c, r, err := cmd.basicClient("POST", server.APISetupService, &exp)
 	if err != nil {
 		cmd.log.Error("Failed to create http client", "err", err)
 		return
@@ -33,8 +34,8 @@ func (cmd *Command) EnableExplorer() {
 		return
 	}
 	if !response.Status {
-		cmd.log.Error("Failed to enable explorer service", "message", response.Message)
+		cmd.log.Error("Failed to setup service", "message", response.Message)
 		return
 	}
-	cmd.log.Info("Explorer service enabled successfully")
+	cmd.log.Info("Service setup successfully")
 }
