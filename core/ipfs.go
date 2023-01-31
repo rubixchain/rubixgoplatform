@@ -308,3 +308,16 @@ func (c *Core) GetDHTddrs(cid string) ([]string, error) {
 		}
 	}
 }
+
+// pin a cid to ipfs
+func (c *Core) Pin(cid string) error {
+	reader := strings.NewReader(cid)
+	_, err := c.ipfs.Request("pin/add", cid).Body(reader).Send(context.Background())
+	return err
+}
+
+// unpin a cid from ipfs
+func (c *Core) Unpin(cid string) error {
+	_, err := c.ipfs.Request("pin/rm", cid).Send(context.Background())
+	return err
+}
