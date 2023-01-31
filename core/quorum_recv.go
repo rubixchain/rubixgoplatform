@@ -153,10 +153,12 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var sr SendTokenRequest
+
 	err := c.l.ParseJSON(req, &sr)
 	crep := model.BasicResponse{
 		Status: false,
 	}
+
 	if err != nil {
 		c.log.Error("Failed to parse json request", "err", err)
 		crep.Message = "Failed to parse json request"
@@ -190,8 +192,23 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update token status"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	amount := (float64(len(sr.WholeTokens)) + float64(len(sr.PartTokens))*0.001)
 	crep.Status = true
-	crep.Message = "Token recved successfully"
+	crep.Message = "Token received successfully"
+	td := &wallet.TransactionDetails{
+		TransactionID:   b.GetTid(),
+		SenderDID:       b.GetSenderDID(),
+		ReceiverDID:     b.GetReceiverDID(),
+		Amount:          amount,
+		Comment:         b.GetComment(),
+		DateTime:        time.Now().UTC(),
+		TotalTime:       0,
+		WholeTokens:     sr.WholeTokens,
+		PartTokens:      sr.PartTokens,
+		QuorumList:      c.cfg.CfgData.QuorumList.Alpha,
+		PledgedTokenMap: b.GetTokenPledgeMap(),
+	}
+	c.w.AddTransactionHistory(td)
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 

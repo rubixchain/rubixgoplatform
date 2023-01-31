@@ -398,17 +398,40 @@ func (b *Block) GetTransType() string {
 }
 
 func (b *Block) GetSenderDID() string {
-	tt, ok := b.bm[TCSenderDIDKey]
-	if !ok {
-		return ""
-	}
+	tt := b.bm[TCSenderDIDKey]
 	return tt.(string)
 }
 
 func (b *Block) GetReceiverDID() string {
-	tt, ok := b.bm[TCReceiverDIDKey]
-	if !ok {
-		return ""
-	}
+	tt := b.bm[TCReceiverDIDKey]
 	return tt.(string)
+}
+
+func (b *Block) GetTid() string {
+	tt := b.bm[TCTIDKey]
+	return tt.(string)
+}
+
+func (b *Block) GetComment() string {
+	tt := b.bm[TCCommentKey]
+	return tt.(string)
+}
+
+func (b *Block) GetTokenPledgeMap() map[string]interface{} {
+	tokenPledge := b.bm[TCTokensPledgeMapKey]
+	tokenPledgeMap, ok := tokenPledge.(map[interface{}]interface{})
+	if !ok {
+		return nil
+	}
+
+	result := make(map[string]interface{})
+	for k, v := range tokenPledgeMap {
+		kStr, kOk := k.(string)
+		if !kOk {
+			return nil
+		}
+		result[kStr] = v
+	}
+
+	return result
 }

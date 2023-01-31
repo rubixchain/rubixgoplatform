@@ -5,8 +5,10 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/uuid"
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -31,7 +33,7 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// removed once it done with the trasnfer
 	wt, pt, err := c.w.GetTokens(did, req.TokenCount)
 	if err != nil {
-		c.log.Error("Failed to get tkens", "err", err)
+		c.log.Error("Failed to get tokens", "err", err)
 		resp.Message = "Insufficient tokens or tokens are locked"
 		return resp
 	}
@@ -96,7 +98,7 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	err = sc.UpdateSignature(ssig, psig)
 	if err != nil {
-		c.log.Error("Failed to ipdate smart contract signature", "err", err)
+		c.log.Error("Failed to update smart contract signature", "err", err)
 		resp.Message = "Failed to ipdate smart contract signature, " + err.Error()
 		return resp
 	}
@@ -116,14 +118,46 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	err = c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
-		resp.Message = "Consensus failed, " + err.Error()
+		resp.Message = "Consensus failed" + err.Error()
 		return resp
 	}
 	et := time.Now()
 	dif := et.Sub(st)
-	c.log.Info("Trasnfer finsihed successfully", "duration", dif)
+	c.log.Info("Transfer finished successfully", "duration", dif)
 	resp.Status = true
-	msg := fmt.Sprintf("Trasnfer finsihed successfully in %v", dif)
+	msg := fmt.Sprintf("Transfer finished successfully in %v", dif)
 	resp.Message = msg
+	tid := util.HexToStr(util.CalculateHash(cr.ContractBlock, "SHA3-256"))
+	tokenList := make([]string, 0)
+	tokenList = append(wta, pta...)
+	pd := c.pd[cr.ReqID]
+	pm := make(map[string]interface{})
+	index := 0
+	ctcb := make(map[string]*block.Block)
+	for _, v := range pd.PledgedTokens {
+		for _, t := range v {
+			b := c.w.GetLatestTokenBlock(tokenList[index])
+			if b == nil {
+				c.log.Error("Failed to get latest token chain block")
+			}
+			ctcb[tokenList[index]] = b
+			pm[tokenList[index]] = t
+			index++
+		}
+	}
+	td := &wallet.TransactionDetails{
+		TransactionID:   tid,
+		SenderDID:       did,
+		ReceiverDID:     rdid,
+		Amount:          req.TokenCount,
+		Comment:         req.Comment,
+		DateTime:        time.Now().UTC(),
+		TotalTime:       int(dif),
+		WholeTokens:     wta,
+		PartTokens:      pta,
+		QuorumList:      c.cfg.CfgData.QuorumList.Alpha,
+		PledgedTokenMap: pm,
+	}
+	c.w.AddTransactionHistory(td)
 	return resp
 }
