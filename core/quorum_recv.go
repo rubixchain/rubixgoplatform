@@ -47,6 +47,21 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
+	//check multiple pins of tokens
+	for i := range cr.WholeTokens {
+		c.log.Debug("Check for multiple Pins", "token", cr.WholeTokens[i])
+		multipleOwnerCheck, multipleOwners, err := c.multiplePincheck(cr.WholeTokens[i], cr.WholeTCBlocks[i], cr)
+		if err != nil {
+			c.log.Error("Failed to get info related to pins", "err", err)
+			crep.Message = "Failed to get info related to pins"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if len(multipleOwners) > 0 && multipleOwnerCheck {
+			c.log.Error("Multiple Owners found", "owners", multipleOwners)
+			crep.Message = "Multiple Owners found"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
 	// check token ownership
 	if !c.validateTokenOwnership(cr) {
 		c.log.Error("Token ownership check failed")
@@ -265,4 +280,3 @@ func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
 	crep.Message = "Credit accepted"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
-
