@@ -107,14 +107,31 @@ func (c *Core) multiplePincheck(tokenHash string, wtcBlock map[string]interface{
 		c.log.Error("Error in finding pins of token", "err", err)
 		return true, nil, err
 	}
+
+	c.log.Info("Providers for token ", "token", tokenHash)
+	c.log.Info("are =", "", pinIds)
+	c.log.Info("Number of", "pins", len(pinIds))
 	if len(pinIds) == 0 {
 		c.log.Info("No pins found for token ", tokenHash)
 		return false, nil, nil
 	}
+
+	if len(pinIds) == 1 {
+		for _, peerId := range pinIds {
+			if peerId != cr.SenderPeerID {
+				c.log.Info("Pin is not held by current Sender for ", "token", tokenHash)
+				c.log.Info("peer Id that holds the pin ", "pinList", pinIds)
+				return true, pinIds, nil
+			} else {
+				c.log.Info("Pin is held by current Sender for ", "token", tokenHash)
+				return false, nil, nil
+			}
+		}
+	}
+
 	if len(pinIds) >= 2 {
 
-		//wtcBlock := cr.WholeTCBlocks[i]
-
+		c.log.Info("Token has more 2 or greater pins. Checking previosus senders")
 		prevSenderDid := wallet.GetTCSenderDID(wtcBlock)
 
 		var prevSenderDidList []string

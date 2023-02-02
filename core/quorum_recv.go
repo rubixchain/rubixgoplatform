@@ -56,11 +56,12 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			crep.Message = "Failed to get info related to pins"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		if len(multipleOwners) > 0 && multipleOwnerCheck {
+		if multipleOwnerCheck {
 			c.log.Error("Multiple Owners found", "owners", multipleOwners)
 			crep.Message = "Multiple Owners found"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
+		c.log.Info("No Multiple pins found for ", "token", cr.WholeTokens[i])
 	}
 	// check token ownership
 	if !c.validateTokenOwnership(cr) {
