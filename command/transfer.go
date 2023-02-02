@@ -25,18 +25,19 @@ func (cmd *Command) GetAccountInfo() {
 		return
 	}
 	defer resp.Body.Close()
-	var model model.RBTInfo
-	err = jsonutil.DecodeJSONFromReader(resp.Body, &model)
+	var info model.GetAccountInfo
+	err = jsonutil.DecodeJSONFromReader(resp.Body, &info)
 	if err != nil {
 		cmd.log.Error("Invalid response from the node", "err", err)
 		return
 	}
-	if !model.Status {
-		cmd.log.Error("Failed to get account info", "message", model.Message)
+	fmt.Printf("Response : %v\n", info)
+	if !info.Status {
+		cmd.log.Error("Failed to get account info", "message", info.Message)
 	} else {
 		cmd.log.Info("Successfully got the account information")
-		fmt.Printf("Whole RBT : %5d, Locked Whole RBT : %5d, Pledged Whole RBT : %5d\n", model.WholeRBT, model.LockedWholeRBT, model.PledgedWholeRBT)
-		fmt.Printf("Part RBT  : %5d, Locked Part RBT  : %5d, Pledged Part RBT  : %5d\n", model.PartRBT, model.LockedPartRBT, model.PledgedPartRBT)
+		fmt.Printf("Whole RBT : %5d, Locked Whole RBT : %5d, Pledged Whole RBT : %5d\n", info.AccountInfo[0].WholeRBT, info.AccountInfo[0].LockedWholeRBT, info.AccountInfo[0].PledgedWholeRBT)
+		fmt.Printf("Part RBT  : %5d, Locked Part RBT  : %5d, Pledged Part RBT  : %5d\n", info.AccountInfo[0].PartRBT, info.AccountInfo[0].LockedPartRBT, info.AccountInfo[0].PledgedPartRBT)
 	}
 }
 
@@ -102,6 +103,6 @@ func (cmd *Command) TransferRBT() {
 		cmd.log.Error("Failed to trasnfer RBT", "message", response.Message)
 		return
 	}
-
+	cmd.log.Info(response.Message)
 	cmd.log.Info("RBT transfered successfully")
 }

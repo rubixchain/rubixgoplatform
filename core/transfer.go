@@ -1,12 +1,16 @@
 package core
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/EnsurityTechnologies/uuid"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
+	st := time.Now()
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -47,16 +51,17 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	defer p.Close()
 	wta := make([]string, 0)
 	wtca := make([]string, 0)
-	wtcb := make([]map[string]interface{}, 0)
+	wtcb := make([][]byte, 0)
 	for i := range wt {
 		wta = append(wta, wt[i].TokenID)
 		wtca = append(wtca, wt[i].TokenChainID)
-		tcb, err := c.w.GetLatestTokenBlock(wt[i].TokenID)
-		if err != nil {
+		blk, err := c.w.GetLatestTokenBlock(wt[i].TokenID)
+		if err != nil || blk == nil {
+			c.log.Error("Failed to get latest token chain block", "err", err)
 			resp.Message = "Failed to get latest token chain block"
 			return resp
 		}
-		wtcb = append(wtcb, tcb)
+		wtcb = append(wtcb, blk.GetBlock())
 	}
 	pta := make([]string, 0)
 	ptca := make([]string, 0)
@@ -104,8 +109,11 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Consensus failed, " + err.Error()
 		return resp
 	}
-	c.log.Info("Trasnfer finsihed successfully")
+	et := time.Now()
+	dif := et.Sub(st)
+	c.log.Info("Trasnfer finsihed successfully", "duration", dif)
 	resp.Status = true
-	resp.Message = "Trasnfer finsihed successfully"
+	msg := fmt.Sprintf("Trasnfer finsihed successfully in %v", dif)
+	resp.Message = msg
 	return resp
 }

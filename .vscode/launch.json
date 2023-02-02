@@ -1,0 +1,35 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Node1",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/windows",
+            "args": ["run", "-p", "node1", "-n", "0",  "-testNet", "-s"]
+        },
+        {
+            "name": "Node2",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/windows",
+            "args": ["run", "-p", "node2", "-n", "1",  "-testNet", "-s"]
+        },
+        {
+            "name": "Node3",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/windows",
+            "args": ["run", "-p", "node3", "-n", "2",  "-testNet", "-s"]
+        }
+    ]
+}

@@ -10,12 +10,12 @@ func (w *Wallet) StoreCredit(did string, credit string) error {
 		DID:    did,
 		Credit: credit,
 	}
-	return w.s.Write(CreditStorage, c)
+	return w.s.Write(w.creditStorage, c)
 }
 
 func (w *Wallet) GetCredit(did string) ([]string, error) {
 	var c []Credit
-	err := w.s.Read(CreditStorage, &c, "did=?", did)
+	err := w.s.Read(w.creditStorage, &c, "did=?", did)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (w *Wallet) GetCredit(did string) ([]string, error) {
 
 func (w *Wallet) RemoveCredit(did string, credit []string) error {
 	for _, c := range credit {
-		err := w.s.Delete(CreditStorage, &c, "did=? AND credit=?", did, c)
+		err := w.s.Delete(w.creditStorage, &c, "did=? AND credit=?", did, c)
 		if err != nil {
 			return err
 		}

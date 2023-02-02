@@ -7,12 +7,17 @@ import (
 	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 const (
-	TokenStorage     string = "Tokens"
-	PartTokenStorage string = "PartTokens"
-	CreditStorage    string = "Credits"
+	MainTokenStorage     string = "TokensTable"
+	MainPartTokenStorage string = "PartTokensTable"
+	MainCreditStorage    string = "CreditsTable"
+	TestTokenStorage     string = "TestTokensTable"
+	TestPartTokenStorage string = "TestPartTokensTable"
+	TestCreditStorage    string = "TestCreditsTable"
+	DIDStorage           string = "DIDTable"
 )
 
 type WalletConfig struct {
@@ -27,23 +32,38 @@ type WalletConfig struct {
 }
 
 type Wallet struct {
-	s   storage.Storage
-	ts  storage.Storage
-	l   sync.Mutex
-	log logger.Logger
+	s                storage.Storage
+	l                sync.Mutex
+	testNet          bool
+	tokenStorage     string
+	partTokenStorage string
+	creditStorage    string
+	log              logger.Logger
+	wl               sync.Mutex
+	tcs              *leveldb.DB
 }
 
-func InitWallet(cfg *WalletConfig, log logger.Logger) (*Wallet, error) {
+func InitWallet(cfg *WalletConfig, log logger.Logger, testNet bool) (*Wallet, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("invalid wallet configuration")
 	}
 	var err error
 	w := &Wallet{
-		log: log,
+		log:     log,
+		testNet: testNet,
 	}
-	w.ts, err = storage.NewStorageLDB(cfg.TokenChainDir)
+	if testNet {
+		w.tokenStorage = TestTokenStorage
+		w.partTokenStorage = TestPartTokenStorage
+		w.creditStorage = TestCreditStorage
+	} else {
+		w.tokenStorage = MainTokenStorage
+		w.partTokenStorage = MainPartTokenStorage
+		w.creditStorage = MainCreditStorage
+	}
+	w.tcs, err = leveldb.OpenFile(cfg.TokenChainDir+"tokenchainstorage", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to configure token chain storage")
+		return nil, fmt.Errorf("failed to configure token chain block storage")
 	}
 	switch cfg.StorageType {
 	case storage.StorageDBType:
@@ -63,17 +83,22 @@ func InitWallet(cfg *WalletConfig, log logger.Logger) (*Wallet, error) {
 	default:
 		return nil, fmt.Errorf("ivnalid wallet configuration, storgae type is not supported")
 	}
-	err = w.s.Init(TokenStorage, &Token{})
+	err = w.s.Init(DIDStorage, &DIDType{})
+	if err != nil {
+		w.log.Error("Failed to initialize DID storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(w.tokenStorage, &Token{})
 	if err != nil {
 		w.log.Error("Failed to initialize whole token storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(PartTokenStorage, &PartToken{})
+	err = w.s.Init(w.partTokenStorage, &PartToken{})
 	if err != nil {
 		w.log.Error("Failed to initialize part token storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(CreditStorage, &Credit{})
+	err = w.s.Init(w.creditStorage, &Credit{})
 	if err != nil {
 		w.log.Error("Failed to initialize credit storage", "err", err)
 		return nil, err

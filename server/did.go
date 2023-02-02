@@ -2,23 +2,17 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
+	"net/http"
 	"strings"
-	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/did"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 const (
-	DIDUserTable string = "didusertable"
+	DIDRootDir string = "root"
 )
-
-type DIDUserMap struct {
-	ensweb.Base
-	UserID string `gorm:"column:UserID"`
-	DID    string `gorm:"column:DID;unique"`
-}
 
 // APICreateDID will create new DID
 func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
@@ -30,8 +24,6 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 	}
 
 	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
-
-	fmt.Printf("Field : %v, Files : %v\n", fileNames, fieldNames)
 
 	if err != nil {
 		s.log.Error("failed to parse request", "err", err)
@@ -64,6 +56,13 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
+	if s.cfg.EnableAuth {
+		// always expect client tokne to present
+		token := req.ClientToken.Model.(*Token)
+		didCreate.Dir = token.UserID
+	} else {
+		didCreate.Dir = DIDRootDir
+	}
 	did, err := s.c.CreateDID(&didCreate)
 	if err != nil {
 		s.log.Error("failed to create did", "err", err)
@@ -72,53 +71,40 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 	didResp := DIDResponse{
 		DID: did,
 	}
-	if s.cfg.EnableAuth {
-		// always expect client tokne to present
-		token := req.ClientToken.Model.(*Token)
-		dm := DIDUserMap{
-			Base: ensweb.Base{
-				TenantID:             req.TenantID,
-				CreationTime:         time.Now(),
-				LastModificationTime: time.Now(),
-			},
-			UserID: token.UserID,
-			DID:    did,
-		}
-		err = s.CreateEntity(DIDUserTable, &dm)
-		if err != nil {
-			s.BasicResponse(req, false, "Failed to update did user map", nil)
-		}
-	}
 	return s.BasicResponse(req, true, "DID created successfully", &didResp)
 }
 
 // APIGetAllDID will get all DID
 func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
-	var ids []string
+	dir := DIDRootDir
 	if s.cfg.EnableAuth {
-		// always expect client tokne to present
+		// always expect client token to present
 		token := req.ClientToken.Model.(*Token)
-		var err = s.GetEntity(DIDUserTable, req.TenantID, "UserID=?", &ids, token.UserID)
-		if err != nil {
-			ids = make([]string, 0)
-		}
-	} else {
-		ids = s.c.GetAllDID()
+		dir = token.UserID
 	}
-	return s.BasicResponse(req, true, "Got all DIDs", ids)
+	dt := s.c.GetDIDs(dir)
+	ai := model.GetAccountInfo{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "Got all DIDs",
+		},
+		AccountInfo: make([]model.DIDAccountInfo, 0),
+	}
+	for _, d := range dt {
+		a, err := s.c.GetAccountInfo(d.DID)
+		if err == nil {
+			a.DIDType = d.Type
+			ai.AccountInfo = append(ai.AccountInfo, a)
+		}
+	}
+	return s.RenderJSON(req, &ai, http.StatusOK)
 }
 
-func (s *Server) validateDIDUserMapping(req *ensweb.Request, did string) bool {
+func (s *Server) validateDIDAccess(req *ensweb.Request, did string) bool {
 	if s.cfg.EnableAuth {
-		// always expect client tokne to present
+		// always expect client token to present
 		token := req.ClientToken.Model.(*Token)
-		var dm DIDUserMap
-		var err = s.GetEntity(DIDUserTable, req.TenantID, "UserID=? AND DID=?", &dm, token.UserID, did)
-		if err != nil {
-			return false
-		} else {
-			return true
-		}
+		return s.c.IsDIDExist(token.UserID, did)
 	} else {
 		return true
 	}

@@ -7,10 +7,11 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/rubixchain/rubixgoplatform/block"
 	didcrypto "github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/util"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
@@ -146,19 +147,17 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 			Message: "Got available tokens",
 		},
 		Tokens:          make([]string, 0),
-		TokenChainBlock: make([]map[string]interface{}, 0),
-		ProofChain:      make([]string, 0),
+		TokenChainBlock: make([]interface{}, 0),
 	}
 	for i := 0; i < tl; i++ {
 		presp.Tokens = append(presp.Tokens, wt[i].TokenID)
 		tc, err := c.w.GetLatestTokenBlock(wt[i].TokenID)
-		if err != nil {
+		if err != nil || tc == nil {
 			c.log.Error("Failed to get latest token chain block", "err", err)
 			crep.Message = "Failed to get latest token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		presp.TokenChainBlock = append(presp.TokenChainBlock, tc)
-		presp.ProofChain = append(presp.Tokens, wt[i].ProofChainID)
 	}
 	return c.l.RenderJSON(req, &presp, http.StatusOK)
 }
@@ -175,7 +174,21 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	err = c.w.TokensReceived(did, sr.WholeTokens, sr.PartTokens, sr.TokenChainBlock)
+	for _, t := range sr.WholeTokens {
+		err = c.syncTokenChainFrom(sr.Address, t)
+		if err != nil {
+			c.log.Error("Failed to sync token chain block", "err", err)
+			crep.Message = "Failed to sync token chain block"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
+	b := block.InitBlock(block.TokenBlockType, sr.TokenChainBlock, nil)
+	if b == nil {
+		c.log.Error("Invalid token chain block", "err", err)
+		crep.Message = "Invalid token chain block"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	err = c.w.TokensReceived(did, sr.WholeTokens, sr.PartTokens, b)
 	if err != nil {
 		c.log.Error("Failed to update token status", "err", err)
 		crep.Message = "Failed to update token status"
@@ -204,43 +217,49 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to setup quorum crypto"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	tcb := wallet.TokenChainBlock{
+	b := block.InitBlock(block.TokenBlockType, ur.TokenChainBlock, nil)
+	tcb := block.TokenChainBlock{
 		TransactionType:   wallet.TokenPledgedType,
 		TokenOwner:        did,
 		Comment:           "Token is pledged at " + time.Now().String(),
-		TokenChainDetials: ur.TokenChainBlock,
+		TokenChainDetials: b.GetBlockMap(),
 	}
-	ctcb := make(map[string]interface{})
+	ctcb := make(map[string]*block.Block)
 	for _, t := range ur.PledgedTokens {
-		ptcb, err := c.w.GetLatestTokenBlock(t)
-		if err != nil {
+		lb, err := c.w.GetLatestTokenBlock(t)
+		if err != nil || lb == nil {
 			c.log.Error("Failed to get token chain block", "err", err)
 			crep.Message = "Failed to get token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		ctcb[t] = ptcb
+		ctcb[t] = lb
 	}
-	ntcb := wallet.CreateTCBlock(ctcb, &tcb)
-	if ntcb == nil {
+	nb := block.CreateNewBlock(ctcb, &tcb)
+	if nb == nil {
 		c.log.Error("Failed to create new token chain block")
 		crep.Message = "Failed to create new token chain block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	ha, ok := ntcb[wallet.TCBlockHashKey]
-	if !ok {
-		c.log.Error("Invalid new token chain block, missing block hash")
+	ha, err := nb.GetHash()
+	if err != nil {
+		c.log.Error("Invalid new token chain block, missing block hash", "err", err)
 		crep.Message = "Invalid new token chain block, missing block hash"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	sig, err := dc.PvtSign([]byte(ha.(string)))
+	sig, err := dc.PvtSign([]byte(ha))
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	ntcb[wallet.TCPvtShareKey] = util.HexToStr(sig)
+	err = nb.UpdateSignature(util.HexToStr(sig))
+	if err != nil {
+		c.log.Error("Failed to update signature to block", "err", err)
+		crep.Message = "Failed to update signature to block"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
 	for _, t := range ur.PledgedTokens {
-		err = c.w.PledgeWholeToken(did, t, ntcb)
+		err = c.w.PledgeWholeToken(did, t, nb)
 		if err != nil {
 			c.log.Error("Failed to update pledge token", "err", err)
 			crep.Message = "Failed to update pledge token"
