@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"testing"
 
 	"github.com/EnsurityTechnologies/enscrypt"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 type CreditSignature struct {
@@ -125,10 +126,11 @@ func TestTokenChainBlock(t *testing.T) {
 	}
 
 	log := logger.New(logOptions)
-	w, err := InitWallet(wc, log)
+	w, err := InitWallet(wc, log, true)
 	if err != nil {
 		t.Fatal("Failed to setup wallet")
 	}
+
 	dc := InitDIDDummy("12512hdjdfjutigkglvmjgutyt78ddhfj")
 	cs := CreditSignature{
 		Signature:     "129120120221012sksfjfjfff;f",
@@ -167,7 +169,12 @@ func TestTokenChainBlock(t *testing.T) {
 	}
 	ftcb[TCSignatureKey] = util.HexToStr(sig)
 
-	err = w.AddLatestTokenBlock(token, ftcb)
+	blk, err := TCBEncode(ftcb)
+	if err != nil {
+		t.Fatal("Invalid block")
+	}
+
+	err = w.AddTokenBlock(token, blk)
 	if err != nil {
 		t.Fatal("Failed to add latest token chain block")
 	}
@@ -207,12 +214,22 @@ func TestTokenChainBlock(t *testing.T) {
 	}
 	stcb[TCSignatureKey] = util.HexToStr(sig)
 
-	err = w.AddLatestTokenBlock(token, ftcb)
+	blk, err = TCBEncode(stcb)
+	if err != nil {
+		t.Fatal("Invalid block")
+	}
+
+	err = w.AddTokenBlock(token, blk)
 	if err != nil {
 		t.Fatal("Failed to add latest token chain block")
 	}
 
-	rstcb, err := w.GetLatestTokenBlock(token)
+	rblk, err := w.GetLatestTokenBlock(token)
+	if err != nil {
+		t.Fatal("Failed to read latest token chain block")
+	}
+
+	rstcb, err := TCBDecode(rblk)
 	if err != nil {
 		t.Fatal("Failed to read latest token chain block")
 	}
@@ -228,4 +245,8 @@ func TestTokenChainBlock(t *testing.T) {
 	if !ok {
 		t.Fatal("Failed to verify signature")
 	}
+	w.s.Close()
+	w.tcs.Close()
+	os.Remove("wallet.db")
+	os.RemoveAll("tokenchainstorage")
 }

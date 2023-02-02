@@ -7,7 +7,7 @@ import (
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 // PingSetup will setup the ping route
@@ -17,12 +17,7 @@ func (c *Core) PeerStatusSetup() {
 
 func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
-	exist := false
-	for _, d := range c.cfg.CfgData.DIDList {
-		if did == d {
-			exist = true
-		}
-	}
+	exist := c.w.IsDIDExist(did)
 	ps := model.PeerStatusResponse{
 		Version:   c.version,
 		DIDExists: exist,

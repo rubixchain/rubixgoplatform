@@ -7,8 +7,9 @@ import (
 
 	"github.com/EnsurityTechnologies/helper/jsonutil"
 	"github.com/rubixchain/rubixgoplatform/core/did"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/server"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (cmd *Command) CreateDID() {
@@ -139,7 +140,7 @@ func (cmd *Command) GetAllDID() {
 		return
 	}
 	defer resp.Body.Close()
-	var response server.GetDIDResponse
+	var response model.GetAccountInfo
 	err = jsonutil.DecodeJSONFromReader(resp.Body, &response)
 	if err != nil {
 		cmd.log.Error("Invalid response from the node", "err", err)
@@ -149,9 +150,8 @@ func (cmd *Command) GetAllDID() {
 		cmd.log.Error("Failed to get DIDs", "message", response.Message)
 		return
 	}
-	fmt.Printf("Response : %v\n", response)
-	for i := range response.Result {
-		fmt.Printf("Address : %s\n", response.Result[i])
+	for i := range response.AccountInfo {
+		fmt.Printf("Address : %s\n", response.AccountInfo[i].DID)
 	}
 	cmd.log.Info("Got all DID successfully")
 }

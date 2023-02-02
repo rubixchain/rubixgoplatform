@@ -9,7 +9,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 type Token struct {
@@ -25,7 +25,7 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	if !s.validateDIDUserMapping(req, tr.DID) {
+	if !s.validateDIDAccess(req, tr.DID) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
@@ -55,7 +55,7 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	if !ok {
 		return s.BasicResponse(req, false, "Invalid sender address", nil)
 	}
-	if !s.validateDIDUserMapping(req, did) {
+	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
@@ -88,14 +88,23 @@ func (s *Server) handleWebRequest(id string) {
 
 func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
 	info, err := s.c.GetAccountInfo(did)
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	if !s.validateDIDUserMapping(req, did) {
-		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	ac := model.GetAccountInfo{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "Got account info successfully",
+		},
+		AccountInfo: make([]model.DIDAccountInfo, 0),
 	}
-	return s.RenderJSON(req, info, http.StatusOK)
+	ac.AccountInfo = append(ac.AccountInfo, info)
+
+	return s.RenderJSON(req, ac, http.StatusOK)
 }
 
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
@@ -111,9 +120,7 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	if resp.Mode == did.BasicDIDMode {
 		s.c.UpateWebReq(resp.ID, req)
 	}
-	s.log.Debug("Received Singature response", "resp", resp)
 	dc.InChan <- resp
-	s.log.Debug("Singature trasnfered", "resp", resp)
 	if resp.Mode == did.BasicDIDMode {
 		s.handleWebRequest(resp.ID)
 		return nil

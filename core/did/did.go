@@ -17,9 +17,8 @@ import (
 	"github.com/EnsurityTechnologies/uuid"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	files "github.com/ipfs/go-ipfs-files"
-	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/nlss"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 const (
@@ -42,7 +41,7 @@ type DIDChan struct {
 }
 
 type DID struct {
-	cfg  *config.Config
+	dir  string
 	log  logger.Logger
 	ipfs *ipfsnode.Shell
 }
@@ -54,9 +53,9 @@ type DIDCrypto interface {
 	PvtVerify(hash []byte, sign []byte) (bool, error)
 }
 
-func InitDID(cfg *config.Config, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
+func InitDID(dir string, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 	did := &DID{
-		cfg:  cfg,
+		dir:  dir,
 		log:  log,
 		ipfs: ipfs,
 	}
@@ -65,9 +64,8 @@ func InitDID(cfg *config.Config, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 
 func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	t1 := time.Now()
-
 	temp := uuid.New()
-	dirName := d.cfg.DirPath + "Rubix/" + temp.String()
+	dirName := d.dir + "Rubix/" + temp.String()
 	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
 	if err != nil {
 		d.log.Error("failed to create directory", "err", err)
@@ -211,7 +209,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	newDIrName := d.cfg.DirPath + "Rubix/" + did
+	newDIrName := d.dir + "Rubix/" + did
 
 	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
 	if err != nil {
@@ -231,15 +229,6 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 	os.RemoveAll(dirName)
-
-	d.cfg.CfgData.DIDList = append(d.cfg.CfgData.DIDList, did)
-	if d.cfg.CfgData.DIDConfig == nil {
-		d.cfg.CfgData.DIDConfig = make(map[string]config.DIDConfigType)
-	}
-	d.cfg.CfgData.DIDConfig[did] = config.DIDConfigType{
-		Type:   didCreate.Type,
-		Config: didCreate.Config,
-	}
 	t2 := time.Now()
 	dif := t2.Sub(t1)
 	fmt.Printf("DID : %s, Time to create DID & Keys : %v", did, dif)

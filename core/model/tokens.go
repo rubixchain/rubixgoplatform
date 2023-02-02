@@ -23,12 +23,18 @@ type RBTTransferReply struct {
 	Type       int    `json:"type"`
 }
 
-type RBTInfo struct {
+type GetAccountInfo struct {
 	BasicResponse
-	WholeRBT        int `json:"whole_rbt"`
-	PledgedWholeRBT int `json:"pledged_whole_rbt"`
-	LockedWholeRBT  int `json:"locked_whole_rbt"`
-	PartRBT         int `json:"part_rbt"`
-	PledgedPartRBT  int `json:"pledged_part_rbt"`
-	LockedPartRBT   int `json:"locked_part_rbt"`
+	AccountInfo []DIDAccountInfo `json:"account_info"`
+}
+
+type DIDAccountInfo struct {
+	DID             string `json:"did"`
+	DIDType         int    `json:"did_type"`
+	WholeRBT        int    `json:"whole_rbt"`
+	PledgedWholeRBT int    `json:"pledged_whole_rbt"`
+	LockedWholeRBT  int    `json:"locked_whole_rbt"`
+	PartRBT         int    `json:"part_rbt"`
+	PledgedPartRBT  int    `json:"pledged_part_rbt"`
+	LockedPartRBT   int    `json:"locked_part_rbt"`
 }

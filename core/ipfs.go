@@ -12,7 +12,7 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 const (
