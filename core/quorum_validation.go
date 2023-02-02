@@ -2,10 +2,9 @@ package core
 
 import (
 	"github.com/EnsurityTechnologies/uuid"
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/util"
-	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -107,7 +106,7 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 	return true
 }
 
-func (c *Core) multiplePincheck(tokenHash string, wtcBlock map[string]interface{}, cr *ConensusRequest) (bool, []string, error) {
+func (c *Core) multiplePincheck(tokenHash string, wtcBlock []byte, cr *ConensusRequest) (bool, []string, error) {
 	//tokenHash := cr.WholeTokens[i]
 	c.log.Debug("Finding dht", "token", tokenHash)
 	pinIds, err := c.GetDHTddrs(tokenHash)
@@ -140,7 +139,10 @@ func (c *Core) multiplePincheck(tokenHash string, wtcBlock map[string]interface{
 	if len(pinIds) >= 2 {
 
 		c.log.Info("Token has more 2 or greater pins. Checking previosus senders")
-		prevSenderDid := wallet.GetTCSenderDID(wtcBlock)
+
+		tcBlock := block.InitBlock(0, wtcBlock, nil)
+
+		prevSenderDid := tcBlock.GetSenderDID()
 
 		var prevSenderDidList []string
 		prevSenderDidList = append(prevSenderDidList, prevSenderDid)
