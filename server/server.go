@@ -150,11 +150,6 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 				return nil, err
 			}
 		}
-		err = s.AddEntity(DIDUserTable, &DIDUserMap{})
-		if err != nil {
-			s.log.Error("failed to init DID user table", "err", err)
-			return nil, err
-		}
 	}
 
 	s.SetShutdown(s.ExitFunc)

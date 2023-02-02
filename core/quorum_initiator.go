@@ -6,12 +6,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/util"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 const (
@@ -29,22 +30,22 @@ const (
 )
 
 type ConensusRequest struct {
-	ReqID           string                   `json:"req_id"`
-	Type            int                      `json:"type"`
-	Mode            int                      `json:"mode"`
-	SenderPeerID    string                   `json:"sender_peerd_id"`
-	ReceiverPeerID  string                   `json:"receiver_peerd_id"`
-	SenderDID       string                   `json:"sender_did"`
-	ReceiverDID     string                   `json:"receiver_did"`
-	WholeTokens     []string                 `json:"whole_tokens"`
-	WholeTokenChain []string                 `json:"whole_token_chain"`
-	WholeTCBlocks   []map[string]interface{} `json:"whole_tc_blocks"`
-	PartTokens      []string                 `json:"part_tokens"`
-	PartTokenChain  []string                 `json:"part_token_chain"`
-	PartTCBlocks    []map[string]interface{} `json:"part_tc_blocks"`
-	Comment         string                   `json:"comment"`
-	ShareSig        []byte                   `json:"share_sig"`
-	PrivSig         []byte                   `json:"priv_sig"`
+	ReqID           string   `json:"req_id"`
+	Type            int      `json:"type"`
+	Mode            int      `json:"mode"`
+	SenderPeerID    string   `json:"sender_peerd_id"`
+	ReceiverPeerID  string   `json:"receiver_peerd_id"`
+	SenderDID       string   `json:"sender_did"`
+	ReceiverDID     string   `json:"receiver_did"`
+	WholeTokens     []string `json:"whole_tokens"`
+	WholeTokenChain []string `json:"whole_token_chain"`
+	WholeTCBlocks   [][]byte `json:"whole_tc_blocks"`
+	PartTokens      []string `json:"part_tokens"`
+	PartTokenChain  []string `json:"part_token_chain"`
+	PartTCBlocks    [][]byte `json:"part_tc_blocks"`
+	Comment         string   `json:"comment"`
+	ShareSig        []byte   `json:"share_sig"`
+	PrivSig         []byte   `json:"priv_sig"`
 }
 
 type ConensusReply struct {
@@ -73,8 +74,7 @@ type PledgeDetials struct {
 	RemPledgeTokens        int
 	NumPledgedTokens       int
 	PledgedTokens          map[string][]string
-	PledgedTokenChainBlock map[string]map[string]interface{}
-	ProofPledge            map[string]string
+	PledgedTokenChainBlock map[string]interface{}
 	TokenList              []string
 }
 
@@ -83,21 +83,21 @@ type PledgeRequest struct {
 }
 
 type UpdatePledgeRequest struct {
-	PledgedTokens   []string               `json:"pledged_tokens"`
-	TokenChainBlock map[string]interface{} `json:"token_chain_block"`
+	PledgedTokens   []string `json:"pledged_tokens"`
+	TokenChainBlock []byte   `json:"token_chain_block"`
 }
 
 type SendTokenRequest struct {
-	WholeTokens     []string               `json:"whole_tokens"`
-	PartTokens      []string               `json:"part_tokens"`
-	TokenChainBlock map[string]interface{} `json:"token_chain_block"`
+	Address         string   `json:"peer_id"`
+	WholeTokens     []string `json:"whole_tokens"`
+	PartTokens      []string `json:"part_tokens"`
+	TokenChainBlock []byte   `json:"token_chain_block"`
 }
 
 type PledgeReply struct {
 	model.BasicResponse
-	Tokens          []string                 `json:"tokens"`
-	TokenChainBlock []map[string]interface{} `json:"token_chain_block"`
-	ProofChain      []string                 `json:"proof_chain"`
+	Tokens          []string      `json:"tokens"`
+	TokenChainBlock []interface{} `json:"token_chain_block"`
 }
 
 type CreditScore struct {
@@ -122,8 +122,7 @@ func (c *Core) QuroumSetup() {
 }
 
 func (c *Core) SetupQuorum(didStr string, pwd string) error {
-	_, ok := c.cfg.CfgData.DIDConfig[didStr]
-	if !ok {
+	if !c.w.IsDIDExist(didStr) {
 		c.log.Error("DID does not exist", "did", didStr)
 		return fmt.Errorf("DID does not exist")
 	}
@@ -271,8 +270,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, dc did.DIDCrypto) error {
 		RemPledgeTokens:        reqPledgeTokens,
 		NumPledgedTokens:       0,
 		PledgedTokens:          make(map[string][]string),
-		PledgedTokenChainBlock: make(map[string]map[string]interface{}),
-		ProofPledge:            make(map[string]string),
+		PledgedTokenChainBlock: make(map[string]interface{}),
 		TokenList:              make([]string, 0),
 	}
 	ql := c.getQuorumList(cr.Type)
@@ -316,7 +314,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, dc did.DIDCrypto) error {
 	if err == nil {
 		authHash := util.CalculateHashString(util.ConvertToJson(cr.WholeTokens)+util.ConvertToJson(cr.WholeTokenChain)+util.ConvertToJson(cr.PartTokens)+util.ConvertToJson(cr.PartTokenChain)+cr.ReceiverDID+cr.SenderDID+cr.Comment, "SHA3-256")
 		tid := util.CalculateHashString(authHash, "SHA3-256")
-		ntcb, err := c.pledgeQuorumToken(cr, tid, dc)
+		nb, err := c.pledgeQuorumToken(cr, tid, dc)
 		if err != nil {
 			c.log.Error("Failed to pledge token", "err", err)
 			return err
@@ -328,9 +326,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, dc did.DIDCrypto) error {
 			return err
 		}
 		sr := SendTokenRequest{
+			Address:         cr.SenderPeerID + "." + cr.SenderDID,
 			WholeTokens:     cr.WholeTokens,
 			PartTokens:      cr.PartTokens,
-			TokenChainBlock: ntcb,
+			TokenChainBlock: nb.GetBlock(),
 		}
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
@@ -338,7 +337,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, dc did.DIDCrypto) error {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
 			return err
 		}
-		err = c.w.TokensTransferred(cr.SenderDID, cr.WholeTokens, cr.PartTokens, ntcb)
+		if !br.Status {
+			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
+			return fmt.Errorf("unable to send tokens to receiver, " + err.Error())
+		}
+		err = c.w.TokensTransferred(cr.SenderDID, cr.WholeTokens, cr.PartTokens, nb)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return err
@@ -454,7 +457,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 	c.finishConensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
 }
 
-func (c *Core) pledgeQuorumToken(cr *ConensusRequest, tid string, dc did.DIDCrypto) (map[string]interface{}, error) {
+func (c *Core) pledgeQuorumToken(cr *ConensusRequest, tid string, dc did.DIDCrypto) (*block.Block, error) {
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
 	cs, ok2 := c.quorumRequest[cr.ReqID]
@@ -476,7 +479,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, tid string, dc did.DIDCryp
 	}
 
 	//tokenList = append(tokenList, cr.PartTokens...)
-	tcb := wallet.TokenChainBlock{
+	tcb := block.TokenChainBlock{
 		TransactionType:   wallet.TokenTransferredType,
 		TokenOwner:        cr.ReceiverDID,
 		TokensPledgedWith: pd.TokenList,
@@ -491,38 +494,43 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, tid string, dc did.DIDCryp
 		TID:               tid,
 		ReceiverDID:       cr.ReceiverDID,
 	}
-	pm := make([]string, 0)
+	pm := make(map[string]interface{})
 	index := 0
-	ctcb := make(map[string]interface{})
+	ctcb := make(map[string]*block.Block)
 	for _, v := range pd.PledgedTokens {
 		for _, t := range v {
-			tcb, err := c.w.GetLatestTokenBlock(tokenList[index])
-			if err != nil {
+			b, err := c.w.GetLatestTokenBlock(tokenList[index])
+			if err != nil || b == nil {
 				c.log.Error("Failed to get latest token chain block", "err", err)
 				return nil, fmt.Errorf("Failed to get latest token chain block")
 			}
-			ctcb[tokenList[index]] = tcb
-			pm = append(pm, tokenList[index]+" "+t)
+			ctcb[tokenList[index]] = b
+			pm[tokenList[index]] = t
 			index++
 		}
 	}
 	tcb.TokensPledgeMap = pm
-	ntcb := wallet.CreateTCBlock(ctcb, &tcb)
-	if ntcb == nil {
+	nb := block.CreateNewBlock(ctcb, &tcb)
+	if nb == nil {
 		c.log.Error("Failed to create new token chain block")
 		return nil, fmt.Errorf("Failed to create new token chain block")
 	}
-	hs, ok := ntcb[wallet.TCBlockHashKey]
-	if !ok {
-		c.log.Error("Failed to create new token chain block")
-		return nil, fmt.Errorf("Failed to create new token chain block")
+	hs, err := nb.GetHash()
+	c.log.Info("Token chain Hash", "hash", hs)
+	if err != nil {
+		c.log.Error("Failed to hash from new block", "err", err)
+		return nil, fmt.Errorf("Failed to hash from new block")
 	}
-	sig, err := dc.PvtSign([]byte(hs.(string)))
+	sig, err := dc.PvtSign([]byte(hs))
 	if err != nil {
 		c.log.Error("Failed to get did signature", "err", err)
 		return nil, fmt.Errorf("Failed to get did signature")
 	}
-	ntcb[wallet.TCSignatureKey] = util.HexToStr(sig)
+	err = nb.UpdateSignature(util.HexToStr(sig))
+	if err != nil {
+		c.log.Error("Failed to update signature to block", "err", err)
+		return nil, fmt.Errorf("Failed to update signature to block")
+	}
 	for k, v := range pd.PledgedTokens {
 		p, ok := cs.P[k]
 		if !ok {
@@ -537,7 +545,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, tid string, dc did.DIDCryp
 		var br model.BasicResponse
 		ur := UpdatePledgeRequest{
 			PledgedTokens:   v,
-			TokenChainBlock: ntcb,
+			TokenChainBlock: nb.GetBlock(),
 		}
 		err = p.SendJSONRequest("POST", APIUpdatePledgeToken, nil, &ur, &br, true)
 		if err != nil {
@@ -549,7 +557,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, tid string, dc did.DIDCryp
 			return nil, fmt.Errorf("failed to update pledge token status")
 		}
 	}
-	return ntcb, nil
+	return nb, nil
 }
 
 func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt int) error {
@@ -597,7 +605,6 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 					pd.NumPledgedTokens++
 					pd.RemPledgeTokens--
 					pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
-					pd.ProofPledge[t] = prs.ProofChain[i]
 					pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
 					pd.TokenList = append(pd.TokenList, t)
 				}

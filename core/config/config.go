@@ -2,19 +2,6 @@ package config
 
 import "github.com/rubixchain/rubixgoplatform/core/wallet"
 
-// Paths defines varies path
-type Paths struct {
-	LogPath           string `json:"LOGGER_PATH"`
-	DataPath          string `json:"DATA_PATH"`
-	TokensPath        string `json:"TOKENS_PATH"`
-	TokenChainPath    string `json:"TOKENCHAIN_PATH"`
-	NFTTokensPath     string `json:"NFT_TOKENS_PATH"`
-	NFTTokenChainPath string `json:"NFT_TOKENCHAIN_PATH"`
-	NFTTHidePath      string `json:"NFT_HIDE_PATH"`
-	WalletDataPath    string `json:"WALLET_DATA_PATH"`
-	PaymentsPath      string `json:"PAYMENTS_PATH"`
-}
-
 // Ports defines varies ports used
 type Ports struct {
 	SendPort     uint16 `json:"sender_port"`
@@ -24,21 +11,6 @@ type Ports struct {
 	IPFSAPIPort  uint16 `json:"ipfs_api_port"`
 }
 
-// SyncConfig defines varies IPs
-type SyncConfig struct {
-	SyncIP        string `json:"SYNC_IP"`
-	ExplorerIP    string `json:"EXPLORER_IP"`
-	NFTExplorerIP string `json:"NFT_EXPLORER_IP"`
-	UserDIDIP     string `json:"USERDID_IP"`
-	AdvisoryIP    string `json:"ADVISORY_IP"`
-}
-
-// ConsensusData defines consensus data
-type ConsensusData struct {
-	ConsensusStatus bool `json:"CONSENSUS_STATUS"`
-	QuorumCount     int  `json:"QUORUM_COUNT"`
-}
-
 type DIDConfigType struct {
 	Type   int                    `json:"TYPE"`
 	Config map[string]interface{} `json:"CONFIG"`
@@ -46,14 +18,12 @@ type DIDConfigType struct {
 
 // ConfigData defines configuration data
 type ConfigData struct {
-	Ports            Ports                    `json:"ports"`
-	DIDList          []string                 `json:"did_list"`
-	DIDConfig        map[string]DIDConfigType `json:"did_config"`
-	BootStrap        []string                 `json:"bootstrap"`
-	Services         map[string]string        `json:"services"`
-	QuorumList       QuorumList               `json:"quorumr_list"`
-	MainWalletConfig wallet.WalletConfig      `json:"main_wallet_config"`
-	TestWalletConfig wallet.WalletConfig      `json:"test_wallet_config"`
+	Ports            Ports               `json:"ports"`
+	BootStrap        []string            `json:"bootstrap"`
+	Services         map[string]string   `json:"services"`
+	QuorumList       QuorumList          `json:"quorumr_list"`
+	MainWalletConfig wallet.WalletConfig `json:"main_wallet_config"`
+	TestWalletConfig wallet.WalletConfig `json:"test_wallet_config"`
 }
 
 type QuorumList struct {

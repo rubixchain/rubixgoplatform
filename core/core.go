@@ -21,7 +21,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/quorum"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
-	"github.com/rubixchain/rubixgoplatform/core/util"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
@@ -34,6 +33,7 @@ const (
 	APIReqPledgeToken    string = "/api/req-pledge-token"
 	APIUpdatePledgeToken string = "/api/update-pledge-token"
 	APISendReceiverToken string = "/api/send-receiver-token"
+	APISyncTokenChain    string = "/api/sync-token-chain"
 )
 
 const (
@@ -116,7 +116,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	update := false
 	if cfg.CfgData.MainWalletConfig.StorageType == 0 {
 		cfg.CfgData.MainWalletConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.MainWalletConfig.DBAddress = cfg.DirPath + "Rubix/MainNet/wallet.db"
+		cfg.CfgData.MainWalletConfig.DBAddress = cfg.DirPath + "Rubix/wallet.db"
 		cfg.CfgData.MainWalletConfig.DBType = "Sqlite3"
 		update = true
 	}
@@ -126,7 +126,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	}
 	if cfg.CfgData.TestWalletConfig.StorageType == 0 {
 		cfg.CfgData.TestWalletConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.TestWalletConfig.DBAddress = cfg.DirPath + "Rubix/TestNet/wallet.db"
+		cfg.CfgData.TestWalletConfig.DBAddress = cfg.DirPath + "Rubix/wallet.db"
 		cfg.CfgData.TestWalletConfig.DBType = "Sqlite3"
 		update = true
 	}
@@ -174,7 +174,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		wcfg = &cfg.CfgData.TestWalletConfig
 	}
 
-	w, err := wallet.InitWallet(wcfg, c.log)
+	w, err := wallet.InitWallet(wcfg, c.log, c.testNet)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
@@ -198,7 +198,7 @@ func (c *Core) SetupCore() error {
 		return err
 	}
 	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, 100, c.ipfs, c.log, c.cfg.CfgData.BootStrap)
-	c.d = did.InitDID(c.cfg, c.log, c.ipfs)
+	c.d = did.InitDID(c.cfg.DirPath, c.log, c.ipfs)
 	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
 	if err != nil {
 		return err
@@ -210,6 +210,7 @@ func (c *Core) SetupCore() error {
 	}
 	c.PingSetup()
 	c.PeerStatusSetup()
+	c.SetupToken()
 	c.QuroumSetup()
 	return nil
 }
@@ -247,11 +248,16 @@ func (c *Core) Start() (bool, string) {
 		c.log.Error("Failed to publish message to explorer", "err", err)
 		return false, "Failed to publish message to explorer"
 	}
-	if len(c.cfg.CfgData.DIDList) > 0 {
+	dt, err := c.w.GetAllDIDs()
+	if err == nil && len(dt) > 0 {
+		list := make([]string, 0)
+		for _, d := range dt {
+			list = append(list, d.DID)
+		}
 		exp = model.ExploreModel{
 			Cmd:     ExpDIDPeerMapCmd,
 			PeerID:  c.peerID,
-			DIDList: c.cfg.CfgData.DIDList,
+			DIDList: list,
 		}
 		err = c.PublishExplorer(&exp)
 		if err != nil {
@@ -317,8 +323,15 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	err = c.updateConfig()
+	dt := wallet.DIDType{
+		DID:    did,
+		DIDDir: didCreate.Dir,
+		Type:   didCreate.Type,
+		Config: didCreate.Config,
+	}
+	err = c.w.CreateDID(&dt)
 	if err != nil {
+		c.log.Error("Failed to create did in the wallet", "err", err)
 		return "", err
 	}
 	exp := model.ExploreModel{
@@ -334,12 +347,20 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	return did, nil
 }
 
-func (c *Core) GetAllDID() []string {
-	str := make([]string, 0)
-	for _, did := range c.cfg.CfgData.DIDList {
-		str = append(str, util.CreateAddress(c.peerID, did))
+func (c *Core) GetDIDs(dir string) []wallet.DIDType {
+	dt, err := c.w.GetDIDs(dir)
+	if err != nil {
+		return nil
 	}
-	return str
+	return dt
+}
+
+func (c *Core) IsDIDExist(dir string, did string) bool {
+	_, err := c.w.GetDIDDir(dir, did)
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 func (c *Core) AddWebReq(req *ensweb.Request) {
@@ -388,13 +409,13 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 }
 
 func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
-	cfg, ok := c.cfg.CfgData.DIDConfig[didStr]
-	if !ok {
+	dt, err := c.w.GetDID(didStr)
+	if err != nil {
 		c.log.Error("DID does not exist", "did", didStr)
 		return nil, fmt.Errorf("DID does not exist")
 	}
 	dc := c.GetWebReq(reqID)
-	switch cfg.Type {
+	switch dt.Type {
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.cfg.DirPath+"/Rubix", dc), nil
 	default:

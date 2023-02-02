@@ -2,6 +2,8 @@ package wallet
 
 import (
 	"fmt"
+
+	"github.com/rubixchain/rubixgoplatform/block"
 )
 
 const (
@@ -18,43 +20,12 @@ const (
 	RACNFTType
 )
 
-const (
-	RACTestTokenVersion int = 1
-)
-
-const (
-	RACTypeKey         string = "type"
-	RACDidKey          string = "creatorDid"
-	RACTotalSupplyKey  string = "totalSupply"
-	RACTokenCountKey   string = "tokenCount"
-	RACCreatorInputKey string = "creatorInput"
-	RACHashKey         string = "contentHash"
-	RACUrlKey          string = "url"
-	RACVersionKey      string = "version"
-	RACNonceKey        string = "nonce"
-	RACSignKey         string = "pvtKeySign"
-)
-
 type Token struct {
 	TokenID      string `gorm:"column:token_id;primary_key"`
 	TokenDetials string `gorm:"column:token_detials"`
 	DID          string `gorm:"column:did"`
 	TokenChainID string `gorm:"column:token_chain_id"`
-	ProofChainID string `gorm:"column:proof_chain_id"`
 	TokenStatus  int    `gorm:"column:token_status;"`
-}
-
-type RACType struct {
-	Type         int    `json:"type"`
-	CreatorDID   string `json:"creatorDid"`
-	TotalSupply  int    `json:"totalSupply"`
-	TokenCount   int    `json:"tokenCount"`
-	ContentHash  string `json:"contentHash"`
-	URL          string `json:"url"`
-	CreatorInput string `json:"creatorInput"`
-	Version      int    `json:"version"`
-	Nonce        string `json:"nonce"`
-	Signature    string `json:"pvtKeySign"`
 }
 
 type TestTokenDetials struct {
@@ -72,35 +43,36 @@ type PartToken struct {
 }
 
 func (w *Wallet) CreateToken(t *Token) error {
-	return w.s.Write(TokenStorage, t)
+	return w.s.Write(w.tokenStorage, t)
 }
 
-func (w *Wallet) PledgeWholeToken(did string, token string, tcb map[string]interface{}) error {
+func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, token)
+	err := w.s.Read(w.tokenStorage, &t, "did=? AND token_id=?", did, token)
 	if err != nil {
 		w.log.Error("Failed to get token", "token", token, "err", err)
 		return err
 	}
+
 	if t.TokenStatus != TokenIsLocked {
 		w.log.Error("Token is not locked")
 		return fmt.Errorf("token is not locked")
 	}
-	bid, err := GetBlockID(token, tcb)
+	bid, err := b.GetBlockID(token)
 	if err != nil {
 		w.log.Error("Invalid token chain block", "err", err)
 		return err
 	}
 	t.TokenChainID = bid
 	t.TokenStatus = TokenIsPledged
-	err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, token)
+	err = w.s.Update(w.tokenStorage, &t, "did=? AND token_id=?", did, token)
 	if err != nil {
 		w.log.Error("Failed to update token", "token", token, "err", err)
 		return err
 	}
-	err = w.AddLatestTokenBlock(token, tcb)
+	err = w.AddTokenBlock(token, b)
 	if err != nil {
 		w.log.Error("Failed to add token chain block", "token", token, "err", err)
 		return err
@@ -110,7 +82,7 @@ func (w *Wallet) PledgeWholeToken(did string, token string, tcb map[string]inter
 
 func (w *Wallet) GetAllWholeTokens(did string) ([]Token, error) {
 	var t []Token
-	err := w.s.Read(TokenStorage, &t, "did=?", did)
+	err := w.s.Read(w.tokenStorage, &t, "did=?", did)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
@@ -120,7 +92,7 @@ func (w *Wallet) GetAllWholeTokens(did string) ([]Token, error) {
 
 func (w *Wallet) GetAllPartTokens(did string) ([]PartToken, error) {
 	var t []PartToken
-	err := w.s.Read(PartTokenStorage, &t, "did=?", did)
+	err := w.s.Read(w.partTokenStorage, &t, "did=?", did)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
@@ -132,7 +104,7 @@ func (w *Wallet) GetWholeTokens(did string, num int) ([]Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=?", did, TokenIsFree)
+	err := w.s.Read(w.tokenStorage, &t, "did=? AND token_status=?", did, TokenIsFree)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
@@ -147,7 +119,7 @@ func (w *Wallet) GetWholeTokens(did string, num int) ([]Token, error) {
 	}
 	for i := range wt {
 		wt[i].TokenStatus = TokenIsLocked
-		err = w.s.Update(TokenStorage, &wt[i], "did=? AND token_id=?", did, wt[i].TokenID)
+		err = w.s.Update(w.tokenStorage, &wt[i], "did=? AND token_id=?", did, wt[i].TokenID)
 		if err != nil {
 			w.log.Error("Failed to update token status", "err", err)
 			return nil, err
@@ -160,7 +132,7 @@ func (w *Wallet) GetTokens(did string, amt float64) ([]Token, []PartToken, error
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=?", did, TokenIsFree)
+	err := w.s.Read(w.tokenStorage, &t, "did=? AND token_status=?", did, TokenIsFree)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, nil, err
@@ -174,7 +146,7 @@ func (w *Wallet) GetTokens(did string, amt float64) ([]Token, []PartToken, error
 	}
 	for i := range wt {
 		wt[i].TokenStatus = TokenIsLocked
-		err = w.s.Update(TokenStorage, &wt[i], "did=? AND token_id=?", did, wt[i].TokenID)
+		err = w.s.Update(w.tokenStorage, &wt[i], "did=? AND token_id=?", did, wt[i].TokenID)
 		if err != nil {
 			w.log.Error("Failed to update token status", "err", err)
 			return nil, nil, err
@@ -188,7 +160,7 @@ func (w *Wallet) LockToken(wt *Token) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	wt.TokenStatus = TokenIsLocked
-	return w.s.Update(TokenStorage, wt, "did=? AND token_id=?", wt.DID, wt.TokenID)
+	return w.s.Update(w.tokenStorage, wt, "did=? AND token_id=?", wt.DID, wt.TokenID)
 }
 
 func (w *Wallet) ReleaseTokens(wt []Token, pt []PartToken) error {
@@ -196,14 +168,14 @@ func (w *Wallet) ReleaseTokens(wt []Token, pt []PartToken) error {
 	defer w.l.Unlock()
 	for i := range wt {
 		wt[i].TokenStatus = TokenIsFree
-		err := w.s.Update(TokenStorage, &wt[i], "did=? AND token_id=?", wt[i].DID, wt[i].TokenID)
+		err := w.s.Update(w.tokenStorage, &wt[i], "did=? AND token_id=?", wt[i].DID, wt[i].TokenID)
 		if err != nil {
 			return err
 		}
 	}
 	for i := range pt {
 		pt[i].TokenStatus = TokenIsFree
-		err := w.s.Update(PartTokenStorage, &pt[i], "did=? AND token_id=?", pt[i].DID, pt[i].TokenID)
+		err := w.s.Update(w.partTokenStorage, &pt[i], "did=? AND token_id=?", pt[i].DID, pt[i].TokenID)
 		if err != nil {
 			return err
 		}
@@ -215,13 +187,13 @@ func (w *Wallet) RemoveTokens(wt []Token, pt []PartToken) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	for i := range wt {
-		err := w.s.Delete(TokenStorage, &Token{}, "did=? AND token_id=?", wt[i].DID, wt[i].TokenID)
+		err := w.s.Delete(w.tokenStorage, &Token{}, "did=? AND token_id=?", wt[i].DID, wt[i].TokenID)
 		if err != nil {
 			return err
 		}
 	}
 	for i := range pt {
-		err := w.s.Delete(PartTokenStorage, &PartToken{}, "did=? AND token_id=?", pt[i].DID, pt[i].TokenID)
+		err := w.s.Delete(w.partTokenStorage, &PartToken{}, "did=? AND token_id=?", pt[i].DID, pt[i].TokenID)
 		if err != nil {
 			return err
 		}
@@ -229,79 +201,88 @@ func (w *Wallet) RemoveTokens(wt []Token, pt []PartToken) error {
 	return nil
 }
 
-func (w *Wallet) TokensTransferred(did string, wt []string, pt []string, tcb map[string]interface{}) error {
+func (w *Wallet) TokensTransferred(did string, wt []string, pt []string, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	for i := range wt {
 		var t Token
-		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, wt[i])
+		err := w.s.Read(w.tokenStorage, &t, "did=? AND token_id=?", did, wt[i])
 		if err != nil {
 			return err
 		}
-		bid, err := GetBlockID(wt[i], tcb)
+		bid, err := b.GetBlockID(wt[i])
+		if err != nil {
+			return err
+		}
+		err = w.AddTokenBlock(wt[i], b)
 		if err != nil {
 			return err
 		}
 		t.TokenChainID = bid
 		t.TokenStatus = TokenIsTransferred
-		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, wt[i])
+		err = w.s.Update(w.tokenStorage, &t, "did=? AND token_id=?", did, wt[i])
 		if err != nil {
 			return err
 		}
-		w.AddLatestTokenBlock(wt[i], tcb)
 	}
 	for i := range pt {
 		var t Token
-		err := w.s.Read(PartTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
+		err := w.s.Read(w.partTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
 		if err != nil {
 			return err
 		}
-		bid, err := GetBlockID(pt[i], tcb)
+		bid, err := b.GetBlockID(pt[i])
+		if err != nil {
+			return err
+		}
+		err = w.AddTokenBlock(pt[i], b)
 		if err != nil {
 			return err
 		}
 		t.TokenChainID = bid
 		t.TokenStatus = TokenIsTransferred
-		err = w.s.Update(PartTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
+		err = w.s.Update(w.partTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
 		if err != nil {
 			return err
 		}
-		w.AddLatestTokenBlock(pt[i], tcb)
 	}
 	return nil
 }
 
-func (w *Wallet) TokensReceived(did string, wt []string, pt []string, tcb map[string]interface{}) error {
+func (w *Wallet) TokensReceived(did string, wt []string, pt []string, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	for i := range wt {
 		var t Token
-		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, wt[i])
+		err := w.s.Read(w.tokenStorage, &t, "did=? AND token_id=?", did, wt[i])
 		if err != nil {
 			t = Token{
 				TokenID: wt[i],
 				DID:     did,
 			}
-			err = w.s.Write(TokenStorage, &t)
+			err = w.s.Write(w.tokenStorage, &t)
 			if err != nil {
 				return err
 			}
 		}
-		bid, err := GetBlockID(wt[i], tcb)
+		bid, err := b.GetBlockID(wt[i])
+		if err != nil {
+			return err
+		}
+		err = w.AddTokenBlock(wt[i], b)
 		if err != nil {
 			return err
 		}
 		t.TokenChainID = bid
 		t.TokenStatus = TokenIsFree
-		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, wt[i])
+		err = w.s.Update(w.tokenStorage, &t, "did=? AND token_id=?", did, wt[i])
 		if err != nil {
 			return err
 		}
-		w.AddLatestTokenBlock(wt[i], tcb)
 	}
 	// for i := range pt {
 	// 	var t Token
-	// 	err := w.s.Read(PartTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
+	// 	err := w.s.Read(w.partTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
 	// 	if err != nil {
 	// 		t = Token{
 	// 			TokenID: wt[i],
@@ -314,7 +295,7 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, tcb map[st
 	// 	}
 	// 	t.TokenChainID = ha.(string)
 	// 	t.TokenStatus = TokenIsTransferred
-	// 	w.AddLatestTokenBlock(pt[i], tcb)
+	// 	w.AddTokenBlock(pt[i], tcb)
 	// }
 	return nil
 }

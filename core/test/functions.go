@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/EnsurityTechnologies/enscrypt"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 type RandPos struct {

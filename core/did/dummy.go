@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/EnsurityTechnologies/enscrypt"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 // DIDDummy will handle basic DID

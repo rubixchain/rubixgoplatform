@@ -1,9 +1,10 @@
 package core
 
 import (
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/did"
-	"github.com/rubixchain/rubixgoplatform/core/util"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (c *Core) validateTokenOwnership(cr *ConensusRequest) bool {
@@ -16,13 +17,18 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest) bool {
 		}
 	}
 	for i := range cr.WholeTokens {
-		tcb := cr.WholeTCBlocks[i]
-		h, s, err := wallet.GetTCHashSig(tcb)
+		blk := cr.WholeTCBlocks[i]
+		if blk == nil {
+			c.log.Error("Invalid token chain block")
+			return false
+		}
+		b := block.InitBlock(block.TokenBlockType, blk, nil)
+		h, s, err := b.GetHashSig()
 		if err != nil {
 			c.log.Error("Failed to get hash & signature", "err", err)
 			return false
 		}
-		ch, err := wallet.TC2HashString(tcb)
+		ch, err := b.GetHash()
 		if err != nil {
 			c.log.Error("Failed to calculate block hash", "err", err)
 			return false
@@ -32,7 +38,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest) bool {
 			return false
 		}
 		var dc did.DIDCrypto
-		switch wallet.GetTCTransType(tcb) {
+		switch b.GetTransType() {
 		case wallet.TokenGeneratedType:
 			if !c.testNet {
 				c.log.Error("Invalid token on main net")
@@ -40,7 +46,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest) bool {
 			}
 			dc = c.SetupForienDID(cr.SenderDID)
 		case wallet.TokenTransferredType:
-			dc = c.SetupForienDID(wallet.GetTCSenderDID(tcb))
+			dc = c.SetupForienDID(b.GetSenderDID())
 		// ::TODO:: need to add other verification
 		default:
 			return false
@@ -84,6 +90,7 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 		c.log.Error("Invalid DID setup")
 		return false
 	}
+	c.log.Info("Received token hash", "hash", h)
 	sig := util.StrToHex(s)
 	ok, err := dc.PvtVerify([]byte(h), sig)
 	if err != nil {
