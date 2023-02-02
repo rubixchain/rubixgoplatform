@@ -37,6 +37,11 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// release the locked tokens before exit
 	defer c.w.ReleaseTokens(wt, pt)
 
+	//Pinning the Tokens by the Sender, this will be released once consesusu is successful
+	for _, t := range wt {
+		c.ipfs.Pin(t.TokenID)
+	}
+
 	// Get the receiver & do sanity check
 	p, err := c.getPeer(req.Receiver)
 	if err != nil {

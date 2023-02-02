@@ -1,8 +1,11 @@
 package core
 
 import (
-	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/EnsurityTechnologies/uuid"
 	"github.com/rubixchain/rubixgoplatform/core/did"
+	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -102,4 +105,105 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 		return false
 	}
 	return true
+}
+
+func (c *Core) multiplePincheck(tokenHash string, wtcBlock map[string]interface{}, cr *ConensusRequest) (bool, []string, error) {
+	//tokenHash := cr.WholeTokens[i]
+	c.log.Debug("Finding dht", "token", tokenHash)
+	pinIds, err := c.GetDHTddrs(tokenHash)
+	if err != nil {
+		c.log.Error("Error in finding pins of token", "err", err)
+		return true, nil, err
+	}
+
+	c.log.Info("Providers for token ", "token", tokenHash)
+	c.log.Info("are =", "", pinIds)
+	c.log.Info("Number of", "pins", len(pinIds))
+	if len(pinIds) == 0 {
+		c.log.Info("No pins found for token ", tokenHash)
+		return false, nil, nil
+	}
+
+	if len(pinIds) == 1 {
+		for _, peerId := range pinIds {
+			if peerId != cr.SenderPeerID {
+				c.log.Info("Pin is not held by current Sender for ", "token", tokenHash)
+				c.log.Info("peer Id that holds the pin ", "pinList", pinIds)
+				return true, pinIds, nil
+			} else {
+				c.log.Info("Pin is held by current Sender for ", "token", tokenHash)
+				return false, nil, nil
+			}
+		}
+	}
+
+	if len(pinIds) >= 2 {
+
+		c.log.Info("Token has more 2 or greater pins. Checking previosus senders")
+		prevSenderDid := wallet.GetTCSenderDID(wtcBlock)
+
+		var prevSenderDidList []string
+		prevSenderDidList = append(prevSenderDidList, prevSenderDid)
+
+		prevSenderPeerId, err := c.getPeerIds(prevSenderDidList)
+		if err != nil {
+			return true, nil, err
+		}
+		retain := prevSenderPeerId
+
+		prevSenderPeerId = append(prevSenderPeerId, cr.SenderPeerID)
+		prevSenderPeerId = append(prevSenderPeerId, cr.ReceiverPeerID)
+
+		uniqueElements := make(map[string]bool)
+
+		for _, element := range pinIds {
+			uniqueElements[element] = true
+		}
+
+		for _, element := range prevSenderPeerId {
+			if !uniqueElements[element] {
+				uniqueElements[element] = true
+			}
+		}
+
+		var resultList []string
+		for element := range uniqueElements {
+			resultList = append(resultList, element)
+		}
+
+		if len(resultList) > 0 {
+			c.log.Error("Multiple Pins Found for token", tokenHash)
+			c.log.Error("Owners are ", pinIds)
+			return true, retain, nil
+		}
+	}
+	return false, nil, nil
+}
+
+func (c *Core) getPeerIds(didList []string) ([]string, error) {
+
+	sd, _ := c.sd[ExplorerService]
+	var peerIdList []string
+	exp := model.ExploreModel{
+		Cmd:     ExpDIDPeerMapCmd,
+		PeerID:  c.peerID,
+		DIDList: didList,
+	}
+	err := c.PublishExplorer(&exp)
+	if err != nil {
+		c.log.Error("Failed to publish message to explorer", "err", err)
+		return nil, err
+	}
+
+	var didPeerIdMap ExplorerNodeDIDMap
+
+	for _, did := range exp.DIDList {
+		err := sd.db.FindNew(uuid.Nil, NodeDIDMapTable, "DID=?", &didPeerIdMap, did)
+		if err != nil {
+			c.log.Error("Failed to create did map table", "err", err)
+			return nil, err
+		}
+		peerIdList = append(peerIdList, didPeerIdMap.PeerID)
+	}
+	return peerIdList, nil
 }
