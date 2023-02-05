@@ -28,6 +28,12 @@ func GetRandBytes(num int) []byte {
 	return d
 }
 
+func GetRandString() string {
+	d := make([]byte, 32)
+	rand.Read(d)
+	return HexToStr(d)
+}
+
 func CalculateHash(data []byte, method string) []byte {
 	switch method {
 	case "SHA3-256":

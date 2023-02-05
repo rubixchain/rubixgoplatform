@@ -249,7 +249,20 @@ func (b *Block) GetBlockID(t string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid token chain block, missing block number")
 	}
-	return ha.(string) + "-" + si.(string), nil
+	return si.(string) + "-" + ha.(string), nil
+}
+
+func (b *Block) GetPrevBlockID(t string) (string, error) {
+	phmi, ok := b.bm[TCPreviousBlockIDKey]
+	if !ok {
+		return "", fmt.Errorf("invalid token chain block, missing block hash")
+	}
+	phm := phmi.(map[interface{}]interface{})
+	bid, ok := phm[t]
+	if !ok {
+		return "", fmt.Errorf("invalid token chain block, missing block number")
+	}
+	return bid.(string), nil
 }
 
 func (b *Block) GetHashSig() (string, string, error) {

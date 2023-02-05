@@ -208,6 +208,7 @@ func (c *Core) SetupCore() error {
 		c.log.Error("Failed to setup services", "err", err)
 		return err
 	}
+	c.w.SetupWallet(c.ipfs)
 	c.PingSetup()
 	c.PeerStatusSetup()
 	c.SetupToken()
@@ -418,6 +419,10 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	switch dt.Type {
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.cfg.DirPath+"/Rubix", dc), nil
+	case did.StandardDIDMode:
+		return did.InitDIDStandard(didStr, c.cfg.DirPath+"/Rubix", dc), nil
+	case did.WalletDIDMode:
+		return did.InitDIDWallet(didStr, c.cfg.DirPath+"/Rubix", dc), nil
 	default:
 		return nil, fmt.Errorf("DID Type is not supported")
 	}

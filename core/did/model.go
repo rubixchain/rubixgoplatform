@@ -7,10 +7,14 @@ const (
 )
 
 const (
-	ImgFileName      string = "image.png"
-	DIDImgFileName   string = "did.png"
-	PubShareFileName string = "pubShare.png"
-	PubKeyFileName   string = "pubKey.pem"
+	ImgFileName          string = "image.png"
+	DIDImgFileName       string = "did.png"
+	PvtShareFileName     string = "pvtShare.png"
+	PubShareFileName     string = "pubShare.png"
+	PvtKeyFileName       string = "pvtKey.pem"
+	PubKeyFileName       string = "pubKey.pem"
+	QuorumPvtKeyFileName string = "quorumPrivKey.pem"
+	QuorumPubKeyFileName string = "quorumPubKey.pem"
 )
 
 const (
@@ -18,16 +22,16 @@ const (
 )
 
 type DIDCreate struct {
-	Type       int    `json:"type"`
-	Dir        string `json:"dir"`
-	Config     string `json:"config"`
-	Secret     string `json:"secret"`
-	PrivPWD    string `json:"priv_pwd"`
-	QuorumPWD  string `json:"quorum_pwd"`
-	ImgFile    string `json:"img_file"`
-	DIDImgFile string `json:"did_img_file"`
-	PubImgFile string `json:"pub_img_file"`
-	PubKeyFile string `json:"pub_key_file"`
+	Type           int    `json:"type"`
+	Dir            string `json:"dir"`
+	Config         string `json:"config"`
+	Secret         string `json:"secret"`
+	PrivPWD        string `json:"priv_pwd"`
+	QuorumPWD      string `json:"quorum_pwd"`
+	ImgFile        string `json:"img_file"`
+	DIDImgFileName string `json:"did_img_file"`
+	PubImgFile     string `json:"pub_img_file"`
+	PubKeyFile     string `json:"pub_key_file"`
 }
 
 type DIDSignature struct {
@@ -36,14 +40,17 @@ type DIDSignature struct {
 }
 
 type SignReqData struct {
-	ID   string `json:"id"`
-	Mode int    `json:"mode"`
+	ID          string `json:"id"`
+	Mode        int    `json:"mode"`
+	Hash        []byte `json:"hash"`
+	OnlyPrivKey bool   `json:"only_priv_key"`
 }
 
 type SignRespData struct {
-	ID       string `json:"id"`
-	Mode     int    `json:"mode"`
-	Password string `json:"password"`
+	ID        string       `json:"id"`
+	Mode      int          `json:"mode"`
+	Password  string       `json:"password"`
+	Signature DIDSignature `json:"signature"`
 }
 
 // BootStrapResponse used as model for the API responses

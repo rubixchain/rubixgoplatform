@@ -1,16 +1,12 @@
 package wallet
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 	"testing"
 
 	"github.com/EnsurityTechnologies/enscrypt"
-	"github.com/EnsurityTechnologies/logger"
-	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type CreditSignature struct {
@@ -113,140 +109,14 @@ func TestTemp(t *testing.T) {
 }
 
 func TestTokenChainBlock(t *testing.T) {
-	wc := &WalletConfig{
-		StorageType:   storage.StorageDBType,
-		DBAddress:     "wallet.db",
-		DBType:        "Sqlite3",
-		TokenChainDir: "./",
-	}
-	logOptions := &logger.LoggerOptions{
-		Name:   "WalletTest",
-		Color:  []logger.ColorOption{logger.AutoColor},
-		Output: []io.Writer{logger.DefaultOutput},
-	}
-
-	log := logger.New(logOptions)
-	w, err := InitWallet(wc, log, true)
+	db, err := leveldb.OpenFile("../../windows/node2/Rubix/TestNet/tokenchainstorage", nil)
 	if err != nil {
-		t.Fatal("Failed to setup wallet")
+		t.Fatal("Failed to open db", err)
 	}
-
-	dc := InitDIDDummy("12512hdjdfjutigkglvmjgutyt78ddhfj")
-	cs := CreditSignature{
-		Signature:     "129120120221012sksfjfjfff;f",
-		PrivSingature: "shsdhsdksksdisdjsdjds",
-		DID:           "sksdjdsusdusd7ssdhshsjsdidsisduyrrh",
+	iter := db.NewIterator(nil, nil)
+	for iter.Next() {
+		fmt.Printf("Key : %s\n", iter.Key())
 	}
-	jb, err := json.Marshal(cs)
-	if err != nil {
-		t.Fatal("Failed to parse json")
-	}
-	qs := make([]string, 0)
-	qs = append(qs, string(jb))
-	qs = append(qs, string(jb))
-	qs = append(qs, string(jb))
-	qs = append(qs, string(jb))
-	qs = append(qs, string(jb))
-
-	tcb := TokenChainBlock{
-		TransactionType: TokenGeneratedType,
-		TokenOwner:      "sjdkskdisuslsflsflf",
-		Comment:         "TOken generated",
-	}
-	token := "17128211910102"
-	ctcb := make(map[string]interface{})
-	ctcb[token] = nil
-
-	ftcb := CreateTCBlock(ctcb, &tcb)
-
-	s, err := GetTCHash(ftcb)
-	if err != nil {
-		t.Fatal("Failed to get hash")
-	}
-	sig, err := dc.PvtSign([]byte(s))
-	if err != nil {
-		t.Fatal("Failed to get signature")
-	}
-	ftcb[TCSignatureKey] = util.HexToStr(sig)
-
-	blk, err := TCBEncode(ftcb)
-	if err != nil {
-		t.Fatal("Invalid block")
-	}
-
-	err = w.AddTokenBlock(token, blk)
-	if err != nil {
-		t.Fatal("Failed to add latest token chain block")
-	}
-
-	pm := make([]string, 0)
-	pm = append(pm, "29202088djdhfyf76g sjskd9sd8sd7sdhfjfk")
-	tcb = TokenChainBlock{
-		TransactionType:   TokenTransferredType,
-		TokenOwner:        "12512hdjdfjutigkglvmjgutyt78ddhfj",
-		SenderDID:         "sjdkskdisuslsflsflf",
-		ReceiverDID:       "12512hdjdfjutigkglvmjgutyt78ddhfj",
-		Comment:           "Dummy transfer",
-		TID:               "19120djdjf88ddkdfkdflddf0dodkdf",
-		WholeTokens:       []string{"29202088djdhfyf76g"},
-		WholeTokensID:     []string{"17281920201019128"},
-		QuorumSignature:   qs,
-		TokensPledgedFor:  []string{"29202088djdhfyf76g"},
-		TokensPledgedWith: []string{"sjskd9sd8sd7sdhfjfk"},
-		TokensPledgeMap:   pm,
-	}
-
-	rtcb, err := w.GetLatestTokenBlock(token)
-	if err != nil {
-		t.Fatal("Failed to read latest token chain block")
-	}
-	ctcb = make(map[string]interface{})
-	ctcb[token] = rtcb
-	stcb := CreateTCBlock(ctcb, &tcb)
-
-	s, err = GetTCHash(stcb)
-	if err != nil {
-		t.Fatal("Failed to get hash")
-	}
-	sig, err = dc.PvtSign([]byte(s))
-	if err != nil {
-		t.Fatal("Failed to get signature")
-	}
-	stcb[TCSignatureKey] = util.HexToStr(sig)
-
-	blk, err = TCBEncode(stcb)
-	if err != nil {
-		t.Fatal("Invalid block")
-	}
-
-	err = w.AddTokenBlock(token, blk)
-	if err != nil {
-		t.Fatal("Failed to add latest token chain block")
-	}
-
-	rblk, err := w.GetLatestTokenBlock(token)
-	if err != nil {
-		t.Fatal("Failed to read latest token chain block")
-	}
-
-	rstcb, err := TCBDecode(rblk)
-	if err != nil {
-		t.Fatal("Failed to read latest token chain block")
-	}
-
-	h, s, err := GetTCHashSig(rstcb)
-	if err != nil {
-		t.Fatal("Failed to get hash")
-	}
-	ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
-	if err != nil {
-		t.Fatal("Failed to verify signature")
-	}
-	if !ok {
-		t.Fatal("Failed to verify signature")
-	}
-	w.s.Close()
-	w.tcs.Close()
-	os.Remove("wallet.db")
-	os.RemoveAll("tokenchainstorage")
+	iter.Release()
+	db.Close()
 }

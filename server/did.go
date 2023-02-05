@@ -46,7 +46,7 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 			didCreate.ImgFile = fileName
 		}
 		if strings.Contains(fileName, did.DIDImgFileName) {
-			didCreate.DIDImgFile = fileName
+			didCreate.DIDImgFileName = fileName
 		}
 		if strings.Contains(fileName, did.PubShareFileName) {
 			didCreate.PubImgFile = fileName

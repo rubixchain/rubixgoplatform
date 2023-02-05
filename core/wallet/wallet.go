@@ -6,6 +6,7 @@ import (
 
 	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/logger"
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -32,6 +33,7 @@ type WalletConfig struct {
 }
 
 type Wallet struct {
+	ipfs             *ipfsnode.Shell
 	s                storage.Storage
 	l                sync.Mutex
 	testNet          bool
@@ -49,7 +51,7 @@ func InitWallet(cfg *WalletConfig, log logger.Logger, testNet bool) (*Wallet, er
 	}
 	var err error
 	w := &Wallet{
-		log:     log,
+		log:     log.Named("wallet"),
 		testNet: testNet,
 	}
 	if testNet {
@@ -104,4 +106,8 @@ func InitWallet(cfg *WalletConfig, log logger.Logger, testNet bool) (*Wallet, er
 		return nil, err
 	}
 	return w, nil
+}
+
+func (w *Wallet) SetupWallet(ipfs *ipfsnode.Shell) {
+	w.ipfs = ipfs
 }

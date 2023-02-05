@@ -117,14 +117,8 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	if dc == nil {
 		return s.BasicResponse(req, false, "Invalid request ID", nil)
 	}
-	if resp.Mode == did.BasicDIDMode {
-		s.c.UpateWebReq(resp.ID, req)
-	}
+	s.c.UpateWebReq(resp.ID, req)
 	dc.InChan <- resp
-	if resp.Mode == did.BasicDIDMode {
-		s.handleWebRequest(resp.ID)
-		return nil
-	}
-	// ::TODO:: Need to updated for other mode
-	return s.BasicResponse(req, false, "Signature processed", nil)
+	s.handleWebRequest(resp.ID)
+	return nil
 }

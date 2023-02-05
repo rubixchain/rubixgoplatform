@@ -2,8 +2,11 @@ package wallet
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 const (
@@ -167,17 +170,35 @@ func (w *Wallet) ReleaseTokens(wt []Token, pt []PartToken) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	for i := range wt {
-		wt[i].TokenStatus = TokenIsFree
-		err := w.s.Update(w.tokenStorage, &wt[i], "did=? AND token_id=?", wt[i].DID, wt[i].TokenID)
+		var t Token
+		err := w.s.Read(w.tokenStorage, &t, "token_id=?", wt[i].TokenID)
 		if err != nil {
+			w.log.Error("Failed to read token", "err", err)
 			return err
+		}
+		if t.TokenStatus == TokenIsLocked {
+			t.TokenStatus = TokenIsFree
+			err = w.s.Update(w.tokenStorage, &t, "token_id=?", t.TokenID)
+			if err != nil {
+				w.log.Error("Failed to update token", "err", err)
+				return err
+			}
 		}
 	}
 	for i := range pt {
-		pt[i].TokenStatus = TokenIsFree
-		err := w.s.Update(w.partTokenStorage, &pt[i], "did=? AND token_id=?", pt[i].DID, pt[i].TokenID)
+		var t PartToken
+		err := w.s.Read(w.partTokenStorage, &t, "token_id=?", pt[i].TokenID)
 		if err != nil {
+			w.log.Error("Failed to read part token", "err", err)
 			return err
+		}
+		if t.TokenStatus == TokenIsLocked {
+			t.TokenStatus = TokenIsFree
+			err = w.s.Update(w.partTokenStorage, &t, "token_id=?", t.TokenID)
+			if err != nil {
+				w.log.Error("Failed to update part token", "err", err)
+				return err
+			}
 		}
 	}
 	return nil
@@ -254,15 +275,37 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, b *block.B
 	defer w.l.Unlock()
 	for i := range wt {
 		var t Token
-		err := w.s.Read(w.tokenStorage, &t, "did=? AND token_id=?", did, wt[i])
+		err := w.s.Read(w.tokenStorage, &t, "token_id=?", wt[i])
 		if err != nil {
+			dir := util.GetRandString()
+			err := util.CreateDir(dir)
+			if err != nil {
+				w.log.Error("Faled to create directory", "err", err)
+				return err
+			}
+			defer os.RemoveAll(dir)
+			err = w.ipfs.Get(wt[i], dir)
+			if err != nil {
+				w.log.Error("Faled to get token", "err", err)
+				return err
+			}
+			rb, err := ioutil.ReadFile(dir + "/" + wt[i])
+			if err != nil {
+				w.log.Error("Faled to read token", "err", err)
+				return err
+			}
 			t = Token{
-				TokenID: wt[i],
-				DID:     did,
+				TokenDetials: string(rb),
+				TokenID:      wt[i],
+				DID:          did,
 			}
 			err = w.s.Write(w.tokenStorage, &t)
 			if err != nil {
 				return err
+			}
+		} else {
+			if t.TokenStatus != TokenIsTransferred {
+				return fmt.Errorf("Token already exist")
 			}
 		}
 		bid, err := b.GetBlockID(wt[i])
@@ -273,9 +316,10 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, b *block.B
 		if err != nil {
 			return err
 		}
+		t.DID = did
 		t.TokenChainID = bid
 		t.TokenStatus = TokenIsFree
-		err = w.s.Update(w.tokenStorage, &t, "did=? AND token_id=?", did, wt[i])
+		err = w.s.Update(w.tokenStorage, &t, "token_id=?", wt[i])
 		if err != nil {
 			return err
 		}

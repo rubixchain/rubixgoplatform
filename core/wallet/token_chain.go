@@ -60,11 +60,13 @@ func (w *Wallet) GetAllTokenBlocks(token string, blockID string) ([][]byte, stri
 	}
 	nextBlkID := ""
 	for iter.Next() {
-		blk := iter.Value()
+		v := iter.Value()
+		blk := make([]byte, len(v))
+		copy(blk, v)
 		blks = append(blks, blk)
-		b := block.InitBlock(block.TokenBlockType, blk, nil)
 		count++
 		if count == TCBlockCountLimit {
+			b := block.InitBlock(block.TokenBlockType, blk, nil)
 			blkID, err := b.GetBlockID(token)
 			if err != nil {
 				return nil, "", fmt.Errorf("Invalid token chain block")
@@ -81,7 +83,9 @@ func (w *Wallet) GetLatestTokenBlock(token string) (*block.Block, error) {
 	defer iter.Release()
 	if iter.Last() {
 		v := iter.Value()
-		b := block.InitBlock(block.TokenBlockType, v, nil)
+		blk := make([]byte, len(v))
+		copy(blk, v)
+		b := block.InitBlock(block.TokenBlockType, blk, nil)
 		return b, nil
 	}
 	return nil, nil

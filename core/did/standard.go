@@ -11,36 +11,29 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// DIDBasic will handle basic DID
-type DIDBasic struct {
+// DIDStandard will handle basic DID
+type DIDStandard struct {
 	did string
 	dir string
 	ch  *DIDChan
-	pwd string
 }
 
-// InitDIDBasic will return the basic did handle
-func InitDIDBasic(did string, baseDir string, ch *DIDChan) *DIDBasic {
-	return &DIDBasic{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
+// InitDIDStandard will return the basic did handle
+func InitDIDStandard(did string, baseDir string, ch *DIDChan) *DIDStandard {
+	return &DIDStandard{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
 }
 
-func InitDIDBasicWithPassword(did string, baseDir string, pwd string) *DIDBasic {
-	return &DIDBasic{did: did, dir: baseDir, pwd: pwd}
-}
-
-func (d *DIDBasic) getPassword() (string, error) {
-	if d.pwd != "" {
-		return d.pwd, nil
-	}
+func (d *DIDStandard) getSignature(hash []byte) ([]byte, error) {
 	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
-		return "", fmt.Errorf("Invalid configuration")
+		return nil, fmt.Errorf("Invalid configuration")
 	}
 	sr := &SignResponse{
 		Status:  true,
-		Message: "Password needed",
+		Message: "Signature needed",
 		Result: SignReqData{
 			ID:   d.ch.ID,
-			Mode: BasicDIDMode,
+			Mode: StandardDIDMode,
+			Hash: hash,
 		},
 	}
 	d.ch.OutChan <- sr
@@ -48,19 +41,18 @@ func (d *DIDBasic) getPassword() (string, error) {
 	select {
 	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
-		return "", fmt.Errorf("Timeout, failed to get password")
+		return nil, fmt.Errorf("Timeout, failed to get password")
 	}
 
 	srd, ok := ch.(SignRespData)
 	if !ok {
-		return "", fmt.Errorf("Invalid data received on the channel")
+		return nil, fmt.Errorf("Invalid data received on the channel")
 	}
-	d.pwd = srd.Password
-	return d.pwd, nil
+	return srd.Signature.Signature, nil
 }
 
 // Sign will return the singature of the DID
-func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
+func (d *DIDStandard) Sign(hash string) ([]byte, []byte, error) {
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
 	if err != nil {
@@ -75,23 +67,8 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 	finalPos := randPosObject.PosForSign
 	pvtPos := util.GetPrivatePositions(finalPos, ps)
 	pvtPosStr := util.IntArraytoStr(pvtPos)
-
-	//create a signature using the private key
-	//1. read and extrqct the private key
-	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
-	if err != nil {
-		return nil, nil, err
-	}
-	pwd, err := d.getPassword()
-	if err != nil {
-		return nil, nil, err
-	}
-	PrivateKey, _, err := enscrypt.DecodeKeyPair(pwd, privKey, nil)
-	if err != nil {
-		return nil, nil, err
-	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
-	pvtKeySign, err := enscrypt.Sign(PrivateKey, []byte(hashPvtSign))
+	pvtKeySign, err := d.getSignature([]byte(hashPvtSign))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -103,7 +80,7 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // Sign will verifyt he signature
-func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDStandard) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
@@ -155,26 +132,14 @@ func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bo
 	return true, nil
 }
 
-func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
-	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
-	if err != nil {
-		return nil, err
-	}
-	pwd, err := d.getPassword()
-	if err != nil {
-		return nil, err
-	}
-	PrivateKey, _, err := enscrypt.DecodeKeyPair(pwd, privKey, nil)
-	if err != nil {
-		return nil, err
-	}
-	pvtKeySign, err := enscrypt.Sign(PrivateKey, hash)
+func (d *DIDStandard) PvtSign(hash []byte) ([]byte, error) {
+	pvtKeySign, err := d.getSignature(hash)
 	if err != nil {
 		return nil, err
 	}
 	return pvtKeySign, nil
 }
-func (d *DIDBasic) PvtVerify(hash []byte, sign []byte) (bool, error) {
+func (d *DIDStandard) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return false, err

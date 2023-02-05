@@ -6,6 +6,13 @@ const (
 	GammaType
 )
 
+// QuorumListResponse used as model for the API responses
+type QuorumListResponse struct {
+	Status  bool       `json:"status"`
+	Message string     `json:"message"`
+	Result  QuorumList `json:"result"`
+}
+
 type Quorum struct {
 	Type    int    `json:"type"`
 	Address string `json:"address"`

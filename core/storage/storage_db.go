@@ -33,7 +33,7 @@ func (s *StorageDB) Write(storageName string, value interface{}) error {
 
 // Update will update the storage
 func (s *StorageDB) Update(stroageName string, value interface{}, querryString string, querryVaule ...interface{}) error {
-	return s.ad.UpdateNew(uuid.Nil, stroageName, querryString, value, querryVaule...)
+	return s.ad.SaveNew(uuid.Nil, stroageName, querryString, value, querryVaule...)
 }
 
 // Delete will delet the data from the storage

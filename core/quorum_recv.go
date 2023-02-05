@@ -158,20 +158,21 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	for _, t := range sr.WholeTokens {
-		err = c.syncTokenChainFrom(sr.Address, t)
-		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
-			crep.Message = "Failed to sync token chain block"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-	}
 	b := block.InitBlock(block.TokenBlockType, sr.TokenChainBlock, nil)
 	if b == nil {
 		c.log.Error("Invalid token chain block", "err", err)
 		crep.Message = "Invalid token chain block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	for _, t := range sr.WholeTokens {
+		err = c.syncTokenChainFrom(sr.Address, b, t)
+		if err != nil {
+			c.log.Error("Failed to sync token chain block", "err", err)
+			crep.Message = "Failed to sync token chain block"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
+
 	err = c.w.TokensReceived(did, sr.WholeTokens, sr.PartTokens, b)
 	if err != nil {
 		c.log.Error("Failed to update token status", "err", err)

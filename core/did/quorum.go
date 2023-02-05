@@ -24,7 +24,7 @@ func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
 
 // Sign will return the singature of the DID
 func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
-	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareImgFile)
+	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
 	if err != nil {
 		fmt.Println(err)
@@ -41,7 +41,7 @@ func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 
 	//create a signature using the private key
 	//1. read and extrqct the private key
-	privKey, err := ioutil.ReadFile(d.dir + QuorumPvtKeyFile)
+	privKey, err := ioutil.ReadFile(d.dir + QuorumPvtKeyFileName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -65,7 +65,7 @@ func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 // Sign will verifyt he signature
 func (d *DIDQuorum) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
-	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFile)
+	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
 		return false, err
 	}
@@ -100,7 +100,7 @@ func (d *DIDQuorum) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (b
 
 	//create a signature using the private key
 	//1. read and extrqct the private key
-	pubKey, err := ioutil.ReadFile(d.dir + QuorumPubKeyFile)
+	pubKey, err := ioutil.ReadFile(d.dir + QuorumPubKeyFileName)
 	if err != nil {
 		return false, err
 	}

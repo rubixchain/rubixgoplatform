@@ -339,7 +339,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, dc did.DIDCrypto) error {
 		}
 		if !br.Status {
 			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
-			return fmt.Errorf("unable to send tokens to receiver, " + err.Error())
+			return fmt.Errorf("unable to send tokens to receiver, " + br.Message)
 		}
 		err = c.w.TokensTransferred(cr.SenderDID, cr.WholeTokens, cr.PartTokens, nb)
 		if err != nil {

@@ -15,6 +15,7 @@ import (
 	srvcfg "github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
+	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/did"
@@ -47,6 +48,7 @@ const (
 	TransferRBTCmd        string = "transferrbt"
 	GetAccountInfoCmd     string = "getaccountinfo"
 	SetupServiceCmd       string = "setupservice"
+	DumpTokenChainCmd     string = "dumptokenchain"
 )
 
 var commands = []string{VersionCmd,
@@ -66,7 +68,8 @@ var commands = []string{VersionCmd,
 	GenerateTestRBTCmd,
 	TransferRBTCmd,
 	GetAccountInfoCmd,
-	SetupServiceCmd}
+	SetupServiceCmd,
+	DumpTokenChainCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -84,10 +87,12 @@ var commandsHelp = []string{"To get tool version",
 	"This command will generate test RBT token",
 	"This command will trasnfer RBT",
 	"This command will help to get account information",
-	"This command enable explorer service on the node"}
+	"This command enable explorer service on the node",
+	"This command will dump the token chain into file"}
 
 type Command struct {
 	cfg          config.Config
+	c            *client.Client
 	encKey       string
 	start        bool
 	node         uint
@@ -109,7 +114,9 @@ type Command struct {
 	quorumPWD    string
 	imgFile      string
 	didImgFile   string
+	privImgFile  string
 	pubImgFile   string
+	privKeyFile  string
 	pubKeyFile   string
 	quorumList   string
 	srvName      string
@@ -127,6 +134,7 @@ type Command struct {
 	numTokens    int
 	enableAuth   bool
 	did          string
+	token        string
 }
 
 func showVersion() {
@@ -245,8 +253,10 @@ func Run(args []string) {
 	flag.StringVar(&cmd.privPWD, "privPWD", "mypassword", "Private key password")
 	flag.StringVar(&cmd.quorumPWD, "quorumPWD", "mypassword", "Quorum key password")
 	flag.StringVar(&cmd.imgFile, "imgFile", did.ImgFileName, "DID creation image")
-	flag.StringVar(&cmd.didImgFile, "didImgFile", did.DIDImgFile, "DID image")
+	flag.StringVar(&cmd.didImgFile, "didImgFile", did.DIDImgFileName, "DID image")
+	flag.StringVar(&cmd.privImgFile, "privImgFile", did.PubShareFileName, "DID public share image")
 	flag.StringVar(&cmd.pubImgFile, "pubImgFile", did.PubShareFileName, "DID public share image")
+	flag.StringVar(&cmd.privKeyFile, "privKeyFile", did.PvtKeyFileName, "Private key file")
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
 	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
 	flag.StringVar(&cmd.srvName, "srvName", "explorer_service", "Service name")
@@ -264,6 +274,7 @@ func Run(args []string) {
 	flag.IntVar(&cmd.numTokens, "numTokens", 1, "Number of tokens")
 	flag.StringVar(&cmd.did, "did", "", "DID")
 	flag.BoolVar(&cmd.enableAuth, "enableAuth", false, "Enable authentication")
+	flag.StringVar(&cmd.token, "token", "", "Token name")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -319,6 +330,12 @@ func Run(args []string) {
 
 	cmd.log = logger.New(logOptions)
 
+	cmd.c, err = client.NewClient(&srvcfg.Config{ServerAddress: cmd.addr, ServerPort: cmd.port}, cmd.log)
+	if err != nil {
+		cmd.log.Error("Failed to create client")
+		return
+	}
+
 	switch cmdName {
 	case VersionCmd:
 		showVersion()
@@ -356,6 +373,8 @@ func Run(args []string) {
 		cmd.TransferRBT()
 	case GetAccountInfoCmd:
 		cmd.GetAccountInfo()
+	case DumpTokenChainCmd:
+		cmd.dumpTokenChain()
 	default:
 		cmd.log.Error("Invalid command")
 	}

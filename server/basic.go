@@ -6,11 +6,12 @@ import (
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 // BasicResponse will send basic mode response
 func (s *Server) BasicResponse(req *ensweb.Request, status bool, msg string, result interface{}) *ensweb.Result {
-	resp := Response{
+	resp := model.BasicResponse{
 		Status:  status,
 		Message: msg,
 		Result:  result,

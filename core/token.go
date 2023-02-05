@@ -218,7 +218,7 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &TCBSyncReply{Status: true, Message: "Got all blocks", TCBlock: blks, NextBlockID: nextID}, http.StatusOK)
 }
 
-func (c *Core) syncTokenChainFrom(address string, token string) error {
+func (c *Core) syncTokenChainFrom(address string, cb *block.Block, token string) error {
 	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
@@ -236,6 +236,15 @@ func (c *Core) syncTokenChainFrom(address string, token string) error {
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
 			return err
+		}
+		pblkID, err := cb.GetPrevBlockID(token)
+		if err != nil {
+			c.log.Error("Failed to get previous block id", "err", err)
+			return err
+		}
+		if blkID == pblkID {
+			c.log.Debug("Blokcs are already synced", "blkid", blkID)
+			return nil
 		}
 	}
 	tr := TCBSyncRequest{
@@ -259,6 +268,7 @@ func (c *Core) syncTokenChainFrom(address string, token string) error {
 				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
 				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
 			}
+			c.log.Debug("Got tokens", "map", blk.GetBlockMap())
 			err = c.w.AddTokenBlock(token, blk)
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err)

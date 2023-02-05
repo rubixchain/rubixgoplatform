@@ -21,16 +21,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-const (
-	DIDImgFile       string = "DID.png"
-	PvtShareImgFile  string = "pvtShare.png"
-	PubShareImgFile  string = "pubShare.png"
-	PvtKeyFile       string = "pvtKey.pem"
-	PubKeyFile       string = "pubKey.pem"
-	QuorumPvtKeyFile string = "quorumPrivKey.pem"
-	QuorumPubKeyFile string = "quorumPubKey.pem"
-)
-
 type DIDChan struct {
 	ID      string
 	InChan  chan interface{}
@@ -120,7 +110,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			}
 		}
 
-		err = util.CreatePNGImage(outPixels, w, h, dirName+"/public/"+DIDImgFile)
+		err = util.CreatePNGImage(outPixels, w, h, dirName+"/public/"+DIDImgFileName)
 		if err != nil {
 			d.log.Error("failed to create image", "err", err)
 			return "", err
@@ -133,7 +123,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			pvtShare = append(pvtShare, pvS...)
 			pubShare = append(pubShare, pbS...)
 		}
-		err = util.CreatePNGImage(pvtShare, w*4, h*2, dirName+"/private/"+PvtShareImgFile)
+		err = util.CreatePNGImage(pvtShare, w*4, h*2, dirName+"/private/"+PvtShareFileName)
 		if err != nil {
 			d.log.Error("failed to create image", "err", err)
 			return "", err
@@ -145,7 +135,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		}
 	}
 	if didCreate.Type == WalletDIDMode {
-		_, err := util.Filecopy(didCreate.DIDImgFile, dirName+"/public/"+DIDImgFile)
+		_, err := util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
 		if err != nil {
 			d.log.Error("failed to copy did image", "err", err)
 			return "", err
@@ -166,16 +156,16 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			d.log.Error("failed to create keypair", "err", err)
 			return "", err
 		}
-		err = util.FileWrite(dirName+"/private/"+PvtKeyFile, pvtKey)
+		err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
 		if err != nil {
 			return "", err
 		}
-		err = util.FileWrite(dirName+"/public/"+PubKeyFile, pubKey)
+		err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
 		if err != nil {
 			return "", err
 		}
 	} else {
-		_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFile)
+		_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFileName)
 		if err != nil {
 			d.log.Error("failed to copy pub key", "err", err)
 			return "", err
@@ -195,11 +185,11 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		d.log.Error("failed to create keypair", "err", err)
 		return "", err
 	}
-	err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFile, pvtKey)
+	err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
 	if err != nil {
 		return "", err
 	}
-	err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFile, pubKey)
+	err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
 	if err != nil {
 		return "", err
 	}
