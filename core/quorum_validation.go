@@ -2,67 +2,70 @@ package core
 
 import (
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/did"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func (c *Core) validateTokenOwnership(cr *ConensusRequest) bool {
+func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) bool {
 	// ::TODO:: Need to implement
-	for i := range cr.WholeTokens {
-		c.log.Debug("Finding dht", "token", cr.WholeTokens[i])
-		ids, err := c.GetDHTddrs(cr.WholeTokens[i])
+	wt := sc.GetWholeTokens()
+	wtdID := sc.GetWholeTokensID()
+	for i := range wt {
+		c.log.Debug("Finding dht", "token", wt[i])
+		ids, err := c.GetDHTddrs(wt[i])
 		if err != nil || len(ids) == 0 {
 			continue
 		}
 	}
-	for i := range cr.WholeTokens {
-		blk := cr.WholeTCBlocks[i]
-		if blk == nil {
+	address := cr.SenderPeerID + "." + sc.GetSenderDID()
+	for i := range wt {
+		err := c.syncTokenChainFrom(address, wtdID[i], wt[i])
+		if err != nil {
+			c.log.Error("Failed to sync token chain block", "err", err)
+			return false
+		}
+		b := c.w.GetLatestTokenBlock(wt[i])
+		if b == nil {
 			c.log.Error("Invalid token chain block")
 			return false
 		}
-		b := block.InitBlock(block.TokenBlockType, blk, nil)
-		h, s, err := b.GetHashSig()
+		signers, err := b.GetSigner()
 		if err != nil {
-			c.log.Error("Failed to get hash & signature", "err", err)
+			c.log.Error("Failed to signers", "err", err)
 			return false
 		}
-		ch, err := b.GetHash()
-		if err != nil {
-			c.log.Error("Failed to calculate block hash", "err", err)
-			return false
-		}
-		if h != ch {
-			c.log.Error("Calculated block hash is not matching", "ch", ch, "rh", h)
-			return false
-		}
-		var dc did.DIDCrypto
-		switch b.GetTransType() {
-		case wallet.TokenGeneratedType:
-			if !c.testNet {
-				c.log.Error("Invalid token on main net")
+		for _, signer := range signers {
+			h, s, err := b.GetHashSig(signer)
+			if err != nil {
+				c.log.Error("Failed to get hash & signature", "err", err)
 				return false
 			}
-			dc = c.SetupForienDID(cr.SenderDID)
-		case wallet.TokenTransferredType:
-			dc = c.SetupForienDID(b.GetSenderDID())
-		// ::TODO:: need to add other verification
-		default:
-			return false
-		}
-		if !c.validateSignature(dc, h, s) {
-			return false
+			var dc did.DIDCrypto
+			switch b.GetTransType() {
+			case block.TokenGeneratedType:
+				dc, err = c.SetupForienDID(signer)
+			default:
+				dc, err = c.SetupForienDIDQuorum(signer)
+			}
+
+			if err != nil {
+				c.log.Error("Failed to get did", "err", err)
+				return false
+			}
+			if !c.validateSignature(dc, h, s) {
+				return false
+			}
 		}
 	}
-	// for i := range cr.WholeTokens {
+	// for i := range wt {
 	// 	c.log.Debug("Requesting Token status")
 	// 	ts := TokenPublish{
-	// 		Token: cr.WholeTokens[i],
+	// 		Token: wt[i],
 	// 	}
 	// 	c.ps.Publish(TokenStatusTopic, &ts)
-	// 	c.log.Debug("Finding dht", "token", cr.WholeTokens[i])
-	// 	ids, err := c.GetDHTddrs(cr.WholeTokens[i])
+	// 	c.log.Debug("Finding dht", "token", wt[i])
+	// 	ids, err := c.GetDHTddrs(wt[i])
 	// 	if err != nil || len(ids) == 0 {
 	// 		c.log.Error("Failed to find token owner", "err", err)
 	// 		crep.Message = "Failed to find token owner"
@@ -70,7 +73,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest) bool {
 	// 	}
 	// 	if len(ids) > 1 {
 	// 		// ::TODO:: to more check to findout right pwner
-	// 		c.log.Error("Mutiple owner found for the token", "token", cr.WholeTokens, "owners", ids)
+	// 		c.log.Error("Mutiple owner found for the token", "token", wt, "owners", ids)
 	// 		crep.Message = "Mutiple owner found for the token"
 	// 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	// 	} else {

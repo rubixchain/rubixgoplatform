@@ -12,18 +12,43 @@ import (
 
 // DIDQuorum will handle basic DID
 type DIDQuorum struct {
-	did string
-	dir string
-	pwd string
+	did     string
+	dir     string
+	pwd     string
+	privKey enscrypt.PrivateKey
+	pubKey  enscrypt.PublicKey
 }
 
 // InitDIDBasic will return the basic did handle
 func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
-	return &DIDQuorum{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
+	d := &DIDQuorum{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
+	if d.pwd != "" {
+		privKey, err := ioutil.ReadFile(d.dir + QuorumPvtKeyFileName)
+		if err != nil {
+			return nil
+		}
+		d.privKey, _, err = enscrypt.DecodeKeyPair(d.pwd, privKey, nil)
+		if err != nil {
+			return nil
+		}
+	}
+
+	pubKey, err := ioutil.ReadFile(d.dir + QuorumPubKeyFileName)
+	if err != nil {
+		return nil
+	}
+	_, d.pubKey, err = enscrypt.DecodeKeyPair("", nil, pubKey)
+	if err != nil {
+		return nil
+	}
+	return d
 }
 
 // Sign will return the singature of the DID
 func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
+	if d.privKey == nil {
+		return nil, nil, fmt.Errorf("private key is not initialized")
+	}
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
 	if err != nil {
@@ -38,20 +63,8 @@ func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 	finalPos := randPosObject.PosForSign
 	pvtPos := util.GetPrivatePositions(finalPos, ps)
 	pvtPosStr := util.IntArraytoStr(pvtPos)
-
-	//create a signature using the private key
-	//1. read and extrqct the private key
-	privKey, err := ioutil.ReadFile(d.dir + QuorumPvtKeyFileName)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	PrivateKey, _, err := enscrypt.DecodeKeyPair(d.pwd, privKey, nil)
-	if err != nil {
-		return nil, nil, err
-	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
-	pvtKeySign, err := enscrypt.Sign(PrivateKey, []byte(hashPvtSign))
+	pvtKeySign, err := enscrypt.Sign(d.privKey, []byte(hashPvtSign))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -97,27 +110,25 @@ func (d *DIDQuorum) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (b
 	if !bytes.Equal(cb, db) {
 		return false, fmt.Errorf("failed to verify")
 	}
-
-	//create a signature using the private key
-	//1. read and extrqct the private key
-	pubKey, err := ioutil.ReadFile(d.dir + QuorumPubKeyFileName)
-	if err != nil {
-		return false, err
-	}
-	_, pubKeyByte, err := enscrypt.DecodeKeyPair("", nil, pubKey)
-	if err != nil {
-		return false, err
-	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !enscrypt.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
+	if !enscrypt.Verify(d.pubKey, []byte(hashPvtSign), pvtKeySIg) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
 }
-
 func (d *DIDQuorum) PvtSign(hash []byte) ([]byte, error) {
-	return nil, nil
+	if d.privKey == nil {
+		return nil, fmt.Errorf("private key is not initialized")
+	}
+	ps, err := enscrypt.Sign(d.privKey, hash)
+	if err != nil {
+		return nil, err
+	}
+	return ps, nil
 }
 func (d *DIDQuorum) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	return false, nil
+	if !enscrypt.Verify(d.pubKey, hash, sign) {
+		return false, fmt.Errorf("failed to verify private key singature")
+	}
+	return true, nil
 }

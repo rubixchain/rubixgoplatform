@@ -124,3 +124,14 @@ func (c *Client) SignatureResponse(sr *did.SignRespData) (*model.BasicResponse, 
 	}
 	return &br, nil
 }
+
+func (c *Client) RegisterDID(didStr string) (*model.BasicResponse, error) {
+	m := make(map[string]interface{})
+	m["did"] = didStr
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("POST", server.APIRegisterDID, nil, &m, &rm)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}

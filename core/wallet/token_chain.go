@@ -12,6 +12,12 @@ const (
 	TokenStatusStorage string = "TokenStatus"
 )
 
+const (
+	WholeTokenType string = "wt"
+	PartTokenType  string = "pt"
+	NFTType        string = "nft"
+)
+
 const TCBlockCountLimit int = 100
 
 const (
@@ -22,12 +28,12 @@ const (
 	TokenGeneratedType   string = "token_generated"
 )
 
-func tcsPrefix(token string) string {
-	return token + "-"
+func tcsPrefix(tokenType string, token string) string {
+	return tokenType + "-" + token + "-"
 }
 
-func tcsKey(token string, blockID string) string {
-	return token + "-" + blockID
+func tcsKey(tokenType string, token string, blockID string) string {
+	return tokenType + "-" + token + "-" + blockID
 }
 
 func tcsBlockID(token string, key string) string {
@@ -40,7 +46,7 @@ func tcsBlockID(token string, key string) string {
 
 // GetTokenBlock get token chain block from the storage
 func (w *Wallet) GetTokenBlock(token string, blockID string) ([]byte, error) {
-	v, err := w.tcs.Get([]byte(tcsKey(token, blockID)), nil)
+	v, err := w.tcs.Get([]byte(tcsKey(WholeTokenType, token, blockID)), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -49,12 +55,12 @@ func (w *Wallet) GetTokenBlock(token string, blockID string) ([]byte, error) {
 
 // GetAllTokenBlocks get the tokecn chain blocks
 func (w *Wallet) GetAllTokenBlocks(token string, blockID string) ([][]byte, string, error) {
-	iter := w.tcs.NewIterator(util.BytesPrefix([]byte(tcsPrefix(token))), nil)
+	iter := w.tcs.NewIterator(util.BytesPrefix([]byte(tcsPrefix(WholeTokenType, token))), nil)
 	defer iter.Release()
 	blks := make([][]byte, 0)
 	count := 0
 	if blockID != "" {
-		if !iter.Seek([]byte(tcsKey(token, blockID))) {
+		if !iter.Seek([]byte(tcsKey(WholeTokenType, token, blockID))) {
 			return nil, "", fmt.Errorf("Token chain block does not exist")
 		}
 	}
@@ -78,17 +84,17 @@ func (w *Wallet) GetAllTokenBlocks(token string, blockID string) ([][]byte, stri
 }
 
 // GetLatestTokenBlock get latest token block from the storage
-func (w *Wallet) GetLatestTokenBlock(token string) (*block.Block, error) {
-	iter := w.tcs.NewIterator(util.BytesPrefix([]byte(tcsPrefix(token))), nil)
+func (w *Wallet) GetLatestTokenBlock(token string) *block.Block {
+	iter := w.tcs.NewIterator(util.BytesPrefix([]byte(tcsPrefix(WholeTokenType, token))), nil)
 	defer iter.Release()
 	if iter.Last() {
 		v := iter.Value()
 		blk := make([]byte, len(v))
 		copy(blk, v)
 		b := block.InitBlock(block.TokenBlockType, blk, nil)
-		return b, nil
+		return b
 	}
-	return nil, nil
+	return nil
 }
 
 // AddTokenBlock will write token block into storage
@@ -97,12 +103,8 @@ func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
 	if err != nil {
 		return err
 	}
-	key := tcsKey(token, bid)
-	lb, err := w.GetLatestTokenBlock(token)
-	if err != nil {
-		w.log.Error("Failed to get latest block", "err", err)
-		return err
-	}
+	key := tcsKey(WholeTokenType, token, bid)
+	lb := w.GetLatestTokenBlock(token)
 	bn, err := b.GetBlockNumber(token)
 	if err != nil {
 		w.log.Error("Failed to get block number", "err", err)

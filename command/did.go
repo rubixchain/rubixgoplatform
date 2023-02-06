@@ -139,6 +139,28 @@ func (cmd *Command) GetAllDID() {
 	cmd.log.Info("Got all DID successfully")
 }
 
+func (cmd *Command) RegsiterDIDCmd() {
+	br, err := cmd.c.RegisterDID(cmd.did)
+
+	if err != nil {
+		cmd.log.Error("Failed to register DID", "err", err)
+		return
+	}
+
+	if !br.Status {
+		cmd.log.Error("Failed to register DID", "msg", br.Message)
+		return
+	}
+
+	msg, status := cmd.SignatureResponse(br)
+
+	if !status {
+		cmd.log.Error("Failed to register DID, " + msg)
+		return
+	}
+	cmd.log.Info("DID registered successfully")
+}
+
 func (cmd *Command) SignatureResponse(br *model.BasicResponse) (string, bool) {
 	pwdSet := false
 	password := cmd.privPWD

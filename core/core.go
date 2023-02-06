@@ -32,6 +32,7 @@ const (
 	APIQuorumCredit      string = "/api/quorum-credit"
 	APIReqPledgeToken    string = "/api/req-pledge-token"
 	APIUpdatePledgeToken string = "/api/update-pledge-token"
+	APISignatureRequest  string = "/api/signature-request"
 	APISendReceiverToken string = "/api/send-receiver-token"
 	APISyncTokenChain    string = "/api/sync-token-chain"
 )
@@ -210,7 +211,7 @@ func (c *Core) SetupCore() error {
 	}
 	c.w.SetupWallet(c.ipfs)
 	c.PingSetup()
-	c.PeerStatusSetup()
+	c.peerSetup()
 	c.SetupToken()
 	c.QuroumSetup()
 	return nil
@@ -428,8 +429,20 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	}
 }
 
-func (c *Core) SetupForienDID(didStr string) did.DIDCrypto {
-	return did.InitDIDBasic(didStr, c.cfg.DirPath+"/Rubix", nil)
+func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
+	err := c.FetchDID(didStr)
+	if err != nil {
+		return nil, err
+	}
+	return did.InitDIDBasic(didStr, c.cfg.DirPath+"/Rubix", nil), nil
+}
+
+func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
+	err := c.FetchDID(didStr)
+	if err != nil {
+		return nil, err
+	}
+	return did.InitDIDQuorumc(didStr, c.cfg.DirPath+"/Rubix", ""), nil
 }
 
 func (c *Core) FetchDID(did string) error {

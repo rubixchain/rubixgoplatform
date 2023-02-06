@@ -49,6 +49,7 @@ const (
 	GetAccountInfoCmd     string = "getaccountinfo"
 	SetupServiceCmd       string = "setupservice"
 	DumpTokenChainCmd     string = "dumptokenchain"
+	RegsiterDIDCmd        string = "registerdid"
 )
 
 var commands = []string{VersionCmd,
@@ -69,7 +70,8 @@ var commands = []string{VersionCmd,
 	TransferRBTCmd,
 	GetAccountInfoCmd,
 	SetupServiceCmd,
-	DumpTokenChainCmd}
+	DumpTokenChainCmd,
+	RegsiterDIDCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -88,7 +90,8 @@ var commandsHelp = []string{"To get tool version",
 	"This command will trasnfer RBT",
 	"This command will help to get account information",
 	"This command enable explorer service on the node",
-	"This command will dump the token chain into file"}
+	"This command will dump the token chain into file",
+	"This command will register DID peer map across the network"}
 
 type Command struct {
 	cfg          config.Config
@@ -254,7 +257,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.quorumPWD, "quorumPWD", "mypassword", "Quorum key password")
 	flag.StringVar(&cmd.imgFile, "imgFile", did.ImgFileName, "DID creation image")
 	flag.StringVar(&cmd.didImgFile, "didImgFile", did.DIDImgFileName, "DID image")
-	flag.StringVar(&cmd.privImgFile, "privImgFile", did.PubShareFileName, "DID public share image")
+	flag.StringVar(&cmd.privImgFile, "privImgFile", did.PvtShareFileName, "DID public share image")
 	flag.StringVar(&cmd.pubImgFile, "pubImgFile", did.PubShareFileName, "DID public share image")
 	flag.StringVar(&cmd.privKeyFile, "privKeyFile", did.PvtKeyFileName, "Private key file")
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
@@ -375,6 +378,8 @@ func Run(args []string) {
 		cmd.GetAccountInfo()
 	case DumpTokenChainCmd:
 		cmd.dumpTokenChain()
+	case RegsiterDIDCmd:
+		cmd.RegsiterDIDCmd()
 	default:
 		cmd.log.Error("Invalid command")
 	}

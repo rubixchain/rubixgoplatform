@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/did"
@@ -108,4 +109,35 @@ func (s *Server) validateDIDAccess(req *ensweb.Request, did string) bool {
 	} else {
 		return true
 	}
+}
+
+func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
+	var m map[string]interface{}
+	err := s.ParseJSON(req, &m)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to parse input", nil)
+	}
+	di, ok := m["did"]
+	if !ok {
+		return s.BasicResponse(req, false, "Failed to parse input", nil)
+	}
+	didStr, ok := di.(string)
+	if !ok {
+		return s.BasicResponse(req, false, "Failed to parse input", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.handleWebRequest(req.ID)
+	err = s.c.RegisterDID(req.ID, didStr)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	br := model.BasicResponse{
+		Status:  true,
+		Message: "DID registered successfully",
+	}
+	dc := s.c.GetWebReq(req.ID)
+	dc.OutChan <- br
+	time.Sleep(time.Millisecond * 10)
+	s.c.RemoveWebReq(req.ID)
+	return nil
 }

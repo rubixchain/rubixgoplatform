@@ -8,6 +8,7 @@ import (
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/contract"
 	didcrypto "github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -32,16 +33,22 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
-	err := c.FetchDID(cr.SenderDID)
+	sc := contract.InitContract(cr.ContractBlock, nil)
+	// setup the did to verify the signature
+	dc, err := c.SetupForienDID(sc.GetSenderDID())
 	if err != nil {
 		c.log.Error("Failed to get DID", "err", err)
 		crep.Message = "Failed to get DID"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	// setup the did to verify the signature
-	dc := c.SetupForienDID(cr.SenderDID)
-	authHash := util.CalculateHashString(util.ConvertToJson(cr.WholeTokens)+util.ConvertToJson(cr.WholeTokenChain)+util.ConvertToJson(cr.PartTokens)+util.ConvertToJson(cr.PartTokenChain)+cr.ReceiverDID+cr.SenderDID+cr.Comment, "SHA3-256")
-	ok, err := dc.Verify(authHash, cr.ShareSig, cr.PrivSig)
+	authHash, ssig, psig, err := sc.GetHashSig()
+	if err != nil {
+		c.log.Error("Invalid smart contract, failed to get hash & signature", "err", err)
+		crep.Message = "Invalid smart contract, failed to get hash & signature"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	ok, err := dc.Verify(authHash, util.StrToHex(ssig), util.StrToHex(psig))
 	if err != nil || !ok {
 		c.log.Error("Failed to verify sender signature", "err", err)
 		crep.Message = "Failed to verify sender signature"
@@ -49,15 +56,13 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	}
 
 	// check token ownership
-	if !c.validateTokenOwnership(cr) {
+	if !c.validateTokenOwnership(cr, sc) {
 		c.log.Error("Token ownership check failed")
 		crep.Message = "Token ownership check failed"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-
-	qHash := util.CalculateHashString(authHash+cr.ReceiverDID, "SHA3-256")
-
-	qsb, ppb, err := qdc.Sign(qHash)
+	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
+	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
@@ -75,7 +80,6 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var cr ConensusRequest
 	err := c.l.ParseJSON(req, &cr)
-	c.log.Debug("Conensus", "did", did)
 	crep := ConensusReply{
 		ReqID:  cr.ReqID,
 		Status: false,
@@ -135,9 +139,9 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	for i := 0; i < tl; i++ {
 		presp.Tokens = append(presp.Tokens, wt[i].TokenID)
-		tc, err := c.w.GetLatestTokenBlock(wt[i].TokenID)
-		if err != nil || tc == nil {
-			c.log.Error("Failed to get latest token chain block", "err", err)
+		tc := c.w.GetLatestTokenBlock(wt[i].TokenID)
+		if tc == nil {
+			c.log.Error("Failed to get latest token chain block")
 			crep.Message = "Failed to get latest token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
@@ -164,8 +168,15 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Invalid token chain block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
 	for _, t := range sr.WholeTokens {
-		err = c.syncTokenChainFrom(sr.Address, b, t)
+		pblkID, err := b.GetPrevBlockID(t)
+		if err != nil {
+			c.log.Error("Failed to sync token chain block, missing previous block id", "err", err)
+			crep.Message = "Failed to sync token chain block, missing previous block id"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		err = c.syncTokenChainFrom(sr.Address, pblkID, t)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			crep.Message = "Failed to sync token chain block"
@@ -182,6 +193,50 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 	crep.Status = true
 	crep.Message = "Token recved successfully"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
+}
+
+func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
+	did := c.l.GetQuerry(req, "did")
+	var sr SignatureRequest
+	err := c.l.ParseJSON(req, &sr)
+	srep := SignatureReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	if err != nil {
+		c.log.Error("Failed to parse json request", "err", err)
+		srep.Message = "Failed to parse json request"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	dc, ok := c.qc[did]
+	if !ok {
+		c.log.Error("Failed to setup quorum crypto")
+		srep.Message = "Failed to setup quorum crypto"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	b := block.InitBlock(block.TokenBlockType, sr.TokenChainBlock, nil, block.NoSignature())
+	if b == nil {
+		c.log.Error("Failed to do signature, invalid token chain block")
+		srep.Message = "Failed to do signature, invalid token chanin block"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	h, err := b.GetHash()
+	if err != nil {
+		c.log.Error("Failed to do signature, invalid token chain block, missing hash", "Err", err)
+		srep.Message = "Failed to do signature, invalid token chain block, missing hash"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	sig, err := dc.PvtSign([]byte(h))
+	if err != nil {
+		c.log.Error("Failed to do signature", "err", err)
+		srep.Message = "Failed to do signature, " + err.Error()
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	srep.Signature = sig
+	srep.Status = true
+	srep.Message = "Signature done"
+	return c.l.RenderJSON(req, &srep, http.StatusOK)
 }
 
 func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
@@ -211,9 +266,9 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	ctcb := make(map[string]*block.Block)
 	for _, t := range ur.PledgedTokens {
-		lb, err := c.w.GetLatestTokenBlock(t)
-		if err != nil || lb == nil {
-			c.log.Error("Failed to get token chain block", "err", err)
+		lb := c.w.GetLatestTokenBlock(t)
+		if lb == nil {
+			c.log.Error("Failed to get token chain block")
 			crep.Message = "Failed to get token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
@@ -237,7 +292,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to get quorum signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	err = nb.UpdateSignature(util.HexToStr(sig))
+	err = nb.UpdateSignature(did, util.HexToStr(sig))
 	if err != nil {
 		c.log.Error("Failed to update signature to block", "err", err)
 		crep.Message = "Failed to update signature to block"

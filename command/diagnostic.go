@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func tcMarshal(str string, m interface{}) (string, error) {
@@ -87,6 +88,8 @@ func tcMarshal(str string, m interface{}) (string, error) {
 			}
 		}
 		str = str + "]"
+	case []byte:
+		str = str + "\"" + util.HexToStr(mt) + "\""
 	case string:
 		str = str + "\"" + mt + "\""
 	case []interface{}:

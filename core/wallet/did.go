@@ -7,6 +7,11 @@ type DIDType struct {
 	Config string `gorm:"column:config"`
 }
 
+type DIDPeerMap struct {
+	DID    string `gorm:"column:did;primary_key"`
+	PeerID string `gorm:"column:peer_id"`
+}
+
 func (w *Wallet) CreateDID(dt *DIDType) error {
 	err := w.s.Write(DIDStorage, &dt)
 	if err != nil {
@@ -64,4 +69,25 @@ func (w *Wallet) IsDIDExist(did string) bool {
 		return false
 	}
 	return true
+}
+
+func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
+	var dm DIDPeerMap
+	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
+	if err != nil {
+		dm.DID = did
+		dm.PeerID = peerID
+		return w.s.Write(DIDPeerStorage, &dm)
+	}
+	dm.PeerID = peerID
+	return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+}
+
+func (w *Wallet) GetPeerID(did string) string {
+	var dm DIDPeerMap
+	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
+	if err != nil {
+		return ""
+	}
+	return dm.PeerID
 }

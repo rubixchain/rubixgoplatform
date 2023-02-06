@@ -178,7 +178,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) error {
 			return fmt.Errorf("Failed to get did signature")
 		}
 
-		err = blk.UpdateSignature(util.HexToStr(sig))
+		err = blk.UpdateSignature(did, util.HexToStr(sig))
 		if err != nil {
 			c.log.Error("Failed to update did signature", "err", err)
 			return fmt.Errorf("Failed to update did signature")
@@ -218,18 +218,14 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &TCBSyncReply{Status: true, Message: "Got all blocks", TCBlock: blks, NextBlockID: nextID}, http.StatusOK)
 }
 
-func (c *Core) syncTokenChainFrom(address string, cb *block.Block, token string) error {
+func (c *Core) syncTokenChainFrom(address string, pblkID string, token string) error {
 	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return err
 	}
 	defer p.Close()
-	blk, err := c.w.GetLatestTokenBlock(token)
-	if err != nil {
-		c.log.Error("Failed to token chain block", "err", err)
-		return err
-	}
+	blk := c.w.GetLatestTokenBlock(token)
 	blkID := ""
 	if blk != nil {
 		blkID, err = blk.GetBlockID(token)
@@ -237,13 +233,7 @@ func (c *Core) syncTokenChainFrom(address string, cb *block.Block, token string)
 			c.log.Error("Failed to get block id", "err", err)
 			return err
 		}
-		pblkID, err := cb.GetPrevBlockID(token)
-		if err != nil {
-			c.log.Error("Failed to get previous block id", "err", err)
-			return err
-		}
 		if blkID == pblkID {
-			c.log.Debug("Blokcs are already synced", "blkid", blkID)
 			return nil
 		}
 	}
@@ -268,7 +258,6 @@ func (c *Core) syncTokenChainFrom(address string, cb *block.Block, token string)
 				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
 				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
 			}
-			c.log.Debug("Got tokens", "map", blk.GetBlockMap())
 			err = c.w.AddTokenBlock(token, blk)
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err)

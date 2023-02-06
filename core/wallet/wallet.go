@@ -19,6 +19,7 @@ const (
 	TestPartTokenStorage string = "TestPartTokensTable"
 	TestCreditStorage    string = "TestCreditsTable"
 	DIDStorage           string = "DIDTable"
+	DIDPeerStorage       string = "DIDPeerTable"
 )
 
 type WalletConfig struct {
@@ -103,6 +104,11 @@ func InitWallet(cfg *WalletConfig, log logger.Logger, testNet bool) (*Wallet, er
 	err = w.s.Init(w.creditStorage, &Credit{})
 	if err != nil {
 		w.log.Error("Failed to initialize credit storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(DIDPeerStorage, &DIDPeerMap{})
+	if err != nil {
+		w.log.Error("Failed to initialize DID Peer storage", "err", err)
 		return nil, err
 	}
 	return w, nil

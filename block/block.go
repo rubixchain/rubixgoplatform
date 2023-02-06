@@ -39,6 +39,15 @@ const (
 	TCSenderSignKey        string = "senderSign"
 	TCPvtShareKey          string = "pvtShareBits"
 	TCTokenChainBlockKey   string = "tokenChainBlock"
+	TCSmartContractKey     string = "smart_contract"
+)
+
+const (
+	TokenMintedType      string = "token_minted"
+	TokenTransferredType string = "token_transferred"
+	TokenMigratedType    string = "token_migrated"
+	TokenPledgedType     string = "token_pledged"
+	TokenGeneratedType   string = "token_generated"
 )
 
 type TokenChainBlock struct {
@@ -59,22 +68,37 @@ type TokenChainBlock struct {
 	TokensPledgedWith []string               `json:"tokensPledgedWith"`
 	TokensPledgeMap   map[string]interface{} `json:"tokensPledgeMap"`
 	TokenChainDetials map[string]interface{} `json:"tokenChainBlock"`
+	Contract          []byte                 `json:"contract"`
 }
 
 type Block struct {
 	bt int
 	bb []byte
 	bm map[string]interface{}
+	op bool
 }
 
-func InitBlock(bt int, bb []byte, bm map[string]interface{}) *Block {
+type BlockOption func(b *Block)
+
+func NoSignature() BlockOption {
+	// this is the ClientOption function type
+	return func(b *Block) {
+		b.op = true
+	}
+}
+
+func InitBlock(bt int, bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block {
 	b := &Block{
 		bt: bt,
 		bb: bb,
 		bm: bm,
+		op: false,
 	}
 	if b.bb == nil && b.bm == nil {
 		return nil
+	}
+	for _, opt := range opts {
+		opt(b)
 	}
 	var err error
 	if b.bb == nil {
@@ -133,6 +157,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.TokenChainDetials != nil {
 		ntcb[TCTokenChainBlockKey] = tcb.TokenChainDetials
 	}
+	if tcb.Contract != nil {
+		ntcb[TCSmartContractKey] = tcb.Contract
+	}
 	if ctcb == nil {
 		return nil
 	}
@@ -168,8 +195,8 @@ func (b *Block) blkDecode() error {
 	if err != nil {
 		return nil
 	}
-	si, ok := m[TCSignatureKey]
-	if !ok {
+	si, sok := m[TCSignatureKey]
+	if !sok && !b.op {
 		return fmt.Errorf("invalid block, missing signature")
 	}
 	bc, ok := m[TCBlockContentKey]
@@ -182,8 +209,15 @@ func (b *Block) blkDecode() error {
 	if err != nil {
 		return err
 	}
+	if sok {
+		var ksb map[string]interface{}
+		err = cbor.Unmarshal(si.([]byte), &ksb)
+		if err != nil {
+			return err
+		}
+		tcb[TCSignatureKey] = ksb
+	}
 	tcb[TCBlockHashKey] = util.HexToStr(hb)
-	tcb[TCSignatureKey] = util.HexToStr(si.([]byte))
 	b.bm = tcb
 	return nil
 }
@@ -208,7 +242,11 @@ func (b *Block) blkEncode() error {
 	m[TCBlockContentKey] = bc
 	if sok {
 		b.bm[TCSignatureKey] = s
-		m[TCSignatureKey] = util.StrToHex(s.(string))
+		ksm, err := cbor.Marshal(s, cbor.CanonicalEncOptions())
+		if err != nil {
+			return err
+		}
+		m[TCSignatureKey] = ksm
 	}
 	blk, err := cbor.Marshal(m, cbor.CanonicalEncOptions())
 	if err != nil {
@@ -265,7 +303,26 @@ func (b *Block) GetPrevBlockID(t string) (string, error) {
 	return bid.(string), nil
 }
 
-func (b *Block) GetHashSig() (string, string, error) {
+func (b *Block) GetSigner() ([]string, error) {
+	ksmi, ok := b.bm[TCSignatureKey]
+	if !ok {
+		return nil, fmt.Errorf("invalid token chain block, missing block signature")
+	}
+	ksm, ok := ksmi.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid token chain block, missing block signature")
+	}
+	did := make([]string, 0)
+	for k, _ := range ksm {
+		did = append(did, k)
+	}
+	if len(did) == 0 {
+		return nil, fmt.Errorf("invalid token chain block, missing block signature")
+	}
+	return did, nil
+}
+
+func (b *Block) GetHashSig(did string) (string, string, error) {
 	h, ok := b.bm[TCBlockHashKey]
 	if !ok {
 		return "", "", fmt.Errorf("invalid token chain block, missing block hash")
@@ -274,11 +331,40 @@ func (b *Block) GetHashSig() (string, string, error) {
 	if !ok {
 		return "", "", fmt.Errorf("invalid token chain block, missing block signature")
 	}
-	return h.(string), s.(string), nil
+	ks, ok := s.(map[string]interface{})
+	if !ok {
+		ks, ok := s.(map[interface{}]interface{})
+		if !ok {
+			return "", "", fmt.Errorf("invalid signature block")
+		}
+		ksi, ok := ks[did]
+		if !ok {
+			return "", "", fmt.Errorf("invalid signature block")
+		}
+		return h.(string), ksi.(string), nil
+	}
+	ksi, ok := ks[did]
+	if !ok {
+		return "", "", fmt.Errorf("invalid signature block")
+	}
+	return h.(string), ksi.(string), nil
 }
 
-func (b *Block) UpdateSignature(sig string) error {
-	b.bm[TCSignatureKey] = sig
+func (b *Block) UpdateSignature(did string, sig string) error {
+	ksmi, ok := b.bm[TCSignatureKey]
+	if !ok {
+		ksm := make(map[string]interface{})
+		ksm[did] = sig
+		b.bm[TCSignatureKey] = ksm
+		return b.blkEncode()
+	}
+
+	ksm, ok := ksmi.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid signature block")
+	}
+	ksm[did] = sig
+	b.bm[TCSignatureKey] = ksm
 	return b.blkEncode()
 }
 
