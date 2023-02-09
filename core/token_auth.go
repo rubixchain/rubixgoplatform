@@ -83,7 +83,7 @@ func (c *Core) validateWholeToken(wholeTokenName string) (bool, string) {
 
 	c.log.Info("Token Value is " + strconv.Itoa(tokenVal))
 
-	if tokenLevel != -1 {
+	if tokenLevel != -1 && tokenVal != -1 {
 		validationStatus = true
 	} else {
 		return false, "Token Count is invalid"
