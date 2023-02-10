@@ -16,6 +16,7 @@ const (
 	TCTransTypeKey         string = "transactionType"
 	TCBlockNumber          string = "blockNumber"
 	TCOwnerKey             string = "owner"
+	TCMigratedBlockID      string = "migratedBlockID"
 	TCSenderDIDKey         string = "sender"
 	TCReceiverDIDKey       string = "receiver"
 	TCCommentKey           string = "comment"
@@ -53,6 +54,7 @@ const (
 type TokenChainBlock struct {
 	BlockType         int                    `json:"blkType"`
 	TransactionType   string                 `json:"transactionType"`
+	MigratedBlockID   string                 `json:"migratedBlockID"`
 	TokenID           string                 `json:"tokenID"`
 	TokenOwner        string                 `json:"owner"`
 	SenderDID         string                 `json:"sender"`
@@ -129,6 +131,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	}
 	if tcb.TID != "" {
 		ntcb[TCTIDKey] = tcb.TID
+	}
+	if tcb.MigratedBlockID != "" {
+		ntcb[TCMigratedBlockID] = tcb.MigratedBlockID
 	}
 	if len(tcb.WholeTokens) != 0 {
 		ntcb[TCWholeTokensKey] = tcb.WholeTokens

@@ -117,6 +117,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) error {
 			return fmt.Errorf("failed to create rac block")
 		}
 
+		// Assuming bo block token creation
 		ha, err := r[0].GetHash()
 		if err != nil {
 			c.log.Error("Failed to calculate rac hash", "err", err)

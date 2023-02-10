@@ -50,6 +50,8 @@ const (
 	SetupServiceCmd       string = "setupservice"
 	DumpTokenChainCmd     string = "dumptokenchain"
 	RegsiterDIDCmd        string = "registerdid"
+	ShutDownCmd           string = "shutdown"
+	MirgateNodeCmd        string = "migratenode"
 )
 
 var commands = []string{VersionCmd,
@@ -71,7 +73,9 @@ var commands = []string{VersionCmd,
 	GetAccountInfoCmd,
 	SetupServiceCmd,
 	DumpTokenChainCmd,
-	RegsiterDIDCmd}
+	RegsiterDIDCmd,
+	ShutDownCmd,
+	MirgateNodeCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -91,7 +95,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will help to get account information",
 	"This command enable explorer service on the node",
 	"This command will dump the token chain into file",
-	"This command will register DID peer map across the network"}
+	"This command will register DID peer map across the network",
+	"This command will shutdown the rubix node",
+	"This command will migrate node to newer node"}
 
 type Command struct {
 	cfg          config.Config
@@ -380,6 +386,10 @@ func Run(args []string) {
 		cmd.dumpTokenChain()
 	case RegsiterDIDCmd:
 		cmd.RegsiterDIDCmd()
+	case ShutDownCmd:
+		cmd.ShutDownCmd()
+	case MirgateNodeCmd:
+		cmd.MigrateNodeCmd()
 	default:
 		cmd.log.Error("Invalid command")
 	}

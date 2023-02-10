@@ -43,6 +43,15 @@ func NewPeerManager(startPort uint16, maxNumPort uint16, ipfs *ipfsnode.Shell, l
 		startPort: startPort,
 		bootStrap: bootStrap,
 	}
+	for _, bs := range p.bootStrap {
+		_, bsID := path.Split(bs)
+		err := p.ipfs.SwarmConnect(context.Background(), "/ipfs/"+bsID)
+		if err == nil {
+			p.log.Info("Bootstrap swarm connected")
+		} else {
+			p.log.Error("Bootstrap swarm failed to connect")
+		}
+	}
 	return p
 }
 
@@ -76,6 +85,7 @@ func (pm *PeerManager) SwarmConnect(peerID string) bool {
 	}
 	for _, bs := range pm.bootStrap {
 		_, bsID := path.Split(bs)
+		pm.log.Debug(bsID)
 		err := pm.ipfs.SwarmConnect(context.Background(), "/ipfs/"+bsID)
 		if err != nil {
 			pm.log.Error("failed to connect bootstrap peer", "BootStrap", bsID, "err", err)

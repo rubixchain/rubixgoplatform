@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -135,29 +136,53 @@ func (c *Core) configIPFS() error {
 // runIPFS will run the IPFS
 func (c *Core) runIPFS() {
 	cmd := exec.Command(c.ipfsApp, "daemon", "--enable-pubsub-experiment")
-	done := make(chan error, 1)
 	c.SetIPFSState(true)
 
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		c.log.Error("failed to open command stdout", "err", err)
+		panic(err)
+	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		c.log.Error("failed to open command stdin", "err", err)
+		panic(err)
+	}
+	c.log.Info("Waiting for IPFS daemon to start")
+	err = cmd.Start()
+	if err != nil {
+		c.log.Error("failed to start command", "err", err)
+		panic(err)
+	}
+
 	go func() {
-		done <- cmd.Run()
-	}()
-	go func() {
-		select {
-		case err := <-done:
-			if err != nil {
-				c.log.Error("failed to run ipfs daemon", "err", err)
-			}
-		case <-c.ipfsChan:
-			if err := cmd.Process.Kill(); err != nil {
-				c.log.Error("failed to kill ipfs daemon", "err", err)
-			}
-			c.log.Info("IPFS daemon requested to close")
+		<-c.ipfsChan
+		if err := cmd.Process.Kill(); err != nil {
+			c.log.Error("failed to kill ipfs daemon", "err", err)
 		}
+		c.log.Info("IPFS daemon requested to close")
 		c.log.Info("IPFS daemon finished")
 		c.SetIPFSState(false)
 	}()
-	c.log.Info("Waiting for IPFS daemon to start")
-	time.Sleep(15 * time.Second)
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		m := scanner.Text()
+		if m == "Daemon is ready" {
+			c.log.Info("IPFS Daemon is ready")
+			break
+		}
+		if strings.Contains(m, "Found outdated fs-repo") {
+			c.log.Info("IPFS repo needs update")
+			b := make([]byte, 2)
+			b[0] = 121
+			b[1] = 13
+			stdin.Write(b)
+		}
+		c.log.Info(m)
+	}
+
+	//time.Sleep(15 * time.Second)
 }
 
 // RunIPFS will run the IPFS daemon
