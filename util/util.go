@@ -108,6 +108,21 @@ func FileWrite(fileName string, data []byte) error {
 	return nil
 }
 
+func GetAllFiles(root string) ([]string, error) {
+	var files []string
+	fs, err := ioutil.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, f := range fs {
+		if !f.IsDir() {
+			files = append(files, f.Name())
+		}
+	}
+	return files, nil
+}
+
 func RandomPositions(role string, hash string, numOfPositions int, pvt1 []int) *RandPos {
 	var u, l, m int = 0, 0, 0
 

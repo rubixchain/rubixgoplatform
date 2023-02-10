@@ -336,16 +336,16 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		c.log.Error("Failed to create did in the wallet", "err", err)
 		return "", err
 	}
-	exp := model.ExploreModel{
-		Cmd:     ExpDIDPeerMapCmd,
-		DIDList: []string{did},
-		PeerID:  c.peerID,
-		Message: "DID Created Successfully",
-	}
-	err = c.PublishExplorer(&exp)
-	if err != nil {
-		return "", err
-	}
+	// exp := model.ExploreModel{
+	// 	Cmd:     ExpDIDPeerMapCmd,
+	// 	DIDList: []string{did},
+	// 	PeerID:  c.peerID,
+	// 	Message: "DID Created Successfully",
+	// }
+	// err = c.PublishExplorer(&exp)
+	// if err != nil {
+	// 	return "", err
+	// }
 	return did, nil
 }
 

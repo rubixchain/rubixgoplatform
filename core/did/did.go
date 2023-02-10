@@ -225,6 +225,104 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	return did, nil
 }
 
+func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
+	t1 := time.Now()
+	temp := uuid.New()
+	dirName := d.dir + "Rubix/" + temp.String()
+	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
+	if err != nil {
+		d.log.Error("failed to create directory", "err", err)
+		return "", err
+	}
+
+	err = os.MkdirAll(dirName+"/private", os.ModeDir|os.ModePerm)
+	if err != nil {
+		d.log.Error("failed to create directory", "err", err)
+		return "", err
+	}
+
+	util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
+	util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
+
+	if didCreate.Type == BasicDIDMode {
+		if didCreate.PrivPWD == "" {
+			d.log.Error("password required for creating", "err", err)
+			return "", err
+		}
+		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.PrivPWD})
+		if err != nil {
+			d.log.Error("failed to create keypair", "err", err)
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
+		if err != nil {
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFileName)
+		if err != nil {
+			d.log.Error("failed to copy pub key", "err", err)
+			return "", err
+		}
+	}
+
+	if didCreate.QuorumPWD == "" {
+		if didCreate.PrivPWD != "" {
+			didCreate.QuorumPWD = didCreate.PrivPWD
+		} else {
+			didCreate.QuorumPWD = DefaultPWD
+		}
+	}
+
+	pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.QuorumPWD})
+	if err != nil {
+		d.log.Error("failed to create keypair", "err", err)
+		return "", err
+	}
+	err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
+	if err != nil {
+		return "", err
+	}
+	err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
+	if err != nil {
+		return "", err
+	}
+
+	did, err := d.getDirHash(dirName + "/public/")
+	if err != nil {
+		return "", err
+	}
+
+	newDIrName := d.dir + "Rubix/" + did
+
+	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
+	if err != nil {
+		d.log.Error("failed to create directory", "err", err)
+		return "", err
+	}
+
+	err = util.DirCopy(dirName+"/public", newDIrName)
+	if err != nil {
+		d.log.Error("failed to copy directory", "err", err)
+		return "", err
+	}
+
+	err = util.DirCopy(dirName+"/private", newDIrName)
+	if err != nil {
+		d.log.Error("failed to copy directory", "err", err)
+		return "", err
+	}
+	os.RemoveAll(dirName)
+	t2 := time.Now()
+	dif := t2.Sub(t1)
+	fmt.Printf("DID : %s, Time to create DID & Keys : %v", did, dif)
+	return did, nil
+}
+
 type object struct {
 	Hash string
 }

@@ -36,6 +36,7 @@ const (
 	APISignatureResponse   string = "/api/signature-response"
 	APIDumpTokenChainBlock string = "/api/dump-token-chain"
 	APIRegisterDID         string = "/api/register-did"
+	APIMigrateNode         string = "/api/migrate-node"
 )
 
 // Server defines server handle
@@ -203,6 +204,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, s.ErrorFunc))
 	s.AddRoute(APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, s.ErrorFunc))
 	s.AddRoute(APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, s.ErrorFunc))
+	s.AddRoute(APIMigrateNode, "POST", s.AuthHandle(s.APIMigrateNode, s.ErrorFunc))
 
 }
 
