@@ -284,7 +284,7 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, b *block.B
 				return err
 			}
 			defer os.RemoveAll(dir)
-			err = w.ipfs.Get(wt[i], dir)
+			err = w.Get(wt[i], did, Owner, dir)
 			if err != nil {
 				w.log.Error("Faled to get token", "err", err)
 				return err
@@ -322,6 +322,10 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, b *block.B
 		err = w.s.Update(w.tokenStorage, &t, "token_id=?", wt[i])
 		if err != nil {
 			return err
+		}
+		//Pinnig the whole tokens and pat tokens
+		for i := range wt {
+			w.Pin(wt[i], 1, did)
 		}
 	}
 	// for i := range pt {

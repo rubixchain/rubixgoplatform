@@ -54,7 +54,24 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		crep.Message = "Failed to verify sender signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-
+	//check if token has multiple pins
+	t := sc.GetWholeTokens()
+	for i := range t {
+		multiPincheck, owners, err := c.pinCheck(t[i], cr)
+		if err != nil {
+			c.log.Error("Error occurede", "error", err)
+			crep.Message = "Token multiple Pin check error triggered"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if multiPincheck {
+			c.log.Debug("Token ", "Token", t[i])
+			c.log.Debug("Has Multiple owners", "owners", owners)
+			crep.Message = "Token has multiple owners"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Debug("Token ", "Token", t[i])
+		c.log.Debug("Multiple pin check passed, does not have multiplke owners")
+	}
 	// check token ownership
 	if !c.validateTokenOwnership(cr, sc) {
 		c.log.Error("Token ownership check failed")
