@@ -1,4 +1,4 @@
-package core
+package token
 
 var TokenMap = map[int]int{
 	0:  0,

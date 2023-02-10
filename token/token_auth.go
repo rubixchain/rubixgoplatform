@@ -1,4 +1,4 @@
-package core
+package token
 
 import (
 	"crypto/sha256"
@@ -6,19 +6,28 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
+
+	"github.com/EnsurityTechnologies/logger"
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
-func (c *Core) getWholeTokenValue(wholeTokenName string) (int, string) {
-	response, err := c.ipfs.Cat(wholeTokenName)
+type TokenAuth struct {
+	log  logger.Logger
+	ipfs *ipfsnode.Shell
+}
+
+func (ta *TokenAuth) getWholeTokenValue(wholeTokenName string) (int, string) {
+
+	response, err := ta.ipfs.Cat(wholeTokenName)
 	if err != nil {
-		c.log.Error("Error occured while fetching token content", "error", err)
+		ta.log.Error("Error occured while fetching token content", "error", err)
 		return -1, ""
 	}
 
 	result, err := ioutil.ReadAll(response)
 
 	if err != nil {
-		c.log.Error("Error occured", "error", err)
+		ta.log.Error("Error in reading data", "error", err)
 		return -1, ""
 	}
 
@@ -29,11 +38,11 @@ func (c *Core) getWholeTokenValue(wholeTokenName string) (int, string) {
 	tokenLevel := string(trimmedResult[:len(trimmedResult)-64])
 	tokenCountHash := string(trimmedResult[len(trimmedResult)-64:])
 
-	fmt.Println(len(tokenCountHash), "token len")
+	//fmt.Println(len(tokenCountHash), "token len")
 
 	tokenLevelInt, err := strconv.Atoi(tokenLevel)
 	if err != nil {
-		fmt.Println("Error occured", "error", err)
+		fmt.Println("Error occured while retriving token level", "error", err)
 	}
 	//	fmt.Println("tokenLevelInt is " + strconv.Itoa(tokenLevelInt))
 	//	fmt.Println("tokenCountHash is " + tokenCountHash)
@@ -48,7 +57,7 @@ func calcSHA256(targetHash string, maxNumber int) int {
 		hashString := fmt.Sprintf("%x", hash)
 
 		if strings.Compare(hashString, targetHash) == 0 {
-			fmt.Println("Found:", i)
+			fmt.Println("Hash found at:", i)
 			return i
 		}
 	}
@@ -62,13 +71,13 @@ func maxTokenFromLevel(level int) int {
 	return val
 }
 
-func (c *Core) validateWholeToken(wholeTokenName string) (bool, string) {
+func (ta *TokenAuth) validateWholeToken(wholeTokenName string) (bool, string) {
 
-	tokenLevel, tokenCountHash := c.getWholeTokenValue(wholeTokenName)
+	tokenLevel, tokenCountHash := ta.getWholeTokenValue(wholeTokenName)
 	tokenLevelStatus := false
 	validationStatus := false
 	tokenVal := -1
-	fmt.Println("tokenLevel from validateWholeToken is " + strconv.Itoa(tokenLevel))
+	ta.log.Debug("tokenLevel from validateWholeToken is "+strconv.Itoa(tokenLevel), "debug")
 
 	if _, ok := TokenMap[tokenLevel]; ok {
 		tokenLevelStatus = true
@@ -81,7 +90,7 @@ func (c *Core) validateWholeToken(wholeTokenName string) (bool, string) {
 		tokenVal = calcSHA256(tokenCountHash, maxTokenFromLevel(tokenLevel))
 	}
 
-	c.log.Info("Token Value is " + strconv.Itoa(tokenVal))
+	ta.log.Info("Token Value is " + strconv.Itoa(tokenVal))
 
 	if tokenLevel != -1 && tokenVal != -1 {
 		validationStatus = true
