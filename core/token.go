@@ -187,7 +187,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) error {
 
 		t := &wallet.Token{
 			TokenID:      id,
-			TokenDetials: tk,
+			TokenDetails: tk,
 			DID:          did,
 			TokenChainID: bid,
 			TokenStatus:  wallet.TokenIsFree,

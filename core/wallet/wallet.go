@@ -20,6 +20,9 @@ const (
 	TestCreditStorage    string = "TestCreditsTable"
 	DIDStorage           string = "DIDTable"
 	DIDPeerStorage       string = "DIDPeerTable"
+	TransactionStorage   string = "TransactionHistory"
+	TokensArrayStorage   string = "TokensTransferred"
+	QuorumListStorage    string = "QuorumList"
 	TokenProvider        string = "TokenProviderTable"
 	IPFSFunction         string = "IpfsFunctionTable"
 	UserRole             string = "RoleTable"
@@ -112,6 +115,21 @@ func InitWallet(cfg *WalletConfig, log logger.Logger, testNet bool) (*Wallet, er
 	err = w.s.Init(DIDPeerStorage, &DIDPeerMap{})
 	if err != nil {
 		w.log.Error("Failed to initialize DID Peer storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(TransactionStorage, &TransactionHistory{})
+	if err != nil {
+		w.log.Error("Failed to initialize Transaction storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(TokensArrayStorage, &TokensTransferred{})
+	if err != nil {
+		w.log.Error("Failed to initialize Tokens Array storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(QuorumListStorage, &QuorumList{})
+	if err != nil {
+		w.log.Error("Failed to initialize Quorum List storage", "err", err)
 		return nil, err
 	}
 	err = w.s.Init(TokenProvider, &TokenProviderMap{})

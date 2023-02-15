@@ -216,7 +216,7 @@ func (c *Core) getQuorumList(t int) *config.QuorumList {
 	}
 
 	if len(ql.Alpha) < MinQuorumRequired {
-		c.log.Error("Failed to get required quorur", "al", len(ql.Alpha))
+		c.log.Error("Failed to get required quorum", "al", len(ql.Alpha))
 		return nil
 	}
 	return &ql
@@ -300,11 +300,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		} else {
 			if cs.Result.SuccessCount >= MinConsensusRequired {
 				loop = false
-				c.log.Debug("Conensus finished successfully")
+				c.log.Debug("Consensus finished successfully")
 			} else if cs.Result.RunningCount == 0 {
 				loop = false
 				err = fmt.Errorf("consensus failed")
-				c.log.Error("Conensus failed")
+				c.log.Error("Consensus failed")
 			}
 		}
 		c.qlock.Unlock()
@@ -333,6 +333,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
+
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
 			return err
@@ -356,7 +357,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	return err
 }
 
-func (c *Core) startConensus(id string, qt int) {
+func (c *Core) startConsensus(id string, qt int) {
 	c.qlock.Lock()
 	defer c.qlock.Unlock()
 	cs, ok := c.quorumRequest[id]
@@ -369,7 +370,7 @@ func (c *Core) startConensus(id string, qt int) {
 	}
 }
 
-func (c *Core) finishConensus(id string, qt int, p *ipfsport.Peer, status bool, hash string, ss []byte, ps []byte) {
+func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool, hash string, ss []byte, ps []byte) {
 	c.qlock.Lock()
 	defer c.qlock.Unlock()
 	cs, ok := c.quorumRequest[id]
@@ -421,18 +422,18 @@ func (c *Core) checkQuroumCredits(p *ipfsport.Peer, cr *ConensusRequest, qt int)
 }
 
 func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
-	c.startConensus(cr.ReqID, qt)
+	c.startConsensus(cr.ReqID, qt)
 	p, err := c.getPeer(addr)
 	if err != nil {
 		c.log.Error("Failed to get peer connection", "err", err)
-		c.finishConensus(cr.ReqID, qt, nil, false, "", nil, nil)
+		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)
 		return
 	}
 	//defer p.Close()
 	err = c.initPledgeQuorumToken(cr, p, qt)
 	if err != nil {
 		c.log.Error("Failed to pleadge token", "err", err)
-		c.finishConensus(cr.ReqID, qt, p, false, "", nil, nil)
+		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
 
@@ -445,16 +446,16 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 	var cresp ConensusReply
 	err = p.SendJSONRequest("POST", APIQuorumConsensus, nil, cr, &cresp, true, 10*time.Minute)
 	if err != nil {
-		c.log.Error("Faile to get consensus", "err", err)
-		c.finishConensus(cr.ReqID, qt, p, false, "", nil, nil)
+		c.log.Error("Failed to get consensus", "err", err)
+		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
 	if !cresp.Status {
 		c.log.Error("Faile to get consensus", "msg", cresp.Message)
-		c.finishConensus(cr.ReqID, qt, p, false, "", nil, nil)
+		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
-	c.finishConensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
+	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
 }
 
 func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid string, dc did.DIDCrypto) (*block.Block, error) {
@@ -531,7 +532,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		c.log.Error("Failed to get new block", "err", err)
 		return nil, fmt.Errorf("Failed to get new block")
 	}
-	for k, _ := range pd.PledgedTokens {
+	for k := range pd.PledgedTokens {
 		p, ok := cs.P[k]
 		if !ok {
 			c.log.Error("Invalid pledge request, failed to get peer connection")

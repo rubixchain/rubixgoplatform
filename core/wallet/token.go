@@ -25,13 +25,13 @@ const (
 
 type Token struct {
 	TokenID      string `gorm:"column:token_id;primary_key"`
-	TokenDetials string `gorm:"column:token_detials"`
+	TokenDetails string `gorm:"column:token_details"`
 	DID          string `gorm:"column:did"`
 	TokenChainID string `gorm:"column:token_chain_id"`
 	TokenStatus  int    `gorm:"column:token_status;"`
 }
 
-type TestTokenDetials struct {
+type TestTokenDetails struct {
 	DID      string `json:"column:did"`
 	RandomID []byte `json:"column:random_id"`
 }
@@ -295,7 +295,7 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, b *block.B
 				return err
 			}
 			t = Token{
-				TokenDetials: string(rb),
+				TokenDetails: string(rb),
 				TokenID:      wt[i],
 				DID:          did,
 			}

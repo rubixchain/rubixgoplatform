@@ -162,7 +162,7 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error
 		}
 		tkn := &wallet.Token{
 			TokenID:      t,
-			TokenDetials: string(tk),
+			TokenDetails: string(tk),
 			DID:          did,
 			TokenChainID: bid,
 			TokenStatus:  wallet.TokenIsFree,
