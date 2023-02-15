@@ -20,6 +20,9 @@ const (
 	TestCreditStorage    string = "TestCreditsTable"
 	DIDStorage           string = "DIDTable"
 	DIDPeerStorage       string = "DIDPeerTable"
+	TokenProvider        string = "TokenProviderTable"
+	IPFSFunction         string = "IpfsFunctionTable"
+	UserRole             string = "RoleTable"
 )
 
 type WalletConfig struct {
@@ -109,6 +112,21 @@ func InitWallet(cfg *WalletConfig, log logger.Logger, testNet bool) (*Wallet, er
 	err = w.s.Init(DIDPeerStorage, &DIDPeerMap{})
 	if err != nil {
 		w.log.Error("Failed to initialize DID Peer storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(TokenProvider, &TokenProviderMap{})
+	if err != nil {
+		w.log.Error("Failed to initialize Token Provider Table", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(IPFSFunction, &Function{})
+	if err != nil {
+		w.log.Error("Failed to initialize IPFS Functions Table", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(UserRole, &Role{})
+	if err != nil {
+		w.log.Error("Failed to initialize User Role Table", "err", err)
 		return nil, err
 	}
 	return w, nil

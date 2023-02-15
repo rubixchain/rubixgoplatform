@@ -12,7 +12,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -347,10 +347,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return err
 		}
 		for _, t := range sc.GetWholeTokens() {
-			c.ipfs.Unpin(t)
+			c.w.UnPin(t, wallet.PrevSender, sc.GetSenderDID())
 		}
 		for _, t := range sc.GetPartTokens() {
-			c.ipfs.Unpin(t)
+			c.w.UnPin(t, wallet.PrevSender, sc.GetSenderDID())
 		}
 	}
 	return err

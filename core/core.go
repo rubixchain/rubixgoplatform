@@ -35,6 +35,7 @@ const (
 	APISignatureRequest  string = "/api/signature-request"
 	APISendReceiverToken string = "/api/send-receiver-token"
 	APISyncTokenChain    string = "/api/sync-token-chain"
+	APIDhtProviderCheck  string = "/api/dht-provider-check"
 )
 
 const (
@@ -214,6 +215,7 @@ func (c *Core) SetupCore() error {
 	c.peerSetup()
 	c.SetupToken()
 	c.QuroumSetup()
+	c.PinService()
 	return nil
 }
 

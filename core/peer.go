@@ -126,3 +126,26 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 	// TODO:: Valid the peer version before proceesing
 	return p, nil
 }
+
+/*
+This methos returns the peer connection to the PeerId supplied as Input.
+*/
+func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
+	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
+	if err != nil {
+		return nil, err
+	}
+	/* q := make(map[string]string)
+	q["did"] = ""
+	var ps model.PeerStatusResponse
+	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps, false)
+	if err != nil {
+		return nil, err
+	}
+	if !ps.DIDExists {
+		p.Close()
+		return nil, fmt.Errorf("did not exist with the peer")
+	} */
+	// TODO:: Valid the peer version before proceesing
+	return p, nil
+}

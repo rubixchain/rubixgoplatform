@@ -137,7 +137,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) error {
 		}
 		tk := util.HexToStr(tb)
 		nb := bytes.NewBuffer([]byte(tk))
-		id, err := c.ipfs.Add(nb)
+		id, err := c.w.Add(nb, did, wallet.Owner)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
