@@ -23,6 +23,9 @@ const (
 	TransactionStorage   string = "TransactionHistory"
 	TokensArrayStorage   string = "TokensTransferred"
 	QuorumListStorage    string = "QuorumList"
+	TokenProvider        string = "TokenProviderTable"
+	IPFSFunction         string = "IpfsFunctionTable"
+	UserRole             string = "RoleTable"
 )
 
 type WalletConfig struct {
@@ -129,7 +132,21 @@ func InitWallet(cfg *WalletConfig, log logger.Logger, testNet bool) (*Wallet, er
 		w.log.Error("Failed to initialize Quorum List storage", "err", err)
 		return nil, err
 	}
-
+	err = w.s.Init(TokenProvider, &TokenProviderMap{})
+	if err != nil {
+		w.log.Error("Failed to initialize Token Provider Table", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(IPFSFunction, &Function{})
+	if err != nil {
+		w.log.Error("Failed to initialize IPFS Functions Table", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(UserRole, &Role{})
+	if err != nil {
+		w.log.Error("Failed to initialize User Role Table", "err", err)
+		return nil, err
+	}
 	return w, nil
 }
 

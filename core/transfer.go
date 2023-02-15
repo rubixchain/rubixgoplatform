@@ -40,6 +40,10 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// release the locked tokens before exit
 	defer c.w.ReleaseTokens(wt, pt)
 
+	for i := range wt {
+		c.w.Pin(wt[i].TokenID, wallet.Owner, did)
+	}
+
 	// Get the receiver & do sanity check
 	p, err := c.getPeer(req.Receiver)
 	if err != nil {
