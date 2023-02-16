@@ -306,7 +306,6 @@ func (c *Core) GetAllBootStrap() []string {
 
 func (c *Core) GetDHTddrs(cid string) ([]string, error) {
 	cmd := exec.Command(c.ipfsApp, "dht", "findprovs", cid)
-
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		c.log.Error("failed to open command stdout", "err", err)
