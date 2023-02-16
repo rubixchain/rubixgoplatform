@@ -4,7 +4,32 @@ import (
 	"fmt"
 )
 
-var TCKey = []string{TCTransTypeKey, TCOwnerKey, TCTokensPledgedWithKey, TCTokensPledgedForKey, TCReceiverDIDKey, TCSenderDIDKey, TCCommentKey, TCTokensPledgeMapKey, TCDistributedObjectKey, TCTIDKey, TCPledgeTokenKey, TCGroupKey, TCWholeTokensKey, TCWholeTokensIDKey, TCPartTokensKey, TCPartTokensIDKey, TCQuorumSignatureKey}
+const (
+	OTCTransTypeKey         string = "transactionType"
+	OTCOwnerKey             string = "owner"
+	OTCSenderDIDKey         string = "sender"
+	OTCReceiverDIDKey       string = "receiver"
+	OTCCommentKey           string = "comment"
+	OTCTIDKey               string = "tid"
+	OTCGroupKey             string = "group"
+	OTCWholeTokensKey       string = "wholeTokens"
+	OTCWholeTokensIDKey     string = "wholeTokensID"
+	OTCPartTokensKey        string = "partTokens"
+	OTCPartTokensIDKey      string = "partTokensID"
+	OTCQuorumSignatureKey   string = "quorumSignature"
+	OTCPledgeTokenKey       string = "pledgeToken"
+	OTCTokensPledgedForKey  string = "tokensPledgedFor"
+	OTCTokensPledgedWithKey string = "tokensPledgedWith"
+	OTCTokensPledgeMapKey   string = "tokensPledgeMap"
+	OTCDistributedObjectKey string = "distributedObject"
+	OTCBlockHashKey         string = "hash"
+	OTCSignatureKey         string = "signature"
+	OTCSenderSignKey        string = "senderSign"
+	OTCPvtShareKey          string = "pvtShareBits"
+	OTCTokenChainBlockKey   string = "tokenChainBlock"
+)
+
+var OTCKey = []string{OTCTransTypeKey, OTCOwnerKey, OTCTokensPledgedWithKey, OTCTokensPledgedForKey, OTCReceiverDIDKey, OTCSenderDIDKey, OTCCommentKey, OTCTokensPledgeMapKey, OTCDistributedObjectKey, OTCTIDKey, OTCPledgeTokenKey, OTCGroupKey, OTCWholeTokensKey, OTCWholeTokensIDKey, OTCPartTokensKey, OTCPartTokensIDKey, OTCQuorumSignatureKey}
 
 func tcMarshal(str string, m interface{}, keys []string) (string, error) {
 	var err error
@@ -52,10 +77,10 @@ func tcMarshal(str string, m interface{}, keys []string) (string, error) {
 					}
 					c1 = true
 					str = str + "\"" + k + "\":"
-					if k == TCTokensPledgedWithKey {
+					if k == OTCTokensPledgedWithKey {
 						str, err = tcMarshal(str, v, []string{"node", "tokens"})
-					} else if k == TCTokenChainBlockKey {
-						str, err = tcMarshal(str, v, TCKey)
+					} else if k == OTCTokenChainBlockKey {
+						str, err = tcMarshal(str, v, OTCKey)
 					} else {
 						str, err = tcMarshal(str, v, nil)
 					}

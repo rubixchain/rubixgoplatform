@@ -305,31 +305,61 @@ func (c *Core) GetAllBootStrap() []string {
 }
 
 func (c *Core) GetDHTddrs(cid string) ([]string, error) {
-	resp, err := c.ipfs.Request("dht/findprovs", cid).Send(context.Background())
+	// resp, err := c.ipfs.Request("dht/findprovs", cid).Send(context.Background())
+	// if err != nil {
+	// 	c.log.Error("failed get dht", "err", err)
+	// 	return nil, err
+	// } else {
+	// 	var dht DHTResponse
+	// 	err := resp.Decode(&dht)
+	// 	resp.Close()
+	// 	if err != nil {
+	// 		c.log.Error("failed parse dht response", "err", err)
+	// 		return nil, err
+	// 	}
+	// 	ids := make([]string, 0)
+	// 	c.log.Debug("DHT Addr", "dht", dht)
+	// 	if dht.ID != "" {
+	// 		ids = append(ids, dht.ID)
+	// 		return ids, nil
+	// 	} else if dht.Responses != nil {
+	// 		for i := range dht.Responses {
+	// 			ids = append(ids, dht.Responses[i].ID)
+	// 		}
+	// 		return ids, nil
+	// 	} else {
+	// 		c.log.Error("No dht found", "cid", cid)
+	// 		return nil, fmt.Errorf("no dht found")
+	// 	}
+	// }
+
+	cmd := exec.Command(c.ipfsApp, "dht", "findprovs", cid)
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		c.log.Error("failed get dht", "err", err)
-		return nil, err
-	} else {
-		var dht DHTResponse
-		err := resp.Decode(&dht)
-		resp.Close()
-		if err != nil {
-			c.log.Error("failed parse dht response", "err", err)
-			return nil, err
-		}
-		ids := make([]string, 0)
-		c.log.Debug("DHT Addr", "dht", dht)
-		if dht.ID != "" {
-			ids = append(ids, dht.ID)
-			return ids, nil
-		} else if dht.Responses != nil {
-			for i := range dht.Responses {
-				ids = append(ids, dht.Responses[i].ID)
-			}
-			return ids, nil
-		} else {
-			c.log.Error("No dht found", "cid", cid)
-			return nil, fmt.Errorf("no dht found")
-		}
+		c.log.Error("failed to open command stdout", "err", err)
+		panic(err)
 	}
+	// stdin, err := cmd.StdinPipe()
+	// if err != nil {
+	// 	c.log.Error("failed to open command stdin", "err", err)
+	// 	panic(err)
+	// }
+	c.log.Info("Waiting for IPFS daemon to start")
+	err = cmd.Start()
+	if err != nil {
+		c.log.Error("failed to start command", "err", err)
+		panic(err)
+	}
+	ids := make([]string, 0)
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		m := scanner.Text()
+		c.log.Info(m)
+		if strings.Contains(m, "Error") {
+			return nil, fmt.Errorf(m)
+		}
+		ids = append(ids, m)
+	}
+	return ids, nil
 }

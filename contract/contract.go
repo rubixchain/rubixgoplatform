@@ -11,20 +11,23 @@ const (
 	SCRBTDirectType int = iota
 )
 const (
-	SCTypeKey           string = "type"
-	SCWholeTokensKey    string = "whole_tokens"
-	SCWholeTokensIDKey  string = "whole_tokens_id"
-	SCPartTokensKey     string = "part_tokens"
-	SCPartTokensIDKey   string = "part_tokens_id"
-	SCSenderDIDKey      string = "sender_did"
-	SCReceiverDIDKey    string = "receiver_did"
-	SCCommentKey        string = "comment"
-	SCShareSignatureKey string = "share_signature"
-	SCKeySignatureKey   string = "key_signature"
-	SCBlockContentKey   string = "block_content"
-	SCBlockHashKey      string = "block_hash"
-	SCPledgeModeKey     string = "pledge_mode"
-	SCPledgeDetialsKey  string = "pledge_detials"
+	SCTypeKey           string = "1"
+	SCWholeTokensKey    string = "2"
+	SCWholeTokensIDKey  string = "3"
+	SCPartTokensKey     string = "4"
+	SCPartTokensIDKey   string = "5"
+	SCSenderDIDKey      string = "6"
+	SCReceiverDIDKey    string = "7"
+	SCCommentKey        string = "8"
+	SCPledgeModeKey     string = "9"
+	SCPledgeDetialsKey  string = "10"
+	SCShareSignatureKey string = "97"
+	SCKeySignatureKey   string = "98"
+	SCBlockHashKey      string = "99"
+
+	SCBlockContentKey     string = "1"
+	SCBlockContentSSigKey string = "2"
+	SCBlockContentPSigKey string = "3"
 )
 
 type ContractType struct {
@@ -86,11 +89,11 @@ func (c *Contract) blkDecode() error {
 	if err != nil {
 		return nil
 	}
-	ssi, ok := m[SCShareSignatureKey]
+	ssi, ok := m[SCBlockContentSSigKey]
 	if !ok {
 		return fmt.Errorf("invalid block, missing share signature")
 	}
-	ksi, ok := m[SCKeySignatureKey]
+	ksi, ok := m[SCBlockContentPSigKey]
 	if !ok {
 		return fmt.Errorf("invalid block, missing key signature")
 	}
@@ -135,11 +138,11 @@ func (c *Contract) blkEncode() error {
 	m[SCBlockContentKey] = bc
 	if ssok {
 		c.sm[SCShareSignatureKey] = ss
-		m[SCShareSignatureKey] = util.StrToHex(ss.(string))
+		m[SCBlockContentSSigKey] = util.StrToHex(ss.(string))
 	}
 	if ksok {
 		c.sm[SCKeySignatureKey] = ss
-		m[SCKeySignatureKey] = util.StrToHex(ks.(string))
+		m[SCBlockContentPSigKey] = util.StrToHex(ks.(string))
 	}
 	blk, err := cbor.Marshal(m, cbor.CanonicalEncOptions())
 	if err != nil {

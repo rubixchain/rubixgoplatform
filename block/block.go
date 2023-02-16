@@ -13,34 +13,32 @@ const (
 )
 
 const (
-	TCTransTypeKey         string = "transactionType"
-	TCBlockNumber          string = "blockNumber"
-	TCOwnerKey             string = "owner"
-	TCMigratedBlockID      string = "migratedBlockID"
-	TCSenderDIDKey         string = "sender"
-	TCReceiverDIDKey       string = "receiver"
-	TCCommentKey           string = "comment"
-	TCTIDKey               string = "tid"
-	TCGroupKey             string = "group"
-	TCWholeTokensKey       string = "wholeTokens"
-	TCWholeTokensIDKey     string = "wholeTokensID"
-	TCPartTokensKey        string = "partTokens"
-	TCPartTokensIDKey      string = "partTokensID"
-	TCQuorumSignatureKey   string = "quorumSignature"
-	TCPledgeTokenKey       string = "pledgeToken"
-	TCTokensPledgedForKey  string = "tokensPledgedFor"
-	TCTokensPledgedWithKey string = "tokensPledgedWith"
-	TCTokensPledgeMapKey   string = "tokensPledgeMap"
-	TCDistributedObjectKey string = "distributedObject"
-	TCPreviousBlockIDKey   string = "previousBlockID"
-	TCBlockHashKey         string = "hash"
-	TCNonceKey             string = "nonce"
-	TCBlockContentKey      string = "blockContent"
-	TCSignatureKey         string = "signature"
-	TCSenderSignKey        string = "senderSign"
-	TCPvtShareKey          string = "pvtShareBits"
-	TCTokenChainBlockKey   string = "tokenChainBlock"
-	TCSmartContractKey     string = "smart_contract"
+	TCTransTypeKey         string = "1"
+	TCTokenLevel           string = "2"
+	TCTokenNumber          string = "3"
+	TCBlockNumber          string = "4"
+	TCMigratedBlockID      string = "5"
+	TCOwnerKey             string = "6"
+	TCSenderDIDKey         string = "7"
+	TCReceiverDIDKey       string = "8"
+	TCCommentKey           string = "9"
+	TCTIDKey               string = "10"
+	TCWholeTokensKey       string = "11"
+	TCWholeTokensIDKey     string = "12"
+	TCPartTokensKey        string = "13"
+	TCPartTokensIDKey      string = "14"
+	TCQuorumSignatureKey   string = "15"
+	TCPledgeTokenKey       string = "16"
+	TCTokensPledgedForKey  string = "17"
+	TCTokensPledgedWithKey string = "18"
+	TCTokensPledgeMapKey   string = "19"
+	TCPreviousBlockIDKey   string = "20"
+	TCTokenChainBlockKey   string = "21"
+	TCSmartContractKey     string = "22"
+	TCBlockHashKey         string = "98"
+	TCSignatureKey         string = "99"
+	TCBlockContentKey      string = "1"
+	TCBlockContentSigKey   string = "2"
 )
 
 const (
@@ -61,6 +59,8 @@ type TokenChainBlock struct {
 	ReceiverDID       string                 `json:"receiver"`
 	Comment           string                 `json:"comment"`
 	TID               string                 `json:"tid"`
+	TokenLevel        int                    `json:"tokenLevel"`
+	TokenNumber       int                    `json:"tokenNumber"`
 	WholeTokens       []string               `json:"wholeTokens"`
 	WholeTokensID     []string               `json:"wholeTokensID"`
 	PartTokens        []string               `json:"partTokens"`
@@ -200,7 +200,7 @@ func (b *Block) blkDecode() error {
 	if err != nil {
 		return nil
 	}
-	si, sok := m[TCSignatureKey]
+	si, sok := m[TCBlockContentSigKey]
 	if !sok && !b.op {
 		return fmt.Errorf("invalid block, missing signature")
 	}
@@ -251,7 +251,7 @@ func (b *Block) blkEncode() error {
 		if err != nil {
 			return err
 		}
-		m[TCSignatureKey] = ksm
+		m[TCBlockContentSigKey] = ksm
 	}
 	blk, err := cbor.Marshal(m, cbor.CanonicalEncOptions())
 	if err != nil {
