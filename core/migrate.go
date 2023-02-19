@@ -6,11 +6,13 @@ import (
 	"io/ioutil"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
-	"github.com/rubixchain/rubixgoplatform/core/did"
+	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -51,6 +53,7 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error
 		QuorumPWD:      m.QuorumPWD,
 		DIDImgFileName: rubixDir + "DATA/" + d[0].DID + "/DID.png",
 		PubImgFile:     rubixDir + "DATA/" + d[0].DID + "/PublicShare.png",
+		PrivImgFile:    rubixDir + "DATA/" + d[0].DID + "/PrivateShare.png",
 	}
 
 	_, err = os.Stat(didCreate.DIDImgFileName)
@@ -82,6 +85,8 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error
 		return fmt.Errorf("failed to create did in the wallet")
 	}
 
+	c.ec.ExplorerMapDID(d[0].DID, did)
+
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		c.log.Error("Failed to setup did crypto", "err", err)
@@ -92,6 +97,26 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error
 	if err != nil {
 		c.log.Error("Failed to migrate, failed to read token files", "err", err)
 		return fmt.Errorf("failed to migrate, failed to read token files")
+	}
+	var wg sync.WaitGroup
+	as := make([]ArbitaryStatus, len(c.arbitaryAddr))
+	for i, a := range c.arbitaryAddr {
+		wg.Add(1)
+		go func(idx int, addr string) {
+			defer wg.Done()
+			p, err := c.getPeer(addr)
+			if err != nil {
+				return
+			}
+			as[idx].p = p
+		}(i, a)
+	}
+	wg.Wait()
+	for i, a := range c.arbitaryAddr {
+		if as[i].p == nil {
+			c.log.Error("Failed to migrate, failed to connect arbitary peer", "err", err, "peer", a)
+			return fmt.Errorf("failed to migrate, failed to connect arbitary peer")
+		}
 	}
 	for _, t := range tokens {
 		tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
@@ -129,6 +154,19 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error
 			c.log.Error("Failed to migrate, failed to add token chain file", "err", err)
 			return fmt.Errorf("failed to migrate, failed to add token chain file")
 		}
+		st := &contract.ContractType{
+			Type:            contract.SCDIDMigrateType,
+			OwnerDID:        did,
+			MigratedToken:   t,
+			MigratedTokenID: tcid,
+			Comment:         "Migrating Token",
+		}
+		sc := contract.CreateNewContract(st)
+		err = sc.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to migrate, failed to update signature", "err", err)
+			return fmt.Errorf("failed to migrate, failed to update signature")
+		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[t] = nil
 		ntcb := &block.TokenChainBlock{
@@ -139,30 +177,38 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error
 			MigratedBlockID: tcid,
 			TokenID:         t,
 			TokenOwner:      did,
+			Contract:        sc.GetBlock(),
 			Comment:         "Token migrated at : " + time.Now().String(),
 		}
+		c.log.Info("Block map", "tl", tl, "tn", tn)
 		//ctcb := make
 		blk := block.CreateNewBlock(ctcb, ntcb)
 		if blk == nil {
 			c.log.Error("Failed to migrate, failed to create new token chain block")
 			return fmt.Errorf("failed to migrate, failed to create new token chain block")
 		}
-		h, err := blk.GetHash()
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to get hash", "err", err)
-			return fmt.Errorf("failed to migrate, failed to get hash")
+		sr := &SignatureRequest{
+			TokenChainBlock: blk.GetBlock(),
 		}
-		sb, err := dc.PvtSign([]byte(h))
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to get did signature", "err", err)
-			return fmt.Errorf("failed to migrate, failed to get did signature")
+		for i := range c.arbitaryAddr {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				c.getArbitrationSignature(&as[idx], sr)
+			}(i)
 		}
-		err = blk.UpdateSignature(did, util.HexToStr(sb))
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to update did signature", "err", err)
-			return fmt.Errorf("failed to migrate, failed to update did signature")
+		wg.Wait()
+		for i, a := range c.arbitaryAddr {
+			if !as[i].status {
+				c.log.Error("Failed to migrate, failed to get arbitary signature", "addr", a)
+				return fmt.Errorf("failed to migrate, failed to get arbitary signature")
+			}
+			err = blk.ReplaceSignature(as[i].p.GetPeerDID(), as[i].sig)
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to update arbitary signature", "addr", a)
+				return fmt.Errorf("failed to migrate, failed to update arbitary signature")
+			}
 		}
-
 		bid, err := blk.GetBlockID(t)
 		if err != nil {
 			c.log.Error("Failed to migrate, failed to get block id", "err", err)

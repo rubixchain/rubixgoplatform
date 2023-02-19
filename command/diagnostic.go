@@ -111,6 +111,10 @@ func tcMarshal(str string, m interface{}) (string, error) {
 			}
 		}
 		str = str + "]"
+	case uint64:
+		str = str + fmt.Sprintf("%d", mt)
+	case int:
+		str = str + fmt.Sprintf("%d", mt)
 	default:
 		return "", fmt.Errorf("invalid type %T", mt)
 	}

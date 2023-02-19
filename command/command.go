@@ -18,8 +18,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/core/did"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/server"
+	"golang.org/x/term"
 )
 
 const (
@@ -144,6 +145,7 @@ type Command struct {
 	enableAuth   bool
 	did          string
 	token        string
+	arbitaryMode bool
 }
 
 func showVersion() {
@@ -175,7 +177,7 @@ func (cmd *Command) runApp() {
 	// Override directory path
 	cmd.cfg.DirPath = cmd.runDir
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode)
 	if err != nil {
 		cmd.log.Error("failed to create core")
 		return
@@ -283,6 +285,7 @@ func Run(args []string) {
 	flag.IntVar(&cmd.numTokens, "numTokens", 1, "Number of tokens")
 	flag.StringVar(&cmd.did, "did", "", "DID")
 	flag.BoolVar(&cmd.enableAuth, "enableAuth", false, "Enable authentication")
+	flag.BoolVar(&cmd.arbitaryMode, "arbitaryMode", false, "Enable arbitary mode")
 	flag.StringVar(&cmd.token, "token", "", "Token name")
 
 	if len(os.Args) < 2 {
@@ -425,4 +428,13 @@ func (cmd *Command) multiformClient(method string, path string, field map[string
 		return c, nil, fmt.Errorf("failed to create http request, " + err.Error())
 	}
 	return c, r, nil
+}
+
+func getpassword(msg string) (string, error) {
+	fmt.Print(msg)
+	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", err
+	}
+	return string(bytePassword), nil
 }

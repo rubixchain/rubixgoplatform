@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/logger"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
@@ -52,14 +51,12 @@ type Wallet struct {
 	tcs              *leveldb.DB
 }
 
-func InitWallet(cfg *WalletConfig, log logger.Logger, testNet bool) (*Wallet, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("invalid wallet configuration")
-	}
+func InitWallet(s storage.Storage, dir string, log logger.Logger, testNet bool) (*Wallet, error) {
 	var err error
 	w := &Wallet{
 		log:     log.Named("wallet"),
 		testNet: testNet,
+		s:       s,
 	}
 	if testNet {
 		w.tokenStorage = TestTokenStorage
@@ -70,27 +67,9 @@ func InitWallet(cfg *WalletConfig, log logger.Logger, testNet bool) (*Wallet, er
 		w.partTokenStorage = MainPartTokenStorage
 		w.creditStorage = MainCreditStorage
 	}
-	w.tcs, err = leveldb.OpenFile(cfg.TokenChainDir+"tokenchainstorage", nil)
+	w.tcs, err = leveldb.OpenFile(dir+"tokenchainstorage", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure token chain block storage")
-	}
-	switch cfg.StorageType {
-	case storage.StorageDBType:
-		scfg := &config.Config{
-			DBName:     cfg.DBAddress,
-			DBAddress:  cfg.DBAddress,
-			DBPort:     cfg.DBPort,
-			DBType:     cfg.DBType,
-			DBUserName: cfg.DBUserName,
-			DBPassword: cfg.DBPassword,
-		}
-		w.s, err = storage.NewStorageDB(scfg)
-		if err != nil {
-			w.log.Error("Failed to configure storage DB", "err", err)
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("ivnalid wallet configuration, storgae type is not supported")
 	}
 	err = w.s.Init(DIDStorage, &DIDType{})
 	if err != nil {

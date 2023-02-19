@@ -7,34 +7,33 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/enscrypt"
-	"github.com/rubixchain/rubixgoplatform/core/nlss"
+	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// DIDWallet will handle basic DID
-type DIDWallet struct {
+// DIDStandard will handle basic DID
+type DIDStandard struct {
 	did string
 	dir string
 	ch  *DIDChan
 }
 
-// InitDIDWallet will return the basic did handle
-func InitDIDWallet(did string, baseDir string, ch *DIDChan) *DIDWallet {
-	return &DIDWallet{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
+// InitDIDStandard will return the basic did handle
+func InitDIDStandard(did string, baseDir string, ch *DIDChan) *DIDStandard {
+	return &DIDStandard{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
 }
 
-func (d *DIDWallet) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte, error) {
+func (d *DIDStandard) getSignature(hash []byte) ([]byte, error) {
 	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
-		return nil, nil, fmt.Errorf("Invalid configuration")
+		return nil, fmt.Errorf("Invalid configuration")
 	}
 	sr := &SignResponse{
 		Status:  true,
 		Message: "Signature needed",
 		Result: SignReqData{
-			ID:          d.ch.ID,
-			Mode:        WalletDIDMode,
-			Hash:        hash,
-			OnlyPrivKey: onlyPrivKey,
+			ID:   d.ch.ID,
+			Mode: StandardDIDMode,
+			Hash: hash,
 		},
 	}
 	d.ch.OutChan <- sr
@@ -42,19 +41,38 @@ func (d *DIDWallet) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte,
 	select {
 	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
-		return nil, nil, fmt.Errorf("Timeout, failed to get password")
+		return nil, fmt.Errorf("Timeout, failed to get password")
 	}
 
 	srd, ok := ch.(SignRespData)
 	if !ok {
-		return nil, nil, fmt.Errorf("Invalid data received on the channel")
+		return nil, fmt.Errorf("Invalid data received on the channel")
 	}
-	return srd.Signature.Pixels, srd.Signature.Signature, nil
+	return srd.Signature.Signature, nil
 }
 
 // Sign will return the singature of the DID
-func (d *DIDWallet) Sign(hash string) ([]byte, []byte, error) {
-	bs, pvtKeySign, err := d.getSignature([]byte(hash), false)
+func (d *DIDStandard) Sign(hash string) ([]byte, []byte, error) {
+	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
+
+	if err != nil {
+		fmt.Println(err)
+		return nil, nil, err
+	}
+
+	ps := util.ByteArraytoIntArray(byteImg)
+
+	randPosObject := util.RandomPositions("signer", hash, 32, ps)
+
+	finalPos := randPosObject.PosForSign
+	pvtPos := util.GetPrivatePositions(finalPos, ps)
+	pvtPosStr := util.IntArraytoStr(pvtPos)
+	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
+	pvtKeySign, err := d.getSignature([]byte(hashPvtSign))
+	if err != nil {
+		return nil, nil, err
+	}
+	bs, err := util.BitstreamToBytes(pvtPosStr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -62,7 +80,7 @@ func (d *DIDWallet) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // Sign will verifyt he signature
-func (d *DIDWallet) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDStandard) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
@@ -114,14 +132,14 @@ func (d *DIDWallet) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (b
 	return true, nil
 }
 
-func (d *DIDWallet) PvtSign(hash []byte) ([]byte, error) {
-	_, pvtKeySign, err := d.getSignature(hash, true)
+func (d *DIDStandard) PvtSign(hash []byte) ([]byte, error) {
+	pvtKeySign, err := d.getSignature(hash)
 	if err != nil {
 		return nil, err
 	}
 	return pvtKeySign, nil
 }
-func (d *DIDWallet) PvtVerify(hash []byte, sign []byte) (bool, error) {
+func (d *DIDStandard) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return false, err

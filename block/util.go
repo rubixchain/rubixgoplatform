@@ -27,6 +27,8 @@ const (
 	OTCSenderSignKey        string = "senderSign"
 	OTCPvtShareKey          string = "pvtShareBits"
 	OTCTokenChainBlockKey   string = "tokenChainBlock"
+	OTCMinIDKey             string = "mineID"
+	OTCStakedTokenKey       string = "stakedToken"
 )
 
 var OTCKey = []string{OTCTransTypeKey, OTCOwnerKey, OTCTokensPledgedWithKey, OTCTokensPledgedForKey, OTCReceiverDIDKey, OTCSenderDIDKey, OTCCommentKey, OTCTokensPledgeMapKey, OTCDistributedObjectKey, OTCTIDKey, OTCPledgeTokenKey, OTCGroupKey, OTCWholeTokensKey, OTCWholeTokensIDKey, OTCPartTokensKey, OTCPartTokensIDKey, OTCQuorumSignatureKey}

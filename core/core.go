@@ -10,18 +10,19 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/apiconfig"
+	econfig "github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/EnsurityTechnologies/uuid"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/quorum"
+	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/did"
 )
 
 const (
@@ -36,6 +37,7 @@ const (
 	APISendReceiverToken string = "/api/send-receiver-token"
 	APISyncTokenChain    string = "/api/sync-token-chain"
 	APIDhtProviderCheck  string = "/api/dht-provider-check"
+	APITokenArbitration  string = "/api/token-arbitration"
 )
 
 const (
@@ -81,6 +83,11 @@ type Core struct {
 	w             *wallet.Wallet
 	qc            map[string]did.DIDCrypto
 	sd            map[string]*ServiceDetials
+	s             storage.Storage
+	srv           *service.Service
+	arbitaryMode  bool
+	arbitaryAddr  []string
+	ec            *ExplorerClient
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {
@@ -99,7 +106,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 					SwarmPort:    (SwarmPort + node),
 					IPFSAPIPort:  (IPFSAPIPort + node),
 				},
-				BootStrap: []string{"/ip4/46.166.163.226/tcp/4001/p2p/Qmb9vLM1cNDeMq5i5e8xwWMt7vr4QCAt17RWh2zp1cjRpY"},
+				BootStrap: []string{"/ip4/46.166.163.226/tcp/4001/p2p/12D3KooWKjScCfmdpehRLyYWW34dUq1X72FV9xy8sNxRAFYdnRWM", "/ip4/172.104.191.191/tcp/4001/p2p/12D3KooWFudnWZY1v1m4YXCzDWZSbNt7nvf5F42uzM6vErZ4NwqJ"},
 			},
 		}
 		cfgBytes, err := json.Marshal(cfg)
@@ -114,26 +121,13 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool) (*Core, error) {
+	var err error
 	update := false
-	if cfg.CfgData.MainWalletConfig.StorageType == 0 {
-		cfg.CfgData.MainWalletConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.MainWalletConfig.DBAddress = cfg.DirPath + "Rubix/wallet.db"
-		cfg.CfgData.MainWalletConfig.DBType = "Sqlite3"
-		update = true
-	}
-	if cfg.CfgData.MainWalletConfig.TokenChainDir == "" {
-		cfg.CfgData.MainWalletConfig.TokenChainDir = cfg.DirPath + "Rubix/MainNet/"
-		update = true
-	}
-	if cfg.CfgData.TestWalletConfig.StorageType == 0 {
-		cfg.CfgData.TestWalletConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.TestWalletConfig.DBAddress = cfg.DirPath + "Rubix/wallet.db"
-		cfg.CfgData.TestWalletConfig.DBType = "Sqlite3"
-		update = true
-	}
-	if cfg.CfgData.TestWalletConfig.TokenChainDir == "" {
-		cfg.CfgData.TestWalletConfig.TokenChainDir = cfg.DirPath + "Rubix/TestNet/"
+	if cfg.CfgData.StorageConfig.StorageType == 0 {
+		cfg.CfgData.StorageConfig.StorageType = storage.StorageDBType
+		cfg.CfgData.StorageConfig.DBAddress = cfg.DirPath + "Rubix/rubix.db"
+		cfg.CfgData.StorageConfig.DBType = "Sqlite3"
 		update = true
 	}
 
@@ -148,7 +142,13 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		webReq:        make(map[string]*did.DIDChan),
 		qc:            make(map[string]did.DIDCrypto),
 		sd:            make(map[string]*ServiceDetials),
+		arbitaryMode:  am,
 	}
+	c.arbitaryAddr = []string{"12D3KooWHwsKu3GS9rh5X5eS9RTKGFy6NcdX1bV1UHcH8sQ8WqCM.bafybmicttgw2qx4grueyytrgln35vq2hbyhznv6ks4fabeakm47u72c26u",
+		"12D3KooWQ2as3FNtvL1MKTeo7XAuBZxSv8QqobxX4AmURxyNe5mX.bafybmicro2m4kove5vsetej63xq4csobtlzchb2c34lp6dnakzkwtq2mmy",
+		"12D3KooWJUJz2ipK78LAiwhc1QUVDvSMjZNBHt4vSAeVAq6FsneA.bafybmics43ef7ldgrogzurh7vukormpgscq4um44bss6mfuopsbjorbyaq",
+		"12D3KooWC5fHUg2yzAHydgenodN52MYPKhpK4DKRfS8TSm3idSUV.bafybmif5qnkfnkkrffxvoofah3fjzkmieohjbgyte35rrjrn3goufaiykq",
+		"12D3KooWDd7c7DAVb38a9vfCFpqxh5nHbDQ4CYjMJuFfBgzpiagK.bafybmie4iynumz2v3obbtkqirxrejjoljjs3l76frvl43wgalqqgprze6q"}
 
 	c.log = log.Named("Core")
 
@@ -164,7 +164,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			return nil, err
 		}
 	}
-	wcfg := &cfg.CfgData.MainWalletConfig
+	tcDir := cfg.DirPath + "Rubix/MainNet/"
 	if testNet {
 		if _, err := os.Stat(cfg.DirPath + "Rubix/TestNet"); os.IsNotExist(err) {
 			err := os.MkdirAll(cfg.DirPath+"Rubix/TestNet", os.ModeDir|os.ModePerm)
@@ -173,16 +173,48 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 				return nil, err
 			}
 		}
-		wcfg = &cfg.CfgData.TestWalletConfig
+		tcDir = cfg.DirPath + "Rubix/TestNet/"
 	}
 
-	w, err := wallet.InitWallet(wcfg, c.log, c.testNet)
+	switch cfg.CfgData.StorageConfig.StorageType {
+
+	case storage.StorageDBType:
+		scfg := &econfig.Config{
+			DBName:     cfg.CfgData.StorageConfig.DBName,
+			DBAddress:  cfg.CfgData.StorageConfig.DBAddress,
+			DBPort:     cfg.CfgData.StorageConfig.DBPort,
+			DBType:     cfg.CfgData.StorageConfig.DBType,
+			DBUserName: cfg.CfgData.StorageConfig.DBUserName,
+			DBPassword: cfg.CfgData.StorageConfig.DBPassword,
+		}
+		c.s, err = storage.NewStorageDB(scfg)
+		if err != nil {
+			c.log.Error("Failed to create storage DB", "err", err)
+			return nil, fmt.Errorf("failed to create storage DB")
+		}
+	default:
+		c.log.Error("Unsupported DB type, please check the configuration", "type", cfg.CfgData.StorageConfig.StorageType)
+		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
+	}
+
+	c.w, err = wallet.InitWallet(c.s, tcDir, c.log, c.testNet)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
 	}
-	c.w = w
-
+	c.srv, err = service.NewService(c.s, c.log)
+	if err != nil {
+		c.log.Error("Failed to setup service", "err", err)
+		return nil, err
+	}
+	if c.arbitaryMode {
+		c.log.Info("Arbitary mode is enabled")
+	}
+	err = c.InitRubixExplorer()
+	if err != nil {
+		c.log.Error("Failed to init explorer", "err", err)
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -200,7 +232,7 @@ func (c *Core) SetupCore() error {
 		return err
 	}
 	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, 100, c.ipfs, c.log, c.cfg.CfgData.BootStrap)
-	c.d = did.InitDID(c.cfg.DirPath, c.log, c.ipfs)
+	c.d = did.InitDID(c.cfg.DirPath+"Rubix/", c.log, c.ipfs)
 	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
 	if err != nil {
 		return err
@@ -242,47 +274,47 @@ func (c *Core) Start() (bool, string) {
 		c.log.Error("failed to start ping port", "err", err)
 		return false, "Failed to start ping port"
 	}
-	exp := model.ExploreModel{
-		Cmd:    ExpPeerStatusCmd,
-		PeerID: c.peerID,
-		Status: "On",
-	}
-	err = c.PublishExplorer(&exp)
-	if err != nil {
-		c.log.Error("Failed to publish message to explorer", "err", err)
-		return false, "Failed to publish message to explorer"
-	}
+	// exp := model.ExploreModel{
+	// 	Cmd:    ExpPeerStatusCmd,
+	// 	PeerID: c.peerID,
+	// 	Status: "On",
+	// }
+	// err = c.PublishExplorer(&exp)
+	// if err != nil {
+	// 	c.log.Error("Failed to publish message to explorer", "err", err)
+	// 	return false, "Failed to publish message to explorer"
+	// }
 	dt, err := c.w.GetAllDIDs()
 	if err == nil && len(dt) > 0 {
 		list := make([]string, 0)
 		for _, d := range dt {
 			list = append(list, d.DID)
 		}
-		exp = model.ExploreModel{
-			Cmd:     ExpDIDPeerMapCmd,
-			PeerID:  c.peerID,
-			DIDList: list,
-		}
-		err = c.PublishExplorer(&exp)
-		if err != nil {
-			c.log.Error("Failed to publish message to explorer", "err", err)
-			return false, "Failed to publish message to explorer"
-		}
+		// exp = model.ExploreModel{
+		// 	Cmd:     ExpDIDPeerMapCmd,
+		// 	PeerID:  c.peerID,
+		// 	DIDList: list,
+		// }
+		// err = c.PublishExplorer(&exp)
+		// if err != nil {
+		// 	c.log.Error("Failed to publish message to explorer", "err", err)
+		// 	return false, "Failed to publish message to explorer"
+		// }
 	}
 	return true, "Setup Complete"
 }
 
 func (c *Core) StopCore() {
-	exp := model.ExploreModel{
-		Cmd:    ExpPeerStatusCmd,
-		PeerID: c.peerID,
-		Status: "Off",
-	}
-	err := c.PublishExplorer(&exp)
-	if err != nil {
-		c.log.Error("Failed to publish explorer model", "err", err)
-		return
-	}
+	// exp := model.ExploreModel{
+	// 	Cmd:    ExpPeerStatusCmd,
+	// 	PeerID: c.peerID,
+	// 	Status: "Off",
+	// }
+	// err := c.PublishExplorer(&exp)
+	// if err != nil {
+	// 	c.log.Error("Failed to publish explorer model", "err", err)
+	// 	return
+	// }
 	time.Sleep(time.Second)
 	c.stopIPFS()
 	if c.alphaQuorum != nil {
@@ -348,6 +380,7 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	// if err != nil {
 	// 	return "", err
 	// }
+	c.ec.ExplorerCreateDID(c.peerID, did)
 	return did, nil
 }
 
@@ -361,10 +394,7 @@ func (c *Core) GetDIDs(dir string) []wallet.DIDType {
 
 func (c *Core) IsDIDExist(dir string, did string) bool {
 	_, err := c.w.GetDIDDir(dir, did)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (c *Core) AddWebReq(req *ensweb.Request) {
@@ -421,11 +451,11 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	dc := c.GetWebReq(reqID)
 	switch dt.Type {
 	case did.BasicDIDMode:
-		return did.InitDIDBasic(didStr, c.cfg.DirPath+"/Rubix", dc), nil
+		return did.InitDIDBasic(didStr, c.cfg.DirPath+"Rubix", dc), nil
 	case did.StandardDIDMode:
-		return did.InitDIDStandard(didStr, c.cfg.DirPath+"/Rubix", dc), nil
+		return did.InitDIDStandard(didStr, c.cfg.DirPath+"Rubix", dc), nil
 	case did.WalletDIDMode:
-		return did.InitDIDWallet(didStr, c.cfg.DirPath+"/Rubix", dc), nil
+		return did.InitDIDWallet(didStr, c.cfg.DirPath+"Rubix", dc), nil
 	default:
 		return nil, fmt.Errorf("DID Type is not supported")
 	}

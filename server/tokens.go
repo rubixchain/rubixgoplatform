@@ -7,8 +7,8 @@ import (
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 

@@ -1,17 +1,21 @@
 package core
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
-	didcrypto "github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	didcrypto "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -255,13 +259,7 @@ func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 		srep.Message = "Failed to do signature, invalid token chanin block"
 		return c.l.RenderJSON(req, &srep, http.StatusOK)
 	}
-	h, err := b.GetHash()
-	if err != nil {
-		c.log.Error("Failed to do signature, invalid token chain block, missing hash", "Err", err)
-		srep.Message = "Failed to do signature, invalid token chain block, missing hash"
-		return c.l.RenderJSON(req, &srep, http.StatusOK)
-	}
-	sig, err := dc.PvtSign([]byte(h))
+	sig, err := b.GetSignature(dc)
 	if err != nil {
 		c.log.Error("Failed to do signature", "err", err)
 		srep.Message = "Failed to do signature, " + err.Error()
@@ -314,19 +312,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to create new token chain block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	ha, err := nb.GetHash()
-	if err != nil {
-		c.log.Error("Invalid new token chain block, missing block hash", "err", err)
-		crep.Message = "Invalid new token chain block, missing block hash"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	sig, err := dc.PvtSign([]byte(ha))
-	if err != nil {
-		c.log.Error("Failed to get quorum signature", "err", err)
-		crep.Message = "Failed to get quorum signature"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	err = nb.UpdateSignature(did, util.HexToStr(sig))
+	err = nb.UpdateSignature(did, dc)
 	if err != nil {
 		c.log.Error("Failed to update signature to block", "err", err)
 		crep.Message = "Failed to update signature to block"
@@ -373,4 +359,111 @@ func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
 	crep.Status = true
 	crep.Message = "Credit accepted"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
+}
+
+func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
+	did := c.l.GetQuerry(req, "did")
+	var sr SignatureRequest
+	err := c.l.ParseJSON(req, &sr)
+	srep := SignatureReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	if err != nil {
+		c.log.Error("Failed to parse json request", "err", err)
+		srep.Message = "Failed to parse json request"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+
+	b := block.InitBlock(block.TokenBlockType, sr.TokenChainBlock, nil, block.NoSignature())
+	if b == nil {
+		c.log.Error("Failed to do token abitration, invalid token chain block")
+		srep.Message = "Failed to do token abitration, invalid token chanin block"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	scb := b.GetContract()
+	if scb == nil {
+		c.log.Error("Failed to do token abitration, invalid token chain block, missing smart contract")
+		srep.Message = "Failed to do token abitration, invalid token chain block, missing smart contract"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	sc := contract.InitContract(scb, nil)
+	if sc == nil {
+		c.log.Error("Failed to do token abitration, invalid smart contract")
+		srep.Message = "Failed to do token abitration, invalid smart contract"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	t := sc.GetMigratedToken()
+	if t == "" {
+		c.log.Error("Failed to do token abitration, invalid token")
+		srep.Message = "Failed to do token abitration, invalid token"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	tl, tn, err := b.GetTokenDetials()
+	if err != nil {
+		c.log.Error("Failed to do token abitration, invalid token detials", "err", err)
+		srep.Message = "Failed to do token abitration, invalid token detials"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	str := token.GetTokenString(tl, tn)
+	tbr := bytes.NewBuffer([]byte(str))
+	thash, err := c.ipfs.Add(tbr, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	if err != nil {
+		c.log.Error("Failed to do token abitration, failed to get ipfs hash", "err", err)
+		srep.Message = "Failed to do token abitration, failed to get ipfs hash"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	if thash != t {
+		c.log.Error("Failed to do token abitration, token hash not matching", "thash", thash, "token", t)
+		srep.Message = "Failed to do token abitration, token hash not matching"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	odid := sc.GetOwnerDID()
+	if odid == "" {
+		c.log.Error("Failed to do token abitration, invalid owner did")
+		srep.Message = "Failed to do token abitration, invalid owner did"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	td, err := c.srv.GetTokenDetials(t)
+	if err == nil && td.Token == t {
+		c.log.Error("Failed to do token abitration, token is already migrated", "token", t, "did", odid)
+		srep.Message = "Failed to do token abitration, token is already migrated"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	dc, err := c.SetupForienDID(odid)
+	if err != nil {
+		c.log.Error("Failed to do token abitration, failed to setup did crypto", "token", t, "did", odid)
+		srep.Message = "Failed to do token abitration, failed to setup did crypto"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	err = sc.VerifySignature(dc)
+	if err != nil {
+		c.log.Error("Failed to do token abitration, signature verification failed", "err", err)
+		srep.Message = "Failed to do token abitration, signature verification failed"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+
+	dc, ok := c.qc[did]
+	if !ok {
+		c.log.Error("Failed to setup quorum crypto")
+		srep.Message = "Failed to setup quorum crypto"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	sig, err := b.GetSignature(dc)
+	if err != nil {
+		c.log.Error("Failed to do token abitration, failed to get signature", "err", err)
+		srep.Message = "Failed to do token abitration, failed to get signature"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	err = c.srv.UpdateTokenDetials(&service.TokenDetials{Token: t, DID: odid})
+	if err != nil {
+		c.log.Error("Failed to do token abitration, failed update token detials", "err", err)
+		srep.Message = "Failed to do token abitration, failed update token detials"
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
+	}
+	srep.Signature = sig
+	srep.Status = true
+	srep.Message = "Signature done"
+	return c.l.RenderJSON(req, &srep, http.StatusOK)
 }

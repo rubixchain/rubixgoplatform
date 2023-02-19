@@ -9,10 +9,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -79,7 +79,7 @@ type SignatureRequest struct {
 
 type SignatureReply struct {
 	model.BasicResponse
-	Signature []byte `json:"signature"`
+	Signature string `json:"signature"`
 }
 
 type UpdatePledgeRequest struct {
@@ -111,6 +111,16 @@ type CreditSignature struct {
 	Hash          string `json:"hash"`
 }
 
+type TokenArbitrationReq struct {
+	Block []byte `json:"block"`
+}
+
+type ArbitaryStatus struct {
+	p      *ipfsport.Peer
+	sig    string
+	status bool
+}
+
 // PingSetup will setup the ping route
 func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APICreditStatus, "GET", c.creditStatus)
@@ -120,6 +130,9 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIUpdatePledgeToken, "POST", c.updatePledgeToken)
 	c.l.AddRoute(APISignatureRequest, "POST", c.signatureRequest)
 	c.l.AddRoute(APISendReceiverToken, "POST", c.updateReceiverToken)
+	if c.arbitaryMode {
+		c.l.AddRoute(APITokenArbitration, "POST", c.tokenArbitration)
+	}
 }
 
 func (c *Core) SetupQuorum(didStr string, pwd string) error {
@@ -128,6 +141,10 @@ func (c *Core) SetupQuorum(didStr string, pwd string) error {
 		return fmt.Errorf("DID does not exist")
 	}
 	dc := did.InitDIDQuorumc(didStr, c.cfg.DirPath+"/Rubix", pwd)
+	if dc == nil {
+		c.log.Error("Failed to setup quorum")
+		return fmt.Errorf("failed to setup quorum")
+	}
 	c.qc[didStr] = dc
 	return nil
 }
@@ -551,7 +568,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			c.log.Error("Failed to get signature from the quorum", "msg", srep.Message)
 			return nil, fmt.Errorf("Failed to get signature from the quorum, " + srep.Message)
 		}
-		err = nb.UpdateSignature(k, util.HexToStr(srep.Signature))
+		err = nb.ReplaceSignature(k, srep.Signature)
 		if err != nil {
 			c.log.Error("Failed to update signature to block", "err", err)
 			return nil, fmt.Errorf("Failed to update signature to block")
@@ -661,4 +678,19 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			return err
 		}
 	}
+}
+
+func (c *Core) getArbitrationSignature(as *ArbitaryStatus, sr *SignatureRequest) {
+	var srep SignatureReply
+	err := as.p.SendJSONRequest("POST", APITokenArbitration, nil, sr, &srep, true)
+	if err != nil {
+		c.log.Error("Failed to get arbitray signature", "err", err)
+		return
+	}
+	if !srep.Status {
+		c.log.Error("Failed to get arbitray signature", "msg", srep.Message)
+		return
+	}
+	as.sig = srep.Signature
+	as.status = true
 }

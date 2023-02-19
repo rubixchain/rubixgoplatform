@@ -4,43 +4,51 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 const (
 	SCRBTDirectType int = iota
+	SCDIDMigrateType
+	SCTokenMigrateType
 )
 const (
-	SCTypeKey           string = "1"
-	SCWholeTokensKey    string = "2"
-	SCWholeTokensIDKey  string = "3"
-	SCPartTokensKey     string = "4"
-	SCPartTokensIDKey   string = "5"
-	SCSenderDIDKey      string = "6"
-	SCReceiverDIDKey    string = "7"
-	SCCommentKey        string = "8"
-	SCPledgeModeKey     string = "9"
-	SCPledgeDetialsKey  string = "10"
-	SCShareSignatureKey string = "97"
-	SCKeySignatureKey   string = "98"
-	SCBlockHashKey      string = "99"
-
+	SCTypeKey             string = "1"
+	SCWholeTokensKey      string = "2"
+	SCWholeTokensIDKey    string = "3"
+	SCPartTokensKey       string = "4"
+	SCPartTokensIDKey     string = "5"
+	SCSenderDIDKey        string = "6"
+	SCReceiverDIDKey      string = "7"
+	SCCommentKey          string = "8"
+	SCPledgeModeKey       string = "9"
+	SCPledgeDetialsKey    string = "10"
+	SCOwnerDIDKey         string = "11"
+	SCMigratedTokenKey    string = "12"
+	SCMigratedTokenIDKey  string = "13"
+	SCShareSignatureKey   string = "97"
+	SCKeySignatureKey     string = "98"
+	SCBlockHashKey        string = "99"
 	SCBlockContentKey     string = "1"
 	SCBlockContentSSigKey string = "2"
 	SCBlockContentPSigKey string = "3"
 )
 
 type ContractType struct {
-	Type          int                    `json:"type"`
-	WholeTokens   []string               `json:"whole_tokens"`
-	WholeTokensID []string               `json:"whole_tokens_id"`
-	PartTokens    []string               `json:"part_tokens"`
-	PartTokensID  []string               `json:"part_tokens_id"`
-	SenderDID     string                 `json:"sender_did"`
-	ReceiverDID   string                 `json:"receiver_did"`
-	PledgeMode    int                    `json:"pledge_mode"`
-	PledgeDetials map[string]interface{} `json:"pledge_detials"`
-	Comment       string                 `json:"comment"`
+	Type            int                    `json:"type"`
+	WholeTokens     []string               `json:"whole_tokens"`
+	WholeTokensID   []string               `json:"whole_tokens_id"`
+	PartTokens      []string               `json:"part_tokens"`
+	PartTokensID    []string               `json:"part_tokens_id"`
+	SenderDID       string                 `json:"sender_did"`
+	ReceiverDID     string                 `json:"receiver_did"`
+	PledgeMode      int                    `json:"pledge_mode"`
+	PledgeDetials   map[string]interface{} `json:"pledge_detials"`
+	OwnerDID        string                 `json:"owner_did"`
+	MigratedToken   string                 `json:"mirgated_token"`
+	MigratedTokenID string                 `json:"migrated_token_id"`
+	Comment         string                 `json:"comment"`
 }
 
 type Contract struct {
@@ -50,7 +58,6 @@ type Contract struct {
 }
 
 func CreateNewContract(st *ContractType) *Contract {
-
 	nm := make(map[string]interface{})
 	nm[SCTypeKey] = st.Type
 	if len(st.WholeTokens) > 0 {
@@ -73,12 +80,21 @@ func CreateNewContract(st *ContractType) *Contract {
 	}
 	nm[SCCommentKey] = st.Comment
 	// ::TODO:: Need to support other pledge mode
-	if st.PledgeMode > POWPledgeMode {
+	if st.PledgeMode > NoPledgeMode {
 		return nil
 	}
 	nm[SCPledgeModeKey] = st.PledgeMode
 	if st.PledgeDetials != nil {
 		nm[SCPledgeDetialsKey] = st.PledgeDetials
+	}
+	if st.OwnerDID != "" {
+		nm[SCOwnerDIDKey] = st.OwnerDID
+	}
+	if st.MigratedToken != "" {
+		nm[SCMigratedTokenKey] = st.MigratedToken
+	}
+	if st.MigratedTokenID != "" {
+		nm[SCMigratedTokenIDKey] = st.MigratedTokenID
 	}
 	return InitContract(nil, nm)
 }
@@ -224,12 +240,6 @@ func (c *Contract) GetMap() map[string]interface{} {
 	return c.sm
 }
 
-func (c *Contract) UpdateSignature(ss []byte, ks []byte) error {
-	c.sm[SCShareSignatureKey] = util.HexToStr(ss)
-	c.sm[SCKeySignatureKey] = util.HexToStr(ks)
-	return c.blkEncode()
-}
-
 func (c *Contract) GetPledgeMode() int {
 	mi, ok := c.sm[SCPledgeModeKey]
 	// Default mode is POW
@@ -239,20 +249,20 @@ func (c *Contract) GetPledgeMode() int {
 	return mi.(int)
 }
 
-func (c *Contract) GetSenderDID() string {
-	si, ok := c.sm[SCSenderDIDKey]
+func (c *Contract) getString(key string) string {
+	si, ok := c.sm[key]
 	if !ok {
 		return ""
 	}
 	return si.(string)
 }
 
+func (c *Contract) GetSenderDID() string {
+	return c.getString(SCSenderDIDKey)
+}
+
 func (c *Contract) GetReceiverDID() string {
-	si, ok := c.sm[SCReceiverDIDKey]
-	if !ok {
-		return ""
-	}
-	return si.(string)
+	return c.getString(SCReceiverDIDKey)
 }
 
 func (c *Contract) GetWholeTokens() []string {
@@ -324,9 +334,46 @@ func (c *Contract) GetPartTokensID() []string {
 }
 
 func (c *Contract) GetComment() string {
-	si, ok := c.sm[SCCommentKey]
-	if !ok {
-		return ""
+	return c.getString(SCCommentKey)
+}
+
+func (c *Contract) GetOwnerDID() string {
+	return c.getString(SCOwnerDIDKey)
+}
+
+func (c *Contract) GetMigratedToken() string {
+	return c.getString(SCMigratedTokenKey)
+}
+
+func (c *Contract) GetMigratedTokenID() string {
+	return c.getString(SCMigratedTokenIDKey)
+}
+
+func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
+	hash, err := c.GetHash()
+	if err != nil {
+		return fmt.Errorf("Failed to get hash of smart contract, " + err.Error())
 	}
-	return si.(string)
+	ssig, psig, err := dc.Sign(hash)
+	if err != nil {
+		return fmt.Errorf("Failed to get signature, " + err.Error())
+	}
+	c.sm[SCShareSignatureKey] = util.HexToStr(ssig)
+	c.sm[SCKeySignatureKey] = util.HexToStr(psig)
+	return c.blkEncode()
+}
+
+func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
+	hs, ss, ps, err := c.GetHashSig()
+	if err != nil {
+		return err
+	}
+	ok, err := dc.Verify(hs, util.StrToHex(ss), util.StrToHex(ps))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("did signature verification failed")
+	}
+	return nil
 }

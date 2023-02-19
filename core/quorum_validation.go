@@ -3,7 +3,7 @@ package core
 import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
-	"github.com/rubixchain/rubixgoplatform/core/did"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 

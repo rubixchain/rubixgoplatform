@@ -55,3 +55,10 @@ func ValidateWholeToken(tokenDetials string) (int, int, error) {
 	}
 	return tokenLevel, tokenVal, nil
 }
+
+func GetTokenString(tl int, tn int) string {
+	str := fmt.Sprintf("%02d", tl)
+	hash := sha256.Sum256([]byte(strconv.Itoa(tn)))
+	str = str + fmt.Sprintf("%x", hash)
+	return str
+}

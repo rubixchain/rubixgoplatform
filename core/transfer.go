@@ -77,7 +77,7 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 	sct := &contract.ContractType{
-		Type:          contract.POWPledgeMode,
+		Type:          contract.SCRBTDirectType,
 		WholeTokens:   wta,
 		WholeTokensID: wtca,
 		PartTokens:    pta,
@@ -88,22 +88,10 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		PledgeMode:    contract.POWPledgeMode,
 	}
 	sc := contract.CreateNewContract(sct)
-	authHash, err := sc.GetHash()
+	err = sc.UpdateSignature(dc)
 	if err != nil {
-		c.log.Error("Failed to get hash of smart contract", "err", err)
-		resp.Message = "Failed to get hash of smart contract, " + err.Error()
-		return resp
-	}
-	ssig, psig, err := dc.Sign(authHash)
-	if err != nil {
-		c.log.Error("Failed to get signature", "err", err)
-		resp.Message = "Failed to get signature, " + err.Error()
-		return resp
-	}
-	err = sc.UpdateSignature(ssig, psig)
-	if err != nil {
-		c.log.Error("Failed to update smart contract signature", "err", err)
-		resp.Message = "Failed to ipdate smart contract signature, " + err.Error()
+		c.log.Error(err.Error())
+		resp.Message = err.Error()
 		return resp
 	}
 	cr := &ConensusRequest{
@@ -112,12 +100,6 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		SenderPeerID:   c.peerID,
 		ReceiverPeerID: rpeerid,
 		ContractBlock:  sc.GetBlock(),
-	}
-	err = util.CreateDir(c.cfg.DirPath + "Temp/" + cr.ReqID)
-	if err != nil {
-		c.log.Error("Failed to create directory", "err", err)
-		resp.Message = "Failed to create directory, " + err.Error()
-		return resp
 	}
 	err = c.initiateConsensus(cr, sc, dc)
 	if err != nil {
@@ -163,5 +145,15 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		PledgedTokenMap: pm,
 	}
 	c.w.AddTransactionHistory(td)
+	etrans := &ExplorerTrans{
+		TID:         tid,
+		SenderDID:   did,
+		ReceiverDID: rdid,
+		Amount:      req.TokenCount,
+		TrasnType:   req.Type,
+		TokenIDs:    wta,
+		QuorumList:  c.cfg.CfgData.QuorumList.Alpha,
+	}
+	c.ec.ExplorerTransaction(etrans)
 	return resp
 }

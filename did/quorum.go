@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 
 	"github.com/EnsurityTechnologies/enscrypt"
-	"github.com/rubixchain/rubixgoplatform/core/nlss"
+	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 

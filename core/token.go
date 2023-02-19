@@ -159,32 +159,16 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to create new token chain block")
 			return fmt.Errorf("Failed to create new token chain block")
 		}
-
-		hash, err := blk.GetHash()
-		if err != nil {
-			c.log.Error("Invalid new token chain block, missing block hash")
-			return fmt.Errorf("Invalid new token chain block, missing block hash")
-		}
-
 		bid, err := blk.GetBlockID(id)
-
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
 			return fmt.Errorf("Failed to get block id")
 		}
-
-		sig, err = dc.PvtSign([]byte(hash))
-		if err != nil {
-			c.log.Error("Failed to get did signature", "err", err)
-			return fmt.Errorf("Failed to get did signature")
-		}
-
-		err = blk.UpdateSignature(did, util.HexToStr(sig))
+		err = blk.UpdateSignature(did, dc)
 		if err != nil {
 			c.log.Error("Failed to update did signature", "err", err)
 			return fmt.Errorf("Failed to update did signature")
 		}
-
 		t := &wallet.Token{
 			TokenID:      id,
 			TokenDetails: tk,

@@ -39,6 +39,14 @@ func (cmd *Command) RemoveAllQuorum() {
 }
 
 func (cmd *Command) SetupQuorum() {
+	if cmd.forcePWD {
+		pwd, err := getpassword("Enter quorum key password: ")
+		if err != nil {
+			cmd.log.Error("Failed to get password")
+			return
+		}
+		cmd.quorumPWD = pwd
+	}
 	msg, status := cmd.c.SetupQuorum(cmd.did, cmd.quorumPWD)
 
 	if !status {

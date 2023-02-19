@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/fxamacker/cbor"
+	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -128,6 +129,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	}
 	if tcb.ReceiverDID != "" {
 		ntcb[TCReceiverDIDKey] = tcb.ReceiverDID
+	}
+	if tcb.TokenLevel != 0 {
+		ntcb[TCTokenLevel] = tcb.TokenLevel
+		ntcb[TCTokenNumber] = tcb.TokenNumber
 	}
 	if tcb.TID != "" {
 		ntcb[TCTIDKey] = tcb.TID
@@ -355,7 +360,29 @@ func (b *Block) GetHashSig(did string) (string, string, error) {
 	return h.(string), ksi.(string), nil
 }
 
-func (b *Block) UpdateSignature(did string, sig string) error {
+func (b *Block) GetSignature(dc didmodule.DIDCrypto) (string, error) {
+	h, err := b.GetHash()
+	if err != nil {
+		return "", fmt.Errorf("failed to get hash")
+	}
+	sb, err := dc.PvtSign([]byte(h))
+	if err != nil {
+		return "", fmt.Errorf("failed to get did signature, " + err.Error())
+	}
+	return util.HexToStr(sb), nil
+}
+
+func (b *Block) UpdateSignature(did string, dc didmodule.DIDCrypto) error {
+	h, err := b.GetHash()
+	if err != nil {
+		return fmt.Errorf("failed to get hash")
+	}
+	sb, err := dc.PvtSign([]byte(h))
+	if err != nil {
+		return fmt.Errorf("failed to get did signature, " + err.Error())
+	}
+	sig := util.HexToStr(sb)
+
 	ksmi, ok := b.bm[TCSignatureKey]
 	if !ok {
 		ksm := make(map[string]interface{})
@@ -363,7 +390,23 @@ func (b *Block) UpdateSignature(did string, sig string) error {
 		b.bm[TCSignatureKey] = ksm
 		return b.blkEncode()
 	}
+	ksm, ok := ksmi.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid signature block")
+	}
+	ksm[did] = sig
+	b.bm[TCSignatureKey] = ksm
+	return b.blkEncode()
+}
 
+func (b *Block) ReplaceSignature(did string, sig string) error {
+	ksmi, ok := b.bm[TCSignatureKey]
+	if !ok {
+		ksm := make(map[string]interface{})
+		ksm[did] = sig
+		b.bm[TCSignatureKey] = ksm
+		return b.blkEncode()
+	}
 	ksm, ok := ksmi.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("invalid signature block")
@@ -381,40 +424,86 @@ func (b *Block) GetBlockMap() map[string]interface{} {
 	return b.bm
 }
 
-func (b *Block) GetHash() (string, error) {
-	h, ok := b.bm[TCBlockHashKey]
-	if !ok {
-		return "", fmt.Errorf("invalid token chain block, missing block hash")
-	}
-	return h.(string), nil
-}
-
-func (b *Block) GetTransType() string {
-	tt, ok := b.bm[TCTransTypeKey]
+func (b *Block) getString(key string) string {
+	h, ok := b.bm[key]
 	if !ok {
 		return ""
 	}
-	return tt.(string)
+	return h.(string)
+}
+
+func (b *Block) GetHash() (string, error) {
+	h := b.getString(TCBlockHashKey)
+	if h == "" {
+		return "", fmt.Errorf("invalid token chain block, missing block hash")
+	}
+	return h, nil
+}
+
+func (b *Block) GetTransType() string {
+	return b.getString(TCTransTypeKey)
 }
 
 func (b *Block) GetSenderDID() string {
-	tt := b.bm[TCSenderDIDKey]
-	return tt.(string)
+	return b.getString(TCSenderDIDKey)
 }
 
 func (b *Block) GetReceiverDID() string {
-	tt := b.bm[TCReceiverDIDKey]
-	return tt.(string)
+	return b.getString(TCReceiverDIDKey)
 }
 
 func (b *Block) GetTid() string {
-	tt := b.bm[TCTIDKey]
-	return tt.(string)
+	return b.getString(TCTIDKey)
 }
 
 func (b *Block) GetComment() string {
-	tt := b.bm[TCCommentKey]
-	return tt.(string)
+	return b.getString(TCCommentKey)
+}
+
+func (b *Block) GetTokenDetials() (int, int, error) {
+	tli, ok := b.bm[TCTokenLevel]
+	if !ok {
+		return 0, 0, fmt.Errorf("failed to get token level")
+	}
+	tl := 0
+	tn := 0
+	switch mt := tli.(type) {
+	case int:
+		tl = mt
+	case int64:
+		tl = int(mt)
+	case uint64:
+		tl = int(mt)
+	default:
+		return 0, 0, fmt.Errorf("invalid token level")
+	}
+	tni, ok := b.bm[TCTokenNumber]
+	if !ok {
+		return 0, 0, fmt.Errorf("failed to get token level")
+	}
+	switch mt := tni.(type) {
+	case int:
+		tn = mt
+	case int64:
+		tn = int(mt)
+	case uint64:
+		tn = int(mt)
+	default:
+		return 0, 0, fmt.Errorf("invalid token number")
+	}
+	return tl, tn, nil
+}
+
+func (b *Block) GetContract() []byte {
+	ci, ok := b.bm[TCSmartContractKey]
+	if !ok {
+		return nil
+	}
+	c, ok := ci.([]byte)
+	if !ok {
+		return nil
+	}
+	return c
 }
 
 func (b *Block) GetTokenPledgeMap() map[string]interface{} {

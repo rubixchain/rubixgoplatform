@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
-	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/did"
 )
 
 const (
