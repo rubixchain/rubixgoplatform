@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -291,7 +292,54 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			return fmt.Errorf("failed to migrate, failed to pin token")
 		}
 	}
-	c.log.Debug("Number of tokens", "tokens", len(tokens))
-	c.log.Info("did")
+	creditFiles, err := util.GetAllFiles(rubixDir + "Wallet/WALLET_DATA/Credits/")
+	if err != nil {
+		c.log.Error("Failed to migrate, failed to read credit files", "err", err)
+		return fmt.Errorf("failed to migrate, failed to credit token files")
+	}
+	for _, cf := range creditFiles {
+		cb, err := ioutil.ReadFile(rubixDir + "Wallet/WALLET_DATA/Credits/" + cf)
+		if err != nil {
+			c.log.Error("Failed to migrate, failed to read credit file", "err", err)
+			return fmt.Errorf("failed to migrate, failed to credit token file")
+		}
+		var cs CreditScore
+		err = json.Unmarshal(cb, &cs)
+		if err != nil {
+			c.log.Error("Failed to migrate, failed to parse credit file", "err", err)
+			return fmt.Errorf("failed to migrate, failed to parse credit file")
+		}
+		var ncs CreditScore
+		ncs.Credit = make([]CreditSignature, 0)
+		for _, s := range cs.Credit {
+			sig := util.ConvertBitString(s.Signature)
+			if sig == nil {
+				c.log.Error("Failed to migrate, failed to parse credit signature")
+				return fmt.Errorf("failed to migrate, failed to parse credit signature")
+			}
+			ns := CreditSignature{
+				DID:       s.DID,
+				Hash:      s.Hash,
+				Signature: util.HexToStr(sig),
+			}
+			ncs.Credit = append(ncs.Credit, ns)
+		}
+		if len(ncs.Credit) > 0 {
+			jb, err := json.Marshal(&ncs)
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to marshal credit", "err", err)
+				return fmt.Errorf("failed to migrate, failed to marshal credit")
+			}
+			err = c.w.StoreCredit(did, base64.StdEncoding.EncodeToString(jb))
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to store credit", "err", err)
+				return fmt.Errorf("failed to migrate, failed to store credit")
+			}
+		}
+	}
+	c.log.Info(fmt.Sprintf("Old DID=%s migrated to New DID=%s", d[0].DID, did))
+	c.log.Info(fmt.Sprintf("Number of tokens migrated =%d", len(tokens)))
+	c.log.Info(fmt.Sprintf("Number of credits migrated =%d", len(creditFiles)))
+	c.log.Info(fmt.Sprintf("Migration done successfully"))
 	return nil
 }

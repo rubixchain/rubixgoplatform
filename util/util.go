@@ -270,6 +270,33 @@ func StrToHex(s string) []byte {
 	return dst
 }
 
+func ConvertBitString(b string) []byte {
+	var out []byte
+	var str string
+
+	for i := len(b); i > 0; i -= 8 {
+		if i-8 < 0 {
+			str = string(b[0:i])
+		} else {
+			str = string(b[i-8 : i])
+		}
+		v, err := strconv.ParseUint(str, 2, 8)
+		if err != nil {
+			return nil
+		}
+		out = append([]byte{byte(v)}, out...)
+	}
+	return out
+}
+
+func ConvertToBitString(data []byte) string {
+	var bits string = ""
+	for i := 0; i < len(data); i++ {
+		bits = bits + fmt.Sprintf("%08b", data[i])
+	}
+	return bits
+}
+
 func DirCopy(src string, dst string) error {
 	var err error
 	var fds []os.FileInfo

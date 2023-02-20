@@ -106,7 +106,7 @@ type CreditScore struct {
 
 type CreditSignature struct {
 	Signature     string `json:"signature"`
-	PrivSingature string `json:"priv_signature"`
+	PrivSignature string `json:"priv_signature"`
 	DID           string `json:"did"`
 	Hash          string `json:"hash"`
 }
@@ -405,7 +405,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 			if cs.Result.SuccessCount < MinConsensusRequired {
 				csig := CreditSignature{
 					Signature:     util.HexToStr(ss),
-					PrivSingature: util.HexToStr(ps),
+					PrivSignature: util.HexToStr(ps),
 					DID:           did,
 					Hash:          hash,
 				}
