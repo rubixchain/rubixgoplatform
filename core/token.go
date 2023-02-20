@@ -98,9 +98,10 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
 	}
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
+		c.log.Error("Failed to get did channels")
 		return
 	}
-	dc.OutChan <- br
+	dc.OutChan <- &br
 }
 
 func (c *Core) generateTestTokens(reqID string, num int, did string) error {

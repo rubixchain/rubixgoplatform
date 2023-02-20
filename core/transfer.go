@@ -19,7 +19,7 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		c.log.Error("Failed to get did channels")
 		return
 	}
-	dc.OutChan <- br
+	dc.OutChan <- &br
 }
 
 func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {

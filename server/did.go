@@ -111,6 +111,22 @@ func (s *Server) validateDIDAccess(req *ensweb.Request, did string) bool {
 	}
 }
 
+func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
+	dc := s.c.GetWebReq(reqID)
+	ch := <-dc.OutChan
+	time.Sleep(time.Millisecond * 10)
+	sr, ok := ch.(*did.SignResponse)
+	if ok {
+		return s.RenderJSON(req, sr, http.StatusOK)
+	}
+	br, ok := ch.(*model.BasicResponse)
+	if ok {
+		s.c.RemoveWebReq(reqID)
+		return s.RenderJSON(req, br, http.StatusOK)
+	}
+	return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "Invalid response"}, http.StatusOK)
+}
+
 func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 	var m map[string]interface{}
 	err := s.ParseJSON(req, &m)
@@ -126,13 +142,7 @@ func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to parse input", nil)
 	}
 	s.c.AddWebReq(req)
-	dc := s.c.GetWebReq(req.ID)
+
 	go s.c.RegisterDID(req.ID, didStr)
-	ch := <-dc.OutChan
-	time.Sleep(time.Millisecond * 10)
-	br := ch.(model.BasicResponse)
-	if !br.Status || br.Result == nil {
-		s.c.RemoveWebReq(req.ID)
-	}
-	return s.RenderJSON(req, &br, http.StatusOK)
+	return s.didResponse(req, req.ID)
 }

@@ -1,12 +1,8 @@
 package server
 
 import (
-	"net/http"
-	"time"
-
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 func (s *Server) APIMigrateNode(req *ensweb.Request) *ensweb.Result {
@@ -22,14 +18,6 @@ func (s *Server) APIMigrateNode(req *ensweb.Request) *ensweb.Result {
 		didDir = token.UserID
 	}
 	s.c.AddWebReq(req)
-	dc := s.c.GetWebReq(req.ID)
 	go s.c.MigrateNode(req.ID, &m, didDir)
-
-	ch := <-dc.OutChan
-	time.Sleep(time.Millisecond * 10)
-	br := ch.(model.BasicResponse)
-	if !br.Status || br.Result == nil {
-		s.c.RemoveWebReq(req.ID)
-	}
-	return s.RenderJSON(req, &br, http.StatusOK)
+	return s.didResponse(req, req.ID)
 }

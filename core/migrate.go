@@ -74,7 +74,7 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) {
 		c.log.Error("Failed to get did channels")
 		return
 	}
-	dc.OutChan <- br
+	dc.OutChan <- &br
 }
 
 func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error {

@@ -55,7 +55,7 @@ func (c *Core) RegisterDID(reqID string, did string) {
 		c.log.Error("Failed to get did channels")
 		return
 	}
-	dc.OutChan <- br
+	dc.OutChan <- &br
 }
 
 func (c *Core) registerDID(reqID string, did string) error {

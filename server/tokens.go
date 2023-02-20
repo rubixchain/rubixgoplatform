@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/dgrijalva/jwt-go"
@@ -28,18 +27,8 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	dc := s.c.GetWebReq(req.ID)
 	go s.c.GenerateTestTokens(req.ID, tr.NumberOfTokens, tr.DID)
-	if err != nil {
-		return s.BasicResponse(req, false, err.Error(), nil)
-	}
-	ch := <-dc.OutChan
-	br := ch.(model.BasicResponse)
-	time.Sleep(time.Millisecond * 10)
-	if !br.Status || br.Result == nil {
-		s.c.RemoveWebReq(req.ID)
-	}
-	return s.RenderJSON(req, &br, http.StatusOK)
+	return s.didResponse(req, req.ID)
 }
 
 func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
@@ -56,15 +45,8 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	dc := s.c.GetWebReq(req.ID)
 	go s.c.InitiateRBTTransfer(req.ID, &rbtReq)
-	ch := <-dc.OutChan
-	time.Sleep(time.Millisecond * 10)
-	br := ch.(model.BasicResponse)
-	if !br.Status || br.Result == nil {
-		s.c.RemoveWebReq(req.ID)
-	}
-	return s.RenderJSON(req, &br, http.StatusOK)
+	return s.didResponse(req, req.ID)
 }
 
 func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
@@ -100,10 +82,5 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	}
 	s.c.UpateWebReq(resp.ID, req)
 	dc.InChan <- resp
-	ch := <-dc.OutChan
-	br := ch.(model.BasicResponse)
-	if !br.Status || br.Result == nil {
-		s.c.RemoveWebReq(resp.ID)
-	}
-	return s.RenderJSON(req, &br, http.StatusOK)
+	return s.didResponse(req, resp.ID)
 }
