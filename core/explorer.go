@@ -51,7 +51,11 @@ type ExplorerResponse struct {
 }
 
 func (c *Core) InitRubixExplorer() error {
-	cl, err := ensweb.NewClient(&config.Config{ServerAddress: "rubix-deamon-api.ensurity.com", ServerPort: "443", Production: "true"}, c.log)
+	url := "deamon-explorer.azurewebsites.net"
+	if c.testNet {
+		url = "rubix-deamon-api.ensurity.com"
+	}
+	cl, err := ensweb.NewClient(&config.Config{ServerAddress: url, ServerPort: "443", Production: "true"}, c.log)
 	if err != nil {
 		return err
 	}

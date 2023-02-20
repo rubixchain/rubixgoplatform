@@ -126,18 +126,13 @@ func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to parse input", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.handleWebRequest(req.ID)
-	err = s.c.RegisterDID(req.ID, didStr)
-	if err != nil {
-		return s.BasicResponse(req, false, err.Error(), nil)
-	}
-	br := model.BasicResponse{
-		Status:  true,
-		Message: "DID registered successfully",
-	}
 	dc := s.c.GetWebReq(req.ID)
-	dc.OutChan <- br
+	go s.c.RegisterDID(req.ID, didStr)
+	ch := <-dc.OutChan
 	time.Sleep(time.Millisecond * 10)
-	s.c.RemoveWebReq(req.ID)
-	return nil
+	br := ch.(model.BasicResponse)
+	if !br.Status || br.Result == nil {
+		s.c.RemoveWebReq(req.ID)
+	}
+	return s.RenderJSON(req, &br, http.StatusOK)
 }

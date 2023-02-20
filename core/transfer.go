@@ -12,7 +12,17 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
+func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) {
+	br := c.initiateRBTTransfer(reqID, req)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
+
+func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
 	st := time.Now()
 	resp := &model.BasicResponse{
 		Status: false,
@@ -153,6 +163,7 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		TrasnType:   req.Type,
 		TokenIDs:    wta,
 		QuorumList:  c.cfg.CfgData.QuorumList.Alpha,
+		TokenTime:   float64(dif.Milliseconds()),
 	}
 	c.ec.ExplorerTransaction(etrans)
 	return resp

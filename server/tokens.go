@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -29,20 +28,18 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.handleWebRequest(req.ID)
-	err = s.c.GenerateTestTokens(req.ID, tr.NumberOfTokens, tr.DID)
+	dc := s.c.GetWebReq(req.ID)
+	go s.c.GenerateTestTokens(req.ID, tr.NumberOfTokens, tr.DID)
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	br := model.BasicResponse{
-		Status:  true,
-		Message: "Token generated successfully",
-	}
-	dc := s.c.GetWebReq(req.ID)
-	dc.OutChan <- br
+	ch := <-dc.OutChan
+	br := ch.(model.BasicResponse)
 	time.Sleep(time.Millisecond * 10)
-	s.c.RemoveWebReq(req.ID)
-	return nil
+	if !br.Status || br.Result == nil {
+		s.c.RemoveWebReq(req.ID)
+	}
+	return s.RenderJSON(req, &br, http.StatusOK)
 }
 
 func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
@@ -59,31 +56,15 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.handleWebRequest(req.ID)
-	br := s.c.InitiateRBTTransfer(req.ID, &rbtReq)
 	dc := s.c.GetWebReq(req.ID)
-	dc.OutChan <- br
+	go s.c.InitiateRBTTransfer(req.ID, &rbtReq)
+	ch := <-dc.OutChan
 	time.Sleep(time.Millisecond * 10)
-	s.c.RemoveWebReq(req.ID)
-	return nil
-}
-
-func (s *Server) handleWebRequest(id string) {
-	dc := s.c.GetWebReq(id)
-	var ch interface{}
-	select {
-	case ch = <-dc.OutChan:
-		w := dc.Req.GetHTTPWritter()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		enc := json.NewEncoder(w)
-		enc.Encode(ch)
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
-		}
-	case <-dc.Finish:
-	case <-time.After(time.Minute * 10):
+	br := ch.(model.BasicResponse)
+	if !br.Status || br.Result == nil {
+		s.c.RemoveWebReq(req.ID)
 	}
+	return s.RenderJSON(req, &br, http.StatusOK)
 }
 
 func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
@@ -119,6 +100,10 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	}
 	s.c.UpateWebReq(resp.ID, req)
 	dc.InChan <- resp
-	s.handleWebRequest(resp.ID)
-	return nil
+	ch := <-dc.OutChan
+	br := ch.(model.BasicResponse)
+	if !br.Status || br.Result == nil {
+		s.c.RemoveWebReq(resp.ID)
+	}
+	return s.RenderJSON(req, &br, http.StatusOK)
 }

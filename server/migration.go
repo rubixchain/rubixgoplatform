@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
@@ -21,18 +22,14 @@ func (s *Server) APIMigrateNode(req *ensweb.Request) *ensweb.Result {
 		didDir = token.UserID
 	}
 	s.c.AddWebReq(req)
-	go s.handleWebRequest(req.ID)
-	err = s.c.MigrateNode(req.ID, &m, didDir)
-	if err != nil {
-		return s.BasicResponse(req, false, err.Error(), nil)
-	}
-	br := model.BasicResponse{
-		Status:  true,
-		Message: "Node migrated successfully",
-	}
 	dc := s.c.GetWebReq(req.ID)
-	dc.OutChan <- br
+	go s.c.MigrateNode(req.ID, &m, didDir)
+
+	ch := <-dc.OutChan
 	time.Sleep(time.Millisecond * 10)
-	s.c.RemoveWebReq(req.ID)
-	return nil
+	br := ch.(model.BasicResponse)
+	if !br.Status || br.Result == nil {
+		s.c.RemoveWebReq(req.ID)
+	}
+	return s.RenderJSON(req, &br, http.StatusOK)
 }

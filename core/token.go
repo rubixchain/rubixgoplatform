@@ -86,7 +86,24 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	return info, nil
 }
 
-func (c *Core) GenerateTestTokens(reqID string, num int, did string) error {
+func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
+	err := c.generateTestTokens(reqID, num, did)
+	br := model.BasicResponse{
+		Status:  true,
+		Message: "DID registered successfully",
+	}
+	if err != nil {
+		br.Status = false
+		br.Message = err.Error()
+	}
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		return
+	}
+	dc.OutChan <- br
+}
+
+func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 	if !c.testNet {
 		return fmt.Errorf("This operation only avialable in test net")
 	}

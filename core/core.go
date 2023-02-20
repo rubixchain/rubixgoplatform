@@ -231,7 +231,11 @@ func (c *Core) SetupCore() error {
 	if err != nil {
 		return err
 	}
-	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, 100, c.ipfs, c.log, c.cfg.CfgData.BootStrap)
+	bs := c.cfg.CfgData.BootStrap
+	if c.testNet {
+		bs = nil
+	}
+	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, 100, c.ipfs, c.log, bs)
 	c.d = did.InitDID(c.cfg.DirPath+"Rubix/", c.log, c.ipfs)
 	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
 	if err != nil {
@@ -449,6 +453,10 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 		return nil, fmt.Errorf("DID does not exist")
 	}
 	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return nil, fmt.Errorf("faield to get did channel")
+	}
 	switch dt.Type {
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.cfg.DirPath+"Rubix", dc), nil

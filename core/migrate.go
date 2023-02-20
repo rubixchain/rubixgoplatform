@@ -4,13 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"runtime"
 	"sync"
 	"time"
 
+	"github.com/EnsurityTechnologies/config"
+	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
@@ -29,7 +33,50 @@ type DIDJson struct {
 	Wallet string `json:"walletHash"`
 }
 
-func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error {
+func (c *Core) removeDIDMap(did string) {
+	// curl --location --request DELETE '13.76.134.226:9090/remove/<did>'
+	ec, err := ensweb.NewClient(&config.Config{ServerAddress: "13.76.134.226", ServerPort: "9090", Production: "false"}, c.log)
+	if err != nil {
+		c.log.Error("Failed to remove old did map", "err", err)
+		return
+	}
+	req, err := ec.JSONRequest("DELETE", "remove/"+did, nil)
+	if err != nil {
+		c.log.Error("Failed to remove old did map", "err", err)
+		return
+	}
+	resp, err := ec.Do(req)
+	if err != nil {
+		c.log.Error("Failed to remove old did map", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		c.log.Error("Failed to remove old did map", "status", resp.StatusCode)
+		return
+	}
+	c.log.Info("Removed old did & peer map")
+}
+
+func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) {
+	err := c.migrateNode(reqID, m, didDir)
+	br := model.BasicResponse{
+		Status:  true,
+		Message: "DID migrated successfully",
+	}
+	if err != nil {
+		br.Status = false
+		br.Message = err.Error()
+	}
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
+
+func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error {
 	rubixDir := "~/Rubix/"
 	if runtime.GOOS == "windows" {
 		rubixDir = "C:/Rubix/"
@@ -37,13 +84,13 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error
 	rb, err := ioutil.ReadFile(rubixDir + "DATA/DID.json")
 	if err != nil {
 		c.log.Error("Failed to migrate, invalid file", "err", err)
-		return fmt.Errorf("Unable to find DID.json file")
+		return fmt.Errorf("unable to find DID.json file")
 	}
 	var d []DIDJson
 	err = json.Unmarshal(rb, &d)
 	if err != nil {
 		c.log.Error("Failed to migrate, invalid parsing", "err", err)
-		return fmt.Errorf("Invalid DID.json file, unable to parse")
+		return fmt.Errorf("invalid DID.json file, unable to parse")
 	}
 	c.log.Debug("Node DID: " + d[0].DID)
 	didCreate := did.DIDCreate{
@@ -85,6 +132,8 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error
 		return fmt.Errorf("failed to create did in the wallet")
 	}
 
+	c.removeDIDMap(d[0].DID)
+
 	c.ec.ExplorerMapDID(d[0].DID, did)
 
 	dc, err := c.SetupDID(reqID, did)
@@ -118,6 +167,11 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error
 			return fmt.Errorf("failed to migrate, failed to connect arbitary peer")
 		}
 	}
+	defer func() {
+		for i := range c.arbitaryAddr {
+			as[i].p.Close()
+		}
+	}()
 	for _, t := range tokens {
 		tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
 		if err != nil {
@@ -230,6 +284,11 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) error
 		if err != nil {
 			c.log.Error("Failed to migrate, failed to add token to wallet", "err", err)
 			return fmt.Errorf("failed to migrate, failed to add token to wallet")
+		}
+		ok, err := c.w.Pin(t, wallet.Owner, did)
+		if err != nil || !ok {
+			c.log.Error("Failed to migrate, failed to pin token", "err", err)
+			return fmt.Errorf("failed to migrate, failed to pin token")
 		}
 	}
 	c.log.Debug("Number of tokens", "tokens", len(tokens))

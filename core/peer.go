@@ -40,7 +40,25 @@ func (c *Core) publishPeerMap(pm *PeerMap) error {
 	return nil
 }
 
-func (c *Core) RegisterDID(reqID string, did string) error {
+func (c *Core) RegisterDID(reqID string, did string) {
+	err := c.registerDID(reqID, did)
+	br := model.BasicResponse{
+		Status:  true,
+		Message: "DID registered successfully",
+	}
+	if err != nil {
+		br.Status = false
+		br.Message = err.Error()
+	}
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
+
+func (c *Core) registerDID(reqID string, did string) error {
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		return fmt.Errorf("DID is not exist")
