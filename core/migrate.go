@@ -78,7 +78,7 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) {
 }
 
 func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error {
-	rubixDir := "~/Rubix/"
+	rubixDir := os.Getenv("HOME") + "/Rubix/"
 	if runtime.GOOS == "windows" {
 		rubixDir = "C:/Rubix/"
 	}
