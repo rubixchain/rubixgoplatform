@@ -32,6 +32,7 @@ type ExplorerDID struct {
 type ExplorerMapDID struct {
 	OldDID string `json:"old_did"`
 	NewDID string `json:"new_did"`
+	PeerID string `json:"peer_id"`
 }
 
 type ExplorerTrans struct {
@@ -110,10 +111,11 @@ func (ec *ExplorerClient) ExplorerCreateDID(peerID string, did string) error {
 	return nil
 }
 
-func (ec *ExplorerClient) ExplorerMapDID(oldDid string, newDID string) error {
+func (ec *ExplorerClient) ExplorerMapDID(oldDid string, newDID string, peerID string) error {
 	ed := ExplorerMapDID{
 		OldDID: oldDid,
 		NewDID: newDID,
+		PeerID: peerID,
 	}
 	var er ExplorerResponse
 	err := ec.SendExploerJSONRequest("POST", ExplorerMapDIDAPI, &ed, &er)

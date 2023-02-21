@@ -324,7 +324,9 @@ func (c *Core) GetDHTddrs(cid string) ([]string, error) {
 		if strings.Contains(m, "Error") {
 			return nil, fmt.Errorf(m)
 		}
-		ids = append(ids, m)
+		if !strings.HasPrefix(m, "Qm") {
+			ids = append(ids, m)
+		}
 	}
 	return ids, nil
 }

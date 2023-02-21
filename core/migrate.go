@@ -34,14 +34,14 @@ type DIDJson struct {
 	Wallet string `json:"walletHash"`
 }
 
-func (c *Core) removeDIDMap(did string) {
+func (c *Core) removeDIDMap(peerID string) {
 	// curl --location --request DELETE '13.76.134.226:9090/remove/<did>'
 	ec, err := ensweb.NewClient(&config.Config{ServerAddress: "13.76.134.226", ServerPort: "9090", Production: "false"}, c.log)
 	if err != nil {
 		c.log.Error("Failed to remove old did map", "err", err)
 		return
 	}
-	req, err := ec.JSONRequest("DELETE", "remove/"+did, nil)
+	req, err := ec.JSONRequest("DELETE", "/remove/"+peerID, nil)
 	if err != nil {
 		c.log.Error("Failed to remove old did map", "err", err)
 		return
@@ -133,9 +133,9 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		return fmt.Errorf("failed to create did in the wallet")
 	}
 
-	c.removeDIDMap(d[0].DID)
+	c.removeDIDMap(d[0].PeerID)
 
-	c.ec.ExplorerMapDID(d[0].DID, did)
+	c.ec.ExplorerMapDID(d[0].DID, did, c.peerID)
 
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {

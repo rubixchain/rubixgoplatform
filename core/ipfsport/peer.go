@@ -161,7 +161,7 @@ func (p *Peer) SendJSONRequest(method string, path string, querry map[string]str
 	}
 	httpResp, err := p.Do(httpReq, timeout...)
 	if err != nil {
-		p.log.Error("failed to receive reply")
+		p.log.Error("failed to receive reply", "err", err)
 		return err
 	}
 	defer httpResp.Body.Close()

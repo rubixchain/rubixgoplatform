@@ -110,6 +110,12 @@ func FileWrite(fileName string, data []byte) error {
 
 func GetAllFiles(root string) ([]string, error) {
 	var files []string
+	_, err := os.Stat(root)
+	if os.IsNotExist(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	fs, err := ioutil.ReadDir(root)
 	if err != nil {
 		return nil, err
