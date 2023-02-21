@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
@@ -159,14 +160,16 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		TokenChainBlock: make([]interface{}, 0),
 	}
 	for i := 0; i < tl; i++ {
-		presp.Tokens = append(presp.Tokens, wt[i].TokenID)
 		tc := c.w.GetLatestTokenBlock(wt[i].TokenID)
 		if tc == nil {
 			c.log.Error("Failed to get latest token chain block")
 			crep.Message = "Failed to get latest token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		presp.TokenChainBlock = append(presp.TokenChainBlock, tc)
+		if !c.checkIsPledged(tc, wt[i].TokenID) {
+			presp.Tokens = append(presp.Tokens, wt[i].TokenID)
+			presp.TokenChainBlock = append(presp.TokenChainBlock, tc)
+		}
 	}
 	return c.l.RenderJSON(req, &presp, http.StatusOK)
 }
@@ -466,4 +469,12 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 	srep.Status = true
 	srep.Message = "Signature done"
 	return c.l.RenderJSON(req, &srep, http.StatusOK)
+}
+
+func (c *Core) checkIsPledged(tcb *block.Block, token string) bool {
+	if strings.Compare(tcb.GetTransType(), wallet.TokenPledgedType) == 0 {
+		c.log.Debug("Token", token, "is pledged token")
+		return true
+	}
+	return false
 }
