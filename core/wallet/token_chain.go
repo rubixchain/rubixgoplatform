@@ -97,6 +97,19 @@ func (w *Wallet) GetLatestTokenBlock(token string) *block.Block {
 	return nil
 }
 
+func (w *Wallet) getGensysBlock(token string) *block.Block {
+	iter := w.tcs.NewIterator(util.BytesPrefix([]byte(tcsPrefix(WholeTokenType, token))), nil)
+	defer iter.Release()
+	if iter.First() {
+		v := iter.Value()
+		blk := make([]byte, len(v))
+		copy(blk, v)
+		b := block.InitBlock(block.TokenBlockType, blk, nil)
+		return b
+	}
+	return nil
+}
+
 // AddTokenBlock will write token block into storage
 func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
 	bid, err := b.GetBlockID(token)

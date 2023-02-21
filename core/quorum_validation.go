@@ -106,3 +106,12 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 	}
 	return true
 }
+
+func (c *Core) checkTokenIsPledged(wt string) bool {
+	b := c.w.GetLatestTokenBlock(wt)
+	if b == nil {
+		c.log.Error("Invalid token chain block")
+		return true
+	}
+	return c.checkIsPledged(b, wt)
+}

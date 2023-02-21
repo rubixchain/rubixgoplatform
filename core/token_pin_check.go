@@ -15,7 +15,7 @@ var RoleMap = map[int]string{
 
 // Method checks for multiple Pins on token
 // if there are multiple owners the list of owners is returned back
-func (c *Core) pinCheck(token string, cr *ConensusRequest) (bool, []string, error) {
+func (c *Core) pinCheck(token string, senderPeerId string, receiverPeerId string) (bool, []string, error) {
 	c.log.Debug("Finding the list of Providers for Token", token)
 
 	var owners []string
@@ -35,7 +35,7 @@ func (c *Core) pinCheck(token string, cr *ConensusRequest) (bool, []string, erro
 
 	if len(provList) == 1 {
 		for _, peerId := range provList {
-			if peerId != cr.SenderPeerID {
+			if peerId != senderPeerId {
 				c.log.Debug("Pin is not held by current Sender for token", token)
 				c.log.Debug("peer Id that holds the pin", peerId)
 				return true, provList, nil
@@ -47,8 +47,8 @@ func (c *Core) pinCheck(token string, cr *ConensusRequest) (bool, []string, erro
 	}
 
 	var knownPeer []string
-	knownPeer = append(knownPeer, cr.SenderPeerID)
-	knownPeer = append(knownPeer, cr.ReceiverPeerID)
+	knownPeer = append(knownPeer, senderPeerId)
+	knownPeer = append(knownPeer, receiverPeerId)
 
 	if len(provList) >= 2 {
 		owners = provList
