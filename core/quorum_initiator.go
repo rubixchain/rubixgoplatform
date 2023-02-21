@@ -96,8 +96,8 @@ type SendTokenRequest struct {
 
 type PledgeReply struct {
 	model.BasicResponse
-	Tokens          []string      `json:"tokens"`
-	TokenChainBlock []interface{} `json:"token_chain_block"`
+	Tokens          []string `json:"tokens"`
+	TokenChainBlock [][]byte `json:"token_chain_block"`
 }
 
 type CreditScore struct {

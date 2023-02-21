@@ -156,7 +156,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 			Message: "Got available tokens",
 		},
 		Tokens:          make([]string, 0),
-		TokenChainBlock: make([]interface{}, 0),
+		TokenChainBlock: make([][]byte, 0),
 	}
 	for i := 0; i < tl; i++ {
 		presp.Tokens = append(presp.Tokens, wt[i].TokenID)
@@ -166,7 +166,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 			crep.Message = "Failed to get latest token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		presp.TokenChainBlock = append(presp.TokenChainBlock, tc)
+		presp.TokenChainBlock = append(presp.TokenChainBlock, tc.GetBlock())
 	}
 	return c.l.RenderJSON(req, &presp, http.StatusOK)
 }
