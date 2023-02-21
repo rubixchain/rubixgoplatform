@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -141,22 +140,12 @@ func (w *Wallet) GetTokens(did string, amt float64) ([]Token, []PartToken, error
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, nil, err
 	}
-	tmp := make([]Token, 0)
-	for i := 0; i < len(t); i++ {
-		checkIsPledge, err1 := w.checkTokenIsPledged(t[i].TokenID)
-		if strings.Compare(err1, "Failed") == 0 {
-			return nil, nil, err
-		}
-		if !checkIsPledge {
-			tmp = append(tmp, t[i])
-		}
-	}
-	if int(amt) > len(tmp) {
+	if int(amt) > len(t) {
 		return nil, nil, fmt.Errorf("insufficient tokens")
 	}
 	wt := make([]Token, 0)
 	for i := 0; i < int(amt); i++ {
-		wt = append(wt, tmp[i])
+		wt = append(wt, t[i])
 	}
 	for i := range wt {
 		wt[i].TokenStatus = TokenIsLocked
@@ -357,17 +346,4 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, b *block.B
 	// 	w.AddTokenBlock(pt[i], tcb)
 	// }
 	return nil
-}
-
-func (w *Wallet) checkTokenIsPledged(token string) (bool, string) {
-	blk := w.GetLatestTokenBlock(token)
-	if blk == nil {
-		w.log.Error("Failed to get latest token chain block")
-		return false, "Failed"
-	}
-	if strings.Compare(blk.GetTransType(), TokenPledgedType) == 0 {
-		w.log.Debug("Token", token, "is pledged token")
-		return true, ""
-	}
-	return false, ""
 }
