@@ -61,7 +61,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	//check if token has multiple pins
 	t := sc.GetWholeTokens()
 	for i := range t {
-		multiPincheck, owners, err := c.pinCheck(t[i], cr)
+		multiPincheck, owners, err := c.pinCheck(t[i], cr.SenderPeerID, cr.ReceiverPeerID)
 		if err != nil {
 			c.log.Error("Error occurede", "error", err)
 			crep.Message = "Token multiple Pin check error triggered"
@@ -82,6 +82,17 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		crep.Message = "Token ownership check failed"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	//check if token is pledgedtoken
+	wt := sc.GetWholeTokens()
+
+	for i := range wt {
+		if c.checkTokenIsPledged(wt[i]) {
+			c.log.Error("Pledge Token check Failed, Token ", wt[i], " is Pledged Token")
+			crep.Message = "Pledge Token check Failed, Token " + wt[i] + " is Pledged Token"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
+
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
 	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
 	if err != nil {
@@ -199,10 +210,40 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 			crep.Message = "Failed to sync token chain block, missing previous block id"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
+		senderPeerId, _, ok := util.ParseAddress(sr.Address)
+		if !ok {
+			c.log.Error("Error occurede", "error", err)
+			crep.Message = "Unable to parse sender address"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		multiPincheck, owners, err := c.pinCheck(t, senderPeerId, c.peerID)
+		if err != nil {
+			c.log.Error("Error occurede", "error", err)
+			crep.Message = "Token multiple Pin check error triggered"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if multiPincheck {
+			c.log.Debug("Token ", "Token", t)
+			c.log.Debug("Has Multiple owners", "owners", owners)
+			crep.Message = "Token has multiple owners"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
 		err = c.syncTokenChainFrom(sr.Address, pblkID, t)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			crep.Message = "Failed to sync token chain block"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		ptcbArray, err := c.w.GetTokenBlock(t, pblkID)
+		if err != nil {
+			c.log.Error("Failed to fetch previous block", "err", err)
+			crep.Message = "Failed to fetch previous block"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		ptcb := block.InitBlock(block.TokenBlockType, ptcbArray, nil)
+		if c.checkIsPledged(ptcb, t) {
+			c.log.Error("Token", t, "is a pledged Token")
+			crep.Message = "Token " + t + " is a pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
@@ -216,6 +257,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 	amount := (float64(len(sr.WholeTokens)) + float64(len(sr.PartTokens))*0.001)
 	crep.Status = true
 	crep.Message = "Token received successfully"
+	c.log.Info("Token received Suffessfully from", sr.Address)
 	td := &wallet.TransactionDetails{
 		TransactionID:   b.GetTid(),
 		SenderDID:       b.GetSenderDID(),
