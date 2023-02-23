@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -645,11 +646,14 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 				did := p.GetPeerDID()
 				pd.PledgedTokens[did] = make([]string, 0)
 				for i, t := range prs.Tokens {
-					pd.NumPledgedTokens++
-					pd.RemPledgeTokens--
-					pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
-					pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
-					pd.TokenList = append(pd.TokenList, t)
+					ptcb := block.InitBlock(block.TokenBlockType, prs.TokenChainBlock[i], nil)
+					if !c.checkIsPledged(ptcb, t) {
+						pd.NumPledgedTokens++
+						pd.RemPledgeTokens--
+						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
+						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
+						pd.TokenList = append(pd.TokenList, t)
+					}
 				}
 				c.qlock.Lock()
 				c.pd[cr.ReqID] = pd
@@ -693,4 +697,11 @@ func (c *Core) getArbitrationSignature(as *ArbitaryStatus, sr *SignatureRequest)
 	}
 	as.sig = srep.Signature
 	as.status = true
+}
+func (c *Core) checkIsPledged(tcb *block.Block, token string) bool {
+	if strings.Compare(tcb.GetTransType(), wallet.TokenPledgedType) == 0 {
+		c.log.Debug("Token", token, " is a pledged token. Not Considered for pledging")
+		return true
+	}
+	return false
 }
