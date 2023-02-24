@@ -11,7 +11,7 @@ import (
 const (
 	SCRBTDirectType int = iota
 	SCDIDMigrateType
-	SCTokenMigrateType
+	SCDataTokenType
 )
 const (
 	SCTypeKey             string = "1"
@@ -41,11 +41,13 @@ type ContractType struct {
 	WholeTokensID   []string               `json:"whole_tokens_id"`
 	PartTokens      []string               `json:"part_tokens"`
 	PartTokensID    []string               `json:"part_tokens_id"`
+	DataToken       string                 `json:"data_token"`
 	SenderDID       string                 `json:"sender_did"`
 	ReceiverDID     string                 `json:"receiver_did"`
 	PledgeMode      int                    `json:"pledge_mode"`
 	PledgeDetials   map[string]interface{} `json:"pledge_detials"`
 	OwnerDID        string                 `json:"owner_did"`
+	CommitterDID    string                 `json:"committer_did"`
 	MigratedToken   string                 `json:"mirgated_token"`
 	MigratedTokenID string                 `json:"migrated_token_id"`
 	Comment         string                 `json:"comment"`

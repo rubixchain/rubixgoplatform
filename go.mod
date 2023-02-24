@@ -7,7 +7,7 @@ require (
 	github.com/EnsurityTechnologies/apiconfig v1.0.1
 	github.com/EnsurityTechnologies/config v1.0.0
 	github.com/EnsurityTechnologies/enscrypt v1.0.1
-	github.com/EnsurityTechnologies/ensweb v1.0.4
+	github.com/EnsurityTechnologies/ensweb v1.0.5
 	github.com/EnsurityTechnologies/helper v1.0.0
 	github.com/EnsurityTechnologies/logger v1.0.4
 	github.com/EnsurityTechnologies/uuid v1.0.0
@@ -74,7 +74,7 @@ require (
 	github.com/swaggo/swag v1.8.10 // indirect
 	github.com/whyrusleeping/tar-utils v0.0.0-20201201191210-20a61371de5b // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/net v0.6.0 // indirect
+	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/term v0.5.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect

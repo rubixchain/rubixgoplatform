@@ -23,8 +23,8 @@ func (cmd *Command) GetAllQuorum() {
 		cmd.log.Error("Failed to get quorum list from node", "msg", response.Message)
 		return
 	}
-	for _, q := range response.Result.Quorum {
-		fmt.Printf("Type : %d, Address : %s\n", q.Type, q.Address)
+	for _, q := range response.Result {
+		fmt.Printf("Address : %s\n", q)
 	}
 	cmd.log.Info("Got all quorum list successfully")
 }

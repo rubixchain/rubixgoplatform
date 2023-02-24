@@ -196,7 +196,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	b := block.InitBlock(block.TokenBlockType, sr.TokenChainBlock, nil)
+	b := block.InitBlock(sr.TokenChainBlock, nil)
 	if b == nil {
 		c.log.Error("Invalid token chain block", "err", err)
 		crep.Message = "Invalid token chain block"
@@ -240,7 +240,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 			crep.Message = "Failed to fetch previous block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		ptcb := block.InitBlock(block.TokenBlockType, ptcbArray, nil)
+		ptcb := block.InitBlock(ptcbArray, nil)
 		if c.checkIsPledged(ptcb, t) {
 			c.log.Error("Token", t, "is a pledged Token")
 			crep.Message = "Token " + t + " is a pledged Token"
@@ -268,7 +268,6 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		TotalTime:       0,
 		WholeTokens:     sr.WholeTokens,
 		PartTokens:      sr.PartTokens,
-		QuorumList:      c.cfg.CfgData.QuorumList.Alpha,
 		PledgedTokenMap: b.GetTokenPledgeMap(),
 	}
 	c.w.AddTransactionHistory(td)
@@ -295,7 +294,7 @@ func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 		srep.Message = "Failed to setup quorum crypto"
 		return c.l.RenderJSON(req, &srep, http.StatusOK)
 	}
-	b := block.InitBlock(block.TokenBlockType, sr.TokenChainBlock, nil, block.NoSignature())
+	b := block.InitBlock(sr.TokenChainBlock, nil, block.NoSignature())
 	if b == nil {
 		c.log.Error("Failed to do signature, invalid token chain block")
 		srep.Message = "Failed to do signature, invalid token chanin block"
@@ -331,7 +330,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to setup quorum crypto"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	b := block.InitBlock(block.TokenBlockType, ur.TokenChainBlock, nil)
+	b := block.InitBlock(ur.TokenChainBlock, nil)
 	tcb := block.TokenChainBlock{
 		TransactionType:   wallet.TokenPledgedType,
 		TokenOwner:        did,
@@ -403,6 +402,65 @@ func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
+func (c *Core) mapDIDArbitration(req *ensweb.Request) *ensweb.Result {
+	var m map[string]string
+	err := c.l.ParseJSON(req, &m)
+	br := model.BasicResponse{
+		Status: false,
+	}
+	if err != nil {
+		c.log.Error("Failed to parse json request", "err", err)
+		br.Message = "Failed to parse json request"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	od, ok := m["olddid"]
+	if !ok {
+		c.log.Error("Missing old did value")
+		br.Message = "Missing old did value"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	nd, ok := m["newdid"]
+	if !ok {
+		c.log.Error("Missing new did value")
+		br.Message = "Missing new did value"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	err = c.srv.UpdateTokenDetials(nd)
+	if err != nil {
+		c.log.Error("Failed to update table detials", "err", err)
+		br.Message = "Failed to update token detials"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	dm := &service.DIDMap{
+		OldDID: od,
+		NewDID: nd,
+	}
+	err = c.srv.UpdateDIDMap(dm)
+	if err != nil {
+		c.log.Error("Failed to update map table", "err", err)
+		br.Message = "Failed to update map table"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	br.Status = true
+	br.Message = "DID mapped successfully"
+	return c.l.RenderJSON(req, &br, http.StatusOK)
+}
+
+func (c *Core) chekDIDArbitration(req *ensweb.Request) *ensweb.Result {
+	did := c.l.GetQuerry(req, "olddid")
+	br := model.BasicResponse{
+		Status: true,
+	}
+	if c.srv.IsDIDExist(did) {
+		br.Message = "DID exist"
+		br.Result = true
+	} else {
+		br.Message = "DID does not exist"
+		br.Result = false
+	}
+	return c.l.RenderJSON(req, &br, http.StatusOK)
+}
+
 func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var sr SignatureRequest
@@ -418,7 +476,7 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &srep, http.StatusOK)
 	}
 
-	b := block.InitBlock(block.TokenBlockType, sr.TokenChainBlock, nil, block.NoSignature())
+	b := block.InitBlock(sr.TokenChainBlock, nil, block.NoSignature())
 	if b == nil {
 		c.log.Error("Failed to do token abitration, invalid token chain block")
 		srep.Message = "Failed to do token abitration, invalid token chanin block"
@@ -498,7 +556,7 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 		srep.Message = "Failed to do token abitration, failed to get signature"
 		return c.l.RenderJSON(req, &srep, http.StatusOK)
 	}
-	err = c.srv.UpdateTokenDetials(&service.TokenDetials{Token: t, DID: odid})
+	err = c.srv.UpdateTempTokenDetials(&service.TokenDetials{Token: t, DID: odid})
 	if err != nil {
 		c.log.Error("Failed to do token abitration, failed update token detials", "err", err)
 		srep.Message = "Failed to do token abitration, failed update token detials"

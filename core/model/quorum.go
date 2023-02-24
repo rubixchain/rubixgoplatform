@@ -8,9 +8,9 @@ const (
 
 // QuorumListResponse used as model for the API responses
 type QuorumListResponse struct {
-	Status  bool       `json:"status"`
-	Message string     `json:"message"`
-	Result  QuorumList `json:"result"`
+	Status  bool     `json:"status"`
+	Message string   `json:"message"`
+	Result  []string `json:"result"`
 }
 
 type Quorum struct {

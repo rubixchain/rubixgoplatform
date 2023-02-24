@@ -3,6 +3,7 @@ package server
 import (
 	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
@@ -67,12 +68,12 @@ func (s *Server) APIGetAllBootStrap(req *ensweb.Request) *ensweb.Result {
 
 // APIAddQuorum will add quorum list to node
 func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
-	var ql model.QuorumList
+	var ql []core.QuorumData
 	err := s.ParseJSON(req, &ql)
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
 	}
-	err = s.c.AddQuorum(&ql)
+	err = s.c.AddQuorum(ql)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to add quorums, "+err.Error(), nil)
 	}

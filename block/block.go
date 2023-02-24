@@ -10,15 +10,18 @@ import (
 )
 
 const (
-	TokenBlockType int = iota
+	RBTTokenType int = iota
+	RBTPartTokenType
+	NFTTokenType
+	DataTokenType
 )
 
 const (
 	TCTransTypeKey         string = "1"
-	TCTokenLevel           string = "2"
-	TCTokenNumber          string = "3"
-	TCBlockNumber          string = "4"
-	TCMigratedBlockID      string = "5"
+	TCTokenLevelKey        string = "2"
+	TCTokenNumberKey       string = "3"
+	TCBlockNumberKey       string = "4"
+	TCMigratedBlockIDKey   string = "5"
 	TCOwnerKey             string = "6"
 	TCSenderDIDKey         string = "7"
 	TCReceiverDIDKey       string = "8"
@@ -36,6 +39,7 @@ const (
 	TCPreviousBlockIDKey   string = "20"
 	TCTokenChainBlockKey   string = "21"
 	TCSmartContractKey     string = "22"
+	TCTokenTypeKey         string = "23"
 	TCBlockHashKey         string = "98"
 	TCSignatureKey         string = "99"
 	TCBlockContentKey      string = "1"
@@ -51,7 +55,7 @@ const (
 )
 
 type TokenChainBlock struct {
-	BlockType         int                    `json:"blkType"`
+	TokenType         int                    `json:"tokenType"`
 	TransactionType   string                 `json:"transactionType"`
 	MigratedBlockID   string                 `json:"migratedBlockID"`
 	TokenID           string                 `json:"tokenID"`
@@ -75,7 +79,6 @@ type TokenChainBlock struct {
 }
 
 type Block struct {
-	bt int
 	bb []byte
 	bm map[string]interface{}
 	op bool
@@ -90,9 +93,8 @@ func NoSignature() BlockOption {
 	}
 }
 
-func InitBlock(bt int, bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block {
+func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block {
 	b := &Block{
-		bt: bt,
 		bb: bb,
 		bm: bm,
 		op: false,
@@ -124,6 +126,7 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	ntcb[TCTransTypeKey] = tcb.TransactionType
 	ntcb[TCOwnerKey] = tcb.TokenOwner
 	ntcb[TCCommentKey] = tcb.Comment
+	ntcb[TCTokenTypeKey] = tcb.TokenType
 	if tcb.SenderDID != "" {
 		ntcb[TCSenderDIDKey] = tcb.SenderDID
 	}
@@ -131,14 +134,14 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		ntcb[TCReceiverDIDKey] = tcb.ReceiverDID
 	}
 	if tcb.TokenLevel != 0 {
-		ntcb[TCTokenLevel] = tcb.TokenLevel
-		ntcb[TCTokenNumber] = tcb.TokenNumber
+		ntcb[TCTokenLevelKey] = tcb.TokenLevel
+		ntcb[TCTokenNumberKey] = tcb.TokenNumber
 	}
 	if tcb.TID != "" {
 		ntcb[TCTIDKey] = tcb.TID
 	}
 	if tcb.MigratedBlockID != "" {
-		ntcb[TCMigratedBlockID] = tcb.MigratedBlockID
+		ntcb[TCMigratedBlockIDKey] = tcb.MigratedBlockID
 	}
 	if len(tcb.WholeTokens) != 0 {
 		ntcb[TCWholeTokensKey] = tcb.WholeTokens
@@ -193,9 +196,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 			bnm[t] = strconv.FormatUint(bn, 10)
 		}
 	}
-	ntcb[TCBlockNumber] = bnm
+	ntcb[TCBlockNumberKey] = bnm
 	ntcb[TCPreviousBlockIDKey] = phm
-	blk := InitBlock(tcb.BlockType, nil, ntcb)
+	blk := InitBlock(nil, ntcb)
 	return blk
 }
 
@@ -267,7 +270,7 @@ func (b *Block) blkEncode() error {
 }
 
 func (b *Block) GetBlockNumber(t string) (uint64, error) {
-	bnmi, ok := b.bm[TCBlockNumber]
+	bnmi, ok := b.bm[TCBlockNumberKey]
 	if !ok {
 		return 0, fmt.Errorf("invalid token chain block, missing block number")
 	}
@@ -288,7 +291,7 @@ func (b *Block) GetBlockID(t string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid token chain block, missing block hash")
 	}
-	bnmi, ok := b.bm[TCBlockNumber]
+	bnmi, ok := b.bm[TCBlockNumberKey]
 	if !ok {
 		return "", fmt.Errorf("invalid token chain block, missing block number")
 	}
@@ -372,6 +375,18 @@ func (b *Block) GetSignature(dc didmodule.DIDCrypto) (string, error) {
 	return util.HexToStr(sb), nil
 }
 
+func (b *Block) VerifySignature(did string, dc didmodule.DIDCrypto) error {
+	h, s, err := b.GetHashSig(did)
+	if err != nil {
+		return fmt.Errorf("failed to read did signature & hash")
+	}
+	ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
+	if err != nil || !ok {
+		return fmt.Errorf("failed to verify did signature")
+	}
+	return nil
+}
+
 func (b *Block) UpdateSignature(did string, dc didmodule.DIDCrypto) error {
 	h, err := b.GetHash()
 	if err != nil {
@@ -432,6 +447,25 @@ func (b *Block) getString(key string) string {
 	return h.(string)
 }
 
+func (b *Block) getInt(key string) int {
+	tli, ok := b.bm[key]
+	if !ok {
+		return 0
+	}
+	var tl int
+	switch mt := tli.(type) {
+	case int:
+		tl = mt
+	case int64:
+		tl = int(mt)
+	case uint64:
+		tl = int(mt)
+	default:
+		tl = 0
+	}
+	return tl
+}
+
 func (b *Block) GetHash() (string, error) {
 	h := b.getString(TCBlockHashKey)
 	if h == "" {
@@ -460,37 +494,16 @@ func (b *Block) GetComment() string {
 	return b.getString(TCCommentKey)
 }
 
+func (b *Block) GetTokenType() int {
+	return b.getInt(TCTokenTypeKey)
+}
+
 func (b *Block) GetTokenDetials() (int, int, error) {
-	tli, ok := b.bm[TCTokenLevel]
-	if !ok {
-		return 0, 0, fmt.Errorf("failed to get token level")
-	}
-	tl := 0
-	tn := 0
-	switch mt := tli.(type) {
-	case int:
-		tl = mt
-	case int64:
-		tl = int(mt)
-	case uint64:
-		tl = int(mt)
-	default:
+	tl := b.getInt(TCTokenLevelKey)
+	if tl == 0 {
 		return 0, 0, fmt.Errorf("invalid token level")
 	}
-	tni, ok := b.bm[TCTokenNumber]
-	if !ok {
-		return 0, 0, fmt.Errorf("failed to get token level")
-	}
-	switch mt := tni.(type) {
-	case int:
-		tn = mt
-	case int64:
-		tn = int(mt)
-	case uint64:
-		tn = int(mt)
-	default:
-		return 0, 0, fmt.Errorf("invalid token number")
-	}
+	tn := b.getInt(TCTokenNumberKey)
 	return tl, tn, nil
 }
 

@@ -59,6 +59,24 @@ func (c *Core) removeDIDMap(peerID string) {
 	c.log.Info("Removed old did & peer map")
 }
 
+func (c *Core) IsArbitaryMode() bool {
+	return c.arbitaryMode
+}
+
+func (c *Core) LockTokens(ts []string) *model.BasicResponse {
+	br := &model.BasicResponse{
+		Status: false,
+	}
+	err := c.srv.AddLockedTokens(ts)
+	if err != nil {
+		br.Message = "Failed to lock tokens, " + err.Error()
+		return br
+	}
+	br.Status = true
+	br.Message = "All tokens are locked successfully"
+	return br
+}
+
 func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) {
 	err := c.migrateNode(reqID, m, didDir)
 	br := model.BasicResponse{
@@ -133,10 +151,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		return fmt.Errorf("failed to create did in the wallet")
 	}
 
-	c.removeDIDMap(d[0].PeerID)
-
-	c.ec.ExplorerMapDID(d[0].DID, did, c.peerID)
-
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		c.log.Error("Failed to setup did crypto", "err", err)
@@ -173,6 +187,26 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			as[i].p.Close()
 		}
 	}()
+	for i := range c.arbitaryAddr {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			c.checkDIDMigrated(&as[idx], d[0].DID)
+		}(i)
+	}
+	wg.Wait()
+	didExist := false
+	for i := range c.arbitaryAddr {
+		if as[i].status && as[i].ds {
+			as[i].status = false
+			didExist = true
+		}
+	}
+	if didExist {
+		c.log.Error("Failed to migrate, node already migrated")
+		return fmt.Errorf("failed to migrate, node already migrated")
+	}
+
 	for _, t := range tokens {
 		tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
 		if err != nil {
@@ -225,7 +259,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		ctcb := make(map[string]*block.Block)
 		ctcb[t] = nil
 		ntcb := &block.TokenChainBlock{
-			BlockType:       block.TokenBlockType,
+			TokenType:       block.RBTTokenType,
 			TokenLevel:      tl,
 			TokenNumber:     tn,
 			TransactionType: block.TokenMigratedType,
@@ -337,9 +371,24 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			}
 		}
 	}
+	for i := range c.arbitaryAddr {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			c.mapMigratedDID(&as[idx], d[0].DID, did)
+		}(i)
+	}
+	wg.Wait()
+	for i := range c.arbitaryAddr {
+		if !as[i].status {
+			c.log.Error("Failed to migrate, failed to map did")
+		}
+	}
+	c.removeDIDMap(d[0].PeerID)
+	c.ec.ExplorerMapDID(d[0].DID, did, c.peerID)
 	c.log.Info(fmt.Sprintf("Old DID=%s migrated to New DID=%s", d[0].DID, did))
 	c.log.Info(fmt.Sprintf("Number of tokens migrated =%d", len(tokens)))
 	c.log.Info(fmt.Sprintf("Number of credits migrated =%d", len(creditFiles)))
-	c.log.Info(fmt.Sprintf("Migration done successfully"))
+	c.log.Info("Migration done successfully")
 	return nil
 }

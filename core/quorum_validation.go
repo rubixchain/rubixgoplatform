@@ -4,6 +4,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -25,6 +26,24 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return false
 		}
+		// Check the token validation
+		if !c.testNet {
+			fb := c.w.GetFirstBlock(wt[i])
+			if fb == nil {
+				c.log.Error("Failed to get first token chain block")
+				return false
+			}
+			tl, tn, err := fb.GetTokenDetials()
+			if err != nil {
+				c.log.Error("Failed to get token detials", "err", err)
+				return false
+			}
+			ct := token.GetTokenString(tl, tn)
+			if ct != wt[i] {
+				c.log.Error("Invalid token", "token", wt, "exp_token", ct, "tl", tl, "tn", tn)
+				return false
+			}
+		}
 		b := c.w.GetLatestTokenBlock(wt[i])
 		if b == nil {
 			c.log.Error("Invalid token chain block")
@@ -36,11 +55,6 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			return false
 		}
 		for _, signer := range signers {
-			h, s, err := b.GetHashSig(signer)
-			if err != nil {
-				c.log.Error("Failed to get hash & signature", "err", err)
-				return false
-			}
 			var dc did.DIDCrypto
 			switch b.GetTransType() {
 			case block.TokenGeneratedType:
@@ -48,12 +62,9 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			default:
 				dc, err = c.SetupForienDIDQuorum(signer)
 			}
-
+			err := b.VerifySignature(signer, dc)
 			if err != nil {
-				c.log.Error("Failed to get did", "err", err)
-				return false
-			}
-			if !c.validateSignature(dc, h, s) {
+				c.log.Error("Failed to verify signature", "err", err)
 				return false
 			}
 		}
@@ -93,7 +104,6 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 		c.log.Error("Invalid DID setup")
 		return false
 	}
-	c.log.Info("Received token hash", "hash", h)
 	sig := util.StrToHex(s)
 	ok, err := dc.PvtVerify([]byte(h), sig)
 	if err != nil {

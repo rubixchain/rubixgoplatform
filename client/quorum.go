@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 
+	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/server"
 )
@@ -18,7 +19,7 @@ func (c *Client) AddQuorum(quorumList string) (string, bool) {
 		c.log.Error("Invalid file", "err", err)
 		return "Invalid file, failed to add quorum list", false
 	}
-	var ql model.QuorumList
+	var ql []core.QuorumData
 	err = json.Unmarshal(qlb, &ql)
 	if err != nil {
 		c.log.Error("Invalid file, failed to add quorum list", "err", err)

@@ -26,17 +26,11 @@ type StorageConfig struct {
 
 // ConfigData defines configuration data
 type ConfigData struct {
-	Ports         Ports             `json:"ports"`
-	BootStrap     []string          `json:"bootstrap"`
-	Services      map[string]string `json:"services"`
-	QuorumList    QuorumList        `json:"quorumr_list"`
-	StorageConfig StorageConfig     `json:"storage_config"`
-}
-
-type QuorumList struct {
-	Alpha []string `json:"alpha"`
-	Beta  []string `json:"beta"`
-	Gamma []string `json:"gamma"`
+	Ports             Ports             `json:"ports"`
+	BootStrap         []string          `json:"bootstrap"`
+	Services          map[string]string `json:"services"`
+	StorageConfig     StorageConfig     `json:"storage_config"`
+	TestStorageConfig StorageConfig     `json:"test_storage_config"`
 }
 
 type Config struct {

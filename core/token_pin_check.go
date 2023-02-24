@@ -58,7 +58,7 @@ func (c *Core) pinCheck(token string, senderPeerId string, receiverPeerId string
 			c.log.Info("Pins help by current sender and receiver, pass")
 			return false, nil, nil
 		} else {
-			var peerIdRolemap map[string]string
+			peerIdRolemap := make(map[string]string)
 			for _, peerId := range t {
 				p, err := c.connectPeer(peerId)
 				if err != nil {

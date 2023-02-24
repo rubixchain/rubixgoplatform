@@ -9,7 +9,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
-	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -32,12 +31,13 @@ const (
 )
 
 type ConensusRequest struct {
-	ReqID          string `json:"req_id"`
-	Type           int    `json:"type"`
-	Mode           int    `json:"mode"`
-	SenderPeerID   string `json:"sender_peerd_id"`
-	ReceiverPeerID string `json:"receiver_peerd_id"`
-	ContractBlock  []byte `json:"contract_block"`
+	ReqID          string   `json:"req_id"`
+	Type           int      `json:"type"`
+	Mode           int      `json:"mode"`
+	SenderPeerID   string   `json:"sender_peerd_id"`
+	ReceiverPeerID string   `json:"receiver_peerd_id"`
+	ContractBlock  []byte   `json:"contract_block"`
+	QuorumList     []string `json:"quorum_list"`
 }
 
 type ConensusReply struct {
@@ -119,6 +119,7 @@ type TokenArbitrationReq struct {
 type ArbitaryStatus struct {
 	p      *ipfsport.Peer
 	sig    string
+	ds     bool
 	status bool
 }
 
@@ -132,6 +133,8 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APISignatureRequest, "POST", c.signatureRequest)
 	c.l.AddRoute(APISendReceiverToken, "POST", c.updateReceiverToken)
 	if c.arbitaryMode {
+		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
+		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
 		c.l.AddRoute(APITokenArbitration, "POST", c.tokenArbitration)
 	}
 }
@@ -141,7 +144,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string) error {
 		c.log.Error("DID does not exist", "did", didStr)
 		return fmt.Errorf("DID does not exist")
 	}
-	dc := did.InitDIDQuorumc(didStr, c.cfg.DirPath+"/Rubix", pwd)
+	dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
 	if dc == nil {
 		c.log.Error("Failed to setup quorum")
 		return fmt.Errorf("failed to setup quorum")
@@ -150,94 +153,17 @@ func (c *Core) SetupQuorum(didStr string, pwd string) error {
 	return nil
 }
 
-func (c *Core) GetAllQuorum() *model.QuorumList {
-	var ql model.QuorumList
-	for _, a := range c.cfg.CfgData.QuorumList.Alpha {
-		if ql.Quorum == nil {
-			ql.Quorum = make([]model.Quorum, 0)
-		}
-		q := model.Quorum{
-			Type:    model.AlphaType,
-			Address: a,
-		}
-		ql.Quorum = append(ql.Quorum, q)
-	}
-	for _, a := range c.cfg.CfgData.QuorumList.Beta {
-		if ql.Quorum == nil {
-			ql.Quorum = make([]model.Quorum, 0)
-		}
-		q := model.Quorum{
-			Type:    model.BetaType,
-			Address: a,
-		}
-		ql.Quorum = append(ql.Quorum, q)
-	}
-	for _, a := range c.cfg.CfgData.QuorumList.Gamma {
-		if ql.Quorum == nil {
-			ql.Quorum = make([]model.Quorum, 0)
-		}
-		q := model.Quorum{
-			Type:    model.GammaType,
-			Address: a,
-		}
-		ql.Quorum = append(ql.Quorum, q)
-	}
-	return &ql
+func (c *Core) GetAllQuorum() []string {
+	return c.qm.GetQuorum(QuorumTypeTwo)
 }
 
-func (c *Core) AddQuorum(ql *model.QuorumList) error {
-	update := false
-	for _, q := range ql.Quorum {
-		switch q.Type {
-		case model.AlphaType:
-			update = true
-			if c.cfg.CfgData.QuorumList.Alpha == nil {
-				c.cfg.CfgData.QuorumList.Alpha = make([]string, 0)
-			}
-			c.cfg.CfgData.QuorumList.Alpha = append(c.cfg.CfgData.QuorumList.Alpha, q.Address)
-		case model.BetaType:
-			update = true
-			if c.cfg.CfgData.QuorumList.Beta == nil {
-				c.cfg.CfgData.QuorumList.Beta = make([]string, 0)
-			}
-			c.cfg.CfgData.QuorumList.Beta = append(c.cfg.CfgData.QuorumList.Beta, q.Address)
-		case model.GammaType:
-			update = true
-			if c.cfg.CfgData.QuorumList.Gamma == nil {
-				c.cfg.CfgData.QuorumList.Gamma = make([]string, 0)
-			}
-			c.cfg.CfgData.QuorumList.Gamma = append(c.cfg.CfgData.QuorumList.Gamma, q.Address)
-		}
-	}
-	if update {
-		return c.updateConfig()
-	} else {
-		return nil
-	}
+func (c *Core) AddQuorum(ql []QuorumData) error {
+	return c.qm.AddQuorum(ql)
 }
 
 func (c *Core) RemoveAllQuorum() error {
-	c.cfg.CfgData.QuorumList.Alpha = nil
-	c.cfg.CfgData.QuorumList.Beta = nil
-	c.cfg.CfgData.QuorumList.Gamma = nil
-	return c.updateConfig()
-}
-
-func (c *Core) getQuorumList(t int) *config.QuorumList {
-	var ql config.QuorumList
-	switch t {
-	case 1:
-		return nil
-		// TODO :: Add method to get type1 quorurm
-	case 2:
-		ql = c.cfg.CfgData.QuorumList
-	}
-
-	if len(ql.Alpha) < MinQuorumRequired {
-		c.log.Error("Failed to get required quorum", "al", len(ql.Alpha))
-		return nil
-	}
-	return &ql
+	// TODO:: needs to handle other types
+	return c.qm.RemoveAllQuorum(QuorumTypeTwo)
 }
 
 func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
@@ -292,17 +218,18 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		PledgedTokenChainBlock: make(map[string]interface{}),
 		TokenList:              make([]string, 0),
 	}
-	ql := c.getQuorumList(cr.Type)
-	if ql == nil {
+	ql := c.qm.GetQuorum(cr.Type)
+	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
-		return fmt.Errorf("Failed to get required quorums")
+		return fmt.Errorf("failed to get required quorums")
 	}
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
 	c.pd[cr.ReqID] = &pd
 	c.qlock.Unlock()
+	cr.QuorumList = ql
 
-	for _, a := range ql.Alpha {
+	for _, a := range ql {
 		go c.connectQuorum(cr, a, AlphaQuorumType)
 	}
 	loop := true
@@ -429,16 +356,6 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	}
 }
 
-func (c *Core) checkQuroumCredits(p *ipfsport.Peer, cr *ConensusRequest, qt int) error {
-	var cs model.CreditStatus
-	err := p.SendJSONRequest("GET", APICreditStatus, nil, nil, &cs, true)
-	if err != nil {
-		return err
-	}
-	// TODO::Check credit score & act
-	return nil
-}
-
 func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 	c.startConsensus(cr.ReqID, qt)
 	p, err := c.getPeer(addr)
@@ -447,20 +364,12 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)
 		return
 	}
-	//defer p.Close()
 	err = c.initPledgeQuorumToken(cr, p, qt)
 	if err != nil {
 		c.log.Error("Failed to pleadge token", "err", err)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
-
-	// err = c.checkQuroumCredits(p, cr, qt)
-	// if err != nil {
-	// 	c.log.Error("Faile to check credit status", "err", err)
-	// 	c.finishConensus(cr.ReqID, qt, p, addr, false, "", nil, nil)
-	// 	return
-	// }
 	var cresp ConensusReply
 	err = p.SendJSONRequest("POST", APIQuorumConsensus, nil, cr, &cresp, true, 10*time.Minute)
 	if err != nil {
@@ -496,7 +405,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		jb, err := json.Marshal(csig)
 		if err != nil {
 			c.log.Error("Failed to parse quorum credit", "err", err)
-			return nil, fmt.Errorf("Failed to parse quorum credit")
+			return nil, fmt.Errorf("failed to parse quorum credit")
 		}
 		credit = append(credit, string(jb))
 	}
@@ -526,7 +435,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			b := c.w.GetLatestTokenBlock(tokenList[index])
 			if b == nil {
 				c.log.Error("Failed to get latest token chain block")
-				return nil, fmt.Errorf("Failed to get latest token chain block")
+				return nil, fmt.Errorf("failed to get latest token chain block")
 			}
 			ctcb[tokenList[index]] = b
 			pm[tokenList[index]] = t
@@ -537,18 +446,18 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
 		c.log.Error("Failed to create new token chain block")
-		return nil, fmt.Errorf("Failed to create new token chain block")
+		return nil, fmt.Errorf("failed to create new token chain block")
 	}
 	hs, err := nb.GetHash()
 	c.log.Info("Token chain Hash", "hash", hs)
 	if err != nil {
 		c.log.Error("Failed to hash from new block", "err", err)
-		return nil, fmt.Errorf("Failed to hash from new block")
+		return nil, fmt.Errorf("failed to hash from new block")
 	}
 	blk := nb.GetBlock()
 	if blk == nil {
 		c.log.Error("Failed to get new block", "err", err)
-		return nil, fmt.Errorf("Failed to get new block")
+		return nil, fmt.Errorf("failed to get new block")
 	}
 	for k := range pd.PledgedTokens {
 		p, ok := cs.P[k]
@@ -563,16 +472,16 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		err = p.SendJSONRequest("POST", APISignatureRequest, nil, &sr, &srep, true)
 		if err != nil {
 			c.log.Error("Failed to get signature from the quorum", "err", err)
-			return nil, fmt.Errorf("Failed to get signature from the quorum")
+			return nil, fmt.Errorf("failed to get signature from the quorum")
 		}
 		if !srep.Status {
 			c.log.Error("Failed to get signature from the quorum", "msg", srep.Message)
-			return nil, fmt.Errorf("Failed to get signature from the quorum, " + srep.Message)
+			return nil, fmt.Errorf("failed to get signature from the quorum, " + srep.Message)
 		}
 		err = nb.ReplaceSignature(k, srep.Signature)
 		if err != nil {
 			c.log.Error("Failed to update signature to block", "err", err)
-			return nil, fmt.Errorf("Failed to update signature to block")
+			return nil, fmt.Errorf("failed to update signature to block")
 		}
 	}
 	for k, v := range pd.PledgedTokens {
@@ -646,7 +555,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 				did := p.GetPeerDID()
 				pd.PledgedTokens[did] = make([]string, 0)
 				for i, t := range prs.Tokens {
-					ptcb := block.InitBlock(block.TokenBlockType, prs.TokenChainBlock[i], nil)
+					ptcb := block.InitBlock(prs.TokenChainBlock[i], nil)
 					if !c.checkIsPledged(ptcb, t) {
 						pd.NumPledgedTokens++
 						pd.RemPledgeTokens--
@@ -682,6 +591,40 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			return err
 		}
 	}
+}
+
+func (c *Core) checkDIDMigrated(as *ArbitaryStatus, did string) {
+	var br model.BasicResponse
+	q := make(map[string]string)
+	q["olddid"] = did
+	err := as.p.SendJSONRequest("GET", APICheckDIDArbitration, q, nil, &br, true)
+	if err != nil {
+		c.log.Error("Failed to get did detials from arbitray", "err", err)
+		return
+	}
+	if !br.Status {
+		c.log.Error("Failed to get did detials from arbitray", "msg", br.Message)
+		return
+	}
+	as.ds = br.Result.(bool)
+	as.status = true
+}
+
+func (c *Core) mapMigratedDID(as *ArbitaryStatus, olddid string, newdid string) {
+	var br model.BasicResponse
+	m := make(map[string]string)
+	m["olddid"] = olddid
+	m["newdid"] = newdid
+	err := as.p.SendJSONRequest("POST", APIMapDIDArbitration, nil, &m, &br, true)
+	if err != nil {
+		c.log.Error("Failed to get did detials from arbitray", "err", err)
+		return
+	}
+	if !br.Status {
+		c.log.Error("Failed to get did detials from arbitray", "msg", br.Message)
+		return
+	}
+	as.status = true
 }
 
 func (c *Core) getArbitrationSignature(as *ArbitaryStatus, sr *SignatureRequest) {
