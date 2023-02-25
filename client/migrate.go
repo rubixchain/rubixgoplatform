@@ -14,3 +14,12 @@ func (c *Client) MigrateNode(m *core.MigrateRequest) (*model.BasicResponse, erro
 	}
 	return &rm, nil
 }
+
+func (c *Client) LockToknes(ts []string) (*model.BasicResponse, error) {
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("POST", server.APILockTokens, nil, ts, &rm)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}

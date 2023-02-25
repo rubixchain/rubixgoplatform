@@ -125,7 +125,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	resp.Message = msg
 	tid := util.HexToStr(util.CalculateHash(cr.ContractBlock, "SHA3-256"))
 	tokenList := make([]string, 0)
-	tokenList = append(wta, pta...)
+	tokenList = append(tokenList, wta...)
+	tokenList = append(tokenList, pta...)
 	pd := c.pd[cr.ReqID]
 	pm := make(map[string]interface{})
 	index := 0
@@ -151,7 +152,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		TotalTime:       int(dif),
 		WholeTokens:     wta,
 		PartTokens:      pta,
-		QuorumList:      c.cfg.CfgData.QuorumList.Alpha,
+		QuorumList:      cr.QuorumList,
 		PledgedTokenMap: pm,
 	}
 	c.w.AddTransactionHistory(td)
@@ -162,7 +163,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		Amount:      req.TokenCount,
 		TrasnType:   req.Type,
 		TokenIDs:    wta,
-		QuorumList:  c.cfg.CfgData.QuorumList.Alpha,
+		QuorumList:  cr.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
 	}
 	c.ec.ExplorerTransaction(etrans)

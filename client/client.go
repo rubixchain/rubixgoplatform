@@ -81,11 +81,18 @@ func (c *Client) sendJSONRequest(method string, path string, query map[string]st
 	return nil
 }
 
-func (c *Client) sendMutiFormRequest(method string, path string, fields map[string]string, files map[string]string, output interface{}, timeout ...time.Duration) error {
+func (c *Client) sendMutiFormRequest(method string, path string, query map[string]string, fields map[string]string, files map[string]string, output interface{}, timeout ...time.Duration) error {
 	req, err := c.multiFormRequest(method, path, fields, files)
 	if err != nil {
 		c.log.Error("Failed to get http request")
 		return err
+	}
+	if query != nil {
+		q := req.URL.Query()
+		for k, v := range query {
+			q.Add(k, v)
+		}
+		req.URL.RawQuery = q.Encode()
 	}
 	resp, err := c.Do(req, timeout...)
 	if err != nil {

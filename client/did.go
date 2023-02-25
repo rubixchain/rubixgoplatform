@@ -103,7 +103,7 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 		files["pub_key"] = cfg.PubKeyFile
 	}
 	var response model.BasicResponse
-	err = c.sendMutiFormRequest("POST", server.APICreateDID, fields, files, &response)
+	err = c.sendMutiFormRequest("POST", server.APICreateDID, nil, fields, files, &response)
 	if err != nil {
 		c.log.Error("Invalid response from the node", "err", err)
 		return "Invalid response from the node, " + err.Error(), false

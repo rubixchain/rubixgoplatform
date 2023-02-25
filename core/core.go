@@ -18,7 +18,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
-	"github.com/rubixchain/rubixgoplatform/core/quorum"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -26,22 +25,30 @@ import (
 )
 
 const (
-	APIPingPath          string = "/api/ping"
-	APIPeerStatus        string = "/api/peerstatus"
-	APICreditStatus      string = "/api/creditstatus"
-	APIQuorumConsensus   string = "/api/quorum-conensus"
-	APIQuorumCredit      string = "/api/quorum-credit"
-	APIReqPledgeToken    string = "/api/req-pledge-token"
-	APIUpdatePledgeToken string = "/api/update-pledge-token"
-	APISignatureRequest  string = "/api/signature-request"
-	APISendReceiverToken string = "/api/send-receiver-token"
-	APISyncTokenChain    string = "/api/sync-token-chain"
-	APIDhtProviderCheck  string = "/api/dht-provider-check"
-	APITokenArbitration  string = "/api/token-arbitration"
+	APIPingPath            string = "/api/ping"
+	APIPeerStatus          string = "/api/peerstatus"
+	APICreditStatus        string = "/api/creditstatus"
+	APIQuorumConsensus     string = "/api/quorum-conensus"
+	APIQuorumCredit        string = "/api/quorum-credit"
+	APIReqPledgeToken      string = "/api/req-pledge-token"
+	APIUpdatePledgeToken   string = "/api/update-pledge-token"
+	APISignatureRequest    string = "/api/signature-request"
+	APISendReceiverToken   string = "/api/send-receiver-token"
+	APISyncTokenChain      string = "/api/sync-token-chain"
+	APIDhtProviderCheck    string = "/api/dht-provider-check"
+	APIMapDIDArbitration   string = "/api/map-did-arbitration"
+	APICheckDIDArbitration string = "/api/check-did-arbitration"
+	APITokenArbitration    string = "/api/token-arbitration"
 )
 
 const (
 	InvalidPasringErr string = "invalid json parsing"
+	RubixRootDir      string = "Rubix/"
+	DefaultMainNetDB  string = "rubix.db"
+	DefaultTestNetDB  string = "rubixtest.db"
+	MainNetDir        string = "MainNet"
+	TestNetDir        string = "TestNet"
+	TestNetDIDDir     string = "TestNetDID/"
 )
 
 const (
@@ -67,9 +74,10 @@ type Core struct {
 	ipfs          *ipfsnode.Shell
 	ipfsState     bool
 	ipfsChan      chan bool
-	alphaQuorum   *quorum.Quorum
 	d             *did.DID
+	didDir        string
 	pm            *ipfsport.PeerManager
+	qm            *QuorumManager
 	l             *ipfsport.Listener
 	ps            *pubsub.PubSub
 	started       bool
@@ -106,7 +114,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 					SwarmPort:    (SwarmPort + node),
 					IPFSAPIPort:  (IPFSAPIPort + node),
 				},
-				BootStrap: []string{"/ip4/46.166.163.226/tcp/4001/p2p/12D3KooWKjScCfmdpehRLyYWW34dUq1X72FV9xy8sNxRAFYdnRWM", "/ip4/172.104.191.191/tcp/4001/p2p/12D3KooWFudnWZY1v1m4YXCzDWZSbNt7nvf5F42uzM6vErZ4NwqJ"},
+				BootStrap: []string{"/ip4/161.35.169.251/tcp/4001/p2p/12D3KooWPhZEYEw4jG3kSRuwgMEHcVt7KMkm1ui2ddu4fgSgwvDq", "/ip4/103.127.158.120/tcp/4001/p2p/12D3KooWSQ94HRDzFf6W2rp7P8gzP6efZQHTaSU8uaQjskVBHiWP", "/ip4/172.104.191.191/tcp/4001/p2p/12D3KooWFudnWZY1v1m4YXCzDWZSbNt7nvf5F42uzM6vErZ4NwqJ"},
 			},
 		}
 		cfgBytes, err := json.Marshal(cfg)
@@ -126,8 +134,15 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	update := false
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
 		cfg.CfgData.StorageConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.StorageConfig.DBAddress = cfg.DirPath + "Rubix/rubix.db"
+		cfg.CfgData.StorageConfig.DBAddress = cfg.DirPath + RubixRootDir + DefaultMainNetDB
 		cfg.CfgData.StorageConfig.DBType = "Sqlite3"
+		update = true
+	}
+
+	if cfg.CfgData.TestStorageConfig.StorageType == 0 {
+		cfg.CfgData.TestStorageConfig.StorageType = storage.StorageDBType
+		cfg.CfgData.TestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + DefaultTestNetDB
+		cfg.CfgData.TestStorageConfig.DBType = "Sqlite3"
 		update = true
 	}
 
@@ -144,6 +159,18 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		sd:            make(map[string]*ServiceDetials),
 		arbitaryMode:  am,
 	}
+	c.didDir = c.cfg.DirPath + RubixRootDir
+	if c.testNet {
+		c.didDir = c.cfg.DirPath + RubixRootDir + TestNetDIDDir
+
+	}
+	if _, err := os.Stat(c.didDir); os.IsNotExist(err) {
+		err := os.MkdirAll(c.didDir, os.ModeDir|os.ModePerm)
+		if err != nil {
+			c.log.Error("Failed to create did directory", "err", err)
+			return nil, err
+		}
+	}
 	c.arbitaryAddr = []string{"12D3KooWHwsKu3GS9rh5X5eS9RTKGFy6NcdX1bV1UHcH8sQ8WqCM.bafybmicttgw2qx4grueyytrgln35vq2hbyhznv6ks4fabeakm47u72c26u",
 		"12D3KooWQ2as3FNtvL1MKTeo7XAuBZxSv8QqobxX4AmURxyNe5mX.bafybmicro2m4kove5vsetej63xq4csobtlzchb2c34lp6dnakzkwtq2mmy",
 		"12D3KooWJUJz2ipK78LAiwhc1QUVDvSMjZNBHt4vSAeVAq6FsneA.bafybmics43ef7ldgrogzurh7vukormpgscq4um44bss6mfuopsbjorbyaq",
@@ -157,35 +184,40 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if update {
 		c.updateConfig()
 	}
-	if _, err := os.Stat(cfg.DirPath + "Rubix/MainNet"); os.IsNotExist(err) {
-		err := os.MkdirAll(cfg.DirPath+"Rubix/MainNet", os.ModeDir|os.ModePerm)
+	if _, err := os.Stat(cfg.DirPath + RubixRootDir + MainNetDir); os.IsNotExist(err) {
+		err := os.MkdirAll(cfg.DirPath+RubixRootDir+MainNetDir, os.ModeDir|os.ModePerm)
 		if err != nil {
 			c.log.Error("Failed to create main net directory", "err", err)
 			return nil, err
 		}
 	}
-	tcDir := cfg.DirPath + "Rubix/MainNet/"
+	tcDir := cfg.DirPath + RubixRootDir + MainNetDir + "/"
 	if testNet {
-		if _, err := os.Stat(cfg.DirPath + "Rubix/TestNet"); os.IsNotExist(err) {
-			err := os.MkdirAll(cfg.DirPath+"Rubix/TestNet", os.ModeDir|os.ModePerm)
+		if _, err := os.Stat(cfg.DirPath + RubixRootDir + TestNetDir); os.IsNotExist(err) {
+			err := os.MkdirAll(cfg.DirPath+RubixRootDir+TestNetDir, os.ModeDir|os.ModePerm)
 			if err != nil {
 				c.log.Error("Failed to create test net directory", "err", err)
 				return nil, err
 			}
 		}
-		tcDir = cfg.DirPath + "Rubix/TestNet/"
+		tcDir = cfg.DirPath + RubixRootDir + TestNetDir + "/"
 	}
 
-	switch cfg.CfgData.StorageConfig.StorageType {
+	sc := cfg.CfgData.StorageConfig
+	if c.testNet {
+		sc = cfg.CfgData.TestStorageConfig
+	}
+
+	switch sc.StorageType {
 
 	case storage.StorageDBType:
 		scfg := &econfig.Config{
-			DBName:     cfg.CfgData.StorageConfig.DBName,
-			DBAddress:  cfg.CfgData.StorageConfig.DBAddress,
-			DBPort:     cfg.CfgData.StorageConfig.DBPort,
-			DBType:     cfg.CfgData.StorageConfig.DBType,
-			DBUserName: cfg.CfgData.StorageConfig.DBUserName,
-			DBPassword: cfg.CfgData.StorageConfig.DBPassword,
+			DBName:     sc.DBName,
+			DBAddress:  sc.DBAddress,
+			DBPort:     sc.DBPort,
+			DBType:     sc.DBType,
+			DBUserName: sc.DBUserName,
+			DBPassword: sc.DBPassword,
 		}
 		c.s, err = storage.NewStorageDB(scfg)
 		if err != nil {
@@ -193,13 +225,18 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			return nil, fmt.Errorf("failed to create storage DB")
 		}
 	default:
-		c.log.Error("Unsupported DB type, please check the configuration", "type", cfg.CfgData.StorageConfig.StorageType)
+		c.log.Error("Unsupported DB type, please check the configuration", "type", sc.StorageType)
 		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
 	}
 
-	c.w, err = wallet.InitWallet(c.s, tcDir, c.log, c.testNet)
+	c.w, err = wallet.InitWallet(c.s, tcDir, c.log)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
+		return nil, err
+	}
+	c.qm, err = NewQuorumManager(c.s, c.log)
+	if err != nil {
+		c.log.Error("Failed to setup quorum manager", "err", err)
 		return nil, err
 	}
 	c.srv, err = service.NewService(c.s, c.log)
@@ -236,7 +273,7 @@ func (c *Core) SetupCore() error {
 		bs = nil
 	}
 	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, 100, c.ipfs, c.log, bs)
-	c.d = did.InitDID(c.cfg.DirPath+"Rubix/", c.log, c.ipfs)
+	c.d = did.InitDID(c.didDir, c.log, c.ipfs)
 	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
 	if err != nil {
 		return err
@@ -288,23 +325,23 @@ func (c *Core) Start() (bool, string) {
 	// 	c.log.Error("Failed to publish message to explorer", "err", err)
 	// 	return false, "Failed to publish message to explorer"
 	// }
-	dt, err := c.w.GetAllDIDs()
-	if err == nil && len(dt) > 0 {
-		list := make([]string, 0)
-		for _, d := range dt {
-			list = append(list, d.DID)
-		}
-		// exp = model.ExploreModel{
-		// 	Cmd:     ExpDIDPeerMapCmd,
-		// 	PeerID:  c.peerID,
-		// 	DIDList: list,
-		// }
-		// err = c.PublishExplorer(&exp)
-		// if err != nil {
-		// 	c.log.Error("Failed to publish message to explorer", "err", err)
-		// 	return false, "Failed to publish message to explorer"
-		// }
-	}
+	// dt, err := c.w.GetAllDIDs()
+	// if err == nil && len(dt) > 0 {
+	// 	list := make([]string, 0)
+	// 	for _, d := range dt {
+	// 		list = append(list, d.DID)
+	// 	}
+	// 	// exp = model.ExploreModel{
+	// 	// 	Cmd:     ExpDIDPeerMapCmd,
+	// 	// 	PeerID:  c.peerID,
+	// 	// 	DIDList: list,
+	// 	// }
+	// 	// err = c.PublishExplorer(&exp)
+	// 	// if err != nil {
+	// 	// 	c.log.Error("Failed to publish message to explorer", "err", err)
+	// 	// 	return false, "Failed to publish message to explorer"
+	// 	// }
+	// }
 	return true, "Setup Complete"
 }
 
@@ -321,9 +358,6 @@ func (c *Core) StopCore() {
 	// }
 	time.Sleep(time.Second)
 	c.stopIPFS()
-	if c.alphaQuorum != nil {
-		c.alphaQuorum.Stop()
-	}
 	if c.l != nil {
 		c.l.Shutdown()
 	}
@@ -429,7 +463,7 @@ func (c *Core) UpateWebReq(reqID string, req *ensweb.Request) error {
 	defer c.rlock.Unlock()
 	dc, ok := c.webReq[reqID]
 	if !ok {
-		return fmt.Errorf("Request does not exist")
+		return fmt.Errorf("request does not exist")
 	}
 	dc.Req = req
 	return nil
@@ -459,11 +493,11 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	}
 	switch dt.Type {
 	case did.BasicDIDMode:
-		return did.InitDIDBasic(didStr, c.cfg.DirPath+"Rubix", dc), nil
+		return did.InitDIDBasic(didStr, c.didDir, dc), nil
 	case did.StandardDIDMode:
-		return did.InitDIDStandard(didStr, c.cfg.DirPath+"Rubix", dc), nil
+		return did.InitDIDStandard(didStr, c.didDir, dc), nil
 	case did.WalletDIDMode:
-		return did.InitDIDWallet(didStr, c.cfg.DirPath+"Rubix", dc), nil
+		return did.InitDIDWallet(didStr, c.didDir, dc), nil
 	default:
 		return nil, fmt.Errorf("DID Type is not supported")
 	}
@@ -474,7 +508,7 @@ func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
 	if err != nil {
 		return nil, err
 	}
-	return did.InitDIDBasic(didStr, c.cfg.DirPath+"/Rubix", nil), nil
+	return did.InitDIDBasic(didStr, c.didDir, nil), nil
 }
 
 func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
@@ -482,18 +516,18 @@ func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 	if err != nil {
 		return nil, err
 	}
-	return did.InitDIDQuorumc(didStr, c.cfg.DirPath+"/Rubix", ""), nil
+	return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 }
 
 func (c *Core) FetchDID(did string) error {
-	_, err := os.Stat(c.cfg.DirPath + "Rubix/" + did)
+	_, err := os.Stat(c.didDir + did)
 	if err != nil {
-		err = os.MkdirAll(c.cfg.DirPath+"Rubix/"+did, os.ModeDir|os.ModePerm)
+		err = os.MkdirAll(c.didDir+did, os.ModeDir|os.ModePerm)
 		if err != nil {
 			c.log.Error("failed to create directory", "err", err)
 			return err
 		}
-		err = c.ipfs.Get(did, c.cfg.DirPath+"Rubix/"+did+"/")
+		err = c.ipfs.Get(did, c.didDir+did+"/")
 	}
 	return err
 }

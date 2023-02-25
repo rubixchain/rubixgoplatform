@@ -135,7 +135,7 @@ func (cmd *Command) dumpTokenChain() {
 			return
 		}
 		for _, blk := range ds.Blocks {
-			b := block.InitBlock(block.TokenBlockType, blk, nil)
+			b := block.InitBlock(blk, nil)
 			if b != nil {
 				blocks = append(blocks, b.GetBlockMap())
 			} else {

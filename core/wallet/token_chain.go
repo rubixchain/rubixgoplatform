@@ -16,6 +16,7 @@ const (
 	WholeTokenType string = "wt"
 	PartTokenType  string = "pt"
 	NFTType        string = "nft"
+	DataTokenType  string = "dt"
 )
 
 const TCBlockCountLimit int = 100
@@ -44,23 +45,44 @@ func tcsBlockID(token string, key string) string {
 	}
 }
 
-// GetTokenBlock get token chain block from the storage
-func (w *Wallet) GetTokenBlock(token string, blockID string) ([]byte, error) {
-	v, err := w.tcs.Get([]byte(tcsKey(WholeTokenType, token, blockID)), nil)
+func (w *Wallet) getChainDB(tt string) *ChainDB {
+	var db *ChainDB
+	switch tt {
+	case WholeTokenType:
+		db = w.tcs
+	case PartTokenType:
+		db = w.tcs
+	case DataTokenType:
+		db = w.dtcs
+	}
+	return db
+}
+
+// getBlock get chain block from the storage
+func (w *Wallet) getBlock(tt string, t string, blockID string) ([]byte, error) {
+	db := w.getChainDB(tt)
+	if db == nil {
+		return nil, fmt.Errorf("failed get block, invalid token type")
+	}
+	v, err := db.Get([]byte(tcsKey(tt, t, blockID)), nil)
 	if err != nil {
 		return nil, err
 	}
 	return v, nil
 }
 
-// GetAllTokenBlocks get the tokecn chain blocks
-func (w *Wallet) GetAllTokenBlocks(token string, blockID string) ([][]byte, string, error) {
-	iter := w.tcs.NewIterator(util.BytesPrefix([]byte(tcsPrefix(WholeTokenType, token))), nil)
+// getAllBlocks get the chain blocks
+func (w *Wallet) getAllBlocks(tt string, token string, blockID string) ([][]byte, string, error) {
+	db := w.getChainDB(tt)
+	if db == nil {
+		return nil, "", fmt.Errorf("failed get all blocks, invalid token type")
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
 	defer iter.Release()
 	blks := make([][]byte, 0)
 	count := 0
 	if blockID != "" {
-		if !iter.Seek([]byte(tcsKey(WholeTokenType, token, blockID))) {
+		if !iter.Seek([]byte(tcsKey(tt, token, blockID))) {
 			return nil, "", fmt.Errorf("Token chain block does not exist")
 		}
 	}
@@ -72,7 +94,7 @@ func (w *Wallet) GetAllTokenBlocks(token string, blockID string) ([][]byte, stri
 		blks = append(blks, blk)
 		count++
 		if count == TCBlockCountLimit {
-			b := block.InitBlock(block.TokenBlockType, blk, nil)
+			b := block.InitBlock(blk, nil)
 			blkID, err := b.GetBlockID(token)
 			if err != nil {
 				return nil, "", fmt.Errorf("Invalid token chain block")
@@ -83,41 +105,57 @@ func (w *Wallet) GetAllTokenBlocks(token string, blockID string) ([][]byte, stri
 	return blks, nextBlkID, nil
 }
 
-// GetLatestTokenBlock get latest token block from the storage
-func (w *Wallet) GetLatestTokenBlock(token string) *block.Block {
-	iter := w.tcs.NewIterator(util.BytesPrefix([]byte(tcsPrefix(WholeTokenType, token))), nil)
+// getLatestBlock get latest block from the storage
+func (w *Wallet) getLatestBlock(tt string, token string) *block.Block {
+	db := w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to get latest block, invalid token type")
+		return nil
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
 	defer iter.Release()
 	if iter.Last() {
 		v := iter.Value()
 		blk := make([]byte, len(v))
 		copy(blk, v)
-		b := block.InitBlock(block.TokenBlockType, blk, nil)
+		b := block.InitBlock(blk, nil)
 		return b
 	}
 	return nil
 }
 
-func (w *Wallet) getGensysBlock(token string) *block.Block {
-	iter := w.tcs.NewIterator(util.BytesPrefix([]byte(tcsPrefix(WholeTokenType, token))), nil)
+// getFirstBlock get the first block from the storage
+func (w *Wallet) getFirstBlock(tt string, token string) *block.Block {
+	db := w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to get first block, invalid token type")
+		return nil
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
 	defer iter.Release()
 	if iter.First() {
 		v := iter.Value()
 		blk := make([]byte, len(v))
 		copy(blk, v)
-		b := block.InitBlock(block.TokenBlockType, blk, nil)
+		b := block.InitBlock(blk, nil)
 		return b
 	}
 	return nil
 }
 
-// AddTokenBlock will write token block into storage
-func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
+// addBlock will write block into storage
+func (w *Wallet) addBlock(tt string, token string, b *block.Block) error {
+	db := w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to add block, invalid token type")
+		return nil
+	}
 	bid, err := b.GetBlockID(token)
 	if err != nil {
 		return err
 	}
-	key := tcsKey(WholeTokenType, token, bid)
-	lb := w.GetLatestTokenBlock(token)
+	key := tcsKey(tt, token, bid)
+	lb := w.getLatestBlock(tt, token)
 	bn, err := b.GetBlockNumber(token)
 	if err != nil {
 		w.log.Error("Failed to get block number", "err", err)
@@ -140,8 +178,8 @@ func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
 			return fmt.Errorf("invalid block number, sequence missing")
 		}
 	}
-	w.wl.Lock()
+	db.l.Lock()
 	err = w.tcs.Put([]byte(key), b.GetBlock(), nil)
-	w.wl.Unlock()
+	db.l.Unlock()
 	return err
 }

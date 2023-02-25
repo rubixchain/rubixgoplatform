@@ -53,6 +53,8 @@ const (
 	RegsiterDIDCmd        string = "registerdid"
 	ShutDownCmd           string = "shutdown"
 	MirgateNodeCmd        string = "migratenode"
+	LockTokensCmd         string = "locktokens"
+	CreateDataTokenCmd    string = "createdatatoken"
 )
 
 var commands = []string{VersionCmd,
@@ -76,7 +78,9 @@ var commands = []string{VersionCmd,
 	DumpTokenChainCmd,
 	RegsiterDIDCmd,
 	ShutDownCmd,
-	MirgateNodeCmd}
+	MirgateNodeCmd,
+	LockTokensCmd,
+	CreateDataTokenCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -98,7 +102,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will dump the token chain into file",
 	"This command will register DID peer map across the network",
 	"This command will shutdown the rubix node",
-	"This command will migrate node to newer node"}
+	"This command will migrate node to newer node",
+	"This command will lock the tokens on the arbitary node",
+	"This command will create data token token"}
 
 type Command struct {
 	cfg          config.Config
@@ -146,6 +152,11 @@ type Command struct {
 	did          string
 	token        string
 	arbitaryMode bool
+	tokenList    string
+	fileMode     bool
+	file         string
+	userID       string
+	userInfo     string
 }
 
 func showVersion() {
@@ -286,7 +297,12 @@ func Run(args []string) {
 	flag.StringVar(&cmd.did, "did", "", "DID")
 	flag.BoolVar(&cmd.enableAuth, "enableAuth", false, "Enable authentication")
 	flag.BoolVar(&cmd.arbitaryMode, "arbitaryMode", false, "Enable arbitary mode")
+	flag.StringVar(&cmd.tokenList, "tokenList", "tokens.txt", "Token lis")
 	flag.StringVar(&cmd.token, "token", "", "Token name")
+	flag.BoolVar(&cmd.fileMode, "fmode", false, "File mode")
+	flag.StringVar(&cmd.file, "file", "file.txt", "File to be uploaded")
+	flag.StringVar(&cmd.userID, "uid", "testuser", "User ID for token creation")
+	flag.StringVar(&cmd.userInfo, "uinfo", "", "User info for token creation")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -393,6 +409,8 @@ func Run(args []string) {
 		cmd.ShutDownCmd()
 	case MirgateNodeCmd:
 		cmd.MigrateNodeCmd()
+	case CreateDataTokenCmd:
+		cmd.createDataToken()
 	default:
 		cmd.log.Error("Invalid command")
 	}

@@ -56,14 +56,11 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 			didCreate.PubKeyFile = fileName
 		}
 	}
-
-	if s.cfg.EnableAuth {
-		// always expect client tokne to present
-		token := req.ClientToken.Model.(*Token)
-		didCreate.Dir = token.UserID
-	} else {
-		didCreate.Dir = DIDRootDir
+	dir, ok := s.validateAccess(req)
+	if !ok {
+		return s.BasicResponse(req, false, "Unathuriozed access", nil)
 	}
+	didCreate.Dir = dir
 	did, err := s.c.CreateDID(&didCreate)
 	if err != nil {
 		s.log.Error("failed to create did", "err", err)
@@ -77,7 +74,10 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 
 // APIGetAllDID will get all DID
 func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
-	dir := DIDRootDir
+	dir, ok := s.validateAccess(req)
+	if !ok {
+		return s.BasicResponse(req, false, "Unathuriozed access", nil)
+	}
 	if s.cfg.EnableAuth {
 		// always expect client token to present
 		token := req.ClientToken.Model.(*Token)
