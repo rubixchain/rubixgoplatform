@@ -8,6 +8,40 @@ import (
 )
 
 func (cmd *Command) MigrateNodeCmd() {
+	if cmd.forcePWD {
+		pwd, err := getpassword("Set private key password: ")
+		if err != nil {
+			cmd.log.Error("Failed to get password")
+			return
+		}
+		npwd, err := getpassword("Re-enter private key password: ")
+		if err != nil {
+			cmd.log.Error("Failed to get password")
+			return
+		}
+		if pwd != npwd {
+			cmd.log.Error("Password mismatch")
+			return
+		}
+		cmd.privPWD = pwd
+	}
+	if cmd.forcePWD {
+		pwd, err := getpassword("Set quorum key password: ")
+		if err != nil {
+			cmd.log.Error("Failed to get password")
+			return
+		}
+		npwd, err := getpassword("Re-enter quorum key password: ")
+		if err != nil {
+			cmd.log.Error("Failed to get password")
+			return
+		}
+		if pwd != npwd {
+			cmd.log.Error("Password mismatch")
+			return
+		}
+		cmd.quorumPWD = pwd
+	}
 	r := core.MigrateRequest{
 		DIDType:   cmd.didType,
 		PrivPWD:   cmd.privPWD,
