@@ -179,7 +179,7 @@ func (w *Wallet) addBlock(tt string, token string, b *block.Block) error {
 		}
 	}
 	db.l.Lock()
-	err = w.tcs.Put([]byte(key), b.GetBlock(), nil)
+	err = db.Put([]byte(key), b.GetBlock(), nil)
 	db.l.Unlock()
 	return err
 }

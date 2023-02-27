@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/EnsurityTechnologies/uuid"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -150,10 +151,13 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, write failed"
 		return &br
 	}
+	dtm := make(map[string]interface{})
+	dtm[dr.DID] = dt
 	st := &contract.ContractType{
 		Type:         contract.SCDataTokenType,
 		OwnerDID:     dr.DID,
 		CommitterDID: comDid,
+		DataTokens:   dtm,
 		Comment:      "Committed token",
 	}
 	sc := contract.CreateNewContract(st)
@@ -201,25 +205,62 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	return &br
 }
 
-// func (c *Core) CommitDataToken(reqID string, did string) {
-// 	br := c.commitDataToken(reqID, did)
-// 	dc := c.GetWebReq(reqID)
-// 	if dc == nil {
-// 		c.log.Error("Failed to create data token, failed to get did channel")
-// 		return
-// 	}
-// 	dc.OutChan <- br
-// }
+func (c *Core) CommitDataToken(reqID string, did string) {
+	br := c.commitDataToken(reqID, did)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to create data token, failed to get did channel")
+		return
+	}
+	dc.OutChan <- br
+}
 
-// func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
-// 	dt, err := c.w.GetDataToken(did)
-// 	br := &model.BasicResponse{
-// 		Status: false,
-// 	}
-// 	if err != nil {
-// 		c.log.Error("Commit data token failed, failed to get data token", "err", err)
-// 		br.Message = "Commit data token failed, failed to get data token"
-// 		return br
-// 	}
+func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
+	dt, err := c.w.GetDataToken(did)
+	br := &model.BasicResponse{
+		Status: false,
+	}
+	if err != nil {
+		c.log.Error("Commit data token failed, failed to get data token", "err", err)
+		br.Message = "Commit data token failed, failed to get data token"
+		return br
+	}
 
-// }
+	dtm := make(map[string]interface{})
+
+	for i := range dt {
+		dtm[dt[i].TokenID] = dt[i].DID
+	}
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		br.Message = "Failed to setup DID, " + err.Error()
+		return br
+	}
+	sct := &contract.ContractType{
+		Type:       contract.SCDataTokenCommitType,
+		DataTokens: dtm,
+		PledgeMode: contract.POWPledgeMode,
+	}
+	sc := contract.CreateNewContract(sct)
+	err = sc.UpdateSignature(dc)
+	if err != nil {
+		c.log.Error(err.Error())
+		br.Message = err.Error()
+		return br
+	}
+	cr := &ConensusRequest{
+		ReqID:         uuid.New().String(),
+		Type:          QuorumTypeTwo,
+		Mode:          DTCommitMode,
+		SenderPeerID:  c.peerID,
+		ContractBlock: sc.GetBlock(),
+	}
+	err = c.initiateConsensus(cr, sc, dc)
+	if err != nil {
+		c.log.Error("Consensus failed", "err", err)
+		br.Message = "Consensus failed" + err.Error()
+		return br
+	}
+
+	return br
+}

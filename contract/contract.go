@@ -12,6 +12,7 @@ const (
 	SCRBTDirectType int = iota
 	SCDIDMigrateType
 	SCDataTokenType
+	SCDataTokenCommitType
 )
 const (
 	SCTypeKey             string = "1"
@@ -27,6 +28,8 @@ const (
 	SCOwnerDIDKey         string = "11"
 	SCMigratedTokenKey    string = "12"
 	SCMigratedTokenIDKey  string = "13"
+	SCPledgeTokenKey      string = "14"
+	SCDataTokensKey       string = "15"
 	SCShareSignatureKey   string = "97"
 	SCKeySignatureKey     string = "98"
 	SCBlockHashKey        string = "99"
@@ -41,11 +44,12 @@ type ContractType struct {
 	WholeTokensID   []string               `json:"whole_tokens_id"`
 	PartTokens      []string               `json:"part_tokens"`
 	PartTokensID    []string               `json:"part_tokens_id"`
-	DataToken       string                 `json:"data_token"`
 	SenderDID       string                 `json:"sender_did"`
 	ReceiverDID     string                 `json:"receiver_did"`
 	PledgeMode      int                    `json:"pledge_mode"`
 	PledgeDetials   map[string]interface{} `json:"pledge_detials"`
+	PledgeToken     string                 `json:"pledge_token"`
+	DataTokens      map[string]interface{} `json:"data_tokens"`
 	OwnerDID        string                 `json:"owner_did"`
 	CommitterDID    string                 `json:"committer_did"`
 	MigratedToken   string                 `json:"mirgated_token"`
@@ -97,6 +101,12 @@ func CreateNewContract(st *ContractType) *Contract {
 	}
 	if st.MigratedTokenID != "" {
 		nm[SCMigratedTokenIDKey] = st.MigratedTokenID
+	}
+	if st.PledgeToken != "" {
+		nm[SCPledgeTokenKey] = st.PledgeToken
+	}
+	if st.DataTokens != nil {
+		nm[SCDataTokensKey] = st.DataTokens
 	}
 	return InitContract(nil, nm)
 }
@@ -282,6 +292,18 @@ func (c *Contract) GetWholeTokens() []string {
 		wt = append(wt, i.(string))
 	}
 	return wt
+}
+
+func (c *Contract) GetDataTokens() map[string]interface{} {
+	dti, ok := c.sm[SCDataTokensKey]
+	if !ok {
+		return nil
+	}
+	dt, ok := dti.(map[string]interface{})
+	if ok {
+		return dt
+	}
+	return nil
 }
 
 func (c *Contract) GetWholeTokensID() []string {

@@ -32,6 +32,50 @@ func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &cs, http.StatusOK)
 }
 
+func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, cr *ConensusRequest) *ensweb.Result {
+	crep := ConensusReply{
+		ReqID:  cr.ReqID,
+		Status: false,
+	}
+	sc := contract.InitContract(cr.ContractBlock, nil)
+	// setup the did to verify the signature
+	dc, err := c.SetupForienDID(sc.GetSenderDID())
+	if err != nil {
+		c.log.Error("Failed to get DID", "err", err)
+		crep.Message = "Failed to get DID"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	err = sc.VerifySignature(dc)
+	if err != nil {
+		c.log.Error("Failed to verify sender signature", "err", err)
+		crep.Message = "Failed to verify sender signature"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	//check if token has multiple pins
+	dt := sc.GetDataTokens()
+	if dt == nil {
+		c.log.Error("Consensus failed, data token missing")
+		crep.Message = "Consensus failed, data token missing"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	for k, _ := range dt {
+		c.ipfs.Pin(k)
+	}
+	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
+	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	if err != nil {
+		c.log.Error("Failed to get quorum signature", "err", err)
+		crep.Message = "Failed to get quorum signature"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	crep.Status = true
+	crep.Message = "Conensus finished successfully"
+	crep.ShareSig = qsb
+	crep.PrivSig = ppb
+	return c.l.RenderJSON(req, &crep, http.StatusOK)
+}
+
 func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, cr *ConensusRequest) *ensweb.Result {
 	crep := ConensusReply{
 		ReqID:  cr.ReqID,
@@ -45,15 +89,8 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		crep.Message = "Failed to get DID"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	authHash, ssig, psig, err := sc.GetHashSig()
+	err = sc.VerifySignature(dc)
 	if err != nil {
-		c.log.Error("Invalid smart contract, failed to get hash & signature", "err", err)
-		crep.Message = "Invalid smart contract, failed to get hash & signature"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-
-	ok, err := dc.Verify(authHash, util.StrToHex(ssig), util.StrToHex(psig))
-	if err != nil || !ok {
 		c.log.Error("Failed to verify sender signature", "err", err)
 		crep.Message = "Failed to verify sender signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -130,6 +167,8 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	switch cr.Mode {
 	case RBTTransferMode:
 		return c.quorumRBTConsensus(req, did, qdc, &cr)
+	case DTCommitMode:
+		return c.quorumDTConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
 		crep.Message = "Invalid consensus mode"

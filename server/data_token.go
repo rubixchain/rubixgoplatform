@@ -30,16 +30,12 @@ func (s *Server) APICreateDataToken(req *ensweb.Request) *ensweb.Result {
 
 }
 
-// func (s *Server) APICommitDataToken(req *ensweb.Request) *ensweb.Result {
-// 	var dr core.DataTokenReq
-// 	var err error
-// 	dr.DID = s.GetQuerry(req, "did")
-
-// 	if !s.validateDIDAccess(req, dr.DID) {
-// 		return s.BasicResponse(req, false, "DID does not have an access", nil)
-// 	}
-// 	s.c.AddWebReq(req)
-// 	go s.c.CreateDataToken(req.ID, &dr)
-// 	return s.didResponse(req, req.ID)
-
-// }
+func (s *Server) APICommitDataToken(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "did")
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.CommitDataToken(req.ID, did)
+	return s.didResponse(req, req.ID)
+}
