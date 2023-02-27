@@ -145,6 +145,7 @@ func (cmd *Command) CreateDID() {
 		DIDImgFileName: cmd.didImgFile,
 		PubImgFile:     cmd.pubImgFile,
 		PubKeyFile:     cmd.pubKeyFile,
+		PeerID:         cmd.peerID,
 	}
 	msg, status := cmd.c.CreateDID(&cfg)
 	if !status {
