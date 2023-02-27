@@ -28,7 +28,7 @@ func (w *Wallet) AddDataTokenBlock(t string, b *block.Block) error {
 	return w.addBlock(DataTokenType, t, b)
 }
 
-func (w *Wallet) GetDataToken(did string) ([]string, error) {
+func (w *Wallet) GetDataToken(did string) ([]DataToken, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	var dts []DataToken
@@ -39,9 +39,5 @@ func (w *Wallet) GetDataToken(did string) ([]string, error) {
 	if len(dts) == 0 {
 		return nil, fmt.Errorf("no data token is available")
 	}
-	s := make([]string, 0)
-	for _, dt := range dts {
-		s = append(s, dt.TokenID)
-	}
-	return s, nil
+	return dts, nil
 }

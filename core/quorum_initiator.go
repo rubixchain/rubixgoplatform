@@ -23,6 +23,7 @@ const (
 const (
 	RBTTransferMode int = iota
 	NFTTransferMode
+	DTCommitMode
 )
 const (
 	AlphaQuorumType int = iota
@@ -209,8 +210,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			FailedCount:  0,
 		},
 	}
+	var reqPledgeTokens int
 	// TODO:: Need to correct for part tokens
-	reqPledgeTokens := len(sc.GetWholeTokens())
+	switch cr.Mode {
+	case RBTTransferMode:
+		reqPledgeTokens = len(sc.GetWholeTokens())
+	case DTCommitMode:
+		reqPledgeTokens = 1
+	}
 	pd := PledgeDetials{
 		RemPledgeTokens:        reqPledgeTokens,
 		NumPledgedTokens:       0,

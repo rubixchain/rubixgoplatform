@@ -76,20 +76,22 @@ func (s *Service) UpdateTokenDetials(did string) error {
 				s.log.Error("Failed to write arbitary table", "err", err)
 				return err
 			}
+			err = s.s.Delete(ArbitrationTempTable, &td, "token=?", td.Token)
+			if err != nil {
+				s.log.Error("Failed to delete from arbitary temp table", "err", err)
+				return err
+			}
+		} else {
+			break
 		}
 	}
-
-	err := s.s.Write(ArbitrationTable, td)
-	if err != nil {
-		s.log.Error("Failed to write aribitration table", "err", err)
-	}
-	return err
+	return nil
 }
 
 func (s *Service) UpdateTempTokenDetials(td *TokenDetials) error {
 	err := s.s.Write(ArbitrationTempTable, td)
 	if err != nil {
-		s.log.Error("Failed to write aribitration table", "err", err)
+		s.log.Error("Failed to write aribitration temp table", "err", err)
 	}
 	return err
 }

@@ -207,6 +207,8 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		return fmt.Errorf("failed to migrate, node already migrated")
 	}
 
+	st := time.Now()
+
 	for _, t := range tokens {
 		tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
 		if err != nil {
@@ -269,7 +271,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			Contract:        sc.GetBlock(),
 			Comment:         "Token migrated at : " + time.Now().String(),
 		}
-		c.log.Info("Block map", "tl", tl, "tn", tn)
 		//ctcb := make
 		blk := block.CreateNewBlock(ctcb, ntcb)
 		if blk == nil {
@@ -384,8 +385,14 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			c.log.Error("Failed to migrate, failed to map did")
 		}
 	}
+	et := time.Now()
+	dif := et.Sub(st)
+	c.log.Info("Tokens signatures completed", "duration", dif)
+	st = time.Now()
 	c.removeDIDMap(d[0].PeerID)
 	c.ec.ExplorerMapDID(d[0].DID, did, c.peerID)
+	dif = et.Sub(st)
+	c.log.Info("Tokens migration completed", "duration", dif)
 	c.log.Info(fmt.Sprintf("Old DID=%s migrated to New DID=%s", d[0].DID, did))
 	c.log.Info(fmt.Sprintf("Number of tokens migrated =%d", len(tokens)))
 	c.log.Info(fmt.Sprintf("Number of credits migrated =%d", len(creditFiles)))
