@@ -33,7 +33,6 @@ type DIDCreate struct {
 	PubImgFile     string `json:"pub_img_file"`
 	PrivImgFile    string `json:"priv_img_file"`
 	PubKeyFile     string `json:"pub_key_file"`
-	PeerID         string `json:"peer_id"`
 }
 
 type DIDSignature struct {

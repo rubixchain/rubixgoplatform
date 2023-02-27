@@ -531,3 +531,7 @@ func (c *Core) FetchDID(did string) error {
 	}
 	return err
 }
+
+func (c *Core) GetPeerID() string {
+	return c.peerID
+}

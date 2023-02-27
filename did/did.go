@@ -222,10 +222,6 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	t2 := time.Now()
 	dif := t2.Sub(t1)
 	fmt.Printf("DID : %s, Time to create DID & Keys : %v", did, dif)
-	if didCreate.Type == WalletDIDMode {
-		return didCreate.PeerID + "." + did, nil
-	}
-
 	return did, nil
 }
 
