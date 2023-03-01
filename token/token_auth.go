@@ -7,6 +7,14 @@ import (
 	"strings"
 )
 
+const (
+	RBTTokenType int = iota
+	PartTokenType
+	NFTTokenType
+	TestTokenType
+	DataTokenType
+)
+
 func getWholeTokenValue(tokenDetials string) (int, string, error) {
 
 	trimmedResult := strings.TrimSpace(tokenDetials)

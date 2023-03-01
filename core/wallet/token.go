@@ -2,10 +2,10 @@ package wallet
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -25,7 +25,6 @@ const (
 
 type Token struct {
 	TokenID      string `gorm:"column:token_id;primary_key"`
-	TokenDetails string `gorm:"column:token_details"`
 	DID          string `gorm:"column:did"`
 	TokenChainID string `gorm:"column:token_chain_id"`
 	TokenStatus  int    `gorm:"column:token_status;"`
@@ -222,60 +221,61 @@ func (w *Wallet) RemoveTokens(wt []Token, pt []PartToken) error {
 	return nil
 }
 
-func (w *Wallet) TokensTransferred(did string, wt []string, pt []string, b *block.Block) error {
+func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	for i := range wt {
+	// ::TODO:: need to address part & other tokens
+	for i := range ti {
 		var t Token
-		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, wt[i])
+		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
 		if err != nil {
 			return err
 		}
-		bid, err := b.GetBlockID(wt[i])
+		bid, err := b.GetBlockID(ti[i].Token)
 		if err != nil {
 			return err
 		}
-		err = w.AddTokenBlock(wt[i], b)
+		err = w.AddTokenBlock(ti[i].Token, b)
 		if err != nil {
 			return err
 		}
 		t.TokenChainID = bid
 		t.TokenStatus = TokenIsTransferred
-		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, wt[i])
+		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
 		if err != nil {
 			return err
 		}
 	}
-	for i := range pt {
-		var t Token
-		err := w.s.Read(PartTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
-		if err != nil {
-			return err
-		}
-		bid, err := b.GetBlockID(pt[i])
-		if err != nil {
-			return err
-		}
-		err = w.AddTokenBlock(pt[i], b)
-		if err != nil {
-			return err
-		}
-		t.TokenChainID = bid
-		t.TokenStatus = TokenIsTransferred
-		err = w.s.Update(PartTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
-		if err != nil {
-			return err
-		}
-	}
+	// for i := range pt {
+	// 	var t Token
+	// 	err := w.s.Read(PartTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	bid, err := b.GetBlockID(pt[i])
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	err = w.AddTokenBlock(pt[i], b)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	t.TokenChainID = bid
+	// 	t.TokenStatus = TokenIsTransferred
+	// 	err = w.s.Update(PartTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 	return nil
 }
 
-func (w *Wallet) TokensReceived(did string, wt []string, pt []string, b *block.Block) error {
+func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	for i := range wt {
+	for i := range ti {
 		var t Token
-		err := w.s.Read(TokenStorage, &t, "token_id=?", wt[i])
+		err := w.s.Read(TokenStorage, &t, "token_id=?", ti[i].Token)
 		if err != nil {
 			dir := util.GetRandString()
 			err := util.CreateDir(dir)
@@ -284,20 +284,14 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, b *block.B
 				return err
 			}
 			defer os.RemoveAll(dir)
-			err = w.Get(wt[i], did, Owner, dir)
+			err = w.Get(ti[i].Token, did, Owner, dir)
 			if err != nil {
 				w.log.Error("Faled to get token", "err", err)
 				return err
 			}
-			rb, err := ioutil.ReadFile(dir + "/" + wt[i])
-			if err != nil {
-				w.log.Error("Faled to read token", "err", err)
-				return err
-			}
 			t = Token{
-				TokenDetails: string(rb),
-				TokenID:      wt[i],
-				DID:          did,
+				TokenID: ti[i].Token,
+				DID:     did,
 			}
 			err = w.s.Write(TokenStorage, &t)
 			if err != nil {
@@ -308,24 +302,28 @@ func (w *Wallet) TokensReceived(did string, wt []string, pt []string, b *block.B
 				return fmt.Errorf("Token already exist")
 			}
 		}
-		bid, err := b.GetBlockID(wt[i])
+		bid, err := b.GetBlockID(ti[i].Token)
 		if err != nil {
 			return err
 		}
-		err = w.AddTokenBlock(wt[i], b)
+		err = w.AddTokenBlock(ti[i].Token, b)
 		if err != nil {
 			return err
 		}
 		t.DID = did
 		t.TokenChainID = bid
 		t.TokenStatus = TokenIsFree
-		err = w.s.Update(TokenStorage, &t, "token_id=?", wt[i])
+		err = w.s.Update(TokenStorage, &t, "token_id=?", ti[i].Token)
 		if err != nil {
 			return err
 		}
 		//Pinnig the whole tokens and pat tokens
-		for i := range wt {
-			w.Pin(wt[i], 1, did)
+		ok, err := w.Pin(ti[i].Token, Owner, did)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("failed to pin token")
 		}
 	}
 	// for i := range pt {

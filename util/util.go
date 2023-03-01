@@ -606,3 +606,79 @@ func CalcTokenChainHash(tc []map[string]interface{}) string {
 	// str = str + "]"
 	return str
 }
+
+func GetFromMap(m interface{}, key string) interface{} {
+	switch mm := m.(type) {
+	case map[string]interface{}:
+		return mm[key]
+	case map[interface{}]interface{}:
+		return mm[key]
+	}
+	return nil
+}
+
+func GetStringFromMap(m interface{}, key string) string {
+	var si interface{}
+	switch mm := m.(type) {
+	case map[string]interface{}:
+		si = mm[key]
+	case map[interface{}]interface{}:
+		si = mm[key]
+	default:
+		return ""
+	}
+	switch s := si.(type) {
+	case string:
+		return s
+	case interface{}:
+		str, ok := si.(string)
+		if ok {
+			return str
+		}
+	}
+	return ""
+}
+
+func GetString(si interface{}) string {
+	switch s := si.(type) {
+	case string:
+		return s
+	case interface{}:
+		st, ok := s.(string)
+		if ok {
+			return st
+		}
+	}
+	return ""
+}
+
+func GetIntFromMap(m interface{}, key string) int {
+	var tli interface{}
+	var ok bool
+	switch mm := m.(type) {
+	case map[string]interface{}:
+		tli, ok = mm[key]
+		if !ok {
+			return 0
+		}
+	case map[interface{}]interface{}:
+		tli, ok = mm[key]
+		if !ok {
+			return 0
+		}
+	default:
+		return 0
+	}
+	var tl int
+	switch mt := tli.(type) {
+	case int:
+		tl = mt
+	case int64:
+		tl = int(mt)
+	case uint64:
+		tl = int(mt)
+	default:
+		tl = 0
+	}
+	return tl
+}

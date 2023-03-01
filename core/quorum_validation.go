@@ -9,42 +9,39 @@ import (
 )
 
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) bool {
-	// ::TODO:: Need to implement
-	wt := sc.GetWholeTokens()
-	wtdID := sc.GetWholeTokensID()
-	for i := range wt {
-		c.log.Debug("Finding dht", "token", wt[i])
-		ids, err := c.GetDHTddrs(wt[i])
+	ti := sc.GetTransTokenInfo()
+	for i := range ti {
+		ids, err := c.GetDHTddrs(ti[i].Token)
 		if err != nil || len(ids) == 0 {
 			continue
 		}
 	}
 	address := cr.SenderPeerID + "." + sc.GetSenderDID()
-	for i := range wt {
-		err := c.syncTokenChainFrom(address, wtdID[i], wt[i])
+	for i := range ti {
+		err := c.syncTokenChainFrom(address, ti[i].BlockID, ti[i].Token)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return false
 		}
 		// Check the token validation
 		if !c.testNet {
-			fb := c.w.GetFirstBlock(wt[i])
+			fb := c.w.GetFirstBlock(ti[i].Token)
 			if fb == nil {
 				c.log.Error("Failed to get first token chain block")
 				return false
 			}
-			tl, tn, err := fb.GetTokenDetials()
+			tl, tn, err := fb.GetTokenDetials(ti[i].Token)
 			if err != nil {
 				c.log.Error("Failed to get token detials", "err", err)
 				return false
 			}
 			ct := token.GetTokenString(tl, tn)
-			if ct != wt[i] {
-				c.log.Error("Invalid token", "token", wt, "exp_token", ct, "tl", tl, "tn", tn)
+			if ct != ti[i].Token {
+				c.log.Error("Invalid token", "token", ti[i].Token, "exp_token", ct, "tl", tl, "tn", tn)
 				return false
 			}
 		}
-		b := c.w.GetLatestTokenBlock(wt[i])
+		b := c.w.GetLatestTokenBlock(ti[i].Token)
 		if b == nil {
 			c.log.Error("Invalid token chain block")
 			return false
@@ -62,7 +59,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			default:
 				dc, err = c.SetupForienDIDQuorum(signer)
 			}
-			err := b.VerifySignature(signer, dc)
+			err := b.VerifySignature(dc)
 			if err != nil {
 				c.log.Error("Failed to verify signature", "err", err)
 				return false

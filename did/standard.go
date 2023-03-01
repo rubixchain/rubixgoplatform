@@ -51,6 +51,10 @@ func (d *DIDStandard) getSignature(hash []byte) ([]byte, error) {
 	return srd.Signature.Signature, nil
 }
 
+func (d *DIDStandard) GetDID() string {
+	return d.did
+}
+
 // Sign will return the singature of the DID
 func (d *DIDStandard) Sign(hash string) ([]byte, []byte, error) {
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)

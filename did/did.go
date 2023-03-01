@@ -37,6 +37,7 @@ type DID struct {
 }
 
 type DIDCrypto interface {
+	GetDID() string
 	Sign(hash string) ([]byte, []byte, error)
 	Verify(hash string, didSig []byte, pvtSig []byte) (bool, error)
 	PvtSign(hash []byte) ([]byte, error)

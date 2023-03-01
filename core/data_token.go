@@ -13,6 +13,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -153,12 +154,21 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	}
 	dtm := make(map[string]interface{})
 	dtm[dr.DID] = dt
+	ti := contract.TokenInfo{
+		Token:     dt,
+		TokenType: token.DataTokenType,
+		OwnerDID:  dr.DID,
+	}
+	tis := make([]contract.TokenInfo, 0)
+	tis = append(tis, ti)
+	ts := &contract.TransInfo{
+		SenderDID:   comDid,
+		Comment:     "created data token at : " + time.Now().String(),
+		TransTokens: tis,
+	}
 	st := &contract.ContractType{
-		Type:         contract.SCDataTokenType,
-		OwnerDID:     dr.DID,
-		CommitterDID: comDid,
-		DataTokens:   dtm,
-		Comment:      "Committed token",
+		Type:      contract.SCDataTokenType,
+		TransInfo: ts,
 	}
 	sc := contract.CreateNewContract(st)
 	if sc == nil {
@@ -173,12 +183,13 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		return &br
 	}
 	tcb := &block.TokenChainBlock{
-		TransactionType: wallet.TokenGeneratedType,
+		TransactionType: block.TokenGeneratedType,
 		TokenOwner:      dr.DID,
-		TokenType:       block.DataTokenType,
-		TokenID:         dt,
-		Contract:        sc.GetBlock(),
-		Comment:         "Token generated at " + time.Now().String(),
+		TokenType:       token.DataTokenType,
+		SmartContract:   sc.GetBlock(),
+		TransInfo: &block.TransInfo{
+			Comment: "Data token generated at : " + time.Now().String(),
+		},
 	}
 	ctcb := make(map[string]*block.Block)
 	ctcb[dt] = nil
@@ -188,7 +199,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, unable to create token chain"
 		return &br
 	}
-	err = blk.UpdateSignature(dr.DID, dc)
+	err = blk.UpdateSignature(dc)
 	if err != nil {
 		c.log.Error("Failed to create data token, failed to update signature", "err", err)
 		br.Message = "Failed to create data token, failed to update signature"
@@ -238,7 +249,6 @@ func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
 	}
 	sct := &contract.ContractType{
 		Type:       contract.SCDataTokenCommitType,
-		DataTokens: dtm,
 		PledgeMode: contract.POWPledgeMode,
 	}
 	sc := contract.CreateNewContract(sct)

@@ -59,6 +59,10 @@ func (d *DIDBasic) getPassword() (string, error) {
 	return d.pwd, nil
 }
 
+func (d *DIDBasic) GetDID() string {
+	return d.did
+}
+
 // Sign will return the singature of the DID
 func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)

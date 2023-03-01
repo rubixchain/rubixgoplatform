@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/uuid"
-	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -75,27 +75,42 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		}
 		wtcb = append(wtcb, blk.GetBlock())
 	}
-	pta := make([]string, 0)
-	ptca := make([]string, 0)
-	for i := range pt {
-		pta = append(pta, pt[i].TokenID)
-		ptca = append(ptca, pt[i].TokenChainID)
-	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
+	tis := make([]contract.TokenInfo, 0)
+	for i := range wt {
+		blk := c.w.GetLatestTokenBlock(wt[i].TokenID)
+		if blk == nil {
+			c.log.Error("failed to get latest block, invalid token chain")
+			resp.Message = "failed to get latest block, invalid token chain"
+			return resp
+		}
+		bid, err := blk.GetBlockID(wt[i].TokenID)
+		if err != nil {
+			c.log.Error("failed to get block id", "err", err)
+			resp.Message = "failed to get block id, " + err.Error()
+			return resp
+		}
+		ti := contract.TokenInfo{
+			Token:     wt[i].TokenID,
+			TokenType: token.RBTTokenType,
+			OwnerDID:  wt[i].DID,
+			BlockID:   bid,
+		}
+		tis = append(tis, ti)
+	}
 	sct := &contract.ContractType{
-		Type:          contract.SCRBTDirectType,
-		WholeTokens:   wta,
-		WholeTokensID: wtca,
-		PartTokens:    pta,
-		PartTokensID:  ptca,
-		SenderDID:     did,
-		ReceiverDID:   rdid,
-		Comment:       req.Comment,
-		PledgeMode:    contract.POWPledgeMode,
+		Type:       contract.SCRBTDirectType,
+		PledgeMode: contract.POWPledgeMode,
+		TransInfo: &contract.TransInfo{
+			SenderDID:   did,
+			ReceiverDID: rdid,
+			Comment:     req.Comment,
+			TransTokens: tis,
+		},
 	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)
@@ -124,38 +139,38 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	msg := fmt.Sprintf("Transfer finished successfully in %v", dif)
 	resp.Message = msg
 	tid := util.HexToStr(util.CalculateHash(cr.ContractBlock, "SHA3-256"))
-	tokenList := make([]string, 0)
-	tokenList = append(tokenList, wta...)
-	tokenList = append(tokenList, pta...)
-	pd := c.pd[cr.ReqID]
-	pm := make(map[string]interface{})
-	index := 0
-	ctcb := make(map[string]*block.Block)
-	for _, v := range pd.PledgedTokens {
-		for _, t := range v {
-			b := c.w.GetLatestTokenBlock(tokenList[index])
-			if b == nil {
-				c.log.Error("Failed to get latest token chain block")
-			}
-			ctcb[tokenList[index]] = b
-			pm[tokenList[index]] = t
-			index++
-		}
-	}
-	td := &wallet.TransactionDetails{
-		TransactionID:   tid,
-		SenderDID:       did,
-		ReceiverDID:     rdid,
-		Amount:          req.TokenCount,
-		Comment:         req.Comment,
-		DateTime:        time.Now().UTC(),
-		TotalTime:       int(dif),
-		WholeTokens:     wta,
-		PartTokens:      pta,
-		QuorumList:      cr.QuorumList,
-		PledgedTokenMap: pm,
-	}
-	c.w.AddTransactionHistory(td)
+	// tokenList := make([]string, 0)
+	// tokenList = append(tokenList, wta...)
+	// tokenList = append(tokenList, pta...)
+	// pd := c.pd[cr.ReqID]
+	// pm := make(map[string]interface{})
+	// index := 0
+	// ctcb := make(map[string]*block.Block)
+	// for _, v := range pd.PledgedTokens {
+	// 	for _, t := range v {
+	// 		b := c.w.GetLatestTokenBlock(tokenList[index])
+	// 		if b == nil {
+	// 			c.log.Error("Failed to get latest token chain block")
+	// 		}
+	// 		ctcb[tokenList[index]] = b
+	// 		pm[tokenList[index]] = t
+	// 		index++
+	// 	}
+	// }
+	// td := &wallet.TransactionDetails{
+	// 	TransactionID:   tid,
+	// 	SenderDID:       did,
+	// 	ReceiverDID:     rdid,
+	// 	Amount:          req.TokenCount,
+	// 	Comment:         req.Comment,
+	// 	DateTime:        time.Now().UTC(),
+	// 	TotalTime:       int(dif),
+	// 	WholeTokens:     wta,
+	// 	PartTokens:      pta,
+	// 	QuorumList:      cr.QuorumList,
+	// 	PledgedTokenMap: pm,
+	// }
+	// c.w.AddTransactionHistory(td)
 	etrans := &ExplorerTrans{
 		TID:         tid,
 		SenderDID:   did,

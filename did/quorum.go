@@ -44,6 +44,10 @@ func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
 	return d
 }
 
+func (d *DIDQuorum) GetDID() string {
+	return d.did
+}
+
 // Sign will return the singature of the DID
 func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 	if d.privKey == nil {

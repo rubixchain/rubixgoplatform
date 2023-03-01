@@ -9,73 +9,47 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
+// ----------TokenChain----------------------
+// {
+// 	 "1" : TokenType        : int
+// 	 "2" : TransactionType  : string
+// 	 "3" : TokenOwner       : string
+// 	 "4" : GenesisBlock     : GenesisBlock
+//   "5" : TransInfo        : TransInfo
+//   "6" : QuorumSignature  : []string
+//   "7" : SmartContract    : []byte
+// }
+
 const (
-	RBTTokenType int = iota
-	RBTPartTokenType
-	NFTTokenType
-	DataTokenType
+	TCTokenTypeKey       string = "1"
+	TCTransTypeKey       string = "2"
+	TCTokenOwnerKey      string = "3"
+	TCGenesisBlockKey    string = "4"
+	TCTransInfoKey       string = "5"
+	TCSmartContractKey   string = "6"
+	TCQuorumSignatureKey string = "7"
+	TCBlockHashKey       string = "98"
+	TCSignatureKey       string = "99"
+	TCBlockContentKey    string = "1"
+	TCBlockContentSigKey string = "2"
 )
 
 const (
-	TCTransTypeKey         string = "1"
-	TCTokenLevelKey        string = "2"
-	TCTokenNumberKey       string = "3"
-	TCBlockNumberKey       string = "4"
-	TCMigratedBlockIDKey   string = "5"
-	TCOwnerKey             string = "6"
-	TCSenderDIDKey         string = "7"
-	TCReceiverDIDKey       string = "8"
-	TCCommentKey           string = "9"
-	TCTIDKey               string = "10"
-	TCWholeTokensKey       string = "11"
-	TCWholeTokensIDKey     string = "12"
-	TCPartTokensKey        string = "13"
-	TCPartTokensIDKey      string = "14"
-	TCQuorumSignatureKey   string = "15"
-	TCPledgeTokenKey       string = "16"
-	TCTokensPledgedForKey  string = "17"
-	TCTokensPledgedWithKey string = "18"
-	TCTokensPledgeMapKey   string = "19"
-	TCPreviousBlockIDKey   string = "20"
-	TCTokenChainBlockKey   string = "21"
-	TCSmartContractKey     string = "22"
-	TCTokenTypeKey         string = "23"
-	TCBlockHashKey         string = "98"
-	TCSignatureKey         string = "99"
-	TCBlockContentKey      string = "1"
-	TCBlockContentSigKey   string = "2"
-)
-
-const (
-	TokenMintedType      string = "token_minted"
-	TokenTransferredType string = "token_transferred"
-	TokenMigratedType    string = "token_migrated"
-	TokenPledgedType     string = "token_pledged"
-	TokenGeneratedType   string = "token_generated"
+	TokenMintedType      string = "01"
+	TokenTransferredType string = "02"
+	TokenMigratedType    string = "03"
+	TokenPledgedType     string = "04"
+	TokenGeneratedType   string = "05"
 )
 
 type TokenChainBlock struct {
-	TokenType         int                    `json:"tokenType"`
-	TransactionType   string                 `json:"transactionType"`
-	MigratedBlockID   string                 `json:"migratedBlockID"`
-	TokenID           string                 `json:"tokenID"`
-	TokenOwner        string                 `json:"owner"`
-	SenderDID         string                 `json:"sender"`
-	ReceiverDID       string                 `json:"receiver"`
-	Comment           string                 `json:"comment"`
-	TID               string                 `json:"tid"`
-	TokenLevel        int                    `json:"tokenLevel"`
-	TokenNumber       int                    `json:"tokenNumber"`
-	WholeTokens       []string               `json:"wholeTokens"`
-	WholeTokensID     []string               `json:"wholeTokensID"`
-	PartTokens        []string               `json:"partTokens"`
-	PartTokensID      []string               `json:"partTokensID"`
-	QuorumSignature   []string               `json:"quorumSignature"`
-	TokensPledgedFor  []string               `json:"tokensPledgedFor"`
-	TokensPledgedWith []string               `json:"tokensPledgedWith"`
-	TokensPledgeMap   map[string]interface{} `json:"tokensPledgeMap"`
-	TokenChainDetials map[string]interface{} `json:"tokenChainBlock"`
-	Contract          []byte                 `json:"contract"`
+	TokenType       int           `json:"tokenType"`
+	TransactionType string        `json:"transactionType"`
+	TokenOwner      string        `json:"owner"`
+	GenesisBlock    *GenesisBlock `json:"genesisBlock"`
+	TransInfo       *TransInfo    `json:"transInfo"`
+	QuorumSignature []string      `json:"quorumSignature"`
+	SmartContract   []byte        `json:"smartContract"`
 }
 
 type Block struct {
@@ -122,82 +96,30 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 }
 
 func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
-	ntcb := make(map[string]interface{})
-	ntcb[TCTransTypeKey] = tcb.TransactionType
-	ntcb[TCOwnerKey] = tcb.TokenOwner
-	ntcb[TCCommentKey] = tcb.Comment
-	ntcb[TCTokenTypeKey] = tcb.TokenType
-	if tcb.SenderDID != "" {
-		ntcb[TCSenderDIDKey] = tcb.SenderDID
-	}
-	if tcb.ReceiverDID != "" {
-		ntcb[TCReceiverDIDKey] = tcb.ReceiverDID
-	}
-	if tcb.TokenLevel != 0 {
-		ntcb[TCTokenLevelKey] = tcb.TokenLevel
-		ntcb[TCTokenNumberKey] = tcb.TokenNumber
-	}
-	if tcb.TID != "" {
-		ntcb[TCTIDKey] = tcb.TID
-	}
-	if tcb.MigratedBlockID != "" {
-		ntcb[TCMigratedBlockIDKey] = tcb.MigratedBlockID
-	}
-	if len(tcb.WholeTokens) != 0 {
-		ntcb[TCWholeTokensKey] = tcb.WholeTokens
-	}
-	if len(tcb.WholeTokensID) != 0 {
-		ntcb[TCWholeTokensIDKey] = tcb.WholeTokensID
-	}
-	if len(tcb.PartTokens) != 0 {
-		ntcb[TCPartTokensKey] = tcb.PartTokens
-	}
-	if len(tcb.PartTokensID) != 0 {
-		ntcb[TCPartTokensIDKey] = tcb.PartTokensID
-	}
-	if tcb.QuorumSignature != nil {
-		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
-	}
-	if len(tcb.TokensPledgedFor) != 0 {
-		ntcb[TCTokensPledgedForKey] = tcb.TokensPledgedFor
-	}
-	if len(tcb.TokensPledgedWith) != 0 {
-		ntcb[TCTokensPledgedWithKey] = tcb.TokensPledgedWith
-	}
-	if tcb.TokensPledgeMap != nil {
-		ntcb[TCTokensPledgeMapKey] = tcb.TokensPledgeMap
-	}
-	if tcb.TokenChainDetials != nil {
-		ntcb[TCTokenChainBlockKey] = tcb.TokenChainDetials
-	}
-	if tcb.Contract != nil {
-		ntcb[TCSmartContractKey] = tcb.Contract
-	}
-	if ctcb == nil {
+	if tcb.TransInfo == nil || ctcb == nil {
 		return nil
 	}
-	phm := make(map[interface{}]interface{}, 0)
-	bnm := make(map[interface{}]interface{}, 0)
-	for t, b := range ctcb {
-		if b == nil {
-			bnm[t] = "0"
-			phm[t] = ""
-		} else {
-			bn, err := b.GetBlockNumber(t)
-			if err != nil {
-				return nil
-			}
-			bn++
-			bid, err := b.GetBlockID(t)
-			if err != nil {
-				return nil
-			}
-			phm[t] = bid
-			bnm[t] = strconv.FormatUint(bn, 10)
+	ntcb := make(map[string]interface{})
+	ntcb[TCTokenTypeKey] = tcb.TokenType
+	ntcb[TCTransTypeKey] = tcb.TransactionType
+	ntcb[TCTokenOwnerKey] = tcb.TokenOwner
+	if tcb.GenesisBlock != nil {
+		ntcb[TCGenesisBlockKey] = newGenesisBlock(tcb.GenesisBlock)
+		if ntcb[TCGenesisBlockKey] == nil {
+			return nil
 		}
 	}
-	ntcb[TCBlockNumberKey] = bnm
-	ntcb[TCPreviousBlockIDKey] = phm
+	ntib := newTransInfo(ctcb, tcb.TransInfo)
+	if ntib == nil {
+		return nil
+	}
+	ntcb[TCTransInfoKey] = ntib
+	if tcb.QuorumSignature == nil {
+		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
+	}
+	if tcb.SmartContract != nil {
+		ntcb[TCSmartContractKey] = tcb.SmartContract
+	}
 	blk := InitBlock(nil, ntcb)
 	return blk
 }
@@ -269,17 +191,42 @@ func (b *Block) blkEncode() error {
 	return nil
 }
 
+func (b *Block) getTokensMap(t string) interface{} {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return nil
+	}
+	tm := util.GetFromMap(tim, TITokensKey)
+	if tm == nil {
+		return nil
+	}
+	ttm := util.GetFromMap(tm, t)
+	return ttm
+}
+
+func (b *Block) getGenesisTokenMap(t string) interface{} {
+	gbm := util.GetFromMap(b.bm, TCGenesisBlockKey)
+	if gbm == nil {
+		return nil
+	}
+	im := util.GetFromMap(gbm, GBInfoKey)
+	if im == nil {
+		return nil
+	}
+	gtm := util.GetFromMap(im, t)
+	return gtm
+}
+
 func (b *Block) GetBlockNumber(t string) (uint64, error) {
-	bnmi, ok := b.bm[TCBlockNumberKey]
-	if !ok {
+	ttm := b.getTokensMap(t)
+	if ttm == nil {
+		return 0, fmt.Errorf("invalid token chain block, missing transaction token block")
+	}
+	bni := util.GetFromMap(ttm, TTBlockNumberKey)
+	if bni == nil {
 		return 0, fmt.Errorf("invalid token chain block, missing block number")
 	}
-	bnm := bnmi.(map[interface{}]interface{})
-	si, ok := bnm[t]
-	if !ok {
-		return 0, fmt.Errorf("invalid token chain block, missing block number")
-	}
-	num, err := strconv.ParseUint(si.(string), 10, 64)
+	num, err := strconv.ParseUint(util.GetString(bni), 10, 64)
 	if err != nil {
 		return 0, err
 	}
@@ -291,29 +238,31 @@ func (b *Block) GetBlockID(t string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid token chain block, missing block hash")
 	}
-	bnmi, ok := b.bm[TCBlockNumberKey]
-	if !ok {
+	ttm := b.getTokensMap(t)
+	if ttm == nil {
+		return "", fmt.Errorf("invalid token chain block, missing transaction token block")
+	}
+	bni := util.GetFromMap(ttm, TTBlockNumberKey)
+	if bni == nil {
 		return "", fmt.Errorf("invalid token chain block, missing block number")
 	}
-	bnm := bnmi.(map[interface{}]interface{})
-	si, ok := bnm[t]
-	if !ok {
+	bns := util.GetString(bni)
+	if bni == "" {
 		return "", fmt.Errorf("invalid token chain block, missing block number")
 	}
-	return si.(string) + "-" + ha.(string), nil
+	return bns + "-" + ha.(string), nil
 }
 
 func (b *Block) GetPrevBlockID(t string) (string, error) {
-	phmi, ok := b.bm[TCPreviousBlockIDKey]
-	if !ok {
-		return "", fmt.Errorf("invalid token chain block, missing block hash")
+	ttm := b.getTokensMap(t)
+	if ttm == nil {
+		return "", fmt.Errorf("invalid token chain block, missing transaction token block")
 	}
-	phm := phmi.(map[interface{}]interface{})
-	bid, ok := phm[t]
-	if !ok {
+	pbi := util.GetFromMap(ttm, TTPreviousBlockIDKey)
+	if pbi == nil {
 		return "", fmt.Errorf("invalid token chain block, missing block number")
 	}
-	return bid.(string), nil
+	return util.GetString(pbi), nil
 }
 
 func (b *Block) GetSigner() ([]string, error) {
@@ -375,7 +324,8 @@ func (b *Block) GetSignature(dc didmodule.DIDCrypto) (string, error) {
 	return util.HexToStr(sb), nil
 }
 
-func (b *Block) VerifySignature(did string, dc didmodule.DIDCrypto) error {
+func (b *Block) VerifySignature(dc didmodule.DIDCrypto) error {
+	did := dc.GetDID()
 	h, s, err := b.GetHashSig(did)
 	if err != nil {
 		return fmt.Errorf("failed to read did signature & hash")
@@ -387,7 +337,8 @@ func (b *Block) VerifySignature(did string, dc didmodule.DIDCrypto) error {
 	return nil
 }
 
-func (b *Block) UpdateSignature(did string, dc didmodule.DIDCrypto) error {
+func (b *Block) UpdateSignature(dc didmodule.DIDCrypto) error {
+	did := dc.GetDID()
 	h, err := b.GetHash()
 	if err != nil {
 		return fmt.Errorf("failed to get hash")
@@ -439,7 +390,7 @@ func (b *Block) GetBlockMap() map[string]interface{} {
 	return b.bm
 }
 
-func (b *Block) getString(key string) string {
+func (b *Block) getBlkString(key string) string {
 	h, ok := b.bm[key]
 	if !ok {
 		return ""
@@ -447,7 +398,7 @@ func (b *Block) getString(key string) string {
 	return h.(string)
 }
 
-func (b *Block) getInt(key string) int {
+func (b *Block) getBlkInt(key string) int {
 	tli, ok := b.bm[key]
 	if !ok {
 		return 0
@@ -467,7 +418,7 @@ func (b *Block) getInt(key string) int {
 }
 
 func (b *Block) GetHash() (string, error) {
-	h := b.getString(TCBlockHashKey)
+	h := b.getBlkString(TCBlockHashKey)
 	if h == "" {
 		return "", fmt.Errorf("invalid token chain block, missing block hash")
 	}
@@ -475,39 +426,40 @@ func (b *Block) GetHash() (string, error) {
 }
 
 func (b *Block) GetTransType() string {
-	return b.getString(TCTransTypeKey)
+	return b.getBlkString(TCTransTypeKey)
 }
 
 func (b *Block) GetSenderDID() string {
-	return b.getString(TCSenderDIDKey)
+	return b.getTrasnInfoString(TISenderDIDKey)
 }
 
 func (b *Block) GetReceiverDID() string {
-	return b.getString(TCReceiverDIDKey)
+	return b.getTrasnInfoString(TIReceiverDIDKey)
 }
 
 func (b *Block) GetTid() string {
-	return b.getString(TCTIDKey)
+	return b.getTrasnInfoString(TITIDKey)
 }
 
 func (b *Block) GetComment() string {
-	return b.getString(TCCommentKey)
+	return b.getTrasnInfoString(TICommentKey)
 }
 
 func (b *Block) GetTokenType() int {
-	return b.getInt(TCTokenTypeKey)
+	return b.getBlkInt(TCTokenTypeKey)
 }
 
-func (b *Block) GetTokenDetials() (int, int, error) {
-	tl := b.getInt(TCTokenLevelKey)
-	if tl == 0 {
-		return 0, 0, fmt.Errorf("invalid token level")
+func (b *Block) GetTokenDetials(t string) (int, int, error) {
+	gtm := b.getGenesisTokenMap(t)
+	if gtm == nil {
+		return 0, 0, fmt.Errorf("invalid token chain block, missing genesis block")
 	}
-	tn := b.getInt(TCTokenNumberKey)
+	tl := util.GetIntFromMap(gtm, GITokenLevelKey)
+	tn := util.GetIntFromMap(gtm, GITokenNumberKey)
 	return tl, tn, nil
 }
 
-func (b *Block) GetContract() []byte {
+func (b *Block) GetSmartContract() []byte {
 	ci, ok := b.bm[TCSmartContractKey]
 	if !ok {
 		return nil
@@ -519,21 +471,21 @@ func (b *Block) GetContract() []byte {
 	return c
 }
 
-func (b *Block) GetTokenPledgeMap() map[string]interface{} {
-	tokenPledge := b.bm[TCTokensPledgeMapKey]
-	tokenPledgeMap, ok := tokenPledge.(map[interface{}]interface{})
-	if !ok {
-		return nil
-	}
+// func (b *Block) GetTokenPledgeMap() map[string]interface{} {
+// 	tokenPledge := b.bm[TCTokensPledgeMapKey]
+// 	tokenPledgeMap, ok := tokenPledge.(map[interface{}]interface{})
+// 	if !ok {
+// 		return nil
+// 	}
 
-	result := make(map[string]interface{})
-	for k, v := range tokenPledgeMap {
-		kStr, kOk := k.(string)
-		if !kOk {
-			return nil
-		}
-		result[kStr] = v
-	}
+// 	result := make(map[string]interface{})
+// 	for k, v := range tokenPledgeMap {
+// 		kStr, kOk := k.(string)
+// 		if !kOk {
+// 			return nil
+// 		}
+// 		result[kStr] = v
+// 	}
 
-	return result
-}
+// 	return result
+// }

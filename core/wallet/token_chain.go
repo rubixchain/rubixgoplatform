@@ -21,14 +21,6 @@ const (
 
 const TCBlockCountLimit int = 100
 
-const (
-	TokenMintedType      string = "token_minted"
-	TokenTransferredType string = "token_transferred"
-	TokenMigratedType    string = "token_migrated"
-	TokenPledgedType     string = "token_pledged"
-	TokenGeneratedType   string = "token_generated"
-)
-
 func tcsPrefix(tokenType string, token string) string {
 	return tokenType + "-" + token + "-"
 }

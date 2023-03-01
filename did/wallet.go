@@ -52,6 +52,10 @@ func (d *DIDWallet) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte,
 	return srd.Signature.Pixels, srd.Signature.Signature, nil
 }
 
+func (d *DIDWallet) GetDID() string {
+	return d.did
+}
+
 // Sign will return the singature of the DID
 func (d *DIDWallet) Sign(hash string) ([]byte, []byte, error) {
 	bs, pvtKeySign, err := d.getSignature([]byte(hash), false)

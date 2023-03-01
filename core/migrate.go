@@ -1,6 +1,7 @@
 package core
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -8,11 +9,11 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/ensweb"
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -20,6 +21,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
+)
+
+const (
+	BatchSize int = 1000
 )
 
 type MigrateRequest struct {
@@ -162,95 +167,90 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		c.log.Error("Failed to migrate, failed to read token files", "err", err)
 		return fmt.Errorf("failed to migrate, failed to read token files")
 	}
-	var wg sync.WaitGroup
-	as := make([]ArbitaryStatus, len(c.arbitaryAddr))
-	for i, a := range c.arbitaryAddr {
-		wg.Add(1)
-		go func(idx int, addr string) {
-			defer wg.Done()
-			p, err := c.getPeer(addr)
-			if err != nil {
-				return
-			}
-			as[idx].p = p
-		}(i, a)
+	h := sha256.New()
+	h.Write([]byte(d[0].DID))
+	ha := h.Sum(nil)
+	addr := int(ha[0]) % len(c.arbitaryAddr)
+	p, err := c.getPeer(c.arbitaryAddr[addr])
+	if err != nil {
+		c.log.Error("Failed to migrate, failed to connect arbitary peer", "err", err, "peer", c.arbitaryAddr[addr])
+		return fmt.Errorf("failed to migrate, failed to connect arbitary peer")
 	}
-	wg.Wait()
-	for i, a := range c.arbitaryAddr {
-		if as[i].p == nil {
-			c.log.Error("Failed to migrate, failed to connect arbitary peer", "err", err, "peer", a)
-			return fmt.Errorf("failed to migrate, failed to connect arbitary peer")
-		}
-	}
-	defer func() {
-		for i := range c.arbitaryAddr {
-			as[i].p.Close()
-		}
-	}()
-	for i := range c.arbitaryAddr {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			c.checkDIDMigrated(&as[idx], d[0].DID)
-		}(i)
-	}
-	wg.Wait()
-	didExist := false
-	for i := range c.arbitaryAddr {
-		if as[i].status && as[i].ds {
-			as[i].status = false
-			didExist = true
-		}
-	}
-	if didExist {
-		c.log.Error("Failed to migrate, node already migrated")
-		return fmt.Errorf("failed to migrate, node already migrated")
+	defer p.Close()
+	if !c.checkDIDMigrated(p, d[0].DID) {
+		c.log.Error("Failed to migrate, unable to migrate did")
+		return fmt.Errorf("failed to migrate, unable to migrate did")
 	}
 
 	st := time.Now()
-
-	for _, t := range tokens {
-		tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to read token files", "err", err)
-			return fmt.Errorf("failed to migrate, failed to read token files")
+	numTokens := len(tokens)
+	index := 0
+	for {
+		tis := make([]contract.TokenInfo, 0)
+		gtis := make([]block.GenesisTokenInfo, 0)
+		batchIndex := 0
+		for {
+			t := tokens[index]
+			tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to read token files", "err", err)
+				return fmt.Errorf("failed to migrate, failed to read token files")
+			}
+			tl, tn, err := token.ValidateWholeToken(string(tk))
+			if err != nil {
+				c.log.Error("Failed to migrate, invalid token", "err", err)
+				return fmt.Errorf("failed to migrate, invalid token")
+			}
+			tb, err := os.Open(rubixDir + "Wallet/TOKENS/" + t)
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to read token files", "err", err)
+				return fmt.Errorf("failed to migrate, failed to read token files")
+			}
+			tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to add token file", "err", err)
+				return fmt.Errorf("failed to migrate, failed to add token file")
+			}
+			if t != tid {
+				c.log.Error("Failed to migrate, token hash is not matching", "err", err)
+				return fmt.Errorf("failed to migrate, token hash is not matching")
+			}
+			fb, err := os.Open(rubixDir + "Wallet/TOKENCHAINS/" + t + ".json")
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to read token chain files", "err", err)
+				return fmt.Errorf("failed to migrate, failed to read token chain files")
+			}
+			tcid, err := c.ipfs.Add(fb)
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to add token chain file", "err", err)
+				return fmt.Errorf("failed to migrate, failed to add token chain file")
+			}
+			gti := block.GenesisTokenInfo{
+				Token:           t,
+				TokenLevel:      tl,
+				TokenNumber:     tn,
+				MigratedBlockID: tcid,
+			}
+			ti := contract.TokenInfo{
+				Token:     t,
+				TokenType: token.RBTTokenType,
+				OwnerDID:  did,
+			}
+			gtis = append(gtis, gti)
+			tis = append(tis, ti)
+			index++
+			batchIndex++
+			if batchIndex == BatchSize || index == numTokens {
+				break
+			}
 		}
-		tl, tn, err := token.ValidateWholeToken(string(tk))
-		if err != nil {
-			c.log.Error("Failed to migrate, invalid token", "err", err)
-			return fmt.Errorf("failed to migrate, invalid token")
-		}
-		tb, err := os.Open(rubixDir + "Wallet/TOKENS/" + t)
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to read token files", "err", err)
-			return fmt.Errorf("failed to migrate, failed to read token files")
-		}
-		tid, err := c.ipfs.Add(tb)
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to add token file", "err", err)
-			return fmt.Errorf("failed to migrate, failed to add token file")
-		}
-		if t != tid {
-			c.log.Error("Failed to migrate, token hash is not matching", "err", err)
-			return fmt.Errorf("failed to migrate, token hash is not matching")
-		}
-
-		fb, err := os.Open(rubixDir + "Wallet/TOKENCHAINS/" + t + ".json")
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to read token chain files", "err", err)
-			return fmt.Errorf("failed to migrate, failed to read token chain files")
-		}
-		tcid, err := c.ipfs.Add(fb)
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to add token chain file", "err", err)
-			return fmt.Errorf("failed to migrate, failed to add token chain file")
+		ts := &contract.TransInfo{
+			Comment:     "Migrating Token at : " + time.Now().String(),
+			TransTokens: tis,
 		}
 		st := &contract.ContractType{
-			Type:            contract.SCDIDMigrateType,
-			OwnerDID:        did,
-			MigratedToken:   t,
-			MigratedTokenID: tcid,
-			Comment:         "Migrating Token",
+			Type:      contract.SCDIDMigrateType,
+			TransInfo: ts,
 		}
 		sc := contract.CreateNewContract(st)
 		err = sc.UpdateSignature(dc)
@@ -258,18 +258,17 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			c.log.Error("Failed to migrate, failed to update signature", "err", err)
 			return fmt.Errorf("failed to migrate, failed to update signature")
 		}
+		gb := &block.GenesisBlock{
+			Type: block.TokenMigratedType,
+			Info: gtis,
+		}
 		ctcb := make(map[string]*block.Block)
-		ctcb[t] = nil
 		ntcb := &block.TokenChainBlock{
-			TokenType:       block.RBTTokenType,
-			TokenLevel:      tl,
-			TokenNumber:     tn,
+			TokenType:       token.RBTTokenType,
 			TransactionType: block.TokenMigratedType,
-			MigratedBlockID: tcid,
-			TokenID:         t,
 			TokenOwner:      did,
-			Contract:        sc.GetBlock(),
-			Comment:         "Token migrated at : " + time.Now().String(),
+			GenesisBlock:    gb,
+			SmartContract:   sc.GetBlock(),
 		}
 		//ctcb := make
 		blk := block.CreateNewBlock(ctcb, ntcb)
@@ -280,51 +279,42 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		sr := &SignatureRequest{
 			TokenChainBlock: blk.GetBlock(),
 		}
-		for i := range c.arbitaryAddr {
-			wg.Add(1)
-			go func(idx int) {
-				defer wg.Done()
-				c.getArbitrationSignature(&as[idx], sr)
-			}(i)
+		sig, ok := c.getArbitrationSignature(p, sr)
+		if !ok {
+			c.log.Error("Failed to migrate, failed to get signature")
+			return fmt.Errorf("failed to migrate, failed to get signature")
 		}
-		wg.Wait()
-		for i, a := range c.arbitaryAddr {
-			if !as[i].status {
-				c.log.Error("Failed to migrate, failed to get arbitary signature", "addr", a)
-				return fmt.Errorf("failed to migrate, failed to get arbitary signature")
-			}
-			err = blk.ReplaceSignature(as[i].p.GetPeerDID(), as[i].sig)
+		err = blk.ReplaceSignature(p.GetPeerDID(), sig)
+		if err != nil {
+			c.log.Error("Failed to migrate, failed to update arbitary signature")
+			return fmt.Errorf("failed to migrate, failed to update arbitary signature")
+		}
+		for _, ti := range tis {
+			t := ti.Token
+			bid, err := blk.GetBlockID(t)
 			if err != nil {
-				c.log.Error("Failed to migrate, failed to update arbitary signature", "addr", a)
-				return fmt.Errorf("failed to migrate, failed to update arbitary signature")
+				c.log.Error("Failed to migrate, failed to get block id", "err", err)
+				return fmt.Errorf("failed to migrate, failed to get block id")
+			}
+			tkn := &wallet.Token{
+				TokenID:      t,
+				DID:          did,
+				TokenChainID: bid,
+				TokenStatus:  wallet.TokenIsFree,
+			}
+			err = c.w.AddTokenBlock(t, blk)
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to add token chain block", "err", err)
+				return fmt.Errorf("failed to migrate, failed to add token chain block")
+			}
+			err = c.w.CreateToken(tkn)
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to add token to wallet", "err", err)
+				return fmt.Errorf("failed to migrate, failed to add token to wallet")
 			}
 		}
-		bid, err := blk.GetBlockID(t)
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to get block id", "err", err)
-			return fmt.Errorf("failed to migrate, failed to get block id")
-		}
-		tkn := &wallet.Token{
-			TokenID:      t,
-			TokenDetails: string(tk),
-			DID:          did,
-			TokenChainID: bid,
-			TokenStatus:  wallet.TokenIsFree,
-		}
-		err = c.w.AddTokenBlock(t, blk)
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to add token chain block", "err", err)
-			return fmt.Errorf("failed to migrate, failed to add token chain block")
-		}
-		err = c.w.CreateToken(tkn)
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to add token to wallet", "err", err)
-			return fmt.Errorf("failed to migrate, failed to add token to wallet")
-		}
-		ok, err := c.w.Pin(t, wallet.Owner, did)
-		if err != nil || !ok {
-			c.log.Error("Failed to migrate, failed to pin token", "err", err)
-			return fmt.Errorf("failed to migrate, failed to pin token")
+		if index >= numTokens {
+			break
 		}
 	}
 	creditFiles, err := util.GetAllFiles(rubixDir + "Wallet/WALLET_DATA/Credits/")
@@ -372,17 +362,26 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			}
 		}
 	}
-	for i := range c.arbitaryAddr {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			c.mapMigratedDID(&as[idx], d[0].DID, did)
-		}(i)
+	if !c.mapMigratedDID(p, d[0].DID, did) {
+		c.log.Error("Failed to migrate, failed to store credit", "err", err)
+		return fmt.Errorf("failed to migrate, failed to store credit")
 	}
-	wg.Wait()
-	for i := range c.arbitaryAddr {
-		if !as[i].status {
-			c.log.Error("Failed to migrate, failed to map did")
+	for i := 0; i < numTokens; i++ {
+		t := tokens[i]
+		tb, err := os.Open(rubixDir + "Wallet/TOKENS/" + t)
+		if err != nil {
+			c.log.Error("Failed to migrate, failed to read token files", "err", err)
+			return fmt.Errorf("failed to migrate, failed to read token files")
+		}
+		_, err = c.ipfs.Add(tb)
+		if err != nil {
+			c.log.Error("Failed to migrate, failed to add token file", "err", err)
+			return fmt.Errorf("failed to migrate, failed to add token file")
+		}
+		ok, err := c.w.Pin(t, wallet.Owner, did)
+		if err != nil || !ok {
+			c.log.Error("Failed to migrate, failed to pin token", "err", err)
+			return fmt.Errorf("failed to migrate, failed to pin token")
 		}
 	}
 	et := time.Now()

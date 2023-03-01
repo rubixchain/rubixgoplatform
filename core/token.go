@@ -11,6 +11,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -142,12 +143,26 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
 		}
+		gb := &block.GenesisBlock{
+			Type: block.TokenGeneratedType,
+			Info: []block.GenesisTokenInfo{
+				{Token: id},
+			},
+		}
+		ti := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     id,
+					TokenType: token.TestTokenType,
+				},
+			},
+		}
 
 		tcb := &block.TokenChainBlock{
-			TransactionType: wallet.TokenGeneratedType,
+			TransactionType: block.TokenGeneratedType,
 			TokenOwner:      did,
-			TokenID:         id,
-			Comment:         "Token generated at " + time.Now().String(),
+			GenesisBlock:    gb,
+			TransInfo:       ti,
 		}
 
 		ctcb := make(map[string]*block.Block)
@@ -164,14 +179,13 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to get block id", "err", err)
 			return fmt.Errorf("failed to get block id")
 		}
-		err = blk.UpdateSignature(did, dc)
+		err = blk.UpdateSignature(dc)
 		if err != nil {
 			c.log.Error("Failed to update did signature", "err", err)
 			return fmt.Errorf("failed to update did signature")
 		}
 		t := &wallet.Token{
 			TokenID:      id,
-			TokenDetails: tk,
 			DID:          did,
 			TokenChainID: bid,
 			TokenStatus:  wallet.TokenIsFree,
