@@ -265,12 +265,11 @@ func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
 		SenderPeerID:  c.peerID,
 		ContractBlock: sc.GetBlock(),
 	}
-	err = c.initiateConsensus(cr, sc, dc)
+	_, err = c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		br.Message = "Consensus failed" + err.Error()
 		return br
 	}
-
 	return br
 }

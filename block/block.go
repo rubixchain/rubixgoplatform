@@ -16,8 +16,9 @@ import (
 // 	 "3" : TokenOwner       : string
 // 	 "4" : GenesisBlock     : GenesisBlock
 //   "5" : TransInfo        : TransInfo
-//   "6" : QuorumSignature  : []string
-//   "7" : SmartContract    : []byte
+//   "6" : SmartContract    : []byte
+//   "7" : QuorumSignature  : []string
+//
 // }
 
 const (
@@ -114,7 +115,7 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		return nil
 	}
 	ntcb[TCTransInfoKey] = ntib
-	if tcb.QuorumSignature == nil {
+	if tcb.QuorumSignature != nil {
 		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
 	}
 	if tcb.SmartContract != nil {

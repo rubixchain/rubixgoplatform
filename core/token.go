@@ -41,11 +41,6 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 		c.log.Error("Failed to get tokens", "err", err)
 		return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
 	}
-	pt, err := c.w.GetAllPartTokens(did)
-	if err != nil {
-		c.log.Error("Failed to get tokens", "err", err)
-		return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
-	}
 	info := model.DIDAccountInfo{
 		DID: did,
 	}
@@ -57,16 +52,6 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 			info.LockedWholeRBT++
 		case wallet.TokenIsPledged:
 			info.PledgedWholeRBT++
-		}
-	}
-	for _, t := range pt {
-		switch t.TokenStatus {
-		case wallet.TokenIsFree:
-			info.PartRBT++
-		case wallet.TokenIsLocked:
-			info.LockedPartRBT++
-		case wallet.TokenIsPledged:
-			info.PledgedPartRBT++
 		}
 	}
 	return info, nil
@@ -138,7 +123,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		}
 		tk := util.HexToStr(tb)
 		nb := bytes.NewBuffer([]byte(tk))
-		id, err := c.w.Add(nb, did, wallet.Owner)
+		id, err := c.w.Add(nb, did, wallet.OwnerRole)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
@@ -174,21 +159,16 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to create new token chain block")
 			return fmt.Errorf("failed to create new token chain block")
 		}
-		bid, err := blk.GetBlockID(id)
-		if err != nil {
-			c.log.Error("Failed to get block id", "err", err)
-			return fmt.Errorf("failed to get block id")
-		}
 		err = blk.UpdateSignature(dc)
 		if err != nil {
 			c.log.Error("Failed to update did signature", "err", err)
 			return fmt.Errorf("failed to update did signature")
 		}
 		t := &wallet.Token{
-			TokenID:      id,
-			DID:          did,
-			TokenChainID: bid,
-			TokenStatus:  wallet.TokenIsFree,
+			TokenID:     id,
+			DID:         did,
+			TokenValue:  1,
+			TokenStatus: wallet.TokenIsFree,
 		}
 		err = c.w.AddTokenBlock(id, blk)
 		if err != nil {

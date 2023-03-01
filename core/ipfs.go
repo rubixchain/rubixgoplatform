@@ -320,7 +320,6 @@ func (c *Core) GetDHTddrs(cid string) ([]string, error) {
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		m := scanner.Text()
-		c.log.Info(m)
 		if strings.Contains(m, "Error") {
 			return nil, fmt.Errorf(m)
 		}

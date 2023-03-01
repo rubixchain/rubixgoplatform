@@ -41,17 +41,17 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// Get the required tokens from the DID bank
 	// this method locks the token needs to be released or
 	// removed once it done with the trasnfer
-	wt, pt, err := c.w.GetTokens(did, req.TokenCount)
+	wt, err := c.w.GetTokens(did, req.TokenCount)
 	if err != nil {
 		c.log.Error("Failed to get tokens", "err", err)
 		resp.Message = "Insufficient tokens or tokens are locked"
 		return resp
 	}
 	// release the locked tokens before exit
-	defer c.w.ReleaseTokens(wt, pt)
+	defer c.w.ReleaseTokens(wt)
 
 	for i := range wt {
-		c.w.Pin(wt[i].TokenID, wallet.Owner, did)
+		c.w.Pin(wt[i].TokenID, wallet.OwnerRole, did)
 	}
 
 	// Get the receiver & do sanity check
@@ -62,18 +62,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	defer p.Close()
 	wta := make([]string, 0)
-	wtca := make([]string, 0)
-	wtcb := make([][]byte, 0)
 	for i := range wt {
 		wta = append(wta, wt[i].TokenID)
-		wtca = append(wtca, wt[i].TokenChainID)
-		blk := c.w.GetLatestTokenBlock(wt[i].TokenID)
-		if blk == nil {
-			c.log.Error("Failed to get latest token chain block")
-			resp.Message = "Failed to get latest token chain block"
-			return resp
-		}
-		wtcb = append(wtcb, blk.GetBlock())
 	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
@@ -105,6 +95,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	sct := &contract.ContractType{
 		Type:       contract.SCRBTDirectType,
 		PledgeMode: contract.POWPledgeMode,
+		TotalRBTs:  req.TokenCount,
 		TransInfo: &contract.TransInfo{
 			SenderDID:   did,
 			ReceiverDID: rdid,
@@ -126,7 +117,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		ReceiverPeerID: rpeerid,
 		ContractBlock:  sc.GetBlock(),
 	}
-	err = c.initiateConsensus(cr, sc, dc)
+	td, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		resp.Message = "Consensus failed" + err.Error()
@@ -134,45 +125,11 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	et := time.Now()
 	dif := et.Sub(st)
-	c.log.Info("Transfer finished successfully", "duration", dif)
-	resp.Status = true
-	msg := fmt.Sprintf("Transfer finished successfully in %v", dif)
-	resp.Message = msg
-	tid := util.HexToStr(util.CalculateHash(cr.ContractBlock, "SHA3-256"))
-	// tokenList := make([]string, 0)
-	// tokenList = append(tokenList, wta...)
-	// tokenList = append(tokenList, pta...)
-	// pd := c.pd[cr.ReqID]
-	// pm := make(map[string]interface{})
-	// index := 0
-	// ctcb := make(map[string]*block.Block)
-	// for _, v := range pd.PledgedTokens {
-	// 	for _, t := range v {
-	// 		b := c.w.GetLatestTokenBlock(tokenList[index])
-	// 		if b == nil {
-	// 			c.log.Error("Failed to get latest token chain block")
-	// 		}
-	// 		ctcb[tokenList[index]] = b
-	// 		pm[tokenList[index]] = t
-	// 		index++
-	// 	}
-	// }
-	// td := &wallet.TransactionDetails{
-	// 	TransactionID:   tid,
-	// 	SenderDID:       did,
-	// 	ReceiverDID:     rdid,
-	// 	Amount:          req.TokenCount,
-	// 	Comment:         req.Comment,
-	// 	DateTime:        time.Now().UTC(),
-	// 	TotalTime:       int(dif),
-	// 	WholeTokens:     wta,
-	// 	PartTokens:      pta,
-	// 	QuorumList:      cr.QuorumList,
-	// 	PledgedTokenMap: pm,
-	// }
-	// c.w.AddTransactionHistory(td)
+	td.Amount = req.TokenCount
+	td.TotalTime = float64(dif.Milliseconds())
+	c.w.AddTransactionHistory(td)
 	etrans := &ExplorerTrans{
-		TID:         tid,
+		TID:         td.TransactionID,
 		SenderDID:   did,
 		ReceiverDID: rdid,
 		Amount:      req.TokenCount,
@@ -182,5 +139,9 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		TokenTime:   float64(dif.Milliseconds()),
 	}
 	c.ec.ExplorerTransaction(etrans)
+	c.log.Info("Transfer finished successfully", "duration", dif)
+	resp.Status = true
+	msg := fmt.Sprintf("Transfer finished successfully in %v", dif)
+	resp.Message = msg
 	return resp
 }

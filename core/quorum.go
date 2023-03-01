@@ -58,13 +58,16 @@ func (qm *QuorumManager) GetQuorum(t int) []string {
 }
 
 func (qm *QuorumManager) AddQuorum(qds []QuorumData) error {
+	str := make([]string, 0)
 	for _, qd := range qds {
 		err := qm.s.Write(QuorumStorage, &qd)
 		if err != nil {
 			qm.log.Error("Failed to write to quorum storage", "err", err)
 			return err
 		}
+		str = append(str, qd.Address)
 	}
+	qm.ql = str
 	return nil
 }
 

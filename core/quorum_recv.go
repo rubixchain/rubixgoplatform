@@ -13,6 +13,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/service"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -21,7 +22,6 @@ import (
 func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 	// ::TODO:: Get proper credit score
 	did := c.l.GetQuerry(req, "did")
-	c.log.Debug("Getting credit score for", "did", did)
 	credits, err := c.w.GetCredit(did)
 	var cs model.CreditStatus
 	cs.Score = 0
@@ -106,13 +106,10 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		if multiPincheck {
-			c.log.Debug("Token ", "Token", ti[i].Token)
-			c.log.Debug("Has Multiple owners", "owners", owners)
+			c.log.Error("Token has multiple owners", "token", ti[i].Token, "owners", owners)
 			crep.Message = "Token has multiple owners"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		c.log.Debug("Token ", "Token", ti[i].Token)
-		c.log.Debug("Multiple pin check passed, does not have multiplke owners")
 	}
 	// check token ownership
 	if !c.validateTokenOwnership(cr, sc) {
@@ -264,8 +261,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		if multiPincheck {
-			c.log.Debug("Token ", "Token", t)
-			c.log.Debug("Has Multiple owners", "owners", owners)
+			c.log.Error("Token has multiple owners", "token", t, "owners", owners)
 			crep.Message = "Token has multiple owners"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
@@ -283,7 +279,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		}
 		ptcb := block.InitBlock(ptcbArray, nil)
 		if c.checkIsPledged(ptcb, t) {
-			c.log.Error("Token", t, "is a pledged Token")
+			c.log.Error("Token is a pledged Token", "token", t)
 			crep.Message = "Token " + t + " is a pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
@@ -295,22 +291,33 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update token status"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	// amount := (float64(len(sr.WholeTokens)) + float64(len(sr.PartTokens))*0.001)
+	sc := contract.InitContract(b.GetSmartContract(), nil)
+	if sc == nil {
+		c.log.Error("Failed to update token status, missing smart contract")
+		crep.Message = "Failed to update token status, missing smart contract"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	bid, err := b.GetBlockID(sr.TokenInfo[0].Token)
+	if err != nil {
+		c.log.Error("Failed to update token status, failed to get block ID", "err", err)
+		crep.Message = "Failed to update token status, failed to get block ID"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	td := &wallet.TransactionDetails{
+		TransactionID:   b.GetTid(),
+		TransactionType: b.GetTransType(),
+		BlockID:         bid,
+		Mode:            wallet.RecvMode,
+		Amount:          sc.GetTotalRBTs(),
+		SenderDID:       sc.GetSenderDID(),
+		ReceiverDID:     sc.GetReceiverDID(),
+		Comment:         sc.GetComment(),
+		DateTime:        time.Now(),
+		Status:          true,
+	}
+	c.w.AddTransactionHistory(td)
 	crep.Status = true
 	crep.Message = "Token received successfully"
-	// c.log.Info("Token received Suffessfully from", sr.Address)
-	// td := &wallet.TransactionDetails{
-	// 	TransactionID: b.GetTid(),
-	// 	SenderDID:     b.GetSenderDID(),
-	// 	ReceiverDID:   b.GetReceiverDID(),
-	// 	Amount:        amount,
-	// 	Comment:       b.GetComment(),
-	// 	DateTime:      time.Now().UTC(),
-	// 	TotalTime:     0,
-	// 	WholeTokens:   sr.WholeTokens,
-	// 	PartTokens:    sr.PartTokens,
-	// }
-	// c.w.AddTransactionHistory(td)
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
@@ -434,7 +441,6 @@ func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	c.log.Debug("Credits recieved for quorum", "did", did)
 	jb, err := json.Marshal(&credit)
 	if err != nil {
 		c.log.Error("Failed to parse request", "err", err)

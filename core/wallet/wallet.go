@@ -12,7 +12,6 @@ import (
 
 const (
 	TokenStorage       string = "TokensTable"
-	PartTokenStorage   string = "PartTokensTable"
 	DataTokenStorage   string = "DataTokensTable"
 	NFTTokenStorage    string = "NFTTokensTable"
 	CreditStorage      string = "CreditsTable"
@@ -20,10 +19,7 @@ const (
 	DIDPeerStorage     string = "DIDPeerTable"
 	TransactionStorage string = "TransactionHistory"
 	TokensArrayStorage string = "TokensTransferred"
-	QuorumListStorage  string = "QuorumList"
 	TokenProvider      string = "TokenProviderTable"
-	IPFSFunction       string = "IpfsFunctionTable"
-	UserRole           string = "RoleTable"
 	TokenChainStorage  string = "tokenchainstorage"
 	NFTChainStorage    string = "nftchainstorage"
 	DataChainStorage   string = "datachainstorage"
@@ -86,11 +82,6 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize whole token storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(PartTokenStorage, &PartToken{})
-	if err != nil {
-		w.log.Error("Failed to initialize part token storage", "err", err)
-		return nil, err
-	}
 	err = w.s.Init(DataTokenStorage, &DataToken{})
 	if err != nil {
 		w.log.Error("Failed to initialize data token storage", "err", err)
@@ -106,34 +97,14 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize DID Peer storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TransactionStorage, &TransactionHistory{})
+	err = w.s.Init(TransactionStorage, &TransactionDetails{})
 	if err != nil {
 		w.log.Error("Failed to initialize Transaction storage", "err", err)
-		return nil, err
-	}
-	err = w.s.Init(TokensArrayStorage, &TokensTransferred{})
-	if err != nil {
-		w.log.Error("Failed to initialize Tokens Array storage", "err", err)
-		return nil, err
-	}
-	err = w.s.Init(QuorumListStorage, &QuorumList{})
-	if err != nil {
-		w.log.Error("Failed to initialize Quorum List storage", "err", err)
 		return nil, err
 	}
 	err = w.s.Init(TokenProvider, &TokenProviderMap{})
 	if err != nil {
 		w.log.Error("Failed to initialize Token Provider Table", "err", err)
-		return nil, err
-	}
-	err = w.s.Init(IPFSFunction, &Function{})
-	if err != nil {
-		w.log.Error("Failed to initialize IPFS Functions Table", "err", err)
-		return nil, err
-	}
-	err = w.s.Init(UserRole, &Role{})
-	if err != nil {
-		w.log.Error("Failed to initialize User Role Table", "err", err)
 		return nil, err
 	}
 	return w, nil

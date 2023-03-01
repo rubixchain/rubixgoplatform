@@ -20,12 +20,14 @@ const (
 // 	 "1"  : Type             : int
 // 	 "2"  : PledgeMode       : int
 // 	 "3"  : TransInfo        : TransInfo
+// 	 "4"  : TotalRBTs        : flaot64
 // }
 
 const (
 	SCTypeKey             string = "1"
 	SCPledgeModeKey       string = "2"
 	SCTransInfoKey        string = "3"
+	SCTotalRBTsKey        string = "4"
 	SCShareSignatureKey   string = "97"
 	SCKeySignatureKey     string = "98"
 	SCBlockHashKey        string = "99"
@@ -38,6 +40,7 @@ type ContractType struct {
 	Type       int        `json:"type"`
 	PledgeMode int        `json:"pledge_mode"`
 	TransInfo  *TransInfo `json:"transInfo"`
+	TotalRBTs  float64    `json:"totalRBTs"`
 }
 
 type Contract struct {
@@ -61,6 +64,7 @@ func CreateNewContract(st *ContractType) *Contract {
 	if nm[SCTransInfoKey] == nil {
 		return nil
 	}
+	nm[SCTotalRBTsKey] = st.TotalRBTs
 	return InitContract(nil, nm)
 }
 
@@ -231,6 +235,10 @@ func (c *Contract) GetBlock() []byte {
 
 func (c *Contract) GetMap() map[string]interface{} {
 	return c.sm
+}
+
+func (c *Contract) GetTotalRBTs() float64 {
+	return util.GetFloatFromMap(c.sm, SCTotalRBTsKey)
 }
 
 func (c *Contract) GetPledgeMode() int {

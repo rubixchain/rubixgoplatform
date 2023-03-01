@@ -203,7 +203,7 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 	// c.qlock.Unlock()
 }
 
-func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) error {
+func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, error) {
 	cs := ConsensusStatus{
 		Credit: CreditScore{
 			Credit: make([]CreditSignature, 0),
@@ -244,7 +244,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	ql := c.qm.GetQuorum(cr.Type)
 	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
-		return fmt.Errorf("failed to get required quorums")
+		return nil, fmt.Errorf("failed to get required quorums")
 	}
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
@@ -268,7 +268,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		} else {
 			if cs.Result.SuccessCount >= MinConsensusRequired {
 				loop = false
-				c.log.Debug("Consensus finished successfully")
 			} else if cs.Result.RunningCount == 0 {
 				loop = false
 				err = fmt.Errorf("consensus failed")
@@ -280,46 +279,63 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			break
 		}
 	}
-	if err == nil {
-		tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
-		nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
-		if err != nil {
-			c.log.Error("Failed to pledge token", "err", err)
-			return err
-		}
-		c.sendQuorumCredit(cr)
-		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
-		if err != nil {
-			c.log.Error("Receiver not connected", "err", err)
-			return err
-		}
-		ti := sc.GetTransTokenInfo()
-		sr := SendTokenRequest{
-			Address:         cr.SenderPeerID + "." + sc.GetSenderDID(),
-			TokenInfo:       ti,
-			TokenChainBlock: nb.GetBlock(),
-		}
-		var br model.BasicResponse
-		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
-
-		if err != nil {
-			c.log.Error("Unable to send tokens to receiver", "err", err)
-			return err
-		}
-		if !br.Status {
-			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
-			return fmt.Errorf("unable to send tokens to receiver, " + br.Message)
-		}
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb)
-		if err != nil {
-			c.log.Error("Failed to transfer tokens", "err", err)
-			return err
-		}
-		for _, t := range ti {
-			c.w.UnPin(t.Token, wallet.PrevSender, sc.GetSenderDID())
-		}
+	if err != nil {
+		return nil, err
 	}
-	return err
+	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
+	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
+	if err != nil {
+		c.log.Error("Failed to pledge token", "err", err)
+		return nil, err
+	}
+	c.sendQuorumCredit(cr)
+	rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
+	if err != nil {
+		c.log.Error("Receiver not connected", "err", err)
+		return nil, err
+	}
+	ti := sc.GetTransTokenInfo()
+	sr := SendTokenRequest{
+		Address:         cr.SenderPeerID + "." + sc.GetSenderDID(),
+		TokenInfo:       ti,
+		TokenChainBlock: nb.GetBlock(),
+	}
+	var br model.BasicResponse
+	err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
+
+	if err != nil {
+		c.log.Error("Unable to send tokens to receiver", "err", err)
+		return nil, err
+	}
+	if !br.Status {
+		c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
+		return nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
+	}
+	err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb)
+	if err != nil {
+		c.log.Error("Failed to transfer tokens", "err", err)
+		return nil, err
+	}
+	for _, t := range ti {
+		c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+	}
+	nbid, err := nb.GetBlockID(ti[0].Token)
+	if err != nil {
+		c.log.Error("Failed to get block id", "err", err)
+		return nil, err
+	}
+	td := wallet.TransactionDetails{
+		TransactionID:   tid,
+		TransactionType: nb.GetTransType(),
+		BlockID:         nbid,
+		Mode:            wallet.SendMode,
+		SenderDID:       sc.GetSenderDID(),
+		ReceiverDID:     sc.GetReceiverDID(),
+		Comment:         sc.GetComment(),
+		DateTime:        time.Now(),
+		Status:          true,
+	}
+	return &td, nil
 }
 
 func (c *Core) startConsensus(id string, qt int) {

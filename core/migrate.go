@@ -116,7 +116,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		c.log.Error("Failed to migrate, invalid parsing", "err", err)
 		return fmt.Errorf("invalid DID.json file, unable to parse")
 	}
-	c.log.Debug("Node DID: " + d[0].DID)
+	c.log.Info("Node DID: " + d[0].DID)
 	didCreate := did.DIDCreate{
 		Dir:            didDir,
 		Type:           m.DIDType,
@@ -291,16 +291,11 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		}
 		for _, ti := range tis {
 			t := ti.Token
-			bid, err := blk.GetBlockID(t)
-			if err != nil {
-				c.log.Error("Failed to migrate, failed to get block id", "err", err)
-				return fmt.Errorf("failed to migrate, failed to get block id")
-			}
 			tkn := &wallet.Token{
-				TokenID:      t,
-				DID:          did,
-				TokenChainID: bid,
-				TokenStatus:  wallet.TokenIsFree,
+				TokenID:     t,
+				DID:         did,
+				TokenValue:  1,
+				TokenStatus: wallet.TokenIsFree,
 			}
 			err = c.w.AddTokenBlock(t, blk)
 			if err != nil {
@@ -378,7 +373,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			c.log.Error("Failed to migrate, failed to add token file", "err", err)
 			return fmt.Errorf("failed to migrate, failed to add token file")
 		}
-		ok, err := c.w.Pin(t, wallet.Owner, did)
+		ok, err := c.w.Pin(t, wallet.OwnerRole, did)
 		if err != nil || !ok {
 			c.log.Error("Failed to migrate, failed to pin token", "err", err)
 			return fmt.Errorf("failed to migrate, failed to pin token")

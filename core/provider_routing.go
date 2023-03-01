@@ -11,6 +11,7 @@ type PinStatusReq struct {
 }
 
 type PinStatusRes struct {
+	Status bool   `json:"status"`
 	Token  string `json:"token"`
 	DID    string `json:"did"`
 	FuncID int    `json:"funcid"`
@@ -25,27 +26,21 @@ func (c *Core) PinService() {
 // return true if pin exist, false if not, reason for pin if true
 func (c *Core) checkProviderStatus(req *ensweb.Request) *ensweb.Result {
 	var reqObj PinStatusReq
+	res := PinStatusRes{}
 	err := c.l.ParseJSON(req, &reqObj)
-	c.log.Debug("Token", reqObj.Token)
 	if err != nil {
 		c.log.Error("error parsing incoming request", "error", err)
-		var res PinStatusRes
 		return c.l.RenderJSON(req, &res, http.StatusOK)
 	}
 	providerMap, err := c.w.GetProviderDetails(reqObj.Token)
 	if err != nil {
-		if err.Error() == "record not found" {
-			c.log.Debug("Data not found in table")
-		} else {
-			c.log.Error("Error", err)
-		}
+		return c.l.RenderJSON(req, &res, http.StatusOK)
 	}
-	res := PinStatusRes{
-		Token:  providerMap.Token,
-		DID:    providerMap.DID,
-		FuncID: providerMap.FuncID,
-		Role:   providerMap.Role,
-	}
+	res.Status = true
+	res.Token = providerMap.Token
+	res.DID = providerMap.DID
+	res.FuncID = providerMap.FuncID
+	res.Role = providerMap.Role
 
 	return c.l.RenderJSON(req, &res, http.StatusOK)
 }
