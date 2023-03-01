@@ -67,7 +67,8 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
 	didResp := DIDResponse{
-		DID: did,
+		DID:    did,
+		PeerID: s.c.GetPeerID(),
 	}
 	return s.BasicResponse(req, true, "DID created successfully", &didResp)
 }

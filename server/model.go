@@ -13,7 +13,8 @@ const (
 )
 
 type DIDResponse struct {
-	DID string `json:"did"`
+	DID    string `json:"did"`
+	PeerID string `json:"peer_id"`
 }
 
 type LoginRequest struct {
