@@ -185,6 +185,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	st := time.Now()
 	numTokens := len(tokens)
 	index := 0
+	invalidTokens := make([]string, 0)
 	for {
 		tis := make([]contract.TokenInfo, 0)
 		gtis := make([]block.GenesisTokenInfo, 0)
@@ -199,8 +200,9 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			}
 			tl, tn, err := token.ValidateWholeToken(string(tk))
 			if err != nil {
-				c.log.Error("Failed to migrate, invalid token", "err", err)
-				return fmt.Errorf("failed to migrate, invalid token")
+				c.log.Info("Invalid token skipping : " + t)
+				invalidTokens = append(invalidTokens, t)
+				continue
 			}
 			tb, err := os.Open(rubixDir + "Wallet/TOKENS/" + t)
 			if err != nil {
@@ -319,6 +321,15 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		}
 		if index >= numTokens {
 			break
+		}
+	}
+	if len(invalidTokens) > 0 {
+		fp, err := os.Open("invalidtokens.txt")
+		if err == nil {
+			for i := range invalidTokens {
+				fp.WriteString(invalidTokens[i])
+			}
+			fp.Close()
 		}
 	}
 	creditFiles, err := util.GetAllFiles(rubixDir + "Wallet/WALLET_DATA/Credits/")

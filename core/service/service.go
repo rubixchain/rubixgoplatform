@@ -57,7 +57,6 @@ func (s *Service) GetTokenDetials(t string) (*TokenDetials, error) {
 	var td TokenDetials
 	err := s.s.Read(ArbitrationTable, &td, "token=?", t)
 	if err != nil {
-		s.log.Error("Failed to read aribitration table", "err", err)
 		return nil, err
 	}
 	return &td, nil
@@ -91,7 +90,22 @@ func (s *Service) UpdateTokenDetials(did string) error {
 func (s *Service) UpdateTempTokenDetials(td *TokenDetials) error {
 	err := s.s.Write(ArbitrationTempTable, td)
 	if err != nil {
-		s.log.Error("Failed to write aribitration temp table", "err", err)
+		var t TokenDetials
+		err = s.s.Read(ArbitrationTempTable, &t, "token=?", td.Token)
+		if err != nil {
+			s.log.Error("Failed to write aribitration temp table", "err", err)
+			return err
+		}
+		err = s.s.Delete(ArbitrationTempTable, &TokenDetials{}, "did=?", t.DID)
+		if err != nil {
+			s.log.Error("Failed to write aribitration temp table", "err", err)
+			return err
+		}
+		err := s.s.Write(ArbitrationTempTable, td)
+		if err != nil {
+			s.log.Error("Failed to write aribitration temp table", "err", err)
+			return err
+		}
 	}
 	return err
 }
