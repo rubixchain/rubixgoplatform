@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor"
+	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -11,6 +12,7 @@ const (
 	RacTestTokenType int = iota
 	RacOldNFTType
 	RacNFTType
+	RacDataTokenType
 )
 
 const (
@@ -18,31 +20,33 @@ const (
 )
 
 const (
-	RacTestTokenVersion int = 1
-)
-
-const (
-	RacTypeKey         string = "type"
-	RacDidKey          string = "creatorDid"
-	RacTotalSupplyKey  string = "totalSupply"
-	RacTokenCountKey   string = "tokenCount"
-	RacCreatorInputKey string = "creatorInput"
-	RacContentHashKey  string = "contentHash"
-	RacUrlKey          string = "url"
-	RacVersionKey      string = "version"
-	RacSignKey         string = "pvtKeySign"
-	RacHashKey         string = "hash"
-	RacBlockCotent     string = "contentBlock"
-	RacBlockSig        string = "contentSig"
+	RacTypeKey         string = "1"
+	RacVersionKey      string = "2"
+	RacDidKey          string = "3"
+	RacTokenNumberKey  string = "4"
+	RacTotalSupplyKey  string = "5"
+	RacTimeStampKey    string = "6"
+	RacCreatorIDKey    string = "7"
+	RacCreatorInputKey string = "8"
+	RacContentIDKey    string = "9"
+	RacContentHashKey  string = "10"
+	RacContentURLKey   string = "11"
+	RacHashKey         string = "98"
+	RacSignKey         string = "99"
+	RacBlockCotent     string = "1"
+	RacBlockSig        string = "2"
 )
 
 type RacType struct {
 	Type         int
 	DID          string
 	TotalSupply  uint64
+	TimeStamp    string
+	CreatorID    string
 	CreatorInput string
-	ContentHash  string
-	Url          string
+	ContentID    map[string]string
+	ContentHash  map[string]string
+	ContentURL   map[string]string
 }
 
 type RacBlock struct {
@@ -74,20 +78,35 @@ func InitRacBlock(bb []byte, bm map[string]interface{}) (*RacBlock, error) {
 }
 
 func CreateRac(r *RacType) ([]*RacBlock, error) {
-	if r.Type == 1 || r.Type > 2 {
+	if r.Type == 1 || r.Type > RacDataTokenType {
 		return nil, fmt.Errorf("rac type is not supported")
 	}
 	rb := make([]*RacBlock, 0)
 	for i := uint64(0); i < r.TotalSupply; i++ {
 		m := make(map[string]interface{})
 		m[RacTypeKey] = r.Type
-		m[RacDidKey] = r.DID
-		m[RacTotalSupplyKey] = r.TotalSupply
-		m[RacTokenCountKey] = i
-		m[RacContentHashKey] = r.ContentHash
-		m[RacCreatorInputKey] = r.CreatorInput
-		m[RacUrlKey] = r.Url
 		m[RacVersionKey] = RacVersion
+		m[RacDidKey] = r.DID
+		m[RacTokenNumberKey] = i
+		m[RacTotalSupplyKey] = r.TotalSupply
+		if r.CreatorInput != "" {
+			m[RacCreatorInputKey] = r.CreatorInput
+		}
+		if r.CreatorID != "" {
+			m[RacCreatorIDKey] = r.CreatorID
+		}
+		if r.TimeStamp != "" {
+			m[RacTimeStampKey] = r.TimeStamp
+		}
+		if r.ContentID != nil {
+			m[RacContentIDKey] = r.ContentID
+		}
+		if r.ContentHash != nil {
+			m[RacContentHashKey] = r.ContentHash
+		}
+		if r.ContentURL != nil {
+			m[RacContentURLKey] = r.ContentURL
+		}
 		r, err := InitRacBlock(nil, m)
 		if err != nil {
 			return nil, err
@@ -159,8 +178,16 @@ func (r *RacBlock) GetRacMap() map[string]interface{} {
 	return r.bm
 }
 
-func (r *RacBlock) UpdateSignature(sig string) error {
-	r.bm[RacSignKey] = sig
+func (r *RacBlock) UpdateSignature(dc didmodule.DIDCrypto) error {
+	ha, err := r.GetHash()
+	if err != nil {
+		return err
+	}
+	sig, err := dc.PvtSign([]byte(ha))
+	if err != nil {
+		return err
+	}
+	r.bm[RacSignKey] = util.HexToStr(sig)
 	return r.blkEncode()
 }
 

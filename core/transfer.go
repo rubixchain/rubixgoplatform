@@ -7,10 +7,22 @@ import (
 	"github.com/EnsurityTechnologies/uuid"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
+func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) {
+	br := c.initiateRBTTransfer(reqID, req)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
+
+func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
 	st := time.Now()
 	resp := &model.BasicResponse{
 		Status: false,
@@ -29,14 +41,18 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// Get the required tokens from the DID bank
 	// this method locks the token needs to be released or
 	// removed once it done with the trasnfer
-	wt, pt, err := c.w.GetTokens(did, req.TokenCount)
+	wt, err := c.w.GetTokens(did, req.TokenCount)
 	if err != nil {
-		c.log.Error("Failed to get tkens", "err", err)
+		c.log.Error("Failed to get tokens", "err", err)
 		resp.Message = "Insufficient tokens or tokens are locked"
 		return resp
 	}
 	// release the locked tokens before exit
-	defer c.w.ReleaseTokens(wt, pt)
+	defer c.w.ReleaseTokens(wt)
+
+	for i := range wt {
+		c.w.Pin(wt[i].TokenID, wallet.OwnerRole, did)
+	}
 
 	// Get the receiver & do sanity check
 	p, err := c.getPeer(req.Receiver)
@@ -46,58 +62,52 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	defer p.Close()
 	wta := make([]string, 0)
-	wtca := make([]string, 0)
-	wtcb := make([][]byte, 0)
 	for i := range wt {
 		wta = append(wta, wt[i].TokenID)
-		wtca = append(wtca, wt[i].TokenChainID)
-		blk := c.w.GetLatestTokenBlock(wt[i].TokenID)
-		if blk == nil {
-			c.log.Error("Failed to get latest token chain block")
-			resp.Message = "Failed to get latest token chain block"
-			return resp
-		}
-		wtcb = append(wtcb, blk.GetBlock())
-	}
-	pta := make([]string, 0)
-	ptca := make([]string, 0)
-	for i := range pt {
-		pta = append(pta, pt[i].TokenID)
-		ptca = append(ptca, pt[i].TokenChainID)
 	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
+	tis := make([]contract.TokenInfo, 0)
+	for i := range wt {
+		blk := c.w.GetLatestTokenBlock(wt[i].TokenID)
+		if blk == nil {
+			c.log.Error("failed to get latest block, invalid token chain")
+			resp.Message = "failed to get latest block, invalid token chain"
+			return resp
+		}
+		bid, err := blk.GetBlockID(wt[i].TokenID)
+		if err != nil {
+			c.log.Error("failed to get block id", "err", err)
+			resp.Message = "failed to get block id, " + err.Error()
+			return resp
+		}
+		ti := contract.TokenInfo{
+			Token:     wt[i].TokenID,
+			TokenType: token.RBTTokenType,
+			OwnerDID:  wt[i].DID,
+			BlockID:   bid,
+		}
+		tis = append(tis, ti)
+	}
 	sct := &contract.ContractType{
-		Type:          contract.POWPledgeMode,
-		WholeTokens:   wta,
-		WholeTokensID: wtca,
-		PartTokens:    pta,
-		PartTokensID:  ptca,
-		SenderDID:     did,
-		ReceiverDID:   rdid,
-		Comment:       req.Comment,
-		PledgeMode:    contract.POWPledgeMode,
+		Type:       contract.SCRBTDirectType,
+		PledgeMode: contract.POWPledgeMode,
+		TotalRBTs:  req.TokenCount,
+		TransInfo: &contract.TransInfo{
+			SenderDID:   did,
+			ReceiverDID: rdid,
+			Comment:     req.Comment,
+			TransTokens: tis,
+		},
 	}
 	sc := contract.CreateNewContract(sct)
-	authHash, err := sc.GetHash()
+	err = sc.UpdateSignature(dc)
 	if err != nil {
-		c.log.Error("Failed to get hash of smart contract", "err", err)
-		resp.Message = "Failed to get hash of smart contract, " + err.Error()
-		return resp
-	}
-	ssig, psig, err := dc.Sign(authHash)
-	if err != nil {
-		c.log.Error("Failed to get signature", "err", err)
-		resp.Message = "Failed to get signature, " + err.Error()
-		return resp
-	}
-	err = sc.UpdateSignature(ssig, psig)
-	if err != nil {
-		c.log.Error("Failed to ipdate smart contract signature", "err", err)
-		resp.Message = "Failed to ipdate smart contract signature, " + err.Error()
+		c.log.Error(err.Error())
+		resp.Message = err.Error()
 		return resp
 	}
 	cr := &ConensusRequest{
@@ -107,23 +117,31 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		ReceiverPeerID: rpeerid,
 		ContractBlock:  sc.GetBlock(),
 	}
-	err = util.CreateDir(c.cfg.DirPath + "Temp/" + cr.ReqID)
-	if err != nil {
-		c.log.Error("Failed to create directory", "err", err)
-		resp.Message = "Failed to create directory, " + err.Error()
-		return resp
-	}
-	err = c.initiateConsensus(cr, sc, dc)
+	td, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
-		resp.Message = "Consensus failed, " + err.Error()
+		resp.Message = "Consensus failed" + err.Error()
 		return resp
 	}
 	et := time.Now()
 	dif := et.Sub(st)
-	c.log.Info("Trasnfer finsihed successfully", "duration", dif)
+	td.Amount = req.TokenCount
+	td.TotalTime = float64(dif.Milliseconds())
+	c.w.AddTransactionHistory(td)
+	etrans := &ExplorerTrans{
+		TID:         td.TransactionID,
+		SenderDID:   did,
+		ReceiverDID: rdid,
+		Amount:      req.TokenCount,
+		TrasnType:   req.Type,
+		TokenIDs:    wta,
+		QuorumList:  cr.QuorumList,
+		TokenTime:   float64(dif.Milliseconds()),
+	}
+	c.ec.ExplorerTransaction(etrans)
+	c.log.Info("Transfer finished successfully", "duration", dif)
 	resp.Status = true
-	msg := fmt.Sprintf("Trasnfer finsihed successfully in %v", dif)
+	msg := fmt.Sprintf("Transfer finished successfully in %v", dif)
 	resp.Message = msg
 	return resp
 }

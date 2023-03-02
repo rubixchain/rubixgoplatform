@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 
 	"github.com/EnsurityTechnologies/enscrypt"
-	"github.com/rubixchain/rubixgoplatform/core/nlss"
+	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -42,6 +42,10 @@ func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
 		return nil
 	}
 	return d
+}
+
+func (d *DIDQuorum) GetDID() string {
+	return d.did
 }
 
 // Sign will return the singature of the DID

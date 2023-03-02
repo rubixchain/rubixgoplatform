@@ -6,18 +6,49 @@ import (
 	"image"
 	"io/ioutil"
 	"os"
-	"syscall"
 
 	"github.com/EnsurityTechnologies/enscrypt"
-	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/nlss"
+	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
-	"golang.org/x/term"
 )
 
 func (cmd *Command) CreateDID() {
-	password := cmd.privPWD
+	if cmd.forcePWD {
+		pwd, err := getpassword("Set private key password: ")
+		if err != nil {
+			cmd.log.Error("Failed to get password")
+			return
+		}
+		npwd, err := getpassword("Re-enter private key password: ")
+		if err != nil {
+			cmd.log.Error("Failed to get password")
+			return
+		}
+		if pwd != npwd {
+			cmd.log.Error("Password mismatch")
+			return
+		}
+		cmd.privPWD = pwd
+	}
+	if cmd.forcePWD {
+		pwd, err := getpassword("Set quorum key password: ")
+		if err != nil {
+			cmd.log.Error("Failed to get password")
+			return
+		}
+		npwd, err := getpassword("Re-enter quorum key password: ")
+		if err != nil {
+			cmd.log.Error("Failed to get password")
+			return
+		}
+		if pwd != npwd {
+			cmd.log.Error("Password mismatch")
+			return
+		}
+		cmd.quorumPWD = pwd
+	}
 	if cmd.didType == did.WalletDIDMode {
 		f, err := os.Open(cmd.imgFile)
 		if err != nil {
@@ -89,7 +120,7 @@ func (cmd *Command) CreateDID() {
 			cmd.log.Error("private key & public key file names required")
 			return
 		}
-		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: password})
+		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: cmd.privPWD})
 		if err != nil {
 			cmd.log.Error("failed to create keypair", "err", err)
 			return
@@ -182,13 +213,11 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse) (string, bool) {
 			return "Invalid response, " + err.Error(), false
 		}
 		if cmd.forcePWD && !pwdSet {
-			fmt.Print("Enter Password: ")
-			bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+			password, err = getpassword("Enter private key password: ")
 			if err != nil {
 				return "Failed to get password", false
 			}
 			pwdSet = true
-			password = string(bytePassword)
 		}
 		sresp := did.SignRespData{
 			ID:   sr.ID,

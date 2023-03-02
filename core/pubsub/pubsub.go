@@ -39,7 +39,10 @@ func (ps *PubSub) receivePub(topic string, p *ipfsnode.PubSubSubscription) {
 	for {
 		m, err := p.Next()
 		if err != nil {
-			ps.log.Error("failed to read message", "err", err)
+			//ps.log.Error("failed to read message", "err", err)
+			// if strings.Contains(err.Error(), "An existing connection was forcibly closed by the remote host") {
+			// 	break
+			// }
 			continue
 		}
 		cb := ps.sub[topic]

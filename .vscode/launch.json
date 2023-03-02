@@ -30,7 +30,7 @@
             "program": "${workspaceFolder}",
             "cwd": "${workspaceFolder}/windows",
             "args": ["run", "-p", "node3", "-n", "2",  "-testNet", "-s"]
-        }
+        },
         {
             "name": "Command",
             "type": "go",

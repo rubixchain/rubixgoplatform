@@ -4,40 +4,43 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 const (
 	SCRBTDirectType int = iota
+	SCDIDMigrateType
+	SCDataTokenType
+	SCDataTokenCommitType
 )
+
+// ----------SmartContract----------------------
+// {
+// 	 "1"  : Type             : int
+// 	 "2"  : PledgeMode       : int
+// 	 "3"  : TransInfo        : TransInfo
+// 	 "4"  : TotalRBTs        : flaot64
+// }
+
 const (
-	SCTypeKey           string = "type"
-	SCWholeTokensKey    string = "whole_tokens"
-	SCWholeTokensIDKey  string = "whole_tokens_id"
-	SCPartTokensKey     string = "part_tokens"
-	SCPartTokensIDKey   string = "part_tokens_id"
-	SCSenderDIDKey      string = "sender_did"
-	SCReceiverDIDKey    string = "receiver_did"
-	SCCommentKey        string = "comment"
-	SCShareSignatureKey string = "share_signature"
-	SCKeySignatureKey   string = "key_signature"
-	SCBlockContentKey   string = "block_content"
-	SCBlockHashKey      string = "block_hash"
-	SCPledgeModeKey     string = "pledge_mode"
-	SCPledgeDetialsKey  string = "pledge_detials"
+	SCTypeKey             string = "1"
+	SCPledgeModeKey       string = "2"
+	SCTransInfoKey        string = "3"
+	SCTotalRBTsKey        string = "4"
+	SCShareSignatureKey   string = "97"
+	SCKeySignatureKey     string = "98"
+	SCBlockHashKey        string = "99"
+	SCBlockContentKey     string = "1"
+	SCBlockContentSSigKey string = "2"
+	SCBlockContentPSigKey string = "3"
 )
 
 type ContractType struct {
-	Type          int                    `json:"type"`
-	WholeTokens   []string               `json:"whole_tokens"`
-	WholeTokensID []string               `json:"whole_tokens_id"`
-	PartTokens    []string               `json:"part_tokens"`
-	PartTokensID  []string               `json:"part_tokens_id"`
-	SenderDID     string                 `json:"sender_did"`
-	ReceiverDID   string                 `json:"receiver_did"`
-	PledgeMode    int                    `json:"pledge_mode"`
-	PledgeDetials map[string]interface{} `json:"pledge_detials"`
-	Comment       string                 `json:"comment"`
+	Type       int        `json:"type"`
+	PledgeMode int        `json:"pledge_mode"`
+	TransInfo  *TransInfo `json:"transInfo"`
+	TotalRBTs  float64    `json:"totalRBTs"`
 }
 
 type Contract struct {
@@ -47,36 +50,21 @@ type Contract struct {
 }
 
 func CreateNewContract(st *ContractType) *Contract {
-
+	if st.TransInfo == nil {
+		return nil
+	}
 	nm := make(map[string]interface{})
 	nm[SCTypeKey] = st.Type
-	if len(st.WholeTokens) > 0 {
-		nm[SCWholeTokensKey] = st.WholeTokens
-	}
-	if len(st.WholeTokensID) > 0 {
-		nm[SCWholeTokensIDKey] = st.WholeTokensID
-	}
-	if len(st.PartTokens) > 0 {
-		nm[SCPartTokensKey] = st.PartTokens
-	}
-	if len(st.PartTokensID) > 0 {
-		nm[SCPartTokensIDKey] = st.PartTokensID
-	}
-	if st.SenderDID != "" {
-		nm[SCSenderDIDKey] = st.SenderDID
-	}
-	if st.ReceiverDID != "" {
-		nm[SCReceiverDIDKey] = st.ReceiverDID
-	}
-	nm[SCCommentKey] = st.Comment
 	// ::TODO:: Need to support other pledge mode
-	if st.PledgeMode > POWPledgeMode {
+	if st.PledgeMode > NoPledgeMode {
 		return nil
 	}
 	nm[SCPledgeModeKey] = st.PledgeMode
-	if st.PledgeDetials != nil {
-		nm[SCPledgeDetialsKey] = st.PledgeDetials
+	nm[SCTransInfoKey] = newTransInfoBlock(st.TransInfo)
+	if nm[SCTransInfoKey] == nil {
+		return nil
 	}
+	nm[SCTotalRBTsKey] = st.TotalRBTs
 	return InitContract(nil, nm)
 }
 
@@ -86,12 +74,12 @@ func (c *Contract) blkDecode() error {
 	if err != nil {
 		return nil
 	}
-	ssi, ok := m[SCShareSignatureKey]
-	if !ok {
+	ssi, sok := m[SCBlockContentSSigKey]
+	if !sok {
 		return fmt.Errorf("invalid block, missing share signature")
 	}
-	ksi, ok := m[SCKeySignatureKey]
-	if !ok {
+	ksi, kok := m[SCBlockContentPSigKey]
+	if !kok {
 		return fmt.Errorf("invalid block, missing key signature")
 	}
 	bc, ok := m[SCBlockContentKey]
@@ -105,8 +93,22 @@ func (c *Contract) blkDecode() error {
 		return err
 	}
 	tcb[SCBlockHashKey] = util.HexToStr(hb)
-	tcb[SCShareSignatureKey] = util.HexToStr(ssi.([]byte))
-	tcb[SCKeySignatureKey] = util.HexToStr(ksi.([]byte))
+	if sok {
+		var ksb map[string]interface{}
+		err = cbor.Unmarshal(ssi.([]byte), &ksb)
+		if err != nil {
+			return err
+		}
+		tcb[SCShareSignatureKey] = ksb
+	}
+	if kok {
+		var ksb map[string]interface{}
+		err = cbor.Unmarshal(ksi.([]byte), &ksb)
+		if err != nil {
+			return err
+		}
+		tcb[SCKeySignatureKey] = ksb
+	}
 	c.sm = tcb
 	return nil
 }
@@ -135,11 +137,19 @@ func (c *Contract) blkEncode() error {
 	m[SCBlockContentKey] = bc
 	if ssok {
 		c.sm[SCShareSignatureKey] = ss
-		m[SCShareSignatureKey] = util.StrToHex(ss.(string))
+		ksm, err := cbor.Marshal(ss, cbor.CanonicalEncOptions())
+		if err != nil {
+			return err
+		}
+		m[SCBlockContentSSigKey] = ksm
 	}
 	if ksok {
-		c.sm[SCKeySignatureKey] = ss
-		m[SCKeySignatureKey] = util.StrToHex(ks.(string))
+		c.sm[SCKeySignatureKey] = ks
+		ksm, err := cbor.Marshal(ks, cbor.CanonicalEncOptions())
+		if err != nil {
+			return err
+		}
+		m[SCBlockContentPSigKey] = ksm
 	}
 	blk, err := cbor.Marshal(m, cbor.CanonicalEncOptions())
 	if err != nil {
@@ -188,7 +198,7 @@ func (c *Contract) GetType() uint64 {
 	return c.st
 }
 
-func (c *Contract) GetHashSig() (string, string, string, error) {
+func (c *Contract) GetHashSig(did string) (string, string, string, error) {
 	hi, ok := c.sm[SCBlockHashKey]
 	if !ok {
 		return "", "", "", fmt.Errorf("invalid smart contract, hash block is missing")
@@ -202,7 +212,13 @@ func (c *Contract) GetHashSig() (string, string, string, error) {
 	if !ok {
 		return "", "", "", fmt.Errorf("invalid smart contract, key signature block is missing")
 	}
-	return hi.(string), ssi.(string), ksi.(string), nil
+
+	ss := util.GetStringFromMap(ssi, did)
+	ks := util.GetStringFromMap(ksi, did)
+	if ss == "" || ks == "" {
+		return "", "", "", fmt.Errorf("invalid smart contract, share/key signature block is missing")
+	}
+	return hi.(string), ss, ks, nil
 }
 
 func (c *Contract) GetHash() (string, error) {
@@ -221,10 +237,8 @@ func (c *Contract) GetMap() map[string]interface{} {
 	return c.sm
 }
 
-func (c *Contract) UpdateSignature(ss []byte, ks []byte) error {
-	c.sm[SCShareSignatureKey] = util.HexToStr(ss)
-	c.sm[SCKeySignatureKey] = util.HexToStr(ks)
-	return c.blkEncode()
+func (c *Contract) GetTotalRBTs() float64 {
+	return util.GetFloatFromMap(c.sm, SCTotalRBTsKey)
 }
 
 func (c *Contract) GetPledgeMode() int {
@@ -237,93 +251,121 @@ func (c *Contract) GetPledgeMode() int {
 }
 
 func (c *Contract) GetSenderDID() string {
-	si, ok := c.sm[SCSenderDIDKey]
-	if !ok {
-		return ""
-	}
-	return si.(string)
+	return c.getTransInfoString(TSSenderDIDKey)
 }
 
 func (c *Contract) GetReceiverDID() string {
-	si, ok := c.sm[SCReceiverDIDKey]
-	if !ok {
-		return ""
-	}
-	return si.(string)
-}
-
-func (c *Contract) GetWholeTokens() []string {
-	wti, ok := c.sm[SCWholeTokensKey]
-	if !ok {
-		return nil
-	}
-	wt, ok := wti.([]string)
-	if ok {
-		return wt
-	}
-	wtf := wti.([]interface{})
-	wt = make([]string, 0)
-	for _, i := range wtf {
-		wt = append(wt, i.(string))
-	}
-	return wt
-}
-
-func (c *Contract) GetWholeTokensID() []string {
-	wti, ok := c.sm[SCWholeTokensIDKey]
-	if !ok {
-		return nil
-	}
-	wt, ok := wti.([]string)
-	if ok {
-		return wt
-	}
-	wtf := wti.([]interface{})
-	wt = make([]string, 0)
-	for _, i := range wtf {
-		wt = append(wt, i.(string))
-	}
-	return wt
-}
-
-func (c *Contract) GetPartTokens() []string {
-	pti, ok := c.sm[SCPartTokensKey]
-	if !ok {
-		return nil
-	}
-	wt, ok := pti.([]string)
-	if ok {
-		return wt
-	}
-	wtf := pti.([]interface{})
-	wt = make([]string, 0)
-	for _, i := range wtf {
-		wt = append(wt, i.(string))
-	}
-	return wt
-}
-
-func (c *Contract) GetPartTokensID() []string {
-	pti, ok := c.sm[SCPartTokensIDKey]
-	if !ok {
-		return nil
-	}
-	wt, ok := pti.([]string)
-	if ok {
-		return wt
-	}
-	wtf := pti.([]interface{})
-	wt = make([]string, 0)
-	for _, i := range wtf {
-		wt = append(wt, i.(string))
-	}
-	return wt
+	return c.getTransInfoString(TSReceiverDIDKey)
 }
 
 func (c *Contract) GetComment() string {
-	si, ok := c.sm[SCCommentKey]
-	if !ok {
-		return ""
+	return c.getTransInfoString(TSCommentKey)
+}
+
+func (c *Contract) GetTransTokenInfo() []TokenInfo {
+	tim := util.GetFromMap(c.sm, SCTransInfoKey)
+	if tim == nil {
+		return nil
 	}
-	return si.(string)
+	tsm := util.GetFromMap(tim, TSTransInfoKey)
+	if tsm == nil {
+		return nil
+	}
+	ti := make([]TokenInfo, 0)
+	tsmi, ok := tsm.(map[string]interface{})
+	if ok {
+		for k, v := range tsmi {
+			t := TokenInfo{
+				Token:     k,
+				TokenType: util.GetIntFromMap(v, TITokenTypeKey),
+				OwnerDID:  util.GetStringFromMap(v, TIOwnerDIDKey),
+				BlockID:   util.GetStringFromMap(v, TIBlockIDKey),
+			}
+			ti = append(ti, t)
+		}
+	} else {
+		tsmi, ok := tsm.(map[interface{}]interface{})
+		if ok {
+			for k, v := range tsmi {
+				t := TokenInfo{
+					Token:     util.GetString(k),
+					TokenType: util.GetIntFromMap(v, TITokenTypeKey),
+					OwnerDID:  util.GetStringFromMap(v, TIOwnerDIDKey),
+					BlockID:   util.GetStringFromMap(v, TIBlockIDKey),
+				}
+				ti = append(ti, t)
+			}
+		} else {
+			return nil
+		}
+	}
+	return ti
+
+}
+
+func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
+	did := dc.GetDID()
+	hash, err := c.GetHash()
+	if err != nil {
+		return fmt.Errorf("Failed to get hash of smart contract, " + err.Error())
+	}
+	ssig, psig, err := dc.Sign(hash)
+	if err != nil {
+		return fmt.Errorf("Failed to get signature, " + err.Error())
+	}
+	if c.sm[SCShareSignatureKey] == nil {
+		ksm := make(map[string]interface{})
+		ksm[did] = util.HexToStr(ssig)
+		c.sm[SCShareSignatureKey] = ksm
+	} else {
+		ksm, ok := c.sm[SCShareSignatureKey].(map[string]interface{})
+		if ok {
+			ksm[did] = util.HexToStr(ssig)
+			c.sm[SCShareSignatureKey] = ksm
+		} else {
+			ksm, ok := c.sm[SCShareSignatureKey].(map[interface{}]interface{})
+			if ok {
+				ksm[did] = util.HexToStr(ssig)
+				c.sm[SCShareSignatureKey] = ksm
+			} else {
+				return fmt.Errorf("failed to update signature, invalid share signature block")
+			}
+		}
+	}
+	if c.sm[SCKeySignatureKey] == nil {
+		ksm := make(map[string]interface{})
+		ksm[did] = util.HexToStr(psig)
+		c.sm[SCKeySignatureKey] = ksm
+	} else {
+		ksm, ok := c.sm[SCKeySignatureKey].(map[string]interface{})
+		if ok {
+			ksm[did] = util.HexToStr(psig)
+			c.sm[SCKeySignatureKey] = ksm
+		} else {
+			ksm, ok := c.sm[SCKeySignatureKey].(map[interface{}]interface{})
+			if ok {
+				ksm[did] = util.HexToStr(psig)
+				c.sm[SCKeySignatureKey] = ksm
+			} else {
+				return fmt.Errorf("failed to update signature, invalid key signature block")
+			}
+		}
+	}
+	return c.blkEncode()
+}
+
+func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
+	did := dc.GetDID()
+	hs, ss, ps, err := c.GetHashSig(did)
+	if err != nil {
+		return err
+	}
+	ok, err := dc.Verify(hs, util.StrToHex(ss), util.StrToHex(ps))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("did signature verification failed")
+	}
+	return nil
 }

@@ -31,6 +31,7 @@ type DIDCreate struct {
 	ImgFile        string `json:"img_file"`
 	DIDImgFileName string `json:"did_img_file"`
 	PubImgFile     string `json:"pub_img_file"`
+	PrivImgFile    string `json:"priv_img_file"`
 	PubKeyFile     string `json:"pub_key_file"`
 }
 

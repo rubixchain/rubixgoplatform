@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/enscrypt"
-	"github.com/rubixchain/rubixgoplatform/core/nlss"
+	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -49,6 +49,10 @@ func (d *DIDStandard) getSignature(hash []byte) ([]byte, error) {
 		return nil, fmt.Errorf("Invalid data received on the channel")
 	}
 	return srd.Signature.Signature, nil
+}
+
+func (d *DIDStandard) GetDID() string {
+	return d.did
 }
 
 // Sign will return the singature of the DID

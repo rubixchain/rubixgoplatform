@@ -40,7 +40,25 @@ func (c *Core) publishPeerMap(pm *PeerMap) error {
 	return nil
 }
 
-func (c *Core) RegisterDID(reqID string, did string) error {
+func (c *Core) RegisterDID(reqID string, did string) {
+	err := c.registerDID(reqID, did)
+	br := model.BasicResponse{
+		Status:  true,
+		Message: "DID registered successfully",
+	}
+	if err != nil {
+		br.Status = false
+		br.Message = err.Error()
+	}
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- &br
+}
+
+func (c *Core) registerDID(reqID string, did string) error {
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		return fmt.Errorf("DID is not exist")
@@ -123,6 +141,29 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 		p.Close()
 		return nil, fmt.Errorf("did not exist with the peer")
 	}
+	// TODO:: Valid the peer version before proceesing
+	return p, nil
+}
+
+/*
+This methos returns the peer connection to the PeerId supplied as Input.
+*/
+func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
+	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
+	if err != nil {
+		return nil, err
+	}
+	/* q := make(map[string]string)
+	q["did"] = ""
+	var ps model.PeerStatusResponse
+	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps, false)
+	if err != nil {
+		return nil, err
+	}
+	if !ps.DIDExists {
+		p.Close()
+		return nil, fmt.Errorf("did not exist with the peer")
+	} */
 	// TODO:: Valid the peer version before proceesing
 	return p, nil
 }

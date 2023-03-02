@@ -17,7 +17,7 @@ import (
 	"github.com/EnsurityTechnologies/uuid"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	files "github.com/ipfs/go-ipfs-files"
-	"github.com/rubixchain/rubixgoplatform/core/nlss"
+	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -37,6 +37,7 @@ type DID struct {
 }
 
 type DIDCrypto interface {
+	GetDID() string
 	Sign(hash string) ([]byte, []byte, error)
 	Verify(hash string, didSig []byte, pvtSig []byte) (bool, error)
 	PvtSign(hash []byte) ([]byte, error)
@@ -55,7 +56,7 @@ func InitDID(dir string, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
-	dirName := d.dir + "Rubix/" + temp.String()
+	dirName := d.dir + temp.String()
 	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
 	if err != nil {
 		d.log.Error("failed to create directory", "err", err)
@@ -199,7 +200,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	newDIrName := d.dir + "Rubix/" + did
+	newDIrName := d.dir + did
 
 	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
 	if err != nil {
@@ -228,7 +229,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
-	dirName := d.dir + "Rubix/" + temp.String()
+	dirName := d.dir + temp.String()
 	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
 	if err != nil {
 		d.log.Error("failed to create directory", "err", err)
@@ -243,6 +244,7 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 
 	util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
 	util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
+	util.Filecopy(didCreate.PrivImgFile, dirName+"/private/"+PvtShareFileName)
 
 	if didCreate.Type == BasicDIDMode {
 		if didCreate.PrivPWD == "" {
@@ -297,7 +299,7 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	newDIrName := d.dir + "Rubix/" + did
+	newDIrName := d.dir + did
 
 	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
 	if err != nil {

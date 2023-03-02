@@ -1,7 +1,5 @@
 package config
 
-import "github.com/rubixchain/rubixgoplatform/core/wallet"
-
 // Ports defines varies ports used
 type Ports struct {
 	SendPort     uint16 `json:"sender_port"`
@@ -16,20 +14,23 @@ type DIDConfigType struct {
 	Config map[string]interface{} `json:"CONFIG"`
 }
 
-// ConfigData defines configuration data
-type ConfigData struct {
-	Ports            Ports               `json:"ports"`
-	BootStrap        []string            `json:"bootstrap"`
-	Services         map[string]string   `json:"services"`
-	QuorumList       QuorumList          `json:"quorumr_list"`
-	MainWalletConfig wallet.WalletConfig `json:"main_wallet_config"`
-	TestWalletConfig wallet.WalletConfig `json:"test_wallet_config"`
+type StorageConfig struct {
+	StorageType int    `json:"stroage_type"`
+	DBName      string `json:"db_name"`
+	DBAddress   string `json:"db_address"`
+	DBPort      string `json:"db_port"`
+	DBType      string `json:"db_type"`
+	DBUserName  string `json:"db_user_name"`
+	DBPassword  string `json:"db_password"`
 }
 
-type QuorumList struct {
-	Alpha []string `json:"alpha"`
-	Beta  []string `json:"beta"`
-	Gamma []string `json:"gamma"`
+// ConfigData defines configuration data
+type ConfigData struct {
+	Ports             Ports             `json:"ports"`
+	BootStrap         []string          `json:"bootstrap"`
+	Services          map[string]string `json:"services"`
+	StorageConfig     StorageConfig     `json:"storage_config"`
+	TestStorageConfig StorageConfig     `json:"test_storage_config"`
 }
 
 type Config struct {

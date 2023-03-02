@@ -23,8 +23,7 @@ func remoteStorageDB() error {
 }
 
 type model struct {
-	ID      int    `gorm:"column:Id;primary_key;auto_increment"`
-	Name    string `gorm:"column:Name;not null"`
+	Name    string `gorm:"column:Name;primary_key;"`
 	Age     int    `gorm:"column:Age"`
 	Address string `gorm:"column:Address"`
 }
@@ -43,10 +42,31 @@ func TestBasic(t *testing.T) {
 	if err := s.Write("user", &model{Name: "TestUser1", Age: 20, Address: "Hyderabad"}); err != nil {
 		t.Fatal("Failed to write storage", err.Error())
 	}
-	if err := s.Write("user", &model{Name: "TestUser2", Age: 30, Address: "Hyderabad"}); err != nil {
+	if err := s.Write("user", &model{Name: "TestUser2", Age: 32, Address: "Hyderabad"}); err != nil {
 		t.Fatal("Failed to write storage", err.Error())
 	}
-	if err := s.Write("user", &model{Name: "TestUser3", Age: 32, Address: "Hyderabad"}); err != nil {
+	if err := s.Write("user", &model{Name: "TestUser3", Age: 34, Address: "Hyderabad"}); err != nil {
+		t.Fatal("Failed to write storage", err.Error())
+	}
+	if err := s.Write("user", &model{Name: "TestUser1", Age: 30, Address: "Hyderabad"}); err != nil {
+		var m model
+		err = s.Read("user", &m, "Name=?", "TestUser1")
+		if err != nil {
+			t.Fatal("Failed to write storage", err.Error())
+		}
+		err = s.Delete("user", &model{}, "Address=?", "Hyderabad")
+		if err != nil {
+			t.Fatal("Failed to write storage", err.Error())
+		}
+		err = s.Write("user", &model{Name: "TestUser1", Age: 30, Address: "Hyderabad"})
+		if err != nil {
+			t.Fatal("Failed to write storage", err.Error())
+		}
+	}
+	if err := s.Write("user", &model{Name: "TestUser2", Age: 31, Address: "Hyderabad"}); err != nil {
+		t.Fatal("Failed to write storage", err.Error())
+	}
+	if err := s.Write("user", &model{Name: "TestUser3", Age: 33, Address: "Hyderabad"}); err != nil {
 		t.Fatal("Failed to write storage", err.Error())
 	}
 	var m model

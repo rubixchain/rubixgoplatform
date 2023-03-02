@@ -110,6 +110,12 @@ func FileWrite(fileName string, data []byte) error {
 
 func GetAllFiles(root string) ([]string, error) {
 	var files []string
+	_, err := os.Stat(root)
+	if os.IsNotExist(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	fs, err := ioutil.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -268,6 +274,33 @@ func StrToHex(s string) []byte {
 	dst := make([]byte, hex.DecodedLen(len(s)))
 	hex.Decode(dst, []byte(s))
 	return dst
+}
+
+func ConvertBitString(b string) []byte {
+	var out []byte
+	var str string
+
+	for i := len(b); i > 0; i -= 8 {
+		if i-8 < 0 {
+			str = string(b[0:i])
+		} else {
+			str = string(b[i-8 : i])
+		}
+		v, err := strconv.ParseUint(str, 2, 8)
+		if err != nil {
+			return nil
+		}
+		out = append([]byte{byte(v)}, out...)
+	}
+	return out
+}
+
+func ConvertToBitString(data []byte) string {
+	var bits string = ""
+	for i := 0; i < len(data); i++ {
+		bits = bits + fmt.Sprintf("%08b", data[i])
+	}
+	return bits
 }
 
 func DirCopy(src string, dst string) error {
@@ -572,4 +605,115 @@ func CalcTokenChainHash(tc []map[string]interface{}) string {
 	// }
 	// str = str + "]"
 	return str
+}
+
+func GetFromMap(m interface{}, key string) interface{} {
+	switch mm := m.(type) {
+	case map[string]interface{}:
+		return mm[key]
+	case map[interface{}]interface{}:
+		return mm[key]
+	}
+	return nil
+}
+
+func GetStringFromMap(m interface{}, key string) string {
+	var si interface{}
+	switch mm := m.(type) {
+	case map[string]interface{}:
+		si = mm[key]
+	case map[interface{}]interface{}:
+		si = mm[key]
+	default:
+		return ""
+	}
+	switch s := si.(type) {
+	case string:
+		return s
+	case interface{}:
+		str, ok := si.(string)
+		if ok {
+			return str
+		}
+	}
+	return ""
+}
+
+func GetString(si interface{}) string {
+	switch s := si.(type) {
+	case string:
+		return s
+	case interface{}:
+		st, ok := s.(string)
+		if ok {
+			return st
+		}
+	}
+	return ""
+}
+
+func GetIntFromMap(m interface{}, key string) int {
+	var tli interface{}
+	var ok bool
+	switch mm := m.(type) {
+	case map[string]interface{}:
+		tli, ok = mm[key]
+		if !ok {
+			return 0
+		}
+	case map[interface{}]interface{}:
+		tli, ok = mm[key]
+		if !ok {
+			return 0
+		}
+	default:
+		return 0
+	}
+	var tl int
+	switch mt := tli.(type) {
+	case int:
+		tl = mt
+	case int64:
+		tl = int(mt)
+	case uint64:
+		tl = int(mt)
+	default:
+		tl = 0
+	}
+	return tl
+}
+
+func GetFloatFromMap(m interface{}, key string) float64 {
+	var tli interface{}
+	var ok bool
+	switch mm := m.(type) {
+	case map[string]interface{}:
+		tli, ok = mm[key]
+		if !ok {
+			return 0
+		}
+	case map[interface{}]interface{}:
+		tli, ok = mm[key]
+		if !ok {
+			return 0
+		}
+	default:
+		return 0
+	}
+	var tl float64
+	switch mt := tli.(type) {
+	case float64:
+		tl = mt
+	case float32:
+		tl = float64(mt)
+	case int:
+		tl = float64(mt)
+	case int64:
+		tl = float64(mt)
+	case uint64:
+		tl = float64(mt)
+	default:
+		tl = 0
+	}
+	return tl
 }

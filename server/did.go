@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
-	"github.com/rubixchain/rubixgoplatform/core/did"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/did"
 )
 
 const (
@@ -56,28 +56,29 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 			didCreate.PubKeyFile = fileName
 		}
 	}
-
-	if s.cfg.EnableAuth {
-		// always expect client tokne to present
-		token := req.ClientToken.Model.(*Token)
-		didCreate.Dir = token.UserID
-	} else {
-		didCreate.Dir = DIDRootDir
+	dir, ok := s.validateAccess(req)
+	if !ok {
+		return s.BasicResponse(req, false, "Unathuriozed access", nil)
 	}
+	didCreate.Dir = dir
 	did, err := s.c.CreateDID(&didCreate)
 	if err != nil {
 		s.log.Error("failed to create did", "err", err)
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
 	didResp := DIDResponse{
-		DID: did,
+		DID:    did,
+		PeerID: s.c.GetPeerID(),
 	}
 	return s.BasicResponse(req, true, "DID created successfully", &didResp)
 }
 
 // APIGetAllDID will get all DID
 func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
-	dir := DIDRootDir
+	dir, ok := s.validateAccess(req)
+	if !ok {
+		return s.BasicResponse(req, false, "Unathuriozed access", nil)
+	}
 	if s.cfg.EnableAuth {
 		// always expect client token to present
 		token := req.ClientToken.Model.(*Token)
@@ -111,6 +112,22 @@ func (s *Server) validateDIDAccess(req *ensweb.Request, did string) bool {
 	}
 }
 
+func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
+	dc := s.c.GetWebReq(reqID)
+	ch := <-dc.OutChan
+	time.Sleep(time.Millisecond * 10)
+	sr, ok := ch.(*did.SignResponse)
+	if ok {
+		return s.RenderJSON(req, sr, http.StatusOK)
+	}
+	br, ok := ch.(*model.BasicResponse)
+	if ok {
+		s.c.RemoveWebReq(reqID)
+		return s.RenderJSON(req, br, http.StatusOK)
+	}
+	return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "Invalid response"}, http.StatusOK)
+}
+
 func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 	var m map[string]interface{}
 	err := s.ParseJSON(req, &m)
@@ -126,18 +143,7 @@ func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to parse input", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.handleWebRequest(req.ID)
-	err = s.c.RegisterDID(req.ID, didStr)
-	if err != nil {
-		return s.BasicResponse(req, false, err.Error(), nil)
-	}
-	br := model.BasicResponse{
-		Status:  true,
-		Message: "DID registered successfully",
-	}
-	dc := s.c.GetWebReq(req.ID)
-	dc.OutChan <- br
-	time.Sleep(time.Millisecond * 10)
-	s.c.RemoveWebReq(req.ID)
-	return nil
+
+	go s.c.RegisterDID(req.ID, didStr)
+	return s.didResponse(req, req.ID)
 }

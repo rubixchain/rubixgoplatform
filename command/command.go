@@ -18,8 +18,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/core/did"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/server"
+	"golang.org/x/term"
 )
 
 const (
@@ -27,7 +28,7 @@ const (
 )
 
 const (
-	version string = "0.0.1"
+	version string = "0.0.2"
 )
 const (
 	VersionCmd            string = "-v"
@@ -52,6 +53,8 @@ const (
 	RegsiterDIDCmd        string = "registerdid"
 	ShutDownCmd           string = "shutdown"
 	MirgateNodeCmd        string = "migratenode"
+	LockTokensCmd         string = "locktokens"
+	CreateDataTokenCmd    string = "createdatatoken"
 )
 
 var commands = []string{VersionCmd,
@@ -75,7 +78,9 @@ var commands = []string{VersionCmd,
 	DumpTokenChainCmd,
 	RegsiterDIDCmd,
 	ShutDownCmd,
-	MirgateNodeCmd}
+	MirgateNodeCmd,
+	LockTokensCmd,
+	CreateDataTokenCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -97,7 +102,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will dump the token chain into file",
 	"This command will register DID peer map across the network",
 	"This command will shutdown the rubix node",
-	"This command will migrate node to newer node"}
+	"This command will migrate node to newer node",
+	"This command will lock the tokens on the arbitary node",
+	"This command will create data token token"}
 
 type Command struct {
 	cfg          config.Config
@@ -144,6 +151,12 @@ type Command struct {
 	enableAuth   bool
 	did          string
 	token        string
+	arbitaryMode bool
+	tokenList    string
+	fileMode     bool
+	file         string
+	userID       string
+	userInfo     string
 }
 
 func showVersion() {
@@ -175,7 +188,7 @@ func (cmd *Command) runApp() {
 	// Override directory path
 	cmd.cfg.DirPath = cmd.runDir
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode)
 	if err != nil {
 		cmd.log.Error("failed to create core")
 		return
@@ -200,6 +213,7 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("Failed to create server")
 		return
 	}
+	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
 
@@ -283,7 +297,13 @@ func Run(args []string) {
 	flag.IntVar(&cmd.numTokens, "numTokens", 1, "Number of tokens")
 	flag.StringVar(&cmd.did, "did", "", "DID")
 	flag.BoolVar(&cmd.enableAuth, "enableAuth", false, "Enable authentication")
+	flag.BoolVar(&cmd.arbitaryMode, "arbitaryMode", false, "Enable arbitary mode")
+	flag.StringVar(&cmd.tokenList, "tokenList", "tokens.txt", "Token lis")
 	flag.StringVar(&cmd.token, "token", "", "Token name")
+	flag.BoolVar(&cmd.fileMode, "fmode", false, "File mode")
+	flag.StringVar(&cmd.file, "file", "file.txt", "File to be uploaded")
+	flag.StringVar(&cmd.userID, "uid", "testuser", "User ID for token creation")
+	flag.StringVar(&cmd.userInfo, "uinfo", "", "User info for token creation")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -390,6 +410,8 @@ func Run(args []string) {
 		cmd.ShutDownCmd()
 	case MirgateNodeCmd:
 		cmd.MigrateNodeCmd()
+	case CreateDataTokenCmd:
+		cmd.createDataToken()
 	default:
 		cmd.log.Error("Invalid command")
 	}
@@ -425,4 +447,13 @@ func (cmd *Command) multiformClient(method string, path string, field map[string
 		return c, nil, fmt.Errorf("failed to create http request, " + err.Error())
 	}
 	return c, r, nil
+}
+
+func getpassword(msg string) (string, error) {
+	fmt.Print(msg)
+	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", err
+	}
+	return string(bytePassword), nil
 }

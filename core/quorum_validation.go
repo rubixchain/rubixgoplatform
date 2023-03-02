@@ -3,29 +3,45 @@ package core
 import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
-	"github.com/rubixchain/rubixgoplatform/core/did"
+	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) bool {
-	// ::TODO:: Need to implement
-	wt := sc.GetWholeTokens()
-	wtdID := sc.GetWholeTokensID()
-	for i := range wt {
-		c.log.Debug("Finding dht", "token", wt[i])
-		ids, err := c.GetDHTddrs(wt[i])
+	ti := sc.GetTransTokenInfo()
+	for i := range ti {
+		ids, err := c.GetDHTddrs(ti[i].Token)
 		if err != nil || len(ids) == 0 {
 			continue
 		}
 	}
 	address := cr.SenderPeerID + "." + sc.GetSenderDID()
-	for i := range wt {
-		err := c.syncTokenChainFrom(address, wtdID[i], wt[i])
+	for i := range ti {
+		err := c.syncTokenChainFrom(address, ti[i].BlockID, ti[i].Token)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return false
 		}
-		b := c.w.GetLatestTokenBlock(wt[i])
+		// Check the token validation
+		if !c.testNet {
+			fb := c.w.GetFirstBlock(ti[i].Token)
+			if fb == nil {
+				c.log.Error("Failed to get first token chain block")
+				return false
+			}
+			tl, tn, err := fb.GetTokenDetials(ti[i].Token)
+			if err != nil {
+				c.log.Error("Failed to get token detials", "err", err)
+				return false
+			}
+			ct := token.GetTokenString(tl, tn)
+			if ct != ti[i].Token {
+				c.log.Error("Invalid token", "token", ti[i].Token, "exp_token", ct, "tl", tl, "tn", tn)
+				return false
+			}
+		}
+		b := c.w.GetLatestTokenBlock(ti[i].Token)
 		if b == nil {
 			c.log.Error("Invalid token chain block")
 			return false
@@ -36,11 +52,6 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			return false
 		}
 		for _, signer := range signers {
-			h, s, err := b.GetHashSig(signer)
-			if err != nil {
-				c.log.Error("Failed to get hash & signature", "err", err)
-				return false
-			}
 			var dc did.DIDCrypto
 			switch b.GetTransType() {
 			case block.TokenGeneratedType:
@@ -48,12 +59,9 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			default:
 				dc, err = c.SetupForienDIDQuorum(signer)
 			}
-
+			err := b.VerifySignature(dc)
 			if err != nil {
-				c.log.Error("Failed to get did", "err", err)
-				return false
-			}
-			if !c.validateSignature(dc, h, s) {
+				c.log.Error("Failed to verify signature", "err", err)
 				return false
 			}
 		}
@@ -93,7 +101,6 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 		c.log.Error("Invalid DID setup")
 		return false
 	}
-	c.log.Info("Received token hash", "hash", h)
 	sig := util.StrToHex(s)
 	ok, err := dc.PvtVerify([]byte(h), sig)
 	if err != nil {
@@ -105,4 +112,13 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 		return false
 	}
 	return true
+}
+
+func (c *Core) checkTokenIsPledged(wt string) bool {
+	b := c.w.GetLatestTokenBlock(wt)
+	if b == nil {
+		c.log.Error("Invalid token chain block")
+		return true
+	}
+	return c.checkIsPledged(b, wt)
 }

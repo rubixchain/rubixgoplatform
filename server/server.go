@@ -37,6 +37,9 @@ const (
 	APIDumpTokenChainBlock string = "/api/dump-token-chain"
 	APIRegisterDID         string = "/api/register-did"
 	APIMigrateNode         string = "/api/migrate-node"
+	APILockTokens          string = "/api/lock-tokens"
+	APICreateDataToken     string = "/api/create-data_token"
+	APICommitDataToken     string = "/api/commit-data_token"
 )
 
 // Server defines server handle
@@ -205,6 +208,9 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, s.ErrorFunc))
 	s.AddRoute(APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, s.ErrorFunc))
 	s.AddRoute(APIMigrateNode, "POST", s.AuthHandle(s.APIMigrateNode, s.ErrorFunc))
+	s.AddRoute(APILockTokens, "POST", s.AuthHandle(s.APILockTokens, s.ErrorFunc))
+	s.AddRoute(APICreateDataToken, "POST", s.AuthHandle(s.APICreateDataToken, s.ErrorFunc))
+	//s.AddRoute(APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, s.ErrorFunc))
 
 }
 

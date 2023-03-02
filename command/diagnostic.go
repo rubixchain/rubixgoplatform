@@ -111,6 +111,17 @@ func tcMarshal(str string, m interface{}) (string, error) {
 			}
 		}
 		str = str + "]"
+	case uint64:
+		str = str + fmt.Sprintf("%d", mt)
+	case int:
+		str = str + fmt.Sprintf("%d", mt)
+	case interface{}:
+		str, err = tcMarshal(str, mt)
+		if err != nil {
+			return "", err
+		}
+	case nil:
+		str = str + "\"" + "\""
 	default:
 		return "", fmt.Errorf("invalid type %T", mt)
 	}
@@ -131,7 +142,7 @@ func (cmd *Command) dumpTokenChain() {
 			return
 		}
 		for _, blk := range ds.Blocks {
-			b := block.InitBlock(block.TokenBlockType, blk, nil)
+			b := block.InitBlock(blk, nil)
 			if b != nil {
 				blocks = append(blocks, b.GetBlockMap())
 			} else {
