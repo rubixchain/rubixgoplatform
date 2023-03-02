@@ -332,7 +332,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			c.log.Error("Failed to migrate, failed to read credit file", "err", err)
 			return fmt.Errorf("failed to migrate, failed to credit token file")
 		}
-		var cs CreditScore
+		var cs []CreditSignature
 		err = json.Unmarshal(cb, &cs)
 		if err != nil {
 			c.log.Error("Failed to migrate, failed to parse credit file", "err", err)
@@ -340,7 +340,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		}
 		var ncs CreditScore
 		ncs.Credit = make([]CreditSignature, 0)
-		for _, s := range cs.Credit {
+		for _, s := range cs {
 			sig := util.ConvertBitString(s.Signature)
 			if sig == nil {
 				c.log.Error("Failed to migrate, failed to parse credit signature")
