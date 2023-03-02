@@ -28,7 +28,7 @@ const (
 )
 
 const (
-	version string = "0.0.1"
+	version string = "0.0.2"
 )
 const (
 	VersionCmd            string = "-v"
@@ -213,6 +213,7 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("Failed to create server")
 		return
 	}
+	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
 

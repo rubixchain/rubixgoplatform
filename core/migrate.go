@@ -188,6 +188,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	for {
 		tis := make([]contract.TokenInfo, 0)
 		gtis := make([]block.GenesisTokenInfo, 0)
+		tts := make([]block.TransTokens, 0)
 		batchIndex := 0
 		for {
 			t := tokens[index]
@@ -236,8 +237,13 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				TokenType: token.RBTTokenType,
 				OwnerDID:  did,
 			}
+			tt := block.TransTokens{
+				Token:     t,
+				TokenType: token.RBTTokenType,
+			}
 			gtis = append(gtis, gti)
 			tis = append(tis, ti)
+			tts = append(tts, tt)
 			index++
 			batchIndex++
 			if batchIndex == BatchSize || index == numTokens {
@@ -269,6 +275,9 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			TokenOwner:      did,
 			GenesisBlock:    gb,
 			SmartContract:   sc.GetBlock(),
+			TransInfo: &block.TransInfo{
+				Tokens: tts,
+			},
 		}
 		//ctcb := make
 		blk := block.CreateNewBlock(ctcb, ntcb)
