@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -118,7 +119,7 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 
 func (c *Client) SignatureResponse(sr *did.SignRespData) (*model.BasicResponse, error) {
 	var br model.BasicResponse
-	err := c.sendJSONRequest("POST", server.APISignatureResponse, nil, sr, &br)
+	err := c.sendJSONRequest("POST", server.APISignatureResponse, nil, sr, &br, time.Hour)
 	if err != nil {
 		return nil, err
 	}

@@ -41,7 +41,7 @@ func (d *DIDStandard) getSignature(hash []byte) ([]byte, error) {
 	select {
 	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
-		return nil, fmt.Errorf("Timeout, failed to get password")
+		return nil, fmt.Errorf("Timeout, failed to get signature")
 	}
 
 	srd, ok := ch.(SignRespData)

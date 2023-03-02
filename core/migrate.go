@@ -171,6 +171,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	h.Write([]byte(d[0].DID))
 	ha := h.Sum(nil)
 	addr := int(ha[0]) % len(c.arbitaryAddr)
+	c.log.Info("Conneting to node : " + c.arbitaryAddr[addr])
 	p, err := c.getPeer(c.arbitaryAddr[addr])
 	if err != nil {
 		c.log.Error("Failed to migrate, failed to connect arbitary peer", "err", err, "peer", c.arbitaryAddr[addr])
@@ -181,7 +182,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		c.log.Error("Failed to migrate, unable to migrate did")
 		return fmt.Errorf("failed to migrate, unable to migrate did")
 	}
-
 	st := time.Now()
 	numTokens := len(tokens)
 	index := 0
@@ -191,6 +191,8 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		gtis := make([]block.GenesisTokenInfo, 0)
 		tts := make([]block.TransTokens, 0)
 		batchIndex := 0
+		stime := time.Now()
+		c.log.Info("Starting the batch")
 		for {
 			t := tokens[index]
 			tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
@@ -253,6 +255,10 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				break
 			}
 		}
+		etime := time.Now()
+		dtime := etime.Sub(stime)
+		c.log.Info("Starting the signature", "duration", dtime)
+		stime = time.Now()
 		ts := &contract.TransInfo{
 			Comment:     "Migrating Token at : " + time.Now().String(),
 			TransTokens: tis,
@@ -267,6 +273,8 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			c.log.Error("Failed to migrate, failed to update signature", "err", err)
 			return fmt.Errorf("failed to migrate, failed to update signature")
 		}
+		dtime = etime.Sub(stime)
+		c.log.Info("Signature done", "duration", dtime)
 		gb := &block.GenesisBlock{
 			Type: block.TokenMigratedType,
 			Info: gtis,

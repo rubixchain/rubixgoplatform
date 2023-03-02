@@ -42,7 +42,7 @@ func (d *DIDWallet) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte,
 	select {
 	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
-		return nil, nil, fmt.Errorf("Timeout, failed to get password")
+		return nil, nil, fmt.Errorf("Timeout, failed to get signature")
 	}
 
 	srd, ok := ch.(SignRespData)

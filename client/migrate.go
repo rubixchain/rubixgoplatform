@@ -1,6 +1,8 @@
 package client
 
 import (
+	"time"
+
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/server"
@@ -8,7 +10,7 @@ import (
 
 func (c *Client) MigrateNode(m *core.MigrateRequest) (*model.BasicResponse, error) {
 	var rm model.BasicResponse
-	err := c.sendJSONRequest("POST", server.APIMigrateNode, nil, m, &rm)
+	err := c.sendJSONRequest("POST", server.APIMigrateNode, nil, m, &rm, 1*time.Hour)
 	if err != nil {
 		return nil, err
 	}
