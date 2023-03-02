@@ -202,6 +202,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			if err != nil {
 				c.log.Info("Invalid token skipping : " + t)
 				invalidTokens = append(invalidTokens, t)
+				index++
 				continue
 			}
 			tb, err := os.Open(rubixDir + "Wallet/TOKENS/" + t)

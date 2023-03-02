@@ -28,7 +28,7 @@ const (
 )
 
 const (
-	version string = "0.0.3"
+	version string = "0.0.4"
 )
 const (
 	VersionCmd            string = "-v"
