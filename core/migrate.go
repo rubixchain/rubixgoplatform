@@ -218,7 +218,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					c.log.Info("Invalid token skipping : " + t)
 					invalidTokens = append(invalidTokens, t)
 					invalidMap[t] = true
-					index++
+					mindex++
 					continue
 				}
 				_, tn, _, _ := token.ValidateWholeToken(string(tk))
