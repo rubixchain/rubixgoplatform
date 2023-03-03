@@ -11,6 +11,7 @@ package block
 //   "1" : TokenLevel  : int
 //   "2" : TokenNumber : string
 //   "3" : MigratedID  : string
+//   "4" : PreviousID  : string
 // }
 
 const (
@@ -26,6 +27,7 @@ const (
 	GITokenLevelKey    string = "1"
 	GITokenNumberKey   string = "2"
 	GIMigratedBlkIDKey string = "3"
+	GIPreviousIDKey    string = "4"
 )
 
 type GenesisTokenInfo struct {
@@ -33,6 +35,7 @@ type GenesisTokenInfo struct {
 	TokenLevel      int    `json:"tokenLevel"`
 	TokenNumber     int    `json:"tokenNumber"`
 	MigratedBlockID string `json:"migratedBlockID"`
+	PreviousID      string `json:"previosuID"`
 }
 
 type GenesisBlock struct {
@@ -46,6 +49,9 @@ func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 	ngib[GITokenNumberKey] = gi.TokenNumber
 	if gi.MigratedBlockID != "" {
 		ngib[GIMigratedBlkIDKey] = gi.MigratedBlockID
+	}
+	if gi.PreviousID != "" {
+		ngib[GIPreviousIDKey] = gi.PreviousID
 	}
 	return ngib
 }

@@ -15,17 +15,22 @@ const (
 	DataTokenType
 )
 
-func GetWholeTokenValue(tokenDetials string) (int, string, error) {
-
+func GetWholeTokenValue(tokenDetials string) (int, string, bool, error) {
 	trimmedResult := strings.TrimSpace(tokenDetials)
-
 	tokenLevel := string(trimmedResult[:len(trimmedResult)-64])
 	tokenCountHash := string(trimmedResult[len(trimmedResult)-64:])
 	tokenLevelInt, err := strconv.Atoi(tokenLevel)
 	if err != nil {
-		return 0, "", err
+		return 0, "", false, err
 	}
-	return tokenLevelInt, tokenCountHash, nil
+	needMigration := false
+	if len(tokenLevel) < 3 {
+		if tokenLevelInt != 1 {
+			return 0, "", false, fmt.Errorf("invalid token level format")
+		}
+		needMigration = true
+	}
+	return tokenLevelInt, tokenCountHash, needMigration, nil
 }
 
 func calcSHA256(targetHash string, maxNumber int) int {
@@ -52,24 +57,28 @@ func ValidateTokenDetials(tl int, tn int) bool {
 	return tn < TokenMap[tl]
 }
 
-func ValidateWholeToken(tokenDetials string) (int, int, error) {
-	tokenLevel, tokenCountHash, err := GetWholeTokenValue(tokenDetials)
+func ValidateWholeToken(tokenDetials string) (int, int, bool, error) {
+	tokenLevel, tokenCountHash, needMigration, err := GetWholeTokenValue(tokenDetials)
 	if err != nil {
-		return -1, -1, err
+		return -1, -1, false, err
 	}
 	tokenVal := -1
-
-	if _, ok := TokenMap[tokenLevel]; !ok {
-	}
 	tokenVal = calcSHA256(tokenCountHash, maxTokenFromLevel(tokenLevel))
-
 	if tokenVal == -1 {
-		return -1, -1, fmt.Errorf("token Count is invalid")
+		return -1, -1, false, fmt.Errorf("token Count is invalid")
 	}
-	return tokenLevel, tokenVal, nil
+	return tokenLevel, tokenVal, needMigration, nil
 }
 
 func GetTokenString(tl int, tn int) string {
+	str := ""
+	str = fmt.Sprintf("%03d", tl)
+	hash := sha256.Sum256([]byte(strconv.Itoa(tn)))
+	str = str + fmt.Sprintf("%x", hash)
+	return str
+}
+
+func GetLevelOneTokenString(tl int, tn int) string {
 	str := ""
 	if tl == 1 {
 		str = fmt.Sprintf("%02d", tl)
