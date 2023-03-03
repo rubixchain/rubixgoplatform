@@ -519,7 +519,7 @@ func (c *Core) chekDIDArbitration(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) getTokenNumber(req *ensweb.Request) *ensweb.Result {
 	var hashes []string
-	br := model.BasicResponse{
+	br := model.TokenNumberResponse{
 		Status: false,
 	}
 	err := c.l.ParseJSON(req, &hashes)
@@ -537,7 +537,7 @@ func (c *Core) getTokenNumber(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 	br.Status = true
-	br.Result = tns
+	br.TokenNumbers = tns
 	return c.l.RenderJSON(req, &br, http.StatusOK)
 }
 

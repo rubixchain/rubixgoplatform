@@ -233,23 +233,19 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				break
 			}
 		}
-		var br model.BasicResponse
+		var br model.TokenNumberResponse
 		err = p.SendJSONRequest("POST", APIGetTokenNumber, nil, thashes, &br, true)
 		if err != nil {
 			c.log.Error("Failed to migrate, failed to get token number", "err", err)
 			return fmt.Errorf("failed to migrate, failed to get token number")
 		}
-		tns, ok := br.Result.([]interface{})
-		if !ok {
-			c.log.Error("Failed to migrate, failed to get token number, invalid data type")
-			return fmt.Errorf("failed to migrate, failed to get token number, invalid data type")
-		}
+		tns := br.TokenNumbers
 		if len(tns) != len(tls) {
 			c.log.Error("Failed to migrate, failed to get token number properly")
 			return fmt.Errorf("failed to migrate, failed to get token number properly")
 		}
 		for i, t := range tkns {
-			tn := tns[i].(int)
+			tn := tns[i]
 			tl := tls[i]
 			if !token.ValidateTokenDetials(tl, tn) {
 				c.log.Info("Invalid token skipping : " + t)
