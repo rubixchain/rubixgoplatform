@@ -239,7 +239,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			c.log.Error("Failed to migrate, failed to get token number", "err", err)
 			return fmt.Errorf("failed to migrate, failed to get token number")
 		}
-		tns, ok := br.Result.([]int)
+		tns, ok := br.Result.([]interface{})
 		if !ok {
 			c.log.Error("Failed to migrate, failed to get token number, invalid data type")
 			return fmt.Errorf("failed to migrate, failed to get token number, invalid data type")
@@ -249,7 +249,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			return fmt.Errorf("failed to migrate, failed to get token number properly")
 		}
 		for i, t := range tkns {
-			tn := tns[i]
+			tn := tns[i].(int)
 			tl := tls[i]
 			if !token.ValidateTokenDetials(tl, tn) {
 				c.log.Info("Invalid token skipping : " + t)
