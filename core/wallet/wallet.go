@@ -8,6 +8,7 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 const (
@@ -60,13 +61,17 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	}
 	w.tcs = &ChainDB{}
 	w.dtcs = &ChainDB{}
-	tdb, err := leveldb.OpenFile(dir+TokenChainStorage, nil)
+	op := &opt.Options{
+		WriteBuffer: 100 * 1024 * 1024,
+	}
+
+	tdb, err := leveldb.OpenFile(dir+TokenChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure token chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure token chain block storage")
 	}
 	w.tcs.DB = *tdb
-	dtdb, err := leveldb.OpenFile(dir+DataChainStorage, nil)
+	dtdb, err := leveldb.OpenFile(dir+DataChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure data chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure data chain block storage")
