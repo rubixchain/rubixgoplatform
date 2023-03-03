@@ -203,26 +203,44 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		stime := time.Now()
 		c.log.Info("Starting the batch")
 		tls := make([]int, 0)
+		var tns []int
 		thashes := make([]string, 0)
 		tkns := make([]string, 0)
 		if migration {
 			for {
-				t := migrateTokens[mindex]
+				t := migrateTokens[mindex+batchIndex]
 				tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
 				if err != nil {
 					c.log.Error("Failed to migrate, failed to read token files", "err", err)
 					return fmt.Errorf("failed to migrate, failed to read token files")
 				}
-				tl, thash, _, err := token.GetWholeTokenValue(string(tk))
-				if err != nil {
-					c.log.Info("Invalid token skipping : " + t)
-					invalidTokens = append(invalidTokens, t)
-					invalidMap[t] = true
-					mindex++
-					continue
+				tl, thash, _, _ := token.GetWholeTokenValue(string(tk))
+				thashes = append(thashes, thash)
+				tls = append(tls, tl)
+				batchIndex++
+				if mindex+batchIndex == len(migrateTokens) || batchIndex == BatchSize {
+					break
 				}
-				_, tn, _, _ := token.ValidateWholeToken(string(tk))
-				ntd := token.GetTokenString(tl, tn)
+			}
+			batchIndex = 0
+			var br model.TokenNumberResponse
+			err = p.SendJSONRequest("POST", APIGetTokenNumber, nil, thashes, &br, true)
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to get token number", "err", err)
+				return fmt.Errorf("failed to migrate, failed to get token number")
+			}
+			if !br.Status {
+				c.log.Error("Failed to migrate, failed to get token number", "msg", br.Message)
+				return fmt.Errorf("failed to migrate, failed to get token number")
+			}
+			tns = br.TokenNumbers
+			if len(tns) != len(thashes) {
+				c.log.Error("Failed to migrate, failed to get token number properly")
+				return fmt.Errorf("failed to migrate, failed to get token number properly")
+			}
+			for {
+				t := migrateTokens[mindex]
+				ntd := token.GetTokenString(tls[batchIndex], tns[batchIndex])
 				tb := bytes.NewReader([]byte(ntd))
 				tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 				if err != nil {
@@ -231,8 +249,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				}
 				migrateDetials[tid] = t + "," + ntd
 				migratedMap[t] = tid
-				tls = append(tls, tl)
-				thashes = append(thashes, thash)
 				tkns = append(tkns, tid)
 				mindex++
 				batchIndex++
@@ -296,20 +312,22 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				}
 			}
 		}
-		var br model.TokenNumberResponse
-		err = p.SendJSONRequest("POST", APIGetTokenNumber, nil, thashes, &br, true)
-		if err != nil {
-			c.log.Error("Failed to migrate, failed to get token number", "err", err)
-			return fmt.Errorf("failed to migrate, failed to get token number")
-		}
-		if !br.Status {
-			c.log.Error("Failed to migrate, failed to get token number", "msg", br.Message)
-			return fmt.Errorf("failed to migrate, failed to get token number")
-		}
-		tns := br.TokenNumbers
-		if len(tns) != len(tls) {
-			c.log.Error("Failed to migrate, failed to get token number properly")
-			return fmt.Errorf("failed to migrate, failed to get token number properly")
+		if !migration {
+			var br model.TokenNumberResponse
+			err = p.SendJSONRequest("POST", APIGetTokenNumber, nil, thashes, &br, true)
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to get token number", "err", err)
+				return fmt.Errorf("failed to migrate, failed to get token number")
+			}
+			if !br.Status {
+				c.log.Error("Failed to migrate, failed to get token number", "msg", br.Message)
+				return fmt.Errorf("failed to migrate, failed to get token number")
+			}
+			tns = br.TokenNumbers
+			if len(tns) != len(tls) {
+				c.log.Error("Failed to migrate, failed to get token number properly")
+				return fmt.Errorf("failed to migrate, failed to get token number properly")
+			}
 		}
 		for i, t := range tkns {
 			tn := tns[i]
@@ -422,6 +440,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				TokenValue:  1,
 				TokenStatus: wallet.TokenIsFree,
 			}
+			c.log.Info("Writing block", "len", len(blk.GetBlock()))
 			err = c.w.AddTokenBlock(t, blk)
 			if err != nil {
 				c.log.Error("Failed to migrate, failed to add token chain block", "err", err)
