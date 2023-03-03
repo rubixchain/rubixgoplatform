@@ -223,7 +223,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				}
 				_, tn, _, _ := token.ValidateWholeToken(string(tk))
 				ntd := token.GetTokenString(tl, tn)
-
 				tb := bytes.NewReader([]byte(ntd))
 				tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 				if err != nil {
@@ -239,6 +238,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				batchIndex++
 				if mindex == len(migrateTokens) {
 					migrationDone = true
+					break
 				} else if batchIndex == BatchSize {
 					break
 				}
@@ -257,11 +257,17 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					invalidTokens = append(invalidTokens, t)
 					invalidMap[t] = true
 					index++
+					if index == numTokens {
+						break
+					}
 					continue
 				} else if needMigration {
 					c.log.Info("Token need migration : " + t)
 					migrateTokens = append(migrateTokens, t)
 					index++
+					if index == numTokens {
+						break
+					}
 					continue
 				}
 				tb := bytes.NewReader(tk)
@@ -275,6 +281,9 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					invalidTokens = append(invalidTokens, t)
 					invalidMap[t] = true
 					index++
+					if index == numTokens {
+						break
+					}
 					continue
 				}
 				tls = append(tls, tl)
@@ -315,7 +324,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			if migration {
 				dt := strings.Split(migrateDetials[t], ",")
 				tk = dt[0]
-
 			} else {
 				tk = t
 			}
