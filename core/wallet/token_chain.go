@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -171,7 +172,7 @@ func (w *Wallet) addBlock(tt string, token string, b *block.Block) error {
 		}
 	}
 	db.l.Lock()
-	err = db.Put([]byte(key), b.GetBlock(), nil)
+	err = db.Put([]byte(key), b.GetBlock(), &opt.WriteOptions{NoWriteMerge: false, Sync: true})
 	db.l.Unlock()
 	return err
 }
