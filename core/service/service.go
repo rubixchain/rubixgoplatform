@@ -1,6 +1,10 @@
 package service
 
 import (
+	"crypto/sha256"
+	"fmt"
+	"strconv"
+
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 )
@@ -10,6 +14,7 @@ const (
 	ArbitrationTable     string = "Arbitration"
 	ArbitrationTempTable string = "ArbitrationTemp"
 	AribitrationLocked   string = "AribirationLocked"
+	HashTable            string = "HashTable"
 )
 
 type Service struct {
@@ -25,6 +30,11 @@ type DIDMap struct {
 type TokenDetials struct {
 	Token string `gorm:"column:token;primary_key"`
 	DID   string `gorm:"column:did"`
+}
+
+type HashEntry struct {
+	Hash  string `gorm:"column:hash;primary_key"`
+	Value int    `gorm:"column:value"`
 }
 
 func NewService(s storage.Storage, log logger.Logger) (*Service, error) {
@@ -50,7 +60,45 @@ func NewService(s storage.Storage, log logger.Logger) (*Service, error) {
 	if err != nil {
 		srv.log.Error("Failed to init arbitration locked table")
 	}
+	err = s.Init(HashTable, &HashEntry{})
+	if err != nil {
+		srv.log.Error("Failed to create hash table")
+	}
+	// var he HashEntry
+	// err = s.Read(HashTable, &he, "value=?", 0)
+	// if err != nil {
+	// 	go srv.CalculateHash()
+	// }
 	return srv, nil
+}
+
+func (s *Service) CalculateHash() {
+	for i := 0; i < 5000000; i++ {
+		hash := sha256.Sum256([]byte(strconv.Itoa(i)))
+		hashString := fmt.Sprintf("%x", hash)
+		he := HashEntry{
+			Hash:  hashString,
+			Value: i,
+		}
+		err := s.s.Write(HashTable, &he)
+		if err != nil {
+			s.log.Error("Failed to write hash tbale", "err", err)
+			return
+		}
+		if i%1000 == 0 {
+			s.log.Info("Hash Calulation in progress...", "count", i)
+		}
+	}
+}
+
+func (s *Service) GetTokenNumber(hash string) (int, error) {
+	var he HashEntry
+	err := s.s.Read(HashTable, &he, "hash=?", hash)
+	if err != nil {
+		s.log.Error("Failed to get the token number", "hash", hash)
+		return 0, err
+	}
+	return he.Value, nil
 }
 
 func (s *Service) GetTokenDetials(t string) (*TokenDetials, error) {

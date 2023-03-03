@@ -15,7 +15,7 @@ const (
 	DataTokenType
 )
 
-func getWholeTokenValue(tokenDetials string) (int, string, error) {
+func GetWholeTokenValue(tokenDetials string) (int, string, error) {
 
 	trimmedResult := strings.TrimSpace(tokenDetials)
 
@@ -41,20 +41,25 @@ func calcSHA256(targetHash string, maxNumber int) int {
 }
 
 func maxTokenFromLevel(level int) int {
-
 	val := TokenMap[level]
 	return val
 }
 
+func ValidateTokenDetials(tl int, tn int) bool {
+	if tn < 0 {
+		return false
+	}
+	return tn < TokenMap[tl]
+}
+
 func ValidateWholeToken(tokenDetials string) (int, int, error) {
-	tokenLevel, tokenCountHash, err := getWholeTokenValue(tokenDetials)
+	tokenLevel, tokenCountHash, err := GetWholeTokenValue(tokenDetials)
 	if err != nil {
 		return -1, -1, err
 	}
 	tokenVal := -1
 
 	if _, ok := TokenMap[tokenLevel]; !ok {
-		return -1, -1, fmt.Errorf("token Level is invalid")
 	}
 	tokenVal = calcSHA256(tokenCountHash, maxTokenFromLevel(tokenLevel))
 

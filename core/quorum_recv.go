@@ -517,6 +517,30 @@ func (c *Core) chekDIDArbitration(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &br, http.StatusOK)
 }
 
+func (c *Core) getTokenNumber(req *ensweb.Request) *ensweb.Result {
+	var hashes []string
+	br := model.BasicResponse{
+		Status: false,
+	}
+	err := c.l.ParseJSON(req, &hashes)
+	if err != nil {
+		br.Message = "failed to get token number, parsing failed"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	tns := make([]int, 0)
+	for i := range hashes {
+		tn, err := c.srv.GetTokenNumber(hashes[i])
+		if err != nil {
+			tns = append(tns, -1)
+		} else {
+			tns = append(tns, tn)
+		}
+	}
+	br.Status = true
+	br.Result = tns
+	return c.l.RenderJSON(req, &br, http.StatusOK)
+}
+
 func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var sr SignatureRequest

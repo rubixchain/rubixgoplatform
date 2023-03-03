@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -193,6 +194,9 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		batchIndex := 0
 		stime := time.Now()
 		c.log.Info("Starting the batch")
+		tls := make([]int, 0)
+		thashes := make([]string, 0)
+		tkns := make([]string, 0)
 		for {
 			t := tokens[index]
 			tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
@@ -200,26 +204,57 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				c.log.Error("Failed to migrate, failed to read token files", "err", err)
 				return fmt.Errorf("failed to migrate, failed to read token files")
 			}
-			tl, tn, err := token.ValidateWholeToken(string(tk))
+			tl, thash, err := token.GetWholeTokenValue(string(tk))
 			if err != nil {
 				c.log.Info("Invalid token skipping : " + t)
 				invalidTokens = append(invalidTokens, t)
 				index++
 				continue
 			}
-			tb, err := os.Open(rubixDir + "Wallet/TOKENS/" + t)
-			if err != nil {
-				c.log.Error("Failed to migrate, failed to read token files", "err", err)
-				return fmt.Errorf("failed to migrate, failed to read token files")
-			}
+			tb := bytes.NewReader(tk)
 			tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			if err != nil {
 				c.log.Error("Failed to migrate, failed to add token file", "err", err)
 				return fmt.Errorf("failed to migrate, failed to add token file")
 			}
 			if t != tid {
-				c.log.Error("Failed to migrate, token hash is not matching", "err", err)
-				return fmt.Errorf("failed to migrate, token hash is not matching")
+				c.log.Info("Token hash not matching Invalid token skipping : " + t)
+				invalidTokens = append(invalidTokens, t)
+				index++
+				continue
+			}
+
+			tls = append(tls, tl)
+			thashes = append(thashes, thash)
+			tkns = append(tkns, t)
+			index++
+			batchIndex++
+			if batchIndex == BatchSize || index == numTokens {
+				break
+			}
+		}
+		var br model.BasicResponse
+		err = p.SendJSONRequest("POST", APIGetTokenNumber, nil, thashes, &br, true)
+		if err != nil {
+			c.log.Error("Failed to migrate, failed to get token number", "err", err)
+			return fmt.Errorf("failed to migrate, failed to get token number")
+		}
+		tns, ok := br.Result.([]int)
+		if !ok {
+			c.log.Error("Failed to migrate, failed to get token number, invalid data type")
+			return fmt.Errorf("failed to migrate, failed to get token number, invalid data type")
+		}
+		if len(tns) != len(tls) {
+			c.log.Error("Failed to migrate, failed to get token number properly")
+			return fmt.Errorf("failed to migrate, failed to get token number properly")
+		}
+		for i, t := range tkns {
+			tn := tns[i]
+			tl := tls[i]
+			if !token.ValidateTokenDetials(tl, tn) {
+				c.log.Info("Invalid token skipping : " + t)
+				invalidTokens = append(invalidTokens, t)
+				continue
 			}
 			fb, err := os.Open(rubixDir + "Wallet/TOKENCHAINS/" + t + ".json")
 			if err != nil {
@@ -249,11 +284,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			gtis = append(gtis, gti)
 			tis = append(tis, ti)
 			tts = append(tts, tt)
-			index++
-			batchIndex++
-			if batchIndex == BatchSize || index == numTokens {
-				break
-			}
 		}
 		etime := time.Now()
 		dtime := etime.Sub(stime)

@@ -39,6 +39,7 @@ const (
 	APIMapDIDArbitration   string = "/api/map-did-arbitration"
 	APICheckDIDArbitration string = "/api/check-did-arbitration"
 	APITokenArbitration    string = "/api/token-arbitration"
+	APIGetTokenNumber      string = "/api/get-token-number"
 )
 
 const (
@@ -239,12 +240,12 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		c.log.Error("Failed to setup quorum manager", "err", err)
 		return nil, err
 	}
-	c.srv, err = service.NewService(c.s, c.log)
-	if err != nil {
-		c.log.Error("Failed to setup service", "err", err)
-		return nil, err
-	}
 	if c.arbitaryMode {
+		c.srv, err = service.NewService(c.s, c.log)
+		if err != nil {
+			c.log.Error("Failed to setup service", "err", err)
+			return nil, err
+		}
 		c.log.Info("Arbitary mode is enabled")
 	}
 	err = c.InitRubixExplorer()

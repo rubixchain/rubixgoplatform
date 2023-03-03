@@ -210,7 +210,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIMigrateNode, "POST", s.AuthHandle(s.APIMigrateNode, s.ErrorFunc))
 	s.AddRoute(APILockTokens, "POST", s.AuthHandle(s.APILockTokens, s.ErrorFunc))
 	s.AddRoute(APICreateDataToken, "POST", s.AuthHandle(s.APICreateDataToken, s.ErrorFunc))
-	//s.AddRoute(APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, s.ErrorFunc))
+	s.AddRoute(APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, s.ErrorFunc))
 
 }
 

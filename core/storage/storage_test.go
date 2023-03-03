@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -85,6 +86,31 @@ func TestBasic(t *testing.T) {
 	if err := remoteStorageDB(); err != nil {
 		t.Fatal("Failed to remove storage", err.Error())
 	}
+}
+
+func TestTemp(t *testing.T) {
+	ts := make([]int, 0)
+	ts = append(ts, 10)
+	ts = append(ts, 2)
+	ts = append(ts, 25)
+	ts = append(ts, 50)
+	ts = append(ts, -1)
+	ts = append(ts, 7)
+	ts = append(ts, 22)
+	ts = append(ts, 40)
+	jb, err := json.Marshal(ts)
+	if err != nil {
+		t.Fatal("failed")
+	}
+	var tr []int
+	err = json.Unmarshal(jb, &tr)
+	if err != nil {
+		t.Fatal("failed")
+	}
+	for _, ti := range tr {
+		fmt.Println(ti)
+	}
+
 }
 
 func TestLevelLB(t *testing.T) {

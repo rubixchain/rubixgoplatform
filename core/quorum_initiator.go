@@ -142,6 +142,7 @@ func (c *Core) QuroumSetup() {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
 		c.l.AddRoute(APITokenArbitration, "POST", c.tokenArbitration)
+		c.l.AddRoute(APIGetTokenNumber, "POST", c.getTokenNumber)
 	}
 }
 
