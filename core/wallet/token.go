@@ -55,11 +55,7 @@ func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) erro
 		w.log.Error("Failed to update token", "token", token, "err", err)
 		return err
 	}
-	err = w.AddTokenBlock(token, b)
-	if err != nil {
-		w.log.Error("Failed to add token chain block", "token", token, "err", err)
-		return err
-	}
+
 	return nil
 }
 
@@ -174,13 +170,13 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 	w.l.Lock()
 	defer w.l.Unlock()
 	// ::TODO:: need to address part & other tokens
+	err := w.CreateTokenBlock(b)
+	if err != nil {
+		return err
+	}
 	for i := range ti {
 		var t Token
 		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
-		if err != nil {
-			return err
-		}
-		err = w.AddTokenBlock(ti[i].Token, b)
 		if err != nil {
 			return err
 		}
@@ -218,6 +214,10 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
+	err := w.CreateTokenBlock(b)
+	if err != nil {
+		return err
+	}
 	for i := range ti {
 		var t Token
 		err := w.s.Read(TokenStorage, &t, "token_id=?", ti[i].Token)
@@ -248,10 +248,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 				return fmt.Errorf("Token already exist")
 			}
 		}
-		err = w.AddTokenBlock(ti[i].Token, b)
-		if err != nil {
-			return err
-		}
+
 		t.DID = did
 		t.TokenStatus = TokenIsFree
 		err = w.s.Update(TokenStorage, &t, "token_id=?", ti[i].Token)
@@ -309,4 +306,9 @@ func (w *Wallet) GetFirstBlock(token string) *block.Block {
 // AddTokenBlock will write token block into storage
 func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
 	return w.addBlock(WholeTokenType, token, b)
+}
+
+// AddTokenBlock will write token block into storage
+func (w *Wallet) CreateTokenBlock(b *block.Block) error {
+	return w.addBlocks(WholeTokenType, b)
 }

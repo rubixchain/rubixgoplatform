@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	BatchSize int = 100
+	BatchSize int = 1000
 )
 
 type MigrateRequest struct {
@@ -433,6 +433,11 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				c.log.Error("Failed to migrate, failed to update arbitary signature")
 				return fmt.Errorf("failed to migrate, failed to update arbitary signature")
 			}
+			err = c.w.CreateTokenBlock(blk)
+			if err != nil {
+				c.log.Error("Failed to migrate, failed to add token chain block", "err", err)
+				return fmt.Errorf("failed to migrate, failed to add token chain block")
+			}
 			for _, ti := range tis {
 				t := ti.Token
 				tkn := &wallet.Token{
@@ -440,12 +445,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					DID:         did,
 					TokenValue:  1,
 					TokenStatus: wallet.TokenIsFree,
-				}
-				c.log.Info("Writing block", "len", len(blk.GetBlock()))
-				err = c.w.AddTokenBlock(t, blk)
-				if err != nil {
-					c.log.Error("Failed to migrate, failed to add token chain block", "err", err)
-					return fmt.Errorf("failed to migrate, failed to add token chain block")
 				}
 				err = c.w.CreateToken(tkn)
 				if err != nil {

@@ -424,6 +424,12 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
+	err = c.w.CreateTokenBlock(nb)
+	if err != nil {
+		c.log.Error("Failed to update token chain block", "err", err)
+		crep.Message = "Failed to update token chain block"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
 	crep.Status = true
 	crep.Message = "Token pledge status updated"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)

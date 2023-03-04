@@ -18,7 +18,6 @@ import (
 // ----------TransToken--------------------------
 // {
 //   "1" : TokenType       : int
-//   "2" : BlockNumber     : int
 //   "2" : PledgedToken    : string
 //   "3" : PledgedDID      : string
 //   "4" : BlockNumber     : string
