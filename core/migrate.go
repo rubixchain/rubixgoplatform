@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	BatchSize int = 1000
+	BatchSize int = 100
 )
 
 type MigrateRequest struct {
@@ -188,6 +188,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	numTokens := len(tokens)
 	index := 0
 	mindex := 0
+	finishCount := 0
 	migration := false
 	migrationDone := false
 	invalidTokens := make([]string, 0)
@@ -379,10 +380,10 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				tis = append(tis, ti)
 				tts = append(tts, tt)
 			}
-			etime := time.Now()
+			/* etime := time.Now()
 			dtime := etime.Sub(stime)
 			c.log.Info("Starting the signature", "duration", dtime)
-			stime = time.Now()
+			stime = time.Now() */
 			ts := &contract.TransInfo{
 				Comment:     "Migrating Token at : " + time.Now().String(),
 				TransTokens: tis,
@@ -397,8 +398,8 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				c.log.Error("Failed to migrate, failed to update signature", "err", err)
 				return fmt.Errorf("failed to migrate, failed to update signature")
 			}
-			dtime = etime.Sub(stime)
-			c.log.Info("Signature done", "duration", dtime)
+			/* dtime = etime.Sub(stime)
+			c.log.Info("Signature done", "duration", dtime) */
 			gb := &block.GenesisBlock{
 				Type: block.TokenMigratedType,
 				Info: gtis,
@@ -452,7 +453,11 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					return fmt.Errorf("failed to migrate, failed to add token to wallet")
 				}
 			}
-			c.log.Info("Number of tokens migrtaed", "count", index)
+			finishCount = finishCount + len(tkns)
+			c.log.Info("Number of tokens migrtaed", "count", finishCount)
+			etime := time.Now()
+			dtime := etime.Sub(stime)
+			c.log.Info("Batch process end", "duration", dtime)
 		}
 		if migration {
 			if migrationDone {
