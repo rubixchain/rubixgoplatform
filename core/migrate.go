@@ -452,6 +452,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					return fmt.Errorf("failed to migrate, failed to add token to wallet")
 				}
 			}
+			c.log.Info("Number of tokens migrtaed", "count", index)
 		}
 		if migration {
 			if migrationDone {
