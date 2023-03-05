@@ -1,6 +1,9 @@
 package core
 
 import (
+	"bytes"
+
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -36,8 +39,14 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				return false
 			}
 			ct := token.GetTokenString(tl, tn)
-			if ct != ti[i].Token {
-				c.log.Error("Invalid token", "token", ti[i].Token, "exp_token", ct, "tl", tl, "tn", tn)
+			tb := bytes.NewBuffer([]byte(ct))
+			tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			if err != nil {
+				c.log.Error("Failed to validate, failed to get token hash", "err", err)
+				return false
+			}
+			if tid != ti[i].Token {
+				c.log.Error("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn)
 				return false
 			}
 		}
