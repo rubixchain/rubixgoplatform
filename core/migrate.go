@@ -336,11 +336,12 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				tn := tns[i]
 				tl := tls[i]
 				if !token.ValidateTokenDetials(tl, tn) {
-					c.log.Info("Invalid token skipping : " + t)
+					//c.log.Info("Invalid token skipping : " + t)
 					invalidTokens = append(invalidTokens, t)
 					invalidMap[t] = true
 					continue
 				}
+
 				tk := ""
 				if migration {
 					dt := strings.Split(migrateDetials[t], ",")
@@ -381,84 +382,86 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				tis = append(tis, ti)
 				tts = append(tts, tt)
 			}
-			/* etime := time.Now()
-			dtime := etime.Sub(stime)
-			c.log.Info("Starting the signature", "duration", dtime)
-			stime = time.Now() */
-			ts := &contract.TransInfo{
-				Comment:     "Migrating Token at : " + time.Now().String(),
-				TransTokens: tis,
-			}
-			st := &contract.ContractType{
-				Type:      contract.SCDIDMigrateType,
-				TransInfo: ts,
-			}
-			sc := contract.CreateNewContract(st)
-			err = sc.UpdateSignature(dc)
-			if err != nil {
-				c.log.Error("Failed to migrate, failed to update signature", "err", err)
-				return fmt.Errorf("failed to migrate, failed to update signature")
-			}
-			/* dtime = etime.Sub(stime)
-			c.log.Info("Signature done", "duration", dtime) */
-			gb := &block.GenesisBlock{
-				Type: block.TokenMigratedType,
-				Info: gtis,
-			}
-			ctcb := make(map[string]*block.Block)
-			ntcb := &block.TokenChainBlock{
-				TokenType:       token.RBTTokenType,
-				TransactionType: block.TokenMigratedType,
-				TokenOwner:      did,
-				GenesisBlock:    gb,
-				SmartContract:   sc.GetBlock(),
-				TransInfo: &block.TransInfo{
-					Tokens: tts,
-				},
-			}
-			//ctcb := make
-			blk := block.CreateNewBlock(ctcb, ntcb)
-			if blk == nil {
-				c.log.Error("Failed to migrate, failed to create new token chain block")
-				return fmt.Errorf("failed to migrate, failed to create new token chain block")
-			}
-			sr := &SignatureRequest{
-				TokenChainBlock: blk.GetBlock(),
-			}
-			sig, ok := c.getArbitrationSignature(p, sr)
-			if !ok {
-				c.log.Error("Failed to migrate, failed to get signature")
-				return fmt.Errorf("failed to migrate, failed to get signature")
-			}
-			err = blk.ReplaceSignature(p.GetPeerDID(), sig)
-			if err != nil {
-				c.log.Error("Failed to migrate, failed to update arbitary signature")
-				return fmt.Errorf("failed to migrate, failed to update arbitary signature")
-			}
-			err = c.w.CreateTokenBlock(blk)
-			if err != nil {
-				c.log.Error("Failed to migrate, failed to add token chain block", "err", err)
-				return fmt.Errorf("failed to migrate, failed to add token chain block")
-			}
-			for _, ti := range tis {
-				t := ti.Token
-				tkn := &wallet.Token{
-					TokenID:     t,
-					DID:         did,
-					TokenValue:  1,
-					TokenStatus: wallet.TokenIsFree,
+			if len(gtis) > 0 {
+				/* etime := time.Now()
+				dtime := etime.Sub(stime)
+				c.log.Info("Starting the signature", "duration", dtime)
+				stime = time.Now() */
+				ts := &contract.TransInfo{
+					Comment:     "Migrating Token at : " + time.Now().String(),
+					TransTokens: tis,
 				}
-				err = c.w.CreateToken(tkn)
+				st := &contract.ContractType{
+					Type:      contract.SCDIDMigrateType,
+					TransInfo: ts,
+				}
+				sc := contract.CreateNewContract(st)
+				err = sc.UpdateSignature(dc)
 				if err != nil {
-					c.log.Error("Failed to migrate, failed to add token to wallet", "err", err)
-					return fmt.Errorf("failed to migrate, failed to add token to wallet")
+					c.log.Error("Failed to migrate, failed to update signature", "err", err)
+					return fmt.Errorf("failed to migrate, failed to update signature")
 				}
+				/* dtime = etime.Sub(stime)
+				c.log.Info("Signature done", "duration", dtime) */
+				gb := &block.GenesisBlock{
+					Type: block.TokenMigratedType,
+					Info: gtis,
+				}
+				ctcb := make(map[string]*block.Block)
+				ntcb := &block.TokenChainBlock{
+					TokenType:       token.RBTTokenType,
+					TransactionType: block.TokenMigratedType,
+					TokenOwner:      did,
+					GenesisBlock:    gb,
+					SmartContract:   sc.GetBlock(),
+					TransInfo: &block.TransInfo{
+						Tokens: tts,
+					},
+				}
+				//ctcb := make
+				blk := block.CreateNewBlock(ctcb, ntcb)
+				if blk == nil {
+					c.log.Error("Failed to migrate, failed to create new token chain block")
+					return fmt.Errorf("failed to migrate, failed to create new token chain block")
+				}
+				sr := &SignatureRequest{
+					TokenChainBlock: blk.GetBlock(),
+				}
+				sig, ok := c.getArbitrationSignature(p, sr)
+				if !ok {
+					c.log.Error("Failed to migrate, failed to get signature")
+					return fmt.Errorf("failed to migrate, failed to get signature")
+				}
+				err = blk.ReplaceSignature(p.GetPeerDID(), sig)
+				if err != nil {
+					c.log.Error("Failed to migrate, failed to update arbitary signature")
+					return fmt.Errorf("failed to migrate, failed to update arbitary signature")
+				}
+				err = c.w.CreateTokenBlock(blk)
+				if err != nil {
+					c.log.Error("Failed to migrate, failed to add token chain block", "err", err)
+					return fmt.Errorf("failed to migrate, failed to add token chain block")
+				}
+				for _, ti := range tis {
+					t := ti.Token
+					tkn := &wallet.Token{
+						TokenID:     t,
+						DID:         did,
+						TokenValue:  1,
+						TokenStatus: wallet.TokenIsFree,
+					}
+					err = c.w.CreateToken(tkn)
+					if err != nil {
+						c.log.Error("Failed to migrate, failed to add token to wallet", "err", err)
+						return fmt.Errorf("failed to migrate, failed to add token to wallet")
+					}
+				}
+				finishCount = finishCount + len(tkns)
+				c.log.Info("Number of tokens migrtaed", "count", finishCount)
+				etime := time.Now()
+				dtime := etime.Sub(stime)
+				c.log.Info("Batch process end", "duration", dtime)
 			}
-			finishCount = finishCount + len(tkns)
-			c.log.Info("Number of tokens migrtaed", "count", finishCount)
-			etime := time.Now()
-			dtime := etime.Sub(stime)
-			c.log.Info("Batch process end", "duration", dtime)
 		}
 		if migration {
 			if migrationDone {
