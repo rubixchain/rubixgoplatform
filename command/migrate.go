@@ -47,7 +47,7 @@ func (cmd *Command) MigrateNodeCmd() {
 		PrivPWD:   cmd.privPWD,
 		QuorumPWD: cmd.quorumPWD,
 	}
-	br, err := cmd.c.MigrateNode(&r)
+	br, err := cmd.c.MigrateNode(&r, cmd.timeout)
 	if err != nil {
 		cmd.log.Error("Failed to migrate node", "err", err)
 		return
@@ -56,7 +56,7 @@ func (cmd *Command) MigrateNodeCmd() {
 		cmd.log.Error("Failed to migrate node", "msg", br.Message)
 		return
 	}
-	msg, status := cmd.SignatureResponse(br)
+	msg, status := cmd.SignatureResponse(br, cmd.timeout)
 	if !status {
 		cmd.log.Error("Failed to migrate node, " + msg)
 		return

@@ -6,6 +6,7 @@ import (
 	"image"
 	"io/ioutil"
 	"os"
+	"time"
 
 	"github.com/EnsurityTechnologies/enscrypt"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -192,7 +193,7 @@ func (cmd *Command) RegsiterDIDCmd() {
 	cmd.log.Info("DID registered successfully")
 }
 
-func (cmd *Command) SignatureResponse(br *model.BasicResponse) (string, bool) {
+func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.Duration) (string, bool) {
 	pwdSet := false
 	password := cmd.privPWD
 	for {
@@ -280,7 +281,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse) (string, bool) {
 			}
 			sresp.Signature.Signature = sig
 		}
-		br, err = cmd.c.SignatureResponse(&sresp)
+		br, err = cmd.c.SignatureResponse(&sresp, timeout...)
 		if err != nil {
 			cmd.log.Error("Failed to generate RBT", "err", err)
 			return "Failed in signature response, " + err.Error(), false

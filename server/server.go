@@ -53,7 +53,7 @@ type Server struct {
 }
 
 // NewServer create new server instances
-func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan bool) (*Server, error) {
+func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan bool, timeout time.Duration) (*Server, error) {
 	s := &Server{cfg: cfg, sc: sc, c: c}
 	var err error
 	s.log = log.Named("Rubixplatform")
@@ -67,7 +67,7 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 			cfg.DBAddress = "rubix.db"
 		}
 	}
-	s.Server, err = ensweb.NewServer(&cfg.Config, nil, log, ensweb.SetServerTimeout(time.Minute*10))
+	s.Server, err = ensweb.NewServer(&cfg.Config, nil, log, ensweb.SetServerTimeout(timeout))
 	if err != nil {
 		s.log.Error("failed to create server", "err", err)
 		return nil, err

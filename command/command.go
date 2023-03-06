@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/EnsurityTechnologies/apiconfig"
 	srvcfg "github.com/EnsurityTechnologies/config"
@@ -162,6 +163,7 @@ type Command struct {
 	file         string
 	userID       string
 	userInfo     string
+	timeout      time.Duration
 }
 
 func showVersion() {
@@ -213,7 +215,7 @@ func (cmd *Command) runApp() {
 	// 	HostAddress: cmd.cfg.NodeAddress,
 	// 	HostPort:    cmd.cfg.NodePort,
 	// }
-	s, err := server.NewServer(c, scfg, cmd.log, cmd.start, sc)
+	s, err := server.NewServer(c, scfg, cmd.log, cmd.start, sc, cmd.timeout)
 	if err != nil {
 		cmd.log.Error("Failed to create server")
 		return
@@ -261,6 +263,7 @@ func Run(args []string) {
 
 	cmd := &Command{}
 	var peers string
+	var timeout int
 
 	flag.StringVar(&cmd.runDir, "p", "./", "Working directory path")
 	flag.StringVar(&cmd.logFile, "logFile", "", "Log file name")
@@ -310,6 +313,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.file, "file", "file.txt", "File to be uploaded")
 	flag.StringVar(&cmd.userID, "uid", "testuser", "User ID for token creation")
 	flag.StringVar(&cmd.userInfo, "uinfo", "", "User info for token creation")
+	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -327,6 +331,8 @@ func Run(args []string) {
 		peers = strings.ReplaceAll(peers, " ", "")
 		cmd.peers = strings.Split(peers, ",")
 	}
+
+	cmd.timeout = time.Duration(timeout) * time.Minute
 
 	if !cmd.validateOptions() {
 		fmt.Println("Validate options failed")
@@ -365,7 +371,7 @@ func Run(args []string) {
 
 	cmd.log = logger.New(logOptions)
 
-	cmd.c, err = client.NewClient(&srvcfg.Config{ServerAddress: cmd.addr, ServerPort: cmd.port}, cmd.log)
+	cmd.c, err = client.NewClient(&srvcfg.Config{ServerAddress: cmd.addr, ServerPort: cmd.port}, cmd.log, cmd.timeout)
 	if err != nil {
 		cmd.log.Error("Failed to create client")
 		return

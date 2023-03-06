@@ -7,17 +7,18 @@ require (
 	github.com/EnsurityTechnologies/apiconfig v1.0.1
 	github.com/EnsurityTechnologies/config v1.0.0
 	github.com/EnsurityTechnologies/enscrypt v1.0.1
-	github.com/EnsurityTechnologies/ensweb v1.0.5
+	github.com/EnsurityTechnologies/ensweb v1.0.6
 	github.com/EnsurityTechnologies/helper v1.0.0
 	github.com/EnsurityTechnologies/logger v1.0.4
 	github.com/EnsurityTechnologies/uuid v1.0.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/fxamacker/cbor v1.5.1
 	github.com/gorilla/sessions v1.2.1
 	github.com/ipfs/go-ipfs-api v0.3.0
 	github.com/ipfs/go-ipfs-files v0.1.1
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
-	golang.org/x/crypto v0.6.0
-	gopkg.in/mail.v2 v2.3.1
+	golang.org/x/crypto v0.7.0
+	golang.org/x/term v0.6.0
 )
 
 require (
@@ -30,7 +31,6 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
 	github.com/fatih/color v1.14.1 // indirect
-	github.com/fxamacker/cbor v1.5.1 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/spec v0.20.8 // indirect
@@ -74,11 +74,9 @@ require (
 	github.com/swaggo/swag v1.8.10 // indirect
 	github.com/whyrusleeping/tar-utils v0.0.0-20201201191210-20a61371de5b // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/term v0.5.0 // indirect
+	golang.org/x/net v0.8.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
-	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.1.6 // indirect
 )

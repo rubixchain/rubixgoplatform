@@ -331,7 +331,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			}
 		}
 		if len(tkns) > 0 {
-			c.log.Info("Number of tokens", "count", len(tkns))
 			for i, t := range tkns {
 				tn := tns[i]
 				tl := tls[i]

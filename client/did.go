@@ -117,9 +117,9 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 	return "DID Created successfully", true
 }
 
-func (c *Client) SignatureResponse(sr *did.SignRespData) (*model.BasicResponse, error) {
+func (c *Client) SignatureResponse(sr *did.SignRespData, timeout ...time.Duration) (*model.BasicResponse, error) {
 	var br model.BasicResponse
-	err := c.sendJSONRequest("POST", server.APISignatureResponse, nil, sr, &br, time.Hour)
+	err := c.sendJSONRequest("POST", server.APISignatureResponse, nil, sr, &br, timeout...)
 	if err != nil {
 		return nil, err
 	}
