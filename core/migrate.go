@@ -270,7 +270,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				}
 				tl, thash, needMigration, err := token.GetWholeTokenValue(string(tk))
 				if err != nil {
-					c.log.Info("Invalid token skipping : " + t)
+					//c.log.Info("Invalid token skipping : " + t)
 					invalidTokens = append(invalidTokens, t)
 					invalidMap[t] = true
 					index++
@@ -279,7 +279,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					}
 					continue
 				} else if needMigration {
-					c.log.Info("Token need migration : " + t)
+					//c.log.Info("Token need migration : " + t)
 					migrateTokens = append(migrateTokens, t)
 					index++
 					if index == numTokens {
@@ -294,7 +294,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					return fmt.Errorf("failed to migrate, failed to add token file")
 				}
 				if t != tid {
-					c.log.Info("Token hash not matching Invalid token skipping : " + t)
+					//c.log.Info("Token hash not matching Invalid token skipping : " + t)
 					invalidTokens = append(invalidTokens, t)
 					invalidMap[t] = true
 					index++
@@ -331,6 +331,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			}
 		}
 		if len(tkns) > 0 {
+			c.log.Info("Number of tokens", "count", len(tkns))
 			for i, t := range tkns {
 				tn := tns[i]
 				tl := tls[i]
@@ -465,6 +466,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			}
 		} else if index >= numTokens {
 			if len(migrateTokens) > 0 {
+				c.log.Info("Started migration token")
 				migration = true
 			} else {
 				break

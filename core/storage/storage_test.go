@@ -8,7 +8,6 @@ import (
 
 	"github.com/EnsurityTechnologies/config"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 func initStorageDB() (*StorageDB, error) {
@@ -148,40 +147,36 @@ func TestLevelLB(t *testing.T) {
 }
 
 func TestSanp(t *testing.T) {
-	db, err := leveldb.OpenFile("tempdb", nil)
-	if err != nil {
-		t.Fatal("Failed to open db")
+	str := "rf-12093738jfkfigug"
+	rb := []byte(str)
+	newStr := string(rb[0:2])
+	if newStr == "rf" {
+		fmt.Println("success")
 	}
 
-	db.Put([]byte("token1-entry1"), []byte("token1-entry1"), nil)
-	db.Put([]byte("token1-entry2"), []byte("token1-entry2"), nil)
-	db.Put([]byte("token2-entry1"), []byte("token2-entry1"), nil)
-	db.Put([]byte("token1-entry3"), []byte("token1-entry3"), nil)
-	db.Put([]byte("token2-entry2"), []byte("token2-entry2"), nil)
-	db.Put([]byte("token2-entry3"), []byte("token2-entry3"), nil)
-	db.Put([]byte("token2-entry4"), []byte("token2-entry4"), nil)
-	db.Put([]byte("token1-entry4"), []byte("token1-entry4"), nil)
-	db.Put([]byte("token1-entry2"), []byte("token1-entry2-updated"), nil)
-	iter := db.NewIterator(util.BytesPrefix([]byte("token1-")), nil)
-	if err != nil {
-		t.Fatal("Failed to get sanp")
-	}
-	//iter.Last()
-	key := iter.Key()
-	value := iter.Value()
-	fmt.Printf("%s : %s\n", string(key), string(value))
-	iter.Seek([]byte("token1-entry3"))
-	for {
-		key := iter.Key()
-		value := iter.Value()
-		fmt.Printf("%s : %s\n", string(key), string(value))
-		if !iter.Next() {
-			break
-		}
-	}
-	iter.Release()
-	db.Close()
-	os.RemoveAll("tempdb")
+	// db, err := leveldb.OpenFile("tempdb", nil)
+	// if err != nil {
+	// 	t.Fatal("Failed to open db")
+	// }
+
+	// tb := make([]byte, 8096)
+	// for i := range tb {
+	// 	tb[i] = byte(i)
+	// }
+	// st := time.Now()
+	// for i := 0; i < 1000000; i++ {
+	// 	str := fmt.Sprintf("%d", i)
+	// 	err = db.Put([]byte(str), tb, &opt.WriteOptions{Sync: true})
+	// 	if err != nil {
+	// 		t.Fatal("Failed to write db")
+	// 	}
+	// }
+	// et := time.Now()
+	// dif := et.Sub(st)
+	// fmt.Printf("Different %v", dif)
+
+	// db.Close()
+	// os.RemoveAll("tempdb")
 
 }
 

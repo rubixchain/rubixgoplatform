@@ -18,6 +18,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
+	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/server"
 	"golang.org/x/term"
@@ -55,6 +56,7 @@ const (
 	MirgateNodeCmd        string = "migratenode"
 	LockTokensCmd         string = "locktokens"
 	CreateDataTokenCmd    string = "createdatatoken"
+	SetupDBCmd            string = "setupdb"
 )
 
 var commands = []string{VersionCmd,
@@ -80,7 +82,8 @@ var commands = []string{VersionCmd,
 	ShutDownCmd,
 	MirgateNodeCmd,
 	LockTokensCmd,
-	CreateDataTokenCmd}
+	CreateDataTokenCmd,
+	SetupDBCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -104,7 +107,8 @@ var commandsHelp = []string{"To get tool version",
 	"This command will shutdown the rubix node",
 	"This command will migrate node to newer node",
 	"This command will lock the tokens on the arbitary node",
-	"This command will create data token token"}
+	"This command will create data token token",
+	"This command will setup the DB"}
 
 type Command struct {
 	cfg          config.Config
@@ -136,6 +140,7 @@ type Command struct {
 	pubKeyFile   string
 	quorumList   string
 	srvName      string
+	storageType  int
 	dbName       string
 	dbType       string
 	dbAddress    string
@@ -283,6 +288,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
 	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
 	flag.StringVar(&cmd.srvName, "srvName", "explorer_service", "Service name")
+	flag.IntVar(&cmd.storageType, "storageType", storage.StorageDBType, "Storage type")
 	flag.StringVar(&cmd.dbName, "dbName", "ServiceDB", "Service database name")
 	flag.StringVar(&cmd.dbType, "dbType", "SQLServer", "DB Type, supported database are SQLServer, PostgressSQL, MySQL & Sqlite3")
 	flag.StringVar(&cmd.dbAddress, "dbAddress", "localhost", "Database address")
@@ -412,6 +418,8 @@ func Run(args []string) {
 		cmd.MigrateNodeCmd()
 	case CreateDataTokenCmd:
 		cmd.createDataToken()
+	case SetupDBCmd:
+		cmd.setupDB()
 	default:
 		cmd.log.Error("Invalid command")
 	}

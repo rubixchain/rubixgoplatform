@@ -40,6 +40,7 @@ const (
 	APILockTokens          string = "/api/lock-tokens"
 	APICreateDataToken     string = "/api/create-data_token"
 	APICommitDataToken     string = "/api/commit-data_token"
+	APISetupDB             string = "/api/setup-db"
 )
 
 // Server defines server handle
@@ -211,6 +212,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APILockTokens, "POST", s.AuthHandle(s.APILockTokens, s.ErrorFunc))
 	s.AddRoute(APICreateDataToken, "POST", s.AuthHandle(s.APICreateDataToken, s.ErrorFunc))
 	s.AddRoute(APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, s.ErrorFunc))
+	s.AddRoute(APISetupDB, "POST", s.AuthHandle(s.APISetupDB, s.ErrorFunc))
 
 }
 
