@@ -41,3 +41,29 @@ func (w *Wallet) GetDataToken(did string) ([]DataToken, error) {
 	}
 	return dts, nil
 }
+
+func (w *Wallet) ReleaseDataToken(dts []DataToken) error {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	for i := range dts {
+		dts[i].TokenStatus = TokenIsFree
+		err := w.s.Update(DataTokenStorage, &dts[i], "token_id=?", dts[i].TokenID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *Wallet) CommitDataToken(dts []DataToken) error {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	for i := range dts {
+		dts[i].TokenStatus = TokenIsCommitted
+		err := w.s.Update(DataTokenStorage, &dts[i], "token_id=?", dts[i].TokenID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

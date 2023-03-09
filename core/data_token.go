@@ -240,11 +240,20 @@ func (c *Core) CommitDataToken(reqID string, did string) {
 	dc.OutChan <- br
 }
 
+func (c *Core) finishDataCommit(br *model.BasicResponse, dts []wallet.DataToken) {
+	if br.Status {
+		c.w.CommitDataToken(dts)
+	} else {
+		c.w.ReleaseDataToken(dts)
+	}
+}
+
 func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
 	dt, err := c.w.GetDataToken(did)
 	br := &model.BasicResponse{
 		Status: false,
 	}
+	defer c.finishDataCommit(br, dt)
 	if err != nil {
 		c.log.Error("Commit data token failed, failed to get data token", "err", err)
 		br.Message = "Commit data token failed, failed to get data token"
