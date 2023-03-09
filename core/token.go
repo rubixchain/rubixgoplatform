@@ -20,8 +20,9 @@ type TokenPublish struct {
 }
 
 type TCBSyncRequest struct {
-	Token   string `json:"token"`
-	BlockID string `json:"block_id"`
+	Token     string `json:"token"`
+	TokenType int    `json:"token_type"`
+	BlockID   string `json:"block_id"`
 }
 
 type TCBSyncReply struct {
@@ -170,7 +171,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TokenValue:  1,
 			TokenStatus: wallet.TokenIsFree,
 		}
-		err = c.w.CreateTokenBlock(blk)
+		err = c.w.CreateTokenBlock(blk, token.TestTokenType)
 		if err != nil {
 			c.log.Error("Failed to add token chain", "err", err)
 			return err
@@ -190,21 +191,22 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to parse request"}, http.StatusOK)
 	}
-	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.BlockID)
+	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: err.Error()}, http.StatusOK)
 	}
 	return c.l.RenderJSON(req, &TCBSyncReply{Status: true, Message: "Got all blocks", TCBlock: blks, NextBlockID: nextID}, http.StatusOK)
 }
 
-func (c *Core) syncTokenChainFrom(address string, pblkID string, token string) error {
+func (c *Core) syncTokenChainFrom(address string, pblkID string, token string, tokenType int) error {
 	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return err
 	}
 	defer p.Close()
-	blk := c.w.GetLatestTokenBlock(token)
+	c.log.Debug("Syncing", "tokentype", tokenType)
+	blk := c.w.GetLatestTokenBlock(token, tokenType)
 	blkID := ""
 	if blk != nil {
 		blkID, err = blk.GetBlockID(token)
@@ -217,8 +219,9 @@ func (c *Core) syncTokenChainFrom(address string, pblkID string, token string) e
 		}
 	}
 	tr := TCBSyncRequest{
-		Token:   token,
-		BlockID: blkID,
+		Token:     token,
+		TokenType: tokenType,
+		BlockID:   blkID,
 	}
 	for {
 		var trep TCBSyncReply
@@ -237,7 +240,7 @@ func (c *Core) syncTokenChainFrom(address string, pblkID string, token string) e
 				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
 				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
 			}
-			err = c.w.AddTokenBlock(token, blk)
+			err = c.w.AddTokenBlock(token, tokenType, blk)
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
 				return err

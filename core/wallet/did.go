@@ -1,14 +1,14 @@
 package wallet
 
 type DIDType struct {
-	DID    string `gorm:"column:did;primary_key"`
+	DID    string `gorm:"column:did;primaryKey"`
 	Type   int    `gorm:"column:type"`
 	DIDDir string `gorm:"column:did_dir"`
 	Config string `gorm:"column:config"`
 }
 
 type DIDPeerMap struct {
-	DID    string `gorm:"column:did;primary_key"`
+	DID    string `gorm:"column:did;primaryKey"`
 	PeerID string `gorm:"column:peer_id"`
 }
 

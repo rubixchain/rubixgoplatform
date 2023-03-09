@@ -21,14 +21,14 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	}
 	address := cr.SenderPeerID + "." + sc.GetSenderDID()
 	for i := range ti {
-		err := c.syncTokenChainFrom(address, ti[i].BlockID, ti[i].Token)
+		err := c.syncTokenChainFrom(address, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return false
 		}
 		// Check the token validation
 		if !c.testNet {
-			fb := c.w.GetFirstBlock(ti[i].Token)
+			fb := c.w.GetFirstBlock(ti[i].Token, ti[i].TokenType)
 			if fb == nil {
 				c.log.Error("Failed to get first token chain block")
 				return false
@@ -50,7 +50,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				return false
 			}
 		}
-		b := c.w.GetLatestTokenBlock(ti[i].Token)
+		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		if b == nil {
 			c.log.Error("Invalid token chain block")
 			return false
@@ -124,7 +124,11 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 }
 
 func (c *Core) checkTokenIsPledged(wt string) bool {
-	b := c.w.GetLatestTokenBlock(wt)
+	tokenType := token.RBTTokenType
+	if c.testNet {
+		tokenType = token.TestTokenType
+	}
+	b := c.w.GetLatestTokenBlock(wt, tokenType)
 	if b == nil {
 		c.log.Error("Invalid token chain block")
 		return true

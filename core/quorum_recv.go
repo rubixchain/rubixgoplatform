@@ -206,9 +206,13 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		Tokens:          make([]string, 0),
 		TokenChainBlock: make([][]byte, 0),
 	}
+	tokenType := token.RBTTokenType
+	if c.testNet {
+		tokenType = token.TestTokenType
+	}
 	for i := 0; i < tl; i++ {
 		presp.Tokens = append(presp.Tokens, wt[i].TokenID)
-		tc := c.w.GetLatestTokenBlock(wt[i].TokenID)
+		tc := c.w.GetLatestTokenBlock(wt[i].TokenID, tokenType)
 		if tc == nil {
 			c.log.Error("Failed to get latest token chain block")
 			crep.Message = "Failed to get latest token chain block"
@@ -265,13 +269,13 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 			crep.Message = "Token has multiple owners"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		err = c.syncTokenChainFrom(sr.Address, pblkID, t)
+		err = c.syncTokenChainFrom(sr.Address, pblkID, t, ti.TokenType)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			crep.Message = "Failed to sync token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		ptcbArray, err := c.w.GetTokenBlock(t, pblkID)
+		ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
 		if err != nil {
 			c.log.Error("Failed to fetch previous block", "err", err)
 			crep.Message = "Failed to fetch previous block"
@@ -381,13 +385,17 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 
 	ctcb := make(map[string]*block.Block)
 	tsb := make([]block.TransTokens, 0)
+	tokenType := token.RBTTokenType
+	if c.testNet {
+		tokenType = token.TestTokenType
+	}
 	for _, t := range ur.PledgedTokens {
 		tt := block.TransTokens{
 			Token:     t,
-			TokenType: token.RBTTokenType,
+			TokenType: tokenType,
 		}
 		tsb = append(tsb, tt)
-		lb := c.w.GetLatestTokenBlock(t)
+		lb := c.w.GetLatestTokenBlock(t, tokenType)
 		if lb == nil {
 			c.log.Error("Failed to get token chain block")
 			crep.Message = "Failed to get token chain block"
@@ -424,7 +432,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
-	err = c.w.CreateTokenBlock(nb)
+	err = c.w.CreateTokenBlock(nb, tokenType)
 	if err != nil {
 		c.log.Error("Failed to update token chain block", "err", err)
 		crep.Message = "Failed to update token chain block"

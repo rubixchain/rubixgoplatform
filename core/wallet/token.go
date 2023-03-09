@@ -24,7 +24,7 @@ const (
 )
 
 type Token struct {
-	TokenID       string  `gorm:"column:token_id;primary_key"`
+	TokenID       string  `gorm:"column:token_id;primaryKey"`
 	ParentTokenID string  `gorm:"column:parent_token_id"`
 	TokenValue    float64 `gorm:"column:token_value"`
 	DID           string  `gorm:"column:did"`
@@ -166,11 +166,21 @@ func (w *Wallet) RemoveTokens(wt []Token) error {
 	return nil
 }
 
+func (w *Wallet) ClearTokens(did string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.s.Delete(TokenStorage, &Token{}, "did=?", did)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// ::TODO:: need to address part & other tokens
-	err := w.CreateTokenBlock(b)
+	err := w.CreateTokenBlock(b, ti[0].TokenType)
 	if err != nil {
 		return err
 	}
@@ -214,14 +224,15 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	err := w.CreateTokenBlock(b)
+	// TODO :: Needs to be address
+	err := w.CreateTokenBlock(b, ti[0].TokenType)
 	if err != nil {
 		return err
 	}
 	for i := range ti {
 		var t Token
 		err := w.s.Read(TokenStorage, &t, "token_id=?", ti[i].Token)
-		if err != nil {
+		if err != nil || t.TokenID == "" {
 			dir := util.GetRandString()
 			err := util.CreateDir(dir)
 			if err != nil {
@@ -282,33 +293,4 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	// 	w.AddTokenBlock(pt[i], tcb)
 	// }
 	return nil
-}
-
-// GetTokenBlock get token chain block from the storage
-func (w *Wallet) GetTokenBlock(token string, blockID string) ([]byte, error) {
-	return w.getBlock(WholeTokenType, token, blockID)
-}
-
-// GetAllTokenBlocks get the tokecn chain blocks
-func (w *Wallet) GetAllTokenBlocks(token string, blockID string) ([][]byte, string, error) {
-	return w.getAllBlocks(WholeTokenType, token, blockID)
-}
-
-// GetLatestTokenBlock get latest token block from the storage
-func (w *Wallet) GetLatestTokenBlock(token string) *block.Block {
-	return w.getLatestBlock(WholeTokenType, token)
-}
-
-func (w *Wallet) GetFirstBlock(token string) *block.Block {
-	return w.getFirstBlock(WholeTokenType, token)
-}
-
-// AddTokenBlock will write token block into storage
-func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
-	return w.addBlock(WholeTokenType, token, b)
-}
-
-// AddTokenBlock will write token block into storage
-func (w *Wallet) CreateTokenBlock(b *block.Block) error {
-	return w.addBlocks(WholeTokenType, b)
 }

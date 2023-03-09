@@ -22,7 +22,7 @@ type QuorumManager struct {
 
 type QuorumData struct {
 	Type    int    `gorm:"column:type" json:"type"`
-	Address string `gorm:"column:address;primary_key" json:"address"`
+	Address string `gorm:"column:address;primaryKey" json:"address"`
 }
 
 func NewQuorumManager(s storage.Storage, log logger.Logger) (*QuorumManager, error) {
@@ -30,7 +30,7 @@ func NewQuorumManager(s storage.Storage, log logger.Logger) (*QuorumManager, err
 		s:   s,
 		log: log.Named("quorum_manager"),
 	}
-	err := qm.s.Init(QuorumStorage, &QuorumData{})
+	err := qm.s.Init(QuorumStorage, &QuorumData{}, true)
 	if err != nil {
 		qm.log.Error("Failed to init quorum storage", "err", err)
 		return nil, err

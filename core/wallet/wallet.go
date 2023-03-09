@@ -77,37 +77,37 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		return nil, fmt.Errorf("failed to configure data chain block storage")
 	}
 	w.dtcs.DB = *dtdb
-	err = w.s.Init(DIDStorage, &DIDType{})
+	err = w.s.Init(DIDStorage, &DIDType{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TokenStorage, &Token{})
+	err = w.s.Init(TokenStorage, &Token{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize whole token storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(DataTokenStorage, &DataToken{})
+	err = w.s.Init(DataTokenStorage, &DataToken{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize data token storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(CreditStorage, &Credit{})
+	err = w.s.Init(CreditStorage, &Credit{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize credit storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(DIDPeerStorage, &DIDPeerMap{})
+	err = w.s.Init(DIDPeerStorage, &DIDPeerMap{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID Peer storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TransactionStorage, &TransactionDetails{})
+	err = w.s.Init(TransactionStorage, &TransactionDetails{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Transaction storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TokenProvider, &TokenProviderMap{})
+	err = w.s.Init(TokenProvider, &TokenProviderMap{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Token Provider Table", "err", err)
 		return nil, err

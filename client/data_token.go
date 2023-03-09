@@ -46,3 +46,14 @@ func (c *Client) CreateDataToken(dt *DataTokenReq) (*model.BasicResponse, error)
 	}
 	return &br, nil
 }
+
+func (c *Client) CommitDataToken(did string) (*model.BasicResponse, error) {
+	var br model.BasicResponse
+	q := make(map[string]string)
+	q["did"] = did
+	err := c.sendMutiFormRequest("POST", server.APICommitDataToken, q, nil, nil, &br)
+	if err != nil {
+		return nil, err
+	}
+	return &br, nil
+}

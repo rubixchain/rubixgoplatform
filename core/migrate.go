@@ -102,6 +102,13 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) {
 	dc.OutChan <- &br
 }
 
+func (c *Core) cleanMirgate(did string, clean *bool) {
+	if *clean {
+		c.w.ClearTokens(did)
+		c.w.ClearTokenBlocks(token.RBTTokenType)
+	}
+}
+
 func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error {
 	rubixDir := os.Getenv("HOME") + "/Rubix/"
 	if runtime.GOOS == "windows" {
@@ -151,6 +158,8 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		Type:   didCreate.Type,
 		Config: didCreate.Config,
 	}
+	clean := true
+	defer c.cleanMirgate(did, &clean)
 
 	err = c.w.CreateDID(&dt)
 	if err != nil {
@@ -436,7 +445,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					c.log.Error("Failed to migrate, failed to update arbitary signature")
 					return fmt.Errorf("failed to migrate, failed to update arbitary signature")
 				}
-				err = c.w.CreateTokenBlock(blk)
+				err = c.w.CreateTokenBlock(blk, token.RBTTokenType)
 				if err != nil {
 					c.log.Error("Failed to migrate, failed to add token chain block", "err", err)
 					return fmt.Errorf("failed to migrate, failed to add token chain block")
@@ -587,6 +596,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			return fmt.Errorf("failed to migrate, failed to pin token")
 		}
 	}
+	clean = false
 	et := time.Now()
 	dif := et.Sub(st)
 	c.log.Info("Tokens signatures completed", "duration", dif)

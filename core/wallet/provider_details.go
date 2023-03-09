@@ -2,7 +2,7 @@ package wallet
 
 // struct definition for Mapping token and reason the did is a provider
 type TokenProviderMap struct {
-	Token  string `gorm:"column:token;primary_key"`
+	Token  string `gorm:"column:token;primaryKey"`
 	DID    string `gorm:"column:did"`
 	FuncID int    `gorm:"column:func_id"`
 	Role   int    `gorm:"column:role"`
@@ -29,7 +29,7 @@ func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
 func (w *Wallet) AddProviderDetails(token string, did string, funId int, role int) error {
 	var tpm TokenProviderMap
 	err := w.s.Read(TokenProvider, &tpm, "did=? AND token=?", did, token)
-	if err != nil {
+	if err != nil || tpm.Token == "" {
 		tpm.Token = token
 		tpm.DID = did
 		tpm.FuncID = funId
