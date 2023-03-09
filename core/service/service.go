@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	WriteBatchSize int = 10000
+	WriteBatchSize int = 1000
 )
 
 const (

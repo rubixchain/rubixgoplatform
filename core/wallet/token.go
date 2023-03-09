@@ -15,6 +15,7 @@ const (
 	TokenIsPledged
 	TokenIsUnPledged
 	TokenIsTransferred
+	TokenIsCommitted
 )
 
 const (
