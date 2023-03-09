@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
@@ -98,15 +99,21 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	}
 	//check if token has multiple pins
 	ti := sc.GetTransTokenInfo()
+	results := make([]MultiPinCheckRes, len(ti))
+	var wg sync.WaitGroup
 	for i := range ti {
-		multiPincheck, owners, err := c.pinCheck(ti[i].Token, cr.SenderPeerID, cr.ReceiverPeerID)
-		if err != nil {
-			c.log.Error("Error occurede", "error", err)
-			crep.Message = "Token multiple Pin check error triggered"
+		wg.Add(1)
+		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
+	}
+	wg.Wait()
+	for i := range results {
+		if results[i].Error != nil {
+			c.log.Error("Error occured", "error", err)
+			crep.Message = "Error while cheking Token multiple Pins"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		if multiPincheck {
-			c.log.Error("Token has multiple owners", "token", ti[i].Token, "owners", owners)
+		if results[i].Status {
+			c.log.Error("Token has multiple owners", "token", results[i].Token, "owners", results[i].Owners)
 			crep.Message = "Token has multiple owners"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
@@ -248,23 +255,6 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 			crep.Message = "Failed to sync token chain block, missing previous block id"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		senderPeerId, _, ok := util.ParseAddress(sr.Address)
-		if !ok {
-			c.log.Error("Error occurede", "error", err)
-			crep.Message = "Unable to parse sender address"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		multiPincheck, owners, err := c.pinCheck(t, senderPeerId, c.peerID)
-		if err != nil {
-			c.log.Error("Error occurede", "error", err)
-			crep.Message = "Token multiple Pin check error triggered"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		if multiPincheck {
-			c.log.Error("Token has multiple owners", "token", t, "owners", owners)
-			crep.Message = "Token has multiple owners"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
 		err = c.syncTokenChainFrom(sr.Address, pblkID, t)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
@@ -281,6 +271,33 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		if c.checkIsPledged(ptcb, t) {
 			c.log.Error("Token is a pledged Token", "token", t)
 			crep.Message = "Token " + t + " is a pledged Token"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
+
+	results := make([]MultiPinCheckRes, len(sr.TokenInfo))
+	var wg sync.WaitGroup
+	for i, ti := range sr.TokenInfo {
+		t := ti.Token
+		senderPeerId, _, ok := util.ParseAddress(sr.Address)
+		if !ok {
+			c.log.Error("Error occurede", "error", err)
+			crep.Message = "Unable to parse sender address"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		wg.Add(1)
+		go c.pinCheck(t, i, senderPeerId, c.peerID, results, &wg)
+	}
+	wg.Wait()
+	for i := range results {
+		if results[i].Error != nil {
+			c.log.Error("Error occured", "error", err)
+			crep.Message = "Error while cheking Token multiple Pins"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if results[i].Status {
+			c.log.Error("Token has multiple owners", "token", results[i].Token, "owners", results[i].Owners)
+			crep.Message = "Token has multiple owners"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
