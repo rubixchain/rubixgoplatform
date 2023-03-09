@@ -10,6 +10,10 @@ import (
 )
 
 const (
+	WriteBatchSize int = 10000
+)
+
+const (
 	ArbitrationDIDTable  string = "DIDArbitration"
 	ArbitrationTable     string = "Arbitration"
 	ArbitrationTempTable string = "ArbitrationTemp"
@@ -23,17 +27,17 @@ type Service struct {
 }
 
 type DIDMap struct {
-	OldDID string `gorm:"column:old_did;primary_key"`
+	OldDID string `gorm:"column:old_did;primaryKey"`
 	NewDID string `gorm:"column:new_did"`
 }
 
 type TokenDetials struct {
-	Token string `gorm:"column:token;primary_key"`
+	Token string `gorm:"column:token;primaryKey"`
 	DID   string `gorm:"column:did"`
 }
 
 type HashEntry struct {
-	Hash  string `gorm:"column:hash;primary_key"`
+	Hash  string `gorm:"column:hash;primaryKey"`
 	Value int    `gorm:"column:value"`
 }
 
@@ -44,23 +48,23 @@ func NewService(s storage.Storage, log logger.Logger) (*Service, error) {
 	}
 	// Initialize the Arbitration Table to store the token
 	// detials
-	err := s.Init(ArbitrationTable, &TokenDetials{})
+	err := s.Init(ArbitrationTable, &TokenDetials{}, false)
 	if err != nil {
 		srv.log.Error("Failed to init arbitration")
 	}
-	err = s.Init(ArbitrationTempTable, &TokenDetials{})
+	err = s.Init(ArbitrationTempTable, &TokenDetials{}, false)
 	if err != nil {
 		srv.log.Error("Failed to init temp arbitration")
 	}
-	err = s.Init(ArbitrationDIDTable, &DIDMap{})
+	err = s.Init(ArbitrationDIDTable, &DIDMap{}, false)
 	if err != nil {
 		srv.log.Error("Failed to init did arbitration")
 	}
-	err = s.Init(AribitrationLocked, &TokenDetials{})
+	err = s.Init(AribitrationLocked, &TokenDetials{}, false)
 	if err != nil {
 		srv.log.Error("Failed to init arbitration locked table")
 	}
-	err = s.Init(HashTable, &HashEntry{})
+	err = s.Init(HashTable, &HashEntry{}, false)
 	if err != nil {
 		srv.log.Error("Failed to create hash table")
 	}
@@ -111,25 +115,34 @@ func (s *Service) GetTokenDetials(t string) (*TokenDetials, error) {
 }
 
 func (s *Service) UpdateTokenDetials(did string) error {
-	var td TokenDetials
+	var err error
+	count := s.s.GetDataCount(ArbitrationTempTable, "did=?", did)
+	offset := 0
 	for {
-		err := s.s.Read(ArbitrationTempTable, &td, "did=?", did)
+		if offset >= int(count) {
+			break
+		}
+		var td []TokenDetials
+		err = s.s.ReadWithOffset(ArbitrationTempTable, offset, WriteBatchSize, &td, "did=?", did)
 		if err != nil {
 			break
 		}
-		if td.Token != "" {
-			err = s.s.Write(ArbitrationTable, &td)
+		if len(td) > 0 {
+			err = s.s.WriteBatch(ArbitrationTable, td, len(td))
 			if err != nil {
 				s.log.Error("Failed to write arbitary table", "err", err)
 				return err
 			}
-			err = s.s.Delete(ArbitrationTempTable, &td, "token=?", td.Token)
-			if err != nil {
-				s.log.Error("Failed to delete from arbitary temp table", "err", err)
-				return err
-			}
 		} else {
 			break
+		}
+		offset = offset + WriteBatchSize
+	}
+	if err == nil {
+		err := s.s.Delete(ArbitrationTempTable, &TokenDetials{}, "did=?", did)
+		if err != nil {
+			s.log.Error("Failed to delete from arbitary temp table", "err", err)
+			return err
 		}
 	}
 	return nil
@@ -140,9 +153,9 @@ func (s *Service) UpdateTempTokenDetials(td *TokenDetials) error {
 	if err != nil {
 		var t TokenDetials
 		err = s.s.Read(ArbitrationTempTable, &t, "token=?", td.Token)
-		if err != nil {
-			s.log.Error("Failed to write aribitration temp table", "err", err)
-			return err
+		if err == nil && t.Token == "" {
+			s.log.Error("Failed to write aribitration temp table")
+			return fmt.Errorf("failed to add token into temp table")
 		}
 		err = s.s.Delete(ArbitrationTempTable, &TokenDetials{}, "did=?", t.DID)
 		if err != nil {

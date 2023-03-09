@@ -57,6 +57,7 @@ const (
 	MirgateNodeCmd        string = "migratenode"
 	LockTokensCmd         string = "locktokens"
 	CreateDataTokenCmd    string = "createdatatoken"
+	CommitDataTokenCmd    string = "commitdatatoken"
 	SetupDBCmd            string = "setupdb"
 )
 
@@ -84,6 +85,7 @@ var commands = []string{VersionCmd,
 	MirgateNodeCmd,
 	LockTokensCmd,
 	CreateDataTokenCmd,
+	CommitDataTokenCmd,
 	SetupDBCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -109,6 +111,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will migrate node to newer node",
 	"This command will lock the tokens on the arbitary node",
 	"This command will create data token token",
+	"This command will commit data token token",
 	"This command will setup the DB"}
 
 type Command struct {
@@ -424,6 +427,8 @@ func Run(args []string) {
 		cmd.MigrateNodeCmd()
 	case CreateDataTokenCmd:
 		cmd.createDataToken()
+	case CommitDataTokenCmd:
+		cmd.commitDataToken()
 	case SetupDBCmd:
 		cmd.setupDB()
 	default:

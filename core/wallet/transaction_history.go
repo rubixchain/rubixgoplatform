@@ -10,7 +10,7 @@ const (
 )
 
 type TransactionDetails struct {
-	TransactionID   string    `gorm:"column:transaction_id;primary_key"`
+	TransactionID   string    `gorm:"column:transaction_id;primaryKey"`
 	TransactionType string    `gorm:"column:transaction_type"`
 	BlockID         string    `gorm:"column:block_id"`
 	Mode            int       `gorm:"column:mode"`

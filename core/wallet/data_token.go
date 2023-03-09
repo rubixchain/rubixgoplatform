@@ -2,12 +2,10 @@ package wallet
 
 import (
 	"fmt"
-
-	"github.com/rubixchain/rubixgoplatform/block"
 )
 
 type DataToken struct {
-	TokenID      string `gorm:"column:token_id;primary_key"`
+	TokenID      string `gorm:"column:token_id;primaryKey"`
 	DID          string `gorm:"column:did"`
 	CommitterDID string `gorm:"column:commiter_did"`
 	TokenStatus  int    `gorm:"column:token_status;"`
@@ -23,11 +21,6 @@ func (w *Wallet) CreateDataToken(dt *DataToken) error {
 	return nil
 }
 
-// AddDataTokenBlock will add token chain to db
-func (w *Wallet) AddDataTokenBlock(t string, b *block.Block) error {
-	return w.addBlock(DataTokenType, t, b)
-}
-
 func (w *Wallet) GetDataToken(did string) ([]DataToken, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
@@ -37,7 +30,14 @@ func (w *Wallet) GetDataToken(did string) ([]DataToken, error) {
 		return nil, err
 	}
 	if len(dts) == 0 {
-		return nil, fmt.Errorf("no data token is available")
+		return nil, fmt.Errorf("no data token is available to commit")
+	}
+	for i := range dts {
+		dts[i].TokenStatus = TokenIsLocked
+		err := w.s.Update(DataTokenStorage, &dts[i], "token_id=?", dts[i].TokenID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return dts, nil
 }

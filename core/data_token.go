@@ -182,14 +182,28 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, smart contract signature failed"
 		return &br
 	}
+	gb := &block.GenesisBlock{
+		Type: block.TokenGeneratedType,
+		Info: []block.GenesisTokenInfo{
+			{Token: dt},
+		},
+	}
+	bti := &block.TransInfo{
+		Tokens: []block.TransTokens{
+			{
+				Token:     dt,
+				TokenType: token.TestTokenType,
+			},
+		},
+		Comment: "Data token generated at : " + time.Now().String(),
+	}
 	tcb := &block.TokenChainBlock{
 		TransactionType: block.TokenGeneratedType,
 		TokenOwner:      dr.DID,
 		TokenType:       token.DataTokenType,
 		SmartContract:   sc.GetBlock(),
-		TransInfo: &block.TransInfo{
-			Comment: "Data token generated at : " + time.Now().String(),
-		},
+		GenesisBlock:    gb,
+		TransInfo:       bti,
 	}
 	ctcb := make(map[string]*block.Block)
 	ctcb[dt] = nil
@@ -205,7 +219,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, failed to update signature"
 		return &br
 	}
-	err = c.w.AddDataTokenBlock(dt, blk)
+	err = c.w.AddTokenBlock(dt, token.DataTokenType, blk)
 	if err != nil {
 		c.log.Error("Failed to create data token, failed to add token chan block", "err", err)
 		br.Message = "Failed to create data token, failed to add token chan block"
@@ -236,11 +250,17 @@ func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
 		br.Message = "Commit data token failed, failed to get data token"
 		return br
 	}
-
-	dtm := make(map[string]interface{})
-
+	tsi := &contract.TransInfo{
+		SenderDID:   did,
+		TransTokens: make([]contract.TokenInfo, 0),
+	}
 	for i := range dt {
-		dtm[dt[i].TokenID] = dt[i].DID
+		ti := contract.TokenInfo{
+			Token:     dt[i].TokenID,
+			TokenType: token.DataTokenType,
+			OwnerDID:  dt[i].DID,
+		}
+		tsi.TransTokens = append(tsi.TransTokens, ti)
 	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
@@ -250,6 +270,7 @@ func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
 	sct := &contract.ContractType{
 		Type:       contract.SCDataTokenCommitType,
 		PledgeMode: contract.POWPledgeMode,
+		TransInfo:  tsi,
 	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)
@@ -271,5 +292,7 @@ func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
 		br.Message = "Consensus failed" + err.Error()
 		return br
 	}
+	br.Status = true
+	br.Message = "Data committed successfully"
 	return br
 }

@@ -23,7 +23,7 @@ func remoteStorageDB() error {
 }
 
 type model struct {
-	Name    string `gorm:"column:Name;primary_key;"`
+	Name    string `gorm:"column:Name;primaryKey;"`
 	Age     int    `gorm:"column:Age"`
 	Address string `gorm:"column:Address"`
 }
@@ -36,9 +36,15 @@ func TestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to init DB", err.Error())
 	}
-	if err := s.Init("user", &model{}); err != nil {
+	if err := s.Init("user", &model{}, true); err != nil {
 		t.Fatal("Failed to initialize storage", err.Error())
 	}
+	var rm model
+	err = s.Read("user", &rm, "Name=?", "TestUser1")
+	if err == nil {
+		t.Fatal("Invalid read", err.Error())
+	}
+	fmt.Printf("Data : %v\n", rm)
 	if err := s.Write("user", &model{Name: "TestUser1", Age: 20, Address: "Hyderabad"}); err != nil {
 		t.Fatal("Failed to write storage", err.Error())
 	}
@@ -110,40 +116,6 @@ func TestTemp(t *testing.T) {
 		fmt.Println(ti)
 	}
 
-}
-
-func TestLevelLB(t *testing.T) {
-	var s Storage
-	var err error
-	s, err = NewStorageLDB("./")
-	if err != nil {
-		t.Fatal("Failed to setup level db", err.Error())
-	}
-	if err := s.Init("Test", &StorageType{}); err != nil {
-		t.Fatal("Failed to initialize storage", err.Error())
-	}
-
-	if err := s.Write("Test", &StorageType{Key: "Key1", Value: "Value1"}); err != nil {
-		t.Fatal("Failed to write storage", err.Error())
-	}
-	if err := s.Write("Test", &StorageType{Key: "Key2", Value: "Value2"}); err != nil {
-		t.Fatal("Failed to write storage", err.Error())
-	}
-	if err := s.Write("Test", &StorageType{Key: "Key3", Value: "Value3"}); err != nil {
-		t.Fatal("Failed to write storage", err.Error())
-	}
-	var st StorageType
-	if err := s.Read("Test", &st, "key=?", "Key1"); err != nil {
-		t.Fatal("Failed to get data from storage", err.Error())
-	}
-
-	if st.Value != "Value1" {
-		t.Fatal("Value miss match")
-	}
-
-	if err := s.Close(); err != nil {
-		t.Fatal("Failed to close storage", err.Error())
-	}
 }
 
 func TestSanp(t *testing.T) {

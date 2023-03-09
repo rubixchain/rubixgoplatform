@@ -223,7 +223,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		ti := sc.GetTransTokenInfo()
 		partToken := false
 		for i := range ti {
-			if ti[i].TokenType == token.RBTTokenType {
+			if ti[i].TokenType == token.RBTTokenType || ti[i].TokenType == token.TestTokenType {
 				reqPledgeTokens++
 			} else if ti[i].TokenType == token.PartTokenType {
 				partToken = true
@@ -290,53 +290,63 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		return nil, err
 	}
 	c.sendQuorumCredit(cr)
-	rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
-	if err != nil {
-		c.log.Error("Receiver not connected", "err", err)
-		return nil, err
-	}
 	ti := sc.GetTransTokenInfo()
-	sr := SendTokenRequest{
-		Address:         cr.SenderPeerID + "." + sc.GetSenderDID(),
-		TokenInfo:       ti,
-		TokenChainBlock: nb.GetBlock(),
-	}
-	var br model.BasicResponse
-	err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
+	if cr.Mode == RBTTransferMode {
+		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
+		if err != nil {
+			c.log.Error("Receiver not connected", "err", err)
+			return nil, err
+		}
+		sr := SendTokenRequest{
+			Address:         cr.SenderPeerID + "." + sc.GetSenderDID(),
+			TokenInfo:       ti,
+			TokenChainBlock: nb.GetBlock(),
+		}
+		var br model.BasicResponse
+		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
 
-	if err != nil {
-		c.log.Error("Unable to send tokens to receiver", "err", err)
-		return nil, err
+		if err != nil {
+			c.log.Error("Unable to send tokens to receiver", "err", err)
+			return nil, err
+		}
+		if !br.Status {
+			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
+			return nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
+		}
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb)
+		if err != nil {
+			c.log.Error("Failed to transfer tokens", "err", err)
+			return nil, err
+		}
+		for _, t := range ti {
+			c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+		}
+		nbid, err := nb.GetBlockID(ti[0].Token)
+		if err != nil {
+			c.log.Error("Failed to get block id", "err", err)
+			return nil, err
+		}
+		td := wallet.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			BlockID:         nbid,
+			Mode:            wallet.SendMode,
+			SenderDID:       sc.GetSenderDID(),
+			ReceiverDID:     sc.GetReceiverDID(),
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+		}
+		return &td, nil
+	} else {
+		err = c.w.CreateTokenBlock(nb, token.DataTokenType)
+		if err != nil {
+			c.log.Error("Failed to create token block", "err", err)
+			return nil, err
+		}
+		return nil, nil
 	}
-	if !br.Status {
-		c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
-		return nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
-	}
-	err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb)
-	if err != nil {
-		c.log.Error("Failed to transfer tokens", "err", err)
-		return nil, err
-	}
-	for _, t := range ti {
-		c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
-	}
-	nbid, err := nb.GetBlockID(ti[0].Token)
-	if err != nil {
-		c.log.Error("Failed to get block id", "err", err)
-		return nil, err
-	}
-	td := wallet.TransactionDetails{
-		TransactionID:   tid,
-		TransactionType: nb.GetTransType(),
-		BlockID:         nbid,
-		Mode:            wallet.SendMode,
-		SenderDID:       sc.GetSenderDID(),
-		ReceiverDID:     sc.GetReceiverDID(),
-		Comment:         sc.GetComment(),
-		DateTime:        time.Now(),
-		Status:          true,
-	}
-	return &td, nil
+
 }
 
 func (c *Core) startConsensus(id string, qt int) {
@@ -461,7 +471,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	for i := range ti {
 		pledgeToken := ""
 		pledgeDID := ""
-		if ti[i].TokenType == token.PartTokenType {
+		if ti[i].TokenType == token.PartTokenType || ti[i].TokenType == token.DataTokenType {
 			if pt == "" {
 				pledgeToken = pts[index].Token
 				pledgeDID = pts[index].DID
@@ -485,7 +495,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 		tks = append(tks, tt)
 		//TODO:: need to address for part otken
-		b := c.w.GetLatestTokenBlock(ti[i].Token)
+		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		ctcb[ti[i].Token] = b
 	}
 

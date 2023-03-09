@@ -30,14 +30,14 @@ const (
 )
 
 type ExplorerNodeStatus struct {
-	PeerID               string    `gorm:"column:PeerID;primary_key;"`
+	PeerID               string    `gorm:"column:PeerID;primaryKey;"`
 	CreationTime         time.Time `gorm:"column:CreationTime;not null"`
 	LastModificationTime time.Time `gorm:"column:LastModificationTime;not null"`
 	Status               string    `gorm:"column:Status;"`
 }
 
 type ExplorerNodeDIDMap struct {
-	DID                  string    `gorm:"column:DID;primary_key;"`
+	DID                  string    `gorm:"column:DID;primaryKey;"`
 	PeerID               string    `gorm:"column:PeerID;"`
 	CreationTime         time.Time `gorm:"column:CreationTime;not null"`
 	LastModificationTime time.Time `gorm:"column:LastModificationTime;not null"`
@@ -112,11 +112,11 @@ func (c *Core) startService(sn string) error {
 	}
 	switch sn {
 	case ExplorerService:
-		err := sd.db.InitTable(NodeStatusTable, &ExplorerNodeStatus{})
+		err := sd.db.InitTable(NodeStatusTable, &ExplorerNodeStatus{}, false)
 		if err != nil {
 			return err
 		}
-		err = sd.db.InitTable(NodeDIDMapTable, &ExplorerNodeDIDMap{})
+		err = sd.db.InitTable(NodeDIDMapTable, &ExplorerNodeDIDMap{}, false)
 		if err != nil {
 			return err
 		}
