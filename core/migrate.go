@@ -15,7 +15,6 @@ import (
 
 	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/ensweb"
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -252,7 +251,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				t := migrateTokens[mindex]
 				ntd := token.GetTokenString(tls[batchIndex], tns[batchIndex])
 				tb := bytes.NewReader([]byte(ntd))
-				tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+				tid, err := c.ipfs.Add(tb)
 				if err != nil {
 					c.log.Error("Failed to migrate, failed to add token file", "err", err)
 					return fmt.Errorf("failed to migrate, failed to add token file")
@@ -297,12 +296,14 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					continue
 				}
 				tb := bytes.NewReader(tk)
-				tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+				tid, err := c.ipfs.Add(tb)
+				//tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 				if err != nil {
 					c.log.Error("Failed to migrate, failed to add token file", "err", err)
 					return fmt.Errorf("failed to migrate, failed to add token file")
 				}
 				if t != tid {
+					c.ipfs.Unpin(tid)
 					//c.log.Info("Token hash not matching Invalid token skipping : " + t)
 					invalidTokens = append(invalidTokens, t)
 					invalidMap[t] = true
@@ -344,6 +345,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				tn := tns[i]
 				tl := tls[i]
 				if !token.ValidateTokenDetials(tl, tn) {
+					c.ipfs.Unpin(t)
 					//c.log.Info("Invalid token skipping : " + t)
 					invalidTokens = append(invalidTokens, t)
 					invalidMap[t] = true
@@ -555,39 +557,22 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	if len(migrateTokens) > 0 {
 		mt = true
 	}
+	lt := false
+	if len(invalidMap) > 0 {
+		lt = true
+	}
 	for i := 0; i < numTokens; i++ {
 		t := tokens[i]
-		tf := t
-		td := ""
-		flag := false
 		if mt {
 			tid, ok := migratedMap[t]
 			if ok {
 				t = tid
-				dt := strings.Split(migrateDetials[tid], ",")
-				td = dt[1]
-				flag = true
 			}
-		} else if invalidMap[t] {
-			continue
 		}
-		if flag {
-			tb := bytes.NewBuffer([]byte(td))
-			_, err = c.ipfs.Add(tb)
-			if err != nil {
-				c.log.Error("Failed to migrate, failed to add token file", "err", err)
-				return fmt.Errorf("failed to migrate, failed to add token file")
-			}
-		} else {
-			tb, err := os.Open(rubixDir + "Wallet/TOKENS/" + tf)
-			if err != nil {
-				c.log.Error("Failed to migrate, failed to read token files", "err", err)
-				return fmt.Errorf("failed to migrate, failed to read token files")
-			}
-			_, err = c.ipfs.Add(tb)
-			if err != nil {
-				c.log.Error("Failed to migrate, failed to add token file", "err", err)
-				return fmt.Errorf("failed to migrate, failed to add token file")
+		if lt {
+			s, ok := invalidMap[t]
+			if ok && s {
+				continue
 			}
 		}
 		ok, err := c.w.Pin(t, wallet.OwnerRole, did)
