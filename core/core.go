@@ -273,7 +273,7 @@ func (c *Core) SetupCore() error {
 	if c.testNet {
 		bs = nil
 	}
-	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, 100, c.ipfs, c.log, bs)
+	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, c.cfg.CfgData.Ports.ReceiverPort+10, 100, c.ipfs, c.log, bs, c.peerID)
 	c.d = did.InitDID(c.didDir, c.log, c.ipfs)
 	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
 	if err != nil {
@@ -391,49 +391,6 @@ func (c *Core) updateConfig() error {
 		return err
 	}
 	return nil
-}
-
-func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
-	did, err := c.d.CreateDID(didCreate)
-	if err != nil {
-		return "", err
-	}
-	dt := wallet.DIDType{
-		DID:    did,
-		DIDDir: didCreate.Dir,
-		Type:   didCreate.Type,
-		Config: didCreate.Config,
-	}
-	err = c.w.CreateDID(&dt)
-	if err != nil {
-		c.log.Error("Failed to create did in the wallet", "err", err)
-		return "", err
-	}
-	// exp := model.ExploreModel{
-	// 	Cmd:     ExpDIDPeerMapCmd,
-	// 	DIDList: []string{did},
-	// 	PeerID:  c.peerID,
-	// 	Message: "DID Created Successfully",
-	// }
-	// err = c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	return "", err
-	// }
-	c.ec.ExplorerCreateDID(c.peerID, did)
-	return did, nil
-}
-
-func (c *Core) GetDIDs(dir string) []wallet.DIDType {
-	dt, err := c.w.GetDIDs(dir)
-	if err != nil {
-		return nil
-	}
-	return dt
-}
-
-func (c *Core) IsDIDExist(dir string, did string) bool {
-	_, err := c.w.GetDIDDir(dir, did)
-	return err == nil
 }
 
 func (c *Core) AddWebReq(req *ensweb.Request) {

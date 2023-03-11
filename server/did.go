@@ -147,3 +147,49 @@ func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 	go s.c.RegisterDID(req.ID, didStr)
 	return s.didResponse(req, req.ID)
 }
+
+func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
+	folderName, err := s.c.CreateTempFolder()
+	if err != nil {
+		s.log.Error("failed to create folder")
+		return s.BasicResponse(req, false, "failed to create folder", nil)
+	}
+	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
+	if err != nil {
+		s.log.Error("failed to parse request", "err", err)
+		return s.BasicResponse(req, false, "failed to create DID", nil)
+	}
+	fields := fieldNames[DIDConfigField]
+	if len(fields) == 0 {
+		s.log.Error("missing did configuration")
+		return s.BasicResponse(req, false, "missing did configuration", nil)
+	}
+	var didCreate did.DIDCreate
+	err = json.Unmarshal([]byte(fields[0]), &didCreate)
+	if err != nil {
+		s.log.Error("failed to parse did configuration", "err", err)
+		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
+	}
+
+	for _, fileName := range fileNames {
+		if strings.Contains(fileName, did.DIDImgFileName) {
+			didCreate.DIDImgFileName = did.DIDImgFileName
+		}
+		if strings.Contains(fileName, did.PubShareFileName) {
+			didCreate.PubImgFile = did.PubShareFileName
+		}
+		if strings.Contains(fileName, did.PubShareFileName) {
+			didCreate.PubImgFile = fileName
+		}
+		if strings.Contains(fileName, did.PubKeyFileName) {
+			didCreate.PubKeyFile = fileName
+		}
+	}
+	dir, ok := s.validateAccess(req)
+	if !ok {
+		return s.BasicResponse(req, false, "Unathuriozed access", nil)
+	}
+	didCreate.Dir = dir
+	br := s.c.AddDID(&didCreate)
+	return s.RenderJSON(req, br, http.StatusOK)
+}

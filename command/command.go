@@ -53,6 +53,7 @@ const (
 	SetupServiceCmd       string = "setupservice"
 	DumpTokenChainCmd     string = "dumptokenchain"
 	RegsiterDIDCmd        string = "registerdid"
+	SetupDIDCmd           string = "setupdid"
 	ShutDownCmd           string = "shutdown"
 	MirgateNodeCmd        string = "migratenode"
 	LockTokensCmd         string = "locktokens"
@@ -81,6 +82,7 @@ var commands = []string{VersionCmd,
 	SetupServiceCmd,
 	DumpTokenChainCmd,
 	RegsiterDIDCmd,
+	SetupDBCmd,
 	ShutDownCmd,
 	MirgateNodeCmd,
 	LockTokensCmd,
@@ -107,6 +109,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command enable explorer service on the node",
 	"This command will dump the token chain into file",
 	"This command will register DID peer map across the network",
+	"This command will setup the DID with peer",
 	"This command will shutdown the rubix node",
 	"This command will migrate node to newer node",
 	"This command will lock the tokens on the arbitary node",
@@ -421,6 +424,8 @@ func Run(args []string) {
 		cmd.dumpTokenChain()
 	case RegsiterDIDCmd:
 		cmd.RegsiterDIDCmd()
+	case SetupDIDCmd:
+		cmd.SetupDIDCmd()
 	case ShutDownCmd:
 		cmd.ShutDownCmd()
 	case MirgateNodeCmd:

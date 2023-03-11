@@ -36,6 +36,7 @@ const (
 	APISignatureResponse   string = "/api/signature-response"
 	APIDumpTokenChainBlock string = "/api/dump-token-chain"
 	APIRegisterDID         string = "/api/register-did"
+	APISetupDID            string = "/api/setup-did"
 	APIMigrateNode         string = "/api/migrate-node"
 	APILockTokens          string = "/api/lock-tokens"
 	APICreateDataToken     string = "/api/create-data_token"
@@ -208,6 +209,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, s.ErrorFunc))
 	s.AddRoute(APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, s.ErrorFunc))
 	s.AddRoute(APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, s.ErrorFunc))
+	s.AddRoute(APISetupDID, "POST", s.AuthHandle(s.APISetupDID, s.ErrorFunc))
 	s.AddRoute(APIMigrateNode, "POST", s.AuthHandle(s.APIMigrateNode, s.ErrorFunc))
 	s.AddRoute(APILockTokens, "POST", s.AuthHandle(s.APILockTokens, s.ErrorFunc))
 	s.AddRoute(APICreateDataToken, "POST", s.AuthHandle(s.APICreateDataToken, s.ErrorFunc))

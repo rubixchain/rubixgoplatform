@@ -22,17 +22,20 @@ const (
 )
 
 type DIDCreate struct {
-	Type           int    `json:"type"`
-	Dir            string `json:"dir"`
-	Config         string `json:"config"`
-	Secret         string `json:"secret"`
-	PrivPWD        string `json:"priv_pwd"`
-	QuorumPWD      string `json:"quorum_pwd"`
-	ImgFile        string `json:"img_file"`
-	DIDImgFileName string `json:"did_img_file"`
-	PubImgFile     string `json:"pub_img_file"`
-	PrivImgFile    string `json:"priv_img_file"`
-	PubKeyFile     string `json:"pub_key_file"`
+	Type              int    `json:"type"`
+	Dir               string `json:"dir"`
+	Config            string `json:"config"`
+	Secret            string `json:"secret"`
+	PrivPWD           string `json:"priv_pwd"`
+	QuorumPWD         string `json:"quorum_pwd"`
+	ImgFile           string `json:"img_file"`
+	DIDImgFileName    string `json:"did_img_file"`
+	PubImgFile        string `json:"pub_img_file"`
+	PrivImgFile       string `json:"priv_img_file"`
+	PubKeyFile        string `json:"pub_key_file"`
+	PrivKeyFile       string `json:"priv_key_file"`
+	QuorumPubKeyFile  string `json:"quorum_pub_key_file"`
+	QuorumPrivKeyFile string `json:"quorum_priv_key_file"`
 }
 
 type DIDSignature struct {
