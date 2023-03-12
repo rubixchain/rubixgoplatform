@@ -24,6 +24,7 @@ const (
 	DTFileHashField    string = "FileHash"
 	DTFileURLField     string = "FileURL"
 	DTCommiterDIDField string = "CommitterDID"
+	DTBatchIDField     string = "BatchID"
 )
 
 type DataTokenReq struct {
@@ -67,6 +68,11 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	cdid, ok := dr.Fields[DTCommiterDIDField]
 	if ok {
 		comDid = cdid[0]
+	}
+	bid := comDid
+	bids, ok := dr.Fields[DTBatchIDField]
+	if ok {
+		bid = bids[0]
 	}
 	fileInfo, fok := dr.Fields[DTFileInfoField]
 	if fok {
@@ -146,7 +152,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, failed to add rac token to ipfs"
 		return &br
 	}
-	err = c.w.CreateDataToken(&wallet.DataToken{TokenID: dt, DID: dr.DID, CommitterDID: comDid})
+	err = c.w.CreateDataToken(&wallet.DataToken{TokenID: dt, DID: dr.DID, CommitterDID: comDid, BatchID: bid})
 	if err != nil {
 		c.log.Error("Failed to create data token, write failed", "err", err)
 		br.Message = "Failed to create data token, write failed"
@@ -230,8 +236,8 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	return &br
 }
 
-func (c *Core) CommitDataToken(reqID string, did string) {
-	br := c.commitDataToken(reqID, did)
+func (c *Core) CommitDataToken(reqID string, did string, batchID string) {
+	br := c.commitDataToken(reqID, did, batchID)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to create data token, failed to get did channel")
@@ -248,8 +254,8 @@ func (c *Core) finishDataCommit(br *model.BasicResponse, dts []wallet.DataToken)
 	}
 }
 
-func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
-	dt, err := c.w.GetDataToken(did)
+func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.BasicResponse {
+	dt, err := c.w.GetDataToken(batchID)
 	br := &model.BasicResponse{
 		Status: false,
 	}

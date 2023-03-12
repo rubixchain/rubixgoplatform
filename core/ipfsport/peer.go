@@ -204,6 +204,10 @@ func (p *Peer) SendJSONRequest(method string, path string, querry map[string]str
 	return nil
 }
 
+func (p *Peer) IsLocal() bool {
+	return p.local
+}
+
 func (p *Peer) Close() error {
 	if !p.local {
 		defer p.pm.releasePeerPort(p.port)

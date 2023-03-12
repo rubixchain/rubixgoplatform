@@ -97,6 +97,9 @@ func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 		if err == nil {
 			a.DIDType = d.Type
 			ai.AccountInfo = append(ai.AccountInfo, a)
+		} else {
+			a.DIDType = d.Type
+			ai.AccountInfo = append(ai.AccountInfo, model.DIDAccountInfo{DID: d.DID})
 		}
 	}
 	return s.RenderJSON(req, &ai, http.StatusOK)

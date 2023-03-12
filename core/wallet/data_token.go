@@ -8,6 +8,7 @@ type DataToken struct {
 	TokenID      string `gorm:"column:token_id;primaryKey"`
 	DID          string `gorm:"column:did"`
 	CommitterDID string `gorm:"column:commiter_did"`
+	BatchID      string `gorm:"column:batch_id"`
 	TokenStatus  int    `gorm:"column:token_status;"`
 }
 
@@ -21,11 +22,11 @@ func (w *Wallet) CreateDataToken(dt *DataToken) error {
 	return nil
 }
 
-func (w *Wallet) GetDataToken(did string) ([]DataToken, error) {
+func (w *Wallet) GetDataToken(batchID string) ([]DataToken, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	var dts []DataToken
-	err := w.s.Read(DataTokenStorage, &dts, "commiter_did=? AND token_status=?", did, TokenIsFree)
+	err := w.s.Read(DataTokenStorage, &dts, "batch_id=? AND token_status=?", batchID, TokenIsFree)
 	if err != nil {
 		return nil, err
 	}

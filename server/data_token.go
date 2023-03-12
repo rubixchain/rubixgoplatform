@@ -32,10 +32,14 @@ func (s *Server) APICreateDataToken(req *ensweb.Request) *ensweb.Result {
 
 func (s *Server) APICommitDataToken(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
+	batchID := s.GetQuerry(req, "batchID")
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
+	if batchID == "" {
+		batchID = did
+	}
 	s.c.AddWebReq(req)
-	go s.c.CommitDataToken(req.ID, did)
+	go s.c.CommitDataToken(req.ID, did, batchID)
 	return s.didResponse(req, req.ID)
 }

@@ -297,6 +297,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Receiver not connected", "err", err)
 			return nil, err
 		}
+		defer rp.Close()
 		sr := SendTokenRequest{
 			Address:         cr.SenderPeerID + "." + sc.GetSenderDID(),
 			TokenInfo:       ti,
@@ -304,7 +305,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
-
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
 			return nil, err
@@ -313,7 +313,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
 			return nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
 		}
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb)
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, err

@@ -177,25 +177,28 @@ func (w *Wallet) ClearTokens(did string) error {
 	return nil
 }
 
-func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block) error {
+func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block, local bool) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// ::TODO:: need to address part & other tokens
-	err := w.CreateTokenBlock(b, ti[0].TokenType)
-	if err != nil {
-		return err
-	}
-	for i := range ti {
-		var t Token
-		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
+	// Skip update if it is local DID
+	if !local {
+		err := w.CreateTokenBlock(b, ti[0].TokenType)
 		if err != nil {
 			return err
 		}
-		t.TokenValue = 1
-		t.TokenStatus = TokenIsTransferred
-		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
-		if err != nil {
-			return err
+		for i := range ti {
+			var t Token
+			err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
+			if err != nil {
+				return err
+			}
+			t.TokenValue = 1
+			t.TokenStatus = TokenIsTransferred
+			err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	// for i := range pt {
@@ -254,10 +257,6 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			err = w.s.Write(TokenStorage, &t)
 			if err != nil {
 				return err
-			}
-		} else {
-			if t.TokenStatus != TokenIsTransferred {
-				return fmt.Errorf("Token already exist")
 			}
 		}
 
