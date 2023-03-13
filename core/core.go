@@ -346,6 +346,11 @@ func (c *Core) Start() (bool, string) {
 	return true, "Setup Complete"
 }
 
+// TODO:: need to add more test
+func (c *Core) NodeStatus() bool {
+	return true
+}
+
 func (c *Core) StopCore() {
 	// exp := model.ExploreModel{
 	// 	Cmd:    ExpPeerStatusCmd,

@@ -18,6 +18,7 @@ const (
 	APILogin               string = "/api/login"
 	APIStart               string = "/api/start"
 	APIShutdown            string = "/api/shutdown"
+	APINodeStatus          string = "/api/node-status"
 	APIPing                string = "/api/ping"
 	APIAddBootStrap        string = "/api/add-bootstrap"
 	APIRemoveBootStrap     string = "/api/remove-bootstrap"
@@ -41,6 +42,7 @@ const (
 	APILockTokens          string = "/api/lock-tokens"
 	APICreateDataToken     string = "/api/create-data_token"
 	APICommitDataToken     string = "/api/commit-data_token"
+	APICheckDataToken      string = "/api/check-data_token"
 	APISetupDB             string = "/api/setup-db"
 )
 
@@ -191,6 +193,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APILogin, "POST", s.APILogin)
 	s.AddRoute(APIStart, "GET", s.AuthHandle(s.APIStart, s.ErrorFunc))
 	s.AddRoute(APIShutdown, "POST", s.AuthHandle(s.APIShutdown, s.ErrorFunc))
+	s.AddRoute(APINodeStatus, "GET", s.AuthHandle(s.APINodeStatus, s.ErrorFunc))
 	s.AddRoute(APIPing, "GET", s.AuthHandle(s.APIPing, s.ErrorFunc))
 	s.AddRoute(APIAddBootStrap, "POST", s.AuthHandle(s.APIAddBootStrap, s.ErrorFunc))
 	s.AddRoute(APIRemoveBootStrap, "POST", s.AuthHandle(s.APIRemoveBootStrap, s.ErrorFunc))
@@ -214,6 +217,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APILockTokens, "POST", s.AuthHandle(s.APILockTokens, s.ErrorFunc))
 	s.AddRoute(APICreateDataToken, "POST", s.AuthHandle(s.APICreateDataToken, s.ErrorFunc))
 	s.AddRoute(APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, s.ErrorFunc))
+	s.AddRoute(APICheckDataToken, "POST", s.AuthHandle(s.APICheckDataToken, s.ErrorFunc))
 	s.AddRoute(APISetupDB, "POST", s.AuthHandle(s.APISetupDB, s.ErrorFunc))
 
 }

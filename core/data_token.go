@@ -18,13 +18,14 @@ import (
 )
 
 const (
-	DTUserIDField      string = "UserID"
-	DTUserInfoField    string = "UserInfo"
-	DTFileInfoField    string = "FileInfo"
-	DTFileHashField    string = "FileHash"
-	DTFileURLField     string = "FileURL"
-	DTCommiterDIDField string = "CommitterDID"
-	DTBatchIDField     string = "BatchID"
+	DTUserIDField        string = "UserID"
+	DTUserInfoField      string = "UserInfo"
+	DTFileInfoField      string = "FileInfo"
+	DTFileHashField      string = "FileHash"
+	DTFileURLField       string = "FileURL"
+	DTFileTransInfoField string = "FileTransInfo"
+	DTCommiterDIDField   string = "CommitterDID"
+	DTBatchIDField       string = "BatchID"
 )
 
 type DataTokenReq struct {
@@ -60,7 +61,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		TotalSupply: 1,
 		CreatorID:   userID[0],
 	}
-	userInfo, ok := dr.Fields[DTUserIDField]
+	userInfo, ok := dr.Fields[DTUserInfoField]
 	if ok {
 		rt.CreatorInput = userInfo[0]
 	}
@@ -97,6 +98,13 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 					rt.ContentURL = make(map[string]string)
 				}
 				rt.ContentURL[k] = cu
+			}
+			ti, ok := v[DTFileTransInfoField]
+			if ok {
+				if rt.TransInfo == nil {
+					rt.TransInfo = make(map[string]string)
+				}
+				rt.TransInfo[k] = ti
 			}
 		}
 	}
@@ -310,4 +318,34 @@ func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.
 	br.Status = true
 	br.Message = "Data committed successfully"
 	return br
+}
+
+func (c *Core) CheckDataToken(dt string) bool {
+	err := c.ipfs.Get(dt, c.cfg.DirPath)
+	if err != nil {
+		c.log.Error("failed to get the data token")
+		return false
+	}
+	rb, err := ioutil.ReadFile(c.cfg.DirPath + dt)
+	if err != nil {
+		c.log.Error("failed to read the data token file")
+		return false
+	}
+	b, err := rac.InitRacBlock(rb, nil)
+	if err != nil {
+		c.log.Error("failed to read the data token file")
+		return false
+	}
+	did := b.GetDID()
+	dc, err := c.SetupForienDID(did)
+	if err != nil {
+		c.log.Error("failed to setup did crypto")
+		return false
+	}
+	err = b.VerifySignature(dc)
+	if err != nil {
+		c.log.Error("failed to verify did signature", "err", err)
+		return false
+	}
+	return true
 }

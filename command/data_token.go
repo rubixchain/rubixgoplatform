@@ -59,7 +59,7 @@ func (cmd *Command) createDataToken() {
 }
 
 func (cmd *Command) commitDataToken() {
-	br, err := cmd.c.CommitDataToken(cmd.did)
+	br, err := cmd.c.CommitDataToken(cmd.did, cmd.batchID)
 	if err != nil {
 		cmd.log.Error("Failed to commit data token", "err", err)
 		return

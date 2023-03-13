@@ -165,6 +165,7 @@ type Command struct {
 	token        string
 	arbitaryMode bool
 	tokenList    string
+	batchID      string
 	fileMode     bool
 	file         string
 	userID       string
@@ -315,6 +316,7 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.arbitaryMode, "arbitaryMode", false, "Enable arbitary mode")
 	flag.StringVar(&cmd.tokenList, "tokenList", "tokens.txt", "Token lis")
 	flag.StringVar(&cmd.token, "token", "", "Token name")
+	flag.StringVar(&cmd.batchID, "bid", "batchID1", "Batch ID")
 	flag.BoolVar(&cmd.fileMode, "fmode", false, "File mode")
 	flag.StringVar(&cmd.file, "file", "file.txt", "File to be uploaded")
 	flag.StringVar(&cmd.userID, "uid", "testuser", "User ID for token creation")

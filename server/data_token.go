@@ -43,3 +43,15 @@ func (s *Server) APICommitDataToken(req *ensweb.Request) *ensweb.Result {
 	go s.c.CommitDataToken(req.ID, did, batchID)
 	return s.didResponse(req, req.ID)
 }
+
+func (s *Server) APICheckDataToken(req *ensweb.Request) *ensweb.Result {
+	dt := s.GetQuerry(req, "data_token")
+	if dt == "" {
+		s.BasicResponse(req, false, "Data token required", nil)
+	}
+	ok := s.c.CheckDataToken(dt)
+	if !ok {
+		s.BasicResponse(req, false, "Data token is invalid", nil)
+	}
+	return s.BasicResponse(req, true, "Data token is valid", nil)
+}

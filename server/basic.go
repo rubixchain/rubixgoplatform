@@ -80,6 +80,16 @@ func (s *Server) APIShutdown(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "Shutting down...", nil)
 }
 
+// APIStart will setup the core
+func (s *Server) APINodeStatus(req *ensweb.Request) *ensweb.Result {
+	ok := s.c.NodeStatus()
+	if ok {
+		return s.BasicResponse(req, true, "Node is up and running", nil)
+	} else {
+		return s.BasicResponse(req, false, "Node is down, please check logs", nil)
+	}
+}
+
 func (s *Server) shutDown() {
 	s.log.Info("Shutting down...")
 	time.Sleep(2 * time.Second)
