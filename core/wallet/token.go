@@ -70,6 +70,17 @@ func (w *Wallet) GetAllWholeTokens(did string) ([]Token, error) {
 	return t, nil
 }
 
+func (w *Wallet) GetAllPledgedTokens(did string) ([]Token, error) {
+	var t []Token
+	const tokenStatus = 2
+	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=?", did, tokenStatus)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
+
 func (w *Wallet) GetWholeTokens(did string, num int) ([]Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
