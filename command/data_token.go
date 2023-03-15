@@ -15,7 +15,7 @@ func (cmd *Command) createDataToken() {
 	dt := client.DataTokenReq{
 		DID:      cmd.did,
 		UserID:   cmd.userID,
-		UserInfo: cmd.userID,
+		UserInfo: cmd.userInfo,
 	}
 
 	if cmd.fileMode {
