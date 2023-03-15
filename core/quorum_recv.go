@@ -458,6 +458,9 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update token chain block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	for _, t := range ur.PledgedTokens {
+		c.up.AddUnPledge(t)
+	}
 	crep.Status = true
 	crep.Message = "Token pledge status updated"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
