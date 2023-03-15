@@ -41,6 +41,7 @@ const (
 	TokenMigratedType    string = "03"
 	TokenPledgedType     string = "04"
 	TokenGeneratedType   string = "05"
+	TokenUnpledgedType   string = "06"
 )
 
 type TokenChainBlock struct {
@@ -476,6 +477,10 @@ func (b *Block) GetTransTokens() []string {
 
 func (b *Block) GetTransType() string {
 	return b.getBlkString(TCTransTypeKey)
+}
+
+func (b *Block) GetOwner() string {
+	return b.getBlkString(TCTokenOwnerKey)
 }
 
 func (b *Block) GetSenderDID() string {

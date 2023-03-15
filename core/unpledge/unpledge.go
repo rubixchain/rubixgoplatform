@@ -1,93 +1,101 @@
 package unpledge
 
 import (
-	"bufio"
 	"crypto/sha256"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io/ioutil"
-	"math/rand"
-	"net/http"
 	"os"
-	"strconv"
+	"sync"
 	"time"
 
 	"github.com/EnsurityTechnologies/logger"
+	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/token"
 
 	"golang.org/x/crypto/sha3"
 )
 
+const (
+	RecordInterval int = 1000
+	Difficultlevel int = 6
+)
+
+const (
+	UnpledgeQueueTable string = "unpledgequeue"
+)
+
 type UnPledge struct {
-	log logger.Logger
+	s       storage.Storage
+	testNet bool
+	w       *wallet.Wallet
+	l       sync.Mutex
+	running bool
+	dir     string
+	cb      UnpledgeCBType
+	log     logger.Logger
 }
 
-func (un *UnPledge) GetPledgedTokenID(did string) ([]string, error) {
-	w := wallet.Wallet{}
-	var tokenIDs []string
-	pledgedTokens, err := w.GetAllPledgedTokens(did)
+type UnpledgeTokenList struct {
+	Token string `gorm:"column:token"`
+}
+
+type UnpledgeCBType func(t string, file string) error
+
+func InitUnPledge(s storage.Storage, w *wallet.Wallet, testNet bool, dir string, cb UnpledgeCBType, log logger.Logger) (*UnPledge, error) {
+	up := &UnPledge{
+		s:       s,
+		testNet: testNet,
+		w:       w,
+		dir:     dir,
+		cb:      cb,
+		log:     log.Named("unpledge"),
+	}
+	err := up.s.Init(UnpledgeQueueTable, UnpledgeTokenList{}, true)
 	if err != nil {
+		up.log.Error("failed to init unpledge token list table", "err", err)
 		return nil, err
 	}
-	for _, token := range pledgedTokens {
-		tokenIDs = append(tokenIDs, token.TokenID)
+	var list []UnpledgeTokenList
+	err = up.s.Read(UnpledgeQueueTable, &list, "token != ?", "")
+	if err != nil {
+		tks, err := up.w.GetAllPledgedTokens()
+		if err == nil {
+			list = make([]UnpledgeTokenList, 0)
+			for i := range tks {
+				l := UnpledgeTokenList{
+					Token: tks[i].TokenID,
+				}
+				list = append(list, l)
+			}
+			for i := range list {
+				err = up.s.Write(UnpledgeQueueTable, &list[i])
+				if err != nil {
+					up.log.Error("Failed to write unpledge list", "err", err)
+					return nil, err
+				}
+			}
+		}
 	}
-	return tokenIDs, nil
+	go up.runUnpledge()
+	return up, nil
 }
 
-func (un *UnPledge) GetLastBlockReceiverDID(TokenID string) (string, error) {
-	w := wallet.Wallet{}
-	lastBlock := w.GetLatestTokenBlock(TokenID)
-	if lastBlock == nil {
-		un.log.Error("latest block for token %s not found", TokenID)
-		return "", nil
-	}
-	ReceiverDID := lastBlock.GetReceiverDID()
-	return ReceiverDID, nil
-}
-
-func (un *UnPledge) GetLastBlockTransactionID(TokenID string) (string, error) {
-	w := wallet.Wallet{}
-	lastBlock := w.GetLatestTokenBlock(TokenID)
-	if lastBlock == nil {
-		un.log.Error("latest block for token %s not found", TokenID)
-		return "", nil
-	}
-	TransactionID := lastBlock.GetTid()
-	return TransactionID, nil
-}
-
-func (un *UnPledge) Concat(TokenID string, ReceiverDID string) (string, error) {
-	if TokenID == "" {
-		err := errors.New("TokenID cannot be empty")
-		un.log.Error(err.Error())
-		return "", err
-	}
-	if ReceiverDID == "" {
-		err := errors.New("ReceiverDID cannot be empty")
-		un.log.Error(err.Error())
-		return "", err
-	}
-	valueConcated := TokenID + ReceiverDID
-	return valueConcated, nil
-}
-
-func (un *UnPledge) CalcSHA_256Hash(input string) string {
+func sha2Hash256(input string) string {
 	hash := sha256.Sum256([]byte(input))
 	hashedInput := fmt.Sprintf("%x", hash)
 	return hashedInput
 }
 
-func (un *UnPledge) CalcSHA_3_256Hash(input string) string {
+func sha3Hash256(input string) string {
 	hash := sha3.Sum256([]byte(input))
 	hashedInput := fmt.Sprintf("%x", hash)
 	return hashedInput
 }
 
-func (un *UnPledge) CalcSHA3_256Hash1000Times(input string) string {
+func sha3Hash256Loop(input string) string {
 	var hashedInput string
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < RecordInterval; i++ {
 		hash := sha3.Sum256([]byte(input))
 		hashedInput = fmt.Sprintf("%x", hash)
 		input = hashedInput
@@ -95,211 +103,216 @@ func (un *UnPledge) CalcSHA3_256Hash1000Times(input string) string {
 	return hashedInput
 }
 
-func (un *UnPledge) getCurrentLevel() int {
-	url := "http://13.76.134.226:9090/getCurrentLevel"
-	resp, err := http.Get(url)
-	if err != nil {
-		un.log.Error("Error:", err)
-		return -1
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		un.log.Error("Error:", err)
-		return -1
-	}
-
-	var data map[string]interface{}
-	err = json.Unmarshal(body, &data)
-	if err != nil {
-		un.log.Error("Error:", err)
-		return -1
-	}
-
-	level := int(data["level"].(float64))
-	un.log.Debug("Level:", level)
-	return level
-}
-func (un *UnPledge) Difficultlevel() int {
-	cl := un.getCurrentLevel()
-	return DiffLevel[cl]
-}
-func (un *UnPledge) saveProofToFile(proof []string, filePath string) error {
-	file, err := os.Create(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	writer := bufio.NewWriter(file)
-
-	for _, line := range proof {
-		_, err := writer.WriteString(line + "\n")
-		if err != nil {
-			return err
-		}
-	}
-
-	err = writer.Flush()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-func (un *UnPledge) proofcreation(did string) ([]string, error) {
-	var proof []string
-	tokenIDs, err := un.GetPledgedTokenID(did)
-	if err != nil {
-		un.log.Error("Error fetching Pledged Tokens ")
-	}
-	for i := range tokenIDs {
-		TokenID := tokenIDs[i]
-		ReceiverDID, err := un.GetLastBlockReceiverDID(TokenID)
-
-		if err != nil {
-			un.log.Error("Unable to fetch Receiver DID from last block")
-			continue
-		}
-
-		TransactionID, err := un.GetLastBlockTransactionID(TokenID)
-		if err != nil {
-			un.log.Error("Unable to fetch Transaction ID from last block")
-			continue
-		}
-
-		ValueToBeHashed, err := un.Concat(TokenID, ReceiverDID)
-		if err != nil {
-			un.log.Error("Unable Concat Receiver DID and Token ID")
-		}
-
-		dl := un.Difficultlevel()
-
-		proof = append(proof, strconv.Itoa(dl))
-
-		ValueHashed := un.CalcSHA_256Hash(ValueToBeHashed)
-		proof = append(proof, ValueHashed)
-
-		SuffixTransactionID := TransactionID[len(TransactionID)-dl:]
-
-		count := 1
-
-		for {
-
-			targetHash := un.CalcSHA_3_256Hash(ValueHashed)
-
-			if count%1000 == 0 {
-				proof = append(proof, targetHash)
-			}
-
-			SuffixTarget := targetHash[len(ValueHashed)-dl:]
-
-			if SuffixTarget == SuffixTransactionID {
-				proof = append(proof, targetHash)
-
-				un.log.Debug("Hashing completed at ", count)
-
-				un.log.Debug("Proof hash is ", targetHash, " Transaction ID is ", TransactionID)
-
-				break
-			}
-
-			count++
-			ValueHashed = targetHash
-		}
-
-		pf := un.saveProofToFile(proof, tokenIDs[i]+".proof")
-		if pf != nil {
-			un.log.Error("Unable to save proof.json")
-		}
-	}
-	return proof, nil
+func (up *UnPledge) isRunning() bool {
+	up.l.Lock()
+	s := up.running
+	up.l.Unlock()
+	return s
 }
 
-func (un *UnPledge) proofverification(tokenID string, proof []string) error {
+func (up *UnPledge) AddUnPledge(t string) {
+	var list UnpledgeTokenList
+	err := up.s.Read(UnpledgeQueueTable, &list, "token = ?", t)
+	if err == nil {
+		up.log.Error("Token already in the unpledge list")
+		return
+	}
+	list.Token = t
+	err = up.s.Write(UnpledgeQueueTable, &list)
+	if err != nil {
+		up.log.Error("Error adding token "+t+" to unpledge list", "err", err)
+		return
+	}
+	up.runUnpledge()
+}
 
+func (up *UnPledge) runUnpledge() {
+	up.l.Lock()
+	if up.running {
+		up.l.Unlock()
+		return
+	}
+	up.log.Info("Unpledging started")
+	up.running = true
+	up.l.Unlock()
+	defer func() {
+		up.l.Lock()
+		up.running = false
+		up.l.Unlock()
+	}()
 	for {
-		TokenID := tokenID
-		ReceiverDID, err := un.GetLastBlockReceiverDID(TokenID)
+		var list UnpledgeTokenList
+		err := up.s.Read(UnpledgeQueueTable, &list, "token != ?", "")
 		if err != nil {
-			un.log.Error("Unable to fetch Receiver DID from last block")
+			up.log.Info("All tokens are unplegded")
 			break
 		}
-		TransactionID, err := un.GetLastBlockTransactionID(TokenID)
+		st := time.Now()
+		t := list.Token
+		tt := token.RBTTokenType
+		if up.testNet {
+			tt = token.TestTokenType
+		}
+		b := up.w.GetLatestTokenBlock(t, tt)
+		if b == nil {
+			up.log.Error("Failed to get the latest token block, removing the token from the unpledge list")
+			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+			continue
+		}
+		bid, err := b.GetBlockID(t)
 		if err != nil {
-			un.log.Error("Unable to fetch Transaction ID from last block")
+			up.log.Error("Failed to get the block id, removing the token from the unpledge list")
+			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+			continue
 		}
+		if b.GetTransType() != block.TokenPledgedType {
+			up.log.Error("Token is not in pledged state, removing the token from the unpledge list")
+			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+			continue
+		}
+		blk := b.GetTransBlock()
+		if blk == nil {
+			up.log.Error("Token block missing transaction block, removing the token from the unpledge list")
+			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+			continue
+		}
+		nb := block.InitBlock(blk, nil)
+		if nb == nil {
+			up.log.Error("Invalid transaction block, removing the token from the unpledge list")
+			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+			continue
+		}
+		tid := nb.GetTid()
+		rdid := nb.GetReceiverDID()
 
-		ValueToBeHashed, err := un.Concat(TokenID, ReceiverDID)
+		hash := sha2Hash256(t + rdid + bid)
+		fileName := up.dir + t + ".proof"
+		f, err := os.Create(fileName)
 		if err != nil {
-			un.log.Error("Unable to verify proof")
-			break
+			up.log.Error("Failed to create file, removing the token from the unpledge list")
+			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+			continue
 		}
 
-		valueHashed := un.CalcSHA_256Hash(ValueToBeHashed)
-		if proof[0] == "" {
-			un.log.Error("Unable to verify proof")
-			break
-		}
-		dl := un.Difficultlevel()
-		if proof[0] != strconv.Itoa(dl) {
-			un.log.Error("Unable to verify proof")
-			break
-		}
-
-		if proof[1] != valueHashed {
-			un.log.Error("Unable to verify proof")
-			break
-		}
-
-		proofToVerify := proof[1:] // Exculding firstline (Difficuilty level)
-		lenProof := len(proof)
-		lenProoftoVerify := len(proofToVerify)
-		l := lenProoftoVerify / 2
-
-		firstHalf := proof[1 : l-1]
-		secondHalf := proof[l+1 : lenProoftoVerify-1]
-
-		rand.Seed(time.Now().UnixNano())
-
-		randIndexInFH := rand.Intn(len(firstHalf) - 1)
-		randIndexInSH := rand.Intn(len(secondHalf) - 1)
-
-		RandomHashInFH := firstHalf[randIndexInFH]
-		RandomHashInSH := secondHalf[randIndexInSH]
-
-		TargetHashInFH := firstHalf[randIndexInFH+1]
-		TargetHashInSH := secondHalf[randIndexInSH+1]
-
-		if un.CalcSHA3_256Hash1000Times(RandomHashInFH) != TargetHashInFH || un.CalcSHA3_256Hash1000Times(RandomHashInSH) != TargetHashInSH {
-			un.log.Error("Unable to verify proof")
-			break
-		}
-		var c int
-		counter := 0
-		target := proof[lenProof-3]
-
-		SuffixLasthash := TransactionID[len(TransactionID)-dl:]
-
+		// ::TODO:: need to update
+		dl := Difficultlevel
+		targetHash := tid[len(tid)-dl:]
+		f.WriteString(fmt.Sprintf("%d\n", dl))
+		f.WriteString(hash + "\n")
+		count := 1
 		for {
-			targetHash := un.CalcSHA_3_256Hash(target)
-			SuffixTarget := targetHash[len(targetHash)-dl:]
-
-			if SuffixTarget == SuffixLasthash {
-				c = counter
+			hash = sha3Hash256(hash)
+			if targetHash == hash[len(hash)-dl:] {
+				f.WriteString(hash + "\n")
 				break
 			}
-			counter++
-			target = targetHash
+			if count%1000 == 0 {
+				f.WriteString(hash + "\n")
+			}
+			count++
 		}
-		if c > 1000 {
-			un.log.Error("Unable to verify proof")
-			break
-		} else {
-			un.log.Debug("Proof Verified")
+		f.Close()
+		if up.cb == nil {
+			up.log.Error("Callback function not set, removing the token from the unpledge list")
+			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+			continue
 		}
-		break
+		err = up.cb(t, fileName)
+		if err != nil {
+			up.log.Error("Error in unpledge alback, removing the token from the unpledge list", "err", err)
+			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+			continue
+		}
+		et := time.Now()
+		df := et.Sub(st)
+		up.log.Info("Unpledging completed for the token " + t + " in " + df.String())
+		up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
 	}
-	return nil
 }
+
+// func (un *UnPledge) proofverification(tokenID string, proof []string) error {
+
+// 	for {
+// 		TokenID := tokenID
+// 		ReceiverDID, err := un.GetLastBlockReceiverDID(TokenID)
+// 		if err != nil {
+// 			un.log.Error("Unable to fetch Receiver DID from last block")
+// 			break
+// 		}
+// 		TransactionID, err := un.GetLastBlockTransactionID(TokenID)
+// 		if err != nil {
+// 			un.log.Error("Unable to fetch Transaction ID from last block")
+// 		}
+
+// 		ValueToBeHashed, err := un.Concat(TokenID, ReceiverDID)
+// 		if err != nil {
+// 			un.log.Error("Unable to verify proof")
+// 			break
+// 		}
+
+// 		valueHashed := un.CalcSHA_256Hash(ValueToBeHashed)
+// 		if proof[0] == "" {
+// 			un.log.Error("Unable to verify proof")
+// 			break
+// 		}
+// 		dl := un.Difficultlevel()
+// 		if proof[0] != strconv.Itoa(dl) {
+// 			un.log.Error("Unable to verify proof")
+// 			break
+// 		}
+
+// 		if proof[1] != valueHashed {
+// 			un.log.Error("Unable to verify proof")
+// 			break
+// 		}
+
+// 		proofToVerify := proof[1:] // Exculding firstline (Difficuilty level)
+// 		lenProof := len(proof)
+// 		lenProoftoVerify := len(proofToVerify)
+// 		l := lenProoftoVerify / 2
+
+// 		firstHalf := proof[1 : l-1]
+// 		secondHalf := proof[l+1 : lenProoftoVerify-1]
+
+// 		rand.Seed(time.Now().UnixNano())
+
+// 		randIndexInFH := rand.Intn(len(firstHalf) - 1)
+// 		randIndexInSH := rand.Intn(len(secondHalf) - 1)
+
+// 		RandomHashInFH := firstHalf[randIndexInFH]
+// 		RandomHashInSH := secondHalf[randIndexInSH]
+
+// 		TargetHashInFH := firstHalf[randIndexInFH+1]
+// 		TargetHashInSH := secondHalf[randIndexInSH+1]
+
+// 		if un.CalcSHA3_256Hash1000Times(RandomHashInFH) != TargetHashInFH || un.CalcSHA3_256Hash1000Times(RandomHashInSH) != TargetHashInSH {
+// 			un.log.Error("Unable to verify proof")
+// 			break
+// 		}
+// 		var c int
+// 		counter := 0
+// 		target := proof[lenProof-3]
+
+// 		SuffixLasthash := TransactionID[len(TransactionID)-dl:]
+
+// 		for {
+// 			targetHash := un.CalcSHA_3_256Hash(target)
+// 			SuffixTarget := targetHash[len(targetHash)-dl:]
+
+// 			if SuffixTarget == SuffixLasthash {
+// 				c = counter
+// 				break
+// 			}
+// 			counter++
+// 			target = targetHash
+// 		}
+// 		if c > 1000 {
+// 			un.log.Error("Unable to verify proof")
+// 			break
+// 		} else {
+// 			un.log.Debug("Proof Verified")
+// 		}
+// 		break
+// 	}
+// 	return nil
+// }

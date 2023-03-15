@@ -654,6 +654,19 @@ func GetInt(si interface{}) int {
 	return tl
 }
 
+func GetBytes(si interface{}) []byte {
+	switch s := si.(type) {
+	case []byte:
+		return s
+	case interface{}:
+		st, ok := s.([]byte)
+		if ok {
+			return st
+		}
+	}
+	return nil
+}
+
 func GetString(si interface{}) string {
 	switch s := si.(type) {
 	case string:

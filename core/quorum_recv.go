@@ -171,8 +171,10 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	}
 	switch cr.Mode {
 	case RBTTransferMode:
+		c.log.Debug("RBT Consensus started")
 		return c.quorumRBTConsensus(req, did, qdc, &cr)
 	case DTCommitMode:
+		c.log.Debug("Data Consensus started")
 		return c.quorumDTConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
@@ -188,6 +190,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	crep := model.BasicResponse{
 		Status: false,
 	}
+	c.log.Debug("Request for pledge")
 	if err != nil {
 		c.log.Error("Failed to parse json request", "err", err)
 		crep.Message = "Failed to parse json request"

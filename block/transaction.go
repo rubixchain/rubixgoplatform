@@ -22,6 +22,7 @@ import (
 //   "3" : PledgedDID      : string
 //   "4" : BlockNumber     : string
 //   "5" : PreviousBlockID : string
+//   "6" : UnpledgedID     : string
 // }
 
 const (
@@ -39,6 +40,7 @@ const (
 	TTPledgedDIDKey      string = "3"
 	TTBlockNumberKey     string = "4"
 	TTPreviousBlockIDKey string = "5"
+	TTUnpledgedIDKey     string = "6"
 )
 
 type TransTokens struct {
@@ -46,6 +48,7 @@ type TransTokens struct {
 	TokenType    int    `json:"tokenType"`
 	PledgedToken string `json:"pledgedToken"`
 	PledgedDID   string `json:"pledgedDID"`
+	UnplededID   string `json:"unpledgedID"`
 }
 
 type TransInfo struct {
@@ -68,6 +71,9 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 	}
 	if tt.PledgedDID != "" {
 		nttb[TTPledgedDIDKey] = tt.PledgedDID
+	}
+	if tt.UnplededID != "" {
+		nttb[TTUnpledgedIDKey] = tt.UnplededID
 	}
 	if b == nil {
 		nttb[TTBlockNumberKey] = "0"
@@ -128,4 +134,13 @@ func (b *Block) getTrasnInfoString(key string) string {
 	}
 	si := util.GetFromMap(tim, key)
 	return util.GetString(si)
+}
+
+func (b *Block) GetTransBlock() []byte {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return nil
+	}
+	si := util.GetFromMap(tim, TIBlockKey)
+	return util.GetBytes(si)
 }
