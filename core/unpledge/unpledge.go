@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	RecordInterval int = 1000
+	RecordInterval int = 5000
 	Difficultlevel int = 6
 )
 
@@ -77,8 +77,12 @@ func InitUnPledge(s storage.Storage, w *wallet.Wallet, testNet bool, dir string,
 			}
 		}
 	}
-	go up.runUnpledge()
+	//go up.runUnpledge()
 	return up, nil
+}
+
+func (up *UnPledge) RunUnpledge() {
+	go up.runUnpledge()
 }
 
 func sha2Hash256(input string) string {
@@ -206,7 +210,7 @@ func (up *UnPledge) runUnpledge() {
 				f.WriteString(hash + "\n")
 				break
 			}
-			if count%1000 == 0 {
+			if count%RecordInterval == 0 {
 				f.WriteString(hash + "\n")
 			}
 			count++

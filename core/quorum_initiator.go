@@ -157,6 +157,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string) error {
 		return fmt.Errorf("failed to setup quorum")
 	}
 	c.qc[didStr] = dc
+	c.up.RunUnpledge()
 	return nil
 }
 
