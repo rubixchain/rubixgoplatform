@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -46,6 +47,7 @@ func (c *Core) CreateDataToken(reqID string, dr *DataTokenReq) {
 }
 
 func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicResponse {
+	defer os.RemoveAll(dr.FolderName)
 	br := model.BasicResponse{
 		Status: false,
 	}
