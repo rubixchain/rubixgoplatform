@@ -26,9 +26,12 @@ func (c *Core) Unpledge(t string, file string) error {
 	}
 	id, err := c.ipfs.Add(f)
 	if err != nil {
+		f.Close()
 		c.log.Error("Failed to add file to ipfs", "err", err)
 		return err
 	}
+	f.Close()
+	os.Remove(file)
 	ctcb := make(map[string]*block.Block)
 	tsb := make([]block.TransTokens, 0)
 
