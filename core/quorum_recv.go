@@ -458,20 +458,12 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update token chain block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-
-	defer c.initiateUnpledge(ur.PledgedTokens)
-
+	for _, t := range ur.PledgedTokens {
+		c.up.AddUnPledge(t)
+	}
 	crep.Status = true
 	crep.Message = "Token pledge status updated"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
-}
-
-func (c *Core) initiateUnpledge(tokenList []string) {
-	c.log.Debug("Initiating Unpledging")
-	for _, t := range tokenList {
-		c.up.AddUnPledge(t)
-	}
-	c.log.Debug("Finished Unpledging")
 }
 
 func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
