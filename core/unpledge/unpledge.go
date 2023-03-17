@@ -127,7 +127,7 @@ func (up *UnPledge) AddUnPledge(t string) {
 		up.log.Error("Error adding token "+t+" to unpledge list", "err", err)
 		return
 	}
-	up.runUnpledge()
+	go up.runUnpledge()
 }
 
 func (up *UnPledge) runUnpledge() {
