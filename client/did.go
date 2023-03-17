@@ -108,18 +108,18 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 	if cfg.PubKeyFile != "" {
 		files["pub_key"] = cfg.PubKeyFile
 	}
-	var response model.BasicResponse
-	err = c.sendMutiFormRequest("POST", server.APICreateDID, nil, fields, files, &response)
+	var dr model.DIDResponse
+	err = c.sendMutiFormRequest("POST", server.APICreateDID, nil, fields, files, &dr)
 	if err != nil {
 		c.log.Error("Invalid response from the node", "err", err)
 		return "Invalid response from the node, " + err.Error(), false
 	}
-	if !response.Status {
-		c.log.Error("Failed to create DID", "message", response.Message)
-		return "Failed to create DID, " + response.Message, false
+	if !dr.Status {
+		c.log.Error("Failed to create DID", "message", dr.Message)
+		return "Failed to create DID, " + dr.Message, false
 	}
 	c.log.Info("DID Created successfully")
-	return "DID Created successfully", true
+	return dr.Result.DID, true
 }
 
 func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {

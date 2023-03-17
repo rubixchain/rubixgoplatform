@@ -476,6 +476,8 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 		return did.InitDIDStandard(didStr, c.didDir, dc), nil
 	case did.WalletDIDMode:
 		return did.InitDIDWallet(didStr, c.didDir, dc), nil
+	case did.ChildDIDMode:
+		return did.InitDIDChild(didStr, c.didDir, dc), nil
 	default:
 		return nil, fmt.Errorf("DID Type is not supported")
 	}
