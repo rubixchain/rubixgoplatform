@@ -82,6 +82,11 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 			cfg.PubKeyFile = did.PubKeyFileName
 		}
 		cfg.ImgFile = ""
+	case did.ChildDIDMode:
+		cfg.ImgFile = ""
+		cfg.DIDImgFileName = ""
+		cfg.PubImgFile = ""
+		cfg.PubKeyFile = ""
 	}
 	jd, err := json.Marshal(&cfg)
 	if err != nil {

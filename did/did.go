@@ -147,7 +147,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			return "", err
 		}
 	}
-	if didCreate.Type == BasicDIDMode {
+	if didCreate.Type == BasicDIDMode || didCreate.Type == ChildDIDMode {
 		if didCreate.PrivPWD == "" {
 			d.log.Error("password required for creating", "err", err)
 			return "", err
@@ -173,26 +173,36 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		}
 	}
 
-	if didCreate.QuorumPWD == "" {
-		if didCreate.PrivPWD != "" {
-			didCreate.QuorumPWD = didCreate.PrivPWD
-		} else {
-			didCreate.QuorumPWD = DefaultPWD
+	if didCreate.Type == ChildDIDMode {
+		if didCreate.MasterDID == "" {
+			return "", fmt.Errorf("master did is missing")
 		}
-	}
+		err = util.FileWrite(dirName+"/public/"+MasterDIDFileName, []byte(didCreate.MasterDID))
+		if err != nil {
+			return "", err
+		}
+	} else {
+		if didCreate.QuorumPWD == "" {
+			if didCreate.PrivPWD != "" {
+				didCreate.QuorumPWD = didCreate.PrivPWD
+			} else {
+				didCreate.QuorumPWD = DefaultPWD
+			}
+		}
 
-	pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.QuorumPWD})
-	if err != nil {
-		d.log.Error("failed to create keypair", "err", err)
-		return "", err
-	}
-	err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
-	if err != nil {
-		return "", err
-	}
-	err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
-	if err != nil {
-		return "", err
+		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.QuorumPWD})
+		if err != nil {
+			d.log.Error("failed to create keypair", "err", err)
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
+		if err != nil {
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	did, err := d.getDirHash(dirName + "/public/")
@@ -222,7 +232,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	os.RemoveAll(dirName)
 	t2 := time.Now()
 	dif := t2.Sub(t1)
-	fmt.Printf("DID : %s, Time to create DID & Keys : %v", did, dif)
+	d.log.Info(fmt.Sprintf("DID : %s, Time to create DID & Keys : %v", did, dif))
 	return did, nil
 }
 

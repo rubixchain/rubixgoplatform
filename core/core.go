@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"sync"
@@ -23,6 +24,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/unpledge"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	didm "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -504,6 +506,17 @@ func (c *Core) FetchDID(did string) error {
 			return err
 		}
 		err = c.ipfs.Get(did, c.didDir+did+"/")
+		if err == nil {
+			_, e := os.Stat(c.didDir + did + "/" + didm.MasterDIDFileName)
+			// Fetch the master DID also
+			if e == nil {
+				var rb []byte
+				rb, err = ioutil.ReadFile(c.didDir + did + "/" + didm.MasterDIDFileName)
+				if err == nil {
+					return c.FetchDID(string(rb))
+				}
+			}
+		}
 	}
 	return err
 }

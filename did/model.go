@@ -4,11 +4,13 @@ const (
 	BasicDIDMode int = iota
 	StandardDIDMode
 	WalletDIDMode
+	ChildDIDMode
 )
 
 const (
 	ImgFileName          string = "image.png"
 	DIDImgFileName       string = "did.png"
+	MasterDIDFileName    string = "master.txt"
 	PvtShareFileName     string = "pvtShare.png"
 	PubShareFileName     string = "pubShare.png"
 	PvtKeyFileName       string = "pvtKey.pem"
@@ -25,6 +27,7 @@ type DIDCreate struct {
 	Type              int    `json:"type"`
 	Dir               string `json:"dir"`
 	Config            string `json:"config"`
+	MasterDID         string `json:"master_did"`
 	Secret            string `json:"secret"`
 	PrivPWD           string `json:"priv_pwd"`
 	QuorumPWD         string `json:"quorum_pwd"`
