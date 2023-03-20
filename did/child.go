@@ -11,24 +11,25 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// DIDBasic will handle basic DID
-type DIDBasic struct {
-	did string
-	dir string
-	ch  *DIDChan
-	pwd string
+// DIDChild will handle basic DID
+type DIDChild struct {
+	did     string
+	baseDir string
+	dir     string
+	ch      *DIDChan
+	pwd     string
 }
 
-// InitDIDBasic will return the basic did handle
-func InitDIDBasic(did string, baseDir string, ch *DIDChan) *DIDBasic {
-	return &DIDBasic{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
+// InitDIDChild will return the basic did handle
+func InitDIDChild(did string, baseDir string, ch *DIDChan) *DIDChild {
+	return &DIDChild{did: did, baseDir: util.SanitizeDirPath(baseDir), dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
 }
 
-func InitDIDBasicWithPassword(did string, baseDir string, pwd string) *DIDBasic {
-	return &DIDBasic{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
+func InitDIDChildWithPassword(did string, baseDir string, pwd string) *DIDChild {
+	return &DIDChild{did: did, baseDir: util.SanitizeDirPath(baseDir), dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 }
 
-func (d *DIDBasic) getPassword() (string, error) {
+func (d *DIDChild) getPassword() (string, error) {
 	if d.pwd != "" {
 		return d.pwd, nil
 	}
@@ -59,16 +60,21 @@ func (d *DIDBasic) getPassword() (string, error) {
 	return d.pwd, nil
 }
 
-func (d *DIDBasic) GetDID() string {
+func (d *DIDChild) GetDID() string {
 	return d.did
 }
 
 // Sign will return the singature of the DID
-func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
-	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
+func (d *DIDChild) Sign(hash string) ([]byte, []byte, error) {
+
+	rb, err := ioutil.ReadFile(d.dir + MasterDIDFileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	mdid := string(rb)
+	byteImg, err := util.GetPNGImagePixels(d.baseDir + mdid + "/" + PvtShareFileName)
 
 	if err != nil {
-		fmt.Println(err)
 		return nil, nil, err
 	}
 
@@ -107,13 +113,18 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // Sign will verifyt he signature
-func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
-	// read senderDID
-	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
+func (d *DIDChild) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+	rb, err := ioutil.ReadFile(d.dir + MasterDIDFileName)
 	if err != nil {
 		return false, err
 	}
-	pubImg, err := util.GetPNGImagePixels(d.dir + PubShareFileName)
+	mdid := string(rb)
+
+	didImg, err := util.GetPNGImagePixels(d.baseDir + mdid + "/" + DIDImgFileName)
+	if err != nil {
+		return false, err
+	}
+	pubImg, err := util.GetPNGImagePixels(d.baseDir + mdid + "/" + PubShareFileName)
 
 	if err != nil {
 		return false, err
@@ -159,7 +170,7 @@ func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bo
 	return true, nil
 }
 
-func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
+func (d *DIDChild) PvtSign(hash []byte) ([]byte, error) {
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
 		return nil, err
@@ -178,7 +189,7 @@ func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
 	}
 	return pvtKeySign, nil
 }
-func (d *DIDBasic) PvtVerify(hash []byte, sign []byte) (bool, error) {
+func (d *DIDChild) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return false, err

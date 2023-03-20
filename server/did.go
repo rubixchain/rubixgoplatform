@@ -66,11 +66,15 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to create did", "err", err)
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	didResp := DIDResponse{
-		DID:    did,
-		PeerID: s.c.GetPeerID(),
+	didResp := model.DIDResponse{
+		Status:  true,
+		Message: "DID created successfully",
+		Result: model.DIDResult{
+			DID:    did,
+			PeerID: s.c.GetPeerID(),
+		},
 	}
-	return s.BasicResponse(req, true, "DID created successfully", &didResp)
+	return s.RenderJSON(req, &didResp, http.StatusOK)
 }
 
 // APIGetAllDID will get all DID
