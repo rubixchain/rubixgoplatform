@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -12,13 +13,17 @@ import (
 )
 
 const (
+	DefaultKeyLength int = 131
+)
+
+const (
 	TokenStatusStorage string = "TokenStatus"
 )
 
 const (
 	WholeTokenType string = "wt"
 	PartTokenType  string = "pt"
-	NFTType        string = "nft"
+	NFTType        string = "nt"
 	TestTokenType  string = "tt"
 	DataTokenType  string = "dt"
 	ReferenceType  string = "rf"
@@ -61,6 +66,47 @@ func tcsPrefix(tokenType int, t string) string {
 }
 
 func tcsKey(tokenType int, t string, blockID string) string {
+	tt := "wt"
+	switch tokenType {
+	case tkn.RBTTokenType:
+		tt = WholeTokenType
+	case tkn.PartTokenType:
+		tt = PartTokenType
+	case tkn.NFTTokenType:
+		tt = NFTType
+	case tkn.TestTokenType:
+		tt = TestTokenType
+	case tkn.DataTokenType:
+		tt = DataTokenType
+	}
+	bs := strings.Split(blockID, "-")
+	if len(bs) == 2 {
+		bn, err := strconv.ParseUint(bs[0], 10, 64)
+		if err != nil {
+			return tt + "-" + t + "-" + blockID
+		}
+		return tt + "-" + t + "-" + fmt.Sprintf("%016x", bn) + "-" + bs[1]
+	}
+	return tt + "-" + t + "-" + blockID
+}
+
+func old2NewKey(key string) string {
+	bs := strings.Split(key, "-")
+	if len(bs) == 4 {
+		bn, err := strconv.ParseUint(bs[2], 10, 64)
+		if err != nil {
+			return key
+		}
+		return bs[0] + "-" + bs[1] + "-" + fmt.Sprintf("%016x", bn) + "-" + bs[3]
+	}
+	return key
+}
+
+func isOldKey(key string) bool {
+	return len(key) != DefaultKeyLength
+}
+
+func oldtcsKey(tokenType int, t string, blockID string) string {
 	tt := "wt"
 	switch tokenType {
 	case tkn.RBTTokenType:
@@ -141,6 +187,15 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 	nextBlkID := ""
 	var err error
 	for iter.Next() {
+		key := string(iter.Key())
+		if isOldKey(key) {
+			err = w.updateNewKey(tt, token)
+			if err != nil {
+				w.log.Error("Failed to update new key", "err", err)
+				return nil, "", err
+			}
+			return w.getAllBlocks(tt, token, blockID)
+		}
 		v := iter.Value()
 		blk := make([]byte, len(v))
 		copy(blk, v)
@@ -164,6 +219,34 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 	return blks, nextBlkID, nil
 }
 
+func (w *Wallet) updateNewKey(tt int, token string) error {
+	db := w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to get latest block, invalid token type")
+		return nil
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
+	defer iter.Release()
+	for iter.Next() {
+		key := string(iter.Key())
+		if isOldKey(key) {
+			v := iter.Value()
+			blk := make([]byte, len(v))
+			copy(blk, v)
+			db.l.Lock()
+			err := db.Delete([]byte(key), nil)
+			if err == nil {
+				err = db.Put([]byte(old2NewKey(key)), blk, nil)
+			}
+			db.l.Unlock()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // getLatestBlock get latest block from the storage
 func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 	db := w.getChainDB(tt)
@@ -175,12 +258,23 @@ func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 	defer iter.Release()
 	var err error
 	if iter.Last() {
+		key := string(iter.Key())
+		if isOldKey(key) {
+			err = w.updateNewKey(tt, token)
+			if err != nil {
+				w.log.Error("Failed to update new key", "err", err)
+				return nil
+			}
+			w.log.Debug("Keys are updated successfully")
+			return w.getLatestBlock(tt, token)
+		}
 		v := iter.Value()
 		blk := make([]byte, len(v))
 		copy(blk, v)
 		if string(blk[0:2]) == ReferenceType {
 			blk, err = w.getRawBlock(db, blk)
 			if err != nil {
+				w.log.Error("Failed to get reference block", "err", err)
 				return nil
 			}
 		}
@@ -201,6 +295,15 @@ func (w *Wallet) getFirstBlock(tt int, token string) *block.Block {
 	defer iter.Release()
 	var err error
 	if iter.First() {
+		key := string(iter.Key())
+		if isOldKey(key) {
+			err = w.updateNewKey(tt, token)
+			if err != nil {
+				w.log.Error("Failed to update new key", "err", err)
+				return nil
+			}
+			return w.getFirstBlock(tt, token)
+		}
 		v := iter.Value()
 		blk := make([]byte, len(v))
 		copy(blk, v)
