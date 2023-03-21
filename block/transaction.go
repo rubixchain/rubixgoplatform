@@ -14,6 +14,7 @@ import (
 //   "4" : TID         : string
 //   "5" : Block       : []byte
 //   "6" : Tokens      : map[string]TransToken
+//   "7" : BlockIDs    : []string
 // }
 // ----------TransToken--------------------------
 // {
@@ -32,6 +33,7 @@ const (
 	TITIDKey         string = "4"
 	TIBlockKey       string = "5"
 	TITokensKey      string = "6"
+	TIRefIDKey       string = "7"
 )
 
 const (
@@ -57,6 +59,7 @@ type TransInfo struct {
 	Comment     string        `json:"comment"`
 	TID         string        `json:"tid"`
 	Block       []byte        `json:"block"`
+	RefID       string        `json:"refID"`
 	Tokens      []TransTokens `json:"tokens"`
 }
 
@@ -114,6 +117,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	if ti.Block != nil {
 		ntib[TIBlockKey] = ti.Block
 	}
+	if ti.RefID != "" {
+		ntib[TIRefIDKey] = ti.RefID
+	}
 	nttbs := make(map[string]interface{})
 	for _, tt := range ti.Tokens {
 		b := ctcb[tt.Token]
@@ -143,4 +149,13 @@ func (b *Block) GetTransBlock() []byte {
 	}
 	si := util.GetFromMap(tim, TIBlockKey)
 	return util.GetBytes(si)
+}
+
+func (b *Block) GetRefID() string {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return ""
+	}
+	si := util.GetFromMap(tim, TIRefIDKey)
+	return util.GetString(si)
 }

@@ -20,8 +20,14 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		}
 	}
 	address := cr.SenderPeerID + "." + sc.GetSenderDID()
+	p, err := c.getPeer(address)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return false
+	}
+	defer p.Close()
 	for i := range ti {
-		err := c.syncTokenChainFrom(address, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
+		err := c.syncTokenChainFrom(p, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return false

@@ -383,7 +383,9 @@ func (d *DID) getDirHash(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer sf.Close()
 	slf := files.NewSliceDirectory([]files.DirEntry{files.FileEntry(filepath.Base(dir), sf)})
+	defer slf.Close()
 	reader := files.NewMultiFileReader(slf, true)
 
 	resp, err := d.ipfs.Request("add").
@@ -401,7 +403,7 @@ func (d *DID) getDirHash(dir string) (string, error) {
 	if resp.Error != nil {
 		return "", resp.Error
 	}
-
+	defer resp.Output.Close()
 	dec := json.NewDecoder(resp.Output)
 	var final string
 	for {

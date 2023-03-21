@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -176,9 +178,30 @@ func (up *UnPledge) runUnpledge() {
 		}
 		blk := b.GetTransBlock()
 		if blk == nil {
-			up.log.Error("Token block missing transaction block, removing the token from the unpledge list")
-			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
-			continue
+			refID := b.GetRefID()
+			if refID == "" {
+				up.log.Error("Token block missing transaction block, removing the token from the unpledge list")
+				up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+				continue
+			}
+			ss := strings.Split(refID, ",")
+			if len(ss) != 3 {
+				up.log.Error("Invalid reference ID, removing the token from the unpledge list")
+				up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+				continue
+			}
+			tt, err := strconv.ParseInt(ss[1], 10, 32)
+			if err != nil {
+				up.log.Error("Invalid reference ID, removing the token from the unpledge list", "err", err)
+				up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+				continue
+			}
+			blk, err = up.w.GetTokenBlock(ss[0], int(tt), ss[2])
+			if err != nil {
+				up.log.Error("Failed to get transaction block, removing the token from the unpledge list", "err", err)
+				up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+				continue
+			}
 		}
 		nb := block.InitBlock(blk, nil)
 		if nb == nil {

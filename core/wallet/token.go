@@ -60,7 +60,7 @@ func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) erro
 	return nil
 }
 
-func (w *Wallet) UnpledgeWholeToken(did string, token string) error {
+func (w *Wallet) UnpledgeWholeToken(did string, token string, tt int) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t Token
@@ -73,6 +73,12 @@ func (w *Wallet) UnpledgeWholeToken(did string, token string) error {
 	if t.TokenStatus != TokenIsPledged {
 		w.log.Error("Token is not pledged")
 		return fmt.Errorf("token is not pledged")
+	}
+
+	b := w.GetLatestTokenBlock(token, tt)
+	if b.GetTransType() != block.TokenUnpledgedType {
+		w.log.Error("Token block not in un pledged state")
+		return fmt.Errorf("Token block not in un pledged state")
 	}
 	t.TokenStatus = TokenIsFree
 	err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, token)
@@ -108,7 +114,6 @@ func (w *Wallet) GetWholeTokens(did string, num int) ([]Token, error) {
 	var t []Token
 	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=?", did, TokenIsFree)
 	if err != nil {
-		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
 	}
 	tl := len(t)

@@ -42,6 +42,7 @@ const (
 	TokenPledgedType     string = "04"
 	TokenGeneratedType   string = "05"
 	TokenUnpledgedType   string = "06"
+	TokenCommittedType   string = "07"
 )
 
 type TokenChainBlock struct {

@@ -154,10 +154,22 @@ func TestSanp(t *testing.T) {
 
 func TestNodeDB(t *testing.T) {
 
-	db, err := leveldb.OpenFile("../../windows/node1/Rubix/TestNet/tokenchainstorage", nil)
+	db, err := leveldb.OpenFile("testdb", nil)
 	if err != nil {
 		t.Fatal("Failed to open db")
 	}
+
+	db.Put([]byte("tt-QmW89JbFNK4sKidZ9Fdvv9L4jt2eVP8spkHrJj6KqMNRV2-10-b4e64dca58c1657d14b71d175904a9f424bd43b7ff5085b2d4cb06f7083db04a"), []byte("testdata"), nil)
+
+	v, err := db.Get([]byte("tt-QmW89JbFNK4sKidZ9Fdvv9L4jt2eVP8spkHrJj6KqMNRV2-10-b4e64dca58c1657d14b71d175904a9f424bd43b7ff5085b2d4cb06f7083db04a"), nil)
+	if err != nil {
+		t.Fatal("Failed to get data")
+	}
+
+	if v == nil {
+		t.Fatal("Failed to get data")
+	}
+
 	iter := db.NewIterator(nil, nil)
 	if err != nil {
 		t.Fatal("Failed to get sanp")

@@ -8,6 +8,7 @@ import (
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
@@ -145,6 +146,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		}
 
 		tcb := &block.TokenChainBlock{
+			TokenType:       token.TestTokenType,
 			TransactionType: block.TokenGeneratedType,
 			TokenOwner:      did,
 			GenesisBlock:    gb,
@@ -198,14 +200,14 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &TCBSyncReply{Status: true, Message: "Got all blocks", TCBlock: blks, NextBlockID: nextID}, http.StatusOK)
 }
 
-func (c *Core) syncTokenChainFrom(address string, pblkID string, token string, tokenType int) error {
-	p, err := c.getPeer(address)
-	if err != nil {
-		c.log.Error("Failed to get peer", "err", err)
-		return err
-	}
-	defer p.Close()
-	c.log.Debug("Syncing", "tokentype", tokenType)
+func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
+	// p, err := c.getPeer(address)
+	// if err != nil {
+	// 	c.log.Error("Failed to get peer", "err", err)
+	// 	return err
+	// }
+	// defer p.Close()
+	var err error
 	blk := c.w.GetLatestTokenBlock(token, tokenType)
 	blkID := ""
 	if blk != nil {

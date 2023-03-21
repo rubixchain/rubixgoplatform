@@ -7,7 +7,7 @@ require (
 	github.com/EnsurityTechnologies/apiconfig v1.0.1
 	github.com/EnsurityTechnologies/config v1.0.0
 	github.com/EnsurityTechnologies/enscrypt v1.0.1
-	github.com/EnsurityTechnologies/ensweb v1.0.7
+	github.com/EnsurityTechnologies/ensweb v1.0.8
 	github.com/EnsurityTechnologies/helper v1.0.0
 	github.com/EnsurityTechnologies/logger v1.0.4
 	github.com/EnsurityTechnologies/uuid v1.0.0
@@ -30,7 +30,7 @@ require (
 	github.com/crackcomm/go-gitignore v0.0.0-20170627025303-887ab5e44cc3 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
-	github.com/fatih/color v1.14.1 // indirect
+	github.com/fatih/color v1.15.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/spec v0.20.8 // indirect
@@ -76,19 +76,19 @@ require (
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/swaggo/files v1.0.0 // indirect
-	github.com/swaggo/http-swagger v1.3.3 // indirect
+	github.com/swaggo/http-swagger v1.3.4 // indirect
 	github.com/swaggo/swag v1.8.10 // indirect
 	github.com/whyrusleeping/tar-utils v0.0.0-20201201191210-20a61371de5b // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
-	golang.org/x/tools v0.6.0 // indirect
+	golang.org/x/tools v0.7.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/driver/mysql v1.4.7 // indirect
-	gorm.io/driver/postgres v1.4.8 // indirect
+	gorm.io/driver/postgres v1.5.0 // indirect
 	gorm.io/driver/sqlite v1.4.4 // indirect
 	gorm.io/driver/sqlserver v1.4.2 // indirect
-	gorm.io/gorm v1.24.6 // indirect
+	gorm.io/gorm v1.24.7-0.20230306060331-85eaf9eeda11 // indirect
 	lukechampine.com/blake3 v1.1.6 // indirect
 )

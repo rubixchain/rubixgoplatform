@@ -5,8 +5,9 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
-	"github.com/rubixchain/rubixgoplatform/token"
+	tkn "github.com/rubixchain/rubixgoplatform/token"
 	ut "github.com/rubixchain/rubixgoplatform/util"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -28,15 +29,15 @@ const TCBlockCountLimit int = 100
 func tcsType(tokenType int) string {
 	tt := "wt"
 	switch tokenType {
-	case token.RBTTokenType:
+	case tkn.RBTTokenType:
 		tt = WholeTokenType
-	case token.PartTokenType:
+	case tkn.PartTokenType:
 		tt = PartTokenType
-	case token.NFTTokenType:
+	case tkn.NFTTokenType:
 		tt = NFTType
-	case token.TestTokenType:
+	case tkn.TestTokenType:
 		tt = TestTokenType
-	case token.DataTokenType:
+	case tkn.DataTokenType:
 		tt = DataTokenType
 	}
 	return tt + "-"
@@ -45,15 +46,15 @@ func tcsType(tokenType int) string {
 func tcsPrefix(tokenType int, t string) string {
 	tt := "wt"
 	switch tokenType {
-	case token.RBTTokenType:
+	case tkn.RBTTokenType:
 		tt = WholeTokenType
-	case token.PartTokenType:
+	case tkn.PartTokenType:
 		tt = PartTokenType
-	case token.NFTTokenType:
+	case tkn.NFTTokenType:
 		tt = NFTType
-	case token.TestTokenType:
+	case tkn.TestTokenType:
 		tt = TestTokenType
-	case token.DataTokenType:
+	case tkn.DataTokenType:
 		tt = DataTokenType
 	}
 	return tt + "-" + t + "-"
@@ -62,15 +63,15 @@ func tcsPrefix(tokenType int, t string) string {
 func tcsKey(tokenType int, t string, blockID string) string {
 	tt := "wt"
 	switch tokenType {
-	case token.RBTTokenType:
+	case tkn.RBTTokenType:
 		tt = WholeTokenType
-	case token.PartTokenType:
+	case tkn.PartTokenType:
 		tt = PartTokenType
-	case token.NFTTokenType:
+	case tkn.NFTTokenType:
 		tt = NFTType
-	case token.TestTokenType:
+	case tkn.TestTokenType:
 		tt = TestTokenType
-	case token.DataTokenType:
+	case tkn.DataTokenType:
 		tt = DataTokenType
 	}
 	return tt + "-" + t + "-" + blockID
@@ -87,13 +88,13 @@ func tcsBlockID(token string, key string) string {
 func (w *Wallet) getChainDB(tt int) *ChainDB {
 	var db *ChainDB
 	switch tt {
-	case token.RBTTokenType:
+	case tkn.RBTTokenType:
 		db = w.tcs
-	case token.PartTokenType:
+	case tkn.PartTokenType:
 		db = w.tcs
-	case token.TestTokenType:
+	case tkn.TestTokenType:
 		db = w.tcs
-	case token.DataTokenType:
+	case tkn.DataTokenType:
 		db = w.dtcs
 	}
 	return db
@@ -217,6 +218,9 @@ func (w *Wallet) getFirstBlock(tt int, token string) *block.Block {
 
 // addBlock will write block into storage
 func (w *Wallet) addBlock(tt int, token string, b *block.Block) error {
+	opt := &opt.WriteOptions{
+		Sync: true,
+	}
 	db := w.getChainDB(tt)
 	if db == nil {
 		w.log.Error("Failed to add block, invalid token type")
@@ -234,6 +238,7 @@ func (w *Wallet) addBlock(tt int, token string, b *block.Block) error {
 		w.log.Error("Failed to get block number", "err", err)
 		return err
 	}
+
 	// First block check block number start with zero
 	if lb == nil {
 		if bn != 0 {
@@ -262,19 +267,22 @@ func (w *Wallet) addBlock(tt int, token string, b *block.Block) error {
 		// Write only if reference block not exist
 		if err != nil {
 			db.l.Lock()
-			err = db.Put(refkey, b.GetBlock(), nil)
+			err = db.Put(refkey, b.GetBlock(), opt)
 			db.l.Unlock()
 			if err != nil {
 				return err
 			}
 		}
 		db.l.Lock()
-		err = db.Put([]byte(key), refkey, nil)
+		err = db.Put([]byte(key), refkey, opt)
 		db.l.Unlock()
 		return err
 	} else {
 		db.l.Lock()
-		err = db.Put([]byte(key), b.GetBlock(), nil)
+		err = db.Put([]byte(key), b.GetBlock(), opt)
+		if tt == tkn.TestTokenType {
+			w.log.Debug("Writtent", "key", key)
+		}
 		db.l.Unlock()
 		return err
 	}
@@ -303,6 +311,9 @@ func (w *Wallet) clearBlocks(tt int) error {
 
 // addBlock will write block into storage
 func (w *Wallet) addBlocks(tt int, b *block.Block) error {
+	opt := &opt.WriteOptions{
+		Sync: true,
+	}
 	db := w.getChainDB(tt)
 	if db == nil {
 		w.log.Error("Failed to add block, invalid token type")
@@ -352,7 +363,7 @@ func (w *Wallet) addBlocks(tt int, b *block.Block) error {
 		return fmt.Errorf("failed write the block, block already exist")
 	}
 	db.l.Lock()
-	err = db.Put(refkey, b.GetBlock(), nil)
+	err = db.Put(refkey, b.GetBlock(), opt)
 	db.l.Unlock()
 	if err != nil {
 		return err
@@ -364,7 +375,7 @@ func (w *Wallet) addBlocks(tt int, b *block.Block) error {
 		}
 		key := tcsKey(tt, token, bid)
 		db.l.Lock()
-		err = db.Put([]byte(key), refkey, nil)
+		err = db.Put([]byte(key), refkey, opt)
 		db.l.Unlock()
 		if err != nil {
 			return err
