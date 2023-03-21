@@ -86,6 +86,7 @@ type SignatureReply struct {
 }
 
 type UpdatePledgeRequest struct {
+	Mode            int      `json:"mode"`
 	PledgedTokens   []string `json:"pledged_tokens"`
 	TokenChainBlock []byte   `json:"token_chain_block"`
 }
@@ -469,9 +470,11 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	ptDID := ""
 	pt := ""
 	ctcb := make(map[string]*block.Block)
+	toktenType := token.RBTTokenType
 	for i := range ti {
 		pledgeToken := ""
 		pledgeDID := ""
+		toktenType = ti[i].TokenType
 		if ti[i].TokenType == token.PartTokenType || ti[i].TokenType == token.DataTokenType {
 			if pt == "" {
 				pledgeToken = pts[index].Token
@@ -510,11 +513,15 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 
 	//tokenList = append(tokenList, cr.PartTokens...)
 	tcb := block.TokenChainBlock{
+		TokenType:       toktenType,
 		TransactionType: block.TokenTransferredType,
 		TokenOwner:      sc.GetReceiverDID(),
 		TransInfo:       bti,
 		QuorumSignature: credit,
 		SmartContract:   sc.GetBlock(),
+	}
+	if cr.Mode == DTCommitMode {
+		tcb.TransactionType = block.TokenCommittedType
 	}
 
 	nb := block.CreateNewBlock(ctcb, &tcb)
@@ -562,9 +569,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			c.log.Error("Invalid pledge request")
 			return nil, fmt.Errorf("invalid pledge request")
 		}
-
 		var br model.BasicResponse
 		ur := UpdatePledgeRequest{
+			Mode:            cr.Mode,
 			PledgedTokens:   v,
 			TokenChainBlock: nb.GetBlock(),
 		}

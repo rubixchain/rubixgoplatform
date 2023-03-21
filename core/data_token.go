@@ -37,6 +37,7 @@ type DataTokenReq struct {
 }
 
 func (c *Core) CreateDataToken(reqID string, dr *DataTokenReq) {
+	defer os.RemoveAll(dr.FolderName)
 	br := c.createDataToken(reqID, dr)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
@@ -208,7 +209,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		Tokens: []block.TransTokens{
 			{
 				Token:     dt,
-				TokenType: token.TestTokenType,
+				TokenType: token.DataTokenType,
 			},
 		},
 		Comment: "Data token generated at : " + time.Now().String(),

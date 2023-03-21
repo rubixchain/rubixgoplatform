@@ -36,7 +36,9 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	// if err != nil {
 	// 	return "", err
 	// }
-	c.ec.ExplorerCreateDID(c.peerID, did)
+	if !c.testNet {
+		c.ec.ExplorerCreateDID(c.peerID, did)
+	}
 	return did, nil
 }
 

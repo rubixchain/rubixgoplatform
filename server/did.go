@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to create folder")
 		return s.BasicResponse(req, false, "failed to create folder", nil)
 	}
+	defer os.RemoveAll(folderName)
 
 	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
 
@@ -161,6 +163,7 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to create folder")
 		return s.BasicResponse(req, false, "failed to create folder", nil)
 	}
+	defer os.RemoveAll(folderName)
 	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
 	if err != nil {
 		s.log.Error("failed to parse request", "err", err)

@@ -49,6 +49,7 @@ func (c *Core) Unpledge(t string, file string) error {
 	tsb = append(tsb, ts)
 	ctcb[t] = b
 	tcb := block.TokenChainBlock{
+		TokenType:       tokenType,
 		TransactionType: block.TokenUnpledgedType,
 		TokenOwner:      did,
 		TransInfo: &block.TransInfo{
@@ -66,14 +67,14 @@ func (c *Core) Unpledge(t string, file string) error {
 		c.log.Error("Failed to update the signature", "err", err)
 		return fmt.Errorf("failed to update the signature")
 	}
-	err = c.w.UnpledgeWholeToken(did, t)
-	if err != nil {
-		c.log.Error("Failed to update un pledge token", "err", err)
-		return err
-	}
 	err = c.w.CreateTokenBlock(nb, tokenType)
 	if err != nil {
 		c.log.Error("Failed to update token chain block", "err", err)
+		return err
+	}
+	err = c.w.UnpledgeWholeToken(did, t, tokenType)
+	if err != nil {
+		c.log.Error("Failed to update un pledge token", "err", err)
 		return err
 	}
 	return nil
