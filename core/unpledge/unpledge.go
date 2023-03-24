@@ -259,7 +259,7 @@ func (up *UnPledge) runUnpledge() {
 	}
 }
 
-func (up *UnPledge) proofVerification(tokenID string, proof []string) error {
+func (up *UnPledge) proofVerification(tokenID string, proof []string) (error, bool) {
 
 	tt := token.RBTTokenType
 	blk := up.w.GetLatestTokenBlock(tokenID, tt)
@@ -267,7 +267,7 @@ func (up *UnPledge) proofVerification(tokenID string, proof []string) error {
 	bid, err := blk.GetPrevBlockID(tokenID)
 	if err != nil {
 		up.log.Error("Failed to get the block id. Unable to verify proof file")
-		return err
+		return err, false
 	}
 
 	rdid := blk.GetReceiverDID()
@@ -277,19 +277,19 @@ func (up *UnPledge) proofVerification(tokenID string, proof []string) error {
 	if proof[0] == "" {
 		err := errors.New("First line of proof empty. Unable to verify proof file")
 		up.log.Error(err.Error())
-		return err
+		return err, false
 	}
 	dl := Difficultlevel
 	if proof[0] != strconv.Itoa(dl) {
 		err := errors.New("First line of proof mismatch. Unable to verify proof file")
 		up.log.Error(err.Error())
-		return err
+		return err, false
 	}
 
 	if proof[1] != valueHashed {
 		err := errors.New("Second line of proof mismatch. Unable to verify proof file")
 		up.log.Error(err.Error())
-		return err
+		return err, false
 	}
 
 	proofToVerify := proof[1:] // Exculding firstline (Difficuilty level)
@@ -314,7 +314,7 @@ func (up *UnPledge) proofVerification(tokenID string, proof []string) error {
 	if sha3Hash256Loop(randomHashInFH) != targetHashInFH || sha3Hash256Loop(randomHashInSH) != targetHashInSH {
 		err := errors.New("Random hash verification fail. Unable to verify proof file")
 		up.log.Error(err.Error())
-		return err
+		return err, false
 	}
 
 	var c int
@@ -336,9 +336,9 @@ func (up *UnPledge) proofVerification(tokenID string, proof []string) error {
 	}
 	if c > RecordInterval-1 || suffixLasthash != tid[len(tid)-dl:] {
 		up.log.Error("Last line of proof mismatch, Unable to verify proof file")
-		return err
+		return err, false
 	} else {
 		up.log.Info("Proof Verified for " + tokenID)
-		return nil
+		return nil, true
 	}
 }
