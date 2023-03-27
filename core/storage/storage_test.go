@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/EnsurityTechnologies/config"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 func initStorageDB() (*StorageDB, error) {
@@ -152,25 +155,24 @@ func TestSanp(t *testing.T) {
 
 }
 
-func TestNodeDB(t *testing.T) {
+func TestLevelDB(t *testing.T) {
 
-	db, err := leveldb.OpenFile("testdb", nil)
+	str := fmt.Sprintf("%064X", 0)
+
+	fmt.Println(str)
+	fmt.Println(fmt.Sprintf("%064X", 20))
+
+	db, err := leveldb.OpenFile("testldb", nil)
 	if err != nil {
 		t.Fatal("Failed to open db")
 	}
-
-	db.Put([]byte("tt-QmW89JbFNK4sKidZ9Fdvv9L4jt2eVP8spkHrJj6KqMNRV2-10-b4e64dca58c1657d14b71d175904a9f424bd43b7ff5085b2d4cb06f7083db04a"), []byte("testdata"), nil)
-
-	v, err := db.Get([]byte("tt-QmW89JbFNK4sKidZ9Fdvv9L4jt2eVP8spkHrJj6KqMNRV2-10-b4e64dca58c1657d14b71d175904a9f424bd43b7ff5085b2d4cb06f7083db04a"), nil)
-	if err != nil {
-		t.Fatal("Failed to get data")
+	for i := 0; i < 10; i++ {
+		rb := make([]byte, 32)
+		rand.Read(rb)
+		key := "tt-QmW89JbFNK4sKidZ9Fdvv9L4jt2eVP8spkHrJj6KqMNRV2-" + fmt.Sprintf("%d", i) + "-" + hex.EncodeToString(rb)
+		db.Put([]byte(key), rb, nil)
 	}
-
-	if v == nil {
-		t.Fatal("Failed to get data")
-	}
-
-	iter := db.NewIterator(nil, nil)
+	iter := db.NewIterator(util.BytesPrefix([]byte("tt-QmW89JbFNK4sKidZ9Fdvv9L4jt2eVP8spkHrJj6KqMNRV2")), nil)
 	if err != nil {
 		t.Fatal("Failed to get sanp")
 	}
@@ -178,7 +180,35 @@ func TestNodeDB(t *testing.T) {
 		key := iter.Key()
 		//value := iter.Value()
 		fmt.Printf("%s\n", string(key))
+		//f.WriteString(s)
 	}
+	iter.Release()
+	db.Close()
+}
+
+func TestNodeDB(t *testing.T) {
+
+	str := fmt.Sprintf("%064X", 0)
+
+	fmt.Println(str)
+	fmt.Println(fmt.Sprintf("%064X", 20))
+
+	db, err := leveldb.OpenFile("../../windows/node3/Rubix/TestNet/tokenchainstorage", nil)
+	if err != nil {
+		t.Fatal("Failed to open db")
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte("tt-QmPR6frD2HrgTDoyTpS6KjfQn2zM8LcLUyszHyn9c9mYNe")), nil)
+	if err != nil {
+		t.Fatal("Failed to get sanp")
+	}
+	f, _ := os.Create("dump.txt")
+	for iter.Next() {
+		key := iter.Key()
+		//value := iter.Value()
+		s := fmt.Sprintf("%s\n", string(key))
+		f.WriteString(s)
+	}
+	f.Close()
 	iter.Release()
 	db.Close()
 }
