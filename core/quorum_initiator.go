@@ -721,3 +721,11 @@ func (c *Core) checkIsPledged(tcb *block.Block, token string) bool {
 	}
 	return false
 }
+
+func (c *Core) checkIsUnpledged(tcb *block.Block, token string) bool {
+	if strings.Compare(tcb.GetTransType(), block.TokenUnpledgedType) == 0 {
+		c.log.Debug("Token", token, " is unpledged token")
+		return true
+	}
+	return false
+}

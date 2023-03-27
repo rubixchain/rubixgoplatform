@@ -1,6 +1,7 @@
 package util
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
@@ -744,4 +745,13 @@ func GetFloatFromMap(m interface{}, key string) float64 {
 		tl = 0
 	}
 	return tl
+}
+
+func BytesToString(b []byte) []string {
+	var lines []string
+	scanner := bufio.NewScanner(bytes.NewReader(b))
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines
 }

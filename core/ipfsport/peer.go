@@ -173,6 +173,7 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 
 func (p *Peer) SendJSONRequest(method string, path string, querry map[string]string, req interface{}, resp interface{}, did bool, timeout ...time.Duration) error {
 	httpReq, err := p.JSONRequest(method, path, req)
+	httpReq.Close = true
 	if err != nil {
 		return err
 	}
