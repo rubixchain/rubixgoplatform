@@ -156,6 +156,7 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 			pm.releasePeerPort(portNum)
 			return nil, err
 		}
+		defer resp.Close()
 		if resp.Error != nil {
 			pm.log.Error("error in forward request")
 			pm.releasePeerPort(portNum)
@@ -219,6 +220,7 @@ func (p *Peer) Close() error {
 			p.log.Error("failed to close ipfs port", "err", err)
 			return err
 		}
+		defer resp.Close()
 		if resp.Error != nil {
 			p.log.Error("failed to close ipfs port", "err", resp.Error)
 			return resp.Error

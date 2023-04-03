@@ -121,7 +121,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		ReceiverPeerID: rpeerid,
 		ContractBlock:  sc.GetBlock(),
 	}
-	td, err := c.initiateConsensus(cr, sc, dc)
+	td, _, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		resp.Message = "Consensus failed" + err.Error()

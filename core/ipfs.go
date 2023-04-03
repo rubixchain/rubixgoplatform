@@ -127,6 +127,7 @@ func (c *Core) configIPFS() error {
 	if err != nil {
 		return err
 	}
+	defer resp.Close()
 	if resp.Error != nil {
 		return resp.Error
 	}

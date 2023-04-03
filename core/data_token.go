@@ -266,6 +266,7 @@ func (c *Core) finishDataCommit(br *model.BasicResponse, dts []wallet.DataToken)
 }
 
 func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.BasicResponse {
+	st := time.Now()
 	dt, err := c.w.GetDataToken(batchID)
 	br := &model.BasicResponse{
 		Status: false,
@@ -280,7 +281,9 @@ func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.
 		SenderDID:   did,
 		TransTokens: make([]contract.TokenInfo, 0),
 	}
+	dts := make([]string, len(dt))
 	for i := range dt {
+		dts[i] = dt[i].TokenID
 		ti := contract.TokenInfo{
 			Token:     dt[i].TokenID,
 			TokenType: token.DataTokenType,
@@ -312,12 +315,25 @@ func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.
 		SenderPeerID:  c.peerID,
 		ContractBlock: sc.GetBlock(),
 	}
-	_, err = c.initiateConsensus(cr, sc, dc)
+	td, pl, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		br.Message = "Consensus failed" + err.Error()
 		return br
 	}
+	et := time.Now()
+	dif := et.Sub(st)
+
+	etrans := &ExplorerDataTrans{
+		TID:          td.TransactionID,
+		CommitterDID: did,
+		TrasnType:    2,
+		DataTokens:   dts,
+		QuorumList:   pl,
+		TokenTime:    float64(dif.Milliseconds()),
+	}
+	c.ec.ExplorerDataTransaction(etrans)
+
 	br.Status = true
 	br.Message = "Data committed successfully"
 	return br

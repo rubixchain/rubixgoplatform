@@ -206,7 +206,7 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 	// c.qlock.Unlock()
 }
 
-func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, error) {
+func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, map[string]float64, error) {
 	cs := ConsensusStatus{
 		Credit: CreditScore{
 			Credit: make([]CreditSignature, 0),
@@ -247,13 +247,19 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	ql := c.qm.GetQuorum(cr.Type)
 	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
-		return nil, fmt.Errorf("failed to get required quorums")
+		return nil, nil, fmt.Errorf("failed to get required quorums")
 	}
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
 	c.pd[cr.ReqID] = &pd
 	c.qlock.Unlock()
 	cr.QuorumList = ql
+	defer func() {
+		c.qlock.Lock()
+		delete(c.quorumRequest, cr.ReqID)
+		delete(c.pd, cr.ReqID)
+		c.qlock.Unlock()
+	}()
 
 	for _, a := range ql {
 		go c.connectQuorum(cr, a, AlphaQuorumType)
@@ -283,21 +289,32 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
 	if err != nil {
 		c.log.Error("Failed to pledge token", "err", err)
-		return nil, err
+		return nil, nil, err
 	}
 	c.sendQuorumCredit(cr)
 	ti := sc.GetTransTokenInfo()
+	c.qlock.Lock()
+	pds := c.pd[cr.ReqID]
+	c.qlock.Unlock()
+	pl := make(map[string]float64)
+	for _, d := range cr.QuorumList {
+		pl[d] = 0
+		ss, ok := pds.PledgedTokens[d]
+		if ok {
+			pl[d] = float64(len(ss))
+		}
+	}
 	if cr.Mode == RBTTransferMode {
 		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
-			return nil, err
+			return nil, nil, err
 		}
 		defer rp.Close()
 		sr := SendTokenRequest{
@@ -309,16 +326,16 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
-			return nil, err
+			return nil, nil, err
 		}
 		if !br.Status {
 			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
-			return nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
+			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
 		}
 		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
-			return nil, err
+			return nil, nil, err
 		}
 		for _, t := range ti {
 			c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
@@ -326,8 +343,9 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		nbid, err := nb.GetBlockID(ti[0].Token)
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
-			return nil, err
+			return nil, nil, err
 		}
+
 		td := wallet.TransactionDetails{
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
@@ -339,16 +357,21 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			DateTime:        time.Now(),
 			Status:          true,
 		}
-		return &td, nil
+		return &td, pl, nil
 	} else {
 		err = c.w.CreateTokenBlock(nb, token.DataTokenType)
 		if err != nil {
 			c.log.Error("Failed to create token block", "err", err)
-			return nil, err
+			return nil, nil, err
 		}
-		return nil, nil
+		td := wallet.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			DateTime:        time.Now(),
+			Status:          true,
+		}
+		return &td, pl, nil
 	}
-
 }
 
 func (c *Core) startConsensus(id string, qt int) {
@@ -624,9 +647,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 				cs.PledgeLock.Unlock()
 				return err
 			}
-			if !prs.Status {
-				c.log.Info("Unable to plegde token from peer", "did", p.GetPeerDID(), "msg", prs.Message)
-			} else {
+			if prs.Status {
 				did := p.GetPeerDID()
 				pd.PledgedTokens[did] = make([]string, 0)
 				for i, t := range prs.Tokens {

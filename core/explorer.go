@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	ExplorerBasePath       string = "/api/v2/services/app/Rubix/"
-	ExplorerCreateDIDAPI   string = "CreateOrUpdateRubixUser"
-	ExplorerTransactionAPI string = "CreateOrUpdateRubixTransaction"
-	ExplorerMapDIDAPI      string = "map-did"
+	ExplorerBasePath           string = "/api/v2/services/app/Rubix/"
+	ExplorerCreateDIDAPI       string = "CreateOrUpdateRubixUser"
+	ExplorerTransactionAPI     string = "CreateOrUpdateRubixTransaction"
+	ExplorerCreateDataTransAPI string = "create-datatokens"
+	ExplorerMapDIDAPI          string = "map-did"
 )
 
 type ExplorerClient struct {
@@ -44,6 +45,18 @@ type ExplorerTrans struct {
 	Amount      float64  `json:"amount"`
 	TrasnType   int      `json:"transaction_type"`
 	QuorumList  []string `json:"quorum_list"`
+}
+
+type ExplorerDataTrans struct {
+	TID          string             `json:"transaction_id"`
+	CommitterDID string             `json:"commiter"`
+	SenderDID    string             `json:"sender"`
+	ReceiverDID  string             `json:"receiver"`
+	TokenTime    float64            `json:"token_time"`
+	DataTokens   []string           `json:"datatokens"`
+	Amount       float64            `json:"amount"`
+	TrasnType    int                `json:"transaction_type"`
+	QuorumList   map[string]float64 `json:"quorum_list"`
 }
 
 type ExplorerResponse struct {
@@ -137,6 +150,19 @@ func (ec *ExplorerClient) ExplorerTransaction(et *ExplorerTrans) error {
 	}
 	if !er.Status {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
+		return fmt.Errorf("failed to update explorer")
+	}
+	return nil
+}
+
+func (ec *ExplorerClient) ExplorerDataTransaction(et *ExplorerDataTrans) error {
+	var er ExplorerResponse
+	err := ec.SendExploerJSONRequest("POST", ExplorerCreateDataTransAPI, et, &er)
+	if err != nil {
+		return err
+	}
+	if !er.Status {
+		ec.log.Error("Failed to update explorer with data transaction", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
 	return nil
