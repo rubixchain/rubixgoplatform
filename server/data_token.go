@@ -36,7 +36,7 @@ func (s *Server) APICommitDataToken(req *ensweb.Request) *ensweb.Result {
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
-	if batchID == "" {
+	if batchID == "batchID1" {
 		batchID = did
 	}
 	s.c.AddWebReq(req)
