@@ -340,6 +340,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		for _, t := range ti {
 			c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
 		}
+		//call ipfs repo gc after unpinnning
+		c.ipfsRepoGc()
 		nbid, err := nb.GetBlockID(ti[0].Token)
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
