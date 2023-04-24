@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,6 +22,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/did"
+	_ "github.com/rubixchain/rubixgoplatform/docs"
 	"github.com/rubixchain/rubixgoplatform/server"
 	"golang.org/x/term"
 )
@@ -191,6 +193,24 @@ func showHelp() {
 	}
 }
 
+// Get preferred outbound ip of this machine
+func (cmd *Command) getURL(url string) string {
+	// No IP address present
+	if strings.Contains(url, "://:") {
+		conn, err := net.Dial("udp", "8.8.8.8:80")
+		if err != nil {
+			return url
+		}
+		defer conn.Close()
+		localAddr := conn.LocalAddr().(*net.UDPAddr)
+		outIp := localAddr.IP.String()
+		s := strings.Split(url, "://:")
+		url = s[0] + "://" + outIp + ":" + s[1]
+	}
+	cmd.log.Info("Swagger URL : " + url + "/swagger/index.html")
+	return url
+}
+
 func (cmd *Command) runApp() {
 	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node))
 	err := apiconfig.LoadAPIConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, &cmd.cfg)
@@ -211,6 +231,7 @@ func (cmd *Command) runApp() {
 		Config: srvcfg.Config{
 			HostAddress: cmd.cfg.NodeAddress,
 			HostPort:    cmd.cfg.NodePort,
+			Production:  "false",
 		},
 	}
 	scfg.EnableAuth = cmd.enableAuth
@@ -227,6 +248,7 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("Failed to create server")
 		return
 	}
+	s.EnableSWagger(cmd.getURL(s.GetServerURL()))
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()

@@ -206,7 +206,7 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 	// c.qlock.Unlock()
 }
 
-func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, map[string]float64, error) {
+func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, map[string]map[string]float64, error) {
 	cs := ConsensusStatus{
 		Credit: CreditScore{
 			Credit: make([]CreditSignature, 0),
@@ -302,12 +302,18 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	c.qlock.Lock()
 	pds := c.pd[cr.ReqID]
 	c.qlock.Unlock()
-	pl := make(map[string]float64)
+	pl := make(map[string]map[string]float64)
 	for _, d := range cr.QuorumList {
-		pl[d] = 0
-		ss, ok := pds.PledgedTokens[d]
-		if ok {
-			pl[d] = float64(len(ss))
+		ds := strings.Split(d, ".")
+		if len(ds) == 2 {
+			ss, ok := pds.PledgedTokens[ds[1]]
+			if ok {
+				m := make(map[string]float64)
+				for i := range ss {
+					m[ss[i]] = 1
+				}
+				pl[ds[1]] = m
+			}
 		}
 	}
 	if cr.Mode == RBTTransferMode {

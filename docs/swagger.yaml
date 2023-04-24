@@ -1,0 +1,124 @@
+definitions:
+  model.BasicResponse:
+    properties:
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+    type: object
+info:
+  contact:
+    email: murali.c@ensurity.com
+    name: API Support
+  description: Rubix core API to control & manage the node.
+  title: Rubix Core
+  version: "0.9"
+paths:
+  /api/commit-data-token:
+    post:
+      consumes:
+      - application/json
+      description: This API will create data token
+      parameters:
+      - description: DID
+        in: query
+        name: did
+        required: true
+        type: string
+      - description: Batch ID
+        in: query
+        name: batchID
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create Data Token
+      tags:
+      - Data Tokens
+  /api/create-data-token:
+    post:
+      consumes:
+      - multipart/form-data
+      description: This API will create data token
+      parameters:
+      - description: User/Entity ID
+        in: formData
+        name: UserID
+        type: string
+      - description: User/Entity Info
+        in: formData
+        name: UserInfo
+        type: string
+      - description: Committer DID
+        in: formData
+        name: CommitterDID
+        type: string
+      - description: Batch ID
+        in: formData
+        name: BacthID
+        type: string
+      - description: File Info is json string {
+        in: formData
+        name: FileInfo
+        type: string
+      - description: File to be committed
+        in: formData
+        name: FileContent
+        type: file
+      produces:
+      - multipart/form-data
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create Data Token
+      tags:
+      - Data Tokens
+  /api/get-data-token:
+    get:
+      consumes:
+      - application/json
+      description: This API will get all data token belong to the did
+      parameters:
+      - description: DID
+        in: query
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get Data Token
+      tags:
+      - Data Tokens
+  /api/start:
+    get:
+      consumes:
+      - application/json
+      description: It will setup the core if not done before
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Start Core
+      tags:
+      - Basic
+securityDefinitions:
+  SessionToken:
+    in: header
+    name: Session-Token
+    type: apiKey
+swagger: "2.0"

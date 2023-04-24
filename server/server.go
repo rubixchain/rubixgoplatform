@@ -40,9 +40,10 @@ const (
 	APISetupDID            string = "/api/setup-did"
 	APIMigrateNode         string = "/api/migrate-node"
 	APILockTokens          string = "/api/lock-tokens"
-	APICreateDataToken     string = "/api/create-data_token"
-	APICommitDataToken     string = "/api/commit-data_token"
-	APICheckDataToken      string = "/api/check-data_token"
+	APICreateDataToken     string = "/api/create-data-token"
+	APICommitDataToken     string = "/api/commit-data-token"
+	APICheckDataToken      string = "/api/check-data-token"
+	APIGetDataToken        string = "/api/get-data-token"
 	APISetupDB             string = "/api/setup-db"
 )
 
@@ -218,6 +219,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APICreateDataToken, "POST", s.AuthHandle(s.APICreateDataToken, s.ErrorFunc))
 	s.AddRoute(APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, s.ErrorFunc))
 	s.AddRoute(APICheckDataToken, "POST", s.AuthHandle(s.APICheckDataToken, s.ErrorFunc))
+	s.AddRoute(APIGetDataToken, "GET", s.AuthHandle(s.APIGetDataToken, s.ErrorFunc))
 	s.AddRoute(APISetupDB, "POST", s.AuthHandle(s.APISetupDB, s.ErrorFunc))
 
 }
