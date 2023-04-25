@@ -187,6 +187,53 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		c.log.Error("Failed to migrate, failed to connect arbitary peer", "err", err, "peer", c.arbitaryAddr[addr])
 		return fmt.Errorf("failed to migrate, failed to connect arbitary peer")
 	}
+	//logic to check and remove alreadyn migrated tokens
+	var br model.MigratedTokenStatus
+	c.log.Debug("entering migrated token check")
+	// 1. loop through entire tokens in batches
+	c.log.Debug("tokens in the node before migrated token check")
+	tempTokensarray := tokens
+	migratedTokensList := make([]string, 0)
+	for i := 0; i < len(tokens); i += BatchSize {
+		end := i + BatchSize
+		if end > len(tokens) {
+			end = len(tokens)
+		}
+		tokenBatch := tokens[i:end]
+
+		// 2.check arb node and get status of tokens migrated or not
+		err = p.SendJSONRequest("POST", APIGetMigratedTokenStatus, nil, tokenBatch, &br, true)
+		if err != nil {
+			c.log.Error("Failed to migrate, failed to get token migrated token status", "err", err)
+			return fmt.Errorf("failed to migrate, ffailed to get token migrated token status")
+		}
+		if !br.Status {
+			c.log.Error("Failed to migrate, failed to get token migrated token status", "msg", br.Message)
+			return fmt.Errorf("failed to migrate, failed to get token migrated token status")
+		}
+		migratedTokenStatus := br.MigratedStatus
+		// 2. iterate through the repsonse and if 1 is encountered at ith position, remove token at i in temp
+		for i := range migratedTokenStatus {
+			if migratedTokenStatus[i] == 1 {
+				tempTokensarray = util.RemoveAtIndex(tempTokensarray, i)
+				migratedTokensList = append(migratedTokensList, tempTokensarray[i])
+				c.log.Debug("encountered an already migrated token ", tempTokensarray[i])
+				c.log.Debug("skipping the token")
+			}
+		}
+	}
+	// 3. write the corrected tokens to the original array
+	tokens = tempTokensarray
+	// 4. store the list of already migrated tokens in a file
+	if len(migratedTokensList) > 0 {
+		fp, err := os.Open("migratedtokens.txt")
+		if err == nil {
+			for i := range migratedTokensList {
+				fp.WriteString(migratedTokensList[i])
+			}
+			fp.Close()
+		}
+	}
 	defer p.Close()
 	if !c.checkDIDMigrated(p, d[0].DID) {
 		c.log.Error("Failed to migrate, unable to migrate did")
