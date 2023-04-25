@@ -62,6 +62,7 @@ const (
 	CreateDataTokenCmd    string = "createdatatoken"
 	CommitDataTokenCmd    string = "commitdatatoken"
 	SetupDBCmd            string = "setupdb"
+	GetTxnDetailsCmd      string = "gettxndetails"
 )
 
 var commands = []string{VersionCmd,
@@ -90,7 +91,8 @@ var commands = []string{VersionCmd,
 	LockTokensCmd,
 	CreateDataTokenCmd,
 	CommitDataTokenCmd,
-	SetupDBCmd}
+	SetupDBCmd,
+	GetTxnDetailsCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -117,7 +119,8 @@ var commandsHelp = []string{"To get tool version",
 	"This command will lock the tokens on the arbitary node",
 	"This command will create data token token",
 	"This command will commit data token token",
-	"This command will setup the DB"}
+	"This command will setup the DB",
+	"This command will get transaction details"}
 
 type Command struct {
 	cfg          config.Config
@@ -173,6 +176,9 @@ type Command struct {
 	userID       string
 	userInfo     string
 	timeout      time.Duration
+	txnID        string
+	role         string
+	date         time.Time
 }
 
 func showVersion() {
@@ -330,7 +336,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.senderAddr, "senderAddr", "", "Sender address")
 	flag.StringVar(&cmd.receiverAddr, "receiverAddr", "", "Receiver address")
 	flag.Float64Var(&cmd.rbtAmount, "rbtAmount", 0.0, "RBT amount")
-	flag.StringVar(&cmd.transComment, "transComment", "Test tranasaction", "Transaction comment")
+	flag.StringVar(&cmd.transComment, "transComment", "", "Transaction comment")
 	flag.IntVar(&cmd.transType, "transType", 2, "Transaction type")
 	flag.IntVar(&cmd.numTokens, "numTokens", 1, "Number of tokens")
 	flag.StringVar(&cmd.did, "did", "", "DID")
@@ -344,6 +350,8 @@ func Run(args []string) {
 	flag.StringVar(&cmd.userID, "uid", "testuser", "User ID for token creation")
 	flag.StringVar(&cmd.userInfo, "uinfo", "", "User info for token creation")
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
+	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
+	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -460,6 +468,8 @@ func Run(args []string) {
 		cmd.commitDataToken()
 	case SetupDBCmd:
 		cmd.setupDB()
+	case GetTxnDetailsCmd:
+		cmd.getTxnDetails()
 	default:
 		cmd.log.Error("Invalid command")
 	}

@@ -348,6 +348,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		for _, t := range ti {
 			c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
 		}
+		//call ipfs repo gc after unpinnning
+		c.ipfsRepoGc()
 		nbid, err := nb.GetBlockID(ti[0].Token)
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
@@ -746,6 +748,14 @@ func (c *Core) getArbitrationSignature(p *ipfsport.Peer, sr *SignatureRequest) (
 func (c *Core) checkIsPledged(tcb *block.Block, token string) bool {
 	if strings.Compare(tcb.GetTransType(), block.TokenPledgedType) == 0 {
 		c.log.Debug("Token", token, " is a pledged token. Not Considered for pledging")
+		return true
+	}
+	return false
+}
+
+func (c *Core) checkIsUnpledged(tcb *block.Block, token string) bool {
+	if strings.Compare(tcb.GetTransType(), block.TokenUnpledgedType) == 0 {
+		c.log.Debug("Token", token, " is unpledged token")
 		return true
 	}
 	return false
