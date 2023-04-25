@@ -582,6 +582,7 @@ func (c *Core) mapDIDArbitration(req *ensweb.Request) *ensweb.Result {
 	}
 	br.Status = true
 	br.Message = "DID mapped successfully"
+	go c.updateDIDOnAllArbitrationNode(od, nd)
 	return c.l.RenderJSON(req, &br, http.StatusOK)
 }
 
@@ -622,6 +623,98 @@ func (c *Core) getTokenNumber(req *ensweb.Request) *ensweb.Result {
 	br.Status = true
 	br.TokenNumbers = tns
 	return c.l.RenderJSON(req, &br, http.StatusOK)
+}
+
+func (c *Core) getMigratedTokenStatus(req *ensweb.Request) *ensweb.Result {
+	var tokens []string
+	br := model.MigratedTokenStatus{
+		Status: false,
+	}
+	err := c.l.ParseJSON(req, &tokens)
+	if err != nil {
+		br.Message = "failed to get tokens, parsing failed"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	migratedTokenStatus := make([]int, 0)
+	for i := range tokens {
+		td, err := c.srv.GetTokenDetials(tokens[i])
+		if err == nil && td.Token == tokens[i] {
+			migratedTokenStatus[i] = 1
+		}
+	}
+	br.Status = true
+	br.MigratedStatus = migratedTokenStatus
+	return c.l.RenderJSON(req, &br, http.StatusOK)
+}
+
+func (c *Core) updateDIDOnAllArbitrationNode(oldDid, newDid string) {
+
+	for i := 0; i < len(c.arbitaryAddr); i++ {
+		peerID, _, ok := util.ParseAddress(c.arbitaryAddr[i])
+		if !ok {
+			fmt.Errorf("invalid address")
+		}
+		if peerID == c.peerID {
+			continue
+		}
+		p, err := c.getPeer(c.arbitaryAddr[i])
+		if err != nil {
+			c.log.Error("Failed to sync DB to arbitrary node", "err", err, "peer", c.arbitaryAddr[i])
+			//return fmt.Errorf("failed to migrate, failed to connect arbitary peer")
+		}
+		m := make(map[string]string)
+		var br model.BasicResponse
+		m["olddid"] = oldDid
+		m["newdid"] = newDid
+		err1 := p.SendJSONRequest("POST", APISyncDIDArbitration, nil, &m, &br, true)
+		if err1 != nil {
+			c.log.Error("Failed to sync did to arbitray", "peer", c.arbitaryAddr[i], "err", err)
+			//return false
+		}
+		if !br.Status {
+			c.log.Error("Failed to sync did to arbitray", "peer", c.arbitaryAddr[i], "msg", br.Message)
+			//return false
+		}
+	}
+}
+
+func (c *Core) syncDIDArbitration(req *ensweb.Request) *ensweb.Result {
+	var m map[string]string
+	err := c.l.ParseJSON(req, &m)
+	br := model.BasicResponse{
+		Status: false,
+	}
+	if err != nil {
+		c.log.Error("Failed to parse json request", "err", err)
+		br.Message = "Failed to parse json request"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	od, ok := m["olddid"]
+	if !ok {
+		c.log.Error("Missing old did value")
+		br.Message = "Missing old did value"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	nd, ok := m["newdid"]
+	if !ok {
+		c.log.Error("Missing new did value")
+		br.Message = "Missing new did value"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	dm := &service.DIDMap{
+		OldDID: od,
+		NewDID: nd,
+	}
+	err = c.srv.UpdateDIDMap(dm)
+	if err != nil {
+		c.log.Error("Failed to update map table", "err", err)
+		br.Message = "Failed to update map table"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	br.Status = true
+	br.Message = "DID mapped successfully"
+	return c.l.RenderJSON(req, &br, http.StatusOK)
+
 }
 
 func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
