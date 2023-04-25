@@ -747,6 +747,10 @@ func GetFloatFromMap(m interface{}, key string) float64 {
 	return tl
 }
 
+func RemoveAtIndex(slice []string, index int) []string {
+	return append(slice[:index], slice[index+1:]...)
+}
+
 func BytesToString(b []byte) []string {
 	var lines []string
 	scanner := bufio.NewScanner(bytes.NewReader(b))
