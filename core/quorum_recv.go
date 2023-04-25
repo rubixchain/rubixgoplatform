@@ -5,7 +5,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -147,6 +150,47 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			c.log.Error("Pledge Token check Failed, Token ", wt[i], " is Pledged Token")
 			crep.Message = "Pledge Token check Failed, Token " + wt[i].Token + " is Pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if c.checkTokenIsUnpledged(wt[i].Token) {
+			unpledgeId := c.getUnpledgeId(wt[i].Token)
+			if unpledgeId == "" {
+				c.log.Error("Failed to fetch proof file CID")
+				crep.Message = "Failed to fetch proof file CID"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			err := c.ipfs.Get(unpledgeId, c.cfg.DirPath+"unpledge")
+			if err != nil {
+				c.log.Error("Failed to fetch proof file")
+				crep.Message = "Failed to fetch proof file, err " + err.Error()
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			pcb, err := ioutil.ReadFile(c.cfg.DirPath + "unpledge/" + unpledgeId)
+			if err != nil {
+				c.log.Error("Invalid file", "err", err)
+				crep.Message = "Invalid file,err " + err.Error()
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			pcs := util.BytesToString(pcb)
+
+			senderAddr := cr.SenderPeerID + "." + sc.GetSenderDID()
+			rdid, tid, err := c.getProofverificationDetails(wt[i].Token, senderAddr)
+			if err != nil {
+				c.log.Error("Failed to get pledged for token reciveer did", "err", err)
+				crep.Message = "Failed to get pledged for token reciveer did"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			pv, err := c.up.ProofVerification(wt[i].Token, pcs, rdid, tid)
+			if err != nil {
+				c.log.Error("Proof Verification Failed due to error ", err)
+				crep.Message = "Proof Verification Failed due to error " + err.Error()
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			if !pv {
+				c.log.Debug("Proof of Work for Unpledge not verified")
+				crep.Message = "Proof of Work for Unpledge not verified"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			c.log.Debug("Proof of work verified")
 		}
 	}
 
@@ -731,4 +775,89 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 	srep.Status = true
 	srep.Message = "Signature done"
 	return c.l.RenderJSON(req, &srep, http.StatusOK)
+}
+
+func (c *Core) getProofverificationDetails(tokenID string, senderAddr string) (string, string, error) {
+	var receiverDID, txnId string
+	tt := token.RBTTokenType
+	blk := c.w.GetLatestTokenBlock(tokenID, tt)
+
+	pbid, err := blk.GetPrevBlockID(tokenID)
+	if err != nil {
+		c.log.Error("Failed to get the block id. Unable to verify proof file")
+		return "", "", err
+	}
+	pBlk, err := c.w.GetTokenBlock(tokenID, tt, pbid)
+	if err != nil {
+		c.log.Error("Failed to get the Previous Block Unable to verify proof file")
+		return "", "", err
+	}
+
+	prevBlk := block.InitBlock(pBlk, nil)
+	if prevBlk == nil {
+		c.log.Error("Failed to initialize the Previous Block Unable to verify proof file")
+		return "", "", fmt.Errorf("Failed to initilaize previous block")
+	}
+	tokenPledgedForDetailsStr := prevBlk.GetTokenPledgedForDetails()
+	tokenPledgedForDetailsBlkArray := prevBlk.GetTransBlock()
+
+	if tokenPledgedForDetailsStr == "" && tokenPledgedForDetailsBlkArray == nil {
+		c.log.Error("Failed to get details pledged for token. Unable to verify proof file")
+		return "", "", fmt.Errorf("Failed to get deatils of pledged for token")
+	}
+
+	if tokenPledgedForDetailsBlkArray != nil {
+		tokenPledgedForDetailsBlk := block.InitBlock(tokenPledgedForDetailsBlkArray, nil)
+		receiverDID = tokenPledgedForDetailsBlk.GetReceiverDID()
+		txnId = tokenPledgedForDetailsBlk.GetTid()
+	}
+
+	if tokenPledgedForDetailsStr != "" {
+		tpfdArray := strings.Split(tokenPledgedForDetailsStr, ",")
+
+		tokenPledgedFor := tpfdArray[0]
+		tokenPledgedForTypeStr := tpfdArray[1]
+		tokenPledgedForBlockId := tpfdArray[2]
+
+		tokenPledgedForType, err := strconv.Atoi(tokenPledgedForTypeStr)
+		if err != nil {
+			c.log.Error("Failed toconvert to integer", "err", err)
+			return "", "", err
+		}
+		//check if token chain of token pledged for already synced to node
+		pledgedfBlk, err := c.w.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
+		if err != nil {
+			c.log.Error("Failed to get the pledged for token's Block Unable to verify proof file")
+			return "", "", err
+		}
+		var pledgedforBlk *block.Block
+		if pledgedfBlk != nil {
+			pledgedforBlk = block.InitBlock(pledgedfBlk, nil)
+			if pledgedforBlk == nil {
+				c.log.Error("Failed to initialize the pledged for token's Block Unable to verify proof file")
+				return "", "", fmt.Errorf("Failed to initilaize previous block")
+			}
+		} else { //if token chain of token pledged for not synced fetch from sender
+			p, err := c.getPeer(senderAddr)
+			if err != nil {
+				c.log.Error("Failed to get peer", "err", err)
+				return "", "", err
+			}
+			err = c.syncTokenChainFrom(p, tokenPledgedForBlockId, tokenPledgedFor, tokenPledgedForType)
+			if err != nil {
+				c.log.Error("Failed to sync token chain block", "err", err)
+				return "", "", err
+			}
+			tcbArray, err := c.w.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
+			if err != nil {
+				c.log.Error("Failed to fetch previous block", "err", err)
+				return "", "", err
+			}
+			pledgedforBlk = block.InitBlock(tcbArray, nil)
+		}
+
+		receiverDID = pledgedforBlk.GetReceiverDID()
+		txnId = pledgedforBlk.GetTid()
+	}
+	return receiverDID, txnId, nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/EnsurityTechnologies/logger"
 	"github.com/fxamacker/cbor"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -56,9 +57,10 @@ type TokenChainBlock struct {
 }
 
 type Block struct {
-	bb []byte
-	bm map[string]interface{}
-	op bool
+	bb  []byte
+	bm  map[string]interface{}
+	op  bool
+	log logger.Logger
 }
 
 type BlockOption func(b *Block)
@@ -474,6 +476,30 @@ func (b *Block) GetTransTokens() []string {
 		return tkns
 	}
 	return nil
+}
+
+func (b *Block) GetUnpledgeId() string {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return ""
+	}
+	tm := util.GetFromMap(tim, TITokensKey)
+	if tm == nil {
+		return ""
+	}
+	var result string
+	mi, ok2 := tm.(map[interface{}]interface{})
+	if ok2 {
+		for _, v := range mi {
+			result = (util.GetFromMap(v, TTUnpledgedIDKey)).(string)
+		}
+
+	}
+	return result
+}
+
+func (b *Block) GetTokenPledgedForDetails() string {
+	return b.getTrasnInfoString(TIRefIDKey)
 }
 
 func (b *Block) GetTransType() string {
