@@ -703,7 +703,7 @@ func (c *Core) checkDIDMigrated(p *ipfsport.Peer, did string) bool {
 	var br model.BasicResponse
 	q := make(map[string]string)
 	q["olddid"] = did
-	err := p.SendJSONRequest("GET", APICheckDIDArbitration, q, nil, &br, true)
+	err := p.SendJSONRequest("GET", APICheckDIDArbitration, q, nil, &br, true, time.Minute*10)
 	if err != nil {
 		c.log.Error("Failed to get did detials from arbitray", "err", err)
 		return false
@@ -720,7 +720,7 @@ func (c *Core) mapMigratedDID(p *ipfsport.Peer, olddid string, newdid string) bo
 	m := make(map[string]string)
 	m["olddid"] = olddid
 	m["newdid"] = newdid
-	err := p.SendJSONRequest("POST", APIMapDIDArbitration, nil, &m, &br, true)
+	err := p.SendJSONRequest("POST", APIMapDIDArbitration, nil, &m, &br, true, time.Minute*10)
 	if err != nil {
 		c.log.Error("Failed to get did detials from arbitray", "err", err)
 		return false
@@ -734,13 +734,19 @@ func (c *Core) mapMigratedDID(p *ipfsport.Peer, olddid string, newdid string) bo
 
 func (c *Core) getArbitrationSignature(p *ipfsport.Peer, sr *SignatureRequest) (string, bool) {
 	var srep SignatureReply
-	err := p.SendJSONRequest("POST", APITokenArbitration, nil, sr, &srep, true)
+	err := p.SendJSONRequest("POST", APITokenArbitration, nil, sr, &srep, true, time.Minute*10)
 	if err != nil {
 		c.log.Error("Failed to get arbitray signature", "err", err)
 		return "", false
 	}
 	if !srep.Status {
 		c.log.Error("Failed to get arbitray signature", "msg", srep.Message)
+		if strings.Contains(srep.Message, "token is already migrated") {
+			str := strings.Split(srep.Message, ",")
+			if len(str) > 1 {
+				return str[1], false
+			}
+		}
 		return "", false
 	}
 	return srep.Signature, true
