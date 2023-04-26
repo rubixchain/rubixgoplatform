@@ -23,6 +23,7 @@ const (
 
 type Service struct {
 	s   storage.Storage
+	as  storage.Storage
 	log logger.Logger
 }
 
@@ -41,14 +42,15 @@ type HashEntry struct {
 	Value int    `gorm:"column:value"`
 }
 
-func NewService(s storage.Storage, log logger.Logger) (*Service, error) {
+func NewService(s storage.Storage, as storage.Storage, log logger.Logger) (*Service, error) {
 	srv := &Service{
 		s:   s,
+		as:  as,
 		log: log.Named("service"),
 	}
 	// Initialize the Arbitration Table to store the token
 	// detials
-	err := s.Init(ArbitrationTable, &TokenDetials{}, false)
+	err := as.Init(ArbitrationTable, &TokenDetials{}, false)
 	if err != nil {
 		srv.log.Error("Failed to init arbitration")
 	}
@@ -56,7 +58,7 @@ func NewService(s storage.Storage, log logger.Logger) (*Service, error) {
 	if err != nil {
 		srv.log.Error("Failed to init temp arbitration")
 	}
-	err = s.Init(ArbitrationDIDTable, &DIDMap{}, false)
+	err = as.Init(ArbitrationDIDTable, &DIDMap{}, false)
 	if err != nil {
 		srv.log.Error("Failed to init did arbitration")
 	}
@@ -107,7 +109,7 @@ func (s *Service) GetTokenNumber(hash string) (int, error) {
 
 func (s *Service) GetTokenDetials(t string) (*TokenDetials, error) {
 	var td TokenDetials
-	err := s.s.Read(ArbitrationTable, &td, "token=?", t)
+	err := s.as.Read(ArbitrationTable, &td, "token=?", t)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +130,7 @@ func (s *Service) UpdateTokenDetials(did string) error {
 			break
 		}
 		if len(td) > 0 {
-			err = s.s.WriteBatch(ArbitrationTable, td, len(td))
+			err = s.as.WriteBatch(ArbitrationTable, td, len(td))
 			if err != nil {
 				s.log.Error("Failed to write arbitary table", "err", err)
 				return err
@@ -172,7 +174,7 @@ func (s *Service) UpdateTempTokenDetials(td *TokenDetials) error {
 }
 
 func (s *Service) UpdateDIDMap(dm *DIDMap) error {
-	err := s.s.Write(ArbitrationDIDTable, dm)
+	err := s.as.Write(ArbitrationDIDTable, dm)
 	if err != nil {
 		s.log.Error("Failed to write did aribitration table", "err", err)
 	}
@@ -181,7 +183,7 @@ func (s *Service) UpdateDIDMap(dm *DIDMap) error {
 
 func (s *Service) GetDIDMap(did string) (*DIDMap, error) {
 	var dm DIDMap
-	err := s.s.Read(ArbitrationDIDTable, &dm, "old_did=?", did)
+	err := s.as.Read(ArbitrationDIDTable, &dm, "old_did=?", did)
 	if err != nil {
 		return nil, err
 	}

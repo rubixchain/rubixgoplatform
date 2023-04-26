@@ -626,7 +626,6 @@ func (c *Core) mapDIDArbitration(req *ensweb.Request) *ensweb.Result {
 	}
 	br.Status = true
 	br.Message = "DID mapped successfully"
-	go c.updateDIDOnAllArbitrationNode(od, nd)
 	return c.l.RenderJSON(req, &br, http.StatusOK)
 }
 
@@ -689,37 +688,6 @@ func (c *Core) getMigratedTokenStatus(req *ensweb.Request) *ensweb.Result {
 	br.Status = true
 	br.MigratedStatus = migratedTokenStatus
 	return c.l.RenderJSON(req, &br, http.StatusOK)
-}
-
-func (c *Core) updateDIDOnAllArbitrationNode(oldDid, newDid string) {
-
-	for i := 0; i < len(c.arbitaryAddr); i++ {
-		peerID, _, ok := util.ParseAddress(c.arbitaryAddr[i])
-		if !ok {
-			fmt.Errorf("invalid address")
-		}
-		if peerID == c.peerID {
-			continue
-		}
-		p, err := c.getPeer(c.arbitaryAddr[i])
-		if err != nil {
-			c.log.Error("Failed to sync DB to arbitrary node", "err", err, "peer", c.arbitaryAddr[i])
-			//return fmt.Errorf("failed to migrate, failed to connect arbitary peer")
-		}
-		m := make(map[string]string)
-		var br model.BasicResponse
-		m["olddid"] = oldDid
-		m["newdid"] = newDid
-		err1 := p.SendJSONRequest("POST", APISyncDIDArbitration, nil, &m, &br, true)
-		if err1 != nil {
-			c.log.Error("Failed to sync did to arbitray", "peer", c.arbitaryAddr[i], "err", err)
-			//return false
-		}
-		if !br.Status {
-			c.log.Error("Failed to sync did to arbitray", "peer", c.arbitaryAddr[i], "msg", br.Message)
-			//return false
-		}
-	}
 }
 
 func (c *Core) syncDIDArbitration(req *ensweb.Request) *ensweb.Result {
