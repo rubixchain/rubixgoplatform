@@ -12,11 +12,6 @@ const (
 	ReponseMsgHdr string = "response"
 )
 
-type DIDResponse struct {
-	DID    string `json:"did"`
-	PeerID string `json:"peer_id"`
-}
-
 type LoginRequest struct {
 	UserName string `json:"user_Name"`
 	Password string `json:"password"`

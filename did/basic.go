@@ -25,7 +25,7 @@ func InitDIDBasic(did string, baseDir string, ch *DIDChan) *DIDBasic {
 }
 
 func InitDIDBasicWithPassword(did string, baseDir string, pwd string) *DIDBasic {
-	return &DIDBasic{did: did, dir: baseDir, pwd: pwd}
+	return &DIDBasic{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 }
 
 func (d *DIDBasic) getPassword() (string, error) {

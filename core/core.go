@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"sync"
@@ -20,25 +21,31 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
+	"github.com/rubixchain/rubixgoplatform/core/unpledge"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	didm "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 const (
-	APIPingPath            string = "/api/ping"
-	APIPeerStatus          string = "/api/peerstatus"
-	APICreditStatus        string = "/api/creditstatus"
-	APIQuorumConsensus     string = "/api/quorum-conensus"
-	APIQuorumCredit        string = "/api/quorum-credit"
-	APIReqPledgeToken      string = "/api/req-pledge-token"
-	APIUpdatePledgeToken   string = "/api/update-pledge-token"
-	APISignatureRequest    string = "/api/signature-request"
-	APISendReceiverToken   string = "/api/send-receiver-token"
-	APISyncTokenChain      string = "/api/sync-token-chain"
-	APIDhtProviderCheck    string = "/api/dht-provider-check"
-	APIMapDIDArbitration   string = "/api/map-did-arbitration"
-	APICheckDIDArbitration string = "/api/check-did-arbitration"
-	APITokenArbitration    string = "/api/token-arbitration"
+	APIPingPath               string = "/api/ping"
+	APIPeerStatus             string = "/api/peerstatus"
+	APICreditStatus           string = "/api/creditstatus"
+	APIQuorumConsensus        string = "/api/quorum-conensus"
+	APIQuorumCredit           string = "/api/quorum-credit"
+	APIReqPledgeToken         string = "/api/req-pledge-token"
+	APIUpdatePledgeToken      string = "/api/update-pledge-token"
+	APISignatureRequest       string = "/api/signature-request"
+	APISendReceiverToken      string = "/api/send-receiver-token"
+	APISyncTokenChain         string = "/api/sync-token-chain"
+	APIDhtProviderCheck       string = "/api/dht-provider-check"
+	APIMapDIDArbitration      string = "/api/map-did-arbitration"
+	APICheckDIDArbitration    string = "/api/check-did-arbitration"
+	APITokenArbitration       string = "/api/token-arbitration"
+	APIGetTokenNumber         string = "/api/get-token-number"
+	APIGetMigratedTokenStatus string = "/api/get-Migrated-token-status"
+	APISyncDIDArbitration     string = "/api/sync-did-arbitration"
 )
 
 const (
@@ -75,6 +82,7 @@ type Core struct {
 	ipfsState     bool
 	ipfsChan      chan bool
 	d             *did.DID
+	up            *unpledge.UnPledge
 	didDir        string
 	pm            *ipfsport.PeerManager
 	qm            *QuorumManager
@@ -92,6 +100,7 @@ type Core struct {
 	qc            map[string]did.DIDCrypto
 	sd            map[string]*ServiceDetials
 	s             storage.Storage
+	as            storage.Storage
 	srv           *service.Service
 	arbitaryMode  bool
 	arbitaryAddr  []string
@@ -224,6 +233,14 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			c.log.Error("Failed to create storage DB", "err", err)
 			return nil, fmt.Errorf("failed to create storage DB")
 		}
+		if c.arbitaryMode {
+			scfg.DBName = "ArbitaryDB"
+			c.as, err = storage.NewStorageDB(scfg)
+			if err != nil {
+				c.log.Error("Failed to create storage DB", "err", err)
+				return nil, fmt.Errorf("failed to create storage DB")
+			}
+		}
 	default:
 		c.log.Error("Unsupported DB type, please check the configuration", "type", sc.StorageType)
 		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
@@ -239,12 +256,22 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		c.log.Error("Failed to setup quorum manager", "err", err)
 		return nil, err
 	}
-	c.srv, err = service.NewService(c.s, c.log)
+	err = util.CreateDir(c.cfg.DirPath + "unpledge")
 	if err != nil {
-		c.log.Error("Failed to setup service", "err", err)
+		c.log.Error("Failed to create unpledge", "err", err)
+		return nil, err
+	}
+	c.up, err = unpledge.InitUnPledge(c.s, c.w, c.testNet, c.cfg.DirPath+"unpledge/", c.Unpledge, c.log)
+	if err != nil {
+		c.log.Error("Failed to init unpledge", "err", err)
 		return nil, err
 	}
 	if c.arbitaryMode {
+		c.srv, err = service.NewService(c.s, c.as, c.log)
+		if err != nil {
+			c.log.Error("Failed to setup service", "err", err)
+			return nil, err
+		}
 		c.log.Info("Arbitary mode is enabled")
 	}
 	err = c.InitRubixExplorer()
@@ -272,7 +299,7 @@ func (c *Core) SetupCore() error {
 	if c.testNet {
 		bs = nil
 	}
-	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, 100, c.ipfs, c.log, bs)
+	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, c.cfg.CfgData.Ports.ReceiverPort+10, 5000, c.ipfs, c.log, bs, c.peerID)
 	c.d = did.InitDID(c.didDir, c.log, c.ipfs)
 	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
 	if err != nil {
@@ -345,6 +372,11 @@ func (c *Core) Start() (bool, string) {
 	return true, "Setup Complete"
 }
 
+// TODO:: need to add more test
+func (c *Core) NodeStatus() bool {
+	return true
+}
+
 func (c *Core) StopCore() {
 	// exp := model.ExploreModel{
 	// 	Cmd:    ExpPeerStatusCmd,
@@ -390,49 +422,6 @@ func (c *Core) updateConfig() error {
 		return err
 	}
 	return nil
-}
-
-func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
-	did, err := c.d.CreateDID(didCreate)
-	if err != nil {
-		return "", err
-	}
-	dt := wallet.DIDType{
-		DID:    did,
-		DIDDir: didCreate.Dir,
-		Type:   didCreate.Type,
-		Config: didCreate.Config,
-	}
-	err = c.w.CreateDID(&dt)
-	if err != nil {
-		c.log.Error("Failed to create did in the wallet", "err", err)
-		return "", err
-	}
-	// exp := model.ExploreModel{
-	// 	Cmd:     ExpDIDPeerMapCmd,
-	// 	DIDList: []string{did},
-	// 	PeerID:  c.peerID,
-	// 	Message: "DID Created Successfully",
-	// }
-	// err = c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	return "", err
-	// }
-	c.ec.ExplorerCreateDID(c.peerID, did)
-	return did, nil
-}
-
-func (c *Core) GetDIDs(dir string) []wallet.DIDType {
-	dt, err := c.w.GetDIDs(dir)
-	if err != nil {
-		return nil
-	}
-	return dt
-}
-
-func (c *Core) IsDIDExist(dir string, did string) bool {
-	_, err := c.w.GetDIDDir(dir, did)
-	return err == nil
 }
 
 func (c *Core) AddWebReq(req *ensweb.Request) {
@@ -498,6 +487,8 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 		return did.InitDIDStandard(didStr, c.didDir, dc), nil
 	case did.WalletDIDMode:
 		return did.InitDIDWallet(didStr, c.didDir, dc), nil
+	case did.ChildDIDMode:
+		return did.InitDIDChild(didStr, c.didDir, dc), nil
 	default:
 		return nil, fmt.Errorf("DID Type is not supported")
 	}
@@ -528,6 +519,17 @@ func (c *Core) FetchDID(did string) error {
 			return err
 		}
 		err = c.ipfs.Get(did, c.didDir+did+"/")
+		if err == nil {
+			_, e := os.Stat(c.didDir + did + "/" + didm.MasterDIDFileName)
+			// Fetch the master DID also
+			if e == nil {
+				var rb []byte
+				rb, err = ioutil.ReadFile(c.didDir + did + "/" + didm.MasterDIDFileName)
+				if err == nil {
+					return c.FetchDID(string(rb))
+				}
+			}
+		}
 	}
 	return err
 }

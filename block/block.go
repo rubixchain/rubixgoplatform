@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/EnsurityTechnologies/logger"
 	"github.com/fxamacker/cbor"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -41,6 +42,8 @@ const (
 	TokenMigratedType    string = "03"
 	TokenPledgedType     string = "04"
 	TokenGeneratedType   string = "05"
+	TokenUnpledgedType   string = "06"
+	TokenCommittedType   string = "07"
 )
 
 type TokenChainBlock struct {
@@ -54,9 +57,10 @@ type TokenChainBlock struct {
 }
 
 type Block struct {
-	bb []byte
-	bm map[string]interface{}
-	op bool
+	bb  []byte
+	bm  map[string]interface{}
+	op  bool
+	log logger.Logger
 }
 
 type BlockOption func(b *Block)
@@ -426,8 +430,84 @@ func (b *Block) GetHash() (string, error) {
 	return h, nil
 }
 
+func (b *Block) CheckMultiTokenBlock() bool {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return false
+	}
+	tm := util.GetFromMap(tim, TITokensKey)
+	if tm == nil {
+		return false
+	}
+	m, ok := tm.(map[string]interface{})
+	if ok {
+		return len(m) > 1
+	}
+	lm, ok := tm.(map[interface{}]interface{})
+	if ok {
+		return len(lm) > 1
+	}
+	return false
+}
+
+func (b *Block) GetTransTokens() []string {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return nil
+	}
+	tm := util.GetFromMap(tim, TITokensKey)
+	if tm == nil {
+		return nil
+	}
+	m, ok := tm.(map[string]interface{})
+	if ok {
+		tkns := make([]string, 0)
+		for k, _ := range m {
+			tkns = append(tkns, k)
+		}
+		return tkns
+	}
+	lm, ok := tm.(map[interface{}]interface{})
+	if ok {
+		tkns := make([]string, 0)
+		for k, _ := range lm {
+			tkns = append(tkns, k.(string))
+		}
+		return tkns
+	}
+	return nil
+}
+
+func (b *Block) GetUnpledgeId() string {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return ""
+	}
+	tm := util.GetFromMap(tim, TITokensKey)
+	if tm == nil {
+		return ""
+	}
+	var result string
+	mi, ok2 := tm.(map[interface{}]interface{})
+	if ok2 {
+		for _, v := range mi {
+			result = (util.GetFromMap(v, TTUnpledgedIDKey)).(string)
+		}
+
+	}
+	return result
+}
+
+func (b *Block) GetTokenPledgedForDetails() string {
+	return b.getTrasnInfoString(TIRefIDKey)
+}
+
 func (b *Block) GetTransType() string {
 	return b.getBlkString(TCTransTypeKey)
+}
+
+func (b *Block) GetOwner() string {
+	return b.getBlkString(TCTokenOwnerKey)
 }
 
 func (b *Block) GetSenderDID() string {

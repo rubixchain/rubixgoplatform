@@ -147,7 +147,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			return "", err
 		}
 	}
-	if didCreate.Type == BasicDIDMode {
+	if didCreate.Type == BasicDIDMode || didCreate.Type == ChildDIDMode {
 		if didCreate.PrivPWD == "" {
 			d.log.Error("password required for creating", "err", err)
 			return "", err
@@ -173,26 +173,36 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		}
 	}
 
-	if didCreate.QuorumPWD == "" {
-		if didCreate.PrivPWD != "" {
-			didCreate.QuorumPWD = didCreate.PrivPWD
-		} else {
-			didCreate.QuorumPWD = DefaultPWD
+	if didCreate.Type == ChildDIDMode {
+		if didCreate.MasterDID == "" {
+			return "", fmt.Errorf("master did is missing")
 		}
-	}
+		err = util.FileWrite(dirName+"/public/"+MasterDIDFileName, []byte(didCreate.MasterDID))
+		if err != nil {
+			return "", err
+		}
+	} else {
+		if didCreate.QuorumPWD == "" {
+			if didCreate.PrivPWD != "" {
+				didCreate.QuorumPWD = didCreate.PrivPWD
+			} else {
+				didCreate.QuorumPWD = DefaultPWD
+			}
+		}
 
-	pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.QuorumPWD})
-	if err != nil {
-		d.log.Error("failed to create keypair", "err", err)
-		return "", err
-	}
-	err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
-	if err != nil {
-		return "", err
-	}
-	err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
-	if err != nil {
-		return "", err
+		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.QuorumPWD})
+		if err != nil {
+			d.log.Error("failed to create keypair", "err", err)
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
+		if err != nil {
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	did, err := d.getDirHash(dirName + "/public/")
@@ -222,7 +232,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	os.RemoveAll(dirName)
 	t2 := time.Now()
 	dif := t2.Sub(t1)
-	fmt.Printf("DID : %s, Time to create DID & Keys : %v", did, dif)
+	d.log.Info(fmt.Sprintf("DID : %s, Time to create DID & Keys : %v", did, dif))
 	return did, nil
 }
 
@@ -242,27 +252,51 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
-	util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
-	util.Filecopy(didCreate.PrivImgFile, dirName+"/private/"+PvtShareFileName)
-
+	_, err = util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
+	if err != nil {
+		d.log.Error("failed to copy did image", "err", err)
+		return "", err
+	}
+	_, err = util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
+	if err != nil {
+		d.log.Error("failed to copy public share", "err", err)
+		return "", err
+	}
+	_, err = util.Filecopy(didCreate.PrivImgFile, dirName+"/private/"+PvtShareFileName)
+	if err != nil {
+		d.log.Error("failed to copy private share key", "err", err)
+		return "", err
+	}
 	if didCreate.Type == BasicDIDMode {
-		if didCreate.PrivPWD == "" {
-			d.log.Error("password required for creating", "err", err)
-			return "", err
-		}
-		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.PrivPWD})
-		if err != nil {
-			d.log.Error("failed to create keypair", "err", err)
-			return "", err
-		}
-		err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
-		if err != nil {
-			return "", err
-		}
-		err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
-		if err != nil {
-			return "", err
+		if didCreate.PrivKeyFile == "" || didCreate.PubKeyFile == "" {
+			if didCreate.PrivPWD == "" {
+				d.log.Error("password required for creating", "err", err)
+				return "", err
+			}
+			pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.PrivPWD})
+			if err != nil {
+				d.log.Error("failed to create keypair", "err", err)
+				return "", err
+			}
+			err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
+			if err != nil {
+				return "", err
+			}
+			err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			_, err = util.Filecopy(didCreate.PrivKeyFile, dirName+"/private/"+PvtKeyFileName)
+			if err != nil {
+				d.log.Error("failed to copy private key", "err", err)
+				return "", err
+			}
+			_, err = util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFileName)
+			if err != nil {
+				d.log.Error("failed to copy pub key", "err", err)
+				return "", err
+			}
 		}
 	} else {
 		_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFileName)
@@ -279,19 +313,29 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 			didCreate.QuorumPWD = DefaultPWD
 		}
 	}
-
-	pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.QuorumPWD})
-	if err != nil {
-		d.log.Error("failed to create keypair", "err", err)
-		return "", err
-	}
-	err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
-	if err != nil {
-		return "", err
-	}
-	err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
-	if err != nil {
-		return "", err
+	if didCreate.QuorumPrivKeyFile == "" || didCreate.QuorumPubKeyFile == "" {
+		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.QuorumPWD})
+		if err != nil {
+			d.log.Error("failed to create keypair", "err", err)
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
+		if err != nil {
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		_, err = util.Filecopy(didCreate.QuorumPrivKeyFile, dirName+"/private/"+QuorumPvtKeyFileName)
+		if err != nil {
+			return "", err
+		}
+		_, err = util.Filecopy(didCreate.QuorumPubKeyFile, dirName+"/public/"+QuorumPubKeyFileName)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	did, err := d.getDirHash(dirName + "/public/")
@@ -339,7 +383,9 @@ func (d *DID) getDirHash(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer sf.Close()
 	slf := files.NewSliceDirectory([]files.DirEntry{files.FileEntry(filepath.Base(dir), sf)})
+	defer slf.Close()
 	reader := files.NewMultiFileReader(slf, true)
 
 	resp, err := d.ipfs.Request("add").
@@ -357,7 +403,7 @@ func (d *DID) getDirHash(dir string) (string, error) {
 	if resp.Error != nil {
 		return "", resp.Error
 	}
-
+	defer resp.Output.Close()
 	dec := json.NewDecoder(resp.Output)
 	var final string
 	for {

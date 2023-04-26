@@ -2,6 +2,7 @@ package core
 
 import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/token"
 )
 
 func (c *Core) DumpTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
@@ -10,7 +11,11 @@ func (c *Core) DumpTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 			Status: false,
 		},
 	}
-	blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, dr.BlockID)
+	tt := token.RBTTokenType
+	if c.testNet {
+		tt = token.TestTokenType
+	}
+	blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, tt, dr.BlockID)
 	if err != nil {
 		ds.Message = "Failed to get token chain block"
 		return ds

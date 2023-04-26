@@ -1,6 +1,9 @@
 package core
 
 import (
+	"bytes"
+
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -17,15 +20,21 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		}
 	}
 	address := cr.SenderPeerID + "." + sc.GetSenderDID()
+	p, err := c.getPeer(address)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return false
+	}
+	defer p.Close()
 	for i := range ti {
-		err := c.syncTokenChainFrom(address, ti[i].BlockID, ti[i].Token)
+		err := c.syncTokenChainFrom(p, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return false
 		}
 		// Check the token validation
 		if !c.testNet {
-			fb := c.w.GetFirstBlock(ti[i].Token)
+			fb := c.w.GetFirstBlock(ti[i].Token, ti[i].TokenType)
 			if fb == nil {
 				c.log.Error("Failed to get first token chain block")
 				return false
@@ -36,12 +45,18 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				return false
 			}
 			ct := token.GetTokenString(tl, tn)
-			if ct != ti[i].Token {
-				c.log.Error("Invalid token", "token", ti[i].Token, "exp_token", ct, "tl", tl, "tn", tn)
+			tb := bytes.NewBuffer([]byte(ct))
+			tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			if err != nil {
+				c.log.Error("Failed to validate, failed to get token hash", "err", err)
+				return false
+			}
+			if tid != ti[i].Token {
+				c.log.Error("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn)
 				return false
 			}
 		}
-		b := c.w.GetLatestTokenBlock(ti[i].Token)
+		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		if b == nil {
 			c.log.Error("Invalid token chain block")
 			return false
@@ -115,10 +130,40 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 }
 
 func (c *Core) checkTokenIsPledged(wt string) bool {
-	b := c.w.GetLatestTokenBlock(wt)
+	tokenType := token.RBTTokenType
+	if c.testNet {
+		tokenType = token.TestTokenType
+	}
+	b := c.w.GetLatestTokenBlock(wt, tokenType)
 	if b == nil {
 		c.log.Error("Invalid token chain block")
 		return true
 	}
 	return c.checkIsPledged(b, wt)
+}
+
+func (c *Core) checkTokenIsUnpledged(wt string) bool {
+	tokenType := token.RBTTokenType
+	if c.testNet {
+		tokenType = token.TestTokenType
+	}
+	b := c.w.GetLatestTokenBlock(wt, tokenType)
+	if b == nil {
+		c.log.Error("Invalid token chain block")
+		return true
+	}
+	return c.checkIsUnpledged(b, wt)
+}
+
+func (c *Core) getUnpledgeId(wt string) string {
+	tokenType := token.RBTTokenType
+	if c.testNet {
+		tokenType = token.TestTokenType
+	}
+	b := c.w.GetLatestTokenBlock(wt, tokenType)
+	if b == nil {
+		c.log.Error("Invalid token chain block")
+		return ""
+	}
+	return b.GetUnpledgeId()
 }

@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -81,6 +82,11 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 			cfg.PubKeyFile = did.PubKeyFileName
 		}
 		cfg.ImgFile = ""
+	case did.ChildDIDMode:
+		cfg.ImgFile = ""
+		cfg.DIDImgFileName = ""
+		cfg.PubImgFile = ""
+		cfg.PubKeyFile = ""
 	}
 	jd, err := json.Marshal(&cfg)
 	if err != nil {
@@ -102,23 +108,88 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 	if cfg.PubKeyFile != "" {
 		files["pub_key"] = cfg.PubKeyFile
 	}
-	var response model.BasicResponse
-	err = c.sendMutiFormRequest("POST", server.APICreateDID, nil, fields, files, &response)
+	var dr model.DIDResponse
+	err = c.sendMutiFormRequest("POST", server.APICreateDID, nil, fields, files, &dr)
 	if err != nil {
 		c.log.Error("Invalid response from the node", "err", err)
 		return "Invalid response from the node, " + err.Error(), false
 	}
-	if !response.Status {
-		c.log.Error("Failed to create DID", "message", response.Message)
-		return "Failed to create DID, " + response.Message, false
+	if !dr.Status {
+		c.log.Error("Failed to create DID", "message", dr.Message)
+		return "Failed to create DID, " + dr.Message, false
 	}
 	c.log.Info("DID Created successfully")
-	return "DID Created successfully", true
+	return dr.Result.DID, true
 }
 
-func (c *Client) SignatureResponse(sr *did.SignRespData) (*model.BasicResponse, error) {
+func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
+	if dc.Type < did.BasicDIDMode && dc.Type > did.WalletDIDMode {
+		return "Invalid DID mode", false
+	}
+	if !strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
+		!strings.Contains(dc.DIDImgFileName, did.DIDImgFileName) ||
+		!strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
+		!strings.Contains(dc.QuorumPubKeyFile, did.QuorumPubKeyFileName) ||
+		!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) {
+		return "Required files are missing", false
+	}
+	switch dc.Type {
+	case did.BasicDIDMode:
+		if !strings.Contains(dc.PrivImgFile, did.PvtShareFileName) ||
+			!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) {
+			return "Required files are missing", false
+		}
+	case did.StandardDIDMode:
+		if !strings.Contains(dc.PrivImgFile, did.PvtShareFileName) {
+			return "Required files are missing", false
+		}
+	}
+	jd, err := json.Marshal(&dc)
+	if err != nil {
+		c.log.Error("Failed to parse json data", "err", err)
+		return "Failed to parse json data", false
+	}
+	fields := make(map[string]string)
+	fields[server.DIDConfigField] = string(jd)
+	files := make(map[string]string)
+	if dc.PubImgFile != "" {
+		files["pub_image"] = dc.PubImgFile
+	}
+	if dc.DIDImgFileName != "" {
+		files["did_image"] = dc.DIDImgFileName
+	}
+	if dc.PrivImgFile != "" {
+		files["priv_image"] = dc.PrivImgFile
+	}
+	if dc.PubKeyFile != "" {
+		files["pub_key"] = dc.PubKeyFile
+	}
+	if dc.PrivKeyFile != "" {
+		files["priv_key"] = dc.PrivKeyFile
+	}
+	if dc.QuorumPubKeyFile != "" {
+		files["quorum_pub_key"] = dc.QuorumPubKeyFile
+	}
+	if dc.QuorumPrivKeyFile != "" {
+		files["quorum_priv_key"] = dc.QuorumPrivKeyFile
+	}
 	var br model.BasicResponse
-	err := c.sendJSONRequest("POST", server.APISignatureResponse, nil, sr, &br)
+	err = c.sendMutiFormRequest("POST", server.APISetupDID, nil, fields, files, &br)
+	if err != nil {
+		c.log.Error("Invalid response from the node", "err", err)
+		return "Invalid response from the node, " + err.Error(), false
+	}
+	if !br.Status {
+		c.log.Error("Failed to setup DID", "message", br.Message)
+		return "Failed to setup DID, " + br.Message, false
+	}
+	c.log.Info("DID setup successfully")
+	return br.Result.(string), true
+}
+
+func (c *Client) SignatureResponse(sr *did.SignRespData, timeout ...time.Duration) (*model.BasicResponse, error) {
+	var br model.BasicResponse
+	err := c.sendJSONRequest("POST", server.APISignatureResponse, nil, sr, &br, timeout...)
 	if err != nil {
 		return nil, err
 	}

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -36,49 +35,6 @@ func (c *Core) publishPeerMap(pm *PeerMap) error {
 			c.log.Error("Failed to publish peer map message", "err", err)
 			return err
 		}
-	}
-	return nil
-}
-
-func (c *Core) RegisterDID(reqID string, did string) {
-	err := c.registerDID(reqID, did)
-	br := model.BasicResponse{
-		Status:  true,
-		Message: "DID registered successfully",
-	}
-	if err != nil {
-		br.Status = false
-		br.Message = err.Error()
-	}
-	dc := c.GetWebReq(reqID)
-	if dc == nil {
-		c.log.Error("Failed to get did channels")
-		return
-	}
-	dc.OutChan <- &br
-}
-
-func (c *Core) registerDID(reqID string, did string) error {
-	dc, err := c.SetupDID(reqID, did)
-	if err != nil {
-		return fmt.Errorf("DID is not exist")
-	}
-	t := time.Now().String()
-	h := util.CalculateHashString(c.peerID+did+t, "SHA3-256")
-	sig, err := dc.PvtSign([]byte(h))
-	if err != nil {
-		return fmt.Errorf("register did, failed to do signature")
-	}
-	pm := &PeerMap{
-		PeerID:    c.peerID,
-		DID:       did,
-		Signature: sig,
-		Time:      t,
-	}
-	err = c.publishPeerMap(pm)
-	if err != nil {
-		c.log.Error("Register DID, failed to publish peer did map", "err", err)
-		return err
 	}
 	return nil
 }

@@ -68,7 +68,14 @@ func (s *Server) APILogin(req *ensweb.Request) *ensweb.Result {
 	}
 }
 
-// APIStart will setup the core
+// ShowAccount godoc
+// @Summary      Start Core
+// @Description  It will setup the core if not done before
+// @Tags         Basic
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/start [get]
 func (s *Server) APIStart(req *ensweb.Request) *ensweb.Result {
 	status, msg := s.c.Start()
 	return s.BasicResponse(req, status, msg, nil)
@@ -78,6 +85,16 @@ func (s *Server) APIStart(req *ensweb.Request) *ensweb.Result {
 func (s *Server) APIShutdown(req *ensweb.Request) *ensweb.Result {
 	go s.shutDown()
 	return s.BasicResponse(req, true, "Shutting down...", nil)
+}
+
+// APIStart will setup the core
+func (s *Server) APINodeStatus(req *ensweb.Request) *ensweb.Result {
+	ok := s.c.NodeStatus()
+	if ok {
+		return s.BasicResponse(req, true, "Node is up and running", nil)
+	} else {
+		return s.BasicResponse(req, false, "Node is down, please check logs", nil)
+	}
 }
 
 func (s *Server) shutDown() {

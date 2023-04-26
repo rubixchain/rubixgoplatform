@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -18,12 +19,14 @@ import (
 )
 
 const (
-	DTUserIDField      string = "UserID"
-	DTUserInfoField    string = "UserInfo"
-	DTFileInfoField    string = "FileInfo"
-	DTFileHashField    string = "FileHash"
-	DTFileURLField     string = "FileURL"
-	DTCommiterDIDField string = "CommitterDID"
+	DTUserIDField        string = "UserID"
+	DTUserInfoField      string = "UserInfo"
+	DTFileInfoField      string = "FileInfo"
+	DTFileHashField      string = "FileHash"
+	DTFileURLField       string = "FileURL"
+	DTFileTransInfoField string = "FileTransInfo"
+	DTCommiterDIDField   string = "CommitterDID"
+	DTBatchIDField       string = "BatchID"
 )
 
 type DataTokenReq struct {
@@ -34,6 +37,7 @@ type DataTokenReq struct {
 }
 
 func (c *Core) CreateDataToken(reqID string, dr *DataTokenReq) {
+	defer os.RemoveAll(dr.FolderName)
 	br := c.createDataToken(reqID, dr)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
@@ -44,6 +48,7 @@ func (c *Core) CreateDataToken(reqID string, dr *DataTokenReq) {
 }
 
 func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicResponse {
+	defer os.RemoveAll(dr.FolderName)
 	br := model.BasicResponse{
 		Status: false,
 	}
@@ -59,7 +64,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		TotalSupply: 1,
 		CreatorID:   userID[0],
 	}
-	userInfo, ok := dr.Fields[DTUserIDField]
+	userInfo, ok := dr.Fields[DTUserInfoField]
 	if ok {
 		rt.CreatorInput = userInfo[0]
 	}
@@ -67,6 +72,11 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	cdid, ok := dr.Fields[DTCommiterDIDField]
 	if ok {
 		comDid = cdid[0]
+	}
+	bid := comDid
+	bids, ok := dr.Fields[DTBatchIDField]
+	if ok {
+		bid = bids[0]
 	}
 	fileInfo, fok := dr.Fields[DTFileInfoField]
 	if fok {
@@ -91,6 +101,13 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 					rt.ContentURL = make(map[string]string)
 				}
 				rt.ContentURL[k] = cu
+			}
+			ti, ok := v[DTFileTransInfoField]
+			if ok {
+				if rt.TransInfo == nil {
+					rt.TransInfo = make(map[string]string)
+				}
+				rt.TransInfo[k] = ti
 			}
 		}
 	}
@@ -146,7 +163,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, failed to add rac token to ipfs"
 		return &br
 	}
-	err = c.w.CreateDataToken(&wallet.DataToken{TokenID: dt, DID: dr.DID, CommitterDID: comDid})
+	err = c.w.CreateDataToken(&wallet.DataToken{TokenID: dt, DID: dr.DID, CommitterDID: comDid, BatchID: bid})
 	if err != nil {
 		c.log.Error("Failed to create data token, write failed", "err", err)
 		br.Message = "Failed to create data token, write failed"
@@ -182,14 +199,28 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, smart contract signature failed"
 		return &br
 	}
+	gb := &block.GenesisBlock{
+		Type: block.TokenGeneratedType,
+		Info: []block.GenesisTokenInfo{
+			{Token: dt},
+		},
+	}
+	bti := &block.TransInfo{
+		Tokens: []block.TransTokens{
+			{
+				Token:     dt,
+				TokenType: token.DataTokenType,
+			},
+		},
+		Comment: "Data token generated at : " + time.Now().String(),
+	}
 	tcb := &block.TokenChainBlock{
 		TransactionType: block.TokenGeneratedType,
 		TokenOwner:      dr.DID,
 		TokenType:       token.DataTokenType,
 		SmartContract:   sc.GetBlock(),
-		TransInfo: &block.TransInfo{
-			Comment: "Data token generated at : " + time.Now().String(),
-		},
+		GenesisBlock:    gb,
+		TransInfo:       bti,
 	}
 	ctcb := make(map[string]*block.Block)
 	ctcb[dt] = nil
@@ -205,7 +236,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, failed to update signature"
 		return &br
 	}
-	err = c.w.AddDataTokenBlock(dt, blk)
+	err = c.w.AddTokenBlock(dt, token.DataTokenType, blk)
 	if err != nil {
 		c.log.Error("Failed to create data token, failed to add token chan block", "err", err)
 		br.Message = "Failed to create data token, failed to add token chan block"
@@ -216,8 +247,8 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	return &br
 }
 
-func (c *Core) CommitDataToken(reqID string, did string) {
-	br := c.commitDataToken(reqID, did)
+func (c *Core) CommitDataToken(reqID string, did string, batchID string) {
+	br := c.commitDataToken(reqID, did, batchID)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to create data token, failed to get did channel")
@@ -226,21 +257,39 @@ func (c *Core) CommitDataToken(reqID string, did string) {
 	dc.OutChan <- br
 }
 
-func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
-	dt, err := c.w.GetDataToken(did)
+func (c *Core) finishDataCommit(br *model.BasicResponse, dts []wallet.DataToken) {
+	if br.Status {
+		c.w.CommitDataToken(dts)
+	} else {
+		c.w.ReleaseDataToken(dts)
+	}
+}
+
+func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.BasicResponse {
+	st := time.Now()
+	dt, err := c.w.GetDataToken(batchID)
 	br := &model.BasicResponse{
 		Status: false,
 	}
+	defer c.finishDataCommit(br, dt)
 	if err != nil {
 		c.log.Error("Commit data token failed, failed to get data token", "err", err)
 		br.Message = "Commit data token failed, failed to get data token"
 		return br
 	}
-
-	dtm := make(map[string]interface{})
-
+	tsi := &contract.TransInfo{
+		SenderDID:   did,
+		TransTokens: make([]contract.TokenInfo, 0),
+	}
+	dts := make(map[string]string)
 	for i := range dt {
-		dtm[dt[i].TokenID] = dt[i].DID
+		dts[dt[i].DID] = dt[i].TokenID
+		ti := contract.TokenInfo{
+			Token:     dt[i].TokenID,
+			TokenType: token.DataTokenType,
+			OwnerDID:  dt[i].DID,
+		}
+		tsi.TransTokens = append(tsi.TransTokens, ti)
 	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
@@ -250,6 +299,7 @@ func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
 	sct := &contract.ContractType{
 		Type:       contract.SCDataTokenCommitType,
 		PledgeMode: contract.POWPledgeMode,
+		TransInfo:  tsi,
 	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)
@@ -265,11 +315,65 @@ func (c *Core) commitDataToken(reqID string, did string) *model.BasicResponse {
 		SenderPeerID:  c.peerID,
 		ContractBlock: sc.GetBlock(),
 	}
-	_, err = c.initiateConsensus(cr, sc, dc)
+	td, pl, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		br.Message = "Consensus failed" + err.Error()
 		return br
 	}
+	et := time.Now()
+	dif := et.Sub(st)
+
+	etrans := &ExplorerDataTrans{
+		TID:          td.TransactionID,
+		CommitterDID: did,
+		TrasnType:    2,
+		DataTokens:   dts,
+		QuorumList:   pl,
+		TokenTime:    float64(dif.Milliseconds()),
+	}
+	c.ec.ExplorerDataTransaction(etrans)
+
+	br.Status = true
+	br.Message = "Data committed successfully"
 	return br
+}
+
+func (c *Core) CheckDataToken(dt string) bool {
+	err := c.ipfs.Get(dt, c.cfg.DirPath)
+	if err != nil {
+		c.log.Error("failed to get the data token")
+		return false
+	}
+	rb, err := ioutil.ReadFile(c.cfg.DirPath + dt)
+	if err != nil {
+		c.log.Error("failed to read the data token file")
+		return false
+	}
+	b, err := rac.InitRacBlock(rb, nil)
+	if err != nil {
+		c.log.Error("failed to read the data token file")
+		return false
+	}
+	did := b.GetDID()
+	dc, err := c.SetupForienDID(did)
+	if err != nil {
+		c.log.Error("failed to setup did crypto")
+		return false
+	}
+	err = b.VerifySignature(dc)
+	if err != nil {
+		c.log.Error("failed to verify did signature", "err", err)
+		return false
+	}
+	return true
+}
+
+func (c *Core) GetDataTokens(did string) []wallet.DataToken {
+	dt, err := c.w.GetDataTokenByDID(did)
+	if err != nil {
+		c.log.Error("failed to get data tokens", "err", err)
+		return nil
+	}
+	return dt
 }

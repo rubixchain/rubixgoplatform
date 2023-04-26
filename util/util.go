@@ -1,6 +1,7 @@
 package util
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
@@ -639,6 +640,34 @@ func GetStringFromMap(m interface{}, key string) string {
 	return ""
 }
 
+func GetInt(si interface{}) int {
+	var tl int
+	switch mt := si.(type) {
+	case int:
+		tl = mt
+	case int64:
+		tl = int(mt)
+	case uint64:
+		tl = int(mt)
+	default:
+		tl = 0
+	}
+	return tl
+}
+
+func GetBytes(si interface{}) []byte {
+	switch s := si.(type) {
+	case []byte:
+		return s
+	case interface{}:
+		st, ok := s.([]byte)
+		if ok {
+			return st
+		}
+	}
+	return nil
+}
+
 func GetString(si interface{}) string {
 	switch s := si.(type) {
 	case string:
@@ -716,4 +745,17 @@ func GetFloatFromMap(m interface{}, key string) float64 {
 		tl = 0
 	}
 	return tl
+}
+
+func RemoveAtIndex(slice []string, index int) []string {
+	return append(slice[:index], slice[index+1:]...)
+}
+
+func BytesToString(b []byte) []string {
+	var lines []string
+	scanner := bufio.NewScanner(bytes.NewReader(b))
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines
 }

@@ -15,6 +15,7 @@ type DataTokenReq struct {
 	FileInfo     string
 	Files        []string
 	CommitterDID string
+	BatchID      string
 }
 
 func (c *Client) CreateDataToken(dt *DataTokenReq) (*model.BasicResponse, error) {
@@ -32,6 +33,9 @@ func (c *Client) CreateDataToken(dt *DataTokenReq) (*model.BasicResponse, error)
 	if dt.CommitterDID != "" {
 		fields[core.DTCommiterDIDField] = dt.CommitterDID
 	}
+	if dt.BatchID != "" {
+		fields[core.DTBatchIDField] = dt.BatchID
+	}
 
 	for _, fn := range dt.Files {
 		fuid := path.Base(fn)
@@ -45,4 +49,32 @@ func (c *Client) CreateDataToken(dt *DataTokenReq) (*model.BasicResponse, error)
 		return nil, err
 	}
 	return &br, nil
+}
+
+func (c *Client) CommitDataToken(did string, batchID string) (*model.BasicResponse, error) {
+	var br model.BasicResponse
+	q := make(map[string]string)
+	q["did"] = did
+	q["batchID"] = batchID
+	err := c.sendMutiFormRequest("POST", server.APICommitDataToken, q, nil, nil, &br)
+	if err != nil {
+		return nil, err
+	}
+	return &br, nil
+}
+
+func (c *Client) CheckDataToken(dt string) bool {
+	var br model.BasicResponse
+	q := make(map[string]string)
+	q["data_token"] = dt
+	err := c.sendMutiFormRequest("GET", server.APICheckDataToken, q, nil, nil, &br)
+	if err != nil {
+		c.log.Error("failed to check data token", "err", err)
+		return false
+	}
+	if !br.Status {
+		c.log.Error("failed to check data token", "msg", br.Message)
+		return false
+	}
+	return true
 }

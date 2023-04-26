@@ -17,8 +17,12 @@ type Client struct {
 	log logger.Logger
 }
 
-func NewClient(cfg *srvcfg.Config, log logger.Logger) (*Client, error) {
-	ec, err := ensweb.NewClient(cfg, log)
+func NewClient(cfg *srvcfg.Config, log logger.Logger, timeout ...time.Duration) (*Client, error) {
+	opt := make([]ensweb.ClientOptions, 0)
+	if timeout != nil {
+		opt = append(opt, ensweb.SetClientDefaultTimeout(timeout[0]))
+	}
+	ec, err := ensweb.NewClient(cfg, log, opt...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get new client, " + err.Error())
 	}

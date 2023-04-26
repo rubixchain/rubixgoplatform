@@ -31,6 +31,7 @@ const (
 	RacContentIDKey    string = "9"
 	RacContentHashKey  string = "10"
 	RacContentURLKey   string = "11"
+	RacTransInfoKey    string = "12"
 	RacHashKey         string = "98"
 	RacSignKey         string = "99"
 	RacBlockCotent     string = "1"
@@ -47,6 +48,7 @@ type RacType struct {
 	ContentID    map[string]string
 	ContentHash  map[string]string
 	ContentURL   map[string]string
+	TransInfo    map[string]string
 }
 
 type RacBlock struct {
@@ -106,6 +108,9 @@ func CreateRac(r *RacType) ([]*RacBlock, error) {
 		}
 		if r.ContentURL != nil {
 			m[RacContentURLKey] = r.ContentURL
+		}
+		if r.TransInfo != nil {
+			m[RacTransInfoKey] = r.TransInfo
 		}
 		r, err := InitRacBlock(nil, m)
 		if err != nil {
@@ -191,12 +196,35 @@ func (r *RacBlock) UpdateSignature(dc didmodule.DIDCrypto) error {
 	return r.blkEncode()
 }
 
+func (r *RacBlock) VerifySignature(dc didmodule.DIDCrypto) error {
+	ha, sig, err := r.GetHashSig()
+	if err != nil {
+		return err
+	}
+	ok, err := dc.PvtVerify([]byte(ha), util.StrToHex(sig))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("failed to verify the rac signature")
+	}
+	return nil
+}
+
 func (r *RacBlock) GetHash() (string, error) {
 	h, ok := r.bm[RacHashKey]
 	if !ok {
 		return "", fmt.Errorf("invalid rac, hash is missing")
 	}
 	return h.(string), nil
+}
+
+func (r *RacBlock) GetDID() string {
+	h, ok := r.bm[RacDidKey]
+	if !ok {
+		return ""
+	}
+	return h.(string)
 }
 
 func (r *RacBlock) GetHashSig() (string, string, error) {

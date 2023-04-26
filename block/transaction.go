@@ -14,15 +14,16 @@ import (
 //   "4" : TID         : string
 //   "5" : Block       : []byte
 //   "6" : Tokens      : map[string]TransToken
+//   "7" : BlockIDs    : []string
 // }
 // ----------TransToken--------------------------
 // {
 //   "1" : TokenType       : int
-//   "2" : BlockNumber     : int
 //   "2" : PledgedToken    : string
 //   "3" : PledgedDID      : string
 //   "4" : BlockNumber     : string
 //   "5" : PreviousBlockID : string
+//   "6" : UnpledgedID     : string
 // }
 
 const (
@@ -32,6 +33,7 @@ const (
 	TITIDKey         string = "4"
 	TIBlockKey       string = "5"
 	TITokensKey      string = "6"
+	TIRefIDKey       string = "7"
 )
 
 const (
@@ -40,6 +42,7 @@ const (
 	TTPledgedDIDKey      string = "3"
 	TTBlockNumberKey     string = "4"
 	TTPreviousBlockIDKey string = "5"
+	TTUnpledgedIDKey     string = "6"
 )
 
 type TransTokens struct {
@@ -47,6 +50,7 @@ type TransTokens struct {
 	TokenType    int    `json:"tokenType"`
 	PledgedToken string `json:"pledgedToken"`
 	PledgedDID   string `json:"pledgedDID"`
+	UnplededID   string `json:"unpledgedID"`
 }
 
 type TransInfo struct {
@@ -55,6 +59,7 @@ type TransInfo struct {
 	Comment     string        `json:"comment"`
 	TID         string        `json:"tid"`
 	Block       []byte        `json:"block"`
+	RefID       string        `json:"refID"`
 	Tokens      []TransTokens `json:"tokens"`
 }
 
@@ -69,6 +74,9 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 	}
 	if tt.PledgedDID != "" {
 		nttb[TTPledgedDIDKey] = tt.PledgedDID
+	}
+	if tt.UnplededID != "" {
+		nttb[TTUnpledgedIDKey] = tt.UnplededID
 	}
 	if b == nil {
 		nttb[TTBlockNumberKey] = "0"
@@ -109,6 +117,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	if ti.Block != nil {
 		ntib[TIBlockKey] = ti.Block
 	}
+	if ti.RefID != "" {
+		ntib[TIRefIDKey] = ti.RefID
+	}
 	nttbs := make(map[string]interface{})
 	for _, tt := range ti.Tokens {
 		b := ctcb[tt.Token]
@@ -128,5 +139,23 @@ func (b *Block) getTrasnInfoString(key string) string {
 		return ""
 	}
 	si := util.GetFromMap(tim, key)
+	return util.GetString(si)
+}
+
+func (b *Block) GetTransBlock() []byte {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return nil
+	}
+	si := util.GetFromMap(tim, TIBlockKey)
+	return util.GetBytes(si)
+}
+
+func (b *Block) GetRefID() string {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return ""
+	}
+	si := util.GetFromMap(tim, TIRefIDKey)
 	return util.GetString(si)
 }

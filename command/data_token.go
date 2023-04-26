@@ -15,7 +15,7 @@ func (cmd *Command) createDataToken() {
 	dt := client.DataTokenReq{
 		DID:      cmd.did,
 		UserID:   cmd.userID,
-		UserInfo: cmd.userID,
+		UserInfo: cmd.userInfo,
 	}
 
 	if cmd.fileMode {
@@ -45,18 +45,36 @@ func (cmd *Command) createDataToken() {
 		cmd.log.Error("Failed to create data token", "err", err)
 		return
 	}
-
 	if !br.Status {
 		cmd.log.Error("Failed to create data token", "msg", br.Message)
 		return
 	}
-
 	msg, status := cmd.SignatureResponse(br)
-
 	if !status {
 		cmd.log.Error("Failed to create data token, " + msg)
 		return
 	}
 	cmd.log.Info(fmt.Sprintf("Data Token : %s", msg))
 	cmd.log.Info("Data token create successfully")
+}
+
+func (cmd *Command) commitDataToken() {
+	br, err := cmd.c.CommitDataToken(cmd.did, cmd.batchID)
+	if err != nil {
+		cmd.log.Error("Failed to commit data token", "err", err)
+		return
+	}
+
+	if !br.Status {
+		cmd.log.Error("Failed to commit data token", "msg", br.Message)
+		return
+	}
+
+	msg, status := cmd.SignatureResponse(br)
+
+	if !status {
+		cmd.log.Error("Failed to commit data token, " + msg)
+		return
+	}
+	cmd.log.Info("Data tokens committed successfully")
 }

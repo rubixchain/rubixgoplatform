@@ -8,6 +8,7 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 const (
@@ -60,49 +61,53 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	}
 	w.tcs = &ChainDB{}
 	w.dtcs = &ChainDB{}
-	tdb, err := leveldb.OpenFile(dir+TokenChainStorage, nil)
+	op := &opt.Options{
+		WriteBuffer: 64 * 1024 * 1024,
+	}
+
+	tdb, err := leveldb.OpenFile(dir+TokenChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure token chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure token chain block storage")
 	}
 	w.tcs.DB = *tdb
-	dtdb, err := leveldb.OpenFile(dir+DataChainStorage, nil)
+	dtdb, err := leveldb.OpenFile(dir+DataChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure data chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure data chain block storage")
 	}
 	w.dtcs.DB = *dtdb
-	err = w.s.Init(DIDStorage, &DIDType{})
+	err = w.s.Init(DIDStorage, &DIDType{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TokenStorage, &Token{})
+	err = w.s.Init(TokenStorage, &Token{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize whole token storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(DataTokenStorage, &DataToken{})
+	err = w.s.Init(DataTokenStorage, &DataToken{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize data token storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(CreditStorage, &Credit{})
+	err = w.s.Init(CreditStorage, &Credit{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize credit storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(DIDPeerStorage, &DIDPeerMap{})
+	err = w.s.Init(DIDPeerStorage, &DIDPeerMap{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID Peer storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TransactionStorage, &TransactionDetails{})
+	err = w.s.Init(TransactionStorage, &TransactionDetails{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Transaction storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TokenProvider, &TokenProviderMap{})
+	err = w.s.Init(TokenProvider, &TokenProviderMap{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Token Provider Table", "err", err)
 		return nil, err

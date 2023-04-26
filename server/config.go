@@ -4,6 +4,7 @@ import (
 	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core"
+	cc "github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
@@ -93,4 +94,17 @@ func (s *Server) APIRemoveAllQuorum(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to remove all quorums", nil)
 	}
 	return s.BasicResponse(req, true, "Removed all quorums successfully", nil)
+}
+
+func (s *Server) APISetupDB(req *ensweb.Request) *ensweb.Result {
+	var sc cc.StorageConfig
+	err := s.ParseJSON(req, &sc)
+	if err != nil {
+		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	err = s.c.SetupDB(&sc)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to setup DB, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "DB setup done successfully", nil)
 }

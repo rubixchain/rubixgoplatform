@@ -86,6 +86,7 @@ type SignatureReply struct {
 }
 
 type UpdatePledgeRequest struct {
+	Mode            int      `json:"mode"`
 	PledgedTokens   []string `json:"pledged_tokens"`
 	TokenChainBlock []byte   `json:"token_chain_block"`
 }
@@ -142,6 +143,9 @@ func (c *Core) QuroumSetup() {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
 		c.l.AddRoute(APITokenArbitration, "POST", c.tokenArbitration)
+		c.l.AddRoute(APIGetTokenNumber, "POST", c.getTokenNumber)
+		c.l.AddRoute(APIGetMigratedTokenStatus, "POST", c.getMigratedTokenStatus)
+		c.l.AddRoute(APISyncDIDArbitration, "POST", c.syncDIDArbitration)
 	}
 }
 
@@ -156,6 +160,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string) error {
 		return fmt.Errorf("failed to setup quorum")
 	}
 	c.qc[didStr] = dc
+	c.up.RunUnpledge()
 	return nil
 }
 
@@ -203,7 +208,7 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 	// c.qlock.Unlock()
 }
 
-func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, error) {
+func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, map[string]map[string]float64, error) {
 	cs := ConsensusStatus{
 		Credit: CreditScore{
 			Credit: make([]CreditSignature, 0),
@@ -222,7 +227,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		ti := sc.GetTransTokenInfo()
 		partToken := false
 		for i := range ti {
-			if ti[i].TokenType == token.RBTTokenType {
+			if ti[i].TokenType == token.RBTTokenType || ti[i].TokenType == token.TestTokenType {
 				reqPledgeTokens++
 			} else if ti[i].TokenType == token.PartTokenType {
 				partToken = true
@@ -244,13 +249,19 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	ql := c.qm.GetQuorum(cr.Type)
 	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
-		return nil, fmt.Errorf("failed to get required quorums")
+		return nil, nil, fmt.Errorf("failed to get required quorums")
 	}
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
 	c.pd[cr.ReqID] = &pd
 	c.qlock.Unlock()
 	cr.QuorumList = ql
+	defer func() {
+		c.qlock.Lock()
+		delete(c.quorumRequest, cr.ReqID)
+		delete(c.pd, cr.ReqID)
+		c.qlock.Unlock()
+	}()
 
 	for _, a := range ql {
 		go c.connectQuorum(cr, a, AlphaQuorumType)
@@ -280,62 +291,97 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
 	if err != nil {
 		c.log.Error("Failed to pledge token", "err", err)
-		return nil, err
+		return nil, nil, err
 	}
 	c.sendQuorumCredit(cr)
-	rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
-	if err != nil {
-		c.log.Error("Receiver not connected", "err", err)
-		return nil, err
-	}
 	ti := sc.GetTransTokenInfo()
-	sr := SendTokenRequest{
-		Address:         cr.SenderPeerID + "." + sc.GetSenderDID(),
-		TokenInfo:       ti,
-		TokenChainBlock: nb.GetBlock(),
+	c.qlock.Lock()
+	pds := c.pd[cr.ReqID]
+	c.qlock.Unlock()
+	pl := make(map[string]map[string]float64)
+	for _, d := range cr.QuorumList {
+		ds := strings.Split(d, ".")
+		if len(ds) == 2 {
+			ss, ok := pds.PledgedTokens[ds[1]]
+			if ok {
+				m := make(map[string]float64)
+				for i := range ss {
+					m[ss[i]] = 1
+				}
+				pl[ds[1]] = m
+			}
+		}
 	}
-	var br model.BasicResponse
-	err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
+	if cr.Mode == RBTTransferMode {
+		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
+		if err != nil {
+			c.log.Error("Receiver not connected", "err", err)
+			return nil, nil, err
+		}
+		defer rp.Close()
+		sr := SendTokenRequest{
+			Address:         cr.SenderPeerID + "." + sc.GetSenderDID(),
+			TokenInfo:       ti,
+			TokenChainBlock: nb.GetBlock(),
+		}
+		var br model.BasicResponse
+		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
+		if err != nil {
+			c.log.Error("Unable to send tokens to receiver", "err", err)
+			return nil, nil, err
+		}
+		if !br.Status {
+			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
+			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
+		}
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
+		if err != nil {
+			c.log.Error("Failed to transfer tokens", "err", err)
+			return nil, nil, err
+		}
+		for _, t := range ti {
+			c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+		}
+		//call ipfs repo gc after unpinnning
+		c.ipfsRepoGc()
+		nbid, err := nb.GetBlockID(ti[0].Token)
+		if err != nil {
+			c.log.Error("Failed to get block id", "err", err)
+			return nil, nil, err
+		}
 
-	if err != nil {
-		c.log.Error("Unable to send tokens to receiver", "err", err)
-		return nil, err
+		td := wallet.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			BlockID:         nbid,
+			Mode:            wallet.SendMode,
+			SenderDID:       sc.GetSenderDID(),
+			ReceiverDID:     sc.GetReceiverDID(),
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+		}
+		return &td, pl, nil
+	} else {
+		err = c.w.CreateTokenBlock(nb, token.DataTokenType)
+		if err != nil {
+			c.log.Error("Failed to create token block", "err", err)
+			return nil, nil, err
+		}
+		td := wallet.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			DateTime:        time.Now(),
+			Status:          true,
+		}
+		return &td, pl, nil
 	}
-	if !br.Status {
-		c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
-		return nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
-	}
-	err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb)
-	if err != nil {
-		c.log.Error("Failed to transfer tokens", "err", err)
-		return nil, err
-	}
-	for _, t := range ti {
-		c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
-	}
-	nbid, err := nb.GetBlockID(ti[0].Token)
-	if err != nil {
-		c.log.Error("Failed to get block id", "err", err)
-		return nil, err
-	}
-	td := wallet.TransactionDetails{
-		TransactionID:   tid,
-		TransactionType: nb.GetTransType(),
-		BlockID:         nbid,
-		Mode:            wallet.SendMode,
-		SenderDID:       sc.GetSenderDID(),
-		ReceiverDID:     sc.GetReceiverDID(),
-		Comment:         sc.GetComment(),
-		DateTime:        time.Now(),
-		Status:          true,
-	}
-	return &td, nil
 }
 
 func (c *Core) startConsensus(id string, qt int) {
@@ -457,10 +503,12 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	ptDID := ""
 	pt := ""
 	ctcb := make(map[string]*block.Block)
+	toktenType := token.RBTTokenType
 	for i := range ti {
 		pledgeToken := ""
 		pledgeDID := ""
-		if ti[i].TokenType == token.PartTokenType {
+		toktenType = ti[i].TokenType
+		if ti[i].TokenType == token.PartTokenType || ti[i].TokenType == token.DataTokenType {
 			if pt == "" {
 				pledgeToken = pts[index].Token
 				pledgeDID = pts[index].DID
@@ -484,7 +532,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 		tks = append(tks, tt)
 		//TODO:: need to address for part otken
-		b := c.w.GetLatestTokenBlock(ti[i].Token)
+		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		ctcb[ti[i].Token] = b
 	}
 
@@ -498,11 +546,15 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 
 	//tokenList = append(tokenList, cr.PartTokens...)
 	tcb := block.TokenChainBlock{
+		TokenType:       toktenType,
 		TransactionType: block.TokenTransferredType,
 		TokenOwner:      sc.GetReceiverDID(),
 		TransInfo:       bti,
 		QuorumSignature: credit,
 		SmartContract:   sc.GetBlock(),
+	}
+	if cr.Mode == DTCommitMode {
+		tcb.TransactionType = block.TokenCommittedType
 	}
 
 	nb := block.CreateNewBlock(ctcb, &tcb)
@@ -550,9 +602,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			c.log.Error("Invalid pledge request")
 			return nil, fmt.Errorf("invalid pledge request")
 		}
-
 		var br model.BasicResponse
 		ur := UpdatePledgeRequest{
+			Mode:            cr.Mode,
 			PledgedTokens:   v,
 			TokenChainBlock: nb.GetBlock(),
 		}
@@ -605,9 +657,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 				cs.PledgeLock.Unlock()
 				return err
 			}
-			if !prs.Status {
-				c.log.Info("Unable to plegde token from peer", "did", p.GetPeerDID(), "msg", prs.Message)
-			} else {
+			if prs.Status {
 				did := p.GetPeerDID()
 				pd.PledgedTokens[did] = make([]string, 0)
 				for i, t := range prs.Tokens {
@@ -698,6 +748,14 @@ func (c *Core) getArbitrationSignature(p *ipfsport.Peer, sr *SignatureRequest) (
 func (c *Core) checkIsPledged(tcb *block.Block, token string) bool {
 	if strings.Compare(tcb.GetTransType(), block.TokenPledgedType) == 0 {
 		c.log.Debug("Token", token, " is a pledged token. Not Considered for pledging")
+		return true
+	}
+	return false
+}
+
+func (c *Core) checkIsUnpledged(tcb *block.Block, token string) bool {
+	if strings.Compare(tcb.GetTransType(), block.TokenUnpledgedType) == 0 {
+		c.log.Debug("Token", token, " is unpledged token")
 		return true
 	}
 	return false

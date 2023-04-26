@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to create folder")
 		return s.BasicResponse(req, false, "failed to create folder", nil)
 	}
+	defer os.RemoveAll(folderName)
 
 	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
 
@@ -66,11 +68,15 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to create did", "err", err)
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	didResp := DIDResponse{
-		DID:    did,
-		PeerID: s.c.GetPeerID(),
+	didResp := model.DIDResponse{
+		Status:  true,
+		Message: "DID created successfully",
+		Result: model.DIDResult{
+			DID:    did,
+			PeerID: s.c.GetPeerID(),
+		},
 	}
-	return s.BasicResponse(req, true, "DID created successfully", &didResp)
+	return s.RenderJSON(req, &didResp, http.StatusOK)
 }
 
 // APIGetAllDID will get all DID
@@ -97,6 +103,9 @@ func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 		if err == nil {
 			a.DIDType = d.Type
 			ai.AccountInfo = append(ai.AccountInfo, a)
+		} else {
+			a.DIDType = d.Type
+			ai.AccountInfo = append(ai.AccountInfo, model.DIDAccountInfo{DID: d.DID})
 		}
 	}
 	return s.RenderJSON(req, &ai, http.StatusOK)
@@ -146,4 +155,60 @@ func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 
 	go s.c.RegisterDID(req.ID, didStr)
 	return s.didResponse(req, req.ID)
+}
+
+func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
+	folderName, err := s.c.CreateTempFolder()
+	if err != nil {
+		s.log.Error("failed to create folder")
+		return s.BasicResponse(req, false, "failed to create folder", nil)
+	}
+	defer os.RemoveAll(folderName)
+	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
+	if err != nil {
+		s.log.Error("failed to parse request", "err", err)
+		return s.BasicResponse(req, false, "failed to create DID", nil)
+	}
+	fields := fieldNames[DIDConfigField]
+	if len(fields) == 0 {
+		s.log.Error("missing did configuration")
+		return s.BasicResponse(req, false, "missing did configuration", nil)
+	}
+	var didCreate did.DIDCreate
+	err = json.Unmarshal([]byte(fields[0]), &didCreate)
+	if err != nil {
+		s.log.Error("failed to parse did configuration", "err", err)
+		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
+	}
+
+	for _, fileName := range fileNames {
+		if strings.Contains(fileName, did.DIDImgFileName) {
+			didCreate.DIDImgFileName = fileName
+		}
+		if strings.Contains(fileName, did.PubShareFileName) {
+			didCreate.PubImgFile = fileName
+		}
+		if strings.Contains(fileName, did.PvtShareFileName) {
+			didCreate.PrivImgFile = fileName
+		}
+		if strings.Contains(fileName, did.PvtKeyFileName) {
+			didCreate.PrivKeyFile = fileName
+		}
+		if strings.Contains(fileName, did.PubKeyFileName) {
+			didCreate.PubKeyFile = fileName
+		}
+		if strings.Contains(fileName, did.QuorumPvtKeyFileName) {
+			didCreate.QuorumPrivKeyFile = fileName
+		}
+		if strings.Contains(fileName, did.QuorumPubKeyFileName) {
+			didCreate.QuorumPubKeyFile = fileName
+		}
+	}
+	dir, ok := s.validateAccess(req)
+	if !ok {
+		return s.BasicResponse(req, false, "Unathuriozed access", nil)
+	}
+	didCreate.Dir = dir
+	br := s.c.AddDID(&didCreate)
+	return s.RenderJSON(req, br, http.StatusOK)
 }

@@ -4,12 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/EnsurityTechnologies/apiconfig"
 	srvcfg "github.com/EnsurityTechnologies/config"
@@ -18,7 +20,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
+	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/did"
+	_ "github.com/rubixchain/rubixgoplatform/docs"
 	"github.com/rubixchain/rubixgoplatform/server"
 	"golang.org/x/term"
 )
@@ -28,7 +32,7 @@ const (
 )
 
 const (
-	version string = "0.0.2"
+	version string = "0.0.8"
 )
 const (
 	VersionCmd            string = "-v"
@@ -51,10 +55,14 @@ const (
 	SetupServiceCmd       string = "setupservice"
 	DumpTokenChainCmd     string = "dumptokenchain"
 	RegsiterDIDCmd        string = "registerdid"
+	SetupDIDCmd           string = "setupdid"
 	ShutDownCmd           string = "shutdown"
 	MirgateNodeCmd        string = "migratenode"
 	LockTokensCmd         string = "locktokens"
 	CreateDataTokenCmd    string = "createdatatoken"
+	CommitDataTokenCmd    string = "commitdatatoken"
+	SetupDBCmd            string = "setupdb"
+	GetTxnDetailsCmd      string = "gettxndetails"
 )
 
 var commands = []string{VersionCmd,
@@ -77,10 +85,14 @@ var commands = []string{VersionCmd,
 	SetupServiceCmd,
 	DumpTokenChainCmd,
 	RegsiterDIDCmd,
+	SetupDBCmd,
 	ShutDownCmd,
 	MirgateNodeCmd,
 	LockTokensCmd,
-	CreateDataTokenCmd}
+	CreateDataTokenCmd,
+	CommitDataTokenCmd,
+	SetupDBCmd,
+	GetTxnDetailsCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -101,10 +113,14 @@ var commandsHelp = []string{"To get tool version",
 	"This command enable explorer service on the node",
 	"This command will dump the token chain into file",
 	"This command will register DID peer map across the network",
+	"This command will setup the DID with peer",
 	"This command will shutdown the rubix node",
 	"This command will migrate node to newer node",
 	"This command will lock the tokens on the arbitary node",
-	"This command will create data token token"}
+	"This command will create data token token",
+	"This command will commit data token token",
+	"This command will setup the DB",
+	"This command will get transaction details"}
 
 type Command struct {
 	cfg          config.Config
@@ -136,6 +152,7 @@ type Command struct {
 	pubKeyFile   string
 	quorumList   string
 	srvName      string
+	storageType  int
 	dbName       string
 	dbType       string
 	dbAddress    string
@@ -153,10 +170,15 @@ type Command struct {
 	token        string
 	arbitaryMode bool
 	tokenList    string
+	batchID      string
 	fileMode     bool
 	file         string
 	userID       string
 	userInfo     string
+	timeout      time.Duration
+	txnID        string
+	role         string
+	date         time.Time
 }
 
 func showVersion() {
@@ -175,6 +197,24 @@ func showHelp() {
 	for i := range commands {
 		fmt.Printf("     %20s : %s\n\n", commands[i], commandsHelp[i])
 	}
+}
+
+// Get preferred outbound ip of this machine
+func (cmd *Command) getURL(url string) string {
+	// No IP address present
+	if strings.Contains(url, "://:") {
+		conn, err := net.Dial("udp", "8.8.8.8:80")
+		if err != nil {
+			return url
+		}
+		defer conn.Close()
+		localAddr := conn.LocalAddr().(*net.UDPAddr)
+		outIp := localAddr.IP.String()
+		s := strings.Split(url, "://:")
+		url = s[0] + "://" + outIp + ":" + s[1]
+	}
+	cmd.log.Info("Swagger URL : " + url + "/swagger/index.html")
+	return url
 }
 
 func (cmd *Command) runApp() {
@@ -197,6 +237,7 @@ func (cmd *Command) runApp() {
 		Config: srvcfg.Config{
 			HostAddress: cmd.cfg.NodeAddress,
 			HostPort:    cmd.cfg.NodePort,
+			Production:  "false",
 		},
 	}
 	scfg.EnableAuth = cmd.enableAuth
@@ -208,11 +249,12 @@ func (cmd *Command) runApp() {
 	// 	HostAddress: cmd.cfg.NodeAddress,
 	// 	HostPort:    cmd.cfg.NodePort,
 	// }
-	s, err := server.NewServer(c, scfg, cmd.log, cmd.start, sc)
+	s, err := server.NewServer(c, scfg, cmd.log, cmd.start, sc, cmd.timeout)
 	if err != nil {
 		cmd.log.Error("Failed to create server")
 		return
 	}
+	s.EnableSWagger(cmd.getURL(s.GetServerURL()))
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
@@ -256,6 +298,7 @@ func Run(args []string) {
 
 	cmd := &Command{}
 	var peers string
+	var timeout int
 
 	flag.StringVar(&cmd.runDir, "p", "./", "Working directory path")
 	flag.StringVar(&cmd.logFile, "logFile", "", "Log file name")
@@ -283,6 +326,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
 	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
 	flag.StringVar(&cmd.srvName, "srvName", "explorer_service", "Service name")
+	flag.IntVar(&cmd.storageType, "storageType", storage.StorageDBType, "Storage type")
 	flag.StringVar(&cmd.dbName, "dbName", "ServiceDB", "Service database name")
 	flag.StringVar(&cmd.dbType, "dbType", "SQLServer", "DB Type, supported database are SQLServer, PostgressSQL, MySQL & Sqlite3")
 	flag.StringVar(&cmd.dbAddress, "dbAddress", "localhost", "Database address")
@@ -292,7 +336,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.senderAddr, "senderAddr", "", "Sender address")
 	flag.StringVar(&cmd.receiverAddr, "receiverAddr", "", "Receiver address")
 	flag.Float64Var(&cmd.rbtAmount, "rbtAmount", 0.0, "RBT amount")
-	flag.StringVar(&cmd.transComment, "transComment", "Test tranasaction", "Transaction comment")
+	flag.StringVar(&cmd.transComment, "transComment", "", "Transaction comment")
 	flag.IntVar(&cmd.transType, "transType", 2, "Transaction type")
 	flag.IntVar(&cmd.numTokens, "numTokens", 1, "Number of tokens")
 	flag.StringVar(&cmd.did, "did", "", "DID")
@@ -300,10 +344,14 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.arbitaryMode, "arbitaryMode", false, "Enable arbitary mode")
 	flag.StringVar(&cmd.tokenList, "tokenList", "tokens.txt", "Token lis")
 	flag.StringVar(&cmd.token, "token", "", "Token name")
+	flag.StringVar(&cmd.batchID, "bid", "batchID1", "Batch ID")
 	flag.BoolVar(&cmd.fileMode, "fmode", false, "File mode")
 	flag.StringVar(&cmd.file, "file", "file.txt", "File to be uploaded")
 	flag.StringVar(&cmd.userID, "uid", "testuser", "User ID for token creation")
 	flag.StringVar(&cmd.userInfo, "uinfo", "", "User info for token creation")
+	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
+	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
+	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -321,6 +369,8 @@ func Run(args []string) {
 		peers = strings.ReplaceAll(peers, " ", "")
 		cmd.peers = strings.Split(peers, ",")
 	}
+
+	cmd.timeout = time.Duration(timeout) * time.Minute
 
 	if !cmd.validateOptions() {
 		fmt.Println("Validate options failed")
@@ -359,7 +409,7 @@ func Run(args []string) {
 
 	cmd.log = logger.New(logOptions)
 
-	cmd.c, err = client.NewClient(&srvcfg.Config{ServerAddress: cmd.addr, ServerPort: cmd.port}, cmd.log)
+	cmd.c, err = client.NewClient(&srvcfg.Config{ServerAddress: cmd.addr, ServerPort: cmd.port}, cmd.log, cmd.timeout)
 	if err != nil {
 		cmd.log.Error("Failed to create client")
 		return
@@ -406,12 +456,20 @@ func Run(args []string) {
 		cmd.dumpTokenChain()
 	case RegsiterDIDCmd:
 		cmd.RegsiterDIDCmd()
+	case SetupDIDCmd:
+		cmd.SetupDIDCmd()
 	case ShutDownCmd:
 		cmd.ShutDownCmd()
 	case MirgateNodeCmd:
 		cmd.MigrateNodeCmd()
 	case CreateDataTokenCmd:
 		cmd.createDataToken()
+	case CommitDataTokenCmd:
+		cmd.commitDataToken()
+	case SetupDBCmd:
+		cmd.setupDB()
+	case GetTxnDetailsCmd:
+		cmd.getTxnDetails()
 	default:
 		cmd.log.Error("Invalid command")
 	}

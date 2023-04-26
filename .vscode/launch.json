@@ -40,5 +40,14 @@
             "cwd": "${workspaceFolder}/windows",
             "args": ["generatetestrbt", "-did", "bafybmia43gyhaddos2uhxui43arimn63zqobchqcnfrqhu7wgsgntmmzl4"]
         }
+        {
+            "name": "Migrate",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/migratedb",
+            "cwd": "${workspaceFolder}/migratedb",
+            "args": ["generatetestrbt", "-did", "bafybmia43gyhaddos2uhxui43arimn63zqobchqcnfrqhu7wgsgntmmzl4"]
+        }
     ]
 }

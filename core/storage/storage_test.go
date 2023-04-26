@@ -1,6 +1,9 @@
 package storage
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -23,7 +26,7 @@ func remoteStorageDB() error {
 }
 
 type model struct {
-	Name    string `gorm:"column:Name;primary_key;"`
+	Name    string `gorm:"column:Name;primaryKey;"`
 	Age     int    `gorm:"column:Age"`
 	Address string `gorm:"column:Address"`
 }
@@ -36,9 +39,15 @@ func TestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to init DB", err.Error())
 	}
-	if err := s.Init("user", &model{}); err != nil {
+	if err := s.Init("user", &model{}, true); err != nil {
 		t.Fatal("Failed to initialize storage", err.Error())
 	}
+	var rm model
+	err = s.Read("user", &rm, "Name=?", "TestUser1")
+	if err == nil {
+		t.Fatal("Invalid read", err.Error())
+	}
+	fmt.Printf("Data : %v\n", rm)
 	if err := s.Write("user", &model{Name: "TestUser1", Age: 20, Address: "Hyderabad"}); err != nil {
 		t.Fatal("Failed to write storage", err.Error())
 	}
@@ -87,85 +96,83 @@ func TestBasic(t *testing.T) {
 	}
 }
 
-func TestLevelLB(t *testing.T) {
-	var s Storage
-	var err error
-	s, err = NewStorageLDB("./")
+func TestTemp(t *testing.T) {
+	ts := make([]int, 0)
+	ts = append(ts, 10)
+	ts = append(ts, 2)
+	ts = append(ts, 25)
+	ts = append(ts, 50)
+	ts = append(ts, -1)
+	ts = append(ts, 7)
+	ts = append(ts, 22)
+	ts = append(ts, 40)
+	jb, err := json.Marshal(ts)
 	if err != nil {
-		t.Fatal("Failed to setup level db", err.Error())
+		t.Fatal("failed")
 	}
-	if err := s.Init("Test", &StorageType{}); err != nil {
-		t.Fatal("Failed to initialize storage", err.Error())
+	var tr []int
+	err = json.Unmarshal(jb, &tr)
+	if err != nil {
+		t.Fatal("failed")
 	}
-
-	if err := s.Write("Test", &StorageType{Key: "Key1", Value: "Value1"}); err != nil {
-		t.Fatal("Failed to write storage", err.Error())
-	}
-	if err := s.Write("Test", &StorageType{Key: "Key2", Value: "Value2"}); err != nil {
-		t.Fatal("Failed to write storage", err.Error())
-	}
-	if err := s.Write("Test", &StorageType{Key: "Key3", Value: "Value3"}); err != nil {
-		t.Fatal("Failed to write storage", err.Error())
-	}
-	var st StorageType
-	if err := s.Read("Test", &st, "key=?", "Key1"); err != nil {
-		t.Fatal("Failed to get data from storage", err.Error())
+	for _, ti := range tr {
+		fmt.Println(ti)
 	}
 
-	if st.Value != "Value1" {
-		t.Fatal("Value miss match")
-	}
-
-	if err := s.Close(); err != nil {
-		t.Fatal("Failed to close storage", err.Error())
-	}
 }
 
 func TestSanp(t *testing.T) {
-	db, err := leveldb.OpenFile("tempdb", nil)
-	if err != nil {
-		t.Fatal("Failed to open db")
+	str := "rf-12093738jfkfigug"
+	rb := []byte(str)
+	newStr := string(rb[0:2])
+	if newStr == "rf" {
+		fmt.Println("success")
 	}
 
-	db.Put([]byte("token1-entry1"), []byte("token1-entry1"), nil)
-	db.Put([]byte("token1-entry2"), []byte("token1-entry2"), nil)
-	db.Put([]byte("token2-entry1"), []byte("token2-entry1"), nil)
-	db.Put([]byte("token1-entry3"), []byte("token1-entry3"), nil)
-	db.Put([]byte("token2-entry2"), []byte("token2-entry2"), nil)
-	db.Put([]byte("token2-entry3"), []byte("token2-entry3"), nil)
-	db.Put([]byte("token2-entry4"), []byte("token2-entry4"), nil)
-	db.Put([]byte("token1-entry4"), []byte("token1-entry4"), nil)
-	db.Put([]byte("token1-entry2"), []byte("token1-entry2-updated"), nil)
-	iter := db.NewIterator(util.BytesPrefix([]byte("token1-")), nil)
-	if err != nil {
-		t.Fatal("Failed to get sanp")
-	}
-	//iter.Last()
-	key := iter.Key()
-	value := iter.Value()
-	fmt.Printf("%s : %s\n", string(key), string(value))
-	iter.Seek([]byte("token1-entry3"))
-	for {
-		key := iter.Key()
-		value := iter.Value()
-		fmt.Printf("%s : %s\n", string(key), string(value))
-		if !iter.Next() {
-			break
-		}
-	}
-	iter.Release()
-	db.Close()
-	os.RemoveAll("tempdb")
+	// db, err := leveldb.OpenFile("tempdb", nil)
+	// if err != nil {
+	// 	t.Fatal("Failed to open db")
+	// }
+
+	// tb := make([]byte, 8096)
+	// for i := range tb {
+	// 	tb[i] = byte(i)
+	// }
+	// st := time.Now()
+	// for i := 0; i < 1000000; i++ {
+	// 	str := fmt.Sprintf("%d", i)
+	// 	err = db.Put([]byte(str), tb, &opt.WriteOptions{Sync: true})
+	// 	if err != nil {
+	// 		t.Fatal("Failed to write db")
+	// 	}
+	// }
+	// et := time.Now()
+	// dif := et.Sub(st)
+	// fmt.Printf("Different %v", dif)
+
+	// db.Close()
+	// os.RemoveAll("tempdb")
 
 }
 
-func TestNodeDB(t *testing.T) {
+func TestLevelDB(t *testing.T) {
 
-	db, err := leveldb.OpenFile("../../windows/node1/Rubix/TestNet/tokenchainstorage", nil)
+	str := fmt.Sprintf("%064X", 0)
+
+	fmt.Println(str)
+	fmt.Println(fmt.Sprintf("%064X", 20))
+
+	db, err := leveldb.OpenFile("testldb", nil)
 	if err != nil {
 		t.Fatal("Failed to open db")
 	}
-	iter := db.NewIterator(nil, nil)
+	for i := 0; i < 10; i++ {
+		rb := make([]byte, 32)
+		rand.Read(rb)
+		key := "tt-QmW89JbFNK4sKidZ9Fdvv9L4jt2eVP8spkHrJj6KqMNRV2-" + fmt.Sprintf("%d", i) + "-" + hex.EncodeToString(rb)
+		db.Put([]byte(key), rb, nil)
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte("tt-QmW89JbFNK4sKidZ9Fdvv9L4jt2eVP8spkHrJj6KqMNRV2")), nil)
 	if err != nil {
 		t.Fatal("Failed to get sanp")
 	}
@@ -173,7 +180,35 @@ func TestNodeDB(t *testing.T) {
 		key := iter.Key()
 		//value := iter.Value()
 		fmt.Printf("%s\n", string(key))
+		//f.WriteString(s)
 	}
+	iter.Release()
+	db.Close()
+}
+
+func TestNodeDB(t *testing.T) {
+
+	str := fmt.Sprintf("%064X", 0)
+
+	fmt.Println(str)
+	fmt.Println(fmt.Sprintf("%064X", 20))
+
+	db, err := leveldb.OpenFile("../../windows/node3/Rubix/TestNet/tokenchainstorage", nil)
+	if err != nil {
+		t.Fatal("Failed to open db")
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte("tt-QmPR6frD2HrgTDoyTpS6KjfQn2zM8LcLUyszHyn9c9mYNe")), nil)
+	if err != nil {
+		t.Fatal("Failed to get sanp")
+	}
+	f, _ := os.Create("dump.txt")
+	for iter.Next() {
+		key := iter.Key()
+		//value := iter.Value()
+		s := fmt.Sprintf("%s\n", string(key))
+		f.WriteString(s)
+	}
+	f.Close()
 	iter.Release()
 	db.Close()
 }

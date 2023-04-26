@@ -70,9 +70,13 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
+	tokenType := token.RBTTokenType
+	if c.testNet {
+		tokenType = token.TestTokenType
+	}
 	tis := make([]contract.TokenInfo, 0)
 	for i := range wt {
-		blk := c.w.GetLatestTokenBlock(wt[i].TokenID)
+		blk := c.w.GetLatestTokenBlock(wt[i].TokenID, tokenType)
 		if blk == nil {
 			c.log.Error("failed to get latest block, invalid token chain")
 			resp.Message = "failed to get latest block, invalid token chain"
@@ -86,7 +90,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		}
 		ti := contract.TokenInfo{
 			Token:     wt[i].TokenID,
-			TokenType: token.RBTTokenType,
+			TokenType: tokenType,
 			OwnerDID:  wt[i].DID,
 			BlockID:   bid,
 		}
@@ -117,7 +121,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		ReceiverPeerID: rpeerid,
 		ContractBlock:  sc.GetBlock(),
 	}
-	td, err := c.initiateConsensus(cr, sc, dc)
+	td, _, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		resp.Message = "Consensus failed" + err.Error()

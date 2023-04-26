@@ -18,6 +18,7 @@ const (
 	APILogin               string = "/api/login"
 	APIStart               string = "/api/start"
 	APIShutdown            string = "/api/shutdown"
+	APINodeStatus          string = "/api/node-status"
 	APIPing                string = "/api/ping"
 	APIAddBootStrap        string = "/api/add-bootstrap"
 	APIRemoveBootStrap     string = "/api/remove-bootstrap"
@@ -36,10 +37,17 @@ const (
 	APISignatureResponse   string = "/api/signature-response"
 	APIDumpTokenChainBlock string = "/api/dump-token-chain"
 	APIRegisterDID         string = "/api/register-did"
+	APISetupDID            string = "/api/setup-did"
 	APIMigrateNode         string = "/api/migrate-node"
 	APILockTokens          string = "/api/lock-tokens"
-	APICreateDataToken     string = "/api/create-data_token"
-	APICommitDataToken     string = "/api/commit-data_token"
+	APICreateDataToken     string = "/api/create-data-token"
+	APICommitDataToken     string = "/api/commit-data-token"
+	APICheckDataToken      string = "/api/check-data-token"
+	APIGetDataToken        string = "/api/get-data-token"
+	APISetupDB             string = "/api/setup-db"
+	APIGetTxnByTxnID       string = "/api/get-by-txnId"
+	APIGetTxnByDID         string = "/api/get-by-did"
+	APIGetTxnByComment     string = "/api/get-by-comment"
 )
 
 // Server defines server handle
@@ -52,7 +60,7 @@ type Server struct {
 }
 
 // NewServer create new server instances
-func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan bool) (*Server, error) {
+func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan bool, timeout time.Duration) (*Server, error) {
 	s := &Server{cfg: cfg, sc: sc, c: c}
 	var err error
 	s.log = log.Named("Rubixplatform")
@@ -66,7 +74,7 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 			cfg.DBAddress = "rubix.db"
 		}
 	}
-	s.Server, err = ensweb.NewServer(&cfg.Config, nil, log, ensweb.SetServerTimeout(time.Minute*10))
+	s.Server, err = ensweb.NewServer(&cfg.Config, nil, log, ensweb.SetServerTimeout(timeout))
 	if err != nil {
 		s.log.Error("failed to create server", "err", err)
 		return nil, err
@@ -189,6 +197,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APILogin, "POST", s.APILogin)
 	s.AddRoute(APIStart, "GET", s.AuthHandle(s.APIStart, s.ErrorFunc))
 	s.AddRoute(APIShutdown, "POST", s.AuthHandle(s.APIShutdown, s.ErrorFunc))
+	s.AddRoute(APINodeStatus, "GET", s.AuthHandle(s.APINodeStatus, s.ErrorFunc))
 	s.AddRoute(APIPing, "GET", s.AuthHandle(s.APIPing, s.ErrorFunc))
 	s.AddRoute(APIAddBootStrap, "POST", s.AuthHandle(s.APIAddBootStrap, s.ErrorFunc))
 	s.AddRoute(APIRemoveBootStrap, "POST", s.AuthHandle(s.APIRemoveBootStrap, s.ErrorFunc))
@@ -207,10 +216,17 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, s.ErrorFunc))
 	s.AddRoute(APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, s.ErrorFunc))
 	s.AddRoute(APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, s.ErrorFunc))
+	s.AddRoute(APISetupDID, "POST", s.AuthHandle(s.APISetupDID, s.ErrorFunc))
 	s.AddRoute(APIMigrateNode, "POST", s.AuthHandle(s.APIMigrateNode, s.ErrorFunc))
 	s.AddRoute(APILockTokens, "POST", s.AuthHandle(s.APILockTokens, s.ErrorFunc))
 	s.AddRoute(APICreateDataToken, "POST", s.AuthHandle(s.APICreateDataToken, s.ErrorFunc))
-	//s.AddRoute(APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, s.ErrorFunc))
+	s.AddRoute(APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, s.ErrorFunc))
+	s.AddRoute(APICheckDataToken, "POST", s.AuthHandle(s.APICheckDataToken, s.ErrorFunc))
+	s.AddRoute(APIGetDataToken, "GET", s.AuthHandle(s.APIGetDataToken, s.ErrorFunc))
+	s.AddRoute(APISetupDB, "POST", s.AuthHandle(s.APISetupDB, s.ErrorFunc))
+	s.AddRoute(APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, s.ErrorFunc))
+	s.AddRoute(APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, s.ErrorFunc))
+	s.AddRoute(APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, s.ErrorFunc))
 
 }
 

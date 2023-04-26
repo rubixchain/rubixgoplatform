@@ -1,8 +1,16 @@
 package service
 
 import (
+	"crypto/sha256"
+	"fmt"
+	"strconv"
+
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
+)
+
+const (
+	WriteBatchSize int = 1000
 )
 
 const (
@@ -10,79 +18,133 @@ const (
 	ArbitrationTable     string = "Arbitration"
 	ArbitrationTempTable string = "ArbitrationTemp"
 	AribitrationLocked   string = "AribirationLocked"
+	HashTable            string = "HashTable"
 )
 
 type Service struct {
 	s   storage.Storage
+	as  storage.Storage
 	log logger.Logger
 }
 
 type DIDMap struct {
-	OldDID string `gorm:"column:old_did;primary_key"`
+	OldDID string `gorm:"column:old_did;primaryKey"`
 	NewDID string `gorm:"column:new_did"`
 }
 
 type TokenDetials struct {
-	Token string `gorm:"column:token;primary_key"`
+	Token string `gorm:"column:token;primaryKey"`
 	DID   string `gorm:"column:did"`
 }
 
-func NewService(s storage.Storage, log logger.Logger) (*Service, error) {
+type HashEntry struct {
+	Hash  string `gorm:"column:hash;primaryKey"`
+	Value int    `gorm:"column:value"`
+}
+
+func NewService(s storage.Storage, as storage.Storage, log logger.Logger) (*Service, error) {
 	srv := &Service{
 		s:   s,
+		as:  as,
 		log: log.Named("service"),
 	}
 	// Initialize the Arbitration Table to store the token
 	// detials
-	err := s.Init(ArbitrationTable, &TokenDetials{})
+	err := as.Init(ArbitrationTable, &TokenDetials{}, false)
 	if err != nil {
 		srv.log.Error("Failed to init arbitration")
 	}
-	err = s.Init(ArbitrationTempTable, &TokenDetials{})
+	err = s.Init(ArbitrationTempTable, &TokenDetials{}, false)
 	if err != nil {
 		srv.log.Error("Failed to init temp arbitration")
 	}
-	err = s.Init(ArbitrationDIDTable, &DIDMap{})
+	err = as.Init(ArbitrationDIDTable, &DIDMap{}, false)
 	if err != nil {
 		srv.log.Error("Failed to init did arbitration")
 	}
-	err = s.Init(AribitrationLocked, &TokenDetials{})
+	err = s.Init(AribitrationLocked, &TokenDetials{}, false)
 	if err != nil {
 		srv.log.Error("Failed to init arbitration locked table")
 	}
+	err = s.Init(HashTable, &HashEntry{}, false)
+	if err != nil {
+		srv.log.Error("Failed to create hash table")
+	}
+	// var he HashEntry
+	// err = s.Read(HashTable, &he, "value=?", 0)
+	// if err != nil {
+	// 	go srv.CalculateHash()
+	// }
 	return srv, nil
+}
+
+func (s *Service) CalculateHash() {
+	for i := 0; i < 5000000; i++ {
+		hash := sha256.Sum256([]byte(strconv.Itoa(i)))
+		hashString := fmt.Sprintf("%x", hash)
+		he := HashEntry{
+			Hash:  hashString,
+			Value: i,
+		}
+		err := s.s.Write(HashTable, &he)
+		if err != nil {
+			s.log.Error("Failed to write hash tbale", "err", err)
+			return
+		}
+		if i%1000 == 0 {
+			s.log.Info("Hash Calulation in progress...", "count", i)
+		}
+	}
+}
+
+func (s *Service) GetTokenNumber(hash string) (int, error) {
+	var he HashEntry
+	err := s.s.Read(HashTable, &he, "hash=?", hash)
+	if err != nil {
+		s.log.Error("Failed to get the token number", "hash", hash)
+		return 0, err
+	}
+	return he.Value, nil
 }
 
 func (s *Service) GetTokenDetials(t string) (*TokenDetials, error) {
 	var td TokenDetials
-	err := s.s.Read(ArbitrationTable, &td, "token=?", t)
+	err := s.as.Read(ArbitrationTable, &td, "token=?", t)
 	if err != nil {
-		s.log.Error("Failed to read aribitration table", "err", err)
 		return nil, err
 	}
 	return &td, nil
 }
 
 func (s *Service) UpdateTokenDetials(did string) error {
-	var td TokenDetials
+	var err error
+	count := s.s.GetDataCount(ArbitrationTempTable, "did=?", did)
+	offset := 0
 	for {
-		err := s.s.Read(ArbitrationTempTable, &td, "did=?", did)
+		if offset >= int(count) {
+			break
+		}
+		var td []TokenDetials
+		err = s.s.ReadWithOffset(ArbitrationTempTable, offset, WriteBatchSize, &td, "did=?", did)
 		if err != nil {
 			break
 		}
-		if td.Token != "" {
-			err = s.s.Write(ArbitrationTable, &td)
+		if len(td) > 0 {
+			err = s.as.WriteBatch(ArbitrationTable, td, len(td))
 			if err != nil {
 				s.log.Error("Failed to write arbitary table", "err", err)
 				return err
 			}
-			err = s.s.Delete(ArbitrationTempTable, &td, "token=?", td.Token)
-			if err != nil {
-				s.log.Error("Failed to delete from arbitary temp table", "err", err)
-				return err
-			}
 		} else {
 			break
+		}
+		offset = offset + WriteBatchSize
+	}
+	if err == nil {
+		err := s.s.Delete(ArbitrationTempTable, &TokenDetials{}, "did=?", did)
+		if err != nil {
+			s.log.Error("Failed to delete from arbitary temp table", "err", err)
+			return err
 		}
 	}
 	return nil
@@ -91,13 +153,28 @@ func (s *Service) UpdateTokenDetials(did string) error {
 func (s *Service) UpdateTempTokenDetials(td *TokenDetials) error {
 	err := s.s.Write(ArbitrationTempTable, td)
 	if err != nil {
-		s.log.Error("Failed to write aribitration temp table", "err", err)
+		var t TokenDetials
+		err = s.s.Read(ArbitrationTempTable, &t, "token=?", td.Token)
+		if err == nil && t.Token == "" {
+			s.log.Error("Failed to write aribitration temp table")
+			return fmt.Errorf("failed to add token into temp table")
+		}
+		err = s.s.Delete(ArbitrationTempTable, &TokenDetials{}, "did=?", t.DID)
+		if err != nil {
+			s.log.Error("Failed to write aribitration temp table", "err", err)
+			return err
+		}
+		err := s.s.Write(ArbitrationTempTable, td)
+		if err != nil {
+			s.log.Error("Failed to write aribitration temp table", "err", err)
+			return err
+		}
 	}
 	return err
 }
 
 func (s *Service) UpdateDIDMap(dm *DIDMap) error {
-	err := s.s.Write(ArbitrationDIDTable, dm)
+	err := s.as.Write(ArbitrationDIDTable, dm)
 	if err != nil {
 		s.log.Error("Failed to write did aribitration table", "err", err)
 	}
@@ -106,7 +183,7 @@ func (s *Service) UpdateDIDMap(dm *DIDMap) error {
 
 func (s *Service) GetDIDMap(did string) (*DIDMap, error) {
 	var dm DIDMap
-	err := s.s.Read(ArbitrationDIDTable, &dm, "old_did=?", did)
+	err := s.as.Read(ArbitrationDIDTable, &dm, "old_did=?", did)
 	if err != nil {
 		return nil, err
 	}

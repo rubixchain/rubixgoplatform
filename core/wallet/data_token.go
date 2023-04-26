@@ -2,15 +2,14 @@ package wallet
 
 import (
 	"fmt"
-
-	"github.com/rubixchain/rubixgoplatform/block"
 )
 
 type DataToken struct {
-	TokenID      string `gorm:"column:token_id;primary_key"`
-	DID          string `gorm:"column:did"`
-	CommitterDID string `gorm:"column:commiter_did"`
-	TokenStatus  int    `gorm:"column:token_status;"`
+	TokenID      string `gorm:"column:token_id;primaryKey" json:"token_id"`
+	DID          string `gorm:"column:did" json:"did"`
+	CommitterDID string `gorm:"column:commiter_did" json:"comiter_did"`
+	BatchID      string `gorm:"column:batch_id" json:"batch_id"`
+	TokenStatus  int    `gorm:"column:token_status;" json:"token_status"`
 }
 
 // CreateDataToken write data token into db
@@ -23,21 +22,63 @@ func (w *Wallet) CreateDataToken(dt *DataToken) error {
 	return nil
 }
 
-// AddDataTokenBlock will add token chain to db
-func (w *Wallet) AddDataTokenBlock(t string, b *block.Block) error {
-	return w.addBlock(DataTokenType, t, b)
-}
-
-func (w *Wallet) GetDataToken(did string) ([]DataToken, error) {
+func (w *Wallet) GetDataToken(batchID string) ([]DataToken, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	var dts []DataToken
-	err := w.s.Read(DataTokenStorage, &dts, "commiter_did=? AND token_status=?", did, TokenIsFree)
+	err := w.s.Read(DataTokenStorage, &dts, "batch_id=? AND token_status=?", batchID, TokenIsFree)
 	if err != nil {
 		return nil, err
 	}
 	if len(dts) == 0 {
-		return nil, fmt.Errorf("no data token is available")
+		return nil, fmt.Errorf("no data token is available to commit")
+	}
+	for i := range dts {
+		dts[i].TokenStatus = TokenIsLocked
+		err := w.s.Update(DataTokenStorage, &dts[i], "token_id=?", dts[i].TokenID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return dts, nil
+}
+
+func (w *Wallet) GetDataTokenByDID(did string) ([]DataToken, error) {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	var dts []DataToken
+	err := w.s.Read(DataTokenStorage, &dts, "did=?", did)
+	if err != nil {
+		return nil, err
+	}
+	if len(dts) == 0 {
+		return nil, fmt.Errorf("no data token is available to commit")
+	}
+	return dts, nil
+}
+
+func (w *Wallet) ReleaseDataToken(dts []DataToken) error {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	for i := range dts {
+		dts[i].TokenStatus = TokenIsFree
+		err := w.s.Update(DataTokenStorage, &dts[i], "token_id=?", dts[i].TokenID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *Wallet) CommitDataToken(dts []DataToken) error {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	for i := range dts {
+		dts[i].TokenStatus = TokenIsCommitted
+		err := w.s.Update(DataTokenStorage, &dts[i], "token_id=?", dts[i].TokenID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
