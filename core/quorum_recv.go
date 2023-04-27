@@ -798,7 +798,7 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 		td, err := c.srv.GetTokenDetials(ti[i].Token)
 		if err == nil && td.Token == ti[i].Token {
 			c.log.Error("Failed to do token abitration, token is already migrated", "token", ti[i].Token, "did", odid)
-			srep.Message = "token is already migrated, ti[i].Token"
+			srep.Message = "token is already migrated," + ti[i].Token
 			return c.l.RenderJSON(req, &srep, http.StatusOK)
 		}
 		dc, err := c.SetupForienDID(odid)
