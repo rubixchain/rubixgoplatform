@@ -334,7 +334,7 @@
         },
         "/api/initiate-rbt-transfer": {
             "post": {
-                "description": "This API will initiate RBT transfer to the specified dID",
+                "description": "Initiates a transfer of RBT tokens from one account to another.",
                 "consumes": [
                     "application/json"
                 ],
@@ -344,51 +344,51 @@
                 "tags": [
                     "Account"
                 ],
-                "summary": "Initiate RBT Transfer",
+                "summary": "Initiate RBT transfer",
                 "operationId": "initiate-rbt-transfer",
                 "parameters": [
                     {
-                        "description": "The decentralized identifier of the receiver",
-                        "name": "receiver",
+                        "description": "Transfer input parameters",
+                        "name": "input",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/model.RBTTransferRequest"
                         }
-                    },
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/signature-response": {
+            "post": {
+                "description": "This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Signature Response",
+                "operationId": "signature-response",
+                "parameters": [
                     {
-                        "description": "The decentralized identifier of the sender",
-                        "name": "sender",
+                        "description": "Transfer input parameters",
+                        "name": "input",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "The number of RBT tokens to transfer",
-                        "name": "tokenCount",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "A comment for the transfer",
-                        "name": "comment",
-                        "in": "body",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "The type of transfer (1 for direct transfer, 2 for group transfer)",
-                        "name": "type",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/server.inputData"
                         }
                     }
                 ],
@@ -436,6 +436,43 @@
                 "result": {},
                 "status": {
                     "type": "boolean"
+                }
+            }
+        },
+        "model.RBTTransferRequest": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "receiver": {
+                    "type": "string"
+                },
+                "sender": {
+                    "type": "string"
+                },
+                "tokenCOunt": {
+                    "type": "number"
+                },
+                "type": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.inputData": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "mode": {
+                    "type": "integer"
+                },
+                "password": {
+                    "type": "string"
                 }
             }
         }

@@ -7,6 +7,30 @@ definitions:
       status:
         type: boolean
     type: object
+  model.RBTTransferRequest:
+    properties:
+      comment:
+        type: string
+      password:
+        type: string
+      receiver:
+        type: string
+      sender:
+        type: string
+      tokenCOunt:
+        type: number
+      type:
+        type: integer
+    type: object
+  server.inputData:
+    properties:
+      id:
+        type: string
+      mode:
+        type: integer
+      password:
+        type: string
+    type: object
 info:
   contact:
     email: murali.c@ensurity.com
@@ -232,38 +256,15 @@ paths:
     post:
       consumes:
       - application/json
-      description: This API will initiate RBT transfer to the specified dID
+      description: Initiates a transfer of RBT tokens from one account to another.
       operationId: initiate-rbt-transfer
       parameters:
-      - description: The decentralized identifier of the receiver
+      - description: Transfer input parameters
         in: body
-        name: receiver
+        name: input
         required: true
         schema:
-          type: string
-      - description: The decentralized identifier of the sender
-        in: body
-        name: sender
-        required: true
-        schema:
-          type: string
-      - description: The number of RBT tokens to transfer
-        in: body
-        name: tokenCount
-        required: true
-        schema:
-          type: string
-      - description: A comment for the transfer
-        in: body
-        name: comment
-        schema:
-          type: string
-      - description: The type of transfer (1 for direct transfer, 2 for group transfer)
-        in: body
-        name: type
-        required: true
-        schema:
-          type: string
+          $ref: '#/definitions/model.RBTTransferRequest'
       produces:
       - application/json
       responses:
@@ -271,7 +272,31 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/model.BasicResponse'
-      summary: Initiate RBT Transfer
+      summary: Initiate RBT transfer
+      tags:
+      - Account
+  /api/signature-response:
+    post:
+      consumes:
+      - application/json
+      description: This API is used to supply the password for the node along with
+        the ID generated when Initiate RBT transfer is called.
+      operationId: signature-response
+      parameters:
+      - description: Transfer input parameters
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.inputData'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Signature Response
       tags:
       - Account
   /api/start:

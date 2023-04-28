@@ -32,17 +32,13 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 }
 
 // ShowAccount godoc
-// @Summary     Initiate RBT Transfer
-// @Description This API will initiate RBT transfer to the specified dID
+// @Summary Initiate RBT transfer
+// @Description Initiates a transfer of RBT tokens from one account to another.
+// @ID initiate-rbt-transfer
 // @Tags        Account
-// @ID 			initiate-rbt-transfer
-// @Accept      json
-// @Produce     json
-// @Param 		receiver 	body string true "The decentralized identifier of the receiver"
-// @Param 		sender 		body string true "The decentralized identifier of the sender"
-// @Param 		tokenCount 	body string true "The number of RBT tokens to transfer"
-// @Param 		comment 	body string false "A comment for the transfer"
-// @Param 		type 		body string true "The type of transfer (1 for direct transfer, 2 for group transfer)"
+// @Accept json
+// @Produce json
+// @Param input body model.RBTTransferRequest true "Transfer input parameters"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/initiate-rbt-transfer [post]
 func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
@@ -93,6 +89,22 @@ func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
 
+type inputData struct {
+	ID       string `json:"id"`
+	Mode     int    `json:"mode"`
+	Password string `json:"password"`
+}
+
+// ShowAccount godoc
+// @Summary     Signature Response
+// @Description This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.
+// @Tags        Account
+// @ID 			signature-response
+// @Accept      json
+// @Produce     json
+// @Param input body inputData true "Transfer input parameters"
+// @Success 	200		{object}	model.BasicResponse
+// @Router /api/signature-response [post]
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	var resp did.SignRespData
 	err := s.ParseJSON(req, &resp)
