@@ -274,7 +274,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Initiate RBT transfer
       tags:
-      - Account
+      - Transaction
   /api/signature-response:
     post:
       consumes:
@@ -298,7 +298,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Signature Response
       tags:
-      - Account
+      - Transaction
   /api/start:
     get:
       consumes:

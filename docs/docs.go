@@ -351,7 +351,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Account"
+                    "Transaction"
                 ],
                 "summary": "Initiate RBT transfer",
                 "operationId": "initiate-rbt-transfer",
@@ -386,7 +386,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Account"
+                    "Transaction"
                 ],
                 "summary": "Signature Response",
                 "operationId": "signature-response",

@@ -35,7 +35,7 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 // @Summary Initiate RBT transfer
 // @Description Initiates a transfer of RBT tokens from one account to another.
 // @ID initiate-rbt-transfer
-// @Tags        Account
+// @Tags        Transaction
 // @Accept json
 // @Produce json
 // @Param input body model.RBTTransferRequest true "Transfer input parameters"
@@ -98,7 +98,7 @@ type inputData struct {
 // ShowAccount godoc
 // @Summary     Signature Response
 // @Description This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.
-// @Tags        Account
+// @Tags        Transaction
 // @ID 			signature-response
 // @Accept      json
 // @Produce     json
