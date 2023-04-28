@@ -7,11 +7,9 @@ definitions:
       status:
         type: boolean
     type: object
-  model.RBTTransferRequest:
+  server.RBTTransferRequestSwaggoInput:
     properties:
       comment:
-        type: string
-      password:
         type: string
       receiver:
         type: string
@@ -264,7 +262,7 @@ paths:
         name: input
         required: true
         schema:
-          $ref: '#/definitions/model.RBTTransferRequest'
+          $ref: '#/definitions/server.RBTTransferRequestSwaggoInput'
       produces:
       - application/json
       responses:

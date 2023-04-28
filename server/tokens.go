@@ -31,6 +31,14 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+type RBTTransferRequestSwaggoInput struct {
+	Receiver   string  `json:"receiver"`
+	Sender     string  `json:"sender"`
+	TokenCount float64 `json:"tokenCOunt"`
+	Comment    string  `json:"comment"`
+	Type       int     `json:"type"`
+}
+
 // ShowAccount godoc
 // @Summary Initiate RBT transfer
 // @Description Initiates a transfer of RBT tokens from one account to another.
@@ -38,7 +46,7 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 // @Tags        Transaction
 // @Accept json
 // @Produce json
-// @Param input body model.RBTTransferRequest true "Transfer input parameters"
+// @Param input body RBTTransferRequestSwaggoInput true "Transfer input parameters"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/initiate-rbt-transfer [post]
 func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {

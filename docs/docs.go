@@ -362,7 +362,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.RBTTransferRequest"
+                            "$ref": "#/definitions/server.RBTTransferRequestSwaggoInput"
                         }
                     }
                 ],
@@ -448,13 +448,10 @@ const docTemplate = `{
                 }
             }
         },
-        "model.RBTTransferRequest": {
+        "server.RBTTransferRequestSwaggoInput": {
             "type": "object",
             "properties": {
                 "comment": {
-                    "type": "string"
-                },
-                "password": {
                     "type": "string"
                 },
                 "receiver": {

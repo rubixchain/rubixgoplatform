@@ -16,10 +16,7 @@ import (
 // @Produce json
 // @Param txnID query string true "The ID of the transaction to retrieve"
 // @Success 200 {object} model.BasicResponse
-// @Failure 400 {object} model.BasicResponse
-// @Failure 404 {object} model.BasicResponse
-// @Failure 500 {object} model.BasicResponse
-// @Router /api/get-txn-details-by-id [get]
+// @Router /api/get-by-txnId [get]
 func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 	txnID := s.GetQuerry(req, "txnID")
 	res, err := s.c.GetTxnDetailsByID(txnID)
@@ -55,9 +52,6 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 // @Param DID query string true "DID of sender/receiver"
 // @Param Role query string false "Filter by role as sender or receiver"
 // @Success 200 {object} model.BasicResponse
-// @Failure 400 {object} model.BasicResponse
-// @Failure 404 {object} model.BasicResponse
-// @Failure 500 {object} model.BasicResponse
 // @Router /api/get-by-did [get]
 func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "DID")
@@ -97,9 +91,6 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 // @Produce json
 // @Param Comment query string true "Comment to identify the transaction"
 // @Success 200 {object} model.BasicResponse
-// @Failure 400 {object} model.BasicResponse
-// @Failure 404 {object} model.BasicResponse
-// @Failure 500 {object} model.BasicResponse
 // @Router /api/get-by-comment [get]
 func (s *Server) APIGetTxnByComment(req *ensweb.Request) *ensweb.Result {
 	comment := s.GetQuerry(req, "Comment")
