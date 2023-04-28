@@ -80,6 +80,99 @@ paths:
       summary: Create Data Token
       tags:
       - Data Tokens
+  /api/get-account-info:
+    get:
+      consumes:
+      - application/json
+      description: For a mentioned DID, check the account balance
+      parameters:
+      - description: User DID
+        in: query
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Check account balance
+      tags:
+      - Account
+  /api/get-by-comment:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of a transaction based on its comment.
+      operationId: get-by-comment
+      parameters:
+      - description: Comment to identify the transaction
+        in: query
+        name: Comment
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get transaction details by Transcation Comment
+      tags:
+      - Account
+  /api/get-by-did:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of a transaction based on dID.
+      operationId: get-by-did
+      parameters:
+      - description: DID of sender/receiver
+        in: query
+        name: DID
+        required: true
+        type: string
+      - description: Filter by role as sender or receiver
+        in: query
+        name: Role
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get transaction details by dID
+      tags:
+      - Account
   /api/get-data-token:
     get:
       consumes:
@@ -101,6 +194,86 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
+  /api/get-txn-details-by-id:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of a transaction based on its ID.
+      operationId: get-txn-details-by-id
+      parameters:
+      - description: The ID of the transaction to retrieve
+        in: query
+        name: txnID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get transaction details by Transcation ID
+      tags:
+      - Account
+  /api/initiate-rbt-transfer:
+    post:
+      consumes:
+      - application/json
+      description: This API will initiate RBT transfer to the specified dID
+      operationId: initiate-rbt-transfer
+      parameters:
+      - description: The decentralized identifier of the receiver
+        in: body
+        name: receiver
+        required: true
+        schema:
+          type: string
+      - description: The decentralized identifier of the sender
+        in: body
+        name: sender
+        required: true
+        schema:
+          type: string
+      - description: The number of RBT tokens to transfer
+        in: body
+        name: tokenCount
+        required: true
+        schema:
+          type: string
+      - description: A comment for the transfer
+        in: body
+        name: comment
+        schema:
+          type: string
+      - description: The type of transfer (1 for direct transfer, 2 for group transfer)
+        in: body
+        name: type
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiate RBT Transfer
+      tags:
+      - Account
   /api/start:
     get:
       consumes:

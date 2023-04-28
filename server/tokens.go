@@ -31,6 +31,20 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+// ShowAccount godoc
+// @Summary     Initiate RBT Transfer
+// @Description This API will initiate RBT transfer to the specified dID
+// @Tags        Account
+// @ID 			initiate-rbt-transfer
+// @Accept      json
+// @Produce     json
+// @Param 		receiver 	body string true "The decentralized identifier of the receiver"
+// @Param 		sender 		body string true "The decentralized identifier of the sender"
+// @Param 		tokenCount 	body string true "The number of RBT tokens to transfer"
+// @Param 		comment 	body string false "A comment for the transfer"
+// @Param 		type 		body string true "The type of transfer (1 for direct transfer, 2 for group transfer)"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/initiate-rbt-transfer [post]
 func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTTransferRequest
 	err := s.ParseJSON(req, &rbtReq)
@@ -49,6 +63,15 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+// ShowAccount godoc
+// @Summary      Check account balance
+// @Description  For a mentioned DID, check the account balance
+// @Tags         Account
+// @Accept       json
+// @Produce      json
+// @Param        did      	   query      string  true  "User DID"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/get-account-info [get]
 func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
 	if !s.validateDIDAccess(req, did) {
