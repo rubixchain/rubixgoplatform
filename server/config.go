@@ -19,6 +19,7 @@ type Config struct {
 	AuthMethod  string `json:"auth_method"`
 	SessionName string `json:"session_name"`
 	SessionKey  string `json:"session_key"`
+	GRPCPort    uint16 `json:"grpc_port"`
 }
 
 // APIAddBootStrap will add bootstrap peers to the configuration
