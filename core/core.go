@@ -112,7 +112,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 		nodePort := NodePort + node
 		portOffset := MaxPeerConn * node
 		cfg := config.Config{
-			NodeAddress: "localhost",
+			NodeAddress: "0.0.0.0",
 			NodePort:    fmt.Sprintf("%d", nodePort),
 			DirPath:     "./",
 			CfgData: config.ConfigData{
