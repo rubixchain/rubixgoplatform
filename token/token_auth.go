@@ -13,6 +13,8 @@ const (
 	NFTTokenType
 	TestTokenType
 	DataTokenType
+	TestPartTokenType
+	TestNFTTokenType
 )
 
 func GetWholeTokenValue(tokenDetials string) (int, string, bool, error) {

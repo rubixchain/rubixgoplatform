@@ -34,7 +34,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		}
 		// Check the token validation
 		if !c.testNet {
-			fb := c.w.GetFirstBlock(ti[i].Token, ti[i].TokenType)
+			fb := c.w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
 			if fb == nil {
 				c.log.Error("Failed to get first token chain block")
 				return false

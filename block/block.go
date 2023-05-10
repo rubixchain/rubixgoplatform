@@ -530,6 +530,16 @@ func (b *Block) GetTokenType() int {
 	return b.getBlkInt(TCTokenTypeKey)
 }
 
+func (b *Block) GetParentDetials(t string) (string, []string, error) {
+	gtm := b.getGenesisTokenMap(t)
+	if gtm == nil {
+		return "", nil, fmt.Errorf("invalid token chain block, missing genesis block")
+	}
+	p := util.GetStringFromMap(gtm, GIParentIDKey)
+	gp := util.GetStringSliceFromMap(gtm, GIGrandParentIDKey)
+	return p, gp, nil
+}
+
 func (b *Block) GetTokenDetials(t string) (int, int, error) {
 	gtm := b.getGenesisTokenMap(t)
 	if gtm == nil {

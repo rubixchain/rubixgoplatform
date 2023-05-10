@@ -13,6 +13,10 @@ const (
 	RacOldNFTType
 	RacNFTType
 	RacDataTokenType
+	RacPartTokenType
+	RacTestNFTType
+	RacTestDataTokenType
+	RacTestPartTokenType
 )
 
 const (
@@ -32,10 +36,17 @@ const (
 	RacContentHashKey  string = "10"
 	RacContentURLKey   string = "11"
 	RacTransInfoKey    string = "12"
+	RacPartInfoKey     string = "13"
 	RacHashKey         string = "98"
 	RacSignKey         string = "99"
 	RacBlockCotent     string = "1"
 	RacBlockSig        string = "2"
+)
+
+const (
+	RacPIParentKey  string = "1"
+	RacPIPartNumKey string = "2"
+	RacPIValueKey   string = "3"
 )
 
 type RacType struct {
@@ -49,6 +60,13 @@ type RacType struct {
 	ContentHash  map[string]string
 	ContentURL   map[string]string
 	TransInfo    map[string]string
+	PartInfo     *RacPartInfo
+}
+
+type RacPartInfo struct {
+	Parent  string
+	PartNum int
+	Value   float64
 }
 
 type RacBlock struct {
@@ -80,7 +98,7 @@ func InitRacBlock(bb []byte, bm map[string]interface{}) (*RacBlock, error) {
 }
 
 func CreateRac(r *RacType) ([]*RacBlock, error) {
-	if r.Type == 1 || r.Type > RacDataTokenType {
+	if r.Type == 1 || r.Type > RacPartTokenType {
 		return nil, fmt.Errorf("rac type is not supported")
 	}
 	rb := make([]*RacBlock, 0)
@@ -112,6 +130,12 @@ func CreateRac(r *RacType) ([]*RacBlock, error) {
 		if r.TransInfo != nil {
 			m[RacTransInfoKey] = r.TransInfo
 		}
+		if r.PartInfo != nil {
+			m[RacPartInfoKey] = newPartInfo(r.PartInfo)
+			if m[RacPartInfoKey] == nil {
+				return nil, fmt.Errorf("failed to create part info")
+			}
+		}
 		r, err := InitRacBlock(nil, m)
 		if err != nil {
 			return nil, err
@@ -119,6 +143,17 @@ func CreateRac(r *RacType) ([]*RacBlock, error) {
 		rb = append(rb, r)
 	}
 	return rb, nil
+}
+
+func newPartInfo(ti *RacPartInfo) map[string]interface{} {
+	tim := make(map[string]interface{})
+	if ti.Parent == "" {
+		return nil
+	}
+	tim[RacPIParentKey] = ti.Parent
+	tim[RacPIPartNumKey] = ti.PartNum
+	tim[RacPIValueKey] = ti.Value
+	return tim
 }
 
 func (r *RacBlock) blkEncode() error {

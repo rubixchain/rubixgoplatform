@@ -21,12 +21,14 @@ const (
 )
 
 const (
-	WholeTokenType string = "wt"
-	PartTokenType  string = "pt"
-	NFTType        string = "nt"
-	TestTokenType  string = "tt"
-	DataTokenType  string = "dt"
-	ReferenceType  string = "rf"
+	WholeTokenType    string = "wt"
+	PartTokenType     string = "pt"
+	NFTType           string = "nt"
+	TestTokenType     string = "tt"
+	DataTokenType     string = "dt"
+	TestPartTokenType string = "tpt"
+	TestNFTType       string = "tnt"
+	ReferenceType     string = "rf"
 )
 
 const TCBlockCountLimit int = 100
@@ -61,6 +63,10 @@ func tcsPrefix(tokenType int, t string) string {
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.TestPartTokenType:
+		tt = TestPartTokenType
+	case tkn.TestNFTTokenType:
+		tt = TestNFTType
 	}
 	return tt + "-" + t + "-"
 }
@@ -139,6 +145,8 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 	case tkn.PartTokenType:
 		db = w.tcs
 	case tkn.TestTokenType:
+		db = w.tcs
+	case tkn.TestPartTokenType:
 		db = w.tcs
 	case tkn.DataTokenType:
 		db = w.dtcs
@@ -247,6 +255,41 @@ func (w *Wallet) updateNewKey(tt int, token string) error {
 	return nil
 }
 
+// getGenesisBlock get the genesis block from the storage
+func (w *Wallet) getGenesisBlock(tt int, token string) *block.Block {
+	db := w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to get first block, invalid token type")
+		return nil
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
+	defer iter.Release()
+	var err error
+	if iter.First() {
+		key := string(iter.Key())
+		if isOldKey(key) {
+			err = w.updateNewKey(tt, token)
+			if err != nil {
+				w.log.Error("Failed to update new key", "err", err)
+				return nil
+			}
+			return w.getGenesisBlock(tt, token)
+		}
+		v := iter.Value()
+		blk := make([]byte, len(v))
+		copy(blk, v)
+		if string(blk[0:2]) == ReferenceType {
+			blk, err = w.getRawBlock(db, blk)
+			if err != nil {
+				return nil
+			}
+		}
+		b := block.InitBlock(blk, nil)
+		return b
+	}
+	return nil
+}
+
 // getLatestBlock get latest block from the storage
 func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 	db := w.getChainDB(tt)
@@ -275,41 +318,6 @@ func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 			blk, err = w.getRawBlock(db, blk)
 			if err != nil {
 				w.log.Error("Failed to get reference block", "err", err)
-				return nil
-			}
-		}
-		b := block.InitBlock(blk, nil)
-		return b
-	}
-	return nil
-}
-
-// getFirstBlock get the first block from the storage
-func (w *Wallet) getFirstBlock(tt int, token string) *block.Block {
-	db := w.getChainDB(tt)
-	if db == nil {
-		w.log.Error("Failed to get first block, invalid token type")
-		return nil
-	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
-	defer iter.Release()
-	var err error
-	if iter.First() {
-		key := string(iter.Key())
-		if isOldKey(key) {
-			err = w.updateNewKey(tt, token)
-			if err != nil {
-				w.log.Error("Failed to update new key", "err", err)
-				return nil
-			}
-			return w.getFirstBlock(tt, token)
-		}
-		v := iter.Value()
-		blk := make([]byte, len(v))
-		copy(blk, v)
-		if string(blk[0:2]) == ReferenceType {
-			blk, err = w.getRawBlock(db, blk)
-			if err != nil {
 				return nil
 			}
 		}
@@ -502,8 +510,9 @@ func (w *Wallet) GetLatestTokenBlock(token string, tokenType int) *block.Block {
 	return w.getLatestBlock(tokenType, token)
 }
 
-func (w *Wallet) GetFirstBlock(token string, tokenType int) *block.Block {
-	return w.getFirstBlock(tokenType, token)
+// GetLatestTokenBlock get latest token block from the storage
+func (w *Wallet) GetGenesisTokenBlock(token string, tokenType int) *block.Block {
+	return w.getGenesisBlock(tokenType, token)
 }
 
 // AddTokenBlock will write token block into storage
