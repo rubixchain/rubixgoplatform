@@ -1,5 +1,7 @@
 package wallet
 
+import "fmt"
+
 type DIDType struct {
 	DID    string `gorm:"column:did;primaryKey"`
 	Type   int    `gorm:"column:type"`
@@ -72,20 +74,28 @@ func (w *Wallet) IsDIDExist(did string) bool {
 }
 
 func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
+	lastChar := string(did[len(did)-1])
+	tableName := fmt.Sprintf("DIDPeerStorage_%s", lastChar)
 	var dm DIDPeerMap
-	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
+	err := w.s.Read(tableName, &dm, "did=?", did)
 	if err != nil {
 		dm.DID = did
 		dm.PeerID = peerID
-		return w.s.Write(DIDPeerStorage, &dm)
+		fmt.Println(dm.DID + "---------------------------------------------------")
+		fmt.Println(dm.PeerID + "--------------------------------------------------")
+		fmt.Println(tableName + "-----------------------------------------------------")
+		return w.s.Write(tableName, &dm)
 	}
+
 	dm.PeerID = peerID
-	return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+	return w.s.Update(tableName, &dm, "did=?", did)
 }
 
 func (w *Wallet) GetPeerID(did string) string {
+	lastChar := string(did[len(did)-1])
+	tableName := fmt.Sprintf("DIDPeerStorage_%s", lastChar)
 	var dm DIDPeerMap
-	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
+	err := w.s.Read(tableName, &dm, "did=?", did)
 	if err != nil {
 		return ""
 	}
