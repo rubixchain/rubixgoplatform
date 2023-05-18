@@ -75,15 +75,12 @@ func (w *Wallet) IsDIDExist(did string) bool {
 
 func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
 	lastChar := string(did[len(did)-1])
-	tableName := fmt.Sprintf("DIDPeerStorage_%s", lastChar)
+	tableName := fmt.Sprintf("DIDPeerTable_%s", lastChar)
 	var dm DIDPeerMap
 	err := w.s.Read(tableName, &dm, "did=?", did)
 	if err != nil {
 		dm.DID = did
 		dm.PeerID = peerID
-		fmt.Println(dm.DID + "---------------------------------------------------")
-		fmt.Println(dm.PeerID + "--------------------------------------------------")
-		fmt.Println(tableName + "-----------------------------------------------------")
 		return w.s.Write(tableName, &dm)
 	}
 
