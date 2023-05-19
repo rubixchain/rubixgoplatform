@@ -95,6 +95,7 @@ type SendTokenRequest struct {
 	Address         string               `json:"peer_id"`
 	TokenInfo       []contract.TokenInfo `json:"token_info"`
 	TokenChainBlock []byte               `json:"token_chain_block"`
+	Finality        bool                 `json:"finality"`
 }
 
 type PledgeReply struct {
@@ -290,6 +291,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			break
 		}
 	}
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -318,10 +320,22 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 		}
 	}
+	//add db txn status - ConsensusSuccess
+	err = c.addTxnStatus(cr, sc, wallet.ConsensusSuccess, tid)
+	if err != nil {
+		return nil, nil, err
+	}
 	if cr.Mode == RBTTransferMode {
 		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
+			//add db txn status - Finality Pending
+			err1 := c.updateTxnStatus(sc.GetTransTokenInfo(), wallet.FinlaityPending, tid)
+			if err1 != nil {
+				c.log.Error("Error triggered while updating txn status", err1)
+				return nil, nil, err1
+			}
+			c.w.TokensFinalityStatus(sc.GetSenderDID(), ti, nb, rp.IsLocal(), wallet.TokenTxnFinalityPending)
 			return nil, nil, err
 		}
 		defer rp.Close()
@@ -330,16 +344,31 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TokenInfo:       ti,
 			TokenChainBlock: nb.GetBlock(),
 		}
+		//add db txn status - ReceiverValidation
+		c.updateTxnStatus(sc.GetTransTokenInfo(), wallet.ReceiverValidation, tid)
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
+			//add db txn status - Finality Pending
+			err1 := c.updateTxnStatus(sc.GetTransTokenInfo(), wallet.FinlaityPending, tid)
+			if err1 != nil {
+				return nil, nil, err1
+			}
+			c.w.TokensFinalityStatus(sc.GetSenderDID(), ti, nb, rp.IsLocal(), wallet.TokenTxnFinalityPending)
 			return nil, nil, err
 		}
 		if !br.Status {
 			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
+			//add db txn status - Finality Pending
+			err1 := c.updateTxnStatus(sc.GetTransTokenInfo(), wallet.FinlaityPending, tid)
+			if err1 != nil {
+				return nil, nil, err1
+			}
+			c.w.TokensFinalityStatus(sc.GetSenderDID(), ti, nb, rp.IsLocal(), wallet.TokenTxnFinalityPending)
 			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
 		}
+
 		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
@@ -366,6 +395,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
 			Status:          true,
+		}
+		//add db txn status - Finality Achieved
+		err = c.updateTxnStatus(sc.GetTransTokenInfo(), wallet.FinalityAchieved, tid)
+		if err != nil {
+			return nil, nil, err
 		}
 		return &td, pl, nil
 	} else {
@@ -765,4 +799,37 @@ func (c *Core) checkIsUnpledged(tcb *block.Block, token string) bool {
 		return true
 	}
 	return false
+}
+
+func (c *Core) addTxnStatus(cr *ConensusRequest, sc *contract.Contract, txnStatus int, txnId string) error {
+	tokenInfo := sc.GetTransTokenInfo()
+	quorumList := strings.Join(cr.QuorumList, "-")
+	for i := range tokenInfo {
+		tokenTxnStatus := wallet.TransactionStatusMap{
+			Token:          tokenInfo[i].Token,
+			ReqID:          cr.ReqID,
+			TxnID:          txnId,
+			SenderDID:      sc.GetSenderDID(),
+			SenderPeerID:   cr.SenderPeerID,
+			ReceiverDID:    sc.GetReceiverDID(),
+			ReceiverPeerID: cr.ReceiverPeerID,
+			TxnStatus:      txnStatus,
+			QuorumList:     quorumList,
+		}
+		err := c.w.AddTxnStatus(tokenTxnStatus)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Core) updateTxnStatus(tokenInfo []contract.TokenInfo, txnStatus int, txnId string) error {
+	c.log.Debug("Updating txn status")
+	err := c.w.UpdateTxnStatus(tokenInfo, txnStatus, txnId)
+	if err != nil {
+		c.log.Error("Error triggered while updating txn status", err)
+		return err
+	}
+	return nil
 }

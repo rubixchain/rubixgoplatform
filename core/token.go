@@ -8,6 +8,7 @@ import (
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -265,3 +266,22 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 // 	// }
 // 	// c.log.Debug("Token recevied", "token", tp.Token)
 // }
+
+func (c *Core) TokenChainsReceivedForFinality(senderAddr string, tokenInfo []contract.TokenInfo) error {
+	peerConnection, err := c.getPeer(senderAddr)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return err
+	}
+	defer peerConnection.Close()
+
+	for i := range tokenInfo {
+		err := c.syncTokenChainFrom(peerConnection, tokenInfo[i].BlockID, tokenInfo[i].Token, tokenInfo[i].TokenType)
+		if err != nil {
+			c.log.Error("Failed to fetch token chain from sender", "err", err)
+			return err
+		}
+		c.log.Debug("Token", tokenInfo[i].Token, " chain successfully synced to receiver")
+	}
+	return nil
+}

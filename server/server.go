@@ -48,6 +48,8 @@ const (
 	APIGetTxnByTxnID       string = "/api/get-by-txnId"
 	APIGetTxnByDID         string = "/api/get-by-did"
 	APIGetTxnByComment     string = "/api/get-by-comment"
+	APIGetPendingTxn       string = "/api/get-pending-txn"
+	APIInitiateTxnFinality string = "/api/initiate-txn-finality"
 )
 
 // Server defines server handle
@@ -227,6 +229,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, s.ErrorFunc))
 	s.AddRoute(APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, s.ErrorFunc))
 	s.AddRoute(APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, s.ErrorFunc))
+	s.AddRoute(APIGetPendingTxn, "GET", s.AuthHandle(s.APIGetPendingTxn, s.ErrorFunc))
+	s.AddRoute(APIInitiateTxnFinality, "POST", s.AuthHandle(s.APIInitiateTxnFinality, s.ErrorFunc))
 
 }
 

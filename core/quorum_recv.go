@@ -374,12 +374,30 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
-	err = c.w.TokensReceived(did, sr.TokenInfo, b)
-	if err != nil {
-		c.log.Error("Failed to update token status", "err", err)
-		crep.Message = "Failed to update token status"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	if sr.Finality {
+		//sync tokens and token chain based on that
+		err = c.TokenChainsReceivedForFinality(sr.Address, sr.TokenInfo)
+		if err != nil {
+			c.log.Error("Failed to fetch and write token chain from sender ", "err", err)
+			crep.Message = "Failed to update token status " + err.Error()
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		err = c.w.TokensReceivedForFinality(did, sr.TokenInfo, b)
+		if err != nil {
+			c.log.Error("Failed to Pin/update token status", "err", err)
+			crep.Message = "Failed to update token status"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+
+	} else {
+		err = c.w.TokensReceived(did, sr.TokenInfo, b)
+		if err != nil {
+			c.log.Error("Failed to update token status", "err", err)
+			crep.Message = "Failed to update token status"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
 	}
+
 	sc := contract.InitContract(b.GetSmartContract(), nil)
 	if sc == nil {
 		c.log.Error("Failed to update token status, missing smart contract")

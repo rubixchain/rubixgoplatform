@@ -35,34 +35,36 @@ const (
 	version string = "0.0.8"
 )
 const (
-	VersionCmd            string = "-v"
-	HelpCmd               string = "-h"
-	RunCmd                string = "run"
-	PingCmd               string = "ping"
-	AddBootStrapCmd       string = "addbootstrap"
-	RemoveBootStrapCmd    string = "removebootstrap"
-	RemoveAllBootStrapCmd string = "removeallbootstrap"
-	GetAllBootStrapCmd    string = "getallbootstrap"
-	CreateDIDCmd          string = "createdid"
-	GetAllDIDCmd          string = "getalldid"
-	AddQuorumCmd          string = "addquorum"
-	GetAllQuorumCmd       string = "getallquorum"
-	RemoveAllQuorumCmd    string = "removeallquorum"
-	SetupQuorumCmd        string = "setupquorum"
-	GenerateTestRBTCmd    string = "generatetestrbt"
-	TransferRBTCmd        string = "transferrbt"
-	GetAccountInfoCmd     string = "getaccountinfo"
-	SetupServiceCmd       string = "setupservice"
-	DumpTokenChainCmd     string = "dumptokenchain"
-	RegsiterDIDCmd        string = "registerdid"
-	SetupDIDCmd           string = "setupdid"
-	ShutDownCmd           string = "shutdown"
-	MirgateNodeCmd        string = "migratenode"
-	LockTokensCmd         string = "locktokens"
-	CreateDataTokenCmd    string = "createdatatoken"
-	CommitDataTokenCmd    string = "commitdatatoken"
-	SetupDBCmd            string = "setupdb"
-	GetTxnDetailsCmd      string = "gettxndetails"
+	VersionCmd             string = "-v"
+	HelpCmd                string = "-h"
+	RunCmd                 string = "run"
+	PingCmd                string = "ping"
+	AddBootStrapCmd        string = "addbootstrap"
+	RemoveBootStrapCmd     string = "removebootstrap"
+	RemoveAllBootStrapCmd  string = "removeallbootstrap"
+	GetAllBootStrapCmd     string = "getallbootstrap"
+	CreateDIDCmd           string = "createdid"
+	GetAllDIDCmd           string = "getalldid"
+	AddQuorumCmd           string = "addquorum"
+	GetAllQuorumCmd        string = "getallquorum"
+	RemoveAllQuorumCmd     string = "removeallquorum"
+	SetupQuorumCmd         string = "setupquorum"
+	GenerateTestRBTCmd     string = "generatetestrbt"
+	TransferRBTCmd         string = "transferrbt"
+	GetAccountInfoCmd      string = "getaccountinfo"
+	SetupServiceCmd        string = "setupservice"
+	DumpTokenChainCmd      string = "dumptokenchain"
+	RegsiterDIDCmd         string = "registerdid"
+	SetupDIDCmd            string = "setupdid"
+	ShutDownCmd            string = "shutdown"
+	MirgateNodeCmd         string = "migratenode"
+	LockTokensCmd          string = "locktokens"
+	CreateDataTokenCmd     string = "createdatatoken"
+	CommitDataTokenCmd     string = "commitdatatoken"
+	SetupDBCmd             string = "setupdb"
+	GetTxnDetailsCmd       string = "gettxndetails"
+	GetPendingTxnCmd       string = "getpendingtxns"
+	InitiateTxnFinalityCmd string = "intitatetxnfinality"
 )
 
 var commands = []string{VersionCmd,
@@ -92,7 +94,9 @@ var commands = []string{VersionCmd,
 	CreateDataTokenCmd,
 	CommitDataTokenCmd,
 	SetupDBCmd,
-	GetTxnDetailsCmd}
+	GetTxnDetailsCmd,
+	GetPendingTxnCmd,
+	InitiateTxnFinalityCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -120,7 +124,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will create data token token",
 	"This command will commit data token token",
 	"This command will setup the DB",
-	"This command will get transaction details"}
+	"This command will get transaction details",
+	"This command will get all the pending txn yet to achieve finality",
+	"this command will intitte the txn finality for specified txnId"}
 
 type Command struct {
 	cfg          config.Config
@@ -470,6 +476,10 @@ func Run(args []string) {
 		cmd.setupDB()
 	case GetTxnDetailsCmd:
 		cmd.getTxnDetails()
+	case GetPendingTxnCmd:
+		cmd.getPendingTxn()
+	case InitiateTxnFinalityCmd:
+		cmd.initiateTxnFinality()
 	default:
 		cmd.log.Error("Invalid command")
 	}

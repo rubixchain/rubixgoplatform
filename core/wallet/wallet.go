@@ -12,18 +12,19 @@ import (
 )
 
 const (
-	TokenStorage       string = "TokensTable"
-	DataTokenStorage   string = "DataTokensTable"
-	NFTTokenStorage    string = "NFTTokensTable"
-	CreditStorage      string = "CreditsTable"
-	DIDStorage         string = "DIDTable"
-	DIDPeerStorage     string = "DIDPeerTable"
-	TransactionStorage string = "TransactionHistory"
-	TokensArrayStorage string = "TokensTransferred"
-	TokenProvider      string = "TokenProviderTable"
-	TokenChainStorage  string = "tokenchainstorage"
-	NFTChainStorage    string = "nftchainstorage"
-	DataChainStorage   string = "datachainstorage"
+	TokenStorage             string = "TokensTable"
+	DataTokenStorage         string = "DataTokensTable"
+	NFTTokenStorage          string = "NFTTokensTable"
+	CreditStorage            string = "CreditsTable"
+	DIDStorage               string = "DIDTable"
+	DIDPeerStorage           string = "DIDPeerTable"
+	TransactionStorage       string = "TransactionHistory"
+	TokensArrayStorage       string = "TokensTransferred"
+	TokenProvider            string = "TokenProviderTable"
+	TokenChainStorage        string = "tokenchainstorage"
+	NFTChainStorage          string = "nftchainstorage"
+	DataChainStorage         string = "datachainstorage"
+	TransactionStatusStorage string = "transactionstatusstorage"
 )
 
 type WalletConfig struct {
@@ -110,6 +111,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	err = w.s.Init(TokenProvider, &TokenProviderMap{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Token Provider Table", "err", err)
+		return nil, err
+	}
+	//intitlize DB table for Txn Status
+	err = w.s.Init(TransactionStatusStorage, &TransactionStatusMap{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize Transaction Status Table", "err", err)
 		return nil, err
 	}
 	return w, nil
