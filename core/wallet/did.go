@@ -10,8 +10,9 @@ type DIDType struct {
 }
 
 type DIDPeerMap struct {
-	DID    string `gorm:"column:did;primaryKey"`
-	PeerID string `gorm:"column:peer_id"`
+	DID     string `gorm:"column:did;primaryKey"`
+	PeerID  string `gorm:"column:peer_id"`
+	DIDChar string `gorm:"column:did_char"`
 }
 
 func (w *Wallet) CreateDID(dt *DIDType) error {
@@ -75,19 +76,39 @@ func (w *Wallet) IsDIDExist(did string) bool {
 
 func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
 	lastChar := string(did[len(did)-1])
-	tableName := fmt.Sprintf("DIDPeerTable_%s", lastChar)
 	var dm DIDPeerMap
-	err := w.s.Read(tableName, &dm, "did=?", did)
+	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
 		dm.DID = did
 		dm.PeerID = peerID
-		return w.s.Write(tableName, &dm)
+		dm.DIDChar = lastChar
+		return w.s.Write(DIDPeerStorage, &dm)
 	}
 
 	dm.PeerID = peerID
-	return w.s.Update(tableName, &dm, "did=?", did)
+	return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
 }
 
+func (w *Wallet) AddDIDChar() error {
+	var existingDIDPeer []DIDPeerMap
+	err := w.s.Read(DIDPeerStorage, &existingDIDPeer, "did!=?", "")
+	if err != nil {
+		w.log.Error("Unable to read from DID Peer table")
+		return err
+	}
+	for i := 0; i < len(existingDIDPeer); i++ {
+		dm := existingDIDPeer[i]
+		did := dm.DID
+		lastChar := string(did[len(did)-1])
+		dm.DIDChar = lastChar
+		err := w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+		if err != nil {
+			w.log.Error("Unable to update DIDChar table.")
+			return err
+		}
+	}
+	return nil
+}
 func (w *Wallet) GetPeerID(did string) string {
 	lastChar := string(did[len(did)-1])
 	tableName := fmt.Sprintf("DIDPeerTable_%s", lastChar)
