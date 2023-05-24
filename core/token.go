@@ -49,11 +49,11 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	for _, t := range wt {
 		switch t.TokenStatus {
 		case wallet.TokenIsFree:
-			info.WholeRBT++
+			info.RBTAmount = info.RBTAmount + t.TokenValue
 		case wallet.TokenIsLocked:
-			info.LockedWholeRBT++
+			info.LockedRBT = info.LockedRBT + t.TokenValue
 		case wallet.TokenIsPledged:
-			info.PledgedWholeRBT++
+			info.PledgedRBT = info.PledgedRBT + t.TokenValue
 		}
 	}
 	return info, nil
@@ -146,7 +146,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		}
 
 		tcb := &block.TokenChainBlock{
-			TokenType:       token.TestTokenType,
 			TransactionType: block.TokenGeneratedType,
 			TokenOwner:      did,
 			GenesisBlock:    gb,
@@ -173,7 +172,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TokenValue:  1,
 			TokenStatus: wallet.TokenIsFree,
 		}
-		err = c.w.CreateTokenBlock(blk, token.TestTokenType)
+		err = c.w.CreateTokenBlock(blk)
 		if err != nil {
 			c.log.Error("Failed to add token chain", "err", err)
 			return err
@@ -242,7 +241,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
 				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
 			}
-			err = c.w.AddTokenBlock(token, tokenType, blk)
+			err = c.w.AddTokenBlock(token, blk)
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
 				return err

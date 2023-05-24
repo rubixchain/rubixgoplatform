@@ -146,12 +146,18 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	wt := sc.GetTransTokenInfo()
 
 	for i := range wt {
-		if c.checkTokenIsPledged(wt[i].Token) {
+		b := c.w.GetLatestTokenBlock(wt[i].Token, wt[i].TokenType)
+		if b == nil {
+			c.log.Error("pledge token check Failed, failed to get latest block")
+			crep.Message = "pledge token check Failed, failed to get latest block"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if c.checkIsPledged(b) {
 			c.log.Error("Pledge Token check Failed, Token ", wt[i], " is Pledged Token")
 			crep.Message = "Pledge Token check Failed, Token " + wt[i].Token + " is Pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		if c.checkTokenIsUnpledged(wt[i].Token) {
+		if c.checkIsUnpledged(b) {
 			unpledgeId := c.getUnpledgeId(wt[i].Token)
 			if unpledgeId == "" {
 				c.log.Error("Failed to fetch proof file CID")
@@ -255,7 +261,8 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	wt, err := c.w.GetWholeTokens(did, pr.NumTokens)
+	dc := c.pqc[did]
+	wt, err := c.GetTokens(dc, did, pr.TokensRequired)
 	if err != nil {
 		crep.Message = "Failed to get tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -272,15 +279,18 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 			Message: "Got available tokens",
 		},
 		Tokens:          make([]string, 0),
+		TokenValue:      make([]float64, 0),
 		TokenChainBlock: make([][]byte, 0),
 	}
-	tokenType := token.RBTTokenType
-	if c.testNet {
-		tokenType = token.TestTokenType
-	}
+
 	for i := 0; i < tl; i++ {
 		presp.Tokens = append(presp.Tokens, wt[i].TokenID)
-		tc := c.w.GetLatestTokenBlock(wt[i].TokenID, tokenType)
+		presp.TokenValue = append(presp.TokenValue, wt[i].TokenValue)
+		ts := RBTString
+		if wt[i].TokenValue != 1.0 {
+			ts = PartString
+		}
+		tc := c.w.GetLatestTokenBlock(wt[i].TokenID, c.TokenType(ts))
 		if tc == nil {
 			c.log.Error("Failed to get latest token chain block")
 			crep.Message = "Failed to get latest token chain block"
@@ -340,7 +350,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		ptcb := block.InitBlock(ptcbArray, nil)
-		if c.checkIsPledged(ptcb, t) {
+		if c.checkIsPledged(ptcb) {
 			c.log.Error("Token is a pledged Token", "token", t)
 			crep.Message = "Token " + t + " is a pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -476,21 +486,13 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			crep.Message = "Failed to get block ID"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		refID = fmt.Sprintf("%s,%d,%s", tks[0], b.GetTokenType(), id)
+		refID = fmt.Sprintf("%s,%d,%s", tks[0], b.GetTokenType(tks[0]), id)
 	}
 
 	ctcb := make(map[string]*block.Block)
 	tsb := make([]block.TransTokens, 0)
-	tokenType := token.RBTTokenType
-	if c.testNet {
-		tokenType = token.TestTokenType
-	}
-	ttt := tokenType
 	for _, t := range tks {
-		if ur.Mode == DTCommitMode {
-			ttt = token.DataTokenType
-		}
-		err = c.w.AddTokenBlock(t, ttt, b)
+		err = c.w.AddTokenBlock(t, b)
 		if err != nil {
 			c.log.Error("Failed to add token block", "token", t)
 			crep.Message = "Failed to add token block"
@@ -498,12 +500,22 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 	for _, t := range ur.PledgedTokens {
+		tk, err := c.w.ReadToken(t)
+		if err != nil {
+			c.log.Error("failed to read token from wallet")
+			crep.Message = "failed to read token from wallet"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		ts := RBTString
+		if tk.TokenValue != 1.0 {
+			ts = PartString
+		}
 		tt := block.TransTokens{
 			Token:     t,
-			TokenType: tokenType,
+			TokenType: c.TokenType(ts),
 		}
 		tsb = append(tsb, tt)
-		lb := c.w.GetLatestTokenBlock(t, tokenType)
+		lb := c.w.GetLatestTokenBlock(t, c.TokenType(ts))
 		if lb == nil {
 			c.log.Error("Failed to get token chain block")
 			crep.Message = "Failed to get token chain block"
@@ -512,7 +524,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		ctcb[t] = lb
 	}
 	tcb := block.TokenChainBlock{
-		TokenType:       tokenType,
 		TransactionType: block.TokenPledgedType,
 		TokenOwner:      did,
 		TransInfo: &block.TransInfo{
@@ -533,7 +544,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update signature to block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	err = c.w.CreateTokenBlock(nb, tokenType)
+	err = c.w.CreateTokenBlock(nb)
 	if err != nil {
 		c.log.Error("Failed to update token chain block", "err", err)
 		crep.Message = "Failed to update token chain block"

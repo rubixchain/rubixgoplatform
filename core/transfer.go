@@ -8,7 +8,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -38,10 +37,15 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Invalid receiver DID"
 		return resp
 	}
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		resp.Message = "Failed to setup DID, " + err.Error()
+		return resp
+	}
 	// Get the required tokens from the DID bank
 	// this method locks the token needs to be released or
-	// removed once it done with the trasnfer
-	wt, err := c.w.GetTokens(did, req.TokenCount)
+	// removed once it done with the transfer
+	wt, err := c.GetTokens(dc, did, req.TokenCount)
 	if err != nil {
 		c.log.Error("Failed to get tokens", "err", err)
 		resp.Message = "Insufficient tokens or tokens are locked"
@@ -65,18 +69,15 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	for i := range wt {
 		wta = append(wta, wt[i].TokenID)
 	}
-	dc, err := c.SetupDID(reqID, did)
-	if err != nil {
-		resp.Message = "Failed to setup DID, " + err.Error()
-		return resp
-	}
-	tokenType := token.RBTTokenType
-	if c.testNet {
-		tokenType = token.TestTokenType
-	}
+
 	tis := make([]contract.TokenInfo, 0)
 	for i := range wt {
-		blk := c.w.GetLatestTokenBlock(wt[i].TokenID, tokenType)
+		tts := "rbt"
+		if wt[i].TokenValue != 1 {
+			tts = "part"
+		}
+		tt := c.TokenType(tts)
+		blk := c.w.GetLatestTokenBlock(wt[i].TokenID, tt)
 		if blk == nil {
 			c.log.Error("failed to get latest block, invalid token chain")
 			resp.Message = "failed to get latest block, invalid token chain"
@@ -89,10 +90,11 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			return resp
 		}
 		ti := contract.TokenInfo{
-			Token:     wt[i].TokenID,
-			TokenType: tokenType,
-			OwnerDID:  wt[i].DID,
-			BlockID:   bid,
+			Token:      wt[i].TokenID,
+			TokenType:  tt,
+			TokenValue: wt[i].TokenValue,
+			OwnerDID:   wt[i].DID,
+			BlockID:    bid,
 		}
 		tis = append(tis, ti)
 	}

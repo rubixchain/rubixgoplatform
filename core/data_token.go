@@ -217,7 +217,6 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	tcb := &block.TokenChainBlock{
 		TransactionType: block.TokenGeneratedType,
 		TokenOwner:      dr.DID,
-		TokenType:       token.DataTokenType,
 		SmartContract:   sc.GetBlock(),
 		GenesisBlock:    gb,
 		TransInfo:       bti,
@@ -236,7 +235,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, failed to update signature"
 		return &br
 	}
-	err = c.w.AddTokenBlock(dt, token.DataTokenType, blk)
+	err = c.w.AddTokenBlock(dt, blk)
 	if err != nil {
 		c.log.Error("Failed to create data token, failed to add token chan block", "err", err)
 		br.Message = "Failed to create data token, failed to add token chan block"

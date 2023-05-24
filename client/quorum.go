@@ -56,10 +56,11 @@ func (c *Client) RemoveAllQuorum() (string, bool) {
 	return rm.Message, rm.Status
 }
 
-func (c *Client) SetupQuorum(did string, pwd string) (string, bool) {
+func (c *Client) SetupQuorum(did string, pwd string, privPwd string) (string, bool) {
 	m := model.QuorumSetup{
-		DID:      did,
-		Password: pwd,
+		DID:             did,
+		Password:        pwd,
+		PrivKeyPassword: privPwd,
 	}
 	var rm model.BasicResponse
 	err := c.sendJSONRequest("POST", server.APISetupQuorum, nil, &m, &rm)

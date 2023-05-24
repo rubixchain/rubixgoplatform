@@ -15,6 +15,7 @@ const (
 	DataTokenType
 	TestPartTokenType
 	TestNFTTokenType
+	TestDataTokenType
 )
 
 func GetWholeTokenValue(tokenDetials string) (int, string, bool, error) {

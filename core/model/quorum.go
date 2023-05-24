@@ -27,6 +27,7 @@ type CreditStatus struct {
 }
 
 type QuorumSetup struct {
-	DID      string `json:"did"`
-	Password string `json:"password"`
+	DID             string `json:"did"`
+	Password        string `json:"password"`
+	PrivKeyPassword string `json:"priv_password`
 }

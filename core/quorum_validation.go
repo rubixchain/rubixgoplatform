@@ -7,9 +7,41 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
+
+func (c *Core) validateSigner(b *block.Block) bool {
+	signers, err := b.GetSigner()
+	if err != nil {
+		c.log.Error("failed to get signers", "err", err)
+		return false
+	}
+	for _, signer := range signers {
+		var dc did.DIDCrypto
+		switch b.GetTransType() {
+		case block.TokenGeneratedType, block.TokenBurntType:
+			dc, err = c.SetupForienDID(signer)
+			if err != nil {
+				c.log.Error("failed to setup forien DID", "err", err)
+				return false
+			}
+		default:
+			dc, err = c.SetupForienDIDQuorum(signer)
+			if err != nil {
+				c.log.Error("failed to setup forien DID quorum", "err", err)
+				return false
+			}
+		}
+		err := b.VerifySignature(dc)
+		if err != nil {
+			c.log.Error("Failed to verify signature", "err", err)
+			return false
+		}
+	}
+	return true
+}
 
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) bool {
 	ti := sc.GetTransTokenInfo()
@@ -32,13 +64,54 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return false
 		}
-		// Check the token validation
-		if !c.testNet {
-			fb := c.w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
-			if fb == nil {
-				c.log.Error("Failed to get first token chain block")
+		fb := c.w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
+		if fb == nil {
+			c.log.Error("Failed to get first token chain block")
+			return false
+		}
+		if c.TokenType(PartString) == ti[i].TokenType {
+			pt, _, err := fb.GetParentDetials(ti[i].Token)
+			if err != nil {
+				c.log.Error("failed to fetch parent token detials", "err", err, "token", ti[i].Token)
 				return false
 			}
+			rpt, err := c.ipfs.Cat(pt)
+			if err != nil {
+				c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", pt)
+				return false
+			}
+			buf := new(bytes.Buffer)
+			buf.ReadFrom(rpt)
+			b := buf.Bytes()
+			_, _, ok, err := token.GetWholeTokenValue(string(b))
+			tt := token.RBTTokenType
+			if err == nil || !ok {
+				blk := util.StrToHex(string(b))
+				rb, err := rac.InitRacBlock(blk, nil)
+				if err != nil {
+					c.log.Error("invalid token, invalid rac block", "err", err)
+					return false
+				}
+				tt = rac.RacType2TokenType(rb.GetRacType())
+			}
+			err = c.syncTokenChainFrom(p, "", pt, tt)
+			if err != nil {
+				c.log.Error("Failed to sync token chain block", "err", err)
+				return false
+			}
+			ptb := c.w.GetLatestTokenBlock(pt, tt)
+			if ptb == nil {
+				c.log.Error("Failed to get latest token chain block")
+				return false
+			}
+			if ptb.GetTransType() != block.TokenBurntType {
+				c.log.Error("parent token is not in burnt stage", "trans_type", ptb.GetTransType())
+				return false
+			}
+		}
+
+		// Check the token validation
+		if ti[i].TokenType == token.RBTTokenType {
 			tl, tn, err := fb.GetTokenDetials(ti[i].Token)
 			if err != nil {
 				c.log.Error("Failed to get token detials", "err", err)
@@ -61,24 +134,8 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Error("Invalid token chain block")
 			return false
 		}
-		signers, err := b.GetSigner()
-		if err != nil {
-			c.log.Error("Failed to signers", "err", err)
+		if !c.validateSigner(b) {
 			return false
-		}
-		for _, signer := range signers {
-			var dc did.DIDCrypto
-			switch b.GetTransType() {
-			case block.TokenGeneratedType:
-				dc, err = c.SetupForienDID(signer)
-			default:
-				dc, err = c.SetupForienDIDQuorum(signer)
-			}
-			err := b.VerifySignature(dc)
-			if err != nil {
-				c.log.Error("Failed to verify signature", "err", err)
-				return false
-			}
 		}
 	}
 	// for i := range wt {
@@ -129,31 +186,31 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 	return true
 }
 
-func (c *Core) checkTokenIsPledged(wt string) bool {
-	tokenType := token.RBTTokenType
-	if c.testNet {
-		tokenType = token.TestTokenType
-	}
-	b := c.w.GetLatestTokenBlock(wt, tokenType)
-	if b == nil {
-		c.log.Error("Invalid token chain block")
-		return true
-	}
-	return c.checkIsPledged(b, wt)
-}
+// func (c *Core) checkTokenIsPledged(wt string) bool {
+// 	tokenType := token.RBTTokenType
+// 	if c.testNet {
+// 		tokenType = token.TestTokenType
+// 	}
+// 	b := c.w.GetLatestTokenBlock(wt, tokenType)
+// 	if b == nil {
+// 		c.log.Error("Invalid token chain block")
+// 		return true
+// 	}
+// 	return c.checkIsPledged(b, wt)
+// }
 
-func (c *Core) checkTokenIsUnpledged(wt string) bool {
-	tokenType := token.RBTTokenType
-	if c.testNet {
-		tokenType = token.TestTokenType
-	}
-	b := c.w.GetLatestTokenBlock(wt, tokenType)
-	if b == nil {
-		c.log.Error("Invalid token chain block")
-		return true
-	}
-	return c.checkIsUnpledged(b, wt)
-}
+// func (c *Core) checkTokenIsUnpledged(wt string) bool {
+// 	tokenType := token.RBTTokenType
+// 	if c.testNet {
+// 		tokenType = token.TestTokenType
+// 	}
+// 	b := c.w.GetLatestTokenBlock(wt, tokenType)
+// 	if b == nil {
+// 		c.log.Error("Invalid token chain block")
+// 		return true
+// 	}
+// 	return c.checkIsUnpledged(b, wt)
+// }
 
 func (c *Core) getUnpledgeId(wt string) string {
 	tokenType := token.RBTTokenType
@@ -165,5 +222,5 @@ func (c *Core) getUnpledgeId(wt string) string {
 		c.log.Error("Invalid token chain block")
 		return ""
 	}
-	return b.GetUnpledgeId()
+	return b.GetUnpledgeId(wt)
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/fxamacker/cbor"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -98,7 +99,7 @@ func InitRacBlock(bb []byte, bm map[string]interface{}) (*RacBlock, error) {
 }
 
 func CreateRac(r *RacType) ([]*RacBlock, error) {
-	if r.Type == 1 || r.Type > RacPartTokenType {
+	if r.Type == 1 || r.Type > RacTestPartTokenType {
 		return nil, fmt.Errorf("rac type is not supported")
 	}
 	rb := make([]*RacBlock, 0)
@@ -190,7 +191,7 @@ func (r *RacBlock) blkDecode() error {
 	if err != nil {
 		return nil
 	}
-	si, ok := m[RacBlockSig]
+	_, ok := m[RacBlockSig]
 	if !ok {
 		return fmt.Errorf("invalid block, missing signature")
 	}
@@ -205,7 +206,7 @@ func (r *RacBlock) blkDecode() error {
 		return err
 	}
 	tcb[RacHashKey] = util.HexToStr(hb)
-	tcb[RacSignKey] = util.HexToStr(si.([]byte))
+	tcb[RacSignKey] = util.GetStringFromMap(m, RacBlockSig)
 	r.bm = tcb
 	return nil
 }
@@ -246,6 +247,10 @@ func (r *RacBlock) VerifySignature(dc didmodule.DIDCrypto) error {
 	return nil
 }
 
+func (r *RacBlock) GetRacType() int {
+	return util.GetIntFromMap(r.bm, RacTypeKey)
+}
+
 func (r *RacBlock) GetHash() (string, error) {
 	h, ok := r.bm[RacHashKey]
 	if !ok {
@@ -272,4 +277,24 @@ func (r *RacBlock) GetHashSig() (string, string, error) {
 		return "", "", fmt.Errorf("invalid rac, signature is missing")
 	}
 	return h.(string), s.(string), nil
+}
+
+func RacType2TokenType(rt int) int {
+	switch rt {
+	case RacTestTokenType:
+		return token.TestTokenType
+	case RacNFTType:
+		return token.NFTTokenType
+	case RacTestNFTType:
+		return token.TestNFTTokenType
+	case RacPartTokenType:
+		return token.PartTokenType
+	case RacTestPartTokenType:
+		return token.TestPartTokenType
+	case RacDataTokenType:
+		return token.DataTokenType
+	case RacTestDataTokenType:
+		return token.TestDataTokenType
+	}
+	return token.RBTTokenType
 }
