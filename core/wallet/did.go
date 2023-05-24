@@ -93,7 +93,7 @@ func (w *Wallet) AddDIDChar() error {
 	var existingDIDPeer []DIDPeerMap
 	err := w.s.Read(DIDPeerStorage, &existingDIDPeer, "did!=?", "")
 	if err != nil {
-		w.log.Error("Unable to read from DID Peer table")
+		w.log.Error("Unable to read from DID Peer table", err)
 		return err
 	}
 	for i := 0; i < len(existingDIDPeer); i++ {
