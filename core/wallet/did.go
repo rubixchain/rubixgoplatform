@@ -1,7 +1,5 @@
 package wallet
 
-import "fmt"
-
 type DIDType struct {
 	DID    string `gorm:"column:did;primaryKey"`
 	Type   int    `gorm:"column:type"`
@@ -110,10 +108,8 @@ func (w *Wallet) AddDIDChar() error {
 	return nil
 }
 func (w *Wallet) GetPeerID(did string) string {
-	lastChar := string(did[len(did)-1])
-	tableName := fmt.Sprintf("DIDPeerTable_%s", lastChar)
 	var dm DIDPeerMap
-	err := w.s.Read(tableName, &dm, "did=?", did)
+	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
 		return ""
 	}
