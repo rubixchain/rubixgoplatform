@@ -259,12 +259,13 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	resultArray[index] = result
 }
 
-func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did string) {
+func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did string) error {
 	for i := range tokenStateCheckResult {
 		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenStateCheckResult[i].tokenIDTokenStateData))
 		id, err := c.w.Add(tokenIDTokenStateBuffer, did, wallet.QuorumRole)
 		if err != nil {
 			c.log.Error("Error triggered while adding token state", err)
+			return err
 		}
 		_, err1 := c.w.Pin(id, wallet.QuorumRole, did)
 		if err1 != nil {
@@ -272,4 +273,5 @@ func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did 
 		}
 		c.log.Debug("token state pinned", id)
 	}
+	return nil
 }

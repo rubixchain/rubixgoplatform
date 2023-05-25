@@ -175,7 +175,12 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
-	c.pinTokenState(tokenStateCheckResult, did)
+	err1 := c.pinTokenState(tokenStateCheckResult, did)
+	if err1 != nil {
+		crep.Message = "Error Pinning token state" + err.Error()
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	c.log.Debug("Finished Tokenstate check")
 
 	//check if token is pledgedtoken
