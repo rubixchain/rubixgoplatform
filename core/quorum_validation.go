@@ -267,9 +267,10 @@ func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did 
 			c.log.Error("Error triggered while adding token state", err)
 			return err
 		}
-		_, err1 := c.w.Pin(id, wallet.QuorumRole, did)
-		if err1 != nil {
+		_, err = c.w.Pin(id, wallet.QuorumRole, did)
+		if err != nil {
 			c.log.Error("Error triggered while pinning token state", err)
+			return err
 		}
 		c.log.Debug("token state pinned", id)
 	}
