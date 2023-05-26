@@ -56,7 +56,6 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 	if err != nil || !st {
 		return
 	}
-	c.w.AddDIDChar()
 	c.w.AddDIDPeerMap(m.DID, m.PeerID)
 }
 
