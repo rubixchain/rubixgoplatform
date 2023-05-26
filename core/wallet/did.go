@@ -98,7 +98,7 @@ func (w *Wallet) AddDIDLastChar() error {
 		lastChar := string(did[len(did)-1])
 		dm.DIDLastChar = lastChar
 		err := w.s.Update(DIDPeerStorage, &dm, "did=?", did)
-		w.log.Info("DID Peer table updated for ", did)
+		w.log.Info("DID Peer table updated")
 		if err != nil {
 			w.log.Error("Unable to update DID Peer table.")
 			return err
