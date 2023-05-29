@@ -82,9 +82,11 @@ func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
 		dm.DIDLastChar = lastChar
 		return w.s.Write(DIDPeerStorage, &dm)
 	}
-
-	dm.PeerID = peerID
-	return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+	if dm.PeerID != peerID {
+		dm.PeerID = peerID
+		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+	}
+	return nil
 }
 
 func (w *Wallet) AddDIDLastChar() error {
