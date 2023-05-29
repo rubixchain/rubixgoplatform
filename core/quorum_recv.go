@@ -415,6 +415,30 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
+	//tokenstate check
+
+	tokenStateCheckResult := make([]TokenStateCheckResult, len(sr.TokenInfo))
+	for i, ti := range sr.TokenInfo {
+		t := ti.Token
+		wg.Add(1)
+		go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, sr.QuorumList)
+	}
+	wg.Wait()
+
+	for i := range tokenStateCheckResult {
+		if tokenStateCheckResult[i].Error != nil {
+			c.log.Error("Error occured", "error", err)
+			crep.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if tokenStateCheckResult[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
+			crep.Message = tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
+	}
+
 	err = c.w.TokensReceived(did, sr.TokenInfo, b)
 	if err != nil {
 		c.log.Error("Failed to update token status", "err", err)
