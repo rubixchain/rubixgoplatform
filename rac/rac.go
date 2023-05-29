@@ -279,6 +279,14 @@ func (r *RacBlock) GetHashSig() (string, string, error) {
 	return h.(string), s.(string), nil
 }
 
+func (r *RacBlock) GetRacValue() float64 {
+	pi, ok := r.bm[RacPartInfoKey]
+	if !ok {
+		return 0
+	}
+	return util.GetFloatFromMap(pi, RacPIValueKey)
+}
+
 func RacType2TokenType(rt int) int {
 	switch rt {
 	case RacTestTokenType:

@@ -324,8 +324,8 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 
 	p, err := c.getPeer(sr.Address)
 	if err != nil {
-		c.log.Error("Failed to get peer", "err", err)
-		crep.Message = "Failed to get peer"
+		c.log.Error("failed to get peer", "err", err)
+		crep.Message = "failed to get peer"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	defer p.Close()
@@ -333,15 +333,36 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		t := ti.Token
 		pblkID, err := b.GetPrevBlockID(t)
 		if err != nil {
-			c.log.Error("Failed to sync token chain block, missing previous block id", "err", err)
-			crep.Message = "Failed to sync token chain block, missing previous block id"
+			c.log.Error("failed to sync token chain block, missing previous block id", "err", err)
+			crep.Message = "failed to sync token chain block, missing previous block id"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		err = c.syncTokenChainFrom(p, pblkID, t, ti.TokenType)
 		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
-			crep.Message = "Failed to sync token chain block"
+			c.log.Error("failed to sync token chain block", "err", err)
+			crep.Message = "failed to sync token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+
+		if c.TokenType(PartString) == ti.TokenType {
+			gb := c.w.GetGenesisTokenBlock(t, ti.TokenType)
+			if gb == nil {
+				c.log.Error("failed to get genesis block", "err", err)
+				crep.Message = "failed to get genesis block"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			pt, _, err := gb.GetParentDetials(t)
+			if err != nil {
+				c.log.Error("failed to get parent detials", "err", err)
+				crep.Message = "failed to get parent detials"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			err = c.syncParentToken(p, pt)
+			if err != nil {
+				c.log.Error("failed to sync parent token", "err", err)
+				crep.Message = "failed to sync parent token"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
 		}
 		ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
 		if err != nil {

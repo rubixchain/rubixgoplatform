@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -18,10 +19,21 @@ func (c *Core) relaseToken(release *bool, token string) {
 	}
 }
 
+func round(num float64) int {
+	return int(num + math.Copysign(0.5, num))
+}
+
+func floatPrecision(num float64, precision int) float64 {
+	output := math.Pow(10, float64(precision))
+	return float64(round(num*output)) / output
+}
+
 func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.Token, error) {
 	wholeValue := int(value)
 	var err error
-	rem := value - float64(wholeValue)
+	fv := float64(wholeValue)
+	rem := value - fv
+	rem = floatPrecision(rem, 10)
 	remWhole := 0
 	wt := make([]wallet.Token, 0)
 	if wholeValue != 0 {
@@ -50,7 +62,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		}
 		tkn := tt.TokenID
 		c.w.ReleaseToken(tkn)
-		parts := []float64{rem, tt.TokenValue - rem}
+		parts := []float64{rem, floatPrecision(tt.TokenValue-rem, 10)}
 		nt, err := c.createPartToken(dc, did, tkn, parts)
 		if err != nil {
 			c.w.ReleaseTokens(wt)
@@ -88,7 +100,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	if len(rpt) > 0 {
-		parts := []float64{rem, rpt[0].TokenValue - rem}
+		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, 10)}
 		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts)
 		if err != nil {
 			c.w.ReleaseTokens(wt)
@@ -108,7 +120,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return nil, fmt.Errorf("failed to get whole token")
 	}
 	c.w.ReleaseToken(nwt.TokenID)
-	parts := []float64{rem, 1 - rem}
+	parts := []float64{rem, floatPrecision(1.0-rem, 10)}
 	npt, err := c.createPartToken(dc, did, nwt.TokenID, parts)
 	if err != nil {
 		c.w.ReleaseTokens(wt)
@@ -142,10 +154,12 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	amount := float64(0)
 	for i := range parts {
 		amount = amount + parts[i]
+		amount = floatPrecision(amount, 10)
 		if amount > t.TokenValue {
 			return nil, fmt.Errorf("invalid part split, split sum is more than the parent token")
 		}
 	}
+
 	if amount != t.TokenValue {
 		return nil, fmt.Errorf("invalid part split, sum of parts value not matching with parent token")
 	}

@@ -2,10 +2,13 @@ package core
 
 import (
 	"bytes"
+	"fmt"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
+	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
@@ -43,6 +46,78 @@ func (c *Core) validateSigner(b *block.Block) bool {
 	return true
 }
 
+func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
+	b, err := c.getFromIPFS(pt)
+	if err != nil {
+		c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", pt)
+		return err
+	}
+	_, _, ok, err := token.GetWholeTokenValue(string(b))
+	tt := token.RBTTokenType
+	tv := float64(1)
+	if err == nil || !ok {
+		blk := util.StrToHex(string(b))
+		rb, err := rac.InitRacBlock(blk, nil)
+		if err != nil {
+			c.log.Error("invalid token, invalid rac block", "err", err)
+			return err
+		}
+		tt = rac.RacType2TokenType(rb.GetRacType())
+		if c.TokenType(PartString) == tt {
+			tv = rb.GetRacValue()
+		}
+	}
+	lbID := ""
+	// lb := c.w.GetLatestTokenBlock(pt, tt)
+	// if lb != nil {
+	// 	lbID, err = lb.GetBlockID(pt)
+	// 	if err != nil {
+	// 		lbID = ""
+	// 	}
+	// }
+	err = c.syncTokenChainFrom(p, lbID, pt, tt)
+	if err != nil {
+		c.log.Error("failed to sync token chain block", "err", err)
+		return err
+	}
+	ptb := c.w.GetLatestTokenBlock(pt, tt)
+	if ptb == nil {
+		c.log.Error("Failed to get latest token chain block", "token", pt)
+		return fmt.Errorf("failed to get latest block")
+	}
+	td, err := c.w.ReadToken(pt)
+	if err != nil {
+		td = &wallet.Token{
+			TokenID:     pt,
+			TokenValue:  tv,
+			DID:         p.GetPeerDID(),
+			TokenStatus: wallet.TokenIsBurnt,
+		}
+		if c.TokenType(PartString) == tt {
+			gb := c.w.GetGenesisTokenBlock(pt, tt)
+			if gb == nil {
+				c.log.Error("failed to get genesis token chain block", "token", pt)
+				return fmt.Errorf("failed to get genesis token chain block")
+			}
+			ppt, _, err := gb.GetParentDetials(pt)
+			if err != nil {
+				c.log.Error("failed to get genesis token chain block", "token", pt, "err", err)
+				return fmt.Errorf("failed to get genesis token chain block")
+			}
+			td.ParentTokenID = ppt
+		}
+		c.w.CreateToken(td)
+	} else {
+		td.TokenStatus = wallet.TokenIsBurnt
+		c.w.UpdateToken(td)
+	}
+	if ptb.GetTransType() != block.TokenBurntType {
+		c.log.Error("parent token is not in burnt stage", "token", pt)
+		return fmt.Errorf("parent token is not in burnt stage")
+	}
+	return nil
+}
+
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) bool {
 	ti := sc.GetTransTokenInfo()
 	for i := range ti {
@@ -75,37 +150,9 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				c.log.Error("failed to fetch parent token detials", "err", err, "token", ti[i].Token)
 				return false
 			}
-			rpt, err := c.ipfs.Cat(pt)
+			err = c.syncParentToken(p, pt)
 			if err != nil {
-				c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", pt)
-				return false
-			}
-			buf := new(bytes.Buffer)
-			buf.ReadFrom(rpt)
-			b := buf.Bytes()
-			_, _, ok, err := token.GetWholeTokenValue(string(b))
-			tt := token.RBTTokenType
-			if err == nil || !ok {
-				blk := util.StrToHex(string(b))
-				rb, err := rac.InitRacBlock(blk, nil)
-				if err != nil {
-					c.log.Error("invalid token, invalid rac block", "err", err)
-					return false
-				}
-				tt = rac.RacType2TokenType(rb.GetRacType())
-			}
-			err = c.syncTokenChainFrom(p, "", pt, tt)
-			if err != nil {
-				c.log.Error("Failed to sync token chain block", "err", err)
-				return false
-			}
-			ptb := c.w.GetLatestTokenBlock(pt, tt)
-			if ptb == nil {
-				c.log.Error("Failed to get latest token chain block")
-				return false
-			}
-			if ptb.GetTransType() != block.TokenBurntType {
-				c.log.Error("parent token is not in burnt stage", "trans_type", ptb.GetTransType())
+				c.log.Error("failed to sync parent token chain", "token", pt)
 				return false
 			}
 		}

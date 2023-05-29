@@ -255,6 +255,18 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 	return nil
 }
 
+func (c *Core) getFromIPFS(path string) ([]byte, error) {
+	rpt, err := c.ipfs.Cat(path)
+	if err != nil {
+		c.log.Error("failed to get from ipfs", "err", err, "path", path)
+		return nil, err
+	}
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(rpt)
+	b := buf.Bytes()
+	return b, nil
+}
+
 // func (c *Core) tokenStatusCallback(peerID string, topic string, data []byte) {
 // 	// c.log.Debug("Recevied token status request")
 // 	// var tp TokenPublish
