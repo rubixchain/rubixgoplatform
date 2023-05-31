@@ -48,15 +48,15 @@ type ExplorerTrans struct {
 }
 
 type ExplorerDataTrans struct {
-	TID          string             `json:"transaction_id"`
-	CommitterDID string             `json:"commiter"`
-	SenderDID    string             `json:"sender"`
-	ReceiverDID  string             `json:"receiver"`
-	TokenTime    float64            `json:"token_time"`
-	DataTokens   []string           `json:"datatokens"`
-	Amount       float64            `json:"amount"`
-	TrasnType    int                `json:"transaction_type"`
-	QuorumList   map[string]float64 `json:"quorum_list"`
+	TID          string                        `json:"transaction_id"`
+	CommitterDID string                        `json:"commiter"`
+	SenderDID    string                        `json:"sender"`
+	ReceiverDID  string                        `json:"receiver"`
+	TokenTime    float64                       `json:"token_time"`
+	DataTokens   map[string]string             `json:"datatokens"`
+	Amount       float64                       `json:"amount"`
+	TrasnType    int                           `json:"transaction_type"`
+	QuorumList   map[string]map[string]float64 `json:"quorum_list"`
 }
 
 type ExplorerResponse struct {

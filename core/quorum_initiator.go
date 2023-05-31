@@ -144,6 +144,8 @@ func (c *Core) QuroumSetup() {
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
 		c.l.AddRoute(APITokenArbitration, "POST", c.tokenArbitration)
 		c.l.AddRoute(APIGetTokenNumber, "POST", c.getTokenNumber)
+		c.l.AddRoute(APIGetMigratedTokenStatus, "POST", c.getMigratedTokenStatus)
+		c.l.AddRoute(APISyncDIDArbitration, "POST", c.syncDIDArbitration)
 	}
 }
 
@@ -206,7 +208,7 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 	// c.qlock.Unlock()
 }
 
-func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, map[string]float64, error) {
+func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, map[string]map[string]float64, error) {
 	cs := ConsensusStatus{
 		Credit: CreditScore{
 			Credit: make([]CreditSignature, 0),
@@ -302,12 +304,18 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	c.qlock.Lock()
 	pds := c.pd[cr.ReqID]
 	c.qlock.Unlock()
-	pl := make(map[string]float64)
+	pl := make(map[string]map[string]float64)
 	for _, d := range cr.QuorumList {
-		pl[d] = 0
-		ss, ok := pds.PledgedTokens[d]
-		if ok {
-			pl[d] = float64(len(ss))
+		ds := strings.Split(d, ".")
+		if len(ds) == 2 {
+			ss, ok := pds.PledgedTokens[ds[1]]
+			if ok {
+				m := make(map[string]float64)
+				for i := range ss {
+					m[ss[i]] = 1
+				}
+				pl[ds[1]] = m
+			}
 		}
 	}
 	if cr.Mode == RBTTransferMode {
@@ -340,6 +348,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		for _, t := range ti {
 			c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
 		}
+		//call ipfs repo gc after unpinnning
+		c.ipfsRepoGc()
 		nbid, err := nb.GetBlockID(ti[0].Token)
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
@@ -693,7 +703,7 @@ func (c *Core) checkDIDMigrated(p *ipfsport.Peer, did string) bool {
 	var br model.BasicResponse
 	q := make(map[string]string)
 	q["olddid"] = did
-	err := p.SendJSONRequest("GET", APICheckDIDArbitration, q, nil, &br, true)
+	err := p.SendJSONRequest("GET", APICheckDIDArbitration, q, nil, &br, true, time.Minute*10)
 	if err != nil {
 		c.log.Error("Failed to get did detials from arbitray", "err", err)
 		return false
@@ -710,7 +720,7 @@ func (c *Core) mapMigratedDID(p *ipfsport.Peer, olddid string, newdid string) bo
 	m := make(map[string]string)
 	m["olddid"] = olddid
 	m["newdid"] = newdid
-	err := p.SendJSONRequest("POST", APIMapDIDArbitration, nil, &m, &br, true)
+	err := p.SendJSONRequest("POST", APIMapDIDArbitration, nil, &m, &br, true, time.Minute*10)
 	if err != nil {
 		c.log.Error("Failed to get did detials from arbitray", "err", err)
 		return false
@@ -724,13 +734,19 @@ func (c *Core) mapMigratedDID(p *ipfsport.Peer, olddid string, newdid string) bo
 
 func (c *Core) getArbitrationSignature(p *ipfsport.Peer, sr *SignatureRequest) (string, bool) {
 	var srep SignatureReply
-	err := p.SendJSONRequest("POST", APITokenArbitration, nil, sr, &srep, true)
+	err := p.SendJSONRequest("POST", APITokenArbitration, nil, sr, &srep, true, time.Minute*10)
 	if err != nil {
 		c.log.Error("Failed to get arbitray signature", "err", err)
 		return "", false
 	}
 	if !srep.Status {
 		c.log.Error("Failed to get arbitray signature", "msg", srep.Message)
+		if strings.Contains(srep.Message, "token is already migrated") {
+			str := strings.Split(srep.Message, ",")
+			if len(str) > 1 {
+				return str[1], false
+			}
+		}
 		return "", false
 	}
 	return srep.Signature, true
@@ -738,6 +754,14 @@ func (c *Core) getArbitrationSignature(p *ipfsport.Peer, sr *SignatureRequest) (
 func (c *Core) checkIsPledged(tcb *block.Block, token string) bool {
 	if strings.Compare(tcb.GetTransType(), block.TokenPledgedType) == 0 {
 		c.log.Debug("Token", token, " is a pledged token. Not Considered for pledging")
+		return true
+	}
+	return false
+}
+
+func (c *Core) checkIsUnpledged(tcb *block.Block, token string) bool {
+	if strings.Compare(tcb.GetTransType(), block.TokenUnpledgedType) == 0 {
+		c.log.Debug("Token", token, " is unpledged token")
 		return true
 	}
 	return false

@@ -2,7 +2,9 @@ package unpledge
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -257,89 +259,82 @@ func (up *UnPledge) runUnpledge() {
 	}
 }
 
-// func (un *UnPledge) proofverification(tokenID string, proof []string) error {
+func (up *UnPledge) ProofVerification(tokenID string, proof []string, rdid string, tid string) (bool, error) {
+	tt := token.RBTTokenType
+	blk := up.w.GetLatestTokenBlock(tokenID, tt)
 
-// 	for {
-// 		TokenID := tokenID
-// 		ReceiverDID, err := un.GetLastBlockReceiverDID(TokenID)
-// 		if err != nil {
-// 			un.log.Error("Unable to fetch Receiver DID from last block")
-// 			break
-// 		}
-// 		TransactionID, err := un.GetLastBlockTransactionID(TokenID)
-// 		if err != nil {
-// 			un.log.Error("Unable to fetch Transaction ID from last block")
-// 		}
+	bid, err := blk.GetPrevBlockID(tokenID)
+	if err != nil {
+		up.log.Error("Failed to get the block id. Unable to verify proof file")
+		return false, err
+	}
 
-// 		ValueToBeHashed, err := un.Concat(TokenID, ReceiverDID)
-// 		if err != nil {
-// 			un.log.Error("Unable to verify proof")
-// 			break
-// 		}
+	valueHashed := sha2Hash256(tokenID + rdid + bid)
+	if proof[0] == "" {
+		err := errors.New("First line of proof empty. Unable to verify proof file")
+		up.log.Error(err.Error())
+		return false, err
+	}
+	dl := Difficultlevel
+	if proof[0] != strconv.Itoa(dl) {
+		err := errors.New("First line of proof mismatch. Unable to verify proof file")
+		up.log.Error(err.Error())
+		return false, err
+	}
 
-// 		valueHashed := un.CalcSHA_256Hash(ValueToBeHashed)
-// 		if proof[0] == "" {
-// 			un.log.Error("Unable to verify proof")
-// 			break
-// 		}
-// 		dl := un.Difficultlevel()
-// 		if proof[0] != strconv.Itoa(dl) {
-// 			un.log.Error("Unable to verify proof")
-// 			break
-// 		}
+	if proof[1] != valueHashed {
+		err := errors.New("Second line of proof mismatch. Unable to verify proof file")
+		up.log.Error(err.Error())
+		return false, err
+	}
 
-// 		if proof[1] != valueHashed {
-// 			un.log.Error("Unable to verify proof")
-// 			break
-// 		}
+	proofToVerify := proof[1:] // Exculding firstline (Difficuilty level)
+	lenProof := len(proof)
+	lenProoftoVerify := len(proofToVerify)
+	l := lenProoftoVerify / 2
 
-// 		proofToVerify := proof[1:] // Exculding firstline (Difficuilty level)
-// 		lenProof := len(proof)
-// 		lenProoftoVerify := len(proofToVerify)
-// 		l := lenProoftoVerify / 2
+	firstHalf := proof[1 : l-1]
+	secondHalf := proof[l : lenProoftoVerify-2]
 
-// 		firstHalf := proof[1 : l-1]
-// 		secondHalf := proof[l+1 : lenProoftoVerify-1]
+	rand.Seed(time.Now().UnixNano())
 
-// 		rand.Seed(time.Now().UnixNano())
+	randIndexInFH := rand.Intn(len(firstHalf) - 2)
+	randIndexInSH := rand.Intn(len(secondHalf) - 2)
 
-// 		randIndexInFH := rand.Intn(len(firstHalf) - 1)
-// 		randIndexInSH := rand.Intn(len(secondHalf) - 1)
+	randomHashInFH := firstHalf[randIndexInFH]
+	randomHashInSH := secondHalf[randIndexInSH]
 
-// 		RandomHashInFH := firstHalf[randIndexInFH]
-// 		RandomHashInSH := secondHalf[randIndexInSH]
+	targetHashInFH := firstHalf[randIndexInFH+1]
+	targetHashInSH := secondHalf[randIndexInSH+1]
 
-// 		TargetHashInFH := firstHalf[randIndexInFH+1]
-// 		TargetHashInSH := secondHalf[randIndexInSH+1]
+	if sha3Hash256Loop(randomHashInFH) != targetHashInFH || sha3Hash256Loop(randomHashInSH) != targetHashInSH {
+		err := errors.New("Random hash verification fail. Unable to verify proof file")
+		up.log.Error(err.Error())
+		return false, err
+	}
 
-// 		if un.CalcSHA3_256Hash1000Times(RandomHashInFH) != TargetHashInFH || un.CalcSHA3_256Hash1000Times(RandomHashInSH) != TargetHashInSH {
-// 			un.log.Error("Unable to verify proof")
-// 			break
-// 		}
-// 		var c int
-// 		counter := 0
-// 		target := proof[lenProof-3]
+	var c int
+	counter := 0
+	target := proof[lenProof-2]
+	lastHash := proof[lenProof-1]
+	suffixLasthash := lastHash[len(lastHash)-dl:]
 
-// 		SuffixLasthash := TransactionID[len(TransactionID)-dl:]
+	for {
+		targetHash := sha3Hash256(target)
+		suffixTarget := targetHash[len(targetHash)-dl:]
 
-// 		for {
-// 			targetHash := un.CalcSHA_3_256Hash(target)
-// 			SuffixTarget := targetHash[len(targetHash)-dl:]
-
-// 			if SuffixTarget == SuffixLasthash {
-// 				c = counter
-// 				break
-// 			}
-// 			counter++
-// 			target = targetHash
-// 		}
-// 		if c > 1000 {
-// 			un.log.Error("Unable to verify proof")
-// 			break
-// 		} else {
-// 			un.log.Debug("Proof Verified")
-// 		}
-// 		break
-// 	}
-// 	return nil
-// }
+		if suffixTarget == suffixLasthash || counter > RecordInterval {
+			c = counter
+			break
+		}
+		counter++
+		target = targetHash
+	}
+	if c > RecordInterval-1 || suffixLasthash != tid[len(tid)-dl:] {
+		up.log.Error("Last line of proof mismatch, Unable to verify proof file")
+		return false, err
+	} else {
+		up.log.Info("Proof Verified for " + tokenID)
+		return true, nil
+	}
+}

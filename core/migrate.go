@@ -204,6 +204,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	migrateDetials := make(map[string]string)
 	migratedMap := make(map[string]string)
 	invalidMap := make(map[string]bool)
+	discardTokens := make([]string, 0)
 	for {
 		tis := make([]contract.TokenInfo, 0)
 		gtis := make([]block.GenesisTokenInfo, 0)
@@ -218,14 +219,23 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		if migration {
 			for {
 				t := migrateTokens[mindex+batchIndex]
-				tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
-				if err != nil {
-					c.log.Error("Failed to migrate, failed to read token files", "err", err)
-					return fmt.Errorf("failed to migrate, failed to read token files")
+				discard := false
+				for i := range discardTokens {
+					if discardTokens[i] == t {
+						discard = true
+						break
+					}
 				}
-				tl, thash, _, _ := token.GetWholeTokenValue(string(tk))
-				thashes = append(thashes, thash)
-				tls = append(tls, tl)
+				if !discard {
+					tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
+					if err != nil {
+						c.log.Error("Failed to migrate, failed to read token files", "err", err)
+						return fmt.Errorf("failed to migrate, failed to read token files")
+					}
+					tl, thash, _, _ := token.GetWholeTokenValue(string(tk))
+					thashes = append(thashes, thash)
+					tls = append(tls, tl)
+				}
 				batchIndex++
 				if mindex+batchIndex == len(migrateTokens) || batchIndex == BatchSize {
 					break
@@ -233,7 +243,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			}
 			batchIndex = 0
 			var br model.TokenNumberResponse
-			err = p.SendJSONRequest("POST", APIGetTokenNumber, nil, thashes, &br, true)
+			err = p.SendJSONRequest("POST", APIGetTokenNumber, nil, thashes, &br, true, time.Minute*10)
 			if err != nil {
 				c.log.Error("Failed to migrate, failed to get token number", "err", err)
 				return fmt.Errorf("failed to migrate, failed to get token number")
@@ -249,16 +259,26 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			}
 			for {
 				t := migrateTokens[mindex]
-				ntd := token.GetTokenString(tls[batchIndex], tns[batchIndex])
-				tb := bytes.NewReader([]byte(ntd))
-				tid, err := c.ipfs.Add(tb)
-				if err != nil {
-					c.log.Error("Failed to migrate, failed to add token file", "err", err)
-					return fmt.Errorf("failed to migrate, failed to add token file")
+				discard := false
+				for i := range discardTokens {
+					if discardTokens[i] == t {
+						c.log.Info("Discarding token", "token", t)
+						discard = true
+						break
+					}
 				}
-				migrateDetials[tid] = t + "," + ntd
-				migratedMap[t] = tid
-				tkns = append(tkns, tid)
+				if !discard {
+					ntd := token.GetTokenString(tls[batchIndex], tns[batchIndex])
+					tb := bytes.NewReader([]byte(ntd))
+					tid, err := c.ipfs.Add(tb)
+					if err != nil {
+						c.log.Error("Failed to migrate, failed to add token file", "err", err)
+						return fmt.Errorf("failed to migrate, failed to add token file")
+					}
+					migrateDetials[tid] = t + "," + ntd
+					migratedMap[t] = tid
+					tkns = append(tkns, tid)
+				}
 				mindex++
 				batchIndex++
 				if mindex == len(migrateTokens) {
@@ -271,51 +291,61 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		} else {
 			for {
 				t := tokens[index]
-				tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
-				if err != nil {
-					c.log.Error("Failed to migrate, failed to read token files", "err", err)
-					return fmt.Errorf("failed to migrate, failed to read token files")
-				}
-				tl, thash, needMigration, err := token.GetWholeTokenValue(string(tk))
-				if err != nil {
-					//c.log.Info("Invalid token skipping : " + t)
-					invalidTokens = append(invalidTokens, t)
-					invalidMap[t] = true
-					index++
-					if index == numTokens {
+				discard := false
+				for i := range discardTokens {
+					if discardTokens[i] == t {
+						c.log.Info("Discarding token", "token", t)
+						discard = true
 						break
 					}
-					continue
-				} else if needMigration {
-					//c.log.Info("Token need migration : " + t)
-					migrateTokens = append(migrateTokens, t)
-					index++
-					if index == numTokens {
-						break
+				}
+				if !discard {
+					tk, err := ioutil.ReadFile(rubixDir + "Wallet/TOKENS/" + t)
+					if err != nil {
+						c.log.Error("Failed to migrate, failed to read token files", "err", err)
+						return fmt.Errorf("failed to migrate, failed to read token files")
 					}
-					continue
-				}
-				tb := bytes.NewReader(tk)
-				tid, err := c.ipfs.Add(tb)
-				//tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-				if err != nil {
-					c.log.Error("Failed to migrate, failed to add token file", "err", err)
-					return fmt.Errorf("failed to migrate, failed to add token file")
-				}
-				if t != tid {
-					c.ipfs.Unpin(tid)
-					//c.log.Info("Token hash not matching Invalid token skipping : " + t)
-					invalidTokens = append(invalidTokens, t)
-					invalidMap[t] = true
-					index++
-					if index == numTokens {
-						break
+					tl, thash, needMigration, err := token.GetWholeTokenValue(string(tk))
+					if err != nil {
+						//c.log.Info("Invalid token skipping : " + t)
+						invalidTokens = append(invalidTokens, t)
+						invalidMap[t] = true
+						index++
+						if index == numTokens {
+							break
+						}
+						continue
+					} else if needMigration {
+						//c.log.Info("Token need migration : " + t)
+						migrateTokens = append(migrateTokens, t)
+						index++
+						if index == numTokens {
+							break
+						}
+						continue
 					}
-					continue
+					tb := bytes.NewReader(tk)
+					tid, err := c.ipfs.Add(tb)
+					//tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+					if err != nil {
+						c.log.Error("Failed to migrate, failed to add token file", "err", err)
+						return fmt.Errorf("failed to migrate, failed to add token file")
+					}
+					if t != tid {
+						c.ipfs.Unpin(tid)
+						//c.log.Info("Token hash not matching Invalid token skipping : " + t)
+						invalidTokens = append(invalidTokens, t)
+						invalidMap[t] = true
+						index++
+						if index == numTokens {
+							break
+						}
+						continue
+					}
+					tls = append(tls, tl)
+					thashes = append(thashes, thash)
+					tkns = append(tkns, t)
 				}
-				tls = append(tls, tl)
-				thashes = append(thashes, thash)
-				tkns = append(tkns, t)
 				index++
 				batchIndex++
 				if batchIndex == BatchSize || index == numTokens {
@@ -325,7 +355,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		}
 		if !migration {
 			var br model.TokenNumberResponse
-			err = p.SendJSONRequest("POST", APIGetTokenNumber, nil, thashes, &br, true)
+			err = p.SendJSONRequest("POST", APIGetTokenNumber, nil, thashes, &br, true, time.Minute*10)
 			if err != nil {
 				c.log.Error("Failed to migrate, failed to get token number", "err", err)
 				return fmt.Errorf("failed to migrate, failed to get token number")
@@ -439,8 +469,19 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				}
 				sig, ok := c.getArbitrationSignature(p, sr)
 				if !ok {
-					c.log.Error("Failed to migrate, failed to get signature")
-					return fmt.Errorf("failed to migrate, failed to get signature")
+					if sig == "" {
+						c.log.Error("Failed to migrate, failed to get signature")
+						return fmt.Errorf("failed to migrate, failed to get signature")
+					} else {
+						c.log.Error("Token already migrated, discarding the token", "token", sig)
+						discardTokens = append(discardTokens, sig)
+						if migration {
+							mindex = mindex - len(tkns)
+						} else {
+							index = index - len(tkns)
+						}
+						continue
+					}
 				}
 				err = blk.ReplaceSignature(p.GetPeerDID(), sig)
 				if err != nil {
@@ -466,6 +507,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 						return fmt.Errorf("failed to migrate, failed to add token to wallet")
 					}
 				}
+				discardTokens = make([]string, 0)
 				finishCount = finishCount + len(tkns)
 				c.log.Info("Number of tokens migrtaed", "count", finishCount)
 				etime := time.Now()

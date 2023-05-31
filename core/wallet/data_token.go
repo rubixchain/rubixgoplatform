@@ -5,11 +5,11 @@ import (
 )
 
 type DataToken struct {
-	TokenID      string `gorm:"column:token_id;primaryKey"`
-	DID          string `gorm:"column:did"`
-	CommitterDID string `gorm:"column:commiter_did"`
-	BatchID      string `gorm:"column:batch_id"`
-	TokenStatus  int    `gorm:"column:token_status;"`
+	TokenID      string `gorm:"column:token_id;primaryKey" json:"token_id"`
+	DID          string `gorm:"column:did" json:"did"`
+	CommitterDID string `gorm:"column:commiter_did" json:"comiter_did"`
+	BatchID      string `gorm:"column:batch_id" json:"batch_id"`
+	TokenStatus  int    `gorm:"column:token_status;" json:"token_status"`
 }
 
 // CreateDataToken write data token into db
@@ -39,6 +39,20 @@ func (w *Wallet) GetDataToken(batchID string) ([]DataToken, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+	return dts, nil
+}
+
+func (w *Wallet) GetDataTokenByDID(did string) ([]DataToken, error) {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	var dts []DataToken
+	err := w.s.Read(DataTokenStorage, &dts, "did=?", did)
+	if err != nil {
+		return nil, err
+	}
+	if len(dts) == 0 {
+		return nil, fmt.Errorf("no data token is available to commit")
 	}
 	return dts, nil
 }
