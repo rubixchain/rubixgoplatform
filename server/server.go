@@ -48,6 +48,7 @@ const (
 	APIGetTxnByTxnID       string = "/api/get-by-txnId"
 	APIGetTxnByDID         string = "/api/get-by-did"
 	APIGetTxnByComment     string = "/api/get-by-comment"
+	APIRemoveTokenChain    string = "/api/remove-token-chain"
 )
 
 // Server defines server handle
@@ -227,6 +228,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, s.ErrorFunc))
 	s.AddRoute(APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, s.ErrorFunc))
 	s.AddRoute(APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, s.ErrorFunc))
+	s.AddRoute(APIRemoveTokenChain, "POST", s.AuthHandle(s.APIRemoveTokenChain, s.ErrorFunc))
 
 }
 

@@ -17,3 +17,15 @@ func (c *Client) DumpTokenChain(token string, blockID string) (*model.TCDumpRepl
 	}
 	return &drep, nil
 }
+
+func (c *Client) RemoveTokenChain(token string) (*model.TCRemoveReply, error) {
+	removeReq := &model.TCRemoveRequest{
+		Token: token,
+	}
+	var removeReply model.TCRemoveReply
+	err := c.sendJSONRequest("POST", server.APIRemoveTokenChain, nil, removeReq, &removeReply)
+	if err != nil {
+		return nil, err
+	}
+	return &removeReply, nil
+}

@@ -168,3 +168,16 @@ func (cmd *Command) dumpTokenChain() {
 	f.Close()
 	cmd.log.Info("Token chain dumped successfully!")
 }
+
+func (cmd *Command) removeTokenChain() {
+	response, err := cmd.c.RemoveTokenChain(cmd.token)
+	if err != nil {
+		cmd.log.Error("Failed to remove token chain", "err", err)
+		return
+	}
+	if !response.Status {
+		cmd.log.Error("Failed to remove token chain", "msg", response.Message)
+		return
+	}
+	cmd.log.Info("Token chain removed successfully!")
+}

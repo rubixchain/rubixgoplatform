@@ -26,3 +26,23 @@ func (c *Core) DumpTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	ds.NextBlockID = nextID
 	return ds
 }
+
+func (c *Core) RemoveTokenChain(removeReq *model.TCRemoveRequest) *model.TCRemoveReply {
+	removeReply := &model.TCRemoveReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	tt := token.RBTTokenType
+	if c.testNet {
+		tt = token.TestTokenType
+	}
+	err := c.w.RemoveTokenChain(removeReq.Token, tt)
+	if err != nil {
+		removeReply.Message = "Failed to remove token chain "
+		return removeReply
+	}
+	removeReply.Status = true
+	removeReply.Message = "Successfully removed token chain "
+	return removeReply
+}
