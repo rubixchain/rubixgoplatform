@@ -174,7 +174,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 }
 
 func (c *Core) GetAllQuorum() []string {
-	return c.qm.GetQuorum(QuorumTypeTwo)
+	return c.qm.GetQuorum(QuorumTypeTwo, "")
 }
 
 func (c *Core) AddQuorum(ql []QuorumData) error {
@@ -248,7 +248,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		PledgedTokenChainBlock: make(map[string]interface{}),
 		TokenList:              make([]string, 0),
 	}
-	ql := c.qm.GetQuorum(cr.Type)
+	//getting last character from TID
+	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
+	lastCharTID := string(tid[len(tid)-1])
+
+	ql := c.qm.GetQuorum(cr.Type, lastCharTID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
 	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
 		return nil, nil, fmt.Errorf("failed to get required quorums")
@@ -295,7 +299,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	if err != nil {
 		return nil, nil, err
 	}
-	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
+
 	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
 	if err != nil {
 		c.log.Error("Failed to pledge token", "err", err)

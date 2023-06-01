@@ -9,8 +9,9 @@ type DIDType struct {
 }
 
 type DIDPeerMap struct {
-	DID    string `gorm:"column:did;primaryKey"`
-	PeerID string `gorm:"column:peer_id"`
+	DID     string `gorm:"column:did;primaryKey"`
+	PeerID  string `gorm:"column:peer_id"`
+	DIDChar string `gorm:"column:did_char"`
 }
 
 func (w *Wallet) IsRootDIDExist() bool {
@@ -82,11 +83,17 @@ func (w *Wallet) IsDIDExist(did string) bool {
 }
 
 func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
+	lastChar := string(did[len(did)-1])
 	var dm DIDPeerMap
-	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
+	err := w.s.Read(DIDStorage, &dm, "did=?", did)
+	if err == nil {
+		return nil
+	}
+	err = w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
 		dm.DID = did
 		dm.PeerID = peerID
+		dm.DIDChar = lastChar
 		return w.s.Write(DIDPeerStorage, &dm)
 	}
 	dm.PeerID = peerID
