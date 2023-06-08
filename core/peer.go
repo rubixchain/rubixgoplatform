@@ -123,3 +123,32 @@ func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
 	// TODO:: Valid the peer version before proceesing
 	return p, nil
 }
+
+func (c *Core) getPeerWithBalance(addr string) (float64, error) {
+	peerID, did, ok := util.ParseAddress(addr)
+	if !ok {
+		return 0.0, fmt.Errorf("invalid address")
+	}
+	// check if addr contains the peer ID
+	if peerID == "" {
+		peerID = c.w.GetPeerID(did)
+		if peerID == "" {
+			c.log.Error("Peer ID not found", "did", did)
+			return 0.0, fmt.Errorf("invalid address, Peer ID not found")
+		}
+	}
+	p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
+	if err != nil {
+		return 0.0, err
+	}
+	q := make(map[string]string)
+	q["did"] = did
+	q["peerID"] = peerID
+	var ps model.PeerTokenCountResponse
+	err = p.SendJSONRequest("GET", APIGetTokenCount, q, nil, &ps, false)
+	if err != nil {
+		return 0.0, err
+	}
+	// TODO:: Valid the peer version before proceesing
+	return ps.DIDBalance, nil
+}

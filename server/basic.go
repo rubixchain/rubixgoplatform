@@ -63,3 +63,14 @@ func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.BasicResponse(req, true, str, nil)
 }
+
+func (s *Server) APIGetPeerBalance(req *ensweb.Request) *ensweb.Result {
+	peerdID := s.GetQuerry(req, "peerID")
+	did := s.GetQuerry(req, "did")
+	str, err := s.c.PingPeerWithBalance(peerdID, did)
+	if err != nil {
+		s.log.Error("ping failed", "err", err)
+		return s.BasicResponse(req, false, str, nil)
+	}
+	return s.BasicResponse(req, true, str, nil)
+}

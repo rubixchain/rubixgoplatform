@@ -75,9 +75,7 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string) []string {
 		var quorumAddrList []string
 		fmt.Println(quorumAddrList)
 		for _, q := range quorumList {
-			// 	c.PingPeer(q.PeerID)
-			addr := string(q.PeerID + "." + q.DID) //concat
-			fmt.Println(addr)
+			addr := string(q.PeerID + "." + q.DID)
 			quorumAddrList = append(quorumAddrList, addr)
 		}
 		return quorumAddrList

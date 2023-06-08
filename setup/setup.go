@@ -50,6 +50,7 @@ const (
 	APICreateNFT           string = "/api/createnft"
 	APIGetAllNFT           string = "/api/getallnft"
 	APIAddNFTSale          string = "/api/addnftsale"
+	APIGetPeerBalance      string = "/api/get-peer-balance"
 )
 
 // jwt.RegisteredClaims

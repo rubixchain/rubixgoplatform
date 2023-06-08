@@ -1030,3 +1030,18 @@ func (c *Core) getProofverificationDetails(tokenID string, senderAddr string) (s
 	}
 	return receiverDID, txnId, nil
 }
+
+func (c *Core) getTokenCount(req *ensweb.Request) *ensweb.Result {
+	did := c.l.GetQuerry(req, "did")
+	peerID := c.l.GetQuerry(req, "peerID")
+	var ps model.PeerTokenCountResponse
+	count := c.w.GetBalance(did, peerID)
+	ps.DIDBalance = count
+	// if err != nil {
+	// 	c.log.Error("Failed to get Balance", "err", err)
+	// 	return c.l.RenderJSON(req, &ps, http.StatusOK)
+	// }
+
+	return c.l.RenderJSON(req, &ps, http.StatusOK)
+
+}

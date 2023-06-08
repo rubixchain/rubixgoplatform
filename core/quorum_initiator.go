@@ -140,6 +140,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIUpdatePledgeToken, "POST", c.updatePledgeToken)
 	c.l.AddRoute(APISignatureRequest, "POST", c.signatureRequest)
 	c.l.AddRoute(APISendReceiverToken, "POST", c.updateReceiverToken)
+	c.l.AddRoute(APIGetTokenCount, "GET", c.getTokenCount)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
@@ -270,7 +271,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}()
 
 	for _, a := range ql {
-		go c.connectQuorum(cr, a, AlphaQuorumType)
+		go c.connectQuorum(cr, a, AlphaQuorumType, reqPledgeTokens)
 	}
 	loop := true
 	var err error
@@ -444,9 +445,19 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	}
 }
 
-func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
+func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, pledgetokens float64) {
 	c.startConsensus(cr.ReqID, qt)
-	p, err := c.getPeer(addr)
+	var p *ipfsport.Peer
+	var b *model.PeerTokenCountResponse
+	var err error
+	if cr.Type == 1 {
+		b.DIDBalance, err = c.getPeerWithBalance(addr)
+		if b.DIDBalance < float64(pledgetokens)/float64(MinConsensusRequired) {
+			return
+		}
+	} else {
+		p, err = c.getPeer(addr)
+	}
 	if err != nil {
 		c.log.Error("Failed to get peer connection", "err", err)
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)
