@@ -271,6 +271,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}()
 
 	for _, a := range ql {
+		//This part of code is trying to connect to the quorums in quorum list, where various functions are called to pledge the tokens
+		//and checking of transaction by the quorum i.e. consensus for the transaction. Once the quorum is connected, it pledges and
+		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
+		//as well. Each quorums should pledge equal amount of tokens and hence, it should have a total of (Transacting RBTs/5) tokens
+		//available for pledging.
 		go c.connectQuorum(cr, a, AlphaQuorumType, reqPledgeTokens)
 	}
 	loop := true
