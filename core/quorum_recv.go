@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -164,22 +163,8 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 				crep.Message = "Failed to fetch proof file, err " + err.Error()
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
-			pcb, err := ioutil.ReadFile(c.cfg.DirPath + "unpledge/" + unpledgeId)
-			if err != nil {
-				c.log.Error("Invalid file", "err", err)
-				crep.Message = "Invalid file,err " + err.Error()
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			pcs := util.BytesToString(pcb)
 
-			senderAddr := cr.SenderPeerID + "." + sc.GetSenderDID()
-			rdid, tid, err := c.getProofverificationDetails(wt[i].Token, senderAddr)
-			if err != nil {
-				c.log.Error("Failed to get pledged for token reciveer did", "err", err)
-				crep.Message = "Failed to get pledged for token reciveer did"
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			pv, err := c.up.ProofVerification(wt[i].Token, pcs, rdid, tid)
+			pv, err := c.Up.ProofVerification(wt[i].Token)
 			if err != nil {
 				c.log.Error("Proof Verification Failed due to error ", err)
 				crep.Message = "Proof Verification Failed due to error " + err.Error()
@@ -392,6 +377,17 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update token status, failed to get block ID"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
+	epochTime := sc.GetEpochTime()
+	currentTime := time.Now()
+	timediff := currentTime.Sub(epochTime)
+	c.log.Debug("1", timediff)
+	c.log.Debug("2", currentTime.Add(1000*time.Second))
+	if epochTime.After(currentTime.Add(1000 * time.Second)) {
+		crep.Message = "Epoch time elapsed > 1000"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	td := &wallet.TransactionDetails{
 		TransactionID:   b.GetTid(),
 		TransactionType: b.GetTransType(),
@@ -403,6 +399,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		Comment:         sc.GetComment(),
 		DateTime:        time.Now(),
 		Status:          true,
+		EpochTime:       sc.GetEpochTime(),
 	}
 	c.w.AddTransactionHistory(td)
 	crep.Status = true
@@ -511,6 +508,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		ctcb[t] = lb
 	}
+	epoch := time.Now()
 	tcb := block.TokenChainBlock{
 		TokenType:       tokenType,
 		TransactionType: block.TokenPledgedType,
@@ -520,6 +518,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			RefID:   refID,
 			Tokens:  tsb,
 		},
+		EpochTime: &epoch,
 	}
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
@@ -549,7 +548,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 
 	for _, t := range ur.PledgedTokens {
-		c.up.AddUnPledge(t)
+		c.Up.AddUnPledge(t)
 	}
 	crep.Status = true
 	crep.Message = "Token pledge status updated"
