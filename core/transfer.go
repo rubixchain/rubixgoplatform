@@ -96,15 +96,18 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		}
 		tis = append(tis, ti)
 	}
+	epoch := time.Now()
 	sct := &contract.ContractType{
 		Type:       contract.SCRBTDirectType,
 		PledgeMode: contract.POWPledgeMode,
 		TotalRBTs:  req.TokenCount,
+		EpochTime:  &epoch,
 		TransInfo: &contract.TransInfo{
 			SenderDID:   did,
 			ReceiverDID: rdid,
 			Comment:     req.Comment,
 			TransTokens: tis,
+			EpochTime:   epoch,
 		},
 	}
 	sc := contract.CreateNewContract(sct)
