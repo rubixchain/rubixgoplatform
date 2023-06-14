@@ -24,6 +24,7 @@ const (
 	TokenChainStorage  string = "tokenchainstorage"
 	NFTChainStorage    string = "nftchainstorage"
 	DataChainStorage   string = "datachainstorage"
+	PledgePinsStorage  string = "pledgepinsstorage"
 )
 
 type WalletConfig struct {
@@ -105,6 +106,11 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	err = w.s.Init(TransactionStorage, &TransactionDetails{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Transaction storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(PledgePinsStorage, &PledgePinsDetails{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize Pledged Pins storage", "err", err)
 		return nil, err
 	}
 	err = w.s.Init(TokenProvider, &TokenProviderMap{}, true)
