@@ -3,6 +3,7 @@ package block
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/fxamacker/cbor"
@@ -30,6 +31,7 @@ const (
 	TCTransInfoKey       string = "5"
 	TCSmartContractKey   string = "6"
 	TCQuorumSignatureKey string = "7"
+	TCEpochTime          string = "8"
 	TCBlockHashKey       string = "98"
 	TCSignatureKey       string = "99"
 	TCBlockContentKey    string = "1"
@@ -54,6 +56,7 @@ type TokenChainBlock struct {
 	TransInfo       *TransInfo    `json:"transInfo"`
 	QuorumSignature []string      `json:"quorumSignature"`
 	SmartContract   []byte        `json:"smartContract"`
+	EpochTime       *time.Time    `json:"epoch_time"`
 }
 
 type Block struct {
@@ -256,6 +259,14 @@ func (b *Block) GetBlockID(t string) (string, error) {
 		return "", fmt.Errorf("invalid token chain block, missing block number")
 	}
 	return bns + "-" + ha.(string), nil
+}
+
+func (b *Block) GetBlockEpoch() (string, error) {
+	ha, ok := b.bm[TCEpochTime]
+	if !ok {
+		return "", fmt.Errorf("invalid token chain block, missing epoch time")
+	}
+	return ha.(string), nil
 }
 
 func (b *Block) GetPrevBlockID(t string) (string, error) {
