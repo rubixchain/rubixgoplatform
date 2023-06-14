@@ -21,6 +21,7 @@ type TransactionDetails struct {
 	Comment         string    `gorm:"column:comment"`
 	DateTime        time.Time `gorm:"column:date_time"`
 	Status          bool      `gorm:"column:status"`
+	EpochTime       time.Time `gorm:"column:epoch_time"`
 }
 
 func (w *Wallet) AddTransactionHistory(td *TransactionDetails) error {
