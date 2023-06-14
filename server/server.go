@@ -48,6 +48,8 @@ const (
 	APIGetTxnByTxnID       string = "/api/get-by-txnId"
 	APIGetTxnByDID         string = "/api/get-by-did"
 	APIGetTxnByComment     string = "/api/get-by-comment"
+	APIUnpledgeTokens      string = "/api/unpledge-tokens"
+	APIUnpinQuorumTokens   string = "/api/unpin-quorum-tokens"
 )
 
 // Server defines server handle
@@ -227,6 +229,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, s.ErrorFunc))
 	s.AddRoute(APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, s.ErrorFunc))
 	s.AddRoute(APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, s.ErrorFunc))
+	s.AddRoute(APIUnpledgeTokens, "POST", s.AuthHandle(s.APIUnpledgeTokens, s.ErrorFunc))
+	//s.AddRoute(APIUnpinQuorumTokens, "POST", s.AuthHandle(s.APIUnpinQuorumTokens, s.ErrorFunc))
 
 }
 
