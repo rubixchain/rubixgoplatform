@@ -1,0 +1,71 @@
+package client
+
+import (
+	"fmt"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
+)
+
+type SmartContractRequest struct {
+	BinaryCode string
+	RawCode    string
+	YamlCode   string
+	DID        string
+	SCPath     string
+}
+
+type FetchSmartContractRequest struct {
+	SmartContractToken     string
+	SmartContractTokenPath string
+}
+
+func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractRequest) (*model.BasicResponse, error) {
+
+	fields := make(map[string]string)
+	files := make(map[string]string)
+
+	if smartContractRequest.BinaryCode != "" {
+		files["binaryCodePath"] = smartContractRequest.BinaryCode
+	}
+	if smartContractRequest.RawCode != "" {
+		files["rawCodePath"] = smartContractRequest.RawCode
+	}
+	if smartContractRequest.YamlCode != "" {
+		files["yamlFilePath"] = smartContractRequest.YamlCode
+	}
+	if smartContractRequest.DID != "" {
+		fields["did"] = smartContractRequest.DID
+	}
+
+	for key, value := range fields {
+		fmt.Printf("Field: %s, Value: %s\n", key, value)
+	}
+
+	for key, value := range files {
+		fmt.Printf("File: %s, Value: %s\n", key, value)
+	}
+
+	var basicResponse model.BasicResponse
+	err := c.sendMutiFormRequest("POST", "/api/generate-smart-contract", nil, fields, files, &basicResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &basicResponse, nil
+
+}
+
+func (c *Client) FetchSmartContract(fetchSmartContractRequest *FetchSmartContractRequest) (*model.BasicResponse, error) {
+	fields := make(map[string]string)
+	if fetchSmartContractRequest.SmartContractToken != "" {
+		fields["smartContractToken"] = fetchSmartContractRequest.SmartContractToken
+	}
+
+	var basicResponse model.BasicResponse
+	err := c.sendMutiFormRequest("POST", "/api/fetch-smart-contract", nil, fields, nil, &basicResponse)
+	if err != nil {
+		return nil, err
+	}
+	return &basicResponse, nil
+
+}

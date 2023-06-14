@@ -73,6 +73,13 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
                         "description": "User/Entity ID",
                         "name": "UserID",
                         "in": "formData"
@@ -106,6 +113,91 @@ const docTemplate = `{
                         "description": "File to be committed",
                         "name": "FileContent",
                         "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/fetch-smart-contract": {
+            "post": {
+                "description": "This API will deploy smart contract",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Deploy Smart Contract",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "smartContractToken",
+                        "name": "smartContractToken",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/generate-smart-contract": {
+            "post": {
+                "description": "This API will deploy smart contract",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Deploy Smart Contract",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "location of binary code hash",
+                        "name": "binaryCodePath",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "location of raw code hash",
+                        "name": "rawCodePath",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "location of yaml code hash",
+                        "name": "yamlFilePath",
+                        "in": "formData",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -179,24 +271,6 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
                         }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
                     }
                 }
             }
@@ -236,21 +310,36 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
                         }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
+                    }
+                }
+            }
+        },
+        "/api/get-by-txnId": {
+            "get": {
+                "description": "Retrieves the details of a transaction based on its ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Get transaction details by Transcation ID",
+                "operationId": "get-txn-details-by-id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The ID of the transaction to retrieve",
+                        "name": "txnID",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
                         }
@@ -283,57 +372,6 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-txn-details-by-id": {
-            "get": {
-                "description": "Retrieves the details of a transaction based on its ID.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Get transaction details by Transcation ID",
-                "operationId": "get-txn-details-by-id",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "The ID of the transaction to retrieve",
-                        "name": "txnID",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
                         }
@@ -502,6 +540,8 @@ var SwaggerInfo = &swag.Spec{
 	Description:      "Rubix core API to control & manage the node.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
+	LeftDelim:        "{{",
+	RightDelim:       "}}",
 }
 
 func init() {

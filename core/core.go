@@ -112,7 +112,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 		nodePort := NodePort + node
 		portOffset := MaxPeerConn * node
 		cfg := config.Config{
-			NodeAddress: "0.0.0.0",
+			NodeAddress: "localhost",
 			NodePort:    fmt.Sprintf("%d", nodePort),
 			DirPath:     "./",
 			CfgData: config.ConfigData{
@@ -401,6 +401,22 @@ func (c *Core) CreateTempFolder() (string, error) {
 	return folderName, err
 }
 
+func (c *Core) CreateSCTempFolder() (string, error) {
+	folderName := c.cfg.DirPath + "SmartContract/" + uuid.New().String()
+	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
+	return folderName, err
+}
+
+func (c *Core) RenameSCFolder(tempFolderName string, smartContractName string) (string, error) {
+	folderName := c.cfg.DirPath + "SmartContract/" + tempFolderName
+	err := os.Rename(folderName, c.cfg.DirPath+"SmartContract/"+smartContractName)
+	if err != nil {
+		c.log.Error("Unable to rename ", tempFolderName, " to ", smartContractName, err)
+	}
+	folderName = c.cfg.DirPath + "SmartContract/" + smartContractName
+	return folderName, err
+}
+
 func (c *Core) HandleQuorum(conn net.Conn) {
 
 }
@@ -471,6 +487,7 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 
 func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	dt, err := c.w.GetDID(didStr)
+	c.log.Debug("dt is", "dt", dt)
 	if err != nil {
 		c.log.Error("DID does not exist", "did", didStr)
 		return nil, fmt.Errorf("DID does not exist")

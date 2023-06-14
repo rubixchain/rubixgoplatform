@@ -68,6 +68,11 @@ paths:
       - multipart/form-data
       description: This API will create data token
       parameters:
+      - description: DID
+        in: formData
+        name: did
+        required: true
+        type: string
       - description: User/Entity ID
         in: formData
         name: UserID
@@ -102,6 +107,63 @@ paths:
       summary: Create Data Token
       tags:
       - Data Tokens
+  /api/fetch-smart-contract:
+    post:
+      consumes:
+      - multipart/form-data
+      description: This API will deploy smart contract
+      parameters:
+      - description: smartContractToken
+        in: formData
+        name: smartContractToken
+        required: true
+        type: string
+      produces:
+      - multipart/form-data
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Deploy Smart Contract
+      tags:
+      - Smart Contract
+  /api/generate-smart-contract:
+    post:
+      consumes:
+      - multipart/form-data
+      description: This API will deploy smart contract
+      parameters:
+      - description: DID
+        in: formData
+        name: did
+        required: true
+        type: string
+      - description: location of binary code hash
+        in: formData
+        name: binaryCodePath
+        required: true
+        type: file
+      - description: location of raw code hash
+        in: formData
+        name: rawCodePath
+        required: true
+        type: file
+      - description: location of yaml code hash
+        in: formData
+        name: yamlFilePath
+        required: true
+        type: file
+      produces:
+      - multipart/form-data
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Deploy Smart Contract
+      tags:
+      - Smart Contract
   /api/get-account-info:
     get:
       consumes:
@@ -142,18 +204,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/model.BasicResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
       summary: Get transaction details by Transcation Comment
       tags:
       - Account
@@ -180,19 +230,29 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/model.BasicResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
       summary: Get transaction details by dID
+      tags:
+      - Account
+  /api/get-by-txnId:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of a transaction based on its ID.
+      operationId: get-txn-details-by-id
+      parameters:
+      - description: The ID of the transaction to retrieve
+        in: query
+        name: txnID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get transaction details by Transcation ID
       tags:
       - Account
   /api/get-data-token:
@@ -216,40 +276,6 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
-  /api/get-txn-details-by-id:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves the details of a transaction based on its ID.
-      operationId: get-txn-details-by-id
-      parameters:
-      - description: The ID of the transaction to retrieve
-        in: query
-        name: txnID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Get transaction details by Transcation ID
-      tags:
-      - Account
   /api/initiate-rbt-transfer:
     post:
       consumes:
