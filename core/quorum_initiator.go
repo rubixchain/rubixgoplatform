@@ -42,6 +42,16 @@ type ConensusRequest struct {
 	QuorumList     []string `json:"quorum_list"`
 }
 
+type QuorumPledge struct {
+	ReqID          string   `json:"req_id"`
+	Type           int      `json:"type"`
+	Mode           int      `json:"mode"`
+	SenderPeerID   string   `json:"sender_peerd_id"`
+	ReceiverPeerID string   `json:"receiver_peerd_id"`
+	ContractBlock  []byte   `json:"contract_block"`
+	QuorumList     []string `json:"quorum_list"`
+}
+
 type ConensusReply struct {
 	ReqID    string `json:"req_id"`
 	Status   bool   `json:"status"`
@@ -160,7 +170,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string) error {
 		return fmt.Errorf("failed to setup quorum")
 	}
 	c.qc[didStr] = dc
-	c.up.RunUnpledge()
+	c.Up.RunUnpledge8HourlyThread()
 	return nil
 }
 
@@ -299,6 +309,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Error("Failed to pledge token", "err", err)
 		return nil, nil, err
 	}
+	//c.sendQuorumPledgedTokenDetails()
 	c.sendQuorumCredit(cr)
 	ti := sc.GetTransTokenInfo()
 	c.qlock.Lock()
@@ -366,6 +377,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
 			Status:          true,
+			EpochTime:       sc.GetEpochTime(),
 		}
 		return &td, pl, nil
 	} else {
@@ -379,6 +391,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionType: nb.GetTransType(),
 			DateTime:        time.Now(),
 			Status:          true,
+			EpochTime:       sc.GetEpochTime(),
 		}
 		return &td, pl, nil
 	}
