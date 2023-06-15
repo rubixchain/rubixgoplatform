@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
 type GenerateSmartContractRequest struct {
@@ -23,7 +24,7 @@ type SmartContractToken struct {
 	BinaryCodeHash string `json:"binaryCodeHash"`
 	RawCodeHash    string `json:"rawCodeHash"`
 	YamlCodeHash   string `json:"yamlCodeHash"`
-	GenesisBlock   string `json:"genesisBlock"`
+	DID            string `json:"did"`
 }
 
 type FetchSmartContractRequest struct {
@@ -46,7 +47,6 @@ func (c *Core) GenerateSmartContractToken(requestID string, smartContractTokenRe
 		c.log.Error("failed to get web request", "requestID", requestID)
 		return nil
 	}
-	fmt.Printf("smartContractTokenResponse: %+v\n", smartContractTokenResponse)
 	dc.OutChan <- smartContractTokenResponse
 
 	return smartContractTokenResponse
@@ -105,20 +105,19 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		BinaryCodeHash: binaryCodeHash,
 		RawCodeHash:    rawCodeHash,
 		YamlCodeHash:   yamlCodeHash,
-		GenesisBlock:   "To be created",
+		DID:            smartContractTokenRequest.DID,
 	}
 
-	fmt.Printf("smartContractToken: %+v\n", smartContractToken)
+	if err != nil {
+		c.log.Error("Failed to create smart contract token", "err", err)
+		return basicResponse
+	}
 
 	smartContractTokenJSON, err := json.MarshalIndent(smartContractToken, "", "  ")
 	if err != nil {
 		c.log.Error("Failed to marshal SmartContractToken struct", "err", err)
 		return basicResponse
 	}
-
-	// Print the value of smartContractTokenJSON
-	fmt.Println("smartContractTokenJSON:")
-	fmt.Println(string(smartContractTokenJSON))
 
 	smartContractTokenHash, err := c.ipfs.Add(bytes.NewReader(smartContractTokenJSON))
 	if err != nil {
@@ -134,20 +133,17 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		Result:  smartContractTokenHash,
 	}
 
-	scFolder, err := c.RenameSCFolder(smartContractTokenRequest.SCPath, smartContractTokenHash)
+	_, err = c.RenameSCFolder(smartContractTokenRequest.SCPath, smartContractTokenHash)
 	if err != nil {
 		c.log.Error("Failed to rename SC folder", "err", err)
 		return basicResponse
-	} else {
-		fmt.Println("scFolder ", scFolder)
 	}
+	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, YamlCodeHash: yamlCodeHash, ContractStatus: 6})
 
 	// Set the response values
 	basicResponse.Status = true
 	basicResponse.Message = smartContractTokenResponse.Message
 	basicResponse.Result = smartContractTokenResponse
-
-	fmt.Printf("basicResponse: %+v\n", basicResponse)
 
 	return basicResponse
 }
@@ -160,14 +156,14 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 
 	smartContractTokenJSON, err := c.ipfs.Cat(fetchSmartContractRequest.SmartContractToken)
 	if err != nil {
-		c.log.Error("Failed to get smart contract from IPFS", "err", err)
+		c.log.Error("Failed to get smart contract from network", "err", err)
 		return basicResponse
 	}
 
 	// Read the smart contract token JSON
 	smartContractTokenJSONBytes, err := ioutil.ReadAll(smartContractTokenJSON)
 	if err != nil {
-		c.log.Error("Failed to read smart contract token JSON", "err", err)
+		c.log.Error("Failed to read smart contract token from network", "err", err)
 		return basicResponse
 	}
 
@@ -182,17 +178,15 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		return basicResponse
 	}
 
-	fmt.Printf("smartContractToken: %+v\n", smartContractToken)
-
 	// Fetch and store the binary code file
 	binaryCodeFile, err := c.ipfs.Cat(smartContractToken.BinaryCodeHash)
 	if err != nil {
-		c.log.Error("Failed to fetch binary code file from IPFS", "err", err)
+		c.log.Error("Failed to fetch binary code file from network", "err", err)
 		return basicResponse
 	}
 	defer binaryCodeFile.Close()
 
-	binaryCodeFilePath := filepath.Join(fetchSmartContractRequest.SmartContractTokenPath, "binaryCode")
+	binaryCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
 	err = os.MkdirAll(binaryCodeFilePath, 0755)
 	if err != nil {
 		c.log.Error("Failed to create binary code directory", "err", err)
@@ -223,7 +217,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 	defer rawCodeFile.Close()
 
-	rawCodeFilePath := filepath.Join(fetchSmartContractRequest.SmartContractTokenPath, "rawCode")
+	rawCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
 	err = os.MkdirAll(rawCodeFilePath, 0755)
 	if err != nil {
 		c.log.Error("Failed to create raw code directory", "err", err)
@@ -254,10 +248,10 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 	defer yamlCodeFile.Close()
 
-	yamlCodeFilePath := filepath.Join(fetchSmartContractRequest.SmartContractTokenPath, "yamlCode")
+	yamlCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
 	err = os.MkdirAll(yamlCodeFilePath, 0755)
 	if err != nil {
-		c.log.Error("Failed to create YAML code directory", "err", err)
+		c.log.Error("Failed to create YAML directory", "err", err)
 		return basicResponse
 	}
 
@@ -276,6 +270,8 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		c.log.Error("Failed to write YAML code file", "err", err)
 		return basicResponse
 	}
+
+	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, YamlCodeHash: smartContractToken.YamlCodeHash, ContractStatus: wallet.TokenIsFetched})
 
 	// Set the response values
 	basicResponse.Status = true

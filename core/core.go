@@ -407,14 +407,15 @@ func (c *Core) CreateSCTempFolder() (string, error) {
 	return folderName, err
 }
 
-func (c *Core) RenameSCFolder(tempFolderName string, smartContractName string) (string, error) {
-	folderName := c.cfg.DirPath + "SmartContract/" + tempFolderName
-	err := os.Rename(folderName, c.cfg.DirPath+"SmartContract/"+smartContractName)
+func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
+
+	scFolderName := c.cfg.DirPath + "SmartContract/" + smartContractName
+	err := os.Rename(tempFolderPath, scFolderName)
 	if err != nil {
-		c.log.Error("Unable to rename ", tempFolderName, " to ", smartContractName, err)
+		c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
+		scFolderName = ""
 	}
-	folderName = c.cfg.DirPath + "SmartContract/" + smartContractName
-	return folderName, err
+	return scFolderName, err
 }
 
 func (c *Core) HandleQuorum(conn net.Conn) {

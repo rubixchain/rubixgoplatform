@@ -36,9 +36,6 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Generate smart contract failed, failed to create SC folder", "err", err)
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create SC folder", nil)
 	}
-
-	s.log.Debug("Smart contract folder created", "folder", deploySC.SCPath)
-
 	binaryCodeFile, binaryHeader, err := s.ParseMultiPartFormFile(req, "binaryCodePath")
 	if err != nil {
 		s.log.Error("Generate smart contract failed, failed to retrieve Binary File", "err", err)
@@ -52,8 +49,6 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Generate smart contract failed, failed to create Binary Code file", "err", err)
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create Binary Code file", nil)
 	}
-
-	s.log.Debug("Binary code file retrieved", "filename", binaryHeader.Filename)
 
 	err = os.Rename(binaryCodeFile.Name(), binaryCodeDest)
 	if err != nil {

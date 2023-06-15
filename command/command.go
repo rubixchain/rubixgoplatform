@@ -234,8 +234,6 @@ func (cmd *Command) getURL(url string) string {
 func (cmd *Command) runApp() {
 	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node))
 	err := apiconfig.LoadAPIConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, &cmd.cfg)
-	//print the content of the config file
-	cmd.log.Info("Config file content", "config", cmd.cfg)
 
 	if err != nil {
 		cmd.log.Error("Configfile is either currupted or cipher is wrong", "err", err)

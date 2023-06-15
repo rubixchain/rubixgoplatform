@@ -12,18 +12,19 @@ import (
 )
 
 const (
-	TokenStorage       string = "TokensTable"
-	DataTokenStorage   string = "DataTokensTable"
-	NFTTokenStorage    string = "NFTTokensTable"
-	CreditStorage      string = "CreditsTable"
-	DIDStorage         string = "DIDTable"
-	DIDPeerStorage     string = "DIDPeerTable"
-	TransactionStorage string = "TransactionHistory"
-	TokensArrayStorage string = "TokensTransferred"
-	TokenProvider      string = "TokenProviderTable"
-	TokenChainStorage  string = "tokenchainstorage"
-	NFTChainStorage    string = "nftchainstorage"
-	DataChainStorage   string = "datachainstorage"
+	TokenStorage         string = "TokensTable"
+	DataTokenStorage     string = "DataTokensTable"
+	NFTTokenStorage      string = "NFTTokensTable"
+	CreditStorage        string = "CreditsTable"
+	DIDStorage           string = "DIDTable"
+	DIDPeerStorage       string = "DIDPeerTable"
+	TransactionStorage   string = "TransactionHistory"
+	TokensArrayStorage   string = "TokensTransferred"
+	TokenProvider        string = "TokenProviderTable"
+	TokenChainStorage    string = "tokenchainstorage"
+	NFTChainStorage      string = "nftchainstorage"
+	DataChainStorage     string = "datachainstorage"
+	SmartContractStorage string = "smartcontract"
 )
 
 type WalletConfig struct {
@@ -110,6 +111,11 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	err = w.s.Init(TokenProvider, &TokenProviderMap{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Token Provider Table", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(SmartContractStorage, &SmartContract{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize Smart Contract storage", "err", err)
 		return nil, err
 	}
 	return w, nil
