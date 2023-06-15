@@ -15,7 +15,7 @@ import (
 type GenerateSmartContractRequest struct {
 	BinaryCode string
 	RawCode    string
-	YamlCode   string
+	SchemaCode string
 	DID        string
 	SCPath     string
 }
@@ -23,7 +23,7 @@ type GenerateSmartContractRequest struct {
 type SmartContractToken struct {
 	BinaryCodeHash string `json:"binaryCodeHash"`
 	RawCodeHash    string `json:"rawCodeHash"`
-	YamlCodeHash   string `json:"yamlCodeHash"`
+	SchemaCodeHash string `json:"schemaCodeHash"`
 	DID            string `json:"did"`
 }
 
@@ -86,25 +86,25 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		return basicResponse
 	}
 
-	// Open YAML code file
-	yamlCodeFile, err := os.Open(smartContractTokenRequest.YamlCode)
+	// Open Schema code file
+	schemaCodeFile, err := os.Open(smartContractTokenRequest.SchemaCode)
 	if err != nil {
-		c.log.Error("Failed to open YAML code file", "err", err)
+		c.log.Error("Failed to open Schema code file", "err", err)
 		return basicResponse
 	}
-	defer yamlCodeFile.Close()
+	defer schemaCodeFile.Close()
 
-	// Add YAML code file to IPFS
-	yamlCodeHash, err := c.ipfs.Add(yamlCodeFile)
+	// Add Schema code file to IPFS
+	schemaCodeHash, err := c.ipfs.Add(schemaCodeFile)
 	if err != nil {
-		c.log.Error("Failed to add YAML code file to IPFS", "err", err)
+		c.log.Error("Failed to add Schema code file to IPFS", "err", err)
 		return basicResponse
 	}
 
 	smartContractToken := SmartContractToken{
 		BinaryCodeHash: binaryCodeHash,
 		RawCodeHash:    rawCodeHash,
-		YamlCodeHash:   yamlCodeHash,
+		SchemaCodeHash: schemaCodeHash,
 		DID:            smartContractTokenRequest.DID,
 	}
 
@@ -138,7 +138,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		c.log.Error("Failed to rename SC folder", "err", err)
 		return basicResponse
 	}
-	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, YamlCodeHash: yamlCodeHash, ContractStatus: 6})
+	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, SchemaCodeHash: schemaCodeHash, ContractStatus: 6})
 
 	// Set the response values
 	basicResponse.Status = true
@@ -240,38 +240,38 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		return basicResponse
 	}
 
-	// Fetch and store the YAML code file
-	yamlCodeFile, err := c.ipfs.Cat(smartContractToken.YamlCodeHash)
+	// Fetch and store the Schema code file
+	schemaCodeFile, err := c.ipfs.Cat(smartContractToken.SchemaCodeHash)
 	if err != nil {
-		c.log.Error("Failed to fetch YAML code file from IPFS", "err", err)
+		c.log.Error("Failed to fetch Schema code file from IPFS", "err", err)
 		return basicResponse
 	}
-	defer yamlCodeFile.Close()
+	defer schemaCodeFile.Close()
 
-	yamlCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
-	err = os.MkdirAll(yamlCodeFilePath, 0755)
+	schemaCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
+	err = os.MkdirAll(schemaCodeFilePath, 0755)
 	if err != nil {
-		c.log.Error("Failed to create YAML directory", "err", err)
-		return basicResponse
-	}
-
-	yamlCodeFileDestPath := filepath.Join(yamlCodeFilePath, "yamlCodeFile")
-
-	// Read the content of yamlCodeFile
-	yamlCodeContent, err := ioutil.ReadAll(yamlCodeFile)
-	if err != nil {
-		c.log.Error("Failed to read YAML code file", "err", err)
+		c.log.Error("Failed to create Schema directory", "err", err)
 		return basicResponse
 	}
 
-	// Write the content to yamlCodeFileDestPath
-	err = ioutil.WriteFile(yamlCodeFileDestPath, yamlCodeContent, 0644)
+	schemaCodeFileDestPath := filepath.Join(schemaCodeFilePath, "schemaCodeFile")
+
+	// Read the content of schemaCodeFile
+	schemaCodeContent, err := ioutil.ReadAll(schemaCodeFile)
 	if err != nil {
-		c.log.Error("Failed to write YAML code file", "err", err)
+		c.log.Error("Failed to read Schema code file", "err", err)
 		return basicResponse
 	}
 
-	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, YamlCodeHash: smartContractToken.YamlCodeHash, ContractStatus: wallet.TokenIsFetched})
+	// Write the content to schemaCodeFileDestPath
+	err = ioutil.WriteFile(schemaCodeFileDestPath, schemaCodeContent, 0644)
+	if err != nil {
+		c.log.Error("Failed to write Schema code file", "err", err)
+		return basicResponse
+	}
+
+	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, SchemaCodeHash: smartContractToken.SchemaCodeHash, ContractStatus: wallet.TokenIsFetched})
 
 	// Set the response values
 	basicResponse.Status = true

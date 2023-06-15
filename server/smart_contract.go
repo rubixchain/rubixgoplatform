@@ -12,7 +12,7 @@ import (
 type InitSmartContractToken struct {
 	binaryCodeHash string
 	rawCodeHash    string
-	yamlCodeHash   string
+	schemaCodeHash string
 	genesisBlock   string
 }
 
@@ -25,7 +25,7 @@ type InitSmartContractToken struct {
 // @Param        did        	   formData      string  true   "DID"
 // @Param 		 binaryCodePath	   formData      file    true  "location of binary code hash"
 // @Param 		 rawCodePath	   formData      file    true  "location of raw code hash"
-// @Param 		 yamlFilePath	   formData      file    true  "location of yaml code hash"
+// @Param 		 schemaFilePath	   formData      file    true  "location of schema code hash"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/generate-smart-contract [post]
 func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
@@ -81,44 +81,44 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move raw code file", nil)
 	}
 
-	yamlFile, yamlHeader, err := s.ParseMultiPartFormFile(req, "yamlFilePath")
+	schemaFile, schemaHeader, err := s.ParseMultiPartFormFile(req, "schemaFilePath")
 	if err != nil {
 		binaryCodeDestFile.Close()
 		rawCodeDestFile.Close()
-		s.log.Error("Generate smart contract failed, failed to retrieve YAML file", "err", err)
-		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve YAML file", nil)
+		s.log.Error("Generate smart contract failed, failed to retrieve Schema file", "err", err)
+		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve Schema file", nil)
 	}
 
-	yamlDest := filepath.Join(deploySC.SCPath, yamlHeader.Filename)
-	yamlDestFile, err := os.Create(yamlDest)
+	schemaDest := filepath.Join(deploySC.SCPath, schemaHeader.Filename)
+	schemaDestFile, err := os.Create(schemaDest)
 	if err != nil {
 		binaryCodeDestFile.Close()
 		rawCodeDestFile.Close()
-		yamlFile.Close()
-		s.log.Error("Generate smart contract failed, failed to create YAML file", "err", err)
-		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create YAML file", nil)
+		schemaFile.Close()
+		s.log.Error("Generate smart contract failed, failed to create Schema file", "err", err)
+		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create Schema file", nil)
 	}
 
-	err = os.Rename(yamlFile.Name(), yamlDest)
+	err = os.Rename(schemaFile.Name(), schemaDest)
 	if err != nil {
 		binaryCodeDestFile.Close()
 		rawCodeDestFile.Close()
-		yamlDestFile.Close()
-		s.log.Error("Generate smart contract failed, failed to move YAML file", "err", err)
-		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move YAML file", nil)
+		schemaDestFile.Close()
+		s.log.Error("Generate smart contract failed, failed to move Schema file", "err", err)
+		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move Schema file", nil)
 	}
 
 	// Close all files
 	binaryCodeDestFile.Close()
 	rawCodeDestFile.Close()
-	yamlDestFile.Close()
+	schemaDestFile.Close()
 	binaryCodeFile.Close()
 	rawCodeFile.Close()
-	yamlFile.Close()
+	schemaFile.Close()
 
 	deploySC.BinaryCode = binaryCodeDest
 	deploySC.RawCode = rawCodeDest
-	deploySC.YamlCode = yamlDest
+	deploySC.SchemaCode = schemaDest
 
 	_, did, err := s.ParseMultiPartForm(req, "did")
 	if err != nil {

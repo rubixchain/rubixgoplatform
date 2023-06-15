@@ -149,9 +149,9 @@ paths:
         name: rawCodePath
         required: true
         type: file
-      - description: location of yaml code hash
+      - description: location of schema code hash
         in: formData
-        name: yamlFilePath
+        name: schemaFilePath
         required: true
         type: file
       produces:

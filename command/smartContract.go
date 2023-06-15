@@ -9,14 +9,14 @@ func (cmd *Command) generateSmartContractToken() {
 	smartContractTokenRequest := core.GenerateSmartContractRequest{
 		BinaryCode: cmd.binaryCodePath,
 		RawCode:    cmd.rawCodePath,
-		YamlCode:   cmd.yamlFilePath,
+		SchemaCode: cmd.schemaFilePath,
 		DID:        cmd.did,
 	}
 
 	request := client.SmartContractRequest{
 		BinaryCode: smartContractTokenRequest.BinaryCode,
 		RawCode:    smartContractTokenRequest.RawCode,
-		YamlCode:   smartContractTokenRequest.YamlCode,
+		SchemaCode: smartContractTokenRequest.SchemaCode,
 		DID:        smartContractTokenRequest.DID,
 	}
 

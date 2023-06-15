@@ -194,8 +194,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "file",
-                        "description": "location of yaml code hash",
-                        "name": "yamlFilePath",
+                        "description": "location of Schema code hash",
+                        "name": "schemaFilePath",
                         "in": "formData",
                         "required": true
                     }

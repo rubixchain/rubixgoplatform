@@ -9,7 +9,7 @@ import (
 type SmartContractRequest struct {
 	BinaryCode string
 	RawCode    string
-	YamlCode   string
+	SchemaCode string
 	DID        string
 	SCPath     string
 }
@@ -30,8 +30,8 @@ func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractR
 	if smartContractRequest.RawCode != "" {
 		files["rawCodePath"] = smartContractRequest.RawCode
 	}
-	if smartContractRequest.YamlCode != "" {
-		files["yamlFilePath"] = smartContractRequest.YamlCode
+	if smartContractRequest.SchemaCode != "" {
+		files["schemaFilePath"] = smartContractRequest.SchemaCode
 	}
 	if smartContractRequest.DID != "" {
 		fields["did"] = smartContractRequest.DID
