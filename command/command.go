@@ -191,7 +191,7 @@ type Command struct {
 	ip                 string
 	binaryCodePath     string
 	rawCodePath        string
-	yamlFilePath       string
+	schemaFilePath     string
 	smartContractToken string
 }
 
@@ -369,7 +369,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
 	flag.StringVar(&cmd.binaryCodePath, "binCode", "", "Binary code path")
 	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
-	flag.StringVar(&cmd.yamlFilePath, "yamlFile", "", "Yaml file path")
+	flag.StringVar(&cmd.schemaFilePath, "schemaFile", "", "Schema file path")
 	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
 
 	if len(os.Args) < 2 {
