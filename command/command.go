@@ -195,7 +195,6 @@ type Command struct {
 	role          string
 	date          time.Time
 	contract      string
-	contractEvent int
 	contractBlock string
 	grpcAddr      string
 	grpcPort      int
@@ -378,7 +377,6 @@ func Run(args []string) {
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
 	flag.StringVar(&cmd.contract, "contract", "", "Contract token hash")
-	flag.IntVar(&cmd.contractEvent, "contractEvent", 0, "Contract Event")
 	flag.StringVar(&cmd.contractBlock, "contractBlkHash", "", "Contract block hash")
 	flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
 	flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
