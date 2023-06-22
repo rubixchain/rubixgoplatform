@@ -1,6 +1,7 @@
 package util
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
@@ -93,6 +94,11 @@ func Filecopy(src, dst string) (int64, error) {
 	defer destination.Close()
 	nBytes, err := io.Copy(destination, source)
 	return nBytes, err
+}
+
+func IsFileExist(fileName string) bool {
+	_, err := os.Stat(fileName)
+	return err == nil
 }
 
 func FileWrite(fileName string, data []byte) error {
@@ -744,4 +750,17 @@ func GetFloatFromMap(m interface{}, key string) float64 {
 		tl = 0
 	}
 	return tl
+}
+
+func RemoveAtIndex(slice []string, index int) []string {
+	return append(slice[:index], slice[index+1:]...)
+}
+
+func BytesToString(b []byte) []string {
+	var lines []string
+	scanner := bufio.NewScanner(bytes.NewReader(b))
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines
 }

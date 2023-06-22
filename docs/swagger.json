@@ -1,0 +1,189 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Rubix core API to control \u0026 manage the node.",
+        "title": "Rubix Core",
+        "contact": {
+            "name": "API Support",
+            "email": "murali.c@ensurity.com"
+        },
+        "version": "0.9"
+    },
+    "paths": {
+        "/api/commit-data-token": {
+            "post": {
+                "description": "This API will create data token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Data Tokens"
+                ],
+                "summary": "Create Data Token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Batch ID",
+                        "name": "batchID",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/create-data-token": {
+            "post": {
+                "description": "This API will create data token",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "Data Tokens"
+                ],
+                "summary": "Create Data Token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User/Entity ID",
+                        "name": "UserID",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "User/Entity Info",
+                        "name": "UserInfo",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Committer DID",
+                        "name": "CommitterDID",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Batch ID",
+                        "name": "BacthID",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "File Info is json string {",
+                        "name": "FileInfo",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "File to be committed",
+                        "name": "FileContent",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/get-data-token": {
+            "get": {
+                "description": "This API will get all data token belong to the did",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Data Tokens"
+                ],
+                "summary": "Get Data Token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/start": {
+            "get": {
+                "description": "It will setup the core if not done before",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Basic"
+                ],
+                "summary": "Start Core",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "model.BasicResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "SessionToken": {
+            "type": "apiKey",
+            "name": "Session-Token",
+            "in": "header"
+        }
+    }
+}

@@ -330,3 +330,12 @@ func (c *Core) GetDHTddrs(cid string) ([]string, error) {
 	}
 	return ids, nil
 }
+
+func (c *Core) ipfsRepoGc() {
+	cmd := exec.Command(c.ipfsApp, "ipfs", "repo", "gc")
+	err := cmd.Start()
+	if err != nil {
+		c.log.Error("failed to start command", "err", err)
+		//return nil, err
+	}
+}

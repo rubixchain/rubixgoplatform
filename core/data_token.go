@@ -281,9 +281,9 @@ func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.
 		SenderDID:   did,
 		TransTokens: make([]contract.TokenInfo, 0),
 	}
-	dts := make([]string, len(dt))
+	dts := make(map[string]string)
 	for i := range dt {
-		dts[i] = dt[i].TokenID
+		dts[dt[i].DID] = dt[i].TokenID
 		ti := contract.TokenInfo{
 			Token:     dt[i].TokenID,
 			TokenType: token.DataTokenType,
@@ -367,4 +367,13 @@ func (c *Core) CheckDataToken(dt string) bool {
 		return false
 	}
 	return true
+}
+
+func (c *Core) GetDataTokens(did string) []wallet.DataToken {
+	dt, err := c.w.GetDataTokenByDID(did)
+	if err != nil {
+		c.log.Error("failed to get data tokens", "err", err)
+		return nil
+	}
+	return dt
 }

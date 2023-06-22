@@ -29,21 +29,23 @@ import (
 )
 
 const (
-	APIPingPath            string = "/api/ping"
-	APIPeerStatus          string = "/api/peerstatus"
-	APICreditStatus        string = "/api/creditstatus"
-	APIQuorumConsensus     string = "/api/quorum-conensus"
-	APIQuorumCredit        string = "/api/quorum-credit"
-	APIReqPledgeToken      string = "/api/req-pledge-token"
-	APIUpdatePledgeToken   string = "/api/update-pledge-token"
-	APISignatureRequest    string = "/api/signature-request"
-	APISendReceiverToken   string = "/api/send-receiver-token"
-	APISyncTokenChain      string = "/api/sync-token-chain"
-	APIDhtProviderCheck    string = "/api/dht-provider-check"
-	APIMapDIDArbitration   string = "/api/map-did-arbitration"
-	APICheckDIDArbitration string = "/api/check-did-arbitration"
-	APITokenArbitration    string = "/api/token-arbitration"
-	APIGetTokenNumber      string = "/api/get-token-number"
+	APIPingPath               string = "/api/ping"
+	APIPeerStatus             string = "/api/peerstatus"
+	APICreditStatus           string = "/api/creditstatus"
+	APIQuorumConsensus        string = "/api/quorum-conensus"
+	APIQuorumCredit           string = "/api/quorum-credit"
+	APIReqPledgeToken         string = "/api/req-pledge-token"
+	APIUpdatePledgeToken      string = "/api/update-pledge-token"
+	APISignatureRequest       string = "/api/signature-request"
+	APISendReceiverToken      string = "/api/send-receiver-token"
+	APISyncTokenChain         string = "/api/sync-token-chain"
+	APIDhtProviderCheck       string = "/api/dht-provider-check"
+	APIMapDIDArbitration      string = "/api/map-did-arbitration"
+	APICheckDIDArbitration    string = "/api/check-did-arbitration"
+	APITokenArbitration       string = "/api/token-arbitration"
+	APIGetTokenNumber         string = "/api/get-token-number"
+	APIGetMigratedTokenStatus string = "/api/get-Migrated-token-status"
+	APISyncDIDArbitration     string = "/api/sync-did-arbitration"
 )
 
 const (
@@ -98,6 +100,7 @@ type Core struct {
 	qc            map[string]did.DIDCrypto
 	sd            map[string]*ServiceDetials
 	s             storage.Storage
+	as            storage.Storage
 	srv           *service.Service
 	arbitaryMode  bool
 	arbitaryAddr  []string
@@ -230,6 +233,14 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			c.log.Error("Failed to create storage DB", "err", err)
 			return nil, fmt.Errorf("failed to create storage DB")
 		}
+		if c.arbitaryMode {
+			scfg.DBName = "ArbitaryDB"
+			c.as, err = storage.NewStorageDB(scfg)
+			if err != nil {
+				c.log.Error("Failed to create storage DB", "err", err)
+				return nil, fmt.Errorf("failed to create storage DB")
+			}
+		}
 	default:
 		c.log.Error("Unsupported DB type, please check the configuration", "type", sc.StorageType)
 		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
@@ -256,7 +267,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		return nil, err
 	}
 	if c.arbitaryMode {
-		c.srv, err = service.NewService(c.s, c.log)
+		c.srv, err = service.NewService(c.s, c.as, c.log)
 		if err != nil {
 			c.log.Error("Failed to setup service", "err", err)
 			return nil, err

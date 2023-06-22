@@ -5,7 +5,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -147,6 +150,47 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			c.log.Error("Pledge Token check Failed, Token ", wt[i], " is Pledged Token")
 			crep.Message = "Pledge Token check Failed, Token " + wt[i].Token + " is Pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if c.checkTokenIsUnpledged(wt[i].Token) {
+			unpledgeId := c.getUnpledgeId(wt[i].Token)
+			if unpledgeId == "" {
+				c.log.Error("Failed to fetch proof file CID")
+				crep.Message = "Failed to fetch proof file CID"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			err := c.ipfs.Get(unpledgeId, c.cfg.DirPath+"unpledge")
+			if err != nil {
+				c.log.Error("Failed to fetch proof file")
+				crep.Message = "Failed to fetch proof file, err " + err.Error()
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			pcb, err := ioutil.ReadFile(c.cfg.DirPath + "unpledge/" + unpledgeId)
+			if err != nil {
+				c.log.Error("Invalid file", "err", err)
+				crep.Message = "Invalid file,err " + err.Error()
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			pcs := util.BytesToString(pcb)
+
+			senderAddr := cr.SenderPeerID + "." + sc.GetSenderDID()
+			rdid, tid, err := c.getProofverificationDetails(wt[i].Token, senderAddr)
+			if err != nil {
+				c.log.Error("Failed to get pledged for token reciveer did", "err", err)
+				crep.Message = "Failed to get pledged for token reciveer did"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			pv, err := c.up.ProofVerification(wt[i].Token, pcs, rdid, tid)
+			if err != nil {
+				c.log.Error("Proof Verification Failed due to error ", err)
+				crep.Message = "Proof Verification Failed due to error " + err.Error()
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			if !pv {
+				c.log.Debug("Proof of Work for Unpledge not verified")
+				crep.Message = "Proof of Work for Unpledge not verified"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			c.log.Debug("Proof of work verified")
 		}
 	}
 
@@ -624,6 +668,67 @@ func (c *Core) getTokenNumber(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &br, http.StatusOK)
 }
 
+func (c *Core) getMigratedTokenStatus(req *ensweb.Request) *ensweb.Result {
+	var tokens []string
+	br := model.MigratedTokenStatus{
+		Status: false,
+	}
+	err := c.l.ParseJSON(req, &tokens)
+	if err != nil {
+		br.Message = "failed to get tokens, parsing failed"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	migratedTokenStatus := make([]int, 0)
+	for i := range tokens {
+		td, err := c.srv.GetTokenDetials(tokens[i])
+		if err == nil && td.Token == tokens[i] {
+			migratedTokenStatus[i] = 1
+		}
+	}
+	br.Status = true
+	br.MigratedStatus = migratedTokenStatus
+	return c.l.RenderJSON(req, &br, http.StatusOK)
+}
+
+func (c *Core) syncDIDArbitration(req *ensweb.Request) *ensweb.Result {
+	var m map[string]string
+	err := c.l.ParseJSON(req, &m)
+	br := model.BasicResponse{
+		Status: false,
+	}
+	if err != nil {
+		c.log.Error("Failed to parse json request", "err", err)
+		br.Message = "Failed to parse json request"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	od, ok := m["olddid"]
+	if !ok {
+		c.log.Error("Missing old did value")
+		br.Message = "Missing old did value"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	nd, ok := m["newdid"]
+	if !ok {
+		c.log.Error("Missing new did value")
+		br.Message = "Missing new did value"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	dm := &service.DIDMap{
+		OldDID: od,
+		NewDID: nd,
+	}
+	err = c.srv.UpdateDIDMap(dm)
+	if err != nil {
+		c.log.Error("Failed to update map table", "err", err)
+		br.Message = "Failed to update map table"
+		return c.l.RenderJSON(req, &br, http.StatusOK)
+	}
+	br.Status = true
+	br.Message = "DID mapped successfully"
+	return c.l.RenderJSON(req, &br, http.StatusOK)
+
+}
+
 func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var sr SignatureRequest
@@ -663,6 +768,8 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 		srep.Message = "Failed to do token abitration, invalid token"
 		return c.l.RenderJSON(req, &srep, http.StatusOK)
 	}
+	mflag := false
+	mmsg := "token is already migrated"
 	for i := range ti {
 		tl, tn, err := b.GetTokenDetials(ti[i].Token)
 		if err != nil {
@@ -692,28 +799,37 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 		}
 		td, err := c.srv.GetTokenDetials(ti[i].Token)
 		if err == nil && td.Token == ti[i].Token {
-			c.log.Error("Failed to do token abitration, token is already migrated", "token", ti[i].Token, "did", odid)
-			srep.Message = "Failed to do token abitration, token is already migrated"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
+			nm, _ := c.srv.GetNewDIDMap(td.DID)
+			c.log.Error("Failed to do token abitration, token is already migrated", "token", ti[i].Token, "old_did", nm.OldDID, "new_did", td.DID)
+			mflag = true
+			mmsg = mmsg + "," + ti[i].Token
+			// srep.Message = "token is already migrated," + ti[i].Token
+			// return c.l.RenderJSON(req, &srep, http.StatusOK)
 		}
-		dc, err := c.SetupForienDID(odid)
-		if err != nil {
-			c.log.Error("Failed to do token abitration, failed to setup did crypto", "token", ti[i].Token, "did", odid)
-			srep.Message = "Failed to do token abitration, failed to setup did crypto"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
+		if !mflag {
+			dc, err := c.SetupForienDID(odid)
+			if err != nil {
+				c.log.Error("Failed to do token abitration, failed to setup did crypto", "token", ti[i].Token, "did", odid)
+				srep.Message = "Failed to do token abitration, failed to setup did crypto"
+				return c.l.RenderJSON(req, &srep, http.StatusOK)
+			}
+			err = sc.VerifySignature(dc)
+			if err != nil {
+				c.log.Error("Failed to do token abitration, signature verification failed", "err", err)
+				srep.Message = "Failed to do token abitration, signature verification failed"
+				return c.l.RenderJSON(req, &srep, http.StatusOK)
+			}
+			err = c.srv.UpdateTempTokenDetials(&service.TokenDetials{Token: ti[i].Token, DID: odid})
+			if err != nil {
+				c.log.Error("Failed to do token abitration, failed update token detials", "err", err)
+				srep.Message = "Failed to do token abitration, failed update token detials"
+				return c.l.RenderJSON(req, &srep, http.StatusOK)
+			}
 		}
-		err = sc.VerifySignature(dc)
-		if err != nil {
-			c.log.Error("Failed to do token abitration, signature verification failed", "err", err)
-			srep.Message = "Failed to do token abitration, signature verification failed"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
-		}
-		err = c.srv.UpdateTempTokenDetials(&service.TokenDetials{Token: ti[i].Token, DID: odid})
-		if err != nil {
-			c.log.Error("Failed to do token abitration, failed update token detials", "err", err)
-			srep.Message = "Failed to do token abitration, failed update token detials"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
-		}
+	}
+	if mflag {
+		srep.Message = mmsg
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
 	}
 	dc, ok := c.qc[did]
 	if !ok {
@@ -731,4 +847,89 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 	srep.Status = true
 	srep.Message = "Signature done"
 	return c.l.RenderJSON(req, &srep, http.StatusOK)
+}
+
+func (c *Core) getProofverificationDetails(tokenID string, senderAddr string) (string, string, error) {
+	var receiverDID, txnId string
+	tt := token.RBTTokenType
+	blk := c.w.GetLatestTokenBlock(tokenID, tt)
+
+	pbid, err := blk.GetPrevBlockID(tokenID)
+	if err != nil {
+		c.log.Error("Failed to get the block id. Unable to verify proof file")
+		return "", "", err
+	}
+	pBlk, err := c.w.GetTokenBlock(tokenID, tt, pbid)
+	if err != nil {
+		c.log.Error("Failed to get the Previous Block Unable to verify proof file")
+		return "", "", err
+	}
+
+	prevBlk := block.InitBlock(pBlk, nil)
+	if prevBlk == nil {
+		c.log.Error("Failed to initialize the Previous Block Unable to verify proof file")
+		return "", "", fmt.Errorf("Failed to initilaize previous block")
+	}
+	tokenPledgedForDetailsStr := prevBlk.GetTokenPledgedForDetails()
+	tokenPledgedForDetailsBlkArray := prevBlk.GetTransBlock()
+
+	if tokenPledgedForDetailsStr == "" && tokenPledgedForDetailsBlkArray == nil {
+		c.log.Error("Failed to get details pledged for token. Unable to verify proof file")
+		return "", "", fmt.Errorf("Failed to get deatils of pledged for token")
+	}
+
+	if tokenPledgedForDetailsBlkArray != nil {
+		tokenPledgedForDetailsBlk := block.InitBlock(tokenPledgedForDetailsBlkArray, nil)
+		receiverDID = tokenPledgedForDetailsBlk.GetReceiverDID()
+		txnId = tokenPledgedForDetailsBlk.GetTid()
+	}
+
+	if tokenPledgedForDetailsStr != "" {
+		tpfdArray := strings.Split(tokenPledgedForDetailsStr, ",")
+
+		tokenPledgedFor := tpfdArray[0]
+		tokenPledgedForTypeStr := tpfdArray[1]
+		tokenPledgedForBlockId := tpfdArray[2]
+
+		tokenPledgedForType, err := strconv.Atoi(tokenPledgedForTypeStr)
+		if err != nil {
+			c.log.Error("Failed toconvert to integer", "err", err)
+			return "", "", err
+		}
+		//check if token chain of token pledged for already synced to node
+		pledgedfBlk, err := c.w.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
+		if err != nil {
+			c.log.Error("Failed to get the pledged for token's Block Unable to verify proof file")
+			return "", "", err
+		}
+		var pledgedforBlk *block.Block
+		if pledgedfBlk != nil {
+			pledgedforBlk = block.InitBlock(pledgedfBlk, nil)
+			if pledgedforBlk == nil {
+				c.log.Error("Failed to initialize the pledged for token's Block Unable to verify proof file")
+				return "", "", fmt.Errorf("Failed to initilaize previous block")
+			}
+		} else { //if token chain of token pledged for not synced fetch from sender
+			p, err := c.getPeer(senderAddr)
+			if err != nil {
+				c.log.Error("Failed to get peer", "err", err)
+				return "", "", err
+			}
+			err = c.syncTokenChainFrom(p, tokenPledgedForBlockId, tokenPledgedFor, tokenPledgedForType)
+			if err != nil {
+				c.log.Error("Failed to sync token chain block", "err", err)
+				return "", "", err
+			}
+			tcbArray, err := c.w.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
+			if err != nil {
+				c.log.Error("Failed to fetch previous block", "err", err)
+				return "", "", err
+			}
+			pledgedforBlk = block.InitBlock(tcbArray, nil)
+		}
+
+		receiverDID = pledgedforBlk.GetReceiverDID()
+		txnId = pledgedforBlk.GetTid()
+	}
+	return receiverDID, txnId, nil
 }
