@@ -377,13 +377,22 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update token status, failed to get block ID"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-
 	epochTime := sc.GetEpochTime()
+	// Parse the string into a time.Time value
+	t, err := time.Parse("2006-01-02 15:04:05", epochTime)
+	if err != nil {
+		fmt.Println("Error parsing date:", err)
+	}
+
+	// Convert time.Time to Unix timestamp (epoch time)
+	//t = strconv.FormatInt(t.Unix(), 10)
+	fmt.Println("Epoch Time:", t)
+
 	currentTime := time.Now()
-	timediff := currentTime.Sub(epochTime)
+	timediff := currentTime.Sub(t)
 	c.log.Debug("1", timediff)
 	c.log.Debug("2", currentTime.Add(1000*time.Second))
-	if epochTime.After(currentTime.Add(1000 * time.Second)) {
+	if t.After(currentTime.Add(1000 * time.Second)) {
 		crep.Message = "Epoch time elapsed > 1000"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
@@ -399,7 +408,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		Comment:         sc.GetComment(),
 		DateTime:        time.Now(),
 		Status:          true,
-		EpochTime:       sc.GetEpochTime(),
+		EpochTime:       time.Now(),
 	}
 	c.w.AddTransactionHistory(td)
 	crep.Status = true
@@ -508,17 +517,17 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		ctcb[t] = lb
 	}
-	epoch := time.Now()
+	//epoch := time.Now()
 	tcb := block.TokenChainBlock{
 		TokenType:       tokenType,
 		TransactionType: block.TokenPledgedType,
 		TokenOwner:      did,
+		EpochTime:       time.Now().String(),
 		TransInfo: &block.TransInfo{
 			Comment: "Token is pledged at " + time.Now().String(),
 			RefID:   refID,
 			Tokens:  tsb,
 		},
-		EpochTime: &epoch,
 	}
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
