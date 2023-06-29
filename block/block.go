@@ -2,13 +2,12 @@ package block
 
 import (
 	"fmt"
-	"strconv"
-	"time"
-
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/fxamacker/cbor"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"strconv"
+	"time"
 )
 
 // ----------TokenChain----------------------
@@ -31,7 +30,7 @@ const (
 	TCTransInfoKey       string = "5"
 	TCSmartContractKey   string = "6"
 	TCQuorumSignatureKey string = "7"
-	TCEpochTime          string = "8"
+	TCEpochTimeKey       string = "8"
 	TCBlockHashKey       string = "98"
 	TCSignatureKey       string = "99"
 	TCBlockContentKey    string = "1"
@@ -56,7 +55,7 @@ type TokenChainBlock struct {
 	TransInfo       *TransInfo    `json:"transInfo"`
 	QuorumSignature []string      `json:"quorumSignature"`
 	SmartContract   []byte        `json:"smartContract"`
-	EpochTime       *time.Time    `json:"epoch_time"`
+	EpochTime       string        `json:"epoch_time"`
 }
 
 type Block struct {
@@ -111,6 +110,7 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	ntcb[TCTokenTypeKey] = tcb.TokenType
 	ntcb[TCTransTypeKey] = tcb.TransactionType
 	ntcb[TCTokenOwnerKey] = tcb.TokenOwner
+	ntcb[TCEpochTimeKey] = time.Now().String()
 	if tcb.GenesisBlock != nil {
 		ntcb[TCGenesisBlockKey] = newGenesisBlock(tcb.GenesisBlock)
 		if ntcb[TCGenesisBlockKey] == nil {
@@ -262,7 +262,7 @@ func (b *Block) GetBlockID(t string) (string, error) {
 }
 
 func (b *Block) GetBlockEpoch() (string, error) {
-	ha, ok := b.bm[TCEpochTime]
+	ha, ok := b.bm[TCEpochTimeKey]
 	if !ok {
 		return "", fmt.Errorf("invalid token chain block, missing epoch time")
 	}
