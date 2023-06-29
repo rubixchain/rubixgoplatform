@@ -2,8 +2,6 @@ package contract
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/fxamacker/cbor"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -42,14 +40,14 @@ type ContractType struct {
 	PledgeMode int        `json:"pledge_mode"`
 	TransInfo  *TransInfo `json:"transInfo"`
 	TotalRBTs  float64    `json:"totalRBTs"`
-	EpochTime  *time.Time `json:"epoch_time"`
+	EpochTime  string     `json:"epoch_time"`
 }
 
 type Contract struct {
 	st uint64
 	sb []byte
 	sm map[string]interface{}
-	se time.Time
+	se string
 }
 
 func CreateNewContract(st *ContractType) *Contract {
@@ -244,7 +242,7 @@ func (c *Contract) GetTotalRBTs() float64 {
 	return util.GetFloatFromMap(c.sm, SCTotalRBTsKey)
 }
 
-func (c *Contract) GetEpochTime() time.Time {
+func (c *Contract) GetEpochTime() string {
 	return c.se
 }
 
