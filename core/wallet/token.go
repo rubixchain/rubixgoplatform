@@ -75,11 +75,11 @@ func (w *Wallet) UnpledgeWholeToken(did string, token string, tt int) error {
 		return fmt.Errorf("token is not pledged")
 	}
 
-	b := w.GetLatestTokenBlock(token, tt)
-	if b.GetTransType() != block.TokenUnpledgedType {
-		w.log.Error("Token block not in un pledged state")
-		return fmt.Errorf("Token block not in un pledged state")
-	}
+	//b := w.GetLatestTokenBlock(token, tt)
+	//if b.GetTransType() != block.TokenUnpledgedType {
+	//	w.log.Error("Token block not in un pledged state")
+	//	return fmt.Errorf("Token block not in un pledged state")
+	//}
 	t.TokenStatus = TokenIsFree
 	err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, token)
 	if err != nil {
