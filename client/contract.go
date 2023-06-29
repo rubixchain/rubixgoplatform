@@ -6,26 +6,26 @@ import (
 )
 
 func (c *Client) PublishNewEvent(contract string, did string, block string) (*model.BasicResponse, error) {
-	var req model.BasicResponse
-	nc := model.NewContractEvent{
+	var response model.BasicResponse
+	newContract := model.NewContractEvent{
 		Contract:          contract,
 		Did:               did,
 		ContractBlockHash: block,
 	}
-	err := c.sendJSONRequest("POST", server.APIPublishEvent, nil, &nc, &req)
+	err := c.sendJSONRequest("POST", server.APIPublishEvent, nil, &newContract, &response)
 	if err != nil {
 		return nil, err
 	}
-	return &req, nil
+	return &response, nil
 }
 func (c *Client) SubscribeContract(contract string) (*model.BasicResponse, error) {
-	var req model.BasicResponse
-	ns := model.NewSubcription{
+	var response model.BasicResponse
+	newSubcription := model.NewSubcription{
 		Contract: contract,
 	}
-	err := c.sendJSONRequest("POST", server.APISubscribecontract, nil, &ns, &req)
+	err := c.sendJSONRequest("POST", server.APISubscribecontract, nil, &newSubcription, &response)
 	if err != nil {
 		return nil, err
 	}
-	return &req, nil
+	return &response, nil
 }

@@ -5,23 +5,23 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
-func (s *Server) APIPublishEvent(req *ensweb.Request) *ensweb.Result {
-	var ne model.NewContractEvent
-	err := s.ParseJSON(req, &ne)
+func (s *Server) APIPublishEvent(request *ensweb.Request) *ensweb.Result {
+	var newEvent model.NewContractEvent
+	err := s.ParseJSON(request, &newEvent)
 	if err != nil {
-		return s.BasicResponse(req, false, "Failed to parse input", nil)
+		return s.BasicResponse(request, false, "Failed to parse input", nil)
 	}
 
-	go s.c.PublishNewEvent(&ne)
-	return s.BasicResponse(req, true, "", nil)
+	go s.c.PublishNewEvent(&newEvent)
+	return s.BasicResponse(request, true, "", nil)
 }
-func (s *Server) APISubscribecontract(req *ensweb.Request) *ensweb.Result {
-	var ns model.NewSubcription
-	err := s.ParseJSON(req, &ns)
+func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
+	var newSubcription model.NewSubcription
+	err := s.ParseJSON(request, &newSubcription)
 	if err != nil {
-		return s.BasicResponse(req, false, "Failed to parse input", nil)
+		return s.BasicResponse(request, false, "Failed to parse input", nil)
 	}
-	topic := ns.Contract
+	topic := newSubcription.Contract
 	go s.c.SubsribeContractSetup(topic)
-	return s.BasicResponse(req, true, "", nil)
+	return s.BasicResponse(request, true, "", nil)
 }

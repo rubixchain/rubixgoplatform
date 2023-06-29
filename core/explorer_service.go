@@ -9,8 +9,8 @@ import (
 )
 
 func (c *Core) PublishExplorer(exp *model.ExploreModel) error {
-	if c.ps != nil {
-		err := c.ps.Publish(ExplorerService, exp)
+	if c.pubsub != nil {
+		err := c.pubsub.Publish(ExplorerService, exp)
 		if err != nil {
 			c.log.Error("Failed to publish message to explorer", "err", err)
 			return err

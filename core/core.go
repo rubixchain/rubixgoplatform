@@ -87,7 +87,7 @@ type Core struct {
 	pm            *ipfsport.PeerManager
 	qm            *QuorumManager
 	l             *ipfsport.Listener
-	ps            *pubsub.PubSub
+	pubsub        *pubsub.PubSub
 	started       bool
 	ipfsApp       string
 	testNet       bool
@@ -305,7 +305,7 @@ func (c *Core) SetupCore() error {
 	}
 	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, c.cfg.CfgData.Ports.ReceiverPort+10, 5000, c.ipfs, c.log, bs, c.peerID)
 	c.d = did.InitDID(c.didDir, c.log, c.ipfs)
-	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
+	c.pubsub, err = pubsub.NewPubSub(c.ipfs, c.log)
 	if err != nil {
 		return err
 	}

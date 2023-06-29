@@ -121,7 +121,7 @@ func (c *Core) startService(sn string) error {
 			return err
 		}
 		sd.running = true
-		return c.ps.SubscribeTopic(ExplorerService, c.exploreCallback)
+		return c.pubsub.SubscribeTopic(ExplorerService, c.exploreCallback)
 	default:
 		return fmt.Errorf("unknown service %s", sn)
 	}
