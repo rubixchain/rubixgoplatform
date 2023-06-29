@@ -452,6 +452,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					TokenType:       token.RBTTokenType,
 					TransactionType: block.TokenMigratedType,
 					TokenOwner:      did,
+					EpochTime:       time.Now().String(),
 					GenesisBlock:    gb,
 					SmartContract:   sc.GetBlock(),
 					TransInfo: &block.TransInfo{

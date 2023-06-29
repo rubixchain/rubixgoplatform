@@ -149,6 +149,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TokenType:       token.TestTokenType,
 			TransactionType: block.TokenGeneratedType,
 			TokenOwner:      did,
+			EpochTime:       time.Now().String(),
 			GenesisBlock:    gb,
 			TransInfo:       ti,
 		}

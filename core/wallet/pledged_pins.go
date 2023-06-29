@@ -1,11 +1,9 @@
 package wallet
 
-import "time"
-
 type PledgePinsDetails struct {
-	QuorumDID string    `gorm:"column:date_time"`
-	TokenID   string    `gorm:"column:status"`
-	EpochTime time.Time `gorm:"column:epoch_time"`
+	QuorumDID string `gorm:"column:date_time"`
+	TokenID   string `gorm:"column:status"`
+	EpochTime string `gorm:"column:epoch_time"`
 }
 
 func (w *Wallet) AddPins(pd *PledgePinsDetails) error {

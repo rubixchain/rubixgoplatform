@@ -2,7 +2,6 @@ package contract
 
 import (
 	"github.com/rubixchain/rubixgoplatform/util"
-	"time"
 )
 
 // ----------TransInfo----------------------
@@ -49,7 +48,7 @@ type TransInfo struct {
 	Comment        string      `json:"comment"`
 	TransTokens    []TokenInfo `json:"TransTokens"`
 	ExchangeTokens []TokenInfo `json:"excahngeTokens"`
-	EpochTime      time.Time   `json:"epochTime"`
+	EpochTime      string      `json:"epochTime"`
 }
 
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {
@@ -99,9 +98,7 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 		ntsb[TSExcahngeInfoKey] = ntibs
 	}
 
-	if !ts.EpochTime.IsZero() {
-		ntsb[TSEpochTime] = ts.EpochTime
-	}
+	ntsb[TSEpochTime] = ts.EpochTime
 	return ntsb
 }
 

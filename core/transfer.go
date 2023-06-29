@@ -101,13 +101,13 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		Type:       contract.SCRBTDirectType,
 		PledgeMode: contract.POWPledgeMode,
 		TotalRBTs:  req.TokenCount,
-		EpochTime:  &epoch,
+		EpochTime:  epoch.String(),
 		TransInfo: &contract.TransInfo{
 			SenderDID:   did,
 			ReceiverDID: rdid,
 			Comment:     req.Comment,
 			TransTokens: tis,
-			EpochTime:   epoch,
+			EpochTime:   epoch.String(),
 		},
 	}
 	sc := contract.CreateNewContract(sct)

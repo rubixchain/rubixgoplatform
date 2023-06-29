@@ -52,6 +52,7 @@ func (c *Core) Unpledge(t string, file string) error {
 		TokenType:       tokenType,
 		TransactionType: block.TokenUnpledgedType,
 		TokenOwner:      did,
+		EpochTime:       time.Now().String(),
 		TransInfo: &block.TransInfo{
 			Comment: "Token is un pledged at " + time.Now().String(),
 			Tokens:  tsb,

@@ -377,7 +377,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
 			Status:          true,
-			EpochTime:       sc.GetEpochTime(),
+			EpochTime:       time.Now(),
 		}
 		return &td, pl, nil
 	} else {
@@ -391,7 +391,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionType: nb.GetTransType(),
 			DateTime:        time.Now(),
 			Status:          true,
-			EpochTime:       sc.GetEpochTime(),
+			EpochTime:       time.Now(),
 		}
 		return &td, pl, nil
 	}
@@ -562,6 +562,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		TokenType:       toktenType,
 		TransactionType: block.TokenTransferredType,
 		TokenOwner:      sc.GetReceiverDID(),
+		EpochTime:       time.Now().String(),
 		TransInfo:       bti,
 		QuorumSignature: credit,
 		SmartContract:   sc.GetBlock(),
