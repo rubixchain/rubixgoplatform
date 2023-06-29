@@ -6,7 +6,6 @@ import (
 )
 
 func (s *Server) APIPublishEvent(req *ensweb.Request) *ensweb.Result {
-	// nc is new contract
 	var ne model.NewContractEvent
 	err := s.ParseJSON(req, &ne)
 	if err != nil {
