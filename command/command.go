@@ -35,34 +35,36 @@ const (
 	version string = "0.0.8"
 )
 const (
-	VersionCmd            string = "-v"
-	HelpCmd               string = "-h"
-	RunCmd                string = "run"
-	PingCmd               string = "ping"
-	AddBootStrapCmd       string = "addbootstrap"
-	RemoveBootStrapCmd    string = "removebootstrap"
-	RemoveAllBootStrapCmd string = "removeallbootstrap"
-	GetAllBootStrapCmd    string = "getallbootstrap"
-	CreateDIDCmd          string = "createdid"
-	GetAllDIDCmd          string = "getalldid"
-	AddQuorumCmd          string = "addquorum"
-	GetAllQuorumCmd       string = "getallquorum"
-	RemoveAllQuorumCmd    string = "removeallquorum"
-	SetupQuorumCmd        string = "setupquorum"
-	GenerateTestRBTCmd    string = "generatetestrbt"
-	TransferRBTCmd        string = "transferrbt"
-	GetAccountInfoCmd     string = "getaccountinfo"
-	SetupServiceCmd       string = "setupservice"
-	DumpTokenChainCmd     string = "dumptokenchain"
-	RegsiterDIDCmd        string = "registerdid"
-	SetupDIDCmd           string = "setupdid"
-	ShutDownCmd           string = "shutdown"
-	MirgateNodeCmd        string = "migratenode"
-	LockTokensCmd         string = "locktokens"
-	CreateDataTokenCmd    string = "createdatatoken"
-	CommitDataTokenCmd    string = "commitdatatoken"
-	SetupDBCmd            string = "setupdb"
-	GetTxnDetailsCmd      string = "gettxndetails"
+	VersionCmd              string = "-v"
+	HelpCmd                 string = "-h"
+	RunCmd                  string = "run"
+	PingCmd                 string = "ping"
+	AddBootStrapCmd         string = "addbootstrap"
+	RemoveBootStrapCmd      string = "removebootstrap"
+	RemoveAllBootStrapCmd   string = "removeallbootstrap"
+	GetAllBootStrapCmd      string = "getallbootstrap"
+	CreateDIDCmd            string = "createdid"
+	GetAllDIDCmd            string = "getalldid"
+	AddQuorumCmd            string = "addquorum"
+	GetAllQuorumCmd         string = "getallquorum"
+	RemoveAllQuorumCmd      string = "removeallquorum"
+	SetupQuorumCmd          string = "setupquorum"
+	GenerateTestRBTCmd      string = "generatetestrbt"
+	TransferRBTCmd          string = "transferrbt"
+	GetAccountInfoCmd       string = "getaccountinfo"
+	SetupServiceCmd         string = "setupservice"
+	DumpTokenChainCmd       string = "dumptokenchain"
+	RegsiterDIDCmd          string = "registerdid"
+	SetupDIDCmd             string = "setupdid"
+	ShutDownCmd             string = "shutdown"
+	MirgateNodeCmd          string = "migratenode"
+	LockTokensCmd           string = "locktokens"
+	CreateDataTokenCmd      string = "createdatatoken"
+	CommitDataTokenCmd      string = "commitdatatoken"
+	SetupDBCmd              string = "setupdb"
+	GetTxnDetailsCmd        string = "gettxndetails"
+	DeploySmartContractCmd  string = "deploysmartcontract"
+	ExecuteSmartcontractCmd string = "executesmartcontract"
 )
 
 var commands = []string{VersionCmd,
@@ -92,7 +94,9 @@ var commands = []string{VersionCmd,
 	CreateDataTokenCmd,
 	CommitDataTokenCmd,
 	SetupDBCmd,
-	GetTxnDetailsCmd}
+	GetTxnDetailsCmd,
+	DeploySmartContractCmd,
+	ExecuteSmartcontractCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -120,7 +124,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will create data token token",
 	"This command will commit data token token",
 	"This command will setup the DB",
-	"This command will get transaction details"}
+	"This command will get transaction details",
+	"This command will deploy the smart contract token",
+	"This command will execute the fetched smart contract"}
 
 type Command struct {
 	cfg          config.Config
@@ -179,6 +185,7 @@ type Command struct {
 	txnID        string
 	role         string
 	date         time.Time
+	deployerAddr string
 }
 
 func showVersion() {
@@ -352,6 +359,7 @@ func Run(args []string) {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
+	flag.StringVar(&cmd.deployerAddr, "deployerAddr", "", "Smart contract Deployer Address")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -470,6 +478,8 @@ func Run(args []string) {
 		cmd.setupDB()
 	case GetTxnDetailsCmd:
 		cmd.getTxnDetails()
+	case DeploySmartContractCmd:
+		cmd.deploySmartcontract()
 	default:
 		cmd.log.Error("Invalid command")
 	}
