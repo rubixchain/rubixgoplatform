@@ -13,7 +13,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -65,7 +64,7 @@ type ConsensusStatus struct {
 }
 
 type PledgeDetials struct {
-	RemPledgeTokens        int
+	RemPledgeTokens        float64
 	NumPledgedTokens       int
 	PledgedTokens          map[string][]string
 	PledgedTokenChainBlock map[string]interface{}
@@ -73,7 +72,7 @@ type PledgeDetials struct {
 }
 
 type PledgeRequest struct {
-	NumTokens int `json:"num_tokens"`
+	TokensRequired float64 `json:"tokens_required"`
 }
 
 type SignatureRequest struct {
@@ -95,12 +94,14 @@ type SendTokenRequest struct {
 	Address         string               `json:"peer_id"`
 	TokenInfo       []contract.TokenInfo `json:"token_info"`
 	TokenChainBlock []byte               `json:"token_chain_block"`
+	QuorumList      []string             `json:"quorum_list"`
 }
 
 type PledgeReply struct {
 	model.BasicResponse
-	Tokens          []string `json:"tokens"`
-	TokenChainBlock [][]byte `json:"token_chain_block"`
+	Tokens          []string  `json:"tokens"`
+	TokenValue      []float64 `json:"token_value"`
+	TokenChainBlock [][]byte  `json:"token_chain_block"`
 }
 
 type PledgeToken struct {
@@ -149,7 +150,7 @@ func (c *Core) QuroumSetup() {
 	}
 }
 
-func (c *Core) SetupQuorum(didStr string, pwd string) error {
+func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	if !c.w.IsDIDExist(didStr) {
 		c.log.Error("DID does not exist", "did", didStr)
 		return fmt.Errorf("DID does not exist")
@@ -160,6 +161,14 @@ func (c *Core) SetupQuorum(didStr string, pwd string) error {
 		return fmt.Errorf("failed to setup quorum")
 	}
 	c.qc[didStr] = dc
+	if pvtKeyPwd != "" {
+		dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
+		if dc == nil {
+			c.log.Error("Failed to setup quorum")
+			return fmt.Errorf("failed to setup quorum")
+		}
+		c.pqc[didStr] = dc
+	}
 	c.up.RunUnpledge()
 	return nil
 }
@@ -220,22 +229,15 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			FailedCount:  0,
 		},
 	}
-	var reqPledgeTokens int
+	reqPledgeTokens := float64(0)
 	// TODO:: Need to correct for part tokens
 	switch cr.Mode {
 	case RBTTransferMode:
 		ti := sc.GetTransTokenInfo()
-		partToken := false
 		for i := range ti {
-			if ti[i].TokenType == token.RBTTokenType || ti[i].TokenType == token.TestTokenType {
-				reqPledgeTokens++
-			} else if ti[i].TokenType == token.PartTokenType {
-				partToken = true
-			}
+			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
-		if partToken {
-			reqPledgeTokens++
-		}
+
 	case DTCommitMode:
 		reqPledgeTokens = 1
 	}
@@ -329,6 +331,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Address:         cr.SenderPeerID + "." + sc.GetSenderDID(),
 			TokenInfo:       ti,
 			TokenChainBlock: nb.GetBlock(),
+			QuorumList:      cr.QuorumList,
 		}
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
@@ -369,7 +372,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		return &td, pl, nil
 	} else {
-		err = c.w.CreateTokenBlock(nb, token.DataTokenType)
+		err = c.w.CreateTokenBlock(nb)
 		if err != nil {
 			c.log.Error("Failed to create token block", "err", err)
 			return nil, nil, err
@@ -503,12 +506,10 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	ptDID := ""
 	pt := ""
 	ctcb := make(map[string]*block.Block)
-	toktenType := token.RBTTokenType
 	for i := range ti {
 		pledgeToken := ""
 		pledgeDID := ""
-		toktenType = ti[i].TokenType
-		if ti[i].TokenType == token.PartTokenType || ti[i].TokenType == token.DataTokenType {
+		if ti[i].TokenType == c.TokenType(DataString) {
 			if pt == "" {
 				pledgeToken = pts[index].Token
 				pledgeDID = pts[index].DID
@@ -531,7 +532,6 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgedDID:   pledgeDID,
 		}
 		tks = append(tks, tt)
-		//TODO:: need to address for part otken
 		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		ctcb[ti[i].Token] = b
 	}
@@ -546,7 +546,6 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 
 	//tokenList = append(tokenList, cr.PartTokens...)
 	tcb := block.TokenChainBlock{
-		TokenType:       toktenType,
 		TransactionType: block.TokenTransferredType,
 		TokenOwner:      sc.GetReceiverDID(),
 		TransInfo:       bti,
@@ -643,7 +642,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 		// Request pledage token
 		if pd.RemPledgeTokens != 0 {
 			pr := PledgeRequest{
-				NumTokens: pd.RemPledgeTokens,
+				TokensRequired: pd.RemPledgeTokens,
 			}
 			// l := len(pd.PledgedTokens)
 			// for i := pd.NumPledgedTokens; i < l; i++ {
@@ -662,9 +661,10 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 				pd.PledgedTokens[did] = make([]string, 0)
 				for i, t := range prs.Tokens {
 					ptcb := block.InitBlock(prs.TokenChainBlock[i], nil)
-					if !c.checkIsPledged(ptcb, t) {
+					if !c.checkIsPledged(ptcb) {
 						pd.NumPledgedTokens++
-						pd.RemPledgeTokens--
+						pd.RemPledgeTokens = pd.RemPledgeTokens - prs.TokenValue[i]
+						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, 10)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
 						pd.TokenList = append(pd.TokenList, t)
@@ -751,17 +751,15 @@ func (c *Core) getArbitrationSignature(p *ipfsport.Peer, sr *SignatureRequest) (
 	}
 	return srep.Signature, true
 }
-func (c *Core) checkIsPledged(tcb *block.Block, token string) bool {
+func (c *Core) checkIsPledged(tcb *block.Block) bool {
 	if strings.Compare(tcb.GetTransType(), block.TokenPledgedType) == 0 {
-		c.log.Debug("Token", token, " is a pledged token. Not Considered for pledging")
 		return true
 	}
 	return false
 }
 
-func (c *Core) checkIsUnpledged(tcb *block.Block, token string) bool {
+func (c *Core) checkIsUnpledged(tcb *block.Block) bool {
 	if strings.Compare(tcb.GetTransType(), block.TokenUnpledgedType) == 0 {
-		c.log.Debug("Token", token, " is unpledged token")
 		return true
 	}
 	return false

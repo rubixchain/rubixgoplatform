@@ -27,16 +27,18 @@ const (
 )
 
 const (
-	TITokenTypeKey string = "1"
-	TIOwnerDIDKey  string = "2"
-	TIBlockIDKey   string = "3"
+	TITokenTypeKey  string = "1"
+	TIOwnerDIDKey   string = "2"
+	TIBlockIDKey    string = "3"
+	TITokenValueKey string = "4"
 )
 
 type TokenInfo struct {
-	Token     string `json:"token"`
-	TokenType int    `json:"tokenType"`
-	OwnerDID  string `json:"ownerDID"`
-	BlockID   string `json:"blockID"`
+	Token      string  `json:"token"`
+	TokenType  int     `json:"tokenType"`
+	TokenValue float64 `json:"tokenValue"`
+	OwnerDID   string  `json:"ownerDID"`
+	BlockID    string  `json:"blockID"`
 }
 
 type TransInfo struct {
@@ -50,6 +52,7 @@ type TransInfo struct {
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {
 	ntib := make(map[string]interface{})
 	ntib[TITokenTypeKey] = ti.TokenType
+	ntib[TITokenValueKey] = ti.TokenValue
 	if ti.OwnerDID != "" {
 		ntib[TIOwnerDIDKey] = ti.OwnerDID
 	}

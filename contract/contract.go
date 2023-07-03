@@ -290,10 +290,11 @@ func (c *Contract) GetTransTokenInfo() []TokenInfo {
 	if ok {
 		for k, v := range tsmi {
 			t := TokenInfo{
-				Token:     k,
-				TokenType: util.GetIntFromMap(v, TITokenTypeKey),
-				OwnerDID:  util.GetStringFromMap(v, TIOwnerDIDKey),
-				BlockID:   util.GetStringFromMap(v, TIBlockIDKey),
+				Token:      k,
+				TokenType:  util.GetIntFromMap(v, TITokenTypeKey),
+				OwnerDID:   util.GetStringFromMap(v, TIOwnerDIDKey),
+				BlockID:    util.GetStringFromMap(v, TIBlockIDKey),
+				TokenValue: util.GetFloatFromMap(v, TITokenValueKey),
 			}
 			ti = append(ti, t)
 		}
@@ -302,10 +303,11 @@ func (c *Contract) GetTransTokenInfo() []TokenInfo {
 		if ok {
 			for k, v := range tsmi {
 				t := TokenInfo{
-					Token:     util.GetString(k),
-					TokenType: util.GetIntFromMap(v, TITokenTypeKey),
-					OwnerDID:  util.GetStringFromMap(v, TIOwnerDIDKey),
-					BlockID:   util.GetStringFromMap(v, TIBlockIDKey),
+					Token:      util.GetString(k),
+					TokenType:  util.GetIntFromMap(v, TITokenTypeKey),
+					OwnerDID:   util.GetStringFromMap(v, TIOwnerDIDKey),
+					BlockID:    util.GetStringFromMap(v, TIBlockIDKey),
+					TokenValue: util.GetFloatFromMap(v, TITokenValueKey),
 				}
 				ti = append(ti, t)
 			}

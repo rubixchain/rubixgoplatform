@@ -142,16 +142,63 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		crep.Message = "Token ownership check failed"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
+	//Token state check and pinning
+	/*
+		1. get the latest block from token chain,
+		2. retrive the Block Id
+		3. concat token id and blockId
+		4. add to ipfs
+		5. check for pin and if none pin the content
+		6. if pin exist , exit with error token state exhauste
+	*/
+
+	tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
+	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
+	for i := range ti {
+		wg.Add(1)
+		go c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult, &wg, cr.QuorumList)
+	}
+	wg.Wait()
+
+	for i := range tokenStateCheckResult {
+		if tokenStateCheckResult[i].Error != nil {
+			c.log.Error("Error occured", "error", err)
+			crep.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if tokenStateCheckResult[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
+			crep.Message = tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
+	}
+	c.log.Debug("Proceeding to pin token state to prevent double spend")
+	err = c.pinTokenState(tokenStateCheckResult, did)
+	if err != nil {
+		crep.Message = "Error Pinning token state" + err.Error()
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	c.log.Debug("Finished Tokenstate check")
+
 	//check if token is pledgedtoken
 	wt := sc.GetTransTokenInfo()
 
 	for i := range wt {
-		if c.checkTokenIsPledged(wt[i].Token) {
+		b := c.w.GetLatestTokenBlock(wt[i].Token, wt[i].TokenType)
+		if b == nil {
+			c.log.Error("pledge token check Failed, failed to get latest block")
+			crep.Message = "pledge token check Failed, failed to get latest block"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if c.checkIsPledged(b) {
 			c.log.Error("Pledge Token check Failed, Token ", wt[i], " is Pledged Token")
 			crep.Message = "Pledge Token check Failed, Token " + wt[i].Token + " is Pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		if c.checkTokenIsUnpledged(wt[i].Token) {
+		if c.checkIsUnpledged(b) {
 			unpledgeId := c.getUnpledgeId(wt[i].Token)
 			if unpledgeId == "" {
 				c.log.Error("Failed to fetch proof file CID")
@@ -255,7 +302,8 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	wt, err := c.w.GetWholeTokens(did, pr.NumTokens)
+	dc := c.pqc[did]
+	wt, err := c.GetTokens(dc, did, pr.TokensRequired)
 	if err != nil {
 		crep.Message = "Failed to get tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -272,15 +320,18 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 			Message: "Got available tokens",
 		},
 		Tokens:          make([]string, 0),
+		TokenValue:      make([]float64, 0),
 		TokenChainBlock: make([][]byte, 0),
 	}
-	tokenType := token.RBTTokenType
-	if c.testNet {
-		tokenType = token.TestTokenType
-	}
+
 	for i := 0; i < tl; i++ {
 		presp.Tokens = append(presp.Tokens, wt[i].TokenID)
-		tc := c.w.GetLatestTokenBlock(wt[i].TokenID, tokenType)
+		presp.TokenValue = append(presp.TokenValue, wt[i].TokenValue)
+		ts := RBTString
+		if wt[i].TokenValue != 1.0 {
+			ts = PartString
+		}
+		tc := c.w.GetLatestTokenBlock(wt[i].TokenID, c.TokenType(ts))
 		if tc == nil {
 			c.log.Error("Failed to get latest token chain block")
 			crep.Message = "Failed to get latest token chain block"
@@ -314,8 +365,8 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 
 	p, err := c.getPeer(sr.Address)
 	if err != nil {
-		c.log.Error("Failed to get peer", "err", err)
-		crep.Message = "Failed to get peer"
+		c.log.Error("failed to get peer", "err", err)
+		crep.Message = "failed to get peer"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	defer p.Close()
@@ -323,15 +374,36 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		t := ti.Token
 		pblkID, err := b.GetPrevBlockID(t)
 		if err != nil {
-			c.log.Error("Failed to sync token chain block, missing previous block id", "err", err)
-			crep.Message = "Failed to sync token chain block, missing previous block id"
+			c.log.Error("failed to sync token chain block, missing previous block id", "err", err)
+			crep.Message = "failed to sync token chain block, missing previous block id"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		err = c.syncTokenChainFrom(p, pblkID, t, ti.TokenType)
 		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
-			crep.Message = "Failed to sync token chain block"
+			c.log.Error("failed to sync token chain block", "err", err)
+			crep.Message = "failed to sync token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+
+		if c.TokenType(PartString) == ti.TokenType {
+			gb := c.w.GetGenesisTokenBlock(t, ti.TokenType)
+			if gb == nil {
+				c.log.Error("failed to get genesis block", "err", err)
+				crep.Message = "failed to get genesis block"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			pt, _, err := gb.GetParentDetials(t)
+			if err != nil {
+				c.log.Error("failed to get parent detials", "err", err)
+				crep.Message = "failed to get parent detials"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			err = c.syncParentToken(p, pt)
+			if err != nil {
+				c.log.Error("failed to sync parent token", "err", err)
+				crep.Message = "failed to sync parent token"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
 		}
 		ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
 		if err != nil {
@@ -340,7 +412,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		ptcb := block.InitBlock(ptcbArray, nil)
-		if c.checkIsPledged(ptcb, t) {
+		if c.checkIsPledged(ptcb) {
 			c.log.Error("Token is a pledged Token", "token", t)
 			crep.Message = "Token " + t + " is a pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -372,6 +444,30 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 			crep.Message = "Token has multiple owners"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
+	}
+
+	//tokenstate check
+
+	tokenStateCheckResult := make([]TokenStateCheckResult, len(sr.TokenInfo))
+	for i, ti := range sr.TokenInfo {
+		t := ti.Token
+		wg.Add(1)
+		go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, sr.QuorumList)
+	}
+	wg.Wait()
+
+	for i := range tokenStateCheckResult {
+		if tokenStateCheckResult[i].Error != nil {
+			c.log.Error("Error occured", "error", err)
+			crep.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if tokenStateCheckResult[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
+			crep.Message = tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
 
 	err = c.w.TokensReceived(did, sr.TokenInfo, b)
@@ -476,21 +572,13 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			crep.Message = "Failed to get block ID"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		refID = fmt.Sprintf("%s,%d,%s", tks[0], b.GetTokenType(), id)
+		refID = fmt.Sprintf("%s,%d,%s", tks[0], b.GetTokenType(tks[0]), id)
 	}
 
 	ctcb := make(map[string]*block.Block)
 	tsb := make([]block.TransTokens, 0)
-	tokenType := token.RBTTokenType
-	if c.testNet {
-		tokenType = token.TestTokenType
-	}
-	ttt := tokenType
 	for _, t := range tks {
-		if ur.Mode == DTCommitMode {
-			ttt = token.DataTokenType
-		}
-		err = c.w.AddTokenBlock(t, ttt, b)
+		err = c.w.AddTokenBlock(t, b)
 		if err != nil {
 			c.log.Error("Failed to add token block", "token", t)
 			crep.Message = "Failed to add token block"
@@ -498,12 +586,22 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 	for _, t := range ur.PledgedTokens {
+		tk, err := c.w.ReadToken(t)
+		if err != nil {
+			c.log.Error("failed to read token from wallet")
+			crep.Message = "failed to read token from wallet"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		ts := RBTString
+		if tk.TokenValue != 1.0 {
+			ts = PartString
+		}
 		tt := block.TransTokens{
 			Token:     t,
-			TokenType: tokenType,
+			TokenType: c.TokenType(ts),
 		}
 		tsb = append(tsb, tt)
-		lb := c.w.GetLatestTokenBlock(t, tokenType)
+		lb := c.w.GetLatestTokenBlock(t, c.TokenType(ts))
 		if lb == nil {
 			c.log.Error("Failed to get token chain block")
 			crep.Message = "Failed to get token chain block"
@@ -512,7 +610,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		ctcb[t] = lb
 	}
 	tcb := block.TokenChainBlock{
-		TokenType:       tokenType,
 		TransactionType: block.TokenPledgedType,
 		TokenOwner:      did,
 		TransInfo: &block.TransInfo{
@@ -533,7 +630,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update signature to block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	err = c.w.CreateTokenBlock(nb, tokenType)
+	err = c.w.CreateTokenBlock(nb)
 	if err != nil {
 		c.log.Error("Failed to update token chain block", "err", err)
 		crep.Message = "Failed to update token chain block"
@@ -798,7 +895,7 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 		td, err := c.srv.GetTokenDetials(ti[i].Token)
 		if err == nil && td.Token == ti[i].Token {
 			c.log.Error("Failed to do token abitration, token is already migrated", "token", ti[i].Token, "did", odid)
-			srep.Message = "token is already migrated, ti[i].Token"
+			srep.Message = "token is already migrated," + ti[i].Token
 			return c.l.RenderJSON(req, &srep, http.StatusOK)
 		}
 		dc, err := c.SetupForienDID(odid)
