@@ -128,14 +128,22 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 }
 
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) bool {
-	ti := sc.GetTransTokenInfo()
+
+	var ti []contract.TokenInfo
+	var address string
+	if cr.Mode == SmartContractDeployMode {
+		ti = sc.GetCommitedTokensInfo()
+		address = cr.DeployerPeerID + "." + sc.GetDeployerDID()
+	} else {
+		ti = sc.GetTransTokenInfo()
+		address = cr.SenderPeerID + "." + sc.GetSenderDID()
+	}
 	for i := range ti {
 		ids, err := c.GetDHTddrs(ti[i].Token)
 		if err != nil || len(ids) == 0 {
 			continue
 		}
 	}
-	address := cr.SenderPeerID + "." + sc.GetSenderDID()
 	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)

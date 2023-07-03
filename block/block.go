@@ -37,14 +37,17 @@ const (
 )
 
 const (
-	TokenMintedType      string = "01"
-	TokenTransferredType string = "02"
-	TokenMigratedType    string = "03"
-	TokenPledgedType     string = "04"
-	TokenGeneratedType   string = "05"
-	TokenUnpledgedType   string = "06"
-	TokenCommittedType   string = "07"
-	TokenBurntType       string = "08"
+	TokenMintedType       string = "01"
+	TokenTransferredType  string = "02"
+	TokenMigratedType     string = "03"
+	TokenPledgedType      string = "04"
+	TokenGeneratedType    string = "05"
+	TokenUnpledgedType    string = "06"
+	TokenCommittedType    string = "07"
+	TokenBurntType        string = "08"
+	TokenDeployedType     string = "09"
+	TokenExecutedType     string = "10"
+	TokenContractCommited string = "11"
 )
 
 type TokenChainBlock struct {
@@ -528,6 +531,9 @@ func (b *Block) GetSenderDID() string {
 func (b *Block) GetReceiverDID() string {
 	return b.getTrasnInfoString(TIReceiverDIDKey)
 }
+func (b *Block) GetDeployerDID() string {
+	return b.getTrasnInfoString(TIDeployerDIDKey)
+}
 
 func (b *Block) GetTid() string {
 	return b.getTrasnInfoString(TITIDKey)
@@ -567,6 +573,34 @@ func (b *Block) GetSmartContract() []byte {
 		return nil
 	}
 	return c
+}
+
+func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
+	genesisTokenMap := b.getGenesisTokenMap(t)
+	if genesisTokenMap == nil {
+		return nil, fmt.Errorf("invalid token chain block, missing genesis block")
+	}
+	commitedTokensMap := util.GetFromMap(genesisTokenMap, GICommitedTokensKey)
+	if commitedTokensMap == nil {
+		return nil, fmt.Errorf("invalid token chain block, missing commited tokens block")
+	}
+	m, ok := commitedTokensMap.(map[string]interface{})
+	if ok {
+		tkns := make([]string, 0)
+		for k, _ := range m {
+			tkns = append(tkns, k)
+		}
+		return tkns, nil
+	}
+	lm, ok := commitedTokensMap.(map[interface{}]interface{})
+	if ok {
+		tkns := make([]string, 0)
+		for k, _ := range lm {
+			tkns = append(tkns, k.(string))
+		}
+		return tkns, nil
+	}
+	return nil, nil
 }
 
 // func (b *Block) GetTokenPledgeMap() map[string]interface{} {
