@@ -439,3 +439,25 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	// }
 	return nil
 }
+
+func (w *Wallet) CommitTokensToDeployContract(did string, rbtTokens []string, block *block.Block) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.CreateTokenBlock(block)
+	if err != nil {
+		return err
+	}
+	for i := range rbtTokens {
+		var t Token
+		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, rbtTokens[i])
+		if err != nil {
+			return err
+		}
+		t.TokenStatus = TokenIsCommitted
+		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, rbtTokens[i])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

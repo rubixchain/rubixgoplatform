@@ -154,6 +154,8 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 		db = w.tcs
 	case tkn.DataTokenType:
 		db = w.dtcs
+	case tkn.SmartContractTokenType:
+		db = w.smartContractTokenChainStorage
 	}
 	return db
 }

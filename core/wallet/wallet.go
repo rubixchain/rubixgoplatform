@@ -12,18 +12,19 @@ import (
 )
 
 const (
-	TokenStorage       string = "TokensTable"
-	DataTokenStorage   string = "DataTokensTable"
-	NFTTokenStorage    string = "NFTTokensTable"
-	CreditStorage      string = "CreditsTable"
-	DIDStorage         string = "DIDTable"
-	DIDPeerStorage     string = "DIDPeerTable"
-	TransactionStorage string = "TransactionHistory"
-	TokensArrayStorage string = "TokensTransferred"
-	TokenProvider      string = "TokenProviderTable"
-	TokenChainStorage  string = "tokenchainstorage"
-	NFTChainStorage    string = "nftchainstorage"
-	DataChainStorage   string = "datachainstorage"
+	TokenStorage                   string = "TokensTable"
+	DataTokenStorage               string = "DataTokensTable"
+	NFTTokenStorage                string = "NFTTokensTable"
+	CreditStorage                  string = "CreditsTable"
+	DIDStorage                     string = "DIDTable"
+	DIDPeerStorage                 string = "DIDPeerTable"
+	TransactionStorage             string = "TransactionHistory"
+	TokensArrayStorage             string = "TokensTransferred"
+	TokenProvider                  string = "TokenProviderTable"
+	TokenChainStorage              string = "tokenchainstorage"
+	NFTChainStorage                string = "nftchainstorage"
+	DataChainStorage               string = "datachainstorage"
+	SmartContractTokenChainStorage string = "smartcontractokenchainstorage"
 )
 
 type WalletConfig struct {
@@ -43,14 +44,15 @@ type ChainDB struct {
 }
 
 type Wallet struct {
-	ipfs *ipfsnode.Shell
-	s    storage.Storage
-	l    sync.Mutex
-	dtl  sync.Mutex
-	log  logger.Logger
-	wl   sync.Mutex
-	tcs  *ChainDB
-	dtcs *ChainDB
+	ipfs                           *ipfsnode.Shell
+	s                              storage.Storage
+	l                              sync.Mutex
+	dtl                            sync.Mutex
+	log                            logger.Logger
+	wl                             sync.Mutex
+	tcs                            *ChainDB
+	dtcs                           *ChainDB
+	smartContractTokenChainStorage *ChainDB
 }
 
 func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, error) {
@@ -61,6 +63,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	}
 	w.tcs = &ChainDB{}
 	w.dtcs = &ChainDB{}
+	w.smartContractTokenChainStorage = &ChainDB{}
 	op := &opt.Options{
 		WriteBuffer: 64 * 1024 * 1024,
 	}
@@ -112,6 +115,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize Token Provider Table", "err", err)
 		return nil, err
 	}
+	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
+	if err != nil {
+		w.log.Error("failed to configure token chain block storage", "err", err)
+		return nil, fmt.Errorf("failed to configure token chain block storage")
+	}
+	w.smartContractTokenChainStorage.DB = *smartcontracTokenchainstorageDB
 	return w, nil
 }
 
