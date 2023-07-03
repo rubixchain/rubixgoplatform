@@ -16,13 +16,13 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-
 type TokenStateCheckResult struct {
 	Token                 string
 	Exhausted             bool
 	Error                 error
 	Message               string
 	tokenIDTokenStateData string
+}
 
 func (c *Core) validateSigner(b *block.Block) bool {
 	signers, err := b.GetSigner()
