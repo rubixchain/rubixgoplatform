@@ -25,6 +25,7 @@ const (
 	NFTChainStorage                string = "nftchainstorage"
 	DataChainStorage               string = "datachainstorage"
 	SmartContractTokenChainStorage string = "smartcontractokenchainstorage"
+	SmartContractStorage string = "smartcontract"
 )
 
 type WalletConfig struct {
@@ -115,12 +116,19 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize Token Provider Table", "err", err)
 		return nil, err
 	}
+
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure token chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure token chain block storage")
 	}
 	w.smartContractTokenChainStorage.DB = *smartcontracTokenchainstorageDB
+
+	err = w.s.Init(SmartContractStorage, &SmartContract{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize Smart Contract storage", "err", err)
+		return nil, err
+	}
 	return w, nil
 }
 

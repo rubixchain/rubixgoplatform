@@ -97,6 +97,7 @@ type SendTokenRequest struct {
 	Address         string               `json:"peer_id"`
 	TokenInfo       []contract.TokenInfo `json:"token_info"`
 	TokenChainBlock []byte               `json:"token_chain_block"`
+	QuorumList      []string             `json:"quorum_list"`
 }
 
 type PledgeReply struct {
@@ -339,6 +340,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Address:         cr.SenderPeerID + "." + sc.GetSenderDID(),
 			TokenInfo:       ti,
 			TokenChainBlock: nb.GetBlock(),
+			QuorumList:      cr.QuorumList,
 		}
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)

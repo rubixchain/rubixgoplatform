@@ -50,6 +50,8 @@ const (
 	APIGetTxnByComment      string = "/api/get-by-comment"
 	APIDeploySmartContract  string = "/api/deploy-smart-contract"
 	APIExecuteSmartContract string = "/api/execute-smart-contract"
+	APIGenerateSmartContract string = "/api/generate-smart-contract"
+	APIFetchSmartContract    string = "/api/fetch-smart-contract"
 )
 
 // Server defines server handle
@@ -230,6 +232,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, s.ErrorFunc))
 	s.AddRoute(APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, s.ErrorFunc))
 	s.AddRoute(APIDeploySmartContract, "POST", s.AuthHandle(s.APIDeploySmartContract, s.ErrorFunc))
+	s.AddRoute(APIGenerateSmartContract, "POST", s.AuthHandle(s.APIGenerateSmartContract, s.ErrorFunc))
+	s.AddRoute(APIFetchSmartContract, "POST", s.AuthHandle(s.APIFetchSmartContract, s.ErrorFunc))
 
 }
 

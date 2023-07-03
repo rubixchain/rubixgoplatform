@@ -32,7 +32,7 @@ const (
 )
 
 const (
-	version string = "0.0.8"
+	version string = "0.0.9"
 )
 const (
 	VersionCmd              string = "-v"
@@ -63,6 +63,9 @@ const (
 	CommitDataTokenCmd      string = "commitdatatoken"
 	SetupDBCmd              string = "setupdb"
 	GetTxnDetailsCmd        string = "gettxndetails"
+  UpdateConfig               string = "updateconfig"
+	GenerateSmartContractToken string = "generatesct"
+	FetchSmartContract         string = "fetchsct"
 	DeploySmartContractCmd  string = "deploysmartcontract"
 	ExecuteSmartcontractCmd string = "executesmartcontract"
 )
@@ -96,7 +99,11 @@ var commands = []string{VersionCmd,
 	SetupDBCmd,
 	GetTxnDetailsCmd,
 	DeploySmartContractCmd,
-	ExecuteSmartcontractCmd}
+	ExecuteSmartcontractCmd,
+	ShutDownCmd,
+	GenerateSmartContractToken,
+}
+
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -126,7 +133,10 @@ var commandsHelp = []string{"To get tool version",
 	"This command will setup the DB",
 	"This command will get transaction details",
 	"This command will deploy the smart contract token",
-	"This command will execute the fetched smart contract"}
+	"This command will execute the fetched smart contract",
+	"This command will shutdown the rubix node",
+	"This command will generate a smart contract token",
+	"This command will fetch a smart contract token"}
 
 type Command struct {
 	cfg          config.Config
@@ -186,7 +196,10 @@ type Command struct {
 	role         string
 	date         time.Time
 	deployerAddr string
-}
+	binaryCodePath     string
+	rawCodePath        string
+	schemaFilePath     string
+	smartContractToken string
 
 func showVersion() {
 	fmt.Printf("\n****************************************\n\n")
@@ -227,6 +240,7 @@ func (cmd *Command) getURL(url string) string {
 func (cmd *Command) runApp() {
 	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node))
 	err := apiconfig.LoadAPIConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, &cmd.cfg)
+
 	if err != nil {
 		cmd.log.Error("Configfile is either currupted or cipher is wrong", "err", err)
 		return
@@ -360,6 +374,10 @@ func Run(args []string) {
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
 	flag.StringVar(&cmd.deployerAddr, "deployerAddr", "", "Smart contract Deployer Address")
+	flag.StringVar(&cmd.binaryCodePath, "binCode", "", "Binary code path")
+	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
+	flag.StringVar(&cmd.schemaFilePath, "schemaFile", "", "Schema file path")
+	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -480,6 +498,10 @@ func Run(args []string) {
 		cmd.getTxnDetails()
 	case DeploySmartContractCmd:
 		cmd.deploySmartcontract()
+	case GenerateSmartContractToken:
+		cmd.generateSmartContractToken()
+	case FetchSmartContract:
+		cmd.fetchSmartContract()
 	default:
 		cmd.log.Error("Invalid command")
 	}

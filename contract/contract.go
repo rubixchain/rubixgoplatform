@@ -43,6 +43,7 @@ type ContractType struct {
 	PledgeMode int        `json:"pledge_mode"`
 	TransInfo  *TransInfo `json:"transInfo"`
 	TotalRBTs  float64    `json:"totalRBTs"`
+	log        logger.Logger
 }
 
 type Contract struct {
@@ -56,6 +57,10 @@ func CreateNewContract(st *ContractType) *Contract {
 	if st.TransInfo == nil {
 		return nil
 	}
+	//	st.log.Debug("Creating new contract")
+	//	st.log.Debug("input st is %v", st)
+	//	st.log.Debug("st.TransInfo is %v", st.TransInfo)
+
 	nm := make(map[string]interface{})
 	nm[SCTypeKey] = st.Type
 	// ::TODO:: Need to support other pledge mode
@@ -89,6 +94,10 @@ func (c *Contract) blkDecode() error {
 	if !ok {
 		return fmt.Errorf("invalid block, missing block content")
 	}
+	c.log.Debug("bc is %v", bc)
+	c.log.Debug("SCBlockContentPSigKey is %v", ksi)
+	c.log.Debug("SCBlockContentPSigKey is %v", ssi)
+
 	hb := util.CalculateHash(bc.([]byte), "SHA3-256")
 	var tcb map[string]interface{}
 	err = cbor.Unmarshal(bc.([]byte), &tcb)
@@ -102,6 +111,7 @@ func (c *Contract) blkDecode() error {
 		if err != nil {
 			return err
 		}
+		c.log.Debug("ksb is %v", ksb)
 		tcb[SCShareSignatureKey] = ksb
 	}
 	if kok {
@@ -110,9 +120,11 @@ func (c *Contract) blkDecode() error {
 		if err != nil {
 			return err
 		}
+		c.log.Debug("ksb is %v", ksb)
 		tcb[SCKeySignatureKey] = ksb
 	}
 	c.sm = tcb
+	c.log.Debug("tcb is %v", tcb)
 	return nil
 }
 
