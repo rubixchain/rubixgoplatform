@@ -16,6 +16,7 @@ package block
 
 const (
 	GenesisMigratedType int = iota
+	GenesisPartType
 )
 
 const (
@@ -28,14 +29,18 @@ const (
 	GITokenNumberKey   string = "2"
 	GIMigratedBlkIDKey string = "3"
 	GIPreviousIDKey    string = "4"
+	GIParentIDKey      string = "5"
+	GIGrandParentIDKey string = "6"
 )
 
 type GenesisTokenInfo struct {
-	Token           string `json:"token"`
-	TokenLevel      int    `json:"tokenLevel"`
-	TokenNumber     int    `json:"tokenNumber"`
-	MigratedBlockID string `json:"migratedBlockID"`
-	PreviousID      string `json:"previosuID"`
+	Token           string   `json:"token"`
+	TokenLevel      int      `json:"tokenLevel"`
+	TokenNumber     int      `json:"tokenNumber"`
+	MigratedBlockID string   `json:"migratedBlockID"`
+	PreviousID      string   `json:"previosuID"`
+	ParentID        string   `json:"parentID"`
+	GrandParentID   []string `json:"grandParentID"`
 }
 
 type GenesisBlock struct {
@@ -52,6 +57,12 @@ func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 	}
 	if gi.PreviousID != "" {
 		ngib[GIPreviousIDKey] = gi.PreviousID
+	}
+	if gi.ParentID != "" {
+		ngib[GIParentIDKey] = gi.ParentID
+	}
+	if gi.GrandParentID != nil {
+		ngib[GIGrandParentIDKey] = gi.GrandParentID
 	}
 	return ngib
 }

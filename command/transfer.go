@@ -35,8 +35,7 @@ func (cmd *Command) GetAccountInfo() {
 		cmd.log.Error("Failed to get account info", "message", info.Message)
 	} else {
 		cmd.log.Info("Successfully got the account information")
-		fmt.Printf("Whole RBT : %5d, Locked Whole RBT : %5d, Pledged Whole RBT : %5d\n", info.AccountInfo[0].WholeRBT, info.AccountInfo[0].LockedWholeRBT, info.AccountInfo[0].PledgedWholeRBT)
-		fmt.Printf("Part RBT  : %5d, Locked Part RBT  : %5d, Pledged Part RBT  : %5d\n", info.AccountInfo[0].PartRBT, info.AccountInfo[0].LockedPartRBT, info.AccountInfo[0].PledgedPartRBT)
+		fmt.Printf("RBT : %10.3f, Locked RBT : %10.3f, Pledged RBT : %10.3f\n", info.AccountInfo[0].RBTAmount, info.AccountInfo[0].LockedRBT, info.AccountInfo[0].PledgedRBT)
 	}
 }
 

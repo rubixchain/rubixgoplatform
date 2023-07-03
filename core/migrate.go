@@ -449,7 +449,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				}
 				ctcb := make(map[string]*block.Block)
 				ntcb := &block.TokenChainBlock{
-					TokenType:       token.RBTTokenType,
 					TransactionType: block.TokenMigratedType,
 					TokenOwner:      did,
 					GenesisBlock:    gb,
@@ -488,7 +487,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					c.log.Error("Failed to migrate, failed to update arbitary signature")
 					return fmt.Errorf("failed to migrate, failed to update arbitary signature")
 				}
-				err = c.w.CreateTokenBlock(blk, token.RBTTokenType)
+				err = c.w.CreateTokenBlock(blk)
 				if err != nil {
 					c.log.Error("Failed to migrate, failed to add token chain block", "err", err)
 					return fmt.Errorf("failed to migrate, failed to add token chain block")

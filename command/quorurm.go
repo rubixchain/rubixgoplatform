@@ -47,7 +47,7 @@ func (cmd *Command) SetupQuorum() {
 		}
 		cmd.quorumPWD = pwd
 	}
-	msg, status := cmd.c.SetupQuorum(cmd.did, cmd.quorumPWD)
+	msg, status := cmd.c.SetupQuorum(cmd.did, cmd.quorumPWD, cmd.privPWD)
 
 	if !status {
 		cmd.log.Error("Failed to setup quorum", "msg", msg)

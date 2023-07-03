@@ -29,12 +29,9 @@ type GetAccountInfo struct {
 }
 
 type DIDAccountInfo struct {
-	DID             string `json:"did"`
-	DIDType         int    `json:"did_type"`
-	WholeRBT        int    `json:"whole_rbt"`
-	PledgedWholeRBT int    `json:"pledged_whole_rbt"`
-	LockedWholeRBT  int    `json:"locked_whole_rbt"`
-	PartRBT         int    `json:"part_rbt"`
-	PledgedPartRBT  int    `json:"pledged_part_rbt"`
-	LockedPartRBT   int    `json:"locked_part_rbt"`
+	DID        string  `json:"did"`
+	DIDType    int     `json:"did_type"`
+	RBTAmount  float64 `json:"rbt_amount"`
+	PledgedRBT float64 `json:"pledged_rbt"`
+	LockedRBT  float64 `json:"locked_rbt"`
 }
