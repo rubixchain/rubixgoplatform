@@ -3,6 +3,7 @@ package contract
 import (
 	"fmt"
 
+	"github.com/EnsurityTechnologies/logger"
 	"github.com/fxamacker/cbor"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -13,6 +14,7 @@ const (
 	SCDIDMigrateType
 	SCDataTokenType
 	SCDataTokenCommitType
+	SmartContractDeployType
 )
 
 // ----------SmartContract----------------------
@@ -44,9 +46,10 @@ type ContractType struct {
 }
 
 type Contract struct {
-	st uint64
-	sb []byte
-	sm map[string]interface{}
+	st  uint64
+	sb  []byte
+	sm  map[string]interface{}
+	log logger.Logger
 }
 
 func CreateNewContract(st *ContractType) *Contract {
@@ -258,6 +261,10 @@ func (c *Contract) GetReceiverDID() string {
 	return c.getTransInfoString(TSReceiverDIDKey)
 }
 
+func (c *Contract) GetDeployerDID() string {
+	return c.getTransInfoString(TSDeployerDIDKey)
+}
+
 func (c *Contract) GetComment() string {
 	return c.getTransInfoString(TSCommentKey)
 }
@@ -268,6 +275,49 @@ func (c *Contract) GetTransTokenInfo() []TokenInfo {
 		return nil
 	}
 	tsm := util.GetFromMap(tim, TSTransInfoKey)
+	if tsm == nil {
+		return nil
+	}
+	ti := make([]TokenInfo, 0)
+	tsmi, ok := tsm.(map[string]interface{})
+	if ok {
+		for k, v := range tsmi {
+			t := TokenInfo{
+				Token:      k,
+				TokenType:  util.GetIntFromMap(v, TITokenTypeKey),
+				OwnerDID:   util.GetStringFromMap(v, TIOwnerDIDKey),
+				BlockID:    util.GetStringFromMap(v, TIBlockIDKey),
+				TokenValue: util.GetFloatFromMap(v, TITokenValueKey),
+			}
+			ti = append(ti, t)
+		}
+	} else {
+		tsmi, ok := tsm.(map[interface{}]interface{})
+		if ok {
+			for k, v := range tsmi {
+				t := TokenInfo{
+					Token:      util.GetString(k),
+					TokenType:  util.GetIntFromMap(v, TITokenTypeKey),
+					OwnerDID:   util.GetStringFromMap(v, TIOwnerDIDKey),
+					BlockID:    util.GetStringFromMap(v, TIBlockIDKey),
+					TokenValue: util.GetFloatFromMap(v, TITokenValueKey),
+				}
+				ti = append(ti, t)
+			}
+		} else {
+			return nil
+		}
+	}
+	return ti
+
+}
+
+func (c *Contract) GetCommitedTokensInfo() []TokenInfo {
+	tim := util.GetFromMap(c.sm, SCTransInfoKey)
+	if tim == nil {
+		return nil
+	}
+	tsm := util.GetFromMap(tim, TSCommitedTokenInfoKey)
 	if tsm == nil {
 		return nil
 	}
@@ -360,6 +410,7 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	did := dc.GetDID()
 	hs, ss, ps, err := c.GetHashSig(did)
 	if err != nil {
+		c.log.Error("")
 		return err
 	}
 	ok, err := dc.Verify(hs, util.StrToHex(ss), util.StrToHex(ps))

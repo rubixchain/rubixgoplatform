@@ -6,10 +6,11 @@ import (
 )
 
 const (
-	RBTString  string = "rbt"
-	NFTString  string = "nft"
-	PartString string = "part"
-	DataString string = "data"
+	RBTString           string = "rbt"
+	NFTString           string = "nft"
+	PartString          string = "part"
+	DataString          string = "data"
+	SmartContractString string = "sc"
 )
 
 func (c *Core) RACPartTokenType() int {
@@ -41,6 +42,8 @@ func (c *Core) TokenType(tt string) int {
 			return token.TestDataTokenType
 		}
 		return token.DataTokenType
+	case SmartContractString:
+		return token.SmartContractTokenType
 	}
 	return token.RBTTokenType
 }

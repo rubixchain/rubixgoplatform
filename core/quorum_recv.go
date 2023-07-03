@@ -215,6 +215,55 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
+func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, conensusRequest *ConensusRequest) *ensweb.Result {
+	consensusReply := ConensusReply{
+		ReqID:  conensusRequest.ReqID,
+		Status: false,
+	}
+	consensusContract := contract.InitContract(conensusRequest.ContractBlock, nil)
+	// setup the did to verify the signature
+	dc, err := c.SetupForienDID(consensusContract.GetDeployerDID())
+	if err != nil {
+		c.log.Error("Failed to get deployer DID", "err", err)
+		consensusReply.Message = "Failed to get deployer DID"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	err = consensusContract.VerifySignature(dc)
+	if err != nil {
+		c.log.Error("Failed to verify deployer signature", "err", err)
+		consensusReply.Message = "Failed to verify deployer signature"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+
+	//Todo add validations
+	//check if deployment or execution
+	//if deployment
+
+	//1. check commited token authenticity
+	if !c.validateTokenOwnership(conensusRequest, consensusContract) {
+		c.log.Error("Commited Tokens ownership check failed")
+		consensusReply.Message = "Commited Token ownership check failed"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	//2. check commited token ownership
+
+	//3. check token state
+
+	qHash := util.CalculateHash(consensusContract.GetBlock(), "SHA3-256")
+	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	if err != nil {
+		c.log.Error("Failed to get quorum signature", "err", err)
+		consensusReply.Message = "Failed to get quorum signature"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+
+	consensusReply.Status = true
+	consensusReply.Message = "Conensus finished successfully"
+	consensusReply.ShareSig = qsb
+	consensusReply.PrivSig = ppb
+	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+}
+
 func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var cr ConensusRequest
@@ -241,6 +290,9 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	case DTCommitMode:
 		c.log.Debug("Data Consensus started")
 		return c.quorumDTConsensus(req, did, qdc, &cr)
+	case SmartContractDeployMode:
+		c.log.Debug("Smart contract Consensus started")
+		return c.quorumSmartContractConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
 		crep.Message = "Invalid consensus mode"
