@@ -27,13 +27,16 @@ import (
 // }
 
 const (
-	TISenderDIDKey   string = "1"
-	TIReceiverDIDKey string = "2"
-	TICommentKey     string = "3"
-	TITIDKey         string = "4"
-	TIBlockKey       string = "5"
-	TITokensKey      string = "6"
-	TIRefIDKey       string = "7"
+	TISenderDIDKey      string = "1"
+	TIReceiverDIDKey    string = "2"
+	TICommentKey        string = "3"
+	TITIDKey            string = "4"
+	TIBlockKey          string = "5"
+	TITokensKey         string = "6"
+	TIRefIDKey          string = "7"
+	TIDeployerDIDKey    string = "8"
+	TIExecutorDIDKey    string = "9"
+	TICommitedTokensKey string = "10"
 )
 
 const (
@@ -43,6 +46,7 @@ const (
 	TTBlockNumberKey     string = "4"
 	TTPreviousBlockIDKey string = "5"
 	TTUnpledgedIDKey     string = "6"
+	TTCommitedDIDKey     string = "7"
 )
 
 type TransTokens struct {
@@ -51,6 +55,7 @@ type TransTokens struct {
 	PledgedToken string `json:"pledgedToken"`
 	PledgedDID   string `json:"pledgedDID"`
 	UnplededID   string `json:"unpledgedID"`
+	CommitedDID  string `json:"commitedDID"`
 }
 
 type TransInfo struct {
@@ -61,6 +66,7 @@ type TransInfo struct {
 	Block       []byte        `json:"block"`
 	RefID       string        `json:"refID"`
 	Tokens      []TransTokens `json:"tokens"`
+	DeployerDID string        `json:"deployerDID`
 }
 
 func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
@@ -77,6 +83,9 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 	}
 	if tt.UnplededID != "" {
 		nttb[TTUnpledgedIDKey] = tt.UnplededID
+	}
+	if tt.CommitedDID != "" {
+		nttb[TTCommitedDIDKey] = tt.CommitedDID
 	}
 	if b == nil {
 		nttb[TTBlockNumberKey] = "0"
@@ -108,6 +117,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	if ti.ReceiverDID != "" {
 		ntib[TIReceiverDIDKey] = ti.ReceiverDID
 	}
+	if ti.DeployerDID != "" {
+		ntib[TIDeployerDIDKey] = ti.DeployerDID
+	}
 	if ti.Comment != "" {
 		ntib[TICommentKey] = ti.Comment
 	}
@@ -130,6 +142,7 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 		nttbs[tt.Token] = nttb
 	}
 	ntib[TITokensKey] = nttbs
+
 	return ntib
 }
 
