@@ -40,13 +40,18 @@ type RBTTransferRequestSwaggoInput struct {
 }
 
 // ShowAccount godoc
-// @Summary Initiate RBT transfer
-// @Description Initiates a transfer of RBT tokens from one account to another.
-// @ID initiate-rbt-transfer
-// @Tags        Transaction
-// @Accept json
-// @Produce json
-// @Param input body RBTTransferRequestSwaggoInput true "Transfer input parameters"
+
+// @Summary     Initiate RBT Transfer
+// @Description This API will initiate RBT transfer to the specified dID
+// @Tags        Account
+// @ID 			initiate-rbt-transfer
+// @Accept      json
+// @Produce     json
+// @Param 		receiver 	body string true "The decentralized identifier of the receiver"
+// @Param 		sender 		body string true "The decentralized identifier of the sender"
+// @Param 		tokenCount 	body number true "The number of RBT tokens to transfer"
+// @Param 		comment 	body string false "A comment for the transfer"
+// @Param 		type 		body int true "The type of transfer (1 for direct transfer, 2 for group transfer)"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/initiate-rbt-transfer [post]
 func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
@@ -106,11 +111,13 @@ type inputData struct {
 // ShowAccount godoc
 // @Summary     Signature Response
 // @Description This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.
-// @Tags        Transaction
+// @Tags        Account
 // @ID 			signature-response
 // @Accept      json
 // @Produce     json
-// @Param input body inputData true "Transfer input parameters"
+// @Param 		id			body	string	true 	"Req ID"
+// @Param		mode		body	int		true	"Mode of the node"
+// @Param		password	body	string	true	"password of the node"
 // @Success 	200		{object}	model.BasicResponse
 // @Router /api/signature-response [post]
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
