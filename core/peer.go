@@ -25,12 +25,12 @@ type PeerMap struct {
 // PingSetup will setup the ping route
 func (c *Core) peerSetup() error {
 	c.l.AddRoute(APIPeerStatus, "GET", c.peerStatus)
-	return c.pubsub.SubscribeTopic(PeerService, c.peerCallback)
+	return c.ps.SubscribeTopic(PeerService, c.peerCallback)
 }
 
 func (c *Core) publishPeerMap(pm *PeerMap) error {
-	if c.pubsub != nil {
-		err := c.pubsub.Publish(PeerService, pm)
+	if c.ps != nil {
+		err := c.ps.Publish(PeerService, pm)
 		if err != nil {
 			c.log.Error("Failed to publish peer map message", "err", err)
 			return err
