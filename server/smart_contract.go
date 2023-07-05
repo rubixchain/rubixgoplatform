@@ -1,18 +1,15 @@
 package server
 
 import (
-	"github.com/EnsurityTechnologies/ensweb"
-	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/util"
-  	"fmt"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
-
 
 type InitSmartContractToken struct {
 	binaryCodeHash string
@@ -37,8 +34,7 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 	s.c.AddWebReq(req)
 	go s.c.DeploySmartContractToken(req.ID, &deployReq)
 	return s.didResponse(req, req.ID)
-)
-
+}
 
 // DeplotSmartContract godoc
 // @Summary      Deploy Smart Contract

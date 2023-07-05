@@ -401,7 +401,19 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, err
 		}
 		//update smart contracttoken status to deployed in DB
-
+		smartContractTokenDetails, err := c.w.GetSmartContractToken(cr.SmartContractToken)
+		if err != nil {
+			c.log.Error("Failed to retrieve smart contract Token details from storage", err)
+			return nil, nil, err
+		}
+		for i := range smartContractTokenDetails {
+			smartContractTokenDetails[i].ContractStatus = wallet.TokenIsDeployed
+		}
+		err = c.w.DeploySmartContract(smartContractTokenDetails)
+		if err != nil {
+			c.log.Error("Failed to update smart contract Token deploy detail in storage", err)
+			return nil, nil, err
+		}
 		//create new committed block to be updated to the commited RBT tokens
 		commitedTokensBlock, err := c.createCommitedTokensBlock(nb, cr.SmartContractToken, dc)
 		//update committed RBT token with the new block also and lock the RBT
@@ -411,7 +423,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Failed to fetch commited rbt tokens", "err", err)
 			return nil, nil, err
 		}
-		err = c.w.CommitTokensToDeployContract(sc.GetDeployerDID(), commitedRbtTokens, commitedTokensBlock)
+		err = c.w.CommitTokens(sc.GetDeployerDID(), commitedRbtTokens, commitedTokensBlock)
 
 		newBlockId, err := nb.GetBlockID(cr.SmartContractToken)
 		if err != nil {

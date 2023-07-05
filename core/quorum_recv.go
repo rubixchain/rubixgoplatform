@@ -157,7 +157,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
 	for i := range ti {
 		wg.Add(1)
-		go c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult, &wg, cr.QuorumList)
+		go c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult, &wg, cr.QuorumList, ti[i].TokenType)
 	}
 	wg.Wait()
 
@@ -276,7 +276,6 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
 
-	//Todo add validations
 	//check if deployment or execution
 	//if deployment
 
@@ -286,8 +285,28 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		consensusReply.Message = "Commited Token ownership check failed"
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
-	//2. check commited token ownership
-
+	//2. check commited token double spent
+	commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
+	results := make([]MultiPinCheckRes, len(commitedTokenInfo))
+	var wg sync.WaitGroup
+	for i := range commitedTokenInfo {
+		wg.Add(1)
+		go c.pinCheck(commitedTokenInfo[i].Token, i, conensusRequest.DeployerPeerID, "", results, &wg)
+	}
+	wg.Wait()
+	for i := range results {
+		if results[i].Error != nil {
+			c.log.Error("Error occured", "error", err)
+			consensusReply.Message = "Error while cheking Token multiple Pins"
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		if results[i].Status {
+			c.log.Error("Token has multiple owners", "token", results[i].Token, "owners", results[i].Owners)
+			consensusReply.Message = "Token has multiple owners"
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+	}
+	// if execution
 	//3. check token state
 
 	qHash := util.CalculateHash(consensusContract.GetBlock(), "SHA3-256")
@@ -504,7 +523,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 	for i, ti := range sr.TokenInfo {
 		t := ti.Token
 		wg.Add(1)
-		go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, sr.QuorumList)
+		go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, sr.QuorumList, ti.TokenType)
 	}
 	wg.Wait()
 

@@ -31,7 +31,9 @@ func (w *Wallet) AddProviderDetails(token string, did string, funId int, role in
 	err := w.s.Read(TokenProvider, &tpm, "token=?", token)
 	if err != nil || tpm.Token == "" {
 		tpm.Token = token
-
+		tpm.DID = did
+		tpm.FuncID = funId
+		tpm.Role = role
 		return w.s.Write(TokenProvider, &tpm)
 	}
 	tpm.DID = did
