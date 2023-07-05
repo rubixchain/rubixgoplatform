@@ -42,12 +42,12 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		return resp
 	}
 	//check the smartcontract token from the DB base
-	/* smartContractDetails, err := c.w.GetSmartContractToken(deployReq.SmartContractToken)
+	_, err = c.w.GetSmartContractToken(deployReq.SmartContractToken)
 	if err != nil {
 		c.log.Error("Failed to retrieve smart contract Token details from storage", err)
 		resp.Message = err.Error()
 		return resp
-	} */
+	}
 	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
 	rbtTokensToCommitDetails, err := c.GetTokens(didCryptoLib, did, deployReq.RBTAmount)
 	if err != nil {

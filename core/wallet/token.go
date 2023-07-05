@@ -20,7 +20,6 @@ const (
 	TokenIsDeployed
 	TokenIsFetched
 	TokenIsBurnt
-
 )
 
 const (
@@ -444,7 +443,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	return nil
 }
 
-func (w *Wallet) CommitTokensToDeployContract(did string, rbtTokens []string, block *block.Block) error {
+func (w *Wallet) CommitTokens(did string, rbtTokens []string, block *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	err := w.CreateTokenBlock(block)
