@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/server"
 )
 
 type SmartContractRequest struct {
@@ -46,7 +47,7 @@ func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractR
 	}
 
 	var basicResponse model.BasicResponse
-	err := c.sendMutiFormRequest("POST", "/api/generate-smart-contract", nil, fields, files, &basicResponse)
+	err := c.sendMutiFormRequest("POST", server.APIGenerateSmartContract, nil, fields, files, &basicResponse)
 	if err != nil {
 		return nil, err
 	}
@@ -62,10 +63,34 @@ func (c *Client) FetchSmartContract(fetchSmartContractRequest *FetchSmartContrac
 	}
 
 	var basicResponse model.BasicResponse
-	err := c.sendMutiFormRequest("POST", "/api/fetch-smart-contract", nil, fields, nil, &basicResponse)
+	err := c.sendMutiFormRequest("POST", server.APIFetchSmartContract, nil, fields, nil, &basicResponse)
 	if err != nil {
 		return nil, err
 	}
 	return &basicResponse, nil
 
+}
+func (c *Client) PublishNewEvent(contract string, did string, block string) (*model.BasicResponse, error) {
+	var response model.BasicResponse
+	newContract := model.NewContractEvent{
+		Contract:          contract,
+		Did:               did,
+		ContractBlockHash: block,
+	}
+	err := c.sendJSONRequest("POST", server.APIPublishContract, nil, &newContract, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+func (c *Client) SubscribeContract(contract string) (*model.BasicResponse, error) {
+	var response model.BasicResponse
+	newSubscription := model.NewSubcription{
+		Contract: contract,
+	}
+	err := c.sendJSONRequest("POST", server.APISubscribecontract, nil, &newSubscription, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
 }

@@ -66,6 +66,8 @@ const (
 	UpdateConfig               string = "updateconfig"
 	GenerateSmartContractToken string = "generatesct"
 	FetchSmartContract         string = "fetchsct"
+	PublishContractCmd         string = "publishsct"
+	SubscribeContractCmd       string = "subscribesct"
 )
 
 var commands = []string{VersionCmd,
@@ -96,8 +98,10 @@ var commands = []string{VersionCmd,
 	CommitDataTokenCmd,
 	SetupDBCmd,
 	GetTxnDetailsCmd,
-	ShutDownCmd,
 	GenerateSmartContractToken,
+	FetchSmartContract,
+	PublishContractCmd,
+	SubscribeContractCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -129,7 +133,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will get transaction details",
 	"This command will shutdown the rubix node",
 	"This command will generate a smart contract token",
-	"This command will fetch a smart contract token"}
+	"This command will fetch a smart contract token",
+	"This command will publish a smart contract token",
+	"This command will subscribe to a smart contract token"}
 
 type Command struct {
 	cfg                config.Config
@@ -193,6 +199,7 @@ type Command struct {
 	rawCodePath        string
 	schemaFilePath     string
 	smartContractToken string
+	newContractBlock   string
 }
 
 func showVersion() {
@@ -369,8 +376,9 @@ func Run(args []string) {
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
 	flag.StringVar(&cmd.binaryCodePath, "binCode", "", "Binary code path")
 	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
-	flag.StringVar(&cmd.schemaFilePath, "schemaFile", "", "Schema file path")
+	flag.StringVar(&cmd.schemaFilePath, "yamlFile", "", "Yaml file path")
 	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
+	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -493,7 +501,10 @@ func Run(args []string) {
 		cmd.generateSmartContractToken()
 	case FetchSmartContract:
 		cmd.fetchSmartContract()
-
+	case PublishContractCmd:
+		cmd.PublishContract()
+	case SubscribeContractCmd:
+		cmd.SubscribeContract()
 	default:
 		cmd.log.Error("Invalid command")
 	}

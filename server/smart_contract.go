@@ -7,6 +7,7 @@ import (
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 type InitSmartContractToken struct {
@@ -50,6 +51,9 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create Binary Code file", nil)
 	}
 
+	binaryCodeFile.Close()
+	binaryCodeDestFile.Close()
+
 	err = os.Rename(binaryCodeFile.Name(), binaryCodeDest)
 	if err != nil {
 		binaryCodeFile.Close()
@@ -72,6 +76,9 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Generate smart contract failed, failed to create Raw Code file", "err", err)
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create Raw Code file", nil)
 	}
+
+	rawCodeFile.Close()
+	rawCodeDestFile.Close()
 
 	err = os.Rename(rawCodeFile.Name(), rawCodeDest)
 	if err != nil {
@@ -98,6 +105,9 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Generate smart contract failed, failed to create Schema file", "err", err)
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create Schema file", nil)
 	}
+
+	schemaFile.Close()
+	schemaDestFile.Close()
 
 	err = os.Rename(schemaFile.Name(), schemaDest)
 	if err != nil {
@@ -180,4 +190,25 @@ func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 	}()
 	return s.BasicResponse(req, true, "Smart contract fetched successfully", nil)
 
+}
+func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {
+	var newEvent model.NewContractEvent
+	err := s.ParseJSON(request, &newEvent)
+	if err != nil {
+		return s.BasicResponse(request, false, "Failed to parse input", nil)
+	}
+
+	go s.c.PublishNewEvent(&newEvent)
+	return s.BasicResponse(request, true, "Smart contract published successfully", nil)
+}
+func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
+	var newSubscription model.NewSubcription
+	err := s.ParseJSON(request, &newSubscription)
+	if err != nil {
+		return s.BasicResponse(request, false, "Failed to parse input", nil)
+	}
+	topic := newSubscription.Contract
+	s.c.AddWebReq(request)
+	go s.c.SubsribeContractSetup(request.ID, topic)
+	return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)
 }
