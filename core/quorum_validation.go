@@ -293,12 +293,13 @@ func (c *Core) getUnpledgeId(wt string) string {
  * Function to check whether the TokenState is pinned or not
  * Input tokenId, index, resultArray, waitgroup,quorumList
  */
-func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []TokenStateCheckResult, wg *sync.WaitGroup, quorumList []string) {
+func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []TokenStateCheckResult, wg *sync.WaitGroup, quorumList []string, tokenType int) {
 	defer wg.Done()
 	var result TokenStateCheckResult
 	result.Token = tokenId
+
 	//get the latest blockId i.e. latest token state
-	block := c.w.GetLatestTokenBlock(tokenId, token.RBTTokenType)
+	block := c.w.GetLatestTokenBlock(tokenId, tokenType)
 	if block == nil {
 		c.log.Error("Invalid token chain block")
 		result.Error = fmt.Errorf("Invalid token chain block")
