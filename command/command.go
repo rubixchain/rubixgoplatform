@@ -66,6 +66,8 @@ const (
 	UpdateConfig               string = "updateconfig"
 	GenerateSmartContractToken string = "generatesct"
 	FetchSmartContract         string = "fetchsct"
+	PublishContractCmd         string = "publishsct"
+	SubscribeContractCmd       string = "subscribesct"
 	DeploySmartContractCmd     string = "deploysmartcontract"
 	ExecuteSmartcontractCmd    string = "executesmartcontract"
 )
@@ -102,6 +104,9 @@ var commands = []string{VersionCmd,
 	ExecuteSmartcontractCmd,
 	ShutDownCmd,
 	GenerateSmartContractToken,
+	FetchSmartContract,
+	PublishContractCmd,
+	SubscribeContractCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -136,7 +141,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will execute the fetched smart contract",
 	"This command will shutdown the rubix node",
 	"This command will generate a smart contract token",
-	"This command will fetch a smart contract token"}
+	"This command will fetch a smart contract token",
+	"This command will publish a smart contract token",
+	"This command will subscribe to a smart contract token"}
 
 type Command struct {
 	cfg                config.Config
@@ -200,6 +207,7 @@ type Command struct {
 	rawCodePath        string
 	schemaFilePath     string
 	smartContractToken string
+	newContractBlock   string
 }
 
 func showVersion() {
@@ -379,6 +387,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
 	flag.StringVar(&cmd.schemaFilePath, "schemaFile", "", "Schema file path")
 	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
+	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -503,6 +512,10 @@ func Run(args []string) {
 		cmd.generateSmartContractToken()
 	case FetchSmartContract:
 		cmd.fetchSmartContract()
+	case PublishContractCmd:
+		cmd.PublishContract()
+	case SubscribeContractCmd:
+		cmd.SubscribeContract()
 	default:
 		cmd.log.Error("Invalid command")
 	}

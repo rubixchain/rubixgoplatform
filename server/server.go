@@ -52,6 +52,8 @@ const (
 	APIExecuteSmartContract string = "/api/execute-smart-contract"
 	APIGenerateSmartContract string = "/api/generate-smart-contract"
 	APIFetchSmartContract    string = "/api/fetch-smart-contract"
+	APIPublishContract       string = "/api/publish-contract"
+	APISubscribecontract     string = "/api/subscribe-contract"
 )
 
 // Server defines server handle
@@ -234,6 +236,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIDeploySmartContract, "POST", s.AuthHandle(s.APIDeploySmartContract, s.ErrorFunc))
 	s.AddRoute(APIGenerateSmartContract, "POST", s.AuthHandle(s.APIGenerateSmartContract, s.ErrorFunc))
 	s.AddRoute(APIFetchSmartContract, "POST", s.AuthHandle(s.APIFetchSmartContract, s.ErrorFunc))
+	s.AddRoute(APIPublishContract, "POST", s.AuthHandle(s.APIPublishContract, s.ErrorFunc))
+	s.AddRoute(APISubscribecontract, "POST", s.AuthHandle(s.APISubscribecontract, s.ErrorFunc))
 
 }
 
