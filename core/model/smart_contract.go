@@ -5,6 +5,6 @@ type NewContractEvent struct {
 	Did               string `json:"did"`
 	ContractBlockHash string `json:"contract_block_hash"`
 }
-type NewSubcription struct {
+type NewSubscription struct {
 	Contract string `json:"contract"`
 }

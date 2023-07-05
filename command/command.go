@@ -64,8 +64,8 @@ const (
 	CommitDataTokenCmd    string = "commitdatatoken"
 	SetupDBCmd            string = "setupdb"
 	GetTxnDetailsCmd      string = "gettxndetails"
-	PublishContractCmd    string = "publishcontract"
-	SubscribeContractCmd  string = "subscribecontract"
+	PublishContractCmd    string = "publishsct"
+	SubscribeContractCmd  string = "subscribesct"
 	CreateNFTCmd          string = "createnft"
 	GetAllNFTCmd          string = "getallnft"
 )
@@ -130,75 +130,75 @@ var commandsHelp = []string{"To get tool version",
 	"This command will commit data token token",
 	"This command will setup the DB",
 	"This command will get transaction details",
-	"This command will publish smart contract",
-	"This command will subscribe smart contract",
+	"This command will publish a smart contract token",
+	"This command will subscribe to a smart contract token",
 	"This command will create NFT",
 	"This command will get all NFTs"}
 
 type Command struct {
-	cfg           config.Config
-	c             *client.Client
-	sc            *contract.Contract
-	encKey        string
-	start         bool
-	node          uint
-	runDir        string
-	logFile       string
-	logLevel      string
-	cfgFile       string
-	testNet       bool
-	testNetKey    string
-	addr          string
-	port          string
-	peerID        string
-	peers         []string
-	log           logger.Logger
-	didRoot       bool
-	didType       int
-	didSecret     string
-	forcePWD      bool
-	privPWD       string
-	quorumPWD     string
-	imgFile       string
-	didImgFile    string
-	privImgFile   string
-	pubImgFile    string
-	privKeyFile   string
-	pubKeyFile    string
-	quorumList    string
-	srvName       string
-	storageType   int
-	dbName        string
-	dbType        string
-	dbAddress     string
-	dbPort        string
-	dbUserName    string
-	dbPassword    string
-	senderAddr    string
-	receiverAddr  string
-	rbtAmount     float64
-	transComment  string
-	transType     int
-	numTokens     int
-	enableAuth    bool
-	did           string
-	token         string
-	arbitaryMode  bool
-	tokenList     string
-	batchID       string
-	fileMode      bool
-	file          string
-	userID        string
-	userInfo      string
-	timeout       time.Duration
-	txnID         string
-	role          string
-	date          time.Time
-	contract      string
-	contractBlock string
-	grpcAddr      string
-	grpcPort      int
-	grpcSecure    bool
+	cfg                config.Config
+	c                  *client.Client
+	sc                 *contract.Contract
+	encKey             string
+	start              bool
+	node               uint
+	runDir             string
+	logFile            string
+	logLevel           string
+	cfgFile            string
+	testNet            bool
+	testNetKey         string
+	addr               string
+	port               string
+	peerID             string
+	peers              []string
+	log                logger.Logger
+	didRoot            bool
+	didType            int
+	didSecret          string
+	forcePWD           bool
+	privPWD            string
+	quorumPWD          string
+	imgFile            string
+	didImgFile         string
+	privImgFile        string
+	pubImgFile         string
+	privKeyFile        string
+	pubKeyFile         string
+	quorumList         string
+	srvName            string
+	storageType        int
+	dbName             string
+	dbType             string
+	dbAddress          string
+	dbPort             string
+	dbUserName         string
+	dbPassword         string
+	senderAddr         string
+	receiverAddr       string
+	rbtAmount          float64
+	transComment       string
+	transType          int
+	numTokens          int
+	enableAuth         bool
+	did                string
+	token              string
+	arbitaryMode       bool
+	tokenList          string
+	batchID            string
+	fileMode           bool
+	file               string
+	userID             string
+	userInfo           string
+	timeout            time.Duration
+	txnID              string
+	role               string
+	date               time.Time
+	smartContractToken string
+	newContractBlock   string
+	grpcAddr           string
+	grpcPort           int
+	grpcSecure         bool
 }
 
 func showVersion() {
@@ -376,8 +376,8 @@ func Run(args []string) {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
-	flag.StringVar(&cmd.contract, "contract", "", "Contract token hash")
-	flag.StringVar(&cmd.contractBlock, "contractBlkHash", "", "Contract block hash")
+	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
+	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
 	flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
 	flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
 	flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")

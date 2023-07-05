@@ -12,7 +12,7 @@ func (c *Client) PublishNewEvent(contract string, did string, block string) (*mo
 		Did:               did,
 		ContractBlockHash: block,
 	}
-	err := c.sendJSONRequest("POST", server.APIPublishEvent, nil, &newContract, &response)
+	err := c.sendJSONRequest("POST", server.APIPublishContract, nil, &newContract, &response)
 	if err != nil {
 		return nil, err
 	}
@@ -20,10 +20,10 @@ func (c *Client) PublishNewEvent(contract string, did string, block string) (*mo
 }
 func (c *Client) SubscribeContract(contract string) (*model.BasicResponse, error) {
 	var response model.BasicResponse
-	newSubcription := model.NewSubcription{
+	newSubscription := model.NewSubscription{
 		Contract: contract,
 	}
-	err := c.sendJSONRequest("POST", server.APISubscribecontract, nil, &newSubcription, &response)
+	err := c.sendJSONRequest("POST", server.APISubscribecontract, nil, &newSubscription, &response)
 	if err != nil {
 		return nil, err
 	}

@@ -5,7 +5,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
-func (s *Server) APIPublishEvent(request *ensweb.Request) *ensweb.Result {
+func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {
 	var newEvent model.NewContractEvent
 	err := s.ParseJSON(request, &newEvent)
 	if err != nil {
@@ -13,15 +13,16 @@ func (s *Server) APIPublishEvent(request *ensweb.Request) *ensweb.Result {
 	}
 
 	go s.c.PublishNewEvent(&newEvent)
-	return s.BasicResponse(request, true, "", nil)
+	return s.BasicResponse(request, true, "Smart contract published successfully", nil)
 }
 func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
-	var newSubcription model.NewSubcription
-	err := s.ParseJSON(request, &newSubcription)
+	var newSubscription model.NewSubscription
+	err := s.ParseJSON(request, &newSubscription)
 	if err != nil {
 		return s.BasicResponse(request, false, "Failed to parse input", nil)
 	}
-	topic := newSubcription.Contract
-	go s.c.SubsribeContractSetup(topic)
-	return s.BasicResponse(request, true, "", nil)
+	topic := newSubscription.Contract
+	s.c.AddWebReq(request)
+	go s.c.SubsribeContractSetup(request.ID, topic)
+	return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)
 }

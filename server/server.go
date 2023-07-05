@@ -50,7 +50,7 @@ const (
 	APIGetTxnByTxnID       string = "/api/get-by-txnId"
 	APIGetTxnByDID         string = "/api/get-by-did"
 	APIGetTxnByComment     string = "/api/get-by-comment"
-	APIPublishEvent        string = "/api/publish-new-event"
+	APIPublishContract     string = "/api/publish-contract"
 	APISubscribecontract   string = "/api/subscribe-contract"
 )
 
@@ -179,8 +179,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, true, s.AuthError, false))
 	s.AddRoute(setup.APICreateNFT, "POST", s.AuthHandle(s.APICreateNFT, true, s.AuthError, false))
-	s.AddRoute(APIPublishEvent, "POST", s.AuthHandle(s.APIPublishEvent, s.ErrorFunc))
-	s.AddRoute(APISubscribecontract, "POst", s.AuthHandle(s.APISubscribecontract, s.ErrorFunc))
+	s.AddRoute(APIPublishContract, "POST", s.AuthHandle(s.APIPublishContract, s.ErrorFunc))
+	s.AddRoute(APISubscribecontract, "POST", s.AuthHandle(s.APISubscribecontract, s.ErrorFunc))
 	s.AddRoute(setup.APIGetAllNFT, "GET", s.AuthHandle(s.APIGetAllNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIAddNFTSale, "GET", s.AuthHandle(s.APIAddNFTSale, true, s.AuthError, false))
 }
