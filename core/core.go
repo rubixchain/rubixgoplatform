@@ -98,6 +98,7 @@ type Core struct {
 	webReq        map[string]*did.DIDChan
 	w             *wallet.Wallet
 	qc            map[string]did.DIDCrypto
+	pqc           map[string]did.DIDCrypto
 	sd            map[string]*ServiceDetials
 	s             storage.Storage
 	as            storage.Storage
@@ -165,6 +166,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		pd:            make(map[string]*PledgeDetials),
 		webReq:        make(map[string]*did.DIDChan),
 		qc:            make(map[string]did.DIDCrypto),
+		pqc:           make(map[string]did.DIDCrypto),
 		sd:            make(map[string]*ServiceDetials),
 		arbitaryMode:  am,
 	}

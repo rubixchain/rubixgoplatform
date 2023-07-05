@@ -68,6 +68,8 @@ const (
 	FetchSmartContract         string = "fetchsct"
 	PublishContractCmd         string = "publishsct"
 	SubscribeContractCmd       string = "subscribesct"
+	DeploySmartContractCmd     string = "deploysmartcontract"
+	ExecuteSmartcontractCmd    string = "executesmartcontract"
 )
 
 var commands = []string{VersionCmd,
@@ -98,11 +100,15 @@ var commands = []string{VersionCmd,
 	CommitDataTokenCmd,
 	SetupDBCmd,
 	GetTxnDetailsCmd,
+	DeploySmartContractCmd,
+	ExecuteSmartcontractCmd,
+	ShutDownCmd,
 	GenerateSmartContractToken,
 	FetchSmartContract,
 	PublishContractCmd,
 	SubscribeContractCmd,
 }
+
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -131,6 +137,8 @@ var commandsHelp = []string{"To get tool version",
 	"This command will commit data token token",
 	"This command will setup the DB",
 	"This command will get transaction details",
+	"This command will deploy the smart contract token",
+	"This command will execute the fetched smart contract",
 	"This command will shutdown the rubix node",
 	"This command will generate a smart contract token",
 	"This command will fetch a smart contract token",
@@ -194,7 +202,7 @@ type Command struct {
 	txnID              string
 	role               string
 	date               time.Time
-	ip                 string
+	deployerAddr       string
 	binaryCodePath     string
 	rawCodePath        string
 	schemaFilePath     string
@@ -374,9 +382,10 @@ func Run(args []string) {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
+	flag.StringVar(&cmd.deployerAddr, "deployerAddr", "", "Smart contract Deployer Address")
 	flag.StringVar(&cmd.binaryCodePath, "binCode", "", "Binary code path")
 	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
-	flag.StringVar(&cmd.schemaFilePath, "yamlFile", "", "Yaml file path")
+	flag.StringVar(&cmd.schemaFilePath, "schemaFile", "", "Schema file path")
 	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
 	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
 
@@ -497,6 +506,8 @@ func Run(args []string) {
 		cmd.setupDB()
 	case GetTxnDetailsCmd:
 		cmd.getTxnDetails()
+	case DeploySmartContractCmd:
+		cmd.deploySmartcontract()
 	case GenerateSmartContractToken:
 		cmd.generateSmartContractToken()
 	case FetchSmartContract:

@@ -1,11 +1,13 @@
 package client
 
 import (
-	"fmt"
 
+	"time"
+  "fmt"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/server"
 )
+
 
 type SmartContractRequest struct {
 	BinaryCode string
@@ -18,6 +20,16 @@ type SmartContractRequest struct {
 type FetchSmartContractRequest struct {
 	SmartContractToken     string
 	SmartContractTokenPath string
+}
+
+func (c *Client) DeploySmartContract(deployRequest *model.DeploySmartContractRequest) (*model.BasicResponse, error) {
+	var basicResponse model.BasicResponse
+	err := c.sendJSONRequest("POST", server.APIDeploySmartContract, nil, deployRequest, &basicResponse, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to Deploy Smart Contract", "err", err)
+		return nil, err
+	}
+	return &basicResponse, nil
 }
 
 func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractRequest) (*model.BasicResponse, error) {

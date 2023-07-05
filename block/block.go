@@ -37,17 +37,20 @@ const (
 )
 
 const (
-	TokenMintedType      string = "01"
-	TokenTransferredType string = "02"
-	TokenMigratedType    string = "03"
-	TokenPledgedType     string = "04"
-	TokenGeneratedType   string = "05"
-	TokenUnpledgedType   string = "06"
-	TokenCommittedType   string = "07"
+	TokenMintedType       string = "01"
+	TokenTransferredType  string = "02"
+	TokenMigratedType     string = "03"
+	TokenPledgedType      string = "04"
+	TokenGeneratedType    string = "05"
+	TokenUnpledgedType    string = "06"
+	TokenCommittedType    string = "07"
+	TokenBurntType        string = "08"
+	TokenDeployedType     string = "09"
+	TokenExecutedType     string = "10"
+	TokenContractCommited string = "11"
 )
 
 type TokenChainBlock struct {
-	TokenType       int           `json:"tokenType"`
 	TransactionType string        `json:"transactionType"`
 	TokenOwner      string        `json:"owner"`
 	GenesisBlock    *GenesisBlock `json:"genesisBlock"`
@@ -105,7 +108,6 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		return nil
 	}
 	ntcb := make(map[string]interface{})
-	ntcb[TCTokenTypeKey] = tcb.TokenType
 	ntcb[TCTransTypeKey] = tcb.TransactionType
 	ntcb[TCTokenOwnerKey] = tcb.TokenOwner
 	if tcb.GenesisBlock != nil {
@@ -478,7 +480,23 @@ func (b *Block) GetTransTokens() []string {
 	return nil
 }
 
-func (b *Block) GetUnpledgeId() string {
+func (b *Block) GetTokenType(t string) int {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return 0
+	}
+	tm := util.GetFromMap(tim, TITokensKey)
+	if tm == nil {
+		return 0
+	}
+	ti := util.GetFromMap(tm, t)
+	if ti == nil {
+		return 0
+	}
+	return util.GetIntFromMap(ti, TTTokenTypeKey)
+}
+
+func (b *Block) GetUnpledgeId(t string) string {
 	tim := util.GetFromMap(b.bm, TCTransInfoKey)
 	if tim == nil {
 		return ""
@@ -487,15 +505,11 @@ func (b *Block) GetUnpledgeId() string {
 	if tm == nil {
 		return ""
 	}
-	var result string
-	mi, ok2 := tm.(map[interface{}]interface{})
-	if ok2 {
-		for _, v := range mi {
-			result = (util.GetFromMap(v, TTUnpledgedIDKey)).(string)
-		}
-
+	ti := util.GetFromMap(tm, t)
+	if ti == nil {
+		return ""
 	}
-	return result
+	return util.GetStringFromMap(ti, TTUnpledgedIDKey)
 }
 
 func (b *Block) GetTokenPledgedForDetails() string {
@@ -517,6 +531,9 @@ func (b *Block) GetSenderDID() string {
 func (b *Block) GetReceiverDID() string {
 	return b.getTrasnInfoString(TIReceiverDIDKey)
 }
+func (b *Block) GetDeployerDID() string {
+	return b.getTrasnInfoString(TIDeployerDIDKey)
+}
 
 func (b *Block) GetTid() string {
 	return b.getTrasnInfoString(TITIDKey)
@@ -526,8 +543,14 @@ func (b *Block) GetComment() string {
 	return b.getTrasnInfoString(TICommentKey)
 }
 
-func (b *Block) GetTokenType() int {
-	return b.getBlkInt(TCTokenTypeKey)
+func (b *Block) GetParentDetials(t string) (string, []string, error) {
+	gtm := b.getGenesisTokenMap(t)
+	if gtm == nil {
+		return "", nil, fmt.Errorf("invalid token chain block, missing genesis block")
+	}
+	p := util.GetStringFromMap(gtm, GIParentIDKey)
+	gp := util.GetStringSliceFromMap(gtm, GIGrandParentIDKey)
+	return p, gp, nil
 }
 
 func (b *Block) GetTokenDetials(t string) (int, int, error) {
@@ -550,6 +573,34 @@ func (b *Block) GetSmartContract() []byte {
 		return nil
 	}
 	return c
+}
+
+func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
+	genesisTokenMap := b.getGenesisTokenMap(t)
+	if genesisTokenMap == nil {
+		return nil, fmt.Errorf("invalid token chain block, missing genesis block")
+	}
+	commitedTokensMap := util.GetFromMap(genesisTokenMap, GICommitedTokensKey)
+	if commitedTokensMap == nil {
+		return nil, fmt.Errorf("invalid token chain block, missing commited tokens block")
+	}
+	m, ok := commitedTokensMap.(map[string]interface{})
+	if ok {
+		tkns := make([]string, 0)
+		for k, _ := range m {
+			tkns = append(tkns, k)
+		}
+		return tkns, nil
+	}
+	lm, ok := commitedTokensMap.(map[interface{}]interface{})
+	if ok {
+		tkns := make([]string, 0)
+		for k, _ := range lm {
+			tkns = append(tkns, k.(string))
+		}
+		return tkns, nil
+	}
+	return nil, nil
 }
 
 // func (b *Block) GetTokenPledgeMap() map[string]interface{} {
