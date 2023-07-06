@@ -141,6 +141,40 @@
                 }
             }
         },
+        "/api/publish-contract": {
+            "post": {
+                "description": "This API endpoint publishes a smart contract.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Publish Smart Contract",
+                "parameters": [
+                    {
+                        "description": "Publish input contract",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.NewContractEventSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/start": {
             "get": {
                 "description": "It will setup the core if not done before",
@@ -163,6 +197,40 @@
                     }
                 }
             }
+        },
+        "/api/subscribe-contract": {
+            "post": {
+                "description": "This API endpoint allows subscribing to a smart contract.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Subscribe to Smart Contract",
+                "parameters": [
+                    {
+                        "description": "Subscribe to input contract",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.NewSubscriptionSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -175,6 +243,28 @@
                 "result": {},
                 "status": {
                     "type": "boolean"
+                }
+            }
+        },
+        "server.NewContractEventSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "contract": {
+                    "type": "string"
+                },
+                "contract_block_hash": {
+                    "type": "string"
+                },
+                "did": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.NewSubscriptionSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "contract": {
+                    "type": "string"
                 }
             }
         }

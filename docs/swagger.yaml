@@ -7,6 +7,20 @@ definitions:
       status:
         type: boolean
     type: object
+  server.NewContractEventSwaggoInput:
+    properties:
+      contract:
+        type: string
+      contract_block_hash:
+        type: string
+      did:
+        type: string
+    type: object
+  server.NewSubscriptionSwaggoInput:
+    properties:
+      contract:
+        type: string
+    type: object
 info:
   contact:
     email: murali.c@ensurity.com
@@ -101,6 +115,28 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
+  /api/publish-contract:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint publishes a smart contract.
+      parameters:
+      - description: Publish input contract
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.NewContractEventSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Publish Smart Contract
+      tags:
+      - Smart Contract
   /api/start:
     get:
       consumes:
@@ -116,6 +152,28 @@ paths:
       summary: Start Core
       tags:
       - Basic
+  /api/subscribe-contract:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint allows subscribing to a smart contract.
+      parameters:
+      - description: Subscribe to input contract
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.NewSubscriptionSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Subscribe to Smart Contract
+      tags:
+      - Smart Contract
 securityDefinitions:
   SessionToken:
     in: header

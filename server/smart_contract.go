@@ -5,6 +5,21 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
+type NewContractEventSwaggoInput struct {
+	Contract          string `json:"contract"`
+	Did               string `json:"did"`
+	ContractBlockHash string `json:"contract_block_hash"`
+}
+
+// PublishContract godoc
+// @Summary      Publish Smart Contract
+// @Description  This API endpoint publishes a smart contract.
+// @Tags         Smart Contract
+// @Accept       json
+// @Produce      json
+// @Param 		 input body NewContractEventSwaggoInput true "Publish input contract"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/publish-contract [post]
 func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {
 	var newEvent model.NewContractEvent
 	err := s.ParseJSON(request, &newEvent)
@@ -15,6 +30,20 @@ func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {
 	go s.c.PublishNewEvent(&newEvent)
 	return s.BasicResponse(request, true, "Smart contract published successfully", nil)
 }
+
+type NewSubscriptionSwaggoInput struct {
+	Contract string `json:"contract"`
+}
+
+// SubscribeContract godoc
+// @Summary      Subscribe to Smart Contract
+// @Description  This API endpoint allows subscribing to a smart contract.
+// @Tags         Smart Contract
+// @Accept       json
+// @Produce      json
+// @Param        input body NewSubscriptionSwaggoInput true "Subscribe to input contract"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/subscribe-contract [post]
 func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 	var newSubscription model.NewSubscription
 	err := s.ParseJSON(request, &newSubscription)
