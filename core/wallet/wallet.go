@@ -25,7 +25,7 @@ const (
 	NFTChainStorage                string = "nftchainstorage"
 	DataChainStorage               string = "datachainstorage"
 	SmartContractTokenChainStorage string = "smartcontractokenchainstorage"
-	SmartContractStorage string = "smartcontract"
+	SmartContractStorage           string = "smartcontract"
 )
 
 type WalletConfig struct {
