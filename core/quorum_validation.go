@@ -329,12 +329,34 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		return
 	}
 
+	//check to see if tokenstate was already pinned by current validator, for any previous consensus
+	tokenStatePinInfo, err := c.w.GetProviderDetails(tokenIDTokenStateHash)
+	if err.Error() == "record not found" {
+		c.log.Debug("Data Not avilable in DB")
+		c.log.Debug("Proceeding ..")
+	} else {
+		c.log.Error("Error checking if tokenstate pinned earlier", err)
+		result.Error = err
+		result.Message = "Error checking if tokenstate pinned earlier"
+		resultArray[index] = result
+		return
+	}
+
+	if tokenStatePinInfo != nil {
+		c.log.Debug("Tokenstate pinned already pinned", err)
+		result.Error = err
+		result.Message = "Tokenstate pinned already pinned"
+		resultArray[index] = result
+		return
+	}
+
 	//check dht to see if any pin exist
 	list, err1 := c.GetDHTddrs(tokenIDTokenStateHash)
 	//try to call ipfs cat to check if any one has pinned the state i.e \
 	if err1 != nil {
 		c.log.Error("Error fetching content for the tokenstate ipfs hash :", tokenIDTokenStateHash, "Error", err)
-		result.Error = err
+		result.Exhausted = true
+		result.Error = nil
 		result.Message = "Error fetching content for the tokenstate ipfs hash : " + tokenIDTokenStateHash
 		resultArray[index] = result
 		return

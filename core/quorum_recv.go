@@ -277,37 +277,74 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	}
 
 	//check if deployment or execution
-	//if deployment
+	commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
+	tokenStateCheckResult := make([]TokenStateCheckResult, len(commitedTokenInfo))
+	var wg sync.WaitGroup
+	if conensusRequest.Mode == wallet.DeployMode {
+		//if deployment
+		//1. check commited token authenticity
+		if !c.validateTokenOwnership(conensusRequest, consensusContract) {
+			c.log.Error("Commited Tokens ownership check failed")
+			consensusReply.Message = "Commited Token ownership check failed"
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		//2. check commited token double spent
+		results := make([]MultiPinCheckRes, len(commitedTokenInfo))
+		for i := range commitedTokenInfo {
+			wg.Add(1)
+			go c.pinCheck(commitedTokenInfo[i].Token, i, conensusRequest.DeployerPeerID, "", results, &wg)
+		}
+		wg.Wait()
+		for i := range results {
+			if results[i].Error != nil {
+				c.log.Error("Error occured", "error", err)
+				consensusReply.Message = "Error while cheking Token multiple Pins"
+				return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+			}
+			if results[i].Status {
+				c.log.Error("Token has multiple owners", "token", results[i].Token, "owners", results[i].Owners)
+				consensusReply.Message = "Token has multiple owners"
+				return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+			}
+		}
 
-	//1. check commited token authenticity
-	if !c.validateTokenOwnership(conensusRequest, consensusContract) {
-		c.log.Error("Commited Tokens ownership check failed")
-		consensusReply.Message = "Commited Token ownership check failed"
+		//in deploy mode pin token state of commited RBT tokens
+		for i, ti := range commitedTokenInfo {
+			t := ti.Token
+			wg.Add(1)
+			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, conensusRequest.QuorumList, ti.TokenType)
+		}
+		wg.Wait()
+	} else {
+		//3. check token state -- execute mode - pin tokenstate of the smart token chain
+		smartContractTokenInfo := consensusContract.GetTransTokenInfo()
+		for i, ti := range smartContractTokenInfo {
+			t := ti.Token
+			wg.Add(1)
+			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, conensusRequest.QuorumList, ti.TokenType)
+		}
+	}
+	for i := range tokenStateCheckResult {
+		if tokenStateCheckResult[i].Error != nil {
+			c.log.Error("Error occured", "error", err)
+			consensusReply.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		if tokenStateCheckResult[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
+			consensusReply.Message = tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
+	}
+
+	c.log.Debug("Proceeding to pin token state to prevent double spend")
+	err = c.pinTokenState(tokenStateCheckResult, did)
+	if err != nil {
+		consensusReply.Message = "Error Pinning token state" + err.Error()
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
-	//2. check commited token double spent
-	commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
-	results := make([]MultiPinCheckRes, len(commitedTokenInfo))
-	var wg sync.WaitGroup
-	for i := range commitedTokenInfo {
-		wg.Add(1)
-		go c.pinCheck(commitedTokenInfo[i].Token, i, conensusRequest.DeployerPeerID, "", results, &wg)
-	}
-	wg.Wait()
-	for i := range results {
-		if results[i].Error != nil {
-			c.log.Error("Error occured", "error", err)
-			consensusReply.Message = "Error while cheking Token multiple Pins"
-			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
-		}
-		if results[i].Status {
-			c.log.Error("Token has multiple owners", "token", results[i].Token, "owners", results[i].Owners)
-			consensusReply.Message = "Token has multiple owners"
-			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
-		}
-	}
-	// if execution
-	//3. check token state
+	c.log.Debug("Finished Tokenstate check")
 
 	qHash := util.CalculateHash(consensusContract.GetBlock(), "SHA3-256")
 	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
