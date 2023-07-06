@@ -263,6 +263,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	}
 	consensusContract := contract.InitContract(conensusRequest.ContractBlock, nil)
 	// setup the did to verify the signature
+	c.log.Debug("VEryfying the deployer signature")
 	dc, err := c.SetupForienDID(consensusContract.GetDeployerDID())
 	if err != nil {
 		c.log.Error("Failed to get deployer DID", "err", err)
@@ -283,12 +284,14 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	if conensusRequest.Mode == wallet.DeployMode {
 		//if deployment
 		//1. check commited token authenticity
+		c.log.Debug("validation 1 - Authenticity of commited RBT tokens")
 		if !c.validateTokenOwnership(conensusRequest, consensusContract) {
 			c.log.Error("Commited Tokens ownership check failed")
 			consensusReply.Message = "Commited Token ownership check failed"
 			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 		}
 		//2. check commited token double spent
+		c.log.Debug("validation 2 - double spent check on the commited rbt tokens")
 		results := make([]MultiPinCheckRes, len(commitedTokenInfo))
 		for i := range commitedTokenInfo {
 			wg.Add(1)
