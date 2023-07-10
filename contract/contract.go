@@ -94,9 +94,9 @@ func (c *Contract) blkDecode() error {
 	if !ok {
 		return fmt.Errorf("invalid block, missing block content")
 	}
-	c.log.Debug("bc is %v", bc)
+	/* c.log.Debug("bc is %v", bc)
 	c.log.Debug("SCBlockContentPSigKey is %v", ksi)
-	c.log.Debug("SCBlockContentPSigKey is %v", ssi)
+	c.log.Debug("SCBlockContentPSigKey is %v", ssi) */
 
 	hb := util.CalculateHash(bc.([]byte), "SHA3-256")
 	var tcb map[string]interface{}
@@ -111,7 +111,7 @@ func (c *Contract) blkDecode() error {
 		if err != nil {
 			return err
 		}
-		c.log.Debug("ksb is %v", ksb)
+		//c.log.Debug("ksb is %v", ksb)
 		tcb[SCShareSignatureKey] = ksb
 	}
 	if kok {
@@ -120,11 +120,11 @@ func (c *Contract) blkDecode() error {
 		if err != nil {
 			return err
 		}
-		c.log.Debug("ksb is %v", ksb)
+		//c.log.Debug("ksb is %v", ksb)
 		tcb[SCKeySignatureKey] = ksb
 	}
 	c.sm = tcb
-	c.log.Debug("tcb is %v", tcb)
+	//c.log.Debug("tcb is %v", tcb)
 	return nil
 }
 

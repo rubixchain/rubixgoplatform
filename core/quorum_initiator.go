@@ -414,8 +414,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Failed to update smart contract Token deploy detail in storage", err)
 			return nil, nil, err
 		}
+		c.log.Debug("creating commited token block")
 		//create new committed block to be updated to the commited RBT tokens
-		commitedTokensBlock, err := c.createCommitedTokensBlock(nb, cr.SmartContractToken, dc)
+		err = c.createCommitedTokensBlock(nb, cr.SmartContractToken, dc)
+		if err != nil {
+			c.log.Error("Failed to create commited RBT tokens block ", "err", err)
+			return nil, nil, err
+		}
 		//update committed RBT token with the new block also and lock the RBT
 		//and change token status to commited, to prevent being used for txn or pledging
 		commitedRbtTokens, err := nb.GetCommitedTokenDetials(cr.SmartContractToken)
@@ -423,13 +428,30 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Failed to fetch commited rbt tokens", "err", err)
 			return nil, nil, err
 		}
-		err = c.w.CommitTokens(sc.GetDeployerDID(), commitedRbtTokens, commitedTokensBlock)
+		err = c.w.CommitTokens(sc.GetDeployerDID(), commitedRbtTokens)
+		if err != nil {
+			c.log.Error("Failed to update commited RBT tokens in DB ", "err", err)
+			return nil, nil, err
+		}
 
 		newBlockId, err := nb.GetBlockID(cr.SmartContractToken)
 		if err != nil {
 			c.log.Error("failed to get new block id ", "err", err)
 			return nil, nil, err
 		}
+
+		//Todo pubsub - publish smart contract token details
+		newEvent := model.NewContractEvent{
+			Contract:          cr.SmartContractToken,
+			Did:               sc.GetDeployerDID(),
+			ContractBlockHash: newBlockId,
+		}
+
+		err = c.publishNewEvent(&newEvent)
+		if err != nil {
+			c.log.Error("Failed to publish smart contract deployed info")
+		}
+
 		txnDetails := wallet.TransactionDetails{
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
@@ -870,16 +892,16 @@ func (c *Core) checkIsUnpledged(tcb *block.Block) bool {
 	return false
 }
 
-func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractToken string, didCryptoLib did.DIDCrypto) (*block.Block, error) {
+func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractToken string, didCryptoLib did.DIDCrypto) error {
 	commitedTokens, err := newBlock.GetCommitedTokenDetials(smartContractToken)
 	if err != nil {
 		c.log.Error("error fetching commited token details", err)
-		return nil, err
+		return err
 	}
 	smartContractTokenBlockId, err := newBlock.GetBlockID(smartContractToken)
 	if err != nil {
 		c.log.Error("Failed to get block ID")
-		return nil, err
+		return err
 	}
 	refID := fmt.Sprintf("%s,%d,%s", smartContractToken, newBlock.GetTokenType(smartContractToken), smartContractTokenBlockId)
 
@@ -890,7 +912,7 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 		tokenInfoFromDB, err := c.w.ReadToken(t)
 		if err != nil {
 			c.log.Error("failed to read token from wallet")
-			return nil, err
+			return err
 		}
 		ts := RBTString
 		if tokenInfoFromDB.TokenValue != 1.0 {
@@ -904,7 +926,7 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 		lb := c.w.GetLatestTokenBlock(t, c.TokenType(ts))
 		if lb == nil {
 			c.log.Error("Failed to get token chain block")
-			return nil, fmt.Errorf("failed to get latest block")
+			return fmt.Errorf("failed to get latest block")
 		}
 		ctcb[t] = lb
 	}
@@ -920,17 +942,17 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
 		c.log.Error("Failed to create new token chain block")
-		return nil, fmt.Errorf("Failed to create new token chain block")
+		return fmt.Errorf("Failed to create new token chain block")
 	}
 	err = nb.UpdateSignature(didCryptoLib)
 	if err != nil {
 		c.log.Error("Failed to update signature to block", "err", err)
-		return nil, fmt.Errorf("Failed to update signature to block")
+		return fmt.Errorf("Failed to update signature to block")
 	}
 	err = c.w.CreateTokenBlock(nb)
 	if err != nil {
-		c.log.Error("Failed to update token chain block", "err", err)
-		return nil, fmt.Errorf("Failed to update token chain block")
+		c.log.Error("Failed to update commited rbt token chain block", "err", err)
+		return fmt.Errorf("Failed to update token chain block")
 	}
-	return nb, nil
+	return nil
 }

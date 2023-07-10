@@ -261,6 +261,11 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		ReqID:  conensusRequest.ReqID,
 		Status: false,
 	}
+	if conensusRequest.ContractBlock == nil {
+		c.log.Error("contract block in consensus req is nil")
+		consensusReply.Message = "contract block in consensus req is nil"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
 	consensusContract := contract.InitContract(conensusRequest.ContractBlock, nil)
 	// setup the did to verify the signature
 	c.log.Debug("VEryfying the deployer signature")
@@ -281,7 +286,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
 	tokenStateCheckResult := make([]TokenStateCheckResult, len(commitedTokenInfo))
 	var wg sync.WaitGroup
-	if conensusRequest.Mode == wallet.DeployMode {
+	if conensusRequest.Mode == SmartContractDeployMode {
 		//if deployment
 		//1. check commited token authenticity
 		c.log.Debug("validation 1 - Authenticity of commited RBT tokens")

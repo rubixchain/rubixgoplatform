@@ -330,11 +330,8 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	}
 
 	//check to see if tokenstate was already pinned by current validator, for any previous consensus
-	tokenStatePinInfo, err := c.w.GetProviderDetails(tokenIDTokenStateHash)
-	if err.Error() == "record not found" {
-		c.log.Debug("Data Not avilable in DB")
-		c.log.Debug("Proceeding ..")
-	} else {
+	tokenStatePinInfo, err := c.w.GetStatePinnedInfo(tokenIDTokenStateHash)
+	if err != nil {
 		c.log.Error("Error checking if tokenstate pinned earlier", err)
 		result.Error = err
 		result.Message = "Error checking if tokenstate pinned earlier"

@@ -3,7 +3,7 @@ package wallet
 import "fmt"
 
 type SmartContract struct {
-	SmartContractHash string `gorm:"column:smart_contract_hash;primaryKey" json:"smart_contract_id"`
+	SmartContractHash string `gorm:"column:smart_contract_hash;primaryKey" json:"smart_contract_hash"`
 	Deployer          string `gorm:"column:deployer" json:"deployer"`
 	BinaryCodeHash    string `gorm:"column:binary_code_hash" json:"binary_code_hash"`
 	RawCodeHash       string `gorm:"column:raw_code_hash" json:"raw_code_hash"`
@@ -20,12 +20,14 @@ func (w *Wallet) CreateSmartContractToken(sc *SmartContract) error {
 	return nil
 }
 
-func (w *Wallet) GetSmartContractToken(smartContractID string) ([]SmartContract, error) {
+func (w *Wallet) GetSmartContractToken(smartContractToken string) ([]SmartContract, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	var sc []SmartContract
-	err := w.s.Read(SmartContractStorage, &sc, "smart_contract_hash=?", smartContractID)
+	w.log.Debug("smart_contract_hash=?", smartContractToken)
+	err := w.s.Read(SmartContractStorage, &sc, "smart_contract_hash=?", smartContractToken)
 	if err != nil {
+		w.log.Error("err", err)
 		return nil, err
 	}
 	if len(sc) == 0 {
@@ -61,16 +63,27 @@ func (w *Wallet) DeploySmartContract(sc []SmartContract) error {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	for i := range sc {
-		if sc[i].ContractStatus != TokenIsGenerated {
-			return fmt.Errorf("smart contract token is not generated")
-		}
 		sc[i].ContractStatus = TokenIsDeployed
-		err := w.s.Update(SmartContractStorage, &sc[i], "smart_contract_id=?", sc[i].SmartContractHash)
+		err := w.s.Update(SmartContractStorage, &sc[i], "smart_contract_hash=?", sc[i].SmartContractHash)
 		if err != nil {
 			return err
 		}
-
 	}
-
 	return nil
+}
+
+// retrive state pin info if it exists
+func (w *Wallet) GetStatePinnedInfo(token string) (*TokenProviderMap, error) {
+	var tokenMap TokenProviderMap
+	err := w.s.Read(TokenProvider, &tokenMap, "token=?", token)
+	if err != nil {
+		if err.Error() == "no records found" {
+			w.log.Debug("Data Not avilable in DB")
+			return nil, nil
+		} else {
+			w.log.Error("Error fetching details from DB", "error", err)
+			return nil, err
+		}
+	}
+	return &tokenMap, nil
 }

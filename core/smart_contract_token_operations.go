@@ -128,6 +128,12 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		return resp
 	}
 
+	consensusContractBlock := consensusContract.GetBlock()
+	if consensusContractBlock == nil {
+		c.log.Error("failed to create consensus contract block")
+		resp.Message = "failed to create consensus contract block"
+		return resp
+	}
 	conensusRequest := &ConensusRequest{
 		ReqID:              uuid.New().String(),
 		Type:               deployReq.QuorumType,
@@ -162,7 +168,6 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	}
 	c.ec.ExplorerTransaction(explorerTrans)
 
-	//Todo pubsub - publish smart contract token details
 	c.log.Info("Smart Contract Token Deployed successfully", "duration", dif)
 	resp.Status = true
 	msg := fmt.Sprintf("Smart Contract Token Deployed successfully in %v", dif)

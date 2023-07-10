@@ -13,7 +13,7 @@ func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
 	var tokenMap TokenProviderMap
 	err := w.s.Read(TokenProvider, &tokenMap, "token=?", token)
 	if err != nil {
-		if err.Error() == "record not found" {
+		if err.Error() == "no records found" {
 			w.log.Debug("Data Not avilable in DB")
 			return &tokenMap, err
 		} else {
