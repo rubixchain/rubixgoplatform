@@ -35,41 +35,42 @@ const (
 	version string = "0.0.9"
 )
 const (
-	VersionCmd                 string = "-v"
-	HelpCmd                    string = "-h"
-	RunCmd                     string = "run"
-	PingCmd                    string = "ping"
-	AddBootStrapCmd            string = "addbootstrap"
-	RemoveBootStrapCmd         string = "removebootstrap"
-	RemoveAllBootStrapCmd      string = "removeallbootstrap"
-	GetAllBootStrapCmd         string = "getallbootstrap"
-	CreateDIDCmd               string = "createdid"
-	GetAllDIDCmd               string = "getalldid"
-	AddQuorumCmd               string = "addquorum"
-	GetAllQuorumCmd            string = "getallquorum"
-	RemoveAllQuorumCmd         string = "removeallquorum"
-	SetupQuorumCmd             string = "setupquorum"
-	GenerateTestRBTCmd         string = "generatetestrbt"
-	TransferRBTCmd             string = "transferrbt"
-	GetAccountInfoCmd          string = "getaccountinfo"
-	SetupServiceCmd            string = "setupservice"
-	DumpTokenChainCmd          string = "dumptokenchain"
-	RegsiterDIDCmd             string = "registerdid"
-	SetupDIDCmd                string = "setupdid"
-	ShutDownCmd                string = "shutdown"
-	MirgateNodeCmd             string = "migratenode"
-	LockTokensCmd              string = "locktokens"
-	CreateDataTokenCmd         string = "createdatatoken"
-	CommitDataTokenCmd         string = "commitdatatoken"
-	SetupDBCmd                 string = "setupdb"
-	GetTxnDetailsCmd           string = "gettxndetails"
-	UpdateConfig               string = "updateconfig"
-	GenerateSmartContractToken string = "generatesct"
-	FetchSmartContract         string = "fetchsct"
-	PublishContractCmd         string = "publishsct"
-	SubscribeContractCmd       string = "subscribesct"
-	DeploySmartContractCmd     string = "deploysmartcontract"
-	ExecuteSmartcontractCmd    string = "executesmartcontract"
+	VersionCmd                     string = "-v"
+	HelpCmd                        string = "-h"
+	RunCmd                         string = "run"
+	PingCmd                        string = "ping"
+	AddBootStrapCmd                string = "addbootstrap"
+	RemoveBootStrapCmd             string = "removebootstrap"
+	RemoveAllBootStrapCmd          string = "removeallbootstrap"
+	GetAllBootStrapCmd             string = "getallbootstrap"
+	CreateDIDCmd                   string = "createdid"
+	GetAllDIDCmd                   string = "getalldid"
+	AddQuorumCmd                   string = "addquorum"
+	GetAllQuorumCmd                string = "getallquorum"
+	RemoveAllQuorumCmd             string = "removeallquorum"
+	SetupQuorumCmd                 string = "setupquorum"
+	GenerateTestRBTCmd             string = "generatetestrbt"
+	TransferRBTCmd                 string = "transferrbt"
+	GetAccountInfoCmd              string = "getaccountinfo"
+	SetupServiceCmd                string = "setupservice"
+	DumpTokenChainCmd              string = "dumptokenchain"
+	RegsiterDIDCmd                 string = "registerdid"
+	SetupDIDCmd                    string = "setupdid"
+	ShutDownCmd                    string = "shutdown"
+	MirgateNodeCmd                 string = "migratenode"
+	LockTokensCmd                  string = "locktokens"
+	CreateDataTokenCmd             string = "createdatatoken"
+	CommitDataTokenCmd             string = "commitdatatoken"
+	SetupDBCmd                     string = "setupdb"
+	GetTxnDetailsCmd               string = "gettxndetails"
+	UpdateConfig                   string = "updateconfig"
+	GenerateSmartContractToken     string = "generatesct"
+	FetchSmartContract             string = "fetchsct"
+	PublishContractCmd             string = "publishsct"
+	SubscribeContractCmd           string = "subscribesct"
+	DeploySmartContractCmd         string = "deploysmartcontract"
+	ExecuteSmartcontractCmd        string = "executesmartcontract"
+	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 )
 
 var commands = []string{VersionCmd,
@@ -143,7 +144,8 @@ var commandsHelp = []string{"To get tool version",
 	"This command will generate a smart contract token",
 	"This command will fetch a smart contract token",
 	"This command will publish a smart contract token",
-	"This command will subscribe to a smart contract token"}
+	"This command will subscribe to a smart contract token",
+	"This commadn will dump the smartcontract token chain"}
 
 type Command struct {
 	cfg                config.Config
@@ -516,6 +518,8 @@ func Run(args []string) {
 		cmd.PublishContract()
 	case SubscribeContractCmd:
 		cmd.SubscribeContract()
+	case DumpSmartContractTokenChainCmd:
+		cmd.dumpSmartContractTokenChain()
 	default:
 		cmd.log.Error("Invalid command")
 	}
