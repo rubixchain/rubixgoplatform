@@ -640,6 +640,8 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	if sc.GetDeployerDID() != "" {
 		bti.DeployerDID = sc.GetDeployerDID()
 
+		var smartContractTokenValue float64
+
 		commitedTokens := sc.GetCommitedTokensInfo()
 		commitedTokenInfoArray := make([]block.TransTokens, 0)
 		for i := range commitedTokens {
@@ -649,13 +651,15 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 				CommitedDID: commitedTokens[i].OwnerDID,
 			}
 			commitedTokenInfoArray = append(commitedTokenInfoArray, commitedTokenInfo)
+			smartContractTokenValue = smartContractTokenValue + commitedTokens[i].TokenValue
 		}
 
 		smartContractGensisBlock := &block.GenesisBlock{
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
 				{Token: cr.SmartContractToken,
-					CommitedTokens: commitedTokenInfoArray},
+					CommitedTokens:     commitedTokenInfoArray,
+					SmartContractValue: smartContractTokenValue},
 			},
 		}
 
