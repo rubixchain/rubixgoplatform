@@ -18,6 +18,19 @@ type InitSmartContractToken struct {
 	genesisBlock   string
 }
 
+// DeploySmartContract godoc
+// @Summary      Deploy Smart Contract
+// @Description  This API will deploy smart contract Token
+// @Tags         Smart Contract
+// @Accept       mpfd
+// @Produce      mpfd
+// @Param		 SmartContractToken			   formData		 string  true   "SmartContractToken"
+// @Param        DeployerAddress        	   formData      string  true   "DeployerAddress"
+// @Param        RBTAmount        	   		   formData      number  true   "RBTAmount"
+// @Param        QuorumType        	   		   formData      int     true   "QuorumType"
+// @Param        Comment        	   		   formData      string  true   "Comment"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/generate-smart-contract [post]
 func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 	var deployReq model.DeploySmartContractRequest
 	err := s.ParseJSON(req, &deployReq)
@@ -37,8 +50,8 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 }
 
 // DeplotSmartContract godoc
-// @Summary      Deploy Smart Contract
-// @Description  This API will deploy smart contract
+// @Summary      Generate Smart Contract
+// @Description  This API will Generate smart contract Token
 // @Tags         Smart Contract
 // @Accept       mpfd
 // @Produce      mpfd
