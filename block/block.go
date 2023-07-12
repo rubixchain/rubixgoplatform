@@ -19,21 +19,23 @@ import (
 //   "5" : TransInfo        : TransInfo
 //   "6" : SmartContract    : []byte
 //   "7" : QuorumSignature  : []string
+//   "8" : SmartContractData : string
 //
 // }
 
 const (
-	TCTokenTypeKey       string = "1"
-	TCTransTypeKey       string = "2"
-	TCTokenOwnerKey      string = "3"
-	TCGenesisBlockKey    string = "4"
-	TCTransInfoKey       string = "5"
-	TCSmartContractKey   string = "6"
-	TCQuorumSignatureKey string = "7"
-	TCBlockHashKey       string = "98"
-	TCSignatureKey       string = "99"
-	TCBlockContentKey    string = "1"
-	TCBlockContentSigKey string = "2"
+	TCTokenTypeKey         string = "1"
+	TCTransTypeKey         string = "2"
+	TCTokenOwnerKey        string = "3"
+	TCGenesisBlockKey      string = "4"
+	TCTransInfoKey         string = "5"
+	TCSmartContractKey     string = "6"
+	TCQuorumSignatureKey   string = "7"
+	TCBlockHashKey         string = "98"
+	TCSignatureKey         string = "99"
+	TCBlockContentKey      string = "1"
+	TCBlockContentSigKey   string = "2"
+	TCSmartContractDataKey string = "8"
 )
 
 const (
@@ -51,12 +53,13 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType string        `json:"transactionType"`
-	TokenOwner      string        `json:"owner"`
-	GenesisBlock    *GenesisBlock `json:"genesisBlock"`
-	TransInfo       *TransInfo    `json:"transInfo"`
-	QuorumSignature []string      `json:"quorumSignature"`
-	SmartContract   []byte        `json:"smartContract"`
+	TransactionType   string        `json:"transactionType"`
+	TokenOwner        string        `json:"owner"`
+	GenesisBlock      *GenesisBlock `json:"genesisBlock"`
+	TransInfo         *TransInfo    `json:"transInfo"`
+	QuorumSignature   []string      `json:"quorumSignature"`
+	SmartContract     []byte        `json:"smartContract"`
+	SmartContractData string        `json:"smartContractData"`
 }
 
 type Block struct {
@@ -126,6 +129,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	}
 	if tcb.SmartContract != nil {
 		ntcb[TCSmartContractKey] = tcb.SmartContract
+	}
+	if tcb.SmartContractData != "" {
+		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
 	blk := InitBlock(nil, ntcb)
 	return blk
@@ -621,3 +627,15 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 
 // 	return result
 // }
+
+func (b *Block) GetSmartContractData() string {
+	smartContractInterface, ok := b.bm[TCSmartContractKey]
+	if !ok {
+		return ""
+	}
+	smartContractData, ok := smartContractInterface.(string)
+	if !ok {
+		return ""
+	}
+	return smartContractData
+}
