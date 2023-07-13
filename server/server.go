@@ -48,6 +48,9 @@ const (
 	APIGetTxnByTxnID       string = "/api/get-by-txnId"
 	APIGetTxnByDID         string = "/api/get-by-did"
 	APIGetTxnByComment     string = "/api/get-by-comment"
+	APICreateNFT           string = "/api/createnft"
+	APIGetAllNFT           string = "/api/getallnft"
+	APIAddNFTSale          string = "/api/addnftsale"
 )
 
 // Server defines server handle
@@ -227,6 +230,9 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, s.ErrorFunc))
 	s.AddRoute(APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, s.ErrorFunc))
 	s.AddRoute(APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, s.ErrorFunc))
+	s.AddRoute(APICreateNFT, "POST", s.AuthHandle(s.APICreateNFT, s.ErrorFunc))
+	s.AddRoute(APIGetAllNFT, "GET", s.AuthHandle(s.APIGetAllNFT, s.ErrorFunc))
+	s.AddRoute(APIAddNFTSale, "GET", s.AuthHandle(s.APIAddNFTSale, s.ErrorFunc))
 
 }
 
