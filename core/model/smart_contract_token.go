@@ -7,3 +7,11 @@ type DeploySmartContractRequest struct {
 	QuorumType         int
 	Comment            string
 }
+
+type ExecuteSmartContractRequest struct {
+	SmartContractToken string
+	ExecutorAddress    string
+	QuorumType         int
+	Comment            string
+	SmartContractData  string
+}

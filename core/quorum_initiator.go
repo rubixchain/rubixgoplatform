@@ -25,6 +25,7 @@ const (
 	NFTTransferMode
 	DTCommitMode
 	SmartContractDeployMode
+	SmartContractExecuteMode
 )
 const (
 	AlphaQuorumType int = iota
@@ -42,6 +43,7 @@ type ConensusRequest struct {
 	QuorumList         []string `json:"quorum_list"`
 	DeployerPeerID     string   `json:"deployer_peerd_id"`
 	SmartContractToken string   `json:"smart_contract_token`
+	ExecuterPeerID     string   `json:"executor_peer_id"`
 }
 
 type ConensusReply struct {
@@ -249,6 +251,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		for i := range tokenInfo {
 			reqPledgeTokens = reqPledgeTokens + tokenInfo[i].TokenValue
 		}
+	case SmartContractExecuteMode:
+		reqPledgeTokens = sc.GetTotalRBTs()
 	}
 	pd := PledgeDetials{
 		RemPledgeTokens:        reqPledgeTokens,
@@ -393,7 +397,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Status:          true,
 		}
 		return &td, pl, nil
-	} else {
+	} else /* if cr.Mode == SmartContractDeployMode */ {
 		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
 		if err != nil {
@@ -463,7 +467,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Status:          true,
 		}
 		return &txnDetails, pl, nil
-	}
+	} /* else { //execute mode
+
+		return &txnDetails, pl, nil
+	} */
 }
 
 func (c *Core) startConsensus(id string, qt int) {
@@ -530,7 +537,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 	}
 	err = c.initPledgeQuorumToken(cr, p, qt)
 	if err != nil {
-		c.log.Error("Failed to pleadge token", "err", err)
+		c.log.Error("Failed to pledge token", "err", err)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
@@ -587,6 +594,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	ctcb := make(map[string]*block.Block)
 
 	if sc.GetDeployerDID() != "" {
+		c.log.Debug("length pf pledge tokens, ", len(pts))
 		for i := range pts {
 			tt := block.TransTokens{
 				Token:        ti[0].Token,

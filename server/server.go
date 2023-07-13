@@ -240,6 +240,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APIPublishContract, "POST", s.AuthHandle(s.APIPublishContract, s.ErrorFunc))
 	s.AddRoute(APISubscribecontract, "POST", s.AuthHandle(s.APISubscribecontract, s.ErrorFunc))
 	s.AddRoute(APIDumpSmartContractTokenChainBlock, "POST", s.AuthHandle(s.APIDumpSmartContractTokenChainBlock, s.ErrorFunc))
+	s.AddRoute(APIExecuteSmartContract, "POST", s.AuthHandle(s.APIExecuteSmartContract, s.ErrorFunc))
 }
 
 func (s *Server) ExitFunc() error {

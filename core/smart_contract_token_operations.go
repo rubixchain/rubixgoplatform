@@ -175,6 +175,134 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	return resp
 }
 
-func (c *Core) executeSmartContractToken(smartcontractTokenHash string, function string, input []string) {
+func (c *Core) ExecuteSmartContractToken(reqID string, executeReq *model.ExecuteSmartContractRequest) {
+	br := c.executeSmartContractToken(reqID, executeReq)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
 
+func (c *Core) executeSmartContractToken(reqID string, executeReq *model.ExecuteSmartContractRequest) *model.BasicResponse {
+	st := time.Now()
+	resp := &model.BasicResponse{
+		Status: false,
+	}
+
+	_, did, ok := util.ParseAddress(executeReq.ExecutorAddress)
+	if !ok {
+		resp.Message = "Invalid Executor DID"
+		return resp
+	}
+	didCryptoLib, err := c.SetupDID(reqID, did)
+	if err != nil {
+		resp.Message = "Failed to setup Executor DID, " + err.Error()
+		return resp
+	}
+	//check the smartcontract token from the DB base
+	_, err = c.w.GetSmartContractToken(executeReq.SmartContractToken)
+	if err != nil {
+		c.log.Error("Failed to retrieve smart contract Token details from storage", err)
+		resp.Message = err.Error()
+		return resp
+	}
+
+	//get the gensys block of the amrt contract token
+	tokenType := c.TokenType(SmartContractString)
+	gensysBlock := c.w.GetGenesisTokenBlock(executeReq.SmartContractToken, tokenType)
+
+	//fetch smartcontract value from the gensys block
+	smartContractValue, err := gensysBlock.GetSmartContractValue(executeReq.SmartContractToken)
+	if err != nil {
+		c.log.Error("Failed to retrieve smart contract Token Value , ", err)
+		resp.Message = err.Error()
+		return resp
+	}
+	if smartContractValue == 0 {
+		c.log.Error("smart contract Token Value cannot be 0, ")
+		resp.Message = "smart contract Token Value cannot be 0, "
+		return resp
+	}
+
+	smartContractInfoArray := make([]contract.TokenInfo, 0)
+	smartContractInfo := contract.TokenInfo{
+		Token:      executeReq.SmartContractToken,
+		TokenType:  c.TokenType("sc"),
+		TokenValue: smartContractValue,
+		OwnerDID:   gensysBlock.GetDeployerDID(),
+	}
+	smartContractInfoArray = append(smartContractInfoArray, smartContractInfo)
+
+	//create teh consensuscontract
+	consensusContractDetails := &contract.ContractType{
+		Type:       contract.SmartContractDeployType,
+		PledgeMode: contract.POWPledgeMode,
+		TotalRBTs:  smartContractValue,
+		TransInfo: &contract.TransInfo{
+			DeployerDID:        did,
+			Comment:            executeReq.Comment,
+			SmartContractToken: executeReq.SmartContractToken,
+			TransTokens:        smartContractInfoArray,
+		},
+	}
+
+	consensusContract := contract.CreateNewContract(consensusContractDetails)
+	if consensusContract == nil {
+		c.log.Error("Failed to create Consensus contract")
+		resp.Message = "Failed to create Consensus contract"
+		return resp
+	}
+	err = consensusContract.UpdateSignature(didCryptoLib)
+	if err != nil {
+		c.log.Error(err.Error())
+		resp.Message = err.Error()
+		return resp
+	}
+
+	consensusContractBlock := consensusContract.GetBlock()
+	if consensusContractBlock == nil {
+		c.log.Error("failed to create consensus contract block")
+		resp.Message = "failed to create consensus contract block"
+		return resp
+	}
+	conensusRequest := &ConensusRequest{
+		ReqID:              uuid.New().String(),
+		Type:               executeReq.QuorumType,
+		ExecuterPeerID:     c.peerID,
+		ContractBlock:      consensusContract.GetBlock(),
+		SmartContractToken: executeReq.SmartContractToken,
+		Mode:               SmartContractExecuteMode,
+	}
+
+	txnDetails, _, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)
+
+	if err != nil {
+		c.log.Error("Consensus failed", "err", err)
+		resp.Message = "Consensus failed" + err.Error()
+		return resp
+	}
+	et := time.Now()
+	dif := et.Sub(st)
+
+	txnDetails.TotalTime = float64(dif.Milliseconds())
+	c.w.AddTransactionHistory(txnDetails)
+	tokens := make([]string, 0)
+	tokens = append(tokens, executeReq.SmartContractToken)
+	explorerTrans := &ExplorerTrans{
+		TID:         txnDetails.TransactionID,
+		DeployerDID: did,
+		TrasnType:   conensusRequest.Type,
+		TokenIDs:    tokens,
+		QuorumList:  conensusRequest.QuorumList,
+		TokenTime:   float64(dif.Milliseconds()),
+	}
+	c.ec.ExplorerTransaction(explorerTrans)
+
+	c.log.Info("Smart Contract Token Executed successfully", "duration", dif)
+	resp.Status = true
+	msg := fmt.Sprintf("Smart Contract Token Executed successfully in %v", dif)
+	resp.Message = msg
+	return resp
 }

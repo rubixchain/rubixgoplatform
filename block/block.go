@@ -541,6 +541,10 @@ func (b *Block) GetDeployerDID() string {
 	return b.getTrasnInfoString(TIDeployerDIDKey)
 }
 
+func (b *Block) GetExecutorDID() string {
+	return b.getTrasnInfoString(TIExecutorDIDKey)
+}
+
 func (b *Block) GetTid() string {
 	return b.getTrasnInfoString(TITIDKey)
 }
@@ -638,4 +642,14 @@ func (b *Block) GetSmartContractData() string {
 		return ""
 	}
 	return smartContractData
+}
+
+func (b *Block) GetSmartContractValue(t string) (float64, error) {
+	var result float64
+	gtm := b.getGenesisTokenMap(t)
+	if gtm == nil {
+		return result, fmt.Errorf("invalid token chain block, missing genesis block")
+	}
+	result = util.GetFloatFromMap(gtm, GISmartContractValueKey)
+	return result, nil
 }

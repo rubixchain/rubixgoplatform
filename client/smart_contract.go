@@ -1,13 +1,12 @@
 package client
 
 import (
-
+	"fmt"
 	"time"
-  "fmt"
+
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/server"
 )
-
 
 type SmartContractRequest struct {
 	BinaryCode string
@@ -105,4 +104,14 @@ func (c *Client) SubscribeContract(contract string) (*model.BasicResponse, error
 		return nil, err
 	}
 	return &response, nil
+}
+
+func (c *Client) ExecuteSmartContract(executeRequest *model.ExecuteSmartContractRequest) (*model.BasicResponse, error) {
+	var basicResponse model.BasicResponse
+	err := c.sendJSONRequest("POST", server.APIExecuteSmartContract, nil, executeRequest, &basicResponse, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to Execute Smart Contract", "err", err)
+		return nil, err
+	}
+	return &basicResponse, nil
 }

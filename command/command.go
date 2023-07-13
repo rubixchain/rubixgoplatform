@@ -210,6 +210,8 @@ type Command struct {
 	schemaFilePath     string
 	smartContractToken string
 	newContractBlock   string
+	smartContractData  string
+	executorAddr       string
 }
 
 func showVersion() {
@@ -390,6 +392,8 @@ func Run(args []string) {
 	flag.StringVar(&cmd.schemaFilePath, "schemaFile", "", "Schema file path")
 	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
 	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
+	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
+	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -520,6 +524,8 @@ func Run(args []string) {
 		cmd.SubscribeContract()
 	case DumpSmartContractTokenChainCmd:
 		cmd.dumpSmartContractTokenChain()
+	case ExecuteSmartcontractCmd:
+		cmd.executeSmartcontract()
 	default:
 		cmd.log.Error("Invalid command")
 	}
