@@ -12,6 +12,7 @@ import (
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/gorilla/sessions"
 	"github.com/rubixchain/rubixgoplatform/core"
+	"github.com/rubixchain/rubixgoplatform/server/servergrpc"
 )
 
 const (
@@ -56,10 +57,11 @@ const (
 // Server defines server handle
 type Server struct {
 	ensweb.Server
-	cfg *Config
-	log logger.Logger
-	c   *core.Core
-	sc  chan bool
+	cfg  *Config
+	log  logger.Logger
+	c    *core.Core
+	sc   chan bool
+	grpc *servergrpc.ServerGRPC
 }
 
 // NewServer create new server instances
@@ -190,6 +192,12 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 			return nil, fmt.Errorf("failed to start core")
 		}
 	}
+	s.grpc, err = servergrpc.NewServerGRPC(c, log, cfg.GRPCPort)
+	if err != nil {
+		s.log.Error("Failed to create GRPC server", "err", err)
+		return nil, err
+	}
+	go s.grpc.Run()
 	s.RegisterRoutes()
 	return s, nil
 }

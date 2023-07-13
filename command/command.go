@@ -245,6 +245,7 @@ func (cmd *Command) runApp() {
 			HostPort:    cmd.cfg.NodePort,
 			Production:  "false",
 		},
+		GRPCPort: cmd.cfg.CfgData.Ports.ReceiverPort + 11,
 	}
 	scfg.EnableAuth = cmd.enableAuth
 	if cmd.enableAuth {
