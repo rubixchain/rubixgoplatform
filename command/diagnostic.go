@@ -115,6 +115,8 @@ func tcMarshal(str string, m interface{}) (string, error) {
 		str = str + fmt.Sprintf("%d", mt)
 	case int:
 		str = str + fmt.Sprintf("%d", mt)
+	case float64:
+		str = str + fmt.Sprintf("%f", mt)
 	case interface{}:
 		str, err = tcMarshal(str, mt)
 		if err != nil {
@@ -175,11 +177,11 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 	for {
 		ds, err := cmd.c.DumpSmartContractTokenChain(cmd.smartContractToken, blockID)
 		if err != nil {
-			cmd.log.Error("Failed to dump token chain", "err", err)
+			cmd.log.Error("Failed to dump smart contract token chain", "err", err)
 			return
 		}
 		if !ds.Status {
-			cmd.log.Error("Failed to dump token chain", "msg", ds.Message)
+			cmd.log.Error("Failed to dump smart contract token chain", "msg", ds.Message)
 			return
 		}
 		for _, blk := range ds.Blocks {
@@ -197,15 +199,15 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 	}
 	str, err := tcMarshal("", blocks)
 	if err != nil {
-		cmd.log.Error("Failed to dump token chain", "err", err)
+		cmd.log.Error("Failed to dump smart contract token chain", "err", err)
 		return
 	}
 	f, err := os.Create("dump.json")
 	if err != nil {
-		cmd.log.Error("Failed to dump token chain", "err", err)
+		cmd.log.Error("Failed to dump smart contract token chain", "err", err)
 		return
 	}
 	f.WriteString(str)
 	f.Close()
-	cmd.log.Info("Token chain dumped successfully!")
+	cmd.log.Info("smart contract Token chain dumped successfully!")
 }
