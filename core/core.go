@@ -106,6 +106,7 @@ type Core struct {
 	arbitaryMode  bool
 	arbitaryAddr  []string
 	ec            *ExplorerClient
+	secret        []byte
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {
@@ -169,6 +170,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		pqc:           make(map[string]did.DIDCrypto),
 		sd:            make(map[string]*ServiceDetials),
 		arbitaryMode:  am,
+		secret:        util.GetRandBytes(32),
 	}
 	c.didDir = c.cfg.DirPath + RubixRootDir
 	if c.testNet {

@@ -20,31 +20,35 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	RubixService_CreateDIDChallenge_FullMethodName      = "/protos.RubixService/CreateDIDChallenge"
-	RubixService_CreateDID_FullMethodName               = "/protos.RubixService/CreateDID"
-	RubixService_InitiateTransaction_FullMethodName     = "/protos.RubixService/InitiateTransaction"
-	RubixService_StreamIncomingTxn_FullMethodName       = "/protos.RubixService/StreamIncomingTxn"
-	RubixService_SignResponse_FullMethodName            = "/protos.RubixService/SignResponse"
-	RubixService_GenerateRbt_FullMethodName             = "/protos.RubixService/GenerateRbt"
-	RubixService_GetBalance_FullMethodName              = "/protos.RubixService/GetBalance"
-	RubixService_GetAccessTokenChallenge_FullMethodName = "/protos.RubixService/GetAccessTokenChallenge"
-	RubixService_GenerateAccessToken_FullMethodName     = "/protos.RubixService/GenerateAccessToken"
-	RubixService_GetTransactionHistory_FullMethodName   = "/protos.RubixService/GetTransactionHistory"
+	RubixService_GetDIDChallenge_FullMethodName       = "/protos.RubixService/GetDIDChallenge"
+	RubixService_GetDIDAccess_FullMethodName          = "/protos.RubixService/GetDIDAccess"
+	RubixService_CreateDID_FullMethodName             = "/protos.RubixService/CreateDID"
+	RubixService_GetAllTokens_FullMethodName          = "/protos.RubixService/GetAllTokens"
+	RubixService_TransferRBT_FullMethodName           = "/protos.RubixService/TransferRBT"
+	RubixService_CreateDataToken_FullMethodName       = "/protos.RubixService/CreateDataToken"
+	RubixService_CommitDataToken_FullMethodName       = "/protos.RubixService/CommitDataToken"
+	RubixService_StreamIncomingTxn_FullMethodName     = "/protos.RubixService/StreamIncomingTxn"
+	RubixService_StreamSignature_FullMethodName       = "/protos.RubixService/StreamSignature"
+	RubixService_GenerateRBT_FullMethodName           = "/protos.RubixService/GenerateRBT"
+	RubixService_GetBalance_FullMethodName            = "/protos.RubixService/GetBalance"
+	RubixService_GetTransactionHistory_FullMethodName = "/protos.RubixService/GetTransactionHistory"
 )
 
 // RubixServiceClient is the client API for RubixService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RubixServiceClient interface {
-	CreateDIDChallenge(ctx context.Context, in *ChallengeReq, opts ...grpc.CallOption) (*ChallengeString, error)
+	GetDIDChallenge(ctx context.Context, in *ChallengeReq, opts ...grpc.CallOption) (*ChallengeResp, error)
+	GetDIDAccess(ctx context.Context, in *AccessReq, opts ...grpc.CallOption) (*Token, error)
 	CreateDID(ctx context.Context, in *CreateDIDReq, opts ...grpc.CallOption) (*CreateDIDRes, error)
-	InitiateTransaction(ctx context.Context, in *RequestTransactionPayloadReq, opts ...grpc.CallOption) (*RequestTransactionPayloadRes, error)
+	GetAllTokens(ctx context.Context, in *TokenReq, opts ...grpc.CallOption) (*TokenResp, error)
+	TransferRBT(ctx context.Context, in *TransferRBTReq, opts ...grpc.CallOption) (*BasicReponse, error)
+	CreateDataToken(ctx context.Context, in *DataTokenReq, opts ...grpc.CallOption) (*BasicReponse, error)
+	CommitDataToken(ctx context.Context, in *CommitDataTokenReq, opts ...grpc.CallOption) (*BasicReponse, error)
 	StreamIncomingTxn(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (RubixService_StreamIncomingTxnClient, error)
-	SignResponse(ctx context.Context, in *HashSigned, opts ...grpc.CallOption) (*Status, error)
-	GenerateRbt(ctx context.Context, in *GenerateReq, opts ...grpc.CallOption) (*RequestTransactionPayloadRes, error)
+	StreamSignature(ctx context.Context, opts ...grpc.CallOption) (RubixService_StreamSignatureClient, error)
+	GenerateRBT(ctx context.Context, in *GenerateReq, opts ...grpc.CallOption) (*BasicReponse, error)
 	GetBalance(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetBalanceRes, error)
-	GetAccessTokenChallenge(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ChallengeString, error)
-	GenerateAccessToken(ctx context.Context, in *SignedPayload, opts ...grpc.CallOption) (*Token, error)
 	GetTransactionHistory(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TransactionHistory, error)
 }
 
@@ -56,9 +60,18 @@ func NewRubixServiceClient(cc grpc.ClientConnInterface) RubixServiceClient {
 	return &rubixServiceClient{cc}
 }
 
-func (c *rubixServiceClient) CreateDIDChallenge(ctx context.Context, in *ChallengeReq, opts ...grpc.CallOption) (*ChallengeString, error) {
-	out := new(ChallengeString)
-	err := c.cc.Invoke(ctx, RubixService_CreateDIDChallenge_FullMethodName, in, out, opts...)
+func (c *rubixServiceClient) GetDIDChallenge(ctx context.Context, in *ChallengeReq, opts ...grpc.CallOption) (*ChallengeResp, error) {
+	out := new(ChallengeResp)
+	err := c.cc.Invoke(ctx, RubixService_GetDIDChallenge_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *rubixServiceClient) GetDIDAccess(ctx context.Context, in *AccessReq, opts ...grpc.CallOption) (*Token, error) {
+	out := new(Token)
+	err := c.cc.Invoke(ctx, RubixService_GetDIDAccess_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -74,9 +87,36 @@ func (c *rubixServiceClient) CreateDID(ctx context.Context, in *CreateDIDReq, op
 	return out, nil
 }
 
-func (c *rubixServiceClient) InitiateTransaction(ctx context.Context, in *RequestTransactionPayloadReq, opts ...grpc.CallOption) (*RequestTransactionPayloadRes, error) {
-	out := new(RequestTransactionPayloadRes)
-	err := c.cc.Invoke(ctx, RubixService_InitiateTransaction_FullMethodName, in, out, opts...)
+func (c *rubixServiceClient) GetAllTokens(ctx context.Context, in *TokenReq, opts ...grpc.CallOption) (*TokenResp, error) {
+	out := new(TokenResp)
+	err := c.cc.Invoke(ctx, RubixService_GetAllTokens_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *rubixServiceClient) TransferRBT(ctx context.Context, in *TransferRBTReq, opts ...grpc.CallOption) (*BasicReponse, error) {
+	out := new(BasicReponse)
+	err := c.cc.Invoke(ctx, RubixService_TransferRBT_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *rubixServiceClient) CreateDataToken(ctx context.Context, in *DataTokenReq, opts ...grpc.CallOption) (*BasicReponse, error) {
+	out := new(BasicReponse)
+	err := c.cc.Invoke(ctx, RubixService_CreateDataToken_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *rubixServiceClient) CommitDataToken(ctx context.Context, in *CommitDataTokenReq, opts ...grpc.CallOption) (*BasicReponse, error) {
+	out := new(BasicReponse)
+	err := c.cc.Invoke(ctx, RubixService_CommitDataToken_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -115,18 +155,40 @@ func (x *rubixServiceStreamIncomingTxnClient) Recv() (*IncomingTxnDetails, error
 	return m, nil
 }
 
-func (c *rubixServiceClient) SignResponse(ctx context.Context, in *HashSigned, opts ...grpc.CallOption) (*Status, error) {
-	out := new(Status)
-	err := c.cc.Invoke(ctx, RubixService_SignResponse_FullMethodName, in, out, opts...)
+func (c *rubixServiceClient) StreamSignature(ctx context.Context, opts ...grpc.CallOption) (RubixService_StreamSignatureClient, error) {
+	stream, err := c.cc.NewStream(ctx, &RubixService_ServiceDesc.Streams[1], RubixService_StreamSignature_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &rubixServiceStreamSignatureClient{stream}
+	return x, nil
 }
 
-func (c *rubixServiceClient) GenerateRbt(ctx context.Context, in *GenerateReq, opts ...grpc.CallOption) (*RequestTransactionPayloadRes, error) {
-	out := new(RequestTransactionPayloadRes)
-	err := c.cc.Invoke(ctx, RubixService_GenerateRbt_FullMethodName, in, out, opts...)
+type RubixService_StreamSignatureClient interface {
+	Send(*SignResponse) error
+	Recv() (*BasicReponse, error)
+	grpc.ClientStream
+}
+
+type rubixServiceStreamSignatureClient struct {
+	grpc.ClientStream
+}
+
+func (x *rubixServiceStreamSignatureClient) Send(m *SignResponse) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *rubixServiceStreamSignatureClient) Recv() (*BasicReponse, error) {
+	m := new(BasicReponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *rubixServiceClient) GenerateRBT(ctx context.Context, in *GenerateReq, opts ...grpc.CallOption) (*BasicReponse, error) {
+	out := new(BasicReponse)
+	err := c.cc.Invoke(ctx, RubixService_GenerateRBT_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -136,24 +198,6 @@ func (c *rubixServiceClient) GenerateRbt(ctx context.Context, in *GenerateReq, o
 func (c *rubixServiceClient) GetBalance(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetBalanceRes, error) {
 	out := new(GetBalanceRes)
 	err := c.cc.Invoke(ctx, RubixService_GetBalance_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *rubixServiceClient) GetAccessTokenChallenge(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ChallengeString, error) {
-	out := new(ChallengeString)
-	err := c.cc.Invoke(ctx, RubixService_GetAccessTokenChallenge_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *rubixServiceClient) GenerateAccessToken(ctx context.Context, in *SignedPayload, opts ...grpc.CallOption) (*Token, error) {
-	out := new(Token)
-	err := c.cc.Invoke(ctx, RubixService_GenerateAccessToken_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -173,15 +217,17 @@ func (c *rubixServiceClient) GetTransactionHistory(ctx context.Context, in *empt
 // All implementations must embed UnimplementedRubixServiceServer
 // for forward compatibility
 type RubixServiceServer interface {
-	CreateDIDChallenge(context.Context, *ChallengeReq) (*ChallengeString, error)
+	GetDIDChallenge(context.Context, *ChallengeReq) (*ChallengeResp, error)
+	GetDIDAccess(context.Context, *AccessReq) (*Token, error)
 	CreateDID(context.Context, *CreateDIDReq) (*CreateDIDRes, error)
-	InitiateTransaction(context.Context, *RequestTransactionPayloadReq) (*RequestTransactionPayloadRes, error)
+	GetAllTokens(context.Context, *TokenReq) (*TokenResp, error)
+	TransferRBT(context.Context, *TransferRBTReq) (*BasicReponse, error)
+	CreateDataToken(context.Context, *DataTokenReq) (*BasicReponse, error)
+	CommitDataToken(context.Context, *CommitDataTokenReq) (*BasicReponse, error)
 	StreamIncomingTxn(*emptypb.Empty, RubixService_StreamIncomingTxnServer) error
-	SignResponse(context.Context, *HashSigned) (*Status, error)
-	GenerateRbt(context.Context, *GenerateReq) (*RequestTransactionPayloadRes, error)
+	StreamSignature(RubixService_StreamSignatureServer) error
+	GenerateRBT(context.Context, *GenerateReq) (*BasicReponse, error)
 	GetBalance(context.Context, *emptypb.Empty) (*GetBalanceRes, error)
-	GetAccessTokenChallenge(context.Context, *emptypb.Empty) (*ChallengeString, error)
-	GenerateAccessToken(context.Context, *SignedPayload) (*Token, error)
 	GetTransactionHistory(context.Context, *emptypb.Empty) (*TransactionHistory, error)
 	mustEmbedUnimplementedRubixServiceServer()
 }
@@ -190,32 +236,38 @@ type RubixServiceServer interface {
 type UnimplementedRubixServiceServer struct {
 }
 
-func (UnimplementedRubixServiceServer) CreateDIDChallenge(context.Context, *ChallengeReq) (*ChallengeString, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateDIDChallenge not implemented")
+func (UnimplementedRubixServiceServer) GetDIDChallenge(context.Context, *ChallengeReq) (*ChallengeResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetDIDChallenge not implemented")
+}
+func (UnimplementedRubixServiceServer) GetDIDAccess(context.Context, *AccessReq) (*Token, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetDIDAccess not implemented")
 }
 func (UnimplementedRubixServiceServer) CreateDID(context.Context, *CreateDIDReq) (*CreateDIDRes, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateDID not implemented")
 }
-func (UnimplementedRubixServiceServer) InitiateTransaction(context.Context, *RequestTransactionPayloadReq) (*RequestTransactionPayloadRes, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method InitiateTransaction not implemented")
+func (UnimplementedRubixServiceServer) GetAllTokens(context.Context, *TokenReq) (*TokenResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAllTokens not implemented")
+}
+func (UnimplementedRubixServiceServer) TransferRBT(context.Context, *TransferRBTReq) (*BasicReponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TransferRBT not implemented")
+}
+func (UnimplementedRubixServiceServer) CreateDataToken(context.Context, *DataTokenReq) (*BasicReponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateDataToken not implemented")
+}
+func (UnimplementedRubixServiceServer) CommitDataToken(context.Context, *CommitDataTokenReq) (*BasicReponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CommitDataToken not implemented")
 }
 func (UnimplementedRubixServiceServer) StreamIncomingTxn(*emptypb.Empty, RubixService_StreamIncomingTxnServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamIncomingTxn not implemented")
 }
-func (UnimplementedRubixServiceServer) SignResponse(context.Context, *HashSigned) (*Status, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SignResponse not implemented")
+func (UnimplementedRubixServiceServer) StreamSignature(RubixService_StreamSignatureServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamSignature not implemented")
 }
-func (UnimplementedRubixServiceServer) GenerateRbt(context.Context, *GenerateReq) (*RequestTransactionPayloadRes, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GenerateRbt not implemented")
+func (UnimplementedRubixServiceServer) GenerateRBT(context.Context, *GenerateReq) (*BasicReponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateRBT not implemented")
 }
 func (UnimplementedRubixServiceServer) GetBalance(context.Context, *emptypb.Empty) (*GetBalanceRes, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
-}
-func (UnimplementedRubixServiceServer) GetAccessTokenChallenge(context.Context, *emptypb.Empty) (*ChallengeString, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetAccessTokenChallenge not implemented")
-}
-func (UnimplementedRubixServiceServer) GenerateAccessToken(context.Context, *SignedPayload) (*Token, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GenerateAccessToken not implemented")
 }
 func (UnimplementedRubixServiceServer) GetTransactionHistory(context.Context, *emptypb.Empty) (*TransactionHistory, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTransactionHistory not implemented")
@@ -233,20 +285,38 @@ func RegisterRubixServiceServer(s grpc.ServiceRegistrar, srv RubixServiceServer)
 	s.RegisterService(&RubixService_ServiceDesc, srv)
 }
 
-func _RubixService_CreateDIDChallenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RubixService_GetDIDChallenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ChallengeReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RubixServiceServer).CreateDIDChallenge(ctx, in)
+		return srv.(RubixServiceServer).GetDIDChallenge(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RubixService_CreateDIDChallenge_FullMethodName,
+		FullMethod: RubixService_GetDIDChallenge_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RubixServiceServer).CreateDIDChallenge(ctx, req.(*ChallengeReq))
+		return srv.(RubixServiceServer).GetDIDChallenge(ctx, req.(*ChallengeReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RubixService_GetDIDAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AccessReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RubixServiceServer).GetDIDAccess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RubixService_GetDIDAccess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RubixServiceServer).GetDIDAccess(ctx, req.(*AccessReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -269,20 +339,74 @@ func _RubixService_CreateDID_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RubixService_InitiateTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestTransactionPayloadReq)
+func _RubixService_GetAllTokens_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TokenReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RubixServiceServer).InitiateTransaction(ctx, in)
+		return srv.(RubixServiceServer).GetAllTokens(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RubixService_InitiateTransaction_FullMethodName,
+		FullMethod: RubixService_GetAllTokens_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RubixServiceServer).InitiateTransaction(ctx, req.(*RequestTransactionPayloadReq))
+		return srv.(RubixServiceServer).GetAllTokens(ctx, req.(*TokenReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RubixService_TransferRBT_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransferRBTReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RubixServiceServer).TransferRBT(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RubixService_TransferRBT_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RubixServiceServer).TransferRBT(ctx, req.(*TransferRBTReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RubixService_CreateDataToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DataTokenReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RubixServiceServer).CreateDataToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RubixService_CreateDataToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RubixServiceServer).CreateDataToken(ctx, req.(*DataTokenReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RubixService_CommitDataToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CommitDataTokenReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RubixServiceServer).CommitDataToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RubixService_CommitDataToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RubixServiceServer).CommitDataToken(ctx, req.(*CommitDataTokenReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -308,38 +432,46 @@ func (x *rubixServiceStreamIncomingTxnServer) Send(m *IncomingTxnDetails) error 
 	return x.ServerStream.SendMsg(m)
 }
 
-func _RubixService_SignResponse_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HashSigned)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RubixServiceServer).SignResponse(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: RubixService_SignResponse_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RubixServiceServer).SignResponse(ctx, req.(*HashSigned))
-	}
-	return interceptor(ctx, in, info, handler)
+func _RubixService_StreamSignature_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(RubixServiceServer).StreamSignature(&rubixServiceStreamSignatureServer{stream})
 }
 
-func _RubixService_GenerateRbt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+type RubixService_StreamSignatureServer interface {
+	Send(*BasicReponse) error
+	Recv() (*SignResponse, error)
+	grpc.ServerStream
+}
+
+type rubixServiceStreamSignatureServer struct {
+	grpc.ServerStream
+}
+
+func (x *rubixServiceStreamSignatureServer) Send(m *BasicReponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *rubixServiceStreamSignatureServer) Recv() (*SignResponse, error) {
+	m := new(SignResponse)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _RubixService_GenerateRBT_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GenerateReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RubixServiceServer).GenerateRbt(ctx, in)
+		return srv.(RubixServiceServer).GenerateRBT(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RubixService_GenerateRbt_FullMethodName,
+		FullMethod: RubixService_GenerateRBT_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RubixServiceServer).GenerateRbt(ctx, req.(*GenerateReq))
+		return srv.(RubixServiceServer).GenerateRBT(ctx, req.(*GenerateReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -358,42 +490,6 @@ func _RubixService_GetBalance_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RubixServiceServer).GetBalance(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _RubixService_GetAccessTokenChallenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RubixServiceServer).GetAccessTokenChallenge(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: RubixService_GetAccessTokenChallenge_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RubixServiceServer).GetAccessTokenChallenge(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _RubixService_GenerateAccessToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SignedPayload)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RubixServiceServer).GenerateAccessToken(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: RubixService_GenerateAccessToken_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RubixServiceServer).GenerateAccessToken(ctx, req.(*SignedPayload))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -424,36 +520,40 @@ var RubixService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*RubixServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateDIDChallenge",
-			Handler:    _RubixService_CreateDIDChallenge_Handler,
+			MethodName: "GetDIDChallenge",
+			Handler:    _RubixService_GetDIDChallenge_Handler,
+		},
+		{
+			MethodName: "GetDIDAccess",
+			Handler:    _RubixService_GetDIDAccess_Handler,
 		},
 		{
 			MethodName: "CreateDID",
 			Handler:    _RubixService_CreateDID_Handler,
 		},
 		{
-			MethodName: "InitiateTransaction",
-			Handler:    _RubixService_InitiateTransaction_Handler,
+			MethodName: "GetAllTokens",
+			Handler:    _RubixService_GetAllTokens_Handler,
 		},
 		{
-			MethodName: "SignResponse",
-			Handler:    _RubixService_SignResponse_Handler,
+			MethodName: "TransferRBT",
+			Handler:    _RubixService_TransferRBT_Handler,
 		},
 		{
-			MethodName: "GenerateRbt",
-			Handler:    _RubixService_GenerateRbt_Handler,
+			MethodName: "CreateDataToken",
+			Handler:    _RubixService_CreateDataToken_Handler,
+		},
+		{
+			MethodName: "CommitDataToken",
+			Handler:    _RubixService_CommitDataToken_Handler,
+		},
+		{
+			MethodName: "GenerateRBT",
+			Handler:    _RubixService_GenerateRBT_Handler,
 		},
 		{
 			MethodName: "GetBalance",
 			Handler:    _RubixService_GetBalance_Handler,
-		},
-		{
-			MethodName: "GetAccessTokenChallenge",
-			Handler:    _RubixService_GetAccessTokenChallenge_Handler,
-		},
-		{
-			MethodName: "GenerateAccessToken",
-			Handler:    _RubixService_GenerateAccessToken_Handler,
 		},
 		{
 			MethodName: "GetTransactionHistory",
@@ -465,6 +565,12 @@ var RubixService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "StreamIncomingTxn",
 			Handler:       _RubixService_StreamIncomingTxn_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamSignature",
+			Handler:       _RubixService_StreamSignature_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "rubix-native.proto",

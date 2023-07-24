@@ -1,14 +1,20 @@
 package server
 
-import "github.com/EnsurityTechnologies/ensweb"
+import (
+	"net/http"
+
+	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/setup"
+)
 
 // validateAccess : validate the access based on the client token,
 // api key access will have rot directory access
 func (s *Server) validateAccess(req *ensweb.Request) (string, bool) {
 	if s.cfg.EnableAuth {
 		if req.ClientToken.Verified {
-			token := req.ClientToken.Model.(*Token)
-			return token.UserID, true
+			token := req.ClientToken.Model.(*setup.BearerToken)
+			return token.DID, true
 		} else if req.ClientToken.APIKeyVerified {
 			return DIDRootDir, true
 		} else {
@@ -17,4 +23,33 @@ func (s *Server) validateAccess(req *ensweb.Request) (string, bool) {
 	} else {
 		return DIDRootDir, true
 	}
+}
+
+func (s *Server) AuthError(req *ensweb.Request) *ensweb.Result {
+	return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "unauthorized access"}, http.StatusUnauthorized)
+}
+
+func (s *Server) DIDAuthHandle(hf ensweb.HandlerFunc, af ensweb.AuthFunc, ef ensweb.HandlerFunc) ensweb.HandlerFunc {
+	return ensweb.HandlerFunc(func(req *ensweb.Request) *ensweb.Result {
+		bt, ok := s.c.ValidateDIDToken(req.ClientToken.Token, setup.AccessTokenType, "")
+		if !ok {
+			if ef != nil {
+				return ef(req)
+			} else {
+				return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "ivnalid token"}, http.StatusUnauthorized)
+			}
+		}
+		req.ClientToken.Model = bt
+		req.ClientToken.Verified = true
+		if af != nil {
+			if !af(req) {
+				if ef != nil {
+					return ef(req)
+				} else {
+					return s.RenderJSONError(req, http.StatusForbidden, "Access denined", "Access denied")
+				}
+			}
+		}
+		return hf(req)
+	})
 }

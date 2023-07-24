@@ -310,3 +310,18 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 		}
 	}
 }
+
+func (cmd *Command) GetAccountInfo() {
+	info, err := cmd.c.GetAccountInfo(cmd.did)
+	if err != nil {
+		cmd.log.Error("Invalid response from the node", "err", err)
+		return
+	}
+	fmt.Printf("Response : %v\n", info)
+	if !info.Status {
+		cmd.log.Error("Failed to get account info", "message", info.Message)
+	} else {
+		cmd.log.Info("Successfully got the account information")
+		fmt.Printf("RBT : %10.3f, Locked RBT : %10.3f, Pledged RBT : %10.3f\n", info.AccountInfo[0].RBTAmount, info.AccountInfo[0].LockedRBT, info.AccountInfo[0].PledgedRBT)
+	}
+}

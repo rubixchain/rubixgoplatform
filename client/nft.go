@@ -6,7 +6,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/server"
+	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
 type CreateNFTReq struct {
@@ -40,7 +40,7 @@ func (c *Client) CreateNFT(nt *CreateNFTReq) (*model.BasicResponse, error) {
 	if nt.NumTokens > 0 {
 		q["numTokens"] = fmt.Sprintf("%d", nt.NumTokens)
 	}
-	err := c.sendMutiFormRequest("POST", server.APICreateNFT, q, fields, files, &br)
+	err := c.sendMutiFormRequest("POST", setup.APICreateNFT, q, fields, files, &br)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (c *Client) GetAllNFTs(did string) (*model.NFTTokens, error) {
 	q := make(map[string]string)
 	q["did"] = did
 	var tkns model.NFTTokens
-	err := c.sendJSONRequest("GET", server.APIGetAllNFT, q, nil, &tkns)
+	err := c.sendJSONRequest("GET", setup.APIGetAllNFT, q, nil, &tkns)
 	if err != nil {
 		return nil, err
 	}

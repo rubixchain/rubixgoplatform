@@ -2,18 +2,92 @@ package core
 
 import (
 	"fmt"
+	"io/ioutil"
 	"time"
 
+	"github.com/EnsurityTechnologies/enscrypt"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
+
+func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
+	resp := &model.DIDAccessResponse{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	dt, err := c.w.GetDID(req.DID)
+	if err != nil {
+		c.log.Error("DID does not exist", "err", err)
+		resp.Message = "DID does not exist"
+		return resp
+	}
+	if dt.Type == did.BasicDIDMode || dt.Type == did.ChildDIDMode {
+		if !c.checkPassword(req.DID, req.Password) {
+			resp.Message = "Password does not match"
+			return resp
+		}
+	} else {
+		_, ok := c.ValidateDIDToken(req.Token, setup.ChanllegeTokenType, req.DID)
+		if !ok {
+			resp.Message = "Invalid token"
+			return resp
+		}
+		dc := did.InitDIDBasic(req.DID, c.didDir, nil)
+		ok, err := dc.PvtVerify([]byte(req.Token), req.Signature)
+		if err != nil {
+			c.log.Error("Failed to verify DID signature", "err", err)
+			resp.Message = "Failed to verify DID signature"
+			return resp
+		}
+		if !ok {
+			resp.Message = "Invalid signature"
+			return resp
+		}
+	}
+	expiresAt := time.Now().Add(time.Minute * 10)
+	tkn := c.generateDIDToken(setup.AccessTokenType, req.DID, expiresAt)
+	resp.Status = true
+	resp.Message = "Access granted"
+	resp.Token = tkn
+	return resp
+}
+
+func (c *Core) GetDIDChallenge(d string) *model.DIDAccessResponse {
+	expiresAt := time.Now().Add(time.Minute * 1)
+	return &model.DIDAccessResponse{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "Challenge generated",
+		},
+		Token: c.generateDIDToken(setup.ChanllegeTokenType, d, expiresAt),
+	}
+}
+
+func (c *Core) checkPassword(didStr string, pwd string) bool {
+	privKey, err := ioutil.ReadFile(util.SanitizeDirPath(c.didDir) + didStr + "/" + did.PvtKeyFileName)
+	if err != nil {
+		c.log.Error("Private ket file does not exist", "did", didStr)
+		return false
+	}
+	_, _, err = enscrypt.DecodeKeyPair(pwd, privKey, nil)
+	if err != nil {
+		c.log.Error("Invalid password", "did", didStr)
+		return false
+	}
+	return true
+}
 
 func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	did, err := c.d.CreateDID(didCreate)
 	if err != nil {
 		return "", err
+	}
+	if didCreate.Dir == "" {
+		didCreate.Dir = did
 	}
 	dt := wallet.DIDType{
 		DID:    did,
