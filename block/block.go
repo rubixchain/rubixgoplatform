@@ -134,6 +134,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		return nil
 	}
 	ntcb[TCTransInfoKey] = ntib
+	pdib := newPledgeDetails(tcb.PledgeDetails)
+	if pdib != nil {
+		ntcb[TCPledgeDetailsKey] = pdib
+	}
 	if tcb.QuorumSignature != nil {
 		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
 	}

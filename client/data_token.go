@@ -5,7 +5,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/server"
+	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
 type DataTokenReq struct {
@@ -44,7 +44,7 @@ func (c *Client) CreateDataToken(dt *DataTokenReq) (*model.BasicResponse, error)
 	var br model.BasicResponse
 	q := make(map[string]string)
 	q["did"] = dt.DID
-	err := c.sendMutiFormRequest("POST", server.APICreateDataToken, q, fields, files, &br)
+	err := c.sendMutiFormRequest("POST", setup.APICreateDataToken, q, fields, files, &br)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func (c *Client) CommitDataToken(did string, batchID string) (*model.BasicRespon
 	q := make(map[string]string)
 	q["did"] = did
 	q["batchID"] = batchID
-	err := c.sendMutiFormRequest("POST", server.APICommitDataToken, q, nil, nil, &br)
+	err := c.sendMutiFormRequest("POST", setup.APICommitDataToken, q, nil, nil, &br)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (c *Client) CheckDataToken(dt string) bool {
 	var br model.BasicResponse
 	q := make(map[string]string)
 	q["data_token"] = dt
-	err := c.sendMutiFormRequest("GET", server.APICheckDataToken, q, nil, nil, &br)
+	err := c.sendMutiFormRequest("GET", setup.APICheckDataToken, q, nil, nil, &br)
 	if err != nil {
 		c.log.Error("failed to check data token", "err", err)
 		return false

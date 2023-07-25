@@ -45,14 +45,15 @@ type ChainDB struct {
 }
 
 type Wallet struct {
-	ipfs                           *ipfsnode.Shell
-	s                              storage.Storage
-	l                              sync.Mutex
-	dtl                            sync.Mutex
-	log                            logger.Logger
-	wl                             sync.Mutex
-	tcs                            *ChainDB
-	dtcs                           *ChainDB
+	ipfs *ipfsnode.Shell
+	s    storage.Storage
+	l    sync.Mutex
+	dtl  sync.Mutex
+	log  logger.Logger
+	wl   sync.Mutex
+	tcs  *ChainDB
+	dtcs *ChainDB
+	ntcs *ChainDB
 	smartContractTokenChainStorage *ChainDB
 }
 
@@ -64,6 +65,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	}
 	w.tcs = &ChainDB{}
 	w.dtcs = &ChainDB{}
+	w.ntcs = &ChainDB{}
 	w.smartContractTokenChainStorage = &ChainDB{}
 	op := &opt.Options{
 		WriteBuffer: 64 * 1024 * 1024,
@@ -75,6 +77,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		return nil, fmt.Errorf("failed to configure token chain block storage")
 	}
 	w.tcs.DB = *tdb
+	ntdb, err := leveldb.OpenFile(dir+NFTChainStorage, op)
+	if err != nil {
+		w.log.Error("failed to configure NFT chain block storage", "err", err)
+		return nil, fmt.Errorf("failed to configure NFT chain block storage")
+	}
+	w.ntcs.DB = *ntdb
 	dtdb, err := leveldb.OpenFile(dir+DataChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure data chain block storage", "err", err)
@@ -92,6 +100,11 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		return nil, err
 	}
 	err = w.s.Init(DataTokenStorage, &DataToken{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize data token storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(NFTTokenStorage, &NFT{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize data token storage", "err", err)
 		return nil, err

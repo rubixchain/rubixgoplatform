@@ -6,6 +6,10 @@ import (
 )
 
 const (
+	RBTString  string = "rbt"
+	NFTString  string = "nft"
+	PartString string = "part"
+	DataString string = "data"
 	RBTString           string = "rbt"
 	NFTString           string = "nft"
 	PartString          string = "part"

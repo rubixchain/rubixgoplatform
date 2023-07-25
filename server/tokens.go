@@ -4,17 +4,19 @@ import (
 	"net/http"
 
 	"github.com/EnsurityTechnologies/ensweb"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-type Token struct {
-	UserID  string   `json:"UserID"`
-	IsAdmin bool     `json:"IsAdmin"`
-	Roles   []string `json:"Roles"`
-	jwt.StandardClaims
+func (s *Server) APIGetAllTokens(req *ensweb.Request) *ensweb.Result {
+	tokenType := s.GetQuerry(req, "type")
+	did := s.GetQuerry(req, "did")
+	tr, err := s.c.GetAllTokens(did, tokenType)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to get tokens", nil)
+	}
+	return s.RenderJSON(req, tr, http.StatusOK)
 }
 
 func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {

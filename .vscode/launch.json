@@ -16,6 +16,15 @@
             "args": ["dumpsmartcontracttokenchain","-sct","QmWHRw5q2pQB2iDtGyr1cBk6dQELbJtCjQK5GcSmEXkiyw"]
         },
         {
+            "name": "TestNode",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/windows",
+            "args": ["run", "-p", "venkatnode", "-n", "0",  "-s"]
+        },
+        {
             "name": "Node1",
             "type": "go",
             "request": "launch",

@@ -14,6 +14,7 @@ const (
 	SCDIDMigrateType
 	SCDataTokenType
 	SCDataTokenCommitType
+	SCNFTSaleContractType
 	SmartContractDeployType
 )
 

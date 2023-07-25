@@ -5,6 +5,7 @@ import (
 
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core"
+	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
 func (s *Server) APIMigrateNode(req *ensweb.Request) *ensweb.Result {
@@ -16,8 +17,8 @@ func (s *Server) APIMigrateNode(req *ensweb.Request) *ensweb.Result {
 	didDir := DIDRootDir
 	if s.cfg.EnableAuth {
 		// always expect client tokne to present
-		token := req.ClientToken.Model.(*Token)
-		didDir = token.UserID
+		token := req.ClientToken.Model.(*setup.BearerToken)
+		didDir = token.DID
 	}
 	s.c.AddWebReq(req)
 	go s.c.MigrateNode(req.ID, &m, didDir)

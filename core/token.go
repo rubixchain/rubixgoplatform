@@ -37,9 +37,63 @@ func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
 }
 
+func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {
+	tr := &model.TokenResponse{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "Got all tokens",
+		},
+	}
+	switch tt {
+	case model.RBTType:
+		tkns, err := c.w.GetAllTokens(did)
+		if err != nil {
+			return tr, nil
+		}
+		tr.TokenDetials = make([]model.TokenDetial, 0)
+		for _, t := range tkns {
+			td := model.TokenDetial{
+				Token:  t.TokenID,
+				Status: t.TokenStatus,
+			}
+			tr.TokenDetials = append(tr.TokenDetials, td)
+		}
+	case model.DTType:
+		tkns, err := c.w.GetAllDataTokens(did)
+		if err != nil {
+			return tr, nil
+		}
+		tr.TokenDetials = make([]model.TokenDetial, 0)
+		for _, t := range tkns {
+			td := model.TokenDetial{
+				Token:  t.TokenID,
+				Status: t.TokenStatus,
+			}
+			tr.TokenDetials = append(tr.TokenDetials, td)
+		}
+	case model.NFTType:
+		tkns := c.w.GetAllNFT(did)
+		if tkns == nil {
+			return tr, nil
+		}
+		tr.TokenDetials = make([]model.TokenDetial, 0)
+		for _, t := range tkns {
+			td := model.TokenDetial{
+				Token:  t.TokenID,
+				Status: t.TokenStatus,
+			}
+			tr.TokenDetials = append(tr.TokenDetials, td)
+		}
+	default:
+		tr.BasicResponse.Status = false
+		tr.BasicResponse.Message = "Invalid token type"
+	}
+	return tr, nil
+}
+
 func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
-	wt, err := c.w.GetAllWholeTokens(did)
-	if err != nil {
+	wt, err := c.w.GetAllTokens(did)
+	if err != nil && err.Error() != "no records found" {
 		c.log.Error("Failed to get tokens", "err", err)
 		return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
 	}

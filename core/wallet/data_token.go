@@ -22,6 +22,17 @@ func (w *Wallet) CreateDataToken(dt *DataToken) error {
 	return nil
 }
 
+func (w *Wallet) GetAllDataTokens(did string) ([]DataToken, error) {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	var dts []DataToken
+	err := w.s.Read(DataTokenStorage, &dts, "did=?", did)
+	if err != nil {
+		return nil, err
+	}
+	return dts, nil
+}
+
 func (w *Wallet) GetDataToken(batchID string) ([]DataToken, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()

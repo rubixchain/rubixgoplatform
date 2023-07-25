@@ -2,7 +2,7 @@ package client
 
 import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/server"
+	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
 func (c *Client) DumpTokenChain(token string, blockID string) (*model.TCDumpReply, error) {
@@ -11,7 +11,7 @@ func (c *Client) DumpTokenChain(token string, blockID string) (*model.TCDumpRepl
 		BlockID: blockID,
 	}
 	var drep model.TCDumpReply
-	err := c.sendJSONRequest("POST", server.APIDumpTokenChainBlock, nil, dr, &drep)
+	err := c.sendJSONRequest("POST", setup.APIDumpTokenChainBlock, nil, dr, &drep)
 	if err != nil {
 		return nil, err
 	}

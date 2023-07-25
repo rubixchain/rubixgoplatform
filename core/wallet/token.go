@@ -93,7 +93,7 @@ func (w *Wallet) UnpledgeWholeToken(did string, token string, tt int) error {
 	return nil
 }
 
-func (w *Wallet) GetAllWholeTokens(did string) ([]Token, error) {
+func (w *Wallet) GetAllTokens(did string) ([]Token, error) {
 	var t []Token
 	err := w.s.Read(TokenStorage, &t, "did=?", did)
 	if err != nil {
