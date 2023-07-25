@@ -19,20 +19,20 @@ import (
 //   "5" : TransInfo        : TransInfo
 //   "6" : SmartContract    : []byte
 //   "7" : QuorumSignature  : []string
-
+//   "8" : PledgeDetails    : map[string][]PledgeDetail
 //   "9" : SmartContractData : string
 //
 // }
 
 const (
-	TCTokenTypeKey       string = "1"
-	TCTransTypeKey       string = "2"
-	TCTokenOwnerKey      string = "3"
-	TCGenesisBlockKey    string = "4"
-	TCTransInfoKey       string = "5"
-	TCSmartContractKey   string = "6"
-	TCQuorumSignatureKey string = "7"
-
+	TCTokenTypeKey         string = "1"
+	TCTransTypeKey         string = "2"
+	TCTokenOwnerKey        string = "3"
+	TCGenesisBlockKey      string = "4"
+	TCTransInfoKey         string = "5"
+	TCSmartContractKey     string = "6"
+	TCQuorumSignatureKey   string = "7"
+	TCPledgeDetailsKey     string = "8"
 	TCBlockHashKey         string = "98"
 	TCSignatureKey         string = "99"
 	TCBlockContentKey      string = "1"
@@ -55,13 +55,21 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType   string        `json:"transactionType"`
-	TokenOwner        string        `json:"owner"`
-	GenesisBlock      *GenesisBlock `json:"genesisBlock"`
-	TransInfo         *TransInfo    `json:"transInfo"`
-	QuorumSignature   []string      `json:"quorumSignature"`
-	SmartContract     []byte        `json:"smartContract"`
-	SmartContractData string        `json:"smartContractData"`
+	TransactionType   string         `json:"transactionType"`
+	TokenOwner        string         `json:"owner"`
+	GenesisBlock      *GenesisBlock  `json:"genesisBlock"`
+	TransInfo         *TransInfo     `json:"transInfo"`
+	PledgeDetails     []PledgeDetail `json:"pledgeDetails"`
+	QuorumSignature   []string       `json:"quorumSignature"`
+	SmartContract     []byte         `json:"smartContract"`
+	SmartContractData string         `json:"smartContractData"`
+}
+
+type PledgeDetail struct {
+	Token        string `json:"token"`
+	TokenType    int    `json:"tokenType"`
+	DID          string `json:"did"`
+	TokenBlockID string `json:"tokenBlockID"`
 }
 
 type Block struct {
