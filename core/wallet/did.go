@@ -1,10 +1,11 @@
 package wallet
 
 type DIDType struct {
-	DID    string `gorm:"column:did;primaryKey"`
-	Type   int    `gorm:"column:type"`
-	DIDDir string `gorm:"column:did_dir"`
-	Config string `gorm:"column:config"`
+	DID     string `gorm:"column:did;primaryKey"`
+	Type    int    `gorm:"column:type"`
+	DIDDir  string `gorm:"column:did_dir"`
+	RootDID int    `gorm:"column:root_did"`
+	Config  string `gorm:"column:config"`
 }
 
 type DIDPeerMap struct {

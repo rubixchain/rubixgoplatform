@@ -239,13 +239,14 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("failed to create core")
 		return
 	}
+	addr := fmt.Sprintf(cmd.cfg.NodeAddress+":%d", 10500+cmd.node)
 	scfg := &server.Config{
 		Config: srvcfg.Config{
 			HostAddress: cmd.cfg.NodeAddress,
 			HostPort:    cmd.cfg.NodePort,
 			Production:  "false",
 		},
-		GRPCAddr: cmd.cfg.NodeAddress + ":10500",
+		GRPCAddr: addr,
 	}
 	scfg.EnableAuth = cmd.enableAuth
 	if cmd.enableAuth {

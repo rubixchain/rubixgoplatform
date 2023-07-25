@@ -59,5 +59,6 @@ type BearerToken struct {
 	DID       string `json:"did"`
 	PeerID    string `json:"peerId"`
 	Random    string `json:"random"`
+	Root      bool   `json:"root"`
 	jwt.RegisteredClaims
 }

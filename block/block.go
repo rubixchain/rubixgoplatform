@@ -19,7 +19,7 @@ import (
 //   "5" : TransInfo        : TransInfo
 //   "6" : SmartContract    : []byte
 //   "7" : QuorumSignature  : []string
-//
+//   "8" : PledgeDetails    : map[string][]PledgeDetail
 // }
 
 const (
@@ -30,6 +30,7 @@ const (
 	TCTransInfoKey       string = "5"
 	TCSmartContractKey   string = "6"
 	TCQuorumSignatureKey string = "7"
+	TCPledgeDetailsKey   string = "8"
 	TCBlockHashKey       string = "98"
 	TCSignatureKey       string = "99"
 	TCBlockContentKey    string = "1"
@@ -48,12 +49,20 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType string        `json:"transactionType"`
-	TokenOwner      string        `json:"owner"`
-	GenesisBlock    *GenesisBlock `json:"genesisBlock"`
-	TransInfo       *TransInfo    `json:"transInfo"`
-	QuorumSignature []string      `json:"quorumSignature"`
-	SmartContract   []byte        `json:"smartContract"`
+	TransactionType string         `json:"transactionType"`
+	TokenOwner      string         `json:"owner"`
+	GenesisBlock    *GenesisBlock  `json:"genesisBlock"`
+	TransInfo       *TransInfo     `json:"transInfo"`
+	PledgeDetails   []PledgeDetail `json:"pledgeDetails"`
+	QuorumSignature []string       `json:"quorumSignature"`
+	SmartContract   []byte         `json:"smartContract"`
+}
+
+type PledgeDetail struct {
+	Token        string `json:"token"`
+	TokenType    int    `json:"tokenType"`
+	DID          string `json:"did"`
+	TokenBlockID string `json:"tokenBlockID"`
 }
 
 type Block struct {
@@ -118,6 +127,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		return nil
 	}
 	ntcb[TCTransInfoKey] = ntib
+	pdib := newPledgeDetails(tcb.PledgeDetails)
+	if pdib != nil {
+		ntcb[TCPledgeDetailsKey] = pdib
+	}
 	if tcb.QuorumSignature != nil {
 		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
 	}

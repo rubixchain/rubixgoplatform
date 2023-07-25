@@ -29,7 +29,7 @@ func (s *Server) AuthError(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "unauthorized access"}, http.StatusUnauthorized)
 }
 
-func (s *Server) DIDAuthHandle(hf ensweb.HandlerFunc, af ensweb.AuthFunc, ef ensweb.HandlerFunc) ensweb.HandlerFunc {
+func (s *Server) DIDAuthHandle(hf ensweb.HandlerFunc, af ensweb.AuthFunc, ef ensweb.HandlerFunc, root bool) ensweb.HandlerFunc {
 	return ensweb.HandlerFunc(func(req *ensweb.Request) *ensweb.Result {
 		bt, ok := s.c.ValidateDIDToken(req.ClientToken.Token, setup.AccessTokenType, "")
 		if !ok {
@@ -38,6 +38,9 @@ func (s *Server) DIDAuthHandle(hf ensweb.HandlerFunc, af ensweb.AuthFunc, ef ens
 			} else {
 				return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "ivnalid token"}, http.StatusUnauthorized)
 			}
+		}
+		if root && !bt.Root {
+			return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "root access denied"}, http.StatusUnauthorized)
 		}
 		req.ClientToken.Model = bt
 		req.ClientToken.Verified = true

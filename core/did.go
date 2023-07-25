@@ -49,7 +49,7 @@ func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
 		}
 	}
 	expiresAt := time.Now().Add(time.Minute * 10)
-	tkn := c.generateDIDToken(setup.AccessTokenType, req.DID, expiresAt)
+	tkn := c.generateDIDToken(setup.AccessTokenType, req.DID, dt.RootDID == 1, expiresAt)
 	resp.Status = true
 	resp.Message = "Access granted"
 	resp.Token = tkn
@@ -63,7 +63,7 @@ func (c *Core) GetDIDChallenge(d string) *model.DIDAccessResponse {
 			Status:  true,
 			Message: "Challenge generated",
 		},
-		Token: c.generateDIDToken(setup.ChanllegeTokenType, d, expiresAt),
+		Token: c.generateDIDToken(setup.ChanllegeTokenType, d, false, expiresAt),
 	}
 }
 
@@ -82,6 +82,10 @@ func (c *Core) checkPassword(didStr string, pwd string) bool {
 }
 
 func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
+	if didCreate.RootDID && didCreate.Type != did.BasicDIDMode {
+		c.log.Error("only basic mode is allowed for root did")
+		return "", fmt.Errorf("only basic mode is allowed for root did")
+	}
 	did, err := c.d.CreateDID(didCreate)
 	if err != nil {
 		return "", err
@@ -94,6 +98,9 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		DIDDir: didCreate.Dir,
 		Type:   didCreate.Type,
 		Config: didCreate.Config,
+	}
+	if didCreate.RootDID {
+		dt.RootDID = 1
 	}
 	err = c.w.CreateDID(&dt)
 	if err != nil {

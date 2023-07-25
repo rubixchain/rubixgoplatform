@@ -94,7 +94,7 @@ type Core struct {
 	testNetKey    string
 	version       string
 	quorumRequest map[string]*ConsensusStatus
-	pd            map[string]*PledgeDetials
+	pd            map[string]*PledgeDetails
 	webReq        map[string]*did.DIDChan
 	w             *wallet.Wallet
 	qc            map[string]did.DIDCrypto
@@ -164,7 +164,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		testNet:       testNet,
 		testNetKey:    testNetKey,
 		quorumRequest: make(map[string]*ConsensusStatus),
-		pd:            make(map[string]*PledgeDetials),
+		pd:            make(map[string]*PledgeDetails),
 		webReq:        make(map[string]*did.DIDChan),
 		qc:            make(map[string]did.DIDCrypto),
 		pqc:           make(map[string]did.DIDCrypto),
