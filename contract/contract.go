@@ -278,6 +278,10 @@ func (c *Contract) GetDeployerDID() string {
 	return c.getTransInfoString(TSDeployerDIDKey)
 }
 
+func (c *Contract) GetExecutorDID() string {
+	return c.getTransInfoString(TSExecutorDIDKey)
+}
+
 func (c *Contract) GetComment() string {
 	return c.getTransInfoString(TSCommentKey)
 }

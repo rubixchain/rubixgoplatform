@@ -608,7 +608,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	tks := make([]block.TransTokens, 0)
 	ctcb := make(map[string]*block.Block)
 
-  if sc.GetDeployerDID() != "" {
+	if sc.GetDeployerDID() != "" {
 		tt := block.TransTokens{
 			Token:     ti[0].Token,
 			TokenType: ti[0].TokenType,
@@ -643,7 +643,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	//tokenList = append(tokenList, cr.PartTokens...)
 
 	var tcb block.TokenChainBlock
-  
+
 	if sc.GetDeployerDID() != "" {
 		bti.DeployerDID = sc.GetDeployerDID()
 
@@ -691,7 +691,6 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgeDetails:   ptds,
 		}
 	}
-
 
 	if cr.Mode == DTCommitMode {
 		tcb.TransactionType = block.TokenCommittedType

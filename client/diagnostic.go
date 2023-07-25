@@ -24,7 +24,7 @@ func (c *Client) DumpSmartContractTokenChain(token string, blockID string) (*mod
 		BlockID: blockID,
 	}
 	var drep model.TCDumpReply
-	err := c.sendJSONRequest("POST", server.APIDumpSmartContractTokenChainBlock, nil, dr, &drep)
+	err := c.sendJSONRequest("POST", setup.APIDumpSmartContractTokenChainBlock, nil, dr, &drep)
 	if err != nil {
 		return nil, err
 	}

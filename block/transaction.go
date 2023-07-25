@@ -62,10 +62,10 @@ const (
 )
 
 type TransTokens struct {
-	Token      string `json:"token"`
-	TokenType  int    `json:"tokenType"`
-	UnpledgedID string `json:"unpledgedID"`
-	CommitedDID  string `json:"commitedDID"`
+	Token       string `json:"token"`
+	TokenType   int    `json:"tokenType"`
+	UnplededID  string `json:"unpledgedID"`
+	CommitedDID string `json:"commitedDID"`
 }
 
 type TransInfo struct {

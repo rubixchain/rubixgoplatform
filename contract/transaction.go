@@ -27,6 +27,7 @@ const (
 	TSDeployerDIDKey        string = "6"
 	TSSmartContractTokenKey string = "7"
 	TSCommitedTokenInfoKey  string = "8"
+	TSExecutorDIDKey        string = "9"
 )
 
 const (
