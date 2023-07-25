@@ -11,14 +11,17 @@ import (
 const (
 	SessionAuthMethod string = "SessionAuth"
 	APIKeyAuthMethod  string = "APIKeyAuth"
+	BasicAuthMethod   string = "BasicAuth"
 )
 
 type Config struct {
 	config.Config
 	EnableAuth  bool   `json:"enable_auth"`
+	APIKey      string `json:"api_key"`
 	AuthMethod  string `json:"auth_method"`
 	SessionName string `json:"session_name"`
 	SessionKey  string `json:"session_key"`
+	GRPCAddr    string `json:"grpc_addr"`
 }
 
 // APIAddBootStrap will add bootstrap peers to the configuration

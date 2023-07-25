@@ -27,6 +27,7 @@ type DIDCreate struct {
 	Type              int    `json:"type"`
 	Dir               string `json:"dir"`
 	Config            string `json:"config"`
+	RootDID           bool   `json:"root_did"`
 	MasterDID         string `json:"master_did"`
 	Secret            string `json:"secret"`
 	PrivPWD           string `json:"priv_pwd"`

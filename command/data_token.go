@@ -55,7 +55,7 @@ func (cmd *Command) createDataToken() {
 		return
 	}
 	cmd.log.Info(fmt.Sprintf("Data Token : %s", msg))
-	cmd.log.Info("Data token create successfully")
+	cmd.log.Info("Data token created successfully")
 }
 
 func (cmd *Command) commitDataToken() {

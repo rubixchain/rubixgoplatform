@@ -1,5 +1,17 @@
 package model
 
+type GetDIDAccess struct {
+	DID       string `json:"did"`
+	Password  string `json:"password"`
+	Token     string `json:"token"`
+	Signature []byte `json:"signature"`
+}
+
+type DIDAccessResponse struct {
+	BasicResponse
+	Token string `json:"token"`
+}
+
 // GetDIDResponse used for get DID response
 type GetDIDResponse struct {
 	Status  bool     `json:"status"`

@@ -63,6 +63,8 @@ const (
 	CommitDataTokenCmd    string = "commitdatatoken"
 	SetupDBCmd            string = "setupdb"
 	GetTxnDetailsCmd      string = "gettxndetails"
+	CreateNFTCmd          string = "createnft"
+	GetAllNFTCmd          string = "getallnft"
 )
 
 var commands = []string{VersionCmd,
@@ -92,7 +94,9 @@ var commands = []string{VersionCmd,
 	CreateDataTokenCmd,
 	CommitDataTokenCmd,
 	SetupDBCmd,
-	GetTxnDetailsCmd}
+	GetTxnDetailsCmd,
+	CreateNFTCmd,
+	GetAllNFTCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -120,7 +124,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will create data token token",
 	"This command will commit data token token",
 	"This command will setup the DB",
-	"This command will get transaction details"}
+	"This command will get transaction details",
+	"This command will create NFT",
+	"This command will get all NFTs"}
 
 type Command struct {
 	cfg          config.Config
@@ -233,12 +239,14 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("failed to create core")
 		return
 	}
+	addr := fmt.Sprintf(cmd.cfg.NodeAddress+":%d", 10500+cmd.node)
 	scfg := &server.Config{
 		Config: srvcfg.Config{
 			HostAddress: cmd.cfg.NodeAddress,
 			HostPort:    cmd.cfg.NodePort,
 			Production:  "false",
 		},
+		GRPCAddr: addr,
 	}
 	scfg.EnableAuth = cmd.enableAuth
 	if cmd.enableAuth {
@@ -470,6 +478,10 @@ func Run(args []string) {
 		cmd.setupDB()
 	case GetTxnDetailsCmd:
 		cmd.getTxnDetails()
+	case CreateNFTCmd:
+		cmd.createNFT()
+	case GetAllNFTCmd:
+		cmd.getAllNFTs()
 	default:
 		cmd.log.Error("Invalid command")
 	}

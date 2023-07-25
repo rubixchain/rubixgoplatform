@@ -1,5 +1,11 @@
 package model
 
+const (
+	RBTType string = "RBT"
+	DTType  string = "DT"
+	NFTType string = "NFT"
+)
+
 type RBTGenerateRequest struct {
 	NumberOfTokens int    `json:"number_of_tokens"`
 	DID            string `json:"did"`
@@ -29,12 +35,19 @@ type GetAccountInfo struct {
 }
 
 type DIDAccountInfo struct {
-	DID             string `json:"did"`
-	DIDType         int    `json:"did_type"`
-	WholeRBT        int    `json:"whole_rbt"`
-	PledgedWholeRBT int    `json:"pledged_whole_rbt"`
-	LockedWholeRBT  int    `json:"locked_whole_rbt"`
-	PartRBT         int    `json:"part_rbt"`
-	PledgedPartRBT  int    `json:"pledged_part_rbt"`
-	LockedPartRBT   int    `json:"locked_part_rbt"`
+	DID        string  `json:"did"`
+	DIDType    int     `json:"did_type"`
+	RBTAmount  float64 `json:"rbt_amount"`
+	PledgedRBT float64 `json:"pledged_rbt"`
+	LockedRBT  float64 `json:"locked_rbt"`
+}
+
+type TokenDetial struct {
+	Token  string `json:"token"`
+	Status int    `json:"status"`
+}
+
+type TokenResponse struct {
+	BasicResponse
+	TokenDetials []TokenDetial `json:"token_detials"`
 }

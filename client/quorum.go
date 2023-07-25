@@ -6,7 +6,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/server"
+	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
 func (c *Client) AddQuorum(quorumList string) (string, bool) {
@@ -26,7 +26,7 @@ func (c *Client) AddQuorum(quorumList string) (string, bool) {
 		return "Invalid file, failed to add quorum list", false
 	}
 	var resp model.BasicResponse
-	err = c.sendJSONRequest("POST", server.APIAddQuorum, nil, &ql, &resp)
+	err = c.sendJSONRequest("POST", setup.APIAddQuorum, nil, &ql, &resp)
 	if err != nil {
 		c.log.Error("Failed to add quorum list", "err", err)
 		return "Failed to add quorum list, " + err.Error(), false
@@ -40,7 +40,7 @@ func (c *Client) AddQuorum(quorumList string) (string, bool) {
 
 func (c *Client) GettAllQuorum() (*model.QuorumListResponse, error) {
 	var rm model.QuorumListResponse
-	err := c.sendJSONRequest("GET", server.APIGetAllQuorum, nil, nil, &rm)
+	err := c.sendJSONRequest("GET", setup.APIGetAllQuorum, nil, nil, &rm)
 	if err != nil {
 		return nil, err
 	}
@@ -49,20 +49,21 @@ func (c *Client) GettAllQuorum() (*model.QuorumListResponse, error) {
 
 func (c *Client) RemoveAllQuorum() (string, bool) {
 	var rm model.BasicResponse
-	err := c.sendJSONRequest("GET", server.APIRemoveAllQuorum, nil, nil, &rm)
+	err := c.sendJSONRequest("GET", setup.APIRemoveAllQuorum, nil, nil, &rm)
 	if err != nil {
 		return "Failed to remove quorum, " + err.Error(), false
 	}
 	return rm.Message, rm.Status
 }
 
-func (c *Client) SetupQuorum(did string, pwd string) (string, bool) {
+func (c *Client) SetupQuorum(did string, pwd string, privPwd string) (string, bool) {
 	m := model.QuorumSetup{
-		DID:      did,
-		Password: pwd,
+		DID:             did,
+		Password:        pwd,
+		PrivKeyPassword: privPwd,
 	}
 	var rm model.BasicResponse
-	err := c.sendJSONRequest("POST", server.APISetupQuorum, nil, &m, &rm)
+	err := c.sendJSONRequest("POST", setup.APISetupQuorum, nil, &m, &rm)
 	if err != nil {
 		return "Failed to setup quorum, " + err.Error(), false
 	}
