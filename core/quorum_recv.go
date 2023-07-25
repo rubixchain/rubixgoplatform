@@ -865,6 +865,8 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 		srep.Message = "Failed to do token abitration, invalid token"
 		return c.l.RenderJSON(req, &srep, http.StatusOK)
 	}
+	mflag := false
+	mmsg := "token is already migrated"
 	for i := range ti {
 		tl, tn, err := b.GetTokenDetials(ti[i].Token)
 		if err != nil {
@@ -894,28 +896,37 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 		}
 		td, err := c.srv.GetTokenDetials(ti[i].Token)
 		if err == nil && td.Token == ti[i].Token {
-			c.log.Error("Failed to do token abitration, token is already migrated", "token", ti[i].Token, "did", odid)
-			srep.Message = "token is already migrated," + ti[i].Token
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
+			nm, _ := c.srv.GetNewDIDMap(td.DID)
+			c.log.Error("Failed to do token abitration, token is already migrated", "token", ti[i].Token, "old_did", nm.OldDID, "new_did", td.DID)
+			mflag = true
+			mmsg = mmsg + "," + ti[i].Token
+			// srep.Message = "token is already migrated," + ti[i].Token
+			// return c.l.RenderJSON(req, &srep, http.StatusOK)
 		}
-		dc, err := c.SetupForienDID(odid)
-		if err != nil {
-			c.log.Error("Failed to do token abitration, failed to setup did crypto", "token", ti[i].Token, "did", odid)
-			srep.Message = "Failed to do token abitration, failed to setup did crypto"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
+		if !mflag {
+			dc, err := c.SetupForienDID(odid)
+			if err != nil {
+				c.log.Error("Failed to do token abitration, failed to setup did crypto", "token", ti[i].Token, "did", odid)
+				srep.Message = "Failed to do token abitration, failed to setup did crypto"
+				return c.l.RenderJSON(req, &srep, http.StatusOK)
+			}
+			err = sc.VerifySignature(dc)
+			if err != nil {
+				c.log.Error("Failed to do token abitration, signature verification failed", "err", err)
+				srep.Message = "Failed to do token abitration, signature verification failed"
+				return c.l.RenderJSON(req, &srep, http.StatusOK)
+			}
+			err = c.srv.UpdateTempTokenDetials(&service.TokenDetials{Token: ti[i].Token, DID: odid})
+			if err != nil {
+				c.log.Error("Failed to do token abitration, failed update token detials", "err", err)
+				srep.Message = "Failed to do token abitration, failed update token detials"
+				return c.l.RenderJSON(req, &srep, http.StatusOK)
+			}
 		}
-		err = sc.VerifySignature(dc)
-		if err != nil {
-			c.log.Error("Failed to do token abitration, signature verification failed", "err", err)
-			srep.Message = "Failed to do token abitration, signature verification failed"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
-		}
-		err = c.srv.UpdateTempTokenDetials(&service.TokenDetials{Token: ti[i].Token, DID: odid})
-		if err != nil {
-			c.log.Error("Failed to do token abitration, failed update token detials", "err", err)
-			srep.Message = "Failed to do token abitration, failed update token detials"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
-		}
+	}
+	if mflag {
+		srep.Message = mmsg
+		return c.l.RenderJSON(req, &srep, http.StatusOK)
 	}
 	dc, ok := c.qc[did]
 	if !ok {

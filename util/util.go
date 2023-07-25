@@ -96,6 +96,11 @@ func Filecopy(src, dst string) (int64, error) {
 	return nBytes, err
 }
 
+func IsFileExist(fileName string) bool {
+	_, err := os.Stat(fileName)
+	return err == nil
+}
+
 func FileWrite(fileName string, data []byte) error {
 	f, err := os.Create(fileName)
 	if err != nil {

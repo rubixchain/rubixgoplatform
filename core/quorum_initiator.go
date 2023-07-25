@@ -736,10 +736,7 @@ func (c *Core) getArbitrationSignature(p *ipfsport.Peer, sr *SignatureRequest) (
 	if !srep.Status {
 		c.log.Error("Failed to get arbitray signature", "msg", srep.Message)
 		if strings.Contains(srep.Message, "token is already migrated") {
-			str := strings.Split(srep.Message, ",")
-			if len(str) > 1 {
-				return str[1], false
-			}
+			return srep.Message, false
 		}
 		return "", false
 	}
