@@ -19,23 +19,25 @@ import (
 //   "5" : TransInfo        : TransInfo
 //   "6" : SmartContract    : []byte
 //   "7" : QuorumSignature  : []string
-//   "8" : SmartContractData : string
+
+//   "9" : SmartContractData : string
 //
 // }
 
 const (
-	TCTokenTypeKey         string = "1"
-	TCTransTypeKey         string = "2"
-	TCTokenOwnerKey        string = "3"
-	TCGenesisBlockKey      string = "4"
-	TCTransInfoKey         string = "5"
-	TCSmartContractKey     string = "6"
-	TCQuorumSignatureKey   string = "7"
+	TCTokenTypeKey       string = "1"
+	TCTransTypeKey       string = "2"
+	TCTokenOwnerKey      string = "3"
+	TCGenesisBlockKey    string = "4"
+	TCTransInfoKey       string = "5"
+	TCSmartContractKey   string = "6"
+	TCQuorumSignatureKey string = "7"
+
 	TCBlockHashKey         string = "98"
 	TCSignatureKey         string = "99"
 	TCBlockContentKey      string = "1"
 	TCBlockContentSigKey   string = "2"
-	TCSmartContractDataKey string = "8"
+	TCSmartContractDataKey string = "9"
 )
 
 const (
