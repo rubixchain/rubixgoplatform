@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -46,6 +48,7 @@ type ServerGRPC struct {
 	c      *core.Core
 	log    logger.Logger
 	addr   string
+	secure bool
 	Native *RubixNative
 }
 
@@ -95,7 +98,7 @@ func GenerateJWTToken(claims jwt.Claims, secret string) string {
 	return tokenString
 }
 
-func NewServerGRPC(c *core.Core, cfg *config.Config, log logger.Logger, addr string) (*ServerGRPC, error) {
+func NewServerGRPC(c *core.Core, cfg *config.Config, log logger.Logger, addr string, secure bool) (*ServerGRPC, error) {
 	// cl, err := client.NewClient(cfg, log.Named("grpcclient"), 10*time.Minute)
 	// if err != nil {
 	// 	return nil, err
@@ -104,10 +107,27 @@ func NewServerGRPC(c *core.Core, cfg *config.Config, log logger.Logger, addr str
 		c:      c,
 		log:    log.Named("grpc"),
 		addr:   addr,
+		secure: secure,
 		Native: &RubixNative{c: c, cfg: cfg, randomSecret: util.GetRandString(), log: log.Named("native_grpc")},
 	}
 	s.log.Info("GRPC Server created")
 	return s, nil
+}
+
+func loadTLSCredentials() (credentials.TransportCredentials, error) {
+	// Load server's certificate and private key
+	serverCert, err := tls.LoadX509KeyPair("server-cert.pem", "server-key.pem")
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the credentials and return it
+	config := &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+		ClientAuth:   tls.NoClientCert,
+	}
+
+	return credentials.NewTLS(config), nil
 }
 
 func (s *ServerGRPC) Run() {
@@ -115,8 +135,18 @@ func (s *ServerGRPC) Run() {
 	if err != nil {
 		s.log.Panic("failed to listen", "err", err)
 	}
+	var server *grpc.Server
+	if s.secure {
+		tlsCredentials, err := loadTLSCredentials()
+		if err != nil {
+			s.log.Panic("cannot load TLS credentials: ", err)
+		}
+		server = grpc.NewServer(grpc.Creds(tlsCredentials))
+	} else {
+		server = grpc.NewServer()
+	}
 	// Creates a new gRPC server with UnaryInterceptor
-	server := grpc.NewServer()
+
 	protos.RegisterRubixServiceServer(server, s.Native)
 	s.log.Info("Running GRPC server...")
 	server.Serve(lis)

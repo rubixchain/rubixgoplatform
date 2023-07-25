@@ -22,6 +22,7 @@ type Config struct {
 	SessionName string `json:"session_name"`
 	SessionKey  string `json:"session_key"`
 	GRPCAddr    string `json:"grpc_addr"`
+	GRPCSecure  bool   `json:"grpc_secure"`
 }
 
 // APIAddBootStrap will add bootstrap peers to the configuration

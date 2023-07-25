@@ -185,6 +185,9 @@ type Command struct {
 	txnID        string
 	role         string
 	date         time.Time
+	grpcAddr     string
+	grpcPort     int
+	grpcSecure   bool
 }
 
 func showVersion() {
@@ -239,14 +242,15 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("failed to create core")
 		return
 	}
-	addr := fmt.Sprintf(cmd.cfg.NodeAddress+":%d", 10500+cmd.node)
+	addr := fmt.Sprintf(cmd.grpcAddr+":%d", cmd.grpcPort)
 	scfg := &server.Config{
 		Config: srvcfg.Config{
 			HostAddress: cmd.cfg.NodeAddress,
 			HostPort:    cmd.cfg.NodePort,
 			Production:  "false",
 		},
-		GRPCAddr: addr,
+		GRPCAddr:   addr,
+		GRPCSecure: cmd.grpcSecure,
 	}
 	scfg.EnableAuth = cmd.enableAuth
 	if cmd.enableAuth {
@@ -360,6 +364,9 @@ func Run(args []string) {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
+	flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
+	flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
+	flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

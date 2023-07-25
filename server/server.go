@@ -92,7 +92,7 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 		ServerAddress: cfg.Config.HostAddress,
 		ServerPort:    cfg.Config.HostPort,
 	}
-	s.grpc, err = grpcserver.NewServerGRPC(c, cc, log, cfg.GRPCAddr)
+	s.grpc, err = grpcserver.NewServerGRPC(c, cc, log, cfg.GRPCAddr, cfg.GRPCSecure)
 	if err != nil {
 		s.log.Error("Failed to create GRPC server", "err", err)
 		return nil, err
