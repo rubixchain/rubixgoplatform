@@ -37,6 +37,7 @@ type DataTokenReq struct {
 }
 
 func (c *Core) CreateDataToken(reqID string, dr *DataTokenReq) {
+	c.log.Debug("Create data token")
 	defer os.RemoveAll(dr.FolderName)
 	br := c.createDataToken(reqID, dr)
 	dc := c.GetWebReq(reqID)
@@ -48,6 +49,8 @@ func (c *Core) CreateDataToken(reqID string, dr *DataTokenReq) {
 }
 
 func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicResponse {
+	c.log.Debug("initating data token")
+
 	defer os.RemoveAll(dr.FolderName)
 	br := model.BasicResponse{
 		Status: false,
@@ -64,6 +67,8 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		TotalSupply: 1,
 		CreatorID:   userID[0],
 	}
+	c.log.Debug("Creating data token", "rt", rt)
+	c.log.Debug("DID names", "DID names", dr.DID)
 	userInfo, ok := dr.Fields[DTUserInfoField]
 	if ok {
 		rt.CreatorInput = userInfo[0]
@@ -111,6 +116,8 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 			}
 		}
 	}
+	c.log.Debug("reqID is ", "reqID", reqID)
+	c.log.Debug("dr.DID is ", "dr.DID", dr.DID)
 	dc, err := c.SetupDID(reqID, dr.DID)
 	if err != nil {
 		c.log.Error("Failed to create data token, failed to setup did", "err", err)
@@ -332,6 +339,7 @@ func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.
 		TokenTime:    float64(dif.Milliseconds()),
 	}
 	c.ec.ExplorerDataTransaction(etrans)
+	c.log.Debug("dts is ", "dts", dts)
 
 	br.Status = true
 	br.Message = "Data committed successfully"

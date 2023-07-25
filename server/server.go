@@ -143,6 +143,13 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APICreateNFT, "POST", s.AuthHandle(s.APICreateNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetAllNFT, "GET", s.AuthHandle(s.APIGetAllNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIAddNFTSale, "GET", s.AuthHandle(s.APIAddNFTSale, true, s.AuthError, false))
+	s.AddRoute(APIDeploySmartContract, "POST", s.AuthHandle(s.APIDeploySmartContract, s.ErrorFunc))
+	s.AddRoute(APIGenerateSmartContract, "POST", s.AuthHandle(s.APIGenerateSmartContract, s.ErrorFunc))
+	s.AddRoute(APIFetchSmartContract, "POST", s.AuthHandle(s.APIFetchSmartContract, s.ErrorFunc))
+	s.AddRoute(APIPublishContract, "POST", s.AuthHandle(s.APIPublishContract, s.ErrorFunc))
+	s.AddRoute(APISubscribecontract, "POST", s.AuthHandle(s.APISubscribecontract, s.ErrorFunc))
+	s.AddRoute(APIDumpSmartContractTokenChainBlock, "POST", s.AuthHandle(s.APIDumpSmartContractTokenChainBlock, s.ErrorFunc))
+	s.AddRoute(APIExecuteSmartContract, "POST", s.AuthHandle(s.APIExecuteSmartContract, s.ErrorFunc))
 }
 
 func (s *Server) ExitFunc() error {

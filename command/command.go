@@ -32,7 +32,7 @@ const (
 )
 
 const (
-	version string = "0.0.8"
+	version string = "0.0.9"
 )
 const (
 	VersionCmd            string = "-v"
@@ -65,6 +65,14 @@ const (
 	GetTxnDetailsCmd      string = "gettxndetails"
 	CreateNFTCmd          string = "createnft"
 	GetAllNFTCmd          string = "getallnft"
+	UpdateConfig                   string = "updateconfig"
+	GenerateSmartContractToken     string = "generatesct"
+	FetchSmartContract             string = "fetchsct"
+	PublishContractCmd             string = "publishsct"
+	SubscribeContractCmd           string = "subscribesct"
+	DeploySmartContractCmd         string = "deploysmartcontract"
+	ExecuteSmartcontractCmd        string = "executesmartcontract"
+	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 )
 
 var commands = []string{VersionCmd,
@@ -96,7 +104,17 @@ var commands = []string{VersionCmd,
 	SetupDBCmd,
 	GetTxnDetailsCmd,
 	CreateNFTCmd,
-	GetAllNFTCmd}
+	GetAllNFTCmd,
+	DeploySmartContractCmd,
+	ExecuteSmartcontractCmd,
+	ShutDownCmd,
+	GenerateSmartContractToken,
+	FetchSmartContract,
+	PublishContractCmd,
+	SubscribeContractCmd,
+DumpSmartContractTokenChainCmd,
+}
+
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -126,7 +144,15 @@ var commandsHelp = []string{"To get tool version",
 	"This command will setup the DB",
 	"This command will get transaction details",
 	"This command will create NFT",
-	"This command will get all NFTs"}
+	"This command will get all NFTs",
+	"This command will deploy the smart contract token",
+	"This command will execute the fetched smart contract",
+	"This command will shutdown the rubix node",
+	"This command will generate a smart contract token",
+	"This command will fetch a smart contract token",
+	"This command will publish a smart contract token",
+	"This command will subscribe to a smart contract token",
+	"This commadn will dump the smartcontract token chain"}
 
 type Command struct {
 	cfg          config.Config
@@ -189,6 +215,14 @@ type Command struct {
 	grpcAddr     string
 	grpcPort     int
 	grpcSecure   bool
+  deployerAddr       string
+	binaryCodePath     string
+	rawCodePath        string
+	schemaFilePath     string
+	smartContractToken string
+	newContractBlock   string
+	smartContractData  string
+	executorAddr       string
 }
 
 func showVersion() {
@@ -230,6 +264,7 @@ func (cmd *Command) getURL(url string) string {
 func (cmd *Command) runApp() {
 	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node))
 	err := apiconfig.LoadAPIConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, &cmd.cfg)
+
 	if err != nil {
 		cmd.log.Error("Configfile is either currupted or cipher is wrong", "err", err)
 		return
@@ -369,6 +404,14 @@ func Run(args []string) {
 	flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
 	flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
 	flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")
+	flag.StringVar(&cmd.deployerAddr, "deployerAddr", "", "Smart contract Deployer Address")
+	flag.StringVar(&cmd.binaryCodePath, "binCode", "", "Binary code path")
+	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
+	flag.StringVar(&cmd.schemaFilePath, "schemaFile", "", "Schema file path")
+	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
+	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
+	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
+	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -491,6 +534,20 @@ func Run(args []string) {
 		cmd.createNFT()
 	case GetAllNFTCmd:
 		cmd.getAllNFTs()
+	case DeploySmartContractCmd:
+		cmd.deploySmartcontract()
+	case GenerateSmartContractToken:
+		cmd.generateSmartContractToken()
+	case FetchSmartContract:
+		cmd.fetchSmartContract()
+	case PublishContractCmd:
+		cmd.PublishContract()
+	case SubscribeContractCmd:
+		cmd.SubscribeContract()
+	case DumpSmartContractTokenChainCmd:
+		cmd.dumpSmartContractTokenChain()
+	case ExecuteSmartcontractCmd:
+		cmd.executeSmartcontract()
 	default:
 		cmd.log.Error("Invalid command")
 	}

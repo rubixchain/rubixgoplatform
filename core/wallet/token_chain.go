@@ -71,6 +71,10 @@ func tcsPrefix(tokenType int, t string) string {
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.TestPartTokenType:
+		tt = TestPartTokenType
+	case tkn.TestNFTTokenType:
+		tt = TestNFTType
 	}
 	return tt + "-" + t + "-"
 }
@@ -164,6 +168,8 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 		db = w.ntcs
 	case tkn.TestNFTTokenType:
 		db = w.ntcs
+	case tkn.SmartContractTokenType:
+		db = w.smartContractTokenChainStorage
 	}
 	return db
 }

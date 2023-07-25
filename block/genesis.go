@@ -17,6 +17,7 @@ package block
 const (
 	GenesisMigratedType int = iota
 	GenesisPartType
+	GenesisSmartContract
 )
 
 const (
@@ -25,22 +26,26 @@ const (
 )
 
 const (
-	GITokenLevelKey    string = "1"
-	GITokenNumberKey   string = "2"
-	GIMigratedBlkIDKey string = "3"
-	GIPreviousIDKey    string = "4"
-	GIParentIDKey      string = "5"
-	GIGrandParentIDKey string = "6"
+	GITokenLevelKey         string = "1"
+	GITokenNumberKey        string = "2"
+	GIMigratedBlkIDKey      string = "3"
+	GIPreviousIDKey         string = "4"
+	GIParentIDKey           string = "5"
+	GIGrandParentIDKey      string = "6"
+	GICommitedTokensKey     string = "7"
+	GISmartContractValueKey string = "8"
 )
 
 type GenesisTokenInfo struct {
-	Token           string   `json:"token"`
-	TokenLevel      int      `json:"tokenLevel"`
-	TokenNumber     int      `json:"tokenNumber"`
-	MigratedBlockID string   `json:"migratedBlockID"`
-	PreviousID      string   `json:"previosuID"`
-	ParentID        string   `json:"parentID"`
-	GrandParentID   []string `json:"grandParentID"`
+	Token              string        `json:"token"`
+	TokenLevel         int           `json:"tokenLevel"`
+	TokenNumber        int           `json:"tokenNumber"`
+	MigratedBlockID    string        `json:"migratedBlockID"`
+	PreviousID         string        `json:"previosuID"`
+	ParentID           string        `json:"parentID"`
+	GrandParentID      []string      `json:"grandParentID"`
+	CommitedTokens     []TransTokens `json:"commitedTokens"`
+	SmartContractValue float64       `json:"smartContractValue"`
 }
 
 type GenesisBlock struct {
@@ -63,6 +68,19 @@ func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 	}
 	if gi.GrandParentID != nil {
 		ngib[GIGrandParentIDKey] = gi.GrandParentID
+	}
+	//To add commited tokeninfo
+	newCommitedTokensBlock := make(map[string]interface{})
+	for _, tokensInfo := range gi.CommitedTokens {
+		commitedTokenInfoMap := newTransToken(nil, &tokensInfo)
+		if commitedTokenInfoMap == nil {
+			return nil
+		}
+		newCommitedTokensBlock[tokensInfo.Token] = commitedTokenInfoMap
+	}
+	ngib[GICommitedTokensKey] = newCommitedTokensBlock
+	if gi.SmartContractValue != 0 {
+		ngib[GISmartContractValueKey] = gi.SmartContractValue
 	}
 	return ngib
 }
