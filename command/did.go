@@ -140,6 +140,7 @@ func (cmd *Command) CreateDID() {
 	cfg := did.DIDCreate{
 		Type:           cmd.didType,
 		Secret:         cmd.didSecret,
+		RootDID:        cmd.didRoot,
 		PrivPWD:        cmd.privPWD,
 		QuorumPWD:      cmd.quorumPWD,
 		ImgFile:        cmd.imgFile,

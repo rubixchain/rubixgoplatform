@@ -86,6 +86,10 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		c.log.Error("only basic mode is allowed for root did")
 		return "", fmt.Errorf("only basic mode is allowed for root did")
 	}
+	if didCreate.RootDID && c.w.IsRootDIDExist() {
+		c.log.Error("root did is already exist")
+		return "", fmt.Errorf("root did is already exist")
+	}
 	did, err := c.d.CreateDID(didCreate)
 	if err != nil {
 		return "", err

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"runtime"
 	"time"
@@ -14,6 +17,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/protos"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -107,6 +111,9 @@ type Command struct {
 	txnID        string
 	role         string
 	date         time.Time
+	grpcAddr     string
+	grpcPort     int
+	grpcSecure   bool
 }
 
 func showVersion() {
@@ -125,6 +132,26 @@ func showHelp() {
 	for i := range commands {
 		fmt.Printf("     %20s : %s\n\n", commands[i], commandsHelp[i])
 	}
+}
+
+func loadTLSCredentials() (credentials.TransportCredentials, error) {
+	// Load certificate of the CA who signed server's certificate
+	pemServerCA, err := ioutil.ReadFile("ca-cert.pem")
+	if err != nil {
+		return nil, err
+	}
+
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(pemServerCA) {
+		return nil, fmt.Errorf("failed to add server CA's certificate")
+	}
+
+	// Create the credentials and return it
+	config := &tls.Config{
+		RootCAs: certPool,
+	}
+
+	return credentials.NewTLS(config), nil
 }
 
 func runCommand() {
@@ -184,6 +211,9 @@ func runCommand() {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
+	flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
+	flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
+	flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -196,11 +226,25 @@ func runCommand() {
 	os.Args = os.Args[1:]
 
 	flag.Parse()
-
-	conn, err := grpc.Dial("localhost:10500", grpc.WithInsecure())
-	if err != nil {
-		fmt.Printf("Failed to dial")
-		return
+	var err error
+	var conn *grpc.ClientConn
+	addr := fmt.Sprintf(cmd.grpcAddr+":%d", cmd.grpcPort)
+	if cmd.grpcSecure {
+		tlsCredentials, err := loadTLSCredentials()
+		if err != nil {
+			fmt.Printf("cannot load TLS credentials: %v", err)
+		}
+		conn, err = grpc.Dial(addr, grpc.WithTransportCredentials(tlsCredentials))
+		if err != nil {
+			fmt.Printf("Failed to dial")
+			return
+		}
+	} else {
+		conn, err = grpc.Dial(addr, grpc.WithInsecure())
+		if err != nil {
+			fmt.Printf("Failed to dial")
+			return
+		}
 	}
 	defer conn.Close()
 	cmd.c = protos.NewRubixServiceClient(conn)

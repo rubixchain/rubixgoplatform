@@ -13,6 +13,15 @@ type DIDPeerMap struct {
 	PeerID string `gorm:"column:peer_id"`
 }
 
+func (w *Wallet) IsRootDIDExist() bool {
+	var dt DIDType
+	err := w.s.Read(DIDStorage, &dt, "root_did =?", 1)
+	if err != nil {
+		return false
+	}
+	return dt.RootDID == 1
+}
+
 func (w *Wallet) CreateDID(dt *DIDType) error {
 	err := w.s.Write(DIDStorage, &dt)
 	if err != nil {
