@@ -35,36 +35,36 @@ const (
 	version string = "0.0.9"
 )
 const (
-	VersionCmd            string = "-v"
-	HelpCmd               string = "-h"
-	RunCmd                string = "run"
-	PingCmd               string = "ping"
-	AddBootStrapCmd       string = "addbootstrap"
-	RemoveBootStrapCmd    string = "removebootstrap"
-	RemoveAllBootStrapCmd string = "removeallbootstrap"
-	GetAllBootStrapCmd    string = "getallbootstrap"
-	CreateDIDCmd          string = "createdid"
-	GetAllDIDCmd          string = "getalldid"
-	AddQuorumCmd          string = "addquorum"
-	GetAllQuorumCmd       string = "getallquorum"
-	RemoveAllQuorumCmd    string = "removeallquorum"
-	SetupQuorumCmd        string = "setupquorum"
-	GenerateTestRBTCmd    string = "generatetestrbt"
-	TransferRBTCmd        string = "transferrbt"
-	GetAccountInfoCmd     string = "getaccountinfo"
-	SetupServiceCmd       string = "setupservice"
-	DumpTokenChainCmd     string = "dumptokenchain"
-	RegsiterDIDCmd        string = "registerdid"
-	SetupDIDCmd           string = "setupdid"
-	ShutDownCmd           string = "shutdown"
-	MirgateNodeCmd        string = "migratenode"
-	LockTokensCmd         string = "locktokens"
-	CreateDataTokenCmd    string = "createdatatoken"
-	CommitDataTokenCmd    string = "commitdatatoken"
-	SetupDBCmd            string = "setupdb"
-	GetTxnDetailsCmd      string = "gettxndetails"
-	CreateNFTCmd          string = "createnft"
-	GetAllNFTCmd          string = "getallnft"
+	VersionCmd                     string = "-v"
+	HelpCmd                        string = "-h"
+	RunCmd                         string = "run"
+	PingCmd                        string = "ping"
+	AddBootStrapCmd                string = "addbootstrap"
+	RemoveBootStrapCmd             string = "removebootstrap"
+	RemoveAllBootStrapCmd          string = "removeallbootstrap"
+	GetAllBootStrapCmd             string = "getallbootstrap"
+	CreateDIDCmd                   string = "createdid"
+	GetAllDIDCmd                   string = "getalldid"
+	AddQuorumCmd                   string = "addquorum"
+	GetAllQuorumCmd                string = "getallquorum"
+	RemoveAllQuorumCmd             string = "removeallquorum"
+	SetupQuorumCmd                 string = "setupquorum"
+	GenerateTestRBTCmd             string = "generatetestrbt"
+	TransferRBTCmd                 string = "transferrbt"
+	GetAccountInfoCmd              string = "getaccountinfo"
+	SetupServiceCmd                string = "setupservice"
+	DumpTokenChainCmd              string = "dumptokenchain"
+	RegsiterDIDCmd                 string = "registerdid"
+	SetupDIDCmd                    string = "setupdid"
+	ShutDownCmd                    string = "shutdown"
+	MirgateNodeCmd                 string = "migratenode"
+	LockTokensCmd                  string = "locktokens"
+	CreateDataTokenCmd             string = "createdatatoken"
+	CommitDataTokenCmd             string = "commitdatatoken"
+	SetupDBCmd                     string = "setupdb"
+	GetTxnDetailsCmd               string = "gettxndetails"
+	CreateNFTCmd                   string = "createnft"
+	GetAllNFTCmd                   string = "getallnft"
 	UpdateConfig                   string = "updateconfig"
 	GenerateSmartContractToken     string = "generatesct"
 	FetchSmartContract             string = "fetchsct"
@@ -112,7 +112,7 @@ var commands = []string{VersionCmd,
 	FetchSmartContract,
 	PublishContractCmd,
 	SubscribeContractCmd,
-DumpSmartContractTokenChainCmd,
+	DumpSmartContractTokenChainCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -155,67 +155,67 @@ var commandsHelp = []string{"To get tool version",
 	"This commadn will dump the smartcontract token chain"}
 
 type Command struct {
-	cfg          config.Config
-	c            *client.Client
-	encKey       string
-	start        bool
-	node         uint
-	runDir       string
-	logFile      string
-	logLevel     string
-	cfgFile      string
-	testNet      bool
-	testNetKey   string
-	addr         string
-	port         string
-	peerID       string
-	peers        []string
-	log          logger.Logger
-	didRoot      bool
-	didType      int
-	didSecret    string
-	forcePWD     bool
-	privPWD      string
-	quorumPWD    string
-	imgFile      string
-	didImgFile   string
-	privImgFile  string
-	pubImgFile   string
-	privKeyFile  string
-	pubKeyFile   string
-	quorumList   string
-	srvName      string
-	storageType  int
-	dbName       string
-	dbType       string
-	dbAddress    string
-	dbPort       string
-	dbUserName   string
-	dbPassword   string
-	senderAddr   string
-	receiverAddr string
-	rbtAmount    float64
-	transComment string
-	transType    int
-	numTokens    int
-	enableAuth   bool
-	did          string
-	token        string
-	arbitaryMode bool
-	tokenList    string
-	batchID      string
-	fileMode     bool
-	file         string
-	userID       string
-	userInfo     string
-	timeout      time.Duration
-	txnID        string
-	role         string
-	date         time.Time
-	grpcAddr     string
-	grpcPort     int
-	grpcSecure   bool
-  deployerAddr       string
+	cfg                config.Config
+	c                  *client.Client
+	encKey             string
+	start              bool
+	node               uint
+	runDir             string
+	logFile            string
+	logLevel           string
+	cfgFile            string
+	testNet            bool
+	testNetKey         string
+	addr               string
+	port               string
+	peerID             string
+	peers              []string
+	log                logger.Logger
+	didRoot            bool
+	didType            int
+	didSecret          string
+	forcePWD           bool
+	privPWD            string
+	quorumPWD          string
+	imgFile            string
+	didImgFile         string
+	privImgFile        string
+	pubImgFile         string
+	privKeyFile        string
+	pubKeyFile         string
+	quorumList         string
+	srvName            string
+	storageType        int
+	dbName             string
+	dbType             string
+	dbAddress          string
+	dbPort             string
+	dbUserName         string
+	dbPassword         string
+	senderAddr         string
+	receiverAddr       string
+	rbtAmount          float64
+	transComment       string
+	transType          int
+	numTokens          int
+	enableAuth         bool
+	did                string
+	token              string
+	arbitaryMode       bool
+	tokenList          string
+	batchID            string
+	fileMode           bool
+	file               string
+	userID             string
+	userInfo           string
+	timeout            time.Duration
+	txnID              string
+	role               string
+	date               time.Time
+	grpcAddr           string
+	grpcPort           int
+	grpcSecure         bool
+	deployerAddr       string
 	binaryCodePath     string
 	rawCodePath        string
 	schemaFilePath     string
