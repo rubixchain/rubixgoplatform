@@ -76,7 +76,8 @@ type TransInfo struct {
 	Block       []byte        `json:"block"`
 	RefID       string        `json:"refID"`
 	Tokens      []TransTokens `json:"tokens"`
-	DeployerDID string        `json:"deployerDID`
+	DeployerDID string        `json:"deployerDID"`
+	ExecutorDID string        `json:"executorDID"`
 }
 
 func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {

@@ -8,6 +8,7 @@ const (
 	SendMode int = iota
 	RecvMode
 	DeployMode
+	ExecuteMode
 )
 
 type TransactionDetails struct {

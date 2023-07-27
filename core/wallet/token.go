@@ -20,6 +20,7 @@ const (
 	TokenIsDeployed
 	TokenIsFetched
 	TokenIsBurnt
+	TokenIsExecuted
 )
 
 const (

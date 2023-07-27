@@ -331,25 +331,36 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	consensusContract := contract.InitContract(conensusRequest.ContractBlock, nil)
 	// setup the did to verify the signature
 	c.log.Debug("VEryfying the deployer signature")
-	dc, err := c.SetupForienDID(consensusContract.GetDeployerDID())
+
+	var verifyDID string
+
+	if conensusRequest.Mode == SmartContractDeployMode {
+		c.log.Debug("Fetching Deployer DID")
+		verifyDID = consensusContract.GetDeployerDID()
+	} else {
+		c.log.Debug("Fetching Executor DID")
+		verifyDID = consensusContract.GetExecutorDID()
+	}
+	dc, err := c.SetupForienDID(verifyDID)
 	if err != nil {
-		c.log.Error("Failed to get deployer DID", "err", err)
-		consensusReply.Message = "Failed to get deployer DID"
+		c.log.Error("Failed to get DID for verification", "err", err)
+		consensusReply.Message = "Failed to get DID for verification"
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
 	err = consensusContract.VerifySignature(dc)
 	if err != nil {
-		c.log.Error("Failed to verify deployer signature", "err", err)
-		consensusReply.Message = "Failed to verify deployer signature"
+		c.log.Error("Failed to verify signature", "err", err)
+		consensusReply.Message = "Failed to verify signature"
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
 
 	//check if deployment or execution
-	commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
-	tokenStateCheckResult := make([]TokenStateCheckResult, len(commitedTokenInfo))
+
+	var tokenStateCheckResult []TokenStateCheckResult
 	var wg sync.WaitGroup
 	if conensusRequest.Mode == SmartContractDeployMode {
 		//if deployment
+		commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
 		//1. check commited token authenticity
 		c.log.Debug("validation 1 - Authenticity of commited RBT tokens")
 		if !c.validateTokenOwnership(conensusRequest, consensusContract) {
@@ -379,6 +390,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		}
 
 		//in deploy mode pin token state of commited RBT tokens
+		tokenStateCheckResult = make([]TokenStateCheckResult, len(commitedTokenInfo))
 		for i, ti := range commitedTokenInfo {
 			t := ti.Token
 			wg.Add(1)
@@ -387,12 +399,14 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		wg.Wait()
 	} else {
 		//3. check token state -- execute mode - pin tokenstate of the smart token chain
+		tokenStateCheckResult = make([]TokenStateCheckResult, len(consensusContract.GetTransTokenInfo()))
 		smartContractTokenInfo := consensusContract.GetTransTokenInfo()
 		for i, ti := range smartContractTokenInfo {
 			t := ti.Token
 			wg.Add(1)
 			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, conensusRequest.QuorumList, ti.TokenType)
 		}
+		wg.Wait()
 	}
 	for i := range tokenStateCheckResult {
 		if tokenStateCheckResult[i].Error != nil {
@@ -461,7 +475,10 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 		c.log.Debug("NFT sale contract started")
 		return c.quorumNFTSaleConsensus(req, did, qdc, &cr)
 	case SmartContractDeployMode:
-		c.log.Debug("Smart contract Consensus started")
+		c.log.Debug("Smart contract Consensus for Deploy started")
+		return c.quorumSmartContractConsensus(req, did, qdc, &cr)
+	case SmartContractExecuteMode:
+		c.log.Debug("Smart contract Consensus for execution started")
 		return c.quorumSmartContractConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)

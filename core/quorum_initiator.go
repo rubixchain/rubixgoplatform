@@ -398,7 +398,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Status:          true,
 		}
 		return &td, pl, nil
-	} else /* if cr.Mode == SmartContractDeployMode */ {
+	} else if cr.Mode == SmartContractDeployMode {
 		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
 		if err != nil {
@@ -468,10 +468,59 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Status:          true,
 		}
 		return &txnDetails, pl, nil
-	} /* else { //execute mode
+	} else { //execute mode
 
+		//Create tokechain for the smart contract token and add genesys block
+		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
+		if err != nil {
+			c.log.Error("smart contract token chain creation failed", "err", err)
+			return nil, nil, err
+		}
+		//update smart contracttoken status to deployed in DB
+		smartContractTokenDetails, err := c.w.GetSmartContractToken(cr.SmartContractToken)
+		if err != nil {
+			c.log.Error("Failed to retrieve smart contract Token details from storage", err)
+			return nil, nil, err
+		}
+		for i := range smartContractTokenDetails {
+			smartContractTokenDetails[i].ContractStatus = wallet.TokenIsExecuted
+		}
+		err = c.w.DeploySmartContract(smartContractTokenDetails)
+		if err != nil {
+			c.log.Error("Failed to update smart contract Token execute detail in storage", err)
+			return nil, nil, err
+		}
+
+		newBlockId, err := nb.GetBlockID(cr.SmartContractToken)
+		if err != nil {
+			c.log.Error("failed to get new block id ", "err", err)
+			return nil, nil, err
+		}
+
+		//Todo pubsub - publish smart contract token details
+		newEvent := model.NewContractEvent{
+			Contract:          cr.SmartContractToken,
+			Did:               sc.GetExecutorDID(),
+			ContractBlockHash: newBlockId,
+		}
+
+		err = c.publishNewEvent(&newEvent)
+		if err != nil {
+			c.log.Error("Failed to publish smart contract Executed info")
+		}
+
+		txnDetails := wallet.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			BlockID:         newBlockId,
+			Mode:            wallet.ExecuteMode,
+			DeployerDID:     sc.GetExecutorDID(),
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+		}
 		return &txnDetails, pl, nil
-	} */
+	}
 }
 
 func (c *Core) startConsensus(id string, qt int) {
@@ -644,7 +693,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 
 	var tcb block.TokenChainBlock
 
-	if sc.GetDeployerDID() != "" {
+	if cr.Mode == SmartContractDeployMode {
 		bti.DeployerDID = sc.GetDeployerDID()
 
 		var smartContractTokenValue float64
@@ -677,6 +726,16 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			QuorumSignature: credit,
 			SmartContract:   sc.GetBlock(),
 			GenesisBlock:    smartContractGensisBlock,
+			PledgeDetails:   ptds,
+		}
+	} else if cr.Mode == SmartContractExecuteMode {
+		bti.ExecutorDID = sc.GetExecutorDID()
+		tcb = block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner:      sc.GetExecutorDID(),
+			TransInfo:       bti,
+			QuorumSignature: credit,
+			SmartContract:   sc.GetBlock(),
 			PledgeDetails:   ptds,
 		}
 	} else {
