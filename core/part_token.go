@@ -89,7 +89,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	for i := range pt {
 		if pt[i].TokenValue <= rem {
 			wt = append(wt, pt[i])
-			rem = rem - pt[i].TokenValue
+			rem = floatPrecision(rem-pt[i].TokenValue, 10)
 			idx = append(idx, i)
 		} else {
 			rpt = append(rpt, pt[i])
