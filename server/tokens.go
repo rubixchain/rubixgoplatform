@@ -104,7 +104,7 @@ func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
 
-type inputData struct {
+type SignatureResponseSwaggoInput struct {
 	ID       string `json:"id"`
 	Mode     int    `json:"mode"`
 	Password string `json:"password"`
@@ -117,9 +117,7 @@ type inputData struct {
 // @ID 			signature-response
 // @Accept      json
 // @Produce     json
-// @Param 		id			body	string	true 	"Req ID"
-// @Param		mode		body	int		true	"Mode of the node"
-// @Param		password	body	string	true	"password of the node"
+// @Param 		input body SignatureResponseSwaggoInput true "Signature response input"
 // @Success 	200		{object}	model.BasicResponse
 // @Router /api/signature-response [post]
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
