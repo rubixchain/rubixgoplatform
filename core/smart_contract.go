@@ -22,9 +22,7 @@ type NewState struct {
 	ConBlockHash string `json:"contract_block_hash"`
 }
 
-
 var reqID string
-
 
 type GenerateSmartContractRequest struct {
 	BinaryCode string
@@ -50,8 +48,6 @@ type SmartContractTokenResponse struct {
 	Message string `json:"message"`
 	Result  string `json:"result"`
 }
-
-var reqID string
 
 func (c *Core) GenerateSmartContractToken(requestID string, smartContractTokenRequest *GenerateSmartContractRequest) *model.BasicResponse {
 
