@@ -552,10 +552,6 @@ func Run(args []string) {
 		cmd.generateSmartContractToken()
 	case FetchSmartContract:
 		cmd.fetchSmartContract()
-	case PublishContractCmd:
-		cmd.PublishContract()
-	case SubscribeContractCmd:
-		cmd.SubscribeContract()
 	case DumpSmartContractTokenChainCmd:
 		cmd.dumpSmartContractTokenChain()
 	case ExecuteSmartcontractCmd:
