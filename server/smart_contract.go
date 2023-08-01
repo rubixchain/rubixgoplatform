@@ -49,7 +49,7 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
-// DeplotSmartContract godoc
+// generateSmartContract godoc
 // @Summary      Generate Smart Contract
 // @Description  This API will Generate smart contract Token
 // @Tags         Smart Contract
@@ -184,8 +184,8 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 }
 
 // FetchSmartContract godoc
-// @Summary      Deploy Smart Contract
-// @Description  This API will deploy smart contract
+// @Summary      Fetch Smart Contract
+// @Description  This API will Fetch smart contract
 // @Tags         Smart Contract
 // @Accept       mpfd
 // @Produce      mpfd
