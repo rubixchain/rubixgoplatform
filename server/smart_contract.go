@@ -18,7 +18,7 @@ type InitSmartContractToken struct {
 	genesisBlock   string
 }
 
-// DeploySmartContract godoc
+// SmartContract godoc
 // @Summary      Deploy Smart Contract
 // @Description  This API will deploy smart contract Token
 // @Tags         Smart Contract
@@ -30,7 +30,7 @@ type InitSmartContractToken struct {
 // @Param        transType        	   		   formData      int     true   "QuorumType"
 // @Param        transComment        	   		   formData      string  false   "Comment"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/generate-smart-contract [post]
+// @Router       /api/deploy-smart-contract [post]
 func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 	var deployReq model.DeploySmartContractRequest
 	err := s.ParseJSON(req, &deployReq)
@@ -49,7 +49,7 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
-// generateSmartContract godoc
+// SmartContract godoc
 // @Summary      Generate Smart Contract
 // @Description  This API will Generate smart contract Token
 // @Tags         Smart Contract
@@ -183,7 +183,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "Smart contract generated successfully", nil)
 }
 
-// FetchSmartContract godoc
+// SmartContract godoc
 // @Summary      Fetch Smart Contract
 // @Description  This API will Fetch smart contract
 // @Tags         Smart Contract
@@ -245,7 +245,7 @@ func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)
 }
 
-// ExecuteSmartContract godoc
+// SmartContract godoc
 // @Summary      Execute Smart Contract
 // @Description  This API will Execute smart contract Token
 // @Tags         Smart Contract
@@ -257,7 +257,7 @@ func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 // @Param        transComment        	   		   formData      string  false   "Comment"
 // @Param		 smartContractData			   formData		 string  true   "SmartContractData"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/generate-smart-contract [post]
+// @Router       /api/execute-smart-contract [post]
 func (s *Server) APIExecuteSmartContract(req *ensweb.Request) *ensweb.Result {
 	var executeReq model.ExecuteSmartContractRequest
 	err := s.ParseJSON(req, &executeReq)
