@@ -97,7 +97,7 @@ func (c *Client) PublishNewEvent(contract string, did string, block string) (*mo
 }
 func (c *Client) SubscribeContract(contract string) (*model.BasicResponse, error) {
 	var response model.BasicResponse
-	newSubscription := model.NewSubcription{
+	newSubscription := model.NewSubscription{
 		Contract: contract,
 	}
 	err := c.sendJSONRequest("POST", setup.APISubscribecontract, nil, &newSubscription, &response)
@@ -116,4 +116,3 @@ func (c *Client) ExecuteSmartContract(executeRequest *model.ExecuteSmartContract
 	}
 	return &basicResponse, nil
 }
-
