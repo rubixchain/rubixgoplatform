@@ -234,7 +234,7 @@ func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 
 }
 
-// PublishContract godoc
+// SmartContract godoc
 // @Summary      Publish Smart Contract
 // @Description  This API endpoint publishes a smart contract.
 // @Tags         Smart Contract
@@ -254,7 +254,7 @@ func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(request, true, "Smart contract published successfully", nil)
 }
 
-// SubscribeContract godoc
+// SmartContract godoc
 // @Summary      Subscribe to Smart Contract
 // @Description  This API endpoint allows subscribing to a smart contract.
 // @Tags         Smart Contract
