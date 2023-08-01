@@ -462,6 +462,40 @@
                     }
                 }
             }
+        },
+        "/api/subscribe-contract": {
+            "post": {
+                "description": "This API endpoint allows subscribing to a smart contract.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Subscribe to Smart Contract",
+                "parameters": [
+                    {
+                        "description": "Subscribe to input contract",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.NewSubscriptionSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {

@@ -81,6 +81,7 @@ func (c *Client) FetchSmartContract(fetchSmartContractRequest *FetchSmartContrac
 	return &basicResponse, nil
 
 }
+
 func (c *Client) PublishNewEvent(contract string, did string, block string) (*model.BasicResponse, error) {
 	var response model.BasicResponse
 	newContract := model.NewContractEvent{
@@ -115,3 +116,4 @@ func (c *Client) ExecuteSmartContract(executeRequest *model.ExecuteSmartContract
 	}
 	return &basicResponse, nil
 }
+

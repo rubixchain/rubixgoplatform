@@ -18,6 +18,7 @@ import (
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/client"
+	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
@@ -103,6 +104,8 @@ var commands = []string{VersionCmd,
 	CommitDataTokenCmd,
 	SetupDBCmd,
 	GetTxnDetailsCmd,
+	PublishContractCmd,
+	SubscribeContractCmd,
 	CreateNFTCmd,
 	GetAllNFTCmd,
 	DeploySmartContractCmd,
@@ -143,6 +146,8 @@ var commandsHelp = []string{"To get tool version",
 	"This command will commit data token token",
 	"This command will setup the DB",
 	"This command will get transaction details",
+	"This command will publish a smart contract token",
+	"This command will subscribe to a smart contract token",
 	"This command will create NFT",
 	"This command will get all NFTs",
 	"This command will deploy the smart contract token",
@@ -157,6 +162,7 @@ var commandsHelp = []string{"To get tool version",
 type Command struct {
 	cfg                config.Config
 	c                  *client.Client
+	sc                 *contract.Contract
 	encKey             string
 	start              bool
 	node               uint
@@ -401,6 +407,8 @@ func Run(args []string) {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
+	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
+	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
 	flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
 	flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
 	flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")
@@ -530,6 +538,10 @@ func Run(args []string) {
 		cmd.setupDB()
 	case GetTxnDetailsCmd:
 		cmd.getTxnDetails()
+	case PublishContractCmd:
+		cmd.PublishContract()
+	case SubscribeContractCmd:
+		cmd.SubscribeContract()
 	case CreateNFTCmd:
 		cmd.createNFT()
 	case GetAllNFTCmd:

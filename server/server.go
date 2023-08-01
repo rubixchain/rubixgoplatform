@@ -16,6 +16,44 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
+const (
+	APILogin               string = "/api/login"
+	APIStart               string = "/api/start"
+	APIShutdown            string = "/api/shutdown"
+	APINodeStatus          string = "/api/node-status"
+	APIPing                string = "/api/ping"
+	APIAddBootStrap        string = "/api/add-bootstrap"
+	APIRemoveBootStrap     string = "/api/remove-bootstrap"
+	APIRemoveAllBootStrap  string = "/api/remove-all-bootstrap"
+	APIGetAllBootStrap     string = "/api/get-all-bootstrap"
+	APICreateDID           string = "/api/createdid"
+	APIGetAllDID           string = "/api/getalldid"
+	APIAddQuorum           string = "/api/addquorum"
+	APIGetAllQuorum        string = "/api/getallquorum"
+	APIRemoveAllQuorum     string = "/api/removeallquorum"
+	APISetupQuorum         string = "/api/setup-quorum"
+	APISetupService        string = "/api/setup-service"
+	APIGenerateTestToken   string = "/api/generate-test-token"
+	APIInitiateRBTTransfer string = "/api/initiate-rbt-transfer"
+	APIGetAccountInfo      string = "/api/get-account-info"
+	APISignatureResponse   string = "/api/signature-response"
+	APIDumpTokenChainBlock string = "/api/dump-token-chain"
+	APIRegisterDID         string = "/api/register-did"
+	APISetupDID            string = "/api/setup-did"
+	APIMigrateNode         string = "/api/migrate-node"
+	APILockTokens          string = "/api/lock-tokens"
+	APICreateDataToken     string = "/api/create-data-token"
+	APICommitDataToken     string = "/api/commit-data-token"
+	APICheckDataToken      string = "/api/check-data-token"
+	APIGetDataToken        string = "/api/get-data-token"
+	APISetupDB             string = "/api/setup-db"
+	APIGetTxnByTxnID       string = "/api/get-by-txnId"
+	APIGetTxnByDID         string = "/api/get-by-did"
+	APIGetTxnByComment     string = "/api/get-by-comment"
+	APIPublishContract     string = "/api/publish-contract"
+	APISubscribecontract   string = "/api/subscribe-contract"
+)
+
 // Server defines server handle
 type Server struct {
 	ensweb.Server
@@ -141,6 +179,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, true, s.AuthError, false))
 	s.AddRoute(setup.APICreateNFT, "POST", s.AuthHandle(s.APICreateNFT, true, s.AuthError, false))
+	s.AddRoute(APIPublishContract, "POST", s.AuthHandle(s.APIPublishContract, true, s.AuthError, false))
+	s.AddRoute(APISubscribecontract, "POST", s.AuthHandle(s.APISubscribecontract, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetAllNFT, "GET", s.AuthHandle(s.APIGetAllNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIAddNFTSale, "GET", s.AuthHandle(s.APIAddNFTSale, true, s.AuthError, false))
 	s.AddRoute(setup.APIDeploySmartContract, "POST", s.AuthHandle(s.APIDeploySmartContract, true, s.AuthError, false))

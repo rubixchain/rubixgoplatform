@@ -21,6 +21,11 @@ type NewState struct {
 	ConHash      string `json:"contract_hash"`
 	ConBlockHash string `json:"contract_block_hash"`
 }
+
+
+var reqID string
+
+
 type GenerateSmartContractRequest struct {
 	BinaryCode string
 	RawCode    string
@@ -291,6 +296,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 
 	return basicResponse
 }
+
 func (c *Core) PublishNewEvent(nc *model.NewContractEvent) {
 	c.publishNewEvent(nc)
 }
