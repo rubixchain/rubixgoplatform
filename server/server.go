@@ -183,6 +183,13 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APISubscribecontract, "POST", s.AuthHandle(s.APISubscribecontract, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetAllNFT, "GET", s.AuthHandle(s.APIGetAllNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIAddNFTSale, "GET", s.AuthHandle(s.APIAddNFTSale, true, s.AuthError, false))
+	s.AddRoute(setup.APIDeploySmartContract, "POST", s.AuthHandle(s.APIDeploySmartContract, true, s.AuthError, false))
+	s.AddRoute(setup.APIGenerateSmartContract, "POST", s.AuthHandle(s.APIGenerateSmartContract, true, s.AuthError, false))
+	s.AddRoute(setup.APIFetchSmartContract, "POST", s.AuthHandle(s.APIFetchSmartContract, true, s.AuthError, false))
+	s.AddRoute(setup.APIPublishContract, "POST", s.AuthHandle(s.APIPublishContract, true, s.AuthError, false))
+	s.AddRoute(setup.APISubscribecontract, "POST", s.AuthHandle(s.APISubscribecontract, true, s.AuthError, false))
+	s.AddRoute(setup.APIDumpSmartContractTokenChainBlock, "POST", s.AuthHandle(s.APIDumpSmartContractTokenChainBlock, true, s.AuthError, false))
+	s.AddRoute(setup.APIExecuteSmartContract, "POST", s.AuthHandle(s.APIExecuteSmartContract, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {

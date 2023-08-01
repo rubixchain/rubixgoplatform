@@ -13,7 +13,7 @@ func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
 	var tokenMap TokenProviderMap
 	err := w.s.Read(TokenProvider, &tokenMap, "token=?", token)
 	if err != nil {
-		if err.Error() == "record not found" {
+		if err.Error() == "no records found" {
 			w.log.Debug("Data Not avilable in DB")
 			return &tokenMap, err
 		} else {
@@ -31,7 +31,9 @@ func (w *Wallet) AddProviderDetails(token string, did string, funId int, role in
 	err := w.s.Read(TokenProvider, &tpm, "token=?", token)
 	if err != nil || tpm.Token == "" {
 		tpm.Token = token
-
+		tpm.DID = did
+		tpm.FuncID = funId
+		tpm.Role = role
 		return w.s.Write(TokenProvider, &tpm)
 	}
 	tpm.DID = did

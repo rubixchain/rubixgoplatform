@@ -7,6 +7,8 @@ import (
 const (
 	SendMode int = iota
 	RecvMode
+	DeployMode
+	ExecuteMode
 )
 
 type TransactionDetails struct {
@@ -21,6 +23,7 @@ type TransactionDetails struct {
 	Comment         string    `gorm:"column:comment"`
 	DateTime        time.Time `gorm:"column:date_time"`
 	Status          bool      `gorm:"column:status"`
+	DeployerDID     string    `gorm:"column:deployer_did"`
 }
 
 func (w *Wallet) AddTransactionHistory(td *TransactionDetails) error {

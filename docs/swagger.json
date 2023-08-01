@@ -64,6 +64,13 @@
                 "parameters": [
                     {
                         "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
                         "description": "User/Entity ID",
                         "name": "UserID",
                         "in": "formData"
@@ -109,6 +116,228 @@
                 }
             }
         },
+        "/api/fetch-smart-contract": {
+            "post": {
+                "description": "This API will deploy smart contract",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Deploy Smart Contract",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "smartContractToken",
+                        "name": "smartContractToken",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/generate-smart-contract": {
+            "post": {
+                "description": "This API will deploy smart contract",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Deploy Smart Contract",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "location of binary code hash",
+                        "name": "binaryCodePath",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "location of raw code hash",
+                        "name": "rawCodePath",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "location of yaml code hash",
+                        "name": "yamlFilePath",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/get-account-info": {
+            "get": {
+                "description": "For a mentioned DID, check the account balance",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Check account balance",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User DID",
+                        "name": "did",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/get-by-comment": {
+            "get": {
+                "description": "Retrieves the details of a transaction based on its comment.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Get transaction details by Transcation Comment",
+                "operationId": "get-by-comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Comment to identify the transaction",
+                        "name": "Comment",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/get-by-did": {
+            "get": {
+                "description": "Retrieves the details of a transaction based on dID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Get transaction details by dID",
+                "operationId": "get-by-did",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID of sender/receiver",
+                        "name": "DID",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by role as sender or receiver",
+                        "name": "Role",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/get-by-txnId": {
+            "get": {
+                "description": "Retrieves the details of a transaction based on its ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Get transaction details by Transcation ID",
+                "operationId": "get-txn-details-by-id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The ID of the transaction to retrieve",
+                        "name": "txnID",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/get-data-token": {
             "get": {
                 "description": "This API will get all data token belong to the did",
@@ -141,9 +370,9 @@
                 }
             }
         },
-        "/api/publish-contract": {
+        "/api/initiate-rbt-transfer": {
             "post": {
-                "description": "This API endpoint publishes a smart contract.",
+                "description": "Initiates a transfer of RBT tokens from one account to another.",
                 "consumes": [
                     "application/json"
                 ],
@@ -151,17 +380,53 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Smart Contract"
+                    "Transaction"
                 ],
-                "summary": "Publish Smart Contract",
+                "summary": "Initiate RBT transfer",
+                "operationId": "initiate-rbt-transfer",
                 "parameters": [
                     {
-                        "description": "Publish input contract",
+                        "description": "Transfer input parameters",
                         "name": "input",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.NewContractEventSwaggoInput"
+                            "$ref": "#/definitions/server.RBTTransferRequestSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/signature-response": {
+            "post": {
+                "description": "This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Transaction"
+                ],
+                "summary": "Signature Response",
+                "operationId": "signature-response",
+                "parameters": [
+                    {
+                        "description": "Transfer input parameters",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.inputData"
                         }
                     }
                 ],
@@ -246,24 +511,36 @@
                 }
             }
         },
-        "server.NewContractEventSwaggoInput": {
+        "server.RBTTransferRequestSwaggoInput": {
             "type": "object",
             "properties": {
-                "contract": {
+                "comment": {
                     "type": "string"
                 },
-                "contract_block_hash": {
+                "receiver": {
                     "type": "string"
                 },
-                "did": {
+                "sender": {
                     "type": "string"
+                },
+                "tokenCOunt": {
+                    "type": "number"
+                },
+                "type": {
+                    "type": "integer"
                 }
             }
         },
-        "server.NewSubscriptionSwaggoInput": {
+        "server.inputData": {
             "type": "object",
             "properties": {
-                "contract": {
+                "id": {
+                    "type": "string"
+                },
+                "mode": {
+                    "type": "integer"
+                },
+                "password": {
                     "type": "string"
                 }
             }
