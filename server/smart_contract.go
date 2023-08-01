@@ -28,17 +28,22 @@ type NewSubscriptionSwaggoInput struct {
 	Contract string `json:"contract"`
 }
 
+type DeploySmartContractSwaggoInput struct {
+	SmartContractToken string  `json:"smartContractToken"`
+	DeployerAddress    string  `json:"deployerAddr"`
+	RBTAmount          float64 `json:"rbtAmount"`
+	QuorumType         int     `json:"quorumType"`
+	Comment            string  `json:"comment"`
+}
+
 // SmartContract godoc
 // @Summary      Deploy Smart Contract
 // @Description  This API will deploy smart contract Token
 // @Tags         Smart Contract
-// @Accept       mpfd
-// @Produce      mpfd
-// @Param		 smartContractToken			   formData		 string  true   "SmartContractToken"
-// @Param        deployerAddr        	   formData      string  true   "DeployerAddress"
-// @Param        rbtAmount        	   		   formData      number  true   "RBTAmount"
-// @Param        transType        	   		   formData      int     true   "QuorumType"
-// @Param        transComment        	   		   formData      string  false   "Comment"
+// @ID 			 deploy-smart-contract
+// @Accept       json
+// @Produce      json
+// @Param		 input body DeploySmartContractSwaggoInput true "Deploy smart contract"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/deploy-smart-contract [post]
 func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
