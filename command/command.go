@@ -407,8 +407,6 @@ func Run(args []string) {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
-	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
-	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
 	flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
 	flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
 	flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")
