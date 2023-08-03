@@ -280,17 +280,21 @@ func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)
 }
 
+type ExecuteSmartContractSwaggoInput struct {
+	SmartContractToken string `json:"smartContractToken"`
+	ExecutorAddress    string `json"executorAddr"`
+	QuorumType         int    `json:"quorumType"`
+	Comment            string `json:"comment"`
+	SmartContractData  string `json:"smartContractData`
+}
+
 // SmartContract godoc
 // @Summary      Execute Smart Contract
 // @Description  This API will Execute smart contract Token
 // @Tags         Smart Contract
-// @Accept       mpfd
-// @Produce      mpfd
-// @Param		 smartContractToken			   formData		 string  true   "SmartContractToken"
-// @Param        executorAddr        	   formData      string  true   "ExecutorAddress"
-// @Param        transType        	   		   formData      int     true   "QuorumType"
-// @Param        transComment        	   		   formData      string  false   "Comment"
-// @Param		 smartContractData			   formData		 string  true   "SmartContractData"
+// @Accept       json
+// @Produce      json
+// @Param		 input body ExecuteSmartContractSwaggoInput true "Execute smart contrct and add details to chain"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/execute-smart-contract [post]
 func (s *Server) APIExecuteSmartContract(req *ensweb.Request) *ensweb.Result {
