@@ -427,7 +427,7 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	did := dc.GetDID()
 	hs, ss, ps, err := c.GetHashSig(did)
 	if err != nil {
-		c.log.Error("")
+		c.log.Error("err", err)
 		return err
 	}
 	ok, err := dc.Verify(hs, util.StrToHex(ss), util.StrToHex(ps))

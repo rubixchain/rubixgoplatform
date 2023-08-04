@@ -241,7 +241,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		PledgeMode: contract.POWPledgeMode,
 		TotalRBTs:  smartContractValue,
 		TransInfo: &contract.TransInfo{
-			DeployerDID:        did,
+			ExecutorDID:        did,
 			Comment:            executeReq.Comment,
 			SmartContractToken: executeReq.SmartContractToken,
 			TransTokens:        smartContractInfoArray,

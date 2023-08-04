@@ -54,6 +54,7 @@ type TransInfo struct {
 	CommitedTokens     []TokenInfo `json:"comitedtokens"`
 	DeployerDID        string      `json:"deployerDID`
 	SmartContractToken string      `json:"smartcontractToken`
+	ExecutorDID        string      `json:"executorDID"`
 }
 
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {
@@ -79,6 +80,9 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 	}
 	if ts.DeployerDID != "" {
 		ntsb[TSDeployerDIDKey] = ts.DeployerDID
+	}
+	if ts.ExecutorDID != "" {
+		ntsb[TSExecutorDIDKey] = ts.ExecutorDID
 	}
 	if ts.SmartContractToken != "" {
 		ntsb[TSSmartContractTokenKey] = ts.SmartContractToken
