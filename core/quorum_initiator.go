@@ -43,7 +43,7 @@ type ConensusRequest struct {
 	ContractBlock      []byte   `json:"contract_block"`
 	QuorumList         []string `json:"quorum_list"`
 	DeployerPeerID     string   `json:"deployer_peerd_id"`
-	SmartContractToken string   `json:"smart_contract_token`
+	SmartContractToken string   `json:"smart_contract_token"`
 	ExecuterPeerID     string   `json:"executor_peer_id"`
 }
 

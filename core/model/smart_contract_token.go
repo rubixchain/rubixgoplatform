@@ -10,7 +10,7 @@ type DeploySmartContractRequest struct {
 
 type ExecuteSmartContractRequest struct {
 	SmartContractToken string `json:"smartContractToken"`
-	ExecutorAddress    string `json"executorAddr"`
+	ExecutorAddress    string `json:"executorAddr"`
 	QuorumType         int    `json:"quorumType"`
 	Comment            string `json:"comment"`
 	SmartContractData  string `json:"smartContractData`

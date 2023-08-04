@@ -174,7 +174,6 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 	case tkn.TestNFTTokenType:
 		db = w.ntcs
 	case tkn.SmartContractTokenType:
-		w.log.Debug("smart contract chain db")
 		db = w.smartContractTokenChainStorage
 	}
 	return db
@@ -251,7 +250,6 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 			nextBlkID = blkID
 		}
 	}
-	w.log.Debug("blkls length", len(blks))
 	return blks, nextBlkID, nil
 }
 
@@ -361,7 +359,6 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 		Sync: true,
 	}
 	tt := b.GetTokenType(token)
-	w.log.Debug("adding geneis block to wallet token type ", tt)
 	db := w.getChainDB(tt)
 	if db == nil {
 		w.log.Error("Failed to add block, invalid token type")
