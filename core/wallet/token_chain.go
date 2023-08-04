@@ -51,6 +51,8 @@ func tcsType(tokenType int) string {
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	return tt + "-"
 }
@@ -95,6 +97,8 @@ func tcsKey(tokenType int, t string, blockID string) string {
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	bs := strings.Split(blockID, "-")
 	if len(bs) == 2 {
@@ -136,6 +140,8 @@ func oldtcsKey(tokenType int, t string, blockID string) string {
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	return tt + "-" + t + "-" + blockID
 }
@@ -168,6 +174,7 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 	case tkn.TestNFTTokenType:
 		db = w.ntcs
 	case tkn.SmartContractTokenType:
+		w.log.Debug("smart contract chain db")
 		db = w.smartContractTokenChainStorage
 	}
 	return db
@@ -198,6 +205,7 @@ func (w *Wallet) getBlock(tt int, t string, blockID string) ([]byte, error) {
 
 // getAllBlocks get the chain blocks
 func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, string, error) {
+	w.log.Debug("tokentype ", tt)
 	db := w.getChainDB(tt)
 	if db == nil {
 		return nil, "", fmt.Errorf("failed get all blocks, invalid token type")
@@ -243,6 +251,7 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 			nextBlkID = blkID
 		}
 	}
+	w.log.Debug("blkls length", len(blks))
 	return blks, nextBlkID, nil
 }
 
@@ -352,6 +361,7 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 		Sync: true,
 	}
 	tt := b.GetTokenType(token)
+	w.log.Debug("adding geneis block to wallet token type ", tt)
 	db := w.getChainDB(tt)
 	if db == nil {
 		w.log.Error("Failed to add block, invalid token type")
