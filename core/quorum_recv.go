@@ -337,10 +337,13 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	if conensusRequest.Mode == SmartContractDeployMode {
 		c.log.Debug("Fetching Deployer DID")
 		verifyDID = consensusContract.GetDeployerDID()
+		c.log.Debug("deployer did ", verifyDID)
 	} else {
 		c.log.Debug("Fetching Executor DID")
 		verifyDID = consensusContract.GetExecutorDID()
+		c.log.Debug("executor did ", verifyDID)
 	}
+
 	dc, err := c.SetupForienDID(verifyDID)
 	if err != nil {
 		c.log.Error("Failed to get DID for verification", "err", err)
@@ -398,11 +401,26 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		}
 		wg.Wait()
 	} else {
+		//sync the smartcontract tokenchain
+		address := conensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
+		peerConn, err := c.getPeer(address)
+		if err != nil {
+			c.log.Error("Failed to get executor peer to sync smart contract token chain", "err", err)
+			consensusReply.Message = "Failed to get executor peer to sync smart contract token chain : "
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+
 		//3. check token state -- execute mode - pin tokenstate of the smart token chain
 		tokenStateCheckResult = make([]TokenStateCheckResult, len(consensusContract.GetTransTokenInfo()))
 		smartContractTokenInfo := consensusContract.GetTransTokenInfo()
 		for i, ti := range smartContractTokenInfo {
 			t := ti.Token
+			err = c.syncTokenChainFrom(peerConn, "", ti.Token, ti.TokenType)
+			if err != nil {
+				c.log.Error("Failed to sync smart contract token chain block fro execution validation", "err", err)
+				consensusReply.Message = "Failed to sync smart contract token chain block fro execution validation"
+				return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+			}
 			wg.Add(1)
 			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, conensusRequest.QuorumList, ti.TokenType)
 		}
