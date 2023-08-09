@@ -21,6 +21,17 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 	txnID := s.GetQuerry(req, "txnID")
 	res, err := s.c.GetTxnDetailsByID(txnID)
 	if err != nil {
+		if err.Error() == "no records found" {
+			s.log.Info("There are no records present for this Transaction ID " + txnID)
+			td := model.TxnDetails{
+				BasicResponse: model.BasicResponse{
+					Status:  true,
+					Message: "no records present for this Transaction ID : " + txnID,
+				},
+				TxnDetails: make([]wallet.TransactionDetails, 0),
+			}
+			return s.RenderJSON(req, &td, http.StatusOK)
+		}
 		s.log.Error("err", err)
 		td := model.TxnDetails{
 			BasicResponse: model.BasicResponse{
@@ -58,6 +69,17 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 	role := s.GetQuerry(req, "Role")
 	res, err := s.c.GetTxnDetailsByDID(did, role)
 	if err != nil {
+		if err.Error() == "no records found" {
+			s.log.Info("There are no records present for this DID " + did)
+			td := model.TxnDetails{
+				BasicResponse: model.BasicResponse{
+					Status:  true,
+					Message: "no records present for this DID : " + did,
+				},
+				TxnDetails: make([]wallet.TransactionDetails, 0),
+			}
+			return s.RenderJSON(req, &td, http.StatusOK)
+		}
 		s.log.Error("err", err)
 		td := model.TxnDetails{
 			BasicResponse: model.BasicResponse{
@@ -96,6 +118,17 @@ func (s *Server) APIGetTxnByComment(req *ensweb.Request) *ensweb.Result {
 	comment := s.GetQuerry(req, "Comment")
 	res, err := s.c.GetTxnDetailsByComment(comment)
 	if err != nil {
+		if err.Error() == "no records found" {
+			s.log.Info("There are no records present for the comment " + comment)
+			td := model.TxnDetails{
+				BasicResponse: model.BasicResponse{
+					Status:  true,
+					Message: "no records present for the comment : " + comment,
+				},
+				TxnDetails: make([]wallet.TransactionDetails, 0),
+			}
+			return s.RenderJSON(req, &td, http.StatusOK)
+		}
 		s.log.Error("err", err)
 		td := model.TxnDetails{
 			BasicResponse: model.BasicResponse{
