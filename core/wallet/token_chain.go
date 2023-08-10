@@ -204,7 +204,6 @@ func (w *Wallet) getBlock(tt int, t string, blockID string) ([]byte, error) {
 
 // getAllBlocks get the chain blocks
 func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, string, error) {
-	w.log.Debug("tokentype ", tt)
 	db := w.getChainDB(tt)
 	if db == nil {
 		return nil, "", fmt.Errorf("failed get all blocks, invalid token type")

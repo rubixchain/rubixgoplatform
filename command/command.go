@@ -74,6 +74,8 @@ const (
 	DeploySmartContractCmd         string = "deploysmartcontract"
 	ExecuteSmartcontractCmd        string = "executesmartcontract"
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
+	GetTokenBlock                  string = "gettokenblock"
+	GetSmartContractData           string = "getsmartcontractdata"
 )
 
 var commands = []string{VersionCmd,
@@ -116,6 +118,8 @@ var commands = []string{VersionCmd,
 	PublishContractCmd,
 	SubscribeContractCmd,
 	DumpSmartContractTokenChainCmd,
+	GetTokenBlock,
+	GetSmartContractData,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -157,7 +161,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will fetch a smart contract token",
 	"This command will publish a smart contract token",
 	"This command will subscribe to a smart contract token",
-	"This commadn will dump the smartcontract token chain"}
+	"This commadn will dump the smartcontract token chain",
+	"This command gets token block",
+	"This command gets the smartcontract data from latest block"}
 
 type Command struct {
 	cfg                config.Config
@@ -229,6 +235,7 @@ type Command struct {
 	newContractBlock   string
 	smartContractData  string
 	executorAddr       string
+	latest             bool
 }
 
 func showVersion() {
@@ -552,6 +559,10 @@ func Run(args []string) {
 		cmd.fetchSmartContract()
 	case DumpSmartContractTokenChainCmd:
 		cmd.dumpSmartContractTokenChain()
+	case GetTokenBlock:
+		cmd.getTokenBlock()
+	case GetSmartContractData:
+		cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
 	default:

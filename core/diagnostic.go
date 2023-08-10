@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
@@ -53,4 +54,96 @@ func (c *Core) DumpSmartContractTokenChain(dr *model.TCDumpRequest) *model.TCDum
 	ds.Blocks = blks
 	ds.NextBlockID = nextID
 	return ds
+}
+
+func (c *Core) GetSmartContractData(getReq *model.SmartContractDataReq) *model.SmartContractDataReply {
+	reply := &model.SmartContractDataReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	_, err := c.w.GetSmartContractToken(getReq.Token)
+	if err != nil {
+		reply.Message = "Failed to get smart contract token data, token does not exist"
+		return reply
+	}
+	sctDataArray := make([]model.SCTDataReply, 0)
+	if getReq.Latest {
+		latestBlock := c.w.GetLatestTokenBlock(getReq.Token, c.TokenType(SmartContractString))
+		if latestBlock == nil {
+			reply.Message = "Failed to get smart contract token data, block is empty"
+			return reply
+		}
+		blockNo, err := latestBlock.GetBlockNumber(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get smart contract token latest block number"
+			return reply
+		}
+		/* if blockNo == 0 {
+			reply.Status = true
+			reply.Message = "Latest Block is gensys block"
+			return reply
+		} */
+		blockId, err := latestBlock.GetBlockID(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get smart contract token latest block number"
+			return reply
+		}
+		scData := latestBlock.GetSmartContractData()
+		if scData == "" && blockNo == 0 {
+			reply.Message = "Gensys Block, No Smart contract Data"
+		}
+		if scData == "" {
+			reply.Message = "Failed to get smart contract data, empty"
+			return reply
+		}
+		sctData := model.SCTDataReply{
+			BlockNo:           blockNo,
+			BlockId:           blockId,
+			SmartContractData: scData,
+		}
+		sctDataArray = append(sctDataArray, sctData)
+		reply.SCTDataReply = sctDataArray
+		reply.Status = true
+		reply.Message = "Fetched latest block smart contract data"
+		return reply
+	}
+
+	blks, _, err := c.w.GetAllTokenBlocks(getReq.Token, c.TokenType(SmartContractString), "")
+
+	for _, blk := range blks {
+		block := block.InitBlock(blk, nil)
+		if block == nil {
+			reply.Message = "Failed to initialize smart contract block"
+			return reply
+		}
+		blockNo, err := block.GetBlockNumber(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get smart contract token latest block number"
+			return reply
+		}
+		blockId, err := block.GetBlockID(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get smart contract token latest block number"
+			return reply
+		}
+		scData := block.GetSmartContractData()
+		if scData == "" && blockNo == 0 {
+			reply.Message = "Gensys Block, No Smart contract Data"
+		}
+		if scData == "" {
+			reply.Message = "Failed to get smart contract data, empty"
+			return reply
+		}
+		sctData := model.SCTDataReply{
+			BlockNo:           blockNo,
+			BlockId:           blockId,
+			SmartContractData: scData,
+		}
+		sctDataArray = append(sctDataArray, sctData)
+	}
+	reply.SCTDataReply = sctDataArray
+	reply.Status = true
+	reply.Message = "Fetched Smart contract data"
+	return reply
 }

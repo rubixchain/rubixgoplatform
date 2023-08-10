@@ -57,6 +57,7 @@ const (
 	APIPublishContract                  string = "/api/publish-contract"
 	APISubscribecontract                string = "/api/subscribe-contract"
 	APIDumpSmartContractTokenChainBlock string = "/api/dump-smart-contract-token-chain"
+	APIGetSmartContractData             string = "/api/get-smart-contract-data"
 )
 
 // jwt.RegisteredClaims
