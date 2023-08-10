@@ -211,3 +211,20 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 	f.Close()
 	cmd.log.Info("smart contract Token chain dumped successfully!")
 }
+
+func (cmd *Command) getTokenBlock() {
+
+}
+
+func (cmd *Command) getSmartContractData() {
+	// if latest flag not set then return all data
+	// format willbe json object
+	/*
+		{
+			block_no
+			block_hash
+			smartcontract_hash
+		}
+	*/
+
+}

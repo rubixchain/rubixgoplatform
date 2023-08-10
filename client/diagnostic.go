@@ -30,3 +30,17 @@ func (c *Client) DumpSmartContractTokenChain(token string, blockID string) (*mod
 	}
 	return &drep, nil
 }
+
+func (c *Client) GetSmartContractData(token string, latest bool) (*model.SmartContractDataReply, error) {
+	getReq := &model.SmartContractDataReq{
+		Token:  token,
+		Latest: latest,
+	}
+	var sctDataReply model.SmartContractDataReply
+	err := c.sendJSONRequest("POST", setup.APIGetSmartContractData, nil, getReq, &sctDataReply)
+	if err != nil {
+		return nil, err
+	}
+	return &sctDataReply, nil
+
+}

@@ -10,3 +10,19 @@ type TCDumpReply struct {
 	NextBlockID string   `json:"next_block_id"`
 	Blocks      [][]byte `json:"blocks"`
 }
+
+type SmartContractDataReq struct {
+	Token  string
+	Latest bool
+}
+
+type SmartContractDataReply struct {
+	BasicResponse
+	SCTDataReply []SCTDataReply
+}
+
+type SCTDataReply struct {
+	BlockNo           uint64
+	BlockId           string
+	SmartContractData string
+}
