@@ -82,11 +82,12 @@ func (c *Client) FetchSmartContract(fetchSmartContractRequest *FetchSmartContrac
 
 }
 
-func (c *Client) PublishNewEvent(contract string, did string, block string) (*model.BasicResponse, error) {
+func (c *Client) PublishNewEvent(contract string, did string, publishType int, block string) (*model.BasicResponse, error) {
 	var response model.BasicResponse
 	newContract := model.NewContractEvent{
 		Contract:          contract,
 		Did:               did,
+		Type:              publishType,
 		ContractBlockHash: block,
 	}
 	err := c.sendJSONRequest("POST", setup.APIPublishContract, nil, &newContract, &response)

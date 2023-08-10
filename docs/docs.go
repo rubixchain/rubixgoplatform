@@ -19,6 +19,40 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/addnftsale": {
+            "post": {
+                "description": "This API will put NFTs for sale",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Add NFTs",
+                "parameters": [
+                    {
+                        "description": "NFT Detials",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/core.NFTSaleReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/commit-data-token": {
             "post": {
                 "description": "This API will create data token",
@@ -73,13 +107,6 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "DID",
-                        "name": "did",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
                         "description": "User/Entity ID",
                         "name": "UserID",
                         "in": "formData"
@@ -125,9 +152,121 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/createnft": {
+            "post": {
+                "description": "This API will create new NFT",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Create NFT",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User/Entity Info",
+                        "name": "UserInfo",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "File Info is json string {",
+                        "name": "FileInfo",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "File to be committed",
+                        "name": "FileContent",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/deploy-smart-contract": {
+            "post": {
+                "description": "This API will deploy smart contract Token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Deploy Smart Contract",
+                "operationId": "deploy-smart-contract",
+                "parameters": [
+                    {
+                        "description": "Deploy smart contract",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.DeploySmartContractSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/execute-smart-contract": {
+            "post": {
+                "description": "This API will Execute smart contract Token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Execute Smart Contract",
+                "parameters": [
+                    {
+                        "description": "Execute smart contrct and add details to chain",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.ExecuteSmartContractSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/fetch-smart-contract": {
             "post": {
-                "description": "This API will deploy smart contract",
+                "description": "This API will Fetch smart contract",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -137,7 +276,7 @@ const docTemplate = `{
                 "tags": [
                     "Smart Contract"
                 ],
-                "summary": "Deploy Smart Contract",
+                "summary": "Fetch Smart Contract",
                 "parameters": [
                     {
                         "type": "string",
@@ -159,7 +298,7 @@ const docTemplate = `{
         },
         "/api/generate-smart-contract": {
             "post": {
-                "description": "This API will deploy smart contract",
+                "description": "This API will Generate smart contract Token",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -169,7 +308,7 @@ const docTemplate = `{
                 "tags": [
                     "Smart Contract"
                 ],
-                "summary": "Deploy Smart Contract",
+                "summary": "Generate Smart Contract",
                 "parameters": [
                     {
                         "type": "string",
@@ -194,7 +333,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "file",
-                        "description": "location of Schema code hash",
+                        "description": "location of schema code hash",
                         "name": "schemaFilePath",
                         "in": "formData",
                         "required": true
@@ -379,9 +518,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/initiate-rbt-transfer": {
+        "/api/getallnft": {
             "post": {
-                "description": "Initiates a transfer of RBT tokens from one account to another.",
+                "description": "This API will get all NFTs of the DID",
                 "consumes": [
                     "application/json"
                 ],
@@ -389,18 +528,110 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Transaction"
+                    "NFT"
                 ],
-                "summary": "Initiate RBT transfer",
+                "summary": "Get ALL NFTs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.NFTTokens"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/initiate-rbt-transfer": {
+            "post": {
+                "description": "This API will initiate RBT transfer to the specified dID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Initiate RBT Transfer",
                 "operationId": "initiate-rbt-transfer",
                 "parameters": [
                     {
-                        "description": "Transfer input parameters",
+                        "description": "The decentralized identifier of the receiver",
+                        "name": "receiver",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The decentralized identifier of the sender",
+                        "name": "sender",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The number of RBT tokens to transfer",
+                        "name": "tokenCount",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "number"
+                        }
+                    },
+                    {
+                        "description": "A comment for the transfer",
+                        "name": "comment",
+                        "in": "body",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The type of transfer (1 for direct transfer, 2 for group transfer)",
+                        "name": "type",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/publish-contract": {
+            "post": {
+                "description": "This API endpoint publishes a smart contract.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Publish Smart Contract",
+                "parameters": [
+                    {
+                        "description": "Publish input contract",
                         "name": "input",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.RBTTransferRequestSwaggoInput"
+                            "$ref": "#/definitions/server.NewContractEventSwaggoInput"
                         }
                     }
                 ],
@@ -424,18 +655,18 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Transaction"
+                    "Account"
                 ],
                 "summary": "Signature Response",
                 "operationId": "signature-response",
                 "parameters": [
                     {
-                        "description": "Transfer input parameters",
+                        "description": "Signature response input",
                         "name": "input",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.inputData"
+                            "$ref": "#/definitions/server.SignatureResponseSwaggoInput"
                         }
                     }
                 ],
@@ -508,6 +739,34 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "core.NFTSale": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "core.NFTSaleReq": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/core.NFTSale"
+                    }
+                },
+                "type": {
+                    "type": "integer"
+                }
+            }
+        },
         "model.BasicResponse": {
             "type": "object",
             "properties": {
@@ -520,27 +779,98 @@ const docTemplate = `{
                 }
             }
         },
-        "server.RBTTransferRequestSwaggoInput": {
+        "model.NFTStatus": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
+                },
+                "token_status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.NFTTokens": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
+                },
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.NFTStatus"
+                    }
+                }
+            }
+        },
+        "server.DeploySmartContractSwaggoInput": {
             "type": "object",
             "properties": {
                 "comment": {
                     "type": "string"
                 },
-                "receiver": {
+                "deployerAddr": {
                     "type": "string"
                 },
-                "sender": {
-                    "type": "string"
+                "quorumType": {
+                    "type": "integer"
                 },
-                "tokenCOunt": {
+                "rbtAmount": {
                     "type": "number"
                 },
-                "type": {
-                    "type": "integer"
+                "smartContractToken": {
+                    "type": "string"
                 }
             }
         },
-        "server.inputData": {
+        "server.ExecuteSmartContractSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "executorAddr": {
+                    "type": "string"
+                },
+                "quorumType": {
+                    "type": "integer"
+                },
+                "smartContractData": {
+                    "type": "string"
+                },
+                "smartContractToken": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.NewContractEventSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "contract": {
+                    "type": "string"
+                },
+                "contract_block_hash": {
+                    "type": "string"
+                },
+                "did": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.NewSubscriptionSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "contract": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.SignatureResponseSwaggoInput": {
             "type": "object",
             "properties": {
                 "id": {

@@ -157,7 +157,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will fetch a smart contract token",
 	"This command will publish a smart contract token",
 	"This command will subscribe to a smart contract token",
-	"This commadn will dump the smartcontract token chain"}
+	"This command will dump the smartcontract token chain"}
 
 type Command struct {
 	cfg                config.Config
@@ -227,6 +227,7 @@ type Command struct {
 	schemaFilePath     string
 	smartContractToken string
 	newContractBlock   string
+	publishType        int
 	smartContractData  string
 	executorAddr       string
 }
@@ -416,6 +417,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.schemaFilePath, "schemaFile", "", "Schema file path")
 	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
 	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
+	flag.IntVar(&cmd.publishType, "pubType", 0, "Smart contract event publishing type(Deploy & Execute)")
 	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
 	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
 

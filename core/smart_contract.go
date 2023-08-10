@@ -10,10 +10,16 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/token"
 )
 
 const (
 	NewStateEvent string = "new_state_event"
+)
+
+const (
+	DeployType  int = 1
+	ExecuteType int = 2
 )
 
 type NewState struct {
@@ -324,16 +330,37 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	if err != nil {
 		c.log.Error("Failed to get contract details", "err", err)
 	}
-	fetchSC.SmartContractToken = newEvent.Contract
-	fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
-	if err != nil {
-		c.log.Error("Fetch smart contract failed, failed to create smartcontract folder", "err", err)
-		return
+	if newEvent.Type == 1 {
+		fetchSC.SmartContractToken = newEvent.Contract
+		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
+		if err != nil {
+			c.log.Error("Fetch smart contract failed, failed to create smartcontract folder", "err", err)
+			return
+		}
+		fetchSC.SmartContractTokenPath, err = c.RenameSCFolder(fetchSC.SmartContractTokenPath, fetchSC.SmartContractToken)
+		if err != nil {
+			c.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
+			return
+		}
+		c.FetchSmartContract(requestID, &fetchSC)
+		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetched.")
 	}
-	fetchSC.SmartContractTokenPath, err = c.RenameSCFolder(fetchSC.SmartContractTokenPath, fetchSC.SmartContractToken)
-	if err != nil {
-		c.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
-		return
+	if newEvent.Type == 2 {
+		smartContractToken := newEvent.Contract
+		publisherPeerID := peerID
+		did := newEvent.Did
+		tokenType := token.SmartContractTokenType
+		address := publisherPeerID + "." + did
+		p, err := c.getPeer(address)
+		if err != nil {
+			c.log.Error("Failed to get peer", "err", err)
+			return
+		}
+		err = c.syncTokenChainFrom(p, "", smartContractToken, tokenType)
+		if err != nil {
+			c.log.Error("Failed to sync token chain block", "err", err)
+			return
+		}
+		c.log.Info("Token chain of " + smartContractToken + " syncing successful")
 	}
-	c.FetchSmartContract(requestID, &fetchSC)
 }
