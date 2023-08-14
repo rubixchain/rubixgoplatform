@@ -299,6 +299,17 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		TokenTime:   float64(dif.Milliseconds()),
 	}
 	c.ec.ExplorerTransaction(explorerTrans)
+	newEvent := model.NewContractEvent{
+		Contract:          executeReq.SmartContractToken,
+		Did:               did,
+		Type:              ExecuteType,
+		ContractBlockHash: "",
+	}
+
+	err = c.publishNewEvent(&newEvent)
+	if err != nil {
+		c.log.Error("Failed to publish smart contract executed info")
+	}
 
 	c.log.Info("Smart Contract Token Executed successfully", "duration", dif)
 	resp.Status = true

@@ -55,7 +55,7 @@ func (cmd *Command) fetchSmartContract() {
 	cmd.log.Info("Smart contract token fetched successfully")
 }
 func (cmd *Command) PublishContract() {
-	basicResponse, err := cmd.c.PublishNewEvent(cmd.smartContractToken, cmd.did, cmd.newContractBlock)
+	basicResponse, err := cmd.c.PublishNewEvent(cmd.smartContractToken, cmd.did, cmd.publishType, cmd.newContractBlock)
 
 	if err != nil {
 		cmd.log.Error("Failed to publish new event", "err", err)

@@ -1,4 +1,22 @@
 definitions:
+  core.NFTSale:
+    properties:
+      amount:
+        type: number
+      token:
+        type: string
+    type: object
+  core.NFTSaleReq:
+    properties:
+      did:
+        type: string
+      tokens:
+        items:
+          $ref: '#/definitions/core.NFTSale'
+        type: array
+      type:
+        type: integer
+    type: object
   model.BasicResponse:
     properties:
       message:
@@ -7,20 +25,66 @@ definitions:
       status:
         type: boolean
     type: object
-  server.RBTTransferRequestSwaggoInput:
+  model.NFTStatus:
+    properties:
+      token:
+        type: string
+      token_status:
+        type: integer
+    type: object
+  model.NFTTokens:
+    properties:
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+      tokens:
+        items:
+          $ref: '#/definitions/model.NFTStatus'
+        type: array
+    type: object
+  server.DeploySmartContractSwaggoInput:
     properties:
       comment:
         type: string
-      receiver:
+      deployerAddr:
         type: string
-      sender:
-        type: string
-      tokenCOunt:
-        type: number
-      type:
+      quorumType:
         type: integer
+      rbtAmount:
+        type: number
+      smartContractToken:
+        type: string
     type: object
-  server.inputData:
+  server.ExecuteSmartContractSwaggoInput:
+    properties:
+      comment:
+        type: string
+      executorAddr:
+        type: string
+      quorumType:
+        type: integer
+      smartContractData:
+        type: string
+      smartContractToken:
+        type: string
+    type: object
+  server.NewContractEventSwaggoInput:
+    properties:
+      contract:
+        type: string
+      contract_block_hash:
+        type: string
+      did:
+        type: string
+    type: object
+  server.NewSubscriptionSwaggoInput:
+    properties:
+      contract:
+        type: string
+    type: object
+  server.SignatureResponseSwaggoInput:
     properties:
       id:
         type: string
@@ -37,6 +101,28 @@ info:
   title: Rubix Core
   version: "0.9"
 paths:
+  /api/addnftsale:
+    post:
+      consumes:
+      - application/json
+      description: This API will put NFTs for sale
+      parameters:
+      - description: NFT Detials
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/core.NFTSaleReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Add NFTs
+      tags:
+      - NFT
   /api/commit-data-token:
     post:
       consumes:
@@ -68,11 +154,6 @@ paths:
       - multipart/form-data
       description: This API will create data token
       parameters:
-      - description: DID
-        in: formData
-        name: did
-        required: true
-        type: string
       - description: User/Entity ID
         in: formData
         name: UserID
@@ -107,11 +188,84 @@ paths:
       summary: Create Data Token
       tags:
       - Data Tokens
+  /api/createnft:
+    post:
+      consumes:
+      - multipart/form-data
+      description: This API will create new NFT
+      parameters:
+      - description: User/Entity Info
+        in: formData
+        name: UserInfo
+        type: string
+      - description: File Info is json string {
+        in: formData
+        name: FileInfo
+        type: string
+      - description: File to be committed
+        in: formData
+        name: FileContent
+        type: file
+      produces:
+      - multipart/form-data
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create NFT
+      tags:
+      - NFT
+  /api/deploy-smart-contract:
+    post:
+      consumes:
+      - application/json
+      description: This API will deploy smart contract Token
+      operationId: deploy-smart-contract
+      parameters:
+      - description: Deploy smart contract
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.DeploySmartContractSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Deploy Smart Contract
+      tags:
+      - Smart Contract
+  /api/execute-smart-contract:
+    post:
+      consumes:
+      - application/json
+      description: This API will Execute smart contract Token
+      parameters:
+      - description: Execute smart contrct and add details to chain
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.ExecuteSmartContractSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Execute Smart Contract
+      tags:
+      - Smart Contract
   /api/fetch-smart-contract:
     post:
       consumes:
       - multipart/form-data
-      description: This API will deploy smart contract
+      description: This API will Fetch smart contract
       parameters:
       - description: smartContractToken
         in: formData
@@ -125,14 +279,14 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/model.BasicResponse'
-      summary: Deploy Smart Contract
+      summary: Fetch Smart Contract
       tags:
       - Smart Contract
   /api/generate-smart-contract:
     post:
       consumes:
       - multipart/form-data
-      description: This API will deploy smart contract
+      description: This API will Generate smart contract Token
       parameters:
       - description: DID
         in: formData
@@ -161,7 +315,7 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/model.BasicResponse'
-      summary: Deploy Smart Contract
+      summary: Generate Smart Contract
       tags:
       - Smart Contract
   /api/get-account-info:
@@ -276,19 +430,57 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
+  /api/getallnft:
+    post:
+      consumes:
+      - application/json
+      description: This API will get all NFTs of the DID
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.NFTTokens'
+      summary: Get ALL NFTs
+      tags:
+      - NFT
   /api/initiate-rbt-transfer:
     post:
       consumes:
       - application/json
-      description: Initiates a transfer of RBT tokens from one account to another.
+      description: This API will initiate RBT transfer to the specified dID
       operationId: initiate-rbt-transfer
       parameters:
-      - description: Transfer input parameters
+      - description: The decentralized identifier of the receiver
         in: body
-        name: input
+        name: receiver
         required: true
         schema:
-          $ref: '#/definitions/server.RBTTransferRequestSwaggoInput'
+          type: string
+      - description: The decentralized identifier of the sender
+        in: body
+        name: sender
+        required: true
+        schema:
+          type: string
+      - description: The number of RBT tokens to transfer
+        in: body
+        name: tokenCount
+        required: true
+        schema:
+          type: number
+      - description: A comment for the transfer
+        in: body
+        name: comment
+        schema:
+          type: string
+      - description: The type of transfer (1 for direct transfer, 2 for group transfer)
+        in: body
+        name: type
+        required: true
+        schema:
+          type: integer
       produces:
       - application/json
       responses:
@@ -296,9 +488,31 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/model.BasicResponse'
-      summary: Initiate RBT transfer
+      summary: Initiate RBT Transfer
       tags:
-      - Transaction
+      - Account
+  /api/publish-contract:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint publishes a smart contract.
+      parameters:
+      - description: Publish input contract
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.NewContractEventSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Publish Smart Contract
+      tags:
+      - Smart Contract
   /api/signature-response:
     post:
       consumes:
@@ -307,12 +521,12 @@ paths:
         the ID generated when Initiate RBT transfer is called.
       operationId: signature-response
       parameters:
-      - description: Transfer input parameters
+      - description: Signature response input
         in: body
         name: input
         required: true
         schema:
-          $ref: '#/definitions/server.inputData'
+          $ref: '#/definitions/server.SignatureResponseSwaggoInput'
       produces:
       - application/json
       responses:
@@ -322,7 +536,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Signature Response
       tags:
-      - Transaction
+      - Account
   /api/start:
     get:
       consumes:

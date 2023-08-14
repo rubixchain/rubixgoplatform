@@ -449,6 +449,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		newEvent := model.NewContractEvent{
 			Contract:          cr.SmartContractToken,
 			Did:               sc.GetDeployerDID(),
+			Type:              DeployType,
 			ContractBlockHash: newBlockId,
 		}
 
