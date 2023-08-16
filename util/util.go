@@ -645,6 +645,28 @@ func GetStringFromMap(m interface{}, key string) string {
 	return ""
 }
 
+func GetStringSliceFromMap(m interface{}, key string) []string {
+	var si interface{}
+	switch mm := m.(type) {
+	case map[string]interface{}:
+		si = mm[key]
+	case map[interface{}]interface{}:
+		si = mm[key]
+	default:
+		return nil
+	}
+	switch s := si.(type) {
+	case []string:
+		return s
+	case interface{}:
+		str, ok := si.([]string)
+		if ok {
+			return str
+		}
+	}
+	return nil
+}
+
 func GetInt(si interface{}) int {
 	var tl int
 	switch mt := si.(type) {

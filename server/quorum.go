@@ -11,7 +11,7 @@ func (s *Server) APISetupQuorum(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to parse the input", nil)
 	}
-	err = s.c.SetupQuorum(qs.DID, qs.Password)
+	err = s.c.SetupQuorum(qs.DID, qs.Password, qs.PrivKeyPassword)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to setup quorum, "+err.Error(), nil)
 	}

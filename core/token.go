@@ -37,9 +37,63 @@ func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
 }
 
+func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {
+	tr := &model.TokenResponse{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "Got all tokens",
+		},
+	}
+	switch tt {
+	case model.RBTType:
+		tkns, err := c.w.GetAllTokens(did)
+		if err != nil {
+			return tr, nil
+		}
+		tr.TokenDetials = make([]model.TokenDetial, 0)
+		for _, t := range tkns {
+			td := model.TokenDetial{
+				Token:  t.TokenID,
+				Status: t.TokenStatus,
+			}
+			tr.TokenDetials = append(tr.TokenDetials, td)
+		}
+	case model.DTType:
+		tkns, err := c.w.GetAllDataTokens(did)
+		if err != nil {
+			return tr, nil
+		}
+		tr.TokenDetials = make([]model.TokenDetial, 0)
+		for _, t := range tkns {
+			td := model.TokenDetial{
+				Token:  t.TokenID,
+				Status: t.TokenStatus,
+			}
+			tr.TokenDetials = append(tr.TokenDetials, td)
+		}
+	case model.NFTType:
+		tkns := c.w.GetAllNFT(did)
+		if tkns == nil {
+			return tr, nil
+		}
+		tr.TokenDetials = make([]model.TokenDetial, 0)
+		for _, t := range tkns {
+			td := model.TokenDetial{
+				Token:  t.TokenID,
+				Status: t.TokenStatus,
+			}
+			tr.TokenDetials = append(tr.TokenDetials, td)
+		}
+	default:
+		tr.BasicResponse.Status = false
+		tr.BasicResponse.Message = "Invalid token type"
+	}
+	return tr, nil
+}
+
 func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
-	wt, err := c.w.GetAllWholeTokens(did)
-	if err != nil {
+	wt, err := c.w.GetAllTokens(did)
+	if err != nil && err.Error() != "no records found" {
 		c.log.Error("Failed to get tokens", "err", err)
 		return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
 	}
@@ -49,11 +103,11 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	for _, t := range wt {
 		switch t.TokenStatus {
 		case wallet.TokenIsFree:
-			info.WholeRBT++
+			info.RBTAmount = info.RBTAmount + t.TokenValue
 		case wallet.TokenIsLocked:
-			info.LockedWholeRBT++
+			info.LockedRBT = info.LockedRBT + t.TokenValue
 		case wallet.TokenIsPledged:
-			info.PledgedWholeRBT++
+			info.PledgedRBT = info.PledgedRBT + t.TokenValue
 		}
 	}
 	return info, nil
@@ -146,7 +200,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		}
 
 		tcb := &block.TokenChainBlock{
-			TokenType:       token.TestTokenType,
 			TransactionType: block.TokenGeneratedType,
 			TokenOwner:      did,
 			GenesisBlock:    gb,
@@ -173,7 +226,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TokenValue:  1,
 			TokenStatus: wallet.TokenIsFree,
 		}
-		err = c.w.CreateTokenBlock(blk, token.TestTokenType)
+		err = c.w.CreateTokenBlock(blk)
 		if err != nil {
 			c.log.Error("Failed to add token chain", "err", err)
 			return err
@@ -242,7 +295,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
 				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
 			}
-			err = c.w.AddTokenBlock(token, tokenType, blk)
+			err = c.w.AddTokenBlock(token, blk)
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
 				return err
@@ -254,6 +307,18 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		tr.BlockID = trep.NextBlockID
 	}
 	return nil
+}
+
+func (c *Core) getFromIPFS(path string) ([]byte, error) {
+	rpt, err := c.ipfs.Cat(path)
+	if err != nil {
+		c.log.Error("failed to get from ipfs", "err", err, "path", path)
+		return nil, err
+	}
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(rpt)
+	b := buf.Bytes()
+	return b, nil
 }
 
 // func (c *Core) tokenStatusCallback(peerID string, topic string, data []byte) {

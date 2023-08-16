@@ -5,6 +5,7 @@ import (
 
 	"github.com/fxamacker/cbor"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -13,6 +14,10 @@ const (
 	RacOldNFTType
 	RacNFTType
 	RacDataTokenType
+	RacPartTokenType
+	RacTestNFTType
+	RacTestDataTokenType
+	RacTestPartTokenType
 )
 
 const (
@@ -32,15 +37,23 @@ const (
 	RacContentHashKey  string = "10"
 	RacContentURLKey   string = "11"
 	RacTransInfoKey    string = "12"
+	RacPartInfoKey     string = "13"
 	RacHashKey         string = "98"
 	RacSignKey         string = "99"
 	RacBlockCotent     string = "1"
 	RacBlockSig        string = "2"
 )
 
+const (
+	RacPIParentKey  string = "1"
+	RacPIPartNumKey string = "2"
+	RacPIValueKey   string = "3"
+)
+
 type RacType struct {
 	Type         int
 	DID          string
+	TokenNumber  uint64
 	TotalSupply  uint64
 	TimeStamp    string
 	CreatorID    string
@@ -49,6 +62,13 @@ type RacType struct {
 	ContentHash  map[string]string
 	ContentURL   map[string]string
 	TransInfo    map[string]string
+	PartInfo     *RacPartInfo
+}
+
+type RacPartInfo struct {
+	Parent  string
+	PartNum int
+	Value   float64
 }
 
 type RacBlock struct {
@@ -80,7 +100,7 @@ func InitRacBlock(bb []byte, bm map[string]interface{}) (*RacBlock, error) {
 }
 
 func CreateRac(r *RacType) ([]*RacBlock, error) {
-	if r.Type == 1 || r.Type > RacDataTokenType {
+	if r.Type == 1 || r.Type > RacTestPartTokenType {
 		return nil, fmt.Errorf("rac type is not supported")
 	}
 	rb := make([]*RacBlock, 0)
@@ -112,6 +132,12 @@ func CreateRac(r *RacType) ([]*RacBlock, error) {
 		if r.TransInfo != nil {
 			m[RacTransInfoKey] = r.TransInfo
 		}
+		if r.PartInfo != nil {
+			m[RacPartInfoKey] = newPartInfo(r.PartInfo)
+			if m[RacPartInfoKey] == nil {
+				return nil, fmt.Errorf("failed to create part info")
+			}
+		}
 		r, err := InitRacBlock(nil, m)
 		if err != nil {
 			return nil, err
@@ -119,6 +145,17 @@ func CreateRac(r *RacType) ([]*RacBlock, error) {
 		rb = append(rb, r)
 	}
 	return rb, nil
+}
+
+func newPartInfo(ti *RacPartInfo) map[string]interface{} {
+	tim := make(map[string]interface{})
+	if ti.Parent == "" {
+		return nil
+	}
+	tim[RacPIParentKey] = ti.Parent
+	tim[RacPIPartNumKey] = ti.PartNum
+	tim[RacPIValueKey] = ti.Value
+	return tim
 }
 
 func (r *RacBlock) blkEncode() error {
@@ -155,7 +192,7 @@ func (r *RacBlock) blkDecode() error {
 	if err != nil {
 		return nil
 	}
-	si, ok := m[RacBlockSig]
+	_, ok := m[RacBlockSig]
 	if !ok {
 		return fmt.Errorf("invalid block, missing signature")
 	}
@@ -170,7 +207,7 @@ func (r *RacBlock) blkDecode() error {
 		return err
 	}
 	tcb[RacHashKey] = util.HexToStr(hb)
-	tcb[RacSignKey] = util.HexToStr(si.([]byte))
+	tcb[RacSignKey] = util.GetStringFromMap(m, RacBlockSig)
 	r.bm = tcb
 	return nil
 }
@@ -211,6 +248,10 @@ func (r *RacBlock) VerifySignature(dc didmodule.DIDCrypto) error {
 	return nil
 }
 
+func (r *RacBlock) GetRacType() int {
+	return util.GetIntFromMap(r.bm, RacTypeKey)
+}
+
 func (r *RacBlock) GetHash() (string, error) {
 	h, ok := r.bm[RacHashKey]
 	if !ok {
@@ -237,4 +278,32 @@ func (r *RacBlock) GetHashSig() (string, string, error) {
 		return "", "", fmt.Errorf("invalid rac, signature is missing")
 	}
 	return h.(string), s.(string), nil
+}
+
+func (r *RacBlock) GetRacValue() float64 {
+	pi, ok := r.bm[RacPartInfoKey]
+	if !ok {
+		return 0
+	}
+	return util.GetFloatFromMap(pi, RacPIValueKey)
+}
+
+func RacType2TokenType(rt int) int {
+	switch rt {
+	case RacTestTokenType:
+		return token.TestTokenType
+	case RacNFTType:
+		return token.NFTTokenType
+	case RacTestNFTType:
+		return token.TestNFTTokenType
+	case RacPartTokenType:
+		return token.PartTokenType
+	case RacTestPartTokenType:
+		return token.TestPartTokenType
+	case RacDataTokenType:
+		return token.DataTokenType
+	case RacTestDataTokenType:
+		return token.TestDataTokenType
+	}
+	return token.RBTTokenType
 }
