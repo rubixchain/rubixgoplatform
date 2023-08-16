@@ -70,6 +70,11 @@ definitions:
       smartContractToken:
         type: string
     type: object
+  server.FetchSmartContractSwaggoInput:
+    properties:
+      smart_contract_token:
+        type: string
+    type: object
   server.NewContractEventSwaggoInput:
     properties:
       contract:
@@ -264,16 +269,18 @@ paths:
   /api/fetch-smart-contract:
     post:
       consumes:
-      - multipart/form-data
+      - application/json
       description: This API will Fetch smart contract
+      operationId: fetch-smart-contract
       parameters:
-      - description: smartContractToken
-        in: formData
-        name: smartContractToken
+      - description: Fetch smart contract
+        in: body
+        name: input
         required: true
-        type: string
+        schema:
+          $ref: '#/definitions/server.FetchSmartContractSwaggoInput'
       produces:
-      - multipart/form-data
+      - application/json
       responses:
         "200":
           description: OK
