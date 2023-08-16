@@ -47,11 +47,7 @@ type RBTTransferRequestSwaggoInput struct {
 // @ID 			initiate-rbt-transfer
 // @Accept      json
 // @Produce     json
-// @Param 		receiver 	body string true "The decentralized identifier of the receiver"
-// @Param 		sender 		body string true "The decentralized identifier of the sender"
-// @Param 		tokenCount 	body number true "The number of RBT tokens to transfer"
-// @Param 		comment 	body string false "A comment for the transfer"
-// @Param 		type 		body int true "The type of transfer (1 for direct transfer, 2 for group transfer)"
+// @Param 		input body RBTTransferRequestSwaggoInput true "Intitate RBT transfer"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/initiate-rbt-transfer [post]
 func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
@@ -102,7 +98,7 @@ func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
 
-type inputData struct {
+type SignatureResponseSwaggoInput struct {
 	ID       string `json:"id"`
 	Mode     int    `json:"mode"`
 	Password string `json:"password"`
@@ -115,9 +111,7 @@ type inputData struct {
 // @ID 			signature-response
 // @Accept      json
 // @Produce     json
-// @Param 		id			body	string	true 	"Req ID"
-// @Param		mode		body	int		true	"Mode of the node"
-// @Param		password	body	string	true	"password of the node"
+// @Param 		input body SignatureResponseSwaggoInput true "Send input for requested signature"
 // @Success 	200		{object}	model.BasicResponse
 // @Router /api/signature-response [post]
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
