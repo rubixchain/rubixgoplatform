@@ -26,6 +26,7 @@ const (
 	DataChainStorage               string = "datachainstorage"
 	SmartContractTokenChainStorage string = "smartcontractokenchainstorage"
 	SmartContractStorage           string = "smartcontract"
+	CallBackUrlStorage             string = "callbackurl"
 )
 
 type WalletConfig struct {
@@ -141,6 +142,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		return nil, fmt.Errorf("failed to configure token chain block storage")
 	}
 	w.smartContractTokenChainStorage.DB = *smartcontracTokenchainstorageDB
+
+	err = w.s.Init(CallBackUrlStorage, &CallBackUrl{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize Smart Contract Callback Url storage", "err", err)
+		return nil, err
+	}
 
 	return w, nil
 }

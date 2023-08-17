@@ -1,8 +1,11 @@
 package core
 
 import (
+	"time"
+
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
 func (c *Core) DumpTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
@@ -56,7 +59,7 @@ func (c *Core) DumpSmartContractTokenChain(dr *model.TCDumpRequest) *model.TCDum
 	return ds
 }
 
-func (c *Core) GetSmartContractData(getReq *model.SmartContractDataReq) *model.SmartContractDataReply {
+func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenChainDataReq) *model.SmartContractDataReply {
 	reply := &model.SmartContractDataReply{
 		BasicResponse: model.BasicResponse{
 			Status: false,
@@ -68,6 +71,7 @@ func (c *Core) GetSmartContractData(getReq *model.SmartContractDataReq) *model.S
 		return reply
 	}
 	sctDataArray := make([]model.SCTDataReply, 0)
+	c.log.Debug("latest flag ", getReq.Latest)
 	if getReq.Latest {
 		latestBlock := c.w.GetLatestTokenBlock(getReq.Token, c.TokenType(SmartContractString))
 		if latestBlock == nil {
@@ -79,11 +83,6 @@ func (c *Core) GetSmartContractData(getReq *model.SmartContractDataReq) *model.S
 			reply.Message = "Failed to get smart contract token latest block number"
 			return reply
 		}
-		/* if blockNo == 0 {
-			reply.Status = true
-			reply.Message = "Latest Block is gensys block"
-			return reply
-		} */
 		blockId, err := latestBlock.GetBlockID(getReq.Token)
 		if err != nil {
 			reply.Message = "Failed to get smart contract token latest block number"
@@ -92,10 +91,6 @@ func (c *Core) GetSmartContractData(getReq *model.SmartContractDataReq) *model.S
 		scData := latestBlock.GetSmartContractData()
 		if scData == "" && blockNo == 0 {
 			reply.Message = "Gensys Block, No Smart contract Data"
-		}
-		if scData == "" {
-			reply.Message = "Failed to get smart contract data, empty"
-			return reply
 		}
 		sctData := model.SCTDataReply{
 			BlockNo:           blockNo,
@@ -131,10 +126,6 @@ func (c *Core) GetSmartContractData(getReq *model.SmartContractDataReq) *model.S
 		if scData == "" && blockNo == 0 {
 			reply.Message = "Gensys Block, No Smart contract Data"
 		}
-		if scData == "" {
-			reply.Message = "Failed to get smart contract data, empty"
-			return reply
-		}
 		sctData := model.SCTDataReply{
 			BlockNo:           blockNo,
 			BlockId:           blockId,
@@ -145,5 +136,25 @@ func (c *Core) GetSmartContractData(getReq *model.SmartContractDataReq) *model.S
 	reply.SCTDataReply = sctDataArray
 	reply.Status = true
 	reply.Message = "Fetched Smart contract data"
+	return reply
+}
+
+func (c *Core) RegisterCallBackURL(registerReq *model.RegisterCallBackUrlReq) *model.BasicResponse {
+	reply := &model.BasicResponse{
+		Status: false,
+	}
+	input := &wallet.CallBackUrl{
+		SmartContractHash: registerReq.SmartContractToken,
+		CallBackUrl:       registerReq.CallBackURL,
+		CreatedAt:         time.Now(),
+	}
+	err := c.w.WriteCallBackUrlToDB(input)
+	if err != nil {
+		reply.Message = "Failed to register call back url to DB"
+		return reply
+	}
+	c.log.Debug("Call back URL registered successfully")
+	reply.Status = true
+	reply.Message = "Call back URL registered successfully"
 	return reply
 }

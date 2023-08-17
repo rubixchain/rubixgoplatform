@@ -31,13 +31,13 @@ func (c *Client) DumpSmartContractTokenChain(token string, blockID string) (*mod
 	return &drep, nil
 }
 
-func (c *Client) GetSmartContractData(token string, latest bool) (*model.SmartContractDataReply, error) {
-	getReq := &model.SmartContractDataReq{
+func (c *Client) GetSmartContractTokenData(token string, latest bool) (*model.SmartContractDataReply, error) {
+	getReq := &model.SmartContractTokenChainDataReq{
 		Token:  token,
 		Latest: latest,
 	}
 	var sctDataReply model.SmartContractDataReply
-	err := c.sendJSONRequest("POST", setup.APIGetSmartContractData, nil, getReq, &sctDataReply)
+	err := c.sendJSONRequest("POST", setup.APIGetSmartContractTokenData, nil, getReq, &sctDataReply)
 	if err != nil {
 		return nil, err
 	}

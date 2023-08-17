@@ -1,6 +1,9 @@
 package wallet
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type SmartContract struct {
 	SmartContractHash string `gorm:"column:smart_contract_hash;primaryKey" json:"smart_contract_hash"`
@@ -9,6 +12,12 @@ type SmartContract struct {
 	RawCodeHash       string `gorm:"column:raw_code_hash" json:"raw_code_hash"`
 	SchemaCodeHash    string `gorm:"column:schema_code_hash" json:"schema_code_hash"`
 	ContractStatus    int    `gorm:"column:contract_status" json:"contract_status"`
+}
+
+type CallBackUrl struct {
+	SmartContractHash string    `gorm:"column:smart_contract_hash;primaryKey" json:"smart_contract_hash"`
+	CallBackUrl       string    `gorm:"column:callback_url" json:"callback_url"`
+	CreatedAt         time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (w *Wallet) CreateSmartContractToken(sc *SmartContract) error {
@@ -59,15 +68,19 @@ func (w *Wallet) GetSmartContractTokenByDeployer(did string) ([]SmartContract, e
 	return sc, nil
 }
 
-func (w *Wallet) DeploySmartContract(sc []SmartContract) error {
+func (w *Wallet) UpdateSmartContractStatus(smartContractToken string, tokenStatus int) error {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
-	for i := range sc {
-		sc[i].ContractStatus = TokenIsDeployed
-		err := w.s.Update(SmartContractStorage, &sc[i], "smart_contract_hash=?", sc[i].SmartContractHash)
-		if err != nil {
-			return err
-		}
+	var sc SmartContract
+	err := w.s.Read(SmartContractStorage, &sc, "smart_contract_hash=?", smartContractToken)
+	if err != nil {
+		w.log.Error("err", err)
+		return err
+	}
+	sc.ContractStatus = tokenStatus
+	err = w.s.Update(SmartContractStorage, &sc, "smart_contract_hash=?", smartContractToken)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -86,4 +99,13 @@ func (w *Wallet) GetStatePinnedInfo(token string) (*TokenProviderMap, error) {
 		}
 	}
 	return &tokenMap, nil
+}
+
+func (w *Wallet) WriteCallBackUrlToDB(input *CallBackUrl) error {
+	err := w.s.Write(CallBackUrlStorage, input)
+	if err != nil {
+		w.log.Error("Failed to write smart contract token", "err", err)
+		return err
+	}
+	return nil
 }

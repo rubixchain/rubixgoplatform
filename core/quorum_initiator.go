@@ -406,15 +406,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, err
 		}
 		//update smart contracttoken status to deployed in DB
-		smartContractTokenDetails, err := c.w.GetSmartContractToken(cr.SmartContractToken)
-		if err != nil {
-			c.log.Error("Failed to retrieve smart contract Token details from storage", err)
-			return nil, nil, err
-		}
-		for i := range smartContractTokenDetails {
-			smartContractTokenDetails[i].ContractStatus = wallet.TokenIsDeployed
-		}
-		err = c.w.DeploySmartContract(smartContractTokenDetails)
+		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsDeployed)
 		if err != nil {
 			c.log.Error("Failed to update smart contract Token deploy detail in storage", err)
 			return nil, nil, err
@@ -478,15 +470,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, err
 		}
 		//update smart contracttoken status to deployed in DB
-		smartContractTokenDetails, err := c.w.GetSmartContractToken(cr.SmartContractToken)
-		if err != nil {
-			c.log.Error("Failed to retrieve smart contract Token details from storage", err)
-			return nil, nil, err
-		}
-		for i := range smartContractTokenDetails {
-			smartContractTokenDetails[i].ContractStatus = wallet.TokenIsExecuted
-		}
-		err = c.w.DeploySmartContract(smartContractTokenDetails)
+		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsExecuted)
 		if err != nil {
 			c.log.Error("Failed to update smart contract Token execute detail in storage", err)
 			return nil, nil, err
@@ -502,6 +486,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		newEvent := model.NewContractEvent{
 			Contract:          cr.SmartContractToken,
 			Did:               sc.GetExecutorDID(),
+			Type:              ExecuteType,
 			ContractBlockHash: newBlockId,
 		}
 

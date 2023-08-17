@@ -11,7 +11,7 @@ type TCDumpReply struct {
 	Blocks      [][]byte `json:"blocks"`
 }
 
-type SmartContractDataReq struct {
+type SmartContractTokenChainDataReq struct {
 	Token  string
 	Latest bool
 }
@@ -25,4 +25,9 @@ type SCTDataReply struct {
 	BlockNo           uint64
 	BlockId           string
 	SmartContractData string
+}
+
+type RegisterCallBackUrlReq struct {
+	SmartContractToken string
+	CallBackURL        string
 }
