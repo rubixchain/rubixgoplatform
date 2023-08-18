@@ -126,6 +126,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	if ti.DeployerDID != "" {
 		ntib[TIDeployerDIDKey] = ti.DeployerDID
 	}
+	if ti.ExecutorDID != "" {
+		ntib[TIExecutorDIDKey] = ti.ExecutorDID
+	}
 	if ti.Comment != "" {
 		ntib[TICommentKey] = ti.Comment
 	}

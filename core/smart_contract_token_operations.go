@@ -245,6 +245,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 			Comment:            executeReq.Comment,
 			SmartContractToken: executeReq.SmartContractToken,
 			TransTokens:        smartContractInfoArray,
+			SmartContractData:  executeReq.SmartContractData,
 		},
 	}
 

@@ -282,6 +282,10 @@ func (c *Contract) GetExecutorDID() string {
 	return c.getTransInfoString(TSExecutorDIDKey)
 }
 
+func (c *Contract) GetSmartContractData() string {
+	return c.getTransInfoString(TSSmartContractDataKey)
+}
+
 func (c *Contract) GetComment() string {
 	return c.getTransInfoString(TSCommentKey)
 }

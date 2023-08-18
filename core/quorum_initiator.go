@@ -717,12 +717,13 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	} else if cr.Mode == SmartContractExecuteMode {
 		bti.ExecutorDID = sc.GetExecutorDID()
 		tcb = block.TokenChainBlock{
-			TransactionType: block.TokenGeneratedType,
-			TokenOwner:      sc.GetExecutorDID(),
-			TransInfo:       bti,
-			QuorumSignature: credit,
-			SmartContract:   sc.GetBlock(),
-			PledgeDetails:   ptds,
+			TransactionType:   block.TokenGeneratedType,
+			TokenOwner:        sc.GetExecutorDID(),
+			TransInfo:         bti,
+			QuorumSignature:   credit,
+			SmartContract:     sc.GetBlock(),
+			PledgeDetails:     ptds,
+			SmartContractData: sc.GetSmartContractData(),
 		}
 	} else {
 		bti.SenderDID = sc.GetSenderDID()
