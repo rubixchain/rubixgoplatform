@@ -268,22 +268,25 @@ const docTemplate = `{
             "post": {
                 "description": "This API will Fetch smart contract",
                 "consumes": [
-                    "multipart/form-data"
+                    "application/json"
                 ],
                 "produces": [
-                    "multipart/form-data"
+                    "application/json"
                 ],
                 "tags": [
                     "Smart Contract"
                 ],
                 "summary": "Fetch Smart Contract",
+                "operationId": "fetch-smart-contract",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "smartContractToken",
-                        "name": "smartContractToken",
-                        "in": "formData",
-                        "required": true
+                        "description": "Fetch smart contract",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.FetchSmartContractSwaggoInput"
+                        }
                     }
                 ],
                 "responses": {
@@ -844,6 +847,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "smartContractToken": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.FetchSmartContractSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "smart_contract_token": {
                     "type": "string"
                 }
             }

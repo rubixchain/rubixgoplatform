@@ -18,6 +18,10 @@ type InitSmartContractToken struct {
 	genesisBlock   string
 }
 
+type FetchSmartContractSwaggoInput struct {
+	SmartContractToken string `json:"smart_contract_token"`
+}
+
 type NewContractEventSwaggoInput struct {
 	Contract          string `json:"contract"`
 	Did               string `json:"did"`
@@ -202,9 +206,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 // @Summary      Fetch Smart Contract
 // @Description  This API will Fetch smart contract
 // @Tags         Smart Contract
-// @Accept       mpfd
-// @Produce      mpfd
-// @Param        smartContractToken        	   formData      string  true   "smartContractToken"
+// @ID   	     fetch-smart-contract
+// @Accept       json
+// @Produce      json
+// @Param        input body FetchSmartContractSwaggoInput true "Fetch smart contract"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/fetch-smart-contract [post]
 func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
@@ -285,7 +290,7 @@ type ExecuteSmartContractSwaggoInput struct {
 	ExecutorAddress    string `json:"executorAddr"`
 	QuorumType         int    `json:"quorumType"`
 	Comment            string `json:"comment"`
-	SmartContractData  string `json:"smartContractData`
+	SmartContractData  string `json:"smartContractData"`
 }
 
 // SmartContract godoc
