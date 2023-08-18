@@ -145,9 +145,9 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		TokenTime:   float64(dif.Milliseconds()),
 	}
 	c.ec.ExplorerTransaction(etrans)
-	c.log.Info("Transfer finished successfully", "duration", dif)
+	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
 	resp.Status = true
-	msg := fmt.Sprintf("Transfer finished successfully in %v", dif)
+	msg := fmt.Sprintf("Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
 	resp.Message = msg
 	return resp
 }
