@@ -72,7 +72,9 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 
 	var knownPeer []string
 	knownPeer = append(knownPeer, senderPeerId)
-	knownPeer = append(knownPeer, receiverPeerId)
+	if receiverPeerId != "" {
+		knownPeer = append(knownPeer, receiverPeerId)
+	}
 
 	if len(provList) >= 2 {
 		owners = provList

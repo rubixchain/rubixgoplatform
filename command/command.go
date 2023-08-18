@@ -18,6 +18,7 @@ import (
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/client"
+	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
@@ -35,37 +36,46 @@ const (
 	version string = "0.0.9"
 )
 const (
-	VersionCmd                 string = "-v"
-	HelpCmd                    string = "-h"
-	RunCmd                     string = "run"
-	PingCmd                    string = "ping"
-	AddBootStrapCmd            string = "addbootstrap"
-	RemoveBootStrapCmd         string = "removebootstrap"
-	RemoveAllBootStrapCmd      string = "removeallbootstrap"
-	GetAllBootStrapCmd         string = "getallbootstrap"
-	CreateDIDCmd               string = "createdid"
-	GetAllDIDCmd               string = "getalldid"
-	AddQuorumCmd               string = "addquorum"
-	GetAllQuorumCmd            string = "getallquorum"
-	RemoveAllQuorumCmd         string = "removeallquorum"
-	SetupQuorumCmd             string = "setupquorum"
-	GenerateTestRBTCmd         string = "generatetestrbt"
-	TransferRBTCmd             string = "transferrbt"
-	GetAccountInfoCmd          string = "getaccountinfo"
-	SetupServiceCmd            string = "setupservice"
-	DumpTokenChainCmd          string = "dumptokenchain"
-	RegsiterDIDCmd             string = "registerdid"
-	SetupDIDCmd                string = "setupdid"
-	ShutDownCmd                string = "shutdown"
-	MirgateNodeCmd             string = "migratenode"
-	LockTokensCmd              string = "locktokens"
-	CreateDataTokenCmd         string = "createdatatoken"
-	CommitDataTokenCmd         string = "commitdatatoken"
-	SetupDBCmd                 string = "setupdb"
-	GetTxnDetailsCmd           string = "gettxndetails"
-	UpdateConfig               string = "updateconfig"
-	GenerateSmartContractToken string = "generatesct"
-	FetchSmartContract         string = "fetchsct"
+	VersionCmd                     string = "-v"
+	HelpCmd                        string = "-h"
+	RunCmd                         string = "run"
+	PingCmd                        string = "ping"
+	AddBootStrapCmd                string = "addbootstrap"
+	RemoveBootStrapCmd             string = "removebootstrap"
+	RemoveAllBootStrapCmd          string = "removeallbootstrap"
+	GetAllBootStrapCmd             string = "getallbootstrap"
+	CreateDIDCmd                   string = "createdid"
+	GetAllDIDCmd                   string = "getalldid"
+	AddQuorumCmd                   string = "addquorum"
+	GetAllQuorumCmd                string = "getallquorum"
+	RemoveAllQuorumCmd             string = "removeallquorum"
+	SetupQuorumCmd                 string = "setupquorum"
+	GenerateTestRBTCmd             string = "generatetestrbt"
+	TransferRBTCmd                 string = "transferrbt"
+	GetAccountInfoCmd              string = "getaccountinfo"
+	SetupServiceCmd                string = "setupservice"
+	DumpTokenChainCmd              string = "dumptokenchain"
+	RegsiterDIDCmd                 string = "registerdid"
+	SetupDIDCmd                    string = "setupdid"
+	ShutDownCmd                    string = "shutdown"
+	MirgateNodeCmd                 string = "migratenode"
+	LockTokensCmd                  string = "locktokens"
+	CreateDataTokenCmd             string = "createdatatoken"
+	CommitDataTokenCmd             string = "commitdatatoken"
+	SetupDBCmd                     string = "setupdb"
+	GetTxnDetailsCmd               string = "gettxndetails"
+	CreateNFTCmd                   string = "createnft"
+	GetAllNFTCmd                   string = "getallnft"
+	UpdateConfig                   string = "updateconfig"
+	GenerateSmartContractToken     string = "generatesct"
+	FetchSmartContract             string = "fetchsct"
+	PublishContractCmd             string = "publishsct"
+	SubscribeContractCmd           string = "subscribesct"
+	DeploySmartContractCmd         string = "deploysmartcontract"
+	ExecuteSmartcontractCmd        string = "executesmartcontract"
+	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
+	GetTokenBlock                  string = "gettokenblock"
+	GetSmartContractData           string = "getsmartcontractdata"
 )
 
 var commands = []string{VersionCmd,
@@ -96,9 +106,22 @@ var commands = []string{VersionCmd,
 	CommitDataTokenCmd,
 	SetupDBCmd,
 	GetTxnDetailsCmd,
+	PublishContractCmd,
+	SubscribeContractCmd,
+	CreateNFTCmd,
+	GetAllNFTCmd,
+	DeploySmartContractCmd,
+	ExecuteSmartcontractCmd,
 	ShutDownCmd,
 	GenerateSmartContractToken,
+	FetchSmartContract,
+	PublishContractCmd,
+	SubscribeContractCmd,
+	DumpSmartContractTokenChainCmd,
+	GetTokenBlock,
+	GetSmartContractData,
 }
+
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -127,13 +150,25 @@ var commandsHelp = []string{"To get tool version",
 	"This command will commit data token token",
 	"This command will setup the DB",
 	"This command will get transaction details",
+	"This command will publish a smart contract token",
+	"This command will subscribe to a smart contract token",
+	"This command will create NFT",
+	"This command will get all NFTs",
+	"This command will deploy the smart contract token",
+	"This command will execute the fetched smart contract",
 	"This command will shutdown the rubix node",
 	"This command will generate a smart contract token",
-	"This command will fetch a smart contract token"}
+	"This command will fetch a smart contract token",
+	"This command will publish a smart contract token",
+	"This command will subscribe to a smart contract token",
+	"This command will dump the smartcontract token chain",
+	"This command gets token block",
+	"This command gets the smartcontract data from latest block"}
 
 type Command struct {
 	cfg                config.Config
 	c                  *client.Client
+	sc                 *contract.Contract
 	encKey             string
 	start              bool
 	node               uint
@@ -148,6 +183,7 @@ type Command struct {
 	peerID             string
 	peers              []string
 	log                logger.Logger
+	didRoot            bool
 	didType            int
 	didSecret          string
 	forcePWD           bool
@@ -188,11 +224,19 @@ type Command struct {
 	txnID              string
 	role               string
 	date               time.Time
-	ip                 string
+	grpcAddr           string
+	grpcPort           int
+	grpcSecure         bool
+	deployerAddr       string
 	binaryCodePath     string
 	rawCodePath        string
 	schemaFilePath     string
 	smartContractToken string
+	newContractBlock   string
+	publishType        int
+	smartContractData  string
+	executorAddr       string
+	latest             bool
 }
 
 func showVersion() {
@@ -248,12 +292,15 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("failed to create core")
 		return
 	}
+	addr := fmt.Sprintf(cmd.grpcAddr+":%d", cmd.grpcPort)
 	scfg := &server.Config{
 		Config: srvcfg.Config{
 			HostAddress: cmd.cfg.NodeAddress,
 			HostPort:    cmd.cfg.NodePort,
 			Production:  "false",
 		},
+		GRPCAddr:   addr,
+		GRPCSecure: cmd.grpcSecure,
 	}
 	scfg.EnableAuth = cmd.enableAuth
 	if cmd.enableAuth {
@@ -328,6 +375,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.port, "port", "20000", "Server/Host port")
 	flag.StringVar(&cmd.peerID, "peerID", "", "Peerd ID")
 	flag.StringVar(&peers, "peers", "", "Bootstrap peers, mutiple peers will be seprated by comma")
+	flag.BoolVar(&cmd.didRoot, "didRoot", false, "Root DID")
 	flag.IntVar(&cmd.didType, "didType", 0, "DID Creation type")
 	flag.StringVar(&cmd.didSecret, "didSecret", "My DID Secret", "DID creation secret")
 	flag.BoolVar(&cmd.forcePWD, "fp", false, "Force password entry")
@@ -367,10 +415,18 @@ func Run(args []string) {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
+	flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
+	flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
+	flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")
+	flag.StringVar(&cmd.deployerAddr, "deployerAddr", "", "Smart contract Deployer Address")
 	flag.StringVar(&cmd.binaryCodePath, "binCode", "", "Binary code path")
 	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
 	flag.StringVar(&cmd.schemaFilePath, "schemaFile", "", "Schema file path")
 	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
+	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
+	flag.IntVar(&cmd.publishType, "pubType", 0, "Smart contract event publishing type(Deploy & Execute)")
+	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
+	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -489,11 +545,28 @@ func Run(args []string) {
 		cmd.setupDB()
 	case GetTxnDetailsCmd:
 		cmd.getTxnDetails()
+	case PublishContractCmd:
+		cmd.PublishContract()
+	case SubscribeContractCmd:
+		cmd.SubscribeContract()
+	case CreateNFTCmd:
+		cmd.createNFT()
+	case GetAllNFTCmd:
+		cmd.getAllNFTs()
+	case DeploySmartContractCmd:
+		cmd.deploySmartcontract()
 	case GenerateSmartContractToken:
 		cmd.generateSmartContractToken()
 	case FetchSmartContract:
 		cmd.fetchSmartContract()
-
+	case DumpSmartContractTokenChainCmd:
+		cmd.dumpSmartContractTokenChain()
+	case GetTokenBlock:
+		cmd.getTokenBlock()
+	case GetSmartContractData:
+		cmd.getSmartContractData()
+	case ExecuteSmartcontractCmd:
+		cmd.executeSmartcontract()
 	default:
 		cmd.log.Error("Invalid command")
 	}

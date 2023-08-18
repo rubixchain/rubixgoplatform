@@ -13,7 +13,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -25,6 +24,9 @@ const (
 	RBTTransferMode int = iota
 	NFTTransferMode
 	DTCommitMode
+	NFTSaleContractMode
+	SmartContractDeployMode
+	SmartContractExecuteMode
 )
 const (
 	AlphaQuorumType int = iota
@@ -33,13 +35,16 @@ const (
 )
 
 type ConensusRequest struct {
-	ReqID          string   `json:"req_id"`
-	Type           int      `json:"type"`
-	Mode           int      `json:"mode"`
-	SenderPeerID   string   `json:"sender_peerd_id"`
-	ReceiverPeerID string   `json:"receiver_peerd_id"`
-	ContractBlock  []byte   `json:"contract_block"`
-	QuorumList     []string `json:"quorum_list"`
+	ReqID              string   `json:"req_id"`
+	Type               int      `json:"type"`
+	Mode               int      `json:"mode"`
+	SenderPeerID       string   `json:"sender_peerd_id"`
+	ReceiverPeerID     string   `json:"receiver_peerd_id"`
+	ContractBlock      []byte   `json:"contract_block"`
+	QuorumList         []string `json:"quorum_list"`
+	DeployerPeerID     string   `json:"deployer_peerd_id"`
+	SmartContractToken string   `json:"smart_contract_token"`
+	ExecuterPeerID     string   `json:"executor_peer_id"`
 }
 
 type ConensusReply struct {
@@ -64,8 +69,8 @@ type ConsensusStatus struct {
 	Result     ConsensusResult
 }
 
-type PledgeDetials struct {
-	RemPledgeTokens        int
+type PledgeDetails struct {
+	RemPledgeTokens        float64
 	NumPledgedTokens       int
 	PledgedTokens          map[string][]string
 	PledgedTokenChainBlock map[string]interface{}
@@ -73,7 +78,7 @@ type PledgeDetials struct {
 }
 
 type PledgeRequest struct {
-	NumTokens int `json:"num_tokens"`
+	TokensRequired float64 `json:"tokens_required"`
 }
 
 type SignatureRequest struct {
@@ -95,12 +100,14 @@ type SendTokenRequest struct {
 	Address         string               `json:"peer_id"`
 	TokenInfo       []contract.TokenInfo `json:"token_info"`
 	TokenChainBlock []byte               `json:"token_chain_block"`
+	QuorumList      []string             `json:"quorum_list"`
 }
 
 type PledgeReply struct {
 	model.BasicResponse
-	Tokens          []string `json:"tokens"`
-	TokenChainBlock [][]byte `json:"token_chain_block"`
+	Tokens          []string  `json:"tokens"`
+	TokenValue      []float64 `json:"token_value"`
+	TokenChainBlock [][]byte  `json:"token_chain_block"`
 }
 
 type PledgeToken struct {
@@ -149,7 +156,7 @@ func (c *Core) QuroumSetup() {
 	}
 }
 
-func (c *Core) SetupQuorum(didStr string, pwd string) error {
+func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	if !c.w.IsDIDExist(didStr) {
 		c.log.Error("DID does not exist", "did", didStr)
 		return fmt.Errorf("DID does not exist")
@@ -160,6 +167,14 @@ func (c *Core) SetupQuorum(didStr string, pwd string) error {
 		return fmt.Errorf("failed to setup quorum")
 	}
 	c.qc[didStr] = dc
+	if pvtKeyPwd != "" {
+		dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
+		if dc == nil {
+			c.log.Error("Failed to setup quorum")
+			return fmt.Errorf("failed to setup quorum")
+		}
+		c.pqc[didStr] = dc
+	}
 	c.up.RunUnpledge()
 	return nil
 }
@@ -220,26 +235,27 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			FailedCount:  0,
 		},
 	}
-	var reqPledgeTokens int
+	reqPledgeTokens := float64(0)
 	// TODO:: Need to correct for part tokens
 	switch cr.Mode {
-	case RBTTransferMode:
+	case RBTTransferMode, NFTSaleContractMode:
 		ti := sc.GetTransTokenInfo()
-		partToken := false
 		for i := range ti {
-			if ti[i].TokenType == token.RBTTokenType || ti[i].TokenType == token.TestTokenType {
-				reqPledgeTokens++
-			} else if ti[i].TokenType == token.PartTokenType {
-				partToken = true
-			}
+			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
-		if partToken {
-			reqPledgeTokens++
-		}
+
 	case DTCommitMode:
 		reqPledgeTokens = 1
+
+	case SmartContractDeployMode:
+		tokenInfo := sc.GetTransTokenInfo()
+		for i := range tokenInfo {
+			reqPledgeTokens = reqPledgeTokens + tokenInfo[i].TokenValue
+		}
+	case SmartContractExecuteMode:
+		reqPledgeTokens = sc.GetTotalRBTs()
 	}
-	pd := PledgeDetials{
+	pd := PledgeDetails{
 		RemPledgeTokens:        reqPledgeTokens,
 		NumPledgedTokens:       0,
 		PledgedTokens:          make(map[string][]string),
@@ -329,6 +345,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Address:         cr.SenderPeerID + "." + sc.GetSenderDID(),
 			TokenInfo:       ti,
 			TokenChainBlock: nb.GetBlock(),
+			QuorumList:      cr.QuorumList,
 		}
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
@@ -368,8 +385,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Status:          true,
 		}
 		return &td, pl, nil
-	} else {
-		err = c.w.CreateTokenBlock(nb, token.DataTokenType)
+	} else if cr.Mode == DTCommitMode {
+		err = c.w.CreateTokenBlock(nb)
 		if err != nil {
 			c.log.Error("Failed to create token block", "err", err)
 			return nil, nil, err
@@ -381,6 +398,114 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Status:          true,
 		}
 		return &td, pl, nil
+	} else if cr.Mode == SmartContractDeployMode {
+		//Create tokechain for the smart contract token and add genesys block
+		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
+		if err != nil {
+			c.log.Error("smart contract token chain creation failed", "err", err)
+			return nil, nil, err
+		}
+		//update smart contracttoken status to deployed in DB
+		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsDeployed)
+		if err != nil {
+			c.log.Error("Failed to update smart contract Token deploy detail in storage", err)
+			return nil, nil, err
+		}
+		c.log.Debug("creating commited token block")
+		//create new committed block to be updated to the commited RBT tokens
+		err = c.createCommitedTokensBlock(nb, cr.SmartContractToken, dc)
+		if err != nil {
+			c.log.Error("Failed to create commited RBT tokens block ", "err", err)
+			return nil, nil, err
+		}
+		//update committed RBT token with the new block also and lock the RBT
+		//and change token status to commited, to prevent being used for txn or pledging
+		commitedRbtTokens, err := nb.GetCommitedTokenDetials(cr.SmartContractToken)
+		if err != nil {
+			c.log.Error("Failed to fetch commited rbt tokens", "err", err)
+			return nil, nil, err
+		}
+		err = c.w.CommitTokens(sc.GetDeployerDID(), commitedRbtTokens)
+		if err != nil {
+			c.log.Error("Failed to update commited RBT tokens in DB ", "err", err)
+			return nil, nil, err
+		}
+
+		newBlockId, err := nb.GetBlockID(cr.SmartContractToken)
+		if err != nil {
+			c.log.Error("failed to get new block id ", "err", err)
+			return nil, nil, err
+		}
+
+		//Todo pubsub - publish smart contract token details
+		newEvent := model.NewContractEvent{
+			Contract:          cr.SmartContractToken,
+			Did:               sc.GetDeployerDID(),
+			Type:              DeployType,
+			ContractBlockHash: newBlockId,
+		}
+
+		err = c.publishNewEvent(&newEvent)
+		if err != nil {
+			c.log.Error("Failed to publish smart contract deployed info")
+		}
+
+		txnDetails := wallet.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			BlockID:         newBlockId,
+			Mode:            wallet.DeployMode,
+			DeployerDID:     sc.GetDeployerDID(),
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+		}
+		return &txnDetails, pl, nil
+	} else { //execute mode
+
+		//Create tokechain for the smart contract token and add genesys block
+		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
+		if err != nil {
+			c.log.Error("smart contract token chain creation failed", "err", err)
+			return nil, nil, err
+		}
+		//update smart contracttoken status to deployed in DB
+		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsExecuted)
+		if err != nil {
+			c.log.Error("Failed to update smart contract Token execute detail in storage", err)
+			return nil, nil, err
+		}
+
+		newBlockId, err := nb.GetBlockID(cr.SmartContractToken)
+		if err != nil {
+			c.log.Error("failed to get new block id ", "err", err)
+			return nil, nil, err
+		}
+
+		//Todo pubsub - publish smart contract token details
+		newEvent := model.NewContractEvent{
+			Contract:          cr.SmartContractToken,
+			Did:               sc.GetExecutorDID(),
+			Type:              ExecuteType,
+			ContractBlockHash: newBlockId,
+		}
+
+		err = c.publishNewEvent(&newEvent)
+		if err != nil {
+			c.log.Error("Failed to publish smart contract Executed info")
+		}
+
+		txnDetails := wallet.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			BlockID:         newBlockId,
+			Mode:            wallet.ExecuteMode,
+			DeployerDID:     sc.GetExecutorDID(),
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+		}
+		return &txnDetails, pl, nil
 	}
 }
 
@@ -448,7 +573,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 	}
 	err = c.initPledgeQuorumToken(cr, p, qt)
 	if err != nil {
-		c.log.Error("Failed to pleadge token", "err", err)
+		c.log.Error("Failed to pledge token", "err", err)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
@@ -486,73 +611,132 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 		credit = append(credit, string(jb))
 	}
-	pts := make([]PledgeToken, 0)
-
+	ptds := make([]block.PledgeDetail, 0)
 	for k, v := range pd.PledgedTokens {
 		for _, t := range v {
-			pt := PledgeToken{
-				Token: t,
-				DID:   k,
+			blk, ok := pd.PledgedTokenChainBlock[t].([]byte)
+			if !ok {
+				c.log.Error("failed to get pledge token block", "token", t)
+				return nil, fmt.Errorf("failed to get pledge token block")
 			}
-			pts = append(pts, pt)
+			ptb := block.InitBlock(blk, nil)
+			if ptb == nil {
+				c.log.Error("invalid pledge token block", "token", t)
+				return nil, fmt.Errorf("invalid pledge token block")
+			}
+			tt := ptb.GetTokenType(t)
+			bid, err := ptb.GetBlockID(t)
+			if err != nil {
+				c.log.Error("Failed to get block id", "err", err, "token", t)
+				return nil, fmt.Errorf("failed to get block id")
+			}
+			ptd := block.PledgeDetail{
+				Token:        t,
+				TokenType:    tt,
+				DID:          k,
+				TokenBlockID: bid,
+			}
+			ptds = append(ptds, ptd)
 		}
 	}
 
 	tks := make([]block.TransTokens, 0)
-	index := 0
-	ptDID := ""
-	pt := ""
 	ctcb := make(map[string]*block.Block)
-	toktenType := token.RBTTokenType
-	for i := range ti {
-		pledgeToken := ""
-		pledgeDID := ""
-		toktenType = ti[i].TokenType
-		if ti[i].TokenType == token.PartTokenType || ti[i].TokenType == token.DataTokenType {
-			if pt == "" {
-				pledgeToken = pts[index].Token
-				pledgeDID = pts[index].DID
-				pt = pts[index].Token
-				ptDID = pts[index].DID
-				index++
-			} else {
-				pledgeToken = pt
-				pledgeDID = ptDID
-			}
-		} else {
-			pledgeToken = pts[index].Token
-			pledgeDID = pts[index].DID
-			index++
-		}
+
+	if sc.GetDeployerDID() != "" {
 		tt := block.TransTokens{
-			Token:        ti[i].Token,
-			TokenType:    ti[i].TokenType,
-			PledgedToken: pledgeToken,
-			PledgedDID:   pledgeDID,
+			Token:     ti[0].Token,
+			TokenType: ti[0].TokenType,
 		}
 		tks = append(tks, tt)
-		//TODO:: need to address for part otken
-		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
-		ctcb[ti[i].Token] = b
+		ctcb[ti[0].Token] = nil
+	} else if sc.GetExecutorDID() != "" {
+		tt := block.TransTokens{
+			Token:     ti[0].Token,
+			TokenType: ti[0].TokenType,
+		}
+		tks = append(tks, tt)
+		b := c.w.GetLatestTokenBlock(ti[0].Token, ti[0].TokenType)
+		ctcb[ti[0].Token] = b
+	} else {
+		for i := range ti {
+			tt := block.TransTokens{
+				Token:     ti[i].Token,
+				TokenType: ti[i].TokenType,
+			}
+			tks = append(tks, tt)
+			b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
+			ctcb[ti[i].Token] = b
+		}
 	}
 
 	bti := &block.TransInfo{
-		SenderDID:   sc.GetSenderDID(),
-		ReceiverDID: sc.GetReceiverDID(),
-		Comment:     sc.GetComment(),
-		TID:         tid,
-		Tokens:      tks,
+		Comment: sc.GetComment(),
+		TID:     tid,
+		Tokens:  tks,
+	}
+	//tokenList = append(tokenList, cr.PartTokens...)
+
+	var tcb block.TokenChainBlock
+
+	if cr.Mode == SmartContractDeployMode {
+		bti.DeployerDID = sc.GetDeployerDID()
+
+		var smartContractTokenValue float64
+
+		commitedTokens := sc.GetCommitedTokensInfo()
+		commitedTokenInfoArray := make([]block.TransTokens, 0)
+		for i := range commitedTokens {
+			commitedTokenInfo := block.TransTokens{
+				Token:       commitedTokens[i].Token,
+				TokenType:   commitedTokens[i].TokenType,
+				CommitedDID: commitedTokens[i].OwnerDID,
+			}
+			commitedTokenInfoArray = append(commitedTokenInfoArray, commitedTokenInfo)
+			smartContractTokenValue = smartContractTokenValue + commitedTokens[i].TokenValue
+		}
+
+		smartContractGensisBlock := &block.GenesisBlock{
+			Type: block.TokenGeneratedType,
+			Info: []block.GenesisTokenInfo{
+				{Token: cr.SmartContractToken,
+					CommitedTokens:     commitedTokenInfoArray,
+					SmartContractValue: smartContractTokenValue},
+			},
+		}
+
+		tcb = block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner:      sc.GetDeployerDID(),
+			TransInfo:       bti,
+			QuorumSignature: credit,
+			SmartContract:   sc.GetBlock(),
+			GenesisBlock:    smartContractGensisBlock,
+			PledgeDetails:   ptds,
+		}
+	} else if cr.Mode == SmartContractExecuteMode {
+		bti.ExecutorDID = sc.GetExecutorDID()
+		tcb = block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner:      sc.GetExecutorDID(),
+			TransInfo:       bti,
+			QuorumSignature: credit,
+			SmartContract:   sc.GetBlock(),
+			PledgeDetails:   ptds,
+		}
+	} else {
+		bti.SenderDID = sc.GetSenderDID()
+		bti.ReceiverDID = sc.GetReceiverDID()
+		tcb = block.TokenChainBlock{
+			TransactionType: block.TokenTransferredType,
+			TokenOwner:      sc.GetReceiverDID(),
+			TransInfo:       bti,
+			QuorumSignature: credit,
+			SmartContract:   sc.GetBlock(),
+			PledgeDetails:   ptds,
+		}
 	}
 
-	//tokenList = append(tokenList, cr.PartTokens...)
-	tcb := block.TokenChainBlock{
-		TokenType:       toktenType,
-		TransactionType: block.TokenTransferredType,
-		TokenOwner:      sc.GetReceiverDID(),
-		TransInfo:       bti,
-		QuorumSignature: credit,
-		SmartContract:   sc.GetBlock(),
-	}
 	if cr.Mode == DTCommitMode {
 		tcb.TransactionType = block.TokenCommittedType
 	}
@@ -643,7 +827,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 		// Request pledage token
 		if pd.RemPledgeTokens != 0 {
 			pr := PledgeRequest{
-				NumTokens: pd.RemPledgeTokens,
+				TokensRequired: pd.RemPledgeTokens,
 			}
 			// l := len(pd.PledgedTokens)
 			// for i := pd.NumPledgedTokens; i < l; i++ {
@@ -662,9 +846,10 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 				pd.PledgedTokens[did] = make([]string, 0)
 				for i, t := range prs.Tokens {
 					ptcb := block.InitBlock(prs.TokenChainBlock[i], nil)
-					if !c.checkIsPledged(ptcb, t) {
+					if !c.checkIsPledged(ptcb) {
 						pd.NumPledgedTokens++
-						pd.RemPledgeTokens--
+						pd.RemPledgeTokens = pd.RemPledgeTokens - prs.TokenValue[i]
+						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, 10)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
 						pd.TokenList = append(pd.TokenList, t)
@@ -742,27 +927,87 @@ func (c *Core) getArbitrationSignature(p *ipfsport.Peer, sr *SignatureRequest) (
 	if !srep.Status {
 		c.log.Error("Failed to get arbitray signature", "msg", srep.Message)
 		if strings.Contains(srep.Message, "token is already migrated") {
-			str := strings.Split(srep.Message, ",")
-			if len(str) > 1 {
-				return str[1], false
-			}
+			return srep.Message, false
 		}
 		return "", false
 	}
 	return srep.Signature, true
 }
-func (c *Core) checkIsPledged(tcb *block.Block, token string) bool {
+func (c *Core) checkIsPledged(tcb *block.Block) bool {
 	if strings.Compare(tcb.GetTransType(), block.TokenPledgedType) == 0 {
-		c.log.Debug("Token", token, " is a pledged token. Not Considered for pledging")
 		return true
 	}
 	return false
 }
 
-func (c *Core) checkIsUnpledged(tcb *block.Block, token string) bool {
+func (c *Core) checkIsUnpledged(tcb *block.Block) bool {
 	if strings.Compare(tcb.GetTransType(), block.TokenUnpledgedType) == 0 {
-		c.log.Debug("Token", token, " is unpledged token")
 		return true
 	}
 	return false
+}
+
+func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractToken string, didCryptoLib did.DIDCrypto) error {
+	commitedTokens, err := newBlock.GetCommitedTokenDetials(smartContractToken)
+	if err != nil {
+		c.log.Error("error fetching commited token details", err)
+		return err
+	}
+	smartContractTokenBlockId, err := newBlock.GetBlockID(smartContractToken)
+	if err != nil {
+		c.log.Error("Failed to get block ID")
+		return err
+	}
+	refID := fmt.Sprintf("%s,%d,%s", smartContractToken, newBlock.GetTokenType(smartContractToken), smartContractTokenBlockId)
+
+	ctcb := make(map[string]*block.Block)
+	tsb := make([]block.TransTokens, 0)
+
+	for _, t := range commitedTokens {
+		tokenInfoFromDB, err := c.w.ReadToken(t)
+		if err != nil {
+			c.log.Error("failed to read token from wallet")
+			return err
+		}
+		ts := RBTString
+		if tokenInfoFromDB.TokenValue != 1.0 {
+			ts = PartString
+		}
+		tt := block.TransTokens{
+			Token:     t,
+			TokenType: c.TokenType(ts),
+		}
+		tsb = append(tsb, tt)
+		lb := c.w.GetLatestTokenBlock(t, c.TokenType(ts))
+		if lb == nil {
+			c.log.Error("Failed to get token chain block")
+			return fmt.Errorf("failed to get latest block")
+		}
+		ctcb[t] = lb
+	}
+	tcb := block.TokenChainBlock{
+		TransactionType: block.TokenContractCommited,
+		TokenOwner:      newBlock.GetDeployerDID(),
+		TransInfo: &block.TransInfo{
+			Comment: "Token is Commited at " + time.Now().String() + " for SmartContract Token : " + smartContractToken,
+			RefID:   refID,
+			Tokens:  tsb,
+		},
+	}
+	nb := block.CreateNewBlock(ctcb, &tcb)
+	if nb == nil {
+		c.log.Error("Failed to create new token chain block")
+		return fmt.Errorf("Failed to create new token chain block")
+	}
+	err = nb.UpdateSignature(didCryptoLib)
+	if err != nil {
+		c.log.Error("Failed to update signature to block", "err", err)
+		return fmt.Errorf("Failed to update signature to block")
+	}
+	err = c.w.CreateTokenBlock(nb)
+	if err != nil {
+		c.log.Error("Failed to update commited rbt token chain block", "err", err)
+		return fmt.Errorf("Failed to update token chain block")
+	}
+	return nil
 }

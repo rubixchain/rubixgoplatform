@@ -19,41 +19,57 @@ import (
 //   "5" : TransInfo        : TransInfo
 //   "6" : SmartContract    : []byte
 //   "7" : QuorumSignature  : []string
+//   "8" : PledgeDetails    : map[string][]PledgeDetail
+//   "9" : SmartContractData : string
 //
 // }
 
 const (
-	TCTokenTypeKey       string = "1"
-	TCTransTypeKey       string = "2"
-	TCTokenOwnerKey      string = "3"
-	TCGenesisBlockKey    string = "4"
-	TCTransInfoKey       string = "5"
-	TCSmartContractKey   string = "6"
-	TCQuorumSignatureKey string = "7"
-	TCBlockHashKey       string = "98"
-	TCSignatureKey       string = "99"
-	TCBlockContentKey    string = "1"
-	TCBlockContentSigKey string = "2"
+	TCTokenTypeKey         string = "1"
+	TCTransTypeKey         string = "2"
+	TCTokenOwnerKey        string = "3"
+	TCGenesisBlockKey      string = "4"
+	TCTransInfoKey         string = "5"
+	TCSmartContractKey     string = "6"
+	TCQuorumSignatureKey   string = "7"
+	TCPledgeDetailsKey     string = "8"
+	TCBlockHashKey         string = "98"
+	TCSignatureKey         string = "99"
+	TCBlockContentKey      string = "1"
+	TCBlockContentSigKey   string = "2"
+	TCSmartContractDataKey string = "9"
 )
 
 const (
-	TokenMintedType      string = "01"
-	TokenTransferredType string = "02"
-	TokenMigratedType    string = "03"
-	TokenPledgedType     string = "04"
-	TokenGeneratedType   string = "05"
-	TokenUnpledgedType   string = "06"
-	TokenCommittedType   string = "07"
+	TokenMintedType       string = "01"
+	TokenTransferredType  string = "02"
+	TokenMigratedType     string = "03"
+	TokenPledgedType      string = "04"
+	TokenGeneratedType    string = "05"
+	TokenUnpledgedType    string = "06"
+	TokenCommittedType    string = "07"
+	TokenBurntType        string = "08"
+	TokenDeployedType     string = "09"
+	TokenExecutedType     string = "10"
+	TokenContractCommited string = "11"
 )
 
 type TokenChainBlock struct {
-	TokenType       int           `json:"tokenType"`
-	TransactionType string        `json:"transactionType"`
-	TokenOwner      string        `json:"owner"`
-	GenesisBlock    *GenesisBlock `json:"genesisBlock"`
-	TransInfo       *TransInfo    `json:"transInfo"`
-	QuorumSignature []string      `json:"quorumSignature"`
-	SmartContract   []byte        `json:"smartContract"`
+	TransactionType   string         `json:"transactionType"`
+	TokenOwner        string         `json:"owner"`
+	GenesisBlock      *GenesisBlock  `json:"genesisBlock"`
+	TransInfo         *TransInfo     `json:"transInfo"`
+	PledgeDetails     []PledgeDetail `json:"pledgeDetails"`
+	QuorumSignature   []string       `json:"quorumSignature"`
+	SmartContract     []byte         `json:"smartContract"`
+	SmartContractData string         `json:"smartContractData"`
+}
+
+type PledgeDetail struct {
+	Token        string `json:"token"`
+	TokenType    int    `json:"tokenType"`
+	DID          string `json:"did"`
+	TokenBlockID string `json:"tokenBlockID"`
 }
 
 type Block struct {
@@ -105,7 +121,6 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		return nil
 	}
 	ntcb := make(map[string]interface{})
-	ntcb[TCTokenTypeKey] = tcb.TokenType
 	ntcb[TCTransTypeKey] = tcb.TransactionType
 	ntcb[TCTokenOwnerKey] = tcb.TokenOwner
 	if tcb.GenesisBlock != nil {
@@ -119,11 +134,18 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		return nil
 	}
 	ntcb[TCTransInfoKey] = ntib
+	pdib := newPledgeDetails(tcb.PledgeDetails)
+	if pdib != nil {
+		ntcb[TCPledgeDetailsKey] = pdib
+	}
 	if tcb.QuorumSignature != nil {
 		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
 	}
 	if tcb.SmartContract != nil {
 		ntcb[TCSmartContractKey] = tcb.SmartContract
+	}
+	if tcb.SmartContractData != "" {
+		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
 	blk := InitBlock(nil, ntcb)
 	return blk
@@ -478,7 +500,23 @@ func (b *Block) GetTransTokens() []string {
 	return nil
 }
 
-func (b *Block) GetUnpledgeId() string {
+func (b *Block) GetTokenType(t string) int {
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return 0
+	}
+	tm := util.GetFromMap(tim, TITokensKey)
+	if tm == nil {
+		return 0
+	}
+	ti := util.GetFromMap(tm, t)
+	if ti == nil {
+		return 0
+	}
+	return util.GetIntFromMap(ti, TTTokenTypeKey)
+}
+
+func (b *Block) GetUnpledgeId(t string) string {
 	tim := util.GetFromMap(b.bm, TCTransInfoKey)
 	if tim == nil {
 		return ""
@@ -487,15 +525,11 @@ func (b *Block) GetUnpledgeId() string {
 	if tm == nil {
 		return ""
 	}
-	var result string
-	mi, ok2 := tm.(map[interface{}]interface{})
-	if ok2 {
-		for _, v := range mi {
-			result = (util.GetFromMap(v, TTUnpledgedIDKey)).(string)
-		}
-
+	ti := util.GetFromMap(tm, t)
+	if ti == nil {
+		return ""
 	}
-	return result
+	return util.GetStringFromMap(ti, TTUnpledgedIDKey)
 }
 
 func (b *Block) GetTokenPledgedForDetails() string {
@@ -517,6 +551,13 @@ func (b *Block) GetSenderDID() string {
 func (b *Block) GetReceiverDID() string {
 	return b.getTrasnInfoString(TIReceiverDIDKey)
 }
+func (b *Block) GetDeployerDID() string {
+	return b.getTrasnInfoString(TIDeployerDIDKey)
+}
+
+func (b *Block) GetExecutorDID() string {
+	return b.getTrasnInfoString(TIExecutorDIDKey)
+}
 
 func (b *Block) GetTid() string {
 	return b.getTrasnInfoString(TITIDKey)
@@ -526,8 +567,14 @@ func (b *Block) GetComment() string {
 	return b.getTrasnInfoString(TICommentKey)
 }
 
-func (b *Block) GetTokenType() int {
-	return b.getBlkInt(TCTokenTypeKey)
+func (b *Block) GetParentDetials(t string) (string, []string, error) {
+	gtm := b.getGenesisTokenMap(t)
+	if gtm == nil {
+		return "", nil, fmt.Errorf("invalid token chain block, missing genesis block")
+	}
+	p := util.GetStringFromMap(gtm, GIParentIDKey)
+	gp := util.GetStringSliceFromMap(gtm, GIGrandParentIDKey)
+	return p, gp, nil
 }
 
 func (b *Block) GetTokenDetials(t string) (int, int, error) {
@@ -552,6 +599,34 @@ func (b *Block) GetSmartContract() []byte {
 	return c
 }
 
+func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
+	genesisTokenMap := b.getGenesisTokenMap(t)
+	if genesisTokenMap == nil {
+		return nil, fmt.Errorf("invalid token chain block, missing genesis block")
+	}
+	commitedTokensMap := util.GetFromMap(genesisTokenMap, GICommitedTokensKey)
+	if commitedTokensMap == nil {
+		return nil, fmt.Errorf("invalid token chain block, missing commited tokens block")
+	}
+	m, ok := commitedTokensMap.(map[string]interface{})
+	if ok {
+		tkns := make([]string, 0)
+		for k, _ := range m {
+			tkns = append(tkns, k)
+		}
+		return tkns, nil
+	}
+	lm, ok := commitedTokensMap.(map[interface{}]interface{})
+	if ok {
+		tkns := make([]string, 0)
+		for k, _ := range lm {
+			tkns = append(tkns, k.(string))
+		}
+		return tkns, nil
+	}
+	return nil, nil
+}
+
 // func (b *Block) GetTokenPledgeMap() map[string]interface{} {
 // 	tokenPledge := b.bm[TCTokensPledgeMapKey]
 // 	tokenPledgeMap, ok := tokenPledge.(map[interface{}]interface{})
@@ -570,3 +645,25 @@ func (b *Block) GetSmartContract() []byte {
 
 // 	return result
 // }
+
+func (b *Block) GetSmartContractData() string {
+	smartContractInterface, ok := b.bm[TCSmartContractKey]
+	if !ok {
+		return ""
+	}
+	smartContractData, ok := smartContractInterface.(string)
+	if !ok {
+		return ""
+	}
+	return smartContractData
+}
+
+func (b *Block) GetSmartContractValue(t string) (float64, error) {
+	var result float64
+	gtm := b.getGenesisTokenMap(t)
+	if gtm == nil {
+		return result, fmt.Errorf("invalid token chain block, missing genesis block")
+	}
+	result = util.GetFloatFromMap(gtm, GISmartContractValueKey)
+	return result, nil
+}

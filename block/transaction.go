@@ -19,38 +19,53 @@ import (
 // ----------TransToken--------------------------
 // {
 //   "1" : TokenType       : int
-//   "2" : PledgedToken    : string
-//   "3" : PledgedDID      : string
+//   "2" : PledgedToken    : string  depreciated not used
+//   "3" : PledgedDID      : string  depreciated not used
 //   "4" : BlockNumber     : string
 //   "5" : PreviousBlockID : string
 //   "6" : UnpledgedID     : string
 // }
+// ----------PledgeDetails------------------------
+// {
+//   "1" : Token           : string
+//   "2" : TokenType       : int
+//   "3" : TokenBlockID    : string
+// }
 
 const (
-	TISenderDIDKey   string = "1"
-	TIReceiverDIDKey string = "2"
-	TICommentKey     string = "3"
-	TITIDKey         string = "4"
-	TIBlockKey       string = "5"
-	TITokensKey      string = "6"
-	TIRefIDKey       string = "7"
+	TISenderDIDKey      string = "1"
+	TIReceiverDIDKey    string = "2"
+	TICommentKey        string = "3"
+	TITIDKey            string = "4"
+	TIBlockKey          string = "5"
+	TITokensKey         string = "6"
+	TIRefIDKey          string = "7"
+	TIDeployerDIDKey    string = "8"
+	TIExecutorDIDKey    string = "9"
+	TICommitedTokensKey string = "10"
 )
 
 const (
 	TTTokenTypeKey       string = "1"
-	TTPledgedTokenKey    string = "2"
-	TTPledgedDIDKey      string = "3"
+	TTPledgedTokenKey    string = "2" // depreciated not used
+	TTPledgedDIDKey      string = "3" // depreciated not used
 	TTBlockNumberKey     string = "4"
 	TTPreviousBlockIDKey string = "5"
 	TTUnpledgedIDKey     string = "6"
+	TTCommitedDIDKey     string = "7"
+)
+
+const (
+	PDTokenKey        string = "1"
+	PDTokenTypeKey    string = "2"
+	PDTokenBlockIDKey string = "3"
 )
 
 type TransTokens struct {
-	Token        string `json:"token"`
-	TokenType    int    `json:"tokenType"`
-	PledgedToken string `json:"pledgedToken"`
-	PledgedDID   string `json:"pledgedDID"`
-	UnplededID   string `json:"unpledgedID"`
+	Token       string `json:"token"`
+	TokenType   int    `json:"tokenType"`
+	UnplededID  string `json:"unpledgedID"`
+	CommitedDID string `json:"commitedDID"`
 }
 
 type TransInfo struct {
@@ -61,6 +76,8 @@ type TransInfo struct {
 	Block       []byte        `json:"block"`
 	RefID       string        `json:"refID"`
 	Tokens      []TransTokens `json:"tokens"`
+	DeployerDID string        `json:"deployerDID"`
+	ExecutorDID string        `json:"executorDID"`
 }
 
 func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
@@ -69,14 +86,12 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 	}
 	nttb := make(map[string]interface{})
 	nttb[TTTokenTypeKey] = tt.TokenType
-	if tt.PledgedToken != "" {
-		nttb[TTPledgedTokenKey] = tt.PledgedToken
-	}
-	if tt.PledgedDID != "" {
-		nttb[TTPledgedDIDKey] = tt.PledgedDID
-	}
+	// pledged detials moved out of trans token
 	if tt.UnplededID != "" {
 		nttb[TTUnpledgedIDKey] = tt.UnplededID
+	}
+	if tt.CommitedDID != "" {
+		nttb[TTCommitedDIDKey] = tt.CommitedDID
 	}
 	if b == nil {
 		nttb[TTBlockNumberKey] = "0"
@@ -108,6 +123,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	if ti.ReceiverDID != "" {
 		ntib[TIReceiverDIDKey] = ti.ReceiverDID
 	}
+	if ti.DeployerDID != "" {
+		ntib[TIDeployerDIDKey] = ti.DeployerDID
+	}
 	if ti.Comment != "" {
 		ntib[TICommentKey] = ti.Comment
 	}
@@ -130,6 +148,7 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 		nttbs[tt.Token] = nttb
 	}
 	ntib[TITokensKey] = nttbs
+
 	return ntib
 }
 
@@ -158,4 +177,24 @@ func (b *Block) GetRefID() string {
 	}
 	si := util.GetFromMap(tim, TIRefIDKey)
 	return util.GetString(si)
+}
+
+func newPledgeDetails(pds []PledgeDetail) map[string]interface{} {
+	if len(pds) == 0 {
+		return nil
+	}
+	npds := make(map[string]interface{})
+	for _, pd := range pds {
+		npd, ok := npds[pd.DID].([]map[string]interface{})
+		if !ok {
+			npd = make([]map[string]interface{}, 0)
+		}
+		np := make(map[string]interface{})
+		np[PDTokenKey] = pd.Token
+		np[PDTokenTypeKey] = pd.TokenType
+		np[PDTokenBlockIDKey] = pd.TokenBlockID
+		npd = append(npd, np)
+		npds[pd.DID] = npd
+	}
+	return npds
 }

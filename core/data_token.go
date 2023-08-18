@@ -62,7 +62,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		return &br
 	}
 	rt := rac.RacType{
-		Type:        rac.RacDataTokenType,
+		Type:        c.TokenType(DataString),
 		DID:         dr.DID,
 		TotalSupply: 1,
 		CreatorID:   userID[0],
@@ -180,7 +180,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	dtm[dr.DID] = dt
 	ti := contract.TokenInfo{
 		Token:     dt,
-		TokenType: token.DataTokenType,
+		TokenType: c.TokenType(DataString),
 		OwnerDID:  dr.DID,
 	}
 	tis := make([]contract.TokenInfo, 0)
@@ -216,7 +216,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		Tokens: []block.TransTokens{
 			{
 				Token:     dt,
-				TokenType: token.DataTokenType,
+				TokenType: c.TokenType(DataString),
 			},
 		},
 		Comment: "Data token generated at : " + time.Now().String(),
@@ -224,7 +224,6 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	tcb := &block.TokenChainBlock{
 		TransactionType: block.TokenGeneratedType,
 		TokenOwner:      dr.DID,
-		TokenType:       token.DataTokenType,
 		SmartContract:   sc.GetBlock(),
 		GenesisBlock:    gb,
 		TransInfo:       bti,
@@ -243,7 +242,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, failed to update signature"
 		return &br
 	}
-	err = c.w.AddTokenBlock(dt, token.DataTokenType, blk)
+	err = c.w.AddTokenBlock(dt, blk)
 	if err != nil {
 		c.log.Error("Failed to create data token, failed to add token chan block", "err", err)
 		br.Message = "Failed to create data token, failed to add token chan block"

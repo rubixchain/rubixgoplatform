@@ -19,37 +19,48 @@ import "github.com/rubixchain/rubixgoplatform/util"
 // }
 
 const (
-	TSSenderDIDKey    string = "1"
-	TSReceiverDIDKey  string = "2"
-	TSCommentKey      string = "3"
-	TSTransInfoKey    string = "4"
-	TSExcahngeInfoKey string = "5"
+	TSSenderDIDKey          string = "1"
+	TSReceiverDIDKey        string = "2"
+	TSCommentKey            string = "3"
+	TSTransInfoKey          string = "4"
+	TSExcahngeInfoKey       string = "5"
+	TSDeployerDIDKey        string = "6"
+	TSSmartContractTokenKey string = "7"
+	TSCommitedTokenInfoKey  string = "8"
+	TSExecutorDIDKey        string = "9"
 )
 
 const (
-	TITokenTypeKey string = "1"
-	TIOwnerDIDKey  string = "2"
-	TIBlockIDKey   string = "3"
+	TITokenTypeKey  string = "1"
+	TIOwnerDIDKey   string = "2"
+	TIBlockIDKey    string = "3"
+	TITokenValueKey string = "4"
 )
 
 type TokenInfo struct {
-	Token     string `json:"token"`
-	TokenType int    `json:"tokenType"`
-	OwnerDID  string `json:"ownerDID"`
-	BlockID   string `json:"blockID"`
+	Token      string  `json:"token"`
+	TokenType  int     `json:"tokenType"`
+	TokenValue float64 `json:"tokenValue"`
+	OwnerDID   string  `json:"ownerDID"`
+	BlockID    string  `json:"blockID"`
 }
 
 type TransInfo struct {
-	SenderDID      string      `json:"senderDID"`
-	ReceiverDID    string      `json:"receiverDID"`
-	Comment        string      `json:"comment"`
-	TransTokens    []TokenInfo `json:"TransTokens"`
-	ExchangeTokens []TokenInfo `json:"excahngeTokens"`
+	SenderDID          string      `json:"senderDID"`
+	ReceiverDID        string      `json:"receiverDID"`
+	Comment            string      `json:"comment"`
+	TransTokens        []TokenInfo `json:"TransTokens"`
+	ExchangeTokens     []TokenInfo `json:"excahngeTokens"`
+	CommitedTokens     []TokenInfo `json:"comitedtokens"`
+	DeployerDID        string      `json:"deployerDID`
+	SmartContractToken string      `json:"smartcontractToken`
+	ExecutorDID        string      `json:"executorDID"`
 }
 
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {
 	ntib := make(map[string]interface{})
 	ntib[TITokenTypeKey] = ti.TokenType
+	ntib[TITokenValueKey] = ti.TokenValue
 	if ti.OwnerDID != "" {
 		ntib[TIOwnerDIDKey] = ti.OwnerDID
 	}
@@ -67,9 +78,31 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 	if ts.ReceiverDID != "" {
 		ntsb[TSReceiverDIDKey] = ts.ReceiverDID
 	}
+	if ts.DeployerDID != "" {
+		ntsb[TSDeployerDIDKey] = ts.DeployerDID
+	}
+	if ts.ExecutorDID != "" {
+		ntsb[TSExecutorDIDKey] = ts.ExecutorDID
+	}
+	if ts.SmartContractToken != "" {
+		ntsb[TSSmartContractTokenKey] = ts.SmartContractToken
+	}
 	if ts.Comment != "" {
 		ntsb[TSCommentKey] = ts.Comment
 	}
+
+	if ts.CommitedTokens != nil && len(ts.CommitedTokens) > 0 {
+		ntibs := make(map[string]interface{})
+		for _, ti := range ts.CommitedTokens {
+			ntib := newTokenInfoBlock(&ti)
+			if ntib == nil {
+				return nil
+			}
+			ntibs[ti.Token] = ntib
+		}
+		ntsb[TSCommitedTokenInfoKey] = ntibs
+	}
+
 	if ts.TransTokens != nil && len(ts.TransTokens) > 0 {
 		ntibs := make(map[string]interface{})
 		for _, ti := range ts.TransTokens {

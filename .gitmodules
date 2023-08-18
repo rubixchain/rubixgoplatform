@@ -1,0 +1,6 @@
+[submodule "protos"]
+	path = protos
+	url = https://github.com/getfexr/protos.git
+[submodule "fexrproto"]
+	path = fexrproto
+	url = https://github.com/getfexr/protos.git

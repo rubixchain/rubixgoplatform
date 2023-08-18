@@ -159,15 +159,17 @@ func (s *Service) UpdateTempTokenDetials(td *TokenDetials) error {
 			s.log.Error("Failed to write aribitration temp table")
 			return fmt.Errorf("failed to add token into temp table")
 		}
-		err = s.s.Delete(ArbitrationTempTable, &TokenDetials{}, "did=?", t.DID)
-		if err != nil {
-			s.log.Error("Failed to write aribitration temp table", "err", err)
-			return err
-		}
-		err := s.s.Write(ArbitrationTempTable, td)
-		if err != nil {
-			s.log.Error("Failed to write aribitration temp table", "err", err)
-			return err
+		if t.DID != td.DID {
+			err = s.s.Delete(ArbitrationTempTable, &TokenDetials{}, "did=?", t.DID)
+			if err != nil {
+				s.log.Error("Failed to write aribitration temp table", "err", err)
+				return err
+			}
+			err := s.s.Write(ArbitrationTempTable, td)
+			if err != nil {
+				s.log.Error("Failed to write aribitration temp table", "err", err)
+				return err
+			}
 		}
 	}
 	return err
@@ -184,6 +186,15 @@ func (s *Service) UpdateDIDMap(dm *DIDMap) error {
 func (s *Service) GetDIDMap(did string) (*DIDMap, error) {
 	var dm DIDMap
 	err := s.as.Read(ArbitrationDIDTable, &dm, "old_did=?", did)
+	if err != nil {
+		return nil, err
+	}
+	return &dm, nil
+}
+
+func (s *Service) GetNewDIDMap(did string) (*DIDMap, error) {
+	var dm DIDMap
+	err := s.as.Read(ArbitrationDIDTable, &dm, "new_did=?", did)
 	if err != nil {
 		return nil, err
 	}

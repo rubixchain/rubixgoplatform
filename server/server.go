@@ -5,60 +5,63 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"strings"
 	"time"
 
+	ccfg "github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/gorilla/sessions"
 	"github.com/rubixchain/rubixgoplatform/core"
+	"github.com/rubixchain/rubixgoplatform/grpcserver"
+	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
 const (
-	APILogin                 string = "/api/login"
-	APIStart                 string = "/api/start"
-	APIShutdown              string = "/api/shutdown"
-	APINodeStatus            string = "/api/node-status"
-	APIPing                  string = "/api/ping"
-	APIAddBootStrap          string = "/api/add-bootstrap"
-	APIRemoveBootStrap       string = "/api/remove-bootstrap"
-	APIRemoveAllBootStrap    string = "/api/remove-all-bootstrap"
-	APIGetAllBootStrap       string = "/api/get-all-bootstrap"
-	APICreateDID             string = "/api/createdid"
-	APIGetAllDID             string = "/api/getalldid"
-	APIAddQuorum             string = "/api/addquorum"
-	APIGetAllQuorum          string = "/api/getallquorum"
-	APIRemoveAllQuorum       string = "/api/removeallquorum"
-	APISetupQuorum           string = "/api/setup-quorum"
-	APISetupService          string = "/api/setup-service"
-	APIGenerateTestToken     string = "/api/generate-test-token"
-	APIInitiateRBTTransfer   string = "/api/initiate-rbt-transfer"
-	APIGetAccountInfo        string = "/api/get-account-info"
-	APISignatureResponse     string = "/api/signature-response"
-	APIDumpTokenChainBlock   string = "/api/dump-token-chain"
-	APIRegisterDID           string = "/api/register-did"
-	APISetupDID              string = "/api/setup-did"
-	APIMigrateNode           string = "/api/migrate-node"
-	APILockTokens            string = "/api/lock-tokens"
-	APICreateDataToken       string = "/api/create-data-token"
-	APICommitDataToken       string = "/api/commit-data-token"
-	APICheckDataToken        string = "/api/check-data-token"
-	APIGetDataToken          string = "/api/get-data-token"
-	APISetupDB               string = "/api/setup-db"
-	APIGetTxnByTxnID         string = "/api/get-by-txnId"
-	APIGetTxnByDID           string = "/api/get-by-did"
-	APIGetTxnByComment       string = "/api/get-by-comment"
-	APIGenerateSmartContract string = "/api/generate-smart-contract"
-	APIFetchSmartContract    string = "/api/fetch-smart-contract"
+	APILogin               string = "/api/login"
+	APIStart               string = "/api/start"
+	APIShutdown            string = "/api/shutdown"
+	APINodeStatus          string = "/api/node-status"
+	APIPing                string = "/api/ping"
+	APIAddBootStrap        string = "/api/add-bootstrap"
+	APIRemoveBootStrap     string = "/api/remove-bootstrap"
+	APIRemoveAllBootStrap  string = "/api/remove-all-bootstrap"
+	APIGetAllBootStrap     string = "/api/get-all-bootstrap"
+	APICreateDID           string = "/api/createdid"
+	APIGetAllDID           string = "/api/getalldid"
+	APIAddQuorum           string = "/api/addquorum"
+	APIGetAllQuorum        string = "/api/getallquorum"
+	APIRemoveAllQuorum     string = "/api/removeallquorum"
+	APISetupQuorum         string = "/api/setup-quorum"
+	APISetupService        string = "/api/setup-service"
+	APIGenerateTestToken   string = "/api/generate-test-token"
+	APIInitiateRBTTransfer string = "/api/initiate-rbt-transfer"
+	APIGetAccountInfo      string = "/api/get-account-info"
+	APISignatureResponse   string = "/api/signature-response"
+	APIDumpTokenChainBlock string = "/api/dump-token-chain"
+	APIRegisterDID         string = "/api/register-did"
+	APISetupDID            string = "/api/setup-did"
+	APIMigrateNode         string = "/api/migrate-node"
+	APILockTokens          string = "/api/lock-tokens"
+	APICreateDataToken     string = "/api/create-data-token"
+	APICommitDataToken     string = "/api/commit-data-token"
+	APICheckDataToken      string = "/api/check-data-token"
+	APIGetDataToken        string = "/api/get-data-token"
+	APISetupDB             string = "/api/setup-db"
+	APIGetTxnByTxnID       string = "/api/get-by-txnId"
+	APIGetTxnByDID         string = "/api/get-by-did"
+	APIGetTxnByComment     string = "/api/get-by-comment"
+	APIPublishContract     string = "/api/publish-contract"
+	APISubscribecontract   string = "/api/subscribe-contract"
 )
 
 // Server defines server handle
 type Server struct {
 	ensweb.Server
-	cfg *Config
-	log logger.Logger
-	c   *core.Core
-	sc  chan bool
+	cfg  *Config
+	log  logger.Logger
+	c    *core.Core
+	sc   chan bool
+	grpc *grpcserver.ServerGRPC
 }
 
 // NewServer create new server instances
@@ -85,8 +88,11 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 	s.SetDebugMode()
 
 	if cfg.EnableAuth {
+		if cfg.APIKey == "" {
+			cfg.APIKey = "TestAPIKey"
+		}
 		if cfg.AuthMethod == "" {
-			cfg.AuthMethod = SessionAuthMethod
+			cfg.AuthMethod = BasicAuthMethod
 		}
 		if cfg.SessionName == "" {
 			cfg.SessionName = "AuthSession"
@@ -97,75 +103,6 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 			cfg.SessionKey = base64.StdEncoding.EncodeToString(rb)
 		}
 		s.CreateSessionStore(cfg.SessionName, "HaiHello", sessions.Options{Path: "/api", HttpOnly: true})
-		ecfg := ensweb.EntityConfig{
-			DefaultTenantName:    "root",
-			DefaultAdminName:     "admin",
-			DefaultAdminPassword: "admin@123",
-			TenantTableName:      "tenanttable",
-			UserTableName:        "usertable",
-			RoleTableName:        "roletable",
-			UserRoleTableName:    "userroletable",
-		}
-		err = s.SetupEntity(ecfg)
-		if err != nil {
-			s.log.Error("failed to create entity", "err", err)
-			return nil, err
-		}
-		t, err := s.GetTenant(ecfg.DefaultTenantName)
-		if err != nil {
-			s.log.Error("failed to get default tenant", "err", err)
-			return nil, err
-		}
-		r, err := s.GetRole("admin")
-		if err != nil {
-			r = &ensweb.Role{
-				TenantID:       t.ID,
-				Name:           "admin",
-				NormalizedName: strings.ToUpper("admin"),
-			}
-			err = s.CreateRole(r)
-			if err != nil {
-				s.log.Error("failed to get create role", "err", err)
-				return nil, err
-			}
-		}
-		r, err = s.GetRole("user")
-		if err != nil {
-			r = &ensweb.Role{
-				TenantID:       t.ID,
-				Name:           "user",
-				NormalizedName: strings.ToUpper("user"),
-				IsDefault:      true,
-			}
-			err = s.CreateRole(r)
-			if err != nil {
-				s.log.Error("failed to create role", "err", err)
-				return nil, err
-			}
-		}
-		u, err := s.GetUser(t.ID, ecfg.DefaultAdminName)
-		if err != nil {
-			u = &ensweb.User{
-				Base: ensweb.Base{
-					TenantID:             t.ID,
-					CreationTime:         time.Now(),
-					LastModificationTime: time.Now(),
-				},
-				Name:               "Administrator",
-				UserName:           ecfg.DefaultAdminName,
-				NormalizedUserName: strings.ToUpper(ecfg.DefaultAdminName),
-				Roles: []ensweb.Role{
-					{
-						Name: "admin",
-					},
-				},
-			}
-			err = s.CreateUser(u)
-			if err != nil {
-				s.log.Error("failed to create user", "err", err)
-				return nil, err
-			}
-		}
 	}
 
 	s.SetShutdown(s.ExitFunc)
@@ -189,6 +126,16 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 			return nil, fmt.Errorf("failed to start core")
 		}
 	}
+	cc := &ccfg.Config{
+		ServerAddress: cfg.Config.HostAddress,
+		ServerPort:    cfg.Config.HostPort,
+	}
+	s.grpc, err = grpcserver.NewServerGRPC(c, cc, log, cfg.GRPCAddr, cfg.GRPCSecure)
+	if err != nil {
+		s.log.Error("Failed to create GRPC server", "err", err)
+		return nil, err
+	}
+	go s.grpc.Run()
 	s.RegisterRoutes()
 	return s, nil
 }
@@ -196,42 +143,55 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 // RegisterRoutes register all routes
 func (s *Server) RegisterRoutes() {
 	s.AddRoute("/", "GET", s.Index)
-	s.AddRoute(APILogin, "POST", s.APILogin)
-	s.AddRoute(APIStart, "GET", s.AuthHandle(s.APIStart, s.ErrorFunc))
-	s.AddRoute(APIShutdown, "POST", s.AuthHandle(s.APIShutdown, s.ErrorFunc))
-	s.AddRoute(APINodeStatus, "GET", s.AuthHandle(s.APINodeStatus, s.ErrorFunc))
-	s.AddRoute(APIPing, "GET", s.AuthHandle(s.APIPing, s.ErrorFunc))
-	s.AddRoute(APIAddBootStrap, "POST", s.AuthHandle(s.APIAddBootStrap, s.ErrorFunc))
-	s.AddRoute(APIRemoveBootStrap, "POST", s.AuthHandle(s.APIRemoveBootStrap, s.ErrorFunc))
-	s.AddRoute(APIRemoveAllBootStrap, "POST", s.AuthHandle(s.APIRemoveAllBootStrap, s.ErrorFunc))
-	s.AddRoute(APIGetAllBootStrap, "GET", s.AuthHandle(s.APIGetAllBootStrap, s.ErrorFunc))
-	s.AddRoute(APICreateDID, "POST", s.AuthHandle(s.APICreateDID, s.ErrorFunc))
-	s.AddRoute(APIGetAllDID, "GET", s.AuthHandle(s.APIGetAllDID, s.ErrorFunc))
-	s.AddRoute(APIAddQuorum, "POST", s.AuthHandle(s.APIAddQuorum, s.ErrorFunc))
-	s.AddRoute(APIGetAllQuorum, "GET", s.AuthHandle(s.APIGetAllQuorum, s.ErrorFunc))
-	s.AddRoute(APIRemoveAllQuorum, "GET", s.AuthHandle(s.APIRemoveAllQuorum, s.ErrorFunc))
-	s.AddRoute(APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, s.ErrorFunc))
-	s.AddRoute(APISetupService, "POST", s.AuthHandle(s.APISetupService, s.ErrorFunc))
-	s.AddRoute(APIGenerateTestToken, "POST", s.AuthHandle(s.APIGenerateTestToken, s.ErrorFunc))
-	s.AddRoute(APIInitiateRBTTransfer, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, s.ErrorFunc))
-	s.AddRoute(APIGetAccountInfo, "GET", s.AuthHandle(s.APIGetAccountInfo, s.ErrorFunc))
-	s.AddRoute(APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, s.ErrorFunc))
-	s.AddRoute(APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, s.ErrorFunc))
-	s.AddRoute(APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, s.ErrorFunc))
-	s.AddRoute(APISetupDID, "POST", s.AuthHandle(s.APISetupDID, s.ErrorFunc))
-	s.AddRoute(APIMigrateNode, "POST", s.AuthHandle(s.APIMigrateNode, s.ErrorFunc))
-	s.AddRoute(APILockTokens, "POST", s.AuthHandle(s.APILockTokens, s.ErrorFunc))
-	s.AddRoute(APICreateDataToken, "POST", s.AuthHandle(s.APICreateDataToken, s.ErrorFunc))
-	s.AddRoute(APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, s.ErrorFunc))
-	s.AddRoute(APICheckDataToken, "POST", s.AuthHandle(s.APICheckDataToken, s.ErrorFunc))
-	s.AddRoute(APIGetDataToken, "GET", s.AuthHandle(s.APIGetDataToken, s.ErrorFunc))
-	s.AddRoute(APISetupDB, "POST", s.AuthHandle(s.APISetupDB, s.ErrorFunc))
-	s.AddRoute(APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, s.ErrorFunc))
-	s.AddRoute(APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, s.ErrorFunc))
-	s.AddRoute(APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, s.ErrorFunc))
-	s.AddRoute(APIGenerateSmartContract, "POST", s.AuthHandle(s.APIGenerateSmartContract, s.ErrorFunc))
-	s.AddRoute(APIFetchSmartContract, "POST", s.AuthHandle(s.APIFetchSmartContract, s.ErrorFunc))
-
+	s.AddRoute(setup.APIStart, "GET", s.AuthHandle(s.APIStart, false, s.AuthError, true))
+	s.AddRoute(setup.APIShutdown, "POST", s.AuthHandle(s.APIShutdown, false, s.AuthError, true))
+	s.AddRoute(setup.APINodeStatus, "GET", s.AuthHandle(s.APINodeStatus, false, s.AuthError, false))
+	s.AddRoute(setup.APIPing, "GET", s.AuthHandle(s.APIPing, false, s.AuthError, false))
+	s.AddRoute(setup.APIAddBootStrap, "POST", s.AuthHandle(s.APIAddBootStrap, false, s.AuthError, true))
+	s.AddRoute(setup.APIRemoveBootStrap, "POST", s.AuthHandle(s.APIRemoveBootStrap, false, s.AuthError, true))
+	s.AddRoute(setup.APIRemoveAllBootStrap, "POST", s.AuthHandle(s.APIRemoveAllBootStrap, false, s.AuthError, true))
+	s.AddRoute(setup.APIGetAllBootStrap, "GET", s.AuthHandle(s.APIGetAllBootStrap, false, s.AuthError, true))
+	s.AddRoute(setup.APIGetDIDChallenge, "GET", s.APIGetDIDChallenge)
+	s.AddRoute(setup.APIGetDIDAccess, "POST", s.APIGetDIDAccess)
+	s.AddRoute(setup.APICreateDID, "POST", s.APICreateDID)
+	s.AddRoute(setup.APIGetAllTokens, "GET", s.AuthHandle(s.APIGetAllTokens, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetAllDID, "GET", s.AuthHandle(s.APIGetAllDID, true, s.AuthError, true))
+	s.AddRoute(setup.APIAddQuorum, "POST", s.AuthHandle(s.APIAddQuorum, true, s.AuthError, true))
+	s.AddRoute(setup.APIGetAllQuorum, "GET", s.AuthHandle(s.APIGetAllQuorum, true, s.AuthError, true))
+	s.AddRoute(setup.APIRemoveAllQuorum, "GET", s.AuthHandle(s.APIRemoveAllQuorum, true, s.AuthError, true))
+	s.AddRoute(setup.APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, true, s.AuthError, true))
+	s.AddRoute(setup.APISetupService, "POST", s.AuthHandle(s.APISetupService, true, s.AuthError, true))
+	s.AddRoute(setup.APIGenerateTestToken, "POST", s.AuthHandle(s.APIGenerateTestToken, true, s.AuthError, false))
+	s.AddRoute(setup.APIInitiateRBTTransfer, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetAccountInfo, "GET", s.AuthHandle(s.APIGetAccountInfo, true, s.AuthError, false))
+	s.AddRoute(setup.APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, true, s.AuthError, false))
+	s.AddRoute(setup.APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, true, s.AuthError, false))
+	s.AddRoute(setup.APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, true, s.AuthError, false))
+	s.AddRoute(setup.APISetupDID, "POST", s.AuthHandle(s.APISetupDID, true, s.AuthError, false))
+	s.AddRoute(setup.APIMigrateNode, "POST", s.APIMigrateNode)
+	s.AddRoute(setup.APILockTokens, "POST", s.AuthHandle(s.APILockTokens, true, s.AuthError, false))
+	s.AddRoute(setup.APICreateDataToken, "POST", s.AuthHandle(s.APICreateDataToken, true, s.AuthError, false))
+	s.AddRoute(setup.APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, true, s.AuthError, false))
+	s.AddRoute(setup.APICheckDataToken, "POST", s.AuthHandle(s.APICheckDataToken, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetDataToken, "GET", s.AuthHandle(s.APIGetDataToken, true, s.AuthError, false))
+	s.AddRoute(setup.APISetupDB, "POST", s.AuthHandle(s.APISetupDB, true, s.AuthError, true))
+	s.AddRoute(setup.APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, true, s.AuthError, false))
+	s.AddRoute(setup.APICreateNFT, "POST", s.AuthHandle(s.APICreateNFT, true, s.AuthError, false))
+	s.AddRoute(APIPublishContract, "POST", s.AuthHandle(s.APIPublishContract, true, s.AuthError, false))
+	s.AddRoute(APISubscribecontract, "POST", s.AuthHandle(s.APISubscribecontract, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetAllNFT, "GET", s.AuthHandle(s.APIGetAllNFT, true, s.AuthError, false))
+	s.AddRoute(setup.APIAddNFTSale, "GET", s.AuthHandle(s.APIAddNFTSale, true, s.AuthError, false))
+	s.AddRoute(setup.APIDeploySmartContract, "POST", s.AuthHandle(s.APIDeploySmartContract, true, s.AuthError, false))
+	s.AddRoute(setup.APIGenerateSmartContract, "POST", s.AuthHandle(s.APIGenerateSmartContract, true, s.AuthError, false))
+	s.AddRoute(setup.APIFetchSmartContract, "POST", s.AuthHandle(s.APIFetchSmartContract, true, s.AuthError, false))
+	s.AddRoute(setup.APIPublishContract, "POST", s.AuthHandle(s.APIPublishContract, true, s.AuthError, false))
+	s.AddRoute(setup.APISubscribecontract, "POST", s.AuthHandle(s.APISubscribecontract, true, s.AuthError, false))
+	s.AddRoute(setup.APIDumpSmartContractTokenChainBlock, "POST", s.AuthHandle(s.APIDumpSmartContractTokenChainBlock, true, s.AuthError, false))
+	s.AddRoute(setup.APIExecuteSmartContract, "POST", s.AuthHandle(s.APIExecuteSmartContract, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetSmartContractTokenData, "POST", s.AuthHandle(s.APIGetSmartContractTokenChainData, true, s.AuthError, false))
+	s.AddRoute(setup.APIRegisterCallBackURL, "POST", s.AuthHandle(s.APIRegisterCallbackURL, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {
@@ -239,25 +199,29 @@ func (s *Server) ExitFunc() error {
 	return nil
 }
 
-func (s *Server) ErrorFunc(req *ensweb.Request) *ensweb.Result {
-	return s.RenderJSONError(req, http.StatusForbidden, InvalidRequestErr, InvalidRequestErr)
-}
-
 func (s *Server) Index(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSONError(req, http.StatusForbidden, InvalidRequestErr, InvalidRequestErr)
 }
 
-func (s *Server) AuthHandle(hf ensweb.HandlerFunc, ef ensweb.HandlerFunc) ensweb.HandlerFunc {
+func (s *Server) AuthHandle(hf ensweb.HandlerFunc, did bool, ef ensweb.HandlerFunc, root bool) ensweb.HandlerFunc {
 	if s.cfg.EnableAuth {
 		switch s.cfg.AuthMethod {
-		case SessionAuthMethod:
-			return s.SessionAuthHandle(&Token{}, s.cfg.SessionName, s.cfg.SessionKey, hf, ef)
+		case BasicAuthMethod:
+			if did {
+				return s.DIDAuthHandle(hf, nil, ef, root)
+			} else {
+				return s.APIKeyAuthHandle(hf, ef)
+			}
+		// case SessionAuthMethod:
+		// 	return s.SessionAuthHandle(&setup.BearerToken{}, s.cfg.SessionName, s.cfg.SessionKey, hf, ef)
+		// case BasicAuthMethod:
+		// 	return s.BasicAuthHandle(&Token{}, hf)
 		default:
 			return ensweb.HandlerFunc(func(req *ensweb.Request) *ensweb.Result {
 				if ef == nil {
 					return s.RenderJSONError(req, http.StatusForbidden, "invalid session", "invalid session")
 				} else {
-					return hf(req)
+					return ef(req)
 				}
 			})
 		}

@@ -2,8 +2,10 @@ package client
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
 type SmartContractRequest struct {
@@ -17,6 +19,16 @@ type SmartContractRequest struct {
 type FetchSmartContractRequest struct {
 	SmartContractToken     string
 	SmartContractTokenPath string
+}
+
+func (c *Client) DeploySmartContract(deployRequest *model.DeploySmartContractRequest) (*model.BasicResponse, error) {
+	var basicResponse model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIDeploySmartContract, nil, deployRequest, &basicResponse, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to Deploy Smart Contract", "err", err)
+		return nil, err
+	}
+	return &basicResponse, nil
 }
 
 func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractRequest) (*model.BasicResponse, error) {
@@ -46,7 +58,7 @@ func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractR
 	}
 
 	var basicResponse model.BasicResponse
-	err := c.sendMutiFormRequest("POST", "/api/generate-smart-contract", nil, fields, files, &basicResponse)
+	err := c.sendMutiFormRequest("POST", setup.APIGenerateSmartContract, nil, fields, files, &basicResponse)
 	if err != nil {
 		return nil, err
 	}
@@ -62,10 +74,46 @@ func (c *Client) FetchSmartContract(fetchSmartContractRequest *FetchSmartContrac
 	}
 
 	var basicResponse model.BasicResponse
-	err := c.sendMutiFormRequest("POST", "/api/fetch-smart-contract", nil, fields, nil, &basicResponse)
+	err := c.sendMutiFormRequest("POST", setup.APIFetchSmartContract, nil, fields, nil, &basicResponse)
 	if err != nil {
 		return nil, err
 	}
 	return &basicResponse, nil
 
+}
+
+func (c *Client) PublishNewEvent(contract string, did string, publishType int, block string) (*model.BasicResponse, error) {
+	var response model.BasicResponse
+	newContract := model.NewContractEvent{
+		Contract:          contract,
+		Did:               did,
+		Type:              publishType,
+		ContractBlockHash: block,
+	}
+	err := c.sendJSONRequest("POST", setup.APIPublishContract, nil, &newContract, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+func (c *Client) SubscribeContract(contract string) (*model.BasicResponse, error) {
+	var response model.BasicResponse
+	newSubscription := model.NewSubscription{
+		Contract: contract,
+	}
+	err := c.sendJSONRequest("POST", setup.APISubscribecontract, nil, &newSubscription, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func (c *Client) ExecuteSmartContract(executeRequest *model.ExecuteSmartContractRequest) (*model.BasicResponse, error) {
+	var basicResponse model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIExecuteSmartContract, nil, executeRequest, &basicResponse, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to Execute Smart Contract", "err", err)
+		return nil, err
+	}
+	return &basicResponse, nil
 }

@@ -21,12 +21,15 @@ const (
 )
 
 const (
-	WholeTokenType string = "wt"
-	PartTokenType  string = "pt"
-	NFTType        string = "nt"
-	TestTokenType  string = "tt"
-	DataTokenType  string = "dt"
-	ReferenceType  string = "rf"
+	WholeTokenType         string = "wt"
+	PartTokenType          string = "pt"
+	NFTType                string = "nt"
+	TestTokenType          string = "tt"
+	DataTokenType          string = "dt"
+	TestPartTokenType      string = "tp"
+	TestNFTType            string = "tn"
+	ReferenceType          string = "rf"
+	SmartContractTokenType string = "st"
 )
 
 const TCBlockCountLimit int = 100
@@ -38,12 +41,18 @@ func tcsType(tokenType int) string {
 		tt = WholeTokenType
 	case tkn.PartTokenType:
 		tt = PartTokenType
+	case tkn.TestPartTokenType:
+		tt = TestPartTokenType
 	case tkn.NFTTokenType:
 		tt = NFTType
+	case tkn.TestNFTTokenType:
+		tt = TestNFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	return tt + "-"
 }
@@ -55,12 +64,18 @@ func tcsPrefix(tokenType int, t string) string {
 		tt = WholeTokenType
 	case tkn.PartTokenType:
 		tt = PartTokenType
+	case tkn.TestPartTokenType:
+		tt = TestPartTokenType
 	case tkn.NFTTokenType:
 		tt = NFTType
+	case tkn.TestNFTTokenType:
+		tt = TestNFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	return tt + "-" + t + "-"
 }
@@ -72,12 +87,18 @@ func tcsKey(tokenType int, t string, blockID string) string {
 		tt = WholeTokenType
 	case tkn.PartTokenType:
 		tt = PartTokenType
+	case tkn.TestPartTokenType:
+		tt = TestPartTokenType
 	case tkn.NFTTokenType:
 		tt = NFTType
+	case tkn.TestNFTTokenType:
+		tt = TestNFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	bs := strings.Split(blockID, "-")
 	if len(bs) == 2 {
@@ -119,6 +140,8 @@ func oldtcsKey(tokenType int, t string, blockID string) string {
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	return tt + "-" + t + "-" + blockID
 }
@@ -140,8 +163,18 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 		db = w.tcs
 	case tkn.TestTokenType:
 		db = w.tcs
+	case tkn.TestPartTokenType:
+		db = w.tcs
 	case tkn.DataTokenType:
 		db = w.dtcs
+	case tkn.TestDataTokenType:
+		db = w.dtcs
+	case tkn.NFTTokenType:
+		db = w.ntcs
+	case tkn.TestNFTTokenType:
+		db = w.ntcs
+	case tkn.SmartContractTokenType:
+		db = w.smartContractTokenChainStorage
 	}
 	return db
 }
@@ -247,6 +280,41 @@ func (w *Wallet) updateNewKey(tt int, token string) error {
 	return nil
 }
 
+// getGenesisBlock get the genesis block from the storage
+func (w *Wallet) getGenesisBlock(tt int, token string) *block.Block {
+	db := w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to get first block, invalid token type")
+		return nil
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
+	defer iter.Release()
+	var err error
+	if iter.First() {
+		key := string(iter.Key())
+		if isOldKey(key) {
+			err = w.updateNewKey(tt, token)
+			if err != nil {
+				w.log.Error("Failed to update new key", "err", err)
+				return nil
+			}
+			return w.getGenesisBlock(tt, token)
+		}
+		v := iter.Value()
+		blk := make([]byte, len(v))
+		copy(blk, v)
+		if string(blk[0:2]) == ReferenceType {
+			blk, err = w.getRawBlock(db, blk)
+			if err != nil {
+				return nil
+			}
+		}
+		b := block.InitBlock(blk, nil)
+		return b
+	}
+	return nil
+}
+
 // getLatestBlock get latest block from the storage
 func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 	db := w.getChainDB(tt)
@@ -284,46 +352,12 @@ func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 	return nil
 }
 
-// getFirstBlock get the first block from the storage
-func (w *Wallet) getFirstBlock(tt int, token string) *block.Block {
-	db := w.getChainDB(tt)
-	if db == nil {
-		w.log.Error("Failed to get first block, invalid token type")
-		return nil
-	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
-	defer iter.Release()
-	var err error
-	if iter.First() {
-		key := string(iter.Key())
-		if isOldKey(key) {
-			err = w.updateNewKey(tt, token)
-			if err != nil {
-				w.log.Error("Failed to update new key", "err", err)
-				return nil
-			}
-			return w.getFirstBlock(tt, token)
-		}
-		v := iter.Value()
-		blk := make([]byte, len(v))
-		copy(blk, v)
-		if string(blk[0:2]) == ReferenceType {
-			blk, err = w.getRawBlock(db, blk)
-			if err != nil {
-				return nil
-			}
-		}
-		b := block.InitBlock(blk, nil)
-		return b
-	}
-	return nil
-}
-
 // addBlock will write block into storage
-func (w *Wallet) addBlock(tt int, token string, b *block.Block) error {
+func (w *Wallet) addBlock(token string, b *block.Block) error {
 	opt := &opt.WriteOptions{
 		Sync: true,
 	}
+	tt := b.GetTokenType(token)
 	db := w.getChainDB(tt)
 	if db == nil {
 		w.log.Error("Failed to add block, invalid token type")
@@ -413,23 +447,26 @@ func (w *Wallet) clearBlocks(tt int) error {
 }
 
 // addBlock will write block into storage
-func (w *Wallet) addBlocks(tt int, b *block.Block) error {
+func (w *Wallet) addBlocks(b *block.Block) error {
 	opt := &opt.WriteOptions{
 		Sync: true,
 	}
-	db := w.getChainDB(tt)
-	if db == nil {
-		w.log.Error("Failed to add block, invalid token type")
-		return fmt.Errorf("failed to get db")
-	}
+
 	tokens := b.GetTransTokens()
 	if tokens == nil {
 		return fmt.Errorf("faile to get tokens from the block")
 	}
+
 	if len(tokens) == 1 {
-		return w.addBlock(tt, tokens[0], b)
+		return w.addBlock(tokens[0], b)
+	}
+	db := w.getChainDB(b.GetTokenType(tokens[0]))
+	if db == nil {
+		w.log.Error("Failed to add block, invalid token type")
+		return fmt.Errorf("failed to get db")
 	}
 	for _, token := range tokens {
+		tt := b.GetTokenType(token)
 		lb := w.getLatestBlock(tt, token)
 		bn, err := b.GetBlockNumber(token)
 		if err != nil {
@@ -473,6 +510,7 @@ func (w *Wallet) addBlocks(tt int, b *block.Block) error {
 	}
 	for _, token := range tokens {
 		bid, err := b.GetBlockID(token)
+		tt := b.GetTokenType(token)
 		if err != nil {
 			return err
 		}
@@ -502,18 +540,19 @@ func (w *Wallet) GetLatestTokenBlock(token string, tokenType int) *block.Block {
 	return w.getLatestBlock(tokenType, token)
 }
 
-func (w *Wallet) GetFirstBlock(token string, tokenType int) *block.Block {
-	return w.getFirstBlock(tokenType, token)
+// GetLatestTokenBlock get latest token block from the storage
+func (w *Wallet) GetGenesisTokenBlock(token string, tokenType int) *block.Block {
+	return w.getGenesisBlock(tokenType, token)
 }
 
 // AddTokenBlock will write token block into storage
-func (w *Wallet) AddTokenBlock(token string, tokenType int, b *block.Block) error {
-	return w.addBlock(tokenType, token, b)
+func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
+	return w.addBlock(token, b)
 }
 
 // AddTokenBlock will write token block into storage
-func (w *Wallet) CreateTokenBlock(b *block.Block, tokenType int) error {
-	return w.addBlocks(tokenType, b)
+func (w *Wallet) CreateTokenBlock(b *block.Block) error {
+	return w.addBlocks(b)
 }
 
 func (w *Wallet) ClearTokenBlocks(tokenType int) error {
