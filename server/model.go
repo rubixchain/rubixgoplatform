@@ -5,10 +5,6 @@ const (
 )
 
 const (
-	DIDConfigField string = "did_config"
-)
-
-const (
 	ReponseMsgHdr string = "response"
 )
 

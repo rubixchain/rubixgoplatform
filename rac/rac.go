@@ -53,6 +53,7 @@ const (
 type RacType struct {
 	Type         int
 	DID          string
+	TokenNumber  uint64
 	TotalSupply  uint64
 	TimeStamp    string
 	CreatorID    string

@@ -63,6 +63,8 @@ const (
 	CommitDataTokenCmd    string = "commitdatatoken"
 	SetupDBCmd            string = "setupdb"
 	GetTxnDetailsCmd      string = "gettxndetails"
+	CreateNFTCmd          string = "createnft"
+	GetAllNFTCmd          string = "getallnft"
 )
 
 var commands = []string{VersionCmd,
@@ -92,7 +94,9 @@ var commands = []string{VersionCmd,
 	CreateDataTokenCmd,
 	CommitDataTokenCmd,
 	SetupDBCmd,
-	GetTxnDetailsCmd}
+	GetTxnDetailsCmd,
+	CreateNFTCmd,
+	GetAllNFTCmd}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -120,7 +124,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will create data token token",
 	"This command will commit data token token",
 	"This command will setup the DB",
-	"This command will get transaction details"}
+	"This command will get transaction details",
+	"This command will create NFT",
+	"This command will get all NFTs"}
 
 type Command struct {
 	cfg          config.Config
@@ -139,6 +145,7 @@ type Command struct {
 	peerID       string
 	peers        []string
 	log          logger.Logger
+	didRoot      bool
 	didType      int
 	didSecret    string
 	forcePWD     bool
@@ -179,6 +186,9 @@ type Command struct {
 	txnID        string
 	role         string
 	date         time.Time
+	grpcAddr     string
+	grpcPort     int
+	grpcSecure   bool
 }
 
 func showVersion() {
@@ -233,12 +243,15 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("failed to create core")
 		return
 	}
+	addr := fmt.Sprintf(cmd.grpcAddr+":%d", cmd.grpcPort)
 	scfg := &server.Config{
 		Config: srvcfg.Config{
 			HostAddress: cmd.cfg.NodeAddress,
 			HostPort:    cmd.cfg.NodePort,
 			Production:  "false",
 		},
+		GRPCAddr:   addr,
+		GRPCSecure: cmd.grpcSecure,
 	}
 	scfg.EnableAuth = cmd.enableAuth
 	if cmd.enableAuth {
@@ -313,6 +326,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.port, "port", "20000", "Server/Host port")
 	flag.StringVar(&cmd.peerID, "peerID", "", "Peerd ID")
 	flag.StringVar(&peers, "peers", "", "Bootstrap peers, mutiple peers will be seprated by comma")
+	flag.BoolVar(&cmd.didRoot, "didRoot", false, "Root DID")
 	flag.IntVar(&cmd.didType, "didType", 0, "DID Creation type")
 	flag.StringVar(&cmd.didSecret, "didSecret", "My DID Secret", "DID creation secret")
 	flag.BoolVar(&cmd.forcePWD, "fp", false, "Force password entry")
@@ -352,6 +366,9 @@ func Run(args []string) {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
+	flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
+	flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
+	flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -470,6 +487,10 @@ func Run(args []string) {
 		cmd.setupDB()
 	case GetTxnDetailsCmd:
 		cmd.getTxnDetails()
+	case CreateNFTCmd:
+		cmd.createNFT()
+	case GetAllNFTCmd:
+		cmd.getAllNFTs()
 	default:
 		cmd.log.Error("Invalid command")
 	}

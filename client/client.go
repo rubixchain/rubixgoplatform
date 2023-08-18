@@ -13,8 +13,10 @@ import (
 
 type Client struct {
 	ensweb.Client
-	cfg *srvcfg.Config
-	log logger.Logger
+	cfg       *srvcfg.Config
+	log       logger.Logger
+	setAuth   bool
+	authToken string
 }
 
 func NewClient(cfg *srvcfg.Config, log logger.Logger, timeout ...time.Duration) (*Client, error) {
@@ -34,10 +36,18 @@ func NewClient(cfg *srvcfg.Config, log logger.Logger, timeout ...time.Duration) 
 	return c, nil
 }
 
+func (c *Client) SetAuthToken(token string) {
+	c.authToken = token
+	c.setAuth = true
+}
+
 func (c *Client) basicRequest(method string, path string, model interface{}) (*http.Request, error) {
 	r, err := c.JSONRequest(method, path, model)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create http request, " + err.Error())
+	}
+	if c.setAuth {
+		c.SetAuthorization(r, c.authToken)
 	}
 	return r, nil
 }
@@ -46,6 +56,9 @@ func (c *Client) multiFormRequest(method string, path string, field map[string]s
 	r, err := c.MultiFormRequest(method, path, field, files)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create http request, " + err.Error())
+	}
+	if c.setAuth {
+		c.SetAuthorization(r, c.authToken)
 	}
 	return r, nil
 }

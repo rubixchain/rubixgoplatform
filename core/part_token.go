@@ -89,7 +89,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	for i := range pt {
 		if pt[i].TokenValue <= rem {
 			wt = append(wt, pt[i])
-			rem = rem - pt[i].TokenValue
+			rem = floatPrecision(rem-pt[i].TokenValue, 10)
 			idx = append(idx, i)
 		} else {
 			rpt = append(rpt, pt[i])
@@ -114,10 +114,15 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	nwt, err := c.w.GetCloserToken(did, rem)
-	if err != nil || nwt == nil {
+	if err != nil && err.Error() != "not records found" {
 		c.w.ReleaseTokens(wt)
 		c.log.Error("failed to get whole token", "err", err)
 		return nil, fmt.Errorf("failed to get whole token")
+	}
+	if nwt == nil {
+		c.w.ReleaseTokens(rpt)
+		c.log.Debug("no more tokens left to pledge")
+		return wt, nil
 	}
 	c.w.ReleaseToken(nwt.TokenID)
 	parts := []float64{rem, floatPrecision(1.0-rem, 10)}

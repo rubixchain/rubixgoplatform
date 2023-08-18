@@ -2,18 +2,45 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/server"
+	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
+func (c *Client) GetDIDChallenge(did string) (string, error) {
+	q := make(map[string]string)
+	q["did"] = did
+	var resp model.DIDAccessResponse
+	err := c.sendJSONRequest("GET", setup.APIGetDIDChallenge, q, nil, &resp)
+	if err != nil {
+		return "", err
+	}
+	if !resp.Status {
+		return "", fmt.Errorf(resp.Message)
+	}
+	return resp.Token, nil
+}
+
+func (c *Client) GetDIDAccess(req *model.GetDIDAccess) (string, error) {
+	var resp model.DIDAccessResponse
+	err := c.sendJSONRequest("POST", setup.APIGetDIDAccess, nil, req, &resp)
+	if err != nil {
+		return "", err
+	}
+	if !resp.Status {
+		return "", fmt.Errorf(resp.Message)
+	}
+	return resp.Token, nil
+}
+
 func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
 	var ac model.GetAccountInfo
-	err := c.sendJSONRequest("GET", server.APIGetAllDID, nil, nil, &ac)
+	err := c.sendJSONRequest("GET", setup.APIGetAllDID, nil, nil, &ac)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +121,7 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 		return "Failed to parse json data", false
 	}
 	fields := make(map[string]string)
-	fields[server.DIDConfigField] = string(jd)
+	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
 	if cfg.ImgFile != "" {
 		files["image"] = cfg.ImgFile
@@ -109,7 +136,7 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 		files["pub_key"] = cfg.PubKeyFile
 	}
 	var dr model.DIDResponse
-	err = c.sendMutiFormRequest("POST", server.APICreateDID, nil, fields, files, &dr)
+	err = c.sendMutiFormRequest("POST", setup.APICreateDID, nil, fields, files, &dr)
 	if err != nil {
 		c.log.Error("Invalid response from the node", "err", err)
 		return "Invalid response from the node, " + err.Error(), false
@@ -150,7 +177,7 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 		return "Failed to parse json data", false
 	}
 	fields := make(map[string]string)
-	fields[server.DIDConfigField] = string(jd)
+	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
 	if dc.PubImgFile != "" {
 		files["pub_image"] = dc.PubImgFile
@@ -174,7 +201,7 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 		files["quorum_priv_key"] = dc.QuorumPrivKeyFile
 	}
 	var br model.BasicResponse
-	err = c.sendMutiFormRequest("POST", server.APISetupDID, nil, fields, files, &br)
+	err = c.sendMutiFormRequest("POST", setup.APISetupDID, nil, fields, files, &br)
 	if err != nil {
 		c.log.Error("Invalid response from the node", "err", err)
 		return "Invalid response from the node, " + err.Error(), false
@@ -189,7 +216,7 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 
 func (c *Client) SignatureResponse(sr *did.SignRespData, timeout ...time.Duration) (*model.BasicResponse, error) {
 	var br model.BasicResponse
-	err := c.sendJSONRequest("POST", server.APISignatureResponse, nil, sr, &br, timeout...)
+	err := c.sendJSONRequest("POST", setup.APISignatureResponse, nil, sr, &br, timeout...)
 	if err != nil {
 		return nil, err
 	}
@@ -200,9 +227,20 @@ func (c *Client) RegisterDID(didStr string) (*model.BasicResponse, error) {
 	m := make(map[string]interface{})
 	m["did"] = didStr
 	var rm model.BasicResponse
-	err := c.sendJSONRequest("POST", server.APIRegisterDID, nil, &m, &rm)
+	err := c.sendJSONRequest("POST", setup.APIRegisterDID, nil, &m, &rm)
 	if err != nil {
 		return nil, err
 	}
 	return &rm, nil
+}
+
+func (c *Client) GetAccountInfo(didStr string) (*model.GetAccountInfo, error) {
+	m := make(map[string]string)
+	m["did"] = didStr
+	var info model.GetAccountInfo
+	err := c.sendJSONRequest("GET", setup.APIGetAccountInfo, m, nil, &info)
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
 }

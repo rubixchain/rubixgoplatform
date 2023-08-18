@@ -24,6 +24,7 @@ type TokenStateCheckResult struct {
 	Message               string
 	tokenIDTokenStateData string
 
+}
 func (c *Core) validateSigner(b *block.Block) bool {
 	signers, err := b.GetSigner()
 	if err != nil {
@@ -254,6 +255,7 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 // 	}
 // 	return c.checkIsPledged(b, wt)
 // }
+
 
 // func (c *Core) checkTokenIsUnpledged(wt string) bool {
 // 	tokenType := token.RBTTokenType

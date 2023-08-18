@@ -59,7 +59,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		return &br
 	}
 	rt := rac.RacType{
-		Type:        rac.RacDataTokenType,
+		Type:        c.TokenType(DataString),
 		DID:         dr.DID,
 		TotalSupply: 1,
 		CreatorID:   userID[0],
@@ -173,7 +173,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	dtm[dr.DID] = dt
 	ti := contract.TokenInfo{
 		Token:     dt,
-		TokenType: token.DataTokenType,
+		TokenType: c.TokenType(DataString),
 		OwnerDID:  dr.DID,
 	}
 	tis := make([]contract.TokenInfo, 0)
@@ -209,7 +209,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		Tokens: []block.TransTokens{
 			{
 				Token:     dt,
-				TokenType: token.DataTokenType,
+				TokenType: c.TokenType(DataString),
 			},
 		},
 		Comment: "Data token generated at : " + time.Now().String(),

@@ -10,11 +10,28 @@ import (
 	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
 const (
 	DIDRootDir string = "root"
 )
+
+func (s *Server) APIGetDIDAccess(req *ensweb.Request) *ensweb.Result {
+	var da model.GetDIDAccess
+	err := s.ParseJSON(req, &da)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid request", nil)
+	}
+	resp := s.c.GetDIDAccess(&da)
+	return s.RenderJSON(req, resp, http.StatusOK)
+}
+
+func (s *Server) APIGetDIDChallenge(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "did")
+	resp := s.c.GetDIDChallenge(did)
+	return s.RenderJSON(req, resp, http.StatusOK)
+}
 
 // APICreateDID will create new DID
 func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
@@ -32,7 +49,7 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to parse request", "err", err)
 		return s.BasicResponse(req, false, "failed to create DID", nil)
 	}
-	fields := fieldNames[DIDConfigField]
+	fields := fieldNames[setup.DIDConfigField]
 	if len(fields) == 0 {
 		s.log.Error("missing did configuration")
 		return s.BasicResponse(req, false, "missing did configuration", nil)
@@ -58,11 +75,9 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 			didCreate.PubKeyFile = fileName
 		}
 	}
-	dir, ok := s.validateAccess(req)
-	if !ok {
-		return s.BasicResponse(req, false, "Unathuriozed access", nil)
+	if !s.cfg.EnableAuth {
+		didCreate.Dir = DIDRootDir
 	}
-	didCreate.Dir = dir
 	did, err := s.c.CreateDID(&didCreate)
 	if err != nil {
 		s.log.Error("failed to create did", "err", err)
@@ -87,8 +102,10 @@ func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 	}
 	if s.cfg.EnableAuth {
 		// always expect client token to present
-		token := req.ClientToken.Model.(*Token)
-		dir = token.UserID
+		token, ok := req.ClientToken.Model.(*setup.BearerToken)
+		if ok {
+			dir = token.DID
+		}
 	}
 	dt := s.c.GetDIDs(dir)
 	ai := model.GetAccountInfo{
@@ -114,8 +131,8 @@ func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 func (s *Server) validateDIDAccess(req *ensweb.Request, did string) bool {
 	if s.cfg.EnableAuth {
 		// always expect client token to present
-		token := req.ClientToken.Model.(*Token)
-		return s.c.IsDIDExist(token.UserID, did)
+		token := req.ClientToken.Model.(*setup.BearerToken)
+		return s.c.IsDIDExist(token.DID, did)
 	} else {
 		return true
 	}
@@ -169,7 +186,7 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to parse request", "err", err)
 		return s.BasicResponse(req, false, "failed to create DID", nil)
 	}
-	fields := fieldNames[DIDConfigField]
+	fields := fieldNames[setup.DIDConfigField]
 	if len(fields) == 0 {
 		s.log.Error("missing did configuration")
 		return s.BasicResponse(req, false, "missing did configuration", nil)
