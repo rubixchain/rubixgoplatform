@@ -647,15 +647,7 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 // }
 
 func (b *Block) GetSmartContractData() string {
-	smartContractInterface, ok := b.bm[TCSmartContractKey]
-	if !ok {
-		return ""
-	}
-	smartContractData, ok := smartContractInterface.(string)
-	if !ok {
-		return ""
-	}
-	return smartContractData
+	return b.getBlkString(TCSmartContractDataKey)
 }
 
 func (b *Block) GetSmartContractValue(t string) (float64, error) {
