@@ -65,7 +65,6 @@ const (
 	GetTxnDetailsCmd      string = "gettxndetails"
 	CreateNFTCmd          string = "createnft"
 	GetAllNFTCmd          string = "getallnft"
-	GetPeerBalanceCmd     string = "getpeerbalance"
 )
 
 var commands = []string{VersionCmd,
@@ -98,7 +97,6 @@ var commands = []string{VersionCmd,
 	GetTxnDetailsCmd,
 	CreateNFTCmd,
 	GetAllNFTCmd,
-	GetPeerBalanceCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -129,8 +127,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will setup the DB",
 	"This command will get transaction details",
 	"This command will create NFT",
-	"This command will get all NFTs",
-	"This command will get the total available tokens of a peer"}
+	"This command will get all NFTs"}
 
 type Command struct {
 	cfg          config.Config
@@ -495,8 +492,6 @@ func Run(args []string) {
 		cmd.createNFT()
 	case GetAllNFTCmd:
 		cmd.getAllNFTs()
-	case GetPeerBalanceCmd:
-		cmd.getPeerBalance()
 	default:
 		cmd.log.Error("Invalid command")
 	}

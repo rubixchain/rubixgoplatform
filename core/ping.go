@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -51,26 +50,4 @@ func (c *Core) PingPeer(peerID string) (string, error) {
 		return "", err
 	}
 	return pingResp.Message, nil
-}
-
-func (c *Core) PingPeerWithBalance(peerID string, did string) (string, error) {
-	p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
-	if err != nil {
-		return "", err
-	}
-	q := make(map[string]string)
-	q["peerID"] = peerID
-	q["did"] = did
-
-	var ps model.PeerTokenCountResponse
-	err = p.SendJSONRequest("GET", APIGetTokenCount, q, nil, &ps, false)
-	if err != nil {
-		return "", err
-	}
-	b := fmt.Sprintf("%v", ps.DIDBalance)
-	msg := "Balance of peer ID : " + peerID + " and DID : " + did + " is = " + b
-	c.log.Info(msg)
-	// Close the p2p before exit
-	defer p.Close() /////// Should we close it in the error statement????
-	return msg, nil
 }

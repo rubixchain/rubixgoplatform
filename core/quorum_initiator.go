@@ -140,7 +140,6 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIUpdatePledgeToken, "POST", c.updatePledgeToken)
 	c.l.AddRoute(APISignatureRequest, "POST", c.signatureRequest)
 	c.l.AddRoute(APISendReceiverToken, "POST", c.updateReceiverToken)
-	c.l.AddRoute(APIGetTokenCount, "GET", c.getTokenCount)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
@@ -453,13 +452,9 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, pledgetokens float64) {
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
-	var b *model.PeerTokenCountResponse
 	var err error
 	if cr.Type == 1 {
-		b.DIDBalance, err = c.getPeerWithBalance(addr)
-		if b.DIDBalance < float64(pledgetokens)/float64(MinConsensusRequired) {
-			return
-		}
+		p, err = c.getPeer(addr)
 	} else {
 		p, err = c.getPeer(addr)
 	}
