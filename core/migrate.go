@@ -103,8 +103,8 @@ func (c *Core) MigrateNode(reqID string, m *MigrateRequest, didDir string) {
 
 func (c *Core) cleanMirgate(did string, clean *bool) {
 	if *clean {
-		c.w.ClearTokens(did)
-		c.w.ClearTokenBlocks(token.RBTTokenType)
+		c.W.ClearTokens(did)
+		c.W.ClearTokenBlocks(token.RBTTokenType)
 	}
 }
 
@@ -160,7 +160,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	clean := true
 	defer c.cleanMirgate(did, &clean)
 
-	err = c.w.CreateDID(&dt)
+	err = c.W.CreateDID(&dt)
 	if err != nil {
 		c.log.Error("Failed to create did in the wallet", "err", err)
 		return fmt.Errorf("failed to create did in the wallet")
@@ -489,7 +489,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					c.log.Error("Failed to migrate, failed to update arbitary signature")
 					return fmt.Errorf("failed to migrate, failed to update arbitary signature")
 				}
-				err = c.w.CreateTokenBlock(blk, token.RBTTokenType)
+				err = c.W.CreateTokenBlock(blk, token.RBTTokenType)
 				if err != nil {
 					c.log.Error("Failed to migrate, failed to add token chain block", "err", err)
 					return fmt.Errorf("failed to migrate, failed to add token chain block")
@@ -502,7 +502,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 						TokenValue:  1,
 						TokenStatus: wallet.TokenIsFree,
 					}
-					err = c.w.CreateToken(tkn)
+					err = c.W.CreateToken(tkn)
 					if err != nil {
 						c.log.Error("Failed to migrate, failed to add token to wallet", "err", err)
 						return fmt.Errorf("failed to migrate, failed to add token to wallet")
@@ -585,7 +585,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				c.log.Error("Failed to migrate, failed to marshal credit", "err", err)
 				return fmt.Errorf("failed to migrate, failed to marshal credit")
 			}
-			err = c.w.StoreCredit(did, base64.StdEncoding.EncodeToString(jb))
+			err = c.W.StoreCredit(did, base64.StdEncoding.EncodeToString(jb))
 			if err != nil {
 				c.log.Error("Failed to migrate, failed to store credit", "err", err)
 				return fmt.Errorf("failed to migrate, failed to store credit")
@@ -618,7 +618,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				continue
 			}
 		}
-		ok, err := c.w.Pin(t, wallet.OwnerRole, did)
+		ok, err := c.W.Pin(t, wallet.OwnerRole, did)
 		if err != nil || !ok {
 			c.log.Error("Failed to migrate, failed to pin token", "err", err)
 			return fmt.Errorf("failed to migrate, failed to pin token")

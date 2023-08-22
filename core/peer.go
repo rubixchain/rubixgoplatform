@@ -56,12 +56,12 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 	if err != nil || !st {
 		return
 	}
-	c.w.AddDIDPeerMap(m.DID, m.PeerID)
+	c.W.AddDIDPeerMap(m.DID, m.PeerID)
 }
 
 func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
-	exist := c.w.IsDIDExist(did)
+	exist := c.W.IsDIDExist(did)
 	ps := model.PeerStatusResponse{
 		Version:   c.version,
 		DIDExists: exist,
@@ -76,7 +76,7 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 	}
 	// check if addr contains the peer ID
 	if peerID == "" {
-		peerID = c.w.GetPeerID(did)
+		peerID = c.W.GetPeerID(did)
 		if peerID == "" {
 			c.log.Error("Peer ID not found", "did", did)
 			return nil, fmt.Errorf("invalid address, Peer ID not found")

@@ -160,7 +160,7 @@ func (c *Core) QuroumSetup() {
 }
 
 func (c *Core) SetupQuorum(didStr string, pwd string) error {
-	if !c.w.IsDIDExist(didStr) {
+	if !c.W.IsDIDExist(didStr) {
 		c.log.Error("DID does not exist", "did", didStr)
 		return fmt.Errorf("DID does not exist")
 	}
@@ -171,6 +171,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string) error {
 	}
 	c.qc[didStr] = dc
 	c.Up.RunUnpledge8HourlyThread()
+	//c.W.LockAllTokens(didStr)
 	return nil
 }
 
@@ -351,13 +352,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
 			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
 		}
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
+		err = c.W.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, err
 		}
 		for _, t := range ti {
-			c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+			c.W.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
 		}
 		//call ipfs repo gc after unpinnning
 		c.ipfsRepoGc()
@@ -381,7 +382,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		return &td, pl, nil
 	} else {
-		err = c.w.CreateTokenBlock(nb, token.DataTokenType)
+		err = c.W.CreateTokenBlock(nb, token.DataTokenType)
 		if err != nil {
 			c.log.Error("Failed to create token block", "err", err)
 			return nil, nil, err
@@ -545,7 +546,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 		tks = append(tks, tt)
 		//TODO:: need to address for part otken
-		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
+		b := c.W.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		ctcb[ti[i].Token] = b
 	}
 
@@ -766,17 +767,44 @@ func (c *Core) getArbitrationSignature(p *ipfsport.Peer, sr *SignatureRequest) (
 	return srep.Signature, true
 }
 func (c *Core) checkIsPledged(tcb *block.Block, token string) bool {
-	if strings.Compare(tcb.GetTransType(), block.TokenPledgedType) == 0 {
-		c.log.Debug("Token", token, " is a pledged token. Not Considered for pledging")
-		return true
+	c.log.Debug("quorum_initiator/CheckIsPledged")
+	if (tcb.GetTransType()) == block.TokenPledgedType {
+		c.log.Debug("its a pledged token")
+		timeString, err := tcb.GetBlockEpoch()
+		c.log.Debug("Epoch Time Stored: " + timeString)
+		if err != nil {
+			c.log.Error("Failed to get the epoch time, removing the token from the unpledge list", err)
+			return true
+		}
+		layout := "2006-01-02 15:04:05.999999 -0700 MST "
+
+		timeString = timeString[0:36]
+		storedTime, err := time.Parse(layout, timeString)
+		if err != nil {
+			c.log.Error("Error:", err)
+			return false
+		}
+
+		elapsed := time.Since(storedTime)
+		if elapsed >= 384*time.Hour {
+			c.log.Info("24 hours have elapsed.")
+			return false
+
+		} else {
+			c.log.Info("Less than 24 hours have elapsed.")
+			return true
+		}
+	} else {
+		c.log.Debug("its not a pledged token")
+		return false
 	}
-	return false
+
 }
 
-func (c *Core) checkIsUnpledged(tcb *block.Block, token string) bool {
-	if strings.Compare(tcb.GetTransType(), block.TokenUnpledgedType) == 0 {
-		c.log.Debug("Token", token, " is unpledged token")
-		return true
-	}
-	return false
-}
+//func (c *Core) checkIsUnpledged(tcb *block.Block, token string) bool {
+//	if strings.Compare(tcb.GetTransType(), block.TokenUnpledgedType) == 0 {
+//		c.log.Debug("Token", token, " is unpledged token")
+//		return true
+//	}
+//	return false
+//}

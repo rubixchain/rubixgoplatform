@@ -8,7 +8,7 @@ import (
 
 func (c *Core) GetTxnDetailsByID(txnID string) (wallet.TransactionDetails, error) {
 	var th wallet.TransactionDetails
-	res, err := c.w.GetTransactionDetailsbyTransactionId(txnID)
+	res, err := c.W.GetTransactionDetailsbyTransactionId(txnID)
 	if err != nil {
 		return th, err
 	}
@@ -17,11 +17,11 @@ func (c *Core) GetTxnDetailsByID(txnID string) (wallet.TransactionDetails, error
 
 func (c *Core) GetTxnDetailsByDID(did string, role string) ([]wallet.TransactionDetails, error) {
 	if role == "" {
-		txnAsSender, err := c.w.GetTransactionBySender(did)
+		txnAsSender, err := c.W.GetTransactionBySender(did)
 		if err != nil {
 			return nil, err
 		}
-		txnAsReceiver, err := c.w.GetTransactionByReceiver(did)
+		txnAsReceiver, err := c.W.GetTransactionByReceiver(did)
 		if err != nil {
 			return nil, err
 		}
@@ -40,7 +40,7 @@ func (c *Core) GetTxnDetailsByDID(did string, role string) ([]wallet.Transaction
 
 	lower := strings.ToLower(role)
 	if lower == "sender" {
-		txnAsSender, err := c.w.GetTransactionBySender(did)
+		txnAsSender, err := c.W.GetTransactionBySender(did)
 		if err != nil {
 			return nil, err
 		}
@@ -48,7 +48,7 @@ func (c *Core) GetTxnDetailsByDID(did string, role string) ([]wallet.Transaction
 	}
 
 	if lower == "receiver" {
-		txnAsReceiver, err := c.w.GetTransactionByReceiver(did)
+		txnAsReceiver, err := c.W.GetTransactionByReceiver(did)
 		if err != nil {
 			return nil, err
 		}
@@ -59,7 +59,7 @@ func (c *Core) GetTxnDetailsByDID(did string, role string) ([]wallet.Transaction
 }
 
 func (c *Core) GetTxnDetailsByComment(comment string) ([]wallet.TransactionDetails, error) {
-	res, err := c.w.GetTransactionByComment(comment)
+	res, err := c.W.GetTransactionByComment(comment)
 	if err != nil {
 		return nil, err
 	}

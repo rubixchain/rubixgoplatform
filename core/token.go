@@ -38,7 +38,7 @@ func (c *Core) SetupToken() {
 }
 
 func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
-	wt, err := c.w.GetAllWholeTokens(did)
+	wt, err := c.W.GetAllWholeTokens(did)
 	if err != nil {
 		c.log.Error("Failed to get tokens", "err", err)
 		return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
@@ -125,7 +125,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		}
 		tk := util.HexToStr(tb)
 		nb := bytes.NewBuffer([]byte(tk))
-		id, err := c.w.Add(nb, did, wallet.OwnerRole)
+		id, err := c.W.Add(nb, did, wallet.OwnerRole)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
@@ -174,12 +174,12 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TokenValue:  1,
 			TokenStatus: wallet.TokenIsFree,
 		}
-		err = c.w.CreateTokenBlock(blk, token.TestTokenType)
+		err = c.W.CreateTokenBlock(blk, token.TestTokenType)
 		if err != nil {
 			c.log.Error("Failed to add token chain", "err", err)
 			return err
 		}
-		err = c.w.CreateToken(t)
+		err = c.W.CreateToken(t)
 		if err != nil {
 			c.log.Error("Failed to create token", "err", err)
 			return err
@@ -194,7 +194,7 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to parse request"}, http.StatusOK)
 	}
-	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
+	blks, nextID, err := c.W.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: err.Error()}, http.StatusOK)
 	}
@@ -209,7 +209,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 	// }
 	// defer p.Close()
 	var err error
-	blk := c.w.GetLatestTokenBlock(token, tokenType)
+	blk := c.W.GetLatestTokenBlock(token, tokenType)
 	blkID := ""
 	if blk != nil {
 		blkID, err = blk.GetBlockID(token)
@@ -243,7 +243,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
 				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
 			}
-			err = c.w.AddTokenBlock(token, tokenType, blk)
+			err = c.W.AddTokenBlock(token, tokenType, blk)
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
 				return err

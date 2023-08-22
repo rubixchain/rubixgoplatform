@@ -45,7 +45,7 @@ type ChainDB struct {
 
 type Wallet struct {
 	ipfs *ipfsnode.Shell
-	s    storage.Storage
+	S    storage.Storage
 	l    sync.Mutex
 	dtl  sync.Mutex
 	log  logger.Logger
@@ -58,7 +58,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	var err error
 	w := &Wallet{
 		log: log.Named("wallet"),
-		s:   s,
+		S:   s,
 	}
 	w.tcs = &ChainDB{}
 	w.dtcs = &ChainDB{}
@@ -78,42 +78,42 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		return nil, fmt.Errorf("failed to configure data chain block storage")
 	}
 	w.dtcs.DB = *dtdb
-	err = w.s.Init(DIDStorage, &DIDType{}, true)
+	err = w.S.Init(DIDStorage, &DIDType{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TokenStorage, &Token{}, true)
+	err = w.S.Init(TokenStorage, &Token{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize whole token storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(DataTokenStorage, &DataToken{}, true)
+	err = w.S.Init(DataTokenStorage, &DataToken{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize data token storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(CreditStorage, &Credit{}, true)
+	err = w.S.Init(CreditStorage, &Credit{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize credit storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(DIDPeerStorage, &DIDPeerMap{}, true)
+	err = w.S.Init(DIDPeerStorage, &DIDPeerMap{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID Peer storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TransactionStorage, &TransactionDetails{}, true)
+	err = w.S.Init(TransactionStorage, &TransactionDetails{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Transaction storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(PledgePinsStorage, &PledgePinsDetails{}, true)
+	err = w.S.Init(PledgePinsStorage, &PledgePinsDetails{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Pledged Pins storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TokenProvider, &TokenProviderMap{}, true)
+	err = w.S.Init(TokenProvider, &TokenProviderMap{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Token Provider Table", "err", err)
 		return nil, err

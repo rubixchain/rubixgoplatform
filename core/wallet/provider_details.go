@@ -11,7 +11,7 @@ type TokenProviderMap struct {
 // Method takes token hash as input and returns the Provider details
 func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
 	var tokenMap TokenProviderMap
-	err := w.s.Read(TokenProvider, &tokenMap, "token=?", token)
+	err := w.S.Read(TokenProvider, &tokenMap, "token=?", token)
 	if err != nil {
 		if err.Error() == "record not found" {
 			w.log.Debug("Data Not avilable in DB")
@@ -28,19 +28,19 @@ func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
 // checks if entry exist for token,did either write or updates
 func (w *Wallet) AddProviderDetails(token string, did string, funId int, role int) error {
 	var tpm TokenProviderMap
-	err := w.s.Read(TokenProvider, &tpm, "token=?", token)
+	err := w.S.Read(TokenProvider, &tpm, "token=?", token)
 	if err != nil || tpm.Token == "" {
 		tpm.Token = token
 
-		return w.s.Write(TokenProvider, &tpm)
+		return w.S.Write(TokenProvider, &tpm)
 	}
 	tpm.DID = did
 	tpm.FuncID = funId
 	tpm.Role = role
-	return w.s.Update(TokenProvider, &tpm, "token=?", token)
+	return w.S.Update(TokenProvider, &tpm, "token=?", token)
 }
 
 // Method deletes entry ffrom DB during unpin op
 func (w *Wallet) RemoveProviderDetails(token string, did string) error {
-	return w.s.Delete(TokenProvider, nil, "did=? AND token=?", did, token)
+	return w.S.Delete(TokenProvider, nil, "did=? AND token=?", did, token)
 }

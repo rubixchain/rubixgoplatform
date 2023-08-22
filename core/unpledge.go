@@ -10,11 +10,12 @@ import (
 )
 
 func (c *Core) Unpledge(t string, file string) error {
+
 	tokenType := token.RBTTokenType
 	if c.testNet {
 		tokenType = token.TestTokenType
 	}
-	b := c.w.GetLatestTokenBlock(t, tokenType)
+	b := c.W.GetLatestTokenBlock(t, tokenType)
 	if b == nil {
 		c.log.Error("Failed to unpledge invalid tokne chain block")
 		return fmt.Errorf("Failed to unpledge invalid tokne chain block")
@@ -68,12 +69,12 @@ func (c *Core) Unpledge(t string, file string) error {
 		c.log.Error("Failed to update the signature", "err", err)
 		return fmt.Errorf("failed to update the signature")
 	}
-	err = c.w.CreateTokenBlock(nb, tokenType)
+	err = c.W.CreateTokenBlock(nb, tokenType)
 	if err != nil {
 		c.log.Error("Failed to update token chain block", "err", err)
 		return err
 	}
-	err = c.w.UnpledgeWholeToken(did, t, tokenType)
+	err = c.W.UnpledgeWholeToken(did, t, tokenType)
 	if err != nil {
 		c.log.Error("Failed to update un pledge token", "err", err)
 		return err

@@ -41,17 +41,17 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// Get the required tokens from the DID bank
 	// this method locks the token needs to be released or
 	// removed once it done with the trasnfer
-	wt, err := c.w.GetTokens(did, req.TokenCount)
+	wt, err := c.W.GetTokens(did, req.TokenCount)
 	if err != nil {
 		c.log.Error("Failed to get tokens", "err", err)
 		resp.Message = "Insufficient tokens or tokens are locked"
 		return resp
 	}
 	// release the locked tokens before exit
-	defer c.w.ReleaseTokens(wt)
+	defer c.W.ReleaseTokens(wt)
 
 	for i := range wt {
-		c.w.Pin(wt[i].TokenID, wallet.OwnerRole, did)
+		c.W.Pin(wt[i].TokenID, wallet.OwnerRole, did)
 	}
 
 	// Get the receiver & do sanity check
@@ -76,7 +76,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	tis := make([]contract.TokenInfo, 0)
 	for i := range wt {
-		blk := c.w.GetLatestTokenBlock(wt[i].TokenID, tokenType)
+		blk := c.W.GetLatestTokenBlock(wt[i].TokenID, tokenType)
 		if blk == nil {
 			c.log.Error("failed to get latest block, invalid token chain")
 			resp.Message = "failed to get latest block, invalid token chain"
@@ -134,7 +134,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	dif := et.Sub(st)
 	td.Amount = req.TokenCount
 	td.TotalTime = float64(dif.Milliseconds())
-	c.w.AddTransactionHistory(td)
+	c.W.AddTransactionHistory(td)
 	etrans := &ExplorerTrans{
 		TID:         td.TransactionID,
 		SenderDID:   did,

@@ -7,7 +7,7 @@ type PledgePinsDetails struct {
 }
 
 func (w *Wallet) AddPins(pd *PledgePinsDetails) error {
-	err := w.s.Write(PledgePinsStorage, pd)
+	err := w.S.Write(PledgePinsStorage, pd)
 	if err != nil {
 		w.log.Error("Failed to store pins", "err", err)
 		return err

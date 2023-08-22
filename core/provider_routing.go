@@ -32,7 +32,7 @@ func (c *Core) checkProviderStatus(req *ensweb.Request) *ensweb.Result {
 		c.log.Error("error parsing incoming request", "error", err)
 		return c.l.RenderJSON(req, &res, http.StatusOK)
 	}
-	providerMap, err := c.w.GetProviderDetails(reqObj.Token)
+	providerMap, err := c.W.GetProviderDetails(reqObj.Token)
 	if err != nil {
 		return c.l.RenderJSON(req, &res, http.StatusOK)
 	}
