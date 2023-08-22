@@ -31,6 +31,20 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+func (s *Server) APILockEpochTokens(req *ensweb.Request) *ensweb.Result {
+	var tr model.RBTGenerateRequest
+	err := s.ParseJSON(req, &tr)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	if !s.validateDIDAccess(req, tr.DID) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.W.LockAllTokens(tr.DID)
+	return s.didResponse(req, req.ID)
+}
+
 func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTTransferRequest
 	err := s.ParseJSON(req, &rbtReq)
@@ -46,6 +60,24 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	}
 	s.c.AddWebReq(req)
 	go s.c.InitiateRBTTransfer(req.ID, &rbtReq)
+	return s.didResponse(req, req.ID)
+}
+
+func (s *Server) APIInitiateRBTSelfTransfer(req *ensweb.Request) *ensweb.Result {
+	var rbtReq model.RBTSelfTransferRequest
+	err := s.ParseJSON(req, &rbtReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	_, did, ok := util.ParseAddress(rbtReq.Sender)
+	if !ok {
+		return s.BasicResponse(req, false, "Invalid sender address", nil)
+	}
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.InitiateRBTSelfTransfer(req.ID, &rbtReq)
 	return s.didResponse(req, req.ID)
 }
 
