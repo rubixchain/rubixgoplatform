@@ -21,7 +21,7 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		Type:   didCreate.Type,
 		Config: didCreate.Config,
 	}
-	err = c.w.CreateDID(&dt)
+	err = c.W.CreateDID(&dt)
 	if err != nil {
 		c.log.Error("Failed to create did in the wallet", "err", err)
 		return "", err
@@ -43,7 +43,7 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 }
 
 func (c *Core) GetDIDs(dir string) []wallet.DIDType {
-	dt, err := c.w.GetDIDs(dir)
+	dt, err := c.W.GetDIDs(dir)
 	if err != nil {
 		return nil
 	}
@@ -51,7 +51,7 @@ func (c *Core) GetDIDs(dir string) []wallet.DIDType {
 }
 
 func (c *Core) IsDIDExist(dir string, did string) bool {
-	_, err := c.w.GetDIDDir(dir, did)
+	_, err := c.W.GetDIDDir(dir, did)
 	return err == nil
 }
 
@@ -70,7 +70,7 @@ func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
 		Type:   dc.Type,
 		Config: dc.Config,
 	}
-	err = c.w.CreateDID(&dt)
+	err = c.W.CreateDID(&dt)
 	if err != nil {
 		c.log.Error("Failed to create did in the wallet", "err", err)
 		br.Message = err.Error()
