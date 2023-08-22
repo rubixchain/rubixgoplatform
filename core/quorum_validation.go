@@ -34,7 +34,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		}
 		// Check the token validation
 		if !c.testNet {
-			fb := c.w.GetFirstBlock(ti[i].Token, ti[i].TokenType)
+			fb := c.W.GetFirstBlock(ti[i].Token, ti[i].TokenType)
 			if fb == nil {
 				c.log.Error("Failed to get first token chain block")
 				return false
@@ -56,7 +56,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				return false
 			}
 		}
-		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
+		b := c.W.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		if b == nil {
 			c.log.Error("Invalid token chain block")
 			return false
@@ -134,7 +134,7 @@ func (c *Core) checkTokenIsPledged(wt string) bool {
 	if c.testNet {
 		tokenType = token.TestTokenType
 	}
-	b := c.w.GetLatestTokenBlock(wt, tokenType)
+	b := c.W.GetLatestTokenBlock(wt, tokenType)
 	if b == nil {
 		c.log.Error("Invalid token chain block")
 		return true
@@ -142,28 +142,28 @@ func (c *Core) checkTokenIsPledged(wt string) bool {
 	return c.checkIsPledged(b, wt)
 }
 
-func (c *Core) checkTokenIsUnpledged(wt string) bool {
-	tokenType := token.RBTTokenType
-	if c.testNet {
-		tokenType = token.TestTokenType
-	}
-	b := c.w.GetLatestTokenBlock(wt, tokenType)
-	if b == nil {
-		c.log.Error("Invalid token chain block")
-		return true
-	}
-	return c.checkIsUnpledged(b, wt)
-}
-
-func (c *Core) getUnpledgeId(wt string) string {
-	tokenType := token.RBTTokenType
-	if c.testNet {
-		tokenType = token.TestTokenType
-	}
-	b := c.w.GetLatestTokenBlock(wt, tokenType)
-	if b == nil {
-		c.log.Error("Invalid token chain block")
-		return ""
-	}
-	return b.GetUnpledgeId()
-}
+//func (c *Core) checkTokenIsUnpledged(wt string) bool {
+//	tokenType := token.RBTTokenType
+//	if c.testNet {
+//		tokenType = token.TestTokenType
+//	}
+//	b := c.W.GetLatestTokenBlock(wt, tokenType)
+//	if b == nil {
+//		c.log.Error("Invalid token chain block")
+//		return true
+//	}
+//	return c.checkIsUnpledged(b, wt)
+//}
+//
+//func (c *Core) getUnpledgeId(wt string) string {
+//	tokenType := token.RBTTokenType
+//	if c.testNet {
+//		tokenType = token.TestTokenType
+//	}
+//	b := c.W.GetLatestTokenBlock(wt, tokenType)
+//	if b == nil {
+//		c.log.Error("Invalid token chain block")
+//		return ""
+//	}
+//	return b.GetUnpledgeId()
+//}
