@@ -15,41 +15,44 @@ import (
 )
 
 const (
-	APILogin               string = "/api/login"
-	APIStart               string = "/api/start"
-	APIShutdown            string = "/api/shutdown"
-	APINodeStatus          string = "/api/node-status"
-	APIPing                string = "/api/ping"
-	APIAddBootStrap        string = "/api/add-bootstrap"
-	APIRemoveBootStrap     string = "/api/remove-bootstrap"
-	APIRemoveAllBootStrap  string = "/api/remove-all-bootstrap"
-	APIGetAllBootStrap     string = "/api/get-all-bootstrap"
-	APICreateDID           string = "/api/createdid"
-	APIGetAllDID           string = "/api/getalldid"
-	APIAddQuorum           string = "/api/addquorum"
-	APIGetAllQuorum        string = "/api/getallquorum"
-	APIRemoveAllQuorum     string = "/api/removeallquorum"
-	APISetupQuorum         string = "/api/setup-quorum"
-	APISetupService        string = "/api/setup-service"
-	APIGenerateTestToken   string = "/api/generate-test-token"
-	APIInitiateRBTTransfer string = "/api/initiate-rbt-transfer"
-	APIGetAccountInfo      string = "/api/get-account-info"
-	APISignatureResponse   string = "/api/signature-response"
-	APIDumpTokenChainBlock string = "/api/dump-token-chain"
-	APIRegisterDID         string = "/api/register-did"
-	APISetupDID            string = "/api/setup-did"
-	APIMigrateNode         string = "/api/migrate-node"
-	APILockTokens          string = "/api/lock-tokens"
-	APICreateDataToken     string = "/api/create-data-token"
-	APICommitDataToken     string = "/api/commit-data-token"
-	APICheckDataToken      string = "/api/check-data-token"
-	APIGetDataToken        string = "/api/get-data-token"
-	APISetupDB             string = "/api/setup-db"
-	APIGetTxnByTxnID       string = "/api/get-by-txnId"
-	APIGetTxnByDID         string = "/api/get-by-did"
-	APIGetTxnByComment     string = "/api/get-by-comment"
-	APIUnpledgeTokens      string = "/api/unpledge-tokens"
-	APIUnpinQuorumTokens   string = "/api/unpin-quorum-tokens"
+	APILogin                   string = "/api/login"
+	APIStart                   string = "/api/start"
+	APIShutdown                string = "/api/shutdown"
+	APINodeStatus              string = "/api/node-status"
+	APIPing                    string = "/api/ping"
+	APIAddBootStrap            string = "/api/add-bootstrap"
+	APIRemoveBootStrap         string = "/api/remove-bootstrap"
+	APIRemoveAllBootStrap      string = "/api/remove-all-bootstrap"
+	APIGetAllBootStrap         string = "/api/get-all-bootstrap"
+	APICreateDID               string = "/api/createdid"
+	APIGetAllDID               string = "/api/getalldid"
+	APIAddQuorum               string = "/api/addquorum"
+	APIGetAllQuorum            string = "/api/getallquorum"
+	APIRemoveAllQuorum         string = "/api/removeallquorum"
+	APISetupQuorum             string = "/api/setup-quorum"
+	APISetupService            string = "/api/setup-service"
+	APIGenerateTestToken       string = "/api/generate-test-token"
+	APIInitiateRBTTransfer     string = "/api/initiate-rbt-transfer"
+	APIInitiateRBTSelfTransfer string = "/api/initiate-rbt-self-transfer"
+	APIGetAccountInfo          string = "/api/get-account-info"
+	APISignatureResponse       string = "/api/signature-response"
+	APIDumpTokenChainBlock     string = "/api/dump-token-chain"
+	APIRegisterDID             string = "/api/register-did"
+	APISetupDID                string = "/api/setup-did"
+	APIMigrateNode             string = "/api/migrate-node"
+	APILockTokens              string = "/api/lock-tokens"
+
+	APILockEpochTokens   string = "/api/lock-epoch-tokens"
+	APICreateDataToken   string = "/api/create-data-token"
+	APICommitDataToken   string = "/api/commit-data-token"
+	APICheckDataToken    string = "/api/check-data-token"
+	APIGetDataToken      string = "/api/get-data-token"
+	APISetupDB           string = "/api/setup-db"
+	APIGetTxnByTxnID     string = "/api/get-by-txnId"
+	APIGetTxnByDID       string = "/api/get-by-did"
+	APIGetTxnByComment   string = "/api/get-by-comment"
+	APIUnpledgeTokens    string = "/api/unpledge-tokens"
+	APIUnpinQuorumTokens string = "/api/unpin-quorum-tokens"
 )
 
 // Server defines server handle
@@ -214,6 +217,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APISetupService, "POST", s.AuthHandle(s.APISetupService, s.ErrorFunc))
 	s.AddRoute(APIGenerateTestToken, "POST", s.AuthHandle(s.APIGenerateTestToken, s.ErrorFunc))
 	s.AddRoute(APIInitiateRBTTransfer, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, s.ErrorFunc))
+	s.AddRoute(APIInitiateRBTSelfTransfer, "POST", s.AuthHandle(s.APIInitiateRBTSelfTransfer, s.ErrorFunc))
 	s.AddRoute(APIGetAccountInfo, "GET", s.AuthHandle(s.APIGetAccountInfo, s.ErrorFunc))
 	s.AddRoute(APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, s.ErrorFunc))
 	s.AddRoute(APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, s.ErrorFunc))
@@ -221,6 +225,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(APISetupDID, "POST", s.AuthHandle(s.APISetupDID, s.ErrorFunc))
 	s.AddRoute(APIMigrateNode, "POST", s.AuthHandle(s.APIMigrateNode, s.ErrorFunc))
 	s.AddRoute(APILockTokens, "POST", s.AuthHandle(s.APILockTokens, s.ErrorFunc))
+	s.AddRoute(APILockEpochTokens, "POST", s.AuthHandle(s.APILockEpochTokens, s.ErrorFunc))
 	s.AddRoute(APICreateDataToken, "POST", s.AuthHandle(s.APICreateDataToken, s.ErrorFunc))
 	s.AddRoute(APICommitDataToken, "POST", s.AuthHandle(s.APICommitDataToken, s.ErrorFunc))
 	s.AddRoute(APICheckDataToken, "POST", s.AuthHandle(s.APICheckDataToken, s.ErrorFunc))
