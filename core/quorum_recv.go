@@ -26,7 +26,7 @@ import (
 func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 	// ::TODO:: Get proper credit score
 	did := c.l.GetQuerry(req, "did")
-	credits, err := c.w.GetCredit(did)
+	credits, err := c.W.GetCredit(did)
 	var cs model.CreditStatus
 	cs.Score = 0
 	if err == nil {
@@ -150,33 +150,33 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			crep.Message = "Pledge Token check Failed, Token " + wt[i].Token + " is Pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		if c.checkTokenIsUnpledged(wt[i].Token) {
-			unpledgeId := c.getUnpledgeId(wt[i].Token)
-			if unpledgeId == "" {
-				c.log.Error("Failed to fetch proof file CID")
-				crep.Message = "Failed to fetch proof file CID"
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			err := c.ipfs.Get(unpledgeId, c.cfg.DirPath+"unpledge")
-			if err != nil {
-				c.log.Error("Failed to fetch proof file")
-				crep.Message = "Failed to fetch proof file, err " + err.Error()
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-
-			pv, err := c.Up.ProofVerification(wt[i].Token)
-			if err != nil {
-				c.log.Error("Proof Verification Failed due to error ", err)
-				crep.Message = "Proof Verification Failed due to error " + err.Error()
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			if !pv {
-				c.log.Debug("Proof of Work for Unpledge not verified")
-				crep.Message = "Proof of Work for Unpledge not verified"
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			c.log.Debug("Proof of work verified")
-		}
+		//if c.checkTokenIsUnpledged(wt[i].Token) {
+		//	unpledgeId := c.getUnpledgeId(wt[i].Token)
+		//	if unpledgeId == "" {
+		//		c.log.Error("Failed to fetch proof file CID")
+		//		crep.Message = "Failed to fetch proof file CID"
+		//		return c.l.RenderJSON(req, &crep, http.StatusOK)
+		//	}
+		//	err := c.ipfs.Get(unpledgeId, c.cfg.DirPath+"unpledge")
+		//	if err != nil {
+		//		c.log.Error("Failed to fetch proof file")
+		//		crep.Message = "Failed to fetch proof file, err " + err.Error()
+		//		return c.l.RenderJSON(req, &crep, http.StatusOK)
+		//	}
+		//
+		//	pv, err := c.Up.ProofVerification(wt[i].Token)
+		//	if err != nil {
+		//		c.log.Error("Proof Verification Failed due to error ", err)
+		//		crep.Message = "Proof Verification Failed due to error " + err.Error()
+		//		return c.l.RenderJSON(req, &crep, http.StatusOK)
+		//	}
+		//	if !pv {
+		//		c.log.Debug("Proof of Work for Unpledge not verified")
+		//		crep.Message = "Proof of Work for Unpledge not verified"
+		//		return c.l.RenderJSON(req, &crep, http.StatusOK)
+		//	}
+		//	c.log.Debug("Proof of work verified")
+		//}
 	}
 
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
@@ -240,7 +240,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	wt, err := c.w.GetWholeTokens(did, pr.NumTokens)
+	wt, err := c.W.GetWholeTokens(did, pr.NumTokens)
 	if err != nil {
 		crep.Message = "Failed to get tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -265,7 +265,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	for i := 0; i < tl; i++ {
 		presp.Tokens = append(presp.Tokens, wt[i].TokenID)
-		tc := c.w.GetLatestTokenBlock(wt[i].TokenID, tokenType)
+		tc := c.W.GetLatestTokenBlock(wt[i].TokenID, tokenType)
 		if tc == nil {
 			c.log.Error("Failed to get latest token chain block")
 			crep.Message = "Failed to get latest token chain block"
@@ -318,7 +318,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 			crep.Message = "Failed to sync token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
+		ptcbArray, err := c.W.GetTokenBlock(t, ti.TokenType, pblkID)
 		if err != nil {
 			c.log.Error("Failed to fetch previous block", "err", err)
 			crep.Message = "Failed to fetch previous block"
@@ -359,7 +359,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
-	err = c.w.TokensReceived(did, sr.TokenInfo, b)
+	err = c.W.TokensReceived(did, sr.TokenInfo, b)
 	if err != nil {
 		c.log.Error("Failed to update token status", "err", err)
 		crep.Message = "Failed to update token status"
@@ -410,7 +410,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		Status:          true,
 		EpochTime:       time.Now(),
 	}
-	c.w.AddTransactionHistory(td)
+	c.W.AddTransactionHistory(td)
 	crep.Status = true
 	crep.Message = "Token received successfully"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -496,7 +496,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		if ur.Mode == DTCommitMode {
 			ttt = token.DataTokenType
 		}
-		err = c.w.AddTokenBlock(t, ttt, b)
+		err = c.W.AddTokenBlock(t, ttt, b)
 		if err != nil {
 			c.log.Error("Failed to add token block", "token", t)
 			crep.Message = "Failed to add token block"
@@ -509,7 +509,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			TokenType: tokenType,
 		}
 		tsb = append(tsb, tt)
-		lb := c.w.GetLatestTokenBlock(t, tokenType)
+		lb := c.W.GetLatestTokenBlock(t, tokenType)
 		if lb == nil {
 			c.log.Error("Failed to get token chain block")
 			crep.Message = "Failed to get token chain block"
@@ -520,7 +520,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	//epoch := time.Now()
 	tcb := block.TokenChainBlock{
 		TokenType:       tokenType,
-		TransactionType: block.TokenPledgedType,
+		TransactionType: block.TokenUnpledgedType,
 		TokenOwner:      did,
 		EpochTime:       time.Now().String(),
 		TransInfo: &block.TransInfo{
@@ -541,14 +541,14 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update signature to block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	err = c.w.CreateTokenBlock(nb, tokenType)
+	err = c.W.CreateTokenBlock(nb, tokenType)
 	if err != nil {
 		c.log.Error("Failed to update token chain block", "err", err)
 		crep.Message = "Failed to update token chain block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	for _, t := range ur.PledgedTokens {
-		err = c.w.PledgeWholeToken(did, t, nb)
+		err = c.W.PledgeWholeToken(did, t, nb)
 		if err != nil {
 			c.log.Error("Failed to update pledge token", "err", err)
 			crep.Message = "Failed to update pledge token"
@@ -582,7 +582,7 @@ func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	err = c.w.StoreCredit(did, base64.StdEncoding.EncodeToString(jb))
+	err = c.W.StoreCredit(did, base64.StdEncoding.EncodeToString(jb))
 	if err != nil {
 		c.log.Error("Failed to store credit", "err", err)
 		crep.Message = "Failed to store credit"
@@ -849,14 +849,14 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 func (c *Core) getProofverificationDetails(tokenID string, senderAddr string) (string, string, error) {
 	var receiverDID, txnId string
 	tt := token.RBTTokenType
-	blk := c.w.GetLatestTokenBlock(tokenID, tt)
+	blk := c.W.GetLatestTokenBlock(tokenID, tt)
 
 	pbid, err := blk.GetPrevBlockID(tokenID)
 	if err != nil {
 		c.log.Error("Failed to get the block id. Unable to verify proof file")
 		return "", "", err
 	}
-	pBlk, err := c.w.GetTokenBlock(tokenID, tt, pbid)
+	pBlk, err := c.W.GetTokenBlock(tokenID, tt, pbid)
 	if err != nil {
 		c.log.Error("Failed to get the Previous Block Unable to verify proof file")
 		return "", "", err
@@ -894,7 +894,7 @@ func (c *Core) getProofverificationDetails(tokenID string, senderAddr string) (s
 			return "", "", err
 		}
 		//check if token chain of token pledged for already synced to node
-		pledgedfBlk, err := c.w.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
+		pledgedfBlk, err := c.W.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
 		if err != nil {
 			c.log.Error("Failed to get the pledged for token's Block Unable to verify proof file")
 			return "", "", err
@@ -917,7 +917,7 @@ func (c *Core) getProofverificationDetails(tokenID string, senderAddr string) (s
 				c.log.Error("Failed to sync token chain block", "err", err)
 				return "", "", err
 			}
-			tcbArray, err := c.w.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
+			tcbArray, err := c.W.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
 			if err != nil {
 				c.log.Error("Failed to fetch previous block", "err", err)
 				return "", "", err
