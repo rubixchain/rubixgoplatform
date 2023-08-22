@@ -163,7 +163,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, failed to add rac token to ipfs"
 		return &br
 	}
-	err = c.w.CreateDataToken(&wallet.DataToken{TokenID: dt, DID: dr.DID, CommitterDID: comDid, BatchID: bid})
+	err = c.W.CreateDataToken(&wallet.DataToken{TokenID: dt, DID: dr.DID, CommitterDID: comDid, BatchID: bid})
 	if err != nil {
 		c.log.Error("Failed to create data token, write failed", "err", err)
 		br.Message = "Failed to create data token, write failed"
@@ -237,7 +237,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, failed to update signature"
 		return &br
 	}
-	err = c.w.AddTokenBlock(dt, token.DataTokenType, blk)
+	err = c.W.AddTokenBlock(dt, token.DataTokenType, blk)
 	if err != nil {
 		c.log.Error("Failed to create data token, failed to add token chan block", "err", err)
 		br.Message = "Failed to create data token, failed to add token chan block"
@@ -260,15 +260,15 @@ func (c *Core) CommitDataToken(reqID string, did string, batchID string) {
 
 func (c *Core) finishDataCommit(br *model.BasicResponse, dts []wallet.DataToken) {
 	if br.Status {
-		c.w.CommitDataToken(dts)
+		c.W.CommitDataToken(dts)
 	} else {
-		c.w.ReleaseDataToken(dts)
+		c.W.ReleaseDataToken(dts)
 	}
 }
 
 func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.BasicResponse {
 	st := time.Now()
-	dt, err := c.w.GetDataToken(batchID)
+	dt, err := c.W.GetDataToken(batchID)
 	br := &model.BasicResponse{
 		Status: false,
 	}
@@ -371,7 +371,7 @@ func (c *Core) CheckDataToken(dt string) bool {
 }
 
 func (c *Core) GetDataTokens(did string) []wallet.DataToken {
-	dt, err := c.w.GetDataTokenByDID(did)
+	dt, err := c.W.GetDataTokenByDID(did)
 	if err != nil {
 		c.log.Error("failed to get data tokens", "err", err)
 		return nil
