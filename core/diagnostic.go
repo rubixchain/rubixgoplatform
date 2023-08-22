@@ -15,7 +15,7 @@ func (c *Core) DumpTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	if c.testNet {
 		tt = token.TestTokenType
 	}
-	blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, tt, dr.BlockID)
+	blks, nextID, err := c.W.GetAllTokenBlocks(dr.Token, tt, dr.BlockID)
 	if err != nil {
 		ds.Message = "Failed to get token chain block"
 		return ds
