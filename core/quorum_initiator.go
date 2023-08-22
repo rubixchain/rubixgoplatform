@@ -36,6 +36,7 @@ type ConensusRequest struct {
 	ReqID          string   `json:"req_id"`
 	Type           int      `json:"type"`
 	Mode           int      `json:"mode"`
+	BatchID        string   `json:"batchID"`
 	SenderPeerID   string   `json:"sender_peerd_id"`
 	ReceiverPeerID string   `json:"receiver_peerd_id"`
 	ContractBlock  []byte   `json:"contract_block"`
@@ -217,7 +218,7 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 	// c.qlock.Unlock()
 }
 
-func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, map[string]map[string]float64, error) {
+func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract) (*wallet.TransactionDetails, map[string]map[string]float64, error) {
 	cs := ConsensusStatus{
 		Credit: CreditScore{
 			Credit: make([]CreditSignature, 0),
@@ -229,11 +230,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			FailedCount:  0,
 		},
 	}
+	ti := sc.GetTransTokenInfo(cr.BatchID)
 	reqPledgeTokens := float64(0)
 	// TODO:: Need to correct for part tokens
 	switch cr.Mode {
 	case RBTTransferMode, NFTSaleContractMode:
-		ti := sc.GetTransTokenInfo()
 		for i := range ti {
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
@@ -295,14 +296,17 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	if err != nil {
 		return nil, nil, err
 	}
-	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
-	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
+	scb := sc.GetBlock()
+	if cr.BatchID != "" {
+		scb = append(scb, []byte("Batch ID : "+cr.BatchID)...)
+	}
+	tid := util.HexToStr(util.CalculateHash(scb, "SHA3-256"))
+	nb, err := c.pledgeQuorumToken(cr, sc, tid)
 	if err != nil {
 		c.log.Error("Failed to pledge token", "err", err)
 		return nil, nil, err
 	}
 	c.sendQuorumCredit(cr)
-	ti := sc.GetTransTokenInfo()
 	c.qlock.Lock()
 	pds := c.pd[cr.ReqID]
 	c.qlock.Unlock()
@@ -469,7 +473,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
 }
 
-func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid string, dc did.DIDCrypto) (*block.Block, error) {
+func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid string) (*block.Block, error) {
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
 	cs, ok2 := c.quorumRequest[cr.ReqID]
@@ -478,7 +482,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		c.log.Error("Invalid pledge request")
 		return nil, fmt.Errorf("invalid pledge request")
 	}
-	ti := sc.GetTransTokenInfo()
+	ti := sc.GetTransTokenInfo(cr.BatchID)
 	credit := make([]string, 0)
 	for _, csig := range cs.Credit.Credit {
 		jb, err := json.Marshal(csig)

@@ -1,16 +1,33 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
+	"io/ioutil"
 
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/protos"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func (cmd *Command) CreateDID() {
-
-	resp, err := cmd.c.CreateDID(cmd.ctx, &protos.CreateDIDReq{DidMode: int32(cmd.didType), MasterDid: cmd.did, PrivKeyPwd: cmd.privPWD, Secret: cmd.didSecret})
+	req := &protos.CreateDIDReq{
+		DidMode:    int32(cmd.didType),
+		RootDID:    cmd.didRoot,
+		MasterDID:  cmd.did,
+		PrivKeyPwd: cmd.privPWD,
+		Secret:     cmd.didSecret,
+	}
+	if cmd.didType == did.BasicDIDMode || cmd.didType == did.StandardDIDMode {
+		ib, err := ioutil.ReadFile(cmd.imgFile)
+		if err != nil {
+			fmt.Printf("Invalid image file, %s\n", err.Error())
+			return
+		}
+		req.DidImage = base64.StdEncoding.EncodeToString(ib)
+	}
+	resp, err := cmd.c.CreateDID(cmd.ctx, req)
 
 	if err != nil {
 		fmt.Printf("faield to create did, %s\n", err.Error())

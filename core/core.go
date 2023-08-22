@@ -68,6 +68,10 @@ const (
 	MaxPeerConn uint16 = 1000
 )
 
+const (
+	TokenBatchSize int = 25
+)
+
 type Core struct {
 	cfg           *config.Config
 	cfgFile       string

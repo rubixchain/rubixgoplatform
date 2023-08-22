@@ -263,34 +263,22 @@ func (c *Contract) GetComment() string {
 	return c.getTransInfoString(TSCommentKey)
 }
 
-func (c *Contract) GetTransTokenInfo() []TokenInfo {
+func (c *Contract) GetTransTokenInfo(batchID string) []TokenInfo {
 	tim := util.GetFromMap(c.sm, SCTransInfoKey)
 	if tim == nil {
 		return nil
 	}
-	tsm := util.GetFromMap(tim, TSTransInfoKey)
-	if tsm == nil {
-		return nil
-	}
-	ti := make([]TokenInfo, 0)
-	tsmi, ok := tsm.(map[string]interface{})
-	if ok {
-		for k, v := range tsmi {
-			t := TokenInfo{
-				Token:      k,
-				TokenType:  util.GetIntFromMap(v, TITokenTypeKey),
-				OwnerDID:   util.GetStringFromMap(v, TIOwnerDIDKey),
-				BlockID:    util.GetStringFromMap(v, TIBlockIDKey),
-				TokenValue: util.GetFloatFromMap(v, TITokenValueKey),
-			}
-			ti = append(ti, t)
+	if batchID == "" {
+		tsm := util.GetFromMap(tim, TSTransInfoKey)
+		if tsm == nil {
+			return nil
 		}
-	} else {
-		tsmi, ok := tsm.(map[interface{}]interface{})
+		ti := make([]TokenInfo, 0)
+		tsmi, ok := tsm.(map[string]interface{})
 		if ok {
 			for k, v := range tsmi {
 				t := TokenInfo{
-					Token:      util.GetString(k),
+					Token:      k,
 					TokenType:  util.GetIntFromMap(v, TITokenTypeKey),
 					OwnerDID:   util.GetStringFromMap(v, TIOwnerDIDKey),
 					BlockID:    util.GetStringFromMap(v, TIBlockIDKey),
@@ -299,10 +287,102 @@ func (c *Contract) GetTransTokenInfo() []TokenInfo {
 				ti = append(ti, t)
 			}
 		} else {
+			tsmi, ok := tsm.(map[interface{}]interface{})
+			if ok {
+				for k, v := range tsmi {
+					t := TokenInfo{
+						Token:      util.GetString(k),
+						TokenType:  util.GetIntFromMap(v, TITokenTypeKey),
+						OwnerDID:   util.GetStringFromMap(v, TIOwnerDIDKey),
+						BlockID:    util.GetStringFromMap(v, TIBlockIDKey),
+						TokenValue: util.GetFloatFromMap(v, TITokenValueKey),
+					}
+					ti = append(ti, t)
+				}
+			} else {
+				return nil
+			}
+		}
+		return ti
+	} else {
+		tsm := util.GetFromMap(tim, TSBatchTransInfoKey)
+		if tsm == nil {
 			return nil
 		}
+		ti := make([]TokenInfo, 0)
+		var bi interface{}
+		btsmi, ok := tsm.(map[string]map[string]interface{})
+		if ok {
+			bi, ok = btsmi[batchID]
+			if !ok {
+				return nil
+			}
+		} else {
+			btsmi, ok := tsm.(map[interface{}]map[string]interface{})
+			if ok {
+				bi, ok = btsmi[batchID]
+				if !ok {
+					return nil
+				}
+			} else {
+				btsmi, ok := tsm.(map[string]map[interface{}]interface{})
+				if ok {
+					bi, ok = btsmi[batchID]
+					if !ok {
+						return nil
+					}
+				} else {
+					btsmi, ok := tsm.(map[interface{}]map[interface{}]interface{})
+					if ok {
+						bi, ok = btsmi[batchID]
+						if !ok {
+							return nil
+						}
+					} else {
+						btsmi, ok := tsm.(map[interface{}]interface{})
+						if ok {
+							bi, ok = btsmi[batchID]
+							if !ok {
+								return nil
+							}
+						} else {
+							return nil
+						}
+					}
+				}
+			}
+		}
+		tsmi, ok := bi.(map[string]interface{})
+		if ok {
+			for k, v := range tsmi {
+				t := TokenInfo{
+					Token:      k,
+					TokenType:  util.GetIntFromMap(v, TITokenTypeKey),
+					OwnerDID:   util.GetStringFromMap(v, TIOwnerDIDKey),
+					BlockID:    util.GetStringFromMap(v, TIBlockIDKey),
+					TokenValue: util.GetFloatFromMap(v, TITokenValueKey),
+				}
+				ti = append(ti, t)
+			}
+		} else {
+			tsmi, ok := bi.(map[interface{}]interface{})
+			if ok {
+				for k, v := range tsmi {
+					t := TokenInfo{
+						Token:      util.GetString(k),
+						TokenType:  util.GetIntFromMap(v, TITokenTypeKey),
+						OwnerDID:   util.GetStringFromMap(v, TIOwnerDIDKey),
+						BlockID:    util.GetStringFromMap(v, TIBlockIDKey),
+						TokenValue: util.GetFloatFromMap(v, TITokenValueKey),
+					}
+					ti = append(ti, t)
+				}
+			} else {
+				return nil
+			}
+		}
+		return ti
 	}
-	return ti
 
 }
 

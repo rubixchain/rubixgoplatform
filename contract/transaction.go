@@ -4,11 +4,12 @@ import "github.com/rubixchain/rubixgoplatform/util"
 
 // ----------TransInfo----------------------
 // {
-// 	 "1" : SenderDID      : string
-// 	 "2" : ReceiverDID    : string
-// 	 "3" : Comment        : string
-// 	 "4" : TransTokens    : TokenInfo
-// 	 "5" : ExchangeTokens : TokenInfo
+// 	 "1" : SenderDID        : string
+// 	 "2" : ReceiverDID      : string
+// 	 "3" : Comment          : string
+// 	 "4" : TransTokens      : map[string]TokenInfo
+// 	 "5" : ExchangeTokens   : map[string]TokenInfo
+//   "6" : BatchTransTokens : ma[string]map[string]TokenInfo
 // }
 
 // ----------TokenInfo----------------------
@@ -19,11 +20,12 @@ import "github.com/rubixchain/rubixgoplatform/util"
 // }
 
 const (
-	TSSenderDIDKey    string = "1"
-	TSReceiverDIDKey  string = "2"
-	TSCommentKey      string = "3"
-	TSTransInfoKey    string = "4"
-	TSExcahngeInfoKey string = "5"
+	TSSenderDIDKey      string = "1"
+	TSReceiverDIDKey    string = "2"
+	TSCommentKey        string = "3"
+	TSTransInfoKey      string = "4"
+	TSExchangeInfoKey   string = "5"
+	TSBatchTransInfoKey string = "6"
 )
 
 const (
@@ -42,11 +44,12 @@ type TokenInfo struct {
 }
 
 type TransInfo struct {
-	SenderDID      string      `json:"senderDID"`
-	ReceiverDID    string      `json:"receiverDID"`
-	Comment        string      `json:"comment"`
-	TransTokens    []TokenInfo `json:"TransTokens"`
-	ExchangeTokens []TokenInfo `json:"excahngeTokens"`
+	SenderDID        string                 `json:"senderDID"`
+	ReceiverDID      string                 `json:"receiverDID"`
+	Comment          string                 `json:"comment"`
+	TransTokens      []TokenInfo            `json:"transTokens"`
+	ExchangeTokens   []TokenInfo            `json:"exchangeTokens"`
+	BatchTransTokens map[string][]TokenInfo `json:"batchTransTokens"`
 }
 
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {
@@ -83,6 +86,20 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 			ntibs[ti.Token] = ntib
 		}
 		ntsb[TSTransInfoKey] = ntibs
+	} else if ts.BatchTransTokens != nil {
+		nbtibs := make(map[string]map[string]interface{})
+		for k, v := range ts.BatchTransTokens {
+			ntibs := make(map[string]interface{})
+			for _, ti := range v {
+				ntib := newTokenInfoBlock(&ti)
+				if ntib == nil {
+					return nil
+				}
+				ntibs[ti.Token] = ntib
+			}
+			nbtibs[k] = ntibs
+		}
+		ntsb[TSBatchTransInfoKey] = nbtibs
 	}
 	if ts.ExchangeTokens != nil && len(ts.ExchangeTokens) > 0 {
 		ntibs := make(map[string]interface{})
@@ -93,7 +110,7 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 			}
 			ntibs[ti.Token] = ntib
 		}
-		ntsb[TSExcahngeInfoKey] = ntibs
+		ntsb[TSExchangeInfoKey] = ntibs
 	}
 	return ntsb
 }

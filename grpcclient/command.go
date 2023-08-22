@@ -71,6 +71,7 @@ type Command struct {
 	peerID       string
 	peers        []string
 	log          logger.Logger
+	didRoot      bool
 	didType      int
 	didSecret    string
 	forcePWD     bool
@@ -148,7 +149,8 @@ func loadTLSCredentials() (credentials.TransportCredentials, error) {
 
 	// Create the credentials and return it
 	config := &tls.Config{
-		RootCAs: certPool,
+		InsecureSkipVerify: false,
+		RootCAs:            certPool,
 	}
 
 	return credentials.NewTLS(config), nil
@@ -172,6 +174,7 @@ func runCommand() {
 	flag.StringVar(&cmd.port, "port", "20000", "Server/Host port")
 	flag.StringVar(&cmd.peerID, "peerID", "", "Peerd ID")
 	flag.StringVar(&peers, "peers", "", "Bootstrap peers, mutiple peers will be seprated by comma")
+	flag.BoolVar(&cmd.didRoot, "didRoot", false, "Root DID")
 	flag.IntVar(&cmd.didType, "didType", 0, "DID Creation type")
 	flag.StringVar(&cmd.didSecret, "didSecret", "My DID Secret", "DID creation secret")
 	flag.BoolVar(&cmd.forcePWD, "fp", false, "Force password entry")

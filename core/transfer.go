@@ -69,9 +69,19 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	for i := range wt {
 		wta = append(wta, wt[i].TokenID)
 	}
-
+	multipleBatch := false
+	if len(wt) > TokenBatchSize {
+		multipleBatch = true
+	}
 	tis := make([]contract.TokenInfo, 0)
+	btis := make(map[string][]contract.TokenInfo)
+	var mtis []contract.TokenInfo
 	for i := range wt {
+		if multipleBatch {
+			if i%TokenBatchSize == 0 {
+				mtis = make([]contract.TokenInfo, 0)
+			}
+		}
 		tts := "rbt"
 		if wt[i].TokenValue != 1 {
 			tts = "part"
@@ -96,7 +106,15 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			OwnerDID:   wt[i].DID,
 			BlockID:    bid,
 		}
-		tis = append(tis, ti)
+		if multipleBatch {
+			mtis = append(mtis, ti)
+		} else {
+			tis = append(tis, ti)
+		}
+		if (i+1)%TokenBatchSize == 0 {
+			d := i / TokenBatchSize
+			btis[fmt.Sprintf("%d", d)] = mtis
+		}
 	}
 	sct := &contract.ContractType{
 		Type:       contract.SCRBTDirectType,
@@ -106,8 +124,12 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			SenderDID:   did,
 			ReceiverDID: rdid,
 			Comment:     req.Comment,
-			TransTokens: tis,
 		},
+	}
+	if multipleBatch {
+		sct.TransInfo.BatchTransTokens = btis
+	} else {
+		sct.TransInfo.TransTokens = tis
 	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)
@@ -116,38 +138,81 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = err.Error()
 		return resp
 	}
-	cr := &ConensusRequest{
-		ReqID:          uuid.New().String(),
-		Type:           req.Type,
-		SenderPeerID:   c.peerID,
-		ReceiverPeerID: rpeerid,
-		ContractBlock:  sc.GetBlock(),
-	}
-	td, _, err := c.initiateConsensus(cr, sc, dc)
-	if err != nil {
-		c.log.Error("Consensus failed", "err", err)
-		resp.Message = "Consensus failed" + err.Error()
+	scb := sc.GetBlock()
+	if multipleBatch {
+		is := 0
+		for range btis {
+			st := time.Now()
+			cr := &ConensusRequest{
+				ReqID:          uuid.New().String(),
+				Type:           req.Type,
+				SenderPeerID:   c.peerID,
+				BatchID:        fmt.Sprintf("%d", is),
+				ReceiverPeerID: rpeerid,
+				ContractBlock:  scb,
+			}
+			is++
+			td, _, err := c.initiateConsensus(cr, sc)
+			if err != nil {
+				c.log.Error("Consensus failed", "err", err)
+				resp.Message = "Consensus failed" + err.Error()
+				return resp
+			}
+			et := time.Now()
+			dif := et.Sub(st)
+			td.Amount = req.TokenCount
+			td.TotalTime = float64(dif.Milliseconds())
+			c.w.AddTransactionHistory(td)
+			etrans := &ExplorerTrans{
+				TID:         td.TransactionID,
+				SenderDID:   did,
+				ReceiverDID: rdid,
+				Amount:      req.TokenCount,
+				TrasnType:   req.Type,
+				TokenIDs:    wta,
+				QuorumList:  cr.QuorumList,
+				TokenTime:   float64(dif.Milliseconds()),
+			}
+			c.ec.ExplorerTransaction(etrans)
+			c.log.Info("Transfer finished successfully", "duration", dif)
+		}
+		resp.Status = true
+		resp.Message = "Transfer finished successfully"
+		return resp
+	} else {
+		cr := &ConensusRequest{
+			ReqID:          uuid.New().String(),
+			Type:           req.Type,
+			SenderPeerID:   c.peerID,
+			ReceiverPeerID: rpeerid,
+			ContractBlock:  scb,
+		}
+		td, _, err := c.initiateConsensus(cr, sc)
+		if err != nil {
+			c.log.Error("Consensus failed", "err", err)
+			resp.Message = "Consensus failed" + err.Error()
+			return resp
+		}
+		et := time.Now()
+		dif := et.Sub(st)
+		td.Amount = req.TokenCount
+		td.TotalTime = float64(dif.Milliseconds())
+		c.w.AddTransactionHistory(td)
+		etrans := &ExplorerTrans{
+			TID:         td.TransactionID,
+			SenderDID:   did,
+			ReceiverDID: rdid,
+			Amount:      req.TokenCount,
+			TrasnType:   req.Type,
+			TokenIDs:    wta,
+			QuorumList:  cr.QuorumList,
+			TokenTime:   float64(dif.Milliseconds()),
+		}
+		c.ec.ExplorerTransaction(etrans)
+		c.log.Info("Transfer finished successfully", "duration", dif)
+		resp.Status = true
+		msg := fmt.Sprintf("Transfer finished successfully in %v", dif)
+		resp.Message = msg
 		return resp
 	}
-	et := time.Now()
-	dif := et.Sub(st)
-	td.Amount = req.TokenCount
-	td.TotalTime = float64(dif.Milliseconds())
-	c.w.AddTransactionHistory(td)
-	etrans := &ExplorerTrans{
-		TID:         td.TransactionID,
-		SenderDID:   did,
-		ReceiverDID: rdid,
-		Amount:      req.TokenCount,
-		TrasnType:   req.Type,
-		TokenIDs:    wta,
-		QuorumList:  cr.QuorumList,
-		TokenTime:   float64(dif.Milliseconds()),
-	}
-	c.ec.ExplorerTransaction(etrans)
-	c.log.Info("Transfer finished successfully", "duration", dif)
-	resp.Status = true
-	msg := fmt.Sprintf("Transfer finished successfully in %v", dif)
-	resp.Message = msg
-	return resp
 }

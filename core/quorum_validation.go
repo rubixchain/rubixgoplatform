@@ -119,7 +119,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 }
 
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) bool {
-	ti := sc.GetTransTokenInfo()
+	ti := sc.GetTransTokenInfo(cr.BatchID)
 	for i := range ti {
 		ids, err := c.GetDHTddrs(ti[i].Token)
 		if err != nil || len(ids) == 0 {

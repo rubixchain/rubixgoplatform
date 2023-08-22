@@ -74,7 +74,8 @@ func (rn *RubixNative) CreateDID(ctx context.Context, req *protos.CreateDIDReq) 
 	dc := &did.DIDCreate{
 		Type:      int(req.DidMode),
 		Secret:    req.Secret,
-		MasterDID: req.MasterDid,
+		RootDID:   req.RootDID,
+		MasterDID: req.MasterDID,
 		PrivPWD:   req.PrivKeyPwd,
 		QuorumPWD: req.QuorumKeyPwd,
 	}
