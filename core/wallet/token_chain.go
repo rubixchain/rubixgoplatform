@@ -65,14 +65,10 @@ func tcsPrefix(tokenType int, t string) string {
 		tt = TestPartTokenType
 	case tkn.NFTTokenType:
 		tt = NFTType
-	case tkn.TestNFTTokenType:
-		tt = TestNFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
-	case tkn.TestPartTokenType:
-		tt = TestPartTokenType
 	case tkn.TestNFTTokenType:
 		tt = TestNFTType
 	}
