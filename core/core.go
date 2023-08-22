@@ -96,7 +96,7 @@ type Core struct {
 	quorumRequest map[string]*ConsensusStatus
 	pd            map[string]*PledgeDetials
 	webReq        map[string]*did.DIDChan
-	w             *wallet.Wallet
+	W             *wallet.Wallet
 	qc            map[string]did.DIDCrypto
 	sd            map[string]*ServiceDetials
 	s             storage.Storage
@@ -246,11 +246,12 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
 	}
 
-	c.w, err = wallet.InitWallet(c.s, tcDir, c.log)
+	c.W, err = wallet.InitWallet(c.s, tcDir, c.log)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
 	}
+
 	c.qm, err = NewQuorumManager(c.s, c.log)
 	if err != nil {
 		c.log.Error("Failed to setup quorum manager", "err", err)
@@ -261,7 +262,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		c.log.Error("Failed to create unpledge", "err", err)
 		return nil, err
 	}
-	c.Up, err = unpledge.InitUnPledge(c.s, c.w, c.testNet, c.cfg.DirPath+"unpledge/", c.Unpledge, c.log)
+	c.Up, err = unpledge.InitUnPledge(c.s, c.W, c.testNet, c.cfg.DirPath+"unpledge/", c.Unpledge, c.log)
 	if err != nil {
 		c.log.Error("Failed to init unpledge", "err", err)
 		return nil, err
@@ -310,7 +311,7 @@ func (c *Core) SetupCore() error {
 		c.log.Error("Failed to setup services", "err", err)
 		return err
 	}
-	c.w.SetupWallet(c.ipfs)
+	c.W.SetupWallet(c.ipfs)
 	c.PingSetup()
 	c.peerSetup()
 	c.SetupToken()
@@ -471,7 +472,7 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 }
 
 func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
-	dt, err := c.w.GetDID(didStr)
+	dt, err := c.W.GetDID(didStr)
 	if err != nil {
 		c.log.Error("DID does not exist", "did", didStr)
 		return nil, fmt.Errorf("DID does not exist")
