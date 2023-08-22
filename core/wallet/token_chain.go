@@ -335,30 +335,30 @@ func (w *Wallet) addBlock(tt int, token string, b *block.Block) error {
 		return err
 	}
 	key := tcsKey(tt, token, bid)
-	lb := w.getLatestBlock(tt, token)
-	bn, err := b.GetBlockNumber(token)
+	//lb := w.getLatestBlock(tt, token)
+	//bn, err := b.GetBlockNumber(token)
 	if err != nil {
 		w.log.Error("Failed to get block number", "err", err)
 		return err
 	}
 
 	// First block check block number start with zero
-	if lb == nil {
-		if bn != 0 {
-			w.log.Error("Invalid block number, expect 0", "bn", bn)
-			return fmt.Errorf("invalid block number")
-		}
-	} else {
-		lbn, err := lb.GetBlockNumber(token)
-		if err != nil {
-			w.log.Error("Failed to get block number", "err", err)
-			return err
-		}
-		if lbn+1 != bn {
-			w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
-			return fmt.Errorf("invalid block number, sequence missing")
-		}
-	}
+	//if lb == nil {
+	//	if bn != 0 {
+	//		w.log.Error("Invalid block number, expect 0", "bn", bn)
+	//		return fmt.Errorf("invalid block number")
+	//	}
+	//} else {
+	//	lbn, err := lb.GetBlockNumber(token)
+	//	if err != nil {
+	//		w.log.Error("Failed to get block number", "err", err)
+	//		return err
+	//	}
+	//	if lbn+1 != bn {
+	//		w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
+	//		return fmt.Errorf("invalid block number, sequence missing")
+	//	}
+	//}
 	if b.CheckMultiTokenBlock() {
 		bs, err := b.GetHash()
 		if err != nil {
@@ -449,8 +449,8 @@ func (w *Wallet) addBlocks(tt int, b *block.Block) error {
 				return err
 			}
 			if lbn+1 != bn {
-				w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
-				return fmt.Errorf("invalid block number, sequence missing")
+				w.log.Error("tokenchain.go/452/Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
+				return fmt.Errorf("tokenchain.go/452/invalid block number, sequence missing")
 			}
 		}
 	}
