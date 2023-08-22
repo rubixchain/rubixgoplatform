@@ -1,9 +1,7 @@
 package unpledge
 
 import (
-	"crypto/sha256"
-	"fmt"
-	"strconv"
+	"github.com/rubixchain/rubixgoplatform/block"
 	"sync"
 	"time"
 
@@ -11,13 +9,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/token"
-
-	"golang.org/x/crypto/sha3"
-)
-
-const (
-	RecordInterval int = 5000
-	Difficultlevel int = 6
 )
 
 const (
@@ -55,6 +46,52 @@ func (up *UnPledge) RunUnpledge8Hourly() {
 	}
 }
 
+func (up *UnPledge) GetSelfTransferTokens(did string) []string {
+	wt, err := up.w.GetAllWholeTokens(did)
+	if err != nil {
+		up.log.Error("Failed to get tokens", "err", err)
+		//return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
+	}
+	var selectedTokens []string
+	for i := range wt {
+		tokenType := token.RBTTokenType
+		if up.testNet {
+			tokenType = token.TestTokenType
+		}
+		if wt[i].TokenStatus == wallet.TokenIsFree {
+			b := up.w.GetLatestTokenBlock(wt[i].TokenID, tokenType)
+			if b == nil {
+				up.log.Error("Invalid token chain block")
+			}
+			if (b.GetTransType()) == block.TokenTransferredType {
+				up.log.Debug("its a transferred token")
+				timeString, err := b.GetBlockEpoch()
+				up.log.Debug("Epoch Time Stored: " + timeString)
+				if err != nil {
+					up.log.Error("Failed to get the epoch time, removing the token from the unpledge list", err)
+				}
+				layout := "2006-01-02 15:04:05.999999 -0700 MST "
+
+				timeString = timeString[0:36]
+				storedTime, err := time.Parse(layout, timeString)
+				if err != nil {
+					up.log.Error("Error:", err)
+				}
+
+				elapsed := time.Since(storedTime)
+				if elapsed >= 384*time.Hour {
+					up.log.Info("16 days have elapsed.")
+					selectedTokens = append(selectedTokens, wt[i].TokenID)
+				} else {
+					up.log.Info("Less than 16 days have elapsed.")
+				}
+			} else {
+				up.log.Debug("its not a transferred token")
+			}
+		}
+	}
+	return selectedTokens
+}
 func InitUnPledge(s storage.Storage, w *wallet.Wallet, testNet bool, dir string, cb UnpledgeCBType, log logger.Logger) (*UnPledge, error) {
 	up := &UnPledge{
 		s:       s,
@@ -99,34 +136,34 @@ func (up *UnPledge) RunUnpledge() error {
 	return nil
 }
 
-func sha2Hash256(input string) string {
-	hash := sha256.Sum256([]byte(input))
-	hashedInput := fmt.Sprintf("%x", hash)
-	return hashedInput
-}
+//func sha2Hash256(input string) string {
+//	hash := sha256.Sum256([]byte(input))
+//	hashedInput := fmt.Sprintf("%x", hash)
+//	return hashedInput
+//}
+//
+//func sha3Hash256(input string) string {
+//	hash := sha3.Sum256([]byte(input))
+//	hashedInput := fmt.Sprintf("%x", hash)
+//	return hashedInput
+//}
+//
+//func sha3Hash256Loop(input string) string {
+//	var hashedInput string
+//	for i := 0; i < RecordInterval; i++ {
+//		hash := sha3.Sum256([]byte(input))
+//		hashedInput = fmt.Sprintf("%x", hash)
+//		input = hashedInput
+//	}
+//	return hashedInput
+//}
 
-func sha3Hash256(input string) string {
-	hash := sha3.Sum256([]byte(input))
-	hashedInput := fmt.Sprintf("%x", hash)
-	return hashedInput
-}
-
-func sha3Hash256Loop(input string) string {
-	var hashedInput string
-	for i := 0; i < RecordInterval; i++ {
-		hash := sha3.Sum256([]byte(input))
-		hashedInput = fmt.Sprintf("%x", hash)
-		input = hashedInput
-	}
-	return hashedInput
-}
-
-func (up *UnPledge) isRunning() bool {
-	up.l.Lock()
-	s := up.running
-	up.l.Unlock()
-	return s
-}
+//func (up *UnPledge) isRunning() bool {
+//	up.l.Lock()
+//	s := up.running
+//	up.l.Unlock()
+//	return s
+//}
 
 func (up *UnPledge) AddUnPledge(t string) {
 	var list UnpledgeTokenList
@@ -158,15 +195,20 @@ func (up *UnPledge) runUnpledge() {
 		up.running = false
 		up.l.Unlock()
 	}()
-	for {
-		var list UnpledgeTokenList
-		err := up.s.Read(UnpledgeQueueTable, &list, "token != ?", "")
-		if err != nil {
-			up.log.Info("All tokens are unplegded")
-			break
-		}
-		//st := time.Now()
-		t := list.Token
+	pledgedTokens, err := up.w.GetAllPledgedTokens()
+
+	if err != nil {
+		up.log.Debug("Pledged list is empty")
+	}
+	for i := range pledgedTokens {
+		t := pledgedTokens[i].TokenID
+		//var list UnpledgeTokenList
+		//err := up.s.Read(UnpledgeQueueTable, &list, "token != ?", wallet.TokenIsPledged)
+		//if err != nil {
+		//	up.log.Info("All tokens are unplegded")
+		//	break
+		//}
+		//
 		tt := token.RBTTokenType
 		if up.testNet {
 			tt = token.TestTokenType
@@ -186,7 +228,7 @@ func (up *UnPledge) runUnpledge() {
 			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
 			continue
 		}
-		layout := "2006-01-02 15:04:05.999999 -0700 MST"
+		layout := "2006-01-02 15:04:05.999999 -0700 MST "
 
 		timeString = timeString[0:36]
 		up.log.Debug("substring: ", timeString)
@@ -198,50 +240,51 @@ func (up *UnPledge) runUnpledge() {
 		}
 
 		elapsed := time.Since(storedTime)
-		if elapsed >= 24*time.Hour {
-			up.log.Info("24 hours have elapsed.")
+		if elapsed >= 384*time.Hour {
+			up.log.Info("16 days have elapsed.")
 			did := b.GetOwner()
 			up.w.UnpledgeWholeToken(did, t, tt)
 
 		} else {
-			up.log.Info("Less than 24 hours have elapsed.")
+			up.log.Info("Less than 16 days have elapsed.")
 		}
 
 		up.log.Info("Unpledging completed for the token " + t)
 		up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
 	}
-}
-
-func (up *UnPledge) ProofVerification(tokenID string) (bool, error) {
-	tt := token.RBTTokenType
-	blk := up.w.GetLatestTokenBlock(tokenID, tt)
-
-	epochTimeString, err := blk.GetBlockEpoch()
-	if err != nil {
-		up.log.Error("Failed to get the epoch time, removing the token from the unpledge list")
-		up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", tt)
-		return false, err
-	}
-
-	// Convert the epoch time string to an integer
-	epochTime, err := strconv.ParseInt(epochTimeString, 10, 64)
-	if err != nil {
-		fmt.Println("Error parsing epoch time:", err)
-		return false, err
-	}
-	// Convert the epoch time to a time.Time value
-	storedTime := time.Unix(epochTime, 0)
-	// Calculate the duration between the stored time and current time
-	duration := time.Since(storedTime)
-	// Define a duration representing 24 hours
-	twentyFourHours := 24 * time.Hour
-	// Compare the duration with 24 hours
-	if duration >= twentyFourHours {
-		fmt.Println("24 hours have elapsed.")
-		return true, nil
-	} else {
-		fmt.Println("Less than 24 hours have elapsed.")
-		return false, err
-	}
 
 }
+
+//func (up *UnPledge) ProofVerification(tokenID string) (bool, error) {
+//	tt := token.RBTTokenType
+//	blk := up.w.GetLatestTokenBlock(tokenID, tt)
+//
+//	epochTimeString, err := blk.GetBlockEpoch()
+//	if err != nil {
+//		up.log.Error("Failed to get the epoch time, removing the token from the unpledge list")
+//		up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", tt)
+//		return false, err
+//	}
+//
+//	// Convert the epoch time string to an integer
+//	epochTime, err := strconv.ParseInt(epochTimeString, 10, 64)
+//	if err != nil {
+//		fmt.Println("Error parsing epoch time:", err)
+//		return false, err
+//	}
+//	// Convert the epoch time to a time.Time value
+//	storedTime := time.Unix(epochTime, 0)
+//	// Calculate the duration between the stored time and current time
+//	duration := time.Since(storedTime)
+//	// Define a duration representing 24 hours
+//	twentyFourHours := 24 * time.Hour
+//	// Compare the duration with 24 hours
+//	if duration >= twentyFourHours {
+//		fmt.Println("24 hours have elapsed.")
+//		return true, nil
+//	} else {
+//		fmt.Println("Less than 24 hours have elapsed.")
+//		return false, err
+//	}
+//
+//}
