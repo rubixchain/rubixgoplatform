@@ -344,23 +344,24 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		}
 		c.FetchSmartContract(requestID, &fetchSC)
 		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetched.")
+
 	}
-	if newEvent.Type == 2 {
-		smartContractToken := newEvent.Contract
-		publisherPeerID := peerID
-		did := newEvent.Did
-		tokenType := token.SmartContractTokenType
-		address := publisherPeerID + "." + did
-		p, err := c.getPeer(address)
-		if err != nil {
-			c.log.Error("Failed to get peer", "err", err)
-			return
-		}
-		err = c.syncTokenChainFrom(p, "", smartContractToken, tokenType)
-		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
-			return
-		}
-		c.log.Info("Token chain of " + smartContractToken + " syncing successful")
+	//if newEvent.Type == 2 {
+	smartContractToken := newEvent.Contract
+	publisherPeerID := peerID
+	did := newEvent.Did
+	tokenType := token.SmartContractTokenType
+	address := publisherPeerID + "." + did
+	p, err := c.getPeer(address)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return
 	}
+	err = c.syncTokenChainFrom(p, "", smartContractToken, tokenType)
+	if err != nil {
+		c.log.Error("Failed to sync token chain block", "err", err)
+		return
+	}
+	c.log.Info("Token chain of " + smartContractToken + " syncing successful")
+	//}
 }
