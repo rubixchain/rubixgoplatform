@@ -212,6 +212,11 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	//get the gensys block of the amrt contract token
 	tokenType := c.TokenType(SmartContractString)
 	gensysBlock := c.w.GetGenesisTokenBlock(executeReq.SmartContractToken, tokenType)
+	if gensysBlock == nil {
+		c.log.Debug("Gensys block is empty - Smart contract Token chain not synced")
+		resp.Message = "Gensys block is empty - Smart contract Token chain not synced"
+		return resp
+	}
 
 	//fetch smartcontract value from the gensys block
 	smartContractValue, err := gensysBlock.GetSmartContractValue(executeReq.SmartContractToken)
