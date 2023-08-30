@@ -212,7 +212,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		return basicResponse
 	}
 
-	binaryCodeFileDestPath := filepath.Join(binaryCodeFilePath, "binaryCodeFile.wasm")
+	binaryCodeFileDestPath := filepath.Join(binaryCodeFilePath, "binaryCodeFile")
 
 	// Read the content of binaryCodeFile
 	binaryCodeContent, err := ioutil.ReadAll(binaryCodeFile)
@@ -274,7 +274,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		return basicResponse
 	}
 
-	schemaCodeFileDestPath := filepath.Join(schemaCodeFilePath, "schemaCodeFile.json")
+	schemaCodeFileDestPath := filepath.Join(schemaCodeFilePath, "schemaCodeFile")
 
 	// Read the content of schemaCodeFile
 	schemaCodeContent, err := ioutil.ReadAll(schemaCodeFile)
