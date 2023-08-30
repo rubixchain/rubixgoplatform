@@ -371,6 +371,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	}
 	payload := map[string]interface{}{
 		"smart_contract_hash": newEvent.Contract,
+		"port":                c.cfg.NodePort,
 	}
 	dataBytes, err := json.Marshal(payload)
 	if err != nil {
