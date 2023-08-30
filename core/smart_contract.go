@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -211,7 +212,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		return basicResponse
 	}
 
-	binaryCodeFileDestPath := filepath.Join(binaryCodeFilePath, "binaryCodeFile")
+	binaryCodeFileDestPath := filepath.Join(binaryCodeFilePath, "binaryCodeFile", ".wasm")
 
 	// Read the content of binaryCodeFile
 	binaryCodeContent, err := ioutil.ReadAll(binaryCodeFile)
@@ -273,7 +274,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		return basicResponse
 	}
 
-	schemaCodeFileDestPath := filepath.Join(schemaCodeFilePath, "schemaCodeFile")
+	schemaCodeFileDestPath := filepath.Join(schemaCodeFilePath, "schemaCodeFile", ".json")
 
 	// Read the content of schemaCodeFile
 	schemaCodeContent, err := ioutil.ReadAll(schemaCodeFile)
@@ -346,7 +347,6 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetched.")
 
 	}
-	//if newEvent.Type == 2 {
 	smartContractToken := newEvent.Contract
 	publisherPeerID := peerID
 	did := newEvent.Did
@@ -363,5 +363,32 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 	c.log.Info("Token chain of " + smartContractToken + " syncing successful")
-	//}
+	w := &wallet.Wallet{}
+	curlUrl, err := w.GetSmartContractTokenUrl(newEvent.Contract)
+	if err != nil {
+		c.log.Error("Failed to get smart contract token URL", "err", err)
+		return
+	}
+	payload := map[string]interface{}{
+		"smart_contract_hash": newEvent.Contract,
+	}
+	dataBytes, err := json.Marshal(payload)
+	if err != nil {
+		c.log.Error("Failed to marshal JSON", "err", err)
+		return
+	}
+
+	resp, err := http.Post(curlUrl, "application/json", bytes.NewBuffer(dataBytes))
+	if err != nil {
+		c.log.Error("POST request to notify SC failed", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.log.Error("Error getting response from SC", "status", resp.Status)
+		return
+	}
+
+	c.log.Info("Successfully notified SC on Execution update")
 }
