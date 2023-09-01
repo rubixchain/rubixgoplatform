@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -222,7 +223,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 
 	// Write the content to binaryCodeFileDestPath
-	err = ioutil.WriteFile(binaryCodeFileDestPath, binaryCodeContent, 0644)
+	err = ioutil.WriteFile(binaryCodeFileDestPath+".wasm", binaryCodeContent, 0644)
 	if err != nil {
 		c.log.Error("Failed to write binary code file", "err", err)
 		return basicResponse
@@ -284,7 +285,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 
 	// Write the content to schemaCodeFileDestPath
-	err = ioutil.WriteFile(schemaCodeFileDestPath, schemaCodeContent, 0644)
+	err = ioutil.WriteFile(schemaCodeFileDestPath+".json", schemaCodeContent, 0644)
 	if err != nil {
 		c.log.Error("Failed to write Schema code file", "err", err)
 		return basicResponse
@@ -308,10 +309,10 @@ func (c *Core) publishNewEvent(newEvent *model.NewContractEvent) error {
 	topic := newEvent.Contract
 	if c.ps != nil {
 		err := c.ps.Publish(topic, newEvent)
-		c.log.Info("new state published on contract " + topic)
 		if err != nil {
 			c.log.Error("Failed to publish new event", "err", err)
 		}
+		c.log.Info("New state published on smart contract " + topic)
 	}
 	return nil
 }
@@ -319,7 +320,12 @@ func (c *Core) publishNewEvent(newEvent *model.NewContractEvent) error {
 func (c *Core) SubsribeContractSetup(requestID string, topic string) error {
 	reqID = requestID
 	c.l.AddRoute(APIPeerStatus, "GET", c.peerStatus)
-	return c.ps.SubscribeTopic(topic, c.ContractCallBack)
+	err := c.ps.SubscribeTopic(topic, c.ContractCallBack)
+	if err != nil {
+		c.log.Error("Unable to subscribe smart contract ", topic)
+	}
+	c.log.Info("Subscribing smart contract " + topic + " is successful")
+	return err
 }
 
 func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
@@ -327,10 +333,10 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	var fetchSC FetchSmartContractRequest
 	requestID := reqID
 	err := json.Unmarshal(data, &newEvent)
-	c.log.Info("Contract Update")
 	if err != nil {
 		c.log.Error("Failed to get contract details", "err", err)
 	}
+	c.log.Info("Update on smart contract " + newEvent.Contract)
 	if newEvent.Type == 1 {
 		fetchSC.SmartContractToken = newEvent.Contract
 		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
@@ -344,7 +350,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 			return
 		}
 		c.FetchSmartContract(requestID, &fetchSC)
-		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetched.")
+		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetched succesfully")
 
 	}
 	smartContractToken := newEvent.Contract
@@ -363,8 +369,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 	c.log.Info("Token chain of " + smartContractToken + " syncing successful")
-	w := &wallet.Wallet{}
-	curlUrl, err := w.GetSmartContractTokenUrl(newEvent.Contract)
+	curlUrl, err := c.w.GetSmartContractTokenUrl(smartContractToken)
 	if err != nil {
 		c.log.Error("Failed to get smart contract token URL", "err", err)
 		return
@@ -373,23 +378,30 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		"smart_contract_hash": newEvent.Contract,
 		"port":                c.cfg.NodePort,
 	}
-	dataBytes, err := json.Marshal(payload)
+	payLoadBytes, err := json.Marshal(payload)
 	if err != nil {
 		c.log.Error("Failed to marshal JSON", "err", err)
 		return
 	}
-
-	resp, err := http.Post(curlUrl, "application/json", bytes.NewBuffer(dataBytes))
+	request, err := http.NewRequest("POST", curlUrl, bytes.NewBuffer(payLoadBytes))
 	if err != nil {
-		c.log.Error("POST request to notify SC failed", "err", err)
+		fmt.Println("Error creating HTTP request for smart contract statefile updationcallback: ", err)
 		return
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		c.log.Error("Error getting response from SC", "status", resp.Status)
+	request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		fmt.Println("Error sending HTTP request for smart contract statefile updation: ", err)
 		return
 	}
-
-	c.log.Info("Successfully notified SC on Execution update")
+	c.log.Debug("Response Status:", response.Status)
+	responseBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		fmt.Printf("Error reading response body: %s\n", err)
+		return
+	}
+	c.log.Debug("Response Body:", string(responseBody))
+	defer response.Body.Close()
+	c.log.Info("Successfully notified smart contract on Execution update")
 }
