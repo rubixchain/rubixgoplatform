@@ -111,7 +111,6 @@ func (w *Wallet) WriteCallBackUrlToDB(input *CallBackUrl) error {
 }
 
 func (w *Wallet) GetSmartContractTokenUrl(smartcontracttoken string) (string, error) {
-	w.log.Debug("Get SC Token URL call started....")
 	var callback CallBackUrl
 	err := w.s.Read(CallBackUrlStorage, &callback, "smart_contract_hash=?", smartcontracttoken)
 	if err != nil {
@@ -123,8 +122,6 @@ func (w *Wallet) GetSmartContractTokenUrl(smartcontracttoken string) (string, er
 			return "", err
 		}
 	}
-	w.log.Debug("CallBack is : ", callback)
 	url := callback.CallBackUrl
-	w.log.Debug("url is: ", url)
 	return url, nil
 }
