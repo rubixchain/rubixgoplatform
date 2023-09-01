@@ -338,6 +338,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	}
 	c.log.Info("Update on smart contract " + newEvent.Contract)
 	if newEvent.Type == 1 {
+		c.log.Debug("Type 1 Deploy started...")
 		fetchSC.SmartContractToken = newEvent.Contract
 		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
 		if err != nil {
@@ -353,6 +354,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetched succesfully")
 
 	}
+	c.log.Debug("Type 2 started....")
 	smartContractToken := newEvent.Contract
 	publisherPeerID := peerID
 	did := newEvent.Did
@@ -369,6 +371,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 	c.log.Info("Token chain of " + smartContractToken + " syncing successful")
+	c.log.Debug("About to call Get SC Token Url fn")
 	curlUrl, err := c.w.GetSmartContractTokenUrl(smartContractToken)
 	c.log.Debug("curl url is : ", curlUrl)
 	if err != nil {
@@ -379,16 +382,19 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		"smart_contract_hash": newEvent.Contract,
 		"port":                c.cfg.NodePort,
 	}
+	c.log.Debug("Payload is :", payload)
 	payLoadBytes, err := json.Marshal(payload)
 	if err != nil {
 		c.log.Error("Failed to marshal JSON", "err", err)
 		return
 	}
+	c.log.Debug("Payload bytes is :", payLoadBytes)
 	request, err := http.NewRequest("POST", curlUrl, bytes.NewBuffer(payLoadBytes))
 	if err != nil {
 		fmt.Println("Error creating HTTP request for smart contract statefile updationcallback: ", err)
 		return
 	}
+	c.log.Debug("Request is :", request)
 	request.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	client := &http.Client{}
 	response, err := client.Do(request)
@@ -396,6 +402,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		fmt.Println("Error sending HTTP request for smart contract statefile updation: ", err)
 		return
 	}
+	c.log.Debug("Responce is ", response)
 	c.log.Debug("Response Status " + response.Status)
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
