@@ -123,5 +123,6 @@ func (w *Wallet) GetSmartContractTokenUrl(smartcontracttoken string) (string, er
 		}
 	}
 	url := callback.CallBackUrl
+	w.log.Debug("url is: ", url)
 	return url, nil
 }

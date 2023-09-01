@@ -370,6 +370,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	}
 	c.log.Info("Token chain of " + smartContractToken + " syncing successful")
 	curlUrl, err := c.w.GetSmartContractTokenUrl(smartContractToken)
+	c.log.Debug("curl url is : ", curlUrl)
 	if err != nil {
 		c.log.Error("Failed to get smart contract token URL", "err", err)
 		return
@@ -395,13 +396,13 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		fmt.Println("Error sending HTTP request for smart contract statefile updation: ", err)
 		return
 	}
-	c.log.Debug("Response Status:", response.Status)
+	c.log.Debug("Response Status " + response.Status)
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
 		fmt.Printf("Error reading response body: %s\n", err)
 		return
 	}
-	c.log.Debug("Response Body:", string(responseBody))
+	c.log.Debug("Response Body " + string(responseBody))
 	defer response.Body.Close()
 	c.log.Info("Successfully notified smart contract on Execution update")
 }
