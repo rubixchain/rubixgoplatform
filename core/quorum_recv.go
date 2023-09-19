@@ -63,7 +63,7 @@ func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	//check if token has multiple pins
-	dt := sc.GetTransTokenInfo(cr.BatchID)
+	dt := sc.GetTransTokenInfo()
 	if dt == nil {
 		c.log.Error("Consensus failed, data token missing")
 		crep.Message = "Consensus failed, data token missing"
@@ -114,7 +114,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	//check if token has multiple pins
-	ti := sc.GetTransTokenInfo(cr.BatchID)
+	ti := sc.GetTransTokenInfo()
 	results := make([]MultiPinCheckRes, len(ti))
 	var wg sync.WaitGroup
 	for i := range ti {
@@ -140,20 +140,23 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		crep.Message = "Token ownership check failed"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	for i := range ti {
-		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
+	//check if token is pledgedtoken
+	wt := sc.GetTransTokenInfo()
+
+	for i := range wt {
+		b := c.w.GetLatestTokenBlock(wt[i].Token, wt[i].TokenType)
 		if b == nil {
 			c.log.Error("pledge token check Failed, failed to get latest block")
 			crep.Message = "pledge token check Failed, failed to get latest block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		if c.checkIsPledged(b) {
-			c.log.Error("Pledge Token check Failed, Token ", ti[i], " is Pledged Token")
-			crep.Message = "Pledge Token check Failed, Token " + ti[i].Token + " is Pledged Token"
+			c.log.Error("Pledge Token check Failed, Token ", wt[i], " is Pledged Token")
+			crep.Message = "Pledge Token check Failed, Token " + wt[i].Token + " is Pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		if c.checkIsUnpledged(b) {
-			unpledgeId := c.getUnpledgeId(ti[i].Token)
+			unpledgeId := c.getUnpledgeId(wt[i].Token)
 			if unpledgeId == "" {
 				c.log.Error("Failed to fetch proof file CID")
 				crep.Message = "Failed to fetch proof file CID"
@@ -174,13 +177,13 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			pcs := util.BytesToString(pcb)
 
 			senderAddr := cr.SenderPeerID + "." + sc.GetSenderDID()
-			rdid, tid, err := c.getProofverificationDetails(ti[i].Token, senderAddr)
+			rdid, tid, err := c.getProofverificationDetails(wt[i].Token, senderAddr)
 			if err != nil {
 				c.log.Error("Failed to get pledged for token reciveer did", "err", err)
 				crep.Message = "Failed to get pledged for token reciveer did"
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
-			pv, err := c.up.ProofVerification(ti[i].Token, pcs, rdid, tid)
+			pv, err := c.up.ProofVerification(wt[i].Token, pcs, rdid, tid)
 			if err != nil {
 				c.log.Error("Proof Verification Failed due to error ", err)
 				crep.Message = "Proof Verification Failed due to error " + err.Error()
@@ -194,11 +197,8 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			c.log.Debug("Proof of work verified")
 		}
 	}
-	scb := sc.GetBlock()
-	if cr.BatchID != "" {
-		scb = append(scb, []byte("Batch ID : "+cr.BatchID)...)
-	}
-	qHash := util.CalculateHash(scb, "SHA3-256")
+
+	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
 	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
@@ -224,7 +224,7 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	//check if token has multiple pins
-	ti := sc.GetTransTokenInfo(cr.BatchID)
+	ti := sc.GetTransTokenInfo()
 	results := make([]MultiPinCheckRes, len(ti))
 	var wg sync.WaitGroup
 	for i := range ti {
@@ -250,9 +250,11 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 		crep.Message = "Token ownership check failed"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	//check if token is pledgedtoken
+	wt := sc.GetTransTokenInfo()
 
-	for i := range ti {
-		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
+	for i := range wt {
+		b := c.w.GetLatestTokenBlock(wt[i].Token, wt[i].TokenType)
 		if b == nil {
 			c.log.Error("pledge token check Failed, failed to get latest block")
 			crep.Message = "pledge token check Failed, failed to get latest block"
@@ -857,7 +859,7 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 		srep.Message = "Failed to do token abitration, invalid smart contract"
 		return c.l.RenderJSON(req, &srep, http.StatusOK)
 	}
-	ti := sc.GetTransTokenInfo("")
+	ti := sc.GetTransTokenInfo()
 	if ti == nil {
 		c.log.Error("Failed to do token abitration, invalid token")
 		srep.Message = "Failed to do token abitration, invalid token"
