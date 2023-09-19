@@ -351,9 +351,24 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		}
 		c.FetchSmartContract(requestID, &fetchSC)
 		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetching succesful")
-
 	}
 	smartContractToken := newEvent.Contract
+	scFolderPath := c.cfg.DirPath + "SmartContract/" + smartContractToken
+	if _, err := os.Stat(scFolderPath); os.IsNotExist(err) {
+		fetchSC.SmartContractToken = smartContractToken
+		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
+		if err != nil {
+			c.log.Error("Fetch smart contract failed, failed to create smart contract folder", "err", err)
+			return
+		}
+		fetchSC.SmartContractTokenPath, err = c.RenameSCFolder(fetchSC.SmartContractTokenPath, smartContractToken)
+		if err != nil {
+			c.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
+			return
+		}
+		c.FetchSmartContract(requestID, &fetchSC)
+		c.log.Info("Smart contract " + smartContractToken + " files fetching successful")
+	}
 	publisherPeerID := peerID
 	did := newEvent.Did
 	tokenType := token.SmartContractTokenType
