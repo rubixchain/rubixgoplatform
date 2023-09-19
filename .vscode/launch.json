@@ -11,7 +11,7 @@
             "mode": "auto",
             "program": "${workspaceFolder}",
             "cwd": "${workspaceFolder}/windows",
-            "args": ["run", "-p", "testnode", "-n", "0",  "-s", "-testNet", "-enableAuth", "-grpcSecure"]
+            "args": ["run", "-p", "venkatnode", "-n", "0",  "-s"]
         },
         {
             "name": "Node1",
@@ -20,7 +20,7 @@
             "mode": "auto",
             "program": "${workspaceFolder}",
             "cwd": "${workspaceFolder}/windows",
-            "args": ["run", "-p", "node1", "-n", "0",  "-testNet", "-s", "-grpcPort", "10500"]
+            "args": ["run", "-p", "node1", "-n", "0",  "-testNet", "-s"]
         },
         {
             "name": "Node2",
@@ -29,7 +29,7 @@
             "mode": "auto",
             "program": "${workspaceFolder}",
             "cwd": "${workspaceFolder}/windows",
-            "args": ["run", "-p", "node2", "-n", "1",  "-testNet", "-s", "-grpcPort", "10501"]
+            "args": ["run", "-p", "node2", "-n", "1",  "-testNet", "-s"]
         },
         {
             "name": "Node3",
@@ -38,7 +38,7 @@
             "mode": "auto",
             "program": "${workspaceFolder}",
             "cwd": "${workspaceFolder}/windows",
-            "args": ["run", "-p", "node3", "-n", "2",  "-testNet", "-s", "-grpcPort", "10502"]
+            "args": ["run", "-p", "node3", "-n", "2",  "-testNet", "-s"]
         },
         {
             "name": "Command",

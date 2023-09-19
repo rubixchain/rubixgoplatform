@@ -314,7 +314,7 @@ func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.
 		SenderPeerID:  c.peerID,
 		ContractBlock: sc.GetBlock(),
 	}
-	td, pl, err := c.initiateConsensus(cr, sc)
+	td, pl, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		br.Message = "Consensus failed" + err.Error()
