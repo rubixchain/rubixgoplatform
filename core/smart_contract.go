@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -221,7 +223,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 
 	// Write the content to binaryCodeFileDestPath
-	err = ioutil.WriteFile(binaryCodeFileDestPath, binaryCodeContent, 0644)
+	err = ioutil.WriteFile(binaryCodeFileDestPath+".wasm", binaryCodeContent, 0644)
 	if err != nil {
 		c.log.Error("Failed to write binary code file", "err", err)
 		return basicResponse
@@ -283,7 +285,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 
 	// Write the content to schemaCodeFileDestPath
-	err = ioutil.WriteFile(schemaCodeFileDestPath, schemaCodeContent, 0644)
+	err = ioutil.WriteFile(schemaCodeFileDestPath+".json", schemaCodeContent, 0644)
 	if err != nil {
 		c.log.Error("Failed to write Schema code file", "err", err)
 		return basicResponse
@@ -307,10 +309,10 @@ func (c *Core) publishNewEvent(newEvent *model.NewContractEvent) error {
 	topic := newEvent.Contract
 	if c.ps != nil {
 		err := c.ps.Publish(topic, newEvent)
-		c.log.Info("new state published on contract " + topic)
 		if err != nil {
 			c.log.Error("Failed to publish new event", "err", err)
 		}
+		c.log.Info("New state published on smart contract " + topic)
 	}
 	return nil
 }
@@ -318,7 +320,12 @@ func (c *Core) publishNewEvent(newEvent *model.NewContractEvent) error {
 func (c *Core) SubsribeContractSetup(requestID string, topic string) error {
 	reqID = requestID
 	c.l.AddRoute(APIPeerStatus, "GET", c.peerStatus)
-	return c.ps.SubscribeTopic(topic, c.ContractCallBack)
+	err := c.ps.SubscribeTopic(topic, c.ContractCallBack)
+	if err != nil {
+		c.log.Error("Unable to subscribe smart contract ", topic)
+	}
+	c.log.Info("Subscribing smart contract " + topic + " is successful")
+	return err
 }
 
 func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
@@ -326,10 +333,10 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	var fetchSC FetchSmartContractRequest
 	requestID := reqID
 	err := json.Unmarshal(data, &newEvent)
-	c.log.Info("Contract Update")
 	if err != nil {
 		c.log.Error("Failed to get contract details", "err", err)
 	}
+	c.log.Info("Update on smart contract " + newEvent.Contract)
 	if newEvent.Type == 1 {
 		fetchSC.SmartContractToken = newEvent.Contract
 		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
@@ -343,11 +350,25 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 			return
 		}
 		c.FetchSmartContract(requestID, &fetchSC)
-		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetched.")
-
+		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetching succesful")
 	}
-	//if newEvent.Type == 2 {
 	smartContractToken := newEvent.Contract
+	scFolderPath := c.cfg.DirPath + "SmartContract/" + smartContractToken
+	if _, err := os.Stat(scFolderPath); os.IsNotExist(err) {
+		fetchSC.SmartContractToken = smartContractToken
+		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
+		if err != nil {
+			c.log.Error("Fetch smart contract failed, failed to create smart contract folder", "err", err)
+			return
+		}
+		fetchSC.SmartContractTokenPath, err = c.RenameSCFolder(fetchSC.SmartContractTokenPath, smartContractToken)
+		if err != nil {
+			c.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
+			return
+		}
+		c.FetchSmartContract(requestID, &fetchSC)
+		c.log.Info("Smart contract " + smartContractToken + " files fetching successful")
+	}
 	publisherPeerID := peerID
 	did := newEvent.Did
 	tokenType := token.SmartContractTokenType
@@ -363,5 +384,52 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 	c.log.Info("Token chain of " + smartContractToken + " syncing successful")
-	//}
+	curlUrl, err := c.w.GetSmartContractTokenUrl(smartContractToken)
+	if err != nil {
+		c.log.Error("Failed to get smart contract token URL", "err", err)
+		return
+	}
+	payload := map[string]interface{}{
+		"smart_contract_hash": newEvent.Contract,
+		"port":                c.cfg.NodePort,
+	}
+	payLoadBytes, err := json.Marshal(payload)
+	if err != nil {
+		c.log.Error("Failed to marshal JSON", "err", err)
+		return
+	}
+	request, err := http.NewRequest("POST", curlUrl, bytes.NewBuffer(payLoadBytes))
+	if err != nil {
+		fmt.Println("Error creating HTTP request for smart contract statefile updationcallback: ", err)
+		return
+	}
+	request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		fmt.Println("Error sending HTTP request for smart contract statefile updation: ", err)
+		return
+	}
+	if response.StatusCode != http.StatusOK {
+		c.log.Error("Error getting response from SC", "status", response.Status)
+		return
+	}
+	responseBodyBytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		fmt.Printf("Error reading response body: %s\n", err)
+		return
+	}
+	responseBody := string(responseBodyBytes)
+	var responseData map[string]interface{}
+	if err := json.Unmarshal([]byte(responseBody), &responseData); err != nil {
+		c.log.Error("Error parsing JSON:", err)
+		return
+	}
+	message, ok := responseData["message"].(string)
+	if !ok {
+		c.log.Error("Error: 'message' field not found or not a string")
+		return
+	}
+	c.log.Debug(message)
+	defer response.Body.Close()
 }

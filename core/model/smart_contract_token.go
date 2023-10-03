@@ -13,5 +13,5 @@ type ExecuteSmartContractRequest struct {
 	ExecutorAddress    string `json:"executorAddr"`
 	QuorumType         int    `json:"quorumType"`
 	Comment            string `json:"comment"`
-	SmartContractData  string `json:"smartContractData`
+	SmartContractData  string `json:"smartContractData"`
 }

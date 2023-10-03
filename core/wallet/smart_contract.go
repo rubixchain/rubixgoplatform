@@ -109,3 +109,19 @@ func (w *Wallet) WriteCallBackUrlToDB(input *CallBackUrl) error {
 	}
 	return nil
 }
+
+func (w *Wallet) GetSmartContractTokenUrl(smartcontracttoken string) (string, error) {
+	var callback CallBackUrl
+	err := w.s.Read(CallBackUrlStorage, &callback, "smart_contract_hash=?", smartcontracttoken)
+	if err != nil {
+		if err.Error() == "no records found" {
+			w.log.Error("Smart contract not found in CallBackURL storage")
+			return "", err
+		} else {
+			w.log.Error("Error fetching URL for Smart contract", "error:", err)
+			return "", err
+		}
+	}
+	url := callback.CallBackUrl
+	return url, nil
+}
