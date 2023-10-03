@@ -61,7 +61,7 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string) []string {
 	switch t {
 	case QuorumTypeOne:
 		var quorumList []wallet.DIDPeerMap
-		err := qm.s.Read(wallet.DIDPeerStorage, &quorumList, "did_char=?", lastChar)
+		err := qm.s.Read(wallet.DIDPeerStorage, &quorumList, "did_last_char=?", lastChar)
 		fmt.Println(quorumList)
 
 		if err != nil {
