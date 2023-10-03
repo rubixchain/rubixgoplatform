@@ -275,7 +275,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
 		//as well. Each quorums should pledge equal amount of tokens and hence, it should have a total of (Transacting RBTs/5) tokens
 		//available for pledging.
-		go c.connectQuorum(cr, a, AlphaQuorumType, reqPledgeTokens)
+		go c.connectQuorum(cr, a, AlphaQuorumType)
 	}
 	loop := true
 	var err error
@@ -449,15 +449,11 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	}
 }
 
-func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, pledgetokens float64) {
+func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
 	var err error
-	if cr.Type == 1 {
-		p, err = c.getPeer(addr)
-	} else {
-		p, err = c.getPeer(addr)
-	}
+	p, err = c.getPeer(addr)
 	if err != nil {
 		c.log.Error("Failed to get peer connection", "err", err)
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)
