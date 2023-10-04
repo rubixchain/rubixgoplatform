@@ -317,6 +317,7 @@ func (c *Core) SetupCore() error {
 	c.w.SetupWallet(c.ipfs)
 	c.PingSetup()
 	c.peerSetup()
+	c.w.AddDIDLastChar()
 	c.SetupToken()
 	c.QuroumSetup()
 	c.PinService()
