@@ -96,7 +96,8 @@ var commands = []string{VersionCmd,
 	SetupDBCmd,
 	GetTxnDetailsCmd,
 	CreateNFTCmd,
-	GetAllNFTCmd}
+	GetAllNFTCmd,
+}
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
