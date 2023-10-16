@@ -121,7 +121,6 @@ var commands = []string{VersionCmd,
 	GetTokenBlock,
 	GetSmartContractData,
 }
-
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",

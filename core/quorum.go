@@ -1,8 +1,11 @@
 package core
 
 import (
+	"fmt"
+
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
 const (
@@ -47,10 +50,40 @@ func NewQuorumManager(s storage.Storage, log logger.Logger) (*QuorumManager, err
 }
 
 // GetQuorum will get the configured or available quorum
-func (qm *QuorumManager) GetQuorum(t int) []string {
+func (qm *QuorumManager) GetQuorum(t int, lastChar string) []string {
+	//QuorumTypeOne is to select quorums from the public pool of quorums instead of a private subnet.
+	//Once a new node is created, it will create a DID. Using the command "registerdid", the peerID and DID will be
+	//published in the network, and all the nodes listening to the subscription will have the DID added on the DIDPeerTable
+	//A new variable quorumList is created, which will contain all the nodes which has DID with same last character as Transaction ID.
+	//It would throw an error if it cannot find any relevant data of if the number of nodes is less than 5.
+	//Then a separate array of type String called quorumAddrList, which will simply contain the address of nodes i.e. PeerID.DID
+	//"quorumAddrList" is returned and checking the availability of nodes would be done in initiateConsensus function in quorum_initiator.go.
 	switch t {
 	case QuorumTypeOne:
-		return nil
+		var quorumList []wallet.DIDPeerMap
+		err := qm.s.Read(wallet.DIDPeerStorage, &quorumList, "did_last_char=?", lastChar)
+		fmt.Println(quorumList)
+
+		if err != nil {
+			qm.log.Error("Quorums not present")
+			return nil
+		}
+		if len(quorumList) < 5 {
+			qm.log.Error("Not enough quorums present")
+			return nil
+		}
+		var quorumAddrList []string
+		fmt.Println(quorumAddrList)
+		quorumCount := 0
+		for _, q := range quorumList {
+			addr := string(q.PeerID + "." + q.DID)
+			quorumAddrList = append(quorumAddrList, addr)
+			quorumCount = quorumCount + 1
+			if quorumCount == 7 {
+				break
+			}
+		}
+		return quorumAddrList
 	case QuorumTypeTwo:
 		return qm.ql
 	}
