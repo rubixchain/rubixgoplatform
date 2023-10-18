@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"sync"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -14,6 +15,14 @@ import (
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
+
+type TokenStateCheckResult struct {
+	Token                 string
+	Exhausted             bool
+	Error                 error
+	Message               string
+	tokenIDTokenStateData string
+}
 
 func (c *Core) validateSigner(b *block.Block) bool {
 	signers, err := b.GetSigner()
@@ -119,14 +128,22 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 }
 
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) bool {
-	ti := sc.GetTransTokenInfo()
+
+	var ti []contract.TokenInfo
+	var address string
+	if cr.Mode == SmartContractDeployMode {
+		ti = sc.GetCommitedTokensInfo()
+		address = cr.DeployerPeerID + "." + sc.GetDeployerDID()
+	} else {
+		ti = sc.GetTransTokenInfo()
+		address = cr.SenderPeerID + "." + sc.GetSenderDID()
+	}
 	for i := range ti {
 		ids, err := c.GetDHTddrs(ti[i].Token)
 		if err != nil || len(ids) == 0 {
 			continue
 		}
 	}
-	address := cr.SenderPeerID + "." + sc.GetSenderDID()
 	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
@@ -270,4 +287,131 @@ func (c *Core) getUnpledgeId(wt string) string {
 		return ""
 	}
 	return b.GetUnpledgeId(wt)
+}
+
+/*
+ * Function to check whether the TokenState is pinned or not
+ * Input tokenId, index, resultArray, waitgroup,quorumList
+ */
+func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []TokenStateCheckResult, wg *sync.WaitGroup, quorumList []string, tokenType int) {
+	defer wg.Done()
+	var result TokenStateCheckResult
+	result.Token = tokenId
+
+	//get the latest blockId i.e. latest token state
+	block := c.w.GetLatestTokenBlock(tokenId, tokenType)
+	if block == nil {
+		c.log.Error("Invalid token chain block, Block is nil")
+		result.Error = fmt.Errorf("Invalid token chain block,Block is nil")
+		result.Message = "Invalid token chain block"
+		resultArray[index] = result
+		return
+	}
+	blockId, err := block.GetBlockID(tokenId)
+	if err != nil {
+		c.log.Error("Error fetching block Id", err)
+		result.Error = err
+		result.Message = "Error fetching block Id"
+		resultArray[index] = result
+		return
+	}
+	//concat tokenId and BlockID
+	tokenIDTokenStateData := tokenId + blockId
+	tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
+
+	//add to ipfs get only the hash of the token+tokenstate
+	tokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	if err != nil {
+		c.log.Error("Error adding data to ipfs", err)
+		result.Error = err
+		result.Message = "Error adding data to ipfs"
+		resultArray[index] = result
+		return
+	}
+
+	//check to see if tokenstate was already pinned by current validator, for any previous consensus
+	tokenStatePinInfo, err := c.w.GetStatePinnedInfo(tokenIDTokenStateHash)
+	if err != nil {
+		c.log.Error("Error checking if tokenstate pinned earlier", err)
+		result.Error = err
+		result.Message = "Error checking if tokenstate pinned earlier"
+		resultArray[index] = result
+		return
+	}
+
+	if tokenStatePinInfo != nil {
+		c.log.Debug("Tokenstate pinned already pinned", err)
+		result.Error = err
+		result.Message = "Tokenstate pinned already pinned"
+		resultArray[index] = result
+		return
+	}
+
+	//check dht to see if any pin exist
+	list, err1 := c.GetDHTddrs(tokenIDTokenStateHash)
+	//try to call ipfs cat to check if any one has pinned the state i.e \
+	if err1 != nil {
+		c.log.Error("Error fetching content for the tokenstate ipfs hash :", tokenIDTokenStateHash, "Error", err)
+		result.Exhausted = true
+		result.Error = nil
+		result.Message = "Error fetching content for the tokenstate ipfs hash : " + tokenIDTokenStateHash
+		resultArray[index] = result
+		return
+	}
+	//remove ql peer ids from list
+	qPeerIds := make([]string, 0)
+
+	for i := range quorumList {
+		pId, _, ok := util.ParseAddress(quorumList[i])
+		if !ok {
+			c.log.Error("Error parsing addressing")
+			result.Error = err
+			result.Message = "Error parsing addressing"
+			resultArray[index] = result
+			return
+		}
+		qPeerIds = append(qPeerIds, pId)
+	}
+	updatedList := c.removeStrings(list, qPeerIds)
+	//if pin exist abort
+	if len(updatedList) != 0 {
+		c.log.Debug("Token state is exhausted, Token is being Double spent")
+		result.Exhausted = true
+		result.Error = nil
+		result.Message = "Token state is exhausted, Token is being Double spent"
+		resultArray[index] = result
+		return
+	}
+	c.log.Debug("Token state is not exhausted, Unique Txn")
+	result.Error = nil
+	result.Message = "Token state is free, Unique Txn"
+	result.tokenIDTokenStateData = tokenIDTokenStateData
+	resultArray[index] = result
+}
+
+func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did string) error {
+	var ids []string
+	for i := range tokenStateCheckResult {
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenStateCheckResult[i].tokenIDTokenStateData))
+		tokenIDTokenStateHash, err := c.w.Add(tokenIDTokenStateBuffer, did, wallet.QuorumRole)
+		if err != nil {
+			c.log.Error("Error triggered while adding token state", err)
+			return err
+		}
+		ids = append(ids, tokenIDTokenStateHash)
+		_, err = c.w.Pin(tokenIDTokenStateHash, wallet.QuorumRole, did)
+		if err != nil {
+			c.log.Error("Error triggered while pinning token state", err)
+			c.unPinTokenState(ids, did)
+			return err
+		}
+		c.log.Debug("token state pinned", tokenIDTokenStateHash)
+	}
+	return nil
+}
+
+func (c *Core) unPinTokenState(ids []string, did string) {
+	for i := range ids {
+		c.w.UnPin(ids[i], wallet.QuorumRole, did)
+	}
 }

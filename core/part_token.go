@@ -114,14 +114,14 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	nwt, err := c.w.GetCloserToken(did, rem)
-	if err != nil && err.Error() != "not records found" {
+	if err != nil && err.Error() != "no records found" {
 		c.w.ReleaseTokens(wt)
 		c.log.Error("failed to get whole token", "err", err)
 		return nil, fmt.Errorf("failed to get whole token")
 	}
 	if nwt == nil {
 		c.w.ReleaseTokens(rpt)
-		c.log.Debug("no more tokens left to pledge")
+		c.log.Debug("No More tokens left to pledge")
 		return wt, nil
 	}
 	c.w.ReleaseToken(nwt.TokenID)

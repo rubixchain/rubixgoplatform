@@ -21,14 +21,15 @@ const (
 )
 
 const (
-	WholeTokenType    string = "wt"
-	PartTokenType     string = "pt"
-	NFTType           string = "nt"
-	TestTokenType     string = "tt"
-	DataTokenType     string = "dt"
-	TestPartTokenType string = "tp"
-	TestNFTType       string = "tn"
-	ReferenceType     string = "rf"
+	WholeTokenType         string = "wt"
+	PartTokenType          string = "pt"
+	NFTType                string = "nt"
+	TestTokenType          string = "tt"
+	DataTokenType          string = "dt"
+	TestPartTokenType      string = "tp"
+	TestNFTType            string = "tn"
+	ReferenceType          string = "rf"
+	SmartContractTokenType string = "st"
 )
 
 const TCBlockCountLimit int = 100
@@ -50,6 +51,8 @@ func tcsType(tokenType int) string {
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	return tt + "-"
 }
@@ -71,6 +74,8 @@ func tcsPrefix(tokenType int, t string) string {
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	return tt + "-" + t + "-"
 }
@@ -92,6 +97,8 @@ func tcsKey(tokenType int, t string, blockID string) string {
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	bs := strings.Split(blockID, "-")
 	if len(bs) == 2 {
@@ -133,6 +140,8 @@ func oldtcsKey(tokenType int, t string, blockID string) string {
 		tt = TestTokenType
 	case tkn.DataTokenType:
 		tt = DataTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
 	}
 	return tt + "-" + t + "-" + blockID
 }
@@ -164,6 +173,8 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 		db = w.ntcs
 	case tkn.TestNFTTokenType:
 		db = w.ntcs
+	case tkn.SmartContractTokenType:
+		db = w.smartContractTokenChainStorage
 	}
 	return db
 }

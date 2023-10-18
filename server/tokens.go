@@ -33,6 +33,25 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+type RBTTransferRequestSwaggoInput struct {
+	Receiver   string  `json:"receiver"`
+	Sender     string  `json:"sender"`
+	TokenCount float64 `json:"tokenCOunt"`
+	Comment    string  `json:"comment"`
+	Type       int     `json:"type"`
+}
+
+// ShowAccount godoc
+
+// @Summary     Initiate RBT Transfer
+// @Description This API will initiate RBT transfer to the specified dID
+// @Tags        Account
+// @ID 			initiate-rbt-transfer
+// @Accept      json
+// @Produce     json
+// @Param 		input body RBTTransferRequestSwaggoInput true "Intitate RBT transfer"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/initiate-rbt-transfer [post]
 func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTTransferRequest
 	err := s.ParseJSON(req, &rbtReq)
@@ -51,6 +70,15 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+// ShowAccount godoc
+// @Summary      Check account balance
+// @Description  For a mentioned DID, check the account balance
+// @Tags         Account
+// @Accept       json
+// @Produce      json
+// @Param        did      	   query      string  true  "User DID"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/get-account-info [get]
 func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
 	if !s.validateDIDAccess(req, did) {
@@ -72,6 +100,22 @@ func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
 
+type SignatureResponseSwaggoInput struct {
+	ID       string `json:"id"`
+	Mode     int    `json:"mode"`
+	Password string `json:"password"`
+}
+
+// ShowAccount godoc
+// @Summary     Signature Response
+// @Description This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.
+// @Tags        Account
+// @ID 			signature-response
+// @Accept      json
+// @Produce     json
+// @Param 		input body SignatureResponseSwaggoInput true "Send input for requested signature"
+// @Success 	200		{object}	model.BasicResponse
+// @Router /api/signature-response [post]
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	var resp did.SignRespData
 	err := s.ParseJSON(req, &resp)
