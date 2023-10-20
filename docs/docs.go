@@ -521,6 +521,41 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/get-smart-contract-token-chain-data": {
+            "post": {
+                "description": "This API will return smart contract token chain data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Get Smart Contract Token Chain Data",
+                "operationId": "get-smart-contract-token-chain-data",
+                "parameters": [
+                    {
+                        "description": "Returns Smart contract token chain Execution Data",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.GetSmartContractTokenChainDataSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/getallnft": {
             "post": {
                 "description": "This API will get all NFTs of the DID",
@@ -560,47 +595,12 @@ const docTemplate = `{
                 "operationId": "initiate-rbt-transfer",
                 "parameters": [
                     {
-                        "description": "The decentralized identifier of the receiver",
-                        "name": "receiver",
+                        "description": "Intitate RBT transfer",
+                        "name": "input",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "The decentralized identifier of the sender",
-                        "name": "sender",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "The number of RBT tokens to transfer",
-                        "name": "tokenCount",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "number"
-                        }
-                    },
-                    {
-                        "description": "A comment for the transfer",
-                        "name": "comment",
-                        "in": "body",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "The type of transfer (1 for direct transfer, 2 for group transfer)",
-                        "name": "type",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
+                            "$ref": "#/definitions/server.RBTTransferRequestSwaggoInput"
                         }
                     }
                 ],
@@ -614,7 +614,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/publish-contract": {
+        "/api/publish-smart-contract": {
             "post": {
                 "description": "This API endpoint publishes a smart contract.",
                 "consumes": [
@@ -648,6 +648,41 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/register-callback-url": {
+            "post": {
+                "description": "This API will register call back url for when updated come for smart contract token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Get Smart Contract Token Chain Data",
+                "operationId": "register-callback-url",
+                "parameters": [
+                    {
+                        "description": "Register call back URL",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.RegisterCallBackURLSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/signature-response": {
             "post": {
                 "description": "This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.",
@@ -664,7 +699,7 @@ const docTemplate = `{
                 "operationId": "signature-response",
                 "parameters": [
                     {
-                        "description": "Signature response input",
+                        "description": "Send input for requested signature",
                         "name": "input",
                         "in": "body",
                         "required": true,
@@ -706,7 +741,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/subscribe-contract": {
+        "/api/subscribe-smart-contract": {
             "post": {
                 "description": "This API endpoint allows subscribing to a smart contract.",
                 "consumes": [
@@ -859,6 +894,17 @@ const docTemplate = `{
                 }
             }
         },
+        "server.GetSmartContractTokenChainDataSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "latest": {
+                    "type": "boolean"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
         "server.NewContractEventSwaggoInput": {
             "type": "object",
             "properties": {
@@ -877,6 +923,37 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "contract": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.RBTTransferRequestSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "receiver": {
+                    "type": "string"
+                },
+                "sender": {
+                    "type": "string"
+                },
+                "tokenCOunt": {
+                    "type": "number"
+                },
+                "type": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.RegisterCallBackURLSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "callbackurl": {
+                    "type": "string"
+                },
+                "token": {
                     "type": "string"
                 }
             }

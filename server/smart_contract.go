@@ -252,7 +252,7 @@ func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 // @Produce      json
 // @Param 		 input body NewContractEventSwaggoInput true "Publish input contract"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/publish-contract [post]
+// @Router       /api/publish-smart-contract [post]
 func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {
 	var newEvent model.NewContractEvent
 	err := s.ParseJSON(request, &newEvent)
@@ -272,7 +272,7 @@ func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {
 // @Produce      json
 // @Param        input body NewSubscriptionSwaggoInput true "Subscribe to input contract"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/subscribe-contract [post]
+// @Router       /api/subscribe-smart-contract [post]
 func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 	var newSubscription model.NewSubscription
 	err := s.ParseJSON(request, &newSubscription)
