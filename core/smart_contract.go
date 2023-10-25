@@ -306,7 +306,7 @@ func (c *Core) PublishNewEvent(nc *model.NewContractEvent) {
 }
 
 func (c *Core) publishNewEvent(newEvent *model.NewContractEvent) error {
-	topic := newEvent.Contract
+	topic := newEvent.SmartContractToken
 	if c.ps != nil {
 		err := c.ps.Publish(topic, newEvent)
 		if err != nil {
@@ -336,9 +336,9 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	if err != nil {
 		c.log.Error("Failed to get contract details", "err", err)
 	}
-	c.log.Info("Update on smart contract " + newEvent.Contract)
+	c.log.Info("Update on smart contract " + newEvent.SmartContractToken)
 	if newEvent.Type == 1 {
-		fetchSC.SmartContractToken = newEvent.Contract
+		fetchSC.SmartContractToken = newEvent.SmartContractToken
 		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
 		if err != nil {
 			c.log.Error("Fetch smart contract failed, failed to create smartcontract folder", "err", err)
@@ -352,7 +352,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		c.FetchSmartContract(requestID, &fetchSC)
 		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetching succesful")
 	}
-	smartContractToken := newEvent.Contract
+	smartContractToken := newEvent.SmartContractToken
 	scFolderPath := c.cfg.DirPath + "SmartContract/" + smartContractToken
 	if _, err := os.Stat(scFolderPath); os.IsNotExist(err) {
 		fetchSC.SmartContractToken = smartContractToken
@@ -390,7 +390,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 	payload := map[string]interface{}{
-		"smart_contract_hash": newEvent.Contract,
+		"smart_contract_hash": newEvent.SmartContractToken,
 		"port":                c.cfg.NodePort,
 	}
 	payLoadBytes, err := json.Marshal(payload)

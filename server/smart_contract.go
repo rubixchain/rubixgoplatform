@@ -19,17 +19,11 @@ type InitSmartContractToken struct {
 }
 
 type FetchSmartContractSwaggoInput struct {
-	SmartContractToken string `json:"smart_contract_token"`
-}
-
-type NewContractEventSwaggoInput struct {
-	Contract          string `json:"contract"`
-	Did               string `json:"did"`
-	ContractBlockHash string `json:"contract_block_hash"`
+	SmartContractToken string `json:"smartContractToken"`
 }
 
 type NewSubscriptionSwaggoInput struct {
-	Contract string `json:"contract"`
+	SmartContractToken string `json:"smartContractToken"`
 }
 
 type DeploySmartContractSwaggoInput struct {
@@ -244,15 +238,6 @@ func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 
 }
 
-// SmartContract godoc
-// @Summary      Publish Smart Contract
-// @Description  This API endpoint publishes a smart contract.
-// @Tags         Smart Contract
-// @Accept       json
-// @Produce      json
-// @Param 		 input body NewContractEventSwaggoInput true "Publish input contract"
-// @Success      200  {object}  model.BasicResponse
-// @Router       /api/publish-smart-contract [post]
 func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {
 	var newEvent model.NewContractEvent
 	err := s.ParseJSON(request, &newEvent)
@@ -279,7 +264,7 @@ func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(request, false, "Failed to parse input", nil)
 	}
-	topic := newSubscription.Contract
+	topic := newSubscription.SmartContractToken
 	s.c.AddWebReq(request)
 	go s.c.SubsribeContractSetup(request.ID, topic)
 	return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)

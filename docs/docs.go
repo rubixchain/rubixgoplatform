@@ -614,40 +614,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/publish-smart-contract": {
-            "post": {
-                "description": "This API endpoint publishes a smart contract.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Smart Contract"
-                ],
-                "summary": "Publish Smart Contract",
-                "parameters": [
-                    {
-                        "description": "Publish input contract",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.NewContractEventSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/register-callback-url": {
             "post": {
                 "description": "This API will register call back url for when updated come for smart contract token",
@@ -889,7 +855,7 @@ const docTemplate = `{
         "server.FetchSmartContractSwaggoInput": {
             "type": "object",
             "properties": {
-                "smart_contract_token": {
+                "smartContractToken": {
                     "type": "string"
                 }
             }
@@ -905,24 +871,10 @@ const docTemplate = `{
                 }
             }
         },
-        "server.NewContractEventSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "contract": {
-                    "type": "string"
-                },
-                "contract_block_hash": {
-                    "type": "string"
-                },
-                "did": {
-                    "type": "string"
-                }
-            }
-        },
         "server.NewSubscriptionSwaggoInput": {
             "type": "object",
             "properties": {
-                "contract": {
+                "smartContractToken": {
                     "type": "string"
                 }
             }

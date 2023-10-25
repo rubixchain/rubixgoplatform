@@ -448,10 +448,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		//Todo pubsub - publish smart contract token details
 		newEvent := model.NewContractEvent{
-			Contract:          cr.SmartContractToken,
-			Did:               sc.GetDeployerDID(),
-			Type:              DeployType,
-			ContractBlockHash: newBlockId,
+			SmartContractToken:     cr.SmartContractToken,
+			Did:                    sc.GetDeployerDID(),
+			Type:                   DeployType,
+			SmartContractBlockHash: newBlockId,
 		}
 
 		err = c.publishNewEvent(&newEvent)
@@ -493,10 +493,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		//Todo pubsub - publish smart contract token details
 		newEvent := model.NewContractEvent{
-			Contract:          cr.SmartContractToken,
-			Did:               sc.GetExecutorDID(),
-			Type:              ExecuteType,
-			ContractBlockHash: newBlockId,
+			SmartContractToken:     cr.SmartContractToken,
+			Did:                    sc.GetExecutorDID(),
+			Type:                   ExecuteType,
+			SmartContractBlockHash: newBlockId,
 		}
 
 		err = c.publishNewEvent(&newEvent)

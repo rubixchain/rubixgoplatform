@@ -72,7 +72,7 @@ definitions:
     type: object
   server.FetchSmartContractSwaggoInput:
     properties:
-      smart_contract_token:
+      smartContractToken:
         type: string
     type: object
   server.GetSmartContractTokenChainDataSwaggoInput:
@@ -82,18 +82,9 @@ definitions:
       token:
         type: string
     type: object
-  server.NewContractEventSwaggoInput:
-    properties:
-      contract:
-        type: string
-      contract_block_hash:
-        type: string
-      did:
-        type: string
-    type: object
   server.NewSubscriptionSwaggoInput:
     properties:
-      contract:
+      smartContractToken:
         type: string
     type: object
   server.RBTTransferRequestSwaggoInput:
@@ -525,28 +516,6 @@ paths:
       summary: Initiate RBT Transfer
       tags:
       - Account
-  /api/publish-smart-contract:
-    post:
-      consumes:
-      - application/json
-      description: This API endpoint publishes a smart contract.
-      parameters:
-      - description: Publish input contract
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.NewContractEventSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Publish Smart Contract
-      tags:
-      - Smart Contract
   /api/register-callback-url:
     post:
       consumes:
