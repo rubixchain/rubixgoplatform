@@ -28,6 +28,7 @@ type StorageConfig struct {
 type ConfigData struct {
 	Ports             Ports             `json:"ports"`
 	BootStrap         []string          `json:"bootstrap"`
+	Explorer         	[]string          `json:"explorer"`
 	Services          map[string]string `json:"services"`
 	StorageConfig     StorageConfig     `json:"storage_config"`
 	TestStorageConfig StorageConfig     `json:"test_storage_config"`

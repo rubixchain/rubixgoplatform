@@ -26,6 +26,8 @@ const (
 	APIRemoveBootStrap     string = "/api/remove-bootstrap"
 	APIRemoveAllBootStrap  string = "/api/remove-all-bootstrap"
 	APIGetAllBootStrap     string = "/api/get-all-bootstrap"
+	APIAddExplorer        string = "/api/add-explorer"
+	APIRemoveExplorer     string = "/api/remove-explorer"
 	APICreateDID           string = "/api/createdid"
 	APIGetAllDID           string = "/api/getalldid"
 	APIAddQuorum           string = "/api/addquorum"
@@ -151,6 +153,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRemoveBootStrap, "POST", s.AuthHandle(s.APIRemoveBootStrap, false, s.AuthError, true))
 	s.AddRoute(setup.APIRemoveAllBootStrap, "POST", s.AuthHandle(s.APIRemoveAllBootStrap, false, s.AuthError, true))
 	s.AddRoute(setup.APIGetAllBootStrap, "GET", s.AuthHandle(s.APIGetAllBootStrap, false, s.AuthError, true))
+	s.AddRoute(setup.APIAddExplorer, "POST", s.AuthHandle(s.APIAddExplorer, false, s.AuthError, true))
+	s.AddRoute(setup.APIRemoveExplorer, "POST", s.AuthHandle(s.APIRemoveExplorer, false, s.AuthError, true))
 	s.AddRoute(setup.APIGetDIDChallenge, "GET", s.APIGetDIDChallenge)
 	s.AddRoute(setup.APIGetDIDAccess, "POST", s.APIGetDIDAccess)
 	s.AddRoute(setup.APICreateDID, "POST", s.APICreateDID)

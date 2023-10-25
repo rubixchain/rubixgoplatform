@@ -126,6 +126,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 					IPFSAPIPort:  (IPFSAPIPort + node),
 				},
 				BootStrap: []string{"/ip4/161.35.169.251/tcp/4001/p2p/12D3KooWPhZEYEw4jG3kSRuwgMEHcVt7KMkm1ui2ddu4fgSgwvDq", "/ip4/103.127.158.120/tcp/4001/p2p/12D3KooWSQ94HRDzFf6W2rp7P8gzP6efZQHTaSU8uaQjskVBHiWP", "/ip4/172.104.191.191/tcp/4001/p2p/12D3KooWFudnWZY1v1m4YXCzDWZSbNt7nvf5F42uzM6vErZ4NwqJ"},
+				Explorer: []string{"deamon-explorer.azurewebsites.net"},
 			},
 		}
 		cfgBytes, err := json.Marshal(cfg)

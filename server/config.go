@@ -112,3 +112,31 @@ func (s *Server) APISetupDB(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.BasicResponse(req, true, "DB setup done successfully", nil)
 }
+
+// APIAddBootStrap will add bootstrap peers to the configuration
+func (s *Server) APIAddExplorer(req *ensweb.Request) *ensweb.Result {
+	var m model.ExplorerLinks
+	err := s.ParseJSON(req, &m)
+	if err != nil {
+		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	err = s.c.AddExplorer(m.Links)
+	if err != nil {
+		return s.BasicResponse(req, false, "failed to add explorer, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "explorer added successfully", nil)
+}
+
+// APIRemoveBootStrap will remove bootstrap peers from the configuration
+func (s *Server) APIRemoveExplorer(req *ensweb.Request) *ensweb.Result {
+	var m model.ExplorerLinks
+	err := s.ParseJSON(req, &m)
+	if err != nil {
+		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	err = s.c.RemoveExplorer(m.Links)
+	if err != nil {
+		return s.BasicResponse(req, false, "failed to remove explorer, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "explorer removed successfully", nil)
+}

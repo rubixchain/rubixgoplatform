@@ -20,6 +20,8 @@ const (
 	APIRemoveBootStrap                  string = "/api/remove-bootstrap"
 	APIRemoveAllBootStrap               string = "/api/remove-all-bootstrap"
 	APIGetAllBootStrap                  string = "/api/get-all-bootstrap"
+	APIAddExplorer                    	string = "/api/add-explorer"
+	APIRemoveExplorer             			string = "/api/remove-explorer"
 	APIGetDIDChallenge                  string = "/api/getdidchallenge"
 	APIGetDIDAccess                     string = "/api/logindid"
 	APICreateDID                        string = "/api/createdid"

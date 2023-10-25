@@ -66,6 +66,7 @@ type ExplorerResponse struct {
 }
 
 func (c *Core) InitRubixExplorer() error {
+	// todo: fetch explorer URL from api_config.json file
 	url := "deamon-explorer.azurewebsites.net"
 	if c.testNet {
 		url = "rubix-deamon-api.ensurity.com"
@@ -165,6 +166,33 @@ func (ec *ExplorerClient) ExplorerDataTransaction(et *ExplorerDataTrans) error {
 	if !er.Status {
 		ec.log.Error("Failed to update explorer with data transaction", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
+	}
+	return nil
+}
+
+func (c *Core) AddExplorer(links []string) error {
+	c.cfg.CfgData.Explorer = append(c.cfg.CfgData.Explorer, links...)
+	err := c.updateConfig()
+	if err != nil {
+		return err
+	}
+	return err
+}
+
+func (c *Core) RemoveExplorer(links []string) error {
+	for _, link := range links {
+		newitems := []string{}
+		update := false
+		for _, i := range c.cfg.CfgData.Explorer {
+			if i != link {
+				newitems = append(newitems, i)
+			} else {
+				update = true
+			}
+		}
+		if update {
+			c.cfg.CfgData.Explorer = newitems
+		}
 	}
 	return nil
 }
