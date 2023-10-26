@@ -70,6 +70,7 @@ type ConsensusStatus struct {
 }
 
 type PledgeDetails struct {
+	TransferAmount         float64
 	RemPledgeTokens        float64
 	NumPledgedTokens       int
 	PledgedTokens          map[string][]string
@@ -256,6 +257,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		reqPledgeTokens = sc.GetTotalRBTs()
 	}
 	pd := PledgeDetails{
+		TransferAmount:         reqPledgeTokens,
 		RemPledgeTokens:        reqPledgeTokens,
 		NumPledgedTokens:       0,
 		PledgedTokens:          make(map[string][]string),
@@ -836,10 +838,13 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			err := fmt.Errorf("invalid pledge request")
 			return err
 		}
+
+		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
+
 		// Request pledage token
 		if pd.RemPledgeTokens != 0 {
 			pr := PledgeRequest{
-				TokensRequired: pd.RemPledgeTokens,
+				TokensRequired: pledgeTokensPerQuorum, // Request the determined number of tokens per quorum
 			}
 			// l := len(pd.PledgedTokens)
 			// for i := pd.NumPledgedTokens; i < l; i++ {
