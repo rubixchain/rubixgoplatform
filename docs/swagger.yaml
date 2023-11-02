@@ -72,21 +72,39 @@ definitions:
     type: object
   server.FetchSmartContractSwaggoInput:
     properties:
-      smart_contract_token:
+      smartContractToken:
         type: string
     type: object
-  server.NewContractEventSwaggoInput:
+  server.GetSmartContractTokenChainDataSwaggoInput:
     properties:
-      contract:
-        type: string
-      contract_block_hash:
-        type: string
-      did:
+      latest:
+        type: boolean
+      token:
         type: string
     type: object
   server.NewSubscriptionSwaggoInput:
     properties:
-      contract:
+      smartContractToken:
+        type: string
+    type: object
+  server.RBTTransferRequestSwaggoInput:
+    properties:
+      comment:
+        type: string
+      receiver:
+        type: string
+      sender:
+        type: string
+      tokenCOunt:
+        type: number
+      type:
+        type: integer
+    type: object
+  server.RegisterCallBackURLSwaggoInput:
+    properties:
+      callbackurl:
+        type: string
+      token:
         type: string
     type: object
   server.SignatureResponseSwaggoInput:
@@ -437,6 +455,29 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
+  /api/get-smart-contract-token-chain-data:
+    post:
+      consumes:
+      - application/json
+      description: This API will return smart contract token chain data
+      operationId: get-smart-contract-token-chain-data
+      parameters:
+      - description: Returns Smart contract token chain Execution Data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.GetSmartContractTokenChainDataSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get Smart Contract Token Chain Data
+      tags:
+      - Smart Contract
   /api/getallnft:
     post:
       consumes:
@@ -459,35 +500,12 @@ paths:
       description: This API will initiate RBT transfer to the specified dID
       operationId: initiate-rbt-transfer
       parameters:
-      - description: The decentralized identifier of the receiver
+      - description: Intitate RBT transfer
         in: body
-        name: receiver
+        name: input
         required: true
         schema:
-          type: string
-      - description: The decentralized identifier of the sender
-        in: body
-        name: sender
-        required: true
-        schema:
-          type: string
-      - description: The number of RBT tokens to transfer
-        in: body
-        name: tokenCount
-        required: true
-        schema:
-          type: number
-      - description: A comment for the transfer
-        in: body
-        name: comment
-        schema:
-          type: string
-      - description: The type of transfer (1 for direct transfer, 2 for group transfer)
-        in: body
-        name: type
-        required: true
-        schema:
-          type: integer
+          $ref: '#/definitions/server.RBTTransferRequestSwaggoInput'
       produces:
       - application/json
       responses:
@@ -498,18 +516,20 @@ paths:
       summary: Initiate RBT Transfer
       tags:
       - Account
-  /api/publish-contract:
+  /api/register-callback-url:
     post:
       consumes:
       - application/json
-      description: This API endpoint publishes a smart contract.
+      description: This API will register call back url for when updated come for
+        smart contract token
+      operationId: register-callback-url
       parameters:
-      - description: Publish input contract
+      - description: Register call back URL
         in: body
         name: input
         required: true
         schema:
-          $ref: '#/definitions/server.NewContractEventSwaggoInput'
+          $ref: '#/definitions/server.RegisterCallBackURLSwaggoInput'
       produces:
       - application/json
       responses:
@@ -517,7 +537,7 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/model.BasicResponse'
-      summary: Publish Smart Contract
+      summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
   /api/signature-response:
@@ -528,7 +548,7 @@ paths:
         the ID generated when Initiate RBT transfer is called.
       operationId: signature-response
       parameters:
-      - description: Signature response input
+      - description: Send input for requested signature
         in: body
         name: input
         required: true
@@ -559,7 +579,7 @@ paths:
       summary: Start Core
       tags:
       - Basic
-  /api/subscribe-contract:
+  /api/subscribe-smart-contract:
     post:
       consumes:
       - application/json
