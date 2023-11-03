@@ -12,9 +12,9 @@ import (
 
 	"github.com/EnsurityTechnologies/apiconfig"
 	econfig "github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
 	"github.com/EnsurityTechnologies/uuid"
+	"github.com/gklps/ensweb"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"

@@ -7,11 +7,11 @@ require (
 	github.com/EnsurityTechnologies/apiconfig v1.0.1
 	github.com/EnsurityTechnologies/config v1.0.0
 	github.com/EnsurityTechnologies/enscrypt v1.0.1
-	github.com/EnsurityTechnologies/ensweb v1.0.8
 	github.com/EnsurityTechnologies/helper v1.0.0
 	github.com/EnsurityTechnologies/logger v1.0.4
 	github.com/EnsurityTechnologies/uuid v1.0.0
 	github.com/fxamacker/cbor v1.5.1
+	github.com/gklps/ensweb v1.0.10
 	github.com/gorilla/sessions v1.2.1
 	github.com/ipfs/go-ipfs-api v0.3.0
 	github.com/ipfs/go-ipfs-files v0.1.1

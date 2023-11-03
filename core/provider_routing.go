@@ -3,7 +3,7 @@ package core
 import (
 	"net/http"
 
-	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/gklps/ensweb"
 )
 
 type PinStatusReq struct {

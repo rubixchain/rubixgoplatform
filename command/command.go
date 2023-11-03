@@ -15,8 +15,8 @@ import (
 
 	"github.com/EnsurityTechnologies/apiconfig"
 	srvcfg "github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
+	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core"

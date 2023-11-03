@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	_ "github.com/EnsurityTechnologies/ensweb"
+	_ "github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/command"
 )
 

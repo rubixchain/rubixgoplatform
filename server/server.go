@@ -8,8 +8,8 @@ import (
 	"time"
 
 	ccfg "github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/logger"
+	"github.com/gklps/ensweb"
 	"github.com/gorilla/sessions"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/grpcserver"

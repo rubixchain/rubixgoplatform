@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
