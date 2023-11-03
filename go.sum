@@ -614,8 +614,6 @@ github.com/EnsurityTechnologies/config v1.0.0/go.mod h1:vRtBaM24z38HlLoDIDsM9KCj
 github.com/EnsurityTechnologies/enscrypt v1.0.0/go.mod h1:PQ1/tYC1DMwbfVZKf+FOjh9F7z6koZA6HUDe7G28Sco=
 github.com/EnsurityTechnologies/enscrypt v1.0.1 h1:0Eo6bghnKP+MI5aGwxPNX+8NZXDDPzri2Fum/1ZbalQ=
 github.com/EnsurityTechnologies/enscrypt v1.0.1/go.mod h1:PQ1/tYC1DMwbfVZKf+FOjh9F7z6koZA6HUDe7G28Sco=
-github.com/EnsurityTechnologies/ensweb v1.0.8 h1:fAJdugeSuEIR0IziOkXWbHIMdD85X/1k/b+tbVG5s0I=
-github.com/EnsurityTechnologies/ensweb v1.0.8/go.mod h1:LRQcOAUlhueWm9MOf1tHid1t/zfJoBYLh1bfosbC+/c=
 github.com/EnsurityTechnologies/helper v1.0.0 h1:x6kaCFvqH35/P8eD8Vkx/IUUkbvDqyh4KVwqDJWIfWA=
 github.com/EnsurityTechnologies/helper v1.0.0/go.mod h1:KESBOBjgzlkimm3dDwr49wjbMXWtaoqrA3SiwhxGDwQ=
 github.com/EnsurityTechnologies/logger v1.0.0/go.mod h1:d/0zwSaO0tDbl4wd4QvXtYPV4QpFDpbgAPcTDMRPuOU=
@@ -746,6 +744,8 @@ github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4
 github.com/fxamacker/cbor v1.5.1 h1:XjQWBgdmQyqimslUh5r4tUGmoqzHmBFQOImkWGi2awg=
 github.com/fxamacker/cbor v1.5.1/go.mod h1:3aPGItF174ni7dDzd6JZ206H8cmr4GDNBGpPa971zsU=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
+github.com/gklps/ensweb v1.0.10 h1:Osx32pFcCUwBNspjOBZk04IUXwndHAAnM+NrKvf7dhM=
+github.com/gklps/ensweb v1.0.10/go.mod h1:kM31NGprn0XDss0NyHFEwcN4Oj/ShVJoAWX7V1HFfI8=
 github.com/go-fonts/dejavu v0.1.0/go.mod h1:4Wt4I4OU2Nq9asgDCteaAaWZOV24E+0/Pwo0gppep4g=
 github.com/go-fonts/latin-modern v0.2.0/go.mod h1:rQVLdDMK+mK1xscDwsqM5J8U2jrRa3T0ecnM9pNujks=
 github.com/go-fonts/liberation v0.1.1/go.mod h1:K6qoJYypsmfVjWg8KOVDQhLc8UDgIK2HYqyqAO9z7GY=

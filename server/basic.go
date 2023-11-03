@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 

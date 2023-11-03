@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/gklps/ensweb"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"

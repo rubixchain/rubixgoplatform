@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"

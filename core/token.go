@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"

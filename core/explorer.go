@@ -5,9 +5,9 @@ import (
 	"net/http"
 
 	"github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/EnsurityTechnologies/helper/jsonutil"
 	"github.com/EnsurityTechnologies/logger"
+	"github.com/gklps/ensweb"
 )
 
 const (

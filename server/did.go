@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EnsurityTechnologies/ensweb"
+	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
