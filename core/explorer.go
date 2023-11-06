@@ -179,6 +179,10 @@ func (c *Core) AddExplorer(links []string) error {
 	return err
 }
 
+func (c *Core) GetAllExplorer() []string {
+	return c.cfg.CfgData.Explorer
+}
+
 func (c *Core) RemoveExplorer(links []string) error {
 	for _, link := range links {
 		newitems := []string{}

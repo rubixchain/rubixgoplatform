@@ -113,7 +113,16 @@ func (s *Server) APISetupDB(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "DB setup done successfully", nil)
 }
 
-// APIAddBootStrap will add bootstrap peers to the configuration
+// APIGetAllExplorer will remove all bootstrap peers from the configuration
+func (s *Server) APIGetAllExplorer(req *ensweb.Request) *ensweb.Result {
+	links := s.c.GetAllExplorer()
+	m := model.ExplorerLinks{
+		Links: links,
+	}
+	return s.BasicResponse(req, true, "Got all the bootstrap peers successfully", m)
+}
+
+// APIAddExplorer will add bootstrap peers to the configuration
 func (s *Server) APIAddExplorer(req *ensweb.Request) *ensweb.Result {
 	var m model.ExplorerLinks
 	err := s.ParseJSON(req, &m)
@@ -127,7 +136,7 @@ func (s *Server) APIAddExplorer(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "explorer added successfully", nil)
 }
 
-// APIRemoveBootStrap will remove bootstrap peers from the configuration
+// APIRemoveExplorer will remove bootstrap peers from the configuration
 func (s *Server) APIRemoveExplorer(req *ensweb.Request) *ensweb.Result {
 	var m model.ExplorerLinks
 	err := s.ParseJSON(req, &m)
