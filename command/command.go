@@ -44,6 +44,9 @@ const (
 	RemoveBootStrapCmd             string = "removebootstrap"
 	RemoveAllBootStrapCmd          string = "removeallbootstrap"
 	GetAllBootStrapCmd             string = "getallbootstrap"
+	AddExplorerCmd                 string = "addexplorer"
+	RemoveExplorerCmd              string = "removeexplorer"
+	GetAllExplorerCmd              string = "getallexplorer"
 	CreateDIDCmd                   string = "createdid"
 	GetAllDIDCmd                   string = "getalldid"
 	AddQuorumCmd                   string = "addquorum"
@@ -86,6 +89,9 @@ var commands = []string{VersionCmd,
 	RemoveBootStrapCmd,
 	RemoveAllBootStrapCmd,
 	GetAllBootStrapCmd,
+	AddExplorerCmd,
+	RemoveExplorerCmd,
+	GetAllExplorerCmd,
 	CreateDIDCmd,
 	GetAllDIDCmd,
 	AddQuorumCmd,
@@ -129,6 +135,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will remove bootstrap peers from the configuration",
 	"This command will remove all bootstrap peers from the configuration",
 	"This command will get all bootstrap peers from the configuration",
+	"This command will add explorer link to the configuration",
+	"This command will remove explorer link from the configuration",
+	"This command will get all explorer links from the configuration",
 	"This command will create DID",
 	"This command will get all DID address",
 	"This command will add quorurm list to node",
@@ -181,6 +190,7 @@ type Command struct {
 	port               string
 	peerID             string
 	peers              []string
+	links              []string
 	log                logger.Logger
 	didRoot            bool
 	didType            int
@@ -506,6 +516,12 @@ func Run(args []string) {
 		cmd.removeAllBootStrap()
 	case GetAllBootStrapCmd:
 		cmd.getAllBootStrap()
+	case AddExplorerCmd:
+		cmd.addExplorer()
+	case RemoveExplorerCmd:
+		cmd.removeExplorer()
+	case GetAllExplorerCmd:
+		cmd.getAllExplorer()
 	case CreateDIDCmd:
 		cmd.CreateDID()
 	case GetAllDIDCmd:
