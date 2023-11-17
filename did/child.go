@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/EnsurityTechnologies/enscrypt"
+	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -96,12 +96,12 @@ func (d *DIDChild) Sign(hash string) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	PrivateKey, _, err := enscrypt.DecodeKeyPair(pwd, privKey, nil)
+	PrivateKey, _, err := crypto.DecodeKeyPair(pwd, privKey, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
-	pvtKeySign, err := enscrypt.Sign(PrivateKey, []byte(hashPvtSign))
+	pvtKeySign, err := crypto.Sign(PrivateKey, []byte(hashPvtSign))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -159,12 +159,12 @@ func (d *DIDChild) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bo
 	if err != nil {
 		return false, err
 	}
-	_, pubKeyByte, err := enscrypt.DecodeKeyPair("", nil, pubKey)
+	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
 	if err != nil {
 		return false, err
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !enscrypt.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
+	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
@@ -179,11 +179,11 @@ func (d *DIDChild) PvtSign(hash []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	PrivateKey, _, err := enscrypt.DecodeKeyPair(pwd, privKey, nil)
+	PrivateKey, _, err := crypto.DecodeKeyPair(pwd, privKey, nil)
 	if err != nil {
 		return nil, err
 	}
-	pvtKeySign, err := enscrypt.Sign(PrivateKey, hash)
+	pvtKeySign, err := crypto.Sign(PrivateKey, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -194,11 +194,11 @@ func (d *DIDChild) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, pubKeyByte, err := enscrypt.DecodeKeyPair("", nil, pubKey)
+	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
 	if err != nil {
 		return false, err
 	}
-	if !enscrypt.Verify(pubKeyByte, hash, sign) {
+	if !crypto.Verify(pubKeyByte, hash, sign) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil

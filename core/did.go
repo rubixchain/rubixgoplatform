@@ -5,9 +5,9 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/EnsurityTechnologies/enscrypt"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -73,7 +73,7 @@ func (c *Core) checkPassword(didStr string, pwd string) bool {
 		c.log.Error("Private ket file does not exist", "did", didStr)
 		return false
 	}
-	_, _, err = enscrypt.DecodeKeyPair(pwd, privKey, nil)
+	_, _, err = crypto.DecodeKeyPair(pwd, privKey, nil)
 	if err != nil {
 		c.log.Error("Invalid password", "did", didStr)
 		return false

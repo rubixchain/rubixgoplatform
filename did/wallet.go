@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/EnsurityTechnologies/enscrypt"
+	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -107,12 +107,12 @@ func (d *DIDWallet) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (b
 	if err != nil {
 		return false, err
 	}
-	_, pubKeyByte, err := enscrypt.DecodeKeyPair("", nil, pubKey)
+	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
 	if err != nil {
 		return false, err
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !enscrypt.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
+	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
@@ -130,11 +130,11 @@ func (d *DIDWallet) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, pubKeyByte, err := enscrypt.DecodeKeyPair("", nil, pubKey)
+	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
 	if err != nil {
 		return false, err
 	}
-	if !enscrypt.Verify(pubKeyByte, hash, sign) {
+	if !crypto.Verify(pubKeyByte, hash, sign) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil

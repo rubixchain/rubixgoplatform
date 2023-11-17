@@ -611,9 +611,8 @@ github.com/EnsurityTechnologies/apiconfig v1.0.1 h1:nu+SnKqQIw71+GqM1w8p9EnY1stl
 github.com/EnsurityTechnologies/apiconfig v1.0.1/go.mod h1:5tpJDpeVjp9Y2gfxRnG0vWqhluRH8fNCcusmY6peI4g=
 github.com/EnsurityTechnologies/config v1.0.0 h1:66EpaklRWqWOYeOullIEHrFqZntEUzXBM/quok92NPI=
 github.com/EnsurityTechnologies/config v1.0.0/go.mod h1:vRtBaM24z38HlLoDIDsM9KCj6yoE6aUpx3dd+CLaodo=
+github.com/EnsurityTechnologies/enscrypt v1.0.0 h1:mO4ZwPvuWGOOo3AjZn//HE+T1AUIPvNla89Ks92x6T0=
 github.com/EnsurityTechnologies/enscrypt v1.0.0/go.mod h1:PQ1/tYC1DMwbfVZKf+FOjh9F7z6koZA6HUDe7G28Sco=
-github.com/EnsurityTechnologies/enscrypt v1.0.1 h1:0Eo6bghnKP+MI5aGwxPNX+8NZXDDPzri2Fum/1ZbalQ=
-github.com/EnsurityTechnologies/enscrypt v1.0.1/go.mod h1:PQ1/tYC1DMwbfVZKf+FOjh9F7z6koZA6HUDe7G28Sco=
 github.com/EnsurityTechnologies/helper v1.0.0 h1:x6kaCFvqH35/P8eD8Vkx/IUUkbvDqyh4KVwqDJWIfWA=
 github.com/EnsurityTechnologies/helper v1.0.0/go.mod h1:KESBOBjgzlkimm3dDwr49wjbMXWtaoqrA3SiwhxGDwQ=
 github.com/EnsurityTechnologies/logger v1.0.0/go.mod h1:d/0zwSaO0tDbl4wd4QvXtYPV4QpFDpbgAPcTDMRPuOU=
