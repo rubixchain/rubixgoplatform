@@ -5,7 +5,6 @@ go 1.16
 require (
 	github.com/EnsurityTechnologies/adapter v1.0.7
 	github.com/EnsurityTechnologies/apiconfig v1.0.1
-	github.com/EnsurityTechnologies/config v1.0.0
 	github.com/EnsurityTechnologies/enscrypt v1.0.1
 	github.com/EnsurityTechnologies/helper v1.0.0
 	// github.com/EnsurityTechnologies/logger v1.0.4
@@ -23,7 +22,6 @@ require (
 )
 
 require (
-	github.com/EnsurityTechnologies/logger v1.0.0
 	github.com/EnsurityTechnologies/wraperr v1.0.0
 	github.com/btcsuite/btcd v0.23.0 // indirect
 	github.com/denisenkom/go-mssqldb v0.12.3 // indirect

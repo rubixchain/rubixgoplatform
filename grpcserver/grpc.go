@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EnsurityTechnologies/config"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
@@ -18,6 +17,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/protos"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

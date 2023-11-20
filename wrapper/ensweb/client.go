@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/logger"
+	"github.com/rubixchain/rubixgoplatform/wrapper/config"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 // Client : Client struct

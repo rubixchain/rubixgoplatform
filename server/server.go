@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"time"
 
-	ccfg "github.com/EnsurityTechnologies/config"
 	"github.com/gorilla/sessions"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/grpcserver"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	ccfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )

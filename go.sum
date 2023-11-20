@@ -614,8 +614,6 @@ github.com/EnsurityTechnologies/enscrypt v1.0.1 h1:0Eo6bghnKP+MI5aGwxPNX+8NZXDDP
 github.com/EnsurityTechnologies/enscrypt v1.0.1/go.mod h1:PQ1/tYC1DMwbfVZKf+FOjh9F7z6koZA6HUDe7G28Sco=
 github.com/EnsurityTechnologies/helper v1.0.0 h1:x6kaCFvqH35/P8eD8Vkx/IUUkbvDqyh4KVwqDJWIfWA=
 github.com/EnsurityTechnologies/helper v1.0.0/go.mod h1:KESBOBjgzlkimm3dDwr49wjbMXWtaoqrA3SiwhxGDwQ=
-github.com/EnsurityTechnologies/logger v1.0.0 h1:AJoBptt6QCxEgiF+BzpldJRU3TVgkhGJYF1x7K+q7Ao=
-github.com/EnsurityTechnologies/logger v1.0.0/go.mod h1:d/0zwSaO0tDbl4wd4QvXtYPV4QpFDpbgAPcTDMRPuOU=
 github.com/EnsurityTechnologies/uuid v1.0.0 h1:DlltAsQL1OcNNafQwj1Ra3KT7g8p36Sl0Ptt4ox3XJs=
 github.com/EnsurityTechnologies/uuid v1.0.0/go.mod h1:/TCyZtiWFJ6Ip1LYnq0M3OpwYQcX2nISm7Gq/D2THYQ=
 github.com/EnsurityTechnologies/wraperr v1.0.0 h1:r4w3jNvvSND5LfOrJNzaakSI6Il4aqrsjWJ32geNcrA=
@@ -726,7 +724,6 @@ github.com/envoyproxy/protoc-gen-validate v0.6.7/go.mod h1:dyJXwwfPK2VSqiB9Klm1J
 github.com/envoyproxy/protoc-gen-validate v0.9.1/go.mod h1:OKNgG7TCp5pF4d6XftA0++PMirau2/yoOwVac3AbF2w=
 github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5 h1:Yzb9+7DPaBjB8zlTR87/ElzFsnQfuHnVUVqpZZIcV5Y=
 github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5/go.mod h1:a2zkGnVExMxdzMo3M0Hi/3sEU+cWnZpSni0O6/Yb/P0=
-github.com/fatih/color v1.12.0/go.mod h1:ELkj/draVOlAH/xkhN6mQ50Qd0MPOk5AAr3maGEBuJM=
 github.com/fatih/color v1.15.0 h1:kOqh6YHBtK8aywxGerMG2Eq3H6Qgoqeo13Bk2Mv/nBs=
 github.com/fatih/color v1.15.0/go.mod h1:0h5ZqXfHYED7Bhv2ZJamyIOUej9KtShiJESRwBDUSsw=
 github.com/fogleman/gg v1.2.1-0.20190220221249-0403632d5b90/go.mod h1:R/bRT+9gY/C5z7JzPU0zXsXHKM4/ayA+zqcVNZzPa1k=
@@ -984,11 +981,9 @@ github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e/go.mod h1:C1wdFJiN
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
-github.com/mattn/go-colorable v0.1.8/go.mod h1:u6P/XSegPjTcexA+o6vUJrdnUu04hMope9wVRipJSqc=
 github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=
 github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovkB8vQcUbaXHg=
 github.com/mattn/go-isatty v0.0.12/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Kysco4FUpU=
-github.com/mattn/go-isatty v0.0.13/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Kysco4FUpU=
 github.com/mattn/go-isatty v0.0.16/go.mod h1:kYGgaQfpe5nmfYZH+SKPsOc2e4SrIfOl2e/yFXSvRLM=
 github.com/mattn/go-isatty v0.0.17/go.mod h1:kYGgaQfpe5nmfYZH+SKPsOc2e4SrIfOl2e/yFXSvRLM=
 github.com/mattn/go-isatty v0.0.19 h1:JITubQf0MOLdlGRuRq+jtsDlekdYPia9ZFsB8h/APPA=

@@ -2,8 +2,8 @@ package storage
 
 import (
 	"github.com/EnsurityTechnologies/adapter"
-	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/uuid"
+	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 )
 
 type StorageFile struct {

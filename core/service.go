@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/adapter"
-	srvcfg "github.com/EnsurityTechnologies/config"
 	"github.com/rubixchain/rubixgoplatform/core/config"
+	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 )
 
 const (

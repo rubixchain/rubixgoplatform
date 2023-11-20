@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/apiconfig"
-	srvcfg "github.com/EnsurityTechnologies/config"
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core"
@@ -23,6 +22,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/did"
 	_ "github.com/rubixchain/rubixgoplatform/docs"
 	"github.com/rubixchain/rubixgoplatform/server"
+	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"golang.org/x/term"

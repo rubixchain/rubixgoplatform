@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	srvcfg "github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/helper/jsonutil"
+	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )

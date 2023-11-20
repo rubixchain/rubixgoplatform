@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/adapter"
-	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/uuid"
 	"github.com/gorilla/mux"
+	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
