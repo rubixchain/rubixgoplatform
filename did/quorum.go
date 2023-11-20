@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/EnsurityTechnologies/enscrypt"
+	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -15,8 +15,8 @@ type DIDQuorum struct {
 	did     string
 	dir     string
 	pwd     string
-	privKey enscrypt.PrivateKey
-	pubKey  enscrypt.PublicKey
+	privKey crypto.PrivateKey
+	pubKey  crypto.PublicKey
 }
 
 // InitDIDBasic will return the basic did handle
@@ -27,7 +27,7 @@ func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
 		if err != nil {
 			return nil
 		}
-		d.privKey, _, err = enscrypt.DecodeKeyPair(d.pwd, privKey, nil)
+		d.privKey, _, err = crypto.DecodeKeyPair(d.pwd, privKey, nil)
 		if err != nil {
 			return nil
 		}
@@ -37,7 +37,7 @@ func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
 	if err != nil {
 		return nil
 	}
-	_, d.pubKey, err = enscrypt.DecodeKeyPair("", nil, pubKey)
+	_, d.pubKey, err = crypto.DecodeKeyPair("", nil, pubKey)
 	if err != nil {
 		return nil
 	}
@@ -68,7 +68,7 @@ func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 	pvtPos := util.GetPrivatePositions(finalPos, ps)
 	pvtPosStr := util.IntArraytoStr(pvtPos)
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
-	pvtKeySign, err := enscrypt.Sign(d.privKey, []byte(hashPvtSign))
+	pvtKeySign, err := crypto.Sign(d.privKey, []byte(hashPvtSign))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -115,7 +115,7 @@ func (d *DIDQuorum) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (b
 		return false, fmt.Errorf("failed to verify")
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !enscrypt.Verify(d.pubKey, []byte(hashPvtSign), pvtKeySIg) {
+	if !crypto.Verify(d.pubKey, []byte(hashPvtSign), pvtKeySIg) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
@@ -124,14 +124,14 @@ func (d *DIDQuorum) PvtSign(hash []byte) ([]byte, error) {
 	if d.privKey == nil {
 		return nil, fmt.Errorf("private key is not initialized")
 	}
-	ps, err := enscrypt.Sign(d.privKey, hash)
+	ps, err := crypto.Sign(d.privKey, hash)
 	if err != nil {
 		return nil, err
 	}
 	return ps, nil
 }
 func (d *DIDQuorum) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	if !enscrypt.Verify(d.pubKey, hash, sign) {
+	if !crypto.Verify(d.pubKey, hash, sign) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
