@@ -3,8 +3,6 @@ module github.com/rubixchain/rubixgoplatform
 go 1.16
 
 require (
-	github.com/EnsurityTechnologies/enscrypt v1.0.1
-	github.com/EnsurityTechnologies/helper v1.0.0
 	github.com/fxamacker/cbor v1.5.1
 	github.com/gorilla/sessions v1.2.1
 	github.com/ipfs/go-ipfs-api v0.3.0

@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/EnsurityTechnologies/enscrypt"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	files "github.com/ipfs/go-ipfs-files"
+	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -152,7 +152,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			d.log.Error("password required for creating", "err", err)
 			return "", err
 		}
-		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.PrivPWD})
+		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.PrivPWD})
 		if err != nil {
 			d.log.Error("failed to create keypair", "err", err)
 			return "", err
@@ -190,7 +190,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			}
 		}
 
-		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.QuorumPWD})
+		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.QuorumPWD})
 		if err != nil {
 			d.log.Error("failed to create keypair", "err", err)
 			return "", err
@@ -273,7 +273,7 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 				d.log.Error("password required for creating", "err", err)
 				return "", err
 			}
-			pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.PrivPWD})
+			pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.PrivPWD})
 			if err != nil {
 				d.log.Error("failed to create keypair", "err", err)
 				return "", err
@@ -314,7 +314,7 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 		}
 	}
 	if didCreate.QuorumPrivKeyFile == "" || didCreate.QuorumPubKeyFile == "" {
-		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: didCreate.QuorumPWD})
+		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.QuorumPWD})
 		if err != nil {
 			d.log.Error("failed to create keypair", "err", err)
 			return "", err

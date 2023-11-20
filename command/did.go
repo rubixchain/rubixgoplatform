@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/EnsurityTechnologies/enscrypt"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -121,7 +121,7 @@ func (cmd *Command) CreateDID() {
 			cmd.log.Error("private key & public key file names required")
 			return
 		}
-		pvtKey, pubKey, err := enscrypt.GenerateKeyPair(&enscrypt.CryptoConfig{Alg: enscrypt.ECDSAP256, Pwd: cmd.privPWD})
+		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: cmd.privPWD})
 		if err != nil {
 			cmd.log.Error("failed to create keypair", "err", err)
 			return
@@ -255,12 +255,12 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 			if err != nil {
 				return "Failed to open private key file, " + err.Error(), false
 			}
-			key, _, err := enscrypt.DecodeKeyPair(password, privKey, nil)
+			key, _, err := crypto.DecodeKeyPair(password, privKey, nil)
 			if err != nil {
 				return "Failed to decode private key file, " + err.Error(), false
 			}
 			cmd.log.Info("Doing the private key signature")
-			sig, err := enscrypt.Sign(key, sr.Hash)
+			sig, err := crypto.Sign(key, sr.Hash)
 			if err != nil {
 				return "Failed to do signature, " + err.Error(), false
 			}
@@ -293,12 +293,12 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 			if err != nil {
 				return "Failed to open private key file, " + err.Error(), false
 			}
-			key, _, err := enscrypt.DecodeKeyPair(password, privKey, nil)
+			key, _, err := crypto.DecodeKeyPair(password, privKey, nil)
 			if err != nil {
 				return "Failed to decode private key file, " + err.Error(), false
 			}
 			cmd.log.Info("Doing the private key signature")
-			sig, err := enscrypt.Sign(key, hash)
+			sig, err := crypto.Sign(key, hash)
 			if err != nil {
 				return "Failed to do signature, " + err.Error(), false
 			}
