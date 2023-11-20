@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EnsurityTechnologies/uuid"
+	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
 const (
@@ -53,7 +53,7 @@ type Connection struct {
 	ConnState *tls.ConnectionState `sentinel:""`
 }
 
-//ipRange - a structure that holds the start and end of a range of ip addresses
+// ipRange - a structure that holds the start and end of a range of ip addresses
 type ipRange struct {
 	start net.IP
 	end   net.IP

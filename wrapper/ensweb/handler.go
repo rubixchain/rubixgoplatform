@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/rubixchain/rubixgoplatform/wrapper/helper/jsonutil"
+	"github.com/rubixchain/rubixgoplatform/wrapper/wraperr"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -14,9 +16,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"github.com/EnsurityTechnologies/helper/jsonutil"
-	"github.com/EnsurityTechnologies/wraperr"
 )
 
 // bufferedReader can be used to replace a request body with a buffered

@@ -3,7 +3,7 @@ package ensweb
 import (
 	"net/http"
 
-	"github.com/EnsurityTechnologies/helper/jsonutil"
+	"github.com/rubixchain/rubixgoplatform/wrapper/helper/jsonutil"
 )
 
 func JSONDecodeErr(resp *http.Response) (*ErrMessage, error) {

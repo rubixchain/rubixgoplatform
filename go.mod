@@ -3,11 +3,8 @@ module github.com/rubixchain/rubixgoplatform
 go 1.16
 
 require (
-	github.com/EnsurityTechnologies/apiconfig v1.0.1
 	github.com/EnsurityTechnologies/enscrypt v1.0.1
 	github.com/EnsurityTechnologies/helper v1.0.0
-	// github.com/EnsurityTechnologies/logger v1.0.4
-	github.com/EnsurityTechnologies/uuid v1.0.0
 	github.com/fxamacker/cbor v1.5.1
 	github.com/gorilla/sessions v1.2.1
 	github.com/ipfs/go-ipfs-api v0.3.0
@@ -21,8 +18,6 @@ require (
 )
 
 require (
-	github.com/EnsurityTechnologies/config v1.0.0
-	github.com/EnsurityTechnologies/wraperr v1.0.0
 	github.com/btcsuite/btcd v0.23.0 // indirect
 	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -33,6 +28,7 @@ require (
 	github.com/go-openapi/swag v0.22.4 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.0.0
+	github.com/golang/snappy v0.0.4
 	github.com/gorilla/mux v1.8.0
 	github.com/ipfs/go-cid v0.2.0 // indirect
 	github.com/jackc/pgx/v5 v5.3.1 // indirect
@@ -44,11 +40,12 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.16 // indirect
 	github.com/microsoft/go-mssqldb v0.20.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/multiformats/go-base32 v0.0.4 // indirect
 	github.com/multiformats/go-multiaddr v0.5.0 // indirect
 	github.com/multiformats/go-multihash v0.1.0 // indirect
 	github.com/natefinch/atomic v1.0.1
-	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
+	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/stretchr/testify v1.8.3 // indirect
 	github.com/swaggo/files v1.0.0 // indirect
 	github.com/swaggo/http-swagger v1.3.4

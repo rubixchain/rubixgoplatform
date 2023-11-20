@@ -604,18 +604,10 @@ github.com/Azure/azure-sdk-for-go/sdk/internal v1.0.0/go.mod h1:eWRD7oawr1Mu1sLC
 github.com/AzureAD/microsoft-authentication-library-for-go v0.5.1/go.mod h1:Vt9sXTKwMyGcOxSmLDMnGPgqsUg7m8pe215qMLrDXw4=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
-github.com/EnsurityTechnologies/apiconfig v1.0.1 h1:nu+SnKqQIw71+GqM1w8p9EnY1stldKh3HPftRVoawHw=
-github.com/EnsurityTechnologies/apiconfig v1.0.1/go.mod h1:5tpJDpeVjp9Y2gfxRnG0vWqhluRH8fNCcusmY6peI4g=
-github.com/EnsurityTechnologies/config v1.0.0 h1:66EpaklRWqWOYeOullIEHrFqZntEUzXBM/quok92NPI=
-github.com/EnsurityTechnologies/config v1.0.0/go.mod h1:vRtBaM24z38HlLoDIDsM9KCj6yoE6aUpx3dd+CLaodo=
 github.com/EnsurityTechnologies/enscrypt v1.0.1 h1:0Eo6bghnKP+MI5aGwxPNX+8NZXDDPzri2Fum/1ZbalQ=
 github.com/EnsurityTechnologies/enscrypt v1.0.1/go.mod h1:PQ1/tYC1DMwbfVZKf+FOjh9F7z6koZA6HUDe7G28Sco=
 github.com/EnsurityTechnologies/helper v1.0.0 h1:x6kaCFvqH35/P8eD8Vkx/IUUkbvDqyh4KVwqDJWIfWA=
 github.com/EnsurityTechnologies/helper v1.0.0/go.mod h1:KESBOBjgzlkimm3dDwr49wjbMXWtaoqrA3SiwhxGDwQ=
-github.com/EnsurityTechnologies/uuid v1.0.0 h1:DlltAsQL1OcNNafQwj1Ra3KT7g8p36Sl0Ptt4ox3XJs=
-github.com/EnsurityTechnologies/uuid v1.0.0/go.mod h1:/TCyZtiWFJ6Ip1LYnq0M3OpwYQcX2nISm7Gq/D2THYQ=
-github.com/EnsurityTechnologies/wraperr v1.0.0 h1:r4w3jNvvSND5LfOrJNzaakSI6Il4aqrsjWJ32geNcrA=
-github.com/EnsurityTechnologies/wraperr v1.0.0/go.mod h1:TlhuQGM9O4FdXy41xXGKX/lr6+T1kcq8H13ArFZT16w=
 github.com/JohnCGriffin/overflow v0.0.0-20211019200055-46fa312c352c/go.mod h1:X0CRv0ky0k6m906ixxpzmDRLvX58TFUKS2eePweuyxk=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
@@ -1004,6 +996,8 @@ github.com/minio/sha256-simd v1.0.0 h1:v1ta+49hkWZyvaKwrQB8elexRqm6Y0aMLjCNsrYxo
 github.com/minio/sha256-simd v1.0.0/go.mod h1:OuYzVNI5vcoYIAmbIvHPl3N3jUzVedXbKy5RFepssQM=
 github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG+4E0Y=
 github.com/mitchellh/go-homedir v1.1.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
+github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyuac5Z2hdY=
+github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/modocache/gover v0.0.0-20171022184752-b58185e213c5/go.mod h1:caMODM3PzxT8aQXRPkAt8xlV/e7d7w8GM5g0fa5F0D8=
 github.com/montanaflynn/stats v0.6.6/go.mod h1:etXPPgVO6n31NxCd9KQUMvCM+ve0ruNzt6R8Bnaayow=
 github.com/mr-tron/base58 v1.1.0/go.mod h1:xcD2VGqlgYjBdcBLw+TuYLr8afG+Hj8g2eTVqeSzSU8=

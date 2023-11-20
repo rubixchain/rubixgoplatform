@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/EnsurityTechnologies/enscrypt"
-	"github.com/EnsurityTechnologies/uuid"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
+	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
 const (

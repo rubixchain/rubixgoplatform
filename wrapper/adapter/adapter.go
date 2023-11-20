@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/EnsurityTechnologies/uuid"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
+	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"

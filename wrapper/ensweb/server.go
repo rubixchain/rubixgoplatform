@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/EnsurityTechnologies/uuid"
 	"github.com/gorilla/mux"
 	"github.com/rubixchain/rubixgoplatform/wrapper/adapter"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
+	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
 const DefaultTimeout = 60 * time.Second

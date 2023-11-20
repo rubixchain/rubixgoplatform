@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/EnsurityTechnologies/apiconfig"
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core"
@@ -22,6 +21,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/did"
 	_ "github.com/rubixchain/rubixgoplatform/docs"
 	"github.com/rubixchain/rubixgoplatform/server"
+	"github.com/rubixchain/rubixgoplatform/wrapper/apiconfig"
 	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
