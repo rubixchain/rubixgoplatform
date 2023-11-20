@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/EnsurityTechnologies/adapter"
 	"github.com/rubixchain/rubixgoplatform/core/config"
+	"github.com/rubixchain/rubixgoplatform/wrapper/adapter"
 	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 )
 

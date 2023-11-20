@@ -3,7 +3,6 @@ module github.com/rubixchain/rubixgoplatform
 go 1.16
 
 require (
-	github.com/EnsurityTechnologies/adapter v1.0.7
 	github.com/EnsurityTechnologies/apiconfig v1.0.1
 	github.com/EnsurityTechnologies/enscrypt v1.0.1
 	github.com/EnsurityTechnologies/helper v1.0.0
@@ -22,6 +21,7 @@ require (
 )
 
 require (
+	github.com/EnsurityTechnologies/config v1.0.0
 	github.com/EnsurityTechnologies/wraperr v1.0.0
 	github.com/btcsuite/btcd v0.23.0 // indirect
 	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
@@ -56,5 +56,9 @@ require (
 	golang.org/x/net v0.10.0
 	golang.org/x/tools v0.9.3 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
-	gorm.io/driver/postgres v1.5.0 // indirect
+	gorm.io/driver/mysql v1.4.7
+	gorm.io/driver/postgres v1.5.0
+	gorm.io/driver/sqlite v1.4.4
+	gorm.io/driver/sqlserver v1.4.2
+	gorm.io/gorm v1.24.7-0.20230306060331-85eaf9eeda11
 )

@@ -1,8 +1,8 @@
 package storage
 
 import (
-	"github.com/EnsurityTechnologies/adapter"
 	"github.com/EnsurityTechnologies/uuid"
+	"github.com/rubixchain/rubixgoplatform/wrapper/adapter"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 )
 
