@@ -3,10 +3,10 @@ package contract
 import (
 	"fmt"
 
-	"github.com/EnsurityTechnologies/logger"
 	"github.com/fxamacker/cbor"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 const (

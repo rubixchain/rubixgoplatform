@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/EnsurityTechnologies/config"
+	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
