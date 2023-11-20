@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gklps/ensweb"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
@@ -22,6 +21,7 @@ import (
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {

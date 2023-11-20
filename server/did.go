@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 const (

@@ -3,9 +3,9 @@ package core
 import (
 	"fmt"
 
-	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 const (

@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
-	_ "github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/command"
+	_ "github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 // @title Rubix Core

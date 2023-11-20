@@ -6,8 +6,8 @@ import (
 
 	"github.com/EnsurityTechnologies/config"
 	"github.com/EnsurityTechnologies/helper/jsonutil"
-	"github.com/EnsurityTechnologies/logger"
-	"github.com/gklps/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 const (

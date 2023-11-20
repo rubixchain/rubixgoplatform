@@ -6,9 +6,9 @@ import (
 	"time"
 
 	srvcfg "github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/logger"
-	"github.com/gklps/ensweb"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 type Listener struct {

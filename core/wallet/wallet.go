@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/EnsurityTechnologies/logger"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )

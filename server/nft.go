@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 // ShowAccount godoc

@@ -8,12 +8,12 @@ import (
 	"time"
 
 	ccfg "github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/logger"
-	"github.com/gklps/ensweb"
 	"github.com/gorilla/sessions"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/grpcserver"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 // Server defines server handle

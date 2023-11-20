@@ -2,10 +2,10 @@ package server
 
 import (
 	"github.com/EnsurityTechnologies/config"
-	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core"
 	cc "github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 const (
