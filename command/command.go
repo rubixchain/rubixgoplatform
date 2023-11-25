@@ -51,6 +51,7 @@ const (
 	RemoveAllQuorumCmd             string = "removeallquorum"
 	SetupQuorumCmd                 string = "setupquorum"
 	GenerateTestRBTCmd             string = "generatetestrbt"
+	SelfTransferRBTCmd             string = "selftransferrbt"
 	TransferRBTCmd                 string = "transferrbt"
 	GetAccountInfoCmd              string = "getaccountinfo"
 	SetupServiceCmd                string = "setupservice"
@@ -93,6 +94,7 @@ var commands = []string{VersionCmd,
 	RemoveAllQuorumCmd,
 	SetupQuorumCmd,
 	GenerateTestRBTCmd,
+	SelfTransferRBTCmd,
 	TransferRBTCmd,
 	GetAccountInfoCmd,
 	SetupServiceCmd,
@@ -522,6 +524,8 @@ func Run(args []string) {
 		cmd.SetupService()
 	case GenerateTestRBTCmd:
 		cmd.GenerateTestRBT()
+	case SelfTransferRBTCmd:
+		cmd.SelfTransferRBT()
 	case TransferRBTCmd:
 		cmd.TransferRBT()
 	case GetAccountInfoCmd:

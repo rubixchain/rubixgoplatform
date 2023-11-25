@@ -29,6 +29,7 @@ const (
 	TSCommitedTokenInfoKey  string = "8"
 	TSExecutorDIDKey        string = "9"
 	TSSmartContractDataKey  string = "10"
+	TSEpochTime             string = "6"
 )
 
 const (
@@ -52,6 +53,7 @@ type TransInfo struct {
 	Comment            string      `json:"comment"`
 	TransTokens        []TokenInfo `json:"TransTokens"`
 	ExchangeTokens     []TokenInfo `json:"excahngeTokens"`
+	EpochTime          string      `json:"epochTime"`
 	CommitedTokens     []TokenInfo `json:"comitedtokens"`
 	DeployerDID        string      `json:"deployerDID`
 	SmartContractToken string      `json:"smartcontractToken`
@@ -130,6 +132,7 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 		}
 		ntsb[TSExcahngeInfoKey] = ntibs
 	}
+	ntsb[TSEpochTime] = ts.EpochTime
 	return ntsb
 }
 

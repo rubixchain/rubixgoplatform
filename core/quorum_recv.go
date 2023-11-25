@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -196,47 +195,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			crep.Message = "Pledge Token check Failed, Token " + wt[i].Token + " is Pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		if c.checkIsUnpledged(b) {
-			unpledgeId := c.getUnpledgeId(wt[i].Token)
-			if unpledgeId == "" {
-				c.log.Error("Failed to fetch proof file CID")
-				crep.Message = "Failed to fetch proof file CID"
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			err := c.ipfs.Get(unpledgeId, c.cfg.DirPath+"unpledge")
-			if err != nil {
-				c.log.Error("Failed to fetch proof file")
-				crep.Message = "Failed to fetch proof file, err " + err.Error()
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			pcb, err := ioutil.ReadFile(c.cfg.DirPath + "unpledge/" + unpledgeId)
-			if err != nil {
-				c.log.Error("Invalid file", "err", err)
-				crep.Message = "Invalid file,err " + err.Error()
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			pcs := util.BytesToString(pcb)
 
-			senderAddr := cr.SenderPeerID + "." + sc.GetSenderDID()
-			rdid, tid, err := c.getProofverificationDetails(wt[i].Token, senderAddr)
-			if err != nil {
-				c.log.Error("Failed to get pledged for token reciveer did", "err", err)
-				crep.Message = "Failed to get pledged for token reciveer did"
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			pv, err := c.up.ProofVerification(wt[i].Token, pcs, rdid, tid)
-			if err != nil {
-				c.log.Error("Proof Verification Failed due to error ", err)
-				crep.Message = "Proof Verification Failed due to error " + err.Error()
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			if !pv {
-				c.log.Debug("Proof of Work for Unpledge not verified")
-				crep.Message = "Proof of Work for Unpledge not verified"
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			c.log.Debug("Proof of work verified")
-		}
 	}
 
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
@@ -862,7 +821,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 
 	for _, t := range ur.PledgedTokens {
-		c.up.AddUnPledge(t)
+		c.Up.AddUnPledge(t)
 	}
 	crep.Status = true
 	crep.Message = "Token pledge status updated"

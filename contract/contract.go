@@ -44,6 +44,7 @@ type ContractType struct {
 	PledgeMode int        `json:"pledge_mode"`
 	TransInfo  *TransInfo `json:"transInfo"`
 	TotalRBTs  float64    `json:"totalRBTs"`
+	EpochTime  string     `json:"epoch_time"`
 	log        logger.Logger
 }
 
@@ -51,6 +52,7 @@ type Contract struct {
 	st  uint64
 	sb  []byte
 	sm  map[string]interface{}
+	se  string
 	log logger.Logger
 }
 
@@ -255,6 +257,10 @@ func (c *Contract) GetMap() map[string]interface{} {
 
 func (c *Contract) GetTotalRBTs() float64 {
 	return util.GetFloatFromMap(c.sm, SCTotalRBTsKey)
+}
+
+func (c *Contract) GetEpochTime() string {
+	return c.se
 }
 
 func (c *Contract) GetPledgeMode() int {

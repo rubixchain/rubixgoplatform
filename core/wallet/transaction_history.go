@@ -21,13 +21,14 @@ type TransactionDetails struct {
 	Amount          float64   `gorm:"column:amount"`
 	TotalTime       float64   `gorm:"column:total_time"`
 	Comment         string    `gorm:"column:comment"`
+	EpochTime       time.Time `gorm:"column:epoch_time"`
 	DateTime        time.Time `gorm:"column:date_time"`
 	Status          bool      `gorm:"column:status"`
 	DeployerDID     string    `gorm:"column:deployer_did"`
 }
 
 func (w *Wallet) AddTransactionHistory(td *TransactionDetails) error {
-	err := w.s.Write(TransactionStorage, td)
+	err := w.S.Write(TransactionStorage, td)
 	if err != nil {
 		w.log.Error("Failed to store transaction history", "err", err)
 		return err
@@ -39,7 +40,7 @@ func (w *Wallet) GetTransactionDetailsbyTransactionId(transactionId string) (Tra
 	var th TransactionDetails
 	//var tt []w.TokensTransferred
 	//var ql []w.QuorumList
-	err := w.s.Read(TransactionStorage, &th, "transaction_id=?", transactionId)
+	err := w.S.Read(TransactionStorage, &th, "transaction_id=?", transactionId)
 	if err != nil {
 		w.log.Error("Failed to get transaction details", "err", err)
 		return th, err
@@ -50,7 +51,7 @@ func (w *Wallet) GetTransactionDetailsbyTransactionId(transactionId string) (Tra
 func (w *Wallet) GetTransactionByComment(comment string) ([]TransactionDetails, error) {
 	var td []TransactionDetails
 
-	err := w.s.Read(TransactionStorage, &td, "comment=?", comment)
+	err := w.S.Read(TransactionStorage, &td, "comment=?", comment)
 	if err != nil {
 		w.log.Error("Failed to get transaction details", "err", err)
 		return nil, err
@@ -61,7 +62,7 @@ func (w *Wallet) GetTransactionByComment(comment string) ([]TransactionDetails, 
 func (w *Wallet) GetTransactionByReceiver(receiver string) ([]TransactionDetails, error) {
 	var td []TransactionDetails
 
-	err := w.s.Read(TransactionStorage, &td, "receiver_did=?", receiver)
+	err := w.S.Read(TransactionStorage, &td, "receiver_did=?", receiver)
 	if err != nil {
 		w.log.Error("Failed to get transaction details", "err", err)
 		return nil, err
@@ -72,7 +73,7 @@ func (w *Wallet) GetTransactionByReceiver(receiver string) ([]TransactionDetails
 func (w *Wallet) GetTransactionBySender(sender string) ([]TransactionDetails, error) {
 	var td []TransactionDetails
 
-	err := w.s.Read(TransactionStorage, &td, "sender_did=?", sender)
+	err := w.S.Read(TransactionStorage, &td, "sender_did=?", sender)
 	if err != nil {
 		w.log.Error("Failed to get transaction details", "err", err)
 		return nil, err

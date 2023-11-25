@@ -47,6 +47,16 @@ type ConensusRequest struct {
 	ExecuterPeerID     string   `json:"executor_peer_id"`
 }
 
+type QuorumPledge struct {
+	ReqID          string   `json:"req_id"`
+	Type           int      `json:"type"`
+	Mode           int      `json:"mode"`
+	SenderPeerID   string   `json:"sender_peerd_id"`
+	ReceiverPeerID string   `json:"receiver_peerd_id"`
+	ContractBlock  []byte   `json:"contract_block"`
+	QuorumList     []string `json:"quorum_list"`
+}
+
 type ConensusReply struct {
 	ReqID    string `json:"req_id"`
 	Status   bool   `json:"status"`
@@ -168,6 +178,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 		return fmt.Errorf("failed to setup quorum")
 	}
 	c.qc[didStr] = dc
+	c.Up.RunUnpledge8HourlyThread()
 	if pvtKeyPwd != "" {
 		dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
 		if dc == nil {
@@ -176,7 +187,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 		}
 		c.pqc[didStr] = dc
 	}
-	c.up.RunUnpledge()
+	c.Up.RunUnpledge()
 	return nil
 }
 
@@ -392,6 +403,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetReceiverDID(),
 			Comment:         sc.GetComment(),
+			EpochTime:       time.Now(),
 			DateTime:        time.Now(),
 			Status:          true,
 		}
@@ -407,6 +419,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionType: nb.GetTransType(),
 			DateTime:        time.Now(),
 			Status:          true,
+			EpochTime:       time.Now(),
 		}
 		return &td, pl, nil
 	} else if cr.Mode == SmartContractDeployMode {
@@ -951,18 +964,46 @@ func (c *Core) getArbitrationSignature(p *ipfsport.Peer, sr *SignatureRequest) (
 	return srep.Signature, true
 }
 func (c *Core) checkIsPledged(tcb *block.Block) bool {
-	if strings.Compare(tcb.GetTransType(), block.TokenPledgedType) == 0 {
-		return true
+	c.log.Debug("quorum_initiator/CheckIsPledged")
+	if (tcb.GetTransType()) == block.TokenPledgedType {
+		c.log.Debug("its a pledged token")
+		timeString, err := tcb.GetBlockEpoch()
+		c.log.Debug("Epoch Time Stored: " + timeString)
+		if err != nil {
+			c.log.Error("Failed to get the epoch time, removing the token from the unpledge list", err)
+			return true
+		}
+		layout := "2006-01-02 15:04:05.999999 -0700 MST "
+
+		timeString = timeString[0:36]
+		storedTime, err := time.Parse(layout, timeString)
+		if err != nil {
+			c.log.Error("Error:", err)
+			return false
+		}
+
+		elapsed := time.Since(storedTime)
+		if elapsed >= 384*time.Hour {
+			c.log.Info("24 hours have elapsed.")
+			return false
+
+		} else {
+			c.log.Info("Less than 24 hours have elapsed.")
+			return true
+		}
+	} else {
+		c.log.Debug("its not a pledged token")
+		return false
 	}
-	return false
+
 }
 
-func (c *Core) checkIsUnpledged(tcb *block.Block) bool {
-	if strings.Compare(tcb.GetTransType(), block.TokenUnpledgedType) == 0 {
-		return true
-	}
-	return false
-}
+//func (c *Core) checkIsUnpledged(tcb *block.Block) bool {
+//	if strings.Compare(tcb.GetTransType(), block.TokenUnpledgedType) == 0 {
+//		return true
+//	}
+//	return false
+//}
 
 func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractToken string, didCryptoLib did.DIDCrypto) error {
 	commitedTokens, err := newBlock.GetCommitedTokenDetials(smartContractToken)

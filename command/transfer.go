@@ -26,3 +26,24 @@ func (cmd *Command) TransferRBT() {
 	cmd.log.Info(msg)
 	cmd.log.Info("RBT transfered successfully")
 }
+func (cmd *Command) SelfTransferRBT() {
+	rt := model.RBTSelfTransferRequest{
+		Receiver: cmd.senderAddr,
+		Sender:   cmd.senderAddr,
+		Type:     cmd.transType,
+		Comment:  cmd.transComment,
+	}
+
+	br, err := cmd.c.SelfTransferRBT(&rt)
+	if err != nil {
+		cmd.log.Error("Failed Self RBT transfer", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed self transfer RBT", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
+	cmd.log.Info("RBT self-transferred successfully")
+}

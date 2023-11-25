@@ -82,7 +82,7 @@ type Core struct {
 	ipfsState     bool
 	ipfsChan      chan bool
 	d             *did.DID
-	up            *unpledge.UnPledge
+	Up            *unpledge.UnPledge
 	didDir        string
 	pm            *ipfsport.PeerManager
 	qm            *QuorumManager
@@ -265,7 +265,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		c.log.Error("Failed to create unpledge", "err", err)
 		return nil, err
 	}
-	c.up, err = unpledge.InitUnPledge(c.s, c.w, c.testNet, c.cfg.DirPath+"unpledge/", c.Unpledge, c.log)
+	c.Up, err = unpledge.InitUnPledge(c.s, c.w, c.testNet, c.cfg.DirPath+"unpledge/", c.Unpledge, c.log)
 	if err != nil {
 		c.log.Error("Failed to init unpledge", "err", err)
 		return nil, err

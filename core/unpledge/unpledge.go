@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/EnsurityTechnologies/logger"
 	"math/rand"
 	"os"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -46,6 +46,65 @@ type UnpledgeTokenList struct {
 
 type UnpledgeCBType func(t string, file string) error
 
+func (up *UnPledge) RunUnpledge8HourlyThread() error {
+	go up.RunUnpledge8Hourly()
+	return nil
+}
+func (up *UnPledge) RunUnpledge8Hourly() {
+	for {
+		go up.runUnpledge()
+
+		// Sleep for 8 hours
+		duration := time.Duration(8) * time.Hour
+		time.Sleep(duration)
+	}
+}
+func (up *UnPledge) GetSelfTransferTokens(did string) []string {
+	wt, err := up.w.GetAllWholeTokens(did)
+	if err != nil {
+		up.log.Error("Failed to get tokens", "err", err)
+		//return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
+	}
+	var selectedTokens []string
+	for i := range wt {
+		tokenType := token.RBTTokenType
+		if up.testNet {
+			tokenType = token.TestTokenType
+		}
+		if wt[i].TokenStatus == wallet.TokenIsFree {
+			b := up.w.GetLatestTokenBlock(wt[i].TokenID, tokenType)
+			if b == nil {
+				up.log.Error("Invalid token chain block")
+			}
+			if (b.GetTransType()) == block.TokenTransferredType {
+				up.log.Debug("its a transferred token")
+				timeString, err := b.GetBlockEpoch()
+				up.log.Debug("Epoch Time Stored: " + timeString)
+				if err != nil {
+					up.log.Error("Failed to get the epoch time, removing the token from the unpledge list", err)
+				}
+				layout := "2006-01-02 15:04:05.999999 -0700 MST "
+
+				timeString = timeString[0:36]
+				storedTime, err := time.Parse(layout, timeString)
+				if err != nil {
+					up.log.Error("Error:", err)
+				}
+
+				elapsed := time.Since(storedTime)
+				if elapsed >= 384*time.Hour {
+					up.log.Info("16 days have elapsed.")
+					selectedTokens = append(selectedTokens, wt[i].TokenID)
+				} else {
+					up.log.Info("Less than 16 days have elapsed.")
+				}
+			} else {
+				up.log.Debug("its not a transferred token")
+			}
+		}
+	}
+	return selectedTokens
+}
 func InitUnPledge(s storage.Storage, w *wallet.Wallet, testNet bool, dir string, cb UnpledgeCBType, log logger.Logger) (*UnPledge, error) {
 	up := &UnPledge{
 		s:       s,
@@ -85,8 +144,9 @@ func InitUnPledge(s storage.Storage, w *wallet.Wallet, testNet bool, dir string,
 	return up, nil
 }
 
-func (up *UnPledge) RunUnpledge() {
+func (up *UnPledge) RunUnpledge() error {
 	go up.runUnpledge()
+	return nil
 }
 
 func sha2Hash256(input string) string {
