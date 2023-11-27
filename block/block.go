@@ -3,6 +3,7 @@ package block
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/fxamacker/cbor"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"

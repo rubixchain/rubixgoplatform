@@ -16,6 +16,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
+	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
 type DIDChan struct {

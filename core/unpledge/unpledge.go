@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"math/rand"
 	"os"
 	"strconv"
@@ -12,12 +11,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
+
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/token"
-	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
-
 	"golang.org/x/crypto/sha3"
 )
 
