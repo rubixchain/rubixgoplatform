@@ -16,6 +16,7 @@ require (
 )
 
 require (
+	github.com/EnsurityTechnologies/enscrypt v1.0.1
 	github.com/btcsuite/btcd v0.23.0 // indirect
 	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
