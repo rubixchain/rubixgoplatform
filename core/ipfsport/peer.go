@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	srvcfg "github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/helper/jsonutil"
-	"github.com/EnsurityTechnologies/logger"
-	"github.com/gklps/ensweb"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/helper/jsonutil"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 // Peer handle for all peer connection

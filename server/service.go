@@ -1,8 +1,8 @@
 package server
 
 import (
-	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/config"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 func (s *Server) APISetupService(req *ensweb.Request) *ensweb.Result {

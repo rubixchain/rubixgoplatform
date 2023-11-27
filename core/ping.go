@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 // PingRequest is the model for ping request

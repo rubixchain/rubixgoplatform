@@ -3,9 +3,9 @@ package server
 import (
 	"net/http"
 
-	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 // @Summary Get transaction details by Transcation ID

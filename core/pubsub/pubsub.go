@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/EnsurityTechnologies/logger"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 type PubSubCallback func(peerID string, topic string, data []byte)

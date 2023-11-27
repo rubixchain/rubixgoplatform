@@ -3,9 +3,9 @@ package server
 import (
 	"net/http"
 
-	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 // validateAccess : validate the access based on the client token,
