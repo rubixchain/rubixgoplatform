@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/EnsurityTechnologies/logger"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"math/rand"
 	"os"
 	"strconv"

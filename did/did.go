@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/EnsurityTechnologies/enscrypt"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	files "github.com/ipfs/go-ipfs-files"
 	"github.com/rubixchain/rubixgoplatform/crypto"

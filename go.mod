@@ -3,7 +3,6 @@ module github.com/rubixchain/rubixgoplatform
 go 1.16
 
 require (
-	github.com/EnsurityTechnologies/helper v1.0.0
 	github.com/fxamacker/cbor v1.5.1
 	github.com/gorilla/sessions v1.2.1
 	github.com/ipfs/go-ipfs-api v0.3.0
@@ -21,7 +20,7 @@ require (
 	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.15.0
-	github.com/gklps/ensweb v1.0.10
+	github.com/frankban/quicktest v1.14.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/spec v0.20.9 // indirect
 	github.com/go-openapi/swag v0.22.4 // indirect
@@ -30,10 +29,16 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/gorilla/mux v1.8.0
 	github.com/ipfs/go-cid v0.2.0 // indirect
+	github.com/jackc/pgx/v5 v5.3.1 // indirect
 	github.com/jinzhu/gorm v1.9.16
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/libp2p/go-libp2p-core v0.16.1 // indirect
-	github.com/mattn/go-isatty v0.0.19 // indirect
+	github.com/mattn/go-colorable v0.1.13
+	github.com/mattn/go-isatty v0.0.19
+	github.com/mattn/go-sqlite3 v1.14.16 // indirect
+	github.com/microsoft/go-mssqldb v0.20.0 // indirect
+	github.com/mitchellh/go-homedir v1.1.0
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/multiformats/go-base32 v0.0.4 // indirect
 	github.com/multiformats/go-multiaddr v0.5.0 // indirect
 	github.com/multiformats/go-multihash v0.1.0 // indirect
