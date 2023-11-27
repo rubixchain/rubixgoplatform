@@ -11,9 +11,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/EnsurityTechnologies/logger"
-	"github.com/EnsurityTechnologies/uuid"
-	"github.com/gklps/ensweb"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	files "github.com/ipfs/go-ipfs-files"
 	"github.com/rubixchain/rubixgoplatform/crypto"

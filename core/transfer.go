@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/EnsurityTechnologies/uuid"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
 func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) {

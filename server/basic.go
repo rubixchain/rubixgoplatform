@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 // BasicResponse will send basic mode response

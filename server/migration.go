@@ -3,9 +3,9 @@ package server
 import (
 	"net/http"
 
-	"github.com/gklps/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 func (s *Server) APIMigrateNode(req *ensweb.Request) *ensweb.Result {

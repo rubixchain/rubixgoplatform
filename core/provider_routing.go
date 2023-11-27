@@ -3,7 +3,7 @@ package core
 import (
 	"net/http"
 
-	"github.com/gklps/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 type PinStatusReq struct {

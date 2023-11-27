@@ -2,12 +2,12 @@ package block
 
 import (
 	"fmt"
-	"github.com/EnsurityTechnologies/logger"
+	"strconv"
+
 	"github.com/fxamacker/cbor"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
-	"strconv"
-	"time"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 // ----------TokenChain----------------------
