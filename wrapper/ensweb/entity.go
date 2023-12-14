@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EnsurityTechnologies/enscrypt"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
+	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
@@ -316,7 +316,7 @@ func (s *Server) CreateTenant(t *Tenant) error {
 		UserName:           s.entityConfig.DefaultAdminName,
 		NormalizedUserName: strings.ToUpper(s.entityConfig.DefaultAdminName),
 		Name:               "Administrator",
-		PasswordHash:       enscrypt.HashPassword(s.entityConfig.DefaultAdminPassword, 3, 1, 1000),
+		PasswordHash:       crypto.HashPassword(s.entityConfig.DefaultAdminPassword, 3, 1, 1000),
 		Roles: []Role{
 			{
 				Name:           "admin",
@@ -469,7 +469,7 @@ func (s *Server) LoginUser(tenantID interface{}, req *LoginRequest) *LoginRespon
 		resp.Message = "User not found"
 		return resp
 	}
-	if enscrypt.VerifyPassword(req.Password, u.PasswordHash) {
+	if crypto.VerifyPassword(req.Password, u.PasswordHash) {
 		role := "user"
 		for _, r := range u.Roles {
 			if r.Name == "admin" {
