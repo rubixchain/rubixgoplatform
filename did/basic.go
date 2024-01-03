@@ -65,20 +65,20 @@ func (d *DIDBasic) GetDID() string {
 
 // Sign will return the singature of the DID
 func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
-	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
+	// byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
-	if err != nil {
-		fmt.Println(err)
-		return nil, nil, err
-	}
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return nil, nil, err
+	// }
 
-	ps := util.ByteArraytoIntArray(byteImg)
+	// ps := util.ByteArraytoIntArray(byteImg)
 
-	randPosObject := util.RandomPositions("signer", hash, 32, ps)
+	// randPosObject := util.RandomPositions("signer", hash, 32, ps)
 
-	finalPos := randPosObject.PosForSign
-	pvtPos := util.GetPrivatePositions(finalPos, ps)
-	pvtPosStr := util.IntArraytoStr(pvtPos)
+	// finalPos := randPosObject.PosForSign
+	// pvtPos := util.GetPrivatePositions(finalPos, ps)
+	// pvtPosStr := util.IntArraytoStr(pvtPos)
 
 	//create a signature using the private key
 	//1. read and extrqct the private key
@@ -94,20 +94,28 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
-	pvtKeySign, err := crypto.Sign(PrivateKey, []byte(hashPvtSign))
+	// hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
+	pvtKeySign, err := crypto.Sign(PrivateKey, []byte(hash))
 	if err != nil {
 		return nil, nil, err
 	}
-	bs, err := util.BitstreamToBytes(pvtPosStr)
-	if err != nil {
-		return nil, nil, err
-	}
+
+	bs := []byte{}
+	// bs, err := util.BitstreamToBytes(pvtPosStr)
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
 	return bs, pvtKeySign, err
 }
 
 // Sign will verifyt he signature
 func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+	//New PKI based signing scheme
+	if bytes.Equal(pvtShareSig, []byte{}) {
+		return d.PvtVerify([]byte(hash), pvtKeySIg)
+	}
+
+	//backward compatibility to nlss based signatures
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {

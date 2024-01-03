@@ -2,9 +2,9 @@ package did
 
 const (
 	BasicDIDMode int = iota
-	StandardDIDMode
-	WalletDIDMode
-	ChildDIDMode
+	// StandardDIDMode
+	// WalletDIDMode
+	// ChildDIDMode
 )
 
 const (

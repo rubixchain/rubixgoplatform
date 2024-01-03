@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image"
+
+	// "image"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,7 +15,8 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	files "github.com/ipfs/go-ipfs-files"
 	"github.com/rubixchain/rubixgoplatform/crypto"
-	"github.com/rubixchain/rubixgoplatform/nlss"
+
+	// "github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -69,89 +71,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	if didCreate.Type == BasicDIDMode || didCreate.Type == StandardDIDMode {
-		f, err := os.Open(didCreate.ImgFile)
-		if err != nil {
-			d.log.Error("failed to open image", "err", err)
-			return "", err
-		}
-		defer f.Close()
-		img, _, err := image.Decode(f)
-		if err != nil {
-			d.log.Error("failed to decode image", "err", err)
-			return "", err
-		}
-		bounds := img.Bounds()
-		w, h := bounds.Max.X, bounds.Max.Y
-
-		if w != 256 || h != 256 {
-			d.log.Error("invalid image size", "err", err)
-			return "", fmt.Errorf("invalid image")
-		}
-		pixels := make([]byte, 0)
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				r, g, b, _ := img.At(x, y).RGBA()
-				pixels = append(pixels, byte(r>>8))
-				pixels = append(pixels, byte(g>>8))
-				pixels = append(pixels, byte(b>>8))
-			}
-		}
-		outPixels := make([]byte, 0)
-		message := didCreate.Secret + util.GetMACAddress()
-		dataHash := util.CalculateHash([]byte(message), "SHA3-256")
-		offset := 0
-		for y := 0; y < h; y++ {
-			for x := 0; x < 24; x++ {
-				for i := 0; i < 32; i++ {
-					outPixels = append(outPixels, dataHash[i]^pixels[offset+i])
-				}
-				offset = offset + 32
-				dataHash = util.CalculateHash(dataHash, "SHA3-256")
-			}
-		}
-
-		err = util.CreatePNGImage(outPixels, w, h, dirName+"/public/"+DIDImgFileName)
-		if err != nil {
-			d.log.Error("failed to create image", "err", err)
-			return "", err
-		}
-		pvtShare := make([]byte, 0)
-		pubShare := make([]byte, 0)
-		numBytes := len(outPixels)
-		for i := 0; i < numBytes; i = i + 1024 {
-			pvS, pbS := nlss.Gen2Shares(outPixels[i : i+1024])
-			pvtShare = append(pvtShare, pvS...)
-			pubShare = append(pubShare, pbS...)
-		}
-		err = util.CreatePNGImage(pvtShare, w*4, h*2, dirName+"/private/"+PvtShareFileName)
-		if err != nil {
-			d.log.Error("failed to create image", "err", err)
-			return "", err
-		}
-		err = util.CreatePNGImage(pubShare, w*4, h*2, dirName+"/public/"+PubShareFileName)
-		if err != nil {
-			d.log.Error("failed to create image", "err", err)
-			return "", err
-		}
-	}
-	if didCreate.Type == WalletDIDMode {
-		_, err := util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
-		if err != nil {
-			d.log.Error("failed to copy did image", "err", err)
-			return "", err
-		}
-		_, err = util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
-		if err != nil {
-			d.log.Error("failed to copy public share image", "err", err)
-			return "", err
-		}
-	}
-	if didCreate.Type == BasicDIDMode || didCreate.Type == ChildDIDMode {
-		if didCreate.PrivPWD == "" {
-			d.log.Error("password required for creating", "err", err)
-			return "", err
-		}
+	if didCreate.Type == BasicDIDMode {
 		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.PrivPWD})
 		if err != nil {
 			d.log.Error("failed to create keypair", "err", err)
@@ -165,45 +85,144 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		if err != nil {
 			return "", err
 		}
-	} else {
-		_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFileName)
-		if err != nil {
-			d.log.Error("failed to copy pub key", "err", err)
-			return "", err
-		}
 	}
 
-	if didCreate.Type == ChildDIDMode {
-		if didCreate.MasterDID == "" {
-			return "", fmt.Errorf("master did is missing")
-		}
-		err = util.FileWrite(dirName+"/public/"+MasterDIDFileName, []byte(didCreate.MasterDID))
-		if err != nil {
-			return "", err
-		}
-	} else {
-		if didCreate.QuorumPWD == "" {
-			if didCreate.PrivPWD != "" {
-				didCreate.QuorumPWD = didCreate.PrivPWD
-			} else {
-				didCreate.QuorumPWD = DefaultPWD
-			}
-		}
+	// if didCreate.Type == BasicDIDMode || didCreate.Type == StandardDIDMode {
 
-		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.QuorumPWD})
-		if err != nil {
-			d.log.Error("failed to create keypair", "err", err)
-			return "", err
-		}
-		err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
-		if err != nil {
-			return "", err
-		}
-		err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
-		if err != nil {
-			return "", err
-		}
-	}
+	// f, err := os.Open(didCreate.ImgFile)
+	// if err != nil {
+	// 	d.log.Error("failed to open image", "err", err)
+	// 	return "", err
+	// }
+	// defer f.Close()
+	// img, _, err := image.Decode(f)
+	// if err != nil {
+	// 	d.log.Error("failed to decode image", "err", err)
+	// 	return "", err
+	// }
+	// bounds := img.Bounds()
+	// w, h := bounds.Max.X, bounds.Max.Y
+
+	// if w != 256 || h != 256 {
+	// 	d.log.Error("invalid image size", "err", err)
+	// 	return "", fmt.Errorf("invalid image")
+	// }
+	// pixels := make([]byte, 0)
+	// for y := 0; y < h; y++ {
+	// 	for x := 0; x < w; x++ {
+	// 		r, g, b, _ := img.At(x, y).RGBA()
+	// 		pixels = append(pixels, byte(r>>8))
+	// 		pixels = append(pixels, byte(g>>8))
+	// 		pixels = append(pixels, byte(b>>8))
+	// 	}
+	// }
+	// outPixels := make([]byte, 0)
+	// message := didCreate.Secret + util.GetMACAddress()
+	// dataHash := util.CalculateHash([]byte(message), "SHA3-256")
+	// offset := 0
+	// for y := 0; y < h; y++ {
+	// 	for x := 0; x < 24; x++ {
+	// 		for i := 0; i < 32; i++ {
+	// 			outPixels = append(outPixels, dataHash[i]^pixels[offset+i])
+	// 		}
+	// 		offset = offset + 32
+	// 		dataHash = util.CalculateHash(dataHash, "SHA3-256")
+	// 	}
+	// }
+
+	// err = util.CreatePNGImage(outPixels, w, h, dirName+"/public/"+DIDImgFileName)
+	// if err != nil {
+	// 	d.log.Error("failed to create image", "err", err)
+	// 	return "", err
+	// }
+	// pvtShare := make([]byte, 0)
+	// pubShare := make([]byte, 0)
+	// numBytes := len(outPixels)
+	// for i := 0; i < numBytes; i = i + 1024 {
+	// 	pvS, pbS := nlss.Gen2Shares(outPixels[i : i+1024])
+	// 	pvtShare = append(pvtShare, pvS...)
+	// 	pubShare = append(pubShare, pbS...)
+	// }
+	// 	err = util.CreatePNGImage(pvtShare, w*4, h*2, dirName+"/private/"+PvtShareFileName)
+	// 	if err != nil {
+	// 		d.log.Error("failed to create image", "err", err)
+	// 		return "", err
+	// 	}
+	// 	err = util.CreatePNGImage(pubShare, w*4, h*2, dirName+"/public/"+PubShareFileName)
+	// 	if err != nil {
+	// 		d.log.Error("failed to create image", "err", err)
+	// 		return "", err
+	// 	}
+	// }
+	// if didCreate.Type == WalletDIDMode {
+	// 	_, err := util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
+	// 	if err != nil {
+	// 		d.log.Error("failed to copy did image", "err", err)
+	// 		return "", err
+	// 	}
+	// 	_, err = util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
+	// 	if err != nil {
+	// 		d.log.Error("failed to copy public share image", "err", err)
+	// 		return "", err
+	// 	}
+	// }
+	// if didCreate.Type == BasicDIDMode || didCreate.Type == ChildDIDMode {
+	// 	if didCreate.PrivPWD == "" {
+	// 		d.log.Error("password required for creating", "err", err)
+	// 		return "", err
+	// 	}
+	// 	pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.PrivPWD})
+	// 	if err != nil {
+	// 		d.log.Error("failed to create keypair", "err", err)
+	// 		return "", err
+	// 	}
+	// 	err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
+	// 	if err != nil {
+	// 		return "", err
+	// 	}
+	// 	err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
+	// 	if err != nil {
+	// 		return "", err
+	// 	}
+	// } else {
+	// 	_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFileName)
+	// 	if err != nil {
+	// 		d.log.Error("failed to copy pub key", "err", err)
+	// 		return "", err
+	// 	}
+	// }
+
+	// if didCreate.Type == ChildDIDMode {
+	// 	if didCreate.MasterDID == "" {
+	// 		return "", fmt.Errorf("master did is missing")
+	// 	}
+	// 	err = util.FileWrite(dirName+"/public/"+MasterDIDFileName, []byte(didCreate.MasterDID))
+	// 	if err != nil {
+	// 		return "", err
+	// 	}
+	// } else {
+	// 	if didCreate.QuorumPWD == "" {
+	// 		if didCreate.PrivPWD != "" {
+	// 			didCreate.QuorumPWD = didCreate.PrivPWD
+	// 		} else {
+	// 			didCreate.QuorumPWD = DefaultPWD
+	// 		}
+	// 	}
+
+	// 	pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.QuorumPWD})
+	// 	if err != nil {
+	// 		d.log.Error("failed to create keypair", "err", err)
+	// 		return "", err
+	// 	}
+	// 	err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
+	// 	if err != nil {
+	// 		return "", err
+	// 	}
+	// 	err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
+	// 	if err != nil {
+	// 		return "", err
+	// 	}
+	// }
 
 	did, err := d.getDirHash(dirName + "/public/")
 	if err != nil {
@@ -252,27 +271,27 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	_, err = util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
-	if err != nil {
-		d.log.Error("failed to copy did image", "err", err)
-		return "", err
-	}
-	_, err = util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
-	if err != nil {
-		d.log.Error("failed to copy public share", "err", err)
-		return "", err
-	}
-	_, err = util.Filecopy(didCreate.PrivImgFile, dirName+"/private/"+PvtShareFileName)
-	if err != nil {
-		d.log.Error("failed to copy private share key", "err", err)
-		return "", err
-	}
+	// _, err = util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
+	// if err != nil {
+	// 	d.log.Error("failed to copy did image", "err", err)
+	// 	return "", err
+	// }
+	// _, err = util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
+	// if err != nil {
+	// 	d.log.Error("failed to copy public share", "err", err)
+	// 	return "", err
+	// }
+	// _, err = util.Filecopy(didCreate.PrivImgFile, dirName+"/private/"+PvtShareFileName)
+	// if err != nil {
+	// 	d.log.Error("failed to copy private share key", "err", err)
+	// 	return "", err
+	// }
 	if didCreate.Type == BasicDIDMode {
 		if didCreate.PrivKeyFile == "" || didCreate.PubKeyFile == "" {
-			if didCreate.PrivPWD == "" {
-				d.log.Error("password required for creating", "err", err)
-				return "", err
-			}
+			// if didCreate.PrivPWD == "" {
+			// 	d.log.Error("password required for creating", "err", err)
+			// 	return "", err
+			// }
 			pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.PrivPWD})
 			if err != nil {
 				d.log.Error("failed to create keypair", "err", err)

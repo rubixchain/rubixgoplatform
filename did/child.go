@@ -40,8 +40,8 @@ func (d *DIDChild) getPassword() (string, error) {
 		Status:  true,
 		Message: "Password needed",
 		Result: SignReqData{
-			ID:   d.ch.ID,
-			Mode: BasicDIDMode,
+			ID: d.ch.ID,
+			// Mode: BasicDIDMode,
 		},
 	}
 	d.ch.OutChan <- sr

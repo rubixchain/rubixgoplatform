@@ -48,73 +48,87 @@ func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
 }
 
 func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
-	if cfg.Type < did.BasicDIDMode && cfg.Type > did.WalletDIDMode {
+	if cfg.Type != did.BasicDIDMode {
 		return "Invalid DID mode", false
 	}
+	// switch cfg.Type {
+	// case did.BasicDIDMode:
+	// 	if cfg.ImgFile == "" {
+	// 		c.log.Error("Image file requried")
+	// 		return "Image file requried", false
+	// 	}
+	// 	if !strings.Contains(cfg.ImgFile, did.ImgFileName) {
+	// 		util.Filecopy(cfg.ImgFile, did.ImgFileName)
+	// 		cfg.ImgFile = did.ImgFileName
+	// 	}
+	// 	cfg.DIDImgFileName = ""
+	// 	cfg.PubImgFile = ""
+	// 	cfg.PubKeyFile = ""
+	// case did.StandardDIDMode:
+	// 	if cfg.ImgFile == "" {
+	// 		c.log.Error("Image file requried")
+	// 		return "Image file requried", false
+	// 	}
+	// 	if cfg.PubImgFile == "" {
+	// 		c.log.Error("Public key file requried")
+	// 		return "Public key file requried", false
+	// 	}
+	// 	if !strings.Contains(cfg.ImgFile, did.ImgFileName) {
+	// 		util.Filecopy(cfg.ImgFile, did.ImgFileName)
+	// 		cfg.ImgFile = did.ImgFileName
+	// 	}
+	// 	if !strings.Contains(cfg.PubKeyFile, did.PubKeyFileName) {
+	// 		util.Filecopy(cfg.PubKeyFile, did.PubKeyFileName)
+	// 		cfg.PubKeyFile = did.PubKeyFileName
+	// 	}
+	// 	cfg.DIDImgFileName = ""
+	// 	cfg.PubImgFile = ""
+	// case did.WalletDIDMode:
+	// 	if cfg.DIDImgFileName == "" {
+	// 		c.log.Error("DID image file requried")
+	// 		return "DID image file requried", false
+	// 	}
+	// 	if cfg.PubImgFile == "" {
+	// 		c.log.Error("DID public share image file requried")
+	// 		return "DID public share image file requried", false
+	// 	}
+	// 	if cfg.PubKeyFile == "" {
+	// 		c.log.Error("Public key file requried")
+	// 		return "Public key file requried", false
+	// 	}
+	// 	if !strings.Contains(cfg.DIDImgFileName, did.DIDImgFileName) {
+	// 		util.Filecopy(cfg.DIDImgFileName, did.DIDImgFileName)
+	// 		cfg.DIDImgFileName = did.DIDImgFileName
+	// 	}
+	// 	if !strings.Contains(cfg.PubImgFile, did.PubShareFileName) {
+	// 		util.Filecopy(cfg.PubImgFile, did.PubShareFileName)
+	// 		cfg.PubImgFile = did.PubShareFileName
+	// 	}
+	// 	if !strings.Contains(cfg.PubKeyFile, did.PubKeyFileName) {
+	// 		util.Filecopy(cfg.PubKeyFile, did.PubKeyFileName)
+	// 		cfg.PubKeyFile = did.PubKeyFileName
+	// 	}
+	// 	cfg.ImgFile = ""
+	// case did.ChildDIDMode:
+	// 	cfg.ImgFile = ""
+	// 	cfg.DIDImgFileName = ""
+	// 	cfg.PubImgFile = ""
+	// 	cfg.PubKeyFile = ""
+	// }
+
 	switch cfg.Type {
 	case did.BasicDIDMode:
-		if cfg.ImgFile == "" {
-			c.log.Error("Image file requried")
-			return "Image file requried", false
-		}
-		if !strings.Contains(cfg.ImgFile, did.ImgFileName) {
-			util.Filecopy(cfg.ImgFile, did.ImgFileName)
-			cfg.ImgFile = did.ImgFileName
-		}
-		cfg.DIDImgFileName = ""
-		cfg.PubImgFile = ""
-		cfg.PubKeyFile = ""
-	case did.StandardDIDMode:
-		if cfg.ImgFile == "" {
-			c.log.Error("Image file requried")
-			return "Image file requried", false
-		}
-		if cfg.PubImgFile == "" {
-			c.log.Error("Public key file requried")
-			return "Public key file requried", false
-		}
-		if !strings.Contains(cfg.ImgFile, did.ImgFileName) {
-			util.Filecopy(cfg.ImgFile, did.ImgFileName)
-			cfg.ImgFile = did.ImgFileName
-		}
-		if !strings.Contains(cfg.PubKeyFile, did.PubKeyFileName) {
-			util.Filecopy(cfg.PubKeyFile, did.PubKeyFileName)
-			cfg.PubKeyFile = did.PubKeyFileName
-		}
-		cfg.DIDImgFileName = ""
-		cfg.PubImgFile = ""
-	case did.WalletDIDMode:
-		if cfg.DIDImgFileName == "" {
-			c.log.Error("DID image file requried")
-			return "DID image file requried", false
-		}
-		if cfg.PubImgFile == "" {
-			c.log.Error("DID public share image file requried")
-			return "DID public share image file requried", false
-		}
 		if cfg.PubKeyFile == "" {
 			c.log.Error("Public key file requried")
 			return "Public key file requried", false
 		}
-		if !strings.Contains(cfg.DIDImgFileName, did.DIDImgFileName) {
-			util.Filecopy(cfg.DIDImgFileName, did.DIDImgFileName)
-			cfg.DIDImgFileName = did.DIDImgFileName
-		}
-		if !strings.Contains(cfg.PubImgFile, did.PubShareFileName) {
-			util.Filecopy(cfg.PubImgFile, did.PubShareFileName)
-			cfg.PubImgFile = did.PubShareFileName
-		}
+
 		if !strings.Contains(cfg.PubKeyFile, did.PubKeyFileName) {
 			util.Filecopy(cfg.PubKeyFile, did.PubKeyFileName)
 			cfg.PubKeyFile = did.PubKeyFileName
 		}
-		cfg.ImgFile = ""
-	case did.ChildDIDMode:
-		cfg.ImgFile = ""
-		cfg.DIDImgFileName = ""
-		cfg.PubImgFile = ""
-		cfg.PubKeyFile = ""
 	}
+
 	jd, err := json.Marshal(&cfg)
 	if err != nil {
 		c.log.Error("Failed to parse json data", "err", err)
@@ -123,15 +137,15 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 	fields := make(map[string]string)
 	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
-	if cfg.ImgFile != "" {
-		files["image"] = cfg.ImgFile
-	}
-	if cfg.DIDImgFileName != "" {
-		files["did_image"] = cfg.DIDImgFileName
-	}
-	if cfg.PubImgFile != "" {
-		files["pub_image"] = cfg.PubImgFile
-	}
+	// if cfg.ImgFile != "" {
+	// 	files["image"] = cfg.ImgFile
+	// }
+	// if cfg.DIDImgFileName != "" {
+	// 	files["did_image"] = cfg.DIDImgFileName
+	// }
+	// if cfg.PubImgFile != "" {
+	// 	files["pub_image"] = cfg.PubImgFile
+	// }
 	if cfg.PubKeyFile != "" {
 		files["pub_key"] = cfg.PubKeyFile
 	}
@@ -150,27 +164,30 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 }
 
 func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
-	if dc.Type < did.BasicDIDMode && dc.Type > did.WalletDIDMode {
+	if dc.Type != did.BasicDIDMode {
 		return "Invalid DID mode", false
 	}
-	if !strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
-		!strings.Contains(dc.DIDImgFileName, did.DIDImgFileName) ||
-		!strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
+	if !strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
 		!strings.Contains(dc.QuorumPubKeyFile, did.QuorumPubKeyFileName) ||
 		!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) {
 		return "Required files are missing", false
 	}
 	switch dc.Type {
 	case did.BasicDIDMode:
-		if !strings.Contains(dc.PrivImgFile, did.PvtShareFileName) ||
-			!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) {
+		if !strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) {
 			return "Required files are missing", false
 		}
-	case did.StandardDIDMode:
-		if !strings.Contains(dc.PrivImgFile, did.PvtShareFileName) {
-			return "Required files are missing", false
-		}
+
+		// if !strings.Contains(dc.PrivImgFile, did.PvtShareFileName) ||
+		// 	!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) {
+		// 	return "Required files are missing", false
+		// }
+		// case did.StandardDIDMode:
+		// 	if !strings.Contains(dc.PrivImgFile, did.PvtShareFileName) {
+		// 		return "Required files are missing", false
+		// 	}
 	}
+
 	jd, err := json.Marshal(&dc)
 	if err != nil {
 		c.log.Error("Failed to parse json data", "err", err)
@@ -179,15 +196,15 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 	fields := make(map[string]string)
 	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
-	if dc.PubImgFile != "" {
-		files["pub_image"] = dc.PubImgFile
-	}
-	if dc.DIDImgFileName != "" {
-		files["did_image"] = dc.DIDImgFileName
-	}
-	if dc.PrivImgFile != "" {
-		files["priv_image"] = dc.PrivImgFile
-	}
+	// if dc.PubImgFile != "" {
+	// 	files["pub_image"] = dc.PubImgFile
+	// }
+	// if dc.DIDImgFileName != "" {
+	// 	files["did_image"] = dc.DIDImgFileName
+	// }
+	// if dc.PrivImgFile != "" {
+	// 	files["priv_image"] = dc.PrivImgFile
+	// }
 	if dc.PubKeyFile != "" {
 		files["pub_key"] = dc.PubKeyFile
 	}

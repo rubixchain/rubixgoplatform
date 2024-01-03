@@ -506,12 +506,12 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	switch dt.Type {
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.didDir, dc), nil
-	case did.StandardDIDMode:
-		return did.InitDIDStandard(didStr, c.didDir, dc), nil
-	case did.WalletDIDMode:
-		return did.InitDIDWallet(didStr, c.didDir, dc), nil
-	case did.ChildDIDMode:
-		return did.InitDIDChild(didStr, c.didDir, dc), nil
+	// case did.StandardDIDMode:
+	// 	return did.InitDIDStandard(didStr, c.didDir, dc), nil
+	// case did.WalletDIDMode:
+	// 	return did.InitDIDWallet(didStr, c.didDir, dc), nil
+	// case did.ChildDIDMode:
+	// 	return did.InitDIDChild(didStr, c.didDir, dc), nil
 	default:
 		return nil, fmt.Errorf("DID Type is not supported")
 	}

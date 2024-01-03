@@ -25,11 +25,11 @@ func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
 		resp.Message = "DID does not exist"
 		return resp
 	}
-	if dt.Type == did.BasicDIDMode || dt.Type == did.ChildDIDMode {
-		if !c.checkPassword(req.DID, req.Password) {
-			resp.Message = "Password does not match"
-			return resp
-		}
+	if dt.Type == did.BasicDIDMode {
+		// if !c.checkPassword(req.DID, req.Password) {
+		// 	resp.Message = "Password does not match"
+		// 	return resp
+		// }
 	} else {
 		_, ok := c.ValidateDIDToken(req.Token, setup.ChanllegeTokenType, req.DID)
 		if !ok {
@@ -37,7 +37,7 @@ func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
 			return resp
 		}
 		dc := did.InitDIDBasic(req.DID, c.didDir, nil)
-		ok, err := dc.PvtVerify([]byte(req.Token), req.Signature)
+		ok, err = dc.PvtVerify([]byte(req.Token), req.Signature)
 		if err != nil {
 			c.log.Error("Failed to verify DID signature", "err", err)
 			resp.Message = "Failed to verify DID signature"
@@ -82,7 +82,7 @@ func (c *Core) checkPassword(didStr string, pwd string) bool {
 }
 
 func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
-	if didCreate.RootDID && didCreate.Type != did.BasicDIDMode {
+	if didCreate.RootDID {
 		c.log.Error("only basic mode is allowed for root did")
 		return "", fmt.Errorf("only basic mode is allowed for root did")
 	}

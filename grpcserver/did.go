@@ -84,22 +84,22 @@ func (rn *RubixNative) CreateDID(ctx context.Context, req *protos.CreateDIDReq) 
 		return nil, status.Errorf(codes.Internal, "failed to create folder")
 	}
 	defer os.RemoveAll(folderName)
-	if req.DidImage != "" {
-		err = createFile(folderName+"/"+did.DIDImgFileName, req.DidImage, true)
-		if err != nil {
-			rn.log.Error(err.Error())
-			return nil, status.Errorf(codes.Internal, err.Error())
-		}
-		dc.ImgFile = folderName + "/" + did.DIDImgFileName
-	}
-	if req.PublicShare != "" {
-		err = createFile(folderName+"/"+did.PubShareFileName, req.PublicShare, true)
-		if err != nil {
-			rn.log.Error(err.Error())
-			return nil, status.Errorf(codes.Internal, err.Error())
-		}
-		dc.PubImgFile = folderName + "/" + did.PubShareFileName
-	}
+	// if req.DidImage != "" {
+	// 	err = createFile(folderName+"/"+did.DIDImgFileName, req.DidImage, true)
+	// 	if err != nil {
+	// 		rn.log.Error(err.Error())
+	// 		return nil, status.Errorf(codes.Internal, err.Error())
+	// 	}
+	// 	dc.ImgFile = folderName + "/" + did.DIDImgFileName
+	// }
+	// if req.PublicShare != "" {
+	// 	err = createFile(folderName+"/"+did.PubShareFileName, req.PublicShare, true)
+	// 	if err != nil {
+	// 		rn.log.Error(err.Error())
+	// 		return nil, status.Errorf(codes.Internal, err.Error())
+	// 	}
+	// 	dc.PubImgFile = folderName + "/" + did.PubShareFileName
+	// }
 	if req.PublicKey != "" {
 		err = createFile(folderName+"/"+did.PubKeyFileName, req.PublicKey, false)
 		if err != nil {
