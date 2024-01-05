@@ -79,14 +79,17 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			d.log.Error("failed to create keypair", "err", err)
 			return "", err
 		}
+
 		err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
 		if err != nil {
 			return "", err
 		}
+
 		err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
 		if err != nil {
 			return "", err
 		}
+
 	}
 
 	if didCreate.Type == BasicDIDMode || didCreate.Type == StandardDIDMode {
@@ -177,14 +180,17 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			d.log.Error("failed to create keypair", "err", err)
 			return "", err
 		}
+
 		err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
 		if err != nil {
 			return "", err
 		}
+
 		err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
 		if err != nil {
 			return "", err
 		}
+
 	} else {
 		_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFileName)
 		if err != nil {
