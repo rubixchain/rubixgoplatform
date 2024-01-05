@@ -52,6 +52,14 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 		return "Invalid DID mode", false
 	}
 	switch cfg.Type {
+	case did.LightDIDMode:
+		if !strings.Contains(cfg.PubKeyFile, did.PubKeyFileName) {
+			util.Filecopy(cfg.PubKeyFile, did.PubKeyFileName)
+			cfg.PubKeyFile = did.PubKeyFileName
+		}
+		cfg.ImgFile = ""
+		cfg.DIDImgFileName = ""
+		cfg.PubImgFile = ""
 	case did.BasicDIDMode:
 		if cfg.ImgFile == "" {
 			c.log.Error("Image file requried")
@@ -150,7 +158,7 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 }
 
 func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
-	if dc.Type < did.BasicDIDMode && dc.Type > did.WalletDIDMode {
+	if dc.Type < did.LightDIDMode && dc.Type > did.WalletDIDMode {
 		return "Invalid DID mode", false
 	}
 	if !strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
@@ -161,6 +169,10 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 		return "Required files are missing", false
 	}
 	switch dc.Type {
+	case did.LightDIDMode:
+		if !strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) {
+			return "Required files are missing", false
+		}
 	case did.BasicDIDMode:
 		if !strings.Contains(dc.PrivImgFile, did.PvtShareFileName) ||
 			!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) {

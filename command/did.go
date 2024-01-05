@@ -50,6 +50,27 @@ func (cmd *Command) CreateDID() {
 		}
 		cmd.quorumPWD = pwd
 	}
+	if cmd.didType == did.LightDIDMode {
+		if cmd.privKeyFile == "" || cmd.pubKeyFile == "" {
+			cmd.log.Error("private key & public key file names required")
+			return
+		}
+		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: cmd.privPWD})
+		if err != nil {
+			cmd.log.Error("failed to create keypair", "err", err)
+			return
+		}
+		err = util.FileWrite(cmd.privKeyFile, pvtKey)
+		if err != nil {
+			cmd.log.Error("failed to write private key file", "err", err)
+			return
+		}
+		err = util.FileWrite(cmd.pubKeyFile, pubKey)
+		if err != nil {
+			cmd.log.Error("failed to write public key file", "err", err)
+			return
+		}
+	}
 	if cmd.didType == did.WalletDIDMode {
 		f, err := os.Open(cmd.imgFile)
 		if err != nil {
@@ -248,6 +269,21 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 			Mode: sr.Mode,
 		}
 		switch sr.Mode {
+		case did.LightDIDMode:
+			privKey, err := ioutil.ReadFile(cmd.privKeyFile)
+			if err != nil {
+				return "Failed to open private key file, " + err.Error(), false
+			}
+			key, _, err := crypto.DecodeKeyPair(password, privKey, nil)
+			if err != nil {
+				return "Failed to decode private key file, " + err.Error(), false
+			}
+			cmd.log.Info("Doing the private key signature")
+			sig, err := crypto.Sign(key, sr.Hash)
+			if err != nil {
+				return "Failed to do signature, " + err.Error(), false
+			}
+			sresp.Signature.Signature = sig
 		case did.BasicDIDMode:
 			sresp.Password = password
 		case did.StandardDIDMode:

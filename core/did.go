@@ -36,7 +36,7 @@ func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
 			resp.Message = "Invalid token"
 			return resp
 		}
-		dc := did.InitDIDBasic(req.DID, c.didDir, nil)
+		dc := did.InitDIDLight(req.DID, c.didDir, nil)
 		ok, err := dc.PvtVerify([]byte(req.Token), req.Signature)
 		if err != nil {
 			c.log.Error("Failed to verify DID signature", "err", err)

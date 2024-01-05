@@ -504,6 +504,8 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 		return nil, fmt.Errorf("faield to get did channel")
 	}
 	switch dt.Type {
+	case did.LightDIDMode:
+		return did.InitDIDLight(didStr, c.didDir, dc), nil
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.didDir, dc), nil
 	case did.StandardDIDMode:

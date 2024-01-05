@@ -69,6 +69,26 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
+	if didCreate.Type == LightDIDMode {
+		if didCreate.PrivPWD == "" {
+			d.log.Error("password required for creating", "err", err)
+			return "", err
+		}
+		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.PrivPWD})
+		if err != nil {
+			d.log.Error("failed to create keypair", "err", err)
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
+		if err != nil {
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	if didCreate.Type == BasicDIDMode || didCreate.Type == StandardDIDMode {
 		f, err := os.Open(didCreate.ImgFile)
 		if err != nil {
