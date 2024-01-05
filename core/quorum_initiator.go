@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -818,6 +819,14 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	}
 	return nb, nil
 }
+func Ceilround(num float64) int {
+	return int(math.Ceil(num))
+}
+
+func CeilfloatPrecision(num float64, precision int) float64 {
+	output := math.Pow(10, float64(precision))
+	return float64(Ceilround(num*output)) / output
+}
 
 func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt int) error {
 	if qt == AlphaQuorumType {
@@ -840,11 +849,12 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 		}
 
 		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
+		pledgeTokensPerQuorumPresice := CeilfloatPrecision(pledgeTokensPerQuorum, 3)
 
 		// Request pledage token
-		if pd.RemPledgeTokens != 0 {
+		if pd.RemPledgeTokens > 0 {
 			pr := PledgeRequest{
-				TokensRequired: pledgeTokensPerQuorum, // Request the determined number of tokens per quorum
+				TokensRequired: pledgeTokensPerQuorumPresice, // Request the determined number of tokens per quorum
 			}
 			// l := len(pd.PledgedTokens)
 			// for i := pd.NumPledgedTokens; i < l; i++ {
@@ -891,7 +901,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			return err
 		}
 
-		if pd.RemPledgeTokens == 0 {
+		if pd.RemPledgeTokens <= 0 {
 			return nil
 		} else if count == 300 {
 			c.log.Error("Unable to pledge token")

@@ -156,10 +156,10 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	ptt := c.TokenType(ptts)
 
 	// check part split not crossing RBT
-	amount := float64(0)
+	amount := floatPrecision(0, 3)
 	for i := range parts {
 		amount = amount + parts[i]
-		amount = floatPrecision(amount, 10)
+		amount = floatPrecision(amount, 3)
 		if amount > t.TokenValue {
 			return nil, fmt.Errorf("invalid part split, split sum is more than the parent token")
 		}
