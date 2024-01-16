@@ -242,7 +242,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 
 	//create teh consensuscontract
 	consensusContractDetails := &contract.ContractType{
-		Type:       contract.SmartContractDeployType,
+		Type:       contract.SmartContractExecuteType,
 		PledgeMode: contract.POWPledgeMode,
 		TotalRBTs:  smartContractValue,
 		TransInfo: &contract.TransInfo{

@@ -16,6 +16,7 @@ const (
 	SCDataTokenCommitType
 	SCNFTSaleContractType
 	SmartContractDeployType
+	SmartContractExecuteType
 )
 
 // ----------SmartContract----------------------
