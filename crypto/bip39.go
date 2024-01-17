@@ -15,82 +15,84 @@ const (
 	BIP39 = iota
 )
 
-// Generate a Bip32 HD wallet for the mnemonic and a user supplied randomness
-// here we are reusing the password used for sealing for generating random seed
-func BIPGenerateKeyPair(cfg *CryptoConfig) ([]byte, []byte, error) {
+// Generate child private and public keys for BIP39 masterkey and given path
+// The child private key is regenerated on demand from master key hence never stored
+// The child public key need to shared with other peers for verification
+// Make sure the path of child is also stored along with public key
+func BIPGenerateChild(masterKey string, childPath int) ([]byte, []byte, error) {
 	var privateKeyBytes []byte
 	var publicKeyBytes []byte
+	masterKeybip32, err := bip32.B58Deserialize(masterKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	privateKey, err := masterKeybip32.NewChildKey(uint32(childPath))
+	if err != nil {
+		return nil, nil, err
+	}
+	publicKey := privateKey.PublicKey()
+	privateKeyBytes = privateKey.Key
+	publicKeyBytes = publicKey.Key
+	return privateKeyBytes, publicKeyBytes, nil
+}
 
+// Generate a Bip32 HD wallet MasteKey for the mnemonic and a user provided randomness
+// here we are reusing the password used for sealing masterkey as source of randomness also
+func BIPGenerateMasterKey(cfg *CryptoConfig) ([]byte, error) {
+	var masterkeySeralise string
 	var err error
 	if cfg.Alg == 0 {
 		entropy, _ := bip39.NewEntropy(256)
 		mnemonic, _ := bip39.NewMnemonic(entropy)
 		seed := bip39.NewSeed(mnemonic, cfg.Pwd)
 		masterKey, _ := bip32.NewMasterKey(seed)
-		privateKey, err := masterKey.NewChildKey(0)
+		masterkeySeralise = masterKey.B58Serialize()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		publicKey := privateKey.PublicKey()
-
-		privateKeyBytes = privateKey.Key
-		publicKeyBytes = publicKey.Key
 	} else {
-		return nil, nil, fmt.Errorf("unsupported algorithm")
+		return nil, fmt.Errorf("unsupported algorithm")
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	var pemEncPriv []byte
 	if cfg.Pwd != "" {
-		encBlock, err := Seal(cfg.Pwd, privateKeyBytes)
+		encBlock, err := Seal(cfg.Pwd, []byte(masterkeySeralise))
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		_, err = UnSeal(cfg.Pwd, encBlock)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "ENCRYPTED PRIVATE KEY", Bytes: encBlock})
 	} else {
-		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateKeyBytes})
+		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: []byte(masterkeySeralise)})
 	}
-	pemEncPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicKeyBytes})
-
-	return pemEncPriv, pemEncPub, nil
+	return pemEncPriv, nil
 }
 
-// GenerateKeyPair will generate key pair based on the configuration
-func BIPDecodeKeyPair(pwd string, privKey []byte, pubKey []byte) ([]byte, []byte, error) {
+// Decode the master public key
+func BIPDecodeMasterKey(pwd string, privKey []byte) ([]byte, error) {
 	var cryptoPrivKey []byte
-	var cryptoPubKey []byte
 	var err error
 	if privKey != nil {
 		pemBlock, _ := pem.Decode(privKey)
 		if pemBlock == nil {
-			return nil, nil, fmt.Errorf("invalid private key")
+			return nil, fmt.Errorf("invalid private key")
 		}
-		fmt.Println(" pemBlock ", pemBlock.Bytes)
-		fmt.Println(" pwd ", pwd)
-
 		if pemBlock.Type == "ENCRYPTED PRIVATE KEY" {
 			if pwd == "" {
-				return nil, nil, fmt.Errorf("key is encrypted need password to decrypt")
+				return nil, fmt.Errorf("key is encrypted need password to decrypt")
 			}
 			cryptoPrivKey, err = UnSeal(pwd, pemBlock.Bytes)
 			if err != nil {
-				return nil, nil, fmt.Errorf("key is invalid or password is wrong")
+				return nil, fmt.Errorf("key is invalid or password is wrong")
 			}
 		}
 	}
-	if pubKey != nil {
-		cryptoPubKey, _ := pem.Decode(pubKey)
-		if cryptoPubKey == nil {
-			return nil, nil, fmt.Errorf("invalid public key")
-		}
-	}
-
-	return cryptoPrivKey, cryptoPubKey, nil
+	return cryptoPrivKey, nil
 }
 
 func BIPSign(priv PrivateKey, data []byte) ([]byte, error) {
