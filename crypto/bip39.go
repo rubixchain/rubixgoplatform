@@ -36,39 +36,50 @@ func BIPGenerateChild(masterKey string, childPath int) ([]byte, []byte, error) {
 	return privateKeyBytes, publicKeyBytes, nil
 }
 
-// Generate a Bip32 HD wallet MasteKey for the mnemonic and a user provided randomness
-// here we are reusing the password used for sealing masterkey as source of randomness also
-func BIPGenerateMasterKey(cfg *CryptoConfig) ([]byte, error) {
+// Generate BIPMasterKey from Mnemonic and user provided password
+// Useful in key recovery / device migration through mnemonics
+func BIPGenerateMasterKeyFromMnemonic(mnemonic string, pwd string) ([]byte, error) {
 	var masterkeySeralise string
-	var err error
-	if cfg.Alg == 0 {
-		entropy, _ := bip39.NewEntropy(256)
-		mnemonic, _ := bip39.NewMnemonic(entropy)
-		seed := bip39.NewSeed(mnemonic, cfg.Pwd)
-		masterKey, _ := bip32.NewMasterKey(seed)
-		masterkeySeralise = masterKey.B58Serialize()
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf("unsupported algorithm")
-	}
-	if err != nil {
-		return nil, err
-	}
+	seed := bip39.NewSeed(mnemonic, pwd)
+	masterKey, _ := bip32.NewMasterKey(seed)
+	masterkeySeralise = masterKey.B58Serialize()
 	var pemEncPriv []byte
-	if cfg.Pwd != "" {
-		encBlock, err := Seal(cfg.Pwd, []byte(masterkeySeralise))
+	if pwd != "" {
+		encBlock, err := Seal(pwd, []byte(masterkeySeralise))
 		if err != nil {
 			return nil, err
 		}
-		_, err = UnSeal(cfg.Pwd, encBlock)
+		_, err = UnSeal(pwd, encBlock)
 		if err != nil {
 			return nil, err
 		}
 		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "ENCRYPTED PRIVATE KEY", Bytes: encBlock})
 	} else {
 		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: []byte(masterkeySeralise)})
+	}
+	return pemEncPriv, nil
+}
+
+// Generate a random BIP mnemonic in rubix
+func BIPGenerateMnemonic() string {
+	entropy, _ := bip39.NewEntropy(256)
+	mnemonic, _ := bip39.NewMnemonic(entropy)
+	return mnemonic
+}
+
+// Generate a Bip32 HD wallet MasteKey for the mnemonic and a user provided randomness
+// here we are reusing the password used for sealing masterkey as source of randomness also
+func BIPGenerateMasterKey(cfg *CryptoConfig) ([]byte, error) {
+	var pemEncPriv []byte
+	var err error
+	if cfg.Alg == 0 {
+		mnemonic := BIPGenerateMnemonic()
+		pemEncPriv, err = BIPGenerateMasterKeyFromMnemonic(mnemonic, cfg.Pwd)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, fmt.Errorf("unsupported algorithm")
 	}
 	return pemEncPriv, nil
 }
