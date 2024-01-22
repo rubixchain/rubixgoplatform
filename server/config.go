@@ -112,3 +112,43 @@ func (s *Server) APISetupDB(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.BasicResponse(req, true, "DB setup done successfully", nil)
 }
+
+// APIGetAllExplorer will get all explorer URLs from the db
+func (s *Server) APIGetAllExplorer(req *ensweb.Request) *ensweb.Result {
+	links, err := s.c.GetAllExplorer()
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to get explorer urls"+err.Error(), nil)
+	}
+	m := model.ExplorerLinks{
+		Links: links,
+	}
+	return s.BasicResponse(req, true, "Got all the explorer URLs successfully", m)
+}
+
+// APIAddExplorer will add bootstrap peers to the configuration
+func (s *Server) APIAddExplorer(req *ensweb.Request) *ensweb.Result {
+	var m model.ExplorerLinks
+	err := s.ParseJSON(req, &m)
+	if err != nil {
+		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	err = s.c.AddExplorer(m.Links)
+	if err != nil {
+		return s.BasicResponse(req, false, "failed to add explorer, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "explorer added successfully", nil)
+}
+
+// APIRemoveExplorer will remove bootstrap peers from the configuration
+func (s *Server) APIRemoveExplorer(req *ensweb.Request) *ensweb.Result {
+	var m model.ExplorerLinks
+	err := s.ParseJSON(req, &m)
+	if err != nil {
+		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	err = s.c.RemoveExplorer(m.Links)
+	if err != nil {
+		return s.BasicResponse(req, false, "failed to remove explorer, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "explorer removed successfully", nil)
+}

@@ -59,6 +59,9 @@ const (
 	APIDumpSmartContractTokenChainBlock string = "/api/dump-smart-contract-token-chain"
 	APIGetSmartContractTokenData        string = "/api/get-smart-contract-token-chain-data"
 	APIRegisterCallBackURL              string = "/api/register-callback-url"
+	APIGetAllExplorer                   string = "/api/get-all-explorer"
+	APIAddExplorer                      string = "/api/add-explorer"
+	APIRemoveExplorer                   string = "/api/remove-explorer"
 )
 
 // jwt.RegisteredClaims
