@@ -78,6 +78,7 @@ type TransInfo struct {
 	Tokens      []TransTokens `json:"tokens"`
 	DeployerDID string        `json:"deployerDID"`
 	ExecutorDID string        `json:"executorDID"`
+	// SignVersion int           `json:"signVersion"`
 }
 
 func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {

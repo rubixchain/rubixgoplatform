@@ -221,14 +221,17 @@ func (r *RacBlock) GetRacMap() map[string]interface{} {
 }
 
 func (r *RacBlock) UpdateSignature(dc didmodule.DIDCrypto) error {
+	fmt.Println("updating signature")
 	ha, err := r.GetHash()
 	if err != nil {
 		return err
 	}
+	fmt.Println("got hash")
 	sig, err := dc.PvtSign([]byte(ha))
 	if err != nil {
 		return err
 	}
+	fmt.Println("got pvt sig")
 	r.bm[RacSignKey] = util.HexToStr(sig)
 	return r.blkEncode()
 }

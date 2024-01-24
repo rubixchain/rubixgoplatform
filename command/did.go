@@ -284,6 +284,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 				return "Failed to do signature, " + err.Error(), false
 			}
 			sresp.Signature.Signature = sig
+			sresp.Password = password
 		case did.BasicDIDMode:
 			sresp.Password = password
 		case did.StandardDIDMode:

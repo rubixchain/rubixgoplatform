@@ -38,6 +38,7 @@ type DID struct {
 
 type DIDCrypto interface {
 	GetDID() string
+	GetSignVersion() int
 	Sign(hash string) ([]byte, []byte, error)
 	Verify(hash string, didSig []byte, pvtSig []byte) (bool, error)
 	PvtSign(hash []byte) ([]byte, error)

@@ -40,6 +40,10 @@ const (
 	TCSmartContractDataKey string = "9"
 )
 
+// const (
+// 	PkiSignVersion int = iota
+// )
+
 const (
 	TokenMintedType       string = "01"
 	TokenTransferredType  string = "02"
@@ -166,6 +170,11 @@ func (b *Block) blkDecode() error {
 		return fmt.Errorf("invalid block, missing block content")
 	}
 	hb := util.CalculateHash(bc.([]byte), "SHA3-256")
+
+	// sigVersion := make([]byte, 1)
+	// sigVersion[0] = byte(1)
+	// new_hb := append(hb, sigVersion...)
+
 	var tcb map[string]interface{}
 	err = cbor.Unmarshal(bc.([]byte), &tcb)
 	if err != nil {
@@ -199,6 +208,10 @@ func (b *Block) blkEncode() error {
 		return err
 	}
 	hb := util.CalculateHash(bc, "SHA3-256")
+	// sigVersion := make([]byte, 1)
+	// sigVersion[0] = byte(1)
+	// new_hb := append(hb, sigVersion...)
+
 	b.bm[TCBlockHashKey] = util.HexToStr(hb)
 	m := make(map[string]interface{})
 	m[TCBlockContentKey] = bc

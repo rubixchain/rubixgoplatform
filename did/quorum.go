@@ -48,6 +48,10 @@ func (d *DIDQuorum) GetDID() string {
 	return d.did
 }
 
+func (d *DIDQuorum) GetSignVersion() int {
+	return NlssVersion
+}
+
 // Sign will return the singature of the DID
 func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 	if d.privKey == nil {

@@ -9,6 +9,11 @@ const (
 )
 
 const (
+	PkiVersion int = iota
+	NlssVersion
+)
+
+const (
 	ImgFileName          string = "image.png"
 	DIDImgFileName       string = "did.png"
 	MasterDIDFileName    string = "master.txt"
@@ -47,6 +52,10 @@ type DIDSignature struct {
 	Pixels    []byte
 	Signature []byte
 }
+
+// type Sign_Version struct {
+// 	Version int `json:"version"`
+// }
 
 type SignReqData struct {
 	ID          string `json:"id"`

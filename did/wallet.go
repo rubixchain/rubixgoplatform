@@ -56,6 +56,10 @@ func (d *DIDWallet) GetDID() string {
 	return d.did
 }
 
+func (d *DIDWallet) GetSignVersion() int {
+	return NlssVersion
+}
+
 // Sign will return the singature of the DID
 func (d *DIDWallet) Sign(hash string) ([]byte, []byte, error) {
 	bs, pvtKeySign, err := d.getSignature([]byte(hash), false)

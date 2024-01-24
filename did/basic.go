@@ -63,8 +63,14 @@ func (d *DIDBasic) GetDID() string {
 	return d.did
 }
 
+func (d *DIDBasic) GetSignVersion() int {
+	fmt.Println("NlssVersion")
+	return NlssVersion
+}
+
 // Sign will return the singature of the DID
 func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
+	fmt.Println("nlss sign in basic mode")
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
 	if err != nil {
@@ -108,6 +114,7 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 
 // Sign will verifyt he signature
 func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+	fmt.Println("verifying sign from basic mode")
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
@@ -160,6 +167,7 @@ func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bo
 }
 
 func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
+	fmt.Println("pvt signing in basic mode")
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
 		return nil, err
@@ -179,6 +187,7 @@ func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
 	return pvtKeySign, nil
 }
 func (d *DIDBasic) PvtVerify(hash []byte, sign []byte) (bool, error) {
+	fmt.Println("verifying pvt sign from basic mode")
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return false, err

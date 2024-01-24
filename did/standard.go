@@ -55,6 +55,10 @@ func (d *DIDStandard) GetDID() string {
 	return d.did
 }
 
+func (d *DIDStandard) GetSignVersion() int {
+	return NlssVersion
+}
+
 // Sign will return the singature of the DID
 func (d *DIDStandard) Sign(hash string) ([]byte, []byte, error) {
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
