@@ -56,7 +56,6 @@ func (d *DIDLight) getPassword() (string, error) {
 		return "", fmt.Errorf("Invalid data received on the channel")
 	}
 	d.pwd = srd.Password
-	fmt.Println("getting pwd in light mode")
 	return d.pwd, nil
 }
 
@@ -65,25 +64,21 @@ func (d *DIDLight) GetDID() string {
 }
 
 func (d *DIDLight) GetSignVersion() int {
-	fmt.Println("PkiVersion")
 	return PkiVersion
 }
 
+// PKI based sign in light mode
 func (d *DIDLight) Sign(hash string) ([]byte, []byte, error) {
 	pvtKeySign, err := d.PvtSign([]byte(hash))
 	bs := []byte{}
 
-	fmt.Println("pki sign in light mode")
-	fmt.Println("signing data:", hash)
+	// fmt.Println("pki sign in light mode")
 	return bs, pvtKeySign, err
 }
 
-func (d *DIDLight) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
-	fmt.Println("verifying nlss sign from light mode")
-	// if signVersion == PkiVersion {
-	// 	return d.PvtVerify([]byte(hash), pvtKeySIg)
-	// } else {
-	// read senderDID
+// verify nlss based signatures
+func (d *DIDLight) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+	//read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
 		return false, err
@@ -132,7 +127,6 @@ func (d *DIDLight) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bo
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
-	// }
 
 }
 
@@ -141,17 +135,14 @@ func (d *DIDLight) PvtSign(hash []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("pvt sign in light mode")
 	pwd, err := d.getPassword()
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("got pwd in light mode")
 	PrivateKey, _, err := crypto.DecodeKeyPair(pwd, privKey, nil)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("pvt key decoded in light mode")
 	pvtKeySign, err := crypto.Sign(PrivateKey, hash)
 	if err != nil {
 		return nil, err
@@ -159,10 +150,8 @@ func (d *DIDLight) PvtSign(hash []byte) ([]byte, error) {
 	return pvtKeySign, nil
 }
 
+// Verify PKI based signature
 func (d *DIDLight) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	fmt.Println("verifying pvt sign from light mode")
-	fmt.Println("verifying data:", hash)
-	fmt.Println("verifying sign:", sign)
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return false, err

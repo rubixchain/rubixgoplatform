@@ -37,19 +37,14 @@ func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) verifyContract(cr *ConensusRequest) (bool, *contract.Contract) {
-	fmt.Println("entered verifyContract")
 	sc := contract.InitContract(cr.ContractBlock, nil)
-	fmt.Println("contract initiated")
 	// setup the did to verify the signature
 	dc, err := c.SetupForienDID(sc.GetSenderDID())
-	fmt.Println("did set up done")
 	if err != nil {
 		c.log.Error("Failed to get DID", "err", err)
 		return false, nil
 	}
-	fmt.Println("will verify signature")
 	err = sc.VerifySignature(dc)
-	fmt.Println("signature verified")
 	if err != nil {
 		c.log.Error("Failed to verify sender signature in verifyContract", "err", err)
 		return false, nil
@@ -109,19 +104,15 @@ func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 }
 
 func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, cr *ConensusRequest) *ensweb.Result {
-	fmt.Println("entered quorumRBTConsensus")
 	crep := ConensusReply{
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
-	fmt.Println("will verify contract")
 	ok, sc := c.verifyContract(cr)
-	fmt.Println("contract verification done")
 	if !ok {
 		crep.Message = "Failed to verify sender signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	fmt.Println("verified contract")
 	//check if token has multiple pins
 	ti := sc.GetTransTokenInfo()
 	results := make([]MultiPinCheckRes, len(ti))

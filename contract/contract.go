@@ -105,7 +105,13 @@ func (c *Contract) blkDecode() error {
 	if err != nil {
 		return err
 	}
-	tcb[SCBlockHashKey] = util.HexToStr(hb)
+
+	//appending 1 to the block hash to signify PKI-sign-version
+	sigVersion := make([]byte, 1)
+	sigVersion[0] = byte(1)
+	new_hb := append(hb, sigVersion...)
+
+	tcb[SCBlockHashKey] = util.HexToStr(new_hb)
 	if sok {
 		var ksb map[string]interface{}
 		err = cbor.Unmarshal(ssi.([]byte), &ksb)
@@ -148,7 +154,13 @@ func (c *Contract) blkEncode() error {
 		return err
 	}
 	hb := util.CalculateHash(bc, "SHA3-256")
-	c.sm[SCBlockHashKey] = util.HexToStr(hb)
+
+	//appending 1 to the block hash to signify PKI-sign-version
+	sigVersion := make([]byte, 1)
+	sigVersion[0] = byte(1)
+	new_hb := append(hb, sigVersion...)
+
+	c.sm[SCBlockHashKey] = util.HexToStr(new_hb)
 	m := make(map[string]interface{})
 	m[SCBlockContentKey] = bc
 	if ssok {
@@ -215,28 +227,22 @@ func (c *Contract) GetType() uint64 {
 }
 
 func (c *Contract) GetHashSig(did string) (string, string, string, error) {
-	fmt.Println("entered GetHashSig")
 	hi, ok := c.sm[SCBlockHashKey]
-	fmt.Println("fetched blockhash key from db", hi)
 	if !ok {
 		return "", "", "", fmt.Errorf("invalid smart contract, hash block is missing")
 	}
 
 	ssi, ok := c.sm[SCShareSignatureKey]
-	fmt.Println("fetched share sign key from db", ssi)
 	if !ok {
 		return "", "", "", fmt.Errorf("invalid smart contract, share signature block is missing")
 	}
 	ksi, ok := c.sm[SCKeySignatureKey]
-	fmt.Println("fetched pvt sign key from db", ksi)
 	if !ok {
 		return "", "", "", fmt.Errorf("invalid smart contract, key signature block is missing")
 	}
 
 	ss := util.GetStringFromMap(ssi, did)
-	fmt.Println("fetched share sign from db", ss)
 	ks := util.GetStringFromMap(ksi, did)
-	fmt.Println("fetched pvt sign from db", ks)
 	// ss == "" ||
 	if ks == "" {
 		return "", "", "", fmt.Errorf("invalid smart contract, share/key signature block is missing")
@@ -384,25 +390,16 @@ func (c *Contract) GetCommitedTokensInfo() []TokenInfo {
 }
 
 func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
-	fmt.Println("updating signature")
 	did := dc.GetDID()
 	hash, err := c.GetHash()
 	if err != nil {
 		return fmt.Errorf("Failed to get hash of smart contract, " + err.Error())
 	}
-	fmt.Println("calling sign function")
-	ssig, psig, _ := dc.Sign(hash)
-	hs, _, _, _ := c.GetHashSig(did)
-	ok, err := dc.PvtVerify([]byte(hs), psig)
+	ssig, psig, err := dc.Sign(hash)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to get signature, " + err.Error())
 	}
-	if !ok {
-		return fmt.Errorf("did signature verification failed line 401")
-	}
-	// if err != nil {
-	// 	return fmt.Errorf("Failed to get signature, " + err.Error())
-	// }
+
 	if c.sm[SCShareSignatureKey] == nil {
 		ksm := make(map[string]interface{})
 		ksm[did] = util.HexToStr(ssig)
@@ -445,43 +442,36 @@ func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
 }
 
 func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
-	fmt.Println("entered VerifySignature")
 	did := dc.GetDID()
-	fmt.Println("got did")
 	hs, ss, ps, err := c.GetHashSig(did)
-	fmt.Println("got hash sig")
-	fmt.Println(hs)
-	fmt.Println(ss)
-	fmt.Println(util.StrToHex(ps))
-	fmt.Println(err)
+
 	if err != nil {
 		c.log.Error("err", err)
 		return err
 	}
-	fmt.Println("getting sign version")
-	sign_vers := dc.GetSignVersion()
-	fmt.Println("calling verify func")
-	fmt.Println(sign_vers)
-	// switch sign_vers {}
-	if ss != "" {
-		ok, err := dc.Verify(hs, util.StrToHex(ss), util.StrToHex(ps))
+
+	//check if the the last char of the block hash is 1
+	// lastCharHs := string(hs[len(hs)-1])
+	// fmt.Println("block hash with last char 1:", hs)
+
+	if ss == "" {
+		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
+
 		if err != nil {
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("did signature verification failed")
+			return fmt.Errorf("did Pki signature verification failed")
 		}
 	} else {
-		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
+		ok, err := dc.NlssVerify(hs, util.StrToHex(ss), util.StrToHex(ps))
 		if err != nil {
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("did signature verification failed")
+			return fmt.Errorf("did Nlss signature verification failed")
 		}
 	}
-
-	fmt.Println("verified sign")
 
 	return nil
 }

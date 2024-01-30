@@ -14,15 +14,13 @@ const (
 )
 
 const (
-	ImgFileName          string = "image.png"
-	DIDImgFileName       string = "did.png"
-	MasterDIDFileName    string = "master.txt"
-	PvtShareFileName     string = "pvtShare.png"
-	PubShareFileName     string = "pubShare.png"
-	PvtKeyFileName       string = "pvtKey.pem"
-	PubKeyFileName       string = "pubKey.pem"
-	QuorumPvtKeyFileName string = "quorumPrivKey.pem"
-	QuorumPubKeyFileName string = "quorumPubKey.pem"
+	ImgFileName       string = "image.png"
+	DIDImgFileName    string = "did.png"
+	MasterDIDFileName string = "master.txt"
+	PvtShareFileName  string = "pvtShare.png"
+	PubShareFileName  string = "pubShare.png"
+	PvtKeyFileName    string = "pvtKey.pem"
+	PubKeyFileName    string = "pubKey.pem"
 )
 
 const (

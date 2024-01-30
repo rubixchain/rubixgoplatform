@@ -23,7 +23,7 @@ type DIDQuorum struct {
 func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
 	d := &DIDQuorum{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 	if d.pwd != "" {
-		privKey, err := ioutil.ReadFile(d.dir + QuorumPvtKeyFileName)
+		privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 		if err != nil {
 			return nil
 		}
@@ -33,7 +33,7 @@ func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
 		}
 	}
 
-	pubKey, err := ioutil.ReadFile(d.dir + QuorumPubKeyFileName)
+	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return nil
 	}
@@ -49,7 +49,7 @@ func (d *DIDQuorum) GetDID() string {
 }
 
 func (d *DIDQuorum) GetSignVersion() int {
-	return NlssVersion
+	return PkiVersion
 }
 
 // Sign will return the singature of the DID
@@ -57,34 +57,20 @@ func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 	if d.privKey == nil {
 		return nil, nil, fmt.Errorf("private key is not initialized")
 	}
-	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
+	pvtKeySign, err := d.PvtSign([]byte(hash))
+	// byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
 	if err != nil {
 		fmt.Println(err)
 		return nil, nil, err
 	}
 
-	ps := util.ByteArraytoIntArray(byteImg)
-
-	randPosObject := util.RandomPositions("signer", hash, 32, ps)
-
-	finalPos := randPosObject.PosForSign
-	pvtPos := util.GetPrivatePositions(finalPos, ps)
-	pvtPosStr := util.IntArraytoStr(pvtPos)
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
-	pvtKeySign, err := crypto.Sign(d.privKey, []byte(hashPvtSign))
-	if err != nil {
-		return nil, nil, err
-	}
-	bs, err := util.BitstreamToBytes(pvtPosStr)
-	if err != nil {
-		return nil, nil, err
-	}
+	bs := []byte{}
 	return bs, pvtKeySign, err
 }
 
-// Sign will verifyt he signature
-func (d *DIDQuorum) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+// verify the quorum's nlss based signature
+func (d *DIDQuorum) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
