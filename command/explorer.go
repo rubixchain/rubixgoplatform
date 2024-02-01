@@ -1,5 +1,7 @@
 package command
 
+import "fmt"
+
 func (cmd *Command) addExplorer() {
 	if len(cmd.links) == 0 {
 		cmd.log.Error("links required for Explorer")
@@ -34,5 +36,8 @@ func (cmd *Command) getAllExplorer() {
 	} else {
 		cmd.log.Info("Get all Explorer command finished, " + msg)
 		cmd.log.Info("Explorer links", "links", links)
+		for i, q := range links {
+			fmt.Printf("URL %d: %s\n", i, q)
+		}
 	}
 }
