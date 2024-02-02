@@ -265,9 +265,14 @@ func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(request, false, "Failed to parse input", nil)
 	}
 	topic := newSubscription.SmartContractToken
-	s.c.AddWebReq(request)
-	go s.c.SubsribeContractSetup(request.ID, topic)
-	return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)
+	if len(topic) == 46 {
+		s.c.AddWebReq(request)
+		go s.c.SubsribeContractSetup(request.ID, topic)
+		return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)
+	} else {
+		s.log.Error("Invalid Smart contract")
+		return s.BasicResponse(request, false, "Unable to scubscribe smart contract", nil)
+	}
 }
 
 type ExecuteSmartContractSwaggoInput struct {
