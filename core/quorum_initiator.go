@@ -20,6 +20,7 @@ import (
 const (
 	MinQuorumRequired    int = 5
 	MinConsensusRequired int = 5
+	MaxDecimalPoint      int = 3
 )
 const (
 	RBTTransferMode int = iota
@@ -256,6 +257,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	case SmartContractExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
+	}
+	//Minimum pledge value is 0.005 (ie, 0.005/5 = 0.001 per each quorum)
+	if reqPledgeTokens < 0.005 {
+		reqPledgeTokens = 0.005
 	}
 	pd := PledgeDetails{
 		TransferAmount:         reqPledgeTokens,
@@ -849,7 +854,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 		}
 
 		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
-		pledgeTokensPerQuorumPresice := CeilfloatPrecision(pledgeTokensPerQuorum, 3)
+		pledgeTokensPerQuorumPresice := CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPoint)
 
 		// Request pledage token
 		if pd.RemPledgeTokens > 0 {
@@ -876,7 +881,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 					if !c.checkIsPledged(ptcb) {
 						pd.NumPledgedTokens++
 						pd.RemPledgeTokens = pd.RemPledgeTokens - prs.TokenValue[i]
-						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, 10)
+						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, MaxDecimalPoint)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
 						pd.TokenList = append(pd.TokenList, t)

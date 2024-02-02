@@ -33,7 +33,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	var err error
 	fv := float64(wholeValue)
 	rem := value - fv
-	rem = floatPrecision(rem, 10)
+	rem = floatPrecision(rem, MaxDecimalPoint)
 	remWhole := 0
 	wt := make([]wallet.Token, 0)
 	if wholeValue != 0 {
@@ -62,7 +62,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		}
 		tkn := tt.TokenID
 		c.w.ReleaseToken(tkn)
-		parts := []float64{rem, floatPrecision(tt.TokenValue-rem, 10)}
+		parts := []float64{rem, floatPrecision(tt.TokenValue-rem, MaxDecimalPoint)}
 		nt, err := c.createPartToken(dc, did, tkn, parts)
 		if err != nil {
 			c.w.ReleaseTokens(wt)
@@ -89,7 +89,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	for i := range pt {
 		if pt[i].TokenValue <= rem {
 			wt = append(wt, pt[i])
-			rem = floatPrecision(rem-pt[i].TokenValue, 10)
+			rem = floatPrecision(rem-pt[i].TokenValue, MaxDecimalPoint)
 			idx = append(idx, i)
 		} else {
 			rpt = append(rpt, pt[i])
@@ -100,7 +100,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	if len(rpt) > 0 {
-		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, 10)}
+		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, MaxDecimalPoint)}
 		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts)
 		if err != nil {
 			c.w.ReleaseTokens(wt)
@@ -122,10 +122,15 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	if nwt == nil {
 		c.w.ReleaseTokens(rpt)
 		c.log.Debug("No More tokens left to pledge")
+		if rem != 0 {
+			c.w.ReleaseTokens(wt)
+			err = fmt.Errorf("Insufficient tokens")
+			return nil, err
+		}
 		return wt, nil
 	}
 	c.w.ReleaseToken(nwt.TokenID)
-	parts := []float64{rem, floatPrecision(1.0-rem, 10)}
+	parts := []float64{rem, floatPrecision(1.0-rem, MaxDecimalPoint)}
 	npt, err := c.createPartToken(dc, did, nwt.TokenID, parts)
 	if err != nil {
 		c.w.ReleaseTokens(wt)
@@ -156,10 +161,10 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	ptt := c.TokenType(ptts)
 
 	// check part split not crossing RBT
-	amount := floatPrecision(0, 3)
+	amount := floatPrecision(0, MaxDecimalPoint)
 	for i := range parts {
 		amount = amount + parts[i]
-		amount = floatPrecision(amount, 3)
+		amount = floatPrecision(amount, MaxDecimalPoint)
 		if amount > t.TokenValue {
 			return nil, fmt.Errorf("invalid part split, split sum is more than the parent token")
 		}
