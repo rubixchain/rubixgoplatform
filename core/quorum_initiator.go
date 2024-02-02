@@ -169,7 +169,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	}
 	c.qc[didStr] = dc
 	if pvtKeyPwd != "" {
-		dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
+		dc := did.InitDIDLightWithPassword(didStr, c.didDir, pvtKeyPwd)
 		if dc == nil {
 			c.log.Error("Failed to setup quorum")
 			return fmt.Errorf("failed to setup quorum")
@@ -267,6 +267,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	//getting last character from TID
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
+
+	//Fetching sign version
+	sigVers := dc.GetSignVersion()
+
+	//Appending "1" at the beginning of Transaction ID as a symbol of PKI sign version
+	if sigVers == did.PkiVersion {
+		tid = "1" + tid
+	}
 
 	ql := c.qm.GetQuorum(cr.Type, lastCharTID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
 	if ql == nil || len(ql) < MinQuorumRequired {

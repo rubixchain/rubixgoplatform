@@ -185,11 +185,6 @@ func (b *Block) blkDecode() error {
 		tcb[TCSignatureKey] = ksb
 	}
 
-	//appending 1 to the block hash to signify PKI-sign-version
-	// sigVersion := make([]byte, 1)
-	// sigVersion[0] = byte(1)
-	// new_hb := append(hb, sigVersion...)
-
 	tcb[TCBlockHashKey] = util.HexToStr(hb)
 
 	b.bm = tcb
@@ -211,11 +206,6 @@ func (b *Block) blkEncode() error {
 		return err
 	}
 	hb := util.CalculateHash(bc, "SHA3-256")
-
-	//appending 1 to the block hash to signify PKI-sign-version
-	// sigVersion := make([]byte, 1)
-	// sigVersion[0] = byte(1)
-	// new_hb := append(hb, sigVersion...)
 
 	b.bm[TCBlockHashKey] = util.HexToStr(hb)
 

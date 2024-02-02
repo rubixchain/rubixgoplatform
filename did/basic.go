@@ -69,7 +69,6 @@ func (d *DIDBasic) GetSignVersion() int {
 
 // Sign will return the singature of the DID
 func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
-	// fmt.Println("nlss sign in basic mode")
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
 	if err != nil {
@@ -165,7 +164,6 @@ func (d *DIDBasic) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte)
 }
 
 func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
-	// fmt.Println("pvt signing in basic mode")
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
 		return nil, err

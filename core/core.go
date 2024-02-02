@@ -524,7 +524,7 @@ func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
 	if err != nil {
 		return nil, err
 	}
-	return did.InitDIDBasic(didStr, c.didDir, nil), nil
+	return did.InitDIDLight(didStr, c.didDir, nil), nil
 }
 
 func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {

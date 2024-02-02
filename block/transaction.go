@@ -43,6 +43,7 @@ const (
 	TIDeployerDIDKey    string = "8"
 	TIExecutorDIDKey    string = "9"
 	TICommitedTokensKey string = "10"
+	// TISignVersionKey    string = "11"
 )
 
 const (
@@ -78,7 +79,7 @@ type TransInfo struct {
 	Tokens      []TransTokens `json:"tokens"`
 	DeployerDID string        `json:"deployerDID"`
 	ExecutorDID string        `json:"executorDID"`
-	// SignVersion int           `json:"signVersion"`
+	// SignVersion string        `json:"signVersion"`
 }
 
 func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
@@ -142,6 +143,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	if ti.RefID != "" {
 		ntib[TIRefIDKey] = ti.RefID
 	}
+	// if ti.SignVersion != "" {
+	// 	ntib[TISignVersionKey] = ti.SignVersion
+	// }
 	nttbs := make(map[string]interface{})
 	for _, tt := range ti.Tokens {
 		b := ctcb[tt.Token]

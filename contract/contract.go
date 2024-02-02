@@ -106,12 +106,7 @@ func (c *Contract) blkDecode() error {
 		return err
 	}
 
-	//appending 1 to the block hash to signify PKI-sign-version
-	sigVersion := make([]byte, 1)
-	sigVersion[0] = byte(1)
-	new_hb := append(hb, sigVersion...)
-
-	tcb[SCBlockHashKey] = util.HexToStr(new_hb)
+	tcb[SCBlockHashKey] = util.HexToStr(hb)
 	if sok {
 		var ksb map[string]interface{}
 		err = cbor.Unmarshal(ssi.([]byte), &ksb)
@@ -155,12 +150,7 @@ func (c *Contract) blkEncode() error {
 	}
 	hb := util.CalculateHash(bc, "SHA3-256")
 
-	//appending 1 to the block hash to signify PKI-sign-version
-	sigVersion := make([]byte, 1)
-	sigVersion[0] = byte(1)
-	new_hb := append(hb, sigVersion...)
-
-	c.sm[SCBlockHashKey] = util.HexToStr(new_hb)
+	c.sm[SCBlockHashKey] = util.HexToStr(hb)
 	m := make(map[string]interface{})
 	m[SCBlockContentKey] = bc
 	if ssok {
@@ -441,19 +431,20 @@ func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
 	return c.blkEncode()
 }
 
+// This function is used by the quorums to verify sender's signature
 func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
+	//fetch sender's did
 	did := dc.GetDID()
-	hs, ss, ps, err := c.GetHashSig(did)
 
+	//fetch sender's signature
+	hs, ss, ps, err := c.GetHashSig(did)
 	if err != nil {
 		c.log.Error("err", err)
 		return err
 	}
 
-	//check if the the last char of the block hash is 1
-	// lastCharHs := string(hs[len(hs)-1])
-	// fmt.Println("block hash with last char 1:", hs)
-
+	//If the ss i.e., share signature is empty, then its a Pki sign, so call PvtVerify
+	//Else it is NLSS based sign, so call NlssVerify
 	if ss == "" {
 		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
 

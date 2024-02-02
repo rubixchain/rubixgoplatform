@@ -63,6 +63,8 @@ func (d *DIDLight) GetDID() string {
 	return d.did
 }
 
+// When the did creation and signing is done in Light mode,
+// this function returns the sign version as PkiVersion = 0
 func (d *DIDLight) GetSignVersion() int {
 	return PkiVersion
 }
@@ -72,7 +74,6 @@ func (d *DIDLight) Sign(hash string) ([]byte, []byte, error) {
 	pvtKeySign, err := d.PvtSign([]byte(hash))
 	bs := []byte{}
 
-	// fmt.Println("pki sign in light mode")
 	return bs, pvtKeySign, err
 }
 
