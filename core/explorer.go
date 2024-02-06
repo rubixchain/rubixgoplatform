@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
@@ -210,7 +211,11 @@ func (c *Core) AddExplorer(links []string) error {
 	var eurl []ExplorerURL
 
 	for _, url := range links {
-
+		if strings.HasPrefix(url, "https") {
+			url = strings.TrimPrefix(url, "https://")
+		} else if strings.HasPrefix(url, "http") {
+			url = strings.TrimPrefix(url, "http://")
+		}
 		eur := ExplorerURL{
 			URL:  url,
 			Port: 0,
@@ -227,8 +232,13 @@ func (c *Core) AddExplorer(links []string) error {
 
 func (c *Core) RemoveExplorer(links []string) error {
 
-	for _, link := range links {
-		err := c.s.Delete(ExplorerURLTable, &ExplorerURL{}, "url=?", link)
+	for _, url := range links {
+		if strings.HasPrefix(url, "https") {
+			url = strings.TrimPrefix(url, "https://")
+		} else if strings.HasPrefix(url, "http") {
+			url = strings.TrimPrefix(url, "http://")
+		}
+		err := c.s.Delete(ExplorerURLTable, &ExplorerURL{}, "url=?", url)
 
 		if err != nil {
 			return err
