@@ -634,6 +634,16 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 		}
 	}
 
+	// if len(migrateTokens) > 0 {
+	// 	fp, err := os.Open("migratedtokens.txt")
+	// 	if err == nil {
+	// 		for i := range migrateTokens {
+	// 			fp.WriteString(migrateTokens[i])
+	// 		}
+	// 		fp.Close()
+	// 	}
+	// }
+
 	creditFiles, err := util.GetAllFiles(rubixDir + "Wallet/WALLET_DATA/Credits/")
 	if err != nil {
 		c.log.Error("Failed to migrate, failed to read credit files", "err", err)

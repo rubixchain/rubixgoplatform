@@ -637,6 +637,25 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 	return nil, nil
 }
 
+// func (b *Block) GetTokenPledgeMap() map[string]interface{} {
+// 	tokenPledge := b.bm[TCTokensPledgeMapKey]
+// 	tokenPledgeMap, ok := tokenPledge.(map[interface{}]interface{})
+// 	if !ok {
+// 		return nil
+// 	}
+
+// 	result := make(map[string]interface{})
+// 	for k, v := range tokenPledgeMap {
+// 		kStr, kOk := k.(string)
+// 		if !kOk {
+// 			return nil
+// 		}
+// 		result[kStr] = v
+// 	}
+
+// 	return result
+// }
+
 func (b *Block) GetSmartContractData() string {
 	return b.getBlkString(TCSmartContractDataKey)
 }
