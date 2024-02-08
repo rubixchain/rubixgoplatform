@@ -17,6 +17,7 @@ require (
 
 require (
 	github.com/btcsuite/btcd v0.23.0 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.15.0
