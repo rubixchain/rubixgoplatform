@@ -11,6 +11,14 @@ type RBTGenerateRequest struct {
 	DID            string `json:"did"`
 }
 
+type RBTSelfTransferRequest struct {
+	Receiver string `json:"receiver"`
+	Sender   string `json:"sender"`
+	Comment  string `json:"comment"`
+	Type     int    `json:"type"`
+	Password string `json:"password"`
+}
+
 type RBTTransferRequest struct {
 	Receiver   string  `json:"receiver"`
 	Sender     string  `json:"sender"`

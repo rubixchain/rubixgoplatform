@@ -16,7 +16,7 @@ type DIDPeerMap struct {
 
 func (w *Wallet) IsRootDIDExist() bool {
 	var dt DIDType
-	err := w.s.Read(DIDStorage, &dt, "root_did =?", 1)
+	err := w.S.Read(DIDStorage, &dt, "root_did =?", 1)
 	if err != nil {
 		return false
 	}
@@ -24,7 +24,7 @@ func (w *Wallet) IsRootDIDExist() bool {
 }
 
 func (w *Wallet) CreateDID(dt *DIDType) error {
-	err := w.s.Write(DIDStorage, &dt)
+	err := w.S.Write(DIDStorage, &dt)
 	if err != nil {
 		w.log.Error("Failed to create DID", "err", err)
 		return err
@@ -34,7 +34,7 @@ func (w *Wallet) CreateDID(dt *DIDType) error {
 
 func (w *Wallet) GetAllDIDs() ([]DIDType, error) {
 	var dt []DIDType
-	err := w.s.Read(DIDStorage, &dt, "did!=?", "")
+	err := w.S.Read(DIDStorage, &dt, "did!=?", "")
 	if err != nil {
 		w.log.Error("Failed to get DID", "err", err)
 		return nil, err
@@ -44,7 +44,7 @@ func (w *Wallet) GetAllDIDs() ([]DIDType, error) {
 
 func (w *Wallet) GetDIDs(dir string) ([]DIDType, error) {
 	var dt []DIDType
-	err := w.s.Read(DIDStorage, &dt, "did_dir=?", dir)
+	err := w.S.Read(DIDStorage, &dt, "did_dir=?", dir)
 	if err != nil {
 		w.log.Error("Failed to get DID", "err", err)
 		return nil, err
@@ -54,7 +54,7 @@ func (w *Wallet) GetDIDs(dir string) ([]DIDType, error) {
 
 func (w *Wallet) GetDIDDir(dir string, did string) (*DIDType, error) {
 	var dt DIDType
-	err := w.s.Read(DIDStorage, &dt, "did_dir=? AND did=?", dir, did)
+	err := w.S.Read(DIDStorage, &dt, "did_dir=? AND did=?", dir, did)
 	if err != nil {
 		w.log.Error("Failed to get DID", "err", err)
 		return nil, err
@@ -65,8 +65,8 @@ func (w *Wallet) GetDIDDir(dir string, did string) (*DIDType, error) {
 func (w *Wallet) GetDID(did string) (*DIDType, error) {
 	var dt DIDType
 	w.log.Debug("did value passed inside is", "did", did)
-	err := w.s.Read(DIDStorage, &dt, "did=?", did)
-	w.log.Debug("db print DID", "did", w.s.Read(DIDStorage, &dt, "did=?", did))
+	err := w.S.Read(DIDStorage, &dt, "did=?", did)
+	w.log.Debug("db print DID", "did", w.S.Read(DIDStorage, &dt, "did=?", did))
 	w.log.Debug("GetDID", "did", did)
 	if err != nil {
 		w.log.Error("Failed to get DID", "err", err)
@@ -77,7 +77,7 @@ func (w *Wallet) GetDID(did string) (*DIDType, error) {
 
 func (w *Wallet) IsDIDExist(did string) bool {
 	var dt DIDType
-	err := w.s.Read(DIDStorage, &dt, "did=?", did)
+	err := w.S.Read(DIDStorage, &dt, "did=?", did)
 	if err != nil {
 		w.log.Error("DID does nto exist", "did", did)
 		return false
@@ -88,27 +88,27 @@ func (w *Wallet) IsDIDExist(did string) bool {
 func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
 	lastChar := string(did[len(did)-1])
 	var dm DIDPeerMap
-	err := w.s.Read(DIDStorage, &dm, "did=?", did)
+	err := w.S.Read(DIDStorage, &dm, "did=?", did)
 	if err == nil {
 		return nil
 	}
-	err = w.s.Read(DIDPeerStorage, &dm, "did=?", did)
+	err = w.S.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
 		dm.DID = did
 		dm.PeerID = peerID
 		dm.DIDLastChar = lastChar
-		return w.s.Write(DIDPeerStorage, &dm)
+		return w.S.Write(DIDPeerStorage, &dm)
 	}
 	if dm.PeerID != peerID {
 		dm.PeerID = peerID
-		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+		return w.S.Update(DIDPeerStorage, &dm, "did=?", did)
 	}
 	return nil
 }
 
 func (w *Wallet) AddDIDLastChar() error {
 	var existingDIDPeer []DIDPeerMap
-	err := w.s.Read(DIDPeerStorage, &existingDIDPeer, "did_last_char is NULL")
+	err := w.S.Read(DIDPeerStorage, &existingDIDPeer, "did_last_char is NULL")
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func (w *Wallet) AddDIDLastChar() error {
 		did := dm.DID
 		lastChar := string(did[len(did)-1])
 		dm.DIDLastChar = lastChar
-		err := w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+		err := w.S.Update(DIDPeerStorage, &dm, "did=?", did)
 		w.log.Info("DID Peer table updated")
 		if err != nil {
 			w.log.Error("Unable to update DID Peer table.")
@@ -127,7 +127,7 @@ func (w *Wallet) AddDIDLastChar() error {
 }
 func (w *Wallet) GetPeerID(did string) string {
 	var dm DIDPeerMap
-	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
+	err := w.S.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
 		return ""
 	}

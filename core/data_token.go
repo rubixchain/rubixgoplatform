@@ -224,6 +224,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	tcb := &block.TokenChainBlock{
 		TransactionType: block.TokenGeneratedType,
 		TokenOwner:      dr.DID,
+		EpochTime:       time.Now().String(),
 		SmartContract:   sc.GetBlock(),
 		GenesisBlock:    gb,
 		TransInfo:       bti,

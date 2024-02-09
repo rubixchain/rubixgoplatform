@@ -11,7 +11,7 @@ type NFT struct {
 
 // CreateNFT write NFT into db
 func (w *Wallet) CreateNFT(nt *NFT) error {
-	err := w.s.Write(NFTTokenStorage, nt)
+	err := w.S.Write(NFTTokenStorage, nt)
 	if err != nil {
 		w.log.Error("Failed to write NFT into db", "err", err)
 		return err
@@ -22,7 +22,7 @@ func (w *Wallet) CreateNFT(nt *NFT) error {
 // GetAllNFT get all NFTs from db
 func (w *Wallet) GetAllNFT(did string) []NFT {
 	var tkns []NFT
-	err := w.s.Read(NFTTokenStorage, &tkns, "did=?", did)
+	err := w.S.Read(NFTTokenStorage, &tkns, "did=?", did)
 	if err != nil {
 		return nil
 	}
@@ -35,12 +35,12 @@ func (w *Wallet) GetNFT(did string, nft string, lock bool) (*NFT, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	if lock {
-		err := w.s.Read(NFTTokenStorage, &tkns, "did=? AND token_id=? AND token_status <>?", did, nft, TokenIsLocked)
+		err := w.S.Read(NFTTokenStorage, &tkns, "did=? AND token_id=? AND token_status <>?", did, nft, TokenIsLocked)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		err := w.s.Read(NFTTokenStorage, &tkns, "did=? AND token_id=?", did, nft)
+		err := w.S.Read(NFTTokenStorage, &tkns, "did=? AND token_id=?", did, nft)
 		if err != nil {
 			return nil, err
 		}
@@ -50,7 +50,7 @@ func (w *Wallet) GetNFT(did string, nft string, lock bool) (*NFT, error) {
 	}
 	if lock {
 		tkns.TokenStatus = TokenIsLocked
-		err := w.s.Update(NFTTokenStorage, &tkns, "did=? AND token_id=?", did, nft)
+		err := w.S.Update(NFTTokenStorage, &tkns, "did=? AND token_id=?", did, nft)
 		if err != nil {
 			return nil, err
 		}

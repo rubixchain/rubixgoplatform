@@ -38,14 +38,14 @@ type Token struct {
 }
 
 func (w *Wallet) CreateToken(t *Token) error {
-	return w.s.Write(TokenStorage, t)
+	return w.S.Write(TokenStorage, t)
 }
 
 func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, token)
+	err := w.S.Read(TokenStorage, &t, "did=? AND token_id=?", did, token)
 	if err != nil {
 		w.log.Error("Failed to get token", "token", token, "err", err)
 		return err
@@ -56,7 +56,7 @@ func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) erro
 		return fmt.Errorf("token is not locked")
 	}
 	t.TokenStatus = TokenIsPledged
-	err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, token)
+	err = w.S.Update(TokenStorage, &t, "did=? AND token_id=?", did, token)
 	if err != nil {
 		w.log.Error("Failed to update token", "token", token, "err", err)
 		return err
@@ -69,7 +69,7 @@ func (w *Wallet) UnpledgeWholeToken(did string, token string, tt int) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, token)
+	err := w.S.Read(TokenStorage, &t, "did=? AND token_id=?", did, token)
 	if err != nil {
 		w.log.Error("Failed to get token", "token", token, "err", err)
 		return err
@@ -86,7 +86,7 @@ func (w *Wallet) UnpledgeWholeToken(did string, token string, tt int) error {
 		return fmt.Errorf("Token block not in un pledged state")
 	}
 	t.TokenStatus = TokenIsFree
-	err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, token)
+	err = w.S.Update(TokenStorage, &t, "did=? AND token_id=?", did, token)
 	if err != nil {
 		w.log.Error("Failed to update token", "token", token, "err", err)
 		return err
@@ -94,9 +94,18 @@ func (w *Wallet) UnpledgeWholeToken(did string, token string, tt int) error {
 	return nil
 }
 
+func (w *Wallet) GetAllWholeTokens(did string) ([]Token, error) {
+	var t []Token
+	err := w.S.Read(TokenStorage, &t, "did=?", did)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
 func (w *Wallet) GetAllTokens(did string) ([]Token, error) {
 	var t []Token
-	err := w.s.Read(TokenStorage, &t, "did=?", did)
+	err := w.S.Read(TokenStorage, &t, "did=?", did)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
@@ -106,7 +115,7 @@ func (w *Wallet) GetAllTokens(did string) ([]Token, error) {
 
 func (w *Wallet) GetAllPledgedTokens() ([]Token, error) {
 	var t []Token
-	err := w.s.Read(TokenStorage, &t, "token_status=?", TokenIsPledged)
+	err := w.S.Read(TokenStorage, &t, "token_status=?", TokenIsPledged)
 	if err != nil {
 		return nil, err
 	}
@@ -118,9 +127,9 @@ func (w *Wallet) GetCloserToken(did string, rem float64) (*Token, error) {
 		return nil, fmt.Errorf("token value not less than whole token")
 	}
 	var tks []Token
-	err := w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value>=? AND token_value <?", did, TokenIsFree, rem, 1.0)
+	err := w.S.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value>=? AND token_value <?", did, TokenIsFree, rem, 1.0)
 	if err != nil || len(tks) == 0 {
-		err := w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
+		err := w.S.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
 		if err != nil {
 			return nil, err
 		}
@@ -137,7 +146,7 @@ func (w *Wallet) GetWholeTokens(did string, num int) ([]Token, int, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
+	err := w.S.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
 	if err != nil {
 		return nil, num, err
 	}
@@ -151,7 +160,7 @@ func (w *Wallet) GetWholeTokens(did string, num int) ([]Token, int, error) {
 	}
 	for i := range wt {
 		wt[i].TokenStatus = TokenIsLocked
-		err = w.s.Update(TokenStorage, &wt[i], "did=? AND token_id=?", did, wt[i].TokenID)
+		err = w.S.Update(TokenStorage, &wt[i], "did=? AND token_id=?", did, wt[i].TokenID)
 		if err != nil {
 			w.log.Error("Failed to update token status", "err", err)
 			return nil, num, err
@@ -164,14 +173,14 @@ func (w *Wallet) GetTokensByLimit(did string, limit float64) ([]Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value<=?", did, TokenIsFree, limit)
+	err := w.S.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value<=?", did, TokenIsFree, limit)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
 	}
 	for i := range t {
 		t[i].TokenStatus = TokenIsLocked
-		err = w.s.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
+		err = w.S.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
 		if err != nil {
 			w.log.Error("Failed to update token status", "err", err)
 			return nil, err
@@ -185,7 +194,7 @@ func (w *Wallet) GetTokens(did string, amt float64) ([]Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=?", did, TokenIsFree)
+	err := w.S.Read(TokenStorage, &t, "did=? AND token_status=?", did, TokenIsFree)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
@@ -199,7 +208,7 @@ func (w *Wallet) GetTokens(did string, amt float64) ([]Token, error) {
 	}
 	for i := range wt {
 		wt[i].TokenStatus = TokenIsLocked
-		err = w.s.Update(TokenStorage, &wt[i], "did=? AND token_id=?", did, wt[i].TokenID)
+		err = w.S.Update(TokenStorage, &wt[i], "did=? AND token_id=?", did, wt[i].TokenID)
 		if err != nil {
 			w.log.Error("Failed to update token status", "err", err)
 			return nil, err
@@ -213,13 +222,13 @@ func (w *Wallet) GetToken(token string) (*Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t Token
-	err := w.s.Read(TokenStorage, &t, "token_id=? AND token_status=?", token, TokenIsFree)
+	err := w.S.Read(TokenStorage, &t, "token_id=? AND token_status=?", token, TokenIsFree)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
 	}
 	t.TokenStatus = TokenIsLocked
-	err = w.s.Update(TokenStorage, &t, "token_id=?", t.TokenID)
+	err = w.S.Update(TokenStorage, &t, "token_id=?", t.TokenID)
 	if err != nil {
 		w.log.Error("Failed to update token status", "err", err)
 		return nil, err
@@ -231,7 +240,7 @@ func (w *Wallet) ReadToken(token string) (*Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t Token
-	err := w.s.Read(TokenStorage, &t, "token_id=?", token)
+	err := w.S.Read(TokenStorage, &t, "token_id=?", token)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
@@ -243,7 +252,7 @@ func (w *Wallet) LockToken(wt *Token) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	wt.TokenStatus = TokenIsLocked
-	return w.s.Update(TokenStorage, wt, "did=? AND token_id=?", wt.DID, wt.TokenID)
+	return w.S.Update(TokenStorage, wt, "did=? AND token_id=?", wt.DID, wt.TokenID)
 }
 
 func (w *Wallet) ReleaseTokens(wt []Token) error {
@@ -251,14 +260,14 @@ func (w *Wallet) ReleaseTokens(wt []Token) error {
 	defer w.l.Unlock()
 	for i := range wt {
 		var t Token
-		err := w.s.Read(TokenStorage, &t, "token_id=?", wt[i].TokenID)
+		err := w.S.Read(TokenStorage, &t, "token_id=?", wt[i].TokenID)
 		if err != nil {
 			w.log.Error("Failed to read token", "err", err)
 			return err
 		}
 		if t.TokenStatus == TokenIsLocked {
 			t.TokenStatus = TokenIsFree
-			err = w.s.Update(TokenStorage, &t, "token_id=?", t.TokenID)
+			err = w.S.Update(TokenStorage, &t, "token_id=?", t.TokenID)
 			if err != nil {
 				w.log.Error("Failed to update token", "err", err)
 				return err
@@ -272,14 +281,14 @@ func (w *Wallet) ReleaseToken(token string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t Token
-	err := w.s.Read(TokenStorage, &t, "token_id=?", token)
+	err := w.S.Read(TokenStorage, &t, "token_id=?", token)
 	if err != nil {
 		w.log.Error("Failed to read token", "err", err)
 		return err
 	}
 	if t.TokenStatus == TokenIsLocked {
 		t.TokenStatus = TokenIsFree
-		err = w.s.Update(TokenStorage, &t, "token_id=?", t.TokenID)
+		err = w.S.Update(TokenStorage, &t, "token_id=?", t.TokenID)
 		if err != nil {
 			w.log.Error("Failed to update token", "err", err)
 			return err
@@ -292,7 +301,7 @@ func (w *Wallet) RemoveTokens(wt []Token) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	for i := range wt {
-		err := w.s.Delete(TokenStorage, &Token{}, "did=? AND token_id=?", wt[i].DID, wt[i].TokenID)
+		err := w.S.Delete(TokenStorage, &Token{}, "did=? AND token_id=?", wt[i].DID, wt[i].TokenID)
 		if err != nil {
 			return err
 		}
@@ -303,7 +312,7 @@ func (w *Wallet) RemoveTokens(wt []Token) error {
 func (w *Wallet) ClearTokens(did string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	err := w.s.Delete(TokenStorage, &Token{}, "did=?", did)
+	err := w.S.Delete(TokenStorage, &Token{}, "did=?", did)
 	if err != nil {
 		return err
 	}
@@ -313,7 +322,7 @@ func (w *Wallet) ClearTokens(did string) error {
 func (w *Wallet) UpdateToken(t *Token) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	err := w.s.Update(TokenStorage, t, "token_id=?", t.TokenID)
+	err := w.S.Update(TokenStorage, t, "token_id=?", t.TokenID)
 	if err != nil {
 		return err
 	}
@@ -332,12 +341,12 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 		}
 		for i := range ti {
 			var t Token
-			err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
+			err := w.S.Read(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
 			if err != nil {
 				return err
 			}
 			t.TokenStatus = TokenIsTransferred
-			err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
+			err = w.S.Update(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
 			if err != nil {
 				return err
 			}
@@ -378,7 +387,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 
 	for i := range ti {
 		var t Token
-		err := w.s.Read(TokenStorage, &t, "token_id=?", ti[i].Token)
+		err := w.S.Read(TokenStorage, &t, "token_id=?", ti[i].Token)
 		if err != nil || t.TokenID == "" {
 			dir := util.GetRandString()
 			err := util.CreateDir(dir)
@@ -403,7 +412,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 				ParentTokenID: pt,
 				DID:           did,
 			}
-			err = w.s.Write(TokenStorage, &t)
+			err = w.S.Write(TokenStorage, &t)
 			if err != nil {
 				return err
 			}
@@ -411,7 +420,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 
 		t.DID = did
 		t.TokenStatus = TokenIsFree
-		err = w.s.Update(TokenStorage, &t, "token_id=?", ti[i].Token)
+		err = w.S.Update(TokenStorage, &t, "token_id=?", ti[i].Token)
 		if err != nil {
 			return err
 		}
@@ -449,12 +458,12 @@ func (w *Wallet) CommitTokens(did string, rbtTokens []string) error {
 	defer w.l.Unlock()
 	for i := range rbtTokens {
 		var t Token
-		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, rbtTokens[i])
+		err := w.S.Read(TokenStorage, &t, "did=? AND token_id=?", did, rbtTokens[i])
 		if err != nil {
 			return err
 		}
 		t.TokenStatus = TokenIsCommitted
-		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, rbtTokens[i])
+		err = w.S.Update(TokenStorage, &t, "did=? AND token_id=?", did, rbtTokens[i])
 		if err != nil {
 			return err
 		}

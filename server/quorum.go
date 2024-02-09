@@ -17,3 +17,11 @@ func (s *Server) APISetupQuorum(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.BasicResponse(req, true, "Quorum setup done successfully", nil)
 }
+
+func (s *Server) APIUnpledgeTokens(req *ensweb.Request) *ensweb.Result {
+	err := s.c.Up.RunUnpledge()
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to unpledge, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "Unpledged successfully", nil)
+}
