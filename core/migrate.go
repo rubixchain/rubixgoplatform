@@ -164,6 +164,25 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			QuorumPWD: m.QuorumPWD,
 		}
 
+		if didCreate.Type != didm.LightDIDMode {
+			didCreate = didm.DIDCreate{
+				DIDImgFileName: rubixDir + "DATA/" + d[0].DID + "/DID.png",
+				PubImgFile:     rubixDir + "DATA/" + d[0].DID + "/PublicShare.png",
+				PrivImgFile:    rubixDir + "DATA/" + d[0].DID + "/PrivateShare.png",
+			}
+
+			_, err = os.Stat(didCreate.DIDImgFileName)
+			if err != nil {
+				c.log.Error("Failed to migrate, missing DID.png file", "err", err)
+				return fmt.Errorf("failed to migrate, missing DID.png file")
+			}
+			_, err = os.Stat(didCreate.PubImgFile)
+			if err != nil {
+				c.log.Error("Failed to migrate, missing PublicShare.png file", "err", err)
+				return fmt.Errorf("failed to migrate, missing PublicShare.png file")
+			}
+		}
+
 		did, err = c.d.MigrateDID(&didCreate)
 		if err != nil {
 			c.log.Error("Failed to migrate, failed in creation of new DID address", "err", err, "msg", did)

@@ -66,6 +66,18 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		if strings.Contains(fileName, did.PubKeyFileName) {
 			didCreate.PubKeyFile = fileName
 		}
+
+		if didCreate.Type != did.LightDIDMode {
+			if strings.Contains(fileName, did.ImgFileName) {
+				didCreate.ImgFile = fileName
+			}
+			if strings.Contains(fileName, did.DIDImgFileName) {
+				didCreate.DIDImgFileName = fileName
+			}
+			if strings.Contains(fileName, did.PubShareFileName) {
+				didCreate.PubImgFile = fileName
+			}
+		}
 	}
 	if !s.cfg.EnableAuth {
 		didCreate.Dir = DIDRootDir
@@ -199,6 +211,23 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 			didCreate.PubKeyFile = fileName
 		}
 
+		if didCreate.Type != did.LightDIDMode {
+			if strings.Contains(fileName, did.DIDImgFileName) {
+				didCreate.DIDImgFileName = fileName
+			}
+			if strings.Contains(fileName, did.PubShareFileName) {
+				didCreate.PubImgFile = fileName
+			}
+			if strings.Contains(fileName, did.PvtShareFileName) {
+				didCreate.PrivImgFile = fileName
+			}
+			if strings.Contains(fileName, did.QuorumPvtKeyFileName) {
+				didCreate.QuorumPrivKeyFile = fileName
+			}
+			if strings.Contains(fileName, did.QuorumPubKeyFileName) {
+				didCreate.QuorumPubKeyFile = fileName
+			}
+		}
 	}
 	dir, ok := s.validateAccess(req)
 	if !ok {

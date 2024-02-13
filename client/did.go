@@ -130,6 +130,18 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
 
+	if cfg.Type != did.LightDIDMode {
+		if cfg.ImgFile != "" {
+			files["image"] = cfg.ImgFile
+		}
+		if cfg.DIDImgFileName != "" {
+			files["did_image"] = cfg.DIDImgFileName
+		}
+		if cfg.PubImgFile != "" {
+			files["pub_image"] = cfg.PubImgFile
+		}
+	}
+
 	if cfg.PubKeyFile != "" {
 		files["pub_key"] = cfg.PubKeyFile
 	}
@@ -162,13 +174,19 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 		if !strings.Contains(dc.PrivImgFile, did.PvtShareFileName) ||
 			!strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
 			!strings.Contains(dc.DIDImgFileName, did.DIDImgFileName) ||
+			!strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
+			!strings.Contains(dc.QuorumPubKeyFile, did.QuorumPubKeyFileName) ||
+			!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) ||
 			!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) {
 			return "Required files are missing", false
 		}
 	case did.StandardDIDMode:
 		if !strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
 			!strings.Contains(dc.DIDImgFileName, did.DIDImgFileName) ||
-			!strings.Contains(dc.PrivImgFile, did.PvtShareFileName) {
+			!strings.Contains(dc.PrivImgFile, did.PvtShareFileName) ||
+			!strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
+			!strings.Contains(dc.QuorumPubKeyFile, did.QuorumPubKeyFileName) ||
+			!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) {
 			return "Required files are missing", false
 		}
 	}
@@ -180,6 +198,24 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 	fields := make(map[string]string)
 	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
+
+	if dc.Type != did.LightDIDMode {
+		if dc.PubImgFile != "" {
+			files["pub_image"] = dc.PubImgFile
+		}
+		if dc.DIDImgFileName != "" {
+			files["did_image"] = dc.DIDImgFileName
+		}
+		if dc.PrivImgFile != "" {
+			files["priv_image"] = dc.PrivImgFile
+		}
+		if dc.QuorumPubKeyFile != "" {
+			files["quorum_pub_key"] = dc.QuorumPubKeyFile
+		}
+		if dc.QuorumPrivKeyFile != "" {
+			files["quorum_priv_key"] = dc.QuorumPrivKeyFile
+		}
+	}
 
 	if dc.PubKeyFile != "" {
 		files["pub_key"] = dc.PubKeyFile

@@ -1,7 +1,6 @@
 package did
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -213,6 +212,28 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		if err != nil {
 			return "", err
 		}
+	} else if didCreate.Type != LightDIDMode {
+		if didCreate.QuorumPWD == "" {
+			if didCreate.PrivPWD != "" {
+				didCreate.QuorumPWD = didCreate.PrivPWD
+			} else {
+				didCreate.QuorumPWD = DefaultPWD
+			}
+		}
+
+		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.QuorumPWD})
+		if err != nil {
+			d.log.Error("failed to create keypair", "err", err)
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
+		if err != nil {
+			return "", err
+		}
+		err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	//passing the diroctory of public key file to add it to ipfs and exctract the hash
@@ -263,6 +284,24 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
+	if didCreate.Type != LightDIDMode {
+		_, err = util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
+		if err != nil {
+			d.log.Error("failed to copy did image", "err", err)
+			return "", err
+		}
+		_, err = util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
+		if err != nil {
+			d.log.Error("failed to copy public share", "err", err)
+			return "", err
+		}
+		_, err = util.Filecopy(didCreate.PrivImgFile, dirName+"/private/"+PvtShareFileName)
+		if err != nil {
+			d.log.Error("failed to copy private share key", "err", err)
+			return "", err
+		}
+	}
+
 	if didCreate.Type == BasicDIDMode {
 		if didCreate.PrivKeyFile == "" || didCreate.PubKeyFile == "" {
 			if didCreate.PrivPWD == "" {
@@ -310,6 +349,33 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 		}
 	}
 
+	if didCreate.Type != LightDIDMode {
+		if didCreate.QuorumPrivKeyFile == "" || didCreate.QuorumPubKeyFile == "" {
+			pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.QuorumPWD})
+			if err != nil {
+				d.log.Error("failed to create keypair", "err", err)
+				return "", err
+			}
+			err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
+			if err != nil {
+				return "", err
+			}
+			err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			_, err = util.Filecopy(didCreate.QuorumPrivKeyFile, dirName+"/private/"+QuorumPvtKeyFileName)
+			if err != nil {
+				return "", err
+			}
+			_, err = util.Filecopy(didCreate.QuorumPubKeyFile, dirName+"/public/"+QuorumPubKeyFileName)
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+
 	did, err := d.getDirHash(dirName + "/public/")
 	if err != nil {
 		return "", err
@@ -343,53 +409,6 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 
 type object struct {
 	Hash string
-}
-
-// This function takes file content as input, adds it to IPFS,
-// without creating a physical file in the file system, and exctracts the hash
-func (d *DID) addFileToIPFS(fileData []byte) (string, error) {
-	fmt.Println("calculating ipfs hash")
-	// Create a reader for the file data
-	reader := bytes.NewReader(fileData)
-
-	// Send a request to IPFS to add the file data
-	resp, err := d.ipfs.Request("add").
-		Option("cid-version", 1).
-		Option("hash", "sha3-256").
-		Body(reader).
-		Send(context.Background())
-	if err != nil {
-		return "", err
-	}
-	defer resp.Close()
-
-	// Check for errors in the response
-	if resp.Error != nil {
-		return "", resp.Error
-	}
-	defer resp.Output.Close()
-
-	// Decode the JSON response and extract the hash
-	dec := json.NewDecoder(resp.Output)
-	var final string
-	for {
-		var out object
-		err = dec.Decode(&out)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return "", err
-		}
-		final = out.Hash
-	}
-
-	// Check if the final hash is empty
-	if final == "" {
-		return "", errors.New("no results received")
-	}
-
-	return final, nil
 }
 
 // Calculate the hash of a directory using IPFS
