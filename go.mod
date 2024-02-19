@@ -47,8 +47,6 @@ require (
 	github.com/stretchr/testify v1.8.3 // indirect
 	github.com/swaggo/files v1.0.0 // indirect
 	github.com/swaggo/http-swagger v1.3.4
-	github.com/tyler-smith/go-bip32 v1.0.0 // indirect
-	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
 	github.com/whyrusleeping/tar-utils v0.0.0-20201201191210-20a61371de5b // indirect
 	golang.org/x/net v0.10.0
 	golang.org/x/tools v0.9.3 // indirect
