@@ -123,6 +123,8 @@ This following options are used for this command
         DID public key file name (default "pubKey.pem")
   -fp forcepassword
         This flag prompts to enter the password in terminal
+
+   _Note: Use Light mode for PKI based authentication with backward compatiblity to PKI+NLSS based sign, and Basic mode for PKI+NLSS based authentication._
 ```
 Get All DID Command
 : To get all DID use this command.

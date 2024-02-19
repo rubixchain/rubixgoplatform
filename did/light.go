@@ -70,6 +70,7 @@ func (d *DIDLight) GetSignVersion() int {
 }
 
 // PKI based sign in light mode
+// In light mode, the sign function returns only the private signature, unlike the basic mode
 func (d *DIDLight) Sign(hash string) ([]byte, []byte, error) {
 	pvtKeySign, err := d.PvtSign([]byte(hash))
 	bs := []byte{}

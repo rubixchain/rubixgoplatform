@@ -585,14 +585,14 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 		return
 	}
 
-	var SigVersion string
+	var signVersion string
 
-	//SigVersion = 0 => Pki based sign in light mode
-	//SigVersion = 0 => Nlss based sign in basic mode
+	//signVersion = 0 => Pki based sign in light mode
+	//signVersion = 1 => Nlss based sign in basic mode
 	if util.HexToStr(ss) == "" {
-		SigVersion = "0"
+		signVersion = "0"
 	} else {
-		SigVersion = "1"
+		signVersion = "1"
 	}
 
 	switch qt {
@@ -606,7 +606,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 					PrivSignature: util.HexToStr(ps),
 					DID:           did,
 					Hash:          hash,
-					SignVersion:   SigVersion,
+					SignVersion:   signVersion,
 				}
 				cs.P[did] = p
 				cs.Credit.Credit = append(cs.Credit.Credit, csig)

@@ -43,7 +43,6 @@ const (
 	TIDeployerDIDKey    string = "8"
 	TIExecutorDIDKey    string = "9"
 	TICommitedTokensKey string = "10"
-	// TISignVersionKey    string = "11"
 )
 
 const (
@@ -79,7 +78,6 @@ type TransInfo struct {
 	Tokens      []TransTokens `json:"tokens"`
 	DeployerDID string        `json:"deployerDID"`
 	ExecutorDID string        `json:"executorDID"`
-	// SignVersion string        `json:"signVersion"`
 }
 
 func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {

@@ -53,10 +53,6 @@ type DIDSignature struct {
 	Signature []byte
 }
 
-// type Sign_Version struct {
-// 	Version int `json:"version"`
-// }
-
 type SignReqData struct {
 	ID          string `json:"id"`
 	Mode        int    `json:"mode"`

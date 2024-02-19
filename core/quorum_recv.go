@@ -485,7 +485,6 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	switch cr.Mode {
 	case RBTTransferMode:
 		c.log.Debug("RBT consensus started")
-		// fmt.Println(req, "/n", did, "/n", qdc, "/n", &cr)
 		return c.quorumRBTConsensus(req, did, qdc, &cr)
 	case DTCommitMode:
 		c.log.Debug("Data consensus started")
