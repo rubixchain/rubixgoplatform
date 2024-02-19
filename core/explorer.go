@@ -3,7 +3,9 @@ package core
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/helper/jsonutil"
@@ -16,11 +18,13 @@ const (
 	ExplorerTransactionAPI     string = "CreateOrUpdateRubixTransaction"
 	ExplorerCreateDataTransAPI string = "create-datatokens"
 	ExplorerMapDIDAPI          string = "map-did"
+	ExplorerURLTable           string = "ExplorerURLTable"
 )
 
 type ExplorerClient struct {
 	ensweb.Client
 	log logger.Logger
+	es  storage.Storage
 }
 
 type ExplorerDID struct {
@@ -65,11 +69,33 @@ type ExplorerResponse struct {
 	Status  bool   `json:"Status"`
 }
 
+type ExplorerURL struct {
+	URL  string `gorm:"column:url;primaryKey" json:"ExplorerURL"`
+	Port int    `gorm:"column:port" json:"Explorerport"`
+}
+
 func (c *Core) InitRubixExplorer() error {
+
+	err := c.s.Init(ExplorerURLTable, &ExplorerURL{}, true)
+	if err != nil {
+		c.log.Error("Failed to initialise storage ExplorerURL ", "err", err)
+		return err
+	}
+
 	url := "deamon-explorer.azurewebsites.net"
 	if c.testNet {
 		url = "rubix-deamon-api.ensurity.com"
 	}
+
+	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", url)
+	if err != nil {
+		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: url, Port: 443})
+	}
+
+	if err != nil {
+		return err
+	}
+
 	cl, err := ensweb.NewClient(&config.Config{ServerAddress: url, ServerPort: "443", Production: "true"}, c.log)
 	if err != nil {
 		return err
@@ -77,33 +103,44 @@ func (c *Core) InitRubixExplorer() error {
 	c.ec = &ExplorerClient{
 		Client: cl,
 		log:    c.log.Named("explorerclient"),
+		es:     c.s,
 	}
 	return nil
 }
 
 func (ec *ExplorerClient) SendExploerJSONRequest(method string, path string, input interface{}, output interface{}) error {
-	req, err := ec.JSONRequest(method, ExplorerBasePath+path, input)
+
+	var urls []string
+	urls, err := ec.GetAllExplorer()
 	if err != nil {
 		return err
 	}
-	resp, err := ec.Do(req)
-	if err != nil {
-		ec.log.Error("Failed r get response from explorer", "err", err)
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		str := fmt.Sprintf("Http Request failed with status %d", resp.StatusCode)
-		ec.log.Error(str)
-		return fmt.Errorf(str)
-	}
-	if output == nil {
-		return nil
-	}
-	err = jsonutil.DecodeJSONFromReader(resp.Body, output)
-	if err != nil {
-		ec.log.Error("Invalid response from the node", "err", err)
-		return err
+
+	for _, url := range urls {
+		req, err := ec.JSONRequestForExplorer(method, ExplorerBasePath+path, input, url)
+		if err != nil {
+			ec.log.Error("Request could not be sent to : "+url, "err", err)
+			continue
+		}
+		resp, err := ec.Do(req)
+		if err != nil {
+			ec.log.Error("Failed to get response from explorer : "+url, "err", err)
+			continue
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			str := fmt.Sprintf("Http Request failed with status %d for "+url, resp.StatusCode)
+			ec.log.Error(str)
+			continue
+		}
+		if output == nil {
+			continue
+		}
+		err = jsonutil.DecodeJSONFromReader(resp.Body, output)
+		if err != nil {
+			ec.log.Error("Invalid response from the node", "err", err)
+			continue
+		}
 	}
 	return nil
 }
@@ -167,4 +204,67 @@ func (ec *ExplorerClient) ExplorerDataTransaction(et *ExplorerDataTrans) error {
 		return fmt.Errorf("failed to update explorer")
 	}
 	return nil
+}
+
+func (c *Core) AddExplorer(links []string) error {
+
+	var eurl []ExplorerURL
+
+	for _, url := range links {
+		if strings.HasPrefix(url, "https") {
+			url = strings.TrimPrefix(url, "https://")
+		} else if strings.HasPrefix(url, "http") {
+			url = strings.TrimPrefix(url, "http://")
+		}
+		eur := ExplorerURL{
+			URL:  url,
+			Port: 0,
+		}
+		eurl = append(eurl, eur)
+	}
+
+	err := c.s.Write(ExplorerURLTable, eurl)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Core) RemoveExplorer(links []string) error {
+
+	for _, url := range links {
+		if strings.HasPrefix(url, "https") {
+			url = strings.TrimPrefix(url, "https://")
+		} else if strings.HasPrefix(url, "http") {
+			url = strings.TrimPrefix(url, "http://")
+		}
+		err := c.s.Delete(ExplorerURLTable, &ExplorerURL{}, "url=?", url)
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Core) GetAllExplorer() ([]string, error) {
+	var urls []string
+	urls, err := c.ec.GetAllExplorer()
+	if err != nil {
+		return nil, err
+	}
+	return urls, nil
+}
+
+func (ec *ExplorerClient) GetAllExplorer() ([]string, error) {
+	var eurl []ExplorerURL
+	var urls []string
+	err := ec.es.Read(ExplorerURLTable, &eurl, "url!=?", "")
+	if err != nil {
+		return nil, err
+	}
+	for _, url := range eurl {
+		urls = append(urls, fmt.Sprintf("https://%s", url.URL))
+	}
+	return urls, nil
 }

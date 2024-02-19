@@ -76,6 +76,9 @@ const (
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
+	AddExplorerCmd                 string = "addexplorer"
+	RemoveExplorerCmd              string = "removeexplorer"
+	GetAllExplorerCmd              string = "getallexplorer"
 )
 
 var commands = []string{VersionCmd,
@@ -236,6 +239,7 @@ type Command struct {
 	smartContractData  string
 	executorAddr       string
 	latest             bool
+	links              []string
 }
 
 func showVersion() {
@@ -360,6 +364,7 @@ func Run(args []string) {
 	cmd := &Command{}
 	var peers string
 	var timeout int
+	var links string
 
 	flag.StringVar(&cmd.runDir, "p", "./", "Working directory path")
 	flag.StringVar(&cmd.logFile, "logFile", "", "Log file name")
@@ -426,6 +431,7 @@ func Run(args []string) {
 	flag.IntVar(&cmd.publishType, "pubType", 0, "Smart contract event publishing type(Deploy & Execute)")
 	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
 	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
+	flag.StringVar(&links, "links", "", "Explorer url")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -442,6 +448,11 @@ func Run(args []string) {
 	if peers != "" {
 		peers = strings.ReplaceAll(peers, " ", "")
 		cmd.peers = strings.Split(peers, ",")
+	}
+
+	if links != "" {
+		links = strings.ReplaceAll(links, " ", "")
+		cmd.links = strings.Split(links, ",")
 	}
 
 	cmd.timeout = time.Duration(timeout) * time.Minute
@@ -566,6 +577,12 @@ func Run(args []string) {
 		cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
+	case AddExplorerCmd:
+		cmd.addExplorer()
+	case RemoveExplorerCmd:
+		cmd.removeExplorer()
+	case GetAllExplorerCmd:
+		cmd.getAllExplorer()
 	default:
 		cmd.log.Error("Invalid command")
 	}

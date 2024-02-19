@@ -312,3 +312,34 @@ This following options are used for this command
    -fp 
         Force password to be entered on the terminal
 ```
+To Add explorer url
+: To add explorer url where to send the transaction data.
+```
+./rubixgoplatform addexplorer
+
+This following options are used for this command
+  -links string
+        URLs, mutiple URLs will be seprated by comma
+  -port string
+        Server/Host port (default "20000")
+```
+To remove explorer url
+: To remove explorer url where not to send the transaction data.
+```
+./rubixgoplatform removeexplorer
+
+This following options are used for this command
+  -links string
+        URLs, mutiple URLs will be seprated by comma
+  -port string
+        Server/Host port (default "20000")
+```
+To get all explorer urls
+: To get explorer urls where the transaction data is being sent.
+```
+./rubixgoplatform getallexplorer
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+```
