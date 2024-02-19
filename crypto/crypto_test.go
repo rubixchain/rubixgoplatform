@@ -32,5 +32,6 @@ func testKeyGeneration(t *testing.T, alg CryptoAlgType, pwd string) {
 
 func TestKeyGeneration(t *testing.T) {
 	testKeyGeneration(t, ECDSAP256, "")
+	testKeyGeneration(t, ECDSADET, "test")
 	testKeyGeneration(t, ECDSAP256, "TestPassword")
 }
