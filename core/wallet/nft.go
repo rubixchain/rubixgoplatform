@@ -3,10 +3,12 @@ package wallet
 import "fmt"
 
 type NFT struct {
-	TokenID     string  `gorm:"column:token_id;primaryKey" json:"token_id"`
-	DID         string  `gorm:"column:did" json:"did"`
-	TokenStatus int     `gorm:"column:token_status;" json:"token_status"`
-	TokenValue  float64 `gorm:"column:token_value;" json:"token_value"`
+	TokenID                   string  `gorm:"column:token_id;primaryKey" json:"token_id"`
+	DigitalAssetHash          string  `gorm:"column:digital_asset_hash;" json:"digital_asset_hash"`
+	DigitalAssetAttributeHash string  `gorm:"column:digital_asset_attribute_hash;" json:"digital_asset_attribute_hash"`
+	DID                       string  `gorm:"column:did" json:"did"`
+	TokenStatus               int     `gorm:"column:token_status;" json:"token_status"`
+	TokenValue                float64 `gorm:"column:token_value;" json:"token_value"`
 }
 
 // CreateNFT write NFT into db
