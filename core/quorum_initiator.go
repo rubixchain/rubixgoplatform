@@ -368,6 +368,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
 			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
 		}
+
+		//trigger pledge finality to the quorum
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
+		if pledgeFinalityError != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", err)
+			return nil, nil, pledgeFinalityError
+		}
+
 		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
@@ -408,6 +416,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			DateTime:        time.Now(),
 			Status:          true,
 		}
+
+		//trigger pledge finality to the quorum
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
+		if pledgeFinalityError != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", err)
+			return nil, nil, pledgeFinalityError
+		}
 		return &td, pl, nil
 	} else if cr.Mode == SmartContractDeployMode {
 		//Create tokechain for the smart contract token and add genesys block
@@ -446,6 +461,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if err != nil {
 			c.log.Error("failed to get new block id ", "err", err)
 			return nil, nil, err
+		}
+
+		//trigger pledge finality to the quorum
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
+		if pledgeFinalityError != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", err)
+			return nil, nil, pledgeFinalityError
 		}
 
 		//Todo pubsub - publish smart contract token details
@@ -493,6 +515,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, err
 		}
 
+		//trigger pledge finality to the quorum
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
+		if pledgeFinalityError != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", err)
+			return nil, nil, pledgeFinalityError
+		}
+
 		//Todo pubsub - publish smart contract token details
 		newEvent := model.NewContractEvent{
 			SmartContractToken:     cr.SmartContractToken,
@@ -518,6 +547,44 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		return &txnDetails, pl, nil
 	}
+}
+
+func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block) error {
+	c.qlock.Lock()
+	pd, ok1 := c.pd[cr.ReqID]
+	cs, ok2 := c.quorumRequest[cr.ReqID]
+	c.qlock.Unlock()
+	if !ok1 || !ok2 {
+		c.log.Error("Invalid pledge request")
+		return fmt.Errorf("invalid pledge request")
+	}
+	for k, v := range pd.PledgedTokens {
+		p, ok := cs.P[k]
+		if !ok {
+			c.log.Error("Invalid pledge request")
+			return fmt.Errorf("invalid pledge request")
+		}
+		if p == nil {
+			c.log.Error("Invalid pledge request")
+			return fmt.Errorf("invalid pledge request")
+		}
+		var br model.BasicResponse
+		ur := UpdatePledgeRequest{
+			Mode:            cr.Mode,
+			PledgedTokens:   v,
+			TokenChainBlock: newBlock.GetBlock(),
+		}
+		err := p.SendJSONRequest("POST", APIUpdatePledgeToken, nil, &ur, &br, true)
+		if err != nil {
+			c.log.Error("Failed to update pledge token status", "err", err)
+			return fmt.Errorf("failed to update pledge token status")
+		}
+		if !br.Status {
+			c.log.Error("Failed to update pledge token status", "msg", br.Message)
+			return fmt.Errorf("failed to update pledge token status")
+		}
+	}
+	return nil
 }
 
 func (c *Core) startConsensus(id string, qt int) {
@@ -790,7 +857,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			return nil, fmt.Errorf("failed to update signature to block")
 		}
 	}
-	for k, v := range pd.PledgedTokens {
+	/* for k, v := range pd.PledgedTokens {
 		p, ok := cs.P[k]
 		if !ok {
 			c.log.Error("Invalid pledge request")
@@ -815,7 +882,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			c.log.Error("Failed to update pledge token status", "msg", br.Message)
 			return nil, fmt.Errorf("failed to update pledge token status")
 		}
-	}
+	} */
 	return nb, nil
 }
 
