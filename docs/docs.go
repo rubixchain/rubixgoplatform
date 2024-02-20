@@ -152,49 +152,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/createnft": {
-            "post": {
-                "description": "This API will create new NFT",
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "multipart/form-data"
-                ],
-                "tags": [
-                    "NFT"
-                ],
-                "summary": "Create NFT",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User/Entity Info",
-                        "name": "UserInfo",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "File Info is json string {",
-                        "name": "FileInfo",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "file",
-                        "description": "File to be committed",
-                        "name": "FileContent",
-                        "in": "formData"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/deploy-smart-contract": {
             "post": {
                 "description": "This API will deploy smart contract Token",
@@ -602,6 +559,52 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/server.RBTTransferRequestSwaggoInput"
                         }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/mintnft": {
+            "post": {
+                "description": "This API will Mint new NFT",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Mint NFT",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Location of the digital Asset",
+                        "name": "digitalAssetPath",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Location of the Attribute.json file of the digital asset",
+                        "name": "digitalAssetAttributeFilePath",
+                        "in": "formData",
+                        "required": true
                     }
                 ],
                 "responses": {

@@ -211,34 +211,6 @@ paths:
       summary: Create Data Token
       tags:
       - Data Tokens
-  /api/createnft:
-    post:
-      consumes:
-      - multipart/form-data
-      description: This API will create new NFT
-      parameters:
-      - description: User/Entity Info
-        in: formData
-        name: UserInfo
-        type: string
-      - description: File Info is json string {
-        in: formData
-        name: FileInfo
-        type: string
-      - description: File to be committed
-        in: formData
-        name: FileContent
-        type: file
-      produces:
-      - multipart/form-data
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Create NFT
-      tags:
-      - NFT
   /api/deploy-smart-contract:
     post:
       consumes:
@@ -516,6 +488,37 @@ paths:
       summary: Initiate RBT Transfer
       tags:
       - Account
+  /api/mintnft:
+    post:
+      consumes:
+      - multipart/form-data
+      description: This API will Mint new NFT
+      parameters:
+      - description: DID
+        in: formData
+        name: did
+        required: true
+        type: string
+      - description: Location of the digital Asset
+        in: formData
+        name: digitalAssetPath
+        required: true
+        type: file
+      - description: Location of the Attribute.json file of the digital asset
+        in: formData
+        name: digitalAssetAttributeFilePath
+        required: true
+        type: file
+      produces:
+      - multipart/form-data
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Mint NFT
+      tags:
+      - NFT
   /api/register-callback-url:
     post:
       consumes:
