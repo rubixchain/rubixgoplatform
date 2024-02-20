@@ -240,6 +240,8 @@ type Command struct {
 	executorAddr       string
 	latest             bool
 	links              []string
+	mnemonicFile       string
+	mnemonic           string
 }
 
 func showVersion() {

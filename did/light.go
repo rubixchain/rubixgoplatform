@@ -125,7 +125,7 @@ func (d *DIDLight) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte)
 		return false, err
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
+	if !crypto.BIPVerify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
@@ -145,7 +145,7 @@ func (d *DIDLight) PvtSign(hash []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	pvtKeySign, err := crypto.Sign(PrivateKey, hash)
+	pvtKeySign, err := crypto.BIPSign(PrivateKey, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func (d *DIDLight) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !crypto.Verify(pubKeyByte, hash, sign) {
+	if !crypto.BIPVerify(pubKeyByte, hash, sign) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil

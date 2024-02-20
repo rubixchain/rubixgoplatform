@@ -55,11 +55,33 @@ func (cmd *Command) CreateDID() {
 			cmd.log.Error("private key & public key file names required")
 			return
 		}
-		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: cmd.privPWD})
+
+		mnemonic := cmd.mnemonic
+		if mnemonic == "" {
+			mnemonic = crypto.BIPGenerateMnemonic()
+		}
+
+		masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic, cmd.privPWD)
 		if err != nil {
 			cmd.log.Error("failed to create keypair", "err", err)
+		}
+
+		masterKeyDecoded, err := crypto.BIPDecodeMasterKey(cmd.privPWD, masterKey)
+		if err != nil {
+			cmd.log.Error("failed to decode masterkey", "err", err)
+		}
+
+		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKeyDecoded), 0)
+		if err != nil {
+			cmd.log.Error("failed to create child", "err", err)
+		}
+
+		err = util.FileWrite(cmd.mnemonicFile, []byte(mnemonic))
+		if err != nil {
+			cmd.log.Error("failed to write mnemonic file", "err", err)
 			return
 		}
+
 		err = util.FileWrite(cmd.privKeyFile, pvtKey)
 		if err != nil {
 			cmd.log.Error("failed to write private key file", "err", err)
@@ -279,7 +301,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 				return "Failed to decode private key file, " + err.Error(), false
 			}
 			cmd.log.Info("Doing the private key signature")
-			sig, err := crypto.Sign(key, sr.Hash)
+			sig, err := crypto.BIPSign(key, sr.Hash)
 			if err != nil {
 				return "Failed to do signature, " + err.Error(), false
 			}

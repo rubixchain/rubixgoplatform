@@ -105,7 +105,7 @@ func (d *DIDQuorum_Lt) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []b
 		return false, fmt.Errorf("failed to verify")
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !crypto.Verify(d.pubKey, []byte(hashPvtSign), pvtKeySIg) {
+	if !crypto.BIPVerify(d.pubKey, []byte(hashPvtSign), pvtKeySIg) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
@@ -114,14 +114,14 @@ func (d *DIDQuorum_Lt) PvtSign(hash []byte) ([]byte, error) {
 	if d.privKey == nil {
 		return nil, fmt.Errorf("private key is not initialized")
 	}
-	ps, err := crypto.Sign(d.privKey, hash)
+	ps, err := crypto.BIPSign(d.privKey, hash)
 	if err != nil {
 		return nil, err
 	}
 	return ps, nil
 }
 func (d *DIDQuorum_Lt) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	if !crypto.Verify(d.pubKey, hash, sign) {
+	if !crypto.BIPVerify(d.pubKey, hash, sign) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil

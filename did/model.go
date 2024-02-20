@@ -23,6 +23,7 @@ const (
 	PubKeyFileName       string = "pubKey.pem"
 	QuorumPvtKeyFileName string = "quorumPrivKey.pem"
 	QuorumPubKeyFileName string = "quorumPubKey.pem"
+	mnemonicFile         string = "mnemonic.txt"
 )
 
 const (
