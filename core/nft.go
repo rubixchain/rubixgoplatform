@@ -4,19 +4,31 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"strings"
-	"time"
 
-	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/rac"
-	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
+
+type MintNFTRequest struct {
+	DID                       string
+	DigitalAssetPath          string
+	DigitalAssetAttributeFile string
+	NFTPath                   string
+}
+
+type NFT struct {
+	DigitalAssetFileHash          string `json:"digitalAssetFileHash"`
+	DigitalAssetAttributeFileHash string `json:"digitalAssetAttributesFileHash"`
+	DID                           string `json:"did"`
+}
+
+type MintNFTResponse struct {
+	Message string `json:"message"`
+	Result  string `json:"result"`
+}
 
 type NFTReq struct {
 	DID        string
@@ -37,7 +49,7 @@ type NFTSaleReq struct {
 	Tokens []NFTSale `json:"tokens"`
 }
 
-func (c *Core) CreateNFT(reqID string, nr *NFTReq) {
+/* func (c *Core) CreateNFT(reqID string, nr *NFTReq) {
 	defer os.RemoveAll(nr.FolderName)
 	br := c.createNFT(reqID, nr)
 	dc := c.GetWebReq(reqID)
@@ -217,6 +229,108 @@ func (c *Core) createNFT(reqID string, nr *NFTReq) *model.BasicResponse {
 	br.Status = true
 	br.Message = msg
 	return &br
+} */
+
+func (c *Core) MintNFT(requestID string, mintNFTreq *MintNFTRequest) *model.BasicResponse {
+	defer os.RemoveAll(mintNFTreq.NFTPath)
+
+	mintNFTResponse := c.mintNFT(requestID, mintNFTreq)
+	mintNftDidChannel := c.GetWebReq(requestID)
+	if mintNftDidChannel == nil {
+		c.log.Error("failed to get web request", "requestID", requestID)
+		return nil
+	}
+	mintNftDidChannel.OutChan <- mintNFTResponse
+
+	return mintNFTResponse
+}
+
+func (c *Core) mintNFT(requestID string, mintNFTreq *MintNFTRequest) *model.BasicResponse {
+	basicResponse := &model.BasicResponse{
+		Status: false,
+	}
+
+	//open and read the digital asset file
+	digitalAssetFile, err := os.Open(mintNFTreq.DigitalAssetPath)
+	if err != nil {
+		c.log.Error("Failed to open digital asset file", "err", err)
+		return basicResponse
+	}
+	defer digitalAssetFile.Close()
+
+	//add the digital asset file to ipfs
+	digitalAssetFileHash, err := c.ipfs.Add(digitalAssetFile)
+	if err != nil {
+		c.log.Error("Failed to add digital asset file to IPFS", "err", err)
+		return basicResponse
+	}
+
+	//open and read the attributes file
+	digitalAssetAttributesFile, err := os.Open(mintNFTreq.DigitalAssetAttributeFile)
+	if err != nil {
+		c.log.Error("Failed to open digital asset attributes file", "err", err)
+		return basicResponse
+	}
+	defer digitalAssetAttributesFile.Close()
+
+	//add the attributes file to ipfs
+	digitalAssetAttributesFileHash, err := c.ipfs.Add(digitalAssetAttributesFile)
+	if err != nil {
+		c.log.Error("Failed to add digital asset attributes file to IPFS", "err", err)
+		return basicResponse
+	}
+
+	nftToken := NFT{
+		DigitalAssetFileHash:          digitalAssetFileHash,
+		DigitalAssetAttributeFileHash: digitalAssetAttributesFileHash,
+		DID:                           mintNFTreq.DID,
+	}
+
+	NFTJson, err := json.MarshalIndent(nftToken, "", "  ")
+	if err != nil {
+		c.log.Error("Failed to marshal NFT struct", "err", err)
+		return basicResponse
+	}
+
+	NFTHash, err := c.ipfs.Add(bytes.NewReader(NFTJson))
+	if err != nil {
+		c.log.Error("Failed to add NFT to IPFS", "err", err)
+		return basicResponse
+	}
+
+	fmt.Println("NFT Hash ", NFTHash)
+
+	// Set the response status and message
+	smintNFTResponse := &MintNFTResponse{
+		Message: "NFT minted successfully",
+		Result:  NFTHash,
+	}
+
+	_, err = c.RenameFolder("NFT", mintNFTreq.NFTPath, NFTHash)
+	if err != nil {
+		c.log.Error("Failed to rename NFT folder", "err", err)
+		return basicResponse
+	}
+
+	err = c.w.CreateNFT(&wallet.NFT{
+		TokenID:                   NFTHash,
+		DigitalAssetHash:          digitalAssetFileHash,
+		DigitalAssetAttributeHash: digitalAssetAttributesFileHash,
+		DID:                       mintNFTreq.DID,
+		TokenStatus:               wallet.TokenIsGenerated,
+	})
+
+	if err != nil {
+		c.log.Error("Failed to add NFT to storage", "err", err)
+		return basicResponse
+	}
+
+	// Set the response values
+	basicResponse.Status = true
+	basicResponse.Message = smintNFTResponse.Message
+	basicResponse.Result = smintNFTResponse
+
+	return basicResponse
 }
 
 func (c *Core) GetAllNFT(did string) model.NFTTokens {
