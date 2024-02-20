@@ -1,17 +1,12 @@
 package command
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"path"
 
 	"github.com/rubixchain/rubixgoplatform/client"
-	"github.com/rubixchain/rubixgoplatform/core"
-	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func (cmd *Command) createNFT() {
+/* func (cmd *Command) createNFT() {
 	if cmd.did == "" {
 		cmd.log.Error("Failed to create NFT, DID is required to create NFT")
 		return
@@ -60,6 +55,26 @@ func (cmd *Command) createNFT() {
 	}
 	cmd.log.Info(fmt.Sprintf("Data Token : %s", msg))
 	cmd.log.Info("NFT created successfully")
+} */
+
+func (cmd *Command) mintNFT() {
+	mintNFTRequest := client.MintNFTRequest{
+		DID:                       cmd.did,
+		DigitalAssetPath:          cmd.digitalassetPath,
+		DigitalAssetAttributeFile: cmd.digitalassetAttrPath,
+	}
+
+	basicResponse, err := cmd.c.MintNFT(&mintNFTRequest)
+	if err != nil {
+		cmd.log.Error("Failed to mint NFT", "err", err)
+		return
+	}
+	if !basicResponse.Status {
+		cmd.log.Error("Failed to mint NFT", "err", err)
+		return
+	}
+
+	cmd.log.Info("NFT minted successfully")
 }
 
 func (cmd *Command) getAllNFTs() {

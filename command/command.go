@@ -64,7 +64,7 @@ const (
 	CommitDataTokenCmd             string = "commitdatatoken"
 	SetupDBCmd                     string = "setupdb"
 	GetTxnDetailsCmd               string = "gettxndetails"
-	CreateNFTCmd                   string = "createnft"
+	MintNFTCmd                     string = "mintnft"
 	GetAllNFTCmd                   string = "getallnft"
 	UpdateConfig                   string = "updateconfig"
 	GenerateSmartContractToken     string = "generatesct"
@@ -108,7 +108,7 @@ var commands = []string{VersionCmd,
 	GetTxnDetailsCmd,
 	PublishContractCmd,
 	SubscribeContractCmd,
-	CreateNFTCmd,
+	MintNFTCmd,
 	GetAllNFTCmd,
 	DeploySmartContractCmd,
 	ExecuteSmartcontractCmd,
@@ -151,7 +151,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will get transaction details",
 	"This command will publish a smart contract token",
 	"This command will subscribe to a smart contract token",
-	"This command will create NFT",
+	"This command will mint NFT",
 	"This command will get all NFTs",
 	"This command will deploy the smart contract token",
 	"This command will execute the fetched smart contract",
@@ -165,77 +165,79 @@ var commandsHelp = []string{"To get tool version",
 	"This command gets the smartcontract data from latest block"}
 
 type Command struct {
-	cfg                config.Config
-	c                  *client.Client
-	sc                 *contract.Contract
-	encKey             string
-	start              bool
-	node               uint
-	runDir             string
-	logFile            string
-	logLevel           string
-	cfgFile            string
-	testNet            bool
-	testNetKey         string
-	addr               string
-	port               string
-	peerID             string
-	peers              []string
-	log                logger.Logger
-	didRoot            bool
-	didType            int
-	didSecret          string
-	forcePWD           bool
-	privPWD            string
-	quorumPWD          string
-	imgFile            string
-	didImgFile         string
-	privImgFile        string
-	pubImgFile         string
-	privKeyFile        string
-	pubKeyFile         string
-	quorumList         string
-	srvName            string
-	storageType        int
-	dbName             string
-	dbType             string
-	dbAddress          string
-	dbPort             string
-	dbUserName         string
-	dbPassword         string
-	senderAddr         string
-	receiverAddr       string
-	rbtAmount          float64
-	transComment       string
-	transType          int
-	numTokens          int
-	enableAuth         bool
-	did                string
-	token              string
-	arbitaryMode       bool
-	tokenList          string
-	batchID            string
-	fileMode           bool
-	file               string
-	userID             string
-	userInfo           string
-	timeout            time.Duration
-	txnID              string
-	role               string
-	date               time.Time
-	grpcAddr           string
-	grpcPort           int
-	grpcSecure         bool
-	deployerAddr       string
-	binaryCodePath     string
-	rawCodePath        string
-	schemaFilePath     string
-	smartContractToken string
-	newContractBlock   string
-	publishType        int
-	smartContractData  string
-	executorAddr       string
-	latest             bool
+	cfg                  config.Config
+	c                    *client.Client
+	sc                   *contract.Contract
+	encKey               string
+	start                bool
+	node                 uint
+	runDir               string
+	logFile              string
+	logLevel             string
+	cfgFile              string
+	testNet              bool
+	testNetKey           string
+	addr                 string
+	port                 string
+	peerID               string
+	peers                []string
+	log                  logger.Logger
+	didRoot              bool
+	didType              int
+	didSecret            string
+	forcePWD             bool
+	privPWD              string
+	quorumPWD            string
+	imgFile              string
+	didImgFile           string
+	privImgFile          string
+	pubImgFile           string
+	privKeyFile          string
+	pubKeyFile           string
+	quorumList           string
+	srvName              string
+	storageType          int
+	dbName               string
+	dbType               string
+	dbAddress            string
+	dbPort               string
+	dbUserName           string
+	dbPassword           string
+	senderAddr           string
+	receiverAddr         string
+	rbtAmount            float64
+	transComment         string
+	transType            int
+	numTokens            int
+	enableAuth           bool
+	did                  string
+	token                string
+	arbitaryMode         bool
+	tokenList            string
+	batchID              string
+	fileMode             bool
+	file                 string
+	userID               string
+	userInfo             string
+	timeout              time.Duration
+	txnID                string
+	role                 string
+	date                 time.Time
+	grpcAddr             string
+	grpcPort             int
+	grpcSecure           bool
+	deployerAddr         string
+	binaryCodePath       string
+	rawCodePath          string
+	schemaFilePath       string
+	smartContractToken   string
+	newContractBlock     string
+	publishType          int
+	smartContractData    string
+	executorAddr         string
+	latest               bool
+	digitalassetPath     string
+	digitalassetAttrPath string
 }
 
 func showVersion() {
@@ -426,6 +428,8 @@ func Run(args []string) {
 	flag.IntVar(&cmd.publishType, "pubType", 0, "Smart contract event publishing type(Deploy & Execute)")
 	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
 	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
+	flag.StringVar(&cmd.digitalassetPath, "digitalAsset", "", "Digital Asset path")
+	flag.StringVar(&cmd.digitalassetAttrPath, "digitalAssetAttribute", "", "Digital Asset attribute path")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -548,8 +552,8 @@ func Run(args []string) {
 		cmd.PublishContract()
 	case SubscribeContractCmd:
 		cmd.SubscribeContract()
-	case CreateNFTCmd:
-		cmd.createNFT()
+	case MintNFTCmd:
+		cmd.mintNFT()
 	case GetAllNFTCmd:
 		cmd.getAllNFTs()
 	case DeploySmartContractCmd:
