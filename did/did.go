@@ -77,10 +77,34 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			return "", err
 		}
 
-		//generating private and public key pair
-		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.PrivPWD})
+		_mnemonic, err := os.ReadFile(dirName + "/private/" + MnemonicFileName)
+		if err != nil {
+			d.log.Error("failed to read mnemonic file", "err", err)
+		}
+		mnemonic := string(_mnemonic)
+		if mnemonic == "" {
+			mnemonic = crypto.BIPGenerateMnemonic()
+		}
+
+		masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic, didCreate.PrivPWD)
 		if err != nil {
 			d.log.Error("failed to create keypair", "err", err)
+		}
+
+		masterKeyDecoded, err := crypto.BIPDecodeMasterKey(didCreate.PrivPWD, masterKey)
+		if err != nil {
+			d.log.Error("failed to decode masterkey", "err", err)
+		}
+
+		//generating private and public key pair
+		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKeyDecoded), 0)
+		if err != nil {
+			d.log.Error("failed to create child", "err", err)
+		}
+
+		err = util.FileWrite(dirName+"/private/"+MnemonicFileName, []byte(mnemonic))
+		if err != nil {
+			d.log.Error("failed to write mnemonic file", "err", err)
 			return "", err
 		}
 

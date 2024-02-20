@@ -23,7 +23,7 @@ const (
 	PubKeyFileName       string = "pubKey.pem"
 	QuorumPvtKeyFileName string = "quorumPrivKey.pem"
 	QuorumPubKeyFileName string = "quorumPubKey.pem"
-	mnemonicFile         string = "mnemonic.txt"
+	MnemonicFileName     string = "mnemonic.txt"
 )
 
 const (
@@ -47,6 +47,8 @@ type DIDCreate struct {
 	PrivKeyFile       string `json:"priv_key_file"`
 	QuorumPubKeyFile  string `json:"quorum_pub_key_file"`
 	QuorumPrivKeyFile string `json:"quorum_priv_key_file"`
+	MnemonicFile      string `json:"mnemonic_file"`
+	mnemonic          string
 }
 
 type DIDSignature struct {
