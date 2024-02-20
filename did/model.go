@@ -1,10 +1,16 @@
 package did
 
 const (
-	BasicDIDMode int = iota
+	LightDIDMode int = iota
+	BasicDIDMode
 	StandardDIDMode
 	WalletDIDMode
 	ChildDIDMode
+)
+
+const (
+	PkiVersion int = iota
+	NlssVersion
 )
 
 const (

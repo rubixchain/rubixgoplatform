@@ -11,24 +11,24 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// DIDBasic will handle basic DID
-type DIDBasic struct {
+// DIDLight will handle Light DID
+type DIDLight struct {
 	did string
 	dir string
 	ch  *DIDChan
 	pwd string
 }
 
-// InitDIDBasic will return the basic did handle
-func InitDIDBasic(did string, baseDir string, ch *DIDChan) *DIDBasic {
-	return &DIDBasic{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
+// InitDIDLight will return the Light did handle
+func InitDIDLight(did string, baseDir string, ch *DIDChan) *DIDLight {
+	return &DIDLight{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
 }
 
-func InitDIDBasicWithPassword(did string, baseDir string, pwd string) *DIDBasic {
-	return &DIDBasic{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
+func InitDIDLightWithPassword(did string, baseDir string, pwd string) *DIDLight {
+	return &DIDLight{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 }
 
-func (d *DIDBasic) getPassword() (string, error) {
+func (d *DIDLight) getPassword() (string, error) {
 	if d.pwd != "" {
 		return d.pwd, nil
 	}
@@ -40,7 +40,7 @@ func (d *DIDBasic) getPassword() (string, error) {
 		Message: "Password needed",
 		Result: SignReqData{
 			ID:   d.ch.ID,
-			Mode: BasicDIDMode,
+			Mode: LightDIDMode,
 		},
 	}
 	d.ch.OutChan <- sr
@@ -59,60 +59,28 @@ func (d *DIDBasic) getPassword() (string, error) {
 	return d.pwd, nil
 }
 
-func (d *DIDBasic) GetDID() string {
+func (d *DIDLight) GetDID() string {
 	return d.did
 }
 
-func (d *DIDBasic) GetSignVersion() int {
-	return NlssVersion
+// When the did creation and signing is done in Light mode,
+// this function returns the sign version as PkiVersion = 0
+func (d *DIDLight) GetSignVersion() int {
+	return PkiVersion
 }
 
-// Sign will return the singature of the DID
-func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
-	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
+// PKI based sign in light mode
+// In light mode, the sign function returns only the private signature, unlike the basic mode
+func (d *DIDLight) Sign(hash string) ([]byte, []byte, error) {
+	pvtKeySign, err := d.PvtSign([]byte(hash))
+	bs := []byte{}
 
-	if err != nil {
-		fmt.Println(err)
-		return nil, nil, err
-	}
-
-	ps := util.ByteArraytoIntArray(byteImg)
-
-	randPosObject := util.RandomPositions("signer", hash, 32, ps)
-
-	finalPos := randPosObject.PosForSign
-	pvtPos := util.GetPrivatePositions(finalPos, ps)
-	pvtPosStr := util.IntArraytoStr(pvtPos)
-
-	//create a signature using the private key
-	//1. read and extrqct the private key
-	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
-	if err != nil {
-		return nil, nil, err
-	}
-	pwd, err := d.getPassword()
-	if err != nil {
-		return nil, nil, err
-	}
-	PrivateKey, _, err := crypto.DecodeKeyPair(pwd, privKey, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
-	pvtKeySign, err := crypto.Sign(PrivateKey, []byte(hashPvtSign))
-	if err != nil {
-		return nil, nil, err
-	}
-	bs, err := util.BitstreamToBytes(pvtPosStr)
-	if err != nil {
-		return nil, nil, err
-	}
 	return bs, pvtKeySign, err
 }
 
-// Sign will verifyt he signature
-func (d *DIDBasic) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
-	// read senderDID
+// verify nlss based signatures
+func (d *DIDLight) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+	//read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
 		return false, err
@@ -161,9 +129,10 @@ func (d *DIDBasic) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte)
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
+
 }
 
-func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
+func (d *DIDLight) PvtSign(hash []byte) ([]byte, error) {
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
 		return nil, err
@@ -182,7 +151,9 @@ func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
 	}
 	return pvtKeySign, nil
 }
-func (d *DIDBasic) PvtVerify(hash []byte, sign []byte) (bool, error) {
+
+// Verify PKI based signature
+func (d *DIDLight) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return false, err

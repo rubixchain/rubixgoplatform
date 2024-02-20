@@ -141,6 +141,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	if ti.RefID != "" {
 		ntib[TIRefIDKey] = ti.RefID
 	}
+	// if ti.SignVersion != "" {
+	// 	ntib[TISignVersionKey] = ti.SignVersion
+	// }
 	nttbs := make(map[string]interface{})
 	for _, tt := range ti.Tokens {
 		b := ctcb[tt.Token]

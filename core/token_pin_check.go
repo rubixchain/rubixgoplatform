@@ -113,7 +113,7 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 				}
 			}
 
-			for peerId, _ := range peerIdRolemap {
+			for peerId := range peerIdRolemap {
 				if peerIdRolemap[peerId] == wallet.OwnerRole {
 					c.log.Error("Token has multiple Pins")
 					result.Status = true

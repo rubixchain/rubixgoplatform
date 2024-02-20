@@ -75,7 +75,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	if rem < 1 {
-		for i := range pt {
+		for i, _ := range pt {
 			if pt[i].TokenValue == rem {
 				wt = append(wt, pt[i])
 				pt = append(pt[:i], pt[i+1:]...)
@@ -86,7 +86,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	}
 	idx := make([]int, 0)
 	rpt := make([]wallet.Token, 0)
-	for i := range pt {
+	for i, _ := range pt {
 		if pt[i].TokenValue <= rem {
 			wt = append(wt, pt[i])
 			rem = floatPrecision(rem-pt[i].TokenValue, 10)
@@ -157,7 +157,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 
 	// check part split not crossing RBT
 	amount := float64(0)
-	for i := range parts {
+	for i, _ := range parts {
 		amount = amount + parts[i]
 		amount = floatPrecision(amount, 10)
 		if amount > t.TokenValue {
@@ -181,7 +181,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		c.log.Error("failed to get parent detials", "err", err)
 		return nil, err
 	}
-	for i := range parts {
+	for i, _ := range parts {
 		rt := &rac.RacType{
 			Type:        c.RACPartTokenType(),
 			DID:         did,
@@ -288,7 +288,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		return nil, err
 	}
 	npt := make([]wallet.Token, 0)
-	for i := range parts {
+	for i, _ := range parts {
 		ptkn := &wallet.Token{
 			TokenID:       pts[i],
 			ParentTokenID: tkn,

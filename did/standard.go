@@ -55,6 +55,10 @@ func (d *DIDStandard) GetDID() string {
 	return d.did
 }
 
+func (d *DIDStandard) GetSignVersion() int {
+	return NlssVersion
+}
+
 // Sign will return the singature of the DID
 func (d *DIDStandard) Sign(hash string) ([]byte, []byte, error) {
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
@@ -84,7 +88,7 @@ func (d *DIDStandard) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // Sign will verifyt he signature
-func (d *DIDStandard) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDStandard) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {

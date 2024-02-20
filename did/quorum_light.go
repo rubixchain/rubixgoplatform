@@ -10,8 +10,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// DIDQuorum will handle basic DID
-type DIDQuorum struct {
+// DIDQuorum_Lt will handle light DID
+type DIDQuorum_Lt struct {
 	did     string
 	dir     string
 	pwd     string
@@ -19,11 +19,11 @@ type DIDQuorum struct {
 	pubKey  crypto.PublicKey
 }
 
-// InitDIDBasic will return the basic did handle
-func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
-	d := &DIDQuorum{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
+// InitDIDQuorum_Lt will return the Quorum did handle in light mode
+func InitDIDQuorum_Lt(did string, baseDir string, pwd string) *DIDQuorum_Lt {
+	d := &DIDQuorum_Lt{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 	if d.pwd != "" {
-		privKey, err := ioutil.ReadFile(d.dir + QuorumPvtKeyFileName)
+		privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 		if err != nil {
 			return nil
 		}
@@ -33,7 +33,7 @@ func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
 		}
 	}
 
-	pubKey, err := ioutil.ReadFile(d.dir + QuorumPubKeyFileName)
+	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return nil
 	}
@@ -44,48 +44,33 @@ func InitDIDQuorumc(did string, baseDir string, pwd string) *DIDQuorum {
 	return d
 }
 
-func (d *DIDQuorum) GetDID() string {
+func (d *DIDQuorum_Lt) GetDID() string {
 	return d.did
 }
 
-func (d *DIDQuorum) GetSignVersion() int {
-	return NlssVersion
+func (d *DIDQuorum_Lt) GetSignVersion() int {
+	return PkiVersion
 }
 
 // Sign will return the singature of the DID
-func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
+func (d *DIDQuorum_Lt) Sign(hash string) ([]byte, []byte, error) {
 	if d.privKey == nil {
 		return nil, nil, fmt.Errorf("private key is not initialized")
 	}
-	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
+	pvtKeySign, err := d.PvtSign([]byte(hash))
+	// byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
 	if err != nil {
 		fmt.Println(err)
 		return nil, nil, err
 	}
 
-	ps := util.ByteArraytoIntArray(byteImg)
-
-	randPosObject := util.RandomPositions("signer", hash, 32, ps)
-
-	finalPos := randPosObject.PosForSign
-	pvtPos := util.GetPrivatePositions(finalPos, ps)
-	pvtPosStr := util.IntArraytoStr(pvtPos)
-
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
-	pvtKeySign, err := crypto.Sign(d.privKey, []byte(hashPvtSign))
-	if err != nil {
-		return nil, nil, err
-	}
-	bs, err := util.BitstreamToBytes(pvtPosStr)
-	if err != nil {
-		return nil, nil, err
-	}
+	bs := []byte{}
 	return bs, pvtKeySign, err
 }
 
 // verify the quorum's nlss based signature
-func (d *DIDQuorum) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDQuorum_Lt) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
@@ -125,7 +110,7 @@ func (d *DIDQuorum) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte
 	}
 	return true, nil
 }
-func (d *DIDQuorum) PvtSign(hash []byte) ([]byte, error) {
+func (d *DIDQuorum_Lt) PvtSign(hash []byte) ([]byte, error) {
 	if d.privKey == nil {
 		return nil, fmt.Errorf("private key is not initialized")
 	}
@@ -135,7 +120,7 @@ func (d *DIDQuorum) PvtSign(hash []byte) ([]byte, error) {
 	}
 	return ps, nil
 }
-func (d *DIDQuorum) PvtVerify(hash []byte, sign []byte) (bool, error) {
+func (d *DIDQuorum_Lt) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	if !crypto.Verify(d.pubKey, hash, sign) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}

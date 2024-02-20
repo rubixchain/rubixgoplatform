@@ -56,6 +56,10 @@ func (d *DIDWallet) GetDID() string {
 	return d.did
 }
 
+func (d *DIDWallet) GetSignVersion() int {
+	return NlssVersion
+}
+
 // Sign will return the singature of the DID
 func (d *DIDWallet) Sign(hash string) ([]byte, []byte, error) {
 	bs, pvtKeySign, err := d.getSignature([]byte(hash), false)
@@ -66,7 +70,7 @@ func (d *DIDWallet) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // Sign will verifyt he signature
-func (d *DIDWallet) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDWallet) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {

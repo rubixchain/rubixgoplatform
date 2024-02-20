@@ -125,6 +125,7 @@ type CreditSignature struct {
 	PrivSignature string `json:"priv_signature"`
 	DID           string `json:"did"`
 	Hash          string `json:"hash"`
+	SignVersion   string `json:"sign_version"` //represents sign version (PkiSign == 0 or NlssSign==1)
 }
 
 type TokenArbitrationReq struct {
@@ -162,20 +163,52 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 		c.log.Error("DID does not exist", "did", didStr)
 		return fmt.Errorf("DID does not exist")
 	}
-	dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
-	if dc == nil {
-		c.log.Error("Failed to setup quorum")
-		return fmt.Errorf("failed to setup quorum")
+
+	dt, err := c.w.GetDID(didStr)
+	if err != nil {
+		c.log.Error("DID could not fetch", "did", didStr)
+		return fmt.Errorf("DID does not exist")
 	}
-	c.qc[didStr] = dc
-	if pvtKeyPwd != "" {
-		dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
+
+	//To support NLSS backward compatibility,
+	//If the Quorum's did is created in light mode,
+	//it will initiate DIDQuorum_Lt, and if  it is in basic mode,
+	//it will initiate DIDQuorumc
+	switch dt.Type {
+	case did.LightDIDMode:
+		dc := did.InitDIDQuorum_Lt(didStr, c.didDir, pwd)
 		if dc == nil {
 			c.log.Error("Failed to setup quorum")
 			return fmt.Errorf("failed to setup quorum")
 		}
-		c.pqc[didStr] = dc
+		c.qc[didStr] = dc
+		if pvtKeyPwd != "" {
+			dc := did.InitDIDLightWithPassword(didStr, c.didDir, pvtKeyPwd)
+			if dc == nil {
+				c.log.Error("Failed to setup quorum as dc is nil")
+				return fmt.Errorf("failed to setup quorum")
+			}
+			c.pqc[didStr] = dc
+		}
+	case did.BasicDIDMode:
+		dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
+		if dc == nil {
+			c.log.Error("Failed to setup quorum")
+			return fmt.Errorf("failed to setup quorum")
+		}
+		c.qc[didStr] = dc
+		if pvtKeyPwd != "" {
+			dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
+			if dc == nil {
+				c.log.Error("Failed to setup quorum")
+				return fmt.Errorf("failed to setup quorum")
+			}
+			c.pqc[didStr] = dc
+		}
+	default:
+		return fmt.Errorf("DID Type is not supported")
 	}
+
 	c.up.RunUnpledge()
 	return nil
 }
@@ -267,6 +300,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	//getting last character from TID
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
+
+	//Fetching sign version
+	sigVers := dc.GetSignVersion()
+
+	//Appending "1" at the beginning of Transaction ID as a symbol of PKI sign version
+	if sigVers == did.PkiVersion {
+		tid = "1" + tid
+	}
 
 	ql := c.qm.GetQuorum(cr.Type, lastCharTID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
 	if ql == nil || len(ql) < MinQuorumRequired {
@@ -543,6 +584,17 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 		}
 		return
 	}
+
+	var signVersion string
+
+	//signVersion = 0 => Pki based sign in light mode
+	//signVersion = 1 => Nlss based sign in basic mode
+	if util.HexToStr(ss) == "" {
+		signVersion = "0"
+	} else {
+		signVersion = "1"
+	}
+
 	switch qt {
 	case 0:
 		cs.Result.RunningCount--
@@ -554,6 +606,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 					PrivSignature: util.HexToStr(ps),
 					DID:           did,
 					Hash:          hash,
+					SignVersion:   signVersion,
 				}
 				cs.P[did] = p
 				cs.Credit.Credit = append(cs.Credit.Credit, csig)

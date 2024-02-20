@@ -105,6 +105,7 @@ func (c *Contract) blkDecode() error {
 	if err != nil {
 		return err
 	}
+
 	tcb[SCBlockHashKey] = util.HexToStr(hb)
 	if sok {
 		var ksb map[string]interface{}
@@ -148,6 +149,7 @@ func (c *Contract) blkEncode() error {
 		return err
 	}
 	hb := util.CalculateHash(bc, "SHA3-256")
+
 	c.sm[SCBlockHashKey] = util.HexToStr(hb)
 	m := make(map[string]interface{})
 	m[SCBlockContentKey] = bc
@@ -231,7 +233,8 @@ func (c *Contract) GetHashSig(did string) (string, string, string, error) {
 
 	ss := util.GetStringFromMap(ssi, did)
 	ks := util.GetStringFromMap(ksi, did)
-	if ss == "" || ks == "" {
+	// ss == "" ||
+	if ks == "" {
 		return "", "", "", fmt.Errorf("invalid smart contract, share/key signature block is missing")
 	}
 	return hi.(string), ss, ks, nil
@@ -386,6 +389,7 @@ func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
 	if err != nil {
 		return fmt.Errorf("Failed to get signature, " + err.Error())
 	}
+
 	if c.sm[SCShareSignatureKey] == nil {
 		ksm := make(map[string]interface{})
 		ksm[did] = util.HexToStr(ssig)
@@ -427,19 +431,38 @@ func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
 	return c.blkEncode()
 }
 
+// This function is used by the quorums to verify sender's signature
 func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
+	//fetch sender's did
 	did := dc.GetDID()
+
+	//fetch sender's signature
 	hs, ss, ps, err := c.GetHashSig(did)
 	if err != nil {
 		c.log.Error("err", err)
 		return err
 	}
-	ok, err := dc.Verify(hs, util.StrToHex(ss), util.StrToHex(ps))
-	if err != nil {
-		return err
+
+	//If the ss i.e., share signature is empty, then its a Pki sign, so call PvtVerify
+	//Else it is NLSS based sign, so call NlssVerify
+	if ss == "" {
+		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
+
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("did Pki signature verification failed")
+		}
+	} else {
+		ok, err := dc.NlssVerify(hs, util.StrToHex(ss), util.StrToHex(ps))
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("did Nlss signature verification failed")
+		}
 	}
-	if !ok {
-		return fmt.Errorf("did signature verification failed")
-	}
+
 	return nil
 }

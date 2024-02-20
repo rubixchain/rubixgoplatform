@@ -158,25 +158,31 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	}
 	if !resume {
 		didCreate := didm.DIDCreate{
-			Dir:            didDir,
-			Type:           m.DIDType,
-			PrivPWD:        m.PrivPWD,
-			QuorumPWD:      m.QuorumPWD,
-			DIDImgFileName: rubixDir + "DATA/" + d[0].DID + "/DID.png",
-			PubImgFile:     rubixDir + "DATA/" + d[0].DID + "/PublicShare.png",
-			PrivImgFile:    rubixDir + "DATA/" + d[0].DID + "/PrivateShare.png",
+			Dir:       didDir,
+			Type:      m.DIDType,
+			PrivPWD:   m.PrivPWD,
+			QuorumPWD: m.QuorumPWD,
 		}
 
-		_, err = os.Stat(didCreate.DIDImgFileName)
-		if err != nil {
-			c.log.Error("Failed to migrate, missing DID.png file", "err", err)
-			return fmt.Errorf("failed to migrate, missing DID.png file")
+		if didCreate.Type != didm.LightDIDMode {
+			didCreate = didm.DIDCreate{
+				DIDImgFileName: rubixDir + "DATA/" + d[0].DID + "/DID.png",
+				PubImgFile:     rubixDir + "DATA/" + d[0].DID + "/PublicShare.png",
+				PrivImgFile:    rubixDir + "DATA/" + d[0].DID + "/PrivateShare.png",
+			}
+
+			_, err = os.Stat(didCreate.DIDImgFileName)
+			if err != nil {
+				c.log.Error("Failed to migrate, missing DID.png file", "err", err)
+				return fmt.Errorf("failed to migrate, missing DID.png file")
+			}
+			_, err = os.Stat(didCreate.PubImgFile)
+			if err != nil {
+				c.log.Error("Failed to migrate, missing PublicShare.png file", "err", err)
+				return fmt.Errorf("failed to migrate, missing PublicShare.png file")
+			}
 		}
-		_, err = os.Stat(didCreate.PubImgFile)
-		if err != nil {
-			c.log.Error("Failed to migrate, missing PublicShare.png file", "err", err)
-			return fmt.Errorf("failed to migrate, missing PublicShare.png file")
-		}
+
 		did, err = c.d.MigrateDID(&didCreate)
 		if err != nil {
 			c.log.Error("Failed to migrate, failed in creation of new DID address", "err", err, "msg", did)
@@ -646,6 +652,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			fp.Close()
 		}
 	}
+
 	// if len(migrateTokens) > 0 {
 	// 	fp, err := os.Open("migratedtokens.txt")
 	// 	if err == nil {
@@ -655,6 +662,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	// 		fp.Close()
 	// 	}
 	// }
+
 	creditFiles, err := util.GetAllFiles(rubixDir + "Wallet/WALLET_DATA/Credits/")
 	if err != nil {
 		c.log.Error("Failed to migrate, failed to read credit files", "err", err)

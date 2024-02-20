@@ -48,10 +48,16 @@ func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
 }
 
 func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
-	if cfg.Type < did.BasicDIDMode && cfg.Type > did.WalletDIDMode {
+	if cfg.Type < did.LightDIDMode && cfg.Type > did.WalletDIDMode {
 		return "Invalid DID mode", false
 	}
 	switch cfg.Type {
+	case did.LightDIDMode:
+		if !strings.Contains(cfg.PubKeyFile, did.PubKeyFileName) {
+			util.Filecopy(cfg.PubKeyFile, did.PubKeyFileName)
+			cfg.PubKeyFile = did.PubKeyFileName
+		}
+
 	case did.BasicDIDMode:
 		if cfg.ImgFile == "" {
 			c.log.Error("Image file requried")
@@ -123,15 +129,19 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 	fields := make(map[string]string)
 	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
-	if cfg.ImgFile != "" {
-		files["image"] = cfg.ImgFile
+
+	if cfg.Type != did.LightDIDMode {
+		if cfg.ImgFile != "" {
+			files["image"] = cfg.ImgFile
+		}
+		if cfg.DIDImgFileName != "" {
+			files["did_image"] = cfg.DIDImgFileName
+		}
+		if cfg.PubImgFile != "" {
+			files["pub_image"] = cfg.PubImgFile
+		}
 	}
-	if cfg.DIDImgFileName != "" {
-		files["did_image"] = cfg.DIDImgFileName
-	}
-	if cfg.PubImgFile != "" {
-		files["pub_image"] = cfg.PubImgFile
-	}
+
 	if cfg.PubKeyFile != "" {
 		files["pub_key"] = cfg.PubKeyFile
 	}
@@ -150,24 +160,33 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 }
 
 func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
-	if dc.Type < did.BasicDIDMode && dc.Type > did.WalletDIDMode {
+	if dc.Type < did.LightDIDMode && dc.Type > did.WalletDIDMode {
 		return "Invalid DID mode", false
 	}
-	if !strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
-		!strings.Contains(dc.DIDImgFileName, did.DIDImgFileName) ||
-		!strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
-		!strings.Contains(dc.QuorumPubKeyFile, did.QuorumPubKeyFileName) ||
-		!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) {
-		return "Required files are missing", false
-	}
+
 	switch dc.Type {
+	case did.LightDIDMode:
+		if !strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
+			!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) {
+			return "Required files are missing", false
+		}
 	case did.BasicDIDMode:
 		if !strings.Contains(dc.PrivImgFile, did.PvtShareFileName) ||
+			!strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
+			!strings.Contains(dc.DIDImgFileName, did.DIDImgFileName) ||
+			!strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
+			!strings.Contains(dc.QuorumPubKeyFile, did.QuorumPubKeyFileName) ||
+			!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) ||
 			!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) {
 			return "Required files are missing", false
 		}
 	case did.StandardDIDMode:
-		if !strings.Contains(dc.PrivImgFile, did.PvtShareFileName) {
+		if !strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
+			!strings.Contains(dc.DIDImgFileName, did.DIDImgFileName) ||
+			!strings.Contains(dc.PrivImgFile, did.PvtShareFileName) ||
+			!strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
+			!strings.Contains(dc.QuorumPubKeyFile, did.QuorumPubKeyFileName) ||
+			!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) {
 			return "Required files are missing", false
 		}
 	}
@@ -179,27 +198,32 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 	fields := make(map[string]string)
 	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
-	if dc.PubImgFile != "" {
-		files["pub_image"] = dc.PubImgFile
+
+	if dc.Type != did.LightDIDMode {
+		if dc.PubImgFile != "" {
+			files["pub_image"] = dc.PubImgFile
+		}
+		if dc.DIDImgFileName != "" {
+			files["did_image"] = dc.DIDImgFileName
+		}
+		if dc.PrivImgFile != "" {
+			files["priv_image"] = dc.PrivImgFile
+		}
+		if dc.QuorumPubKeyFile != "" {
+			files["quorum_pub_key"] = dc.QuorumPubKeyFile
+		}
+		if dc.QuorumPrivKeyFile != "" {
+			files["quorum_priv_key"] = dc.QuorumPrivKeyFile
+		}
 	}
-	if dc.DIDImgFileName != "" {
-		files["did_image"] = dc.DIDImgFileName
-	}
-	if dc.PrivImgFile != "" {
-		files["priv_image"] = dc.PrivImgFile
-	}
+
 	if dc.PubKeyFile != "" {
 		files["pub_key"] = dc.PubKeyFile
 	}
 	if dc.PrivKeyFile != "" {
 		files["priv_key"] = dc.PrivKeyFile
 	}
-	if dc.QuorumPubKeyFile != "" {
-		files["quorum_pub_key"] = dc.QuorumPubKeyFile
-	}
-	if dc.QuorumPrivKeyFile != "" {
-		files["quorum_priv_key"] = dc.QuorumPrivKeyFile
-	}
+
 	var br model.BasicResponse
 	err = c.sendMutiFormRequest("POST", setup.APISetupDID, nil, fields, files, &br)
 	if err != nil {
