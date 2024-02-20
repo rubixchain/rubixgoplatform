@@ -1,55 +1,112 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
-	"strconv"
+	"os"
+	"path/filepath"
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 // ShowAccount godoc
-// @Summary      Create NFT
-// @Description  This API will create new NFT
+// @Summary      Mint NFT
+// @Description  This API will Mint new NFT
 // @Tags         NFT
 // @Accept       mpfd
 // @Produce      mpfd
-// @Param        UserInfo      	   formData      string  false  "User/Entity Info"
-// @Param        FileInfo    	   formData      string  false  "File Info is json string {"FileHash" : "asja", "FileURL": "ass", "FileTransInfo": "asas"}"
-// @Param        FileContent       formData      file    false  "File to be committed"
+// @Param        did formData string  true  "DID"
+// @Param        digitalAssetPath formData file  true  "Location of the digital Asset"
+// @Param        digitalAssetAttributeFilePath formData file true  "Location of the Attribute.json file of the digital asset"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/createnft [post]
-func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
-	var nr core.NFTReq
+// @Router       /api/mintnft [post]
+func (s *Server) APIMintNFT(req *ensweb.Request) *ensweb.Result {
+	var mintNFT core.MintNFTRequest
 	var err error
-	nr.DID = s.GetQuerry(req, "did")
-	nr.NumTokens = 1
-	numTokens := s.GetQuerry(req, "numTokens")
-	if numTokens != "" {
-		nt, err := strconv.ParseInt(numTokens, 10, 32)
-		if err == nil {
-			nr.NumTokens = int(nt)
-		}
-	}
-	nr.FolderName, err = s.c.CreateTempFolder()
+	mintNFT.NFTPath, err = s.c.CreateFolder("NFT") //create temp NFT folder
 	if err != nil {
-		s.log.Error("failed to create folder", "err", err)
-		return s.BasicResponse(req, false, "failed to create folder", nil)
-	}
-	nr.FileNames, nr.Fields, err = s.ParseMultiPartForm(req, nr.FolderName+"/")
-
-	if err != nil {
-		s.log.Error("Create data token failed, failed to parse request", "err", err)
-		return s.BasicResponse(req, false, "Create data token failed, failed to parse request", nil)
+		s.log.Error("Mint NFT failed, failed to create nft folder", "err", err)
+		return s.BasicResponse(req, false, "Mint NFT failed, failed to create NFT folder", nil)
 	}
 
-	if !s.validateDIDAccess(req, nr.DID) {
-		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	//read and upload the digital asset file
+	digitalAssetFile, digitalAssetHeader, err := s.ParseMultiPartFormFile(req, "digitalAssetPath")
+	if err != nil {
+		s.log.Error("Mint NFT failed, failed to retrieve Digital Asset File", "err", err)
+		return s.BasicResponse(req, false, "Mint NFT failed, failed to retrieve Digital Asset File", nil)
 	}
+
+	digitalAssetDest := filepath.Join(mintNFT.NFTPath, digitalAssetHeader.Filename)
+	digitalAssetDestFile, err := os.Create(digitalAssetDest)
+	if err != nil {
+		digitalAssetFile.Close()
+		s.log.Error("Mint NFT failed, failed to create Digital Asset file", "err", err)
+		return s.BasicResponse(req, false, "Mint NFT failed, failed to create Digital Asset file", nil)
+	}
+	digitalAssetFile.Close()
+	digitalAssetDestFile.Close()
+
+	err = os.Rename(digitalAssetFile.Name(), digitalAssetDest)
+	if err != nil {
+		digitalAssetFile.Close()
+		s.log.Error("Mint NFT failed, failed to move Digital Asset file", "err", err)
+		return s.BasicResponse(req, false, "Mint NFT failed, failed to move Digital Asset file", nil)
+	}
+
+	//read and upload the digital asset attribute file
+	digitalAssetAttributeFile, digitalAssetAttributeHeader, err := s.ParseMultiPartFormFile(req, "digitalAssetAttributeFilePath")
+	if err != nil {
+		s.log.Error("Mint NFT failed, failed to retrieve Digital Asset Attribute File", "err", err)
+		return s.BasicResponse(req, false, "Mint NFT failed, failed to retrieve Digital Asset Attribute nFile", nil)
+	}
+
+	digitalAssetAttributeDest := filepath.Join(mintNFT.NFTPath, digitalAssetAttributeHeader.Filename)
+	digitalAssetAttributeDestFile, err := os.Create(digitalAssetAttributeDest)
+	if err != nil {
+		digitalAssetFile.Close()
+		s.log.Error("Mint NFT failed, failed to create Digital Asset Attribute file", "err", err)
+		return s.BasicResponse(req, false, "Mint NFT failed, failed to create Digital Asset Attribute file", nil)
+	}
+
+	digitalAssetAttributeFile.Close()
+	digitalAssetAttributeDestFile.Close()
+
+	err = os.Rename(digitalAssetAttributeFile.Name(), digitalAssetAttributeDest)
+	if err != nil {
+		digitalAssetFile.Close()
+		s.log.Error("Mint NFT failed, failed to move Digital Asset Attribute file", "err", err)
+		return s.BasicResponse(req, false, "Mint NFT failed, failed to move Digital Asset Attribute file", nil)
+	}
+
+	//close all files
+	digitalAssetDestFile.Close()
+	digitalAssetAttributeDestFile.Close()
+	digitalAssetFile.Close()
+	digitalAssetAttributeFile.Close()
+
+	//add the paths of the temporary folder where the files have been stored
+	mintNFT.DigitalAssetPath = digitalAssetDest
+	mintNFT.DigitalAssetAttributeFile = digitalAssetAttributeDest
+
+	_, did, err := s.ParseMultiPartForm(req, "did")
+	if err != nil {
+		s.log.Error("Mint NFT failed, failed to retrieve DID", "err", err)
+		return s.BasicResponse(req, false, "Mint NFT failed, failed to retrieve DID", nil)
+	}
+
+	mintNFT.DID = did["did"][0]
+	if !s.validateDIDAccess(req, mintNFT.DID) {
+		return s.BasicResponse(req, false, "Ensure you enter the correct DID", nil)
+	}
+
 	s.c.AddWebReq(req)
-	go s.c.CreateNFT(req.ID, &nr)
-	return s.didResponse(req, req.ID)
+	go func() {
+		basicResponse := s.c.MintNFT(req.ID, &mintNFT)
+		fmt.Printf("Basic Response server:  %+v\n", *basicResponse)
+	}()
 
+	return s.BasicResponse(req, true, "NFT minted successfully", nil)
 }
 
 // ShowAccount godoc
