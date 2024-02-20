@@ -2,12 +2,16 @@ package client
 
 import (
 	"fmt"
-	"path"
 
-	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
+
+type MintNFTRequest struct {
+	DID                       string
+	DigitalAssetPath          string
+	DigitalAssetAttributeFile string
+}
 
 type CreateNFTReq struct {
 	DID       string
@@ -18,7 +22,7 @@ type CreateNFTReq struct {
 	Files     []string
 }
 
-func (c *Client) CreateNFT(nt *CreateNFTReq) (*model.BasicResponse, error) {
+/* func (c *Client) CreateNFT(nt *CreateNFTReq) (*model.BasicResponse, error) {
 	fields := make(map[string]string)
 	files := make(map[string]string)
 	if nt.UserID != "" {
@@ -45,8 +49,39 @@ func (c *Client) CreateNFT(nt *CreateNFTReq) (*model.BasicResponse, error) {
 		return nil, err
 	}
 	return &br, nil
-}
+} */
 
+func (c *Client) MintNFT(mintReq *MintNFTRequest) (*model.BasicResponse, error) {
+	fields := make(map[string]string)
+	files := make(map[string]string)
+
+	if mintReq.DigitalAssetPath != "" {
+		files["digitalAssetPath"] = mintReq.DigitalAssetPath
+	}
+	if mintReq.DigitalAssetAttributeFile != "" {
+		files["digitalAssetAttributeFilePath"] = mintReq.DigitalAssetAttributeFile
+	}
+	if mintReq.DID != "" {
+		fields["did"] = mintReq.DID
+	}
+
+	for key, value := range fields {
+		fmt.Printf("Field: %s, Value: %s\n", key, value)
+	}
+
+	for key, value := range files {
+		fmt.Printf("File: %s, Value: %s\n", key, value)
+	}
+
+	var basicResponse model.BasicResponse
+	err := c.sendMutiFormRequest("POST", setup.APIMintNFT, nil, fields, files, &basicResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &basicResponse, nil
+
+}
 func (c *Client) GetAllNFTs(did string) (*model.NFTTokens, error) {
 	q := make(map[string]string)
 	q["did"] = did
