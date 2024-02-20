@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 const (
 	MinQuorumRequired    int = 5
 	MinConsensusRequired int = 5
+	MaxDecimalPoint      int = 3
 )
 const (
 	RBTTransferMode int = iota
@@ -255,6 +257,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	case SmartContractExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
+	}
+	//Minimum pledge value is 0.005 (ie, 0.005/5 = 0.001 per each quorum)
+	if reqPledgeTokens < 0.005 {
+		reqPledgeTokens = 0.005
 	}
 	pd := PledgeDetails{
 		TransferAmount:         reqPledgeTokens,
@@ -818,6 +824,14 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	}
 	return nb, nil
 }
+func Ceilround(num float64) int {
+	return int(math.Ceil(num))
+}
+
+func CeilfloatPrecision(num float64, precision int) float64 {
+	output := math.Pow(10, float64(precision))
+	return float64(Ceilround(num*output)) / output
+}
 
 func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt int) error {
 	if qt == AlphaQuorumType {
@@ -840,11 +854,12 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 		}
 
 		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
+		pledgeTokensPerQuorumPresice := CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPoint)
 
 		// Request pledage token
-		if pd.RemPledgeTokens != 0 {
+		if pd.RemPledgeTokens > 0 {
 			pr := PledgeRequest{
-				TokensRequired: pledgeTokensPerQuorum, // Request the determined number of tokens per quorum
+				TokensRequired: pledgeTokensPerQuorumPresice, // Request the determined number of tokens per quorum
 			}
 			// l := len(pd.PledgedTokens)
 			// for i := pd.NumPledgedTokens; i < l; i++ {
@@ -866,7 +881,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 					if !c.checkIsPledged(ptcb) {
 						pd.NumPledgedTokens++
 						pd.RemPledgeTokens = pd.RemPledgeTokens - prs.TokenValue[i]
-						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, 10)
+						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, MaxDecimalPoint)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
 						pd.TokenList = append(pd.TokenList, t)
@@ -891,7 +906,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			return err
 		}
 
-		if pd.RemPledgeTokens == 0 {
+		if pd.RemPledgeTokens <= 0 {
 			return nil
 		} else if count == 300 {
 			c.log.Error("Unable to pledge token")
