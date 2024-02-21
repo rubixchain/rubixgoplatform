@@ -294,6 +294,10 @@ func (c *Contract) GetComment() string {
 	return c.getTransInfoString(TSCommentKey)
 }
 
+func (c *Contract) GetPinningServiceDID() string {
+	return c.getTransInfoString(TSPinningDIDKey)
+}
+
 func (c *Contract) GetTransTokenInfo() []TokenInfo {
 	tim := util.GetFromMap(c.sm, SCTransInfoKey)
 	if tim == nil {

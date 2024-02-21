@@ -25,11 +25,13 @@ const (
 	TokenChainSyncIssue
 	TokenPledgeIssue
 	TokenIsBeingDoubleSpent
+	TokenIsPinnedAsService
 )
 const (
 	Zero int = iota
 	One
 )
+
 const (
 	RACTestTokenType int = iota
 	RACOldNFTType
@@ -144,7 +146,7 @@ func (w *Wallet) GetWholeTokens(did string, num int) ([]Token, int, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
+	err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=?) AND token_value=?", did, TokenIsFree, TokenIsPinnedAsService, 1.0)
 	if err != nil {
 		return nil, num, err
 	}
@@ -327,7 +329,7 @@ func (w *Wallet) UpdateToken(t *Token) error {
 	return nil
 }
 
-func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block, local bool) error {
+func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block, local bool, pinningServiceMode bool) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// ::TODO:: need to address part & other tokens
@@ -337,13 +339,19 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 		if err != nil {
 			return err
 		}
+		var tokenStatus int
+		if pinningServiceMode {
+			tokenStatus = TokenIsPinnedAsService
+		} else {
+			tokenStatus = TokenIsTransferred
+		}
 		for i := range ti {
 			var t Token
 			err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
 			if err != nil {
 				return err
 			}
-			t.TokenStatus = TokenIsTransferred
+			t.TokenStatus = tokenStatus
 			err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
 			if err != nil {
 				return err
@@ -374,63 +382,82 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 	return nil
 }
 
-func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string) error {
+func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	// TODO :: Needs to be address
-	err := w.CreateTokenBlock(b)
-	if err != nil {
+
+	// Create token block
+	if err := w.CreateTokenBlock(b); err != nil {
 		return err
 	}
 
-	for i := range ti {
+	// Handle each token
+	for _, tokenInfo := range ti {
+		// Check if token already exists
 		var t Token
-		err := w.s.Read(TokenStorage, &t, "token_id=?", ti[i].Token)
+		err := w.s.Read(TokenStorage, &t, "token_id=?", tokenInfo.Token)
 		if err != nil || t.TokenID == "" {
+			// Token doesn't exist, proceed to handle it
 			dir := util.GetRandString()
-			err := util.CreateDir(dir)
-			if err != nil {
-				w.log.Error("Faled to create directory", "err", err)
+			if err := util.CreateDir(dir); err != nil {
+				w.log.Error("Failed to create directory", "err", err)
 				return err
 			}
 			defer os.RemoveAll(dir)
-			err = w.Get(ti[i].Token, did, OwnerRole, dir)
-			if err != nil {
-				w.log.Error("Faled to get token", "err", err)
+
+			// Get the token
+			if err := w.Get(tokenInfo.Token, did, OwnerRole, dir); err != nil {
+				w.log.Error("Failed to get token", "err", err)
 				return err
 			}
-			gb := w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
-			pt := ""
+
+			// Get parent token details
+			var parentTokenID string
+			gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
 			if gb != nil {
-				pt, _, _ = gb.GetParentDetials(ti[i].Token)
+				parentTokenID, _, _ = gb.GetParentDetials(tokenInfo.Token)
 			}
+
+			// Create new token entry
 			t = Token{
-				TokenID:       ti[i].Token,
-				TokenValue:    ti[i].TokenValue,
-				ParentTokenID: pt,
+				TokenID:       tokenInfo.Token,
+				TokenValue:    tokenInfo.TokenValue,
+				ParentTokenID: parentTokenID,
 				DID:           did,
 			}
-			err = w.s.Write(TokenStorage, &t)
-			if err != nil {
+			if err := w.s.Write(TokenStorage, &t); err != nil {
 				return err
 			}
 		}
 
+		// Update token status and pin tokens
+		tokenStatus := TokenIsFree
+		role := OwnerRole
+		if pinningServiceMode {
+			tokenStatus = TokenIsPinnedAsService
+			role = PinningRole
+		}
+
+		// Update token status
 		t.DID = did
-		t.TokenStatus = TokenIsFree
-		err = w.s.Update(TokenStorage, &t, "token_id=?", ti[i].Token)
-		if err != nil {
+		t.TokenStatus = tokenStatus
+		if err := w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token); err != nil {
 			return err
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-		//Pinnig the whole tokens and pat tokens
-		ok, err := w.Pin(ti[i].Token, OwnerRole, did, b.GetTid(), senderAddress, receiverAddress, ti[i].TokenValue)
+
+		// Pin the token
+		ok, err := w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, ti[i].TokenValue)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("failed to pin token")
+			msg := "failed to pin token"
+			if pinningServiceMode {
+				msg = "failed to pin token as Service"
+			}
+			return fmt.Errorf(msg)
 		}
 	}
 	// for i := range pt {

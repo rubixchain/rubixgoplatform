@@ -82,6 +82,7 @@ const (
 	AddExplorerCmd                 string = "addexplorer"
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
+	PinRBTCmd                      string = "pinrbt"
 )
 
 var commands = []string{VersionCmd,
@@ -128,6 +129,7 @@ var commands = []string{VersionCmd,
 	GetSmartContractData,
 	GetPeerID,
 	CheckQuorumStatusCmd,
+	PinRBTCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -249,6 +251,7 @@ type Command struct {
 	links              []string
 	mnemonicFile       string
 	ChildPath          int
+	pinningAddress     string
 }
 
 func showVersion() {
@@ -445,6 +448,7 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 	flag.StringVar(&links, "links", "", "Explorer url")
+	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -602,6 +606,8 @@ func Run(args []string) {
 		cmd.removeExplorer()
 	case GetAllExplorerCmd:
 		cmd.getAllExplorer()
+	case PinRBTCmd:
+		cmd.PinRBT()
 	default:
 		cmd.log.Error("Invalid command")
 	}
