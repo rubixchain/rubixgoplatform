@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -104,24 +105,44 @@ func (d *DIDQuorum_Lt) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []b
 	if !bytes.Equal(cb, db) {
 		return false, fmt.Errorf("failed to verify")
 	}
+
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !crypto.BIPVerify(d.pubKey, []byte(hashPvtSign), pvtKeySIg) {
+
+	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
+	if err != nil {
+		return false, err
+	}
+	pubkeyback, _ := secp256k1.ParsePubKey(pubKey)
+	pubKeySer := pubkeyback.ToECDSA()
+
+	if !crypto.BIPVerify(pubKeySer, []byte(hashPvtSign), pvtKeySIg) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
 }
 func (d *DIDQuorum_Lt) PvtSign(hash []byte) ([]byte, error) {
-	if d.privKey == nil {
-		return nil, fmt.Errorf("private key is not initialized")
-	}
-	ps, err := crypto.BIPSign(d.privKey, hash)
+	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
 		return nil, err
 	}
-	return ps, nil
+	privkeyback := secp256k1.PrivKeyFromBytes(privKey)
+	privKeySer := privkeyback.ToECDSA()
+	pvtKeySign, err := crypto.BIPSign(privKeySer, hash)
+	if err != nil {
+		return nil, err
+	}
+	return pvtKeySign, nil
 }
 func (d *DIDQuorum_Lt) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	if !crypto.BIPVerify(d.pubKey, hash, sign) {
+
+	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
+	if err != nil {
+		return false, err
+	}
+	pubkeyback, _ := secp256k1.ParsePubKey(pubKey)
+	pubKeySer := pubkeyback.ToECDSA()
+
+	if !crypto.BIPVerify(pubKeySer, hash, sign) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil

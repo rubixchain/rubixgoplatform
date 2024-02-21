@@ -48,7 +48,6 @@ type DIDCreate struct {
 	QuorumPubKeyFile  string `json:"quorum_pub_key_file"`
 	QuorumPrivKeyFile string `json:"quorum_priv_key_file"`
 	MnemonicFile      string `json:"mnemonic_file"`
-	mnemonic          string
 }
 
 type DIDSignature struct {

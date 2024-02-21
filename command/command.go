@@ -241,7 +241,6 @@ type Command struct {
 	latest             bool
 	links              []string
 	mnemonicFile       string
-	mnemonic           string
 }
 
 func showVersion() {

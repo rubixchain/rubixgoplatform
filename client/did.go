@@ -167,7 +167,8 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 	switch dc.Type {
 	case did.LightDIDMode:
 		if !strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
-			!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) {
+			!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) ||
+			!strings.Contains(dc.MnemonicFile, did.MnemonicFileName) {
 			return "Required files are missing", false
 		}
 	case did.BasicDIDMode:

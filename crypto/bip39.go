@@ -9,6 +9,8 @@ import (
 
 	"github.com/tyler-smith/go-bip32"
 	"github.com/tyler-smith/go-bip39"
+
+	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 const (
@@ -28,24 +30,13 @@ func BIPGenerateChild(masterKey string, childPath int, pwd string) ([]byte, []by
 	if err != nil {
 		return nil, nil, err
 	}
-	publicKey := privateKey.PublicKey()
-	var pemEncPriv []byte
-	if pwd != "" {
-		encBlock, err := Seal(pwd, []byte(privateKey.Key))
-		if err != nil {
-			return nil, nil, err
-		}
-		_, err = UnSeal(pwd, encBlock)
-		if err != nil {
-			return nil, nil, err
-		}
-		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "ENCRYPTED PRIVATE KEY", Bytes: encBlock})
-	} else {
-		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: []byte(privateKey.Key)})
-	}
-	pemEncPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicKey.Key})
 
-	return pemEncPriv, pemEncPub, nil
+	privKey := secp256k1.PrivKeyFromBytes(privateKey.Key)
+	privkeybyte := privKey.Serialize()
+
+	pubkeybyte := privKey.PubKey().SerializeUncompressed()
+	return privkeybyte, pubkeybyte, nil
+
 }
 
 // Generate BIPMasterKey from Mnemonic and user provided password

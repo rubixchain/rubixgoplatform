@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -56,7 +57,11 @@ func (cmd *Command) CreateDID() {
 			return
 		}
 
-		mnemonic := cmd.mnemonic
+		_mnemonic, err := os.ReadFile(did.MnemonicFileName)
+		if err != nil {
+			cmd.log.Error("failed to read mnemonic file", "err", err)
+		}
+		mnemonic := string(_mnemonic)
 		if mnemonic == "" {
 			mnemonic = crypto.BIPGenerateMnemonic()
 		}
@@ -183,6 +188,7 @@ func (cmd *Command) CreateDID() {
 		DIDImgFileName: cmd.didImgFile,
 		PubImgFile:     cmd.pubImgFile,
 		PubKeyFile:     cmd.pubKeyFile,
+		MnemonicFile:   cmd.mnemonicFile,
 	}
 	msg, status := cmd.c.CreateDID(&cfg)
 	if !status {
@@ -289,14 +295,11 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 			if err != nil {
 				return "Failed to open private key file, " + err.Error(), false
 			}
-			key, _, err := crypto.DecodeKeyPair(password, privKey, nil)
+			privkeyback := secp256k1.PrivKeyFromBytes(privKey)
+			privKeySer := privkeyback.ToECDSA()
+			sig, err := crypto.BIPSign(privKeySer, sr.Hash)
 			if err != nil {
-				return "Failed to decode private key file, " + err.Error(), false
-			}
-			cmd.log.Info("Doing the private key signature")
-			sig, err := crypto.BIPSign(key, sr.Hash)
-			if err != nil {
-				return "Failed to do signature, " + err.Error(), false
+				return "Failed to sign, " + err.Error(), false
 			}
 			sresp.Signature.Signature = sig
 			sresp.Password = password

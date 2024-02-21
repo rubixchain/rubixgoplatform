@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"time"
 
+	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -120,12 +121,10 @@ func (d *DIDLight) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte)
 	if err != nil {
 		return false, err
 	}
-	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
-	if err != nil {
-		return false, err
-	}
+	pubkeyback, _ := secp256k1.ParsePubKey(pubKey)
+	pubKeySer := pubkeyback.ToECDSA()
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !crypto.BIPVerify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
+	if !crypto.BIPVerify(pubKeySer, []byte(hashPvtSign), pvtKeySIg) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
@@ -137,15 +136,9 @@ func (d *DIDLight) PvtSign(hash []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	pwd, err := d.getPassword()
-	if err != nil {
-		return nil, err
-	}
-	PrivateKey, _, err := crypto.DecodeKeyPair(pwd, privKey, nil)
-	if err != nil {
-		return nil, err
-	}
-	pvtKeySign, err := crypto.BIPSign(PrivateKey, hash)
+	privkeyback := secp256k1.PrivKeyFromBytes(privKey)
+	privKeySer := privkeyback.ToECDSA()
+	pvtKeySign, err := crypto.BIPSign(privKeySer, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -158,11 +151,9 @@ func (d *DIDLight) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
-	if err != nil {
-		return false, err
-	}
-	if !crypto.BIPVerify(pubKeyByte, hash, sign) {
+	pubkeyback, _ := secp256k1.ParsePubKey(pubKey)
+	pubKeySer := pubkeyback.ToECDSA()
+	if !crypto.BIPVerify(pubKeySer, hash, sign) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil

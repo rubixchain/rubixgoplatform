@@ -77,13 +77,15 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			return "", err
 		}
 
-		_mnemonic, err := os.ReadFile(MnemonicFileName)
+		_mnemonic, err := os.ReadFile(didCreate.MnemonicFile)
 		if err != nil {
-			d.log.Error("error is here ! failed to read mnemonic file", "err", err)
+			d.log.Debug("failed to read mnemonic file", "err", err)
 		}
-		mnemonic := string(_mnemonic)
-		if mnemonic == "" {
+		var mnemonic string
+		if _mnemonic == nil {
 			mnemonic = crypto.BIPGenerateMnemonic()
+		} else {
+			mnemonic = string(_mnemonic)
 		}
 
 		masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic, didCreate.PrivPWD)
