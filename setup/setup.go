@@ -73,6 +73,7 @@ const (
 	APISelfTransfer                     string = "/api/initiate-self-transfer"
 	APIRunUnpledge                      string = "/api/run-unpledge"
 	APIUnpledgePOWPledgeTokens          string = "/api/unpledge-pow-unpledge-tokens"
+	APIInitiatePinRBT                   string = "/api/initiate-pin-rbt"
 )
 
 // jwt.RegisteredClaims

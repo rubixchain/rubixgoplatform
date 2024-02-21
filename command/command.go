@@ -88,6 +88,7 @@ const (
 	SelfTransferRBT                string = "self-transfer-rbt"
 	RunUnpledge                    string = "run-unpledge"
 	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
+	PinRBTCmd                      string = "pinrbt"
 )
 
 var commands = []string{VersionCmd,
@@ -137,6 +138,7 @@ var commands = []string{VersionCmd,
 	SelfTransferRBT,
 	RunUnpledge,
 	UnpledgePOWPledgeTokens,
+	PinRBTCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -265,6 +267,7 @@ type Command struct {
 	mnemonicFile       string
 	ChildPath          int
 	TokenState         string
+	pinningAddress     string
 }
 
 func showVersion() {
@@ -462,6 +465,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 	flag.StringVar(&links, "links", "", "Explorer url")
 	flag.StringVar(&cmd.TokenState, "tokenstatehash", "", "Give Token State Hash to check state")
+	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -631,6 +635,8 @@ func Run(args []string) {
 		cmd.RunUnpledge()
 	case UnpledgePOWPledgeTokens:
 		cmd.UnpledgePOWBasedPledgedTokens()
+	case PinRBTCmd:
+		cmd.PinRBT()
 	default:
 		cmd.log.Error("Invalid command")
 	}

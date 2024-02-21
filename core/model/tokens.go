@@ -20,6 +20,15 @@ type RBTTransferRequest struct {
 	Password   string  `json:"password"`
 }
 
+type RBTPinRequest struct {
+	PinningNode string  `json:"pinningNode"`
+	Sender      string  `json:"sender"`
+	TokenCount  float64 `json:"tokenCOunt"`
+	Comment     string  `json:"comment"`
+	Type        int     `json:"type"`
+	Password    string  `json:"password"`
+}
+
 type RBTTransferReply struct {
 	BasicResponse
 	Receiver   string `json:"receiver"`

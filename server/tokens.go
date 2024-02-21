@@ -71,6 +71,25 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+// function for Pinning RBT as service
+func (s *Server) APIInitiatePinRBT(req *ensweb.Request) *ensweb.Result {
+	var rbtReq model.RBTPinRequest
+	err := s.ParseJSON(req, &rbtReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	_, did, ok := util.ParseAddress(rbtReq.Sender)
+	if !ok {
+		return s.BasicResponse(req, false, "Invalid sender address", nil)
+	}
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.InitiatePinRBT(req.ID, &rbtReq)
+	return s.didResponse(req, req.ID)
+}
+
 // ShowAccount godoc
 // @Summary      Check account balance
 // @Description  For a mentioned DID, check the account balance

@@ -47,9 +47,9 @@ func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
 
 	unpledgeSequenceInfo := &wallet.UnpledgeSequenceInfo{
 		TransactionID: transactionID,
-		PledgeTokens: pledgeTokenHashesStrArr,
-		Epoch: transactionEpoch,
-		QuorumDID: quorumDID,
+		PledgeTokens:  pledgeTokenHashesStrArr,
+		Epoch:         transactionEpoch,
+		QuorumDID:     quorumDID,
 	}
 
 	err := c.w.AddUnpledgeSequenceInfo(unpledgeSequenceInfo)
@@ -156,6 +156,12 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	ti := sc.GetTransTokenInfo()
 	results := make([]MultiPinCheckRes, len(ti))
 	var wg sync.WaitGroup
+	var receiverPeerId = cr.ReceiverPeerID
+	if receiverPeerId == "" {
+		c.log.Debug("Receiver peer id is nil: checking for pinning node peer id")
+		receiverPeerId = cr.PinningNodePeerID
+		c.log.Debug("Pinning Node Peer Id", receiverPeerId)
+	}
 	for i := range ti {
 		wg.Add(1)
 		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
@@ -516,7 +522,7 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	switch cr.Mode {
-	case RBTTransferMode, SelfTransferMode:
+	case RBTTransferMode, SelfTransferMode, PinningServiceMode:
 		c.log.Debug("RBT consensus started")
 		return c.quorumRBTConsensus(req, did, qdc, &cr)
 	case DTCommitMode:
@@ -741,7 +747,7 @@ func (c *Core) updateReceiverToken(
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
 
-	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, c.ipfs)
+	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, c.ipfs, sr.PinningServiceMode)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
