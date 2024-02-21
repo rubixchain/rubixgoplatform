@@ -7,19 +7,14 @@ import (
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-func BIPtest(t *testing.T, alg CryptoAlgType, pwd string) {
+func BIPtest(t *testing.T, mnemonic string, pwd string) {
 
-	masterKey, err := BIPGenerateMasterKey(&CryptoConfig{Alg: alg, Pwd: pwd})
+	masterKey, err := BIPGenerateMasterKeyFromMnemonic(mnemonic, pwd)
 	if err != nil {
 		t.Fatal("failed to generate key pair", "err", err)
 	}
 
-	masterKeyDecoded, err := BIPDecodeMasterKey(pwd, masterKey)
-	if err != nil {
-		t.Fatal("failed to decode key pair", "err", err)
-	}
-
-	priv, _, err := BIPGenerateChild(string(masterKeyDecoded), 0)
+	priv, _, err := BIPGenerateChild(string(masterKey), 0, pwd)
 	if err != nil {
 		t.Fatal("failed to generate child", "err", err)
 	}
@@ -42,5 +37,6 @@ func BIPtest(t *testing.T, alg CryptoAlgType, pwd string) {
 	}
 }
 func TestBIPKeyGeneration(t *testing.T) {
-	BIPtest(t, BIP39, "test")
+	BIPtest(t, "cup symbol flee find decline market tube border artist clever make plastic unfold chaos float artwork sustain suspect risk process fox decrease west seven", "test")
+	BIPtest(t, "cup symbol flee find decline market tube border artist clever make plastic unfold chaos float artwork sustain suspect risk process fox decrease west seven", "test")
 }

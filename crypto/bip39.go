@@ -19,9 +19,7 @@ const (
 // The child private key is regenerated on demand from master key hence never stored
 // The child public key need to shared with other peers for verification
 // Make sure the path of child is also stored along with public key
-func BIPGenerateChild(masterKey string, childPath int) ([]byte, []byte, error) {
-	var privateKeyBytes []byte
-	var publicKeyBytes []byte
+func BIPGenerateChild(masterKey string, childPath int, pwd string) ([]byte, []byte, error) {
 	masterKeybip32, err := bip32.B58Deserialize(masterKey)
 	if err != nil {
 		return nil, nil, err
@@ -31,9 +29,23 @@ func BIPGenerateChild(masterKey string, childPath int) ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 	publicKey := privateKey.PublicKey()
-	privateKeyBytes = privateKey.Key
-	publicKeyBytes = publicKey.Key
-	return privateKeyBytes, publicKeyBytes, nil
+	var pemEncPriv []byte
+	if pwd != "" {
+		encBlock, err := Seal(pwd, []byte(privateKey.Key))
+		if err != nil {
+			return nil, nil, err
+		}
+		_, err = UnSeal(pwd, encBlock)
+		if err != nil {
+			return nil, nil, err
+		}
+		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "ENCRYPTED PRIVATE KEY", Bytes: encBlock})
+	} else {
+		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: []byte(privateKey.Key)})
+	}
+	pemEncPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicKey.Key})
+
+	return pemEncPriv, pemEncPub, nil
 }
 
 // Generate BIPMasterKey from Mnemonic and user provided password
@@ -43,21 +55,7 @@ func BIPGenerateMasterKeyFromMnemonic(mnemonic string, pwd string) ([]byte, erro
 	seed := bip39.NewSeed(mnemonic, pwd)
 	masterKey, _ := bip32.NewMasterKey(seed)
 	masterkeySeralise = masterKey.B58Serialize()
-	var pemEncPriv []byte
-	if pwd != "" {
-		encBlock, err := Seal(pwd, []byte(masterkeySeralise))
-		if err != nil {
-			return nil, err
-		}
-		_, err = UnSeal(pwd, encBlock)
-		if err != nil {
-			return nil, err
-		}
-		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "ENCRYPTED PRIVATE KEY", Bytes: encBlock})
-	} else {
-		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: []byte(masterkeySeralise)})
-	}
-	return pemEncPriv, nil
+	return []byte(masterkeySeralise), nil
 }
 
 // Generate a random BIP mnemonic in rubix

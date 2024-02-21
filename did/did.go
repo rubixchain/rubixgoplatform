@@ -77,9 +77,9 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			return "", err
 		}
 
-		_mnemonic, err := os.ReadFile(dirName + "/private/" + MnemonicFileName)
+		_mnemonic, err := os.ReadFile(MnemonicFileName)
 		if err != nil {
-			d.log.Error("failed to read mnemonic file", "err", err)
+			d.log.Error("error is here ! failed to read mnemonic file", "err", err)
 		}
 		mnemonic := string(_mnemonic)
 		if mnemonic == "" {
@@ -91,13 +91,8 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			d.log.Error("failed to create keypair", "err", err)
 		}
 
-		masterKeyDecoded, err := crypto.BIPDecodeMasterKey(didCreate.PrivPWD, masterKey)
-		if err != nil {
-			d.log.Error("failed to decode masterkey", "err", err)
-		}
-
 		//generating private and public key pair
-		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKeyDecoded), 0)
+		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKey), 0, didCreate.PrivPWD)
 		if err != nil {
 			d.log.Error("failed to create child", "err", err)
 		}

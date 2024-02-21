@@ -66,12 +66,7 @@ func (cmd *Command) CreateDID() {
 			cmd.log.Error("failed to create keypair", "err", err)
 		}
 
-		masterKeyDecoded, err := crypto.BIPDecodeMasterKey(cmd.privPWD, masterKey)
-		if err != nil {
-			cmd.log.Error("failed to decode masterkey", "err", err)
-		}
-
-		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKeyDecoded), 0)
+		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKey), 0, cmd.privPWD)
 		if err != nil {
 			cmd.log.Error("failed to create child", "err", err)
 		}
@@ -92,8 +87,7 @@ func (cmd *Command) CreateDID() {
 			cmd.log.Error("failed to write public key file", "err", err)
 			return
 		}
-	}
-	if cmd.didType == did.WalletDIDMode {
+	} else if cmd.didType == did.WalletDIDMode {
 		f, err := os.Open(cmd.imgFile)
 		if err != nil {
 			cmd.log.Error("failed to open image", "err", err)
@@ -158,8 +152,7 @@ func (cmd *Command) CreateDID() {
 			cmd.log.Error("failed to create image", "err", err)
 			return
 		}
-	}
-	if cmd.didType != did.BasicDIDMode {
+	} else if cmd.didType != did.BasicDIDMode {
 		if cmd.privKeyFile == "" || cmd.pubKeyFile == "" {
 			cmd.log.Error("private key & public key file names required")
 			return
