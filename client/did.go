@@ -57,7 +57,7 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 			util.Filecopy(cfg.PubKeyFile, did.PubKeyFileName)
 			cfg.PubKeyFile = did.PubKeyFileName
 		}
-
+		cfg.PubKeyFile = ""
 	case did.BasicDIDMode:
 		if cfg.ImgFile == "" {
 			c.log.Error("Image file requried")

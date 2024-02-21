@@ -56,42 +56,6 @@ func (cmd *Command) CreateDID() {
 			cmd.log.Error("private key & public key file names required")
 			return
 		}
-
-		_mnemonic, err := os.ReadFile(did.MnemonicFileName)
-		if err != nil {
-			cmd.log.Error("failed to read mnemonic file", "err", err)
-		}
-		mnemonic := string(_mnemonic)
-		if mnemonic == "" {
-			mnemonic = crypto.BIPGenerateMnemonic()
-		}
-
-		masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic, cmd.privPWD)
-		if err != nil {
-			cmd.log.Error("failed to create keypair", "err", err)
-		}
-
-		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKey), 0, cmd.privPWD)
-		if err != nil {
-			cmd.log.Error("failed to create child", "err", err)
-		}
-
-		err = util.FileWrite(cmd.mnemonicFile, []byte(mnemonic))
-		if err != nil {
-			cmd.log.Error("failed to write mnemonic file", "err", err)
-			return
-		}
-
-		err = util.FileWrite(cmd.privKeyFile, pvtKey)
-		if err != nil {
-			cmd.log.Error("failed to write private key file", "err", err)
-			return
-		}
-		err = util.FileWrite(cmd.pubKeyFile, pubKey)
-		if err != nil {
-			cmd.log.Error("failed to write public key file", "err", err)
-			return
-		}
 	} else if cmd.didType == did.WalletDIDMode {
 		f, err := os.Open(cmd.imgFile)
 		if err != nil {
