@@ -241,6 +241,7 @@ type Command struct {
 	latest             bool
 	links              []string
 	mnemonicFile       string
+	ChildPath          int
 }
 
 func showVersion() {
@@ -382,6 +383,7 @@ func Run(args []string) {
 	flag.StringVar(&peers, "peers", "", "Bootstrap peers, mutiple peers will be seprated by comma")
 	flag.BoolVar(&cmd.didRoot, "didRoot", false, "Root DID")
 	flag.IntVar(&cmd.didType, "didType", 0, "DID Creation type")
+	flag.IntVar(&cmd.ChildPath, "ChildPath", 0, "BIP child Path")
 	flag.StringVar(&cmd.didSecret, "didSecret", "My DID Secret", "DID creation secret")
 	flag.BoolVar(&cmd.forcePWD, "fp", false, "Force password entry")
 	flag.StringVar(&cmd.privPWD, "privPWD", "mypassword", "Private key password")

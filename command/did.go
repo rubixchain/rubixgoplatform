@@ -153,6 +153,7 @@ func (cmd *Command) CreateDID() {
 		PubImgFile:     cmd.pubImgFile,
 		PubKeyFile:     cmd.pubKeyFile,
 		MnemonicFile:   cmd.mnemonicFile,
+		ChildPath:      cmd.ChildPath,
 	}
 	msg, status := cmd.c.CreateDID(&cfg)
 	if !status {
