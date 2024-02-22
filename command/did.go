@@ -259,7 +259,13 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 			if err != nil {
 				return "Failed to open private key file, " + err.Error(), false
 			}
-			privkeyback := secp256k1.PrivKeyFromBytes(privKey)
+
+			Privkey, _, err := crypto.DecodeBIPKeyPair(cmd.privPWD, privKey, nil)
+			if err != nil {
+				return "Failed to decode private key " + err.Error(), false
+			}
+
+			privkeyback := secp256k1.PrivKeyFromBytes(Privkey)
 			privKeySer := privkeyback.ToECDSA()
 			sig, err := crypto.BIPSign(privKeySer, sr.Hash)
 			if err != nil {

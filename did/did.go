@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
+	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	files "github.com/ipfs/go-ipfs-files"
 	"github.com/rubixchain/rubixgoplatform/crypto"
@@ -114,6 +116,41 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		if err != nil {
 			return "", err
 		}
+
+		privKeyTest, err := ioutil.ReadFile(dirName + "/private/" + PvtKeyFileName)
+		if err != nil {
+			return "", err
+		}
+
+		Privkey, _, err := crypto.DecodeBIPKeyPair(didCreate.PrivPWD, privKeyTest, nil)
+		if err != nil {
+			return "", err
+		}
+
+		privkeyback := secp256k1.PrivKeyFromBytes(Privkey)
+		privKeySer := privkeyback.ToECDSA()
+		pvtKeySign, err := crypto.BIPSign(privKeySer, []byte("test"))
+		if err != nil {
+			return "", err
+		}
+		pubKeyTest, err := ioutil.ReadFile(dirName + "/public/" + PubKeyFileName)
+		if err != nil {
+			return "", err
+		}
+
+		_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKeyTest)
+		if err != nil {
+			return "", err
+		}
+
+		pubkeyback, _ := secp256k1.ParsePubKey(pubKeyByte)
+		pubKeySer := pubkeyback.ToECDSA()
+		if !crypto.BIPVerify(pubKeySer, []byte("test"), pvtKeySign) {
+			return "", fmt.Errorf("failed to verify private key singature")
+		} else {
+			fmt.Println(" BIP sign tested successfully")
+		}
+
 		if didCreate.QuorumPWD == "" {
 			if didCreate.PrivPWD != "" {
 				didCreate.QuorumPWD = didCreate.PrivPWD

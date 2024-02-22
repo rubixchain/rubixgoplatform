@@ -121,7 +121,13 @@ func (d *DIDLight) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte)
 	if err != nil {
 		return false, err
 	}
-	pubkeyback, _ := secp256k1.ParsePubKey(pubKey)
+
+	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKey)
+	if err != nil {
+		return false, err
+	}
+
+	pubkeyback, _ := secp256k1.ParsePubKey(pubKeyByte)
 	pubKeySer := pubkeyback.ToECDSA()
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
 	if !crypto.BIPVerify(pubKeySer, []byte(hashPvtSign), pvtKeySIg) {
@@ -136,7 +142,13 @@ func (d *DIDLight) PvtSign(hash []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	privkeyback := secp256k1.PrivKeyFromBytes(privKey)
+
+	Privatekey, _, err := crypto.DecodeBIPKeyPair(d.pwd, privKey, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	privkeyback := secp256k1.PrivKeyFromBytes(Privatekey)
 	privKeySer := privkeyback.ToECDSA()
 	pvtKeySign, err := crypto.BIPSign(privKeySer, hash)
 	if err != nil {
@@ -151,7 +163,13 @@ func (d *DIDLight) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	pubkeyback, _ := secp256k1.ParsePubKey(pubKey)
+
+	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKey)
+	if err != nil {
+		return false, err
+	}
+
+	pubkeyback, _ := secp256k1.ParsePubKey(pubKeyByte)
 	pubKeySer := pubkeyback.ToECDSA()
 	if !crypto.BIPVerify(pubKeySer, hash, sign) {
 		return false, fmt.Errorf("failed to verify private key singature")

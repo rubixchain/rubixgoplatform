@@ -35,8 +35,57 @@ func BIPGenerateChild(masterKey string, childPath int, pwd string) ([]byte, []by
 	privkeybyte := privKey.Serialize()
 
 	pubkeybyte := privKey.PubKey().SerializeUncompressed()
-	return privkeybyte, pubkeybyte, nil
+	var pemEncPriv []byte
+	if pwd != "" {
+		encBlock, err := Seal(pwd, privkeybyte)
+		if err != nil {
+			return nil, nil, err
+		}
+		_, err = UnSeal(pwd, encBlock)
+		if err != nil {
+			return nil, nil, err
+		}
+		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "ENCRYPTED PRIVATE KEY", Bytes: encBlock})
+	} else {
+		pemEncPriv = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privkeybyte})
+	}
+	pemEncPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubkeybyte})
 
+	return pemEncPriv, pemEncPub, nil
+
+}
+
+// GenerateKeyPair will generate key pair based on the configuration
+func DecodeBIPKeyPair(pwd string, privKey []byte, pubKey []byte) ([]byte, []byte, error) {
+	var cryptoPrivKey []byte
+	var cryptoPubKey []byte
+	if privKey != nil {
+		pemBlock, _ := pem.Decode(privKey)
+		if pemBlock == nil {
+			return nil, nil, fmt.Errorf("invalid private key")
+		}
+		if pemBlock.Type == "ENCRYPTED PRIVATE KEY" {
+			if pwd == "" {
+				return nil, nil, fmt.Errorf("key is encrypted need password to decrypt")
+			}
+			decData, err := UnSeal(pwd, pemBlock.Bytes)
+			if err != nil {
+				return nil, nil, fmt.Errorf("key is invalid or password is wrong")
+			}
+			cryptoPrivKey = decData
+		} else {
+			cryptoPrivKey = pemBlock.Bytes
+		}
+	}
+	if pubKey != nil {
+		pemBlock, _ := pem.Decode(pubKey)
+		if pemBlock == nil {
+			return nil, nil, fmt.Errorf("invalid public key")
+		}
+		cryptoPubKey = pemBlock.Bytes
+	}
+
+	return cryptoPrivKey, cryptoPubKey, nil
 }
 
 // Generate BIPMasterKey from Mnemonic and user provided password

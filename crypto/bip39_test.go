@@ -19,14 +19,19 @@ func BIPtest(t *testing.T, mnemonic string, pwd string) {
 		t.Fatal("failed to generate child", "err", err)
 	}
 
+	privkey, pubkey, err := DecodeBIPKeyPair(pwd, priv, pub)
+	if err != nil {
+		t.Fatal("failed to decode key pair", "err", err)
+	}
+
 	data, err := GetRandBytes(rand.Reader, 20)
 	if err != nil {
 		t.Fatal("failed to generate random number", "err", err)
 	}
 
-	privkeyback := secp256k1.PrivKeyFromBytes(priv)
+	privkeyback := secp256k1.PrivKeyFromBytes(privkey)
 	privKeySer := privkeyback.ToECDSA()
-	pubkeyback, _ := secp256k1.ParsePubKey(pub)
+	pubkeyback, _ := secp256k1.ParsePubKey(pubkey)
 	pubKeySer := pubkeyback.ToECDSA()
 
 	sig, err := BIPSign(privKeySer, data)
