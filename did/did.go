@@ -96,7 +96,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		}
 
 		//generating private and public key pair
-		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKey), 0, didCreate.PrivPWD)
+		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKey), didCreate.ChildPath, didCreate.PrivPWD)
 		if err != nil {
 			d.log.Error("failed to create child", "err", err)
 		}

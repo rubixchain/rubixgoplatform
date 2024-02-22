@@ -121,6 +121,10 @@ This following options are used for this command
         DID private key file name (default "pvtKey.pem")
   -pubKeyFile string
         DID public key file name (default "pubKey.pem")
+  -mnemonicKeyFile string
+        Mnemonic key file (default "mnemonic.txt")
+  -ChildPath int
+        BIP Child Path (default 0)
   -fp forcepassword
         This flag prompts to enter the password in terminal
 
