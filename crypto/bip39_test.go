@@ -45,5 +45,5 @@ func BIPtest(t *testing.T, mnemonic string, pwd string) {
 }
 func TestBIPKeyGeneration(t *testing.T) {
 	BIPtest(t, "cup symbol flee find decline market tube border artist clever make plastic unfold chaos float artwork sustain suspect risk process fox decrease west seven", "test")
-	BIPtest(t, "cup symbol flee find decline market tube border artist clever make plastic unfold chaos float artwork sustain suspect risk process fox decrease west seven", "test")
+	BIPtest(t, "cub symbol flee find decline market tube border artist clever make plastic unfold chaos float artwork sustain suspect risk process fox decrease west seven", "test")
 }

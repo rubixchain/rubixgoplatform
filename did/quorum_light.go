@@ -113,15 +113,12 @@ func (d *DIDQuorum_Lt) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []b
 		return false, err
 	}
 
-	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKey)
+	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
 	if err != nil {
 		return false, err
 	}
 
-	pubkeyback, _ := secp256k1.ParsePubKey(pubKeyByte)
-	pubKeySer := pubkeyback.ToECDSA()
-
-	if !crypto.BIPVerify(pubKeySer, []byte(hashPvtSign), pvtKeySIg) {
+	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
