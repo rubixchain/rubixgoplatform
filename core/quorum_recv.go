@@ -761,7 +761,9 @@ func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
+	c.log.Debug("incoming request for pledge finlaity")
 	did := c.l.GetQuerry(req, "did")
+	c.log.Debug("DID from query", did)
 	var ur UpdatePledgeRequest
 	err := c.l.ParseJSON(req, &ur)
 	crep := model.BasicResponse{
@@ -774,6 +776,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	dc, ok := c.qc[did]
 	if !ok {
+		c.log.Debug("did crypto initilisation failed")
 		c.log.Error("Failed to setup quorum crypto")
 		crep.Message = "Failed to setup quorum crypto"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)

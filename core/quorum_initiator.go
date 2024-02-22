@@ -550,6 +550,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 }
 
 func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block) error {
+	c.log.Debug("Proceeding for pledge finality")
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
 	cs, ok2 := c.quorumRequest[cr.ReqID]
