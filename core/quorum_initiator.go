@@ -569,13 +569,27 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block) 
 			c.log.Error("Invalid pledge request")
 			return fmt.Errorf("invalid pledge request")
 		}
+		var qAddress string
+		for _, quorumValue := range cr.QuorumList {
+			// Check if the value of p.GetPeerDID() exists in the QuorumList as a substring
+			if strings.Contains(quorumValue, p.GetPeerDID()) {
+				qAddress = quorumValue
+			}
+		}
+		qPeer, err := c.getPeer(qAddress)
+		if err != nil {
+			c.log.Error("Quorum not connected", "err", err)
+			return err
+		}
+		defer qPeer.Close()
 		var br model.BasicResponse
 		ur := UpdatePledgeRequest{
 			Mode:            cr.Mode,
 			PledgedTokens:   v,
 			TokenChainBlock: newBlock.GetBlock(),
 		}
-		err := p.SendJSONRequest("POST", APIUpdatePledgeToken, nil, &ur, &br, true)
+
+		err = qPeer.SendJSONRequest("POST", APIUpdatePledgeToken, nil, &ur, &br, true)
 		if err != nil {
 			c.log.Error("Failed to update pledge token status", "err", err)
 			return fmt.Errorf("failed to update pledge token status")
