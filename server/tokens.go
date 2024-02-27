@@ -72,6 +72,26 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 }
 
 // function for Pinning RBT as service
+
+type RBTPinRequestSwaggoInput struct {
+	PinningNode string  `json:"pinningNode"`
+	Sender      string  `json:"sender"`
+	TokenCount  float64 `json:"tokenCOunt"`
+	Comment     string  `json:"comment"`
+	Type        int     `json:"type"`
+}
+
+// ShowAccount godoc
+// @Summary     Initiate Pin RBT
+// @Description This API will pin rbt in the Pinning node on behalf of the sender
+// @Tags        Account
+// @ID 			initiate-pin-rbt
+// @Accept      json
+// @Produce     json
+// @Param 		input body RBTPinRequestSwaggoInput true "Intitate Pin RBT"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/initiate-pin-rbt [post]
+
 func (s *Server) APIInitiatePinRBT(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTPinRequest
 	err := s.ParseJSON(req, &rbtReq)
