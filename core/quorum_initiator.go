@@ -286,7 +286,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	reqPledgeTokens := float64(0)
 	// TODO:: Need to correct for part tokens
 	switch cr.Mode {
-	case RBTTransferMode, NFTSaleContractMode:
+	case RBTTransferMode, NFTSaleContractMode, PinningServiceMode:
 		ti := sc.GetTransTokenInfo()
 		for i := range ti {
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
@@ -507,7 +507,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		return &td, pl, nil
 	} else if cr.Mode == PinningServiceMode {
-		c.log.Info("Mode: PinningServiceMode ")
+		c.log.Debug("Mode = PinningServiceMode ")
 		c.log.Debug("Pinning Node PeerId", cr.PinningNodePeerID)
 		c.log.Debug("Pinning Service DID", sc.GetPinningServiceDID())
 		rp, err := c.getPeer(cr.PinningNodePeerID + "." + sc.GetPinningServiceDID())
@@ -523,6 +523,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			QuorumList:         cr.QuorumList,
 			PinningServiceMode: true,
 		}
+		c.log.Debug("Send Token Request", sr)
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
 		if err != nil {
@@ -537,63 +538,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, err
-		} else if cr.Mode == PinningServiceMode {
-			c.log.Debug("Mode = PinningServiceMode ")
-			c.log.Debug("Pinning Node PeerId", cr.PinningNodePeerID)
-			c.log.Debug("Pinning Service DID", sc.GetPinningServiceDID())
-			rp, err := c.getPeer(cr.PinningNodePeerID + "." + sc.GetPinningServiceDID())
-			if err != nil {
-				c.log.Error("Pinning Node not connected", "err", err)
-				return nil, nil, err
-			}
-			defer rp.Close()
-			sr := SendTokenRequest{
-				Address:            cr.SenderPeerID + "." + sc.GetSenderDID(),
-				TokenInfo:          ti,
-				TokenChainBlock:    nb.GetBlock(),
-				QuorumList:         cr.QuorumList,
-				PinningServiceMode: true,
-			}
-			var br model.BasicResponse
-			err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
-			if err != nil {
-				c.log.Error("Unable to send tokens to receiver", "err", err)
-				return nil, nil, err
-			}
-			if !br.Status {
-				c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
-				return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
-			}
-			err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), true)
-			if err != nil {
-				c.log.Error("Failed to transfer tokens", "err", err)
-				return nil, nil, err
-			}
-			//Commented out this unpinning part so that the unpin is not done from the sender side
-			// for _, t := range ti {
-			// 	c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
-			// }
-			//call ipfs repo gc after unpinnning
-			// c.ipfsRepoGc()
-			nbid, err := nb.GetBlockID(ti[0].Token)
-			if err != nil {
-				c.log.Error("Failed to get block id", "err", err)
-				return nil, nil, err
-			}
-
-			td := wallet.TransactionDetails{
-				TransactionID:   tid,
-				TransactionType: nb.GetTransType(),
-				BlockID:         nbid,
-				Mode:            wallet.SendMode,
-				SenderDID:       sc.GetSenderDID(),
-				ReceiverDID:     sc.GetPinningServiceDID(),
-				Comment:         sc.GetComment(),
-				DateTime:        time.Now(),
-				Status:          true,
-			}
-			return &td, pl, nil
 		}
+		//Commented out this unpinning part so that the unpin is not done from the sender side
+		// for _, t := range ti {
+		// 	c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+		// }
+		//call ipfs repo gc after unpinnning
+		// c.ipfsRepoGc()
 		nbid, err := nb.GetBlockID(ti[0].Token)
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
@@ -1161,6 +1112,17 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SmartContract:     sc.GetBlock(),
 			PledgeDetails:     ptds,
 			SmartContractData: sc.GetSmartContractData(),
+		}
+	} else if cr.Mode == PinningServiceMode {
+		bti.SenderDID = sc.GetSenderDID()
+		bti.PinningNodeDID = sc.GetPinningServiceDID()
+		tcb = block.TokenChainBlock{
+			TransactionType: block.TokenPinnedAsService,
+			TokenOwner:      sc.GetSenderDID(),
+			TransInfo:       bti,
+			QuorumSignature: credit,
+			SmartContract:   sc.GetBlock(),
+			PledgeDetails:   ptds,
 		}
 	} else {
 		bti.SenderDID = sc.GetSenderDID()
