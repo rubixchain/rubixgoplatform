@@ -43,6 +43,7 @@ const (
 	TIDeployerDIDKey    string = "8"
 	TIExecutorDIDKey    string = "9"
 	TICommitedTokensKey string = "10"
+	TIPinningDIDKey     string = "11"
 )
 
 const (
@@ -123,6 +124,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	}
 	if ti.ReceiverDID != "" {
 		ntib[TIReceiverDIDKey] = ti.ReceiverDID
+	}
+	if ti.PinningNodeDID != "" {
+		ntib[TIPinningDIDKey] = ti.PinningNodeDID
 	}
 	if ti.DeployerDID != "" {
 		ntib[TIDeployerDIDKey] = ti.DeployerDID

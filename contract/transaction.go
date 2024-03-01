@@ -44,12 +44,12 @@ const (
 )
 
 type TokenInfo struct {
-	Token          string  `json:"token"`
-	TokenType      int     `json:"tokenType"`
-	TokenValue     float64 `json:"tokenValue"`
-	OwnerDID       string  `json:"ownerDID"`
-	PinningNodeDID string  `json:"pinningNodeDID"`
-	BlockID        string  `json:"blockID"`
+	Token      string  `json:"token"`
+	TokenType  int     `json:"tokenType"`
+	TokenValue float64 `json:"tokenValue"`
+	OwnerDID   string  `json:"ownerDID"`
+
+	BlockID string `json:"blockID"`
 }
 
 type PinInfo struct {
