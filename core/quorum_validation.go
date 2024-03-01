@@ -222,11 +222,14 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
 		}
 		c.log.Info("Validating token ownership", "token", ti[i].Token, "owner", b.GetOwner(), "sender", sc.GetSenderDID())
-		for _, token := range ti {
-			ownerDID := token.OwnerDID
-			c.log.Debug("OwnerDID:", ownerDID)
-			if ownerDID != sc.GetSenderDID() {
-				c.log.Error("Invalid token owner : The token is Pinned as a service", "owner", b.GetOwner(), "The node which is trying to transfer", sc.GetSenderDID())
+		pinningNodeDID := b.GetPinningNodeDID()
+		ownerDID := b.GetOwner()
+		senderDID := sc.GetSenderDID()
+
+		if pinningNodeDID != "" {
+			c.log.Info("The token is Pinned as a service on Node ", pinningNodeDID)
+			if ownerDID != senderDID {
+				c.log.Error("Invalid token owner: The token is Pinned as a service", "owner", ownerDID, "The node which is trying to transfer", senderDID)
 				return false
 			}
 		}

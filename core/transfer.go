@@ -415,12 +415,11 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 		}
 		//OwnerDID will be the same as the sender, so that ownership is not changed.
 		ti := contract.TokenInfo{
-			Token:          wt[i].TokenID,
-			TokenType:      tt,
-			TokenValue:     wt[i].TokenValue,
-			OwnerDID:       did,
-			PinningNodeDID: wt[i].DID,
-			BlockID:        bid,
+			Token:      wt[i].TokenID,
+			TokenType:  tt,
+			TokenValue: wt[i].TokenValue,
+			OwnerDID:   did,
+			BlockID:    bid,
 		}
 
 		tis = append(tis, ti)

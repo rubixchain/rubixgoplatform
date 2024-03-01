@@ -606,6 +606,9 @@ func (b *Block) GetReceiverDID() string {
 func (b *Block) GetDeployerDID() string {
 	return b.getTrasnInfoString(TIDeployerDIDKey)
 }
+func (b *Block) GetPinningNodeDID() string {
+	return b.getTrasnInfoString(TIPinningDIDKey)
+}
 
 func (b *Block) GetExecutorDID() string {
 	return b.getTrasnInfoString(TIExecutorDIDKey)
