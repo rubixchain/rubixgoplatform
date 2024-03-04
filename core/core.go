@@ -526,7 +526,7 @@ func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
 		return nil, err
 	}
 
-	return did.InitDIDLight(didStr, c.didDir, nil), nil
+	return did.InitDIDBasic(didStr, c.didDir, nil), nil
 
 }
 
@@ -535,24 +535,7 @@ func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 	if err != nil {
 		return nil, err
 	}
-	dt, err := c.w.GetDID(didStr)
-	if err != nil {
-		c.log.Error("DID does not exist", "did", didStr)
-		return nil, fmt.Errorf("DID does not exist")
-	}
-
-	//To support NLSS backward compatibility,
-	//If the Quorum's did is created in light mode,
-	//it will initiate DIDQuorum_Lt, and if  it is in basic mode,
-	//it will initiate DIDQuorumc
-	switch dt.Type {
-	case did.LightDIDMode:
-		return did.InitDIDQuorum_Lt(didStr, c.didDir, ""), nil
-	case did.BasicDIDMode:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	default:
-		return nil, fmt.Errorf("DID Type is not supported")
-	}
+	return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 
 }
 

@@ -102,7 +102,7 @@ This following options are used for this command
   -port string
         Server/Host port (default "20000")
   -didType int
-        DID type (0-Light Mode, 1-Basic Mode, 2-Standard Mode, 3-Wallet Mode) (default 0)
+        DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode, 3-Light Mode) (default 0)
   -didSecret string
         DID secret (default "My DID Secret")
   -privPWD string

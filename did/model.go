@@ -1,10 +1,10 @@
 package did
 
 const (
-	LightDIDMode int = iota
-	BasicDIDMode
+	BasicDIDMode int = iota
 	StandardDIDMode
 	WalletDIDMode
+	LightDIDMode
 	ChildDIDMode
 )
 
