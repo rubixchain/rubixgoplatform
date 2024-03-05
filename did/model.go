@@ -4,8 +4,8 @@ const (
 	BasicDIDMode int = iota
 	StandardDIDMode
 	WalletDIDMode
-	LightDIDMode
 	ChildDIDMode
+	LightDIDMode
 )
 
 const (
