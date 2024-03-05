@@ -102,7 +102,7 @@ This following options are used for this command
   -port string
         Server/Host port (default "20000")
   -didType int
-        DID type (0-Light Mode, 1-Basic Mode, 2-Standard Mode, 3-Wallet Mode) (default 0)
+        DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode, 3-Child Mode, Light Mode) (default 0)
   -didSecret string
         DID secret (default "My DID Secret")
   -privPWD string
@@ -124,7 +124,7 @@ This following options are used for this command
   -fp forcepassword
         This flag prompts to enter the password in terminal
 
-   _Note: Use Light mode for PKI based authentication with backward compatiblity to PKI+NLSS based sign, and Basic mode for PKI+NLSS based authentication._
+   Note: Use Light mode for PKI based authentication, and Basic mode for PKI+NLSS based authentication.
 ```
 Get All DID Command
 : To get all DID use this command.
