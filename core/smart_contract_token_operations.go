@@ -165,6 +165,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		TokenIDs:    tokens,
 		QuorumList:  conensusRequest.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
+		BlockHash:   txnDetails.BlockID,
 	}
 	c.ec.ExplorerTransaction(explorerTrans)
 
@@ -303,6 +304,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		TokenIDs:    tokens,
 		QuorumList:  conensusRequest.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
+		BlockHash:   txnDetails.BlockID,
 	}
 	c.ec.ExplorerTransaction(explorerTrans)
 	/* newEvent := model.NewContractEvent{
