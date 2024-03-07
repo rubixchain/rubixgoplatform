@@ -143,6 +143,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		TokenIDs:    wta,
 		QuorumList:  cr.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
+		BlockHash:   td.BlockID,
 	}
 	c.ec.ExplorerTransaction(etrans)
 	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)

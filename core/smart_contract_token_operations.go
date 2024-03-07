@@ -298,7 +298,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	tokens = append(tokens, executeReq.SmartContractToken)
 	explorerTrans := &ExplorerTrans{
 		TID:         txnDetails.TransactionID,
-		DeployerDID: did,
+		ExecutorDID: did,
 		TrasnType:   conensusRequest.Type,
 		TokenIDs:    tokens,
 		QuorumList:  conensusRequest.QuorumList,
