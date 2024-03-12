@@ -57,7 +57,7 @@ func (c *Core) GetTxnDetailsByDID(did string, role string, startDate string, end
 					// Return an error response or handle it accordingly
 				}
 			}
-			return FilterTxnDetailsByDateRange(result, startTime, endTime), nil
+			return c.FilterTxnDetailsByDateRange(result, startTime, endTime), nil
 		}
 
 	}
@@ -91,7 +91,7 @@ func (c *Core) GetTxnDetailsByComment(comment string) ([]wallet.TransactionDetai
 }
 
 // FilterTxnDetailsByDateRange filters TransactionDetails by a date range.
-func FilterTxnDetailsByDateRange(transactions []wallet.TransactionDetails, startTime time.Time, endTime time.Time) []wallet.TransactionDetails {
+func (c *Core) FilterTxnDetailsByDateRange(transactions []wallet.TransactionDetails, startTime time.Time, endTime time.Time) []wallet.TransactionDetails {
 	var filteredTransactions []wallet.TransactionDetails
 
 	for _, txn := range transactions {
@@ -101,4 +101,21 @@ func FilterTxnDetailsByDateRange(transactions []wallet.TransactionDetails, start
 	}
 
 	return filteredTransactions
+}
+
+func (c *Core) GetCountofTxn(did string) (wallet.TransactionCount, error) {
+	result := wallet.TransactionCount{
+		DID: did,
+	}
+	txnAsSender, err := c.w.GetTransactionBySender(did)
+	if err != nil && err.Error() != "no records found" {
+		return result, err
+	}
+	txnAsReceiver, err := c.w.GetTransactionByReceiver(did)
+	if err != nil && err.Error() != "no records found" {
+		return result, err
+	}
+	result.TxnSend = len(txnAsSender)
+	result.TxnReceived = len(txnAsReceiver)
+	return result, nil
 }

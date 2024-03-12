@@ -26,6 +26,12 @@ type TransactionDetails struct {
 	DeployerDID     string    `gorm:"column:deployer_did"`
 }
 
+type TransactionCount struct {
+	DID         string
+	TxnSend     int
+	TxnReceived int
+}
+
 func (w *Wallet) AddTransactionHistory(td *TransactionDetails) error {
 	err := w.s.Write(TransactionStorage, td)
 	if err != nil {

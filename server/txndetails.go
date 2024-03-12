@@ -5,6 +5,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -157,4 +158,41 @@ func (s *Server) APIGetTxnByComment(req *ensweb.Request) *ensweb.Result {
 	}
 
 	return s.RenderJSON(req, &td, http.StatusOK)
+}
+
+// @Summary Get count of incoming and outgoing txns of the DID ins a node
+// @Description Get count of incoming and outgoing txns of the DID ins a node.
+// @ID get-txn-details-by-node
+// @Tags         Account
+// @Accept json
+// @Produce json
+// @Success 200 {object} model.TxnCountForDID
+// @Router /api/get-by-node [get]
+func (s *Server) APIGetTxnByNode(req *ensweb.Request) *ensweb.Result {
+	dir, ok := s.validateAccess(req)
+	if !ok {
+		return s.BasicResponse(req, false, "Unathuriozed access", nil)
+	}
+	if s.cfg.EnableAuth {
+		// always expect client token to present
+		token, ok := req.ClientToken.Model.(*setup.BearerToken)
+		if ok {
+			dir = token.DID
+		}
+	}
+	Result := model.TxnCountForDID{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		}}
+	DIDInNode := s.c.GetDIDs(dir)
+	for _, d := range DIDInNode {
+		txnCount, err := s.c.GetCountofTxn(d.DID)
+		if err != nil {
+			Result.BasicResponse.Message = err.Error()
+			return s.RenderJSON(req, &Result, http.StatusOK)
+		}
+		Result.BasicResponse.Status = true
+		Result.TxnCount = append(Result.TxnCount, txnCount)
+	}
+	return s.RenderJSON(req, &Result, http.StatusOK)
 }
