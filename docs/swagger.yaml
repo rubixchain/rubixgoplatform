@@ -423,11 +423,11 @@ paths:
         in: query
         name: Role
         type: string
-      - description: 'Start date of the date range (format: YYYY-MM-DD)'
+      - description: 'Start date of the date range (format: YYYY-MM-DD hh:mm:ss)'
         in: query
         name: StartDate
         type: string
-      - description: 'End date of the date range (format: YYYY-MM-DD)'
+      - description: 'End date of the date range (format: YYYY-MM-DD hh:mm:ss)'
         in: query
         name: EndDate
         type: string

@@ -447,13 +447,13 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Start date of the date range (format: YYYY-MM-DD)",
+                        "description": "Start date of the date range (format: YYYY-MM-DD hh:mm:ss)",
                         "name": "StartDate",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "End date of the date range (format: YYYY-MM-DD)",
+                        "description": "End date of the date range (format: YYYY-MM-DD hh:mm:ss)",
                         "name": "EndDate",
                         "in": "query"
                     }
