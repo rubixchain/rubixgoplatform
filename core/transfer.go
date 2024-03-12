@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/contract"
@@ -134,6 +135,12 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	td.Amount = req.TokenCount
 	td.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(td)
+	blockHash, err := extractHash(td.BlockID)
+	if err != nil {
+		c.log.Error("Consensus failed", "err", err)
+		resp.Message = "Consensus failed" + err.Error()
+		return resp
+	}
 	etrans := &ExplorerTrans{
 		TID:         td.TransactionID,
 		SenderDID:   did,
@@ -143,7 +150,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		TokenIDs:    wta,
 		QuorumList:  cr.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
-		BlockHash:   td.BlockID,
+		BlockHash:   blockHash,
 	}
 	c.ec.ExplorerTransaction(etrans)
 	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
@@ -151,4 +158,12 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	msg := fmt.Sprintf("Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
 	resp.Message = msg
 	return resp
+}
+
+func extractHash(input string) (string, error) {
+	values := strings.Split(input, "-")
+	if len(values) != 2 {
+		return "", fmt.Errorf("invalid format: %s", input)
+	}
+	return values[1], nil
 }
