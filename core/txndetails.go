@@ -2,6 +2,7 @@ package core
 
 import (
 	"strings"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
@@ -15,7 +16,7 @@ func (c *Core) GetTxnDetailsByID(txnID string) (wallet.TransactionDetails, error
 	return res, nil
 }
 
-func (c *Core) GetTxnDetailsByDID(did string, role string) ([]wallet.TransactionDetails, error) {
+func (c *Core) GetTxnDetailsByDID(did string, role string, startDate string, endDate string) ([]wallet.TransactionDetails, error) {
 	if role == "" {
 		txnAsSender, err := c.w.GetTransactionBySender(did)
 		if err != nil {
@@ -35,7 +36,30 @@ func (c *Core) GetTxnDetailsByDID(did string, role string) ([]wallet.Transaction
 			result = append(result, txnAsReceiver[i])
 		}
 
-		return result, nil
+		if startDate == "" && endDate == "" {
+			return result, nil
+		} else {
+			var startTime, endTime time.Time
+			if startDate != "" {
+				startTime, err = time.Parse("2006-01-02", startDate)
+				if err != nil {
+					// Handle invalid date format
+					c.log.Error("Invalid StartDate format", err)
+					// Return an error response or handle it accordingly
+				}
+			}
+
+			if endDate != "" {
+				endTime, err = time.Parse("2006-01-02", endDate)
+				if err != nil {
+					// Handle invalid date format
+					c.log.Error("Invalid EndDate format", err)
+					// Return an error response or handle it accordingly
+				}
+			}
+			return FilterTxnDetailsByDateRange(result, startTime, endTime), nil
+		}
+
 	}
 
 	lower := strings.ToLower(role)
@@ -64,4 +88,17 @@ func (c *Core) GetTxnDetailsByComment(comment string) ([]wallet.TransactionDetai
 		return nil, err
 	}
 	return res, nil
+}
+
+// FilterTxnDetailsByDateRange filters TransactionDetails by a date range.
+func FilterTxnDetailsByDateRange(transactions []wallet.TransactionDetails, startTime time.Time, endTime time.Time) []wallet.TransactionDetails {
+	var filteredTransactions []wallet.TransactionDetails
+
+	for _, txn := range transactions {
+		if txn.DateTime.After(startTime) && txn.DateTime.Before(endTime) {
+			filteredTransactions = append(filteredTransactions, txn)
+		}
+	}
+
+	return filteredTransactions
 }

@@ -55,19 +55,24 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 }
 
 // @Summary Get transaction details by dID
-// @Description Retrieves the details of a transaction based on dID.
+// @Description Retrieves the details of a transaction based on dID and date range.
 // @ID get-by-did
-// @Tags         Account
+// @Tags Account
 // @Accept json
 // @Produce json
 // @Param DID query string true "DID of sender/receiver"
 // @Param Role query string false "Filter by role as sender or receiver"
+// @Param StartDate query string false "Start date of the date range (format: YYYY-MM-DD)"
+// @Param EndDate query string false "End date of the date range (format: YYYY-MM-DD)"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-by-did [get]
 func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "DID")
 	role := s.GetQuerry(req, "Role")
-	res, err := s.c.GetTxnDetailsByDID(did, role)
+	startDate := s.GetQuerry(req, "StartDate")
+	endDate := s.GetQuerry(req, "EndDate")
+
+	res, err := s.c.GetTxnDetailsByDID(did, role, startDate, endDate)
 	if err != nil {
 		if err.Error() == "no records found" {
 			s.log.Info("There are no records present for this DID " + did)
