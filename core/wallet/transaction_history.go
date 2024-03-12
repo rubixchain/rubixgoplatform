@@ -69,7 +69,7 @@ func (w *Wallet) GetTransactionByReceiver(receiver string) ([]TransactionDetails
 
 	err := w.s.Read(TransactionStorage, &td, "receiver_did=?", receiver)
 	if err != nil {
-		w.log.Error("Failed to get transaction details", "err", err)
+		w.log.Error("Failed to get transaction details with did as Receiver ", "err", err)
 		return nil, err
 	}
 	return td, nil
@@ -80,7 +80,7 @@ func (w *Wallet) GetTransactionBySender(sender string) ([]TransactionDetails, er
 
 	err := w.s.Read(TransactionStorage, &td, "sender_did=?", sender)
 	if err != nil {
-		w.log.Error("Failed to get transaction details", "err", err)
+		w.log.Error("Failed to get transaction details with did as sender", "err", err)
 		return nil, err
 	}
 	return td, nil
