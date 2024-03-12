@@ -17,31 +17,36 @@ func (c *Core) GetTxnDetailsByID(txnID string) (wallet.TransactionDetails, error
 }
 
 func (c *Core) GetTxnDetailsByDID(did string, role string, startDate string, endDate string) ([]wallet.TransactionDetails, error) {
+	c.log.Debug("starttime", startDate)
+	c.log.Debug("enddate", endDate)
 	if role == "" {
 		txnAsSender, err := c.w.GetTransactionBySender(did)
-		if err != nil {
+		if err != nil && err.Error() != "no records found" {
 			return nil, err
 		}
 		txnAsReceiver, err := c.w.GetTransactionByReceiver(did)
-		if err != nil {
+		if err != nil && err.Error() != "no records found" {
 			return nil, err
 		}
 		result := make([]wallet.TransactionDetails, 0)
 
-		for i := range txnAsReceiver {
-			result = append(result, txnAsSender[i])
+		if len(txnAsReceiver) > 0 {
+			result = append(result, txnAsReceiver...)
 		}
 
-		for i := range txnAsSender {
-			result = append(result, txnAsReceiver[i])
+		if len(txnAsSender) > 0 {
+			result = append(result, txnAsSender...)
 		}
 
+		c.log.Debug("result len", len(result))
 		if startDate == "" && endDate == "" {
+			c.log.Debug("return result 1")
 			return result, nil
 		} else {
+			c.log.Debug("inside date chec")
 			var startTime, endTime time.Time
 			if startDate != "" {
-				startTime, err = time.Parse("2006-01-02", startDate)
+				startTime, err = time.Parse(time.DateTime, startDate)
 				if err != nil {
 					// Handle invalid date format
 					c.log.Error("Invalid StartDate format", err)
@@ -50,7 +55,7 @@ func (c *Core) GetTxnDetailsByDID(did string, role string, startDate string, end
 			}
 
 			if endDate != "" {
-				endTime, err = time.Parse("2006-01-02", endDate)
+				endTime, err = time.Parse(time.DateTime, endDate)
 				if err != nil {
 					// Handle invalid date format
 					c.log.Error("Invalid EndDate format", err)

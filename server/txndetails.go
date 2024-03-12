@@ -63,8 +63,8 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 // @Produce json
 // @Param DID query string true "DID of sender/receiver"
 // @Param Role query string false "Filter by role as sender or receiver"
-// @Param StartDate query string false "Start date of the date range (format: YYYY-MM-DD)"
-// @Param EndDate query string false "End date of the date range (format: YYYY-MM-DD)"
+// @Param StartDate query string false "Start date of the date range (format: YYYY-MM-DD hh:mm:ss)"
+// @Param EndDate query string false "End date of the date range (format: YYYY-MM-DD hh:mm:ss)"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-by-did [get]
 func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
