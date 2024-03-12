@@ -47,7 +47,7 @@ type ExplorerTrans struct {
 	QuorumList  []string `json:"quorum_list"`
 	DeployerDID string   `json:"deployer_did"`
 	ExecutorDID string   `json:"executor_did"`
-	BlockHash   string   `json:"block_hash"`
+	//BlockHash   string   `json:"block_hash"`
 }
 
 type ExplorerDataTrans struct {

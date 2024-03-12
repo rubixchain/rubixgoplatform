@@ -141,12 +141,12 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	td.Amount = req.TokenCount
 	td.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(td)
-	blockHash, err := extractHash(td.BlockID)
+	/* blockHash, err := extractHash(td.BlockID)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		resp.Message = "Consensus failed" + err.Error()
 		return resp
-	}
+	} */
 	etrans := &ExplorerTrans{
 		TID:         td.TransactionID,
 		SenderDID:   did,
@@ -156,7 +156,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		TokenIDs:    wta,
 		QuorumList:  cr.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
-		BlockHash:   blockHash,
+		//BlockHash:   blockHash,
 	}
 	c.ec.ExplorerTransaction(etrans)
 	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
