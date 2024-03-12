@@ -46,6 +46,8 @@ type ExplorerTrans struct {
 	TrasnType   int      `json:"transaction_type"`
 	QuorumList  []string `json:"quorum_list"`
 	DeployerDID string   `json:"deployer_did"`
+	ExecutorDID string   `json:"executor_did"`
+	//BlockHash   string   `json:"block_hash"`
 }
 
 type ExplorerDataTrans struct {

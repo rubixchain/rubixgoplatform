@@ -165,6 +165,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		TokenIDs:    tokens,
 		QuorumList:  conensusRequest.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
+		//BlockHash:   txnDetails.BlockID,
 	}
 	c.ec.ExplorerTransaction(explorerTrans)
 
@@ -298,11 +299,12 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	tokens = append(tokens, executeReq.SmartContractToken)
 	explorerTrans := &ExplorerTrans{
 		TID:         txnDetails.TransactionID,
-		DeployerDID: did,
+		ExecutorDID: did,
 		TrasnType:   conensusRequest.Type,
 		TokenIDs:    tokens,
 		QuorumList:  conensusRequest.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
+		//BlockHash:   txnDetails.BlockID,
 	}
 	c.ec.ExplorerTransaction(explorerTrans)
 	/* newEvent := model.NewContractEvent{

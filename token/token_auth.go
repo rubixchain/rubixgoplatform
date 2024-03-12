@@ -38,6 +38,24 @@ func GetWholeTokenValue(tokenDetials string) (int, string, bool, error) {
 	return tokenLevelInt, tokenCountHash, needMigration, nil
 }
 
+func CheckWholeToken(tokenDetials string) (string, bool, error) {
+	isWholeToken := true
+	trimmedResult := strings.TrimSpace(tokenDetials)
+	tokenLevel := string(trimmedResult[:len(trimmedResult)-64])
+	tokenCountHash := string(trimmedResult[len(trimmedResult)-64:])
+	tokenLevelInt, err := strconv.Atoi(tokenLevel)
+	if err != nil {
+		return "", !isWholeToken, err
+	}
+	if len(tokenLevel) < 3 {
+		if tokenLevelInt != 1 {
+			return "", !isWholeToken, fmt.Errorf("invalid token level format")
+		}
+	}
+	return tokenCountHash, isWholeToken, nil
+
+}
+
 func calcSHA256(targetHash string, maxNumber int) int {
 
 	for i := 0; i < maxNumber; i++ {

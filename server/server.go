@@ -152,6 +152,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIExecuteSmartContract, "POST", s.AuthHandle(s.APIExecuteSmartContract, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetSmartContractTokenData, "POST", s.AuthHandle(s.APIGetSmartContractTokenChainData, true, s.AuthError, false))
 	s.AddRoute(setup.APIRegisterCallBackURL, "POST", s.AuthHandle(s.APIRegisterCallbackURL, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetTxnByNode, "GET", s.AuthHandle(s.APIGetTxnByNode, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {
