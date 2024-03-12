@@ -61,10 +61,10 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 		c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", pt)
 		return err
 	}
-	_, _, ok, err := token.GetWholeTokenValue(string(b))
+	_, iswholeToken, err := token.CheckWholeToken(string(b))
 	tt := token.RBTTokenType
 	tv := float64(1)
-	if err == nil || !ok {
+	if !iswholeToken {
 		blk := util.StrToHex(string(b))
 		rb, err := rac.InitRacBlock(blk, nil)
 		if err != nil {
