@@ -16,32 +16,23 @@ func (c *Core) GetTxnDetailsByID(txnID string) (wallet.TransactionDetails, error
 	return res, nil
 }
 
-func (c *Core) GetTxnDetailsByDID(did string, role string, startDate string, endDate string) ([]wallet.TransactionDetails, error) {
+func (c *Core) GetTxnDetailsByDID(did string, role string, startDateStr string, endDateStr string) ([]wallet.TransactionDetails, error) {
+	var startDate time.Time
+	var endDate time.Time
+	var err error
+
+	var result []wallet.TransactionDetails
+
 	if role == "" {
-		txnAsSender, err := c.w.GetTransactionBySender(did)
-		if err != nil && err.Error() != "no records found" {
-			return nil, err
-		}
-		txnAsReceiver, err := c.w.GetTransactionByReceiver(did)
-		if err != nil && err.Error() != "no records found" {
-			return nil, err
-		}
-		result := make([]wallet.TransactionDetails, 0)
-
-		if len(txnAsReceiver) > 0 {
-			result = append(result, txnAsReceiver...)
-		}
-
-		if len(txnAsSender) > 0 {
-			result = append(result, txnAsSender...)
-		}
-
-		if startDate == "" && endDate == "" {
+		result, err = c.w.GetTransactionByDID(did)
+		if startDateStr == "" && endDateStr == "" {
+			if err != nil {
+				return nil, err
+			}
 			return result, nil
 		} else {
-			var startTime, endTime time.Time
-			if startDate != "" {
-				startTime, err = time.Parse(time.DateTime, startDate)
+			if startDateStr != "" {
+				startDate, err = time.Parse("2006-01-02", startDateStr)
 				if err != nil {
 					// Handle invalid date format
 					c.log.Error("Invalid StartDate format", err)
@@ -50,8 +41,8 @@ func (c *Core) GetTxnDetailsByDID(did string, role string, startDate string, end
 				}
 			}
 
-			if endDate != "" {
-				endTime, err = time.Parse(time.DateTime, endDate)
+			if endDateStr != "" {
+				endDate, err = time.Parse("2006-01-02", endDateStr)
 				if err != nil {
 					// Handle invalid date format
 					c.log.Error("Invalid EndDate format", err)
@@ -59,14 +50,14 @@ func (c *Core) GetTxnDetailsByDID(did string, role string, startDate string, end
 					return nil, err
 				}
 			}
-			filteredTxnDetails, err := c.FilterTxnDetailsByDateRange(result, startTime, endTime)
+
+			filteredTxnDetails, err := c.FilterTxnDetailsByDateRange(result, startDate, endDate)
 			if err != nil {
 				c.log.Error("failed to filter by date range", err)
 				return nil, err
 			}
 			return filteredTxnDetails, nil
 		}
-
 	}
 
 	lower := strings.ToLower(role)
@@ -98,16 +89,15 @@ func (c *Core) GetTxnDetailsByComment(comment string) ([]wallet.TransactionDetai
 }
 
 // FilterTxnDetailsByDateRange filters TransactionDetails by a date range.
-func (c *Core) FilterTxnDetailsByDateRange(transactions []wallet.TransactionDetails, startTime time.Time, endTime time.Time) ([]wallet.TransactionDetails, error) {
+func (c *Core) FilterTxnDetailsByDateRange(transactions []wallet.TransactionDetails, startDate time.Time, endDate time.Time) ([]wallet.TransactionDetails, error) {
 	var filteredTransactions []wallet.TransactionDetails
-
 	for _, txn := range transactions {
-		txnDateTimeStr := txn.DateTime.Format(time.DateTime)
-		txnDateTimeParsed, err := time.Parse(time.DateTime, txnDateTimeStr)
+		txnDateTimeStr := txn.DateTime.Format("2006-01-02")
+		txnDateTimeParsed, err := time.Parse("2006-01-02", txnDateTimeStr)
 		if err != nil {
 			return nil, err
 		}
-		if txnDateTimeParsed.After(startTime) && txnDateTimeParsed.Before(endTime) {
+		if (txnDateTimeParsed.Equal(startDate) || txnDateTimeParsed.After(startDate)) && txnDateTimeParsed.Before(endDate) {
 			filteredTransactions = append(filteredTransactions, txn)
 		}
 	}

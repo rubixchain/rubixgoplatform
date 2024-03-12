@@ -86,6 +86,27 @@ func (w *Wallet) GetTransactionBySender(sender string) ([]TransactionDetails, er
 	return td, nil
 }
 
+func (w *Wallet) GetTransactionByDID(did string) ([]TransactionDetails, error) {
+	var td []TransactionDetails
+
+	err := w.s.Read(TransactionStorage, &td, "sender_did=? OR receiver_did=?", did, did)
+	if err != nil {
+		w.log.Error("Failed to get transaction details with did", did, "err", err)
+		return nil, err
+	}
+	return td, nil
+}
+
+func (w *Wallet) GetTransactionByDIDAndDateRange(did string, startDate time.Time, endDate time.Time) ([]TransactionDetails, error) {
+	var td []TransactionDetails
+	err := w.s.Read(TransactionStorage, &td, "date_time >= ? AND date_time <= ? AND sender_did=? OR receiver_did=?", startDate, endDate, did, did)
+	if err != nil {
+		w.log.Error("Failed to get transaction details with did and date range", did, startDate, endDate, "err", err)
+		return nil, err
+	}
+	return td, nil
+}
+
 // func (w *Wallet) GetTransactionByDate(date string) ([]TransactionDetails, error) {
 // 	var th []TransactionHistory
 // 	var td []TransactionDetails

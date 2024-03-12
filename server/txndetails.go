@@ -63,8 +63,8 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 // @Produce json
 // @Param DID query string true "DID of sender/receiver"
 // @Param Role query string false "Filter by role as sender or receiver"
-// @Param StartDate query string false "Start date of the date range (format: YYYY-MM-DD hh:mm:ss)"
-// @Param EndDate query string false "End date of the date range (format: YYYY-MM-DD hh:mm:ss)"
+// @Param StartDate query string false "Start date of the date range (format: YYYY-MM-DD"
+// @Param EndDate query string false "End date of the date range (format: YYYY-MM-DD)"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-by-did [get]
 func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
@@ -72,6 +72,18 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 	role := s.GetQuerry(req, "Role")
 	startDate := s.GetQuerry(req, "StartDate")
 	endDate := s.GetQuerry(req, "EndDate")
+
+	if (startDate != "" || endDate != "") && role != "" {
+		td := model.TxnDetails{
+			BasicResponse: model.BasicResponse{
+				Status:  false,
+				Message: "Either use Date range or Role for filter",
+				Result:  "",
+			},
+			TxnDetails: make([]wallet.TransactionDetails, 0),
+		}
+		return s.RenderJSON(req, &td, http.StatusOK)
+	}
 
 	res, err := s.c.GetTxnDetailsByDID(did, role, startDate, endDate)
 	if err != nil {
@@ -81,16 +93,18 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 				BasicResponse: model.BasicResponse{
 					Status:  true,
 					Message: "no records present for this DID : " + did,
+					Result:  "No data found",
 				},
 				TxnDetails: make([]wallet.TransactionDetails, 0),
 			}
 			return s.RenderJSON(req, &td, http.StatusOK)
 		}
-		s.log.Error("err", err)
+		//s.log.Error("err", err)
 		td := model.TxnDetails{
 			BasicResponse: model.BasicResponse{
 				Status:  false,
 				Message: err.Error(),
+				Result:  "No data found",
 			},
 			TxnDetails: make([]wallet.TransactionDetails, 0),
 		}
@@ -100,13 +114,12 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 		BasicResponse: model.BasicResponse{
 			Status:  true,
 			Message: "Retrieved Txn Details",
+			Result:  "Successful",
 		},
 		TxnDetails: make([]wallet.TransactionDetails, 0),
 	}
 
-	for i := range res {
-		td.TxnDetails = append(td.TxnDetails, res[i])
-	}
+	td.TxnDetails = append(td.TxnDetails, res...)
 
 	return s.RenderJSON(req, &td, http.StatusOK)
 }
