@@ -419,7 +419,7 @@ const docTemplate = `{
         },
         "/api/get-by-did": {
             "get": {
-                "description": "Retrieves the details of a transaction based on dID.",
+                "description": "Retrieves the details of a transaction based on dID and date range.",
                 "consumes": [
                     "application/json"
                 ],
@@ -443,6 +443,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Filter by role as sender or receiver",
                         "name": "Role",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date of the date range (format: YYYY-MM-DD)",
+                        "name": "StartDate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date of the date range (format: YYYY-MM-DD)",
+                        "name": "EndDate",
                         "in": "query"
                     }
                 ],
