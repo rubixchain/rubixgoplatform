@@ -27,6 +27,11 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	resp := &model.BasicResponse{
 		Status: false,
 	}
+
+	if req.Sender == req.Receiver {
+		resp.Message = "Sender and receiver cannot be same"
+		return resp
+	}
 	_, did, ok := util.ParseAddress(req.Sender)
 	if !ok {
 		resp.Message = "Invalid sender DID"
@@ -38,6 +43,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Invalid receiver DID"
 		return resp
 	}
+
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		resp.Message = "Failed to setup DID, " + err.Error()
