@@ -468,6 +468,30 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/get-by-node": {
+            "get": {
+                "description": "Get count of incoming and outgoing txns of the DID ins a node.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Get count of incoming and outgoing txns of the DID ins a node",
+                "operationId": "get-txn-details-by-node",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.TxnCountForDID"
+                        }
+                    }
+                }
+            }
+        },
         "/api/get-by-txnId": {
             "get": {
                 "description": "Retrieves the details of a transaction based on its ID.",
@@ -824,6 +848,24 @@ const docTemplate = `{
                 }
             }
         },
+        "model.TxnCountForDID": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
+                },
+                "txnCount": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/wallet.TransactionCount"
+                    }
+                }
+            }
+        },
         "server.DeploySmartContractSwaggoInput": {
             "type": "object",
             "properties": {
@@ -933,6 +975,20 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string"
+                }
+            }
+        },
+        "wallet.TransactionCount": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "txnReceived": {
+                    "type": "integer"
+                },
+                "txnSend": {
+                    "type": "integer"
                 }
             }
         }
