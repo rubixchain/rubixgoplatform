@@ -518,6 +518,11 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	if (pr.TokensRequired) < MinTrnxAmt {
+		c.log.Error("Pledge amount is less than ", MinTrnxAmt)
+		crep.Message = "Pledge amount is less than minimum transcation amount"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
 	dc := c.pqc[did]
 	wt, err := c.GetTokens(dc, did, pr.TokensRequired)
 	if err != nil {

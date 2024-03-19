@@ -44,6 +44,12 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 
+	c.log.Debug("Minimum trnx amount is ", MinTrnxAmt)
+	if req.TokenCount < float64(MinTrnxAmt) {
+		resp.Message = "Minimum trnx amt is 0.001"
+		return resp
+	}
+
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		resp.Message = "Failed to setup DID, " + err.Error()
