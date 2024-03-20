@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,8 +46,18 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	c.log.Debug("Minimum trnx amount is ", MinTrnxAmt)
-	if req.TokenCount < float64(MinTrnxAmt) {
+	c.log.Debug("Max decimal point is ", MaxDecimalPlaces)
+
+	if req.TokenCount < MinTrnxAmt {
 		resp.Message = "Minimum trnx amt is 0.001"
+		return resp
+	}
+
+	decimalPlaces := strconv.FormatFloat(req.TokenCount, 'f', -1, 64)
+	decimalPlacesStr := strings.Split(decimalPlaces, ".")
+	if len(decimalPlacesStr) == 2 && len(decimalPlacesStr[1]) > MaxDecimalPlaces {
+		c.log.Error("Transcation amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		resp.Message = fmt.Sprintf("Transaction amount exceeds %d decimal places.\n", MaxDecimalPlaces)
 		return resp
 	}
 
