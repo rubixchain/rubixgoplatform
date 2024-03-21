@@ -49,13 +49,15 @@ const (
 )
 
 const (
-	InvalidPasringErr string = "invalid json parsing"
-	RubixRootDir      string = "Rubix/"
-	DefaultMainNetDB  string = "rubix.db"
-	DefaultTestNetDB  string = "rubixtest.db"
-	MainNetDir        string = "MainNet"
-	TestNetDir        string = "TestNet"
-	TestNetDIDDir     string = "TestNetDID/"
+	InvalidPasringErr string  = "invalid json parsing"
+	RubixRootDir      string  = "Rubix/"
+	DefaultMainNetDB  string  = "rubix.db"
+	DefaultTestNetDB  string  = "rubixtest.db"
+	MainNetDir        string  = "MainNet"
+	TestNetDir        string  = "TestNet"
+	TestNetDIDDir     string  = "TestNetDID/"
+	MinTrnxAmt        float64 = 0.00001
+	MaxDecimalPlaces  int     = 5
 )
 
 const (

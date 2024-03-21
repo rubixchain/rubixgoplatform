@@ -518,6 +518,20 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	if (pr.TokensRequired) < MinTrnxAmt {
+		c.log.Error("Pledge amount is less than ", MinTrnxAmt)
+		crep.Message = "Pledge amount is less than minimum transcation amount"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	decimalPlaces := strconv.FormatFloat(pr.TokensRequired, 'f', -1, 64)
+	decimalPlacesStr := strings.Split(decimalPlaces, ".")
+	if len(decimalPlacesStr) == 2 && len(decimalPlacesStr[1]) > MaxDecimalPlaces {
+		c.log.Error("Pledge amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		crep.Message = fmt.Sprintf("Pledge amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	dc := c.pqc[did]
 	wt, err := c.GetTokens(dc, did, pr.TokensRequired)
 	if err != nil {

@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +33,12 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Sender and receiver cannot be same"
 		return resp
 	}
+
+	if !strings.Contains(req.Sender, ".") || !strings.Contains(req.Receiver, ".") {
+		resp.Message = "Sender and receiver address should be of the format PeerID.DID"
+		return resp
+	}
+
 	_, did, ok := util.ParseAddress(req.Sender)
 	if !ok {
 		resp.Message = "Invalid sender DID"
@@ -41,6 +48,22 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	rpeerid, rdid, ok := util.ParseAddress(req.Receiver)
 	if !ok {
 		resp.Message = "Invalid receiver DID"
+		return resp
+	}
+
+	c.log.Debug("Minimum trnx amount is ", MinTrnxAmt)
+	c.log.Debug("Max decimal point is ", MaxDecimalPlaces)
+
+	if req.TokenCount < MinTrnxAmt {
+		resp.Message = "Input transaction amount is less than minimum transcation amount"
+		return resp
+	}
+
+	decimalPlaces := strconv.FormatFloat(req.TokenCount, 'f', -1, 64)
+	decimalPlacesStr := strings.Split(decimalPlaces, ".")
+	if len(decimalPlacesStr) == 2 && len(decimalPlacesStr[1]) > MaxDecimalPlaces {
+		c.log.Error("Transcation amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		resp.Message = fmt.Sprintf("Transaction amount exceeds %d decimal places.\n", MaxDecimalPlaces)
 		return resp
 	}
 
