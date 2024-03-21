@@ -342,6 +342,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 		//serach for the required whole amount
 		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue)
 		if err != nil && err.Error() != "no records found" {
+			defer c.w.ReleaseTokens(wholeTokens)
 			c.log.Error("failed to search for whole tokens", "err", err)
 			return nil, 0.0, err
 		}
@@ -354,7 +355,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 				c.log.Error("failed to search for whole tokens", "err", err)
 				return nil, 0.0, err
 			}
-			if len(allPartTokens) == 0 || err.Error() == "no records found" {
+			if len(allPartTokens) == 0 {
 				c.log.Error("No part Tokens found , This wallet is empty", "err", err)
 				return nil, 0.0, err
 			}
@@ -367,20 +368,31 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
 			}
 			// Iterate through allPartTokens
-			for _, partToken := range allPartTokens {
+			defer c.w.ReleaseTokens(allPartTokens)
+			for i, partToken := range allPartTokens {
 				// Subtract the partToken value from the txnAmount
+				c.log.Debug("partToken.TokenValue", partToken.TokenValue)
+				// If the transaction amount is less than the partToken.TokenValue, skip
+				if txnAmount < partToken.TokenValue {
+					continue
+				}
 				txnAmount -= partToken.TokenValue
+				txnAmount = floatPrecision(txnAmount, MaxDecimalPlaces)
+				c.log.Debug("txn amount after sub", txnAmount)
 				// Add the partToken to the requiredTokens
 				requiredTokens = append(requiredTokens, partToken)
+				// Remove the partToken from allPartTokens
+				allPartTokens = append(allPartTokens[:i], allPartTokens[i+1:]...)
 				// Check if txnAmount goes negative
-				if txnAmount < 0 {
-					// Add the remaining amount to the remainingAmount variable
-					remainingAmount = -txnAmount
-					// Exit the loop
+				if txnAmount == 0 {
 					break
 				}
 			}
+			remainingAmount += txnAmount
+			c.w.ReleaseTokens(allPartTokens)
 		}
 	}
+	remainingAmount += float64(txnAmount)
+	c.log.Debug("remaining amount + decimal of txnamount", remainingAmount)
 	return requiredTokens, remainingAmount, nil
 }

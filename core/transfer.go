@@ -80,6 +80,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Insufficient tokens or tokens are locked or " + err.Error()
 		return resp
 	}
+	c.log.Debug("reqTokens lenght", len(reqTokens))
+	c.log.Debug("remaining amount after required token method", remainingAmount)
 	if len(reqTokens) != 0 {
 		tokensForTxn = append(tokensForTxn, reqTokens...)
 	}
@@ -87,7 +89,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// Get the required tokens from the DID bank
 	// this method locks the token needs to be released or
 	// removed once it done with the transfer
-	if remainingAmount != 0 {
+	if remainingAmount > 0 {
 		wt, err := c.GetTokens(dc, did, remainingAmount)
 		if err != nil {
 			c.log.Error("Failed to get tokens", "err", err)
