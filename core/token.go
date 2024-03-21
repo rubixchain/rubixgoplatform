@@ -334,7 +334,9 @@ func (c *Core) getFromIPFS(path string) ([]byte, error) {
 func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token, float64, error) {
 	requiredTokens := make([]wallet.Token, 0)
 	var remainingAmount float64
-
+	fv := float64(txnAmount)
+	decimalValue := txnAmount - fv
+	decimalValue = floatPrecision(decimalValue, MaxDecimalPlaces)
 	wholeValue := int(txnAmount)
 	//check if whole value exists
 	if wholeValue != 0 {
@@ -367,6 +369,8 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
 				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
 			}
+			// Create a slice to store the indices of elements to be removed
+			var indicesToRemove []int
 			// Iterate through allPartTokens
 			defer c.w.ReleaseTokens(allPartTokens)
 			for i, partToken := range allPartTokens {
@@ -377,22 +381,36 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 					continue
 				}
 				txnAmount -= partToken.TokenValue
-				txnAmount = floatPrecision(txnAmount, MaxDecimalPlaces)
-				c.log.Debug("txn amount after sub", txnAmount)
+				c.log.Debug("sub txnAmount beofre float precision", txnAmount)
+				txnAmount = CeilfloatPrecision(txnAmount, MaxDecimalPlaces)
+				c.log.Debug("sub txnAmount after float precision", txnAmount)
 				// Add the partToken to the requiredTokens
 				requiredTokens = append(requiredTokens, partToken)
-				// Remove the partToken from allPartTokens
-				allPartTokens = append(allPartTokens[:i], allPartTokens[i+1:]...)
+				c.log.Debug("selected PArtTOken value", partToken.TokenValue)
+				// Store the index of the element to be removed
+				indicesToRemove = append(indicesToRemove, i)
 				// Check if txnAmount goes negative
 				if txnAmount == 0 {
 					break
 				}
 			}
-			remainingAmount += txnAmount
+			// Remove elements from allPartTokens using copy
+			for i, idx := range indicesToRemove {
+				copy(allPartTokens[idx-i:], allPartTokens[idx-i+1:])
+			}
+			allPartTokens = allPartTokens[:len(allPartTokens)-len(indicesToRemove)]
+
+			c.log.Debug("rem 1", remainingAmount)
+			if txnAmount > 0 {
+				// Add the remaining amount to the remainingAmount variable
+				remainingAmount += txnAmount
+				c.log.Debug("rem 2", remainingAmount)
+			}
 			c.w.ReleaseTokens(allPartTokens)
 		}
 	}
-	remainingAmount += float64(txnAmount)
+	c.log.Debug("rem 3", remainingAmount)
+	remainingAmount += decimalValue
 	c.log.Debug("remaining amount + decimal of txnamount", remainingAmount)
 	return requiredTokens, remainingAmount, nil
 }

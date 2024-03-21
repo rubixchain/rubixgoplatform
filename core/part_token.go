@@ -23,9 +23,17 @@ func round(num float64) int {
 	return int(num + math.Copysign(0.5, num))
 }
 
+func Ceilround(num float64) int {
+	return int(math.Ceil(num))
+}
+
 func floatPrecision(num float64, precision int) float64 {
 	output := math.Pow(10, float64(precision))
 	return float64(round(num*output)) / output
+}
+func CeilfloatPrecision(num float64, precision int) float64 {
+	output := math.Pow(10, float64(precision))
+	return float64(Ceilround(num*output)) / output
 }
 
 func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.Token, error) {
