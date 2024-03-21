@@ -33,6 +33,12 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Sender and receiver cannot be same"
 		return resp
 	}
+
+	if !strings.Contains(req.Sender, ".") || !strings.Contains(req.Receiver, ".") {
+		resp.Message = "Sender and receiver address should be of the format PeerID.DID"
+		return resp
+	}
+
 	_, did, ok := util.ParseAddress(req.Sender)
 	if !ok {
 		resp.Message = "Invalid sender DID"
@@ -49,7 +55,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	c.log.Debug("Max decimal point is ", MaxDecimalPlaces)
 
 	if req.TokenCount < MinTrnxAmt {
-		resp.Message = "Minimum trnx amt is 0.001"
+		resp.Message = "Input transaction amount is less than minimum transcation amount"
 		return resp
 	}
 

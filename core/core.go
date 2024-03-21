@@ -56,7 +56,7 @@ const (
 	MainNetDir        string  = "MainNet"
 	TestNetDir        string  = "TestNet"
 	TestNetDIDDir     string  = "TestNetDID/"
-	MinTrnxAmt        float64 = 0.001
+	MinTrnxAmt        float64 = 0.00001
 	MaxDecimalPlaces  int     = 5
 )
 
