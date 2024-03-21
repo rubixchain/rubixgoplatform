@@ -24,7 +24,7 @@ func round(num float64) int {
 }
 
 func Ceilround(num float64) int {
-	return int(math.Ceil(num))
+	return int(math.Floor(num))
 }
 
 func floatPrecision(num float64, precision int) float64 {
