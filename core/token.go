@@ -335,9 +335,10 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 	requiredTokens := make([]wallet.Token, 0)
 	var remainingAmount float64
 	wholeValue := int(txnAmount)
-	fv := float64(txnAmount)
-	decimalValue := txnAmount - fv
+	//fv := float64(txnAmount)
+	decimalValue := txnAmount - float64(wholeValue)
 	decimalValue = floatPrecision(decimalValue, MaxDecimalPlaces)
+	c.log.Debug("decimal value =", decimalValue)
 	//check if whole value exists
 	if wholeValue != 0 {
 		//extract the whole amount part that is the integer value of txn amount
@@ -413,8 +414,6 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 			//remainingAmount = +float64(remWhole)
 		}
 
-	}
-	if wholeValue == 0 && txnAmount < 1 {
 	}
 	c.log.Debug("rem 3", remainingAmount)
 	remainingAmount += decimalValue
