@@ -104,10 +104,13 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 		switch t.TokenStatus {
 		case wallet.TokenIsFree:
 			info.RBTAmount = info.RBTAmount + t.TokenValue
+			info.RBTAmount = floatPrecision(info.RBTAmount, MaxDecimalPlaces)
 		case wallet.TokenIsLocked:
 			info.LockedRBT = info.LockedRBT + t.TokenValue
+			info.LockedRBT = floatPrecision(info.LockedRBT, MaxDecimalPlaces)
 		case wallet.TokenIsPledged:
 			info.PledgedRBT = info.PledgedRBT + t.TokenValue
+			info.PledgedRBT = floatPrecision(info.PledgedRBT, MaxDecimalPlaces)
 		}
 	}
 	return info, nil
