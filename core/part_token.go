@@ -28,6 +28,7 @@ func Ceilround(num float64) int {
 }
 
 func floatPrecision(num float64, precision int) float64 {
+	precision = MaxDecimalPlaces
 	output := math.Pow(10, float64(precision))
 	return float64(round(num*output)) / output
 }
@@ -70,7 +71,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		}
 		tkn := tt.TokenID
 		c.w.ReleaseToken(tkn)
-		parts := []float64{rem, floatPrecision(tt.TokenValue-rem, 10)}
+		parts := []float64{rem, floatPrecision(tt.TokenValue-rem, MaxDecimalPlaces)}
 		nt, err := c.createPartToken(dc, did, tkn, parts)
 		if err != nil {
 			c.w.ReleaseTokens(wt)
@@ -165,16 +166,20 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 
 	// check part split not crossing RBT
 	amount := float64(0)
+	fmt.Println("Parts are ", parts)
 	for i := range parts {
 		amount = amount + parts[i]
-		amount = floatPrecision(amount, 10)
+		fmt.Println("Part of i is ", parts[i])
+		fmt.Println("amount is ", amount)
+		fmt.Println("token value is ", t.TokenValue)
+		amount = floatPrecision(amount, MaxDecimalPlaces)
 		if amount > t.TokenValue {
-			return nil, fmt.Errorf("invalid part split, split sum is more than the parent token")
+			return nil, fmt.Errorf("invalid part split, split sum is more than the parent token -1")
 		}
 	}
 
 	if amount != t.TokenValue {
-		return nil, fmt.Errorf("invalid part split, sum of parts value not matching with parent token")
+		return nil, fmt.Errorf("invalid part split, sum of parts value not matching with parent token -2")
 	}
 	pts := make([]string, len(parts))
 	b := c.w.GetGenesisTokenBlock(tkn, ptt)
