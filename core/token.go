@@ -334,10 +334,10 @@ func (c *Core) getFromIPFS(path string) ([]byte, error) {
 func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token, float64, error) {
 	requiredTokens := make([]wallet.Token, 0)
 	var remainingAmount float64
+	wholeValue := int(txnAmount)
 	fv := float64(txnAmount)
 	decimalValue := txnAmount - fv
 	decimalValue = floatPrecision(decimalValue, MaxDecimalPlaces)
-	wholeValue := int(txnAmount)
 	//check if whole value exists
 	if wholeValue != 0 {
 		//extract the whole amount part that is the integer value of txn amount
@@ -413,6 +413,8 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 			//remainingAmount = +float64(remWhole)
 		}
 
+	}
+	if wholeValue == 0 && txnAmount < 1 {
 	}
 	c.log.Debug("rem 3", remainingAmount)
 	remainingAmount += decimalValue
