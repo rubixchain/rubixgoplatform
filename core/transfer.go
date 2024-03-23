@@ -53,7 +53,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 	c.log.Debug("Minimum trnx amount is ", MinTrnxAmt)
 	c.log.Debug("Max decimal point is ", MaxDecimalPlaces)
-
+	fmt.Println("Transfer amount is ", req.TokenCount)
 	if req.TokenCount < MinTrnxAmt {
 		resp.Message = "Input transaction amount is less than minimum transcation amount"
 		return resp
@@ -72,20 +72,39 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
+	tokensForTxn := make([]wallet.Token, 0)
+
+	reqTokens, remainingAmount, err := c.GetRequiredTokens(did, req.TokenCount)
+	if err != nil {
+		c.log.Error("Failed to get tokens", "err", err)
+		resp.Message = "Insufficient tokens or tokens are locked or " + err.Error()
+		return resp
+	}
+	c.log.Debug("reqTokens lenght", len(reqTokens))
+	c.log.Debug("remaining amount after required token method", remainingAmount)
+	if len(reqTokens) != 0 {
+		tokensForTxn = append(tokensForTxn, reqTokens...)
+	}
+	//check if ther is enough tokens to do transfer
 	// Get the required tokens from the DID bank
 	// this method locks the token needs to be released or
 	// removed once it done with the transfer
-	wt, err := c.GetTokens(dc, did, req.TokenCount)
-	if err != nil {
-		c.log.Error("Failed to get tokens", "err", err)
-		resp.Message = "Insufficient tokens or tokens are locked"
-		return resp
+	if remainingAmount > 0 {
+		wt, err := c.GetTokens(dc, did, remainingAmount)
+		if err != nil {
+			c.log.Error("Failed to get tokens", "err", err)
+			resp.Message = "Insufficient tokens or tokens are locked"
+			return resp
+		}
+		if len(wt) != 0 {
+			tokensForTxn = append(tokensForTxn, wt...)
+		}
 	}
 	// release the locked tokens before exit
-	defer c.w.ReleaseTokens(wt)
+	defer c.w.ReleaseTokens(tokensForTxn)
 
-	for i := range wt {
-		c.w.Pin(wt[i].TokenID, wallet.OwnerRole, did)
+	for i := range tokensForTxn {
+		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, did)
 	}
 
 	// Get the receiver & do sanity check
@@ -96,34 +115,34 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	defer p.Close()
 	wta := make([]string, 0)
-	for i := range wt {
-		wta = append(wta, wt[i].TokenID)
+	for i := range tokensForTxn {
+		wta = append(wta, tokensForTxn[i].TokenID)
 	}
 
 	tis := make([]contract.TokenInfo, 0)
-	for i := range wt {
+	for i := range tokensForTxn {
 		tts := "rbt"
-		if wt[i].TokenValue != 1 {
+		if tokensForTxn[i].TokenValue != 1 {
 			tts = "part"
 		}
 		tt := c.TokenType(tts)
-		blk := c.w.GetLatestTokenBlock(wt[i].TokenID, tt)
+		blk := c.w.GetLatestTokenBlock(tokensForTxn[i].TokenID, tt)
 		if blk == nil {
 			c.log.Error("failed to get latest block, invalid token chain")
 			resp.Message = "failed to get latest block, invalid token chain"
 			return resp
 		}
-		bid, err := blk.GetBlockID(wt[i].TokenID)
+		bid, err := blk.GetBlockID(tokensForTxn[i].TokenID)
 		if err != nil {
 			c.log.Error("failed to get block id", "err", err)
 			resp.Message = "failed to get block id, " + err.Error()
 			return resp
 		}
 		ti := contract.TokenInfo{
-			Token:      wt[i].TokenID,
+			Token:      tokensForTxn[i].TokenID,
 			TokenType:  tt,
-			TokenValue: wt[i].TokenValue,
-			OwnerDID:   wt[i].DID,
+			TokenValue: tokensForTxn[i].TokenValue,
+			OwnerDID:   tokensForTxn[i].DID,
 			BlockID:    bid,
 		}
 		tis = append(tis, ti)
