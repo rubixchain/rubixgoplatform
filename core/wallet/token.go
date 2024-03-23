@@ -22,7 +22,10 @@ const (
 	TokenIsBurnt
 	TokenIsExecuted
 )
-
+const (
+	Zero int = iota
+	One
+)
 const (
 	RACTestTokenType int = iota
 	RACOldNFTType
@@ -460,4 +463,45 @@ func (w *Wallet) CommitTokens(did string, rbtTokens []string) error {
 		}
 	}
 	return nil
+}
+
+func (w *Wallet) GetAllPartTokens(did string) ([]Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value>? AND token_value<? ORDER BY token_value DESC", did, TokenIsFree, Zero, One)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	for i := range t {
+		t[i].TokenStatus = TokenIsLocked
+		err = w.s.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return nil, err
+		}
+	}
+	w.log.Debug("all partotkens length", len(t))
+	return t, nil
+}
+
+func (w *Wallet) GetAllWholeTokens(did string) ([]Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	for i := range t {
+		t[i].TokenStatus = TokenIsLocked
+		err = w.s.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return nil, err
+		}
+	}
+	return t, nil
 }
