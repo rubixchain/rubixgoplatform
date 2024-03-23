@@ -51,8 +51,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 
-	c.log.Debug("Minimum trnx amount is ", MinTrnxAmt)
-	c.log.Debug("Max decimal point is ", MaxDecimalPlaces)
 	if req.TokenCount < MinTrnxAmt {
 		resp.Message = "Input transaction amount is less than minimum transcation amount"
 		return resp
@@ -79,8 +77,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Insufficient tokens or tokens are locked or " + err.Error()
 		return resp
 	}
-	c.log.Debug("reqTokens lenght", len(reqTokens))
-	c.log.Debug("remaining amount after required token method", remainingAmount)
 	if len(reqTokens) != 0 {
 		tokensForTxn = append(tokensForTxn, reqTokens...)
 	}
