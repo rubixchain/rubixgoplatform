@@ -42,7 +42,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	var err error
 	fv := float64(wholeValue)
 	rem := value - fv
-	rem = floatPrecision(rem, 10)
+	rem = floatPrecision(rem, MaxDecimalPlaces)
 	remWhole := 0
 	wt := make([]wallet.Token, 0)
 	if wholeValue != 0 {
@@ -57,7 +57,9 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	pt, err := c.w.GetTokensByLimit(did, rem)
+	fmt.Println("line 60 rem is ", rem)
 	if err != nil || len(pt) == 0 {
+		fmt.Println("Inside line 62 len pt ", len(pt))
 		if rem >= 1 {
 			c.w.ReleaseTokens(wt)
 			c.log.Error("failed to get part tokens", "err", err)
@@ -72,7 +74,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		tkn := tt.TokenID
 		c.w.ReleaseToken(tkn)
 		parts := []float64{rem, floatPrecision(tt.TokenValue-rem, MaxDecimalPlaces)}
-		nt, err := c.createPartToken(dc, did, tkn, parts)
+		nt, err := c.createPartToken(dc, did, tkn, parts, 1)
 		if err != nil {
 			c.w.ReleaseTokens(wt)
 			c.log.Error("failed to create part tokens", "err", err)
@@ -84,6 +86,8 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	if rem < 1 {
+		fmt.Println("Inside line 89....rem is ", rem)
+
 		for i := range pt {
 			if pt[i].TokenValue == rem {
 				wt = append(wt, pt[i])
@@ -98,19 +102,33 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	for i := range pt {
 		if pt[i].TokenValue <= rem {
 			wt = append(wt, pt[i])
+			fmt.Println("rem ", rem, "pti ", pt[i].TokenValue)
+			kati := rem - pt[i].TokenValue
+			fmt.Println("kati ", kati)
+			fmt.Println("kati prec ", floatPrecision(kati, MaxDecimalPlaces))
 			rem = floatPrecision(rem-pt[i].TokenValue, 10)
 			idx = append(idx, i)
 		} else {
 			rpt = append(rpt, pt[i])
 		}
 	}
+	fmt.Println("line 115 wt is ", wt)
+	fmt.Println("line 116 rpt is ", rpt)
+	fmt.Println("line 117 at rem is ", rem)
 	if rem == 0 {
+		fmt.Println("line 119 wt is ", wt)
+		fmt.Println("line 120 rem is ", rem)
 		c.w.ReleaseTokens(rpt)
 		return wt, nil
 	}
 	if len(rpt) > 0 {
+		fmt.Println("124 : rpt", len(rpt))
+		fmt.Println("126 : rpt[0] tokenvalue ", rpt[0].TokenValue, rpt[0].TokenID)
+
 		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, 10)}
-		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts)
+		fmt.Println("129 parts is ", parts)
+		c.w.ReleaseToken(rpt[0].TokenID)
+		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts, 2)
 		if err != nil {
 			c.w.ReleaseTokens(wt)
 			c.w.ReleaseTokens(rpt)
@@ -128,14 +146,15 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		c.log.Error("failed to get whole token", "err", err)
 		return nil, fmt.Errorf("failed to get whole token")
 	}
+	fmt.Println("nwt is ", nwt)
 	if nwt == nil {
 		c.w.ReleaseTokens(rpt)
 		c.log.Debug("No More tokens left to pledge")
 		return wt, nil
 	}
 	c.w.ReleaseToken(nwt.TokenID)
-	parts := []float64{rem, floatPrecision(1.0-rem, 10)}
-	npt, err := c.createPartToken(dc, did, nwt.TokenID, parts)
+	parts := []float64{rem, floatPrecision(nwt.TokenValue-rem, MaxDecimalPlaces)}
+	npt, err := c.createPartToken(dc, did, nwt.TokenID, parts, 3)
 	if err != nil {
 		c.w.ReleaseTokens(wt)
 		c.w.ReleaseToken(nwt.TokenID)
@@ -148,7 +167,8 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	return wt, nil
 }
 
-func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts []float64) ([]wallet.Token, error) {
+func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts []float64, num int) ([]wallet.Token, error) {
+	fmt.Println("num is", num)
 	if dc == nil {
 		return nil, fmt.Errorf("did crypto is not initialised")
 	}
@@ -172,6 +192,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		fmt.Println("Part of i is ", parts[i])
 		fmt.Println("amount is ", amount)
 		fmt.Println("token value is ", t.TokenValue)
+		fmt.Println("Token hash is ", t.TokenID)
 		amount = floatPrecision(amount, MaxDecimalPlaces)
 		if amount > t.TokenValue {
 			return nil, fmt.Errorf("invalid part split, split sum is more than the parent token -1")
