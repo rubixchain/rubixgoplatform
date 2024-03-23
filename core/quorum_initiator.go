@@ -836,9 +836,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	if cr.Mode == DTCommitMode {
 		tcb.TransactionType = block.TokenCommittedType
 	}
-	fmt.Println("Length of ctcb ", len(ctcb))
 	nb := block.CreateNewBlock(ctcb, &tcb)
-	fmt.Println("Length of nb get block ", len(nb.GetBlock()))
 	if nb == nil {
 		c.log.Error("Failed to create new token chain block - qrm init")
 		return nil, fmt.Errorf("failed to create new token chain block - qrm init")
@@ -925,7 +923,6 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 		//pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
 
 		// Request pledage token
-		fmt.Println("928 rempldg is ", pd.RemPledgeTokens)
 		if pd.RemPledgeTokens != 0 {
 			pr := PledgeRequest{
 				TokensRequired: pd.RemPledgeTokens,
