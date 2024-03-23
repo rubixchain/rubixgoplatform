@@ -53,7 +53,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 	c.log.Debug("Minimum trnx amount is ", MinTrnxAmt)
 	c.log.Debug("Max decimal point is ", MaxDecimalPlaces)
-	fmt.Println("Transfer amount is ", req.TokenCount)
 	if req.TokenCount < MinTrnxAmt {
 		resp.Message = "Input transaction amount is less than minimum transcation amount"
 		return resp
