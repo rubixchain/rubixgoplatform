@@ -386,7 +386,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 				}
 				txnAmount -= partToken.TokenValue
 				c.log.Debug("sub txnAmount beofre float precision", txnAmount)
-				txnAmount = CeilfloatPrecision(txnAmount, MaxDecimalPlaces)
+				txnAmount = floatPrecision(txnAmount, MaxDecimalPlaces)
 				c.log.Debug("sub txnAmount after float precision", txnAmount)
 				// Add the partToken to the requiredTokens
 				requiredTokens = append(requiredTokens, partToken)
