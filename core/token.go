@@ -341,7 +341,6 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 	//fv := float64(txnAmount)
 	decimalValue := txnAmount - float64(wholeValue)
 	decimalValue = floatPrecision(decimalValue, MaxDecimalPlaces)
-	c.log.Debug("decimal value =", decimalValue)
 	//check if whole value exists
 	if wholeValue != 0 {
 		//extract the whole amount part that is the integer value of txn amount
@@ -379,18 +378,14 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 			defer c.w.ReleaseTokens(allPartTokens)
 			for i, partToken := range allPartTokens {
 				// Subtract the partToken value from the txnAmount
-				c.log.Debug("partToken.TokenValue", partToken.TokenValue)
 				// If the transaction amount is less than the partToken.TokenValue, skip
 				if txnAmount < partToken.TokenValue {
 					continue
 				}
 				txnAmount -= partToken.TokenValue
-				c.log.Debug("sub txnAmount beofre float precision", txnAmount)
 				txnAmount = floatPrecision(txnAmount, MaxDecimalPlaces)
-				c.log.Debug("sub txnAmount after float precision", txnAmount)
 				// Add the partToken to the requiredTokens
 				requiredTokens = append(requiredTokens, partToken)
-				c.log.Debug("selected PArtTOken value", partToken.TokenValue)
 				// Store the index of the element to be removed
 				indicesToRemove = append(indicesToRemove, i)
 				// Check if txnAmount goes negative
@@ -404,11 +399,9 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 			}
 			allPartTokens = allPartTokens[:len(allPartTokens)-len(indicesToRemove)]
 
-			c.log.Debug("rem 1", remainingAmount)
 			if txnAmount > 0 {
 				// Add the remaining amount to the remainingAmount variable
 				remainingAmount += txnAmount
-				c.log.Debug("rem 2", remainingAmount)
 			}
 			c.w.ReleaseTokens(allPartTokens)
 		} else {
@@ -418,8 +411,6 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 		}
 
 	}
-	c.log.Debug("rem 3", remainingAmount)
 	remainingAmount += decimalValue
-	c.log.Debug("remaining amount + decimal of txnamount", remainingAmount)
 	return requiredTokens, remainingAmount, nil
 }

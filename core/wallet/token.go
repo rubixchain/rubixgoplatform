@@ -482,7 +482,6 @@ func (w *Wallet) GetAllPartTokens(did string) ([]Token, error) {
 			return nil, err
 		}
 	}
-	w.log.Debug("all partotkens length", len(t))
 	return t, nil
 }
 
