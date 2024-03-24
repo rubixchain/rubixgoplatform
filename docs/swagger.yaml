@@ -44,6 +44,18 @@ definitions:
           $ref: '#/definitions/model.NFTStatus'
         type: array
     type: object
+  model.TxnCountForDID:
+    properties:
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+      txnCount:
+        items:
+          $ref: '#/definitions/wallet.TransactionCount'
+        type: array
+    type: object
   server.DeploySmartContractSwaggoInput:
     properties:
       comment:
@@ -115,6 +127,15 @@ definitions:
         type: integer
       password:
         type: string
+    type: object
+  wallet.TransactionCount:
+    properties:
+      did:
+        type: string
+      txnReceived:
+        type: integer
+      txnSend:
+        type: integer
     type: object
 info:
   contact:
@@ -390,7 +411,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Retrieves the details of a transaction based on dID.
+      description: Retrieves the details of a transaction based on dID and date range.
       operationId: get-by-did
       parameters:
       - description: DID of sender/receiver
@@ -402,6 +423,14 @@ paths:
         in: query
         name: Role
         type: string
+      - description: 'Start date of the date range (format: YYYY-MM-DD'
+        in: query
+        name: StartDate
+        type: string
+      - description: 'End date of the date range (format: YYYY-MM-DD)'
+        in: query
+        name: EndDate
+        type: string
       produces:
       - application/json
       responses:
@@ -410,6 +439,22 @@ paths:
           schema:
             $ref: '#/definitions/model.BasicResponse'
       summary: Get transaction details by dID
+      tags:
+      - Account
+  /api/get-by-node:
+    get:
+      consumes:
+      - application/json
+      description: Get count of incoming and outgoing txns of the DID ins a node.
+      operationId: get-txn-details-by-node
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.TxnCountForDID'
+      summary: Get count of incoming and outgoing txns of the DID ins a node
       tags:
       - Account
   /api/get-by-txnId:

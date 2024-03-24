@@ -26,6 +26,12 @@ type TransactionDetails struct {
 	DeployerDID     string    `gorm:"column:deployer_did"`
 }
 
+type TransactionCount struct {
+	DID         string
+	TxnSend     int
+	TxnReceived int
+}
+
 func (w *Wallet) AddTransactionHistory(td *TransactionDetails) error {
 	err := w.s.Write(TransactionStorage, td)
 	if err != nil {
@@ -63,7 +69,7 @@ func (w *Wallet) GetTransactionByReceiver(receiver string) ([]TransactionDetails
 
 	err := w.s.Read(TransactionStorage, &td, "receiver_did=?", receiver)
 	if err != nil {
-		w.log.Error("Failed to get transaction details", "err", err)
+		w.log.Error("Failed to get transaction details with did as Receiver ", "err", err)
 		return nil, err
 	}
 	return td, nil
@@ -74,7 +80,28 @@ func (w *Wallet) GetTransactionBySender(sender string) ([]TransactionDetails, er
 
 	err := w.s.Read(TransactionStorage, &td, "sender_did=?", sender)
 	if err != nil {
-		w.log.Error("Failed to get transaction details", "err", err)
+		w.log.Error("Failed to get transaction details with did as sender", "err", err)
+		return nil, err
+	}
+	return td, nil
+}
+
+func (w *Wallet) GetTransactionByDID(did string) ([]TransactionDetails, error) {
+	var td []TransactionDetails
+
+	err := w.s.Read(TransactionStorage, &td, "sender_did=? OR receiver_did=?", did, did)
+	if err != nil {
+		w.log.Error("Failed to get transaction details with did", did, "err", err)
+		return nil, err
+	}
+	return td, nil
+}
+
+func (w *Wallet) GetTransactionByDIDAndDateRange(did string, startDate time.Time, endDate time.Time) ([]TransactionDetails, error) {
+	var td []TransactionDetails
+	err := w.s.Read(TransactionStorage, &td, "date_time >= ? AND date_time <= ? AND sender_did=? OR receiver_did=?", startDate, endDate, did, did)
+	if err != nil {
+		w.log.Error("Failed to get transaction details with did and date range", did, startDate, endDate, "err", err)
 		return nil, err
 	}
 	return td, nil

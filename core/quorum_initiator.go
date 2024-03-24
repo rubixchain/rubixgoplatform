@@ -258,7 +258,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}
 	pd := PledgeDetails{
 		//TransferAmount:         reqPledgeTokens,
-		RemPledgeTokens:        reqPledgeTokens,
+		RemPledgeTokens:        floatPrecision(reqPledgeTokens, MaxDecimalPlaces),
 		NumPledgedTokens:       0,
 		PledgedTokens:          make(map[string][]string),
 		PledgedTokenChainBlock: make(map[string]interface{}),
@@ -836,11 +836,10 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	if cr.Mode == DTCommitMode {
 		tcb.TransactionType = block.TokenCommittedType
 	}
-
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
-		c.log.Error("Failed to create new token chain block")
-		return nil, fmt.Errorf("failed to create new token chain block")
+		c.log.Error("Failed to create new token chain block - qrm init")
+		return nil, fmt.Errorf("failed to create new token chain block - qrm init")
 	}
 	blk := nb.GetBlock()
 	if blk == nil {

@@ -104,10 +104,13 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 		switch t.TokenStatus {
 		case wallet.TokenIsFree:
 			info.RBTAmount = info.RBTAmount + t.TokenValue
+			info.RBTAmount = floatPrecision(info.RBTAmount, MaxDecimalPlaces)
 		case wallet.TokenIsLocked:
 			info.LockedRBT = info.LockedRBT + t.TokenValue
+			info.LockedRBT = floatPrecision(info.LockedRBT, MaxDecimalPlaces)
 		case wallet.TokenIsPledged:
 			info.PledgedRBT = info.PledgedRBT + t.TokenValue
+			info.PledgedRBT = floatPrecision(info.PledgedRBT, MaxDecimalPlaces)
 		}
 	}
 	return info, nil
@@ -330,3 +333,84 @@ func (c *Core) getFromIPFS(path string) ([]byte, error) {
 // 	// }
 // 	// c.log.Debug("Token recevied", "token", tp.Token)
 // }
+
+func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token, float64, error) {
+	requiredTokens := make([]wallet.Token, 0)
+	var remainingAmount float64
+	wholeValue := int(txnAmount)
+	//fv := float64(txnAmount)
+	decimalValue := txnAmount - float64(wholeValue)
+	decimalValue = floatPrecision(decimalValue, MaxDecimalPlaces)
+	//check if whole value exists
+	if wholeValue != 0 {
+		//extract the whole amount part that is the integer value of txn amount
+		//serach for the required whole amount
+		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue)
+		if err != nil && err.Error() != "no records found" {
+			defer c.w.ReleaseTokens(wholeTokens)
+			c.log.Error("failed to search for whole tokens", "err", err)
+			return nil, 0.0, err
+		}
+		//if no parts found anf remWhole is also not 0
+		if len(wholeTokens) == 0 && remWhole > 0 {
+			c.log.Debug("No whole tokens found. proceeding to get part tokens for txn")
+
+			allPartTokens, err := c.w.GetAllPartTokens(did)
+			if err != nil && err.Error() != "no records found" {
+				c.log.Error("failed to search for whole tokens", "err", err)
+				return nil, 0.0, err
+			}
+			if len(allPartTokens) == 0 {
+				c.log.Error("No part Tokens found , This wallet is empty", "err", err)
+				return nil, 0.0, err
+			}
+			var sum float64
+			for _, partToken := range allPartTokens {
+				sum = sum + partToken.TokenValue
+			}
+			if sum < txnAmount {
+				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
+				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
+			}
+			// Create a slice to store the indices of elements to be removed
+			var indicesToRemove []int
+			// Iterate through allPartTokens
+			defer c.w.ReleaseTokens(allPartTokens)
+			for i, partToken := range allPartTokens {
+				// Subtract the partToken value from the txnAmount
+				// If the transaction amount is less than the partToken.TokenValue, skip
+				if txnAmount < partToken.TokenValue {
+					continue
+				}
+				txnAmount -= partToken.TokenValue
+				txnAmount = floatPrecision(txnAmount, MaxDecimalPlaces)
+				// Add the partToken to the requiredTokens
+				requiredTokens = append(requiredTokens, partToken)
+				// Store the index of the element to be removed
+				indicesToRemove = append(indicesToRemove, i)
+				// Check if txnAmount goes negative
+				if txnAmount == 0 {
+					break
+				}
+			}
+			// Remove elements from allPartTokens using copy
+			for i, idx := range indicesToRemove {
+				copy(allPartTokens[idx-i:], allPartTokens[idx-i+1:])
+			}
+			allPartTokens = allPartTokens[:len(allPartTokens)-len(indicesToRemove)]
+
+			if txnAmount > 0 {
+				// Add the remaining amount to the remainingAmount variable
+				remainingAmount += txnAmount
+			}
+			c.w.ReleaseTokens(allPartTokens)
+		} else {
+			c.log.Debug("wallet has whole tokens ")
+			requiredTokens = append(requiredTokens, wholeTokens...)
+			//remainingAmount = +float64(remWhole)
+		}
+
+	}
+	remainingAmount += decimalValue
+	return requiredTokens, remainingAmount, nil
+}
