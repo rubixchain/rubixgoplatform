@@ -45,6 +45,7 @@ type ContractType struct {
 	TransInfo  *TransInfo `json:"transInfo"`
 	TotalRBTs  float64    `json:"totalRBTs"`
 	log        logger.Logger
+	ReqID      string `json:"req_id"`
 }
 
 type Contract struct {

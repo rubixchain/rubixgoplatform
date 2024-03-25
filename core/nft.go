@@ -306,6 +306,7 @@ func (c *Core) addNFTSaleContract(reqID string, sr *NFTSaleReq) *model.BasicResp
 			Comment:     "Putting sale contract for NFTs",
 			TransTokens: tis,
 		},
+		ReqID: reqID,
 	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)

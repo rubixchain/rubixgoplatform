@@ -114,6 +114,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 			SmartContractToken: deployReq.SmartContractToken,
 			TransTokens:        smartContractInfoArray,
 		},
+		ReqID: reqID,
 	}
 	consensusContract := contract.CreateNewContract(consensusContractDetails)
 	if consensusContract == nil {
@@ -253,6 +254,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 			TransTokens:        smartContractInfoArray,
 			SmartContractData:  executeReq.SmartContractData,
 		},
+		ReqID: reqID,
 	}
 
 	consensusContract := contract.CreateNewContract(consensusContractDetails)
