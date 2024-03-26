@@ -53,10 +53,6 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 	}
 	switch cfg.Type {
 	case did.LightDIDMode:
-		// if !strings.Contains(cfg.PubKeyFile, did.PubKeyFileName) {
-		// 	util.Filecopy(cfg.PubKeyFile, did.PubKeyFileName)
-		// 	cfg.PubKeyFile = did.PubKeyFileName
-		// }
 		cfg.PubKeyFile = ""
 
 	case did.BasicDIDMode:
