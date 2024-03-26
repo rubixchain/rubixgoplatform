@@ -519,6 +519,7 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	}
 }
 
+// Initializes the did in it's corresponding did mode (basic/ light)
 func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
@@ -526,17 +527,45 @@ func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
 		return nil, err
 	}
 
-	return did.InitDIDBasic(didStr, c.didDir, nil), nil
-
+	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
+	// and own did type from DIDTable using GetDID function
+	didtype, err := c.w.GetPeerDIDType(didStr)
+	if err != nil {
+		dt, err1 := c.w.GetDID(didStr)
+		if err1 != nil {
+			return nil, fmt.Errorf("couldn't fetch did type")
+		}
+		didtype = dt.Type
+	}
+	return c.InitialiseDID(didStr, didtype)
 }
 
+// Initializes the quorum in it's corresponding did mode (basic/ light)
 func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err
 	}
-	return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 
+	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
+	// and own did type from DIDTable using GetDID function
+	didtype, err := c.w.GetPeerDIDType(didStr)
+	if err != nil {
+		dt, err1 := c.w.GetDID(didStr)
+		if err1 != nil {
+			return nil, fmt.Errorf("couldn't fetch did type")
+		}
+		didtype = dt.Type
+	}
+
+	switch didtype {
+	case did.BasicDIDMode:
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.LightDIDMode:
+		return did.InitDIDQuorum_Lt(didStr, c.didDir, ""), nil
+	default:
+		return nil, fmt.Errorf("invalid did type")
+	}
 }
 
 func (c *Core) FetchDID(did string) error {
@@ -565,4 +594,20 @@ func (c *Core) FetchDID(did string) error {
 
 func (c *Core) GetPeerID() string {
 	return c.peerID
+}
+
+// Initializes the did in it's corresponding did mode (basic/ light)
+func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) {
+	err := c.FetchDID(didStr)
+	if err != nil {
+		return nil, err
+	}
+	switch didType {
+	case did.LightDIDMode:
+		return did.InitDIDLight(didStr, c.didDir, nil), nil
+	case did.BasicDIDMode:
+		return did.InitDIDBasic(didStr, c.didDir, nil), nil
+	default:
+		return nil, fmt.Errorf("invalid did type, couldn't initialise")
+	}
 }

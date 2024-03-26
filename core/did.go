@@ -214,11 +214,17 @@ func (c *Core) registerDID(reqID string, did string) error {
 	if err != nil {
 		return fmt.Errorf("register did, failed to do signature")
 	}
+
+	dt, err := c.w.GetDID(did)
+	if err != nil {
+		return fmt.Errorf("DID does not exist")
+	}
 	pm := &PeerMap{
 		PeerID:    c.peerID,
 		DID:       did,
 		Signature: sig,
 		Time:      t,
+		DIDType:   dt.Type,
 	}
 	err = c.publishPeerMap(pm)
 	if err != nil {
