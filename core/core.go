@@ -495,7 +495,6 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 
 func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	dt, err := c.w.GetDID(didStr)
-	c.log.Debug("dt is", "dt", dt)
 	if err != nil {
 		c.log.Error("DID does not exist", "did", didStr)
 		return nil, fmt.Errorf("DID does not exist")

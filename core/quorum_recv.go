@@ -902,7 +902,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		},
 	}
 	nb := block.CreateNewBlock(ctcb, &tcb)
-	fmt.Println("Length of nb get block ", len(nb.GetBlock()))
 	if nb == nil {
 		c.log.Error("Failed to create new token chain block - qrm rec")
 		crep.Message = "Failed to create new token chain block -qrm rec"
