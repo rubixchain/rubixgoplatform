@@ -731,12 +731,14 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 		token := cresp.Message[ptStart : strings.Index(cresp.Message[ptStart:], ",")+ptStart]
 		issueType := cresp.Message[issueTypeStart:]
 
+		c.log.Debug("String: token is ", token, " issuetype is ", issueType)
 		issueTypeInt, err := strconv.Atoi(issueType)
 		if err != nil {
 			c.log.Error("Consensus failed due to token chain sync issue, issueType string conversion", "err", err)
 			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 			return
 		}
+		c.log.Debug("issue type in int is ", issueTypeInt)
 		syncIssueTokenDetails, err := c.w.GetToken(token, wallet.TokenIsLocked)
 		if err != nil {
 			c.log.Error("Consensus failed due to tokenchain sync issue ", "err", err)
