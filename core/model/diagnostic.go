@@ -31,3 +31,12 @@ type RegisterCallBackUrlReq struct {
 	SmartContractToken string
 	CallBackURL        string
 }
+
+type TCRemoveRequest struct {
+	Token  string
+	Latest bool
+}
+
+type TCRemoveReply struct {
+	BasicResponse
+}

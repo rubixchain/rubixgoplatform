@@ -76,6 +76,7 @@ const (
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
+	RemoveTokenChainBlockCmd       string = "removetokenchainblock"
 )
 
 var commands = []string{VersionCmd,
@@ -120,6 +121,7 @@ var commands = []string{VersionCmd,
 	DumpSmartContractTokenChainCmd,
 	GetTokenBlock,
 	GetSmartContractData,
+	RemoveTokenChainBlockCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -426,6 +428,7 @@ func Run(args []string) {
 	flag.IntVar(&cmd.publishType, "pubType", 0, "Smart contract event publishing type(Deploy & Execute)")
 	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
 	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
+	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -566,6 +569,8 @@ func Run(args []string) {
 		cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
+	case RemoveTokenChainBlockCmd:
+		cmd.removeTokenChainBlock()
 	default:
 		cmd.log.Error("Invalid command")
 	}
