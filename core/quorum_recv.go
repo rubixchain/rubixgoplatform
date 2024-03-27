@@ -141,16 +141,20 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	if err != nil {
 		validateTokenOwnershipErrorString := fmt.Sprint(err)
 		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
-			crep.Message = "Commited Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		c.log.Error("Commited Tokens ownership check failed")
-		crep.Message = "Commited Token ownership check failed, err : " + err.Error()
+		if strings.Contains(validateTokenOwnershipErrorString, "failed to sync tokenchain Token") {
+			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Error("Tokens ownership check failed")
+		crep.Message = "Token ownership check failed, err : " + err.Error()
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	if !validateTokenOwnershipVar {
-		c.log.Error("Commited Tokens ownership check failed")
-		crep.Message = "Commited Token ownership check failed"
+		c.log.Error("Tokens ownership check failed")
+		crep.Message = "Token ownership check failed"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	/* 	if !c.validateTokenOwnership(cr, sc) {

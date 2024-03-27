@@ -717,6 +717,38 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 		return
 	}
 
+	if strings.Contains(cresp.Message, "failed to sync tokenchain") {
+		tokenPrefix := "Token: "
+		issueTypePrefix := "issueType: "
+
+		// Find the starting indexes of pt and issueType values
+		ptStart := strings.Index(cresp.Message, tokenPrefix) + len(tokenPrefix)
+		issueTypeStart := strings.Index(cresp.Message, issueTypePrefix) + len(issueTypePrefix)
+
+		// Extracting the substrings from the message
+		token := cresp.Message[ptStart : strings.Index(cresp.Message[ptStart:], ",")+ptStart]
+		issueType := cresp.Message[issueTypeStart:]
+
+		issueTypeInt, err := strconv.Atoi(issueType)
+		if err != nil {
+			c.log.Error("Consensus failed due to token chain sync issue, issueType string conversion", "err", err)
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+		syncIssueTokenDetails, err := c.w.GetToken(token, wallet.TokenIsLocked)
+		if err != nil {
+			c.log.Error("Consensus failed due to tokenchain sync issue ", "err", err)
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+		if issueTypeInt == wallet.TokenChainSyncIssue {
+			syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+			c.w.UpdateToken(syncIssueTokenDetails)
+		}
+		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+		return
+	}
+
 	if !cresp.Status {
 		c.log.Error("Failed to get consensus", "msg", cresp.Message)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)

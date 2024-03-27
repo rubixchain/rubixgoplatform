@@ -88,7 +88,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 	err = c.syncTokenChainFrom(p, lbID, pt, tt)
 	if err != nil {
 		c.log.Error("failed to sync token chain block", "err", err)
-		return err
+		return fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v", pt, wallet.TokenChainSyncIssue)
 	}
 	ptb := c.w.GetLatestTokenBlock(pt, tt)
 	if ptb == nil {
@@ -157,12 +157,12 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		err := c.syncTokenChainFrom(p, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
-			return false, err
+			return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", ti[i].Token, wallet.TokenChainSyncIssue)
 		}
 		fb := c.w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
 		if fb == nil {
 			c.log.Error("Failed to get first token chain block")
-			return false, fmt.Errorf("Failed to get first token chain block", ti[i].Token)
+			return false, fmt.Errorf("failed to get first token chain block", ti[i].Token)
 		}
 		if c.TokenType(PartString) == ti[i].TokenType {
 			pt, _, err := fb.GetParentDetials(ti[i].Token)

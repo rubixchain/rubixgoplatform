@@ -215,11 +215,11 @@ func (w *Wallet) GetTokens(did string, amt float64) ([]Token, error) {
 	return wt, nil
 }
 
-func (w *Wallet) GetToken(token string) (*Token, error) {
+func (w *Wallet) GetToken(token string, token_Status int) (*Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t Token
-	err := w.s.Read(TokenStorage, &t, "token_id=? AND token_status=?", token, TokenIsFree)
+	err := w.s.Read(TokenStorage, &t, "token_id=? AND token_status=?", token, token_Status)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
