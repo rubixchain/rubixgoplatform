@@ -172,10 +172,20 @@ func (c *Core) RemoveTokenChainBlock(removeReq *model.TCRemoveRequest) *model.TC
 	}
 	err := c.w.RemoveTokenChainBlocklatest(removeReq.Token, tt)
 	if err != nil {
-		removeReply.Message = "Failed to remove token chain block"
+		tt = token.PartTokenType
+		if c.testNet {
+			tt = token.TestPartTokenType
+		}
+		err = c.w.RemoveTokenChainBlocklatest(removeReq.Token, tt)
+		if err != nil {
+			removeReply.Message = "Failed to remove parts token chain block"
+			return removeReply
+		}
+
+		removeReply.Message = "Failed to remove whole token chain block"
 		return removeReply
 	}
 	removeReply.Status = true
-	removeReply.Message = "Successfully removed token chain block"
+	removeReply.Message = "Successfully removed token chain block " + removeReq.Token
 	return removeReply
 }
