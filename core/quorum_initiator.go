@@ -711,6 +711,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 		if issueTypeInt == ParentTokenNotBurned {
 			for _, orphanChild := range orphanChildTokenList {
 				orphanChild.TokenStatus = wallet.TokenIsOrphaned
+				c.log.Debug("Orphan token list status updated", orphanChild)
 				c.w.UpdateToken(&orphanChild)
 			}
 		}
@@ -745,8 +746,10 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 			return
 		}
+		c.log.Debug("sync issue token details ", syncIssueTokenDetails)
 		if issueTypeInt == TokenChainNotSynced {
 			syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+			c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
 			c.w.UpdateToken(syncIssueTokenDetails)
 		}
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
