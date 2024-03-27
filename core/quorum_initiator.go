@@ -691,7 +691,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 		// Extracting the substrings from the message
 		pt := cresp.Message[ptStart : strings.Index(cresp.Message[ptStart:], ",")+ptStart]
 		issueType := cresp.Message[issueTypeStart:]
-
+		c.log.Debug("String: pt is ", pt, " issuetype is ", issueType)
 		blockDetails := block.InitBlock(cr.ContractBlock, nil)
 
 		orphanChildTokenList, err := c.w.GetChildToken(blockDetails.GetSenderDID(), pt)
@@ -700,13 +700,15 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 			return
 		}
-		issueTypeString, err := strconv.Atoi(issueType)
+		issueTypeInt, err := strconv.Atoi(issueType)
+		c.log.Debug("issue type in int is ", issueTypeInt)
 		if err != nil {
 			c.log.Error("Consensus failed due to orphan child token, issueType string conversion", "err", err)
 			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 			return
 		}
-		if issueTypeString == wallet.TokenIsOrphaned {
+		c.log.Debug("Orphan token list ", orphanChildTokenList)
+		if issueTypeInt == ParentTokenNotBurned {
 			for _, orphanChild := range orphanChildTokenList {
 				orphanChild.TokenStatus = wallet.TokenIsOrphaned
 				c.w.UpdateToken(&orphanChild)
@@ -741,7 +743,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 			return
 		}
-		if issueTypeInt == wallet.TokenChainSyncIssue {
+		if issueTypeInt == TokenChainNotSynced {
 			syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
 			c.w.UpdateToken(syncIssueTokenDetails)
 		}

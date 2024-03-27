@@ -180,10 +180,11 @@ func (c *Core) RemoveTokenChainBlock(removeReq *model.TCRemoveRequest) *model.TC
 		if err != nil {
 			removeReply.Message = "Failed to remove parts token chain block"
 			return removeReply
+		} else {
+			removeReply.Message = "Failed to remove whole token chain block"
+			return removeReply
 		}
 
-		removeReply.Message = "Failed to remove whole token chain block"
-		return removeReply
 	}
 	removeReply.Status = true
 	removeReply.Message = "Successfully removed token chain block " + removeReq.Token

@@ -20,6 +20,7 @@ const (
 const (
 	GenericIssue int = iota
 	ParentTokenNotBurned
+	TokenChainNotSynced
 )
 
 type QuorumManager struct {
