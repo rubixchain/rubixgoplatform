@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -308,8 +309,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				loop = false
 			} else if cs.Result.RunningCount == 0 {
 				loop = false
-				err = fmt.Errorf("consensus failed")
-				c.log.Error("Consensus failed")
+				err = fmt.Errorf("consensus failed, retry transaction after sometimes")
+				c.log.Error("Consensus failed, retry transaction after sometimes")
 			}
 		}
 		c.qlock.Unlock()
@@ -679,8 +680,45 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
+
+	if strings.Contains(cresp.Message, "parent token is not in burnt stage") {
+		ptPrefix := "pt: "
+		issueTypePrefix := "issueType: "
+		// Find the starting indexes of pt and issueType values
+		ptStart := strings.Index(cresp.Message, ptPrefix) + len(ptPrefix)
+		issueTypeStart := strings.Index(cresp.Message, issueTypePrefix) + len(issueTypePrefix)
+
+		// Extracting the substrings from the message
+		pt := cresp.Message[ptStart : strings.Index(cresp.Message[ptStart:], ",")+ptStart]
+		issueType := cresp.Message[issueTypeStart:]
+
+		blockDetails := block.InitBlock(cr.ContractBlock, nil)
+
+		orphanChildTokenList, err := c.w.GetChildToken(blockDetails.GetSenderDID(), pt)
+		if err != nil {
+			c.log.Error("Consensus failed due to orphan child token ", "err", err)
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+		issueTypeString, err := strconv.Atoi(issueType)
+		if err != nil {
+			c.log.Error("Consensus failed due to orphan child token, issueType string conversion", "err", err)
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+		if issueTypeString == wallet.TokenIsOrphaned {
+			for _, orphanChild := range orphanChildTokenList {
+				orphanChild.TokenStatus = wallet.TokenIsOrphaned
+				c.w.UpdateToken(&orphanChild)
+			}
+		}
+
+		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+		return
+	}
+
 	if !cresp.Status {
-		c.log.Error("Faile to get consensus", "msg", cresp.Message)
+		c.log.Error("Failed to get consensus", "msg", cresp.Message)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}

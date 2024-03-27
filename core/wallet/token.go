@@ -21,6 +21,9 @@ const (
 	TokenIsFetched
 	TokenIsBurnt
 	TokenIsExecuted
+	TokenIsOrphaned
+	TokenChainSyncIssue
+	TokenPledgeIssue
 )
 const (
 	Zero int = iota
@@ -482,7 +485,6 @@ func (w *Wallet) GetAllPartTokens(did string) ([]Token, error) {
 			return nil, err
 		}
 	}
-	w.log.Debug("all partotkens length", len(t))
 	return t, nil
 }
 
@@ -491,6 +493,36 @@ func (w *Wallet) GetAllWholeTokens(did string) ([]Token, error) {
 	defer w.l.Unlock()
 	var t []Token
 	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	for i := range t {
+		t[i].TokenStatus = TokenIsLocked
+		err = w.s.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return nil, err
+		}
+	}
+	return t, nil
+}
+
+/* func (w *Wallet) UpdateChildTokenStatusToOrphan(tokenHash string) (error){
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.s.Update(TokenStorage, nil, "token_id=?", tokenHash)
+	if err != nil {
+		return err
+	}
+	return nil
+} */
+
+func (w *Wallet) GetChildToken(did string, parentTokenID string) ([]Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "did=? AND parent_token_id=? ", did, parentTokenID)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
