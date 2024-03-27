@@ -654,41 +654,41 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		t := ti.Token
 		pblkID, err := b.GetPrevBlockID(t)
 		if err != nil {
-			c.log.Error("failed to sync token chain block, missing previous block id", "err", err)
-			crep.Message = "failed to sync token chain block, missing previous block id"
+			c.log.Error("failed to sync token chain block, missing previous block id for token ", t, " err : ", err)
+			crep.Message = "failed to sync token chain block, missing previous block id for token " + t
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		err = c.syncTokenChainFrom(p, pblkID, t, ti.TokenType)
 		if err != nil {
-			c.log.Error("failed to sync token chain block", "err", err)
-			crep.Message = "failed to sync token chain block"
+			c.log.Error("failed to sync token chain block for token ", t, " err : ", err)
+			crep.Message = "failed to sync token chain block for token " + t
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 
 		if c.TokenType(PartString) == ti.TokenType {
 			gb := c.w.GetGenesisTokenBlock(t, ti.TokenType)
 			if gb == nil {
-				c.log.Error("failed to get genesis block", "err", err)
-				crep.Message = "failed to get genesis block"
+				c.log.Error("failed to get genesis block for token ", t, "err : ", err)
+				crep.Message = "failed to get genesis block for token " + t
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 			pt, _, err := gb.GetParentDetials(t)
 			if err != nil {
-				c.log.Error("failed to get parent detials", "err", err)
-				crep.Message = "failed to get parent detials"
+				c.log.Error("failed to get parent details for token ", t, " err : ", err)
+				crep.Message = "failed to get parent details for token " + t
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 			err = c.syncParentToken(p, pt)
 			if err != nil {
-				c.log.Error("failed to sync parent token", "err", err)
-				crep.Message = "failed to sync parent token"
+				c.log.Error("failed to sync parent token ", pt, " childtoken ", t, " err : ", err)
+				crep.Message = "failed to sync parent token " + pt + " childtoken " + t
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 		}
 		ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
 		if err != nil {
-			c.log.Error("Failed to fetch previous block", "err", err)
-			crep.Message = "Failed to fetch previous block"
+			c.log.Error("Failed to fetch previous block for token ", t, " err : ", err)
+			crep.Message = "Failed to fetch previous block for token " + t
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		ptcb := block.InitBlock(ptcbArray, nil)
@@ -705,7 +705,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		t := ti.Token
 		senderPeerId, _, ok := util.ParseAddress(sr.Address)
 		if !ok {
-			c.log.Error("Error occurede", "error", err)
+			c.log.Error("Error occured", "error", err)
 			crep.Message = "Unable to parse sender address"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}

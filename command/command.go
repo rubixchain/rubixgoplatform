@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.13a"
+	version string = "0.0.13b"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -76,7 +76,6 @@ const (
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
-	RemoveTokenChainBlockCmd       string = "removetokenchainblock"
 )
 
 var commands = []string{VersionCmd,
@@ -121,7 +120,6 @@ var commands = []string{VersionCmd,
 	DumpSmartContractTokenChainCmd,
 	GetTokenBlock,
 	GetSmartContractData,
-	RemoveTokenChainBlockCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -569,8 +567,6 @@ func Run(args []string) {
 		cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
-	case RemoveTokenChainBlockCmd:
-		cmd.removeTokenChainBlock()
 	default:
 		cmd.log.Error("Invalid command")
 	}
