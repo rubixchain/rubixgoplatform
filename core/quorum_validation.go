@@ -24,11 +24,11 @@ type TokenStateCheckResult struct {
 	tokenIDTokenStateData string
 }
 
-func (c *Core) validateSigner(b *block.Block) bool {
+func (c *Core) validateSigner(b *block.Block) (bool, error) {
 	signers, err := b.GetSigner()
 	if err != nil {
 		c.log.Error("failed to get signers", "err", err)
-		return false
+		return false, fmt.Errorf("failed to get signers", "err", err)
 	}
 	for _, signer := range signers {
 		var dc did.DIDCrypto
@@ -36,26 +36,27 @@ func (c *Core) validateSigner(b *block.Block) bool {
 		case block.TokenGeneratedType, block.TokenBurntType:
 			dc, err = c.SetupForienDID(signer)
 			if err != nil {
-				c.log.Error("failed to setup forien DID", "err", err)
-				return false
+				c.log.Error("failed to setup foreign DID", "err", err)
+				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
 		default:
 			dc, err = c.SetupForienDIDQuorum(signer)
 			if err != nil {
-				c.log.Error("failed to setup forien DID quorum", "err", err)
-				return false
+				c.log.Error("failed to setup foreign DID quorum", "err", err)
+				return false, fmt.Errorf("failed to setup foreign DID quorum : ", signer, "err", err)
 			}
 		}
 		err := b.VerifySignature(dc)
 		if err != nil {
 			c.log.Error("Failed to verify signature", "err", err)
-			return false
+			return false, fmt.Errorf("Failed to verify signature", "err", err)
 		}
 	}
-	return true
+	return true, nil
 }
 
 func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
+	var issueType int
 	b, err := c.getFromIPFS(pt)
 	if err != nil {
 		c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", pt)
@@ -87,7 +88,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 	err = c.syncTokenChainFrom(p, lbID, pt, tt)
 	if err != nil {
 		c.log.Error("failed to sync token chain block", "err", err)
-		return err
+		return fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v", pt, TokenChainNotSynced)
 	}
 	ptb := c.w.GetLatestTokenBlock(pt, tt)
 	if ptb == nil {
@@ -121,13 +122,15 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 		c.w.UpdateToken(td)
 	}
 	if ptb.GetTransType() != block.TokenBurntType {
+		issueType = ParentTokenNotBurned // parent token is not in burnt stage
+		fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
 		c.log.Error("parent token is not in burnt stage", "token", pt)
-		return fmt.Errorf("parent token is not in burnt stage")
+		return fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", pt, issueType)
 	}
 	return nil
 }
 
-func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) bool {
+func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) (bool, error) {
 
 	var ti []contract.TokenInfo
 	var address string
@@ -147,30 +150,30 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
-		return false
+		return false, err
 	}
 	defer p.Close()
 	for i := range ti {
 		err := c.syncTokenChainFrom(p, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
-			return false
+			return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", ti[i].Token, TokenChainNotSynced)
 		}
 		fb := c.w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
 		if fb == nil {
 			c.log.Error("Failed to get first token chain block")
-			return false
+			return false, fmt.Errorf("failed to get first token chain block", ti[i].Token)
 		}
 		if c.TokenType(PartString) == ti[i].TokenType {
 			pt, _, err := fb.GetParentDetials(ti[i].Token)
 			if err != nil {
 				c.log.Error("failed to fetch parent token detials", "err", err, "token", ti[i].Token)
-				return false
+				return false, err
 			}
 			err = c.syncParentToken(p, pt)
 			if err != nil {
 				c.log.Error("failed to sync parent token chain", "token", pt)
-				return false
+				return false, err
 			}
 		}
 
@@ -179,27 +182,28 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			tl, tn, err := fb.GetTokenDetials(ti[i].Token)
 			if err != nil {
 				c.log.Error("Failed to get token detials", "err", err)
-				return false
+				return false, err
 			}
 			ct := token.GetTokenString(tl, tn)
 			tb := bytes.NewBuffer([]byte(ct))
 			tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			if err != nil {
 				c.log.Error("Failed to validate, failed to get token hash", "err", err)
-				return false
+				return false, err
 			}
 			if tid != ti[i].Token {
 				c.log.Error("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn)
-				return false
+				return false, fmt.Errorf("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn)
 			}
 		}
 		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		if b == nil {
 			c.log.Error("Invalid token chain block")
-			return false
+			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
 		}
-		if !c.validateSigner(b) {
-			return false
+		signatureValidation, err := c.validateSigner(b)
+		if !signatureValidation || err != nil {
+			return false, err
 		}
 	}
 	// for i := range wt {
@@ -229,7 +233,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	// 		}
 	// 	}
 	// }
-	return true
+	return true, nil
 }
 
 func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {

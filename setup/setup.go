@@ -60,6 +60,7 @@ const (
 	APIGetSmartContractTokenData        string = "/api/get-smart-contract-token-chain-data"
 	APIRegisterCallBackURL              string = "/api/register-callback-url"
 	APIGetTxnByNode                     string = "/api/get-by-node"
+	APIRemoveTokenChainBlock            string = "/api/remove-token-chain-block"
 )
 
 // jwt.RegisteredClaims

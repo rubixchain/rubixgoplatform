@@ -17,6 +17,12 @@ const (
 	QuorumStorage string = "quorummanager"
 )
 
+const (
+	GenericIssue int = iota
+	ParentTokenNotBurned
+	TokenChainNotSynced
+)
+
 type QuorumManager struct {
 	ql  []string
 	s   storage.Storage

@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -291,7 +292,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
 		//as well. Each quorums should pledge equal amount of tokens and hence, it should have a total of (Transacting RBTs/5) tokens
 		//available for pledging.
-		go c.connectQuorum(cr, a, AlphaQuorumType)
+		go c.connectQuorum(cr, a, AlphaQuorumType, sc)
 	}
 	loop := true
 	var err error
@@ -308,8 +309,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				loop = false
 			} else if cs.Result.RunningCount == 0 {
 				loop = false
-				err = fmt.Errorf("consensus failed")
-				c.log.Error("Consensus failed")
+				err = fmt.Errorf("consensus failed, retry transaction after sometimes")
+				c.log.Error("Consensus failed, retry transaction after sometimes")
 			}
 		}
 		c.qlock.Unlock()
@@ -656,7 +657,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	}
 }
 
-func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
+func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contract.Contract) {
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
 	var err error
@@ -679,8 +680,83 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int) {
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
+
+	if strings.Contains(cresp.Message, "parent token is not in burnt stage") {
+		ptPrefix := "pt: "
+		issueTypePrefix := "issueType: "
+		// Find the starting indexes of pt and issueType values
+		ptStart := strings.Index(cresp.Message, ptPrefix) + len(ptPrefix)
+		issueTypeStart := strings.Index(cresp.Message, issueTypePrefix) + len(issueTypePrefix)
+
+		// Extracting the substrings from the message
+		pt := cresp.Message[ptStart : strings.Index(cresp.Message[ptStart:], ",")+ptStart]
+		issueType := cresp.Message[issueTypeStart:]
+		c.log.Debug("String: pt is ", pt, " issuetype is ", issueType)
+
+		c.log.Debug("sc.GetSenderDID()", sc.GetSenderDID(), "pt", pt)
+		orphanChildTokenList, err1 := c.w.GetChildToken(sc.GetSenderDID(), pt)
+		if err1 != nil {
+			c.log.Error("Consensus failed due to orphan child token ", "err", err1)
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+		issueTypeInt, err2 := strconv.Atoi(issueType)
+		c.log.Debug("issue type in int is ", issueTypeInt)
+		if err2 != nil {
+			c.log.Error("Consensus failed due to orphan child token, issueType string conversion", "err", err2)
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+		c.log.Debug("Orphan token list ", orphanChildTokenList)
+		if issueTypeInt == ParentTokenNotBurned {
+			for _, orphanChild := range orphanChildTokenList {
+				orphanChild.TokenStatus = wallet.TokenIsOrphaned
+				c.log.Debug("Orphan token list status updated", orphanChild)
+				c.w.UpdateToken(&orphanChild)
+			}
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+	}
+
+	if strings.Contains(cresp.Message, "failed to sync tokenchain") {
+		tokenPrefix := "Token: "
+		issueTypePrefix := "issueType: "
+
+		// Find the starting indexes of pt and issueType values
+		ptStart := strings.Index(cresp.Message, tokenPrefix) + len(tokenPrefix)
+		issueTypeStart := strings.Index(cresp.Message, issueTypePrefix) + len(issueTypePrefix)
+
+		// Extracting the substrings from the message
+		token := cresp.Message[ptStart : strings.Index(cresp.Message[ptStart:], ",")+ptStart]
+		issueType := cresp.Message[issueTypeStart:]
+
+		c.log.Debug("String: token is ", token, " issuetype is ", issueType)
+		issueTypeInt, err1 := strconv.Atoi(issueType)
+		if err1 != nil {
+			c.log.Error("Consensus failed due to token chain sync issue, issueType string conversion", "err", err1)
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+		c.log.Debug("issue type in int is ", issueTypeInt)
+		syncIssueTokenDetails, err2 := c.w.GetToken(token, wallet.TokenIsLocked)
+		if err2 != nil {
+			c.log.Error("Consensus failed due to tokenchain sync issue ", "err", err2)
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+		c.log.Debug("sync issue token details ", syncIssueTokenDetails)
+		if issueTypeInt == TokenChainNotSynced {
+			syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+			c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
+			c.w.UpdateToken(syncIssueTokenDetails)
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+	}
+
 	if !cresp.Status {
-		c.log.Error("Faile to get consensus", "msg", cresp.Message)
+		c.log.Error("Failed to get consensus", "msg", cresp.Message)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}

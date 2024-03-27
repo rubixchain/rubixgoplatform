@@ -152,6 +152,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			Comment:     req.Comment,
 			TransTokens: tis,
 		},
+		ReqID: reqID,
 	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)
