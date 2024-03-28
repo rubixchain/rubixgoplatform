@@ -193,6 +193,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	st := &contract.ContractType{
 		Type:      contract.SCDataTokenType,
 		TransInfo: ts,
+		ReqID:     reqID,
 	}
 	sc := contract.CreateNewContract(st)
 	if sc == nil {
@@ -306,6 +307,7 @@ func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.
 		Type:       contract.SCDataTokenCommitType,
 		PledgeMode: contract.POWPledgeMode,
 		TransInfo:  tsi,
+		ReqID:      reqID,
 	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)

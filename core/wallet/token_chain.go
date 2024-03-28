@@ -558,3 +558,29 @@ func (w *Wallet) CreateTokenBlock(b *block.Block) error {
 func (w *Wallet) ClearTokenBlocks(tokenType int) error {
 	return w.clearBlocks(tokenType)
 }
+
+func (w *Wallet) RemoveTokenChainBlocklatest(token string, tokenType int) error {
+	return w.removeTokenChainBlockLatest(token, tokenType)
+}
+
+// Remove Tokenchain for mentioned token
+func (w *Wallet) removeTokenChainBlockLatest(token string, tokenType int) error {
+	db := w.getChainDB(tokenType)
+	if db == nil {
+		return fmt.Errorf("failed get all blocks, invalid token type")
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tokenType, token))), nil)
+	defer iter.Release()
+
+	if iter.Last() {
+		k := iter.Key()
+		err := db.Delete(k, nil)
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("no blocks found for the given token type and token")
+	}
+
+	return nil
+}

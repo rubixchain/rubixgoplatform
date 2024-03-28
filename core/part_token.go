@@ -155,7 +155,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	if dc == nil {
 		return nil, fmt.Errorf("did crypto is not initialised")
 	}
-	t, err := c.w.GetToken(tkn)
+	t, err := c.w.GetToken(tkn, wallet.TokenIsFree)
 	if err != nil || t == nil {
 		return nil, fmt.Errorf("failed to get token or tokne does not exist")
 	}
