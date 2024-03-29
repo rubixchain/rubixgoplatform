@@ -24,6 +24,7 @@ const (
 	TokenIsOrphaned
 	TokenChainSyncIssue
 	TokenPledgeIssue
+	TokenIsBeingDoubleSpent
 )
 const (
 	Zero int = iota
