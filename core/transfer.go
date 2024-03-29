@@ -69,6 +69,20 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
+
+	accountBalance, err := c.GetAccountInfo(did)
+	if err != nil {
+		c.log.Error("Failed to get tokens", "err", err)
+		resp.Message = "Insufficient tokens or tokens are locked or " + err.Error()
+		return resp
+	} else {
+		if req.TokenCount > accountBalance.RBTAmount {
+			c.log.Error(fmt.Sprint("Insufficient balance, account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount))
+			resp.Message = fmt.Sprint("Insufficient balance, account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount)
+			return resp
+		}
+	}
+
 	tokensForTxn := make([]wallet.Token, 0)
 
 	reqTokens, remainingAmount, err := c.GetRequiredTokens(did, req.TokenCount)
