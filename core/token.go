@@ -358,6 +358,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 			requiredTokens = append(requiredTokens, wholeTokens...)
 			//wholeValue = wholeValue - len(requiredTokens)
 			reqAmt = reqAmt - float64(len(wholeTokens))
+			reqAmt = floatPrecision(reqAmt, MaxDecimalPlaces)
 		}
 
 		if len(wholeTokens) != 0 && remWhole > 0 {
