@@ -76,9 +76,9 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Insufficient tokens or tokens are locked or " + err.Error()
 		return resp
 	} else {
-		c.log.Error(" before if : account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount)
+		c.log.Error(fmt.Sprint("Insufficient balance, account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount))
 		if req.TokenCount > accountBalance.RBTAmount {
-			c.log.Error("Insufficient balance, account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount)
+			c.log.Error(fmt.Sprint("Insufficient balance, account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount))
 			resp.Message = fmt.Sprint("Insufficient balance, account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount)
 			return resp
 		}
