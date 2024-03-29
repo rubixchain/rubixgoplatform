@@ -352,6 +352,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 			c.log.Error("failed to search for whole tokens", "err", err)
 			return nil, 0.0, err
 		}
+
 		//if whole tokens are found add thgem to the variable required Tokens
 		if len(wholeTokens) != 0 {
 			c.log.Debug("found whole tokens in wallet adding them to required tokens list")
@@ -361,7 +362,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 			reqAmt = floatPrecision(reqAmt, MaxDecimalPlaces)
 		}
 
-		if len(wholeTokens) != 0 && remWhole > 0 {
+		if (len(wholeTokens) != 0 && remWhole > 0) || (len(wholeTokens) != 0 && remWhole == 0) {
 			c.log.Debug("No more whole token left in wallet , rest of needed amt ", reqAmt)
 			allPartTokens, err := c.w.GetAllPartTokens(did)
 			if err != nil && err.Error() != "no records found" {
