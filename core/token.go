@@ -473,6 +473,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 	} else {
 		return make([]wallet.Token, 0), reqAmt, nil
 	}
+	defer c.w.ReleaseTokens(requiredTokens)
 	remainingAmount = floatPrecision(remainingAmount, MaxDecimalPlaces)
 	return requiredTokens, remainingAmount, nil
 }
