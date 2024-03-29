@@ -375,6 +375,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 			var sum float64
 			for _, partToken := range allPartTokens {
 				sum = sum + partToken.TokenValue
+				sum = floatPrecision(sum, MaxDecimalPlaces)
 			}
 			if sum < reqAmt {
 				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
