@@ -755,6 +755,28 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		}
 	}
 
+	if strings.Contains(cresp.Message, "Token state is exhausted, Token is being Double spent.") {
+		tokenPrefix := "Token : "
+		tStart := strings.Index(cresp.Message, tokenPrefix) + len(tokenPrefix)
+		var token string
+		if tStart >= len(tokenPrefix) {
+			token = cresp.Message[tStart:]
+			fmt.Println("Token is being Double spent. Token is ", token)
+		}
+		doubleSpendTokenDetails, err2 := c.w.GetToken(token, wallet.TokenIsFree)
+		if err2 != nil {
+			c.log.Error("Consensus failed due to token being double spent ", "err", err2)
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
+		c.log.Debug("Double spend token details ", doubleSpendTokenDetails)
+		doubleSpendTokenDetails.TokenStatus = wallet.TokenIsBeingDoubleSpent
+		c.log.Debug("Double spend token details status updated", doubleSpendTokenDetails)
+		c.w.UpdateToken(doubleSpendTokenDetails)
+		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+		return
+	}
+
 	if !cresp.Status {
 		c.log.Error("Failed to get consensus", "msg", cresp.Message)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)

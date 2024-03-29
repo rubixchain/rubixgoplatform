@@ -109,6 +109,19 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			tokensForTxn = append(tokensForTxn, wt...)
 		}
 	}
+
+	var sumOfTokensForTxn float64
+	for _, tokenForTxn := range tokensForTxn {
+		sumOfTokensForTxn = sumOfTokensForTxn + tokenForTxn.TokenValue
+		sumOfTokensForTxn = floatPrecision(sumOfTokensForTxn, MaxDecimalPlaces)
+	}
+
+	if sumOfTokensForTxn != req.TokenCount {
+		c.log.Error(fmt.Sprint("Sum of Selected Tokens sum : ", sumOfTokensForTxn, " is not equal to trnx value : ", req.TokenCount))
+		resp.Message = fmt.Sprint("Sum of Selected Tokens sum : ", sumOfTokensForTxn, " is not equal to trnx value : ", req.TokenCount)
+		return resp
+	}
+
 	// release the locked tokens before exit
 	defer c.w.ReleaseTokens(tokensForTxn)
 

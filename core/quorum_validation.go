@@ -379,10 +379,10 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	updatedList := c.removeStrings(list, qPeerIds)
 	//if pin exist abort
 	if len(updatedList) != 0 {
-		c.log.Debug("Token state is exhausted, Token is being Double spent")
+		c.log.Debug("Token state is exhausted, Token is being Double spent. Token : ", tokenId)
 		result.Exhausted = true
 		result.Error = nil
-		result.Message = "Token state is exhausted, Token is being Double spent"
+		result.Message = "Token state is exhausted, Token is being Double spent. Token : " + tokenId
 		resultArray[index] = result
 		return
 	}
