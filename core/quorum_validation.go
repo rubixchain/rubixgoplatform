@@ -3,7 +3,6 @@ package core
 import (
 	"bytes"
 	"fmt"
-	"strings"
 	"sync"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
@@ -379,15 +378,6 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	}
 	updatedList := c.removeStrings(list, qPeerIds)
 	//if pin exist abort
-	if strings.Contains(tokenId, "Qmci38Qv8fMQ8LtsbXJdhj6MZJ2r8iiEVSBqoAHBeUon41") {
-		c.log.Debug("Token state is exhausted, Token is being Double spent. Token : ", tokenId)
-		result.Exhausted = true
-		result.Error = nil
-		result.Message = "Token state is exhausted, Token is being Double spent. Token : " + tokenId
-		resultArray[index] = result
-		return
-	}
-
 	if len(updatedList) != 0 {
 		c.log.Debug("Token state is exhausted, Token is being Double spent. Token : ", tokenId)
 		result.Exhausted = true

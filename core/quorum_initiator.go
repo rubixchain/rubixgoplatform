@@ -763,7 +763,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 			token = cresp.Message[tStart:]
 			fmt.Println("Token is being Double spent. Token is ", token)
 		}
-		doubleSpendTokenDetails, err2 := c.w.GetToken(token, wallet.TokenIsLocked)
+		doubleSpendTokenDetails, err2 := c.w.GetToken(token, wallet.TokenIsFree)
 		if err2 != nil {
 			c.log.Error("Consensus failed due to token being double spent ", "err", err2)
 			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
