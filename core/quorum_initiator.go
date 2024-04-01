@@ -739,7 +739,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 			return
 		}
 		c.log.Debug("issue type in int is ", issueTypeInt)
-		syncIssueTokenDetails, err2 := c.w.GetToken(token, wallet.TokenIsLocked)
+		syncIssueTokenDetails, err2 := c.w.ReadToken(token)
 		if err2 != nil {
 			c.log.Error("Consensus failed due to tokenchain sync issue ", "err", err2)
 			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
