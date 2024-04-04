@@ -1,0 +1,654 @@
+definitions:
+  core.NFTSale:
+    properties:
+      amount:
+        type: number
+      token:
+        type: string
+    type: object
+  core.NFTSaleReq:
+    properties:
+      did:
+        type: string
+      tokens:
+        items:
+          $ref: '#/definitions/core.NFTSale'
+        type: array
+      type:
+        type: integer
+    type: object
+  model.BasicResponse:
+    properties:
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+    type: object
+  model.NFTStatus:
+    properties:
+      token:
+        type: string
+      token_status:
+        type: integer
+    type: object
+  model.NFTTokens:
+    properties:
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+      tokens:
+        items:
+          $ref: '#/definitions/model.NFTStatus'
+        type: array
+    type: object
+  model.TxnCountForDID:
+    properties:
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+      txnCount:
+        items:
+          $ref: '#/definitions/wallet.TransactionCount'
+        type: array
+    type: object
+  server.DeploySmartContractSwaggoInput:
+    properties:
+      comment:
+        type: string
+      deployerAddr:
+        type: string
+      quorumType:
+        type: integer
+      rbtAmount:
+        type: number
+      smartContractToken:
+        type: string
+    type: object
+  server.ExecuteSmartContractSwaggoInput:
+    properties:
+      comment:
+        type: string
+      executorAddr:
+        type: string
+      quorumType:
+        type: integer
+      smartContractData:
+        type: string
+      smartContractToken:
+        type: string
+    type: object
+  server.FetchSmartContractSwaggoInput:
+    properties:
+      smartContractToken:
+        type: string
+    type: object
+  server.GetSmartContractTokenChainDataSwaggoInput:
+    properties:
+      latest:
+        type: boolean
+      token:
+        type: string
+    type: object
+  server.NewSubscriptionSwaggoInput:
+    properties:
+      smartContractToken:
+        type: string
+    type: object
+  server.RBTTransferRequestSwaggoInput:
+    properties:
+      comment:
+        type: string
+      receiver:
+        type: string
+      sender:
+        type: string
+      tokenCOunt:
+        type: number
+      type:
+        type: integer
+    type: object
+  server.RegisterCallBackURLSwaggoInput:
+    properties:
+      callbackurl:
+        type: string
+      token:
+        type: string
+    type: object
+  server.SignatureResponseSwaggoInput:
+    properties:
+      id:
+        type: string
+      mode:
+        type: integer
+      password:
+        type: string
+    type: object
+  wallet.TransactionCount:
+    properties:
+      did:
+        type: string
+      txnReceived:
+        type: integer
+      txnSend:
+        type: integer
+    type: object
+info:
+  contact:
+    email: murali.c@ensurity.com
+    name: API Support
+  description: Rubix core API to control & manage the node.
+  title: Rubix Core
+  version: "0.9"
+paths:
+  /api/addnftsale:
+    post:
+      consumes:
+      - application/json
+      description: This API will put NFTs for sale
+      parameters:
+      - description: NFT Detials
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/core.NFTSaleReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Add NFTs
+      tags:
+      - NFT
+  /api/commit-data-token:
+    post:
+      consumes:
+      - application/json
+      description: This API will create data token
+      parameters:
+      - description: DID
+        in: query
+        name: did
+        required: true
+        type: string
+      - description: Batch ID
+        in: query
+        name: batchID
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create Data Token
+      tags:
+      - Data Tokens
+  /api/create-data-token:
+    post:
+      consumes:
+      - multipart/form-data
+      description: This API will create data token
+      parameters:
+      - description: User/Entity ID
+        in: formData
+        name: UserID
+        type: string
+      - description: User/Entity Info
+        in: formData
+        name: UserInfo
+        type: string
+      - description: Committer DID
+        in: formData
+        name: CommitterDID
+        type: string
+      - description: Batch ID
+        in: formData
+        name: BacthID
+        type: string
+      - description: File Info is json string {
+        in: formData
+        name: FileInfo
+        type: string
+      - description: File to be committed
+        in: formData
+        name: FileContent
+        type: file
+      produces:
+      - multipart/form-data
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create Data Token
+      tags:
+      - Data Tokens
+  /api/createnft:
+    post:
+      consumes:
+      - multipart/form-data
+      description: This API will create new NFT
+      parameters:
+      - description: User/Entity Info
+        in: formData
+        name: UserInfo
+        type: string
+      - description: File Info is json string {
+        in: formData
+        name: FileInfo
+        type: string
+      - description: File to be committed
+        in: formData
+        name: FileContent
+        type: file
+      produces:
+      - multipart/form-data
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create NFT
+      tags:
+      - NFT
+  /api/deploy-smart-contract:
+    post:
+      consumes:
+      - application/json
+      description: This API will deploy smart contract Token
+      operationId: deploy-smart-contract
+      parameters:
+      - description: Deploy smart contract
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.DeploySmartContractSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Deploy Smart Contract
+      tags:
+      - Smart Contract
+  /api/execute-smart-contract:
+    post:
+      consumes:
+      - application/json
+      description: This API will Execute smart contract Token
+      parameters:
+      - description: Execute smart contrct and add details to chain
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.ExecuteSmartContractSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Execute Smart Contract
+      tags:
+      - Smart Contract
+  /api/fetch-smart-contract:
+    post:
+      consumes:
+      - application/json
+      description: This API will Fetch smart contract
+      operationId: fetch-smart-contract
+      parameters:
+      - description: Fetch smart contract
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.FetchSmartContractSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Fetch Smart Contract
+      tags:
+      - Smart Contract
+  /api/generate-smart-contract:
+    post:
+      consumes:
+      - multipart/form-data
+      description: This API will Generate smart contract Token
+      parameters:
+      - description: DID
+        in: formData
+        name: did
+        required: true
+        type: string
+      - description: location of binary code hash
+        in: formData
+        name: binaryCodePath
+        required: true
+        type: file
+      - description: location of raw code hash
+        in: formData
+        name: rawCodePath
+        required: true
+        type: file
+      - description: location of schema code hash
+        in: formData
+        name: schemaFilePath
+        required: true
+        type: file
+      produces:
+      - multipart/form-data
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Generate Smart Contract
+      tags:
+      - Smart Contract
+  /api/get-account-info:
+    get:
+      consumes:
+      - application/json
+      description: For a mentioned DID, check the account balance
+      parameters:
+      - description: User DID
+        in: query
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Check account balance
+      tags:
+      - Account
+  /api/get-by-comment:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of a transaction based on its comment.
+      operationId: get-by-comment
+      parameters:
+      - description: Comment to identify the transaction
+        in: query
+        name: Comment
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get transaction details by Transcation Comment
+      tags:
+      - Account
+  /api/get-by-did:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of a transaction based on dID and date range.
+      operationId: get-by-did
+      parameters:
+      - description: DID of sender/receiver
+        in: query
+        name: DID
+        required: true
+        type: string
+      - description: Filter by role as sender or receiver
+        in: query
+        name: Role
+        type: string
+      - description: 'Start date of the date range (format: YYYY-MM-DD'
+        in: query
+        name: StartDate
+        type: string
+      - description: 'End date of the date range (format: YYYY-MM-DD)'
+        in: query
+        name: EndDate
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get transaction details by dID
+      tags:
+      - Account
+  /api/get-by-node:
+    get:
+      consumes:
+      - application/json
+      description: Get count of incoming and outgoing txns of the DID ins a node.
+      operationId: get-txn-details-by-node
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.TxnCountForDID'
+      summary: Get count of incoming and outgoing txns of the DID ins a node
+      tags:
+      - Account
+  /api/get-by-txnId:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of a transaction based on its ID.
+      operationId: get-txn-details-by-id
+      parameters:
+      - description: The ID of the transaction to retrieve
+        in: query
+        name: txnID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get transaction details by Transcation ID
+      tags:
+      - Account
+  /api/get-data-token:
+    get:
+      consumes:
+      - application/json
+      description: This API will get all data token belong to the did
+      parameters:
+      - description: DID
+        in: query
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get Data Token
+      tags:
+      - Data Tokens
+  /api/get-smart-contract-token-chain-data:
+    post:
+      consumes:
+      - application/json
+      description: This API will return smart contract token chain data
+      operationId: get-smart-contract-token-chain-data
+      parameters:
+      - description: Returns Smart contract token chain Execution Data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.GetSmartContractTokenChainDataSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get Smart Contract Token Chain Data
+      tags:
+      - Smart Contract
+  /api/getallnft:
+    post:
+      consumes:
+      - application/json
+      description: This API will get all NFTs of the DID
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.NFTTokens'
+      summary: Get ALL NFTs
+      tags:
+      - NFT
+  /api/initiate-rbt-transfer:
+    post:
+      consumes:
+      - application/json
+      description: This API will initiate RBT transfer to the specified dID
+      operationId: initiate-rbt-transfer
+      parameters:
+      - description: Intitate RBT transfer
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.RBTTransferRequestSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiate RBT Transfer
+      tags:
+      - Account
+  /api/register-callback-url:
+    post:
+      consumes:
+      - application/json
+      description: This API will register call back url for when updated come for
+        smart contract token
+      operationId: register-callback-url
+      parameters:
+      - description: Register call back URL
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.RegisterCallBackURLSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get Smart Contract Token Chain Data
+      tags:
+      - Smart Contract
+  /api/signature-response:
+    post:
+      consumes:
+      - application/json
+      description: This API is used to supply the password for the node along with
+        the ID generated when Initiate RBT transfer is called.
+      operationId: signature-response
+      parameters:
+      - description: Send input for requested signature
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.SignatureResponseSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Signature Response
+      tags:
+      - Account
+  /api/start:
+    get:
+      consumes:
+      - application/json
+      description: It will setup the core if not done before
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Start Core
+      tags:
+      - Basic
+  /api/subscribe-smart-contract:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint allows subscribing to a smart contract.
+      parameters:
+      - description: Subscribe to input contract
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.NewSubscriptionSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Subscribe to Smart Contract
+      tags:
+      - Smart Contract
+securityDefinitions:
+  SessionToken:
+    in: header
+    name: Session-Token
+    type: apiKey
+swagger: "2.0"

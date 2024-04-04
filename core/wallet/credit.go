@@ -2,7 +2,7 @@ package wallet
 
 type Credit struct {
 	DID    string `gorm:"column:did"`
-	Credit string `gorm:"column:credit"`
+	Credit string `gorm:"column:credit;size:4000"`
 }
 
 func (w *Wallet) StoreCredit(did string, credit string) error {

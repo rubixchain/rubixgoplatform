@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/EnsurityTechnologies/enscrypt"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/crypto"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 type RandPos struct {
@@ -189,7 +189,7 @@ func (d *DIDBasic) GetSignFromShares(filePath string, hash string) (string, erro
 		return "Could not read PvtKey.pem file", err
 	}
 	pubKey, err := ioutil.ReadFile(d.path + "/" + d.did + "/pubKey.pem")
-	enscrypt.DecodeKeyPair(d.pwd, privKey, pubKey)
+	crypto.DecodeKeyPair(d.pwd, privKey, pubKey)
 
 	return IntArraytoStr(p1Sign), err
 }

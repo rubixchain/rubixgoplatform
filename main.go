@@ -3,26 +3,22 @@ package main
 import (
 	"os"
 
-	"github.com/EnsurityTechnologies/logger"
 	"github.com/rubixchain/rubixgoplatform/command"
+	_ "github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
+// @title Rubix Core
+// @version 0.9
+// @description Rubix core API to control & manage the node.
+
+// @contact.name API Support
+// @contact.email murali.c@ensurity.com
+
+// @BasePath
+
+// @securityDefinitions.apikey SessionToken
+// @in header
+// @name Session-Token
 func main() {
-
-	// fp, err := os.OpenFile(cfg.LogFile,
-	// 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	logOptions := &logger.LoggerOptions{
-		Name:  "Main",
-		Level: logger.Debug,
-		Color: logger.AutoColor,
-		//	Output: fp,
-	}
-
-	log := logger.New(logOptions)
-
-	command.Run(os.Args, log)
+	command.Run(os.Args)
 }

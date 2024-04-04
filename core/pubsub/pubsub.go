@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/EnsurityTechnologies/logger"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-type PubSubCallback func(peerID string, data []byte)
+type PubSubCallback func(peerID string, topic string, data []byte)
 
 type PubSub struct {
 	ipfs *ipfsnode.Shell
@@ -39,12 +39,15 @@ func (ps *PubSub) receivePub(topic string, p *ipfsnode.PubSubSubscription) {
 	for {
 		m, err := p.Next()
 		if err != nil {
-			ps.log.Error("failed to read message", "err", err)
+			//ps.log.Error("failed to read message", "err", err)
+			// if strings.Contains(err.Error(), "An existing connection was forcibly closed by the remote host") {
+			// 	break
+			// }
 			continue
 		}
 		cb := ps.sub[topic]
 		if cb != nil {
-			go cb(m.From.String(), m.Data)
+			go cb(m.From.String(), topic, m.Data)
 		}
 	}
 }

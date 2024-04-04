@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	srvcfg "github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/ensweb"
-	"github.com/EnsurityTechnologies/logger"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 type Listener struct {
@@ -50,6 +50,7 @@ func (l *Listener) listenIPFSPort() error {
 	if err != nil {
 		return err
 	}
+	defer resp.Close()
 	if resp.Error != nil {
 		return resp.Error
 	}

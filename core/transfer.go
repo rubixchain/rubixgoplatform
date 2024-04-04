@@ -1,15 +1,44 @@
 package core
 
 import (
-	"github.com/EnsurityTechnologies/uuid"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/util"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
+func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) {
+	br := c.initiateRBTTransfer(reqID, req)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
+
+func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
+	st := time.Now()
 	resp := &model.BasicResponse{
 		Status: false,
 	}
+
+	if req.Sender == req.Receiver {
+		resp.Message = "Sender and receiver cannot be same"
+		return resp
+	}
+
+	if !strings.Contains(req.Sender, ".") || !strings.Contains(req.Receiver, ".") {
+		resp.Message = "Sender and receiver address should be of the format PeerID.DID"
+		return resp
+	}
+
 	_, did, ok := util.ParseAddress(req.Sender)
 	if !ok {
 		resp.Message = "Invalid sender DID"
@@ -21,17 +50,84 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Invalid receiver DID"
 		return resp
 	}
-	// Get the required tokens from the DID bank
-	// this method locks the token needs to be released or
-	// removed once it done with the trasnfer
-	wt, pt, err := c.w.GetTokens(did, req.TokenCount)
-	if err != nil {
-		c.log.Error("Failed to get tkens", "err", err)
-		resp.Message = "Insufficient tokens or tokens are locked"
+
+	if req.TokenCount < MinTrnxAmt {
+		resp.Message = "Input transaction amount is less than minimum transcation amount"
 		return resp
 	}
+
+	decimalPlaces := strconv.FormatFloat(req.TokenCount, 'f', -1, 64)
+	decimalPlacesStr := strings.Split(decimalPlaces, ".")
+	if len(decimalPlacesStr) == 2 && len(decimalPlacesStr[1]) > MaxDecimalPlaces {
+		c.log.Error("Transcation amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		resp.Message = fmt.Sprintf("Transaction amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		return resp
+	}
+
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		resp.Message = "Failed to setup DID, " + err.Error()
+		return resp
+	}
+
+	accountBalance, err := c.GetAccountInfo(did)
+	if err != nil {
+		c.log.Error("Failed to get tokens", "err", err)
+		resp.Message = "Insufficient tokens or tokens are locked or " + err.Error()
+		return resp
+	} else {
+		if req.TokenCount > accountBalance.RBTAmount {
+			c.log.Error(fmt.Sprint("Insufficient balance, account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount))
+			resp.Message = fmt.Sprint("Insufficient balance, account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount)
+			return resp
+		}
+	}
+
+	tokensForTxn := make([]wallet.Token, 0)
+
+	reqTokens, remainingAmount, err := c.GetRequiredTokens(did, req.TokenCount)
+	if err != nil {
+		c.log.Error("Failed to get tokens", "err", err)
+		resp.Message = "Insufficient tokens or tokens are locked or " + err.Error()
+		return resp
+	}
+	if len(reqTokens) != 0 {
+		tokensForTxn = append(tokensForTxn, reqTokens...)
+	}
+	//check if ther is enough tokens to do transfer
+	// Get the required tokens from the DID bank
+	// this method locks the token needs to be released or
+	// removed once it done with the transfer
+	if remainingAmount > 0 {
+		wt, err := c.GetTokens(dc, did, remainingAmount)
+		if err != nil {
+			c.log.Error("Failed to get tokens", "err", err)
+			resp.Message = "Insufficient tokens or tokens are locked"
+			return resp
+		}
+		if len(wt) != 0 {
+			tokensForTxn = append(tokensForTxn, wt...)
+		}
+	}
+
+	var sumOfTokensForTxn float64
+	for _, tokenForTxn := range tokensForTxn {
+		sumOfTokensForTxn = sumOfTokensForTxn + tokenForTxn.TokenValue
+		sumOfTokensForTxn = floatPrecision(sumOfTokensForTxn, MaxDecimalPlaces)
+	}
+
+	if sumOfTokensForTxn != req.TokenCount {
+		c.log.Error(fmt.Sprint("Sum of Selected Tokens sum : ", sumOfTokensForTxn, " is not equal to trnx value : ", req.TokenCount))
+		resp.Message = fmt.Sprint("Sum of Selected Tokens sum : ", sumOfTokensForTxn, " is not equal to trnx value : ", req.TokenCount)
+		return resp
+	}
+
 	// release the locked tokens before exit
-	defer c.w.ReleaseTokens(wt, pt)
+	defer c.w.ReleaseTokens(tokensForTxn)
+
+	for i := range tokensForTxn {
+		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, did)
+	}
 
 	// Get the receiver & do sanity check
 	p, err := c.getPeer(req.Receiver)
@@ -41,58 +137,104 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	defer p.Close()
 	wta := make([]string, 0)
-	wtca := make([]string, 0)
-	for i := range wt {
-		wta = append(wta, wt[i].TokenID)
-		wtca = append(wtca, wt[i].TokenChainID)
+	for i := range tokensForTxn {
+		wta = append(wta, tokensForTxn[i].TokenID)
 	}
-	pta := make([]string, 0)
-	ptca := make([]string, 0)
-	for i := range pt {
-		pta = append(pta, pt[i].TokenID)
-		ptca = append(ptca, pt[i].TokenChainID)
+
+	tis := make([]contract.TokenInfo, 0)
+	for i := range tokensForTxn {
+		tts := "rbt"
+		if tokensForTxn[i].TokenValue != 1 {
+			tts = "part"
+		}
+		tt := c.TokenType(tts)
+		blk := c.w.GetLatestTokenBlock(tokensForTxn[i].TokenID, tt)
+		if blk == nil {
+			c.log.Error("failed to get latest block, invalid token chain")
+			resp.Message = "failed to get latest block, invalid token chain"
+			return resp
+		}
+		bid, err := blk.GetBlockID(tokensForTxn[i].TokenID)
+		if err != nil {
+			c.log.Error("failed to get block id", "err", err)
+			resp.Message = "failed to get block id, " + err.Error()
+			return resp
+		}
+		ti := contract.TokenInfo{
+			Token:      tokensForTxn[i].TokenID,
+			TokenType:  tt,
+			TokenValue: tokensForTxn[i].TokenValue,
+			OwnerDID:   tokensForTxn[i].DID,
+			BlockID:    bid,
+		}
+		tis = append(tis, ti)
 	}
-	dc, err := c.SetupDID(reqID, did)
+	sct := &contract.ContractType{
+		Type:       contract.SCRBTDirectType,
+		PledgeMode: contract.POWPledgeMode,
+		TotalRBTs:  req.TokenCount,
+		TransInfo: &contract.TransInfo{
+			SenderDID:   did,
+			ReceiverDID: rdid,
+			Comment:     req.Comment,
+			TransTokens: tis,
+		},
+		ReqID: reqID,
+	}
+	sc := contract.CreateNewContract(sct)
+	err = sc.UpdateSignature(dc)
 	if err != nil {
-		resp.Message = "Failed to setup DID, " + err.Error()
-		return resp
-	}
-	authHash := util.CalculateHashString(util.ConvertToJson(wta)+util.ConvertToJson(wtca)+util.ConvertToJson(pta)+util.ConvertToJson(ptca)+rdid+did+req.Comment, "SHA3-256")
-	ssig, psig, err := dc.Sign(authHash)
-	if err != nil {
-		c.log.Error("Failed to get signature", "err", err)
-		resp.Message = "Failed to get signature, " + err.Error()
+		c.log.Error(err.Error())
+		resp.Message = err.Error()
 		return resp
 	}
 	cr := &ConensusRequest{
-		ReqID:           uuid.New().String(),
-		Type:            req.Type,
-		SenderPeerID:    c.peerID,
-		ReceiverPeerID:  rpeerid,
-		SenderDID:       did,
-		ReceiverDID:     rdid,
-		WholeTokens:     wta,
-		WholeTokenChain: wtca,
-		PartTokens:      pta,
-		PartTokenChain:  ptca,
-		Comment:         req.Comment,
-		ShareSig:        ssig,
-		PrivSig:         psig,
+		ReqID:          uuid.New().String(),
+		Type:           req.Type,
+		SenderPeerID:   c.peerID,
+		ReceiverPeerID: rpeerid,
+		ContractBlock:  sc.GetBlock(),
 	}
-	err = util.CreateDir(c.cfg.DirPath + "Temp/" + cr.ReqID)
-	if err != nil {
-		c.log.Error("Failed to create directory", "err", err)
-		resp.Message = "Failed to create directory, " + err.Error()
-		return resp
-	}
-	err = c.initiateConsensus(cr, dc)
+	td, _, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
-		resp.Message = "Consensus failed, " + err.Error()
+		resp.Message = "Consensus failed" + err.Error()
 		return resp
 	}
-	c.log.Info("Trasnfer finsihed successfully")
+	et := time.Now()
+	dif := et.Sub(st)
+	td.Amount = req.TokenCount
+	td.TotalTime = float64(dif.Milliseconds())
+	c.w.AddTransactionHistory(td)
+	/* blockHash, err := extractHash(td.BlockID)
+	if err != nil {
+		c.log.Error("Consensus failed", "err", err)
+		resp.Message = "Consensus failed" + err.Error()
+		return resp
+	} */
+	etrans := &ExplorerTrans{
+		TID:         td.TransactionID,
+		SenderDID:   did,
+		ReceiverDID: rdid,
+		Amount:      req.TokenCount,
+		TrasnType:   req.Type,
+		TokenIDs:    wta,
+		QuorumList:  cr.QuorumList,
+		TokenTime:   float64(dif.Milliseconds()),
+		//BlockHash:   blockHash,
+	}
+	c.ec.ExplorerTransaction(etrans)
+	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
 	resp.Status = true
-	resp.Message = "Trasnfer finsihed successfully"
+	msg := fmt.Sprintf("Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
+	resp.Message = msg
 	return resp
+}
+
+func extractHash(input string) (string, error) {
+	values := strings.Split(input, "-")
+	if len(values) != 2 {
+		return "", fmt.Errorf("invalid format: %s", input)
+	}
+	return values[1], nil
 }

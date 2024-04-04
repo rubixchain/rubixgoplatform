@@ -1,27 +1,28 @@
 package server
 
 import (
-	"encoding/json"
-	"fmt"
-	"strings"
-
-	"github.com/EnsurityTechnologies/config"
-	"github.com/EnsurityTechnologies/ensweb"
-	"github.com/rubixchain/rubixgoplatform/core/did"
+	"github.com/rubixchain/rubixgoplatform/core"
+	cc "github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/wrapper/config"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 const (
 	SessionAuthMethod string = "SessionAuth"
 	APIKeyAuthMethod  string = "APIKeyAuth"
+	BasicAuthMethod   string = "BasicAuth"
 )
 
 type Config struct {
 	config.Config
 	EnableAuth  bool   `json:"enable_auth"`
+	APIKey      string `json:"api_key"`
 	AuthMethod  string `json:"auth_method"`
 	SessionName string `json:"session_name"`
 	SessionKey  string `json:"session_key"`
+	GRPCAddr    string `json:"grpc_addr"`
+	GRPCSecure  bool   `json:"grpc_secure"`
 }
 
 // APIAddBootStrap will add bootstrap peers to the configuration
@@ -70,75 +71,14 @@ func (s *Server) APIGetAllBootStrap(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "Got all the bootstrap peers successfully", m)
 }
 
-// APICreateDID will create new DID
-func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
-
-	folderName, err := s.c.CreateTempFolder()
-	if err != nil {
-		s.log.Error("failed to create folder")
-		return s.BasicResponse(req, false, "failed to create folder", nil)
-	}
-
-	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
-
-	fmt.Printf("Field : %v, Files : %v\n", fileNames, fieldNames)
-
-	if err != nil {
-		s.log.Error("failed to parse request", "err", err)
-		return s.BasicResponse(req, false, "failed to create DID", nil)
-	}
-	fields := fieldNames[DIDConfigField]
-	if len(fields) == 0 {
-		s.log.Error("missing did configuration")
-		return s.BasicResponse(req, false, "missing did configuration", nil)
-	}
-	var didCreate did.DIDCreate
-	err = json.Unmarshal([]byte(fields[0]), &didCreate)
-	if err != nil {
-		s.log.Error("failed to parse did configuration", "err", err)
-		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
-	}
-
-	for _, fileName := range fileNames {
-		if strings.Contains(fileName, did.ImgFileName) {
-			didCreate.ImgFile = fileName
-		}
-		if strings.Contains(fileName, did.DIDImgFileName) {
-			didCreate.DIDImgFile = fileName
-		}
-		if strings.Contains(fileName, did.PubShareFileName) {
-			didCreate.PubImgFile = fileName
-		}
-		if strings.Contains(fileName, did.PubKeyFileName) {
-			didCreate.PubKeyFile = fileName
-		}
-	}
-
-	did, err := s.c.CreateDID(&didCreate)
-	if err != nil {
-		s.log.Error("failed to create did", "err", err)
-		return s.BasicResponse(req, false, err.Error(), nil)
-	}
-	didResp := DIDResponse{
-		DID: did,
-	}
-	return s.BasicResponse(req, true, "DID created successfully", &didResp)
-}
-
-// APIGetAllDID will get all DID
-func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
-	ids := s.c.GetAllDID()
-	return s.BasicResponse(req, true, "Got all DIDs", ids)
-}
-
 // APIAddQuorum will add quorum list to node
 func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
-	var ql model.QuorumList
+	var ql []core.QuorumData
 	err := s.ParseJSON(req, &ql)
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
 	}
-	err = s.c.AddQuorum(&ql)
+	err = s.c.AddQuorum(ql)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to add quorums, "+err.Error(), nil)
 	}
@@ -158,4 +98,17 @@ func (s *Server) APIRemoveAllQuorum(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to remove all quorums", nil)
 	}
 	return s.BasicResponse(req, true, "Removed all quorums successfully", nil)
+}
+
+func (s *Server) APISetupDB(req *ensweb.Request) *ensweb.Result {
+	var sc cc.StorageConfig
+	err := s.ParseJSON(req, &sc)
+	if err != nil {
+		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	err = s.c.SetupDB(&sc)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to setup DB, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "DB setup done successfully", nil)
 }

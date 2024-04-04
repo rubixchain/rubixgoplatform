@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/EnsurityTechnologies/ensweb"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 // PingRequest is the model for ping request
@@ -25,6 +25,7 @@ func (c *Core) PingSetup() {
 
 // PingRecevied is the handler for ping request
 func (c *Core) PingRecevied(req *ensweb.Request) *ensweb.Result {
+	c.log.Info("Ping Received")
 	resp := &PingResponse{
 		BasicResponse: model.BasicResponse{
 			Status: false,
