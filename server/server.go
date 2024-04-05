@@ -154,6 +154,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRegisterCallBackURL, "POST", s.AuthHandle(s.APIRegisterCallbackURL, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTxnByNode, "GET", s.AuthHandle(s.APIGetTxnByNode, true, s.AuthError, false))
 	s.AddRoute(setup.APIRemoveTokenChainBlock, "POST", s.AuthHandle(s.APIRemoveTokenChainBlock, true, s.AuthError, false))
+	s.AddRoute(setup.APIRecoverArchive, "POST", s.AuthHandle(s.APIRecoverArchive, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {

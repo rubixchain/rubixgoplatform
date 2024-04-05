@@ -76,6 +76,7 @@ const (
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
+	RecoverArchiveCmd              string = "recoverarchive"
 )
 
 var commands = []string{VersionCmd,
@@ -120,6 +121,7 @@ var commands = []string{VersionCmd,
 	DumpSmartContractTokenChainCmd,
 	GetTokenBlock,
 	GetSmartContractData,
+	RecoverArchiveCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -567,6 +569,8 @@ func Run(args []string) {
 		cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
+	case RecoverArchiveCmd:
+		cmd.recoverArchive()
 	default:
 		cmd.log.Error("Invalid command")
 	}
