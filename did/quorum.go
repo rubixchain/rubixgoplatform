@@ -121,7 +121,7 @@ func (d *DIDQuorum) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
 	if !crypto.Verify(d.pubKey, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify private key singature")
+		return false, fmt.Errorf("failed to verify nlss private key singature")
 	}
 	return true, nil
 }

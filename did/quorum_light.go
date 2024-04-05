@@ -28,7 +28,7 @@ func InitDIDQuorum_Lt(did string, baseDir string, pwd string) *DIDQuorum_Lt {
 		if err != nil {
 			return nil
 		}
-		d.privKey, _, err = crypto.DecodeKeyPair(d.pwd, privKey, nil)
+		d.privKey, _, err = crypto.DecodeBIPKeyPair(d.pwd, privKey, nil)
 		if err != nil {
 			return nil
 		}
@@ -38,7 +38,7 @@ func InitDIDQuorum_Lt(did string, baseDir string, pwd string) *DIDQuorum_Lt {
 	if err != nil {
 		return nil
 	}
-	_, d.pubKey, err = crypto.DecodeKeyPair("", nil, pubKey)
+	_, d.pubKey, err = crypto.DecodeBIPKeyPair("", nil, pubKey)
 	if err != nil {
 		return nil
 	}
@@ -55,9 +55,6 @@ func (d *DIDQuorum_Lt) GetSignVersion() int {
 
 // Sign will return the singature of the DID
 func (d *DIDQuorum_Lt) Sign(hash string) ([]byte, []byte, error) {
-	if d.privKey == nil {
-		return nil, nil, fmt.Errorf("private key is not initialized")
-	}
 	pvtKeySign, err := d.PvtSign([]byte(hash))
 	// byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
@@ -143,7 +140,6 @@ func (d *DIDQuorum_Lt) PvtSign(hash []byte) ([]byte, error) {
 	return pvtKeySign, nil
 }
 func (d *DIDQuorum_Lt) PvtVerify(hash []byte, sign []byte) (bool, error) {
-
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return false, err

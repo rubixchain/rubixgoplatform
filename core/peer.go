@@ -18,6 +18,7 @@ const (
 type PeerMap struct {
 	PeerID    string `json:"peer_id"`
 	DID       string `json:"did"`
+	DIDType   int    `json:"did_type"`
 	Signature []byte `json:"signature"`
 	Time      string `json:"time"`
 }
@@ -48,15 +49,16 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 		return
 	}
 	h := util.CalculateHashString(m.PeerID+m.DID+m.Time, "SHA3-256")
-	dc, err := c.SetupForienDID(m.DID)
+	dc, err := c.InitialiseDID(m.DID, m.DIDType)
 	if err != nil {
 		return
 	}
+	fmt.Println("dc of peer:", dc)
 	st, err := dc.PvtVerify([]byte(h), m.Signature)
 	if err != nil || !st {
 		return
 	}
-	c.w.AddDIDPeerMap(m.DID, m.PeerID)
+	c.w.AddDIDPeerMap(m.DID, m.PeerID, m.DIDType)
 }
 
 func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {

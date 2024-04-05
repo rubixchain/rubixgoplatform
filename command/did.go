@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -256,23 +255,25 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 		}
 		switch sr.Mode {
 		case did.LightDIDMode:
-			privKey, err := ioutil.ReadFile(cmd.privKeyFile)
-			if err != nil {
-				return "Failed to open private key file, " + err.Error(), false
-			}
+			// fmt.Println(cmd.privKeyFile)
+			// privKey, err := ioutil.ReadFile(cmd.privKeyFile)
 
-			Privkey, _, err := crypto.DecodeBIPKeyPair(cmd.privPWD, privKey, nil)
-			if err != nil {
-				return "Failed to decode private key " + err.Error(), false
-			}
+			// if err != nil {
+			// 	return "Failed to open private key file, " + err.Error(), false
+			// }
 
-			privkeyback := secp256k1.PrivKeyFromBytes(Privkey)
-			privKeySer := privkeyback.ToECDSA()
-			sig, err := crypto.BIPSign(privKeySer, sr.Hash)
-			if err != nil {
-				return "Failed to sign, " + err.Error(), false
-			}
-			sresp.Signature.Signature = sig
+			// Privkey, _, err := crypto.DecodeBIPKeyPair(cmd.privPWD, privKey, nil)
+			// if err != nil {
+			// 	return "Failed to decode private key " + err.Error(), false
+			// }
+
+			// privkeyback := secp256k1.PrivKeyFromBytes(Privkey)
+			// privKeySer := privkeyback.ToECDSA()
+			// sig, err := crypto.BIPSign(privKeySer, sr.Hash)
+			// if err != nil {
+			// 	return "Failed to sign, " + err.Error(), false
+			// }
+			// sresp.Signature.Signature = sig
 			sresp.Password = password
 		case did.BasicDIDMode:
 			sresp.Password = password

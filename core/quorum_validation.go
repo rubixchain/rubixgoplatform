@@ -30,6 +30,7 @@ func (c *Core) validateSigner(b *block.Block) bool {
 		c.log.Error("failed to get signers", "err", err)
 		return false
 	}
+	fmt.Println("signers:", signers)
 	for _, signer := range signers {
 		var dc did.DIDCrypto
 		switch b.GetTransType() {
@@ -46,6 +47,8 @@ func (c *Core) validateSigner(b *block.Block) bool {
 				return false
 			}
 		}
+		fmt.Println("dc:", dc)
+		fmt.Println("signer's did", dc.GetDID())
 		err := b.VerifySignature(dc)
 		if err != nil {
 			c.log.Error("Failed to verify signature", "err", err)

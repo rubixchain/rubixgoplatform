@@ -156,7 +156,7 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 }
 
 func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
-	if dc.Type < did.LightDIDMode && dc.Type > did.WalletDIDMode {
+	if dc.Type < did.BasicDIDMode && dc.Type > did.LightDIDMode {
 		return "Invalid DID mode", false
 	}
 
