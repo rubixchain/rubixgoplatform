@@ -62,6 +62,7 @@ const (
 	APIGetTxnByNode                     string = "/api/get-by-node"
 	APIRemoveTokenChainBlock            string = "/api/remove-token-chain-block"
 	APIRecoverArchive                   string = "/api/recover-archive"
+	APIArchive                          string = "/api/archive"
 )
 
 // jwt.RegisteredClaims
