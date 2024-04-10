@@ -658,6 +658,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 }
 
 func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contract.Contract) {
+	defer c.w.ReleaseAllLockedTokens()
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
 	var err error
