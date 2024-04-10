@@ -164,7 +164,6 @@ func (d *DIDBasic) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte)
 }
 
 func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
-	fmt.Println("pvt sign in basic")
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
 		return nil, err
@@ -184,7 +183,6 @@ func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
 	return pvtKeySign, nil
 }
 func (d *DIDBasic) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	fmt.Println("pvt verify in basic")
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		fmt.Println("couldn't read pub key")

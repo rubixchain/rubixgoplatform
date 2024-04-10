@@ -107,6 +107,10 @@ func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
 		dm.PeerID = peerID
 		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
 	}
+	if dm.DIDType == 0 {
+		dm.DIDType = didType
+		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+	}
 	return nil
 }
 

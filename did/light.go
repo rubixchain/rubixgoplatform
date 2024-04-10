@@ -136,7 +136,6 @@ func (d *DIDLight) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte)
 }
 
 func (d *DIDLight) PvtSign(hash []byte) ([]byte, error) {
-	fmt.Println("pvt sign in light")
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
 		return nil, err
@@ -163,7 +162,6 @@ func (d *DIDLight) PvtSign(hash []byte) ([]byte, error) {
 
 // Verify PKI based signature
 func (d *DIDLight) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	fmt.Println("pvt verify in light")
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return false, err
