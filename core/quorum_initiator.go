@@ -305,7 +305,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	sigVers := dc.GetSignVersion()
 
 	//Appending "1" at the beginning of Transaction ID as a symbol of PKI sign version
-	if sigVers == did.PkiVersion {
+	if sigVers == did.BIPVersion {
 		tid = "1" + tid
 	}
 

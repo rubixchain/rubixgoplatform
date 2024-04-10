@@ -65,9 +65,9 @@ func (d *DIDLight) GetDID() string {
 }
 
 // When the did creation and signing is done in Light mode,
-// this function returns the sign version as PkiVersion = 0
+// this function returns the sign version as BIPVersion = 0
 func (d *DIDLight) GetSignVersion() int {
-	return PkiVersion
+	return BIPVersion
 }
 
 // PKI based sign in light mode

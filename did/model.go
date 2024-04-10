@@ -9,7 +9,7 @@ const (
 )
 
 const (
-	PkiVersion int = iota
+	BIPVersion int = iota
 	NlssVersion
 )
 

@@ -50,7 +50,7 @@ func (d *DIDQuorum_Lt) GetDID() string {
 }
 
 func (d *DIDQuorum_Lt) GetSignVersion() int {
-	return PkiVersion
+	return BIPVersion
 }
 
 // Sign will return the singature of the DID

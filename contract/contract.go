@@ -434,10 +434,10 @@ func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
 // This function is used by the quorums to verify sender's signature
 func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	//fetch sender's did
-	did := dc.GetDID()
+	didstr := dc.GetDID()
 
 	//fetch sender's signature
-	hs, ss, ps, err := c.GetHashSig(did)
+	hs, ss, ps, err := c.GetHashSig(didstr)
 	if err != nil {
 		c.log.Error("err", err)
 		return err
@@ -445,7 +445,8 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 
 	//If the ss i.e., share signature is empty, then its a Pki sign, so call PvtVerify
 	//Else it is NLSS based sign, so call NlssVerify
-	if ss == "" {
+	didType := dc.GetSignVersion()
+	if didType == did.BIPVersion {
 		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
 
 		if err != nil {
