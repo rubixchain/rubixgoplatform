@@ -53,7 +53,6 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 	if err != nil {
 		return
 	}
-	fmt.Println("dc of peer:", dc)
 	st, err := dc.PvtVerify([]byte(h), m.Signature)
 	if err != nil || !st {
 		return

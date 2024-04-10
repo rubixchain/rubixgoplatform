@@ -301,14 +301,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
 
-	//Fetching sign version
-	sigVers := dc.GetSignVersion()
-
-	//Appending "1" at the beginning of Transaction ID as a symbol of PKI sign version
-	if sigVers == did.BIPVersion {
-		tid = "1" + tid
-	}
-
 	ql := c.qm.GetQuorum(cr.Type, lastCharTID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
 	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
