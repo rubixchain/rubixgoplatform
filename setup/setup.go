@@ -61,6 +61,7 @@ const (
 	APIRegisterCallBackURL              string = "/api/register-callback-url"
 	APIGetTxnByNode                     string = "/api/get-by-node"
 	APIRemoveTokenChainBlock            string = "/api/remove-token-chain-block"
+	APIPeerID                           string = "/api/get-peer-id"
 )
 
 // jwt.RegisteredClaims
