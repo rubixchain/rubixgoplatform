@@ -31,6 +31,20 @@ builds:
       - darwin
     goarch:
       - amd64
+
+  - id: darwin-arm64
+    main: ./
+    binary: rubixgoplatform
+    goos:
+      - darwin
+    goarch:
+      - arm64
+  
+  - id: windows
+    main: ./
+    binary: rubixgoplatform
+    goos:
+      - windows
     
 archives:
   - id: release-archives
