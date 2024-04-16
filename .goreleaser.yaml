@@ -8,13 +8,6 @@ before:
     - go mod tidy -compat=1.20
 
 builds:
-  - id: ubuntu-amd64
-    main: ./
-    binary: rubixgoplatform
-    goos:
-      - linux
-    goarch:
-      - amd64
 
   - id: ubuntu-arm64
     main: ./
@@ -23,14 +16,6 @@ builds:
       - linux
     goarch:
       - arm64
-
-  - id: darwin-amd64
-    main: ./
-    binary: rubixgoplatform
-    goos:
-      - darwin
-    goarch:
-      - amd64
 
   - id: darwin-arm64
     main: ./
