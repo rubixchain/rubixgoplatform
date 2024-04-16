@@ -9,14 +9,6 @@ before:
 
 builds:
 
-  - id: ubuntu-arm64
-    main: ./
-    binary: rubixgoplatform
-    goos:
-      - linux
-    goarch:
-      - arm64
-
   - id: darwin-arm64
     main: ./
     binary: rubixgoplatform
