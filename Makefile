@@ -20,3 +20,17 @@ clean:
 	rm -f linux/rubixgoplatform windows/rubixgoplatform.exe mac/rubixgoplatform
 
 all: compile-linux compile-windows compile-mac
+
+GO_VERSION := 1.20.5
+GORELEASER_IMAGE := ghcr.io/goreleaser/goreleaser-cross:v$(GO_VERSION)
+
+release-dry-run:
+	docker run \
+		--rm \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v `pwd`:/go/src/rubixgoplatform \
+		-w /go/src/rubixgoplatform \
+		$(GORELEASER_IMAGE) \
+		release \
+		--clean \
+		--skip=publish

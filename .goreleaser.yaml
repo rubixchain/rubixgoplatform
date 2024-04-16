@@ -1,0 +1,66 @@
+project_name: rubixgoplatform
+
+env:
+  - CGO_ENABLED=1
+
+before:
+  hooks:
+    - go mod tidy -compat=1.20.5
+
+builds:
+  - id: ubuntu-amd64
+    main: ./
+    binary: rubixgoplatform
+    goos:
+      - linux
+    goarch:
+      - amd64
+
+  - id: ubuntu-arm64
+    main: ./
+    binary: rubixgoplatform
+    goos:
+      - linux
+    goarch:
+      - arm64
+
+  - id: darwin-amd64
+    main: ./
+    binary: rubixgoplatform
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    
+archives:
+  - id: release-archives
+    format: tar.gz
+    wrap_in_directory: true
+    name_template: "{{ .Binary }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+release:
+  github:
+    owner: rubixchain
+    name: rubixgoplatform
+  
+  draft: false
+  mode: append
+  header: |
+    # Release Notes
