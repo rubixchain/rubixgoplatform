@@ -89,12 +89,13 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 			peerIdRolemap := make(map[string]int)
 			for _, peerId := range t {
 				p, err := c.connectPeer(peerId)
-				if err != nil {
+				if err != nil || p == nil {
 					c.log.Error("Error connecting to peer ", "peerId", peerId, "err", err)
 					result.Status = true
 					result.Owners = nil
 					result.Error = err
 					results[index] = result
+					continue
 				}
 				req := PinStatusReq{
 					Token: token,
