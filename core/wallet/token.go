@@ -544,7 +544,7 @@ func (w *Wallet) GetAllLockedTokens() ([]Token, error) {
 	defer w.l.Unlock()
 	var t []Token
 	err := w.s.Read(TokenStorage, &t, "token_status=?", TokenIsLocked)
-	if err != nil {
+	if err != nil && err.Error() != "no records found" {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
 	}

@@ -252,5 +252,5 @@ func (cmd *Command) releaseAllLockedTokens() {
 		cmd.log.Error("Failed to release the locked tokens", "msg", resp.Message)
 		return
 	}
-	cmd.log.Info("Locked Tokens released successfully!")
+	cmd.log.Info("Locked Tokens released successfully Or No Locked Tokens found to be released")
 }
