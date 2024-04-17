@@ -86,3 +86,9 @@ func (s *Server) APIRemoveTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	removeReply := s.c.RemoveTokenChainBlock(&removeReq)
 	return s.RenderJSON(req, removeReply, http.StatusOK)
 }
+
+func (s *Server) APIReleaseAllLockedTokens(req *ensweb.Request) *ensweb.Result {
+	var response model.BasicResponse
+	response = s.c.ReleaseAllLockedTokens()
+	return s.RenderJSON(req, response, http.StatusOK)
+}

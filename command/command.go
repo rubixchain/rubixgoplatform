@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.14"
+	version string = "0.0.15"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -76,6 +76,7 @@ const (
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
+	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
 )
 
 var commands = []string{VersionCmd,
@@ -319,6 +320,7 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
+	go cmd.releaseAllLockedTokens()
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
@@ -567,6 +569,8 @@ func Run(args []string) {
 		cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
+	case ReleaseAllLockedTokensCmd:
+		cmd.releaseAllLockedTokens()
 	default:
 		cmd.log.Error("Invalid command")
 	}
