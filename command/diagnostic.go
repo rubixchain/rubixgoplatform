@@ -241,3 +241,16 @@ func (cmd *Command) removeTokenChainBlock() {
 	}
 	cmd.log.Info("Token chain removed successfully!")
 }
+
+func (cmd *Command) releaseAllLockedTokens() {
+	resp, err := cmd.c.ReleaseAllLockedTokens()
+	if err != nil {
+		cmd.log.Error("Failed to release the locked tokens", "err", err)
+		return
+	}
+	if !resp.Status {
+		cmd.log.Error("Failed to release the locked tokens", "msg", resp.Message)
+		return
+	}
+	cmd.log.Info("Locked Tokens released successfully Or No Locked Tokens found to be released")
+}

@@ -544,7 +544,7 @@ func (w *Wallet) GetAllLockedTokens() ([]Token, error) {
 	defer w.l.Unlock()
 	var t []Token
 	err := w.s.Read(TokenStorage, &t, "token_status=?", TokenIsLocked)
-	if err != nil {
+	if err != nil && err.Error() != "no records found" {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
 	}
@@ -552,16 +552,18 @@ func (w *Wallet) GetAllLockedTokens() ([]Token, error) {
 }
 
 func (w *Wallet) ReleaseAllLockedTokens() error {
-	w.l.Lock()
-	defer w.l.Unlock()
-	var tokens []Token
-	tokens, err := w.GetAllLockedTokens()
-	if err != nil {
+	var lockedTokens []Token
+	lockedTokens, err := w.GetAllLockedTokens()
+	if err != nil && err.Error() != "no records found" {
 		w.log.Error("Failed to get tokens", "err", err)
 		return err
 	}
 
-	for _, t := range tokens {
+	if len(lockedTokens) == 0 {
+		w.log.Info("No Loked tokens to release")
+		return nil
+	}
+	for _, t := range lockedTokens {
 		t.TokenStatus = TokenIsFree
 		err = w.s.Update(TokenStorage, &t, "token_id=?", t.TokenID)
 		if err != nil {

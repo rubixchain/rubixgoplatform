@@ -56,3 +56,13 @@ func (c *Client) RemoveTokenChainBlock(token string, latest bool) (*model.TCRemo
 	}
 	return &removeReply, nil
 }
+
+func (c *Client) ReleaseAllLockedTokens() (*model.BasicResponse, error) {
+
+	var response model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIReleaseAllLockedTokens, nil, nil, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}

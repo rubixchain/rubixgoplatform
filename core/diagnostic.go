@@ -190,3 +190,18 @@ func (c *Core) RemoveTokenChainBlock(removeReq *model.TCRemoveRequest) *model.TC
 	removeReply.Message = "Successfully removed token chain block " + removeReq.Token
 	return removeReply
 }
+
+func (c *Core) ReleaseAllLockedTokens() model.BasicResponse {
+	response := &model.BasicResponse{
+		Status: false,
+	}
+	err := c.w.ReleaseAllLockedTokens()
+	if err != nil {
+		c.log.Error("failed to release Locked tokens, ", err)
+		response.Message = "failed to release Locked tokens, " + err.Error()
+		return *response
+	}
+	response.Status = true
+	response.Message = "All Locked Tokens Releases Successfully Or NO Locked Tokens to release"
+	return *response
+}

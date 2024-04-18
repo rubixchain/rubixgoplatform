@@ -660,8 +660,9 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		}
 		err = c.syncTokenChainFrom(p, pblkID, t, ti.TokenType)
 		if err != nil {
-			c.log.Error("failed to sync token chain block for token ", t, " err : ", err)
-			crep.Message = "failed to sync token chain block for token " + t
+			errMsg := fmt.Sprintf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
+			c.log.Error(errMsg, "err", err)
+			crep.Message = errMsg
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 
