@@ -87,6 +87,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 	reqTokens, remainingAmount, err := c.GetRequiredTokens(did, req.TokenCount)
 	if err != nil {
+		c.w.ReleaseTokens(reqTokens)
 		c.log.Error("Failed to get tokens", "err", err)
 		resp.Message = "Insufficient tokens or tokens are locked or " + err.Error()
 		return resp
