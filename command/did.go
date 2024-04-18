@@ -255,25 +255,6 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 		}
 		switch sr.Mode {
 		case did.LightDIDMode:
-			// fmt.Println(cmd.privKeyFile)
-			// privKey, err := ioutil.ReadFile(cmd.privKeyFile)
-
-			// if err != nil {
-			// 	return "Failed to open private key file, " + err.Error(), false
-			// }
-
-			// Privkey, _, err := crypto.DecodeBIPKeyPair(cmd.privPWD, privKey, nil)
-			// if err != nil {
-			// 	return "Failed to decode private key " + err.Error(), false
-			// }
-
-			// privkeyback := secp256k1.PrivKeyFromBytes(Privkey)
-			// privKeySer := privkeyback.ToECDSA()
-			// sig, err := crypto.BIPSign(privKeySer, sr.Hash)
-			// if err != nil {
-			// 	return "Failed to sign, " + err.Error(), false
-			// }
-			// sresp.Signature.Signature = sig
 			sresp.Password = password
 		case did.BasicDIDMode:
 			sresp.Password = password

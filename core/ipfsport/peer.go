@@ -3,6 +3,7 @@ package ipfsport
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"path"
 	"sync"
@@ -66,13 +67,38 @@ func (pm *PeerManager) getPeerPort() uint16 {
 	for i, status := range pm.ps {
 		if !status {
 			pm.ps[i] = true
-			return pm.startPort + uint16(i)
+			port := pm.startPort + uint16(i)
+			availability := isPortAvailable(port)
+
+			if availability {
+				fmt.Println("available port: ", port, availability)
+				return pm.startPort + uint16(i)
+			} else {
+				fmt.Println("NOT available port: ", port, availability)
+			}
 		}
 	}
 	return 0
 }
 
+func isPortAvailable(port uint16) bool {
+	// Convert uint16 port to int
+	portInt := int(port)
+
+	// Attempt to listen on the port
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", portInt))
+	if err != nil {
+		// Port is not available
+		return false
+	}
+	defer listener.Close()
+
+	// Port is available
+	return true
+}
+
 func (pm *PeerManager) releasePeerPort(port uint16) bool {
+	fmt.Println("trying to release peer port ", port)
 	pm.lock.Lock()
 	defer pm.lock.Unlock()
 	offset := uint16(port) - pm.startPort
@@ -148,8 +174,11 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 			did:    did,
 		}
 		proto := "/x/" + appname + "/1.0"
+		// fmt.Println("proto:", proto)
 		addr := "/ip4/127.0.0.1/tcp/" + fmt.Sprintf("%d", portNum)
+		// fmt.Println("addr:", addr)
 		peer := "/p2p/" + peerID
+		// fmt.Println("peer:", peer)
 		resp, err := pm.ipfs.Request("p2p/forward", proto, addr, peer).Send(context.Background())
 		if err != nil {
 			pm.log.Error("failed make forward request")
@@ -157,13 +186,17 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 			return nil, err
 		}
 		defer resp.Close()
+		var result bool
 		if resp.Error != nil {
+
 			pm.log.Error("error in forward request")
-			pm.releasePeerPort(portNum)
+			result = pm.releasePeerPort(portNum)
+			fmt.Println("result of release peer port  ", result)
 			return nil, resp.Error
 		}
 		p.Client, err = ensweb.NewClient(scfg, p.log)
 		if err != nil {
+			fmt.Println("peer in OpenPeerConn ln 199 ", p)
 			pm.log.Error("failed to create ensweb clent", "err", err)
 			pm.releasePeerPort(portNum)
 			return nil, err
