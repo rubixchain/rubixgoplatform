@@ -22,6 +22,9 @@ const (
 	DIDRole
 	StakingRole
 	PledgingRole
+	QuorumPinRole
+	QuorumUnpinRole
+	WholeTokenSplitLockRole
 )
 
 // modified pin method that pins token and update in DB with role of the machine pinning
@@ -82,5 +85,9 @@ func (w *Wallet) Add(r io.Reader, did string, role int) (string, error) {
 		return "", err
 	}
 	err = w.AddProviderDetails(result, did, AddFunc, role)
-	return result, nil
+	if err != nil {
+		w.log.Error("Error adding provider details", "error", err)
+		return "", err
+	}
+	return result, err
 }
