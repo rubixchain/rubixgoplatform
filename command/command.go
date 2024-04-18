@@ -320,7 +320,6 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
-	go cmd.releaseAllLockedTokens()
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
