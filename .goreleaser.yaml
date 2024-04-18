@@ -1,0 +1,104 @@
+project_name: rubixgoplatform
+
+env:
+  - CGO_ENABLED=1
+
+before:
+  hooks:
+    - go mod tidy -compat=1.20
+
+builds:
+
+  - id: ubuntu-amd64
+    main: ./
+    binary: rubixgoplatform
+    env:
+      - CC=x86_64-linux-gnu-gcc
+    goos:
+      - linux
+    goarch:
+      - amd64
+
+  - id: ubuntu-arm64
+    main: ./
+    binary: rubixgoplatform
+    env:
+      - CC=aarch64-linux-gnu-gcc
+    goos:
+      - linux
+    goarch:
+      - arm64
+
+  - id: darwin-amd64
+    main: ./
+    binary: rubixgoplatform
+    env:
+      - CC=o64-clang
+      - CGO_LDFLAGS=-L/lib
+    goos:
+      - darwin
+    goarch:
+      - amd64
+
+  - id: darwin-arm64
+    main: ./
+    binary: rubixgoplatform
+    env:
+      - CC=oa64-clang
+      - CGO_LDFLAGS=-L/lib
+    goos:
+      - darwin
+    goarch:
+      - arm64
+
+  - id: windows-amd64
+    main: ./
+    binary: rubixgoplatform
+    env:
+      - CC=x86_64-w64-mingw32-gcc
+    goos:
+      - windows
+    goarch:
+      - amd64
+
+archives:
+  - id: linux-darwin-archive
+    builds:
+      - ubuntu-amd64
+      - ubuntu-arm64
+      - darwin-amd64
+      - darwin-arm64
+    format: tar.gz
+    wrap_in_directory: false
+    name_template: "{{ .Binary }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+
+  - id: windows-archive
+    builds:
+      - windows-amd64
+    format: zip
+    wrap_in_directory: false
+    name_template: "{{ .Binary }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+release:
+  github:
+    owner: rubixchain
+    name: rubixgoplatform
+  
+  draft: false
+  mode: append
+  header: |
+    # Release Notes
