@@ -2,6 +2,7 @@ package block
 
 import (
 	"fmt"
+	"math"
 )
 
 const (
@@ -158,4 +159,17 @@ func tcMarshal(str string, m interface{}, keys []string) (string, error) {
 		return "", fmt.Errorf("invalid type %T", mt)
 	}
 	return str, nil
+}
+
+// Rounds off float to MaxDecimalPlaces
+// TODO: this function is taken from core package ( floatPrecision() ) because of cyclic dependency issue
+// Later, it needs to added in a seperate package.
+func floatPrecisionToMaxDecimalPlaces(num float64) float64 {
+	precision := 3 // Taken from MaxDecimalPlaces of core package
+	output := math.Pow(10, float64(precision))
+	return float64(round(num*output)) / output
+}
+
+func round(num float64) int {
+	return int(num + math.Copysign(0.5, num))
 }

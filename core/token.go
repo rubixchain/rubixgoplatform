@@ -207,6 +207,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TokenOwner:      did,
 			GenesisBlock:    gb,
 			TransInfo:       ti,
+			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
 		}
 
 		ctcb := make(map[string]*block.Block)

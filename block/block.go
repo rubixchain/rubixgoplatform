@@ -38,6 +38,8 @@ const (
 	TCBlockContentKey      string = "1"
 	TCBlockContentSigKey   string = "2"
 	TCSmartContractDataKey string = "9"
+	TCTokenValueKey        string = "10"
+	TCChildTokenList       string = "11"
 )
 
 const (
@@ -63,6 +65,8 @@ type TokenChainBlock struct {
 	QuorumSignature   []string       `json:"quorumSignature"`
 	SmartContract     []byte         `json:"smartContract"`
 	SmartContractData string         `json:"smartContractData"`
+	TokenValue        float64        `json:"tokenValue"`
+	ChildTokenList    []string       `json:"childTokenList"`
 }
 
 type PledgeDetail struct {
@@ -147,6 +151,17 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
+	
+	if floatPrecisionToMaxDecimalPlaces(tcb.TokenValue) > floatPrecisionToMaxDecimalPlaces(0) {
+		ntcb[TCTokenValueKey] = floatPrecisionToMaxDecimalPlaces(tcb.TokenValue)
+	}
+	
+	if len(tcb.ChildTokenList) == 0 {
+		ntcb[TCChildTokenList] = []string{}
+	} else {
+		ntcb[TCChildTokenList] = tcb.ChildTokenList
+	}
+
 	blk := InitBlock(nil, ntcb)
 	return blk
 }
@@ -658,4 +673,13 @@ func (b *Block) GetSmartContractValue(t string) (float64, error) {
 	}
 	result = util.GetFloatFromMap(gtm, GISmartContractValueKey)
 	return result, nil
+}
+
+func (b *Block) GetTokenValue() float64 {
+	tokenValue := util.GetFloatFromMap(b.bm, TCTokenValueKey)
+	return floatPrecisionToMaxDecimalPlaces(tokenValue)
+}
+
+func (b *Block) GetChildTokenList() []string {
+	return util.GetStringSliceFromMap(b.bm, TCChildTokenList)
 }
