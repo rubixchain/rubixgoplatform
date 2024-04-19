@@ -39,7 +39,7 @@ const (
 	TCBlockContentSigKey   string = "2"
 	TCSmartContractDataKey string = "9"
 	TCTokenValueKey        string = "10"
-	TCChildTokenList       string = "11"
+	TCChildTokensKey       string = "11"
 )
 
 const (
@@ -66,7 +66,7 @@ type TokenChainBlock struct {
 	SmartContract     []byte         `json:"smartContract"`
 	SmartContractData string         `json:"smartContractData"`
 	TokenValue        float64        `json:"tokenValue"`
-	ChildTokenList    []string       `json:"childTokenList"`
+	ChildTokens       []string       `json:"childTokens"`
 }
 
 type PledgeDetail struct {
@@ -151,15 +151,15 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
-	
+
 	if floatPrecisionToMaxDecimalPlaces(tcb.TokenValue) > floatPrecisionToMaxDecimalPlaces(0) {
 		ntcb[TCTokenValueKey] = floatPrecisionToMaxDecimalPlaces(tcb.TokenValue)
 	}
-	
-	if len(tcb.ChildTokenList) == 0 {
-		ntcb[TCChildTokenList] = []string{}
+
+	if len(tcb.ChildTokens) == 0 {
+		ntcb[TCChildTokensKey] = []string{}
 	} else {
-		ntcb[TCChildTokenList] = tcb.ChildTokenList
+		ntcb[TCChildTokensKey] = tcb.ChildTokens
 	}
 
 	blk := InitBlock(nil, ntcb)
@@ -680,6 +680,6 @@ func (b *Block) GetTokenValue() float64 {
 	return floatPrecisionToMaxDecimalPlaces(tokenValue)
 }
 
-func (b *Block) GetChildTokenList() []string {
-	return util.GetStringSliceFromMap(b.bm, TCChildTokenList)
+func (b *Block) GetChildTokens() []string {
+	return util.GetStringSliceFromMap(b.bm, TCChildTokensKey)
 }

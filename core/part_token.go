@@ -284,7 +284,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		TokenOwner:      did,
 		TransInfo:       bti,
 		TokenValue:      floatPrecision(amount, MaxDecimalPlaces),
-		ChildTokenList:  pts,
+		ChildTokens:     pts,
 	}
 	ctcb := make(map[string]*block.Block)
 	ctcb[tkn] = c.w.GetLatestTokenBlock(tkn, ptt)
