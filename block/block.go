@@ -369,7 +369,6 @@ func (b *Block) VerifySignature(dc didmodule.DIDCrypto) error {
 	}
 	ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
 	if err != nil || !ok {
-		fmt.Println("err:", err)
 		return fmt.Errorf("failed to verify did signature")
 	}
 	return nil

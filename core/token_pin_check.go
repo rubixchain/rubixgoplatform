@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -89,26 +88,13 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 		} else {
 			peerIdRolemap := make(map[string]int)
 			for _, peerId := range t {
-				fmt.Println("try1 for peer id ", peerId)
 				p, err := c.connectPeer(peerId)
-				if err != nil || p == nil {
-
-					c.log.Error("Error connecting to peer try 1", "peerId", peerId, "err", err)
+				if err != nil {
+					c.log.Error("Error connecting to peer ", "peerId", peerId, "err", err)
 					result.Status = true
 					result.Owners = nil
 					result.Error = err
 					results[index] = result
-				}
-				fmt.Println("try2 for peer id ", peerId)
-				p, err = c.connectPeer(peerId)
-				if err != nil || p == nil {
-
-					c.log.Error("Error connecting to peer try 2", "peerId", peerId, "err", err)
-					result.Status = true
-					result.Owners = nil
-					result.Error = err
-					results[index] = result
-					continue
 				}
 				req := PinStatusReq{
 					Token: token,
