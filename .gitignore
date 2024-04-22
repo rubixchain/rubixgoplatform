@@ -12,11 +12,11 @@ api_config.json
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 *.txt
-*.sh
 *.png 
 *.json
 *.pdf
 .vscode
+__pycache__
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

@@ -349,6 +349,7 @@ func (c *Core) Start() (bool, string) {
 		c.log.Error("failed to start ping port", "err", err)
 		return false, "Failed to start ping port"
 	}
+	//c.w.ReleaseAllLockedTokens()
 	// exp := model.ExploreModel{
 	// 	Cmd:    ExpPeerStatusCmd,
 	// 	PeerID: c.peerID,

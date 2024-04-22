@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -348,7 +349,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 		//serach for the required whole amount
 		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue)
 		if err != nil && err.Error() != "no records found" {
-			defer c.w.ReleaseTokens(wholeTokens)
+			c.w.ReleaseTokens(wholeTokens)
 			c.log.Error("failed to search for whole tokens", "err", err)
 			return nil, 0.0, err
 		}
@@ -363,14 +364,22 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 		}
 
 		if (len(wholeTokens) != 0 && remWhole > 0) || (len(wholeTokens) != 0 && remWhole == 0) {
+			if reqAmt == 0 {
+				return requiredTokens, remainingAmount, nil
+			}
 			c.log.Debug("No more whole token left in wallet , rest of needed amt ", reqAmt)
 			allPartTokens, err := c.w.GetAllPartTokens(did)
-			if err != nil && err.Error() != "no records found" {
-				c.log.Error("failed to search for part tokens", "err", err)
-				return nil, 0.0, err
-			}
-			if len(allPartTokens) == 0 {
-				c.log.Error("No part Tokens found , This wallet is empty", "err", err)
+			if err != nil {
+				// In GetAllPartTokens, we first check if there are any part tokens present in
+				// TokensTable. Now there could be a situation, where there aren't any part tokens
+				// and it Should not error out, but proceed further. The "no records found" error string
+				// is usually received from the Read() method the db.
+				// Hence, in this case, we simply return with whatever values requiredTokens and reqAmt holds
+				if strings.Contains(err.Error(), "no records found") {
+					return requiredTokens, reqAmt, nil
+				}
+				c.w.ReleaseTokens(wholeTokens)
+				c.log.Error("failed to lock part tokens", "err", err)
 				return nil, 0.0, err
 			}
 			var sum float64
@@ -379,6 +388,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 				sum = floatPrecision(sum, MaxDecimalPlaces)
 			}
 			if sum < reqAmt {
+				c.w.ReleaseTokens(wholeTokens)
 				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
 				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
 			}

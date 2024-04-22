@@ -538,3 +538,38 @@ func (w *Wallet) GetChildToken(did string, parentTokenID string) ([]Token, error
 	}
 	return t, nil
 }
+
+func (w *Wallet) GetAllLockedTokens() ([]Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "token_status=?", TokenIsLocked)
+	if err != nil && err.Error() != "no records found" {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
+
+func (w *Wallet) ReleaseAllLockedTokens() error {
+	var lockedTokens []Token
+	lockedTokens, err := w.GetAllLockedTokens()
+	if err != nil && err.Error() != "no records found" {
+		w.log.Error("Failed to get tokens", "err", err)
+		return err
+	}
+
+	if len(lockedTokens) == 0 {
+		w.log.Info("No Loked tokens to release")
+		return nil
+	}
+	for _, t := range lockedTokens {
+		t.TokenStatus = TokenIsFree
+		err = w.s.Update(TokenStorage, &t, "token_id=?", t.TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token", "err", err)
+			return err
+		}
+	}
+	return nil
+}

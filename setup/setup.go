@@ -62,6 +62,7 @@ const (
 	APIGetTxnByNode                     string = "/api/get-by-node"
 	APIRemoveTokenChainBlock            string = "/api/remove-token-chain-block"
 	APIPeerID                           string = "/api/get-peer-id"
+	APIReleaseAllLockedTokens           string = "/api/release-all-locked-tokens"
 )
 
 // jwt.RegisteredClaims

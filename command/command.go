@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.14"
+	version string = "0.0.15"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -77,6 +77,7 @@ const (
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
 	GetPeerID                      string = "get-peer-id"
+	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
 )
 
 var commands = []string{VersionCmd,
@@ -572,6 +573,8 @@ func Run(args []string) {
 		cmd.executeSmartcontract()
 	case GetPeerID:
 		cmd.peerIDCmd()
+	case ReleaseAllLockedTokensCmd:
+		cmd.releaseAllLockedTokens()
 	default:
 		cmd.log.Error("Invalid command")
 	}

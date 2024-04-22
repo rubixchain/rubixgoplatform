@@ -153,7 +153,7 @@ func (cmd *Command) CreateDID() {
 		cmd.log.Error("Failed to create DID", "message", msg)
 		return
 	}
-	cmd.log.Info("DID Created successfully")
+	cmd.log.Info(fmt.Sprintf("DID %v created successfully", msg))
 }
 
 func (cmd *Command) GetAllDID() {

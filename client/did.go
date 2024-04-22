@@ -145,7 +145,7 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 		c.log.Error("Failed to create DID", "message", dr.Message)
 		return "Failed to create DID, " + dr.Message, false
 	}
-	c.log.Info("DID Created successfully")
+	c.log.Info(fmt.Sprintf("DID %v Created successfully", dr.Result.DID))
 	return dr.Result.DID, true
 }
 
