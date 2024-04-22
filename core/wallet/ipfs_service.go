@@ -28,9 +28,9 @@ const (
 )
 
 // modified pin method that pins token and update in DB with role of the machine pinning
-func (w *Wallet) Pin(hash string, role int, did string) (bool, error) {
+func (w *Wallet) Pin(hash string, role int, did string, transactionId string, sender string, receiver string) (bool, error) {
 	w.ipfs.Pin(hash)
-	err := w.AddProviderDetails(hash, did, PinFunc, role)
+	err := w.AddProviderDetails(TokenProviderMap{Token: hash, Role: role, DID: did, FuncID: PinFunc, TransactionID: transactionId, Sender: sender, Receiver: receiver})
 	if err != nil {
 		w.log.Info("Error addding provider details to DB", "error", err)
 		return false, err
@@ -60,7 +60,7 @@ func (w *Wallet) Cat(hash string, role int, did string) (string, error) {
 		w.log.Error("Error formatting ipfs content", "error", err)
 		return "", err
 	}
-	err1 := w.AddProviderDetails(hash, did, CatFunc, role)
+	err1 := w.AddProviderDetails(TokenProviderMap{Token: hash, Role: role, DID: did, FuncID: CatFunc})
 	if err1 != nil {
 		w.log.Info("Error addding provider details to DB", "error", err)
 		return "", err
@@ -74,7 +74,7 @@ func (w *Wallet) Get(hash string, did string, role int, path string) error {
 		w.log.Error("Error while getting file from ipfs", "error", err)
 		return err
 	}
-	err = w.AddProviderDetails(hash, did, GetFunc, role)
+	err = w.AddProviderDetails(TokenProviderMap{Token: hash, Role: role, DID: did, FuncID: GetFunc})
 	return err
 }
 
@@ -84,7 +84,7 @@ func (w *Wallet) Add(r io.Reader, did string, role int) (string, error) {
 		w.log.Error("Error adding file to ipfs", "error", err)
 		return "", err
 	}
-	err = w.AddProviderDetails(result, did, AddFunc, role)
+	err = w.AddProviderDetails(TokenProviderMap{Token: result, Role: role, DID: did, FuncID: AddFunc})
 	if err != nil {
 		w.log.Error("Error adding provider details", "error", err)
 		return "", err

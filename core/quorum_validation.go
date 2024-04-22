@@ -393,7 +393,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	resultArray[index] = result
 }
 
-func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did string) error {
+func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did string, transactionId string, sender string, receiver string) error {
 	var ids []string
 	for i := range tokenStateCheckResult {
 		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenStateCheckResult[i].tokenIDTokenStateData))
@@ -403,7 +403,7 @@ func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did 
 			return err
 		}
 		ids = append(ids, tokenIDTokenStateHash)
-		_, err = c.w.Pin(tokenIDTokenStateHash, wallet.QuorumRole, did)
+		_, err = c.w.Pin(tokenIDTokenStateHash, wallet.QuorumRole, did, transactionId, sender, receiver)
 		if err != nil {
 			c.log.Error("Error triggered while pinning token state", err)
 			c.unPinTokenState(ids, did)

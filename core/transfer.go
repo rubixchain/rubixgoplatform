@@ -127,7 +127,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	defer c.w.ReleaseTokens(tokensForTxn)
 
 	for i := range tokensForTxn {
-		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, did)
+		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, did, "TID-Not Generated", req.Sender, req.Receiver)
 	}
 
 	// Get the receiver & do sanity check
