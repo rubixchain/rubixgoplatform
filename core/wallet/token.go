@@ -425,7 +425,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
 		//Pinnig the whole tokens and pat tokens
-		ok, err := w.Pin(ti[i].Token, OwnerRole, did, b.GetTid(), senderAddress, receiverAddress)
+		ok, err := w.Pin(ti[i].Token, OwnerRole, did, b.GetTid(), senderAddress, receiverAddress, ti[i].TokenValue)
 		if err != nil {
 			return err
 		}

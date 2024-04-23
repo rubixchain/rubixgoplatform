@@ -177,7 +177,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				c.log.Error("failed to sync parent token chain", "token", pt)
 				return false, err
 			}
-			_, err = c.w.Pin(pt, wallet.QuorumRole, quorumDID, cr.TransactionID, address, receiverAddress)
+			_, err = c.w.Pin(pt, wallet.WholeTokenSplitLockRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
 			if err != nil {
 				c.log.Error("Failed to Pin parent token in Quorum", "err", err)
 				return false, err
@@ -400,7 +400,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	resultArray[index] = result
 }
 
-func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did string, transactionId string, sender string, receiver string) error {
+func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did string, transactionId string, sender string, receiver string, tokenValue float64) error {
 	var ids []string
 	for i := range tokenStateCheckResult {
 		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenStateCheckResult[i].tokenIDTokenStateData))
@@ -410,7 +410,7 @@ func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did 
 			return err
 		}
 		ids = append(ids, tokenIDTokenStateHash)
-		_, err = c.w.Pin(tokenIDTokenStateHash, wallet.QuorumPinRole, did, transactionId, sender, receiver)
+		_, err = c.w.Pin(tokenIDTokenStateHash, wallet.QuorumPinRole, did, transactionId, sender, receiver, tokenValue)
 		if err != nil {
 			c.log.Error("Error triggered while pinning token state", err)
 			c.unPinTokenState(ids, did)
