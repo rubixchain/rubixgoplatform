@@ -493,7 +493,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	}
 
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
-	err = c.pinTokenState(tokenStateCheckResult, did, consensusRequest.TransactionID, "N/A", "N/A", float64(0)) // TODO: Ensure that smart contract trnx id and things are proper
+	err = c.pinTokenState(tokenStateCheckResult, did, consensusRequest.TransactionID, "NA", "NA", float64(0)) // TODO: Ensure that smart contract trnx id and things are proper
 	if err != nil {
 		consensusReply.Message = "Error Pinning token state" + err.Error()
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
