@@ -29,45 +29,16 @@ func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
 
 // Method to add provider details to DB during ipfs ops
 // checks if entry exist for token,did either write or updates
-// func (w *Wallet) AddProviderDetails(token string, did string, funId int, role int) error {
-// 	var tpm TokenProviderMap
-// 	err := w.s.Read(TokenProvider, &tpm, "token=?", token)
-// 	if err != nil || tpm.Token == "" {
-// 		tpm.Token = token
-// 		tpm.DID = did
-// 		tpm.FuncID = funId
-// 		tpm.Role = role
-// 		return w.s.Write(TokenProvider, &tpm)
-// 	}
-// 	tpm.DID = did
-// 	tpm.FuncID = funId
-// 	tpm.Role = role
-// 	return w.s.Update(TokenProvider, &tpm, "token=?", token)
-// }
 
 func (w *Wallet) AddProviderDetails(tokenProviderMap TokenProviderMap) error {
 	var tpm TokenProviderMap
 	err := w.s.Read(TokenProvider, &tpm, "token=?", tokenProviderMap.Token)
-	if err != nil {
-		return err
+	if err != nil || tpm.Token == "" {
+		w.log.Info("Token Details not found: Creating new Record")
+		// create new entry
+		return w.s.Write(TokenProvider, tokenProviderMap)
 	}
-
-	// Update or create new entry
-	tpm.Token = tokenProviderMap.Token
-	tpm.DID = tokenProviderMap.DID
-	tpm.FuncID = tokenProviderMap.FuncID
-	tpm.Role = tokenProviderMap.Role
-	tpm.TransactionID = tokenProviderMap.TransactionID
-	tpm.Sender = tokenProviderMap.Sender
-	tpm.Receiver = tokenProviderMap.Receiver
-
-	if tpm.Token == "" {
-		// If token does not exist, write new entry
-		return w.s.Write(TokenProvider, &tpm)
-	}
-
-	// Otherwise, update existing entry
-	return w.s.Update(TokenProvider, &tpm, "token=?", tokenProviderMap.Token)
+	return w.s.Update(TokenProvider, tokenProviderMap, "token=?", tokenProviderMap.Token)
 }
 
 // Method deletes entry ffrom DB during unpin op
