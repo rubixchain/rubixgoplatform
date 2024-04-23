@@ -62,6 +62,7 @@ type ConsensusResult struct {
 	RunningCount int
 	SuccessCount int
 	FailedCount  int
+	RunsTotal    int
 }
 
 type ConsensusStatus struct {
@@ -236,6 +237,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			RunningCount: 0,
 			SuccessCount: 0,
 			FailedCount:  0,
+			RunsTotal:    0,
 		},
 	}
 	reqPledgeTokens := float64(0)
@@ -381,7 +383,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Debug("String: token is ", token, " issuetype is ", issueType)
 			issueTypeInt, err1 := strconv.Atoi(issueType)
 			if err1 != nil {
-				errMsg := fmt.Sprintf("Consensus failed due to token chain sync issue, issueType string conversion, err %v", err1) 
+				errMsg := fmt.Sprintf("Consensus failed due to token chain sync issue, issueType string conversion, err %v", err1)
 				c.log.Error(errMsg)
 				return nil, nil, fmt.Errorf(errMsg)
 			}
@@ -397,7 +399,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
 				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
 				c.w.UpdateToken(syncIssueTokenDetails)
-				return nil, nil, errors.New(br.Message) 
+				return nil, nil, errors.New(br.Message)
 			}
 		}
 		if !br.Status {
@@ -656,29 +658,53 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	defer c.qlock.Unlock()
 	cs, ok := c.quorumRequest[id]
 	if !ok {
+		fmt.Println("failed to get quorum consensus")
 		if p != nil {
 			p.Close()
 		}
 		return
 	}
+	pd, ok := c.pd[id] //getting details of quorums who pledged
+	if !ok {
+		fmt.Println("failed to get pledged token details")
+		if p != nil {
+			p.Close()
+		}
+		return
+	}
+	keys := make([]string, 0, len(pd.PledgedTokens))
+	for k := range pd.PledgedTokens {
+		keys = append(keys, k)
+	}
+	key := keys[0]
+
 	switch qt {
 	case 0:
 		cs.Result.RunningCount--
 		if status {
 			did := p.GetPeerDID()
-			if cs.Result.SuccessCount < MinConsensusRequired {
-				csig := CreditSignature{
-					Signature:     util.HexToStr(ss),
-					PrivSignature: util.HexToStr(ps),
-					DID:           did,
-					Hash:          hash,
-				}
+			csig := CreditSignature{
+				Signature:     util.HexToStr(ss),
+				PrivSignature: util.HexToStr(ps),
+				DID:           did,
+				Hash:          hash,
+			}
+			if cs.Result.SuccessCount < MinConsensusRequired-1 {
 				cs.P[did] = p
 				cs.Credit.Credit = append(cs.Credit.Credit, csig)
+				cs.Result.SuccessCount++
+			} else if did == key && cs.Result.SuccessCount == MinConsensusRequired-1 {
+				cs.P[did] = p
+				cs.Credit.Credit = append(cs.Credit.Credit, csig)
+				cs.Result.SuccessCount++
+			} else if cs.Result.RunsTotal == 6 && cs.Result.SuccessCount == MinConsensusRequired-1 {
+				cs.P[did] = p
+				cs.Credit.Credit = append(cs.Credit.Credit, csig)
+				cs.Result.SuccessCount++
 			} else {
 				p.Close()
 			}
-			cs.Result.SuccessCount++
+			cs.Result.RunsTotal++
 		} else {
 			cs.Result.FailedCount++
 			if p != nil {
