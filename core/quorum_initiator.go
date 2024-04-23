@@ -1,12 +1,17 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	files "github.com/ipfs/go-ipfs-files"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -137,6 +142,10 @@ type ArbitaryStatus struct {
 	sig    string
 	ds     bool
 	status bool
+}
+
+type object struct {
+	Hash string
 }
 
 // PingSetup will setup the ping route
@@ -298,8 +307,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		TokenList:              make([]string, 0),
 	}
 	//getting last character from TID
-	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
-	lastCharTID := string(tid[len(tid)-1])
+	tid, lastCharTID, err := c.generateTransactionID(cr.Type, sc)
+	if err != nil {
+		err = fmt.Errorf("failed to generate Transaction ID")
+		return nil, nil, err
+	}
 
 	//Fetching sign version
 	sigVers := dc.GetSignVersion()
@@ -335,7 +347,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		go c.connectQuorum(cr, a, AlphaQuorumType)
 	}
 	loop := true
-	var err error
+	// var err error
 	err = nil
 	for {
 		time.Sleep(time.Second)
@@ -1080,4 +1092,64 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 		return fmt.Errorf("Failed to update token chain block")
 	}
 	return nil
+}
+
+func (c *Core) generateTransactionID(transType int, sc *contract.Contract) (string, string, error) {
+	hash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
+	tid := util.HexToStr(hash)
+	if transType == QuorumTypeTwo {
+		return tid, "", nil
+	}
+	os.Mkdir(c.didDir+"/tempdir", 0777)
+	dir := c.didDir + "/tempdir"
+	err := util.FileWrite(dir+"/temptrans.txt", hash)
+	if err != nil {
+		return "", "", err
+	}
+	stat, err := os.Lstat(dir)
+	if err != nil {
+		return "", "", err
+	}
+	sf, err := files.NewSerialFile(dir, false, stat)
+	if err != nil {
+		return "", "", err
+	}
+	defer sf.Close()
+	slf := files.NewSliceDirectory([]files.DirEntry{files.FileEntry(filepath.Base(dir), sf)})
+	defer slf.Close()
+	reader := files.NewMultiFileReader(slf, true)
+
+	resp, err := c.ipfs.Request("add").
+		Option("recursive", true).
+		Option("cid-version", 1).
+		Option("hash", "sha3-256").
+		Body(reader).
+		Send(context.Background())
+	if err != nil {
+		return "", "", err
+	}
+
+	defer resp.Close()
+
+	if resp.Error != nil {
+		return "", "", resp.Error
+	}
+	defer resp.Output.Close()
+
+	dec := json.NewDecoder(resp.Output)
+	var final string
+	for {
+		var out object
+		err = dec.Decode(&out)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", "", err
+		}
+		final = out.Hash
+	}
+	os.RemoveAll(dir)
+	// fmt.Println("final", final)
+	return tid, string(final[len(final)-1]), nil
 }
