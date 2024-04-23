@@ -137,7 +137,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 
 	// check token ownership
 
-	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc)
+	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
 	if err != nil {
 		validateTokenOwnershipErrorString := fmt.Sprint(err)
 		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -310,7 +310,7 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 		}
 	}
 	// check token ownership
-	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc)
+	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
 	if err != nil {
 		validateTokenOwnershipErrorString := fmt.Sprint(err)
 		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -407,7 +407,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
 		//1. check commited token authenticity
 		c.log.Debug("validation 1 - Authenticity of commited RBT tokens")
-		validateTokenOwnershipVar, err := c.validateTokenOwnership(consensusRequest, consensusContract)
+		validateTokenOwnershipVar, err := c.validateTokenOwnership(consensusRequest, consensusContract, did)
 		if err != nil {
 			validateTokenOwnershipErrorString := fmt.Sprint(err)
 			if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
