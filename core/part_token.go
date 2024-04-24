@@ -251,6 +251,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 					},
 				},
 			},
+			TokenValue: floatPrecision(parts[i], MaxDecimalPlaces),
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[pt] = nil
@@ -282,6 +283,8 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		TransactionType: block.TokenBurntType,
 		TokenOwner:      did,
 		TransInfo:       bti,
+		TokenValue:      floatPrecision(amount, MaxDecimalPlaces),
+		ChildTokens:     pts,
 	}
 	ctcb := make(map[string]*block.Block)
 	ctcb[tkn] = c.w.GetLatestTokenBlock(tkn, ptt)
