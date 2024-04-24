@@ -24,7 +24,7 @@ const (
 	PledgingRole
 	QuorumPinRole
 	QuorumUnpinRole
-	WholeTokenSplitLockRole
+	ParentTokenPinByQuorumRole
 )
 
 // modified pin method that pins token and update in DB with role of the machine pinning
