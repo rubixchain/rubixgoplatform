@@ -47,6 +47,7 @@ type ConensusRequest struct {
 	DeployerPeerID     string   `json:"deployer_peerd_id"`
 	SmartContractToken string   `json:"smart_contract_token"`
 	ExecuterPeerID     string   `json:"executor_peer_id"`
+	TransactionID      string   `json:"transaction_id"`
 }
 
 type ConensusReply struct {
@@ -269,6 +270,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	//getting last character from TID
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
+	cr.TransactionID = tid
 
 	ql := c.qm.GetQuorum(cr.Type, lastCharTID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
 	if ql == nil || len(ql) < MinQuorumRequired {
@@ -381,7 +383,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Debug("String: token is ", token, " issuetype is ", issueType)
 			issueTypeInt, err1 := strconv.Atoi(issueType)
 			if err1 != nil {
-				errMsg := fmt.Sprintf("Consensus failed due to token chain sync issue, issueType string conversion, err %v", err1) 
+				errMsg := fmt.Sprintf("Consensus failed due to token chain sync issue, issueType string conversion, err %v", err1)
 				c.log.Error(errMsg)
 				return nil, nil, fmt.Errorf(errMsg)
 			}
@@ -397,7 +399,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
 				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
 				c.w.UpdateToken(syncIssueTokenDetails)
-				return nil, nil, errors.New(br.Message) 
+				return nil, nil, errors.New(br.Message)
 			}
 		}
 		if !br.Status {

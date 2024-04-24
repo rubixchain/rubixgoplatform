@@ -137,7 +137,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 
 	// check token ownership
 
-	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc)
+	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
 	if err != nil {
 		validateTokenOwnershipErrorString := fmt.Sprint(err)
 		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -195,7 +195,9 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
-	err1 := c.pinTokenState(tokenStateCheckResult, did)
+	sender := cr.SenderPeerID + "." + sc.GetSenderDID()
+	receiver := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
+	err1 := c.pinTokenState(tokenStateCheckResult, did, cr.TransactionID, sender, receiver, float64(0))
 	if err1 != nil {
 		crep.Message = "Error Pinning token state" + err.Error()
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -308,7 +310,7 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 		}
 	}
 	// check token ownership
-	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc)
+	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
 	if err != nil {
 		validateTokenOwnershipErrorString := fmt.Sprint(err)
 		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -357,23 +359,23 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
-func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, conensusRequest *ConensusRequest) *ensweb.Result {
+func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, consensusRequest *ConensusRequest) *ensweb.Result {
 	consensusReply := ConensusReply{
-		ReqID:  conensusRequest.ReqID,
+		ReqID:  consensusRequest.ReqID,
 		Status: false,
 	}
-	if conensusRequest.ContractBlock == nil {
+	if consensusRequest.ContractBlock == nil {
 		c.log.Error("contract block in consensus req is nil")
 		consensusReply.Message = "contract block in consensus req is nil"
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
-	consensusContract := contract.InitContract(conensusRequest.ContractBlock, nil)
+	consensusContract := contract.InitContract(consensusRequest.ContractBlock, nil)
 	// setup the did to verify the signature
 	c.log.Debug("VEryfying the deployer signature")
 
 	var verifyDID string
 
-	if conensusRequest.Mode == SmartContractDeployMode {
+	if consensusRequest.Mode == SmartContractDeployMode {
 		c.log.Debug("Fetching Deployer DID")
 		verifyDID = consensusContract.GetDeployerDID()
 		c.log.Debug("deployer did ", verifyDID)
@@ -400,12 +402,12 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 
 	var tokenStateCheckResult []TokenStateCheckResult
 	var wg sync.WaitGroup
-	if conensusRequest.Mode == SmartContractDeployMode {
+	if consensusRequest.Mode == SmartContractDeployMode {
 		//if deployment
 		commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
 		//1. check commited token authenticity
 		c.log.Debug("validation 1 - Authenticity of commited RBT tokens")
-		validateTokenOwnershipVar, err := c.validateTokenOwnership(conensusRequest, consensusContract)
+		validateTokenOwnershipVar, err := c.validateTokenOwnership(consensusRequest, consensusContract, did)
 		if err != nil {
 			validateTokenOwnershipErrorString := fmt.Sprint(err)
 			if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -426,7 +428,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		results := make([]MultiPinCheckRes, len(commitedTokenInfo))
 		for i := range commitedTokenInfo {
 			wg.Add(1)
-			go c.pinCheck(commitedTokenInfo[i].Token, i, conensusRequest.DeployerPeerID, "", results, &wg)
+			go c.pinCheck(commitedTokenInfo[i].Token, i, consensusRequest.DeployerPeerID, "", results, &wg)
 		}
 		wg.Wait()
 		for i := range results {
@@ -447,12 +449,12 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		for i, ti := range commitedTokenInfo {
 			t := ti.Token
 			wg.Add(1)
-			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, conensusRequest.QuorumList, ti.TokenType)
+			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, consensusRequest.QuorumList, ti.TokenType)
 		}
 		wg.Wait()
 	} else {
 		//sync the smartcontract tokenchain
-		address := conensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
+		address := consensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
 		peerConn, err := c.getPeer(address)
 		if err != nil {
 			c.log.Error("Failed to get executor peer to sync smart contract token chain", "err", err)
@@ -472,7 +474,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 				return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 			}
 			wg.Add(1)
-			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, conensusRequest.QuorumList, ti.TokenType)
+			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, consensusRequest.QuorumList, ti.TokenType)
 		}
 		wg.Wait()
 	}
@@ -491,7 +493,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	}
 
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
-	err = c.pinTokenState(tokenStateCheckResult, did)
+	err = c.pinTokenState(tokenStateCheckResult, did, consensusRequest.TransactionID, "NA", "NA", float64(0)) // TODO: Ensure that smart contract trnx id and things are proper
 	if err != nil {
 		consensusReply.Message = "Error Pinning token state" + err.Error()
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
@@ -507,7 +509,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	}
 
 	consensusReply.Status = true
-	consensusReply.Message = "Conensus finished successfully"
+	consensusReply.Message = "Consensus finished successfully"
 	consensusReply.ShareSig = qsb
 	consensusReply.PrivSig = ppb
 	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
@@ -750,8 +752,8 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		}
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
-
-	err = c.w.TokensReceived(did, sr.TokenInfo, b)
+	senderPeerId, _, _ := util.ParseAddress(sr.Address)
+	err = c.w.TokensReceived(did, sr.TokenInfo, b, senderPeerId, c.peerID)
 	if err != nil {
 		c.log.Error("Failed to update token status", "err", err)
 		crep.Message = "Failed to update token status"

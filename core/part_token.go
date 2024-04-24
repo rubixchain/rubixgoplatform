@@ -157,7 +157,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	}
 	t, err := c.w.GetToken(tkn, wallet.TokenIsFree)
 	if err != nil || t == nil {
-		return nil, fmt.Errorf("failed to get token or tokne does not exist")
+		return nil, fmt.Errorf("failed to get token or token does not exist")
 	}
 	release := true
 	defer c.relaseToken(&release, tkn)
@@ -223,7 +223,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		rtb := rb[0].GetBlock()
 		td := util.HexToStr(rtb)
 		fr := bytes.NewBuffer([]byte(td))
-		pt, err := c.ipfs.Add(fr)
+		pt, err := c.w.Add(fr, did, wallet.AddFunc)
 		if err != nil {
 			c.log.Error("Failed to create part token, failed to add rac token to ipfs", "err", err)
 			return nil, err
