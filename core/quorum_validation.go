@@ -177,7 +177,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				c.log.Error("failed to sync parent token chain", "token", pt)
 				return false, err
 			}
-			_, err = c.w.Pin(pt, wallet.WholeTokenSplitLockRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
+			_, err = c.w.Pin(pt, wallet.QuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
 			if err != nil {
 				c.log.Error("Failed to Pin parent token in Quorum", "err", err)
 				return false, err
