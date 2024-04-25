@@ -42,10 +42,6 @@ const (
 	TCChildTokensKey       string = "11"
 )
 
-// const (
-// 	PkiSignVersion int = iota
-// )
-
 const (
 	TokenMintedType       string = "01"
 	TokenTransferredType  string = "02"

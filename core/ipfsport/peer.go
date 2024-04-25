@@ -3,6 +3,7 @@ package ipfsport
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"path"
 	"sync"
@@ -65,11 +66,35 @@ func (pm *PeerManager) getPeerPort() uint16 {
 	defer pm.lock.Unlock()
 	for i, status := range pm.ps {
 		if !status {
-			pm.ps[i] = true
-			return pm.startPort + uint16(i)
+			port := pm.startPort + uint16(i)
+			availability := isPortAvailable(port)
+
+			if availability {
+				fmt.Println("available port: ", port, availability)
+				pm.ps[i] = true
+				return pm.startPort + uint16(i)
+			} else {
+				fmt.Println("NOT available port: ", port, availability)
+			}
 		}
 	}
 	return 0
+}
+
+func isPortAvailable(port uint16) bool {
+	// Convert uint16 port to int
+	portInt := int(port)
+
+	// Attempt to listen on the port
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", portInt))
+	if err != nil {
+		// Port is not available
+		return false
+	}
+	defer listener.Close()
+
+	// Port is available
+	return true
 }
 
 func (pm *PeerManager) releasePeerPort(port uint16) bool {
