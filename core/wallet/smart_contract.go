@@ -91,7 +91,7 @@ func (w *Wallet) GetStatePinnedInfo(token string) (*TokenProviderMap, error) {
 	err := w.s.Read(TokenProvider, &tokenMap, "token=?", token)
 	if err != nil {
 		if err.Error() == "no records found" {
-			w.log.Debug("Data Not avilable in DB")
+			//w.log.Debug("Data Not avilable in DB")
 			return nil, nil
 		} else {
 			w.log.Error("Error fetching details from DB", "error", err)

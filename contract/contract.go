@@ -44,6 +44,7 @@ type ContractType struct {
 	PledgeMode int        `json:"pledge_mode"`
 	TransInfo  *TransInfo `json:"transInfo"`
 	TotalRBTs  float64    `json:"totalRBTs"`
+	ReqID      string     `json:"req_id"`
 	log        logger.Logger
 }
 

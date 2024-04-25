@@ -6,6 +6,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/token"
 )
 
 func (c *Core) DumpTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
@@ -157,4 +158,50 @@ func (c *Core) RegisterCallBackURL(registerReq *model.RegisterCallBackUrlReq) *m
 	reply.Status = true
 	reply.Message = "Call back URL registered successfully"
 	return reply
+}
+
+func (c *Core) RemoveTokenChainBlock(removeReq *model.TCRemoveRequest) *model.TCRemoveReply {
+	removeReply := &model.TCRemoveReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	tt := token.RBTTokenType
+	if c.testNet {
+		tt = token.TestTokenType
+	}
+	err := c.w.RemoveTokenChainBlocklatest(removeReq.Token, tt)
+	if err != nil {
+		tt = token.PartTokenType
+		if c.testNet {
+			tt = token.TestPartTokenType
+		}
+		err = c.w.RemoveTokenChainBlocklatest(removeReq.Token, tt)
+		if err != nil {
+			removeReply.Message = "Failed to remove parts token chain block"
+			return removeReply
+		} else {
+			removeReply.Message = "Failed to remove whole token chain block"
+			return removeReply
+		}
+
+	}
+	removeReply.Status = true
+	removeReply.Message = "Successfully removed token chain block " + removeReq.Token
+	return removeReply
+}
+
+func (c *Core) ReleaseAllLockedTokens() model.BasicResponse {
+	response := &model.BasicResponse{
+		Status: false,
+	}
+	err := c.w.ReleaseAllLockedTokens()
+	if err != nil {
+		c.log.Error("failed to release Locked tokens, ", err)
+		response.Message = "failed to release Locked tokens, " + err.Error()
+		return *response
+	}
+	response.Status = true
+	response.Message = "All Locked Tokens Releases Successfully Or NO Locked Tokens to release"
+	return *response
 }

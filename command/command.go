@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.9"
+	version string = "0.0.15"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -76,6 +76,7 @@ const (
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
+	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
 	AddExplorerCmd                 string = "addexplorer"
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
@@ -435,6 +436,7 @@ func Run(args []string) {
 	flag.IntVar(&cmd.publishType, "pubType", 0, "Smart contract event publishing type(Deploy & Execute)")
 	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
 	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
+	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&links, "links", "", "Explorer url")
 
 	if len(os.Args) < 2 {
@@ -581,6 +583,8 @@ func Run(args []string) {
 		cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
+	case ReleaseAllLockedTokensCmd:
+		cmd.releaseAllLockedTokens()
 	case AddExplorerCmd:
 		cmd.addExplorer()
 	case RemoveExplorerCmd:

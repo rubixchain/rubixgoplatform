@@ -23,9 +23,18 @@ func round(num float64) int {
 	return int(num + math.Copysign(0.5, num))
 }
 
+func Ceilround(num float64) int {
+	return int(math.Floor(num))
+}
+
 func floatPrecision(num float64, precision int) float64 {
+	precision = MaxDecimalPlaces
 	output := math.Pow(10, float64(precision))
 	return float64(round(num*output)) / output
+}
+func CeilfloatPrecision(num float64, precision int) float64 {
+	output := math.Pow(10, float64(precision))
+	return float64(Ceilround(num*output)) / output
 }
 
 func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.Token, error) {
@@ -33,7 +42,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	var err error
 	fv := float64(wholeValue)
 	rem := value - fv
-	rem = floatPrecision(rem, 10)
+	rem = floatPrecision(rem, MaxDecimalPlaces)
 	remWhole := 0
 	wt := make([]wallet.Token, 0)
 	if wholeValue != 0 {
@@ -62,8 +71,8 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		}
 		tkn := tt.TokenID
 		c.w.ReleaseToken(tkn)
-		parts := []float64{rem, floatPrecision(tt.TokenValue-rem, 10)}
-		nt, err := c.createPartToken(dc, did, tkn, parts)
+		parts := []float64{rem, floatPrecision(tt.TokenValue-rem, MaxDecimalPlaces)}
+		nt, err := c.createPartToken(dc, did, tkn, parts, 1)
 		if err != nil {
 			c.w.ReleaseTokens(wt)
 			c.log.Error("failed to create part tokens", "err", err)
@@ -75,7 +84,8 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	if rem < 1 {
-		for i, _ := range pt {
+
+		for i := range pt {
 			if pt[i].TokenValue == rem {
 				wt = append(wt, pt[i])
 				pt = append(pt[:i], pt[i+1:]...)
@@ -95,13 +105,15 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 			rpt = append(rpt, pt[i])
 		}
 	}
+
 	if rem == 0 {
 		c.w.ReleaseTokens(rpt)
 		return wt, nil
 	}
 	if len(rpt) > 0 {
 		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, 10)}
-		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts)
+		c.w.ReleaseToken(rpt[0].TokenID)
+		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts, 2)
 		if err != nil {
 			c.w.ReleaseTokens(wt)
 			c.w.ReleaseTokens(rpt)
@@ -125,8 +137,8 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	c.w.ReleaseToken(nwt.TokenID)
-	parts := []float64{rem, floatPrecision(1.0-rem, 10)}
-	npt, err := c.createPartToken(dc, did, nwt.TokenID, parts)
+	parts := []float64{rem, floatPrecision(nwt.TokenValue-rem, MaxDecimalPlaces)}
+	npt, err := c.createPartToken(dc, did, nwt.TokenID, parts, 3)
 	if err != nil {
 		c.w.ReleaseTokens(wt)
 		c.w.ReleaseToken(nwt.TokenID)
@@ -139,13 +151,13 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	return wt, nil
 }
 
-func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts []float64) ([]wallet.Token, error) {
+func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts []float64, num int) ([]wallet.Token, error) {
 	if dc == nil {
 		return nil, fmt.Errorf("did crypto is not initialised")
 	}
-	t, err := c.w.GetToken(tkn)
+	t, err := c.w.GetToken(tkn, wallet.TokenIsFree)
 	if err != nil || t == nil {
-		return nil, fmt.Errorf("failed to get token or tokne does not exist")
+		return nil, fmt.Errorf("failed to get token or token does not exist")
 	}
 	release := true
 	defer c.relaseToken(&release, tkn)
@@ -159,14 +171,14 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	amount := float64(0)
 	for i, _ := range parts {
 		amount = amount + parts[i]
-		amount = floatPrecision(amount, 10)
+		amount = floatPrecision(amount, MaxDecimalPlaces)
 		if amount > t.TokenValue {
-			return nil, fmt.Errorf("invalid part split, split sum is more than the parent token")
+			return nil, fmt.Errorf("invalid part split, split sum is more than the parent token -1")
 		}
 	}
 
 	if amount != t.TokenValue {
-		return nil, fmt.Errorf("invalid part split, sum of parts value not matching with parent token")
+		return nil, fmt.Errorf("invalid part split, sum of parts value not matching with parent token -2")
 	}
 	pts := make([]string, len(parts))
 	b := c.w.GetGenesisTokenBlock(tkn, ptt)
@@ -211,7 +223,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		rtb := rb[0].GetBlock()
 		td := util.HexToStr(rtb)
 		fr := bytes.NewBuffer([]byte(td))
-		pt, err := c.ipfs.Add(fr)
+		pt, err := c.w.Add(fr, did, wallet.AddFunc)
 		if err != nil {
 			c.log.Error("Failed to create part token, failed to add rac token to ipfs", "err", err)
 			return nil, err
@@ -239,6 +251,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 					},
 				},
 			},
+			TokenValue: floatPrecision(parts[i], MaxDecimalPlaces),
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[pt] = nil
@@ -270,6 +283,8 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		TransactionType: block.TokenBurntType,
 		TokenOwner:      did,
 		TransInfo:       bti,
+		TokenValue:      floatPrecision(amount, MaxDecimalPlaces),
+		ChildTokens:     pts,
 	}
 	ctcb := make(map[string]*block.Block)
 	ctcb[tkn] = c.w.GetLatestTokenBlock(tkn, ptt)

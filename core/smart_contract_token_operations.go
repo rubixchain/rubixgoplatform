@@ -61,7 +61,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	defer c.w.ReleaseTokens(rbtTokensToCommitDetails)
 
 	for i := range rbtTokensToCommitDetails {
-		c.w.Pin(rbtTokensToCommitDetails[i].TokenID, wallet.OwnerRole, did)
+		c.w.Pin(rbtTokensToCommitDetails[i].TokenID, wallet.OwnerRole, did, "NA", "NA", "NA", float64(0)) //TODO: Ensure whether trnxId should be added ?
 		rbtTokensToCommit = append(rbtTokensToCommit, rbtTokensToCommitDetails[i].TokenID)
 	}
 
@@ -114,6 +114,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 			SmartContractToken: deployReq.SmartContractToken,
 			TransTokens:        smartContractInfoArray,
 		},
+		ReqID: reqID,
 	}
 	consensusContract := contract.CreateNewContract(consensusContractDetails)
 	if consensusContract == nil {
@@ -165,6 +166,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		TokenIDs:    tokens,
 		QuorumList:  conensusRequest.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
+		//BlockHash:   txnDetails.BlockID,
 	}
 	c.ec.ExplorerTransaction(explorerTrans)
 
@@ -252,6 +254,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 			TransTokens:        smartContractInfoArray,
 			SmartContractData:  executeReq.SmartContractData,
 		},
+		ReqID: reqID,
 	}
 
 	consensusContract := contract.CreateNewContract(consensusContractDetails)
@@ -298,11 +301,12 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	tokens = append(tokens, executeReq.SmartContractToken)
 	explorerTrans := &ExplorerTrans{
 		TID:         txnDetails.TransactionID,
-		DeployerDID: did,
+		ExecutorDID: did,
 		TrasnType:   conensusRequest.Type,
 		TokenIDs:    tokens,
 		QuorumList:  conensusRequest.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
+		//BlockHash:   txnDetails.BlockID,
 	}
 	c.ec.ExplorerTransaction(explorerTrans)
 	/* newEvent := model.NewContractEvent{

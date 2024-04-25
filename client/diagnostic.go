@@ -44,3 +44,25 @@ func (c *Client) GetSmartContractTokenData(token string, latest bool) (*model.Sm
 	return &sctDataReply, nil
 
 }
+func (c *Client) RemoveTokenChainBlock(token string, latest bool) (*model.TCRemoveReply, error) {
+	removeReq := &model.TCRemoveRequest{
+		Token:  token,
+		Latest: latest,
+	}
+	var removeReply model.TCRemoveReply
+	err := c.sendJSONRequest("POST", setup.APIRemoveTokenChainBlock, nil, removeReq, &removeReply)
+	if err != nil {
+		return nil, err
+	}
+	return &removeReply, nil
+}
+
+func (c *Client) ReleaseAllLockedTokens() (*model.BasicResponse, error) {
+
+	var response model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIReleaseAllLockedTokens, nil, nil, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}

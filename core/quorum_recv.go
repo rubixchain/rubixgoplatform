@@ -134,12 +134,34 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
+
 	// check token ownership
-	if !c.validateTokenOwnership(cr, sc) {
-		c.log.Error("Token ownership check failed")
+
+	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
+	if err != nil {
+		validateTokenOwnershipErrorString := fmt.Sprint(err)
+		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
+			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if strings.Contains(validateTokenOwnershipErrorString, "failed to sync tokenchain Token") {
+			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Error("Tokens ownership check failed")
+		crep.Message = "Token ownership check failed, err : " + err.Error()
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	if !validateTokenOwnershipVar {
+		c.log.Error("Tokens ownership check failed")
 		crep.Message = "Token ownership check failed"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	/* 	if !c.validateTokenOwnership(cr, sc) {
+		c.log.Error("Token ownership check failed")
+		crep.Message = "Token ownership check failed"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	} */
 
 	//Token state check and pinning
 	/*
@@ -173,8 +195,10 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
-	err := c.pinTokenState(tokenStateCheckResult, did)
-	if err != nil {
+	sender := cr.SenderPeerID + "." + sc.GetSenderDID()
+	receiver := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
+	err1 := c.pinTokenState(tokenStateCheckResult, did, cr.TransactionID, sender, receiver, float64(0))
+	if err1 != nil {
 		crep.Message = "Error Pinning token state" + err.Error()
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
@@ -286,11 +310,28 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 		}
 	}
 	// check token ownership
-	if !c.validateTokenOwnership(cr, sc) {
-		c.log.Error("Token ownership check failed")
+	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
+	if err != nil {
+		validateTokenOwnershipErrorString := fmt.Sprint(err)
+		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
+			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Error("Tokens ownership check failed")
+		crep.Message = "Token ownership check failed, err : " + err.Error()
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	if !validateTokenOwnershipVar {
+		c.log.Error("Tokens ownership check failed")
 		crep.Message = "Token ownership check failed"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
+	/* if !c.validateTokenOwnership(cr, sc) {
+		c.log.Error("Token ownership check failed")
+		crep.Message = "Token ownership check failed"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	} */
 	//check if token is pledgedtoken
 	wt := sc.GetTransTokenInfo()
 
@@ -318,23 +359,23 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
-func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, conensusRequest *ConensusRequest) *ensweb.Result {
+func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, consensusRequest *ConensusRequest) *ensweb.Result {
 	consensusReply := ConensusReply{
-		ReqID:  conensusRequest.ReqID,
+		ReqID:  consensusRequest.ReqID,
 		Status: false,
 	}
-	if conensusRequest.ContractBlock == nil {
+	if consensusRequest.ContractBlock == nil {
 		c.log.Error("contract block in consensus req is nil")
 		consensusReply.Message = "contract block in consensus req is nil"
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
-	consensusContract := contract.InitContract(conensusRequest.ContractBlock, nil)
+	consensusContract := contract.InitContract(consensusRequest.ContractBlock, nil)
 	// setup the did to verify the signature
 	c.log.Debug("VEryfying the deployer signature")
 
 	var verifyDID string
 
-	if conensusRequest.Mode == SmartContractDeployMode {
+	if consensusRequest.Mode == SmartContractDeployMode {
 		c.log.Debug("Fetching Deployer DID")
 		verifyDID = consensusContract.GetDeployerDID()
 		c.log.Debug("deployer did ", verifyDID)
@@ -361,12 +402,23 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 
 	var tokenStateCheckResult []TokenStateCheckResult
 	var wg sync.WaitGroup
-	if conensusRequest.Mode == SmartContractDeployMode {
+	if consensusRequest.Mode == SmartContractDeployMode {
 		//if deployment
 		commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
 		//1. check commited token authenticity
 		c.log.Debug("validation 1 - Authenticity of commited RBT tokens")
-		if !c.validateTokenOwnership(conensusRequest, consensusContract) {
+		validateTokenOwnershipVar, err := c.validateTokenOwnership(consensusRequest, consensusContract, did)
+		if err != nil {
+			validateTokenOwnershipErrorString := fmt.Sprint(err)
+			if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
+				consensusReply.Message = "Commited Token ownership check failed, err: " + validateTokenOwnershipErrorString
+				return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+			}
+			c.log.Error("Commited Tokens ownership check failed")
+			consensusReply.Message = "Commited Token ownership check failed, err : " + err.Error()
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		if !validateTokenOwnershipVar {
 			c.log.Error("Commited Tokens ownership check failed")
 			consensusReply.Message = "Commited Token ownership check failed"
 			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
@@ -376,7 +428,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		results := make([]MultiPinCheckRes, len(commitedTokenInfo))
 		for i := range commitedTokenInfo {
 			wg.Add(1)
-			go c.pinCheck(commitedTokenInfo[i].Token, i, conensusRequest.DeployerPeerID, "", results, &wg)
+			go c.pinCheck(commitedTokenInfo[i].Token, i, consensusRequest.DeployerPeerID, "", results, &wg)
 		}
 		wg.Wait()
 		for i := range results {
@@ -397,12 +449,12 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		for i, ti := range commitedTokenInfo {
 			t := ti.Token
 			wg.Add(1)
-			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, conensusRequest.QuorumList, ti.TokenType)
+			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, consensusRequest.QuorumList, ti.TokenType)
 		}
 		wg.Wait()
 	} else {
 		//sync the smartcontract tokenchain
-		address := conensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
+		address := consensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
 		peerConn, err := c.getPeer(address)
 		if err != nil {
 			c.log.Error("Failed to get executor peer to sync smart contract token chain", "err", err)
@@ -422,7 +474,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 				return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 			}
 			wg.Add(1)
-			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, conensusRequest.QuorumList, ti.TokenType)
+			go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, consensusRequest.QuorumList, ti.TokenType)
 		}
 		wg.Wait()
 	}
@@ -441,7 +493,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	}
 
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
-	err = c.pinTokenState(tokenStateCheckResult, did)
+	err = c.pinTokenState(tokenStateCheckResult, did, consensusRequest.TransactionID, "NA", "NA", float64(0)) // TODO: Ensure that smart contract trnx id and things are proper
 	if err != nil {
 		consensusReply.Message = "Error Pinning token state" + err.Error()
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
@@ -457,7 +509,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	}
 
 	consensusReply.Status = true
-	consensusReply.Message = "Conensus finished successfully"
+	consensusReply.Message = "Consensus finished successfully"
 	consensusReply.ShareSig = qsb
 	consensusReply.PrivSig = ppb
 	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
@@ -518,6 +570,20 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	if (pr.TokensRequired) < MinTrnxAmt {
+		c.log.Error("Pledge amount is less than ", MinTrnxAmt)
+		crep.Message = "Pledge amount is less than minimum transcation amount"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	decimalPlaces := strconv.FormatFloat(pr.TokensRequired, 'f', -1, 64)
+	decimalPlacesStr := strings.Split(decimalPlaces, ".")
+	if len(decimalPlacesStr) == 2 && len(decimalPlacesStr[1]) > MaxDecimalPlaces {
+		c.log.Error("Pledge amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		crep.Message = fmt.Sprintf("Pledge amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	dc := c.pqc[did]
 	wt, err := c.GetTokens(dc, did, pr.TokensRequired)
 	if err != nil {
@@ -590,41 +656,42 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		t := ti.Token
 		pblkID, err := b.GetPrevBlockID(t)
 		if err != nil {
-			c.log.Error("failed to sync token chain block, missing previous block id", "err", err)
-			crep.Message = "failed to sync token chain block, missing previous block id"
+			c.log.Error("failed to sync token chain block, missing previous block id for token ", t, " err : ", err)
+			crep.Message = "failed to sync token chain block, missing previous block id for token " + t
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		err = c.syncTokenChainFrom(p, pblkID, t, ti.TokenType)
 		if err != nil {
-			c.log.Error("failed to sync token chain block", "err", err)
-			crep.Message = "failed to sync token chain block"
+			errMsg := fmt.Sprintf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
+			c.log.Error(errMsg, "err", err)
+			crep.Message = errMsg
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 
 		if c.TokenType(PartString) == ti.TokenType {
 			gb := c.w.GetGenesisTokenBlock(t, ti.TokenType)
 			if gb == nil {
-				c.log.Error("failed to get genesis block", "err", err)
-				crep.Message = "failed to get genesis block"
+				c.log.Error("failed to get genesis block for token ", t, "err : ", err)
+				crep.Message = "failed to get genesis block for token " + t
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 			pt, _, err := gb.GetParentDetials(t)
 			if err != nil {
-				c.log.Error("failed to get parent detials", "err", err)
-				crep.Message = "failed to get parent detials"
+				c.log.Error("failed to get parent details for token ", t, " err : ", err)
+				crep.Message = "failed to get parent details for token " + t
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 			err = c.syncParentToken(p, pt)
 			if err != nil {
-				c.log.Error("failed to sync parent token", "err", err)
-				crep.Message = "failed to sync parent token"
+				c.log.Error("failed to sync parent token ", pt, " childtoken ", t, " err : ", err)
+				crep.Message = "failed to sync parent token " + pt + " childtoken " + t
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 		}
 		ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
 		if err != nil {
-			c.log.Error("Failed to fetch previous block", "err", err)
-			crep.Message = "Failed to fetch previous block"
+			c.log.Error("Failed to fetch previous block for token ", t, " err : ", err)
+			crep.Message = "Failed to fetch previous block for token " + t
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		ptcb := block.InitBlock(ptcbArray, nil)
@@ -641,7 +708,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		t := ti.Token
 		senderPeerId, _, ok := util.ParseAddress(sr.Address)
 		if !ok {
-			c.log.Error("Error occurede", "error", err)
+			c.log.Error("Error occured", "error", err)
 			crep.Message = "Unable to parse sender address"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
@@ -685,8 +752,8 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		}
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
-
-	err = c.w.TokensReceived(did, sr.TokenInfo, b)
+	senderPeerId, _, _ := util.ParseAddress(sr.Address)
+	err = c.w.TokensReceived(did, sr.TokenInfo, b, senderPeerId, c.peerID)
 	if err != nil {
 		c.log.Error("Failed to update token status", "err", err)
 		crep.Message = "Failed to update token status"
@@ -761,7 +828,9 @@ func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
+	c.log.Debug("incoming request for pledge finlaity")
 	did := c.l.GetQuerry(req, "did")
+	c.log.Debug("DID from query", did)
 	var ur UpdatePledgeRequest
 	err := c.l.ParseJSON(req, &ur)
 	crep := model.BasicResponse{
@@ -774,6 +843,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	dc, ok := c.qc[did]
 	if !ok {
+		c.log.Debug("did crypto initilisation failed")
 		c.log.Error("Failed to setup quorum crypto")
 		crep.Message = "Failed to setup quorum crypto"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -836,8 +906,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
-		c.log.Error("Failed to create new token chain block")
-		crep.Message = "Failed to create new token chain block"
+		c.log.Error("Failed to create new token chain block - qrm rec")
+		crep.Message = "Failed to create new token chain block -qrm rec"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	err = nb.UpdateSignature(dc)

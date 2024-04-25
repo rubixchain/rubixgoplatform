@@ -49,13 +49,15 @@ const (
 )
 
 const (
-	InvalidPasringErr string = "invalid json parsing"
-	RubixRootDir      string = "Rubix/"
-	DefaultMainNetDB  string = "rubix.db"
-	DefaultTestNetDB  string = "rubixtest.db"
-	MainNetDir        string = "MainNet"
-	TestNetDir        string = "TestNet"
-	TestNetDIDDir     string = "TestNetDID/"
+	InvalidPasringErr string  = "invalid json parsing"
+	RubixRootDir      string  = "Rubix/"
+	DefaultMainNetDB  string  = "rubix.db"
+	DefaultTestNetDB  string  = "rubixtest.db"
+	MainNetDir        string  = "MainNet"
+	TestNetDir        string  = "TestNet"
+	TestNetDIDDir     string  = "TestNetDID/"
+	MinTrnxAmt        float64 = 0.00001
+	MaxDecimalPlaces  int     = 5
 )
 
 const (
@@ -347,6 +349,7 @@ func (c *Core) Start() (bool, string) {
 		c.log.Error("failed to start ping port", "err", err)
 		return false, "Failed to start ping port"
 	}
+	//c.w.ReleaseAllLockedTokens()
 	// exp := model.ExploreModel{
 	// 	Cmd:    ExpPeerStatusCmd,
 	// 	PeerID: c.peerID,
@@ -493,7 +496,6 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 
 func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	dt, err := c.w.GetDID(didStr)
-	c.log.Debug("dt is", "dt", dt)
 	if err != nil {
 		c.log.Error("DID does not exist", "did", didStr)
 		return nil, fmt.Errorf("DID does not exist")

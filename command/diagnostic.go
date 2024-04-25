@@ -116,7 +116,9 @@ func tcMarshal(str string, m interface{}) (string, error) {
 	case int:
 		str = str + fmt.Sprintf("%d", mt)
 	case float64:
-		str = str + fmt.Sprintf("%f", mt)
+		// TokenValue (key: "10") is a float value and needs to have a precision of 5
+		// in the output dump file 
+		str = str + fmt.Sprintf("%.5f", mt)
 	case interface{}:
 		str, err = tcMarshal(str, mt)
 		if err != nil {
@@ -227,4 +229,30 @@ func (cmd *Command) getSmartContractData() {
 		}
 	*/
 
+}
+
+func (cmd *Command) removeTokenChainBlock() {
+	response, err := cmd.c.RemoveTokenChainBlock(cmd.token, cmd.latest)
+	if err != nil {
+		cmd.log.Error("Failed to remove token chain", "err", err)
+		return
+	}
+	if !response.Status {
+		cmd.log.Error("Failed to remove token chain", "msg", response.Message)
+		return
+	}
+	cmd.log.Info("Token chain removed successfully!")
+}
+
+func (cmd *Command) releaseAllLockedTokens() {
+	resp, err := cmd.c.ReleaseAllLockedTokens()
+	if err != nil {
+		cmd.log.Error("Failed to release the locked tokens", "err", err)
+		return
+	}
+	if !resp.Status {
+		cmd.log.Error("Failed to release the locked tokens", "msg", resp.Message)
+		return
+	}
+	cmd.log.Info("Locked Tokens released successfully Or No Locked Tokens found to be released")
 }

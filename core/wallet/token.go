@@ -21,8 +21,15 @@ const (
 	TokenIsFetched
 	TokenIsBurnt
 	TokenIsExecuted
+	TokenIsOrphaned
+	TokenChainSyncIssue
+	TokenPledgeIssue
+	TokenIsBeingDoubleSpent
 )
-
+const (
+	Zero int = iota
+	One
+)
 const (
 	RACTestTokenType int = iota
 	RACOldNFTType
@@ -209,11 +216,11 @@ func (w *Wallet) GetTokens(did string, amt float64) ([]Token, error) {
 	return wt, nil
 }
 
-func (w *Wallet) GetToken(token string) (*Token, error) {
+func (w *Wallet) GetToken(token string, token_Status int) (*Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t Token
-	err := w.s.Read(TokenStorage, &t, "token_id=? AND token_status=?", token, TokenIsFree)
+	err := w.s.Read(TokenStorage, &t, "token_id=? AND token_status=?", token, token_Status)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
@@ -367,7 +374,7 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 	return nil
 }
 
-func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block) error {
+func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
@@ -415,8 +422,10 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		if err != nil {
 			return err
 		}
+		senderAddress := senderPeerId + "." + b.GetSenderDID()
+		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
 		//Pinnig the whole tokens and pat tokens
-		ok, err := w.Pin(ti[i].Token, OwnerRole, did)
+		ok, err := w.Pin(ti[i].Token, OwnerRole, did, b.GetTid(), senderAddress, receiverAddress, ti[i].TokenValue)
 		if err != nil {
 			return err
 		}
@@ -456,6 +465,111 @@ func (w *Wallet) CommitTokens(did string, rbtTokens []string) error {
 		t.TokenStatus = TokenIsCommitted
 		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, rbtTokens[i])
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *Wallet) GetAllPartTokens(did string) ([]Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value>? AND token_value<? ORDER BY token_value DESC", did, TokenIsFree, Zero, One)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	for i := range t {
+		t[i].TokenStatus = TokenIsLocked
+		err = w.s.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return nil, err
+		}
+	}
+	return t, nil
+}
+
+func (w *Wallet) GetAllWholeTokens(did string) ([]Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	for i := range t {
+		t[i].TokenStatus = TokenIsLocked
+		err = w.s.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return nil, err
+		}
+	}
+	return t, nil
+}
+
+/* func (w *Wallet) UpdateChildTokenStatusToOrphan(tokenHash string) (error){
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.s.Update(TokenStorage, nil, "token_id=?", tokenHash)
+	if err != nil {
+		return err
+	}
+	return nil
+} */
+
+func (w *Wallet) GetChildToken(did string, parentTokenID string) ([]Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "did=? AND parent_token_id=? ", did, parentTokenID)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	for i := range t {
+		t[i].TokenStatus = TokenIsLocked
+		err = w.s.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return nil, err
+		}
+	}
+	return t, nil
+}
+
+func (w *Wallet) GetAllLockedTokens() ([]Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "token_status=?", TokenIsLocked)
+	if err != nil && err.Error() != "no records found" {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
+
+func (w *Wallet) ReleaseAllLockedTokens() error {
+	var lockedTokens []Token
+	lockedTokens, err := w.GetAllLockedTokens()
+	if err != nil && err.Error() != "no records found" {
+		w.log.Error("Failed to get tokens", "err", err)
+		return err
+	}
+
+	if len(lockedTokens) == 0 {
+		w.log.Info("No Loked tokens to release")
+		return nil
+	}
+	for _, t := range lockedTokens {
+		t.TokenStatus = TokenIsFree
+		err = w.s.Update(TokenStorage, &t, "token_id=?", t.TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token", "err", err)
 			return err
 		}
 	}

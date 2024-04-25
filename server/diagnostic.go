@@ -76,3 +76,19 @@ func (s *Server) APIRegisterCallbackURL(req *ensweb.Request) *ensweb.Result {
 	response := s.c.RegisterCallBackURL(&registerReq)
 	return s.RenderJSON(req, response, http.StatusOK)
 }
+
+func (s *Server) APIRemoveTokenChainBlock(req *ensweb.Request) *ensweb.Result {
+	var removeReq model.TCRemoveRequest
+	err := s.ParseJSON(req, &removeReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	removeReply := s.c.RemoveTokenChainBlock(&removeReq)
+	return s.RenderJSON(req, removeReply, http.StatusOK)
+}
+
+func (s *Server) APIReleaseAllLockedTokens(req *ensweb.Request) *ensweb.Result {
+	var response model.BasicResponse
+	response = s.c.ReleaseAllLockedTokens()
+	return s.RenderJSON(req, response, http.StatusOK)
+}

@@ -419,7 +419,7 @@ const docTemplate = `{
         },
         "/api/get-by-did": {
             "get": {
-                "description": "Retrieves the details of a transaction based on dID.",
+                "description": "Retrieves the details of a transaction based on dID and date range.",
                 "consumes": [
                     "application/json"
                 ],
@@ -444,6 +444,18 @@ const docTemplate = `{
                         "description": "Filter by role as sender or receiver",
                         "name": "Role",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date of the date range (format: YYYY-MM-DD",
+                        "name": "StartDate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date of the date range (format: YYYY-MM-DD)",
+                        "name": "EndDate",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -451,6 +463,30 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/get-by-node": {
+            "get": {
+                "description": "Get count of incoming and outgoing txns of the DID ins a node.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Get count of incoming and outgoing txns of the DID ins a node",
+                "operationId": "get-txn-details-by-node",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.TxnCountForDID"
                         }
                     }
                 }
@@ -812,6 +848,24 @@ const docTemplate = `{
                 }
             }
         },
+        "model.TxnCountForDID": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
+                },
+                "txnCount": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/wallet.TransactionCount"
+                    }
+                }
+            }
+        },
         "server.DeploySmartContractSwaggoInput": {
             "type": "object",
             "properties": {
@@ -921,6 +975,20 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string"
+                }
+            }
+        },
+        "wallet.TransactionCount": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "txnReceived": {
+                    "type": "integer"
+                },
+                "txnSend": {
+                    "type": "integer"
                 }
             }
         }
