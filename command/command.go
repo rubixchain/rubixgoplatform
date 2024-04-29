@@ -77,6 +77,7 @@ const (
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
 	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
+	CheckQuorumStatusCmd           string = "checkQuorumStatus"
 	AddExplorerCmd                 string = "addexplorer"
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
@@ -124,6 +125,7 @@ var commands = []string{VersionCmd,
 	DumpSmartContractTokenChainCmd,
 	GetTokenBlock,
 	GetSmartContractData,
+	CheckQuorumStatusCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -240,6 +242,7 @@ type Command struct {
 	smartContractData  string
 	executorAddr       string
 	latest             bool
+	quorumAddr         string
 	links              []string
 	mnemonicFile       string
 	ChildPath          int
@@ -585,6 +588,8 @@ func Run(args []string) {
 		cmd.executeSmartcontract()
 	case ReleaseAllLockedTokensCmd:
 		cmd.releaseAllLockedTokens()
+	case CheckQuorumStatusCmd:
+		cmd.checkQuorumStatus()
 	case AddExplorerCmd:
 		cmd.addExplorer()
 	case RemoveExplorerCmd:
