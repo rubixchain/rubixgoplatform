@@ -77,6 +77,7 @@ const (
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
 	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
+	CheckQuorumStatusCmd           string = "checkQuorumStatus"
 )
 
 var commands = []string{VersionCmd,
@@ -121,6 +122,7 @@ var commands = []string{VersionCmd,
 	DumpSmartContractTokenChainCmd,
 	GetTokenBlock,
 	GetSmartContractData,
+	CheckQuorumStatusCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -237,6 +239,7 @@ type Command struct {
 	smartContractData  string
 	executorAddr       string
 	latest             bool
+	quorumAddr         string
 }
 
 func showVersion() {
@@ -570,6 +573,8 @@ func Run(args []string) {
 		cmd.executeSmartcontract()
 	case ReleaseAllLockedTokensCmd:
 		cmd.releaseAllLockedTokens()
+	case CheckQuorumStatusCmd:
+		cmd.checkQuorumStatus()
 	default:
 		cmd.log.Error("Invalid command")
 	}
