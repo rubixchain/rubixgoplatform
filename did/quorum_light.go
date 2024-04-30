@@ -49,6 +49,8 @@ func (d *DIDQuorum_Lt) GetDID() string {
 	return d.did
 }
 
+// When the did creation and signing is done in Light mode,
+// this function returns the sign version as BIPVersion = 0
 func (d *DIDQuorum_Lt) GetSignVersion() int {
 	return BIPVersion
 }

@@ -131,6 +131,14 @@ type CreditSignature struct {
 	SignVersion   string `json:"sign_version"` //represents sign version (PkiSign == 0 or NlssSign==1)
 }
 
+type SenderSignature struct {
+	NLSS_share   string `json:"nlss_share_signature"`
+	Private_sign string `json:"priv_signature"`
+	DID          string `json:"sender_did"`
+	Hash         string `json:"hash"`
+	SignVersion  int    `json:"sign_version"` //represents sign version (PkiSign == 0 or NlssSign==1)
+}
+
 type TokenArbitrationReq struct {
 	Block []byte `json:"block"`
 }
@@ -953,6 +961,29 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	}
 	//tokenList = append(tokenList, cr.PartTokens...)
 
+	//Fetching sender signature to add it to transaction details
+	senderdid := sc.GetSenderDID()
+	sign_data, sender_share_sign, sender_priv_sign, err := sc.GetHashSig(senderdid)
+	if err != nil {
+		c.log.Error("failed to fetch sender sign", "err", err)
+		return nil, fmt.Errorf("failed to fetch sender sign")
+	}
+	sender_sign_version := dc.GetSignVersion()
+	sender_sign_ := &SenderSignature{
+		NLSS_share:   sender_share_sign,
+		Private_sign: sender_priv_sign,
+		DID:          senderdid,
+		Hash:         sign_data,
+		SignVersion:  sender_sign_version,
+	}
+	sender_sign, err := json.Marshal(sender_sign_)
+	if err != nil {
+		c.log.Error("failed to parse sender sign", "err", err)
+		return nil, fmt.Errorf("failed to parse sender sign")
+	}
+
+	senderSignature := string(sender_sign)
+
 	var tcb block.TokenChainBlock
 
 	if cr.Mode == SmartContractDeployMode {
@@ -1011,6 +1042,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			QuorumSignature: credit,
 			SmartContract:   sc.GetBlock(),
 			PledgeDetails:   ptds,
+			SenderSignature: senderSignature,
 		}
 	}
 

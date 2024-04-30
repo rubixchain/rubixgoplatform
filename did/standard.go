@@ -55,6 +55,8 @@ func (d *DIDStandard) GetDID() string {
 	return d.did
 }
 
+// When the did creation and signing is done in Standard mode,
+// this function returns the sign version as NLSSVersion = 1
 func (d *DIDStandard) GetSignVersion() int {
 	return NlssVersion
 }

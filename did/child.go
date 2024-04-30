@@ -64,6 +64,8 @@ func (d *DIDChild) GetDID() string {
 	return d.did
 }
 
+// When the did creation and signing is done in Child mode,
+// this function returns the sign version as NLSSVersion = 1
 func (d *DIDChild) GetSignVersion() int {
 	return NlssVersion
 }

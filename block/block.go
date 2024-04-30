@@ -40,6 +40,7 @@ const (
 	TCSmartContractDataKey string = "9"
 	TCTokenValueKey        string = "10"
 	TCChildTokensKey       string = "11"
+	TCSenderSignatureKey   string = "12"
 )
 
 const (
@@ -67,6 +68,7 @@ type TokenChainBlock struct {
 	SmartContractData string         `json:"smartContractData"`
 	TokenValue        float64        `json:"tokenValue"`
 	ChildTokens       []string       `json:"childTokens"`
+	SenderSignature   string         `json:"senderSignature"`
 }
 
 type PledgeDetail struct {
@@ -150,6 +152,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	}
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
+	}
+	if tcb.SenderSignature != "" {
+		ntcb[TCSenderSignatureKey] = tcb.SenderSignature
 	}
 
 	if floatPrecisionToMaxDecimalPlaces(tcb.TokenValue) > floatPrecisionToMaxDecimalPlaces(0) {
