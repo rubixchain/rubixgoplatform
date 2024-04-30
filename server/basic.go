@@ -76,6 +76,7 @@ func (s *Server) APICheckQuorumStatus(req *ensweb.Request) *ensweb.Result {
 	if len(parts) != 2 {
 		// Handle the case where the string doesn't contain exactly two parts
 		fmt.Println("Invalid quorumAddress format")
+		return s.BasicResponse(req, false, "Invalid Quorum Address Format", nil)
 	}
 	// Assign the first part to "peerID" and the second part to "dID"
 	peerID := parts[0]
@@ -83,6 +84,9 @@ func (s *Server) APICheckQuorumStatus(req *ensweb.Request) *ensweb.Result {
 
 	fmt.Println("peerid in basic " + peerID + " did is " + dID)
 	str, err := s.c.CheckQuorumStatus(peerID, dID)
+	if strings.Contains(str, "") {
+		fmt.Println("str in server basic is ", str)
+	}
 	if err != nil {
 		s.log.Error("Quorum status check failed", "err", err)
 		return s.BasicResponse(req, false, str, nil)

@@ -1,6 +1,9 @@
 package command
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func (cmd *Command) ping() {
 	msg, status := cmd.c.Ping(cmd.peerID)
@@ -14,9 +17,11 @@ func (cmd *Command) ping() {
 func (cmd *Command) checkQuorumStatus() {
 	fmt.Println("checkQuorumStatus triggered")
 	msg, status := cmd.c.CheckQuorumStatus(cmd.quorumAddr)
-	if !status {
-		cmd.log.Error("Quorum is not setup in ", cmd.quorumAddr, " message ", msg)
-	} else {
+	fmt.Println("cmd msg is ", msg)
+	fmt.Println("cmd status is ", status)
+	if strings.Contains(msg, "Quorum is setup") {
 		cmd.log.Info("Quorum is setup in", cmd.quorumAddr, "message", msg)
+	} else {
+		cmd.log.Error("Quorum is not setup in ", cmd.quorumAddr, " message ", msg)
 	}
 }

@@ -529,6 +529,7 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	qdc, ok := c.qc[did]
+	fmt.Println("qdc in quorumreceiver core is ", qdc)
 	if !ok {
 		c.log.Error("Quorum is not setup")
 		crep.Message = "Quorum is not setup"

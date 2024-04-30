@@ -37,7 +37,9 @@ func (c *Client) CheckQuorumStatus(quorumAddress string) (string, bool) {
 	var rm model.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APICheckQuorumStatus, q, nil, &rm, 2*time.Minute)
 	if err != nil {
-		return "CHeck quorum failed, " + err.Error(), false
+		return "Check quorum failed, " + err.Error(), false
 	}
+	fmt.Println("client ping response is ", rm)
+	fmt.Println("status in client ", rm.Status)
 	return rm.Message, rm.Status
 }
