@@ -83,13 +83,14 @@ func (s *Server) APICheckQuorumStatus(req *ensweb.Request) *ensweb.Result {
 	dID := parts[1]
 
 	fmt.Println("peerid in basic " + peerID + " did is " + dID)
-	str, err := s.c.CheckQuorumStatus(peerID, dID)
-	if strings.Contains(str, "") {
-		fmt.Println("str in server basic is ", str)
-	}
+	str, status, err := s.c.CheckQuorumStatus(peerID, dID)
 	if err != nil {
 		s.log.Error("Quorum status check failed", "err", err)
 		return s.BasicResponse(req, false, str, nil)
 	}
-	return s.BasicResponse(req, true, str, nil)
+	/* if !status {
+		s.log.Error("Quorum setup is not done")
+		return s.BasicResponse(req, status, str, nil)
+	} */
+	return s.BasicResponse(req, status, str, nil)
 }
