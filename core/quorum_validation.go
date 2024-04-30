@@ -360,6 +360,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 
 	//check dht to see if any pin exist
 	list, err1 := c.GetDHTddrs(tokenIDTokenStateHash)
+	fmt.Println("List in checkToken State", list)
 	//try to call ipfs cat to check if any one has pinned the state i.e \
 	if err1 != nil {
 		c.log.Error("Error fetching content for the tokenstate ipfs hash :", tokenIDTokenStateHash, "Error", err)
@@ -383,7 +384,11 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		}
 		qPeerIds = append(qPeerIds, pId)
 	}
+	fmt.Println("QpeerIds in checkTokenState", qPeerIds)
+
 	updatedList := c.removeStrings(list, qPeerIds)
+	fmt.Println("Updated List in checkToken state", updatedList)
+
 	//if pin exist abort
 	if len(updatedList) != 0 {
 		c.log.Debug("Token state is exhausted, Token is being Double spent. Token : ", tokenId)
@@ -393,6 +398,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		resultArray[index] = result
 		return
 	}
+
 	c.log.Debug("Token state is not exhausted, Unique Txn")
 	result.Error = nil
 	result.Message = "Token state is free, Unique Txn"

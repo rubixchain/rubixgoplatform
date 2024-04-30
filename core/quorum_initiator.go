@@ -282,18 +282,16 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		fmt.Println("quorum list with cr type 2 :")
 		fmt.Println(ql)
 		finalQl = c.GetFinalQuorumList(ql)
+		cr.QuorumList = finalQl
 		fmt.Println("Final groups with all quorums setup:", finalQl)
+	} else {
+		cr.QuorumList = ql
 	}
 
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
 	c.pd[cr.ReqID] = &pd
 	c.qlock.Unlock()
-	if len(finalQl) != 5 {
-		cr.QuorumList = finalQl
-		c.log.Error("Insufficent quromlist set")
-	}
-	//cr.QuorumList=ql
 	defer func() {
 		c.qlock.Lock()
 		delete(c.quorumRequest, cr.ReqID)
@@ -303,7 +301,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 	fmt.Println("quorum list is ", ql, " length of ql is ", len(ql))
 
-	for _, a := range ql {
+	for _, a := range cr.QuorumList {
 		//This part of code is trying to connect to the quorums in quorum list, where various functions are called to pledge the tokens
 		//and checking of transaction by the quorum i.e. consensus for the transaction. Once the quorum is connected, it pledges and
 		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
@@ -714,6 +712,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	var p *ipfsport.Peer
 	var err error
 	p, err = c.getPeer(addr)
+	fmt.Println("QuorumList in connect Quorum", cr.QuorumList)
 	if err != nil {
 		c.log.Error("Failed to get peer connection", "err", err)
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)
