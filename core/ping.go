@@ -80,14 +80,16 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, error) { //
 	fmt.Println("peer id is " + peerID + " did is " + did)
 	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
 	if err != nil {
-		return "", err
+		fmt.Println("Error in Open Peer Conn", err)
+		return "Open Peer Connection Error", err
 	}
 	// Close the p2p before exit
 	defer p.Close()
 	var checkQuorumStatusResponse PingResponse
 	err = p.SendJSONRequest("GET", APICheckQuorumStatus, nil, nil, &checkQuorumStatusResponse, false, 2*time.Minute)
 	if err != nil {
-		return "", err
+		fmt.Println("Error in sending Json Request ", err)
+		return "Send Json Request error ", err
 	}
 	return checkQuorumStatusResponse.Message, nil
 }

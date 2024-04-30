@@ -132,6 +132,9 @@ func (pm *PeerManager) SwarmConnect(peerID string) bool {
 }
 
 func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (*Peer, error) {
+	fmt.Println("Peer ID in OpenPeerConn", peerID)
+	fmt.Println("DID in OpenPeerConn", did)
+	fmt.Println("Appname in OpenPeerConn", appname)
 	// local peer
 	if peerID == pm.peerID {
 		var err error
