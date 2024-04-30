@@ -70,6 +70,7 @@ func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 func (s *Server) APICheckQuorumStatus(req *ensweb.Request) *ensweb.Result {
 	fmt.Println("APICheckQuorumStatus in basic.go")
 	qAddress := s.GetQuerry(req, "quorumAddress")
+	fmt.Println("QuorumAddress", qAddress)
 	// Split the string into two parts based on a delimiter
 	parts := strings.Split(qAddress, ".")
 	if len(parts) != 2 {

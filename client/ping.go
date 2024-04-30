@@ -30,9 +30,10 @@ func (c *Client) CheckQuorumStatus(quorumAddress string) (string, bool) {
 		return "Invalid quorumAddress format", false
 	}
 	// Assign the first part to "peerID" and the second part to "dID"
-	q["peerID"] = parts[0]
-	q["did"] = parts[1]
-	fmt.Println("Peerid " + q["peerID"] + " did is " + q["did"])
+	// q["peerID"] = parts[0]
+	// q["did"] = parts[1]
+	// fmt.Println("Peerid " + q["peerID"] + " did is " + q["did"])
+	q["quorumAddress"] = quorumAddress
 	var rm model.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APICheckQuorumStatus, q, nil, &rm, 2*time.Minute)
 	if err != nil {
