@@ -175,7 +175,6 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 
 	tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
 	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
-	fmt.Println("Cr.QuorumList =", cr.QuorumList)
 	for i := range ti {
 		wg.Add(1)
 		go c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult, &wg, cr.QuorumList, ti[i].TokenType)
@@ -530,7 +529,6 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	qdc, ok := c.qc[did]
-	fmt.Println("qdc in quorumreceiver core is ", qdc)
 	if !ok {
 		c.log.Error("Quorum is not setup")
 		crep.Message = "Quorum is not setup"
@@ -539,7 +537,6 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	switch cr.Mode {
 	case RBTTransferMode:
 		c.log.Debug("RBT consensus started")
-		fmt.Println("Cr.Quorumlist insie case RBTTransferMode =", cr.QuorumList)
 		return c.quorumRBTConsensus(req, did, qdc, &cr)
 	case DTCommitMode:
 		c.log.Debug("Data consensus started")

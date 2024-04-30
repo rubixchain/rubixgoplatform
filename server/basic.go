@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -68,29 +67,22 @@ func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 
 // APIPing will ping to given peer
 func (s *Server) APICheckQuorumStatus(req *ensweb.Request) *ensweb.Result {
-	fmt.Println("APICheckQuorumStatus in basic.go")
 	qAddress := s.GetQuerry(req, "quorumAddress")
-	fmt.Println("QuorumAddress", qAddress)
 	// Split the string into two parts based on a delimiter
 	parts := strings.Split(qAddress, ".")
 	if len(parts) != 2 {
 		// Handle the case where the string doesn't contain exactly two parts
-		fmt.Println("Invalid quorumAddress format")
+		s.log.Error("Invalid quorumAddress format, required format is PeerID.dID")
 		return s.BasicResponse(req, false, "Invalid Quorum Address Format", nil)
 	}
 	// Assign the first part to "peerID" and the second part to "dID"
 	peerID := parts[0]
 	dID := parts[1]
-
-	fmt.Println("peerid in basic " + peerID + " did is " + dID)
 	str, status, err := s.c.CheckQuorumStatus(peerID, dID)
 	if err != nil {
 		s.log.Error("Quorum status check failed", "err", err)
 		return s.BasicResponse(req, false, str, nil)
 	}
-	/* if !status {
-		s.log.Error("Quorum setup is not done")
-		return s.BasicResponse(req, status, str, nil)
-	} */
+
 	return s.BasicResponse(req, status, str, nil)
 }

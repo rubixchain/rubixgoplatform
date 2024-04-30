@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -67,7 +66,6 @@ func (c *Core) CheckQuorumStatusResponse(req *ensweb.Request) *ensweb.Result { /
 			Status: false,
 		},
 	}
-	fmt.Println("Inout did is ", did)
 	_, ok := c.qc[did]
 	if !ok {
 		c.log.Error("Quorum is not setup in core ping.go")
@@ -85,10 +83,8 @@ func (c *Core) CheckQuorumStatusResponse(req *ensweb.Request) *ensweb.Result { /
 // CheckQuorumStatus will ping the peer & get the response
 func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error) { //
 	q := make(map[string]string)
-	fmt.Println("peer id is " + peerID + " did is " + did)
 	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
 	if err != nil {
-		fmt.Println("Error in Open Peer Conn", err)
 		return "Open Peer Connection Error", false, err
 	}
 	// Close the p2p before exit
@@ -97,9 +93,7 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error
 	var checkQuorumStatusResponse PingResponse
 	err = p.SendJSONRequest("GET", APICheckQuorumStatusPath, q, nil, &checkQuorumStatusResponse, false, 2*time.Minute)
 	if err != nil {
-		fmt.Println("Error in sending Json Request ", err)
 		return "Send Json Request error ", false, err
 	}
-	fmt.Println("core ping checkQuorumStatusResponse ", checkQuorumStatusResponse)
 	return checkQuorumStatusResponse.Message, checkQuorumStatusResponse.Status, nil
 }

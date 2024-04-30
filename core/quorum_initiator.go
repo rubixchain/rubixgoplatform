@@ -279,11 +279,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}
 	var finalQl []string
 	if cr.Type == 2 {
-		fmt.Println("quorum list with cr type 2 :")
-		fmt.Println(ql)
 		finalQl = c.GetFinalQuorumList(ql)
 		cr.QuorumList = finalQl
-		fmt.Println("Final groups with all quorums setup:", finalQl)
 	} else {
 		cr.QuorumList = ql
 	}
@@ -298,9 +295,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		delete(c.pd, cr.ReqID)
 		c.qlock.Unlock()
 	}()
-
-	fmt.Println("quorum list is ", ql, " length of ql is ", len(ql))
-
 	for _, a := range cr.QuorumList {
 		//This part of code is trying to connect to the quorums in quorum list, where various functions are called to pledge the tokens
 		//and checking of transaction by the quorum i.e. consensus for the transaction. Once the quorum is connected, it pledges and
@@ -712,7 +706,6 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	var p *ipfsport.Peer
 	var err error
 	p, err = c.getPeer(addr)
-	fmt.Println("QuorumList in connect Quorum", cr.QuorumList)
 	if err != nil {
 		c.log.Error("Failed to get peer connection", "err", err)
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)
@@ -812,7 +805,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		var token string
 		if tStart >= len(tokenPrefix) {
 			token = cresp.Message[tStart:]
-			fmt.Println("Token is being Double spent. Token is ", token)
+			c.log.Debug("Token is being Double spent. Token is ", token)
 		}
 		doubleSpendTokenDetails, err2 := c.w.ReadToken(token)
 		if err2 != nil {
