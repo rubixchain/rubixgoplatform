@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -21,7 +20,6 @@ func (c *Client) Ping(peerID string) (string, bool) {
 }
 
 func (c *Client) CheckQuorumStatus(quorumAddress string) (string, bool) {
-	fmt.Println("Input address is " + quorumAddress)
 	q := make(map[string]string)
 	// Split the string into two parts based on a delimiter
 	parts := strings.Split(quorumAddress, ".")
@@ -29,17 +27,11 @@ func (c *Client) CheckQuorumStatus(quorumAddress string) (string, bool) {
 		// Handle the case where the string doesn't contain exactly two parts
 		return "Invalid quorumAddress format", false
 	}
-	// Assign the first part to "peerID" and the second part to "dID"
-	// q["peerID"] = parts[0]
-	// q["did"] = parts[1]
-	// fmt.Println("Peerid " + q["peerID"] + " did is " + q["did"])
 	q["quorumAddress"] = quorumAddress
 	var rm model.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APICheckQuorumStatus, q, nil, &rm, 2*time.Minute)
 	if err != nil {
 		return "Check quorum failed, " + err.Error(), false
 	}
-	fmt.Println("client ping response is ", rm)
-	fmt.Println("status in client ", rm.Status)
 	return rm.Message, rm.Status
 }

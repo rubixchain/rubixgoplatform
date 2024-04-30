@@ -1,7 +1,6 @@
 package command
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -15,10 +14,8 @@ func (cmd *Command) ping() {
 }
 
 func (cmd *Command) checkQuorumStatus() {
-	fmt.Println("checkQuorumStatus triggered")
-	msg, status := cmd.c.CheckQuorumStatus(cmd.quorumAddr)
-	fmt.Println("cmd msg is ", msg)
-	fmt.Println("cmd status is ", status)
+	msg, _ := cmd.c.CheckQuorumStatus(cmd.quorumAddr)
+	//Verification with "status" pending !
 	if strings.Contains(msg, "Quorum is setup") {
 		cmd.log.Info("Quorum is setup in", cmd.quorumAddr, "message", msg)
 	} else {
