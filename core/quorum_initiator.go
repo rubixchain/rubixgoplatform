@@ -318,17 +318,31 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Error("Failed to get required quorums")
 		return nil, nil, fmt.Errorf("failed to get required quorums")
 	}
+	var finalQl []string
+	if cr.Type == 2 {
+		fmt.Println("quorum list with cr type 2 :")
+		fmt.Println(ql)
+		finalQl = c.GetFinalQuorumList(ql)
+		fmt.Println("Final groups with all quorums setup:", finalQl)
+	}
+
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
 	c.pd[cr.ReqID] = &pd
 	c.qlock.Unlock()
-	cr.QuorumList = ql
+	if len(finalQl) != 5 {
+		cr.QuorumList = finalQl
+		c.log.Error("Insufficent quromlist set")
+	}
+	//cr.QuorumList=ql
 	defer func() {
 		c.qlock.Lock()
 		delete(c.quorumRequest, cr.ReqID)
 		delete(c.pd, cr.ReqID)
 		c.qlock.Unlock()
 	}()
+
+	fmt.Println("quorum list is ", ql, " length of ql is ", len(ql))
 
 	for _, a := range ql {
 		//This part of code is trying to connect to the quorums in quorum list, where various functions are called to pledge the tokens

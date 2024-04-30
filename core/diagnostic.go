@@ -1,6 +1,8 @@
 package core
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -204,4 +206,58 @@ func (c *Core) ReleaseAllLockedTokens() model.BasicResponse {
 	response.Status = true
 	response.Message = "All Locked Tokens Releases Successfully Or NO Locked Tokens to release"
 	return *response
+}
+
+func (c *Core) GetFinalQuorumList(ql []string) []string {
+	// Initialize finalQl as an empty slice to store the groups that meet the condition
+	fmt.Println("input ql is ", ql)
+	var finalQl []string
+
+	// Loop through ql in groups of 5 items
+	for i := 0; i < len(ql); i += 5 {
+		end := i + 5
+		if end > len(ql) {
+			end = len(ql)
+		}
+		group := ql[i:end]
+
+		// Initialize a variable to keep track of whether all items in the group meet the condition
+		allQuorumSetup := true
+
+		// Loop through the items in the group and check if their response message is "quorum is setup"
+		for _, item := range group {
+			parts := strings.Split(item, ".")
+			if len(parts) != 2 {
+				fmt.Println("Invalid value format at index of ql:", item)
+				continue
+			}
+			peerID := parts[0]
+			did := parts[1]
+			fmt.Println("checking quorum sttus for ", peerID, " . ", did)
+			msg, _, err := c.CheckQuorumStatus(peerID, did)
+			if err != nil {
+				fmt.Println("Failed to check quorum status:", err)
+				continue
+			}
+			fmt.Println("Message: ", msg, "from quorum ", peerID, ".", did)
+			if msg != "Quorum is setup" {
+				// If any item in the group does not have the response message as "quorum is setup",
+				// set allQuorumSetup to false and break the loop
+				allQuorumSetup = false
+				break
+			}
+		}
+
+		// If all items in the group have the response message as "quorum is setup",
+		// append the group to finalQl
+		if allQuorumSetup {
+			finalQl = append(finalQl, group...)
+			break
+		}
+	}
+
+	fmt.Println("Final QL: ", finalQl)
+
+	// Return finalQl
+	return finalQl
 }
