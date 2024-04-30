@@ -24,6 +24,11 @@ func (c *Core) PingSetup() {
 	c.l.AddRoute(APIPingPath, "GET", c.PingRecevied)
 }
 
+// CheckQuorumStatusSetup will setup the ping route
+func (c *Core) CheckQuorumStatusSetup() {
+	c.l.AddRoute(APICheckQuorumStatusPath, "GET", c.CheckQuorumStatusResponse)
+}
+
 // PingRecevied is the handler for ping request
 func (c *Core) PingRecevied(req *ensweb.Request) *ensweb.Result {
 	c.log.Info("Ping Received")
@@ -62,10 +67,12 @@ func (c *Core) CheckQuorumStatusResponse(req *ensweb.Request) *ensweb.Result { /
 			Status: false,
 		},
 	}
+	fmt.Println("Inout did is ", did)
 	_, ok := c.qc[did]
 	if !ok {
-		c.log.Error("Quorum is not setup")
+		c.log.Error("Quorum is not setup in core ping.go")
 		resp.Message = "Quorum is not setup"
+		resp.Status = false
 		return c.l.RenderJSON(req, &resp, http.StatusOK)
 	} else {
 		resp.Status = true
@@ -77,6 +84,7 @@ func (c *Core) CheckQuorumStatusResponse(req *ensweb.Request) *ensweb.Result { /
 
 // CheckQuorumStatus will ping the peer & get the response
 func (c *Core) CheckQuorumStatus(peerID string, did string) (string, error) { //
+	q := make(map[string]string)
 	fmt.Println("peer id is " + peerID + " did is " + did)
 	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
 	if err != nil {
@@ -85,16 +93,13 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, error) { //
 	}
 	// Close the p2p before exit
 	defer p.Close()
+	q["did"] = did
 	var checkQuorumStatusResponse PingResponse
-	err = p.SendJSONRequest("GET", APICheckQuorumStatus, nil, nil, &checkQuorumStatusResponse, false, 2*time.Minute)
+	err = p.SendJSONRequest("GET", APICheckQuorumStatusPath, q, nil, &checkQuorumStatusResponse, false, 2*time.Minute)
 	if err != nil {
 		fmt.Println("Error in sending Json Request ", err)
 		return "Send Json Request error ", err
 	}
+	fmt.Println("core ping checkQuorumStatusResponse ", checkQuorumStatusResponse)
 	return checkQuorumStatusResponse.Message, nil
-}
-
-// PingSetup will setup the ping route
-func (c *Core) CheckQuorumStatusSetup() {
-	c.l.AddRoute(APICheckQuorumStatus, "GET", c.CheckQuorumStatusResponse)
 }
