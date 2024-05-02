@@ -573,3 +573,21 @@ func (w *Wallet) ReleaseAllLockedTokens() error {
 	}
 	return nil
 }
+
+func (w *Wallet) UnlockLockedTokens(did string, tokenList []string) error {
+	for _, tid := range tokenList {
+		var t Token
+		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, tid)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return err
+		}
+		t.TokenStatus = TokenIsFree
+		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, tid)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return err
+		}
+	}
+	return nil
+}
