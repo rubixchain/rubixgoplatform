@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -68,7 +69,7 @@ func (c *Core) CheckQuorumStatusResponse(req *ensweb.Request) *ensweb.Result { /
 	}
 	_, ok := c.qc[did]
 	if !ok {
-		c.log.Error("Quorum is not setup in core ping.go")
+		c.log.Error("Quorum is not setup")
 		resp.Message = "Quorum is not setup"
 		resp.Status = false
 		return c.l.RenderJSON(req, &resp, http.StatusOK)
@@ -85,7 +86,7 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error
 	q := make(map[string]string)
 	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
 	if err != nil {
-		return "Open Peer Connection Error", false, err
+		return "Quorum Connection Error", false, fmt.Errorf("quorum connection error")
 	}
 	// Close the p2p before exit
 	defer p.Close()

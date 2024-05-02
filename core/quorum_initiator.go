@@ -278,9 +278,18 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		return nil, nil, fmt.Errorf("failed to get required quorums")
 	}
 	var finalQl []string
+	var errFQL error
 	if cr.Type == 2 {
-		finalQl = c.GetFinalQuorumList(ql)
+		finalQl, errFQL = c.GetFinalQuorumList(ql)
+		if errFQL != nil {
+			c.log.Error("unable to get consensus from quorum(s). err: ", errFQL)
+			return nil, nil, errFQL
+		}
 		cr.QuorumList = finalQl
+		if len(finalQl) != MinQuorumRequired {
+			c.log.Error("quorum(s) are unavailable for this trnx")
+			return nil, nil, fmt.Errorf("quorum(s) are unavailable for this trnx. retry trnx after some time")
+		}
 	} else {
 		cr.QuorumList = ql
 	}
