@@ -562,7 +562,7 @@ func (w *Wallet) ReleaseAllLockedTokens() error {
 	}
 
 	if len(lockedTokens) == 0 {
-		w.log.Info("No Loked tokens to release")
+		w.log.Info("No locked tokens to release")
 		return nil
 	}
 	for _, t := range lockedTokens {
