@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -207,10 +208,10 @@ func (c *Core) ReleaseAllLockedTokens() model.BasicResponse {
 	return *response
 }
 
-func (c *Core) GetFinalQuorumList(ql []string) []string {
+func (c *Core) GetFinalQuorumList(ql []string) ([]string, error) {
 	// Initialize finalQl as an empty slice to store the groups that meet the condition
 	var finalQl []string
-
+	var opError error
 	// Loop through ql in groups of 5 items
 	for i := 0; i < len(ql); i += 5 {
 		end := i + 5
@@ -224,6 +225,7 @@ func (c *Core) GetFinalQuorumList(ql []string) []string {
 
 		// Loop through the items in the group and check if their response message is "quorum is setup"
 		for _, item := range group {
+			opError = nil
 			parts := strings.Split(item, ".")
 			if len(parts) != 2 {
 				continue
@@ -231,13 +233,21 @@ func (c *Core) GetFinalQuorumList(ql []string) []string {
 			peerID := parts[0]
 			did := parts[1]
 			msg, _, err := c.CheckQuorumStatus(peerID, did)
-			if err != nil {
+			if err != nil || strings.Contains(msg, "Quorum Connection Error") {
 				c.log.Error("Failed to check quorum status:", err)
-				continue
+				opError = fmt.Errorf("failed to check quorum status:  %v", err)
+				allQuorumSetup = false
+				break
 			}
 			if msg != "Quorum is setup" {
 				// If any item in the group does not have the response message as "quorum is setup",
 				// set allQuorumSetup to false and break the loop
+				allQuorumSetup = false
+				break
+			}
+			if strings.Contains(msg, "Quorum is not setup") {
+				c.log.Error("quorums are currently unavailable for this trnx")
+				opError = fmt.Errorf("quorums are uncurrently available for this trnx")
 				allQuorumSetup = false
 				break
 			}
@@ -251,5 +261,5 @@ func (c *Core) GetFinalQuorumList(ql []string) []string {
 		}
 	}
 	// Return finalQl
-	return finalQl
+	return finalQl, opError
 }
