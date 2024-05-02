@@ -726,7 +726,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				continue
 			}
 		}
-		ok, err := c.w.Pin(t, wallet.OwnerRole, did)
+		ok, err := c.w.Pin(t, wallet.OwnerRole, did, "Migrated Token", "NA", "NA", float64(1))
 		if err != nil || !ok {
 			c.log.Error("Failed to migrate, failed to pin token", "err", err)
 			return fmt.Errorf("failed to migrate, failed to pin token")
