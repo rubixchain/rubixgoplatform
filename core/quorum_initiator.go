@@ -416,7 +416,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		//trigger pledge finality to the quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb) /////////hereeeeeeeeeee
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
