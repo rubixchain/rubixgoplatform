@@ -145,7 +145,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		return basicResponse
 	}
 
-	fmt.Println("smartContractTokenHash ", smartContractTokenHash)
+	c.log.Info("smartContractTokenHash ", smartContractTokenHash)
 
 	// Set the response status and message
 	smartContractTokenResponse := &SmartContractTokenResponse{

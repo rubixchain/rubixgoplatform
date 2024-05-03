@@ -62,6 +62,7 @@ const (
 	APIGetTxnByNode                     string = "/api/get-by-node"
 	APIRemoveTokenChainBlock            string = "/api/remove-token-chain-block"
 	APIReleaseAllLockedTokens           string = "/api/release-all-locked-tokens"
+	APICheckQuorumStatus                string = "/api/check-quorum-status"
 )
 
 // jwt.RegisteredClaims

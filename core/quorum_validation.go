@@ -123,7 +123,8 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 	}
 	if ptb.GetTransType() != block.TokenBurntType {
 		issueType = ParentTokenNotBurned // parent token is not in burnt stage
-		fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
+		//Commenting gps
+		//fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
 		c.log.Error("parent token is not in burnt stage", "token", pt)
 		return fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", pt, issueType)
 	}
@@ -393,6 +394,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		resultArray[index] = result
 		return
 	}
+
 	c.log.Debug("Token state is not exhausted, Unique Txn")
 	result.Error = nil
 	result.Message = "Token state is free, Unique Txn"

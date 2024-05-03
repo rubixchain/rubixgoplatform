@@ -198,8 +198,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	td, _, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
-		c.log.Error("Consensus failed", "err", err)
-		resp.Message = "Consensus failed" + err.Error()
+		c.log.Error("Consensus failed ", "err", err)
+		resp.Message = "Consensus failed " + err.Error()
 		return resp
 	}
 	et := time.Now()
