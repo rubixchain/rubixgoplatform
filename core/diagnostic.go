@@ -212,9 +212,9 @@ func (c *Core) GetFinalQuorumList(ql []string) ([]string, error) {
 	// Initialize finalQl as an empty slice to store the groups that meet the condition
 	var finalQl []string
 	var opError error
-	// Loop through ql in groups of 5 items
-	for i := 0; i < len(ql); i += 5 {
-		end := i + 5
+	// Loop through ql in groups of the Minimum Quorum Required
+	for i := 0; i < len(ql); i += MinQuorumRequired {
+		end := i + MinQuorumRequired
 		if end > len(ql) {
 			end = len(ql)
 		}
