@@ -85,7 +85,7 @@ func (rn *RubixNative) CreateDID(ctx context.Context, req *protos.CreateDIDReq) 
 	}
 	defer os.RemoveAll(folderName)
 
-	if dc.Type != did.LightDIDMode {
+	if dc.Type != did.LiteDIDMode {
 		if req.DidImage != "" {
 			err = createFile(folderName+"/"+did.DIDImgFileName, req.DidImage, true)
 			if err != nil {

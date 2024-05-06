@@ -48,7 +48,7 @@ func (d *DIDQuorum) GetDID() string {
 	return d.did
 }
 
-func (d *DIDQuorum) GetSignVersion() int {
+func (d *DIDQuorum) GetSignType() int {
 	return NlssVersion
 }
 

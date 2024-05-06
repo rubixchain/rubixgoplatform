@@ -164,7 +164,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 			QuorumPWD: m.QuorumPWD,
 		}
 
-		if didCreate.Type != didm.LightDIDMode {
+		if didCreate.Type != didm.LiteDIDMode {
 			didCreate = didm.DIDCreate{
 				DIDImgFileName: rubixDir + "DATA/" + d[0].DID + "/DID.png",
 				PubImgFile:     rubixDir + "DATA/" + d[0].DID + "/PublicShare.png",

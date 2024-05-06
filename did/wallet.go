@@ -58,7 +58,7 @@ func (d *DIDWallet) GetDID() string {
 
 // When the did creation and signing is done in wallet mode,
 // this function returns the sign version as NLSSVersion = 1
-func (d *DIDWallet) GetSignVersion() int {
+func (d *DIDWallet) GetSignType() int {
 	return NlssVersion
 }
 

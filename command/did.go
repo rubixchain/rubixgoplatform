@@ -50,7 +50,7 @@ func (cmd *Command) CreateDID() {
 		}
 		cmd.quorumPWD = pwd
 	}
-	if cmd.didType == did.LightDIDMode {
+	if cmd.didType == did.LiteDIDMode {
 		if cmd.privKeyFile == "" || cmd.pubKeyFile == "" {
 			cmd.log.Error("private key & public key file names required")
 			return
@@ -254,7 +254,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 			Mode: sr.Mode,
 		}
 		switch sr.Mode {
-		case did.LightDIDMode:
+		case did.LiteDIDMode:
 			sresp.Password = password
 		case did.BasicDIDMode:
 			sresp.Password = password

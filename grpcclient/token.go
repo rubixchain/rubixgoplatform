@@ -34,7 +34,7 @@ func (cmd *Command) GenerateRBT() {
 			Mode:  br.SignRequest.Mode,
 		}
 		switch int(br.SignRequest.Mode) {
-		case did.LightDIDMode:
+		case did.LiteDIDMode:
 			resp.Password = cmd.privPWD
 		case did.BasicDIDMode:
 			resp.Password = cmd.privPWD

@@ -11,7 +11,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// DIDQuorum_Lt will handle light DID
+// DIDQuorum_Lt will handle lite DID
 type DIDQuorum_Lt struct {
 	did     string
 	dir     string
@@ -20,7 +20,7 @@ type DIDQuorum_Lt struct {
 	pubKey  crypto.PublicKey
 }
 
-// InitDIDQuorum_Lt will return the Quorum did handle in light mode
+// InitDIDQuorum_Lt will return the Quorum did handle in lite mode
 func InitDIDQuorum_Lt(did string, baseDir string, pwd string) *DIDQuorum_Lt {
 	d := &DIDQuorum_Lt{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 	if d.pwd != "" {
@@ -49,9 +49,7 @@ func (d *DIDQuorum_Lt) GetDID() string {
 	return d.did
 }
 
-// When the did creation and signing is done in Light mode,
-// this function returns the sign version as BIPVersion = 0
-func (d *DIDQuorum_Lt) GetSignVersion() int {
+func (d *DIDQuorum_Lt) GetSignType() int {
 	return BIPVersion
 }
 
