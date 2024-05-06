@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -99,7 +100,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	binaryCodeFile.Close()
 	binaryCodeDestFile.Close()
 
-	err = os.Rename(binaryCodeFile.Name(), binaryCodeDest)
+	err = moveFile(binaryCodeFile.Name(), binaryCodeDest)
 	if err != nil {
 		binaryCodeFile.Close()
 		s.log.Error("Generate smart contract failed, failed to move binary code file", "err", err)
@@ -125,7 +126,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	rawCodeFile.Close()
 	rawCodeDestFile.Close()
 
-	err = os.Rename(rawCodeFile.Name(), rawCodeDest)
+	err = moveFile(rawCodeFile.Name(), rawCodeDest)
 	if err != nil {
 		binaryCodeDestFile.Close()
 		rawCodeDestFile.Close()
@@ -154,7 +155,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	schemaFile.Close()
 	schemaDestFile.Close()
 
-	err = os.Rename(schemaFile.Name(), schemaDest)
+	err = moveFile(schemaFile.Name(), schemaDest)
 	if err != nil {
 		binaryCodeDestFile.Close()
 		rawCodeDestFile.Close()
@@ -194,6 +195,51 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	}()
 
 	return s.BasicResponse(req, true, "Smart contract generated successfully", nil)
+}
+
+// moveFile tries to rename the file first; if it fails, it falls back to copying
+func moveFile(src, dst string) error {
+	err := os.Rename(src, dst)
+	if err != nil {
+		if linkErr, ok := err.(*os.LinkError); ok {
+			fmt.Println("os.Rename failed, attempting to copy:", linkErr)
+
+			// Open the source file
+			sourceFile, err := os.Open(src)
+			if err != nil {
+				return fmt.Errorf("error opening source file: %w", err)
+			}
+			defer sourceFile.Close()
+
+			// Create the destination file
+			destinationFile, err := os.Create(dst)
+			if err != nil {
+				return fmt.Errorf("error creating destination file: %w", err)
+			}
+			defer destinationFile.Close()
+
+			// Copy the contents
+			if _, err = io.Copy(destinationFile, sourceFile); err != nil {
+				return fmt.Errorf("error copying file: %w", err)
+			}
+
+			// Close the files explicitly before deleting
+			if err = sourceFile.Close(); err != nil {
+				return fmt.Errorf("error closing source file: %w", err)
+			}
+			if err = destinationFile.Close(); err != nil {
+				return fmt.Errorf("error closing destination file: %w", err)
+			}
+
+			// Delete the original file
+			if err = os.Remove(src); err != nil {
+				return fmt.Errorf("error removing original file: %w", err)
+			}
+		} else {
+			return fmt.Errorf("os.Rename error: %w", err)
+		}
+	}
+	return nil
 }
 
 // SmartContract godoc
