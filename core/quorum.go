@@ -1,8 +1,6 @@
 package core
 
 import (
-	"fmt"
-
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -68,8 +66,6 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string) []string {
 	case QuorumTypeOne:
 		var quorumList []wallet.DIDPeerMap
 		err := qm.s.Read(wallet.DIDPeerStorage, &quorumList, "did_last_char=?", lastChar)
-		fmt.Println(quorumList)
-
 		if err != nil {
 			qm.log.Error("Quorums not present")
 			return nil
@@ -79,7 +75,6 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string) []string {
 			return nil
 		}
 		var quorumAddrList []string
-		fmt.Println(quorumAddrList)
 		quorumCount := 0
 		for _, q := range quorumList {
 			addr := string(q.PeerID + "." + q.DID)

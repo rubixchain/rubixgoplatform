@@ -63,6 +63,7 @@ const (
 	APIRemoveTokenChainBlock            string = "/api/remove-token-chain-block"
 	APIReleaseAllLockedTokens           string = "/api/release-all-locked-tokens"
 	APINodeSync                         string = "/api/node-sync"
+	APICheckQuorumStatus                string = "/api/check-quorum-status"
 )
 
 // jwt.RegisteredClaims
