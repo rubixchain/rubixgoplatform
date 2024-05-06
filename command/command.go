@@ -169,6 +169,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command gets token block",
 	"This command gets the smartcontract data from latest block",
 	"This command restores the token information for a DID from quorums",
+	"This command checks the status of the Quorum",
 }
 
 type Command struct {
