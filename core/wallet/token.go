@@ -575,3 +575,13 @@ func (w *Wallet) ReleaseAllLockedTokens() error {
 	}
 	return nil
 }
+
+func (w *Wallet) AddToken(token *Token) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.s.Write(TokenStorage, token)
+	if err != nil {
+		return err
+	}
+	return nil
+}

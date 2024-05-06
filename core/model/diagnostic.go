@@ -1,5 +1,24 @@
 package model
 
+import "github.com/rubixchain/rubixgoplatform/core/wallet"
+
+type NodeSyncRequest struct {
+	Did string
+}
+
+type NodeSyncResponse struct {
+	BasicResponse
+}
+
+type GetTokensByDIDRequest struct {
+	Did string
+}
+
+type GetTokensByDIDResponse struct {
+	BasicResponse
+	Tokens []*wallet.Token
+}
+
 type TCDumpRequest struct {
 	Token   string
 	BlockID string

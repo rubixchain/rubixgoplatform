@@ -46,6 +46,7 @@ const (
 	APIGetTokenNumber         string = "/api/get-token-number"
 	APIGetMigratedTokenStatus string = "/api/get-Migrated-token-status"
 	APISyncDIDArbitration     string = "/api/sync-did-arbitration"
+	APIGetTokensByDID         string = "/api/get-tokens-by-did"
 )
 
 const (
