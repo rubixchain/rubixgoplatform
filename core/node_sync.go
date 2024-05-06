@@ -263,15 +263,15 @@ func (c *Core) getTokensByDID(req *ensweb.Request) *ensweb.Result {
 		Tokens: make([]*wallet.Token, 0),
 	}
 
-	var restoreNodeSyncRequest *model.GetTokensByDIDRequest
-	err := c.l.ParseJSON(req, &restoreNodeSyncRequest)
+	var getTokensByDIDRequest *model.GetTokensByDIDRequest
+	err := c.l.ParseJSON(req, &getTokensByDIDRequest)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to parse json request, err: %v", err.Error())
 		c.log.Error(errMsg)
 		response.Message = errMsg
 		return c.l.RenderJSON(req, &response, http.StatusOK)
 	}
-	did := restoreNodeSyncRequest.Did
+	did := getTokensByDIDRequest.Did
 
 	c.log.Info(fmt.Sprintf("Retreiving whole and part tokens for did %v...", did))
 

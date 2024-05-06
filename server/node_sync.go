@@ -8,11 +8,11 @@ import (
 )
 
 func (s *Server) APINodeSync(req *ensweb.Request) *ensweb.Result {
-	var restoreNodeSyncRequest model.NodeSyncRequest
-	err := s.ParseJSON(req, &restoreNodeSyncRequest)
+	var nodeSyncRequest model.NodeSyncRequest
+	err := s.ParseJSON(req, &nodeSyncRequest)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	resp := s.c.NodeSync(&restoreNodeSyncRequest)
+	resp := s.c.NodeSync(&nodeSyncRequest)
 	return s.RenderJSON(req, resp, http.StatusOK)
 }
