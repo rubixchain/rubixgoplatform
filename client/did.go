@@ -48,11 +48,11 @@ func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
 }
 
 func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
-	if cfg.Type < did.LightDIDMode && cfg.Type > did.WalletDIDMode {
+	if cfg.Type < did.LiteDIDMode && cfg.Type > did.WalletDIDMode {
 		return "Invalid DID mode", false
 	}
 	switch cfg.Type {
-	case did.LightDIDMode:
+	case did.LiteDIDMode:
 		cfg.PubKeyFile = ""
 	case did.BasicDIDMode:
 		if cfg.ImgFile == "" {
@@ -126,7 +126,7 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
 
-	if cfg.Type != did.LightDIDMode {
+	if cfg.Type != did.LiteDIDMode {
 		if cfg.ImgFile != "" {
 			files["image"] = cfg.ImgFile
 		}
@@ -156,12 +156,12 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 }
 
 func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
-	if dc.Type < did.BasicDIDMode && dc.Type > did.LightDIDMode {
+	if dc.Type < did.BasicDIDMode && dc.Type > did.LiteDIDMode {
 		return "Invalid DID mode", false
 	}
 
 	switch dc.Type {
-	case did.LightDIDMode:
+	case did.LiteDIDMode:
 		if !strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
 			!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) ||
 			!strings.Contains(dc.MnemonicFile, did.MnemonicFileName) {
@@ -196,7 +196,7 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
 
-	if dc.Type != did.LightDIDMode {
+	if dc.Type != did.LiteDIDMode {
 		if dc.PubImgFile != "" {
 			files["pub_image"] = dc.PubImgFile
 		}

@@ -67,7 +67,7 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 			didCreate.PubKeyFile = fileName
 		}
 
-		if didCreate.Type != did.LightDIDMode {
+		if didCreate.Type != did.LiteDIDMode {
 			if strings.Contains(fileName, did.ImgFileName) {
 				didCreate.ImgFile = fileName
 			}
@@ -211,7 +211,7 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 			didCreate.PubKeyFile = fileName
 		}
 
-		if didCreate.Type != did.LightDIDMode {
+		if didCreate.Type != did.LiteDIDMode {
 			if strings.Contains(fileName, did.DIDImgFileName) {
 				didCreate.DIDImgFileName = fileName
 			}

@@ -40,7 +40,7 @@ type DID struct {
 
 type DIDCrypto interface {
 	GetDID() string
-	GetSignVersion() int
+	GetSignType() int
 	Sign(hash string) ([]byte, []byte, error)
 	NlssVerify(hash string, didSig []byte, pvtSig []byte) (bool, error)
 	PvtSign(hash []byte) ([]byte, error)
@@ -72,8 +72,8 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	//In light mode, did is simply the SHA-256 hash  of the public key
-	if didCreate.Type == LightDIDMode {
+	//In lite mode, did is simply the SHA-256 hash  of the public key
+	if didCreate.Type == LiteDIDMode {
 		if didCreate.PrivPWD == "" {
 			d.log.Error("password required for creating", "err", err)
 			return "", err
@@ -270,7 +270,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		if err != nil {
 			return "", err
 		}
-	} else if didCreate.Type != LightDIDMode {
+	} else if didCreate.Type != LiteDIDMode {
 		if didCreate.QuorumPWD == "" {
 			if didCreate.PrivPWD != "" {
 				didCreate.QuorumPWD = didCreate.PrivPWD
@@ -342,7 +342,7 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	if didCreate.Type != LightDIDMode {
+	if didCreate.Type != LiteDIDMode {
 		_, err = util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
 		if err != nil {
 			d.log.Error("failed to copy did image", "err", err)
@@ -407,7 +407,7 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 		}
 	}
 
-	if didCreate.Type != LightDIDMode {
+	if didCreate.Type != LiteDIDMode {
 		if didCreate.QuorumPrivKeyFile == "" || didCreate.QuorumPubKeyFile == "" {
 			pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.QuorumPWD})
 			if err != nil {

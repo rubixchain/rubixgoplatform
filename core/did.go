@@ -30,13 +30,13 @@ func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
 			resp.Message = "Password does not match"
 			return resp
 		}
-	} else if dt.Type == did.LightDIDMode {
+	} else if dt.Type == did.LiteDIDMode {
 		_, ok := c.ValidateDIDToken(req.Token, setup.ChanllegeTokenType, req.DID)
 		if !ok {
 			resp.Message = "Invalid token"
 			return resp
 		}
-		dc := did.InitDIDLight(req.DID, c.didDir, nil)
+		dc := did.InitDIDLite(req.DID, c.didDir, nil)
 		ok, err := dc.PvtVerify([]byte(req.Token), req.Signature)
 		if err != nil {
 			c.log.Error("Failed to verify DID signature", "err", err)

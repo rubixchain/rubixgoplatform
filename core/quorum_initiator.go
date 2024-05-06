@@ -174,11 +174,11 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	}
 
 	//To support NLSS backward compatibility,
-	//If the Quorum's did is created in light mode,
+	//If the Quorum's did is created in lite mode,
 	//it will initiate DIDQuorum_Lt, and if  it is in basic mode,
 	//it will initiate DIDQuorumc
 	switch dt.Type {
-	case did.LightDIDMode:
+	case did.LiteDIDMode:
 		dc := did.InitDIDQuorum_Lt(didStr, c.didDir, pwd)
 		if dc == nil {
 			c.log.Error("Failed to setup quorum")
@@ -186,7 +186,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 		}
 		c.qc[didStr] = dc
 		if pvtKeyPwd != "" {
-			dc := did.InitDIDLightWithPassword(didStr, c.didDir, pvtKeyPwd)
+			dc := did.InitDIDLiteWithPassword(didStr, c.didDir, pvtKeyPwd)
 			if dc == nil {
 				c.log.Error("Failed to setup quorum as dc is nil")
 				return fmt.Errorf("failed to setup quorum")
@@ -714,7 +714,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 
 	var signVersion string
 
-	//signVersion = 0 => Pki based sign in light mode
+	//signVersion = 0 => Pki based sign in lite mode
 	//signVersion = 1 => Nlss based sign in basic mode
 	if util.HexToStr(ss) == "" {
 		signVersion = "0"

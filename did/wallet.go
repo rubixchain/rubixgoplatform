@@ -56,7 +56,7 @@ func (d *DIDWallet) GetDID() string {
 	return d.did
 }
 
-func (d *DIDWallet) GetSignVersion() int {
+func (d *DIDWallet) GetSignType() int {
 	return NlssVersion
 }
 

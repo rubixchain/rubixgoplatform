@@ -5,7 +5,7 @@ const (
 	StandardDIDMode
 	WalletDIDMode
 	ChildDIDMode
-	LightDIDMode
+	LiteDIDMode
 )
 
 const (

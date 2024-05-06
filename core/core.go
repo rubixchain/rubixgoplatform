@@ -508,8 +508,8 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 		return nil, fmt.Errorf("faield to get did channel")
 	}
 	switch dt.Type {
-	case did.LightDIDMode:
-		return did.InitDIDLight(didStr, c.didDir, dc), nil
+	case did.LiteDIDMode:
+		return did.InitDIDLite(didStr, c.didDir, dc), nil
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.didDir, dc), nil
 	case did.StandardDIDMode:
@@ -523,7 +523,7 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	}
 }
 
-// Initializes the did in it's corresponding did mode (basic/ light)
+// Initializes the did in it's corresponding did mode (basic/ lite)
 func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
@@ -544,7 +544,7 @@ func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
 	return c.InitialiseDID(didStr, didtype)
 }
 
-// Initializes the quorum in it's corresponding did mode (basic/ light)
+// Initializes the quorum in it's corresponding did mode (basic/ lite)
 func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
@@ -565,7 +565,7 @@ func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 	switch didtype {
 	case did.BasicDIDMode:
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	case did.LightDIDMode:
+	case did.LiteDIDMode:
 		return did.InitDIDQuorum_Lt(didStr, c.didDir, ""), nil
 	default:
 		return nil, fmt.Errorf("invalid did type")
@@ -600,15 +600,15 @@ func (c *Core) GetPeerID() string {
 	return c.peerID
 }
 
-// Initializes the did in it's corresponding did mode (basic/ light)
+// Initializes the did in it's corresponding did mode (basic/ lite)
 func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err
 	}
 	switch didType {
-	case did.LightDIDMode:
-		return did.InitDIDLight(didStr, c.didDir, nil), nil
+	case did.LiteDIDMode:
+		return did.InitDIDLite(didStr, c.didDir, nil), nil
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	default:

@@ -55,7 +55,7 @@ func (d *DIDStandard) GetDID() string {
 	return d.did
 }
 
-func (d *DIDStandard) GetSignVersion() int {
+func (d *DIDStandard) GetSignType() int {
 	return NlssVersion
 }
 

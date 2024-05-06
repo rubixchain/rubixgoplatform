@@ -446,7 +446,7 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 
 	//If the ss i.e., share signature is empty, then its a Pki sign, so call PvtVerify
 	//Else it is NLSS based sign, so call NlssVerify
-	didType := dc.GetSignVersion()
+	didType := dc.GetSignType()
 	if didType == did.BIPVersion {
 		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
 

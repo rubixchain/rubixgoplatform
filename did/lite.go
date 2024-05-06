@@ -12,24 +12,24 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// DIDLight will handle Light DID
-type DIDLight struct {
+// DIDLite will handle Light DID
+type DIDLite struct {
 	did string
 	dir string
 	ch  *DIDChan
 	pwd string
 }
 
-// InitDIDLight will return the Light did handle
-func InitDIDLight(did string, baseDir string, ch *DIDChan) *DIDLight {
-	return &DIDLight{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
+// InitDIDLite will return the Light did handle
+func InitDIDLite(did string, baseDir string, ch *DIDChan) *DIDLite {
+	return &DIDLite{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
 }
 
-func InitDIDLightWithPassword(did string, baseDir string, pwd string) *DIDLight {
-	return &DIDLight{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
+func InitDIDLiteWithPassword(did string, baseDir string, pwd string) *DIDLite {
+	return &DIDLite{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 }
 
-func (d *DIDLight) getPassword() (string, error) {
+func (d *DIDLite) getPassword() (string, error) {
 	if d.pwd != "" {
 		return d.pwd, nil
 	}
@@ -41,7 +41,7 @@ func (d *DIDLight) getPassword() (string, error) {
 		Message: "Password needed",
 		Result: SignReqData{
 			ID:   d.ch.ID,
-			Mode: LightDIDMode,
+			Mode: LiteDIDMode,
 		},
 	}
 	d.ch.OutChan <- sr
@@ -60,19 +60,19 @@ func (d *DIDLight) getPassword() (string, error) {
 	return d.pwd, nil
 }
 
-func (d *DIDLight) GetDID() string {
+func (d *DIDLite) GetDID() string {
 	return d.did
 }
 
 // When the did creation and signing is done in Light mode,
 // this function returns the sign version as BIPVersion = 0
-func (d *DIDLight) GetSignVersion() int {
+func (d *DIDLite) GetSignType() int {
 	return BIPVersion
 }
 
-// PKI based sign in light mode
-// In light mode, the sign function returns only the private signature, unlike the basic mode
-func (d *DIDLight) Sign(hash string) ([]byte, []byte, error) {
+// PKI based sign in lite mode
+// In lite mode, the sign function returns only the private signature, unlike the basic mode
+func (d *DIDLite) Sign(hash string) ([]byte, []byte, error) {
 	pvtKeySign, err := d.PvtSign([]byte(hash))
 	bs := []byte{}
 
@@ -80,7 +80,7 @@ func (d *DIDLight) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // verify nlss based signatures
-func (d *DIDLight) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	//read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
@@ -135,7 +135,7 @@ func (d *DIDLight) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte)
 
 }
 
-func (d *DIDLight) PvtSign(hash []byte) ([]byte, error) {
+func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
 		return nil, err
@@ -161,7 +161,7 @@ func (d *DIDLight) PvtSign(hash []byte) ([]byte, error) {
 }
 
 // Verify PKI based signature
-func (d *DIDLight) PvtVerify(hash []byte, sign []byte) (bool, error) {
+func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return false, err
