@@ -52,14 +52,14 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	if req.TokenCount < MinTrnxAmt {
-		resp.Message = "Input transaction amount is less than minimum transcation amount"
+		resp.Message = "Input transaction amount is less than minimum transaction amount"
 		return resp
 	}
 
 	decimalPlaces := strconv.FormatFloat(req.TokenCount, 'f', -1, 64)
 	decimalPlacesStr := strings.Split(decimalPlaces, ".")
 	if len(decimalPlacesStr) == 2 && len(decimalPlacesStr[1]) > MaxDecimalPlaces {
-		c.log.Error("Transcation amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		c.log.Error("Transaction amount exceeds %d decimal places.\n", MaxDecimalPlaces)
 		resp.Message = fmt.Sprintf("Transaction amount exceeds %d decimal places.\n", MaxDecimalPlaces)
 		return resp
 	}
@@ -127,7 +127,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	defer c.w.ReleaseTokens(tokensForTxn)
 
 	for i := range tokensForTxn {
-		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, did)
+		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, did, "TID-Not Generated", req.Sender, req.Receiver, tokensForTxn[i].TokenValue)
 	}
 
 	// Get the receiver & do sanity check
@@ -198,8 +198,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	td, _, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
-		c.log.Error("Consensus failed", "err", err)
-		resp.Message = "Consensus failed" + err.Error()
+		c.log.Error("Consensus failed ", "err", err)
+		resp.Message = "Consensus failed " + err.Error()
 		return resp
 	}
 	et := time.Now()

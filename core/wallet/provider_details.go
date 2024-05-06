@@ -2,10 +2,14 @@ package wallet
 
 // struct definition for Mapping token and reason the did is a provider
 type TokenProviderMap struct {
-	Token  string `gorm:"column:token;primaryKey"`
-	DID    string `gorm:"column:did"`
-	FuncID int    `gorm:"column:func_id"`
-	Role   int    `gorm:"column:role"`
+	Token         string  `gorm:"column:token;primaryKey"`
+	DID           string  `gorm:"column:did"`
+	FuncID        int     `gorm:"column:func_id"`
+	Role          int     `gorm:"column:role"`
+	TransactionID string  `gorm:"column:transaction_id"`
+	Sender        string  `gorm:"column:sender"`
+	Receiver      string  `gorm:"column:receiver"`
+	TokenValue    float64 `gorm:"column:token_value"`
 }
 
 // Method takes token hash as input and returns the Provider details
@@ -26,20 +30,16 @@ func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
 
 // Method to add provider details to DB during ipfs ops
 // checks if entry exist for token,did either write or updates
-func (w *Wallet) AddProviderDetails(token string, did string, funId int, role int) error {
+
+func (w *Wallet) AddProviderDetails(tokenProviderMap TokenProviderMap) error {
 	var tpm TokenProviderMap
-	err := w.s.Read(TokenProvider, &tpm, "token=?", token)
+	err := w.s.Read(TokenProvider, &tpm, "token=?", tokenProviderMap.Token)
 	if err != nil || tpm.Token == "" {
-		tpm.Token = token
-		tpm.DID = did
-		tpm.FuncID = funId
-		tpm.Role = role
-		return w.s.Write(TokenProvider, &tpm)
+		w.log.Info("Token Details not found: Creating new Record")
+		// create new entry
+		return w.s.Write(TokenProvider, tokenProviderMap)
 	}
-	tpm.DID = did
-	tpm.FuncID = funId
-	tpm.Role = role
-	return w.s.Update(TokenProvider, &tpm, "token=?", token)
+	return w.s.Update(TokenProvider, tokenProviderMap, "token=?", tokenProviderMap.Token)
 }
 
 // Method deletes entry ffrom DB during unpin op

@@ -47,6 +47,7 @@ const (
 	APIGetMigratedTokenStatus string = "/api/get-Migrated-token-status"
 	APISyncDIDArbitration     string = "/api/sync-did-arbitration"
 	APIUnlockTokens           string = "/api/unlock-tokens"
+	APICheckQuorumStatusPath  string = "/api/check-quorum-status"
 )
 
 const (
@@ -319,6 +320,7 @@ func (c *Core) SetupCore() error {
 	}
 	c.w.SetupWallet(c.ipfs)
 	c.PingSetup()
+	c.CheckQuorumStatusSetup()
 	c.peerSetup()
 	c.w.AddDIDLastChar()
 	c.SetupToken()

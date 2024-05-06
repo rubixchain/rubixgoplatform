@@ -374,7 +374,7 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 	return nil
 }
 
-func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block) error {
+func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
@@ -422,8 +422,10 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		if err != nil {
 			return err
 		}
+		senderAddress := senderPeerId + "." + b.GetSenderDID()
+		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
 		//Pinnig the whole tokens and pat tokens
-		ok, err := w.Pin(ti[i].Token, OwnerRole, did)
+		ok, err := w.Pin(ti[i].Token, OwnerRole, did, b.GetTid(), senderAddress, receiverAddress, ti[i].TokenValue)
 		if err != nil {
 			return err
 		}
@@ -560,7 +562,7 @@ func (w *Wallet) ReleaseAllLockedTokens() error {
 	}
 
 	if len(lockedTokens) == 0 {
-		w.log.Info("No Loked tokens to release")
+		w.log.Info("No locked tokens to release")
 		return nil
 	}
 	for _, t := range lockedTokens {

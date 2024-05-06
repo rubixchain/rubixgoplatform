@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -62,4 +63,26 @@ func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, str, nil)
 	}
 	return s.BasicResponse(req, true, str, nil)
+}
+
+// APIPing will ping to given peer
+func (s *Server) APICheckQuorumStatus(req *ensweb.Request) *ensweb.Result {
+	qAddress := s.GetQuerry(req, "quorumAddress")
+	// Split the string into two parts based on a delimiter
+	parts := strings.Split(qAddress, ".")
+	if len(parts) != 2 {
+		// Handle the case where the string doesn't contain exactly two parts
+		s.log.Error("Invalid quorumAddress format, required format is PeerID.dID")
+		return s.BasicResponse(req, false, "Invalid Quorum Address Format", nil)
+	}
+	// Assign the first part to "peerID" and the second part to "dID"
+	peerID := parts[0]
+	dID := parts[1]
+	str, status, err := s.c.CheckQuorumStatus(peerID, dID)
+	if err != nil {
+		s.log.Error("Quorum status check failed", "err", err)
+		return s.BasicResponse(req, false, str, nil)
+	}
+
+	return s.BasicResponse(req, status, str, nil)
 }

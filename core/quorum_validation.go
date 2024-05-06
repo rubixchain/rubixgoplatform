@@ -123,23 +123,26 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 	}
 	if ptb.GetTransType() != block.TokenBurntType {
 		issueType = ParentTokenNotBurned // parent token is not in burnt stage
-		fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
+		//Commenting gps
+		//fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
 		c.log.Error("parent token is not in burnt stage", "token", pt)
 		return fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", pt, issueType)
 	}
 	return nil
 }
 
-func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract) (bool, error) {
+func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error) {
 
 	var ti []contract.TokenInfo
 	var address string
+	var receiverAddress string
 	if cr.Mode == SmartContractDeployMode {
 		ti = sc.GetCommitedTokensInfo()
 		address = cr.DeployerPeerID + "." + sc.GetDeployerDID()
 	} else {
 		ti = sc.GetTransTokenInfo()
 		address = cr.SenderPeerID + "." + sc.GetSenderDID()
+		receiverAddress = cr.ReceiverPeerID + "." + sc.GetReceiverDID()
 	}
 	for i := range ti {
 		ids, err := c.GetDHTddrs(ti[i].Token)
@@ -173,6 +176,11 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			err = c.syncParentToken(p, pt)
 			if err != nil {
 				c.log.Error("failed to sync parent token chain", "token", pt)
+				return false, err
+			}
+			_, err = c.w.Pin(pt, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
+			if err != nil {
+				c.log.Error("Failed to Pin parent token in Quorum", "err", err)
 				return false, err
 			}
 		}
@@ -386,6 +394,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		resultArray[index] = result
 		return
 	}
+
 	c.log.Debug("Token state is not exhausted, Unique Txn")
 	result.Error = nil
 	result.Message = "Token state is free, Unique Txn"
@@ -393,17 +402,17 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	resultArray[index] = result
 }
 
-func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did string) error {
+func (c *Core) pinTokenState(tokenStateCheckResult []TokenStateCheckResult, did string, transactionId string, sender string, receiver string, tokenValue float64) error {
 	var ids []string
 	for i := range tokenStateCheckResult {
 		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenStateCheckResult[i].tokenIDTokenStateData))
-		tokenIDTokenStateHash, err := c.w.Add(tokenIDTokenStateBuffer, did, wallet.QuorumRole)
+		tokenIDTokenStateHash, err := c.w.Add(tokenIDTokenStateBuffer, did, wallet.QuorumPinRole)
 		if err != nil {
 			c.log.Error("Error triggered while adding token state", err)
 			return err
 		}
 		ids = append(ids, tokenIDTokenStateHash)
-		_, err = c.w.Pin(tokenIDTokenStateHash, wallet.QuorumRole, did)
+		_, err = c.w.Pin(tokenIDTokenStateHash, wallet.QuorumPinRole, did, transactionId, sender, receiver, tokenValue)
 		if err != nil {
 			c.log.Error("Error triggered while pinning token state", err)
 			c.unPinTokenState(ids, did)

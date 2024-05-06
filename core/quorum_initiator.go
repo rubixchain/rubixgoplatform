@@ -47,6 +47,7 @@ type ConensusRequest struct {
 	DeployerPeerID     string   `json:"deployer_peerd_id"`
 	SmartContractToken string   `json:"smart_contract_token"`
 	ExecuterPeerID     string   `json:"executor_peer_id"`
+	TransactionID      string   `json:"transaction_id"`
 }
 
 type ConensusReply struct {
@@ -275,25 +276,41 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	//getting last character from TID
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
+	cr.TransactionID = tid
 
 	ql := c.qm.GetQuorum(cr.Type, lastCharTID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
 	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
 		return nil, nil, fmt.Errorf("failed to get required quorums")
 	}
+	var finalQl []string
+	var errFQL error
+	if cr.Type == 2 {
+		finalQl, errFQL = c.GetFinalQuorumList(ql)
+		if errFQL != nil {
+			c.log.Error("unable to get consensus from quorum(s). err: ", errFQL)
+			return nil, nil, errFQL
+		}
+		cr.QuorumList = finalQl
+		if len(finalQl) != MinQuorumRequired {
+			c.log.Error("quorum(s) are unavailable for this trnx")
+			return nil, nil, fmt.Errorf("quorum(s) are unavailable for this trnx. retry trnx after some time")
+		}
+	} else {
+		cr.QuorumList = ql
+	}
+
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
 	c.pd[cr.ReqID] = &pd
 	c.qlock.Unlock()
-	cr.QuorumList = ql
 	defer func() {
 		c.qlock.Lock()
 		delete(c.quorumRequest, cr.ReqID)
 		delete(c.pd, cr.ReqID)
 		c.qlock.Unlock()
 	}()
-
-	for _, a := range ql {
+	for _, a := range cr.QuorumList {
 		//This part of code is trying to connect to the quorums in quorum list, where various functions are called to pledge the tokens
 		//and checking of transaction by the quorum i.e. consensus for the transaction. Once the quorum is connected, it pledges and
 		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
@@ -833,7 +850,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		var token string
 		if tStart >= len(tokenPrefix) {
 			token = cresp.Message[tStart:]
-			fmt.Println("Token is being Double spent. Token is ", token)
+			c.log.Debug("Token is being Double spent. Token is ", token)
 		}
 		doubleSpendTokenDetails, err2 := c.w.ReadToken(token)
 		if err2 != nil {
