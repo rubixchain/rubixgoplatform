@@ -77,7 +77,7 @@ const (
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
 	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
-	NodeSyncCmd                    string = "restoreNodeSync"
+	NodeSyncCmd                    string = "nodeSync"
 	CheckQuorumStatusCmd           string = "checkQuorumStatus"
 )
 
