@@ -117,7 +117,7 @@ func tcMarshal(str string, m interface{}) (string, error) {
 		str = str + fmt.Sprintf("%d", mt)
 	case float64:
 		// TokenValue (key: "10") is a float value and needs to have a precision of 5
-		// in the output dump file 
+		// in the output dump file
 		str = str + fmt.Sprintf("%.5f", mt)
 	case interface{}:
 		str, err = tcMarshal(str, mt)
