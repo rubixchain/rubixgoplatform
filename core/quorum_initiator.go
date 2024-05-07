@@ -60,9 +60,10 @@ type ConensusReply struct {
 }
 
 type ConsensusResult struct {
-	RunningCount int
-	SuccessCount int
-	FailedCount  int
+	RunningCount          int
+	SuccessCount          int
+	FailedCount           int
+	PledgingDIDSignStatus bool
 }
 
 type ConsensusStatus struct {
@@ -240,9 +241,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		},
 		P: make(map[string]*ipfsport.Peer),
 		Result: ConsensusResult{
-			RunningCount: 0,
-			SuccessCount: 0,
-			FailedCount:  0,
+			RunningCount:          0,
+			SuccessCount:          0,
+			FailedCount:           0,
+			PledgingDIDSignStatus: false,
 		},
 	}
 	reqPledgeTokens := float64(0)
@@ -721,11 +723,11 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 				cs.P[did] = p
 				cs.Credit.Credit = append(cs.Credit.Credit, csig)
 				cs.Result.SuccessCount++
-			} else if did == pledgingDID && cs.Result.SuccessCount == MinConsensusRequired-1 {
-				cs.P[did] = p
-				cs.Credit.Credit = append(cs.Credit.Credit, csig)
-				cs.Result.SuccessCount++
-			} else if cs.Result.RunningCount == 0 && cs.Result.SuccessCount == MinConsensusRequired-1 {
+				if did == pledgingDID {
+					cs.Result.PledgingDIDSignStatus = true
+				}
+
+			} else if (did == pledgingDID || cs.Result.PledgingDIDSignStatus) && cs.Result.SuccessCount == MinConsensusRequired-1 {
 				cs.P[did] = p
 				cs.Credit.Credit = append(cs.Credit.Credit, csig)
 				cs.Result.SuccessCount++
