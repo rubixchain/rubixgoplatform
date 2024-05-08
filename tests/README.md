@@ -23,6 +23,7 @@ The test script covers the following RBT Transfer scenarios:
 ## Prerequisites
 
 - Python 3.10+ ([Install Ref](https://www.python.org/downloads/))
+- tmux for MacOs and Ubuntu based systems ([Install Ref](https://github.com/tmux/tmux/wiki/Installing#binary-packages))
 - `pip` package manger ([Install Ref](https://pip.pypa.io/en/stable/installation/))
 - `requests` package. After installing Python and pip, run `pip install requests` to install this package 
 

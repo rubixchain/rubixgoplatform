@@ -1,6 +1,19 @@
 import subprocess
 import os
 import re
+import platform
+
+def get_build_dir():
+    os_name = platform.system()
+    build_folder = ""
+    if os_name == "Linux":
+        build_folder = "linux"
+    elif os_name == "Windows":
+        build_folder = "windows"
+    elif os_name == "Darwin":
+        build_folder = "mac"
+
+    return build_folder
 
 def run_command(cmd_string, is_output_from_stderr=False):
     assert isinstance(cmd_string, str), "command must be of string type"
@@ -28,15 +41,15 @@ def run_command(cmd_string, is_output_from_stderr=False):
             return output, code
 
 def cmd_run_rubix_servers(node_name, server_port_idx, grpc_port):
-    os.chdir("../linux")
-    cmd_string = f"screen -S {node_name} -d -m ./rubixgoplatform run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}"
+    os.chdir("../" + get_build_dir())
+    cmd_string = f"tmux new -s {node_name} -d ./rubixgoplatform run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}"
     _, code = run_command(cmd_string)
     if code != 0:
         raise Exception("Error occurred while run the command: " + cmd_string)
     os.chdir("../tests")
 
 def cmd_create_did(server_port, grpc_port):
-    os.chdir("../linux")
+    os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
 
@@ -56,7 +69,7 @@ def cmd_create_did(server_port, grpc_port):
     return did_id
 
 def cmd_register_did(did_id, server_port, grpc_port):
-    os.chdir("../linux")
+    os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform registerdid -did {did_id} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string)
     print(output)
@@ -68,7 +81,7 @@ def cmd_register_did(did_id, server_port, grpc_port):
     return output
 
 def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
-    os.chdir("../linux")
+    os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
     
@@ -79,7 +92,7 @@ def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
     return output
 
 def cmd_add_quorum_dids(server_port, grpc_port):
-    os.chdir("../linux")
+    os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
     print(output)
@@ -90,7 +103,7 @@ def cmd_add_quorum_dids(server_port, grpc_port):
     return output
 
 def cmd_shutdown_node(server_port, grpc_port):
-    os.chdir("../linux")
+    os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform shutdown -port {server_port} -grpcPort {grpc_port}"
     output, _ = run_command(cmd_string, True)
     print(output)
@@ -99,7 +112,7 @@ def cmd_shutdown_node(server_port, grpc_port):
     return output
 
 def cmd_setup_quorum_dids(did, server_port, grpc_port):
-    os.chdir("../linux")
+    os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform setupquorum -did {did} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
     print(output)
@@ -110,7 +123,7 @@ def cmd_setup_quorum_dids(did, server_port, grpc_port):
     return output
 
 def cmd_get_peer_id(server_port, grpc_port):
-    os.chdir("../linux")
+    os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform get-peer-id -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string)
 
@@ -120,7 +133,7 @@ def cmd_get_peer_id(server_port, grpc_port):
     return output
 
 def check_account_info(did, server_port, grpc_port):
-    os.chdir("../linux")
+    os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform getaccountinfo -did {did} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string)
 
@@ -131,7 +144,7 @@ def check_account_info(did, server_port, grpc_port):
 
 # Note: address != did, address = peerId.didId 
 def cmd_rbt_transfer(sender_address, receiver_address, rbt_amount, server_port, grpc_port):
-    os.chdir("../linux")
+    os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform transferrbt -senderAddr {sender_address} -receiverAddr {receiver_address} -rbtAmount {rbt_amount} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
     print(output)
