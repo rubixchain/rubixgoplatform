@@ -3,6 +3,10 @@ import os
 import re
 import platform
 
+def is_windows_os():
+    os_name = platform.system()
+    return os_name == "Windows"
+
 def get_build_dir():
     os_name = platform.system()
     build_folder = ""
@@ -36,13 +40,21 @@ def run_command(cmd_string, is_output_from_stderr=False):
     else:
         output = cmd_result.stderr.decode('utf-8')[:-1]
         if output.find('[ERROR]') > 0 or output.find('parse error') > 0:
+            print(output)
             return output, 1
         else:
             return output, code
 
 def cmd_run_rubix_servers(node_name, server_port_idx, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"tmux new -s {node_name} -d ./rubixgoplatform run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}"
+    
+    cmd_string = ""
+    if is_windows_os():
+        #cmd = f".\\rubixgoplatform run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}"
+        cmd_string = f"powershell -Command  Start-Process -FilePath '.\\rubixgoplatform.exe' -ArgumentList 'run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}' -WindowStyle Hidden"
+    else:
+        cmd_string = f"tmux new -s {node_name} -d ./rubixgoplatform run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}"
+    
     _, code = run_command(cmd_string)
     if code != 0:
         raise Exception("Error occurred while run the command: " + cmd_string)
@@ -50,7 +62,10 @@ def cmd_run_rubix_servers(node_name, server_port_idx, grpc_port):
 
 def cmd_create_did(server_port, grpc_port):
     os.chdir("../" + get_build_dir())
+
     cmd_string = f"./rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
 
     if code != 0:
@@ -71,6 +86,8 @@ def cmd_create_did(server_port, grpc_port):
 def cmd_register_did(did_id, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform registerdid -did {did_id} -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform registerdid -did {did_id} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string)
     print(output)
 
@@ -83,6 +100,8 @@ def cmd_register_did(did_id, server_port, grpc_port):
 def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
     
     if code != 0:
@@ -94,6 +113,8 @@ def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
 def cmd_add_quorum_dids(server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
     print(output)
     if code != 0:
@@ -105,6 +126,8 @@ def cmd_add_quorum_dids(server_port, grpc_port):
 def cmd_shutdown_node(server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform shutdown -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform shutdown -port {server_port} -grpcPort {grpc_port}"
     output, _ = run_command(cmd_string, True)
     print(output)
 
@@ -114,6 +137,8 @@ def cmd_shutdown_node(server_port, grpc_port):
 def cmd_setup_quorum_dids(did, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform setupquorum -did {did} -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform setupquorum -did {did} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
     print(output)
     if code != 0:
@@ -125,6 +150,8 @@ def cmd_setup_quorum_dids(did, server_port, grpc_port):
 def cmd_get_peer_id(server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform get-peer-id -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform get-peer-id -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string)
 
     if code != 0:
@@ -135,6 +162,8 @@ def cmd_get_peer_id(server_port, grpc_port):
 def check_account_info(did, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform getaccountinfo -did {did} -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform getaccountinfo -did {did} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string)
 
     if code != 0:
@@ -146,6 +175,8 @@ def check_account_info(did, server_port, grpc_port):
 def cmd_rbt_transfer(sender_address, receiver_address, rbt_amount, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform transferrbt -senderAddr {sender_address} -receiverAddr {receiver_address} -rbtAmount {rbt_amount} -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform transferrbt -senderAddr {sender_address} -receiverAddr {receiver_address} -rbtAmount {rbt_amount} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
     print(output)
     if code != 0:
