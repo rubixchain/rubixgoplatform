@@ -13,8 +13,8 @@ def run_quorum_nodes(node_config_path, only_run_nodes, skip_adding_quorums):
     print("Rubix nodes are now running")
 
     if not only_run_nodes:
-        print("Waiting 20 seconds before fetching all node peer IDs............")
-        time.sleep(20)
+        print("Waiting 60 seconds before fetching all node peer IDs............")
+        time.sleep(60)
 
         fetch_peer_ids(node_config)
 
@@ -32,7 +32,7 @@ def run_quorum_nodes(node_config_path, only_run_nodes, skip_adding_quorums):
         quorum_config(node_config, skip_adding_quorums=skip_adding_quorums, create_quorum_list=True)
 
         pprint.pp(node_config)
-        print("Quorums have been configured. You can proceed with running Test scenarios")
+        print("Quorums have been configured")
     else:
         quorum_config(node_config, skip_adding_quorums=True, create_quorum_list=False)
 
@@ -46,8 +46,8 @@ def run_non_quorum_nodes(node_config_path, only_run_nodes, skip_adding_quorums):
     print("Non-quorum nodes are running successfully")
 
     if not only_run_nodes:        
-        print("Waiting 20 seconds before fetching all node peer IDs............")
-        time.sleep(20)
+        print("Waiting 30 seconds before fetching all node peer IDs............")
+        time.sleep(30)
         fetch_peer_ids(node_config)
         
         print("Creation of Non Quorum DIDs have started")

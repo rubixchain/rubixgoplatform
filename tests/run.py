@@ -68,8 +68,13 @@ def download_ipfs_binary(os_name, version, build_dir):
 
     # Move IPFS binary to the appropriate folder
     print("Moving IPFS binary...")
-    src_file = os.path.join("kubo", "kubo", "ipfs")
-    dest_dir = os.path.join(build_dir, "ipfs")
+    
+    ipfs_bin_name = "ipfs"
+    if os_name == "Windows":
+        ipfs_bin_name = "ipfs.exe"
+
+    src_file = os.path.join("kubo", "kubo", ipfs_bin_name)
+    dest_dir = os.path.join(build_dir, ipfs_bin_name)
     if os.path.exists(src_file):
         shutil.move(src_file, dest_dir)
         print("IPFS binary moved to", dest_dir)

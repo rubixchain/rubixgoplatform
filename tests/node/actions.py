@@ -1,5 +1,5 @@
 from .commands import cmd_run_rubix_servers, cmd_get_peer_id, cmd_create_did, cmd_register_did, \
-    cmd_generate_rbt, cmd_add_quorum_dids, cmd_setup_quorum_dids, cmd_rbt_transfer
+    cmd_generate_rbt, cmd_add_quorum_dids, cmd_setup_quorum_dids, cmd_rbt_transfer, get_build_dir
 from .utils import get_node_name_from_idx, save_to_json
 
 def add_quorums(node_config: dict):
@@ -27,7 +27,8 @@ def quorum_config(node_config: dict, skip_adding_quorums: bool = False, create_q
                 "address": config["peerId"] + "." + config["did"]
             }
             
-            quorum_list_file_path = "../linux/quorumlist.json" # TODO: make it Dynamic 
+            build_dir = get_build_dir()
+            quorum_list_file_path = f"../{build_dir}/quorumlist.json" 
             quorum_list.append(quorum_info)
 
         save_to_json(quorum_list_file_path, quorum_list)
