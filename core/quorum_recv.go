@@ -209,6 +209,18 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	wt := sc.GetTransTokenInfo()
 
 	for i := range wt {
+		var tknType int
+		if wt[i].TokenValue == 1.0 {
+			tknType = token.RBTTokenType
+		} else {
+			tknType = token.PartTokenType
+		}
+
+		if c.testNet && wt[i].TokenValue == 1.0 {
+			tknType = token.TestTokenType
+		} else {
+			tknType = token.TestPartTokenType
+		}
 		b := c.w.GetLatestTokenBlock(wt[i].Token, wt[i].TokenType)
 		if b == nil {
 			c.log.Error("pledge token check Failed, failed to get latest block")
@@ -221,7 +233,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		if c.checkIsUnpledged(b) {
-			unpledgeId := c.getUnpledgeId(wt[i].Token)
+			unpledgeId := c.getUnpledgeId(wt[i].Token, tknType)
 			if unpledgeId == "" {
 				c.log.Error("Failed to fetch proof file CID")
 				crep.Message = "Failed to fetch proof file CID"
@@ -242,13 +254,13 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			pcs := util.BytesToString(pcb)
 
 			senderAddr := cr.SenderPeerID + "." + sc.GetSenderDID()
-			rdid, tid, err := c.getProofverificationDetails(wt[i].Token, senderAddr)
+			rdid, tid, err := c.getProofverificationDetails(wt[i].Token, senderAddr, tknType)
 			if err != nil {
 				c.log.Error("Failed to get pledged for token reciveer did", "err", err)
 				crep.Message = "Failed to get pledged for token reciveer did"
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
-			pv, err := c.up.ProofVerification(wt[i].Token, pcs, rdid, tid)
+			pv, err := c.up.ProofVerification(wt[i].Token, pcs, rdid, tid, tknType)
 			if err != nil {
 				c.log.Error("Proof Verification Failed due to error ", err)
 				crep.Message = "Proof Verification Failed due to error " + err.Error()
@@ -1232,17 +1244,17 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &srep, http.StatusOK)
 }
 
-func (c *Core) getProofverificationDetails(tokenID string, senderAddr string) (string, string, error) {
+func (c *Core) getProofverificationDetails(tokenID string, senderAddr string, tknType int) (string, string, error) {
 	var receiverDID, txnId string
-	tt := token.RBTTokenType
-	blk := c.w.GetLatestTokenBlock(tokenID, tt)
+
+	blk := c.w.GetLatestTokenBlock(tokenID, tknType)
 
 	pbid, err := blk.GetPrevBlockID(tokenID)
 	if err != nil {
 		c.log.Error("Failed to get the block id. Unable to verify proof file")
 		return "", "", err
 	}
-	pBlk, err := c.w.GetTokenBlock(tokenID, tt, pbid)
+	pBlk, err := c.w.GetTokenBlock(tokenID, tknType, pbid)
 	if err != nil {
 		c.log.Error("Failed to get the Previous Block Unable to verify proof file")
 		return "", "", err
@@ -1280,8 +1292,9 @@ func (c *Core) getProofverificationDetails(tokenID string, senderAddr string) (s
 			return "", "", err
 		}
 		//check if token chain of token pledged for already synced to node
+		//TODO: Change proof verification method
 		pledgedfBlk, err := c.w.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
-		if err != nil {
+		if err != nil && err.Error() != "leveldb: not found" {
 			c.log.Error("Failed to get the pledged for token's Block Unable to verify proof file")
 			return "", "", err
 		}

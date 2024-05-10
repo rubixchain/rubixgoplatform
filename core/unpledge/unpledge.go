@@ -157,9 +157,23 @@ func (up *UnPledge) runUnpledge() {
 		}
 		st := time.Now()
 		t := list.Token
-		tt := token.RBTTokenType
-		if up.testNet {
+		unpledgetokendetails, err := up.w.ReadToken(t)
+		if err != nil {
+			up.log.Error("Failed to fetch unpledge token details ", err)
+			up.s.Delete(UnpledgeQueueTable, &UnpledgeTokenList{}, "token=?", t)
+			continue
+		}
+		var tt int
+		if unpledgetokendetails.TokenValue == 1.0 {
+			tt = token.RBTTokenType
+		} else {
+			tt = token.PartTokenType
+		}
+
+		if up.testNet && unpledgetokendetails.TokenValue == 1.0 {
 			tt = token.TestTokenType
+		} else {
+			tt = token.TestPartTokenType
 		}
 		b := up.w.GetLatestTokenBlock(t, tt)
 		if b == nil {
@@ -259,9 +273,9 @@ func (up *UnPledge) runUnpledge() {
 	}
 }
 
-func (up *UnPledge) ProofVerification(tokenID string, proof []string, rdid string, tid string) (bool, error) {
-	tt := token.RBTTokenType
-	blk := up.w.GetLatestTokenBlock(tokenID, tt)
+func (up *UnPledge) ProofVerification(tokenID string, proof []string, rdid string, tid string, tokenType int) (bool, error) {
+
+	blk := up.w.GetLatestTokenBlock(tokenID, tokenType)
 
 	bid, err := blk.GetPrevBlockID(tokenID)
 	if err != nil {
