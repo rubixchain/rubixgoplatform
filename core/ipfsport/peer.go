@@ -70,11 +70,8 @@ func (pm *PeerManager) getPeerPort() uint16 {
 			availability := isPortAvailable(port)
 
 			if availability {
-				fmt.Println("available port: ", port, availability)
 				pm.ps[i] = true
 				return pm.startPort + uint16(i)
-			} else {
-				fmt.Println("NOT available port: ", port, availability)
 			}
 		}
 	}
