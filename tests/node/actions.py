@@ -53,9 +53,10 @@ def setup_rubix_nodes(node_count: int = 0, node_prefix_str: str = "node"):
 
     # Start rubix servers
     loop_start_idx, loop_end_idx = 0, node_count 
-    
+    offset = 4
+
     for i in range(loop_start_idx, loop_end_idx):
-        k = i if node_prefix_str == "node" else (10+i)
+        k = (i + offset) if node_prefix_str == "node" else (10 + i + offset)
 
         ens_server = base_ens_server + k
         print(f"Running server at port: {ens_server}")
@@ -96,9 +97,10 @@ def create_and_register_did(node_config: dict, register_did: bool = True):
         config["did"] = did_id
 
 def fund_dids_with_rbt(node_config: dict, rbt_amount: int = 30):
-    for config in node_config.values():
-        cmd_generate_rbt(config["did"], rbt_amount, config["server"], config["grpcPort"])
-        print("DID ", config["did"], f" is funded with {rbt_amount} RBT")
+    for node, config in node_config.items():
+        if node not in ["node5", "node6", "node7", "node8"]:
+            cmd_generate_rbt(config["did"], rbt_amount, config["server"], config["grpcPort"])
+            print("DID ", config["did"], f" is funded with {rbt_amount} RBT")
 
 def fund_did_with_rbt(config: dict, rbt_amount: int = 30):
     output = cmd_generate_rbt(config["did"], rbt_amount, config["server"], config["grpcPort"])

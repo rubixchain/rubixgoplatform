@@ -2,6 +2,8 @@ import subprocess
 import os
 import re
 import platform
+import time
+import requests
 
 def is_windows_os():
     os_name = platform.system()
@@ -50,7 +52,6 @@ def cmd_run_rubix_servers(node_name, server_port_idx, grpc_port):
     
     cmd_string = ""
     if is_windows_os():
-        #cmd = f".\\rubixgoplatform run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}"
         cmd_string = f"powershell -Command  Start-Process -FilePath '.\\rubixgoplatform.exe' -ArgumentList 'run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}' -WindowStyle Hidden"
     else:
         cmd_string = f"tmux new -s {node_name} -d ./rubixgoplatform run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}"
@@ -58,7 +59,30 @@ def cmd_run_rubix_servers(node_name, server_port_idx, grpc_port):
     _, code = run_command(cmd_string)
     if code != 0:
         raise Exception("Error occurred while run the command: " + cmd_string)
+    
+    print("Waiting for 60 seconds before checking if its running....")
+    time.sleep(60)
+    try:
+        check_if_all_nodes_are_running(server_port_idx)
+    except Exception as e:
+        raise e
     os.chdir("../tests")
+
+def check_if_all_nodes_are_running(server_idx):
+    
+    base_server = 20000
+    port = base_server + int(server_idx)
+    print(f"Check if server with ENS web server port {port} is running...")
+    url = f"http://localhost:{port}/api/getalldid"
+    try:
+        print(f"Sending GET request to URL: {url}")
+        response = requests.get(url)
+        if response.status_code == 200:
+            print(f"Server with port {port} is running successfully")
+        else:
+            raise Exception(f"Failed with Status Code: {response.status_code} |  Server with port {port} is NOT running successfully")
+    except:
+        raise Exception(f"ConnectionError | Server with port {port} is NOT running successfully")
 
 def cmd_create_did(server_port, grpc_port):
     os.chdir("../" + get_build_dir())
