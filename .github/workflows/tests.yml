@@ -1,0 +1,93 @@
+name: Test Workflow
+
+on:
+    pull_request:
+      branches:
+        - development
+        - main
+
+jobs:
+    test-linux:
+        name: "Test - Linux Environment"
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+            
+            - name: Setup Golang v1.21.9
+              uses: actions/setup-go@v5
+              with:
+                go-version: '1.21.9'
+            
+            - name: Setup Python v3.11
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.11'
+
+            - name: Install test dependency
+              run: |
+                pip3 install requests
+            
+            - name: Run tests
+              run: |
+                cd tests && ls && python3 -u run.py
+  
+    test-macos:
+        name: "Test - MacOS Environment"
+        runs-on: macos-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+            
+            - name: Setup Golang v1.21.9
+              uses: actions/setup-go@v5
+              with:
+                go-version: '1.21.9'
+            
+            - name: Setup Python v3.11
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.11'
+            
+            - name: Install test dependency
+              run: |
+                pip3 install requests
+            
+            - name: MacOS install tmux
+              run: brew install tmux
+
+            - name: Run tests
+              run: |
+                cd tests && ls && python3 -u run.py
+
+    test-windows:
+        name: "Test - Windows Environment"
+        runs-on: windows-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+
+            - name: Setup Golang v1.21.9
+              uses: actions/setup-go@v5
+              with:
+                go-version: '1.21.9'
+
+            - name: Setup Python v3.11
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.11'
+            
+            - name: Install test dependency
+              run: |
+                pip3 install requests
+            
+            - name: Run tests
+              run: |
+                cd tests && ls && python3 -u run.py
+    

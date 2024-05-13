@@ -1,9 +1,9 @@
 from node.actions import rbt_transfer, fund_did_with_rbt
 from helper.utils import expect_failure, expect_success
+from .util import get_non_quorum_node_configs
 
 def max_decimal_place_transfer(config):
-    node_A_info = config["nodeNq10"]
-    node_B_info = config["nodeNq11"]
+    node_A_info, node_B_info = config["nodeNq14"], config["nodeNq15"]
 
     print("------ Test Case (FAIL) : Transferring 0.00000009 RBT from B which is more than allowed decimal places ------")
 
@@ -13,8 +13,7 @@ def max_decimal_place_transfer(config):
     print("\n------ Test Case (FAIL) : Transferring 0.00000009 RBT from B which is more than allowed decimal places completed ------\n")
 
 def insufficient_balance_transfer(config):
-    node_A_info = config["nodeNq10"]
-    node_B_info = config["nodeNq11"]
+    node_A_info, node_B_info = config["nodeNq14"], config["nodeNq15"]
 
     print("\n------ Test Case (FAIL) : Transferring 100 RBT from A which has zero balance ------")
 
@@ -32,8 +31,7 @@ def insufficient_balance_transfer(config):
     print("\n------ Test Case (FAIL) : Transferring 100 RBT from B which has insufficient balance completed ------\n")
 
 def shuttle_transfer(config):
-    node_A_info = config["nodeNq10"]
-    node_B_info = config["nodeNq11"]
+    node_A_info, node_B_info = config["nodeNq14"], config["nodeNq15"]
 
     print("------ Test Case (PASS): Shuttle transfer started ------\n")
 
