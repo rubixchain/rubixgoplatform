@@ -49,7 +49,7 @@ func (d *DIDDummy) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // Sign will verifyt he signature
-func (d *DIDDummy) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDDummy) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 
 	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, d.pubKey)

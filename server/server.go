@@ -157,6 +157,9 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIReleaseAllLockedTokens, "GET", s.AuthHandle(s.APIReleaseAllLockedTokens, true, s.AuthError, false))
 	s.AddRoute(setup.APICheckQuorumStatus, "GET", s.AuthHandle(s.APICheckQuorumStatus, false, s.AuthError, false))
 
+	s.AddRoute(setup.APIGetAllExplorer, "GET", s.AuthHandle(s.APIGetAllExplorer, false, s.AuthError, true))
+	s.AddRoute(setup.APIAddExplorer, "POST", s.AuthHandle(s.APIAddExplorer, false, s.AuthError, true))
+	s.AddRoute(setup.APIRemoveExplorer, "POST", s.AuthHandle(s.APIRemoveExplorer, false, s.AuthError, true))
 }
 
 func (s *Server) ExitFunc() error {
