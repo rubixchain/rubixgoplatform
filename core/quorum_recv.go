@@ -209,18 +209,6 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	wt := sc.GetTransTokenInfo()
 
 	for i := range wt {
-		// var tknType int
-		// if wt[i].TokenValue == 1.0 {
-		// 	tknType = token.RBTTokenType
-		// } else {
-		// 	tknType = token.PartTokenType
-		// }
-
-		// if c.testNet && wt[i].TokenValue == 1.0 {
-		// 	tknType = token.TestTokenType
-		// } else {
-		// 	tknType = token.TestPartTokenType
-		// }
 		b := c.w.GetLatestTokenBlock(wt[i].Token, wt[i].TokenType)
 		if b == nil {
 			c.log.Error("pledge token check Failed, failed to get latest block")
