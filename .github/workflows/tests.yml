@@ -43,7 +43,7 @@ jobs:
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                name: artifact-log
+                name: artifact-log-linux
                 path: tests/node_logs
   
     test-macos:
@@ -85,7 +85,7 @@ jobs:
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                name: artifact-log
+                name: artifact-log-mac
                 path: tests/node_logs
 
     test-windows:
@@ -124,5 +124,5 @@ jobs:
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                name: artifact-log
+                name: artifact-log-windows
                 path: tests/node_logs
