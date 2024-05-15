@@ -35,6 +35,20 @@ To start the test. Please NOTE that it must be run from the `tests` directory on
 python3 run.py
 ```
 
+## Running tests in Docker
+
+To run the tests in a Docker Ubuntu environment, run the following:
+
+1. Build the image
+```
+docker build -t rubix_test_image_ubuntu --no-cache -f tests/docker/ubuntu_test.Dockerfile .
+```
+
+2. Run the container
+```
+docker run --rm --name rubix_test_container_ubuntu rubix_test_image_ubuntu
+```
+
 ### Flags
 
 The test script is equipped with CLI Parser. Following are the flags and their description
