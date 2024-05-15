@@ -102,7 +102,7 @@ This following options are used for this command
   -port string
         Server/Host port (default "20000")
   -didType int
-        DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode) (default 0)
+        DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode, 3-Child Mode, 4-Light Mode) (default 0)
   -didSecret string
         DID secret (default "My DID Secret")
   -privPWD string
@@ -121,8 +121,14 @@ This following options are used for this command
         DID private key file name (default "pvtKey.pem")
   -pubKeyFile string
         DID public key file name (default "pubKey.pem")
+  -mnemonicKeyFile string
+        Mnemonic key file (default "mnemonic.txt")
+  -ChildPath int
+        BIP Child Path (default 0)
   -fp forcepassword
         This flag prompts to enter the password in terminal
+
+   _Note: Use Light mode for PKI based authentication with backward compatiblity to PKI+NLSS based sign, and Basic mode for PKI+NLSS based authentication._
 ```
 Get All DID Command
 : To get all DID use this command.
@@ -311,4 +317,35 @@ This following options are used for this command
         Server/Host port (default "20000")
    -fp 
         Force password to be entered on the terminal
+```
+To Add explorer url
+: To add explorer url where to send the transaction data.
+```
+./rubixgoplatform addexplorer
+
+This following options are used for this command
+  -links string
+        URLs, mutiple URLs will be seprated by comma
+  -port string
+        Server/Host port (default "20000")
+```
+To remove explorer url
+: To remove explorer url where not to send the transaction data.
+```
+./rubixgoplatform removeexplorer
+
+This following options are used for this command
+  -links string
+        URLs, mutiple URLs will be seprated by comma
+  -port string
+        Server/Host port (default "20000")
+```
+To get all explorer urls
+: To get explorer urls where the transaction data is being sent.
+```
+./rubixgoplatform getallexplorer
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
 ```
