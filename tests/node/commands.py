@@ -60,8 +60,8 @@ def cmd_run_rubix_servers(node_name, server_port_idx, grpc_port):
     if code != 0:
         raise Exception("Error occurred while run the command: " + cmd_string)
     
-    print("Waiting for 60 seconds before checking if its running....")
-    time.sleep(60)
+    print("Waiting for 15 seconds before checking if its running....")
+    time.sleep(15)
     try:
         check_if_all_nodes_are_running(server_port_idx)
     except Exception as e:
