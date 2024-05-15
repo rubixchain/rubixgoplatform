@@ -84,9 +84,9 @@ def fetch_peer_ids(node_config: dict):
     print("Fetched all Node IDs")
 
 
-def create_and_register_did(node_config: dict, register_did: bool = True):
+def create_and_register_did(node_config: dict, register_did: bool = True, did_type: int = 4):
     for config in node_config.values():
-        did_id = cmd_create_did(config["server"], config["grpcPort"])
+        did_id = cmd_create_did(config["server"], config["grpcPort"], did_type)
         print("Created DID : ", did_id)
         
         if register_did:
