@@ -33,6 +33,18 @@ jobs:
             - name: Run tests
               run: |
                 cd tests && ls && python3 -u run.py
+
+            - name: Packing Quorum and Non-Quorum node logs
+              if: always()
+              run: |
+                cd tests && python3 -u pack_node_logs.py
+       
+            - name: Uploading Quorum and Non-Quorum node logs as Artifacts
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                name: artifact-log
+                path: tests/node_logs
   
     test-macos:
         name: "Test - MacOS Environment"
@@ -64,6 +76,18 @@ jobs:
               run: |
                 cd tests && ls && python3 -u run.py
 
+            - name: Packing Quorum and Non-Quorum node logs
+              if: always()
+              run: |
+                cd tests && python3 -u pack_node_logs.py
+         
+            - name: Uploading Quorum and Non-Quorum node logs as Artifacts
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                name: artifact-log
+                path: tests/node_logs
+
     test-windows:
         name: "Test - Windows Environment"
         runs-on: windows-latest
@@ -90,4 +114,15 @@ jobs:
             - name: Run tests
               run: |
                 cd tests && ls && python3 -u run.py
-    
+
+            - name: Packing Quorum and Non-Quorum node logs
+              if: always()
+              run: |
+                cd tests && python3 -u pack_node_logs.py
+         
+            - name: Uploading Quorum and Non-Quorum node logs as Artifacts
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                name: artifact-log
+                path: tests/node_logs
