@@ -164,16 +164,18 @@ func (up *UnPledge) runUnpledge() {
 			continue
 		}
 		var tt int
-		if unpledgetokendetails.TokenValue == 1.0 {
-			tt = token.RBTTokenType
+		if up.testNet {
+			if unpledgetokendetails.TokenValue == 1 {
+				tt = token.TestTokenType
+			} else if unpledgetokendetails.TokenValue < 1 {
+				tt = token.TestPartTokenType
+			}
 		} else {
-			tt = token.PartTokenType
-		}
-
-		if up.testNet && unpledgetokendetails.TokenValue == 1.0 {
-			tt = token.TestTokenType
-		} else {
-			tt = token.TestPartTokenType
+			if unpledgetokendetails.TokenValue == 1 {
+				tt = token.RBTTokenType
+			} else if unpledgetokendetails.TokenValue < 1 {
+				tt = token.PartTokenType
+			}
 		}
 		b := up.w.GetLatestTokenBlock(t, tt)
 		if b == nil {

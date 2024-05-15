@@ -15,16 +15,18 @@ func (c *Core) Unpledge(t string, file string) error {
 		c.log.Error("Failed to fetch unpledge token details fot token ", t, " error : ", err)
 	}
 	var tokenType int
-	if unpledgetokendetails.TokenValue == 1.0 {
-		tokenType = token.RBTTokenType
+	if c.testNet {
+		if unpledgetokendetails.TokenValue == 1 {
+			tokenType = token.TestTokenType
+		} else if unpledgetokendetails.TokenValue < 1 {
+			tokenType = token.TestPartTokenType
+		}
 	} else {
-		tokenType = token.PartTokenType
-	}
-
-	if c.testNet && unpledgetokendetails.TokenValue == 1.0 {
-		tokenType = token.TestTokenType
-	} else {
-		tokenType = token.TestPartTokenType
+		if unpledgetokendetails.TokenValue == 1 {
+			tokenType = token.RBTTokenType
+		} else if unpledgetokendetails.TokenValue < 1 {
+			tokenType = token.PartTokenType
+		}
 	}
 	b := c.w.GetLatestTokenBlock(t, tokenType)
 	if b == nil {
