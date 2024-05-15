@@ -128,7 +128,7 @@ type CreditSignature struct {
 	PrivSignature string `json:"priv_signature"`
 	DID           string `json:"did"`
 	Hash          string `json:"hash"`
-	SignVersion   string `json:"sign_version"` //represents sign version (PkiSign == 0 or NlssSign==1)
+	SignType      string `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
 
 type SenderSignature struct {
@@ -136,7 +136,7 @@ type SenderSignature struct {
 	Private_sign string `json:"priv_signature"`
 	DID          string `json:"sender_did"`
 	Hash         string `json:"hash"`
-	SignVersion  int    `json:"sign_version"` //represents sign version (PkiSign == 0 or NlssSign==1)
+	SignType     int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
 
 type TokenArbitrationReq struct {
@@ -720,14 +720,14 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 		return
 	}
 
-	var signVersion string
+	var signType string
 
-	//signVersion = 0 => Pki based sign in lite mode
-	//signVersion = 1 => Nlss based sign in basic mode
+	//signType = 0 => Pki based sign in lite mode
+	//signType = 1 => Nlss based sign in basic mode
 	if util.HexToStr(ss) == "" {
-		signVersion = "0"
+		signType = "0"
 	} else {
-		signVersion = "1"
+		signType = "1"
 	}
 
 	switch qt {
@@ -741,7 +741,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 					PrivSignature: util.HexToStr(ps),
 					DID:           did,
 					Hash:          hash,
-					SignVersion:   signVersion,
+					SignType:      signType,
 				}
 				cs.P[did] = p
 				cs.Credit.Credit = append(cs.Credit.Credit, csig)
@@ -983,13 +983,13 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		c.log.Error("failed to fetch sender sign", "err", err)
 		return nil, fmt.Errorf("failed to fetch sender sign")
 	}
-	sender_sign_version := dc.GetSignType()
+	sender_sign_type := dc.GetSignType()
 	sender_sign_ := &SenderSignature{
 		NLSS_share:   sender_share_sign,
 		Private_sign: sender_priv_sign,
 		DID:          senderdid,
 		Hash:         sign_data,
-		SignVersion:  sender_sign_version,
+		SignType:     sender_sign_type,
 	}
 	sender_sign, err := json.Marshal(sender_sign_)
 	if err != nil {
