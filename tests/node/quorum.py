@@ -46,7 +46,7 @@ def run_non_quorum_nodes(node_config_path, only_run_nodes, skip_adding_quorums):
         fetch_peer_ids(node_config)
         
         print("Creation of Non Quorum DIDs have started")
-        create_and_register_did(node_config, False)
+        create_and_register_did(node_config, True)
         print("Non Quorum DIDs have been created")
 
         save_to_json(node_config_path, node_config)

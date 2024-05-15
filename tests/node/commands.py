@@ -84,14 +84,15 @@ def check_if_all_nodes_are_running(server_idx):
     except:
         raise Exception(f"ConnectionError | Server with port {port} is NOT running successfully")
 
-def cmd_create_did(server_port, grpc_port):
+def cmd_create_did(server_port, grpc_port, did_type = 4):
     os.chdir("../" + get_build_dir())
 
-    cmd_string = f"./rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port} -didType {did_type}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port} -didType {did_type}"
     output, code = run_command(cmd_string, True)
-
+    print(output)
+    
     if code != 0:
         raise Exception("Error occurred while run the command: " + cmd_string)
     
@@ -112,7 +113,7 @@ def cmd_register_did(did_id, server_port, grpc_port):
     cmd_string = f"./rubixgoplatform registerdid -did {did_id} -port {server_port} -grpcPort {grpc_port}"
     if is_windows_os():
         cmd_string = f".\\rubixgoplatform registerdid -did {did_id} -port {server_port} -grpcPort {grpc_port}"
-    output, code = run_command(cmd_string)
+    output, code = run_command(cmd_string, True)
     print(output)
 
     if code != 0:
