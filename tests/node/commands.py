@@ -4,6 +4,7 @@ import re
 import platform
 import time
 import requests
+from .utils import get_base_ports
 
 def is_windows_os():
     os_name = platform.system()
@@ -47,9 +48,13 @@ def run_command(cmd_string, is_output_from_stderr=False):
         else:
             return output, code
 
-def cmd_run_rubix_servers(node_name, server_port_idx, grpc_port):
+def cmd_run_rubix_servers(node_name, server_port_idx):
     os.chdir("../" + get_build_dir())
     
+    base_node_server, base_grpc_port = get_base_ports()
+    grpc_port = base_grpc_port + server_port_idx
+    node_server = base_node_server + server_port_idx
+
     cmd_string = ""
     if is_windows_os():
         cmd_string = f"powershell -Command  Start-Process -FilePath '.\\rubixgoplatform.exe' -ArgumentList 'run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}' -WindowStyle Hidden"
@@ -63,14 +68,15 @@ def cmd_run_rubix_servers(node_name, server_port_idx, grpc_port):
     print("Waiting for 40 seconds before checking if its running....")
     time.sleep(40)
     try:
-        check_if_all_nodes_are_running(server_port_idx)
+        check_if_nodes_is_running(server_port_idx)
     except Exception as e:
         raise e
-    os.chdir("../tests")
-
-def check_if_all_nodes_are_running(server_idx):
     
-    base_server = 20000
+    os.chdir("../tests")
+    return node_server, grpc_port
+
+def check_if_nodes_is_running(server_idx):
+    base_server, _ = get_base_ports()
     port = base_server + int(server_idx)
     print(f"Check if server with ENS web server port {port} is running...")
     url = f"http://localhost:{port}/api/getalldid"

@@ -4,12 +4,13 @@ import shutil
 import requests
 import argparse
 from node.commands import run_command
-from node.quorum import run_quorum_nodes, run_non_quorum_nodes
-from scenarios.rbt_transfer import *
+from node.quorum import run_quorum_nodes
+
+from scenarios import (
+    rbt_transfer
+)
 
 IPFS_KUBO_VERSION = "v0.21.0"
-QUORUM_CONFIG_FILE = "./quorum_config.json"
-NON_QUORUM_CONFIG_FILE = "./non_quorum_config.json"
 
 def get_os_info():
     os_name = platform.system()
@@ -120,10 +121,7 @@ def cli():
     parser.add_argument("--run_tests_only", action=argparse.BooleanOptionalAction, help="only proceed with running tests")
     return parser.parse_args()
 
-
 if __name__=='__main__':
-    os.chdir("../")
-
     args = cli()
     skip_prerequisite = args.skip_prerequisite
     run_nodes_only = args.run_nodes_only
@@ -138,6 +136,7 @@ if __name__=='__main__':
             exit(1)
 
         if not skip_prerequisite:
+            os.chdir("../")
             print(f"Building Rubix binary for {os_name}\n")
             build_command = ""
             if os_name == "Linux":
@@ -154,21 +153,17 @@ if __name__=='__main__':
             else:
                 print("\nBuild successful\n")
 
-            
             download_ipfs_binary(os_name, IPFS_KUBO_VERSION, build_folder)
             copy_fixtures_to_build_dir(build_folder)
             os.chdir("./tests")
         
-        run_quorum_nodes(QUORUM_CONFIG_FILE, run_nodes_only, skip_adding_quorums=skip_adding_quorums)
+        run_quorum_nodes(run_nodes_only, skip_adding_quorums=skip_adding_quorums)
     
-        non_quorum_node_config = run_non_quorum_nodes(NON_QUORUM_CONFIG_FILE, run_nodes_only, skip_adding_quorums=skip_adding_quorums)
-    
-    # Run RBT Transfer related tests
-    rbt_transfer_test_list = [
-        shuttle_transfer,
-        insufficient_balance_transfer,
-        max_decimal_place_transfer
+    # It will carry list of Python files containing the function `run()`
+    # that consists of logic to run all the necessary tests
+    modules = [
+        rbt_transfer
     ]
-    for testFn in rbt_transfer_test_list:
-        testFn(non_quorum_node_config) 
-    
+
+    for module in modules:
+        module.run()
