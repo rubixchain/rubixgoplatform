@@ -26,3 +26,6 @@ ipfs
 linux/
 mac/
 windows/
+
+# used for testing purpose
+!node_registry.json
