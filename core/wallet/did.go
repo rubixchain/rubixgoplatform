@@ -98,11 +98,14 @@ func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
 		dm.DIDType = &didType
 		return w.s.Write(DIDPeerStorage, &dm)
 	}
-	if dm.PeerID != peerID {
+	if dm.PeerID != peerID && dm.DIDType == nil {
+		dm.PeerID = peerID
+		dm.DIDType = &didType
+		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+	} else if dm.PeerID != peerID {
 		dm.PeerID = peerID
 		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
-	}
-	if dm.DIDType == nil {
+	} else if dm.DIDType == nil {
 		dm.DIDType = &didType
 		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
 	}
@@ -142,7 +145,7 @@ func (w *Wallet) GetPeerDIDType(did string) (int, error) {
 	var dm DIDPeerMap
 	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
-		w.log.Error("couldn't fetch did type from peer did table")
+		w.log.Error("couldn't fetch did type from peer did table for:", did)
 		return -1, err
 	}
 	if dm.DIDType == nil {

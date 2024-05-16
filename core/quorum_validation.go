@@ -24,7 +24,7 @@ type TokenStateCheckResult struct {
 	tokenIDTokenStateData string
 }
 
-func (c *Core) validateSigner(b *block.Block) (bool, error) {
+func (c *Core) validateSigner(b *block.Block, quorumDID string) (bool, error) {
 	signers, err := b.GetSigner()
 	if err != nil {
 		c.log.Error("failed to get signers", "err", err)
@@ -40,7 +40,7 @@ func (c *Core) validateSigner(b *block.Block) (bool, error) {
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
 		default:
-			dc, err = c.SetupForienDIDQuorum(signer)
+			dc, err = c.SetupForienDIDQuorum(signer, quorumDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID quorum : ", signer, "err", err)
@@ -209,7 +209,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Error("Invalid token chain block")
 			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
 		}
-		signatureValidation, err := c.validateSigner(b)
+		signatureValidation, err := c.validateSigner(b, quorumDID)
 		if !signatureValidation || err != nil {
 			return false, err
 		}

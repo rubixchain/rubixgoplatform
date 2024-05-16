@@ -548,7 +548,7 @@ func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
 }
 
 // Initializes the quorum in it's corresponding did mode (basic/ lite)
-func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
+func (c *Core) SetupForienDIDQuorum(didStr string, quorumDID string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err
@@ -566,7 +566,7 @@ func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 			if peerId == "" {
 				return nil, err
 			}
-			didtype_, msg, err2 := c.GetPeerdidType_fromPeer(peerId, didStr)
+			didtype_, msg, err2 := c.GetPeerdidType_fromPeer(peerId, didStr, quorumDID)
 			if err2 != nil {
 				c.log.Error(msg)
 				return nil, err2

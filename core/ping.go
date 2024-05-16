@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -107,11 +108,25 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error
 // CheckQuorumStatusResponse is the handler for CheckQuorumStatus request
 func (c *Core) GetPeerdidTypeResponse(req *ensweb.Request) *ensweb.Result { //PingRecevied
 	did := c.l.GetQuerry(req, "did")
-	c.log.Info("Fetching peer did type from peer")
+	quorum_peerid := c.l.GetQuerry(req, "quorum_peerid")
+	quorum_did := c.l.GetQuerry(req, "quorum_did")
+	quorum_did_type := c.l.GetQuerry(req, "quorum_did_type")
+
 	resp := &model.GetDIDTypeResponse{
 		BasicResponse: model.BasicResponse{
 			Status: false,
 		},
+	}
+
+	quorum_did_type_int, err1 := strconv.Atoi(quorum_did_type)
+	if err1 != nil {
+		c.log.Debug("could not convert string to integer:", err1)
+	}
+
+	c.log.Info("registering the quorum:", quorum_did)
+	err2 := c.w.AddDIDPeerMap(quorum_did, quorum_peerid, quorum_did_type_int)
+	if err2 != nil {
+		c.log.Debug("could not add quorum details to DID peer table:", err2)
 	}
 
 	dt, err := c.w.GetDID(did)
@@ -131,16 +146,26 @@ func (c *Core) GetPeerdidTypeResponse(req *ensweb.Request) *ensweb.Result { //Pi
 }
 
 // GetPeerdidType will ping the peer & get the did type
-func (c *Core) GetPeerdidType_fromPeer(peerID string, did string) (int, string, error) {
+func (c *Core) GetPeerdidType_fromPeer(peerID string, peer_did string, quorumDID string) (int, string, error) {
+	dt, err0 := c.w.GetDID(quorumDID)
+	if err0 != nil {
+		c.log.Info("could not fetch did type of quorum:", quorumDID)
+	}
 	q := make(map[string]string)
-	p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
+	p, err := c.pm.OpenPeerConn(peerID, peer_did, c.getCoreAppName(peerID))
 	if err != nil {
 		return -1, "Quorum Connection Error", fmt.Errorf("quorum connection error")
 	}
 
+	c.log.Info("Fetching peer did type from peer:", peer_did)
+
 	// Close the p2p before exit
 	defer p.Close()
-	q["did"] = did
+	q["did"] = peer_did
+	q["quorum_peerid"] = c.peerID
+	q["quorum_did"] = quorumDID
+	q["quorum_did_type"] = strconv.Itoa(dt.Type)
+
 	var getPeerdidTypeResponse model.GetDIDTypeResponse
 	err = p.SendJSONRequest("GET", APIGetPeerDIDTypePath, q, nil, &getPeerdidTypeResponse, false, 2*time.Minute)
 	if err != nil {
