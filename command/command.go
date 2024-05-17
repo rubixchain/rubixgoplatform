@@ -77,6 +77,7 @@ const (
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
 	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
+	NodeSyncCmd                    string = "nodeSync"
 	CheckQuorumStatusCmd           string = "checkQuorumStatus"
 	AddExplorerCmd                 string = "addexplorer"
 	RemoveExplorerCmd              string = "removeexplorer"
@@ -125,6 +126,7 @@ var commands = []string{VersionCmd,
 	DumpSmartContractTokenChainCmd,
 	GetTokenBlock,
 	GetSmartContractData,
+	NodeSyncCmd,
 	CheckQuorumStatusCmd,
 }
 var commandsHelp = []string{"To get tool version",
@@ -168,7 +170,10 @@ var commandsHelp = []string{"To get tool version",
 	"This command will subscribe to a smart contract token",
 	"This command will dump the smartcontract token chain",
 	"This command gets token block",
-	"This command gets the smartcontract data from latest block"}
+	"This command gets the smartcontract data from latest block",
+	"This command restores the token information for a DID from quorums",
+	"This command checks the status of the Quorum",
+}
 
 type Command struct {
 	cfg                config.Config
@@ -589,6 +594,8 @@ func Run(args []string) {
 		cmd.executeSmartcontract()
 	case ReleaseAllLockedTokensCmd:
 		cmd.releaseAllLockedTokens()
+	case NodeSyncCmd:
+		cmd.nodeSync()
 	case CheckQuorumStatusCmd:
 		cmd.checkQuorumStatus()
 	case AddExplorerCmd:
