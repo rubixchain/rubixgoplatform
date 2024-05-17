@@ -4,31 +4,31 @@ The test script does the complete setup by building the rubix node based on the 
 
 The test script covers the following RBT Transfer scenarios:
 
-1. Shuttle Transfer (Success Case) <br>
-  1.1 Generate 2 whole RBT for A <br>
-  1.2 Transfer 0.5 from A to B <br>
-  1.3 Transfer 1.499 from A to B <br>
-  1.4 (Transfer 0.25 from B to A) * 4 <br>
-  1.5 Transfer 1 RBT from A to B <br>
-  1.6 Generate 2 whole RBT for A <br>
-  1.7 Transfer 2 RBT from A to B <br>
-  1.8 Transfer 0.001 from A to B <br>
+1. Shuttle Transfer (Success Case)
+  1.1 Generate 2 whole RBT for A
+  1.2 Transfer 0.5 from A to B
+  1.3 Transfer 1.499 from A to B
+  1.4 (Transfer 0.25 from B to A) * 4
+  1.5 Transfer 1 RBT from A to B
+  1.6 Generate 2 whole RBT for A
+  1.7 Transfer 2 RBT from A to B
+  1.8 Transfer 0.001 from A to B
 
-2. Insufficient Balance Transfer (Failure Case) <br>
-  2.1 Transferring 100 RBT from A which has zero balance <br>
-  2.2 Transferring 100 RBT from B which has insufficient balance <br>
+2. Insufficient Balance Transfer (Failure Case)
+  2.1 Transferring 100 RBT from A which has zero balance
+  2.2 Transferring 100 RBT from B which has insufficient balance
 
 3. Transferring 0.00000009 RBT from B which is more than allowed decimal places (Failure Case)
 
-4. Transferring whole, part and mix RBT from NLSS DID to BIP39 DID <br>
-  4.1 Transfer 1 RBT from NLSS DID to BIP39 DID <br>
-  4.2 Transfer 1.5 RBT from NLSS DID to BIP39 DID <br>
-  4.3 Transfer 0.5 RBT from NLSS DID to BIP39 DID <br>
+4. Transferring whole, part and mix RBT from NLSS DID to BIP39 DID
+  4.1 Transfer 1 RBT from NLSS DID to BIP39 DID
+  4.2 Transfer 1.5 RBT from NLSS DID to BIP39 DID
+  4.3 Transfer 0.5 RBT from NLSS DID to BIP39 DID
 
-5. Transferring whole, part and mix RBT from BIP39 DID to NLSS DID <br>
-  5.1 Transfer 0.5 RBT from NLSS DID to BIP39 DID <br>
-  5.2 Transfer 1.5 RBT from NLSS DID to BIP39 DID <br>
-  5.3 Transfer 1 RBT from NLSS DID to BIP39 DID <br>
+5. Transferring whole, part and mix RBT from BIP39 DID to NLSS DID
+  5.1 Transfer 0.5 RBT from NLSS DID to BIP39 DID
+  5.2 Transfer 1.5 RBT from NLSS DID to BIP39 DID
+  5.3 Transfer 1 RBT from NLSS DID to BIP39 DID
 
 ## Prerequisites
 
