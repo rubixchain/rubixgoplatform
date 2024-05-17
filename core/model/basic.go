@@ -20,3 +20,9 @@ type MigratedTokenStatus struct {
 	Message        string `json:"message"`
 	MigratedStatus []int  `json:"migratedstatus"`
 }
+
+// GetDIDTypeResponse is the model for response of peer while fetching did type
+type GetDIDTypeResponse struct {
+	DidType int
+	BasicResponse
+}

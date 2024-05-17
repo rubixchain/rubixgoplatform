@@ -181,6 +181,7 @@ func (b *Block) blkDecode() error {
 		return fmt.Errorf("invalid block, missing block content")
 	}
 	hb := util.CalculateHash(bc.([]byte), "SHA3-256")
+
 	var tcb map[string]interface{}
 	err = cbor.Unmarshal(bc.([]byte), &tcb)
 	if err != nil {
@@ -194,7 +195,9 @@ func (b *Block) blkDecode() error {
 		}
 		tcb[TCSignatureKey] = ksb
 	}
+
 	tcb[TCBlockHashKey] = util.HexToStr(hb)
+
 	b.bm = tcb
 	return nil
 }
@@ -214,7 +217,9 @@ func (b *Block) blkEncode() error {
 		return err
 	}
 	hb := util.CalculateHash(bc, "SHA3-256")
+
 	b.bm[TCBlockHashKey] = util.HexToStr(hb)
+
 	m := make(map[string]interface{})
 	m[TCBlockContentKey] = bc
 	if sok {
@@ -328,6 +333,7 @@ func (b *Block) GetSigner() ([]string, error) {
 
 func (b *Block) GetHashSig(did string) (string, string, error) {
 	h, ok := b.bm[TCBlockHashKey]
+
 	if !ok {
 		return "", "", fmt.Errorf("invalid token chain block, missing block hash")
 	}

@@ -48,6 +48,7 @@ const (
 	APISyncDIDArbitration     string = "/api/sync-did-arbitration"
 	APIUnlockTokens           string = "/api/unlock-tokens"
 	APICheckQuorumStatusPath  string = "/api/check-quorum-status"
+	APIGetPeerDIDTypePath     string = "/api/get-peer-didType"
 )
 
 const (
@@ -321,6 +322,7 @@ func (c *Core) SetupCore() error {
 	c.w.SetupWallet(c.ipfs)
 	c.PingSetup()
 	c.CheckQuorumStatusSetup()
+	c.GetPeerdidTypeSetup()
 	c.peerSetup()
 	c.w.AddDIDLastChar()
 	c.SetupToken()
@@ -509,6 +511,8 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 		return nil, fmt.Errorf("faield to get did channel")
 	}
 	switch dt.Type {
+	case did.LiteDIDMode:
+		return did.InitDIDLite(didStr, c.didDir, dc), nil
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.didDir, dc), nil
 	case did.StandardDIDMode:
@@ -522,20 +526,70 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 	}
 }
 
+// Initializes the did in it's corresponding did mode (basic/ lite)
 func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
+		c.log.Error("couldn't fetch did")
 		return nil, err
 	}
-	return did.InitDIDBasic(didStr, c.didDir, nil), nil
+
+	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
+	// and own did type from DIDTable using GetDID function
+	didtype, err := c.w.GetPeerDIDType(didStr)
+	if err != nil {
+		dt, err1 := c.w.GetDID(didStr)
+		if err1 != nil {
+			return nil, fmt.Errorf("couldn't fetch did type")
+		}
+		didtype = dt.Type
+	}
+	return c.InitialiseDID(didStr, didtype)
 }
 
+// Initializes the quorum in it's corresponding did mode (basic/ lite)
 func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err
 	}
-	return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+
+	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
+	// and own did type from DIDTable using GetDID function
+	didtype, err := c.w.GetPeerDIDType(didStr)
+	if err != nil || didtype == -1 {
+		dt, err1 := c.w.GetDID(didStr)
+
+		if err1 != nil || dt.Type == -1 {
+			peerId := c.w.GetPeerID(didStr)
+
+			if peerId == "" {
+				return nil, err
+			}
+			didtype_, msg, err2 := c.GetPeerdidType_fromPeer(peerId, didStr)
+			if err2 != nil {
+				c.log.Error(msg)
+				return nil, err2
+			}
+			didtype = didtype_
+			peerUpdateResult, err3 := c.w.UpdatePeerDIDType(didStr, didtype)
+			if !peerUpdateResult {
+				c.log.Error("couldn't update did type in peer did table", err3)
+			}
+		} else {
+			didtype = dt.Type
+		}
+
+	}
+
+	switch didtype {
+	case did.BasicDIDMode:
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.LiteDIDMode:
+		return did.InitDIDQuorum_Lt(didStr, c.didDir, ""), nil
+	default:
+		return nil, fmt.Errorf("invalid did type")
+	}
 }
 
 func (c *Core) FetchDID(did string) error {
@@ -564,4 +618,20 @@ func (c *Core) FetchDID(did string) error {
 
 func (c *Core) GetPeerID() string {
 	return c.peerID
+}
+
+// Initializes the did in it's corresponding did mode (basic/ lite)
+func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) {
+	err := c.FetchDID(didStr)
+	if err != nil {
+		return nil, err
+	}
+	switch didType {
+	case did.LiteDIDMode:
+		return did.InitDIDLite(didStr, c.didDir, nil), nil
+	case did.BasicDIDMode:
+		return did.InitDIDBasic(didStr, c.didDir, nil), nil
+	default:
+		return nil, fmt.Errorf("invalid did type, couldn't initialise")
+	}
 }
