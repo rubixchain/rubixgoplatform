@@ -7,7 +7,8 @@ from node.commands import run_command
 from node.quorum import run_quorum_nodes
 
 from scenarios import (
-    rbt_transfer
+    rbt_transfer,
+    bip39_nlss_test
 )
 
 IPFS_KUBO_VERSION = "v0.21.0"
@@ -162,7 +163,8 @@ if __name__=='__main__':
     # It will carry list of Python files containing the function `run()`
     # that consists of logic to run all the necessary tests
     modules = [
-        rbt_transfer
+        rbt_transfer,
+        bip39_nlss_test
     ]
 
     for module in modules:

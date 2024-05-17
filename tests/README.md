@@ -20,6 +20,16 @@ The test script covers the following RBT Transfer scenarios:
 
 3. Transferring 0.00000009 RBT from B which is more than allowed decimal places (Failure Case)
 
+4. Transferring whole, part and mix RBT from NLSS DID to BIP39 DID <br>
+  4.1 Transfer 1 RBT from NLSS DID to BIP39 DID <br>
+  4.2 Transfer 1.5 RBT from NLSS DID to BIP39 DID <br>
+  4.3 Transfer 0.5 RBT from NLSS DID to BIP39 DID <br>
+
+5. Transferring whole, part and mix RBT from BIP39 DID to NLSS DID <br>
+  5.1 Transfer 0.5 RBT from NLSS DID to BIP39 DID <br>
+  5.2 Transfer 1.5 RBT from NLSS DID to BIP39 DID <br>
+  5.3 Transfer 1 RBT from NLSS DID to BIP39 DID <br>
+
 ## Prerequisites
 
 - Python 3.10+ ([Install Ref](https://www.python.org/downloads/))
