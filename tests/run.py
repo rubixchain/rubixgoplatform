@@ -105,12 +105,12 @@ def copy_fixtures_to_build_dir(build_directory):
         raise FileNotFoundError(f"Copy operation for didimage.png.file failed. Destination file not found: {image_file_dest}")
     
     # Copy testswarm.key
-    swarmkey_src = os.path.join(fixtures_directory, "testswarm.key")
-    swarmkey_dest = os.path.join(build_directory, "testswarm.key")
+    swarmkey_src = os.path.join(fixtures_directory, f"testswarm_{build_directory}.key")
+    swarmkey_dest = os.path.join(build_directory, f"testswarm.key")
     shutil.copyfile(swarmkey_src, swarmkey_dest)
 
     if not os.path.exists(swarmkey_dest):
-        raise FileNotFoundError(f"Copy operation for testswarm.key failed. Destination file not found: {swarmkey_dest}")
+        raise FileNotFoundError(f"Copy operation for testswarm_{build_directory}.key failed. Destination file not found: {swarmkey_dest}")
 
     print("\nimage.png and swarm key have been added to build directory successfully")
 
