@@ -38,12 +38,16 @@ jobs:
               if: always()
               run: |
                 cd tests && python3 -u pack_node_logs.py
-       
+            
+            - name: Set Timestamp for Node Logs 
+              if: always()
+              run: echo "TIMESTAMP=$(date -u +'%Y-%m-%dT%H-%M-%SZ' | sed 's/:/-/g')" >> $GITHUB_ENV
+
             - name: Uploading Quorum and Non-Quorum node logs as Artifacts
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                name: node-logs-linux
+                name: node-logs-linux-${{ env.TIMESTAMP }}
                 path: tests/node_logs
   
     test-macos:
@@ -80,12 +84,16 @@ jobs:
               if: always()
               run: |
                 cd tests && python3 -u pack_node_logs.py
-         
+
+            - name: Set Timestamp for Node Logs 
+              if: always()
+              run: echo "TIMESTAMP=$(date -u +'%Y-%m-%dT%H-%M-%SZ' | sed 's/:/-/g')" >> $GITHUB_ENV
+
             - name: Uploading Quorum and Non-Quorum node logs as Artifacts
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                name: node-logs-macos
+                name: node-logs-macos-${{ env.TIMESTAMP }}
                 path: tests/node_logs
 
     test-windows:
@@ -119,10 +127,17 @@ jobs:
               if: always()
               run: |
                 cd tests && python3 -u pack_node_logs.py
-         
+            
+            - name: Set Timestamp for Node Logs 
+              if: always()
+              shell: pwsh
+              run: |
+                $timestamp = Get-Date -Format "yyyy-MM-ddTHH-mm-ssZ"
+                echo "TIMESTAMP=$timestamp" >> $env:GITHUB_ENV
+
             - name: Uploading Quorum and Non-Quorum node logs as Artifacts
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                name: node-logs-windows
+                name: node-logs-windows-${{ env.TIMESTAMP }}
                 path: tests/node_logs
