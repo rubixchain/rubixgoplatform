@@ -66,6 +66,7 @@ const (
 	APIGetAllExplorer                   string = "/api/get-all-explorer"
 	APIAddExplorer                      string = "/api/add-explorer"
 	APIRemoveExplorer                   string = "/api/remove-explorer"
+	APIAddPeerDetails                   string = "/api/add-peer-details"
 )
 
 // jwt.RegisteredClaims

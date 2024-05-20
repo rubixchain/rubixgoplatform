@@ -10,6 +10,40 @@
         "version": "0.9"
     },
     "paths": {
+        "/api/add-peer-details": {
+            "post": {
+                "description": "This API allows the user to add peer details manually",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Add Peer",
+                "parameters": [
+                    {
+                        "description": "Peer Details",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.DIDPeerMapTemp"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/addnftsale": {
             "post": {
                 "description": "This API will put NFTs for sale",
@@ -854,6 +888,20 @@
                     "items": {
                         "$ref": "#/definitions/wallet.TransactionCount"
                     }
+                }
+            }
+        },
+        "server.DIDPeerMapTemp": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "didtype": {
+                    "type": "integer"
+                },
+                "peerID": {
+                    "type": "string"
                 }
             }
         },
