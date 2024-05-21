@@ -30,6 +30,23 @@ func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
 			resp.Message = "Password does not match"
 			return resp
 		}
+	} else if dt.Type == did.LiteDIDMode {
+		_, ok := c.ValidateDIDToken(req.Token, setup.ChanllegeTokenType, req.DID)
+		if !ok {
+			resp.Message = "Invalid token"
+			return resp
+		}
+		dc := did.InitDIDLite(req.DID, c.didDir, nil)
+		ok, err := dc.PvtVerify([]byte(req.Token), req.Signature)
+		if err != nil {
+			c.log.Error("Failed to verify DID signature", "err", err)
+			resp.Message = "Failed to verify DID signature"
+			return resp
+		}
+		if !ok {
+			resp.Message = "Invalid signature"
+			return resp
+		}
 	} else {
 		_, ok := c.ValidateDIDToken(req.Token, setup.ChanllegeTokenType, req.DID)
 		if !ok {
@@ -197,11 +214,17 @@ func (c *Core) registerDID(reqID string, did string) error {
 	if err != nil {
 		return fmt.Errorf("register did, failed to do signature")
 	}
+
+	dt, err := c.w.GetDID(did)
+	if err != nil {
+		return fmt.Errorf("DID does not exist")
+	}
 	pm := &PeerMap{
 		PeerID:    c.peerID,
 		DID:       did,
 		Signature: sig,
 		Time:      t,
+		DIDType:   dt.Type,
 	}
 	err = c.publishPeerMap(pm)
 	if err != nil {

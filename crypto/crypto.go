@@ -6,9 +6,13 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha512"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+
+	"filippo.io/keygen"
+	"golang.org/x/crypto/hkdf"
 )
 
 // PublicKey represents a public key using an unspecified algorithm.
@@ -23,6 +27,7 @@ type CryptoAlgType int
 const (
 	RSA2048 CryptoAlgType = iota
 	ECDSAP256
+	ECDSADET
 )
 
 // CryptoConfig is configuration for the crypto
@@ -42,6 +47,10 @@ func GenerateKeyPair(cfg *CryptoConfig) ([]byte, []byte, error) {
 		pubKey = privKey.(*rsa.PrivateKey).PublicKey
 	case ECDSAP256:
 		privKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		pubKey = &privKey.(*ecdsa.PrivateKey).PublicKey
+	case ECDSADET:
+		r := hkdf.New(sha512.New, []byte(cfg.Pwd), nil, nil)
+		privKey, _ = keygen.ECDSALegacy(elliptic.P256(), r)
 		pubKey = &privKey.(*ecdsa.PrivateKey).PublicKey
 	default:
 		return nil, nil, fmt.Errorf("unsupported algorithm")

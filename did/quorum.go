@@ -48,6 +48,10 @@ func (d *DIDQuorum) GetDID() string {
 	return d.did
 }
 
+func (d *DIDQuorum) GetSignType() int {
+	return NlssVersion
+}
+
 // Sign will return the singature of the DID
 func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 	if d.privKey == nil {
@@ -67,6 +71,7 @@ func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 	finalPos := randPosObject.PosForSign
 	pvtPos := util.GetPrivatePositions(finalPos, ps)
 	pvtPosStr := util.IntArraytoStr(pvtPos)
+
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
 	pvtKeySign, err := crypto.Sign(d.privKey, []byte(hashPvtSign))
 	if err != nil {
@@ -79,8 +84,8 @@ func (d *DIDQuorum) Sign(hash string) ([]byte, []byte, error) {
 	return bs, pvtKeySign, err
 }
 
-// Sign will verifyt he signature
-func (d *DIDQuorum) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+// verify the quorum's nlss based signature
+func (d *DIDQuorum) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
@@ -116,7 +121,7 @@ func (d *DIDQuorum) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (b
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
 	if !crypto.Verify(d.pubKey, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify private key singature")
+		return false, fmt.Errorf("failed to verify nlss private key singature")
 	}
 	return true, nil
 }

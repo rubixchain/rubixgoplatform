@@ -10,6 +10,7 @@ type DIDType struct {
 
 type DIDPeerMap struct {
 	DID         string `gorm:"column:did;primaryKey"`
+	DIDType     *int   `gorm:"column:did_type"`
 	PeerID      string `gorm:"column:peer_id"`
 	DIDLastChar string `gorm:"column:did_last_char"`
 }
@@ -82,7 +83,7 @@ func (w *Wallet) IsDIDExist(did string) bool {
 	return true
 }
 
-func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
+func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
 	lastChar := string(did[len(did)-1])
 	var dm DIDPeerMap
 	err := w.s.Read(DIDStorage, &dm, "did=?", did)
@@ -94,10 +95,15 @@ func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
 		dm.DID = did
 		dm.PeerID = peerID
 		dm.DIDLastChar = lastChar
+		dm.DIDType = &didType
 		return w.s.Write(DIDPeerStorage, &dm)
 	}
 	if dm.PeerID != peerID {
 		dm.PeerID = peerID
+		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+	}
+	if dm.DIDType == nil {
+		dm.DIDType = &didType
 		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
 	}
 	return nil
@@ -129,4 +135,37 @@ func (w *Wallet) GetPeerID(did string) string {
 		return ""
 	}
 	return dm.PeerID
+}
+
+// Fetches did type of the given did from PeerDIDTable
+func (w *Wallet) GetPeerDIDType(did string) (int, error) {
+	var dm DIDPeerMap
+	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
+	if err != nil {
+		w.log.Error("couldn't fetch did type from peer did table")
+		return -1, err
+	}
+	if dm.DIDType == nil {
+		return -1, nil
+	}
+	return *dm.DIDType, nil
+}
+
+// Updates did type of the given did in PeerDIDTable
+func (w *Wallet) UpdatePeerDIDType(did string, didtype int) (bool, error) {
+	var dm DIDPeerMap
+	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
+	if err != nil {
+		w.log.Error("couldn't read from peer did table")
+		return false, err
+	}
+
+	dm.DIDType = &didtype
+
+	err1 := w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+	if err1 != nil {
+		w.log.Error("couldn't update did type in peer did table")
+		return false, err1
+	}
+	return true, nil
 }

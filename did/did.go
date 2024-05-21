@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
+	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	files "github.com/ipfs/go-ipfs-files"
 	"github.com/rubixchain/rubixgoplatform/crypto"
@@ -38,8 +40,9 @@ type DID struct {
 
 type DIDCrypto interface {
 	GetDID() string
+	GetSignType() int
 	Sign(hash string) ([]byte, []byte, error)
-	Verify(hash string, didSig []byte, pvtSig []byte) (bool, error)
+	NlssVerify(hash string, didSig []byte, pvtSig []byte) (bool, error)
 	PvtSign(hash []byte) ([]byte, error)
 	PvtVerify(hash []byte, sign []byte) (bool, error)
 }
@@ -67,6 +70,95 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	if err != nil {
 		d.log.Error("failed to create directory", "err", err)
 		return "", err
+	}
+
+	//In lite mode, did is simply the SHA-256 hash  of the public key
+	if didCreate.Type == LiteDIDMode {
+		if didCreate.PrivPWD == "" {
+			d.log.Error("password required for creating", "err", err)
+			return "", err
+		}
+
+		_mnemonic, err := os.ReadFile(didCreate.MnemonicFile)
+		if err != nil {
+			d.log.Debug("failed to read mnemonic file", "err", err)
+		}
+		var mnemonic string
+		if _mnemonic == nil {
+			mnemonic = crypto.BIPGenerateMnemonic()
+		} else {
+			mnemonic = string(_mnemonic)
+		}
+
+		masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic, didCreate.PrivPWD)
+		if err != nil {
+			d.log.Error("failed to create keypair", "err", err)
+		}
+
+		//generating private and public key pair
+		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKey), didCreate.ChildPath, didCreate.PrivPWD)
+		if err != nil {
+			d.log.Error("failed to create child", "err", err)
+		}
+
+		err = util.FileWrite(dirName+"/private/"+MnemonicFileName, []byte(mnemonic))
+		if err != nil {
+			d.log.Error("failed to write mnemonic file", "err", err)
+			return "", err
+		}
+
+		err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
+		if err != nil {
+			return "", err
+		}
+
+		err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
+		if err != nil {
+			return "", err
+		}
+
+		privKeyTest, err := ioutil.ReadFile(dirName + "/private/" + PvtKeyFileName)
+		if err != nil {
+			return "", err
+		}
+
+		Privkey, _, err := crypto.DecodeBIPKeyPair(didCreate.PrivPWD, privKeyTest, nil)
+		if err != nil {
+			return "", err
+		}
+
+		privkeyback := secp256k1.PrivKeyFromBytes(Privkey)
+		privKeySer := privkeyback.ToECDSA()
+		pvtKeySign, err := crypto.BIPSign(privKeySer, []byte("test"))
+		if err != nil {
+			return "", err
+		}
+		pubKeyTest, err := ioutil.ReadFile(dirName + "/public/" + PubKeyFileName)
+		if err != nil {
+			return "", err
+		}
+
+		_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKeyTest)
+		if err != nil {
+			return "", err
+		}
+
+		pubkeyback, _ := secp256k1.ParsePubKey(pubKeyByte)
+		pubKeySer := pubkeyback.ToECDSA()
+		if !crypto.BIPVerify(pubKeySer, []byte("test"), pvtKeySign) {
+			return "", fmt.Errorf("failed to verify private key singature")
+		} else {
+			fmt.Println(" BIP sign tested successfully")
+		}
+
+		if didCreate.QuorumPWD == "" {
+			if didCreate.PrivPWD != "" {
+				didCreate.QuorumPWD = didCreate.PrivPWD
+			} else {
+				didCreate.QuorumPWD = DefaultPWD
+			}
+		}
+
 	}
 
 	if didCreate.Type == BasicDIDMode || didCreate.Type == StandardDIDMode {
@@ -157,20 +249,17 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			d.log.Error("failed to create keypair", "err", err)
 			return "", err
 		}
+
 		err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
 		if err != nil {
 			return "", err
 		}
+
 		err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
 		if err != nil {
 			return "", err
 		}
-	} else {
-		_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFileName)
-		if err != nil {
-			d.log.Error("failed to copy pub key", "err", err)
-			return "", err
-		}
+
 	}
 
 	if didCreate.Type == ChildDIDMode {
@@ -181,7 +270,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		if err != nil {
 			return "", err
 		}
-	} else {
+	} else if didCreate.Type != LiteDIDMode {
 		if didCreate.QuorumPWD == "" {
 			if didCreate.PrivPWD != "" {
 				didCreate.QuorumPWD = didCreate.PrivPWD
@@ -205,6 +294,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		}
 	}
 
+	//passing the diroctory of public key file to add it to ipfs and exctract the hash
 	did, err := d.getDirHash(dirName + "/public/")
 	if err != nil {
 		return "", err
@@ -252,21 +342,24 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	_, err = util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
-	if err != nil {
-		d.log.Error("failed to copy did image", "err", err)
-		return "", err
+	if didCreate.Type != LiteDIDMode {
+		_, err = util.Filecopy(didCreate.DIDImgFileName, dirName+"/public/"+DIDImgFileName)
+		if err != nil {
+			d.log.Error("failed to copy did image", "err", err)
+			return "", err
+		}
+		_, err = util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
+		if err != nil {
+			d.log.Error("failed to copy public share", "err", err)
+			return "", err
+		}
+		_, err = util.Filecopy(didCreate.PrivImgFile, dirName+"/private/"+PvtShareFileName)
+		if err != nil {
+			d.log.Error("failed to copy private share key", "err", err)
+			return "", err
+		}
 	}
-	_, err = util.Filecopy(didCreate.PubImgFile, dirName+"/public/"+PubShareFileName)
-	if err != nil {
-		d.log.Error("failed to copy public share", "err", err)
-		return "", err
-	}
-	_, err = util.Filecopy(didCreate.PrivImgFile, dirName+"/private/"+PvtShareFileName)
-	if err != nil {
-		d.log.Error("failed to copy private share key", "err", err)
-		return "", err
-	}
+
 	if didCreate.Type == BasicDIDMode {
 		if didCreate.PrivKeyFile == "" || didCreate.PubKeyFile == "" {
 			if didCreate.PrivPWD == "" {
@@ -313,28 +406,31 @@ func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
 			didCreate.QuorumPWD = DefaultPWD
 		}
 	}
-	if didCreate.QuorumPrivKeyFile == "" || didCreate.QuorumPubKeyFile == "" {
-		pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.QuorumPWD})
-		if err != nil {
-			d.log.Error("failed to create keypair", "err", err)
-			return "", err
-		}
-		err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
-		if err != nil {
-			return "", err
-		}
-		err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		_, err = util.Filecopy(didCreate.QuorumPrivKeyFile, dirName+"/private/"+QuorumPvtKeyFileName)
-		if err != nil {
-			return "", err
-		}
-		_, err = util.Filecopy(didCreate.QuorumPubKeyFile, dirName+"/public/"+QuorumPubKeyFileName)
-		if err != nil {
-			return "", err
+
+	if didCreate.Type != LiteDIDMode {
+		if didCreate.QuorumPrivKeyFile == "" || didCreate.QuorumPubKeyFile == "" {
+			pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: didCreate.QuorumPWD})
+			if err != nil {
+				d.log.Error("failed to create keypair", "err", err)
+				return "", err
+			}
+			err = util.FileWrite(dirName+"/private/"+QuorumPvtKeyFileName, pvtKey)
+			if err != nil {
+				return "", err
+			}
+			err = util.FileWrite(dirName+"/public/"+QuorumPubKeyFileName, pubKey)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			_, err = util.Filecopy(didCreate.QuorumPrivKeyFile, dirName+"/private/"+QuorumPvtKeyFileName)
+			if err != nil {
+				return "", err
+			}
+			_, err = util.Filecopy(didCreate.QuorumPubKeyFile, dirName+"/public/"+QuorumPubKeyFileName)
+			if err != nil {
+				return "", err
+			}
 		}
 	}
 
@@ -373,21 +469,29 @@ type object struct {
 	Hash string
 }
 
+// Calculate the hash of a directory using IPFS
 func (d *DID) getDirHash(dir string) (string, error) {
+	// Get information about the directory
 	stat, err := os.Lstat(dir)
 	if err != nil {
 		return "", err
 	}
 
+	// Create a new SerialFile using the directory information
 	sf, err := files.NewSerialFile(dir, false, stat)
 	if err != nil {
 		return "", err
 	}
 	defer sf.Close()
+
+	// Create a new SliceDirectory with the SerialFile
 	slf := files.NewSliceDirectory([]files.DirEntry{files.FileEntry(filepath.Base(dir), sf)})
 	defer slf.Close()
+
+	// Create a MultiFileReader with the SliceDirectory
 	reader := files.NewMultiFileReader(slf, true)
 
+	// Send a request to IPFS to add the directory
 	resp, err := d.ipfs.Request("add").
 		Option("recursive", true).
 		Option("cid-version", 1).
@@ -400,10 +504,13 @@ func (d *DID) getDirHash(dir string) (string, error) {
 
 	defer resp.Close()
 
+	// Check for errors in the response
 	if resp.Error != nil {
 		return "", resp.Error
 	}
 	defer resp.Output.Close()
+
+	// Decode the JSON response and extract the hash
 	dec := json.NewDecoder(resp.Output)
 	var final string
 	for {
@@ -418,6 +525,7 @@ func (d *DID) getDirHash(dir string) (string, error) {
 		final = out.Hash
 	}
 
+	// Check if the final hash is empty
 	if final == "" {
 		return "", errors.New("no results received")
 	}

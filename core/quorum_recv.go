@@ -46,7 +46,7 @@ func (c *Core) verifyContract(cr *ConensusRequest) (bool, *contract.Contract) {
 	}
 	err = sc.VerifySignature(dc)
 	if err != nil {
-		c.log.Error("Failed to verify sender signature", "err", err)
+		c.log.Error("Failed to verify sender signature in verifyContract", "err", err)
 		return false, nil
 	}
 	return true, sc
