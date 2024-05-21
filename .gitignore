@@ -17,6 +17,7 @@ api_config.json
 *.json
 *.pdf
 .vscode
+__pycache__
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
@@ -26,3 +27,6 @@ ipfs
 linux/
 mac/
 windows/
+
+# used for testing purpose
+!node_registry.json
