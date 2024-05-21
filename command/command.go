@@ -76,6 +76,7 @@ const (
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
+	GetPeerID                      string = "get-peer-id"
 	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
 	CheckQuorumStatusCmd           string = "checkQuorumStatus"
 	AddExplorerCmd                 string = "addexplorer"
@@ -126,7 +127,7 @@ var commands = []string{VersionCmd,
 	DumpSmartContractTokenChainCmd,
 	GetTokenBlock,
 	GetSmartContractData,
-	CheckQuorumStatusCmd,
+	GetPeerID,
 	AddPeerDetailsCmd,
 }
 var commandsHelp = []string{"To get tool version",
@@ -171,6 +172,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will dump the smartcontract token chain",
 	"This command gets token block",
 	"This command gets the smartcontract data from latest block",
+	"This command will fetch the peer ID of the node",
 	"This command is to add the peer details manually"}
 
 type Command struct {
@@ -590,6 +592,8 @@ func Run(args []string) {
 		cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
+	case GetPeerID:
+		cmd.peerIDCmd()
 	case ReleaseAllLockedTokensCmd:
 		cmd.releaseAllLockedTokens()
 	case CheckQuorumStatusCmd:
