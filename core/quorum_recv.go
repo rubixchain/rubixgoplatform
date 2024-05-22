@@ -570,6 +570,14 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
+	_, ok := c.qc[did]
+	if !ok {
+		c.log.Error("Quorum is not setup")
+		crep.Message = "Quorum is not setup"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	if (pr.TokensRequired) < MinTrnxAmt {
 		c.log.Error("Pledge amount is less than ", MinTrnxAmt)
 		crep.Message = "Pledge amount is less than minimum transcation amount"
@@ -1315,4 +1323,27 @@ func (c *Core) getProofverificationDetails(tokenID string, senderAddr string) (s
 		txnId = pledgedforBlk.GetTid()
 	}
 	return receiverDID, txnId, nil
+}
+
+func (c *Core) unlockTokens(req *ensweb.Request) *ensweb.Result {
+	var tokenList TokenList
+	err := c.l.ParseJSON(req, &tokenList)
+	crep := model.BasicResponse{
+		Status: false,
+	}
+	if err != nil {
+		c.log.Error("Failed to parse json request", "err", err)
+		crep.Message = "Failed to parse json request"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	err = c.w.UnlockLockedTokens(tokenList.DID, tokenList.Tokens)
+	if err != nil {
+		c.log.Error("Failed to update token status", "err", err)
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	crep.Status = true
+	crep.Message = "Tokens Unlocked Successfully."
+	c.log.Info("Tokens Unclocked")
+	return c.l.RenderJSON(req, &crep, http.StatusOK)
+
 }
