@@ -5,6 +5,12 @@ const (
 	StandardDIDMode
 	WalletDIDMode
 	ChildDIDMode
+	LiteDIDMode
+)
+
+const (
+	BIPVersion int = iota
+	NlssVersion
 )
 
 const (
@@ -17,6 +23,7 @@ const (
 	PubKeyFileName       string = "pubKey.pem"
 	QuorumPvtKeyFileName string = "quorumPrivKey.pem"
 	QuorumPubKeyFileName string = "quorumPubKey.pem"
+	MnemonicFileName     string = "mnemonic.txt"
 )
 
 const (
@@ -40,6 +47,8 @@ type DIDCreate struct {
 	PrivKeyFile       string `json:"priv_key_file"`
 	QuorumPubKeyFile  string `json:"quorum_pub_key_file"`
 	QuorumPrivKeyFile string `json:"quorum_priv_key_file"`
+	MnemonicFile      string `json:"mnemonic_file"`
+	ChildPath         int    `json:"childPath"`
 }
 
 type DIDSignature struct {
