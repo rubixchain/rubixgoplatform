@@ -73,7 +73,7 @@ type ConsensusStatus struct {
 }
 
 type PledgeDetails struct {
-	//TransferAmount         float64
+	TransferAmount         float64
 	RemPledgeTokens        float64
 	NumPledgedTokens       int
 	PledgedTokens          map[string][]string
@@ -260,7 +260,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		reqPledgeTokens = sc.GetTotalRBTs()
 	}
 	pd := PledgeDetails{
-		//TransferAmount:         reqPledgeTokens,
+		TransferAmount:         reqPledgeTokens,
 		RemPledgeTokens:        floatPrecision(reqPledgeTokens, MaxDecimalPlaces),
 		NumPledgedTokens:       0,
 		PledgedTokens:          make(map[string][]string),
@@ -1071,13 +1071,17 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			return err
 		}
 
-		//pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
+		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
+		fmt.Println("Mininum quorum req is ", float64(MinQuorumRequired))
+		fmt.Println("Transfer amount is ", pd.TransferAmount)
+		fmt.Println("Pledge token per quorum is ", pledgeTokensPerQuorum)
 
 		// Request pledage token
-		if pd.RemPledgeTokens != 0 {
+		if pd.RemPledgeTokens > 0 {
 			pr := PledgeRequest{
-				TokensRequired: pd.RemPledgeTokens,
+				TokensRequired: CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPlaces), // Request the determined number of tokens per quorum,
 			}
+			fmt.Println("Tokens required per quorum is ", pr.TokensRequired)
 			// l := len(pd.PledgedTokens)
 			// for i := pd.NumPledgedTokens; i < l; i++ {
 			// 	pr.Tokens = append(pr.Tokens, cr.WholeTokens[i])
@@ -1098,7 +1102,9 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 					if !c.checkIsPledged(ptcb) {
 						pd.NumPledgedTokens++
 						pd.RemPledgeTokens = pd.RemPledgeTokens - prs.TokenValue[i]
+						fmt.Println("rem is ", pd.RemPledgeTokens)
 						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, 10)
+						fmt.Println("rem after float precision is ", pd.RemPledgeTokens)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
 						pd.TokenList = append(pd.TokenList, t)
@@ -1122,8 +1128,8 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			err := fmt.Errorf("invalid pledge request")
 			return err
 		}
-
-		if pd.RemPledgeTokens == 0 {
+		fmt.Println("Remaining pledge token after getting responce is ", pd.RemPledgeTokens)
+		if pd.RemPledgeTokens <= 0 {
 			return nil
 		} else if count == 300 {
 			c.log.Error("Unable to pledge token")
