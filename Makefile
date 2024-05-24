@@ -20,3 +20,25 @@ clean:
 	rm -f linux/rubixgoplatform windows/rubixgoplatform.exe mac/rubixgoplatform
 
 all: compile-linux compile-windows compile-mac
+
+############################ Release ##################################
+
+GORELEASER_VERSION := 1.20
+GORELEASER_IMAGE := ghcr.io/goreleaser/goreleaser-cross:v$(GORELEASER_VERSION)
+
+# Publish binaries to Gitbub. It is used in `release` Github Action Workflow
+ifdef GITHUB_TOKEN
+release:
+	docker run \
+		--rm \
+		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v `pwd`:/go/src/rubixgoplatform \
+		-w /go/src/rubixgoplatform \
+		$(GORELEASER_IMAGE) \
+		release \
+		--clean
+else
+release:
+	@echo "Error: GITHUB_TOKEN is not defined. Please define it before running 'make release'."
+endif
