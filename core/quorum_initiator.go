@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -129,7 +128,7 @@ type CreditSignature struct {
 	PrivSignature string `json:"priv_signature"`
 	DID           string `json:"did"`
 	Hash          string `json:"hash"`
-	SignVersion   string `json:"sign_version"` //represents sign version (PkiSign == 0 or NlssSign==1)
+	SignType      string `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
 
 type TokenArbitrationReq struct {
@@ -739,16 +738,16 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	var pledgingDID string
 	if len(pledgingQuorumDID) > 0 {
 		pledgingDID = pledgingQuorumDID[0]
-  }
+	}
 
-	var signVersion string
+	var signType string
 
-	//signVersion = 0 => Pki based sign in lite mode
-	//signVersion = 1 => Nlss based sign in basic mode
+	//signType = 0 => Pki based sign in lite mode
+	//signType = 1 => Nlss based sign in basic mode
 	if util.HexToStr(ss) == "" {
-		signVersion = "0"
+		signType = "0"
 	} else {
-		signVersion = "1"
+		signType = "1"
 	}
 
 	switch qt {
@@ -761,7 +760,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 				PrivSignature: util.HexToStr(ps),
 				DID:           did,
 				Hash:          hash,
-        SignVersion:   signVersion,
+				SignType:      signType,
 			}
 			if cs.Result.SuccessCount < MinConsensusRequired-1 {
 				cs.P[did] = p
@@ -769,7 +768,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 				cs.Result.SuccessCount++
 				if did == pledgingDID {
 					cs.Result.PledgingDIDSignStatus = true
-        }
+				}
 			} else if (did == pledgingDID || cs.Result.PledgingDIDSignStatus) && cs.Result.SuccessCount == MinConsensusRequired-1 {
 				cs.P[did] = p
 				cs.Credit.Credit = append(cs.Credit.Credit, csig)
@@ -929,14 +928,16 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		return nil, fmt.Errorf("invalid pledge request")
 	}
 	ti := sc.GetTransTokenInfo()
-	credit := make([]string, 0)
+	credit := make([]block.CreditSignature, 0)
 	for _, csig := range cs.Credit.Credit {
-		jb, err := json.Marshal(csig)
-		if err != nil {
-			c.log.Error("Failed to parse quorum credit", "err", err)
-			return nil, fmt.Errorf("failed to parse quorum credit")
+		credit_ := block.CreditSignature{
+			Signature:     csig.Signature,
+			PrivSignature: csig.PrivSignature,
+			DID:           csig.DID,
+			Hash:          csig.Hash,
+			SignType:      csig.SignType,
 		}
-		credit = append(credit, string(jb))
+		credit = append(credit, credit_)
 	}
 	ptds := make([]block.PledgeDetail, 0)
 	for k, v := range pd.PledgedTokens {
@@ -1004,6 +1005,22 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	}
 	//tokenList = append(tokenList, cr.PartTokens...)
 
+	//Fetching sender signature to add it to transaction details
+	senderdid := sc.GetSenderDID()
+	sign_data, sender_share_sign, sender_priv_sign, err := sc.GetHashSig(senderdid)
+	if err != nil {
+		c.log.Error("failed to fetch sender sign", "err", err)
+		return nil, fmt.Errorf("failed to fetch sender sign")
+	}
+	sender_sign_type := dc.GetSignType()
+	sender_sign := &block.SenderSignature{
+		NLSS_share:   sender_share_sign,
+		Private_sign: sender_priv_sign,
+		DID:          senderdid,
+		Hash:         sign_data,
+		SignType:     sender_sign_type,
+	}
+
 	var tcb block.TokenChainBlock
 
 	if cr.Mode == SmartContractDeployMode {
@@ -1062,6 +1079,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			QuorumSignature: credit,
 			SmartContract:   sc.GetBlock(),
 			PledgeDetails:   ptds,
+			SenderSignature: sender_sign,
 		}
 	}
 
