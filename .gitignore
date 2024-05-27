@@ -27,6 +27,7 @@ ipfs
 linux/
 mac/
 windows/
+dist/
 
 # used for testing purpose
 !node_registry.json
