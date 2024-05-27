@@ -398,7 +398,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	}
 	if cr.Mode == RBTTransferMode {
-		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
+		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID(), "")
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
 			return nil, nil, err
@@ -662,7 +662,7 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block) 
 				qAddress = quorumValue
 			}
 		}
-		qPeer, err := c.getPeer(qAddress)
+		qPeer, err := c.getPeer(qAddress, "")
 		if err != nil {
 			c.log.Error("Quorum not connected", "err", err)
 			return err
@@ -759,7 +759,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
 	var err error
-	p, err = c.getPeer(addr)
+	p, err = c.getPeer(addr, sc.GetSenderDID())
 	if err != nil {
 		c.log.Error("Failed to get peer connection", "err", err)
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)

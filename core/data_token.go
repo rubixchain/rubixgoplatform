@@ -365,7 +365,7 @@ func (c *Core) CheckDataToken(dt string) bool {
 		return false
 	}
 	did := b.GetDID()
-	dc, err := c.SetupForienDID(did)
+	dc, err := c.SetupForienDID(did, "")
 	if err != nil {
 		c.log.Error("failed to setup did crypto")
 		return false
