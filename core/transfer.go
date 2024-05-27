@@ -131,7 +131,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	// Get the receiver & do sanity check
-	p, err := c.getPeer(req.Receiver)
+	p, err := c.getPeer(req.Receiver, did)
 	if err != nil {
 		resp.Message = "Failed to get receiver peer, " + err.Error()
 		return resp

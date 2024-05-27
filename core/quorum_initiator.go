@@ -410,7 +410,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	}
 	if cr.Mode == RBTTransferMode {
-		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
+		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID(), "")
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
 			return nil, nil, err
@@ -674,7 +674,7 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block) 
 				qAddress = quorumValue
 			}
 		}
-		qPeer, err := c.getPeer(qAddress)
+		qPeer, err := c.getPeer(qAddress, "")
 		if err != nil {
 			c.log.Error("Quorum not connected", "err", err)
 			return err
@@ -739,7 +739,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	var pledgingDID string
 	if len(pledgingQuorumDID) > 0 {
 		pledgingDID = pledgingQuorumDID[0]
-  }
+	}
 
 	var signVersion string
 
@@ -761,7 +761,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 				PrivSignature: util.HexToStr(ps),
 				DID:           did,
 				Hash:          hash,
-        SignVersion:   signVersion,
+				SignVersion:   signVersion,
 			}
 			if cs.Result.SuccessCount < MinConsensusRequired-1 {
 				cs.P[did] = p
@@ -769,7 +769,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 				cs.Result.SuccessCount++
 				if did == pledgingDID {
 					cs.Result.PledgingDIDSignStatus = true
-        }
+				}
 			} else if (did == pledgingDID || cs.Result.PledgingDIDSignStatus) && cs.Result.SuccessCount == MinConsensusRequired-1 {
 				cs.P[did] = p
 				cs.Credit.Credit = append(cs.Credit.Credit, csig)
@@ -795,7 +795,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
 	var err error
-	p, err = c.getPeer(addr)
+	p, err = c.getPeer(addr, sc.GetSenderDID())
 	if err != nil {
 		c.log.Error("Failed to get peer connection", "err", err)
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)

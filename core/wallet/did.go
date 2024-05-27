@@ -167,7 +167,7 @@ func (w *Wallet) UpdatePeerDIDType(did string, didtype int) (bool, error) {
 
 	err1 := w.s.Update(DIDPeerStorage, &dm, "did=?", did)
 	if err1 != nil {
-		w.log.Error("couldn't update did type in peer did table")
+		w.log.Error("couldn't update did type in peer did table for:", did)
 		return false, err1
 	}
 	return true, nil

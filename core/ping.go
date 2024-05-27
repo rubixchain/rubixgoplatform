@@ -108,9 +108,9 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error
 // CheckQuorumStatusResponse is the handler for CheckQuorumStatus request
 func (c *Core) GetPeerdidTypeResponse(req *ensweb.Request) *ensweb.Result { //PingRecevied
 	did := c.l.GetQuerry(req, "did")
-	quorum_peerid := c.l.GetQuerry(req, "quorum_peerid")
-	quorum_did := c.l.GetQuerry(req, "quorum_did")
-	quorum_did_type := c.l.GetQuerry(req, "quorum_did_type")
+	peer_peerid := c.l.GetQuerry(req, "self_peerid")
+	peer_did := c.l.GetQuerry(req, "self_did")
+	peer_did_type := c.l.GetQuerry(req, "self_did_type")
 
 	resp := &model.GetDIDTypeResponse{
 		BasicResponse: model.BasicResponse{
@@ -118,15 +118,17 @@ func (c *Core) GetPeerdidTypeResponse(req *ensweb.Request) *ensweb.Result { //Pi
 		},
 	}
 
-	quorum_did_type_int, err1 := strconv.Atoi(quorum_did_type)
-	if err1 != nil {
-		c.log.Debug("could not convert string to integer:", err1)
-	}
+	//If the peer's DID type string is not empty, register the peer, if not already registered
+	if peer_did_type != "" {
+		peer_did_type_int, err1 := strconv.Atoi(peer_did_type)
+		if err1 != nil {
+			c.log.Debug("could not convert string to integer:", err1)
+		}
 
-	c.log.Info("registering the quorum:", quorum_did)
-	err2 := c.w.AddDIDPeerMap(quorum_did, quorum_peerid, quorum_did_type_int)
-	if err2 != nil {
-		c.log.Debug("could not add quorum details to DID peer table:", err2)
+		err2 := c.w.AddDIDPeerMap(peer_did, peer_peerid, peer_did_type_int)
+		if err2 != nil {
+			c.log.Debug("could not add quorum details to DID peer table:", err2)
+		}
 	}
 
 	dt, err := c.w.GetDID(did)
@@ -146,11 +148,7 @@ func (c *Core) GetPeerdidTypeResponse(req *ensweb.Request) *ensweb.Result { //Pi
 }
 
 // GetPeerdidType will ping the peer & get the did type
-func (c *Core) GetPeerdidType_fromPeer(peerID string, peer_did string, quorumDID string) (int, string, error) {
-	dt, err0 := c.w.GetDID(quorumDID)
-	if err0 != nil {
-		c.log.Info("could not fetch did type of quorum:", quorumDID)
-	}
+func (c *Core) GetPeerdidType_fromPeer(peerID string, peer_did string, self_DID string) (int, string, error) {
 	q := make(map[string]string)
 	p, err := c.pm.OpenPeerConn(peerID, peer_did, c.getCoreAppName(peerID))
 	if err != nil {
@@ -162,9 +160,17 @@ func (c *Core) GetPeerdidType_fromPeer(peerID string, peer_did string, quorumDID
 	// Close the p2p before exit
 	defer p.Close()
 	q["did"] = peer_did
-	q["quorum_peerid"] = c.peerID
-	q["quorum_did"] = quorumDID
-	q["quorum_did_type"] = strconv.Itoa(dt.Type)
+
+	if self_DID != "" {
+		q["self_peerid"] = c.peerID
+		q["self_did"] = self_DID
+		self_dt, err := c.w.GetDID(self_DID)
+		if err != nil {
+			c.log.Info("could not fetch did type of peer:", self_DID)
+		} else {
+			q["self_did_type"] = strconv.Itoa(self_dt.Type)
+		}
+	}
 
 	var getPeerdidTypeResponse model.GetDIDTypeResponse
 	err = p.SendJSONRequest("GET", APIGetPeerDIDTypePath, q, nil, &getPeerdidTypeResponse, false, 2*time.Minute)

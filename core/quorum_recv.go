@@ -36,10 +36,10 @@ func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &cs, http.StatusOK)
 }
 
-func (c *Core) verifyContract(cr *ConensusRequest) (bool, *contract.Contract) {
+func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *contract.Contract) {
 	sc := contract.InitContract(cr.ContractBlock, nil)
 	// setup the did to verify the signature
-	dc, err := c.SetupForienDID(sc.GetSenderDID())
+	dc, err := c.SetupForienDID(sc.GetSenderDID(), self_did)
 	if err != nil {
 		c.log.Error("Failed to get DID", "err", err)
 		return false, nil
@@ -57,7 +57,7 @@ func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
-	ok, sc := c.verifyContract(cr)
+	ok, sc := c.verifyContract(cr, "")
 	if !ok {
 		crep.Message = "Failed to verify sender signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -70,7 +70,7 @@ func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	address := cr.SenderPeerID + "." + sc.GetSenderDID()
-	p, err := c.getPeer(address)
+	p, err := c.getPeer(address, "")
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		crep.Message = "Failed to get peer"
@@ -108,7 +108,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
-	ok, sc := c.verifyContract(cr)
+	ok, sc := c.verifyContract(cr, did)
 	if !ok {
 		crep.Message = "Failed to verify sender signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -283,7 +283,7 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
-	ok, sc := c.verifyContract(cr)
+	ok, sc := c.verifyContract(cr, did)
 	if !ok {
 		crep.Message = "Failed to verify sender signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -385,7 +385,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		c.log.Debug("executor did ", verifyDID)
 	}
 
-	dc, err := c.SetupForienDID(verifyDID)
+	dc, err := c.SetupForienDID(verifyDID, did)
 	if err != nil {
 		c.log.Error("Failed to get DID for verification", "err", err)
 		consensusReply.Message = "Failed to get DID for verification"
@@ -455,7 +455,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	} else {
 		//sync the smartcontract tokenchain
 		address := consensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
-		peerConn, err := c.getPeer(address)
+		peerConn, err := c.getPeer(address, did)
 		if err != nil {
 			c.log.Error("Failed to get executor peer to sync smart contract token chain", "err", err)
 			consensusReply.Message = "Failed to get executor peer to sync smart contract token chain : "
@@ -653,7 +653,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
-	p, err := c.getPeer(sr.Address)
+	p, err := c.getPeer(sr.Address, "")
 	if err != nil {
 		c.log.Error("failed to get peer", "err", err)
 		crep.Message = "failed to get peer"
@@ -1198,7 +1198,7 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 			// return c.l.RenderJSON(req, &srep, http.StatusOK)
 		}
 		if !mflag {
-			dc, err := c.SetupForienDID(odid)
+			dc, err := c.SetupForienDID(odid, "")
 			if err != nil {
 				c.log.Error("Failed to do token abitration, failed to setup did crypto", "token", ti[i].Token, "did", odid)
 				srep.Message = "Failed to do token abitration, failed to setup did crypto"
@@ -1301,7 +1301,7 @@ func (c *Core) getProofverificationDetails(tokenID string, senderAddr string) (s
 				return "", "", fmt.Errorf("Failed to initilaize previous block")
 			}
 		} else { //if token chain of token pledged for not synced fetch from sender
-			p, err := c.getPeer(senderAddr)
+			p, err := c.getPeer(senderAddr, "")
 			if err != nil {
 				c.log.Error("Failed to get peer", "err", err)
 				return "", "", err
