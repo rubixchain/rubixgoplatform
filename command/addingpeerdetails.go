@@ -10,7 +10,6 @@ import (
 func (cmd *Command) AddPeerDetails() {
 	var peerID string
 	var did string
-	var did_type int
 	var err error
 	if cmd.peerID == "" {
 		fmt.Print("Enter PeerID : ")
@@ -19,11 +18,9 @@ func (cmd *Command) AddPeerDetails() {
 			cmd.log.Error("Failed to get PeerID")
 			return
 		}
-
 	} else {
 		peerID = cmd.peerID
 	}
-
 	if !strings.HasPrefix(peerID, "12D3KooW") || len(peerID) < 52 {
 		cmd.log.Error("Invalid PeerID")
 		return
@@ -44,21 +41,16 @@ func (cmd *Command) AddPeerDetails() {
 		return
 	}
 
-	fmt.Print("Enter DID Type : ")
-	_, err = fmt.Scan(&did_type)
-	if err != nil {
-		cmd.log.Error("Invalid DID Type")
-		return
-	}
-	if did_type < 0 || did_type > 4 {
-		cmd.log.Error("DID should be between 0 and 4")
+	// did_type = cmd.didType
+	if cmd.didType < 0 || cmd.didType > 4 {
+		cmd.log.Error("DID Type should be between 0 and 4")
 		return
 	}
 
 	peer_detail := wallet.DIDPeerMap{
 		PeerID:  peerID,
 		DID:     did,
-		DIDType: &did_type,
+		DIDType: &cmd.didType,
 	}
 	msg, status := cmd.c.AddPeer(&peer_detail)
 	if !status {
