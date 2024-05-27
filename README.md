@@ -353,7 +353,7 @@ To add the peer details manually
 : To add the peer details by providing peerID, did and didType of the peer
 
 ```
-./rubixgoplatform addpeerdetails -did bafybmiduo2rbar4hls7walzn4hhmtbmecqg72nvavz2bwspzc123451111 -peerID 12D3KooWQo7ExWLqTRD1qMUA1VyCGmrZ8covei9GBaGiKtDsxabc -port 20002
+./rubixgoplatform addpeerdetails
 
 This following options are used for this command
   -port string
