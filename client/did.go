@@ -48,7 +48,7 @@ func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
 }
 
 func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
-	if cfg.Type < did.LiteDIDMode && cfg.Type > did.WalletDIDMode {
+	if cfg.Type < did.BasicDIDMode && cfg.Type > did.LiteDIDMode {
 		return "Invalid DID mode", false
 	}
 	switch cfg.Type {
