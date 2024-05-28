@@ -186,6 +186,14 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 			!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) {
 			return "Required files are missing", false
 		}
+	default:
+		if !strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
+			!strings.Contains(dc.DIDImgFileName, did.DIDImgFileName) ||
+			!strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
+			!strings.Contains(dc.QuorumPubKeyFile, did.QuorumPubKeyFileName) ||
+			!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) {
+			return "Required files are missing", false
+		}
 	}
 	jd, err := json.Marshal(&dc)
 	if err != nil {

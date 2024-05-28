@@ -120,7 +120,8 @@ func (cmd *Command) CreateDID() {
 			cmd.log.Error("failed to create image", "err", err)
 			return
 		}
-	} else if cmd.didType != did.BasicDIDMode {
+	}
+	if cmd.didType != did.BasicDIDMode && cmd.didType != did.LiteDIDMode {
 		if cmd.privKeyFile == "" || cmd.pubKeyFile == "" {
 			cmd.log.Error("private key & public key file names required")
 			return

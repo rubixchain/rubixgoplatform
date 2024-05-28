@@ -215,7 +215,20 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 			c.pqc[didStr] = dc
 		}
 	default:
-		return fmt.Errorf("DID Type is not supported")
+		dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
+		if dc == nil {
+			c.log.Error("Failed to setup quorum")
+			return fmt.Errorf("failed to setup quorum")
+		}
+		c.qc[didStr] = dc
+		if pvtKeyPwd != "" {
+			dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
+			if dc == nil {
+				c.log.Error("Failed to setup quorum")
+				return fmt.Errorf("failed to setup quorum")
+			}
+			c.pqc[didStr] = dc
+		}
 	}
 
 	c.up.RunUnpledge()

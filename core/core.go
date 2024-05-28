@@ -587,14 +587,8 @@ func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.LiteDIDMode:
 		return did.InitDIDQuorum_Lt(didStr, c.didDir, ""), nil
-	case did.StandardDIDMode:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	case did.WalletDIDMode:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	case did.ChildDIDMode:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	default:
-		return nil, fmt.Errorf("invalid did type")
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	}
 }
 
@@ -637,13 +631,7 @@ func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) 
 		return did.InitDIDLite(didStr, c.didDir, nil), nil
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
-	case did.StandardDIDMode:
-		return did.InitDIDStandard(didStr, c.didDir, nil), nil
-	case did.WalletDIDMode:
-		return did.InitDIDWallet(didStr, c.didDir, nil), nil
-	case did.ChildDIDMode:
-		return did.InitDIDChild(didStr, c.didDir, nil), nil
 	default:
-		return nil, fmt.Errorf("invalid did type, couldn't initialise")
+		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	}
 }
