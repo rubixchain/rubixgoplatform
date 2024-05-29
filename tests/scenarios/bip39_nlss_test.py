@@ -3,6 +3,7 @@ from node.actions import rbt_transfer, fund_did_with_rbt, setup_rubix_nodes, \
 from node.utils import get_did_by_alias
 from config.utils import save_to_config_file, load_from_config_file
 from helper.utils import expect_failure, expect_success
+from node.quorum import get_quorum_config
 
 __node_config_path = "./bip39_nlss_config.json"
 
@@ -66,6 +67,11 @@ def nlss_to_bip39(node_config):
     add_peer_details(node_nlss["peerId"], did_nlss, 0, 20007, 10507)
     add_peer_details(node_nlss["peerId"], did_nlss, 0, 20008, 10508)
 
+    quorum_config = get_quorum_config()
+    
+    for _, val in quorum_config.items():
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_nlss, grpc_port_nlss)
+
     print("\n2. Transferring 1 RBT from NLSS DID to BIP39 DID....")
     add_peer_details(node_bip39["peerId"], did_bip39, 4, server_port_nlss, grpc_port_nlss) #adding peer details of bip39 node to nlss
     expect_success(rbt_transfer)(address_nlss, address_bip39, 1, server_port_nlss, grpc_port_nlss)
@@ -86,6 +92,11 @@ def bip39_to_nlss(node_config):
     server_port_bip39, grpc_port_bip39 = node_bip39["server"], node_bip39["grpcPort"]
     did_bip39, did_nlss = get_did_by_alias(node_bip39, "bip39_1"), get_did_by_alias(node_nlss, "nlss_1")
     address_bip39, address_nlss = node_bip39["peerId"]+"."+did_bip39, node_nlss["peerId"]+"."+did_nlss
+
+    quorum_config = get_quorum_config()
+    
+    for _, val in quorum_config.items():
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_bip39, grpc_port_bip39)
     
     print("------ Test Case (PASS): Transferring whole, part and mix RBT from BIP39 DID to NLSS DID ------\n")
 

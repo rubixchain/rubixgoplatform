@@ -3,6 +3,7 @@ from node.actions import rbt_transfer, fund_did_with_rbt, setup_rubix_nodes, \
 from node.utils import get_did_by_alias
 from config.utils import save_to_config_file, load_from_config_file
 from helper.utils import expect_failure, expect_success
+from node.quorum import get_quorum_config
 
 __node_config_path = "./rbt_transfer_config.json"
 
@@ -100,6 +101,12 @@ def shuttle_transfer(config):
     add_peer_details(node_B_info["peerId"], did_B, 4, 20006, 10506)
     add_peer_details(node_B_info["peerId"], did_B, 4, 20007, 10507)
     add_peer_details(node_B_info["peerId"], did_B, 4, 20008, 10508)
+
+    quorum_config = get_quorum_config()
+    
+    for _, val in quorum_config.items():
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_A, grpc_port_A)
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_B, grpc_port_B)
 
     print("\n1. Generating 2 whole RBT for A")
     expect_success(fund_did_with_rbt)(node_A_info, did_A, 2)
