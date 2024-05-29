@@ -32,7 +32,7 @@ def quorum_config(node_config: dict, node_did_alias_map: dict, skip_adding_quoru
             did = get_did_by_alias(config, node_did_alias_map[node])
             quorum_info = {
                 "type": 2,
-                "address": config["peerId"] + "." + did
+                "address": did
             }
             
             quorum_list.append(quorum_info)
