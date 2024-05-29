@@ -128,6 +128,20 @@ def cmd_register_did(did_id, server_port, grpc_port):
     os.chdir("../tests")
     return output
 
+def cmd_add_peer_details(peer_id, did_id, did_type, server_port, grpc_port):
+    os.chdir("../" + get_build_dir())
+    cmd_string = f"./rubixgoplatform addpeerdetails -peerID {peer_id} -did {did_id} -didType {did_type} -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform addpeerdetails -peerID {peer_id} -did {did_id} -didType {did_type} -port {server_port} -grpcPort {grpc_port}"
+    output, code = run_command(cmd_string, True)
+    print(output)
+
+    if code != 0:
+        raise Exception("Error occurred while run the command: " + cmd_string)
+
+    os.chdir("../tests")
+    return output
+
 def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -grpcPort {grpc_port}"

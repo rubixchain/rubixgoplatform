@@ -1,5 +1,5 @@
 from node.actions import rbt_transfer, fund_did_with_rbt, setup_rubix_nodes, \
-    create_and_register_did, add_quorums
+    create_and_register_did, add_quorums, add_peer_details
 from node.utils import get_did_by_alias
 from config.utils import save_to_config_file, load_from_config_file
 from helper.utils import expect_failure, expect_success
@@ -15,10 +15,10 @@ def setup():
     config_bip39 = node_config["node11"]
     config_nlss = node_config["node12"]
 
-    create_and_register_did(config_bip39, "bip39_1", did_type=4)
+    create_and_register_did(config_bip39, "bip39_1", did_type=4, register_did=False)
 
 
-    create_and_register_did(config_nlss, "nlss_1", did_type=0)
+    create_and_register_did(config_nlss, "nlss_1", did_type=0, register_did=False)
 
     save_to_config_file(__node_config_path, node_config)
 
@@ -53,7 +53,21 @@ def nlss_to_bip39(node_config):
     expect_success(fund_did_with_rbt)(node_nlss, did_nlss, 3)
     print("Funded NLSS DID with 3 RBT")
 
+    #adding peer details of bip39 node and nlss node to quorums
+    add_peer_details(node_bip39["peerId"], did_bip39, 4, 20004, 10504)
+    add_peer_details(node_bip39["peerId"], did_bip39, 4, 20005, 10505)
+    add_peer_details(node_bip39["peerId"], did_bip39, 4, 20006, 10506)
+    add_peer_details(node_bip39["peerId"], did_bip39, 4, 20007, 10507)
+    add_peer_details(node_bip39["peerId"], did_bip39, 4, 20008, 10508)
+
+    add_peer_details(node_nlss["peerId"], did_nlss, 0, 20004, 10504)
+    add_peer_details(node_nlss["peerId"], did_nlss, 0, 20005, 10505)
+    add_peer_details(node_nlss["peerId"], did_nlss, 0, 20006, 10506)
+    add_peer_details(node_nlss["peerId"], did_nlss, 0, 20007, 10507)
+    add_peer_details(node_nlss["peerId"], did_nlss, 0, 20008, 10508)
+
     print("\n2. Transferring 1 RBT from NLSS DID to BIP39 DID....")
+    add_peer_details(node_bip39["peerId"], did_bip39, 4, server_port_nlss, grpc_port_nlss) #adding peer details of bip39 node to nlss
     expect_success(rbt_transfer)(address_nlss, address_bip39, 1, server_port_nlss, grpc_port_nlss)
     print("Transferred 1 RBT from NLSS DID to BIP39 DID")
 
@@ -76,6 +90,7 @@ def bip39_to_nlss(node_config):
     print("------ Test Case (PASS): Transferring whole, part and mix RBT from BIP39 DID to NLSS DID ------\n")
 
     print("\n4. Transferring 0.5 RBT from BIP39 DID to NLSS DID....")
+    add_peer_details(node_nlss["peerId"], did_nlss, 0, server_port_bip39, grpc_port_bip39) #adding peer details of nlss node to bip39
     expect_success(rbt_transfer)(address_bip39, address_nlss, 0.5, server_port_bip39, grpc_port_bip39)
     print("Transferred 0.5 RBT from BIP39 DID to NLSS DID")
 

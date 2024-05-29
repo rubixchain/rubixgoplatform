@@ -1,5 +1,5 @@
 from node.actions import rbt_transfer, fund_did_with_rbt, setup_rubix_nodes, \
-    create_and_register_did, add_quorums
+    create_and_register_did, add_quorums, add_peer_details
 from node.utils import get_did_by_alias
 from config.utils import save_to_config_file, load_from_config_file
 from helper.utils import expect_failure, expect_success
@@ -15,8 +15,8 @@ def setup():
     config_A = node_config["node9"]
     config_B = node_config["node10"]
 
-    create_and_register_did(config_A, "did_a")
-    create_and_register_did(config_B, "did_b")
+    create_and_register_did(config_A, "did_a", register_did=False)
+    create_and_register_did(config_B, "did_b", register_did=False)
 
     save_to_config_file(__node_config_path, node_config)
 
@@ -88,11 +88,25 @@ def shuttle_transfer(config):
 
     print("------ Test Case (PASS): Shuttle transfer started ------\n")
 
+    #adding peer details of node A and node B to quorums
+    add_peer_details(node_A_info["peerId"], did_A, 4, 20004, 10504)
+    add_peer_details(node_A_info["peerId"], did_A, 4, 20005, 10505)
+    add_peer_details(node_A_info["peerId"], did_A, 4, 20006, 10506)
+    add_peer_details(node_A_info["peerId"], did_A, 4, 20007, 10507)
+    add_peer_details(node_A_info["peerId"], did_A, 4, 20008, 10508)
+
+    add_peer_details(node_B_info["peerId"], did_B, 4, 20004, 10504)
+    add_peer_details(node_B_info["peerId"], did_B, 4, 20005, 10505)
+    add_peer_details(node_B_info["peerId"], did_B, 4, 20006, 10506)
+    add_peer_details(node_B_info["peerId"], did_B, 4, 20007, 10507)
+    add_peer_details(node_B_info["peerId"], did_B, 4, 20008, 10508)
+
     print("\n1. Generating 2 whole RBT for A")
     expect_success(fund_did_with_rbt)(node_A_info, did_A, 2)
     print("Funded node A with 2 RBT")
 
     print("\n2. Transferring 0.5 RBT from A to B....")
+    add_peer_details(node_B_info["peerId"], did_B, 4, server_port_A, grpc_port_A) #adding peer details of node B to node A
     expect_success(rbt_transfer)(address_A, address_B, 0.5, server_port_A, grpc_port_A)
     print("Transferred 0.5 RBT from A to B")
 
@@ -101,6 +115,7 @@ def shuttle_transfer(config):
     print("Transferred 1.499 RBT from A to B")
 
     print("\n4. Transferring 0.25 RBT from B to A....")
+    add_peer_details(node_A_info["peerId"], did_A, 4, server_port_B, grpc_port_B) #adding peer details of node A to node B
     expect_success(rbt_transfer)(address_B, address_A, 0.25, server_port_B, grpc_port_B)
     print("Transferred 0.25 RBT from B to A")
 
