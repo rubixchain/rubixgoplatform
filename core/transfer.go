@@ -350,6 +350,16 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 	resp := &model.BasicResponse{
 		Status: false,
 	}
+
+	if req.Sender == req.PinningNode {
+		resp.Message = "Sender and Pinning node cannot be same"
+		return resp
+	}
+
+	if !strings.Contains(req.Sender, ".") || !strings.Contains(req.PinningNode, ".") {
+		resp.Message = "Sender and Pinning Node address should be of the format PeerID.DID"
+		return resp
+	}
 	_, did, ok := util.ParseAddress(req.Sender)
 	if !ok {
 		resp.Message = "Invalid sender DID"
@@ -361,25 +371,83 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 		resp.Message = "Invalid pinning DID"
 		return resp
 	}
+
+	if req.TokenCount < MinTrnxAmt {
+		resp.Message = "Input transaction amount is less than minimum transaction amount"
+		return resp
+	}
+
+	decimalPlaces := strconv.FormatFloat(req.TokenCount, 'f', -1, 64)
+	decimalPlacesStr := strings.Split(decimalPlaces, ".")
+	if len(decimalPlacesStr) == 2 && len(decimalPlacesStr[1]) > MaxDecimalPlaces {
+		c.log.Error("Transaction amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		resp.Message = fmt.Sprintf("Transaction amount exceeds %d decimal places.\n", MaxDecimalPlaces)
+		return resp
+	}
+
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
+
+	accountBalance, err := c.GetAccountInfo(did)
+	if err != nil {
+		c.log.Error("Failed to get tokens", "err", err)
+		resp.Message = "Insufficient tokens or tokens are locked or " + err.Error()
+		return resp
+	} else {
+		if req.TokenCount > accountBalance.RBTAmount {
+			c.log.Error(fmt.Sprint("Insufficient balance, account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount))
+			resp.Message = fmt.Sprint("Insufficient balance, account balance is ", accountBalance.RBTAmount, " trnx value is ", req.TokenCount)
+			return resp
+		}
+	}
+
+	tokensForTxn := make([]wallet.Token, 0)
+
+	reqTokens, remainingAmount, err := c.GetRequiredTokens(did, req.TokenCount)
+	if err != nil {
+		c.w.ReleaseTokens(reqTokens)
+		c.log.Error("Failed to get tokens", "err", err)
+		resp.Message = "Insufficient tokens or tokens are locked or " + err.Error()
+		return resp
+	}
+	if len(reqTokens) != 0 {
+		tokensForTxn = append(tokensForTxn, reqTokens...)
+	}
+
 	// Get the required tokens from the DID bank
 	// this method locks the token needs to be released or
 	// removed once it done with the transfer
-	wt, err := c.GetTokens(dc, did, req.TokenCount)
-	if err != nil {
-		c.log.Error("Failed to get tokens", "err", err)
-		resp.Message = "Insufficient tokens or tokens are locked"
+	if remainingAmount > 0 {
+		wt, err := c.GetTokens(dc, did, remainingAmount)
+		if err != nil {
+			c.log.Error("Failed to get tokens", "err", err)
+			resp.Message = "Insufficient tokens or tokens are locked"
+			return resp
+		}
+		if len(wt) != 0 {
+			tokensForTxn = append(tokensForTxn, wt...)
+		}
+	}
+
+	var sumOfTokensForTxn float64
+	for _, tokenForTxn := range tokensForTxn {
+		sumOfTokensForTxn = sumOfTokensForTxn + tokenForTxn.TokenValue
+		sumOfTokensForTxn = floatPrecision(sumOfTokensForTxn, MaxDecimalPlaces)
+	}
+
+	if sumOfTokensForTxn != req.TokenCount {
+		c.log.Error(fmt.Sprint("Sum of Selected Tokens sum : ", sumOfTokensForTxn, " is not equal to trnx value : ", req.TokenCount))
+		resp.Message = fmt.Sprint("Sum of Selected Tokens sum : ", sumOfTokensForTxn, " is not equal to trnx value : ", req.TokenCount)
 		return resp
 	}
 	// release the locked tokens before exit
-	defer c.w.ReleaseTokens(wt)
+	defer c.w.ReleaseTokens(tokensForTxn)
 
-	for i := range wt {
-		c.w.Pin(wt[i].TokenID, wallet.PinningRole, did) //my comment : In this pin function the wallet.OwnerRole is changed to wallet.PinRole
+	for i := range tokensForTxn {
+		c.w.Pin(tokensForTxn[i].TokenID, wallet.PinningRole, did, "TID-Not Generated", req.Sender, req.PinningNode, tokensForTxn[i].TokenValue) //my comment : In this pin function the wallet.OwnerRole is changed to wallet.PinRole
 	}
 	p, err := c.getPeer(req.PinningNode)
 	if err != nil {
@@ -389,25 +457,25 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 	defer p.Close()
 
 	wta := make([]string, 0)
-	for i := range wt {
-		wta = append(wta, wt[i].TokenID)
+	for i := range tokensForTxn {
+		wta = append(wta, tokensForTxn[i].TokenID)
 	}
 
 	tis := make([]contract.TokenInfo, 0)
 
-	for i := range wt {
+	for i := range tokensForTxn {
 		tts := "rbt"
-		if wt[i].TokenValue != 1 {
+		if tokensForTxn[i].TokenValue != 1 {
 			tts = "part"
 		}
 		tt := c.TokenType(tts)
-		blk := c.w.GetLatestTokenBlock(wt[i].TokenID, tt)
+		blk := c.w.GetLatestTokenBlock(tokensForTxn[i].TokenID, tt)
 		if blk == nil {
 			c.log.Error("failed to get latest block, invalid token chain")
 			resp.Message = "failed to get latest block, invalid token chain"
 			return resp
 		}
-		bid, err := blk.GetBlockID(wt[i].TokenID)
+		bid, err := blk.GetBlockID(tokensForTxn[i].TokenID)
 		if err != nil {
 			c.log.Error("failed to get block id", "err", err)
 			resp.Message = "failed to get block id, " + err.Error()
@@ -415,9 +483,9 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 		}
 		//OwnerDID will be the same as the sender, so that ownership is not changed.
 		ti := contract.TokenInfo{
-			Token:      wt[i].TokenID,
+			Token:      tokensForTxn[i].TokenID,
 			TokenType:  tt,
-			TokenValue: wt[i].TokenValue,
+			TokenValue: tokensForTxn[i].TokenValue,
 			OwnerDID:   did,
 			BlockID:    bid,
 		}
@@ -434,6 +502,7 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 			Comment:        req.Comment,
 			TransTokens:    tis,
 		},
+		ReqID: reqID,
 	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)
@@ -448,7 +517,7 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 		SenderPeerID:      c.peerID,
 		PinningNodePeerID: pinningNodepeerid,
 		ContractBlock:     sc.GetBlock(),
-		Mode:              6,
+		Mode:              PinningServiceMode,
 	}
 	td, _, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
