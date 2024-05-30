@@ -1,0 +1,143 @@
+name: Test Workflow
+
+on:
+    pull_request:
+      branches:
+        - development
+        - main
+
+jobs:
+    test-linux:
+        name: "Test - Linux Environment"
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+            
+            - name: Setup Golang v1.21.9
+              uses: actions/setup-go@v5
+              with:
+                go-version: '1.21.9'
+            
+            - name: Setup Python v3.11
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.11'
+
+            - name: Install test dependency
+              run: |
+                pip3 install requests
+            
+            - name: Run tests
+              run: |
+                cd tests && ls && python3 -u run.py
+
+            - name: Packing Quorum and Non-Quorum node logs
+              if: always()
+              run: |
+                cd tests && python3 -u pack_node_logs.py
+            
+            - name: Set Timestamp for Node Logs 
+              if: always()
+              run: echo "TIMESTAMP=$(date -u +'%Y-%m-%dT%H-%M-%SZ' | sed 's/:/-/g')" >> $GITHUB_ENV
+
+            - name: Uploading Quorum and Non-Quorum node logs as Artifacts
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                name: node-logs-linux-${{ env.TIMESTAMP }}
+                path: tests/node_logs
+  
+    test-macos:
+        name: "Test - MacOS Environment"
+        runs-on: macos-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+            
+            - name: Setup Golang v1.21.9
+              uses: actions/setup-go@v5
+              with:
+                go-version: '1.21.9'
+            
+            - name: Setup Python v3.11
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.11'
+            
+            - name: Install test dependency
+              run: |
+                pip3 install requests
+            
+            - name: MacOS install tmux
+              run: brew install tmux
+
+            - name: Run tests
+              run: |
+                cd tests && ls && python3 -u run.py
+
+            - name: Packing Quorum and Non-Quorum node logs
+              if: always()
+              run: |
+                cd tests && python3 -u pack_node_logs.py
+
+            - name: Set Timestamp for Node Logs 
+              if: always()
+              run: echo "TIMESTAMP=$(date -u +'%Y-%m-%dT%H-%M-%SZ' | sed 's/:/-/g')" >> $GITHUB_ENV
+
+            - name: Uploading Quorum and Non-Quorum node logs as Artifacts
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                name: node-logs-macos-${{ env.TIMESTAMP }}
+                path: tests/node_logs
+
+    test-windows:
+        name: "Test - Windows Environment"
+        runs-on: windows-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+
+            - name: Setup Golang v1.21.9
+              uses: actions/setup-go@v5
+              with:
+                go-version: '1.21.9'
+
+            - name: Setup Python v3.11
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.11'
+            
+            - name: Install test dependency
+              run: |
+                pip3 install requests
+            
+            - name: Run tests
+              run: |
+                cd tests && ls && python3 -u run.py
+
+            - name: Packing Quorum and Non-Quorum node logs
+              if: always()
+              run: |
+                cd tests && python3 -u pack_node_logs.py
+            
+            - name: Set Timestamp for Node Logs 
+              if: always()
+              shell: pwsh
+              run: |
+                $timestamp = Get-Date -Format "yyyy-MM-ddTHH-mm-ssZ"
+                echo "TIMESTAMP=$timestamp" >> $env:GITHUB_ENV
+
+            - name: Uploading Quorum and Non-Quorum node logs as Artifacts
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                name: node-logs-windows-${{ env.TIMESTAMP }}
+                path: tests/node_logs

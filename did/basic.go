@@ -63,6 +63,12 @@ func (d *DIDBasic) GetDID() string {
 	return d.did
 }
 
+// When the did creation and signing is done in Basic mode,
+// this function returns the sign version as NLSSVersion = 1
+func (d *DIDBasic) GetSignType() int {
+	return NlssVersion
+}
+
 // Sign will return the singature of the DID
 func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
@@ -107,7 +113,7 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // Sign will verifyt he signature
-func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDBasic) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
@@ -154,7 +160,7 @@ func (d *DIDBasic) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bo
 	}
 	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
 	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify private key singature")
+		return false, fmt.Errorf("failed to verify nlss private key singature")
 	}
 	return true, nil
 }

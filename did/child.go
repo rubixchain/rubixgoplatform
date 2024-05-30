@@ -64,6 +64,12 @@ func (d *DIDChild) GetDID() string {
 	return d.did
 }
 
+// When the did creation and signing is done in Child mode,
+// this function returns the sign version as NLSSVersion = 1
+func (d *DIDChild) GetSignType() int {
+	return NlssVersion
+}
+
 // Sign will return the singature of the DID
 func (d *DIDChild) Sign(hash string) ([]byte, []byte, error) {
 
@@ -113,7 +119,7 @@ func (d *DIDChild) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // Sign will verifyt he signature
-func (d *DIDChild) Verify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDChild) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	rb, err := ioutil.ReadFile(d.dir + MasterDIDFileName)
 	if err != nil {
 		return false, err

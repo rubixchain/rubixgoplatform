@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.16"
+	version string = "0.0.17"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -76,8 +76,12 @@ const (
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
+	GetPeerID                      string = "get-peer-id"
 	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
 	CheckQuorumStatusCmd           string = "checkQuorumStatus"
+	AddExplorerCmd                 string = "addexplorer"
+	RemoveExplorerCmd              string = "removeexplorer"
+	GetAllExplorerCmd              string = "getallexplorer"
 )
 
 var commands = []string{VersionCmd,
@@ -122,6 +126,7 @@ var commands = []string{VersionCmd,
 	DumpSmartContractTokenChainCmd,
 	GetTokenBlock,
 	GetSmartContractData,
+	GetPeerID,
 	CheckQuorumStatusCmd,
 }
 var commandsHelp = []string{"To get tool version",
@@ -165,7 +170,8 @@ var commandsHelp = []string{"To get tool version",
 	"This command will subscribe to a smart contract token",
 	"This command will dump the smartcontract token chain",
 	"This command gets token block",
-	"This command gets the smartcontract data from latest block"}
+	"This command gets the smartcontract data from latest block",
+	"This command will fetch the peer ID of the node"}
 
 type Command struct {
 	cfg                config.Config
@@ -240,6 +246,9 @@ type Command struct {
 	executorAddr       string
 	latest             bool
 	quorumAddr         string
+	links              []string
+	mnemonicFile       string
+	ChildPath          int
 }
 
 func showVersion() {
@@ -364,6 +373,7 @@ func Run(args []string) {
 	cmd := &Command{}
 	var peers string
 	var timeout int
+	var links string
 
 	flag.StringVar(&cmd.runDir, "p", "./", "Working directory path")
 	flag.StringVar(&cmd.logFile, "logFile", "", "Log file name")
@@ -380,6 +390,7 @@ func Run(args []string) {
 	flag.StringVar(&peers, "peers", "", "Bootstrap peers, mutiple peers will be seprated by comma")
 	flag.BoolVar(&cmd.didRoot, "didRoot", false, "Root DID")
 	flag.IntVar(&cmd.didType, "didType", 0, "DID Creation type")
+	flag.IntVar(&cmd.ChildPath, "ChildPath", 0, "BIP child Path")
 	flag.StringVar(&cmd.didSecret, "didSecret", "My DID Secret", "DID creation secret")
 	flag.BoolVar(&cmd.forcePWD, "fp", false, "Force password entry")
 	flag.StringVar(&cmd.privPWD, "privPWD", "mypassword", "Private key password")
@@ -388,6 +399,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.didImgFile, "didImgFile", did.DIDImgFileName, "DID image")
 	flag.StringVar(&cmd.privImgFile, "privImgFile", did.PvtShareFileName, "DID public share image")
 	flag.StringVar(&cmd.pubImgFile, "pubImgFile", did.PubShareFileName, "DID public share image")
+	flag.StringVar(&cmd.mnemonicFile, "mnemonicKeyFile", did.MnemonicFileName, "Mnemonic key file")
 	flag.StringVar(&cmd.privKeyFile, "privKeyFile", did.PvtKeyFileName, "Private key file")
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
 	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
@@ -432,6 +444,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
+	flag.StringVar(&links, "links", "", "Explorer url")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -448,6 +461,11 @@ func Run(args []string) {
 	if peers != "" {
 		peers = strings.ReplaceAll(peers, " ", "")
 		cmd.peers = strings.Split(peers, ",")
+	}
+
+	if links != "" {
+		links = strings.ReplaceAll(links, " ", "")
+		cmd.links = strings.Split(links, ",")
 	}
 
 	cmd.timeout = time.Duration(timeout) * time.Minute
@@ -572,10 +590,18 @@ func Run(args []string) {
 		cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
+	case GetPeerID:
+		cmd.peerIDCmd()
 	case ReleaseAllLockedTokensCmd:
 		cmd.releaseAllLockedTokens()
 	case CheckQuorumStatusCmd:
 		cmd.checkQuorumStatus()
+	case AddExplorerCmd:
+		cmd.addExplorer()
+	case RemoveExplorerCmd:
+		cmd.removeExplorer()
+	case GetAllExplorerCmd:
+		cmd.getAllExplorer()
 	default:
 		cmd.log.Error("Invalid command")
 	}

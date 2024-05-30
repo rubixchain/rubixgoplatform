@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -60,9 +59,10 @@ type ConensusReply struct {
 }
 
 type ConsensusResult struct {
-	RunningCount int
-	SuccessCount int
-	FailedCount  int
+	RunningCount          int
+	SuccessCount          int
+	FailedCount           int
+	PledgingDIDSignStatus bool
 }
 
 type ConsensusStatus struct {
@@ -128,6 +128,7 @@ type CreditSignature struct {
 	PrivSignature string `json:"priv_signature"`
 	DID           string `json:"did"`
 	Hash          string `json:"hash"`
+	SignType      string `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
 
 type TokenArbitrationReq struct {
@@ -141,6 +142,11 @@ type ArbitaryStatus struct {
 	status bool
 }
 
+type TokenList struct {
+	Tokens []string
+	DID    string
+}
+
 // PingSetup will setup the ping route
 func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APICreditStatus, "GET", c.creditStatus)
@@ -150,6 +156,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIUpdatePledgeToken, "POST", c.updatePledgeToken)
 	c.l.AddRoute(APISignatureRequest, "POST", c.signatureRequest)
 	c.l.AddRoute(APISendReceiverToken, "POST", c.updateReceiverToken)
+	c.l.AddRoute(APIUnlockTokens, "POST", c.unlockTokens)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
@@ -165,20 +172,65 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 		c.log.Error("DID does not exist", "did", didStr)
 		return fmt.Errorf("DID does not exist")
 	}
-	dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
-	if dc == nil {
-		c.log.Error("Failed to setup quorum")
-		return fmt.Errorf("failed to setup quorum")
+
+	dt, err := c.w.GetDID(didStr)
+	if err != nil {
+		c.log.Error("DID could not fetch", "did", didStr)
+		return fmt.Errorf("DID does not exist")
 	}
-	c.qc[didStr] = dc
-	if pvtKeyPwd != "" {
-		dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
+
+	//To support NLSS backward compatibility,
+	//If the Quorum's did is created in lite mode,
+	//it will initiate DIDQuorum_Lt, and if  it is in basic mode,
+	//it will initiate DIDQuorumc
+	switch dt.Type {
+	case did.LiteDIDMode:
+		dc := did.InitDIDQuorum_Lt(didStr, c.didDir, pwd)
 		if dc == nil {
 			c.log.Error("Failed to setup quorum")
 			return fmt.Errorf("failed to setup quorum")
 		}
-		c.pqc[didStr] = dc
+		c.qc[didStr] = dc
+		if pvtKeyPwd != "" {
+			dc := did.InitDIDLiteWithPassword(didStr, c.didDir, pvtKeyPwd)
+			if dc == nil {
+				c.log.Error("Failed to setup quorum as dc is nil")
+				return fmt.Errorf("failed to setup quorum")
+			}
+			c.pqc[didStr] = dc
+		}
+	case did.BasicDIDMode:
+		dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
+		if dc == nil {
+			c.log.Error("Failed to setup quorum")
+			return fmt.Errorf("failed to setup quorum")
+		}
+		c.qc[didStr] = dc
+		if pvtKeyPwd != "" {
+			dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
+			if dc == nil {
+				c.log.Error("Failed to setup quorum")
+				return fmt.Errorf("failed to setup quorum")
+			}
+			c.pqc[didStr] = dc
+		}
+	default:
+		dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
+		if dc == nil {
+			c.log.Error("Failed to setup quorum")
+			return fmt.Errorf("failed to setup quorum")
+		}
+		c.qc[didStr] = dc
+		if pvtKeyPwd != "" {
+			dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
+			if dc == nil {
+				c.log.Error("Failed to setup quorum")
+				return fmt.Errorf("failed to setup quorum")
+			}
+			c.pqc[didStr] = dc
+		}
 	}
+
 	c.up.RunUnpledge()
 	return nil
 }
@@ -234,9 +286,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		},
 		P: make(map[string]*ipfsport.Peer),
 		Result: ConsensusResult{
-			RunningCount: 0,
-			SuccessCount: 0,
-			FailedCount:  0,
+			RunningCount:          0,
+			SuccessCount:          0,
+			FailedCount:           0,
+			PledgingDIDSignStatus: false,
 		},
 	}
 	reqPledgeTokens := float64(0)
@@ -337,6 +390,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	}
 	if err != nil {
+		unlockErr := c.checkLokedTokens(cr, ql)
+		if unlockErr != nil {
+			c.log.Error(unlockErr.Error() + "Locked tokens could not be unlocked")
+		}
 		return nil, nil, err
 	}
 
@@ -673,29 +730,65 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	defer c.qlock.Unlock()
 	cs, ok := c.quorumRequest[id]
 	if !ok {
+		fmt.Println("failed to get quorum consensus")
 		if p != nil {
 			p.Close()
 		}
 		return
 	}
+	pd, ok := c.pd[id] //getting details of quorums who pledged
+	if !ok {
+		fmt.Println("failed to get pledged token details")
+		if p != nil {
+			p.Close()
+		}
+		return
+	}
+	pledgingQuorumDID := make([]string, 0, len(pd.PledgedTokens))
+	for k := range pd.PledgedTokens {
+		pledgingQuorumDID = append(pledgingQuorumDID, k)
+	}
+	var pledgingDID string
+	if len(pledgingQuorumDID) > 0 {
+		pledgingDID = pledgingQuorumDID[0]
+	}
+
+	var signType string
+
+	//signType = 0 => Pki based sign in lite mode
+	//signType = 1 => Nlss based sign in basic mode
+	if util.HexToStr(ss) == "" {
+		signType = "0"
+	} else {
+		signType = "1"
+	}
+
 	switch qt {
 	case 0:
 		cs.Result.RunningCount--
 		if status {
 			did := p.GetPeerDID()
-			if cs.Result.SuccessCount < MinConsensusRequired {
-				csig := CreditSignature{
-					Signature:     util.HexToStr(ss),
-					PrivSignature: util.HexToStr(ps),
-					DID:           did,
-					Hash:          hash,
-				}
+			csig := CreditSignature{
+				Signature:     util.HexToStr(ss),
+				PrivSignature: util.HexToStr(ps),
+				DID:           did,
+				Hash:          hash,
+				SignType:      signType,
+			}
+			if cs.Result.SuccessCount < MinConsensusRequired-1 {
 				cs.P[did] = p
 				cs.Credit.Credit = append(cs.Credit.Credit, csig)
+				cs.Result.SuccessCount++
+				if did == pledgingDID {
+					cs.Result.PledgingDIDSignStatus = true
+				}
+			} else if (did == pledgingDID || cs.Result.PledgingDIDSignStatus) && cs.Result.SuccessCount == MinConsensusRequired-1 {
+				cs.P[did] = p
+				cs.Credit.Credit = append(cs.Credit.Credit, csig)
+				cs.Result.SuccessCount++
 			} else {
 				p.Close()
 			}
-			cs.Result.SuccessCount++
 		} else {
 			cs.Result.FailedCount++
 			if p != nil {
@@ -848,14 +941,16 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		return nil, fmt.Errorf("invalid pledge request")
 	}
 	ti := sc.GetTransTokenInfo()
-	credit := make([]string, 0)
+	credit := make([]block.CreditSignature, 0)
 	for _, csig := range cs.Credit.Credit {
-		jb, err := json.Marshal(csig)
-		if err != nil {
-			c.log.Error("Failed to parse quorum credit", "err", err)
-			return nil, fmt.Errorf("failed to parse quorum credit")
+		credit_ := block.CreditSignature{
+			Signature:     csig.Signature,
+			PrivSignature: csig.PrivSignature,
+			DID:           csig.DID,
+			Hash:          csig.Hash,
+			SignType:      csig.SignType,
 		}
-		credit = append(credit, string(jb))
+		credit = append(credit, credit_)
 	}
 	ptds := make([]block.PledgeDetail, 0)
 	for k, v := range pd.PledgedTokens {
@@ -923,6 +1018,22 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	}
 	//tokenList = append(tokenList, cr.PartTokens...)
 
+	//Fetching sender signature to add it to transaction details
+	senderdid := sc.GetSenderDID()
+	sign_data, sender_share_sign, sender_priv_sign, err := sc.GetHashSig(senderdid)
+	if err != nil {
+		c.log.Error("failed to fetch sender sign", "err", err)
+		return nil, fmt.Errorf("failed to fetch sender sign")
+	}
+	sender_sign_type := dc.GetSignType()
+	sender_sign := &block.SenderSignature{
+		NLSS_share:   sender_share_sign,
+		Private_sign: sender_priv_sign,
+		DID:          senderdid,
+		Hash:         sign_data,
+		SignType:     sender_sign_type,
+	}
+
 	var tcb block.TokenChainBlock
 
 	if cr.Mode == SmartContractDeployMode {
@@ -981,6 +1092,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			QuorumSignature: credit,
 			SmartContract:   sc.GetBlock(),
 			PledgeDetails:   ptds,
+			SenderSignature: sender_sign,
 		}
 	}
 
@@ -1263,6 +1375,41 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 	if err != nil {
 		c.log.Error("Failed to update commited rbt token chain block", "err", err)
 		return fmt.Errorf("Failed to update token chain block")
+	}
+	return nil
+}
+
+func (c *Core) checkLokedTokens(cr *ConensusRequest, quorumList []string) error {
+	// var err error
+	pd := c.pd[cr.ReqID]
+
+	pledgingQuorumDID := make([]string, 0, len(pd.PledgedTokens))
+	for k := range pd.PledgedTokens {
+		pledgingQuorumDID = append(pledgingQuorumDID, k)
+	}
+	var pledgingDID string
+	if len(pledgingQuorumDID) > 0 {
+		pledgingDID = pledgingQuorumDID[0]
+	}
+	var br model.BasicResponse
+	for _, addr := range quorumList {
+		peerID, did, _ := util.ParseAddress(addr)
+		if did == pledgingDID {
+			p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
+			if err != nil {
+				c.log.Error("Failed to get peer connection", "err", err)
+				return err
+			}
+			tokenList := TokenList{
+				Tokens: pd.PledgedTokens[pledgingDID],
+				DID:    pledgingDID,
+			}
+			err = p.SendJSONRequest("POST", APIUnlockTokens, nil, &tokenList, &br, true)
+			if err != nil {
+				c.log.Error("Invalid response for pledge request", "err", err)
+				return err
+			}
+		}
 	}
 	return nil
 }

@@ -1,0 +1,2 @@
+QUORUM_NODES = 5
+

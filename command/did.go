@@ -50,7 +50,12 @@ func (cmd *Command) CreateDID() {
 		}
 		cmd.quorumPWD = pwd
 	}
-	if cmd.didType == did.WalletDIDMode {
+	if cmd.didType == did.LiteDIDMode {
+		if cmd.privKeyFile == "" || cmd.pubKeyFile == "" {
+			cmd.log.Error("private key & public key file names required")
+			return
+		}
+	} else if cmd.didType == did.WalletDIDMode {
 		f, err := os.Open(cmd.imgFile)
 		if err != nil {
 			cmd.log.Error("failed to open image", "err", err)
@@ -116,7 +121,7 @@ func (cmd *Command) CreateDID() {
 			return
 		}
 	}
-	if cmd.didType != did.BasicDIDMode {
+	if cmd.didType != did.BasicDIDMode && cmd.didType != did.LiteDIDMode {
 		if cmd.privKeyFile == "" || cmd.pubKeyFile == "" {
 			cmd.log.Error("private key & public key file names required")
 			return
@@ -147,13 +152,15 @@ func (cmd *Command) CreateDID() {
 		DIDImgFileName: cmd.didImgFile,
 		PubImgFile:     cmd.pubImgFile,
 		PubKeyFile:     cmd.pubKeyFile,
+		MnemonicFile:   cmd.mnemonicFile,
+		ChildPath:      cmd.ChildPath,
 	}
 	msg, status := cmd.c.CreateDID(&cfg)
 	if !status {
 		cmd.log.Error("Failed to create DID", "message", msg)
 		return
 	}
-	cmd.log.Info("DID Created successfully")
+	cmd.log.Info(fmt.Sprintf("DID %v created successfully", msg))
 }
 
 func (cmd *Command) GetAllDID() {
@@ -248,6 +255,8 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 			Mode: sr.Mode,
 		}
 		switch sr.Mode {
+		case did.LiteDIDMode:
+			sresp.Password = password
 		case did.BasicDIDMode:
 			sresp.Password = password
 		case did.StandardDIDMode:
