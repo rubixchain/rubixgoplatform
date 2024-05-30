@@ -478,7 +478,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, pledgeFinalityError
 		}
 
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, err
