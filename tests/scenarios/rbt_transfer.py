@@ -50,12 +50,11 @@ def max_decimal_place_transfer(config):
     node_A_info, node_B_info = config["node9"], config["node10"]
     server_port_B, grpc_port_B = node_B_info["server"], node_B_info["grpcPort"]
     did_A, did_B = get_did_by_alias(node_A_info, "did_a"), get_did_by_alias(node_B_info, "did_b")
-    address_A, address_B = node_A_info["peerId"]+"."+did_A, node_B_info["peerId"]+"."+did_B
 
     print("------ Test Case (FAIL) : Transferring 0.00000009 RBT from B which is more than allowed decimal places ------")
 
     print("\nTransferring 0.00000009 RBT from B to A....")
-    expect_failure(rbt_transfer)(address_B, address_A, 0.00000009, server_port_B, grpc_port_B)
+    expect_failure(rbt_transfer)(did_B, did_A, 0.00000009, server_port_B, grpc_port_B)
 
     print("\n------ Test Case (FAIL) : Transferring 0.00000009 RBT from B which is more than allowed decimal places completed ------\n")
 
@@ -64,19 +63,18 @@ def insufficient_balance_transfer(config):
     server_port_A, grpc_port_A = node_A_info["server"], node_A_info["grpcPort"]
     server_port_B, grpc_port_B = node_B_info["server"], node_B_info["grpcPort"]
     did_A, did_B = get_did_by_alias(node_A_info, "did_a"), get_did_by_alias(node_B_info, "did_b")
-    address_A, address_B = node_A_info["peerId"]+"."+did_A, node_B_info["peerId"]+"."+did_B
 
     print("\n------ Test Case (FAIL) : Transferring 100 RBT from A which has zero balance ------")
 
     print("\nTransferring 100 RBT from A to B....")
-    expect_failure(rbt_transfer)(address_A, address_B, 100, server_port_A, grpc_port_A)
+    expect_failure(rbt_transfer)(did_A, did_B, 100, server_port_A, grpc_port_A)
 
     print("\n------ Test Case (FAIL) : Transferring 100 RBT from A which has zero balance completed ------\n")
 
     print("\n------ Test Case (FAIL) : Transferring 100 RBT from B which has insufficient balance ------")
 
     print("\nTransferring 100 RBT from B to A....")
-    expect_failure(rbt_transfer)(address_B, address_A, 0.25, server_port_B, grpc_port_B)
+    expect_failure(rbt_transfer)(did_B, did_A, 0.25, server_port_B, grpc_port_B)
 
     print("\n------ Test Case (FAIL) : Transferring 100 RBT from B which has insufficient balance completed ------\n")
 
@@ -85,7 +83,6 @@ def shuttle_transfer(config):
     server_port_A, grpc_port_A = node_A_info["server"], node_A_info["grpcPort"]
     server_port_B, grpc_port_B = node_B_info["server"], node_B_info["grpcPort"]
     did_A, did_B = get_did_by_alias(node_A_info, "did_a"), get_did_by_alias(node_B_info, "did_b")
-    address_A, address_B = node_A_info["peerId"]+"."+did_A, node_B_info["peerId"]+"."+did_B
 
     print("------ Test Case (PASS): Shuttle transfer started ------\n")
 
@@ -114,32 +111,32 @@ def shuttle_transfer(config):
 
     print("\n2. Transferring 0.5 RBT from A to B....")
     add_peer_details(node_B_info["peerId"], did_B, 4, server_port_A, grpc_port_A) #adding peer details of node B to node A
-    expect_success(rbt_transfer)(address_A, address_B, 0.5, server_port_A, grpc_port_A)
+    expect_success(rbt_transfer)(did_A, did_B, 0.5, server_port_A, grpc_port_A)
     print("Transferred 0.5 RBT from A to B")
 
     print("\n3. Transferring 1.499 RBT from A to B....")
-    expect_success(rbt_transfer)(address_A, address_B, 1.499, server_port_A, grpc_port_A)
+    expect_success(rbt_transfer)(did_A, did_B, 1.499, server_port_A, grpc_port_A)
     print("Transferred 1.499 RBT from A to B")
 
     print("\n4. Transferring 0.25 RBT from B to A....")
     add_peer_details(node_A_info["peerId"], did_A, 4, server_port_B, grpc_port_B) #adding peer details of node A to node B
-    expect_success(rbt_transfer)(address_B, address_A, 0.25, server_port_B, grpc_port_B)
+    expect_success(rbt_transfer)(did_B, did_A, 0.25, server_port_B, grpc_port_B)
     print("Transferred 0.25 RBT from B to A")
 
     print("\n5. Transferring 0.25 RBT from B to A....")
-    expect_success(rbt_transfer)(address_B, address_A, 0.25, server_port_B, grpc_port_B)
+    expect_success(rbt_transfer)(did_B, did_A, 0.25, server_port_B, grpc_port_B)
     print("Transferred 0.25 RBT from B to A")
 
     print("\n6. Transferring 0.25 RBT from B to A....")
-    expect_success(rbt_transfer)(address_B, address_A, 0.25, server_port_B, grpc_port_B)
+    expect_success(rbt_transfer)(did_B, did_A, 0.25, server_port_B, grpc_port_B)
     print("Transferred 0.25 RBT from B to A")
 
     print("\n7. Transferring 0.25 RBT from B to A....")
-    expect_success(rbt_transfer)(address_B, address_A, 0.25, server_port_B, grpc_port_B)
+    expect_success(rbt_transfer)(did_B, did_A, 0.25, server_port_B, grpc_port_B)
     print("Transferred 0.25 RBT from B to A")
 
     print("\n8. Transferring 1 RBT from A to B....")
-    expect_success(rbt_transfer)(address_A, address_B, 1, server_port_A, grpc_port_A)
+    expect_success(rbt_transfer)(did_A, did_B, 1, server_port_A, grpc_port_A)
     print("Transferred 1 RBT from A to B")    
 
     print("\n9. Generating 2 whole RBT for A")
@@ -147,11 +144,11 @@ def shuttle_transfer(config):
     print("Funded node A with 2 RBT")
     
     print("\n10. Transferring 2 RBT from A to B....")
-    expect_success(rbt_transfer)(address_A, address_B, 2, server_port_A, grpc_port_A)
+    expect_success(rbt_transfer)(did_A, did_B, 2, server_port_A, grpc_port_A)
     print("Transferred 2 RBT from A to B")    
 
     print("\n11. Transferring 0.001 RBT from A to B....")
-    expect_success(rbt_transfer)(address_A, address_B, 0.001, server_port_A, grpc_port_A)
+    expect_success(rbt_transfer)(did_A, did_B, 0.001, server_port_A, grpc_port_A)
     print("Transferred 0.001 RBT from A to B")
 
     print("\n------ Test Case (PASS): Shuttle transfer completed ------\n")
