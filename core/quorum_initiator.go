@@ -312,6 +312,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	case SmartContractExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
 	}
+	//Minimum pledge value is 0.005 (ie, 0.005/5 = 0.001 per each quorum)
+	if reqPledgeTokens < 0.00005 {
+		reqPledgeTokens = 0.00005
+	}
 	pd := PledgeDetails{
 		TransferAmount:         reqPledgeTokens,
 		RemPledgeTokens:        floatPrecision(reqPledgeTokens, MaxDecimalPlaces),
@@ -1215,7 +1219,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 						pd.NumPledgedTokens++
 						pd.RemPledgeTokens = pd.RemPledgeTokens - prs.TokenValue[i]
 						fmt.Println("rem is ", pd.RemPledgeTokens)
-						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, 10)
+						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, MaxDecimalPlaces)
 						fmt.Println("rem after float precision is ", pd.RemPledgeTokens)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
