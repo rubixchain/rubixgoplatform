@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -353,7 +354,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetching succesful")
 	}
 	smartContractToken := newEvent.SmartContractToken
-	scFolderPath := c.cfg.DirPath + "SmartContract/" + smartContractToken
+	scFolderPath := path.Join(c.cfg.DirPath, "SmartContract/", smartContractToken)
 	if _, err := os.Stat(scFolderPath); os.IsNotExist(err) {
 		fetchSC.SmartContractToken = smartContractToken
 		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
