@@ -2,7 +2,6 @@ package command
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
 	"io/ioutil"
@@ -46,16 +45,16 @@ func createDID(cmdCfg *CommandConfig) *cobra.Command {
 				pwd, err := getpassword("Set private key password: ")
 				if err != nil {
 					cmdCfg.log.Error("Failed to get password")
-					return err
+					return nil
 				}
 				npwd, err := getpassword("Re-enter private key password: ")
 				if err != nil {
 					cmdCfg.log.Error("Failed to get password")
-					return err
+					return nil
 				}
 				if pwd != npwd {
 					cmdCfg.log.Error("Password mismatch")
-					return err
+					return nil
 				}
 				cmdCfg.privPWD = pwd
 			}
@@ -63,43 +62,42 @@ func createDID(cmdCfg *CommandConfig) *cobra.Command {
 				pwd, err := getpassword("Set quorum key password: ")
 				if err != nil {
 					cmdCfg.log.Error("Failed to get password")
-					return err
+					return nil
 				}
 				npwd, err := getpassword("Re-enter quorum key password: ")
 				if err != nil {
 					cmdCfg.log.Error("Failed to get password")
-					return err
+					return nil
 				}
 				if pwd != npwd {
 					cmdCfg.log.Error("Password mismatch")
-					return err
+					return nil
 				}
 				cmdCfg.quorumPWD = pwd
 			}
 			if cmdCfg.didType == did.LiteDIDMode {
 				if cmdCfg.privKeyFile == "" || cmdCfg.pubKeyFile == "" {
-					err := errors.New("private key & public key file names required")
-					cmdCfg.log.Error(err.Error())
-					return err
+					cmdCfg.log.Error("private key & public key file names required")
+					return nil
 				}
 			} else if cmdCfg.didType == did.WalletDIDMode {
 				f, err := os.Open(cmdCfg.imgFile)
 				if err != nil {
 					cmdCfg.log.Error("failed to open image", "err", err)
-					return err
+					return nil
 				}
 				defer f.Close()
 				img, _, err := image.Decode(f)
 				if err != nil {
 					cmdCfg.log.Error("failed to decode image", "err", err)
-					return err
+					return nil
 				}
 				bounds := img.Bounds()
 				w, h := bounds.Max.X, bounds.Max.Y
-
+		
 				if w != 256 || h != 256 {
 					cmdCfg.log.Error("invalid image size", "err", err)
-					return err
+					return nil
 				}
 				pixels := make([]byte, 0)
 				for y := 0; y < h; y++ {
@@ -123,11 +121,11 @@ func createDID(cmdCfg *CommandConfig) *cobra.Command {
 						dataHash = util.CalculateHash(dataHash, "SHA3-256")
 					}
 				}
-
+		
 				err = util.CreatePNGImage(outPixels, w, h, cmdCfg.didImgFile)
 				if err != nil {
 					cmdCfg.log.Error("failed to create image", "err", err)
-					return err
+					return nil
 				}
 				pvtShare := make([]byte, 0)
 				pubShare := make([]byte, 0)
@@ -140,33 +138,33 @@ func createDID(cmdCfg *CommandConfig) *cobra.Command {
 				err = util.CreatePNGImage(pvtShare, w*4, h*2, cmdCfg.privImgFile)
 				if err != nil {
 					cmdCfg.log.Error("failed to create image", "err", err)
-					return err
+					return nil
 				}
 				err = util.CreatePNGImage(pubShare, w*4, h*2, cmdCfg.pubImgFile)
 				if err != nil {
 					cmdCfg.log.Error("failed to create image", "err", err)
-					return err
+					return nil
 				}
-			} else if cmdCfg.didType != did.BasicDIDMode {
+			}
+			if cmdCfg.didType != did.BasicDIDMode && cmdCfg.didType != did.LiteDIDMode {
 				if cmdCfg.privKeyFile == "" || cmdCfg.pubKeyFile == "" {
-					err := errors.New("private key & public key file names required")
-					cmdCfg.log.Error(err.Error())
-					return err
+					cmdCfg.log.Error("private key & public key file names required")
+					return nil
 				}
 				pvtKey, pubKey, err := crypto.GenerateKeyPair(&crypto.CryptoConfig{Alg: crypto.ECDSAP256, Pwd: cmdCfg.privPWD})
 				if err != nil {
 					cmdCfg.log.Error("failed to create keypair", "err", err)
-					return err
+					return nil
 				}
 				err = util.FileWrite(cmdCfg.privKeyFile, pvtKey)
 				if err != nil {
 					cmdCfg.log.Error("failed to write private key file", "err", err)
-					return err
+					return nil
 				}
 				err = util.FileWrite(cmdCfg.pubKeyFile, pubKey)
 				if err != nil {
 					cmdCfg.log.Error("failed to write public key file", "err", err)
-					return err
+					return nil
 				}
 			}
 			cfg := did.DIDCreate{
@@ -184,11 +182,10 @@ func createDID(cmdCfg *CommandConfig) *cobra.Command {
 			}
 			msg, status := cmdCfg.c.CreateDID(&cfg)
 			if !status {
-				err := fmt.Errorf("failed to create DID, message: %v", msg)
-				cmdCfg.log.Error(err.Error())
-				return err
+				cmdCfg.log.Error("Failed to create DID", "message", msg)
+				return nil
 			}
-			cmdCfg.log.Info("DID Created successfully")
+			cmdCfg.log.Info(fmt.Sprintf("DID %v created successfully", msg))
 			return nil
 		},
 	}

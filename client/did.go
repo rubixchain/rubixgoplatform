@@ -48,7 +48,7 @@ func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
 }
 
 func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
-	if cfg.Type < did.LiteDIDMode && cfg.Type > did.WalletDIDMode {
+	if cfg.Type < did.BasicDIDMode && cfg.Type > did.LiteDIDMode {
 		return "Invalid DID mode", false
 	}
 	switch cfg.Type {
@@ -181,6 +181,14 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 		if !strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
 			!strings.Contains(dc.DIDImgFileName, did.DIDImgFileName) ||
 			!strings.Contains(dc.PrivImgFile, did.PvtShareFileName) ||
+			!strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
+			!strings.Contains(dc.QuorumPubKeyFile, did.QuorumPubKeyFileName) ||
+			!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) {
+			return "Required files are missing", false
+		}
+	default:
+		if !strings.Contains(dc.PubImgFile, did.PubShareFileName) ||
+			!strings.Contains(dc.DIDImgFileName, did.DIDImgFileName) ||
 			!strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
 			!strings.Contains(dc.QuorumPubKeyFile, did.QuorumPubKeyFileName) ||
 			!strings.Contains(dc.QuorumPrivKeyFile, did.QuorumPvtKeyFileName) {

@@ -590,7 +590,7 @@ func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 	case did.LiteDIDMode:
 		return did.InitDIDQuorum_Lt(didStr, c.didDir, ""), nil
 	default:
-		return nil, fmt.Errorf("invalid did type")
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	}
 }
 
@@ -635,6 +635,6 @@ func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) 
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	default:
-		return nil, fmt.Errorf("invalid did type, couldn't initialise")
+		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	}
 }

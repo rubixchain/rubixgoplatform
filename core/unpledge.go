@@ -10,14 +10,28 @@ import (
 )
 
 func (c *Core) Unpledge(t string, file string) error {
-	tokenType := token.RBTTokenType
+	unpledgetokendetails, err := c.w.ReadToken(t)
+	if err != nil {
+		c.log.Error("Failed to fetch unpledge token details fot token ", t, " error : ", err)
+	}
+	var tokenType int
 	if c.testNet {
-		tokenType = token.TestTokenType
+		if unpledgetokendetails.TokenValue == 1 {
+			tokenType = token.TestTokenType
+		} else if unpledgetokendetails.TokenValue < 1 {
+			tokenType = token.TestPartTokenType
+		}
+	} else {
+		if unpledgetokendetails.TokenValue == 1 {
+			tokenType = token.RBTTokenType
+		} else if unpledgetokendetails.TokenValue < 1 {
+			tokenType = token.PartTokenType
+		}
 	}
 	b := c.w.GetLatestTokenBlock(t, tokenType)
 	if b == nil {
-		c.log.Error("Failed to unpledge invalid tokne chain block")
-		return fmt.Errorf("Failed to unpledge invalid tokne chain block")
+		c.log.Error("Failed to unpledge invalid tokne chain block for token ", t, " having token type as ", tokenType)
+		return fmt.Errorf("Failed to unpledge invalid tokne chain block for token ", t, " having token type as ", tokenType)
 	}
 	f, err := os.Open(file)
 	if err != nil {
