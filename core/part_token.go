@@ -99,7 +99,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	for i := range pt {
 		if pt[i].TokenValue <= rem {
 			wt = append(wt, pt[i])
-			rem = floatPrecision(rem-pt[i].TokenValue, 10)
+			rem = floatPrecision(rem-pt[i].TokenValue, MaxDecimalPlaces)
 			idx = append(idx, i)
 		} else {
 			rpt = append(rpt, pt[i])
@@ -111,7 +111,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	if len(rpt) > 0 {
-		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, 10)}
+		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, MaxDecimalPlaces)}
 		c.w.ReleaseToken(rpt[0].TokenID)
 		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts, 2)
 		if err != nil {
