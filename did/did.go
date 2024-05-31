@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 
@@ -59,7 +60,7 @@ func InitDID(dir string, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
-	dirName := d.dir + temp.String()
+	dirName := path.Join(d.dir, temp.String())
 	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
 	if err != nil {
 		d.log.Error("failed to create directory", "err", err)
@@ -300,7 +301,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	newDIrName := d.dir + did
+	newDIrName := path.Join(d.dir, did)
 
 	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
 	if err != nil {

@@ -1,351 +1,126 @@
-# rubixgoplatform
+# Rubix Blockchain Platform
 
-The new Rubixgoplatform support command line options to run/configure the Rubix node. To run the application use the follwing format.
+Rubix is a highly scalable, zero-free blockchain that overcomes the scale, cost, and privacy issues of traditional sequentially organized blockchains. It utilizes a novel Proof-of-Pledge (PoP) consensus mechanism, designed to address the drawbacks of Proof-of-Work (PoW) and Proof-of-Stake (PoS) systems.
 
-```
-./rubixgoplatform <cmd> <options>
+### Building from Source
 
-Use the following commands
+1. Clone the repository
 
-                       -v : To get tool version
+    ```
+    git clone https://github.com/rubixchain/rubixgoplatform.git
+    cd rubixgoplatform
+    ```
 
-                       -h : To get help
+2. Based on the OS, run any one of the following commands to build `rubixgoplatform` binary:
 
-                      run : To run the rubix core
+- Linux (binary will be created in `linux` directory)
 
-                     ping : Use the command to ping the peer
-```
+    ```
+    make compile-linux
+    ```
 
-Run Command
-: To run the Rubix node use this command. 
-```
-./rubixgoplatform run -p node1 -n 0 -s -testNet
+- MacOS (binary will be created in `mac` directory)
 
-This following options are used to run the Rubix node
-  -n uint
-        Node number
-  -p string
-        Working directory path (default "./")
-  -s    Start the core
-  -testNet
-        Run as test net
-  -testNetKey string
-        Test net key (default "testswarm.key")
-```
-Ping Command
-: To ping any peer in network use this command.
-```
-./rubixgoplatform ping -peerID 12D3KooWKr8dEQiLXuKacxDCZiHePVEMpgjxk19C3QozuUVQcQHA -port <port>
+    ```
+    make compile-mac
+    ```
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -peerID string
-        Peerd ID
-  -port string
-        Server/Host port (default "20000")
-```
-Add Bootstrap Command
-: To add bootstrap to node use this command.
-```
-./rubixgoplatform addbootstrap -peers /ip4/103.60.213.76/tcp/4001/p2p/QmR1VH6SsEN1wf4EmstxXtNMvR35KEetbBetiGWWKWavJ6
+- Windows (binary will be created in `windows` directory)
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -peers string
-        Bootstrap peers, mutiple peers will be seprated by comma
-  -port string
-        Server/Host port (default "20000")
-```
-Remove Bootstrap Command
-: To remove bootstrap from node use this command.
-```
-./rubixgoplatform removebootstrap -peers /ip4/103.60.213.76/tcp/4001/p2p/QmR1VH6SsEN1wf4EmstxXtNMvR35KEetbBetiGWWKWavJ6
+    ```
+    make compile-windows
+    ```
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -peers string
-        Bootstrap peers, mutiple peers will be seprated by comma
-  -port string
-        Server/Host port (default "20000")
-```
-Remove All Bootstrap Command
-: To remove all bootstrap from node use this command.
-```
-./rubixgoplatform removeallbootstrap
+## Running a Rubix Node
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-```
-Get All Bootstrap Command
-: To get all bootstrap from node use this command.
-```
-./rubixgoplatform getallbootstrap
+0. Build `rubixgoplaform` (Refer previous section)
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-```
-Create DID Command
-: To create DID use this command.
-```
-./rubixgoplatform createdid
+1. Install IPFS Kubo Client (version: `0.21.0`) and copy the IPFS binary to build directory. Refer the section based on your Operating System 
 
-This following options are used for this command
-  -port string
-        Server/Host port (default "20000")
-  -didType int
-        DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode, 3-Child Mode, 4-Light Mode) (default 0)
-  -didSecret string
-        DID secret (default "My DID Secret")
-  -privPWD string
-        Private key password (default "mypassword")
-  -quorumPWD string
-        Quroum key password (default "mypassword")
-  -imgFile string
-        Image file to create DID (Must be 256x256 PNG image) (default "image.png")
-  -didImgFile string
-        DID image file name (default "did.png")
-  -privImgFile string
-        DID private share image file name (default "pvtShare.png")
-  -pubImgFile string
-        DID public share image file name (default "pubShare.png")
-  -privKeyFile string
-        DID private key file name (default "pvtKey.pem")
-  -pubKeyFile string
-        DID public key file name (default "pubKey.pem")
-  -mnemonicKeyFile string
-        Mnemonic key file (default "mnemonic.txt")
-  -ChildPath int
-        BIP Child Path (default 0)
-  -fp forcepassword
-        This flag prompts to enter the password in terminal
+    <details>
+    <summary>Windows Installation</summary>
+        
+    - In Powershell, run the following to install the IPFS kubo client:
 
-   _Note: Use Light mode for PKI based authentication with backward compatiblity to PKI+NLSS based sign, and Basic mode for PKI+NLSS based authentication._
-```
-Get All DID Command
-: To get all DID use this command.
-```
-./rubixgoplatform getalldid
+    ```
+    wget https://dist.ipfs.tech/kubo/v0.21.0/kubo_v0.21.0_windows-amd64.zip -Outfile kubo_v0.21.0.zip
+    ```
+    
+    - Extract `kubo_v0.21.0.zip`
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-```
-To Register DID Command
-: To register DID & PeerID map on the network use this command.
-```
-./rubixgoplatform registerdid 
+    ```
+    Expand-Archive -Path kubo_v0.28.0.zip
+    ```
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-  -did string
-        DID address (default "")
-```
-To Add Quorum List
-: To add quorum list use this command.
-```
-./rubixgoplatform addquorum
+    - Copy the `ipfs` binary to build directory
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-  -quorumList string
-        quorum list file name (default "quorumlist.json")
-```
-To Get All Quorum List
-: To get all quorum list use this command.
-```
-./rubixgoplatform getallquorum
+    ```
+    cp .\kubo_v0.28.0\kubo\ipfs.exe <path-to-rubixgoplatform>\windows\
+    ```
+    </details>
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-```
-To Remove All Quorum List
-: To remove all quorum list use this command.
-```
-./rubixgoplatform removeallquorum
+    <details>
+    <summary>Linux Installation</summary>
+        
+    - Run the following to install the IPFS kubo client:
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-```
-To Setup Quorum
-: To setup quorum use this command. This setup quorum by providn quorum private key password.
-```
-./rubixgoplatform setupquorum
+    ```
+    wget https://dist.ipfs.tech/kubo/v0.21.0/kubo_v0.21.0_linux-amd64.tar.gz
+    ```
+    
+    - Extract `kubo_v0.21.0_linux-amd64.tar.gz`
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-  -quorumPWD string
-        Quroum key password (default "mypassword")
-  -fp forcepassword
-        Enter the  Quroum key password in terminal
-```
-To Setup Service Command
-: To setup service on the node use this command.
-```
-./rubixgoplatform setupservice 
+    ```
+    tar -xvzf kubo_v0.21.0_linux-amd64.tar.gz
+    ```
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-  -srvName string
-        Service name (default "explorer_service")
-  -dbAddress string
-        Database address (default "localhost")
-  -dbName string
-        Explorer database name (default "ExplorerDB")
-  -dbPassword string
-        Database password (default "password")
-  -dbPort string
-        Database port number (default "1433")
-  -dbType string
-        DB Type, supported database are SQLServer, PostgressSQL, MySQL & Sqlite3 (default "SQLServer")
-  -dbUsername string
-        Database username (default "sa")
-```
-To Generate Test RBT Command
-: To generate test RBT on the node use this command.
-```
-./rubixgoplatform generatetestrbt 
+    - Copy the `ipfs` binary to build directory
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-  -did string
-        DID address (default "")
-  -numTokens int
-        Number tokens to be generated (default 1)
-  -fp 
-        Force password to be entered on the terminal
-  -privPWD string
-        Private key password (default "mypassword")
-  -privImgFile string
-        DID private share image file name (default "pvtShare.png")
-  -privKeyFile string
-        DID private key file name (default "pvtKey.pem")
-```
-To Transfer RBT Command
-: To trasnfer RBT on the node use this command.
-```
-./rubixgoplatform transferrbt 
+    ```
+    cp kubo/ipfs <path-to-rubixgoplatform>/linux/
+    ```
+    </details>
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-  -senderAddr string
-        Sender address (default "")
-  -receiverAddr string
-        Receiver address (default "")
-  -rbtAmount float
-        RBT amount to trasnfered (default 0.0)
-  -transComment string
-        Transfer comment (default "Test tranasaction")
-  -transType int
-        Transaction type (default 2)
-  -fp 
-        Force password to be entered on the terminal
-  -privPWD string
-        Private key password (default "mypassword")
-  -privImgFile string
-        DID private share image file name (default "pvtShare.png")
-  -privKeyFile string
-        DID private key file name (default "pvtKey.pem")
-```
-To Get Account Info Command
-: To get account information on the node use this command.
-```
-./rubixgoplatform getaccountinfo 
+    <details>
+    <summary>MacOS Installation</summary>
+        
+    - Run the following to install the IPFS kubo client:
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-  -did string
-        DID address (default "")
-```
-To Dump Token Chain Command
-: To dump token chain on the node use this command.
-```
-./rubixgoplatform dumptokenchain 
+    ```
+    wget https://dist.ipfs.tech/kubo/v0.21.0/kubo_v0.21.0_darwin-arm64.tar.gz
+    ```
+    
+    - Extract `kubo_v0.21.0_darwin-arm64.tar.gz`
 
-This following options are used for this command
-  -addr string
-        Server/Host Address (default "localhost")
-  -port string
-        Server/Host port (default "20000")
-  -token string
-        Token address (default "")
-```
-To Migrate Existing Java Node to RubixGo
-: To dump token chain on the node use this command.
-```
-./rubixgoplatform migratenode 
+    ```
+    tar -xvzf kubo_v0.21.0_darwin-arm64.tar.gz
+    ```
 
-This following options are used for this command
-  -port string
-        Server/Host port (default "20000")
-   -fp 
-        Force password to be entered on the terminal
-```
-To Add explorer url
-: To add explorer url where to send the transaction data.
-```
-./rubixgoplatform addexplorer
+    - Copy the `ipfs` binary to build directory
 
-This following options are used for this command
-  -links string
-        URLs, mutiple URLs will be seprated by comma
-  -port string
-        Server/Host port (default "20000")
-```
-To remove explorer url
-: To remove explorer url where not to send the transaction data.
-```
-./rubixgoplatform removeexplorer
+    ```
+    cp kubo/ipfs <path-to-rubixgoplatform>/mac/
+    ```
+    </details>
 
-This following options are used for this command
-  -links string
-        URLs, mutiple URLs will be seprated by comma
-  -port string
-        Server/Host port (default "20000")
-```
-To get all explorer urls
-: To get explorer urls where the transaction data is being sent.
-```
-./rubixgoplatform getallexplorer
+2. Copy the `swarm.key` present in the root directory into the build directory and rename it to `testswarm.key`.
 
-This following options are used for this command
-  -port string
-        Server/Host port (default "20000")
-```
+3. Run the following from the build directory:
+
+    - Linux and Macos
+
+    ```
+    ./rubixgoplatform run --p node0 --n 0 --s --testNet --grpcPort 10500
+    ```
+
+    - Windows
+
+    ```
+    .\rubixgoplatform.exe run --p node0 --n 0 --s --testNet --grpcPort 10500
+    ```
+
+    The above command creates a `node0` name directory inside the build directory which hosts the configuration and DB files.The `rubixgodaemon` daemon runs on port `20000` and the gRPC server runs on `10500`
+
+## Rubix CLI
+
+Please refer [Rubix CLI](./command/README.md) docs for more details on the `rubixgoplatform` CLI

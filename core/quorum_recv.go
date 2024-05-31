@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -227,13 +228,14 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 				crep.Message = "Failed to fetch proof file CID"
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
-			err := c.ipfs.Get(unpledgeId, c.cfg.DirPath+"unpledge")
+			unpledgeConfigDir := path.Join(c.cfg.DirPath, "unpledge")
+			err := c.ipfs.Get(unpledgeId, unpledgeConfigDir)
 			if err != nil {
 				c.log.Error("Failed to fetch proof file")
 				crep.Message = "Failed to fetch proof file, err " + err.Error()
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
-			pcb, err := ioutil.ReadFile(c.cfg.DirPath + "unpledge/" + unpledgeId)
+			pcb, err := ioutil.ReadFile(path.Join(unpledgeConfigDir, unpledgeId))
 			if err != nil {
 				c.log.Error("Invalid file", "err", err)
 				crep.Message = "Invalid file,err " + err.Error()
