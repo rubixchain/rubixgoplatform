@@ -3,6 +3,7 @@ package wallet
 import (
 	"fmt"
 	"sync"
+	"path"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
@@ -72,19 +73,19 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		WriteBuffer: 64 * 1024 * 1024,
 	}
 
-	tdb, err := leveldb.OpenFile(dir+TokenChainStorage, op)
+	tdb, err := leveldb.OpenFile(path.Join(dir, TokenChainStorage), op)
 	if err != nil {
 		w.log.Error("failed to configure token chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure token chain block storage")
 	}
 	w.tcs.DB = *tdb
-	ntdb, err := leveldb.OpenFile(dir+NFTChainStorage, op)
+	ntdb, err := leveldb.OpenFile(path.Join(dir, NFTChainStorage), op)
 	if err != nil {
 		w.log.Error("failed to configure NFT chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure NFT chain block storage")
 	}
 	w.ntcs.DB = *ntdb
-	dtdb, err := leveldb.OpenFile(dir+DataChainStorage, op)
+	dtdb, err := leveldb.OpenFile(path.Join(dir, DataChainStorage), op)
 	if err != nil {
 		w.log.Error("failed to configure data chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure data chain block storage")
@@ -136,7 +137,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		return nil, err
 	}
 
-	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
+	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(path.Join(dir, SmartContractTokenChainStorage), op)
 	if err != nil {
 		w.log.Error("failed to configure token chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure token chain block storage")

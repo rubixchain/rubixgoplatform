@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"runtime"
 	"strings"
 	"time"
@@ -188,9 +189,10 @@ func (c *Core) runIPFS() {
 
 // RunIPFS will run the IPFS daemon
 func (c *Core) RunIPFS() error {
-	os.Setenv("IPFS_PATH", c.cfg.DirPath+".ipfs")
+	ipfsConfigBasePath := path.Join(c.cfg.DirPath, ".ipfs")
+	os.Setenv("IPFS_PATH", ipfsConfigBasePath)
 	os.Setenv("LIBP2P_FORCE_PNET", "1")
-	err := c.initIPFS(c.cfg.DirPath + ".ipfs")
+	err := c.initIPFS(ipfsConfigBasePath)
 	if err != nil {
 		c.log.Error("failed to initialize IPFS", "err", err)
 		return err
