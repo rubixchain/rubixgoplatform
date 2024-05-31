@@ -2,7 +2,7 @@ import pprint
 import time
 
 from .actions import setup_rubix_nodes, create_and_register_did, \
-    fund_did_with_rbt, quorum_config
+    fund_did_with_rbt, quorum_config,add_peer_details
 from config.utils import save_to_config_file, load_from_config_file
 
 QUORUM_CONFIG_PATH = "./quorum_config.json"
@@ -19,12 +19,19 @@ def run_quorum_nodes(only_run_nodes, skip_adding_quorums):
 
         print("Creating, Registering and Funding Quorum DIDs\n")
         for node, config in node_config.items():
-            did = create_and_register_did(config, did_alias)
+            did = create_and_register_did(config, did_alias, register_did=False)
 
             fund_did_with_rbt(config, did)
 
             # Selecting DIDs for quorum setup
             node_did_alias_map[node] = did_alias
+
+        #Temporary adding details manually
+        for _, val1 in node_config.items():
+            for _, val2 in node_config.items():
+                add_peer_details(val1["peerId"], val1["dids"]["did_quorum"], 4, val2["server"], val2["grpcPort"])
+
+
         save_to_config_file(QUORUM_CONFIG_PATH, node_config)
         print("\nquorum_config.json is created")
         

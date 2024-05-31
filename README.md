@@ -349,3 +349,22 @@ This following options are used for this command
   -port string
         Server/Host port (default "20000")
 ```
+To add the peer details manually
+: To add the peer details by providing peerID, did and didType of the peer
+
+```
+./rubixgoplatform addpeerdetails
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+  
+  -peerID string
+        Peerd ID
+      
+  -did string
+        DID address (default "")
+
+  -didType int
+        DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode, 3-Child Mode, 4-Light Mode) (default 0)
+```

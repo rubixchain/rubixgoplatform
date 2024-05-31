@@ -8,6 +8,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -153,4 +154,13 @@ func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
 	} */
 	// TODO:: Valid the peer version before proceesing
 	return p, nil
+}
+
+func (c *Core) AddPeerDetails(peer_detail wallet.DIDPeerMap) error {
+	err := c.w.AddDIDPeerMap(peer_detail.DID, peer_detail.PeerID, *peer_detail.DIDType)
+	if err != nil {
+		c.log.Error("Failed to add PeerDetails to DIDPeerTable", "err", err)
+		return err
+	}
+	return nil
 }

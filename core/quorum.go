@@ -21,6 +21,13 @@ const (
 	TokenChainNotSynced
 )
 
+type QuorumDIDPeerMap struct {
+	DID         string `gorm:"column:did;primaryKey"`
+	DIDType     *int   `gorm:"column:did_type"`
+	PeerID      string `gorm:"column:peer_id"`
+	DIDLastChar string `gorm:"column:did_last_char"`
+}
+
 type QuorumManager struct {
 	ql  []string
 	s   storage.Storage
@@ -86,7 +93,18 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string) []string {
 		}
 		return quorumAddrList
 	case QuorumTypeTwo:
-		return qm.ql
+		var quorumAddrList []string
+		quorumCount := 0
+		for _, q := range qm.ql {
+			peerID := qm.GetPeerID(q)
+			addr := string(peerID + "." + q)
+			quorumAddrList = append(quorumAddrList, addr)
+			quorumCount = quorumCount + 1
+			if quorumCount == 7 {
+				break
+			}
+		}
+		return quorumAddrList
 	}
 	return nil
 }
@@ -111,4 +129,13 @@ func (qm *QuorumManager) RemoveAllQuorum(t int) error {
 		qm.log.Error("Failed to delete quorum data", "err", err)
 	}
 	return err
+}
+
+func (qm *QuorumManager) GetPeerID(did string) string {
+	var dm QuorumDIDPeerMap
+	err := qm.s.Read(wallet.DIDPeerStorage, &dm, "did=?", did)
+	if err != nil {
+		return ""
+	}
+	return dm.PeerID
 }

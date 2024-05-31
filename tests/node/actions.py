@@ -1,5 +1,5 @@
 from .commands import cmd_run_rubix_servers, cmd_get_peer_id, cmd_create_did, cmd_register_did, \
-    cmd_generate_rbt, cmd_add_quorum_dids, cmd_setup_quorum_dids, cmd_rbt_transfer, get_build_dir
+    cmd_generate_rbt, cmd_add_quorum_dids, cmd_setup_quorum_dids, cmd_rbt_transfer, get_build_dir, cmd_add_peer_details
 from .utils import get_node_name_from_idx, get_did_by_alias
 from config.utils import save_to_config_file, get_node_registry
 
@@ -32,7 +32,7 @@ def quorum_config(node_config: dict, node_did_alias_map: dict, skip_adding_quoru
             did = get_did_by_alias(config, node_did_alias_map[node])
             quorum_info = {
                 "type": 2,
-                "address": config["peerId"] + "." + did
+                "address": did
             }
             
             quorum_list.append(quorum_info)
@@ -107,3 +107,6 @@ def rbt_transfer(
         sender_server_port: int, 
         sender_grpc_port: int):
     cmd_rbt_transfer(sender_address, receiver_address, transfer_rbt, sender_server_port, sender_grpc_port)
+
+def add_peer_details(peer_id: str, did_id: str, did_type: int, server_port: int, grpc_port: int):
+    cmd_add_peer_details(peer_id, did_id, did_type, server_port, grpc_port)
