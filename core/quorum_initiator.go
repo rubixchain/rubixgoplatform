@@ -1188,16 +1188,11 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 		}
 
 		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
-		fmt.Println("Mininum quorum req is ", float64(MinQuorumRequired))
-		fmt.Println("Transfer amount is ", pd.TransferAmount)
-		fmt.Println("Pledge token per quorum is ", pledgeTokensPerQuorum)
-
 		// Request pledage token
 		if pd.RemPledgeTokens > 0 {
 			pr := PledgeRequest{
 				TokensRequired: CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPlaces), // Request the determined number of tokens per quorum,
 			}
-			fmt.Println("Tokens required per quorum is ", pr.TokensRequired)
 			// l := len(pd.PledgedTokens)
 			// for i := pd.NumPledgedTokens; i < l; i++ {
 			// 	pr.Tokens = append(pr.Tokens, cr.WholeTokens[i])
@@ -1218,9 +1213,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 					if !c.checkIsPledged(ptcb) {
 						pd.NumPledgedTokens++
 						pd.RemPledgeTokens = pd.RemPledgeTokens - prs.TokenValue[i]
-						fmt.Println("rem is ", pd.RemPledgeTokens)
 						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, MaxDecimalPlaces)
-						fmt.Println("rem after float precision is ", pd.RemPledgeTokens)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
 						pd.TokenList = append(pd.TokenList, t)
@@ -1244,7 +1237,6 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			err := fmt.Errorf("invalid pledge request")
 			return err
 		}
-		fmt.Println("Remaining pledge token after getting responce is ", pd.RemPledgeTokens)
 		if pd.RemPledgeTokens <= 0 {
 			return nil
 		} else if count == 300 {
