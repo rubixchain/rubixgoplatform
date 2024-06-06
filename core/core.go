@@ -48,6 +48,7 @@ const (
 	APISyncDIDArbitration     string = "/api/sync-did-arbitration"
 	APICheckQuorumStatusPath  string = "/api/check-quorum-status"
 	APIGetPeerDIDTypePath     string = "/api/get-peer-didType"
+	APIGetPeerInfoPath        string = "/api/get-peer-info"
 )
 
 const (

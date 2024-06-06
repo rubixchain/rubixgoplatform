@@ -53,19 +53,6 @@ def nlss_to_bip39(node_config):
     expect_success(fund_did_with_rbt)(node_nlss, did_nlss, 3)
     print("Funded NLSS DID with 3 RBT")
 
-    #adding peer details of bip39 node and nlss node to quorums
-    add_peer_details(node_bip39["peerId"], did_bip39, 4, 20004, 10504)
-    add_peer_details(node_bip39["peerId"], did_bip39, 4, 20005, 10505)
-    add_peer_details(node_bip39["peerId"], did_bip39, 4, 20006, 10506)
-    add_peer_details(node_bip39["peerId"], did_bip39, 4, 20007, 10507)
-    add_peer_details(node_bip39["peerId"], did_bip39, 4, 20008, 10508)
-
-    add_peer_details(node_nlss["peerId"], did_nlss, 0, 20004, 10504)
-    add_peer_details(node_nlss["peerId"], did_nlss, 0, 20005, 10505)
-    add_peer_details(node_nlss["peerId"], did_nlss, 0, 20006, 10506)
-    add_peer_details(node_nlss["peerId"], did_nlss, 0, 20007, 10507)
-    add_peer_details(node_nlss["peerId"], did_nlss, 0, 20008, 10508)
-
     quorum_config = get_quorum_config()
     
     for _, val in quorum_config.items():
@@ -99,7 +86,6 @@ def bip39_to_nlss(node_config):
     print("------ Test Case (PASS): Transferring whole, part and mix RBT from BIP39 DID to NLSS DID ------\n")
 
     print("\n4. Transferring 0.5 RBT from BIP39 DID to NLSS DID....")
-    add_peer_details(node_nlss["peerId"], did_nlss, 0, server_port_bip39, grpc_port_bip39) #adding peer details of nlss node to bip39
     expect_success(rbt_transfer)(did_bip39, did_nlss, 0.5, server_port_bip39, grpc_port_bip39)
     print("Transferred 0.5 RBT from BIP39 DID to NLSS DID")
 
