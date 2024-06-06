@@ -265,6 +265,12 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			return "", err
 		}
 
+	} else if didCreate.Type != LiteDIDMode {
+		_, err := util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFileName)
+		if err != nil {
+			d.log.Error("failed to copy pub key", "err", err)
+			return "", err
+		}
 	}
 
 	if didCreate.Type == ChildDIDMode {
