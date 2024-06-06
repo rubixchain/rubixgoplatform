@@ -86,24 +86,10 @@ def shuttle_transfer(config):
 
     print("------ Test Case (PASS): Shuttle transfer started ------\n")
 
-    #adding peer details of node A and node B to quorums
-    add_peer_details(node_A_info["peerId"], did_A, 4, 20004, 10504)
-    add_peer_details(node_A_info["peerId"], did_A, 4, 20005, 10505)
-    add_peer_details(node_A_info["peerId"], did_A, 4, 20006, 10506)
-    add_peer_details(node_A_info["peerId"], did_A, 4, 20007, 10507)
-    add_peer_details(node_A_info["peerId"], did_A, 4, 20008, 10508)
-
-    add_peer_details(node_B_info["peerId"], did_B, 4, 20004, 10504)
-    add_peer_details(node_B_info["peerId"], did_B, 4, 20005, 10505)
-    add_peer_details(node_B_info["peerId"], did_B, 4, 20006, 10506)
-    add_peer_details(node_B_info["peerId"], did_B, 4, 20007, 10507)
-    add_peer_details(node_B_info["peerId"], did_B, 4, 20008, 10508)
-
     quorum_config = get_quorum_config()
     
     for _, val in quorum_config.items():
         add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_A, grpc_port_A)
-        add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_B, grpc_port_B)
 
     print("\n1. Generating 2 whole RBT for A")
     expect_success(fund_did_with_rbt)(node_A_info, did_A, 2)

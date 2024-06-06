@@ -155,11 +155,11 @@ def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
     os.chdir("../tests")
     return output
 
-def cmd_add_quorum_dids(server_port, grpc_port):
+def cmd_add_quorum_dids(server_port, grpc_port, quorumlist = "quorumlist.json"):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port} -quorumList {quorumlist}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port} -quorumList {quorumlist}"
     output, code = run_command(cmd_string, True)
     print(output)
     if code != 0:

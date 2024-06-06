@@ -794,6 +794,12 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 	c.w.AddTransactionHistory(td)
 	crep.Status = true
 	crep.Message = "Token received successfully"
+
+	//Adding quorums to DIDPeerTable of receiver
+	for _, qrm := range sr.QuorumInfo {
+		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID, *qrm.DIDType)
+	}
+
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 

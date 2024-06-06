@@ -105,6 +105,7 @@ type SendTokenRequest struct {
 	TokenInfo       []contract.TokenInfo `json:"token_info"`
 	TokenChainBlock []byte               `json:"token_chain_block"`
 	QuorumList      []string             `json:"quorum_list"`
+	QuorumInfo      []QuorumDIDPeerMap   `json:"quorum_info"`
 }
 
 type PledgeReply struct {
@@ -421,6 +422,43 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TokenChainBlock: nb.GetBlock(),
 			QuorumList:      cr.QuorumList,
 		}
+
+		//fetching quorums' info from PeerDIDTable to share with the receiver
+		for _, qrm := range sr.QuorumList {
+			//fetch peer id & did of the quorum
+			qpid, qdid, ok := util.ParseAddress(qrm)
+			if !ok {
+				c.log.Error("could not parse quorum address:", qrm)
+			}
+			if qpid == "" {
+				qpid = c.w.GetPeerID(qdid)
+			}
+
+			var qrmInfo QuorumDIDPeerMap
+			//fetch did type of the quorum
+			qDidType, err := c.w.GetPeerDIDType(qdid)
+			if err != nil {
+				c.log.Error("could not fetch did type for quorum:", qdid, "error", err)
+			}
+			if qDidType == -1 {
+				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
+				didtype_, msg, err := c.GetPeerdidType_fromPeer(qpid, qdid, dc.GetDID())
+				if err != nil {
+					c.log.Error("error", err, "msg", msg)
+					qrmInfo.DIDType = nil
+				} else {
+					qDidType = didtype_
+					qrmInfo.DIDType = &qDidType
+				}
+			} else {
+				qrmInfo.DIDType = &qDidType
+			}
+			//add quorum details to the data to be shared
+			qrmInfo.DID = qdid
+			qrmInfo.PeerID = qpid
+			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
+		}
+
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
 		if err != nil {

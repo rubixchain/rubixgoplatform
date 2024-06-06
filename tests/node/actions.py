@@ -3,11 +3,19 @@ from .commands import cmd_run_rubix_servers, cmd_get_peer_id, cmd_create_did, cm
 from .utils import get_node_name_from_idx, get_did_by_alias
 from config.utils import save_to_config_file, get_node_registry
 
-def add_quorums(node_config: dict):
-    for config in node_config.values():
+def add_quorums(node_config: dict, node_key = "", quorumlist = "quorumlist.json"):
+    if node_key == "":
+        for config in node_config.values():
+            cmd_add_quorum_dids(
+                config["server"], 
+                config["grpcPort"]
+            )
+    else: 
+        config = node_config[node_key]
         cmd_add_quorum_dids(
             config["server"], 
-            config["grpcPort"]
+            config["grpcPort"],
+            quorumlist
         )
 
 def setup_quorums(node_config: dict, node_did_alias_map: dict):
@@ -19,11 +27,11 @@ def setup_quorums(node_config: dict, node_did_alias_map: dict):
             config["grpcPort"]
         )
 
-def quorum_config(node_config: dict, node_did_alias_map: dict, skip_adding_quorums: bool = False):
+def quorum_config(node_config: dict, node_did_alias_map: dict, skip_adding_quorums: bool = False, quorum_list_file_name = "quorumlist.json"):
     # Prepare quorumlist.json
     quorum_list = []
     build_dir = get_build_dir()
-    quorum_list_file_path = f"../{build_dir}/quorumlist.json"
+    quorum_list_file_path = f"../{build_dir}/{quorum_list_file_name}"
  
     if skip_adding_quorums:
         setup_quorums(node_config, node_did_alias_map)

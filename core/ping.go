@@ -6,7 +6,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -20,9 +22,15 @@ type PingResponse struct {
 	model.BasicResponse
 }
 
+type GetPeerInfoResponse struct {
+	PeerInfo wallet.DIDPeerMap
+	model.BasicResponse
+}
+
 // PingSetup will setup the ping route
 func (c *Core) PingSetup() {
 	c.l.AddRoute(APIPingPath, "GET", c.PingRecevied)
+	c.l.AddRoute(APIGetPeerInfoPath, "GET", c.GetPeerInfoResponse)
 }
 
 // CheckQuorumStatusSetup will setup the ping route
@@ -178,4 +186,51 @@ func (c *Core) GetPeerdidType_fromPeer(peerID string, peer_did string, self_DID 
 		return -1, "Send Json Request error ", err
 	}
 	return getPeerdidTypeResponse.DidType, getPeerdidTypeResponse.Message, nil
+}
+
+func (c *Core) GetPeerInfoResponse(req *ensweb.Request) *ensweb.Result { //PingRecevied
+	//fetch peer details from DIDPeerTable
+	peerDID := c.l.GetQuerry(req, "did")
+
+	resp := &GetPeerInfoResponse{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	var pInfo wallet.DIDPeerMap
+
+	pInfo.PeerID = c.w.GetPeerID(peerDID)
+	if pInfo.PeerID == "" {
+		c.log.Error("sender does not have prev pledged quorum in DIDPeerTable", peerDID)
+		resp.Message = "Couldn't fetch peer id for did: " + peerDID
+		resp.Status = false
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+
+	qDidType, err := c.w.GetPeerDIDType(peerDID)
+	if err != nil || qDidType == -1 {
+		c.log.Error("could not fetch did type for quorum:", peerDID, "error", err)
+		pInfo.DIDType = nil
+		resp.PeerInfo = pInfo
+		resp.Status = true
+		resp.Message = "could not fetch did type, only sharing peerId"
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	} else {
+		pInfo.DIDType = &qDidType
+	}
+
+	resp.PeerInfo = pInfo
+	resp.Status = true
+	resp.Message = "successfully fetched peer details"
+	return c.l.RenderJSON(req, &resp, http.StatusOK)
+
+}
+
+func (c *Core) GetPeerInfo(p *ipfsport.Peer, peerDID string) (GetPeerInfoResponse, error) {
+	q := make(map[string]string)
+	q["did"] = peerDID
+
+	var response GetPeerInfoResponse
+	err := p.SendJSONRequest("GET", APIGetPeerInfoPath, q, nil, &response, false)
+	return response, err
 }

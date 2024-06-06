@@ -8,7 +8,8 @@ from node.quorum import run_quorum_nodes
 
 from scenarios import (
     rbt_transfer,
-    bip39_nlss_test
+    bip39_nlss_test,
+    ping_peer_improvement_test
 )
 
 IPFS_KUBO_VERSION = "v0.21.0"
@@ -164,7 +165,8 @@ if __name__=='__main__':
     # that consists of logic to run all the necessary tests
     modules = [
         rbt_transfer,
-        bip39_nlss_test
+        bip39_nlss_test,
+        ping_peer_improvement_test
     ]
 
     for module in modules:

@@ -24,7 +24,7 @@ type TokenStateCheckResult struct {
 	tokenIDTokenStateData string
 }
 
-func (c *Core) validateSigner(b *block.Block, self_did string) (bool, error) {
+func (c *Core) validateSigner(b *block.Block, self_did string, p *ipfsport.Peer) (bool, error) {
 	signers, err := b.GetSigner()
 	if err != nil {
 		c.log.Error("failed to get signers", "err", err)
@@ -40,6 +40,16 @@ func (c *Core) validateSigner(b *block.Block, self_did string) (bool, error) {
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
 		default:
+			signer_peeerId := c.w.GetPeerID(signer)
+			if signer_peeerId == "" {
+				signer_details, err := c.GetPeerInfo(p, signer)
+				if err != nil || signer_details.PeerInfo.PeerID == "" {
+					c.log.Error("failed to fetch details of the signer", signer, "msg", signer_details.Message)
+					return signer_details.Status, err
+				}
+				signer_details.PeerInfo.DID = signer
+				c.AddPeerDetails(signer_details.PeerInfo)
+			}
 			dc, err = c.SetupForienDIDQuorum(signer, self_did)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
@@ -209,7 +219,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Error("Invalid token chain block")
 			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
 		}
-		signatureValidation, err := c.validateSigner(b, quorumDID)
+		signatureValidation, err := c.validateSigner(b, quorumDID, p)
 		if !signatureValidation || err != nil {
 			return false, err
 		}
