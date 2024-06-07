@@ -81,10 +81,12 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		}
 
 		_, err := os.Stat(didCreate.MnemonicFile)
-		if os.IsExist(err) {
+		if os.IsNotExist(err) {
+			d.log.Debug("mnemonic file does not exist , creating new")
+		} else {
 			_mnemonic, err = os.ReadFile(didCreate.MnemonicFile)
 			if err != nil {
-				d.log.Debug("failed to read mnemonic file", "err", err)
+				d.log.Error("failed to read file", "err", err)
 			}
 		}
 
