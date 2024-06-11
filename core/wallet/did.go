@@ -1,5 +1,11 @@
 package wallet
 
+import (
+	"encoding/hex"
+
+	"github.com/ipfs/go-cid"
+)
+
 type DIDType struct {
 	DID     string `gorm:"column:did;primaryKey"`
 	Type    int    `gorm:"column:type"`
@@ -84,9 +90,17 @@ func (w *Wallet) IsDIDExist(did string) bool {
 }
 
 func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
-	lastChar := string(did[len(did)-1])
+	// Parse the did
+	c, err := cid.Decode(did)
+	if err != nil {
+		w.log.Error("Failed to decode DID: %v", err)
+	}
+	multihashDigest := c.Hash()
+	// Convert the multihash digest to hexadecimal - to compare with txnID
+	hexDigest := hex.EncodeToString(multihashDigest)
+	lastChar := string(hexDigest[len(hexDigest)-1])
 	var dm DIDPeerMap
-	err := w.s.Read(DIDStorage, &dm, "did=?", did)
+	err = w.s.Read(DIDStorage, &dm, "did=?", did)
 	if err == nil {
 		return nil
 	}
@@ -117,9 +131,17 @@ func (w *Wallet) AddDIDLastChar() error {
 	}
 	for _, dm := range existingDIDPeer {
 		did := dm.DID
-		lastChar := string(did[len(did)-1])
+		// Parse the did
+		c, err := cid.Decode(did)
+		if err != nil {
+			w.log.Error("Failed to decode DID: %v", err)
+		}
+		multihashDigest := c.Hash()
+		// Convert the multihash digest to hexadecimal - to compare with txnID
+		hexDigest := hex.EncodeToString(multihashDigest)
+		lastChar := string(hexDigest[len(hexDigest)-1])
 		dm.DIDLastChar = lastChar
-		err := w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+		err = w.s.Update(DIDPeerStorage, &dm, "did=?", did)
 		w.log.Info("DID Peer table updated")
 		if err != nil {
 			w.log.Error("Unable to update DID Peer table.")
