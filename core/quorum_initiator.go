@@ -394,7 +394,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	}
 	if err != nil {
-		unlockErr := c.checkLokedTokens(cr, ql)
+		unlockErr := c.checkLockedTokens(cr, ql)
 		if unlockErr != nil {
 			c.log.Error(unlockErr.Error() + "Locked tokens could not be unlocked")
 		}
@@ -1375,35 +1375,33 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 	return nil
 }
 
-func (c *Core) checkLokedTokens(cr *ConensusRequest, quorumList []string) error {
-	// var err error
+func (c *Core) checkLockedTokens(cr *ConensusRequest, quorumList []string) error {
 	pd := c.pd[cr.ReqID]
 
 	pledgingQuorumDID := make([]string, 0, len(pd.PledgedTokens))
 	for k := range pd.PledgedTokens {
 		pledgingQuorumDID = append(pledgingQuorumDID, k)
 	}
-	var pledgingDID string
-	if len(pledgingQuorumDID) > 0 {
-		pledgingDID = pledgingQuorumDID[0]
-	}
+
 	var br model.BasicResponse
-	for _, addr := range quorumList {
-		peerID, did, _ := util.ParseAddress(addr)
-		if did == pledgingDID {
-			p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
-			if err != nil {
-				c.log.Error("Failed to get peer connection", "err", err)
-				return err
-			}
-			tokenList := TokenList{
-				Tokens: pd.PledgedTokens[pledgingDID],
-				DID:    pledgingDID,
-			}
-			err = p.SendJSONRequest("POST", APIUnlockTokens, nil, &tokenList, &br, true)
-			if err != nil {
-				c.log.Error("Invalid response for pledge request", "err", err)
-				return err
+	for _, pledgingDID := range pledgingQuorumDID {
+		for _, addr := range quorumList {
+			peerID, did, _ := util.ParseAddress(addr)
+			if did == pledgingDID {
+				p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
+				if err != nil {
+					c.log.Error("Failed to get peer connection", "err", err)
+					return err
+				}
+				tokenList := TokenList{
+					Tokens: pd.PledgedTokens[pledgingDID],
+					DID:    pledgingDID,
+				}
+				err = p.SendJSONRequest("POST", APIUnlockTokens, nil, &tokenList, &br, true)
+				if err != nil {
+					c.log.Error("Invalid response for pledge request", "err", err)
+					return err
+				}
 			}
 		}
 	}
