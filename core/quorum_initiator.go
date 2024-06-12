@@ -748,15 +748,6 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 		}
 		return
 	}
-	pledgingQuorumDID := make([]string, 0, len(pd.PledgedTokens))
-	for k := range pd.PledgedTokens {
-		pledgingQuorumDID = append(pledgingQuorumDID, k)
-	}
-	var pledgingDID string
-	if len(pledgingQuorumDID) > 0 {
-		pledgingDID = pledgingQuorumDID[0]
-	}
-
 	var signType string
 
 	//signType = 0 => Pki based sign in lite mode
@@ -779,19 +770,12 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 				Hash:          hash,
 				SignType:      signType,
 			}
-			if cs.Result.SuccessCount < MinConsensusRequired-1 {
-				cs.P[did] = p
-				cs.Credit.Credit = append(cs.Credit.Credit, csig)
-				cs.Result.SuccessCount++
-				if did == pledgingDID {
-					cs.Result.PledgingDIDSignStatus = true
+			if cs.Result.SuccessCount < MinConsensusRequired {
+				if _, ok := pd.PledgedTokens[did]; ok {
+					cs.P[did] = p
+					cs.Credit.Credit = append(cs.Credit.Credit, csig)
+					cs.Result.SuccessCount++
 				}
-			} else if (did == pledgingDID || cs.Result.PledgingDIDSignStatus) && cs.Result.SuccessCount == MinConsensusRequired-1 {
-				cs.P[did] = p
-				cs.Credit.Credit = append(cs.Credit.Credit, csig)
-				cs.Result.SuccessCount++
-			} else {
-				p.Close()
 			}
 		} else {
 			cs.Result.FailedCount++
