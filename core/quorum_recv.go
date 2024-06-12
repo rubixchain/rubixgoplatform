@@ -1343,7 +1343,7 @@ func (c *Core) unlockTokens(req *ensweb.Request) *ensweb.Result {
 	}
 	crep.Status = true
 	crep.Message = "Tokens Unlocked Successfully."
-	c.log.Info("Tokens Unclocked")
+	c.log.Info("Tokens Unlocked")
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 
 }
