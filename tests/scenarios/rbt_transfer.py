@@ -3,7 +3,7 @@ from node.actions import rbt_transfer, fund_did_with_rbt, setup_rubix_nodes, \
 from node.utils import get_did_by_alias
 from config.utils import save_to_config_file, load_from_config_file
 from helper.utils import expect_failure, expect_success
-from node.quorum import get_quorum_config
+from node.quorum import get_quorum_config, run_quorum_nodes
 
 __node_config_path = "./rbt_transfer_config.json"
 
@@ -21,8 +21,13 @@ def setup():
 
     save_to_config_file(__node_config_path, node_config)
 
-    print("Adding quorums")
-    add_quorums(node_config)
+    run_quorum_nodes(False, False, "quorum2", "./quorum_config2.json", "quorumlist2.json")
+
+    print("Adding quorums for A")
+    add_quorums(node_config, "node9")
+
+    print("Adding quorums for B")
+    add_quorums(node_config, "node10", "quorumlist2.json")
 
     print("Setup Done\n")
     return node_config
@@ -86,23 +91,13 @@ def shuttle_transfer(config):
 
     print("------ Test Case (PASS): Shuttle transfer started ------\n")
 
-    #adding peer details of node A and node B to quorums
-    add_peer_details(node_A_info["peerId"], did_A, 4, 20004, 10504)
-    add_peer_details(node_A_info["peerId"], did_A, 4, 20005, 10505)
-    add_peer_details(node_A_info["peerId"], did_A, 4, 20006, 10506)
-    add_peer_details(node_A_info["peerId"], did_A, 4, 20007, 10507)
-    add_peer_details(node_A_info["peerId"], did_A, 4, 20008, 10508)
-
-    add_peer_details(node_B_info["peerId"], did_B, 4, 20004, 10504)
-    add_peer_details(node_B_info["peerId"], did_B, 4, 20005, 10505)
-    add_peer_details(node_B_info["peerId"], did_B, 4, 20006, 10506)
-    add_peer_details(node_B_info["peerId"], did_B, 4, 20007, 10507)
-    add_peer_details(node_B_info["peerId"], did_B, 4, 20008, 10508)
-
     quorum_config = get_quorum_config()
     
     for _, val in quorum_config.items():
         add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_A, grpc_port_A)
+
+    quorum_config2 = load_from_config_file("./quorum_config2.json")
+    for _, val in quorum_config2.items():
         add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_B, grpc_port_B)
 
     print("\n1. Generating 2 whole RBT for A")

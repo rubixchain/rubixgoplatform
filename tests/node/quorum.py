@@ -7,9 +7,8 @@ from config.utils import save_to_config_file, load_from_config_file
 
 QUORUM_CONFIG_PATH = "./quorum_config.json"
 
-def run_quorum_nodes(only_run_nodes, skip_adding_quorums):
+def run_quorum_nodes(only_run_nodes, skip_adding_quorums, node_registry_key = "quorum", quorum_config_path = "./quorum_config.json", quorum_list_file_name = "quorumlist.json"):
     print("Running Rubix Quorum nodes......")
-    node_registry_key = "quorum"
     node_config = setup_rubix_nodes(node_registry_key)
     print("Rubix Quorum nodes are now running")
 
@@ -27,21 +26,18 @@ def run_quorum_nodes(only_run_nodes, skip_adding_quorums):
             node_did_alias_map[node] = did_alias
 
         #Temporary adding details manually
-        for _, val1 in node_config.items():
-            for _, val2 in node_config.items():
-                add_peer_details(val1["peerId"], val1["dids"]["did_quorum"], 4, val2["server"], val2["grpcPort"])
 
 
-        save_to_config_file(QUORUM_CONFIG_PATH, node_config)
-        print("\nquorum_config.json is created")
+        save_to_config_file(quorum_config_path, node_config)
+        print("\nquorum_config json file is created")
         
         print("Setting up quorums and saving the info in quorumlist.json")
-        quorum_config(node_config, node_did_alias_map, skip_adding_quorums=skip_adding_quorums)
+        quorum_config(node_config, node_did_alias_map, skip_adding_quorums, quorum_list_file_name)
 
         pprint.pp(node_config)
         print("Quorums have been configured")
     else:
-        quorum_config(node_config, node_did_alias_map, skip_adding_quorums=True)
+        quorum_config(node_config, node_did_alias_map, True, quorum_list_file_name)
 
 def get_quorum_config():
     return load_from_config_file(QUORUM_CONFIG_PATH)

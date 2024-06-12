@@ -24,7 +24,7 @@ type TokenStateCheckResult struct {
 	tokenIDTokenStateData string
 }
 
-func (c *Core) validateSigner(b *block.Block) (bool, error) {
+func (c *Core) validateSigner(b *block.Block, self_did string, p *ipfsport.Peer) (bool, error) {
 	signers, err := b.GetSigner()
 	if err != nil {
 		c.log.Error("failed to get signers", "err", err)
@@ -34,13 +34,23 @@ func (c *Core) validateSigner(b *block.Block) (bool, error) {
 		var dc did.DIDCrypto
 		switch b.GetTransType() {
 		case block.TokenGeneratedType, block.TokenBurntType:
-			dc, err = c.SetupForienDID(signer)
+			dc, err = c.SetupForienDID(signer, self_did)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
 		default:
-			dc, err = c.SetupForienDIDQuorum(signer)
+			signer_peeerId := c.w.GetPeerID(signer)
+			if signer_peeerId == "" {
+				signer_details, err := c.GetPeerInfo(p, signer)
+				if err != nil || signer_details.PeerInfo.PeerID == "" {
+					c.log.Error("failed to fetch details of the signer", signer, "msg", signer_details.Message)
+					return signer_details.Status, err
+				}
+				signer_details.PeerInfo.DID = signer
+				c.AddPeerDetails(signer_details.PeerInfo)
+			}
+			dc, err = c.SetupForienDIDQuorum(signer, self_did)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID quorum : ", signer, "err", err)
@@ -150,7 +160,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			continue
 		}
 	}
-	p, err := c.getPeer(address)
+	p, err := c.getPeer(address, quorumDID)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return false, err
@@ -209,7 +219,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Error("Invalid token chain block")
 			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
 		}
-		signatureValidation, err := c.validateSigner(b)
+		signatureValidation, err := c.validateSigner(b, quorumDID, p)
 		if !signatureValidation || err != nil {
 			return false, err
 		}
