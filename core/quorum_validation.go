@@ -298,11 +298,7 @@ func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 // 	return c.checkIsUnpledged(b, wt)
 // }
 
-func (c *Core) getUnpledgeId(wt string) string {
-	tokenType := token.RBTTokenType
-	if c.testNet {
-		tokenType = token.TestTokenType
-	}
+func (c *Core) getUnpledgeId(wt string, tokenType int) string {
 	b := c.w.GetLatestTokenBlock(wt, tokenType)
 	if b == nil {
 		c.log.Error("Invalid token chain block")

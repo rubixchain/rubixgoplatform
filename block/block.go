@@ -40,6 +40,7 @@ const (
 	TCSmartContractDataKey string = "9"
 	TCTokenValueKey        string = "10"
 	TCChildTokensKey       string = "11"
+	TCSenderSignatureKey   string = "12"
 )
 
 const (
@@ -57,16 +58,17 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType   string         `json:"transactionType"`
-	TokenOwner        string         `json:"owner"`
-	GenesisBlock      *GenesisBlock  `json:"genesisBlock"`
-	TransInfo         *TransInfo     `json:"transInfo"`
-	PledgeDetails     []PledgeDetail `json:"pledgeDetails"`
-	QuorumSignature   []string       `json:"quorumSignature"`
-	SmartContract     []byte         `json:"smartContract"`
-	SmartContractData string         `json:"smartContractData"`
-	TokenValue        float64        `json:"tokenValue"`
-	ChildTokens       []string       `json:"childTokens"`
+	TransactionType   string            `json:"transactionType"`
+	TokenOwner        string            `json:"owner"`
+	GenesisBlock      *GenesisBlock     `json:"genesisBlock"`
+	TransInfo         *TransInfo        `json:"transInfo"`
+	PledgeDetails     []PledgeDetail    `json:"pledgeDetails"`
+	QuorumSignature   []CreditSignature `json:"quorumSignature"`
+	SmartContract     []byte            `json:"smartContract"`
+	SmartContractData string            `json:"smartContractData"`
+	TokenValue        float64           `json:"tokenValue"`
+	ChildTokens       []string          `json:"childTokens"`
+	SenderSignature   *SenderSignature  `json:"senderSignature"`
 }
 
 type PledgeDetail struct {
@@ -81,6 +83,22 @@ type Block struct {
 	bm  map[string]interface{}
 	op  bool
 	log logger.Logger
+}
+
+type CreditSignature struct {
+	Signature     string `json:"signature"`
+	PrivSignature string `json:"priv_signature"`
+	DID           string `json:"did"`
+	Hash          string `json:"hash"`
+	SignType      string `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
+}
+
+type SenderSignature struct {
+	NLSS_share   string `json:"nlss_share_signature"`
+	Private_sign string `json:"priv_signature"`
+	DID          string `json:"sender_did"`
+	Hash         string `json:"hash"`
+	SignType     int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
 
 type BlockOption func(b *Block)
@@ -150,6 +168,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	}
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
+	}
+	if tcb.SenderSignature != nil {
+		ntcb[TCSenderSignatureKey] = tcb.SenderSignature
 	}
 
 	if floatPrecisionToMaxDecimalPlaces(tcb.TokenValue) > floatPrecisionToMaxDecimalPlaces(0) {
