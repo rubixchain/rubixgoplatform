@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"encoding/hex"
+	"fmt"
 
 	"github.com/ipfs/go-cid"
 )
@@ -90,15 +91,10 @@ func (w *Wallet) IsDIDExist(did string) bool {
 }
 
 func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
-	// Parse the did
-	c, err := cid.Decode(did)
+	lastChar, err := w.GetLastChar(did)
 	if err != nil {
-		w.log.Error("Failed to decode DID: %v", err)
+		return err
 	}
-	multihashDigest := c.Hash()
-	// Convert the multihash digest to hexadecimal - to compare with txnID
-	hexDigest := hex.EncodeToString(multihashDigest)
-	lastChar := string(hexDigest[len(hexDigest)-1])
 	var dm DIDPeerMap
 	err = w.s.Read(DIDStorage, &dm, "did=?", did)
 	if err == nil {
@@ -131,15 +127,10 @@ func (w *Wallet) AddDIDLastChar() error {
 	}
 	for _, dm := range existingDIDPeer {
 		did := dm.DID
-		// Parse the did
-		c, err := cid.Decode(did)
+		lastChar, err := w.GetLastChar(did)
 		if err != nil {
-			w.log.Error("Failed to decode DID: %v", err)
+			continue
 		}
-		multihashDigest := c.Hash()
-		// Convert the multihash digest to hexadecimal - to compare with txnID
-		hexDigest := hex.EncodeToString(multihashDigest)
-		lastChar := string(hexDigest[len(hexDigest)-1])
 		dm.DIDLastChar = lastChar
 		err = w.s.Update(DIDPeerStorage, &dm, "did=?", did)
 		w.log.Info("DID Peer table updated")
@@ -150,6 +141,21 @@ func (w *Wallet) AddDIDLastChar() error {
 	}
 	return nil
 }
+
+func (w *Wallet) GetLastChar(did string) (string, error) {
+	// Parse the did
+	c, err := cid.Decode(did)
+	if err != nil {
+		w.log.Error(fmt.Sprintf("Failed to decode DID %v : %v", did, err))
+		return "", err
+	}
+	multihashDigest := c.Hash()
+	// Convert the multihash digest to hexadecimal - to compare with txnID
+	hexDigest := hex.EncodeToString(multihashDigest)
+	lastchar := string(hexDigest[len(hexDigest)-1])
+	return lastchar, nil
+}
+
 func (w *Wallet) GetPeerID(did string) string {
 	var dm DIDPeerMap
 	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
