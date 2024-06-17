@@ -1018,22 +1018,6 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	}
 	//tokenList = append(tokenList, cr.PartTokens...)
 
-	//Fetching sender signature to add it to transaction details
-	senderdid := sc.GetSenderDID()
-	sign_data, sender_share_sign, sender_priv_sign, err := sc.GetHashSig(senderdid)
-	if err != nil {
-		c.log.Error("failed to fetch sender sign", "err", err)
-		return nil, fmt.Errorf("failed to fetch sender sign")
-	}
-	sender_sign_type := dc.GetSignType()
-	sender_sign := &block.SenderSignature{
-		NLSS_share:   sender_share_sign,
-		Private_sign: sender_priv_sign,
-		DID:          senderdid,
-		Hash:         sign_data,
-		SignType:     sender_sign_type,
-	}
-
 	var tcb block.TokenChainBlock
 
 	if cr.Mode == SmartContractDeployMode {
@@ -1083,6 +1067,22 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SmartContractData: sc.GetSmartContractData(),
 		}
 	} else {
+		//Fetching sender signature to add it to transaction details
+		senderdid := sc.GetSenderDID()
+		sign_data, sender_share_sign, sender_priv_sign, err := sc.GetHashSig(senderdid)
+		if err != nil {
+			c.log.Error("failed to fetch sender sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch sender sign")
+		}
+		sender_sign_type := dc.GetSignType()
+		sender_sign := &block.SenderSignature{
+			NLSS_share:   sender_share_sign,
+			Private_sign: sender_priv_sign,
+			DID:          senderdid,
+			Hash:         sign_data,
+			SignType:     sender_sign_type,
+		}
+
 		bti.SenderDID = sc.GetSenderDID()
 		bti.ReceiverDID = sc.GetReceiverDID()
 		tcb = block.TokenChainBlock{
