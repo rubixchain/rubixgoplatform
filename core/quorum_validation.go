@@ -22,6 +22,7 @@ type TokenStateCheckResult struct {
 	Error                 error
 	Message               string
 	tokenIDTokenStateData string
+	tokenIDTokenStateHash string
 }
 
 func (c *Core) validateSigner(b *block.Block) (bool, error) {
@@ -329,6 +330,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 
 	//add to ipfs get only the hash of the token+tokenstate
 	tokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	result.tokenIDTokenStateHash = tokenIDTokenStateHash
 	if err != nil {
 		c.log.Error("Error adding data to ipfs", err)
 		result.Error = err

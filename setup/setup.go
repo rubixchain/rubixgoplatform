@@ -67,6 +67,8 @@ const (
 	APIGetAllExplorer                   string = "/api/get-all-explorer"
 	APIAddExplorer                      string = "/api/add-explorer"
 	APIRemoveExplorer                   string = "/api/remove-explorer"
+	APIGetPledgedTokenDetails           string = "/api/get-pledgedtoken-details"
+	APICheckPinnedState                 string = "/api/check-pinned-state"
 )
 
 // jwt.RegisteredClaims
