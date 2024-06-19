@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	QuorumRequired       int = 7
 	MinQuorumRequired    int = 5
 	MinConsensusRequired int = 5
 )
@@ -343,7 +344,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, errFQL
 		}
 		cr.QuorumList = finalQl
-		if len(finalQl) != MinQuorumRequired {
+		if len(finalQl) != QuorumRequired {
 			c.log.Error("quorum(s) are unavailable for this trnx")
 			return nil, nil, fmt.Errorf("quorum(s) are unavailable for this trnx. retry trnx after some time")
 		}
