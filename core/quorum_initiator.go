@@ -313,9 +313,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	case SmartContractExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
 	}
-	//Minimum pledge value is 0.005 (ie, 0.005/5 = 0.001 per each quorum)
-	if reqPledgeTokens < 0.00005 {
-		reqPledgeTokens = 0.00005
+	minValue := MinDecimalValue(MaxDecimalPlaces)
+	minTotalPledgeAmount := minValue * float64(MinQuorumRequired)
+	if reqPledgeTokens < minTotalPledgeAmount {
+		reqPledgeTokens = minTotalPledgeAmount
 	}
 	pd := PledgeDetails{
 		TransferAmount:         reqPledgeTokens,
