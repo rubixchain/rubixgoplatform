@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -157,7 +158,7 @@ func (s *Server) APICheckPinnedState(req *ensweb.Request) *ensweb.Result {
 	var br model.BasicResponse
 	if len(provList) == 0 {
 		br.Status = false
-		br.Message = "No pins available on " + tokenstatehash
+		br.Message = fmt.Sprintf("No pins available on %s", tokenstatehash)
 		return s.RenderJSON(req, br, http.StatusOK)
 	} else {
 		br.Status = true
