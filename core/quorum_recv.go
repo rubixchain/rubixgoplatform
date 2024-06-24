@@ -779,6 +779,18 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update token status, failed to get block ID"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
+	//quorums using pledgefinality function, to be added to TokenStateHash Table
+	var updatedtokenhashes []string
+	for _, ti := range sr.TokenInfo {
+		t := ti.Token
+		b := c.w.GetLatestTokenBlock(ti.Token, ti.TokenType)
+		blockId, _ := b.GetBlockID(t)
+		tokenIDTokenStateData := t + blockId
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
+		tokenIDTokenStateHash, _ := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		updatedtokenhashes = append(updatedtokenhashes, tokenIDTokenStateHash)
+	}
 	td := &wallet.TransactionDetails{
 		TransactionID:   b.GetTid(),
 		TransactionType: b.GetTransType(),
@@ -800,6 +812,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID, *qrm.DIDType)
 	}
 
+	crep.Result = updatedtokenhashes
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
@@ -945,6 +958,15 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
+	//Adding to the Token State Hash Table
+	if ur.TransferredTokenStateHashes != nil {
+		err = c.w.AddTokenStateHash(did, ur.TransferredTokenStateHashes, ur.PledgedTokens, ur.TransactionID)
+	}
+	if err != nil {
+		c.log.Error("Failed to add token state hash", "err", err)
+	}
+
+	//TODO : Unpledging tokens to be removed
 	for _, t := range ur.PledgedTokens {
 		c.up.AddUnPledge(t)
 	}

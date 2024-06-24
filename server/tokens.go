@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -129,4 +130,45 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	s.c.UpateWebReq(resp.ID, req)
 	dc.InChan <- resp
 	return s.didResponse(req, resp.ID)
+}
+
+func (s *Server) APIGetPledgedTokenDetails(req *ensweb.Request) *ensweb.Result {
+	pledgedTokenInfo, err := s.c.GetPledgedInfo()
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	tokenstateresponse := model.TokenStateResponse{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "Got pledged tokens with token states info successfully",
+		},
+		PledgedTokenStateDetails: make([]model.PledgedTokenStateDetails, 0),
+	}
+	tokenstateresponse.PledgedTokenStateDetails = append(tokenstateresponse.PledgedTokenStateDetails, pledgedTokenInfo...)
+	return s.RenderJSON(req, tokenstateresponse, http.StatusOK)
+}
+
+func (s *Server) APICheckPinnedState(req *ensweb.Request) *ensweb.Result {
+	tokenstatehash := s.GetQuerry(req, "tokenstatehash")
+
+	provList, err := s.c.GetDHTddrs(tokenstatehash)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	var br model.BasicResponse
+	if len(provList) == 0 {
+		br.Status = false
+		br.Message = fmt.Sprintf("No pins available on %s", tokenstatehash)
+		return s.RenderJSON(req, br, http.StatusOK)
+	} else {
+		br.Status = true
+		br.Result = provList
+	}
+
+	err = s.c.UpdatePledgedTokenInfo(tokenstatehash)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	br.Message = "Got Pins on " + tokenstatehash + ". Updated the pledging detail in table and removed from pledged token state table."
+	return s.RenderJSON(req, br, http.StatusOK)
 }

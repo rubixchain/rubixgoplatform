@@ -83,6 +83,8 @@ const (
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
 	AddPeerDetailsCmd              string = "addpeerdetails"
+	GetPledgedTokenDetailsCmd      string = "getpledgedtokendetails"
+	CheckPinnedState               string = "checkpinnedstate"
 )
 
 var commands = []string{VersionCmd,
@@ -251,6 +253,7 @@ type Command struct {
 	links              []string
 	mnemonicFile       string
 	ChildPath          int
+	TokenState         string
 }
 
 func showVersion() {
@@ -447,6 +450,7 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 	flag.StringVar(&links, "links", "", "Explorer url")
+	flag.StringVar(&cmd.TokenState, "tokenstatehash", "", "Give Token State Hash to check state")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -606,6 +610,10 @@ func Run(args []string) {
 		cmd.getAllExplorer()
 	case AddPeerDetailsCmd:
 		cmd.AddPeerDetails()
+	case GetPledgedTokenDetailsCmd:
+		cmd.GetPledgedTokenDetails()
+	case CheckPinnedState:
+		cmd.CheckPinnedState()
 	default:
 		cmd.log.Error("Invalid command")
 	}

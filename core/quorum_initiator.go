@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -95,9 +97,11 @@ type SignatureReply struct {
 }
 
 type UpdatePledgeRequest struct {
-	Mode            int      `json:"mode"`
-	PledgedTokens   []string `json:"pledged_tokens"`
-	TokenChainBlock []byte   `json:"token_chain_block"`
+	Mode                        int      `json:"mode"`
+	PledgedTokens               []string `json:"pledged_tokens"`
+	TokenChainBlock             []byte   `json:"token_chain_block"`
+	TransferredTokenStateHashes []string `json:"transferred_tokenstate_hash"`
+	TransactionID               string   `json:"transaction_id"`
 }
 
 type SendTokenRequest struct {
@@ -516,9 +520,25 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
 			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
 		}
+		// br.Result will contain the new token state after sending tokens to receiver
 
-		//trigger pledge finality to the quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
+		newtokenhashresult, ok := br.Result.([]interface{})
+		if !ok {
+			fmt.Println("Type assertion to string failed")
+			return nil, nil, err
+		}
+		var newtokenhashes []string
+		for i, v := range newtokenhashresult {
+			statehash, ok := v.(string)
+			if !ok {
+				fmt.Println("Type assertion to string failed at index", i)
+				return nil, nil, err
+			}
+			newtokenhashes = append(newtokenhashes, statehash)
+		}
+
+		//trigger pledge finality to the quorum and also adding the tokenstate hash details to quorum
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
@@ -566,7 +586,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		//trigger pledge finality to the quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, nil)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
@@ -611,8 +631,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, err
 		}
 
-		//trigger pledge finality to the quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
+		//Latest Smart contract token hash after being deployed.
+		scTokenStateData := cr.SmartContractToken + newBlockId
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(scTokenStateData))
+		newtokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		c.log.Info(fmt.Sprintf("New smart contract token hash after being deployed : %s", newtokenIDTokenStateHash))
+
+		//trigger pledge finality to the quorum and adding the details in token hash table
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash})
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
@@ -663,8 +689,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, err
 		}
 
-		//trigger pledge finality to the quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
+		//Latest Smart contract token hash after being executed.
+		scTokenStateData := cr.SmartContractToken + newBlockId
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(scTokenStateData))
+		newtokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		c.log.Info(fmt.Sprintf("New smart contract token hash after being executed : %s", newtokenIDTokenStateHash))
+
+		//trigger pledge finality to the quorum and adding the details in token hash table
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash})
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
@@ -697,7 +729,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}
 }
 
-func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block) error {
+func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, newTokenStateHashes []string) error {
 	c.log.Debug("Proceeding for pledge finality")
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
@@ -732,9 +764,16 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block) 
 		defer qPeer.Close()
 		var br model.BasicResponse
 		ur := UpdatePledgeRequest{
-			Mode:            cr.Mode,
-			PledgedTokens:   v,
-			TokenChainBlock: newBlock.GetBlock(),
+			Mode:                        cr.Mode,
+			PledgedTokens:               v,
+			TokenChainBlock:             newBlock.GetBlock(),
+			TransactionID:               cr.TransactionID,
+			TransferredTokenStateHashes: nil,
+		}
+
+		if newTokenStateHashes != nil {
+			// ur.TransferredTokenStateHashes = newTokenStateHashes[countofTokenStateHash : countofTokenStateHash+len(v)]
+			ur.TransferredTokenStateHashes = newTokenStateHashes
 		}
 
 		err = qPeer.SendJSONRequest("POST", APIUpdatePledgeToken, nil, &ur, &br, true)
@@ -1056,22 +1095,6 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	}
 	//tokenList = append(tokenList, cr.PartTokens...)
 
-	//Fetching sender signature to add it to transaction details
-	senderdid := sc.GetSenderDID()
-	sign_data, sender_share_sign, sender_priv_sign, err := sc.GetHashSig(senderdid)
-	if err != nil {
-		c.log.Error("failed to fetch sender sign", "err", err)
-		return nil, fmt.Errorf("failed to fetch sender sign")
-	}
-	sender_sign_type := dc.GetSignType()
-	sender_sign := &block.SenderSignature{
-		NLSS_share:   sender_share_sign,
-		Private_sign: sender_priv_sign,
-		DID:          senderdid,
-		Hash:         sign_data,
-		SignType:     sender_sign_type,
-	}
-
 	var tcb block.TokenChainBlock
 
 	if cr.Mode == SmartContractDeployMode {
@@ -1121,6 +1144,21 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SmartContractData: sc.GetSmartContractData(),
 		}
 	} else {
+		//Fetching sender signature to add it to transaction details
+		senderdid := sc.GetSenderDID()
+		sign_data, sender_share_sign, sender_priv_sign, err := sc.GetHashSig(senderdid)
+		if err != nil {
+			c.log.Error("failed to fetch sender sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch sender sign")
+		}
+		sender_sign_type := dc.GetSignType()
+		sender_sign := &block.SenderSignature{
+			NLSS_share:   sender_share_sign,
+			Private_sign: sender_priv_sign,
+			DID:          senderdid,
+			Hash:         sign_data,
+			SignType:     sender_sign_type,
+		}
 		bti.SenderDID = sc.GetSenderDID()
 		bti.ReceiverDID = sc.GetReceiverDID()
 		tcb = block.TokenChainBlock{

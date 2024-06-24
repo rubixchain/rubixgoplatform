@@ -3,6 +3,7 @@ package wallet
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
@@ -591,5 +592,101 @@ func (w *Wallet) UnlockLockedTokens(did string, tokenList []string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (w *Wallet) AddTokenStateHash(did string, tokenstatehashes []string, pledgedtokens []string, TransactionID string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var td TokenStateDetails
+	if tokenstatehashes == nil {
+		return nil
+	}
+	concatenatedpledgedtokens := ""
+
+	for _, i := range pledgedtokens {
+		concatenatedpledgedtokens = concatenatedpledgedtokens + i + " "
+	}
+
+	for _, tokenstatehash := range tokenstatehashes {
+		td.DID = did
+		td.PledgedTokens = concatenatedpledgedtokens
+		td.TokenStateHash = tokenstatehash
+		td.TransactionID = TransactionID
+		err := w.s.Write(TokenStateHash, &td)
+		if err != nil {
+			w.log.Error("Token State Hash could not be added", "token state hash", tokenstatehash, "err", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *Wallet) GetAllTokenStateHash() ([]TokenStateDetails, error) {
+	var td []TokenStateDetails
+	err := w.s.Read(TokenStateHash, &td, "did!=?", "")
+	if err != nil {
+		w.log.Error("Failed to get token states", "err", err)
+		return nil, err
+	}
+	return td, nil
+}
+
+func (w *Wallet) RemoveTokenStateHash(tokenstatehash string) error {
+	var td TokenStateDetails
+
+	//Getting all the details about a particular token state hash
+	err := w.s.Read(TokenStateHash, &td, "token_state_hash=?", tokenstatehash)
+	if err != nil {
+		w.log.Error("Failed to fetch token state from DB", "err", err)
+		return err
+	}
+
+	// Using that token state hash to get the Transaction ID. Now fetch all the entries with that Transaction ID.
+
+	var tds []TokenStateDetails
+
+	err = w.s.Read(TokenStateHash, &tds, "transaction_id=?", td.TransactionID)
+	if err != nil {
+		w.log.Error("Failed to fetch token state from DB", "err", err)
+		return err
+	}
+
+	// If length of entries with same Transaction ID is more than 1, this means all the token state hashes of that particular transaction are not exhausted.
+	// So, we'll remove just that entry with the exhausted token state. If the length is 1, this means, only this Token State Hash was left to be exhausted,
+	// and thus, the quorums can unpledge their tokens.
+
+	if len(tds) > 1 {
+		err = w.s.Delete(TokenStateHash, &td, "token_state_hash=?", tokenstatehash)
+		if err != nil {
+			w.log.Error("Failed to delete token state hash details from DB", "err", err)
+			return err
+		}
+		return nil
+	}
+
+	pledgedTokensList := strings.Split(td.PledgedTokens, " ")
+
+	for _, v := range pledgedTokensList {
+		var tokend Token
+		err = w.s.Read(TokenStorage, &tokend, "did=? AND token_id=?", td.DID, v)
+		if err != nil {
+			w.log.Error("Failed to read token details from DB", "err", err)
+			return err
+		}
+		tokend.TokenStatus = TokenIsFree
+		err = w.s.Update(TokenStorage, &tokend, "did=? AND token_id=?", tokend.DID, tokend.TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token status from DB", "err", err)
+			return err
+		}
+	}
+	var td1 TokenStateDetails
+	err = w.s.Delete(TokenStateHash, &td1, "token_state_hash=?", tokenstatehash)
+	if err != nil {
+		w.log.Error("Failed to delete token state from DB", "err", err)
+		return err
+	}
+	fmt.Println("Delete TokenStateDetails : ", td1)
 	return nil
 }
