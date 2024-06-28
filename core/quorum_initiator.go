@@ -162,6 +162,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APISignatureRequest, "POST", c.signatureRequest)
 	c.l.AddRoute(APISendReceiverToken, "POST", c.updateReceiverToken)
 	c.l.AddRoute(APIUnlockTokens, "POST", c.unlockTokens)
+	c.l.AddRoute(APIUpdateTokenHashDetails, "POST", c.updateTokenHashDetails)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
@@ -520,8 +521,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
 			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
 		}
-		// br.Result will contain the new token state after sending tokens to receiver
 
+		// br.Result will contain the new token state after sending tokens to receiver as a response to APISendReceiverToken
 		newtokenhashresult, ok := br.Result.([]interface{})
 		if !ok {
 			fmt.Println("Type assertion to string failed")
@@ -537,11 +538,38 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			newtokenhashes = append(newtokenhashes, statehash)
 		}
 
-		//trigger pledge finality to the quorum and also adding the tokenstate hash details to quorum
+		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
+		}
+
+		//Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
+		for _, tokeninfo := range ti {
+			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
+			signers, _ := b.GetSigner()
+			//if signer is similar to sender did skip this token, as the block is the genesys block
+			if signers[0] == sc.GetSenderDID() {
+				continue
+			}
+			//concat tokenId and BlockID
+			bid, _ := b.GetBlockID(tokeninfo.Token)
+			prevtokenIDTokenStateData := tokeninfo.Token + bid
+			prevtokenIDTokenStateBuffer := bytes.NewBuffer([]byte(prevtokenIDTokenStateData))
+
+			//add to ipfs get only the hash of the token+tokenstate. This is the hash just before transferring i.e. the exhausted token state hash, and updating in Sender side
+			prevtokenIDTokenStateHash, _ := c.ipfs.Add(prevtokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+
+			//send this exhausted hash to old quorums to unpledge
+			for _, signer := range signers {
+				signer_peeerId := c.w.GetPeerID(signer)
+				signer_addr := signer_peeerId + "." + signer
+				p, _ := c.getPeer(signer_addr, "")
+				m := make(map[string]string)
+				m["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
+				_ = p.SendJSONRequest("POST", APIUpdateTokenHashDetails, m, nil, nil, true)
+			}
 		}
 
 		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
@@ -670,6 +698,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		return &txnDetails, pl, nil
 	} else { //execute mode
 
+		//Get the latest block details before being executed to get the old signers
+		b := c.w.GetLatestTokenBlock(cr.SmartContractToken, nb.GetTokenType(cr.SmartContractToken))
+		signers, _ := b.GetSigner()
+
 		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
 		if err != nil {
@@ -713,6 +745,20 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = c.publishNewEvent(&newEvent)
 		if err != nil {
 			c.log.Error("Failed to publish smart contract Executed info")
+		}
+
+		//inform old quorums about exhausted smart contract token hash
+		prevBlockId, _ := nb.GetPrevBlockID((cr.SmartContractToken))
+		scTokenStateDataOld := cr.SmartContractToken + prevBlockId
+		scTokenStateDataOldBuffer := bytes.NewBuffer([]byte(scTokenStateDataOld))
+		oldsctokenIDTokenStateHash, _ := c.ipfs.Add(scTokenStateDataOldBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		for _, signer := range signers {
+			signer_peeerId := c.w.GetPeerID(signer)
+			signer_addr := signer_peeerId + "." + signer
+			p, _ := c.getPeer(signer_addr, "")
+			m := make(map[string]string)
+			m["tokenIDTokenStateHash"] = oldsctokenIDTokenStateHash
+			_ = p.SendJSONRequest("POST", APIUpdateTokenHashDetails, m, nil, nil, true)
 		}
 
 		txnDetails := wallet.TransactionDetails{

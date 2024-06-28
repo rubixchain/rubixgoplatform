@@ -667,9 +667,12 @@ func (w *Wallet) RemoveTokenStateHash(tokenstatehash string) error {
 
 	pledgedTokensList := strings.Split(td.PledgedTokens, " ")
 
-	for _, v := range pledgedTokensList {
+	for _, pledgedToken := range pledgedTokensList {
+		if strings.TrimSpace(pledgedToken) == "" {
+			continue
+		}
 		var tokend Token
-		err = w.s.Read(TokenStorage, &tokend, "did=? AND token_id=?", td.DID, v)
+		err = w.s.Read(TokenStorage, &tokend, "did=? AND token_id=?", td.DID, pledgedToken)
 		if err != nil {
 			w.log.Error("Failed to read token details from DB", "err", err)
 			return err
@@ -687,6 +690,5 @@ func (w *Wallet) RemoveTokenStateHash(tokenstatehash string) error {
 		w.log.Error("Failed to delete token state from DB", "err", err)
 		return err
 	}
-	fmt.Println("Delete TokenStateDetails : ", td1)
 	return nil
 }

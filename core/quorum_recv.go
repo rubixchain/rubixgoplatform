@@ -806,12 +806,10 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 	c.w.AddTransactionHistory(td)
 	crep.Status = true
 	crep.Message = "Token received successfully"
-
 	//Adding quorums to DIDPeerTable of receiver
 	for _, qrm := range sr.QuorumInfo {
 		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID, *qrm.DIDType)
 	}
-
 	crep.Result = updatedtokenhashes
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
@@ -1029,8 +1027,8 @@ func (c *Core) mapDIDArbitration(req *ensweb.Request) *ensweb.Result {
 	}
 	err = c.srv.UpdateTokenDetials(nd)
 	if err != nil {
-		c.log.Error("Failed to update table detials", "err", err)
-		br.Message = "Failed to update token detials"
+		c.log.Error("Failed to update table details", "err", err)
+		br.Message = "Failed to update token details"
 		return c.l.RenderJSON(req, &br, http.StatusOK)
 	}
 	dm := &service.DIDMap{
@@ -1373,5 +1371,18 @@ func (c *Core) unlockTokens(req *ensweb.Request) *ensweb.Result {
 	crep.Message = "Tokens Unlocked Successfully."
 	c.log.Info("Tokens Unclocked")
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
+
+}
+
+func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
+	c.log.Debug("Updating tokenStateHashDetails in DB")
+	tokenIDTokenStateHash := c.l.GetQuerry(req, "tokenIDTokenStateHash")
+	c.log.Debug("tokenIDTokenStateHash from query", tokenIDTokenStateHash)
+
+	err := c.w.RemoveTokenStateHash(tokenIDTokenStateHash)
+	if err == nil {
+		fmt.Println("removed hash successfully")
+	}
+	return c.l.RenderJSON(req, nil, http.StatusOK)
 
 }
