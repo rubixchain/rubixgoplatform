@@ -86,6 +86,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/check-pinned-state": {
+            "delete": {
+                "description": "This API is used to check if the token state for which the token is pledged is exhausted or not.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Check for exhausted token state hash",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Token State Hash",
+                        "name": "tokenstatehash",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/commit-data-token": {
             "post": {
                 "description": "This API will create data token",
@@ -590,6 +622,26 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/get-pledgedtoken-details": {
+            "get": {
+                "description": "This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Get details about the pledged tokens",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.TokenStateResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/get-smart-contract-token-chain-data": {
             "post": {
                 "description": "This API will return smart contract token chain data",
@@ -877,6 +929,38 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/model.NFTStatus"
+                    }
+                }
+            }
+        },
+        "model.PledgedTokenStateDetails": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "token_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.TokenStateResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
+                },
+                "token_state_details": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.PledgedTokenStateDetails"
                     }
                 }
             }

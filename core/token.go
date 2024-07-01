@@ -51,39 +51,39 @@ func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error)
 		if err != nil {
 			return tr, nil
 		}
-		tr.TokenDetials = make([]model.TokenDetial, 0)
+		tr.TokenDetails = make([]model.TokenDetail, 0)
 		for _, t := range tkns {
-			td := model.TokenDetial{
+			td := model.TokenDetail{
 				Token:  t.TokenID,
 				Status: t.TokenStatus,
 			}
-			tr.TokenDetials = append(tr.TokenDetials, td)
+			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
 	case model.DTType:
 		tkns, err := c.w.GetAllDataTokens(did)
 		if err != nil {
 			return tr, nil
 		}
-		tr.TokenDetials = make([]model.TokenDetial, 0)
+		tr.TokenDetails = make([]model.TokenDetail, 0)
 		for _, t := range tkns {
-			td := model.TokenDetial{
+			td := model.TokenDetail{
 				Token:  t.TokenID,
 				Status: t.TokenStatus,
 			}
-			tr.TokenDetials = append(tr.TokenDetials, td)
+			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
 	case model.NFTType:
 		tkns := c.w.GetAllNFT(did)
 		if tkns == nil {
 			return tr, nil
 		}
-		tr.TokenDetials = make([]model.TokenDetial, 0)
+		tr.TokenDetails = make([]model.TokenDetail, 0)
 		for _, t := range tkns {
-			td := model.TokenDetial{
+			td := model.TokenDetail{
 				Token:  t.TokenID,
 				Status: t.TokenStatus,
 			}
-			tr.TokenDetials = append(tr.TokenDetials, td)
+			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
 	default:
 		tr.BasicResponse.Status = false
@@ -489,4 +489,30 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 	defer c.w.ReleaseTokens(requiredTokens)
 	remainingAmount = floatPrecision(remainingAmount, MaxDecimalPlaces)
 	return requiredTokens, remainingAmount, nil
+}
+
+func (c *Core) GetPledgedInfo() ([]model.PledgedTokenStateDetails, error) {
+	wt, err := c.w.GetAllTokenStateHash()
+	if err != nil && err.Error() != "no records found" {
+		c.log.Error("Failed to get token state hashes", "err", err)
+		return []model.PledgedTokenStateDetails{}, fmt.Errorf("failed to get token states")
+	}
+	info := []model.PledgedTokenStateDetails{}
+	for _, t := range wt {
+		k := model.PledgedTokenStateDetails{
+			DID:            t.DID,
+			TokensPledged:  t.PledgedTokens,
+			TokenStateHash: t.TokenStateHash,
+		}
+		info = append(info, k)
+	}
+	return info, nil
+}
+
+func (c *Core) UpdatePledgedTokenInfo(tokenstatehash string) error {
+	err := c.w.RemoveTokenStateHash(tokenstatehash)
+	if err != nil && err.Error() != "no records found" {
+		c.log.Error("Failed to get token state hash", "err", err)
+	}
+	return nil
 }

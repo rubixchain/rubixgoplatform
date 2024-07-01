@@ -50,6 +50,7 @@ const (
 	APICheckQuorumStatusPath  string = "/api/check-quorum-status"
 	APIGetPeerDIDTypePath     string = "/api/get-peer-didType"
 	APIGetPeerInfoPath        string = "/api/get-peer-info"
+	APIUpdateTokenHashDetails string = "/api/update-tokenhash-details"
 )
 
 const (
