@@ -578,8 +578,8 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
-	if (pr.TokensRequired) < MinTrnxAmt {
-		c.log.Error("Pledge amount is less than ", MinTrnxAmt)
+	if (pr.TokensRequired) < MinDecimalValue(MaxDecimalPlaces) {
+		c.log.Error("Pledge amount is less than ", MinDecimalValue(MaxDecimalPlaces))
 		crep.Message = "Pledge amount is less than minimum transcation amount"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
@@ -1349,7 +1349,7 @@ func (c *Core) unlockTokens(req *ensweb.Request) *ensweb.Result {
 	}
 	crep.Status = true
 	crep.Message = "Tokens Unlocked Successfully."
-	c.log.Info("Tokens Unclocked")
+	c.log.Info("Tokens Unlocked")
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 
 }

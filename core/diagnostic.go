@@ -213,8 +213,8 @@ func (c *Core) GetFinalQuorumList(ql []string) ([]string, error) {
 	var finalQl []string
 	var opError error
 	// Loop through ql in groups of the Minimum Quorum Required
-	for i := 0; i < len(ql); i += MinQuorumRequired {
-		end := i + MinQuorumRequired
+	for i := 0; i < len(ql); i += QuorumRequired {
+		end := i + QuorumRequired
 		if end > len(ql) {
 			end = len(ql)
 		}
