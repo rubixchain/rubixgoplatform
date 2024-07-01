@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.17 copy branch"
+	version string = "0.0.17"
 )
 const (
 	VersionCmd                     string = "-v"
