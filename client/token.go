@@ -46,7 +46,7 @@ func (c *Client) GetPinnedInfo(TokenStateHash string) (*model.BasicResponse, err
 	m := make(map[string]string)
 	m["tokenstatehash"] = TokenStateHash
 	var br model.BasicResponse
-	err := c.sendJSONRequest("GET", setup.APICheckPinnedState, m, nil, &br, time.Minute*2)
+	err := c.sendJSONRequest("DELETE", setup.APICheckPinnedState, m, nil, &br, time.Minute*2)
 	if err != nil {
 		c.log.Error("Failed to get Pins", "err", err)
 		return nil, err

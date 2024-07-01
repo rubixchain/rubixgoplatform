@@ -132,6 +132,13 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, resp.ID)
 }
 
+// APIGetPledgedTokenDetails godoc
+// @Summary     Get details about the pledged tokens
+// @Description This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state
+// @Tags        Account
+// @Produce     json
+// @Success     200 {object} model.TokenStateResponse
+// @Router      /api/get-pledgedtoken-details [get]
 func (s *Server) APIGetPledgedTokenDetails(req *ensweb.Request) *ensweb.Result {
 	pledgedTokenInfo, err := s.c.GetPledgedInfo()
 	if err != nil {
@@ -148,6 +155,15 @@ func (s *Server) APIGetPledgedTokenDetails(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, tokenstateresponse, http.StatusOK)
 }
 
+// APICheckPinnedState godoc
+// @Summary     Check for exhausted token state hash
+// @Description This API is used to check if the token state for which the token is pledged is exhausted or not.
+// @Tags        Account
+// @Accept      json
+// @Produce     json
+// @Param       tokenstatehash	query	string	true	"Token State Hash"
+// @Success 	200		{object}	model.BasicResponse
+// @Router /api/check-pinned-state [delete]
 func (s *Server) APICheckPinnedState(req *ensweb.Request) *ensweb.Result {
 	tokenstatehash := s.GetQuerry(req, "tokenstatehash")
 
