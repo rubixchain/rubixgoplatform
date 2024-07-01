@@ -56,6 +56,15 @@ definitions:
           $ref: '#/definitions/wallet.TransactionCount'
         type: array
     type: object
+  server.DIDPeerMapTemp:
+    properties:
+      did:
+        type: string
+      didtype:
+        type: integer
+      peerID:
+        type: string
+    type: object
   server.DeploySmartContractSwaggoInput:
     properties:
       comment:
@@ -145,6 +154,28 @@ info:
   title: Rubix Core
   version: "0.9"
 paths:
+  /api/add-peer-details:
+    post:
+      consumes:
+      - application/json
+      description: This API allows the user to add peer details manually
+      parameters:
+      - description: Peer Details
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.DIDPeerMapTemp'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Add Peer
+      tags:
+      - Account
   /api/addnftsale:
     post:
       consumes:
