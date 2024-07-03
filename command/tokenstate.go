@@ -30,7 +30,7 @@ func (cmd *Command) CheckPinnedState() {
 	}
 	fmt.Printf("Response : %v\n", info)
 	if !info.Status {
-		cmd.log.Error("Pin not available", "message", info.Message)
+		cmd.log.Debug("Pin not available", "message", info.Message)
 	} else {
 		cmd.log.Info("Token State is Pinned")
 	}

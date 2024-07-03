@@ -605,7 +605,7 @@ func (w *Wallet) AddTokenStateHash(did string, tokenstatehashes []string, pledge
 	concatenatedpledgedtokens := ""
 
 	for _, i := range pledgedtokens {
-		concatenatedpledgedtokens = concatenatedpledgedtokens + i + " "
+		concatenatedpledgedtokens = concatenatedpledgedtokens + i + ","
 	}
 
 	for _, tokenstatehash := range tokenstatehashes {
@@ -665,7 +665,7 @@ func (w *Wallet) RemoveTokenStateHash(tokenstatehash string) error {
 		return nil
 	}
 
-	pledgedTokensList := strings.Split(td.PledgedTokens, " ")
+	pledgedTokensList := strings.Split(td.PledgedTokens, ",")
 
 	for _, pledgedToken := range pledgedTokensList {
 		if strings.TrimSpace(pledgedToken) == "" {
