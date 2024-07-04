@@ -38,11 +38,12 @@ const (
 )
 
 type Token struct {
-	TokenID       string  `gorm:"column:token_id;primaryKey"`
-	ParentTokenID string  `gorm:"column:parent_token_id"`
-	TokenValue    float64 `gorm:"column:token_value"`
-	DID           string  `gorm:"column:did"`
-	TokenStatus   int     `gorm:"column:token_status;"`
+	TokenID        string  `gorm:"column:token_id;primaryKey"`
+	ParentTokenID  string  `gorm:"column:parent_token_id"`
+	TokenValue     float64 `gorm:"column:token_value"`
+	DID            string  `gorm:"column:did"`
+	TokenStatus    int     `gorm:"column:token_status;"`
+	TokenStateHash string  `gorm:"column:token_state_hash"`
 }
 
 func (w *Wallet) CreateToken(t *Token) error {
@@ -416,7 +417,6 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 				return err
 			}
 		}
-
 		t.DID = did
 		t.TokenStatus = TokenIsFree
 		err = w.s.Update(TokenStorage, &t, "token_id=?", ti[i].Token)
@@ -452,6 +452,20 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	// 	w.AddTokenBlock(pt[i], tcb)
 	// }
 	return nil
+}
+
+func (w *Wallet) TokenStateHashUpdate(tokenwithtokenhash []string) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t Token
+	for _, val := range tokenwithtokenhash {
+		token := strings.Split(val, ".")[0]
+		tokenstatehash := strings.Split(val, ".")[1]
+		_ = w.s.Read(TokenStorage, &t, "token_id=?", token)
+		t.TokenStateHash = tokenstatehash
+		_ = w.s.Update(TokenStorage, &t, "token_id=?", token)
+	}
+
 }
 
 func (w *Wallet) CommitTokens(did string, rbtTokens []string) error {

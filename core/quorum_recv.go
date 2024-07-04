@@ -761,12 +761,32 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
 	senderPeerId, _, _ := util.ParseAddress(sr.Address)
+
 	err = c.w.TokensReceived(did, sr.TokenInfo, b, senderPeerId, c.peerID)
 	if err != nil {
 		c.log.Error("Failed to update token status", "err", err)
 		crep.Message = "Failed to update token status"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
+	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
+	//quorums using pledgefinality function, to be added to TokenStateHash Table
+	var updatedtokenhashes []string
+	var tokenwithtokenhash []string
+	for _, ti := range sr.TokenInfo {
+		t := ti.Token
+		b := c.w.GetLatestTokenBlock(ti.Token, ti.TokenType)
+		blockId, _ := b.GetBlockID(t)
+		tokenIDTokenStateData := t + blockId
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
+		tokenIDTokenStateHash, _ := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		updatedtokenhashes = append(updatedtokenhashes, tokenIDTokenStateHash)
+		tokenwithtokenhash = append(tokenwithtokenhash, t+"."+tokenIDTokenStateHash)
+	}
+
+	//Updating the latest tokenstatehash with the new owner i.e. receiver
+	c.w.TokenStateHashUpdate(tokenwithtokenhash)
+
 	sc := contract.InitContract(b.GetSmartContract(), nil)
 	if sc == nil {
 		c.log.Error("Failed to update token status, missing smart contract")
@@ -779,18 +799,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update token status, failed to get block ID"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
-	//quorums using pledgefinality function, to be added to TokenStateHash Table
-	var updatedtokenhashes []string
-	for _, ti := range sr.TokenInfo {
-		t := ti.Token
-		b := c.w.GetLatestTokenBlock(ti.Token, ti.TokenType)
-		blockId, _ := b.GetBlockID(t)
-		tokenIDTokenStateData := t + blockId
-		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
-		tokenIDTokenStateHash, _ := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-		updatedtokenhashes = append(updatedtokenhashes, tokenIDTokenStateHash)
-	}
+
 	td := &wallet.TransactionDetails{
 		TransactionID:   b.GetTid(),
 		TransactionType: b.GetTransType(),
