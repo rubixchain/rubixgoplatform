@@ -17,6 +17,17 @@ definitions:
       type:
         type: integer
     type: object
+  core.UpgradeRequest:
+    properties:
+      did:
+        type: string
+      did_type:
+        type: integer
+      priv_pwd:
+        type: string
+      quorum_pwd:
+        type: string
+    type: object
   model.BasicResponse:
     properties:
       message:
@@ -646,6 +657,29 @@ paths:
       summary: Subscribe to Smart Contract
       tags:
       - Smart Contract
+  /api/upgrade-tokens:
+    post:
+      consumes:
+      - application/json
+      description: It will upgrade tokens server-side.
+      operationId: upgradetokens
+      parameters:
+      - description: Upgrade request details
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/core.UpgradeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Upgrade Tokens
+      tags:
+      - Basic
 securityDefinitions:
   SessionToken:
     in: header

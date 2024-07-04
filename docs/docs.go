@@ -776,6 +776,41 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/api/upgrade-tokens": {
+            "post": {
+                "description": "It will upgrade tokens server-side.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Basic"
+                ],
+                "summary": "Upgrade Tokens",
+                "operationId": "upgradetokens",
+                "parameters": [
+                    {
+                        "description": "Upgrade request details",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/core.UpgradeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -804,6 +839,23 @@ const docTemplate = `{
                 },
                 "type": {
                     "type": "integer"
+                }
+            }
+        },
+        "core.UpgradeRequest": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "did_type": {
+                    "type": "integer"
+                },
+                "priv_pwd": {
+                    "type": "string"
+                },
+                "quorum_pwd": {
+                    "type": "string"
                 }
             }
         },

@@ -57,7 +57,6 @@ func CheckWholeToken(tokenDetials string) (string, bool, error) {
 }
 
 func calcSHA256(targetHash string, maxNumber int) int {
-
 	for i := 0; i < maxNumber; i++ {
 		hash := sha256.Sum256([]byte(strconv.Itoa(i)))
 		hashString := fmt.Sprintf("%x", hash)
@@ -80,7 +79,7 @@ func ValidateTokenDetials(tl int, tn int) bool {
 	return tn < TokenMap[tl]
 }
 
-func ValidateWholeToken(tokenDetials string) (int, int, bool, error) {
+func ValidateWholeTokenForMigration(tokenDetials string) (int, int, bool, error) {
 	tokenLevel, tokenCountHash, needMigration, err := GetWholeTokenValue(tokenDetials)
 	if err != nil {
 		return -1, -1, false, err

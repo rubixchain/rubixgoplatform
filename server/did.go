@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -43,6 +44,8 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 	}
 	defer os.RemoveAll(folderName)
 
+	fmt.Println("input data is ", req.Data)
+	fmt.Println("request body is ", req.GetHTTPRequest())
 	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
 
 	if err != nil {
@@ -54,6 +57,7 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("missing did configuration")
 		return s.BasicResponse(req, false, "missing did configuration", nil)
 	}
+	fmt.Println("fields is ", fields)
 	var didCreate did.DIDCreate
 	err = json.Unmarshal([]byte(fields[0]), &didCreate)
 	if err != nil {

@@ -51,3 +51,15 @@ type TokenResponse struct {
 	BasicResponse
 	TokenDetials []TokenDetial `json:"token_detials"`
 }
+
+// StatusTokensResponse represents a list of tokens for a specific status.
+type StatusTokensResponse struct {
+	Status int      `json:"status"`
+	Tokens []string `json:"tokens"`
+}
+
+// TokenDetails represents the details of a token, including its ID and status.
+type TokenDetails struct {
+	TokenID string `json:"tokenId"`
+	Status  int    `json:"status"`
+}

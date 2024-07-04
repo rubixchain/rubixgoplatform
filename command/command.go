@@ -82,6 +82,7 @@ const (
 	AddExplorerCmd                 string = "addexplorer"
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
+	UpgradeTokensCmd               string = "upgradetokens"
 )
 
 var commands = []string{VersionCmd,
@@ -128,6 +129,7 @@ var commands = []string{VersionCmd,
 	GetSmartContractData,
 	GetPeerID,
 	CheckQuorumStatusCmd,
+	UpgradeTokensCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -171,7 +173,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will dump the smartcontract token chain",
 	"This command gets token block",
 	"This command gets the smartcontract data from latest block",
-	"This command will fetch the peer ID of the node"}
+	"This command will fetch the peer ID of the node",
+	"This command will check if the quorums are available to validate your transcation",
+	"This command will upgrade your exisitng token to latest security enhancement"}
 
 type Command struct {
 	cfg                config.Config
@@ -602,6 +606,9 @@ func Run(args []string) {
 		cmd.removeExplorer()
 	case GetAllExplorerCmd:
 		cmd.getAllExplorer()
+	case UpgradeTokensCmd:
+		cmd.UpgradeTokensCmd()
+
 	default:
 		cmd.log.Error("Invalid command")
 	}

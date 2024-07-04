@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/rubixchain/rubixgoplatform/wrapper/helper/jsonutil"
-	"github.com/rubixchain/rubixgoplatform/wrapper/wraperr"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -16,6 +14,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/rubixchain/rubixgoplatform/wrapper/helper/jsonutil"
+	"github.com/rubixchain/rubixgoplatform/wrapper/wraperr"
 )
 
 // bufferedReader can be used to replace a request body with a buffered
@@ -246,22 +247,38 @@ func (s *Server) GetQuerry(req *Request, key string) string {
 }
 
 func (s *Server) ParseMultiPartForm(req *Request, dirPath string) ([]string, map[string][]string, error) {
+	fmt.Println("Parsing multipart form")
 	mediatype, _, err := mime.ParseMediaType(req.r.Header.Get("Content-Type"))
 	if err != nil {
 		return nil, nil, err
 	}
-	if mediatype != "multipart/form-data" {
-		return nil, nil, fmt.Errorf("invalid content type")
+	fmt.Println("mediatype is ", mediatype)
+	//	if mediatype != "multipart/form-data" {
+	//		return nil, nil, fmt.Errorf("invalid content type")
+	//	}
+	fmt.Println("req.r is ", req.r)
+	fmt.Println("req.r.MultipartForm is ", req.r.MultipartForm)
+	if req.r.MultipartForm != nil {
+		fmt.Println("req.r.MultipartForm.Value is ", req.r.MultipartForm.Value)
+	} else {
+		fmt.Println("req.r.MultipartForm is nil")
 	}
 	defer req.r.Body.Close()
 
 	req.r.ParseMultipartForm(52428800)
 	paramFiles := make([]string, 0)
 	paramTexts := make(map[string][]string)
+	fmt.Println("For loop started k_")
 	for k, v := range req.r.MultipartForm.Value {
+		fmt.Println("v is ", v)
+		fmt.Println("k is ", k)
 		paramTexts[k] = append(paramTexts[k], v...)
 	}
+	fmt.Println("For loop ended k_")
 
+	fmt.Println("paramTexts is ", paramTexts)
+
+	fmt.Println("For loop started k_")
 	for k, _ := range req.r.MultipartForm.File {
 		file, fileHeader, err := req.r.FormFile(k)
 		if err != nil {
@@ -271,18 +288,19 @@ func (s *Server) ParseMultiPartForm(req *Request, dirPath string) ([]string, map
 		out, err := os.OpenFile(localFileName, os.O_CREATE|os.O_RDWR, 0777)
 		if err != nil {
 			file.Close()
-			return nil, nil, fmt.Errorf("faile to open file")
+			return nil, nil, fmt.Errorf("failed to open file")
 		}
 		_, err = io.Copy(out, file)
 		if err != nil {
 			file.Close()
 			out.Close()
-			return nil, nil, fmt.Errorf("faile to copy file")
+			return nil, nil, fmt.Errorf("failed to copy file")
 		}
 		out.Close()
 		file.Close()
 		paramFiles = append(paramFiles, localFileName)
 	}
+	fmt.Println("For loop done")
 
 	return paramFiles, paramTexts, nil
 }
