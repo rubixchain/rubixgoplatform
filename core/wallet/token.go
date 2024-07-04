@@ -602,11 +602,7 @@ func (w *Wallet) AddTokenStateHash(did string, tokenstatehashes []string, pledge
 	if tokenstatehashes == nil {
 		return nil
 	}
-	concatenatedpledgedtokens := ""
-
-	for _, i := range pledgedtokens {
-		concatenatedpledgedtokens = concatenatedpledgedtokens + i + ","
-	}
+	concatenatedpledgedtokens := strings.Join(pledgedtokens, ",")
 
 	for _, tokenstatehash := range tokenstatehashes {
 		td.DID = did
