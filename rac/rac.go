@@ -18,6 +18,8 @@ const (
 	RacTestNFTType
 	RacTestDataTokenType
 	RacTestPartTokenType
+	RacFTType
+	RacTestFTType
 )
 
 const (
@@ -63,12 +65,20 @@ type RacType struct {
 	ContentURL   map[string]string
 	TransInfo    map[string]string
 	PartInfo     *RacPartInfo
+	FTSymbol     string
+	FTInfo       *RacFTInfo
 }
 
 type RacPartInfo struct {
 	Parent  string
 	PartNum int
 	Value   float64
+}
+
+type RacFTInfo struct {
+	Parents string
+	FTNum   int
+	FTName  string
 }
 
 type RacBlock struct {
