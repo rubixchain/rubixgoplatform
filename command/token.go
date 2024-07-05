@@ -22,3 +22,18 @@ func (cmd *Command) GenerateTestRBT() {
 	}
 	cmd.log.Info("Test RBT generated successfully")
 }
+
+func (cmd *Command) ValidateTokenchain() {
+	br, err := cmd.c.ValidateTokenchain(cmd.did, cmd.allMyTokens, cmd.token, cmd.blockCount)
+	if err != nil {
+		cmd.log.Error("failed to validate token chain", "err", err)
+		return
+	}
+
+	if !br.Status {
+		cmd.log.Error("failed to validate token chain", "msg", br.Message)
+		return
+	}
+
+	cmd.log.Info("Tokenchain validated successfully", "msg", br.Message)
+}

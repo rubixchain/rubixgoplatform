@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -22,6 +23,7 @@ type PingResponse struct {
 // PingSetup will setup the ping route
 func (c *Core) PingSetup() {
 	c.l.AddRoute(APIPingPath, "GET", c.PingRecevied)
+	c.l.AddRoute(APILockInvalidToken, "POST", c.LockInvalidTokenResponse)
 }
 
 // CheckQuorumStatusSetup will setup the ping route
@@ -147,4 +149,54 @@ func (c *Core) GetPeerdidType_fromPeer(peerID string, did string) (int, string, 
 		return -1, "Send Json Request error ", err
 	}
 	return getPeerdidTypeResponse.DidType, getPeerdidTypeResponse.Message, nil
+}
+
+// LockInvalidTokenResponse is the handler for LockInvalidToken request
+func (c *Core) LockInvalidTokenResponse(req *ensweb.Request) *ensweb.Result { //PingRecevied
+	did := c.l.GetQuerry(req, "did")
+	var tokenId string
+
+	resp := &model.BasicResponse{
+		Status: false,
+	}
+	err := c.l.ParseJSON(req, &tokenId)
+	if err != nil {
+		resp.Message = "failed to parse tokenId"
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	token_info, err := c.w.ReadToken(tokenId)
+	if err != nil {
+		resp.Message = "failed to retrieve token details. inValid token"
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	c.log.Debug("token owner:", token_info.DID)
+	if token_info.DID != did || token_info.TokenStatus != wallet.TokenIsFree {
+		c.log.Error("Not token owner, can not lock token")
+		resp.Message = "Not token owner, can't lock token"
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	err = c.w.LockToken(token_info)
+	if err != nil {
+		resp.Message = "failed to lock invalid token"
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	resp.Status = true
+	resp.Message = "Token locked successfully"
+	return c.l.RenderJSON(req, &resp, http.StatusOK)
+
+}
+
+func (c *Core) LockInvalidToken(tokenId string, user_did string) (*model.BasicResponse, error) {
+	var rm model.BasicResponse
+	p, err := c.pm.OpenPeerConn(c.peerID, user_did, c.getCoreAppName(c.peerID))
+	if err != nil {
+		rm.Message = "Self-peer Connection Error"
+		rm.Status = false
+		return &rm, err
+	}
+	err = p.SendJSONRequest("POST", APILockInvalidToken, nil, tokenId, &rm, true)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
 }

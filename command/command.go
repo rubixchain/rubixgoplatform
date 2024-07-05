@@ -82,6 +82,7 @@ const (
 	AddExplorerCmd                 string = "addexplorer"
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
+	ValidateTokenchainCmd          string = "validatetokenchain"
 )
 
 var commands = []string{VersionCmd,
@@ -128,6 +129,7 @@ var commands = []string{VersionCmd,
 	GetSmartContractData,
 	GetPeerID,
 	CheckQuorumStatusCmd,
+	ValidateTokenchainCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -249,6 +251,8 @@ type Command struct {
 	links              []string
 	mnemonicFile       string
 	ChildPath          int
+	blockCount         int
+	allMyTokens        bool
 }
 
 func showVersion() {
@@ -445,6 +449,8 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 	flag.StringVar(&links, "links", "", "Explorer url")
+	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
+	flag.BoolVar(&cmd.allMyTokens, "allmyTokens", false, "Validate token chain of all the tokens of the user")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -602,6 +608,8 @@ func Run(args []string) {
 		cmd.removeExplorer()
 	case GetAllExplorerCmd:
 		cmd.getAllExplorer()
+	case ValidateTokenchainCmd:
+		cmd.ValidateTokenchain()
 	default:
 		cmd.log.Error("Invalid command")
 	}

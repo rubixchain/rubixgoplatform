@@ -1,7 +1,9 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -129,4 +131,26 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	s.c.UpateWebReq(resp.ID, req)
 	dc.InChan <- resp
 	return s.didResponse(req, resp.ID)
+}
+
+func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
+	user_did := s.GetQuerry(req, "did")
+	token := s.GetQuerry(req, "token")
+	allMyTokens_str := s.GetQuerry(req, "allmytokens")
+	blockCount_str := s.GetQuerry(req, "blockcount")
+	blockCount, err := strconv.Atoi(blockCount_str)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to convert blockCount string into integer", nil)
+	}
+	
+	allMyTokens, err := strconv.ParseBool(allMyTokens_str)
+	if err != nil {
+		fmt.Errorf("Error converting string to boolean:", err)
+		return s.BasicResponse(req, false, "Error converting string to boolean", nil)
+	}
+	br, err := s.c.TokenChainValidation(user_did, allMyTokens, token, blockCount)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to validate token(s)", nil)
+	}
+	return s.RenderJSON(req, br, http.StatusOK)
 }
