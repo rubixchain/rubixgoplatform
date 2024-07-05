@@ -82,6 +82,7 @@ const (
 	AddExplorerCmd                 string = "addexplorer"
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
+	AddPeerDetailsCmd              string = "addpeerdetails"
 	ValidateTokenchainCmd          string = "validatetokenchain"
 )
 
@@ -128,6 +129,7 @@ var commands = []string{VersionCmd,
 	GetTokenBlock,
 	GetSmartContractData,
 	GetPeerID,
+	AddPeerDetailsCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
 }
@@ -173,7 +175,8 @@ var commandsHelp = []string{"To get tool version",
 	"This command will dump the smartcontract token chain",
 	"This command gets token block",
 	"This command gets the smartcontract data from latest block",
-	"This command will fetch the peer ID of the node"}
+	"This command will fetch the peer ID of the node",
+	"This command is to add the peer details manually"}
 
 type Command struct {
 	cfg                config.Config
@@ -608,6 +611,8 @@ func Run(args []string) {
 		cmd.removeExplorer()
 	case GetAllExplorerCmd:
 		cmd.getAllExplorer()
+	case AddPeerDetailsCmd:
+		cmd.AddPeerDetails()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
 	default:

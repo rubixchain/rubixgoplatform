@@ -9,7 +9,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
@@ -33,21 +32,12 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Sender and receiver cannot be same"
 		return resp
 	}
-
-	if !strings.Contains(req.Sender, ".") || !strings.Contains(req.Receiver, ".") {
-		resp.Message = "Sender and receiver address should be of the format PeerID.DID"
-		return resp
-	}
-
-	_, did, ok := util.ParseAddress(req.Sender)
-	if !ok {
-		resp.Message = "Invalid sender DID"
-		return resp
-	}
-
-	rpeerid, rdid, ok := util.ParseAddress(req.Receiver)
-	if !ok {
-		resp.Message = "Invalid receiver DID"
+	did := req.Sender
+	rdid := req.Receiver
+	rpeerid := c.w.GetPeerID(rdid)
+	if rpeerid == "" {
+		c.log.Error("Peer ID not found", "did", rdid)
+		resp.Message = "invalid address, Peer ID not found"
 		return resp
 	}
 
@@ -131,7 +121,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	// Get the receiver & do sanity check
-	p, err := c.getPeer(req.Receiver)
+	p, err := c.getPeer(req.Receiver, did)
 	if err != nil {
 		resp.Message = "Failed to get receiver peer, " + err.Error()
 		return resp
