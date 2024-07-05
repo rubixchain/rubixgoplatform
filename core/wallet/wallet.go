@@ -27,6 +27,8 @@ const (
 	SmartContractTokenChainStorage string = "smartcontractokenchainstorage"
 	SmartContractStorage           string = "smartcontract"
 	CallBackUrlStorage             string = "callbackurl"
+	FTTokenStorage                 string = "FTTokenStorage"
+	FTChainStorage                 string = "ftchainstorage"
 )
 
 type WalletConfig struct {
@@ -134,6 +136,10 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	if err != nil {
 		w.log.Error("Failed to initialize Smart Contract storage", "err", err)
 		return nil, err
+	}
+	err = w.s.Init(FTTokenStorage, FT{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize FT storahe", "err", err)
 	}
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
