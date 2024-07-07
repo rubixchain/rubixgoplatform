@@ -1,8 +1,19 @@
 package command
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func (cmd *Command) getTxnDetails() {
+	if cmd.did == "" && cmd.txnID == "" && cmd.transComment == "" {
+		cmd.log.Error("Please provide did or transaction id or transaction comment to get transaction details")
+		return
+	}
+	if cmd.did != "" && !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+		cmd.log.Error("Invalid DID")
+		return
+	}
 	if cmd.txnID != "" {
 		res, err := cmd.c.GetTxnByID(cmd.txnID)
 		if err != nil {

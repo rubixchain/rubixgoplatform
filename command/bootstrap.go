@@ -2,7 +2,7 @@ package command
 
 func (cmd *Command) addBootStrap() {
 	if len(cmd.peers) == 0 {
-		cmd.log.Error("Peers required for bootstrap")
+		cmd.log.Error("Peers required for bootstrap. Use flag -peers to provide peers separated by a ','")
 		return
 	}
 	msg, status := cmd.c.AddBootStrap(cmd.peers)
@@ -16,7 +16,7 @@ func (cmd *Command) addBootStrap() {
 
 func (cmd *Command) removeBootStrap() {
 	if len(cmd.peers) == 0 {
-		cmd.log.Error("Peers required for bootstrap")
+		cmd.log.Error("Peers required for bootstrap. Use flag -peers to provide peers separated by a ','")
 		return
 	}
 	msg, status := cmd.c.RemoveBootStrap(cmd.peers)

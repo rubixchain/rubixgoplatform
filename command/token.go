@@ -1,6 +1,16 @@
 package command
 
+import "strings"
+
 func (cmd *Command) GenerateTestRBT() {
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+	if cmd.numTokens <= 0 {
+		cmd.log.Error("Invalid RBT amount, tokens generated should be a whole number and greater than 0")
+		return
+	}
 
 	br, err := cmd.c.GenerateTestRBT(cmd.numTokens, cmd.did)
 

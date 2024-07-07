@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
@@ -12,6 +13,10 @@ import (
 )
 
 func (cmd *Command) createDataToken() {
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+		cmd.log.Error("Invalid DID")
+		return
+	}
 	dt := client.DataTokenReq{
 		DID:      cmd.did,
 		UserID:   cmd.userID,
@@ -59,6 +64,10 @@ func (cmd *Command) createDataToken() {
 }
 
 func (cmd *Command) commitDataToken() {
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+		cmd.log.Error("Invalid DID")
+		return
+	}
 	br, err := cmd.c.CommitDataToken(cmd.did, cmd.batchID)
 	if err != nil {
 		cmd.log.Error("Failed to commit data token", "err", err)

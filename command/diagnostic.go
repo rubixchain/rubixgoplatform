@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -133,6 +134,11 @@ func tcMarshal(str string, m interface{}) (string, error) {
 }
 
 func (cmd *Command) dumpTokenChain() {
+	if len(cmd.token) < 46 || !strings.HasPrefix(cmd.token, "Qm") {
+		cmd.log.Error("Invalid smart contract token")
+		return
+	}
+
 	blocks := make([]map[string]interface{}, 0)
 	blockID := ""
 	for {
@@ -174,6 +180,10 @@ func (cmd *Command) dumpTokenChain() {
 }
 
 func (cmd *Command) dumpSmartContractTokenChain() {
+	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
+		cmd.log.Error("Invalid smart contract token")
+		return
+	}
 	blocks := make([]map[string]interface{}, 0)
 	blockID := ""
 	for {
