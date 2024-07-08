@@ -32,6 +32,19 @@ func (cmd *Command) checkQuorumStatus() {
 			return
 		}
 	}
+	parts := strings.Split(cmd.quorumAddr, ".")
+	if len(parts) != 2 {
+		cmd.log.Error("Invalid quorum address")
+		return
+	}
+	if !strings.HasPrefix(parts[0], "12D3KooW") || len(parts[0]) < 52 {
+		cmd.log.Error("Invalid PeerID of the quorum")
+		return
+	}
+	if !strings.HasPrefix(parts[1], "bafybmi") || len(parts[1]) < 59 {
+		cmd.log.Error("Invalid DID of the quorum")
+		return
+	}
 	msg, _ := cmd.c.CheckQuorumStatus(cmd.quorumAddr)
 	//Verification with "status" pending !
 	if strings.Contains(msg, "Quorum is setup") {

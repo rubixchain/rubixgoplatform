@@ -2,7 +2,7 @@ package client
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -14,7 +14,7 @@ func (c *Client) AddQuorum(quorumList string) (string, bool) {
 		c.log.Error("Quorum list required")
 		return "Quorum list required", false
 	}
-	qlb, err := ioutil.ReadFile(quorumList)
+	qlb, err := os.ReadFile(quorumList)
 	if err != nil {
 		c.log.Error("Invalid file", "err", err)
 		return "Invalid file, failed to add quorum list", false
@@ -24,6 +24,10 @@ func (c *Client) AddQuorum(quorumList string) (string, bool) {
 	if err != nil {
 		c.log.Error("Invalid file, failed to add quorum list", "err", err)
 		return "Invalid file, failed to add quorum list", false
+	}
+	if len(ql) == 0 {
+		c.log.Error("Quorum list provided is empty")
+		return "Quorum list provided is empty", false
 	}
 	var resp model.BasicResponse
 	err = c.sendJSONRequest("POST", setup.APIAddQuorum, nil, &ql, &resp)

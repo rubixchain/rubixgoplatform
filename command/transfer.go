@@ -38,7 +38,7 @@ func (cmd *Command) TransferRBT() {
 		cmd.log.Error("Invalid RBT amount")
 		return
 	}
-	if cmd.transType < 0 || cmd.transType > 2 {
+	if cmd.transType < 1 || cmd.transType > 2 {
 		cmd.log.Error("Invalid trans type")
 		return
 	}

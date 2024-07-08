@@ -30,6 +30,10 @@ func (cmd *Command) getTxnDetails() {
 	}
 
 	if cmd.did != "" {
+		if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+			cmd.log.Error("Invalid DID")
+			return
+		}
 		res, err := cmd.c.GetTxnByDID(cmd.did, cmd.role)
 		if err != nil {
 			cmd.log.Error("Invalid response from the node", "err", err)

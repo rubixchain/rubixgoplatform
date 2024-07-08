@@ -10,6 +10,15 @@ import (
 )
 
 func (cmd *Command) generateSmartContractToken() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
 	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
 		cmd.log.Error("Invalid DID")
 		return
@@ -54,6 +63,15 @@ func (cmd *Command) generateSmartContractToken() {
 }
 
 func (cmd *Command) fetchSmartContract() {
+	if cmd.smartContractToken == "" {
+		cmd.log.Info("smart contract token id cannot be empty")
+		fmt.Print("Enter SC Token Id : ")
+		_, err := fmt.Scan(&cmd.smartContractToken)
+		if err != nil {
+			cmd.log.Error("Failed to get SC Token ID")
+			return
+		}
+	}
 	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
 		cmd.log.Error("Invalid smart contract token")
 		return
@@ -78,6 +96,15 @@ func (cmd *Command) fetchSmartContract() {
 	cmd.log.Info("Smart contract token fetched successfully")
 }
 func (cmd *Command) PublishContract() {
+	if cmd.smartContractToken == "" {
+		cmd.log.Info("smart contract token id cannot be empty")
+		fmt.Print("Enter SC Token Id : ")
+		_, err := fmt.Scan(&cmd.smartContractToken)
+		if err != nil {
+			cmd.log.Error("Failed to get SC Token ID")
+			return
+		}
+	}
 	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
 		cmd.log.Error("Invalid smart contract token")
 		return
@@ -109,6 +136,15 @@ func (cmd *Command) PublishContract() {
 	cmd.log.Info("New event published successfully")
 }
 func (cmd *Command) SubscribeContract() {
+	if cmd.smartContractToken == "" {
+		cmd.log.Info("smart contract token id cannot be empty")
+		fmt.Print("Enter SC Token Id : ")
+		_, err := fmt.Scan(&cmd.smartContractToken)
+		if err != nil {
+			cmd.log.Error("Failed to get SC Token ID")
+			return
+		}
+	}
 	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
 		cmd.log.Error("Invalid smart contract token")
 		return
@@ -134,6 +170,15 @@ func (cmd *Command) SubscribeContract() {
 }
 
 func (cmd *Command) deploySmartcontract() {
+	if cmd.smartContractToken == "" {
+		cmd.log.Info("smart contract token id cannot be empty")
+		fmt.Print("Enter SC Token Id : ")
+		_, err := fmt.Scan(&cmd.smartContractToken)
+		if err != nil {
+			cmd.log.Error("Failed to get SC Token ID")
+			return
+		}
+	}
 	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
 		cmd.log.Error("Invalid smart contract token")
 		return
@@ -146,7 +191,7 @@ func (cmd *Command) deploySmartcontract() {
 		cmd.log.Error("Invalid RBT amount")
 		return
 	}
-	if cmd.transType < 0 || cmd.transType > 2 {
+	if cmd.transType < 1 || cmd.transType > 2 {
 		cmd.log.Error("Invalid trans type")
 		return
 	}
@@ -172,6 +217,15 @@ func (cmd *Command) deploySmartcontract() {
 }
 
 func (cmd *Command) executeSmartcontract() {
+	if cmd.smartContractToken == "" {
+		cmd.log.Info("smart contract token id cannot be empty")
+		fmt.Print("Enter SC Token Id : ")
+		_, err := fmt.Scan(&cmd.smartContractToken)
+		if err != nil {
+			cmd.log.Error("Failed to get SC Token ID")
+			return
+		}
+	}
 	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
 		cmd.log.Error("Invalid smart contract token")
 		return
@@ -180,7 +234,7 @@ func (cmd *Command) executeSmartcontract() {
 		cmd.log.Error("Invalid executer DID")
 		return
 	}
-	if cmd.transType < 0 || cmd.transType > 2 {
+	if cmd.transType < 1 || cmd.transType > 2 {
 		cmd.log.Error("Invalid trans type")
 		return
 	}

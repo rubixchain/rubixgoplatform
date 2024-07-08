@@ -134,6 +134,15 @@ func tcMarshal(str string, m interface{}) (string, error) {
 }
 
 func (cmd *Command) dumpTokenChain() {
+	if cmd.token == "" {
+		cmd.log.Info("token id cannot be empty")
+		fmt.Print("Enter Token Id : ")
+		_, err := fmt.Scan(&cmd.token)
+		if err != nil {
+			cmd.log.Error("Failed to get Token ID")
+			return
+		}
+	}
 	if len(cmd.token) < 46 || !strings.HasPrefix(cmd.token, "Qm") {
 		cmd.log.Error("Invalid smart contract token")
 		return
@@ -180,6 +189,15 @@ func (cmd *Command) dumpTokenChain() {
 }
 
 func (cmd *Command) dumpSmartContractTokenChain() {
+	if cmd.smartContractToken == "" {
+		cmd.log.Info("smart contract token id cannot be empty")
+		fmt.Print("Enter SC Token Id : ")
+		_, err := fmt.Scan(&cmd.smartContractToken)
+		if err != nil {
+			cmd.log.Error("Failed to get SC Token ID")
+			return
+		}
+	}
 	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
 		cmd.log.Error("Invalid smart contract token")
 		return

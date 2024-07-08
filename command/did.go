@@ -185,6 +185,15 @@ func (cmd *Command) GetAllDID() {
 }
 
 func (cmd *Command) RegsiterDIDCmd() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
 	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
 		cmd.log.Error("Invalid DID")
 		return
@@ -335,6 +344,15 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 }
 
 func (cmd *Command) GetAccountInfo() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
 	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
 		cmd.log.Error("Invalid DID")
 		return
