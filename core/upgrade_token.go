@@ -34,7 +34,7 @@ func (c *Core) UpgradeTokens(upgradeRequest *UpgradeRequest) (*model.BasicRespon
 
 	// Group tokens by status
 	tokensByStatus := make(map[int][]string)
-	for _, detail := range tokenDetails.TokenDetials {
+	for _, detail := range tokenDetails.TokenDetails {
 		tokensByStatus[detail.Status] = append(tokensByStatus[detail.Status], detail.Token)
 	}
 
@@ -48,7 +48,7 @@ func (c *Core) UpgradeTokens(upgradeRequest *UpgradeRequest) (*model.BasicRespon
 	}
 
 	// Get the ipfs cat value of each token
-	for _, token := range tokenDetails.TokenDetials {
+	for _, token := range tokenDetails.TokenDetails {
 		path := token.Token
 		rpt, err := c.ipfs.Cat(path)
 		if err != nil {

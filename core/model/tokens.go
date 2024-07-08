@@ -42,14 +42,14 @@ type DIDAccountInfo struct {
 	LockedRBT  float64 `json:"locked_rbt"`
 }
 
-type TokenDetial struct {
+type TokenDetail struct {
 	Token  string `json:"token"`
 	Status int    `json:"status"`
 }
 
 type TokenResponse struct {
 	BasicResponse
-	TokenDetials []TokenDetial `json:"token_detials"`
+	TokenDetails []TokenDetail `json:"token_detials"`
 }
 
 // StatusTokensResponse represents a list of tokens for a specific status.
