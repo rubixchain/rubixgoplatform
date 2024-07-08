@@ -336,7 +336,7 @@ func (c *Core) getFromIPFS(path string) ([]byte, error) {
 // 	// c.log.Debug("Token recevied", "token", tp.Token)
 // }
 
-func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token, float64, error) {
+func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]wallet.Token, float64, error) {
 	requiredTokens := make([]wallet.Token, 0)
 	var remainingAmount float64
 	wholeValue := int(txnAmount)
@@ -348,7 +348,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 	if wholeValue != 0 {
 		//extract the whole amount part that is the integer value of txn amount
 		//serach for the required whole amount
-		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue)
+		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode)
 		if err != nil && err.Error() != "no records found" {
 			c.w.ReleaseTokens(wholeTokens)
 			c.log.Error("failed to search for whole tokens", "err", err)
@@ -515,4 +515,11 @@ func (c *Core) UpdatePledgedTokenInfo(tokenstatehash string) error {
 		c.log.Error("Failed to get token state hash", "err", err)
 	}
 	return nil
+}
+
+func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
+	requiredTokens, err := c.w.GetAllPinnedTokens(did)
+	fmt.Println("err", err)
+	fmt.Println("The tokenlist received:", requiredTokens)
+	return requiredTokens, nil
 }

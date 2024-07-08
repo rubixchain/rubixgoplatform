@@ -29,6 +29,13 @@ type RBTPinRequest struct {
 	Password    string  `json:"password"`
 }
 
+type RBTRecoverRequest struct {
+	PinningNode string  `json:"pinningNode"`
+	Sender      string  `json:"sender"`
+	TokenCount  float64 `json:"tokenCount"`
+	Password    string  `json:"password"`
+}
+
 type RBTTransferReply struct {
 	BasicResponse
 	Receiver   string `json:"receiver"`

@@ -110,6 +110,42 @@ func (s *Server) APIInitiatePinRBT(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+type RBTRecoverRequestSwaggoInput struct {
+	PinningNode string  `json:"pinningNode"`
+	Sender      string  `json:"sender"`
+	TokenCount  float64 `json:"tokenCOunt"`
+	Password    string  `json:"password"`
+}
+
+// ShowAccount godoc
+// @Summary     Recover RBT Token and Tokenchain from the pinning node
+// @Description This API will recover token and tokenchain from the Pinning node to the node which has pinned the token
+// @Tags        Account
+// @ID 			recover-rbt
+// @Accept      json
+// @Produce     json
+// @Param 		input body RBTRecoverRequestSwaggoInput true "Recover-RBT"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/api/recover-rbt [post]
+
+func (s *Server) APIRecoverRBT(req *ensweb.Request) *ensweb.Result {
+	var rbtReq model.RBTRecoverRequest
+	err := s.ParseJSON(req, &rbtReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	_, did, ok := util.ParseAddress(rbtReq.Sender)
+	if !ok {
+		return s.BasicResponse(req, false, "Invalid sender address", nil)
+	}
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.InitiateRecoverRBT(req.ID, &rbtReq)
+	return s.didResponse(req, req.ID)
+}
+
 // ShowAccount godoc
 // @Summary      Check account balance
 // @Description  For a mentioned DID, check the account balance

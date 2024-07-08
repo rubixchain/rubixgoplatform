@@ -172,6 +172,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIUnlockTokens, "POST", c.unlockTokens)
 	c.l.AddRoute(APIUpdateTokenHashDetails, "POST", c.updateTokenHashDetails)
 	c.l.AddRoute(APIAddUnpledgeDetails, "POST", c.addUnpledgeDetails)
+	c.l.AddRoute(APIRecoverPinnedRBT, "POST", c.recoverPinnedToken)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
@@ -649,7 +650,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
-			Mode:            wallet.SendMode,
+			Mode:            wallet.PinningServiceMode,
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetPinningServiceDID(),
 			Comment:         sc.GetComment(),

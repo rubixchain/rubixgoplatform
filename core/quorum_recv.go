@@ -592,7 +592,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 
 	dc := c.pqc[did]
-	wt, err := c.GetTokens(dc, did, pr.TokensRequired)
+	wt, err := c.GetTokens(dc, did, pr.TokensRequired, RBTTransferMode)
 	if err != nil {
 		crep.Message = "Failed to get tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)

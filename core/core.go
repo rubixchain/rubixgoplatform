@@ -52,6 +52,7 @@ const (
 	APIUpdateTokenHashDetails string = "/api/update-tokenhash-details"
 	APIAddUnpledgeDetails     string = "/api/initiate-unpledge"
 	APISelfTransfer           string = "/api/self-transfer"
+	APIRecoverPinnedRBT       string = "/api/recover-pinned-rbt"
 )
 
 const (

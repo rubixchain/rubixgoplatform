@@ -160,13 +160,21 @@ func (w *Wallet) GetCloserToken(did string, rem float64) (*Token, error) {
 	return &tks[0], nil
 }
 
-func (w *Wallet) GetWholeTokens(did string, num int) ([]Token, int, error) {
+func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int) ([]Token, int, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=?) AND token_value=?", did, TokenIsFree, TokenIsPinnedAsService, 1.0)
-	if err != nil {
-		return nil, num, err
+	if trnxMode == 0 {
+		err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=?) AND token_value=?", did, TokenIsFree, TokenIsPinnedAsService, 1.0)
+		if err != nil {
+			return nil, num, err
+		}
+	} else {
+		err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
+		if err != nil {
+			return nil, num, err
+		}
+
 	}
 	tl := len(t)
 	if tl > num {
@@ -178,10 +186,10 @@ func (w *Wallet) GetWholeTokens(did string, num int) ([]Token, int, error) {
 	}
 	for i := range wt {
 		wt[i].TokenStatus = TokenIsLocked
-		err = w.s.Update(TokenStorage, &wt[i], "did=? AND token_id=?", did, wt[i].TokenID)
-		if err != nil {
-			w.log.Error("Failed to update token status", "err", err)
-			return nil, num, err
+		err1 := w.s.Update(TokenStorage, &wt[i], "did=? AND token_id=?", did, wt[i].TokenID)
+		if err1 != nil {
+			w.log.Error("Failed to update token status", "err", err1)
+			return nil, num, err1
 		}
 	}
 	return wt, (num - tl), nil
@@ -465,7 +473,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 				TokenID:       tokenInfo.Token,
 				TokenValue:    tokenInfo.TokenValue,
 				ParentTokenID: parentTokenID,
-				DID:           did,
+				DID:           tokenInfo.OwnerDID,
 			}
 			t.TokenStateHash = tokenHashMap[tokenId]
 
@@ -476,13 +484,15 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		// Update token status and pin tokens
 		tokenStatus := TokenIsFree
 		role := OwnerRole
+		ownerdid := did
 		if pinningServiceMode {
 			tokenStatus = TokenIsPinnedAsService
 			role = PinningRole
+			ownerdid = b.GetOwner()
 		}
 
 		// Update token status
-		t.DID = did
+		t.DID = ownerdid
 		t.TokenStatus = tokenStatus
 		t.TransactionID = b.GetTid()
 		t.TokenStateHash = tokenHashMap[t.TokenID]
@@ -776,4 +786,25 @@ func (w *Wallet) RemoveTokenStateHashByTransactionID(transactionID string) error
 	}
 
 	return nil
+}
+
+func (w *Wallet) GetAllPinnedTokens(did string) ([]Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? ", did, TokenIsPinnedAsService)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	for i := range t {
+		t[i].TokenStatus = TokenIsLocked // Here should we change it to TokenIsRecovered
+		err = w.s.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return nil, err
+		}
+	}
+	return t, nil
+
 }

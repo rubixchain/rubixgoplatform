@@ -89,6 +89,7 @@ const (
 	RunUnpledge                    string = "run-unpledge"
 	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
 	PinRBTCmd                      string = "pinrbt"
+	RecoverTokensCmd               string = "recovertokens"
 )
 
 var commands = []string{VersionCmd,
@@ -139,6 +140,7 @@ var commands = []string{VersionCmd,
 	RunUnpledge,
 	UnpledgePOWPledgeTokens,
 	PinRBTCmd,
+	RecoverTokensCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -637,6 +639,8 @@ func Run(args []string) {
 		cmd.UnpledgePOWBasedPledgedTokens()
 	case PinRBTCmd:
 		cmd.PinRBT()
+	case RecoverTokensCmd:
+		cmd.RecoverTokens()
 	default:
 		cmd.log.Error("Invalid command")
 	}
