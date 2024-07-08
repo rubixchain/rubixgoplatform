@@ -219,14 +219,14 @@ func (c *Core) Validate_RBTTransfer_Block(b *block.Block, tokenId string, calcul
 	}
 
 	//validate pledged quorum signature
-	response, err = c.ValidatePledgedQuorum(b, tokenId)
+	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
 	}
 
 	//validate all quorums' signatures
-	response, err = c.ValidateQuorums(b, tokenId)
+	response, err = c.ValidateQuorums(b, user_did)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
@@ -250,8 +250,8 @@ func (c *Core) Validate_RBTBurnt_Block(b *block.Block, token_info wallet.Token, 
 	}
 
 	//validate burnt-token owner signature
-	isOwnerValid, err := c.validateSigner(b)
-	if !isOwnerValid || err != nil {
+	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	if err != nil {
 		response.Message = "invalid token owner in RBT burnt block"
 		c.log.Error("invalid token owner in RBT burnt block")
 		return response, fmt.Errorf("failed to validate token owner in RBT burnt block")
@@ -276,8 +276,8 @@ func (c *Core) ValidateGenesisBlock(b *block.Block, token_info wallet.Token, tok
 	}
 
 	//initial token owner signature verification
-	isOwnerValid, err := c.validateSigner(b)
-	if !isOwnerValid || err != nil {
+	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	if err != nil {
 		response.Message = "invalid token owner in genesis block"
 		c.log.Error("invalid token owner in genesis block")
 		return response, fmt.Errorf("failed to validate token owner in genesis block")
@@ -458,17 +458,38 @@ func (c *Core) ValidateSender(b *block.Block, tokenId string) (*model.BasicRespo
 }
 
 // pledged quorum signature verification
-func (c *Core) ValidatePledgedQuorum(b *block.Block, tokenId string) (*model.BasicResponse, error) {
+func (c *Core) Validate_Owner_or_PledgedQuorum(b *block.Block, user_did string) (*model.BasicResponse, error) {
 	c.log.Debug("validating pledged qrm")
 	response := &model.BasicResponse{
 		Status: false,
 	}
 
-	isQrmValid, err := c.validateSigner(b)
-	if !isQrmValid || err != nil {
-		c.log.Error("failed to validate pledged quorum")
-		response.Message = "invalid pledged quorum in block"
+	signers, err := b.GetSigner()
+	if err != nil {
+		c.log.Error("failed to get signers", "err", err)
 		return response, err
+	}
+	for _, signer := range signers {
+		var dc did.DIDCrypto
+		switch b.GetTransType() {
+		case block.TokenGeneratedType, block.TokenBurntType:
+			dc, err = c.SetupForienDID(signer, user_did)
+			if err != nil {
+				c.log.Error("failed to setup foreign DID", signer, "err", err)
+				return response, err
+			}
+		default:
+			dc, err = c.SetupForienDIDQuorum(signer, user_did)
+			if err != nil {
+				c.log.Error("failed to setup foreign DID quorum", signer, "err", err)
+				return response, err
+			}
+		}
+		err := b.VerifySignature(dc)
+		if err != nil {
+			c.log.Error("Failed to verify signature of signer", signer, "err", err)
+			return response, err
+		}
 	}
 
 	response.Status = true
@@ -478,7 +499,7 @@ func (c *Core) ValidatePledgedQuorum(b *block.Block, tokenId string) (*model.Bas
 }
 
 // quorum signature validation
-func (c *Core) ValidateQuorums(b *block.Block, tokenId string) (*model.BasicResponse, error) {
+func (c *Core) ValidateQuorums(b *block.Block, user_did string) (*model.BasicResponse, error) {
 	c.log.Debug("validating all qrms")
 	response := &model.BasicResponse{
 		Status: false,
@@ -493,7 +514,7 @@ func (c *Core) ValidateQuorums(b *block.Block, tokenId string) (*model.BasicResp
 
 	response.Status = true
 	for _, qrm := range quorum_sign_list {
-		qrm_DIDCrypto, err := c.SetupForienDIDQuorum(qrm.DID)
+		qrm_DIDCrypto, err := c.SetupForienDIDQuorum(qrm.DID, user_did)
 		if err != nil {
 			c.log.Error("failed to initialise quorum:", qrm.DID, "err", err)
 			continue
