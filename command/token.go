@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -15,7 +16,8 @@ func (cmd *Command) GenerateTestRBT() {
 			return
 		}
 	}
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
 		cmd.log.Error("Invalid DID")
 		return
 	}

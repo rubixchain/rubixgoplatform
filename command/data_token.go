@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/client"
@@ -22,7 +23,8 @@ func (cmd *Command) createDataToken() {
 			return
 		}
 	}
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
 		cmd.log.Error("Invalid DID")
 		return
 	}
@@ -82,7 +84,8 @@ func (cmd *Command) commitDataToken() {
 			return
 		}
 	}
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
 		cmd.log.Error("Invalid DID")
 		return
 	}

@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -10,10 +11,7 @@ func (cmd *Command) getTxnDetails() {
 		cmd.log.Error("Please provide did or transaction id or transaction comment to get transaction details")
 		return
 	}
-	if cmd.did != "" && !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
-		cmd.log.Error("Invalid DID")
-		return
-	}
+
 	if cmd.txnID != "" {
 		res, err := cmd.c.GetTxnByID(cmd.txnID)
 		if err != nil {
@@ -30,7 +28,8 @@ func (cmd *Command) getTxnDetails() {
 	}
 
 	if cmd.did != "" {
-		if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+		is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+		if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
 			cmd.log.Error("Invalid DID")
 			return
 		}

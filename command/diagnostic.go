@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -143,8 +144,10 @@ func (cmd *Command) dumpTokenChain() {
 			return
 		}
 	}
-	if len(cmd.token) < 46 || !strings.HasPrefix(cmd.token, "Qm") {
-		cmd.log.Error("Invalid smart contract token")
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.token)
+
+	if len(cmd.token) != 46 || !strings.HasPrefix(cmd.token, "Qm") || !is_alphanumeric {
+		cmd.log.Error("Invalid token")
 		return
 	}
 
@@ -198,7 +201,9 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 			return
 		}
 	}
-	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}

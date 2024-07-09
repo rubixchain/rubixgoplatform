@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -26,20 +27,22 @@ func (cmd *Command) TransferRBT() {
 			return
 		}
 	}
-	if strings.Contains(cmd.senderAddr, ".") || strings.Contains(cmd.receiverAddr, ".") {
+	is_alphanumeric_sender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	is_alphanumeric_receiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !is_alphanumeric_sender || !is_alphanumeric_receiver {
 		cmd.log.Error("Invalid sender or receiver address. Please provide valid DID")
 		return
 	}
-	if !strings.HasPrefix(cmd.senderAddr, "bafybmi") || len(cmd.senderAddr) < 59 || !strings.HasPrefix(cmd.receiverAddr, "bafybmi") || len(cmd.receiverAddr) < 59 {
+	if !strings.HasPrefix(cmd.senderAddr, "bafybmi") || len(cmd.senderAddr) != 59 || !strings.HasPrefix(cmd.receiverAddr, "bafybmi") || len(cmd.receiverAddr) != 59 {
 		cmd.log.Error("Invalid sender or receiver DID")
 		return
 	}
-	if cmd.rbtAmount == 0.0 || cmd.rbtAmount < 0.00001 {
-		cmd.log.Error("Invalid RBT amount")
+	if cmd.rbtAmount < 0.00001 {
+		cmd.log.Error("Invalid RBT amount. RBT amount should be atlease 0.00001")
 		return
 	}
 	if cmd.transType < 1 || cmd.transType > 2 {
-		cmd.log.Error("Invalid trans type")
+		cmd.log.Error("Invalid trans type. TransType should be 1 or 2")
 		return
 	}
 	rt := model.RBTTransferRequest{

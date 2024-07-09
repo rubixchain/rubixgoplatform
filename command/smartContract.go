@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/client"
@@ -19,7 +20,8 @@ func (cmd *Command) generateSmartContractToken() {
 			return
 		}
 	}
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
 		cmd.log.Error("Invalid DID")
 		return
 	}
@@ -72,7 +74,9 @@ func (cmd *Command) fetchSmartContract() {
 			return
 		}
 	}
-	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
@@ -105,15 +109,17 @@ func (cmd *Command) PublishContract() {
 			return
 		}
 	}
-	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) < 59 {
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
 		cmd.log.Error("Invalid DID")
 		return
 	}
-	if cmd.publishType < 0 || cmd.publishType > 1 {
+	if cmd.publishType < 1 || cmd.publishType > 2 {
 		cmd.log.Error("Invalid publish type")
 		return
 	}
@@ -145,7 +151,8 @@ func (cmd *Command) SubscribeContract() {
 			return
 		}
 	}
-	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
@@ -179,16 +186,18 @@ func (cmd *Command) deploySmartcontract() {
 			return
 		}
 	}
-	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
-	if !strings.HasPrefix(cmd.deployerAddr, "bafybmi") || len(cmd.deployerAddr) < 59 {
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.deployerAddr)
+	if !strings.HasPrefix(cmd.deployerAddr, "bafybmi") || len(cmd.deployerAddr) != 59 || !is_alphanumeric {
 		cmd.log.Error("Invalid deployer DID")
 		return
 	}
-	if cmd.rbtAmount == 0.0 || cmd.rbtAmount < 0.00001 {
-		cmd.log.Error("Invalid RBT amount")
+	if cmd.rbtAmount < 0.00001 {
+		cmd.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.00001")
 		return
 	}
 	if cmd.transType < 1 || cmd.transType > 2 {
@@ -226,11 +235,15 @@ func (cmd *Command) executeSmartcontract() {
 			return
 		}
 	}
-	if len(cmd.smartContractToken) < 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") {
+
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
-	if !strings.HasPrefix(cmd.executorAddr, "bafybmi") || len(cmd.executorAddr) < 59 {
+
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.executorAddr)
+	if !strings.HasPrefix(cmd.executorAddr, "bafybmi") || len(cmd.executorAddr) != 59 || !is_alphanumeric {
 		cmd.log.Error("Invalid executer DID")
 		return
 	}

@@ -2,7 +2,10 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -25,9 +28,16 @@ func (c *Client) AddQuorum(quorumList string) (string, bool) {
 		c.log.Error("Invalid file, failed to add quorum list", "err", err)
 		return "Invalid file, failed to add quorum list", false
 	}
-	if len(ql) == 0 {
-		c.log.Error("Quorum list provided is empty")
-		return "Quorum list provided is empty", false
+	if len(ql) < 5 {
+		c.log.Error("Length of Quorum list should be atleast 5")
+		return "Length of Quorum list should be atleast 5", false
+	}
+	for _, q := range ql {
+		is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(q.Address)
+		if !strings.HasPrefix(q.Address, "bafybmi") || len(q.Address) != 59 || !is_alphanumeric {
+			c.log.Error(fmt.Sprintf("Invalid quorum DID : %s", q.Address))
+			return fmt.Sprintf("Invalid quorum DID : %s", q.Address), false
+		}
 	}
 	var resp model.BasicResponse
 	err = c.sendJSONRequest("POST", setup.APIAddQuorum, nil, &ql, &resp)

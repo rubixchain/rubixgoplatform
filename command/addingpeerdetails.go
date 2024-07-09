@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -21,7 +22,8 @@ func (cmd *Command) AddPeerDetails() {
 	} else {
 		peerID = cmd.peerID
 	}
-	if !strings.HasPrefix(peerID, "12D3KooW") || len(peerID) < 52 {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.peerID)
+	if !strings.HasPrefix(cmd.peerID, "12D3KooW") || len(cmd.peerID) != 52 || !is_alphanumeric {
 		cmd.log.Error("Invalid PeerID")
 		return
 	}
@@ -36,7 +38,8 @@ func (cmd *Command) AddPeerDetails() {
 	} else {
 		did = cmd.did
 	}
-	if !strings.HasPrefix(did, "bafybmi") || len(did) < 59 {
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
 		cmd.log.Error("Invalid DID")
 		return
 	}

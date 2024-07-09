@@ -2,6 +2,8 @@ package server
 
 import (
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -69,6 +71,11 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 // @Router /api/get-by-did [get]
 func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "DID")
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
 	role := s.GetQuerry(req, "Role")
 	startDate := s.GetQuerry(req, "StartDate")
 	endDate := s.GetQuerry(req, "EndDate")
