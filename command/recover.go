@@ -16,7 +16,9 @@ func (cmd *Command) RecoverTokens() {
 		cmd.log.Error("Failed to Recover the Tokens", "err", err)
 		return
 	}
-	cmd.log.Info("The message response from RecoverRBT function", br.Message)
-	cmd.log.Info("The status in RecoverRBT function", br.Status)
-	cmd.log.Info("RBT Recovered successfully")
+	if !br.Status {
+		cmd.log.Error("Failed to recover RBT: " + br.Message)
+	} else {
+		cmd.log.Info("Recovered RBT: " + br.Message)
+	}
 }

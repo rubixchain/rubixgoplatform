@@ -606,7 +606,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Debug("Mode = PinningServiceMode ")
 		c.log.Debug("Pinning Node PeerId", cr.PinningNodePeerID)
 		c.log.Debug("Pinning Service DID", sc.GetPinningServiceDID())
-		rp, err := c.getPeer(cr.PinningNodePeerID + "." + sc.GetPinningServiceDID())
+		rp, err := c.getPeer(cr.PinningNodePeerID+"."+sc.GetPinningServiceDID(), "")
 		if err != nil {
 			c.log.Error("Pinning Node not connected", "err", err)
 			return nil, nil, err

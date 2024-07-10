@@ -56,6 +56,7 @@ type DIDAccountInfo struct {
 	RBTAmount  float64 `json:"rbt_amount"`
 	PledgedRBT float64 `json:"pledged_rbt"`
 	LockedRBT  float64 `json:"locked_rbt"`
+	PinnedRBT  float64 `json:"pinned_rbt"`
 }
 
 type TokenDetail struct {

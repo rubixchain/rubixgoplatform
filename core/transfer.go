@@ -10,7 +10,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
@@ -352,23 +351,15 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 	}
 
 	if req.Sender == req.PinningNode {
-		resp.Message = "Sender and Pinning node cannot be same"
+		resp.Message = "Sender and receiver cannot be same"
 		return resp
 	}
-
-	if !strings.Contains(req.Sender, ".") || !strings.Contains(req.PinningNode, ".") {
-		resp.Message = "Sender and Pinning Node address should be of the format PeerID.DID"
-		return resp
-	}
-	_, did, ok := util.ParseAddress(req.Sender)
-	if !ok {
-		resp.Message = "Invalid sender DID"
-		return resp
-	}
-
-	pinningNodepeerid, pinningNodeDID, ok := util.ParseAddress(req.PinningNode)
-	if !ok {
-		resp.Message = "Invalid pinning DID"
+	did := req.Sender
+	pinningNodeDID := req.PinningNode
+	pinningNodepeerid := c.w.GetPeerID(pinningNodeDID)
+	if pinningNodepeerid == "" {
+		c.log.Error("Peer ID not found", "did", pinningNodeDID)
+		resp.Message = "invalid address, Peer ID not found"
 		return resp
 	}
 
@@ -447,9 +438,9 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 	defer c.w.ReleaseTokens(tokensForTxn)
 
 	for i := range tokensForTxn {
-		c.w.Pin(tokensForTxn[i].TokenID, wallet.PinningRole, did, "TID-Not Generated", req.Sender, req.PinningNode, tokensForTxn[i].TokenValue) //my comment : In this pin function the wallet.OwnerRole is changed to wallet.PinRole
+		c.w.Pin(tokensForTxn[i].TokenID, wallet.PinningRole, did, "TID-Not Generated", req.Sender, req.PinningNode, tokensForTxn[i].TokenValue)
 	}
-	p, err := c.getPeer(req.PinningNode)
+	p, err := c.getPeer(req.PinningNode, did)
 	if err != nil {
 		resp.Message = "Failed to get pinning peer, " + err.Error()
 		return resp

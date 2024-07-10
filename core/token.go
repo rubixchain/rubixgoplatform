@@ -112,6 +112,9 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 		case wallet.TokenIsPledged:
 			info.PledgedRBT = info.PledgedRBT + t.TokenValue
 			info.PledgedRBT = floatPrecision(info.PledgedRBT, MaxDecimalPlaces)
+		case wallet.TokenIsPinnedAsService:
+			info.PinnedRBT = info.PinnedRBT + t.TokenValue
+			info.PinnedRBT = floatPrecision(info.PinnedRBT, MaxDecimalPlaces)
 		}
 	}
 	return info, nil
@@ -519,7 +522,9 @@ func (c *Core) UpdatePledgedTokenInfo(tokenstatehash string) error {
 
 func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
 	requiredTokens, err := c.w.GetAllPinnedTokens(did)
-	fmt.Println("err", err)
-	fmt.Println("The tokenlist received:", requiredTokens)
+	if err != nil {
+		c.log.Error("Error retrieving pinned tokens from database :", err)
+		return nil, err
+	}
 	return requiredTokens, nil
 }
