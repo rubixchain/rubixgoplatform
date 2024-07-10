@@ -138,19 +138,39 @@ func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
 	token := s.GetQuerry(req, "token")
 	allMyTokens_str := s.GetQuerry(req, "allmytokens")
 	blockCount_str := s.GetQuerry(req, "blockcount")
+	smartContractChainValidation_str := s.GetQuerry(req, "SCChainValidation")
 	blockCount, err := strconv.Atoi(blockCount_str)
+
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to convert blockCount string into integer", nil)
 	}
-	
+
 	allMyTokens, err := strconv.ParseBool(allMyTokens_str)
 	if err != nil {
-		fmt.Errorf("Error converting string to boolean:", err)
+		fmt.Errorf("error converting string to boolean:", err)
 		return s.BasicResponse(req, false, "Error converting string to boolean", nil)
 	}
-	br, err := s.c.TokenChainValidation(user_did, allMyTokens, token, blockCount)
+
+	smartContractChainValidation, err := strconv.ParseBool(smartContractChainValidation_str)
 	if err != nil {
-		return s.BasicResponse(req, false, "Failed to validate token(s)", nil)
+		fmt.Errorf("error converting string to boolean:", err)
+		return s.BasicResponse(req, false, "Error converting string to boolean", nil)
 	}
+
+	var br *model.BasicResponse
+	if smartContractChainValidation {
+		s.log.Debug("validating smart contract")
+		br, err = s.c.SmartContractTokenChainValidation(user_did, allMyTokens, token, blockCount)
+		if err != nil {
+			return s.BasicResponse(req, false, "Failed to validate token(s)", nil)
+		}
+	} else {
+		s.log.Debug("validating rbt token")
+		br, err = s.c.TokenChainValidation(user_did, allMyTokens, token, blockCount)
+		if err != nil {
+			return s.BasicResponse(req, false, "Failed to validate token(s)", nil)
+		}
+	}
+
 	return s.RenderJSON(req, br, http.StatusOK)
 }

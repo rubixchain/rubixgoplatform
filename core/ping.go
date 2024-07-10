@@ -9,6 +9,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -236,50 +237,101 @@ func (c *Core) GetPeerInfo(p *ipfsport.Peer, peerDID string) (GetPeerInfoRespons
 
 // LockInvalidTokenResponse is the handler for LockInvalidToken request
 func (c *Core) LockInvalidTokenResponse(req *ensweb.Request) *ensweb.Result { //PingRecevied
-	did := c.l.GetQuerry(req, "did")
-	var tokenId string
-
 	resp := &model.BasicResponse{
 		Status: false,
 	}
-	err := c.l.ParseJSON(req, &tokenId)
+
+	did := c.l.GetQuerry(req, "did")
+	//exctract token Id and token type from the map - m
+	var m map[string]string
+	err := c.l.ParseJSON(req, &m)
 	if err != nil {
-		resp.Message = "failed to parse tokenId"
+		c.log.Error("Failed to parse json request", "err", err)
+		resp.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &resp, http.StatusOK)
 	}
-	token_info, err := c.w.ReadToken(tokenId)
+	//exctract token Id
+	tokenId, ok := m["token"]
+	if !ok {
+		c.log.Error("Missing old did value")
+		resp.Message = "Missing old did value"
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	//exctract token type
+	token_type_str, ok := m["token_type"]
+	if !ok {
+		c.log.Error("Missing new did value")
+		resp.Message = "Missing new did value"
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	token_type, err := strconv.Atoi(token_type_str)
 	if err != nil {
-		resp.Message = "failed to retrieve token details. inValid token"
+		resp.Message = "failed to retrieve token type"
 		return c.l.RenderJSON(req, &resp, http.StatusOK)
 	}
-	c.log.Debug("token owner:", token_info.DID)
-	if token_info.DID != did || token_info.TokenStatus != wallet.TokenIsFree {
-		c.log.Error("Not token owner, can not lock token")
-		resp.Message = "Not token owner, can't lock token"
-		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	if token_type == token.SmartContractTokenType {
+		token_info, err := c.w.GetSmartContractToken(tokenId)
+		if err != nil {
+			resp.Message = "failed to retrieve token details. inValid token"
+			return c.l.RenderJSON(req, &resp, http.StatusOK)
+		}
+		sctoken := wallet.SmartContract{}
+		for i := range token_info {
+			if token_info[i].Deployer == did {
+				sctoken = token_info[i]
+				break
+			}
+		}
+		if sctoken.ContractStatus != wallet.TokenIsDeployed && sctoken.ContractStatus != wallet.TokenIsExecuted {
+			c.log.Error("Smart contract is not in deployed or executed state, can not lock")
+			resp.Message = "Smart contract is not in deployed or executed state, can't lock"
+			return c.l.RenderJSON(req, &resp, http.StatusOK)
+		}
+		err = c.w.LockSmartContract(&sctoken)
+		if err != nil {
+			resp.Message = "failed to lock invalid smart contract"
+			return c.l.RenderJSON(req, &resp, http.StatusOK)
+		}
+		resp.Message = "Smart contract token locked successfully"
+
+	} else { //token transferred or pledged/unpledged types
+		token_info, err := c.w.ReadToken(tokenId)
+		if err != nil {
+			resp.Message = "failed to retrieve token details. inValid token"
+			return c.l.RenderJSON(req, &resp, http.StatusOK)
+		}
+		if token_info.DID != did || token_info.TokenStatus != wallet.TokenIsFree {
+			c.log.Error("Not token owner, can not lock token")
+			resp.Message = "Not token owner, can't lock token"
+			return c.l.RenderJSON(req, &resp, http.StatusOK)
+		}
+		err = c.w.LockToken(token_info)
+		if err != nil {
+			resp.Message = "failed to lock invalid token"
+			return c.l.RenderJSON(req, &resp, http.StatusOK)
+		}
+		resp.Message = "Token locked successfully"
 	}
-	err = c.w.LockToken(token_info)
-	if err != nil {
-		resp.Message = "failed to lock invalid token"
-		return c.l.RenderJSON(req, &resp, http.StatusOK)
-	}
+
 	resp.Status = true
-	resp.Message = "Token locked successfully"
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 
 }
 
-func (c *Core) LockInvalidToken(tokenId string, user_did string) (*model.BasicResponse, error) {
-	var rm model.BasicResponse
+func (c *Core) LockInvalidToken(tokenId string, tokenType int, user_did string) (*model.BasicResponse, error) {
+	var resp model.BasicResponse
 	p, err := c.pm.OpenPeerConn(c.peerID, user_did, c.getCoreAppName(c.peerID))
 	if err != nil {
-		rm.Message = "Self-peer Connection Error"
-		rm.Status = false
-		return &rm, err
+		resp.Message = "Self-peer Connection Error"
+		resp.Status = false
+		return &resp, err
 	}
-	err = p.SendJSONRequest("POST", APILockInvalidToken, nil, tokenId, &rm, true)
+	m := make(map[string]string)
+	m["token"] = tokenId
+	m["token_type"] = strconv.Itoa(tokenType)
+	err = p.SendJSONRequest("POST", APILockInvalidToken, nil, &m, &resp, true)
 	if err != nil {
 		return nil, err
 	}
-	return &rm, nil
+	return &resp, nil
 }

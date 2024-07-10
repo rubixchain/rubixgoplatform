@@ -32,12 +32,13 @@ func (c *Client) GetAllTokens(didStr string, tokenType string) (*model.TokenResp
 	return &tr, nil
 }
 
-func (c *Client) ValidateTokenchain(user_did string, allMyTokens bool, token string, blockCount int) (*model.BasicResponse, error) {
+func (c *Client) ValidateTokenchain(user_did string, smartContractChainValidation bool, allMyTokens bool, token string, blockCount int) (*model.BasicResponse, error) {
 	q := make(map[string]string)
 	q["did"] = user_did
 	q["token"] = token
 	q["blockcount"] = strconv.Itoa(blockCount)
 	q["allmytokens"] = strconv.FormatBool(allMyTokens)
+	q["SCChainValidation"] = strconv.FormatBool(smartContractChainValidation)
 
 	var br model.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APIValidateTokenChain, q, nil, &br)

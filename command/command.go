@@ -256,6 +256,7 @@ type Command struct {
 	ChildPath          int
 	blockCount         int
 	allMyTokens        bool
+	smartContractChainValidation bool
 }
 
 func showVersion() {
@@ -454,6 +455,7 @@ func Run(args []string) {
 	flag.StringVar(&links, "links", "", "Explorer url")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.allMyTokens, "allmyTokens", false, "Validate token chain of all the tokens of the user")
+	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

@@ -24,7 +24,7 @@ func (cmd *Command) GenerateTestRBT() {
 }
 
 func (cmd *Command) ValidateTokenchain() {
-	br, err := cmd.c.ValidateTokenchain(cmd.did, cmd.allMyTokens, cmd.token, cmd.blockCount)
+	br, err := cmd.c.ValidateTokenchain(cmd.did, cmd.smartContractChainValidation, cmd.allMyTokens, cmd.token, cmd.blockCount)
 	if err != nil {
 		cmd.log.Error("failed to validate token chain", "err", err)
 		return

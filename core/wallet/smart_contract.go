@@ -44,7 +44,6 @@ func (w *Wallet) GetSmartContractToken(smartContractToken string) ([]SmartContra
 	}
 
 	for i := range sc {
-		sc[i].ContractStatus = TokenIsGenerated
 		err := w.s.Update(SmartContractStorage, &sc[i], "smart_contract_hash=?", sc[i].SmartContractHash)
 		if err != nil {
 			return nil, err
@@ -58,7 +57,7 @@ func (w *Wallet) GetSmartContractTokenByDeployer(did string) ([]SmartContract, e
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	var sc []SmartContract
-	err := w.s.Read(SmartContractStorage, &sc, "did=?", did)
+	err := w.s.Read(SmartContractStorage, &sc, "deployer=?", did)
 	if err != nil {
 		return nil, err
 	}
@@ -124,4 +123,11 @@ func (w *Wallet) GetSmartContractTokenUrl(smartcontracttoken string) (string, er
 	}
 	url := callback.CallBackUrl
 	return url, nil
+}
+
+func (w *Wallet) LockSmartContract(wt *SmartContract) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	wt.ContractStatus = TokenIsLocked
+	return w.s.Update(SmartContractStorage, wt, "deployer=? AND smart_contract_hash=?", wt.Deployer, wt.SmartContractHash)
 }
