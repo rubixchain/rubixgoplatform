@@ -578,6 +578,18 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
+	var availableBalance model.DIDAccountInfo
+	availableBalance, err = c.GetAccountInfo(did)
+	if err != nil {
+		c.log.Error("Unable to check quorum balance")
+	}
+	availableRBT := availableBalance.RBTAmount
+	if availableRBT < pr.TokensRequired {
+		c.log.Error("Quorum don't have enough balance to pledge")
+		crep.Message = "Quorum don't have enough balance to pledge"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	if (pr.TokensRequired) < MinDecimalValue(MaxDecimalPlaces) {
 		c.log.Error("Pledge amount is less than ", MinDecimalValue(MaxDecimalPlaces))
 		crep.Message = "Pledge amount is less than minimum transcation amount"

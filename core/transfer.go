@@ -198,6 +198,10 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	td, _, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
+		if c.noBalanceQuorumCount > 2 {
+			resp.Message = "Consensus failed due to insufficient balance in Quorum, Retry transaction after sometime"
+			return resp
+		}
 		c.log.Error("Consensus failed ", "err", err)
 		resp.Message = "Consensus failed " + err.Error()
 		return resp

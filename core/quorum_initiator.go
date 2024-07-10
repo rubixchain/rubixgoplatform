@@ -363,6 +363,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		delete(c.pd, cr.ReqID)
 		c.qlock.Unlock()
 	}()
+	c.quorumCount = 0
+	c.noBalanceQuorumCount = 0
 	for _, a := range cr.QuorumList {
 		//This part of code is trying to connect to the quorums in quorum list, where various functions are called to pledge the tokens
 		//and checking of transaction by the quorum i.e. consensus for the transaction. Once the quorum is connected, it pledges and
@@ -805,6 +807,11 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	}
 	err = c.initPledgeQuorumToken(cr, p, qt)
 	if err != nil {
+		if strings.Contains(err.Error(), "don't have enough balance to pledge") {
+			c.log.Error("Quorum failed to pledge token")
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
 		c.log.Error("Failed to pledge token", "err", err)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
@@ -1179,10 +1186,6 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			pr := PledgeRequest{
 				TokensRequired: CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPlaces), // Request the determined number of tokens per quorum,
 			}
-			// l := len(pd.PledgedTokens)
-			// for i := pd.NumPledgedTokens; i < l; i++ {
-			// 	pr.Tokens = append(pr.Tokens, cr.WholeTokens[i])
-			// }
 			var prs PledgeReply
 			err := p.SendJSONRequest("POST", APIReqPledgeToken, nil, &pr, &prs, true)
 			if err != nil {
@@ -1191,7 +1194,16 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 				cs.PledgeLock.Unlock()
 				return err
 			}
+			if strings.Contains(prs.Message, "Quorum don't have enough balance to pledge") {
+				c.quorumCount++
+				c.noBalanceQuorumCount++
+				cs.PledgeLock.Unlock()
+				did := p.GetPeerDID()
+				c.log.Error("Quorum (DID:" + did + ") don't have enough balance to pledge")
+				return fmt.Errorf("Quorum (DID:" + did + ") don't have enough balance to pledge")
+			}
 			if prs.Status {
+				c.quorumCount++
 				did := p.GetPeerDID()
 				pd.PledgedTokens[did] = make([]string, 0)
 				for i, t := range prs.Tokens {
@@ -1223,12 +1235,18 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			err := fmt.Errorf("invalid pledge request")
 			return err
 		}
-		if pd.RemPledgeTokens <= 0 {
+		if pd.RemPledgeTokens > 0 {
+			if c.quorumCount < QuorumRequired {
+				if count == 300 {
+					err := fmt.Errorf("Unable to pledge after wait")
+					return err
+				}
+			} else if c.quorumCount == QuorumRequired {
+				err := fmt.Errorf("Unable to pledge")
+				return err
+			}
+		} else if pd.RemPledgeTokens <= 0 {
 			return nil
-		} else if count == 300 {
-			c.log.Error("Unable to pledge token")
-			err := fmt.Errorf("unable to pledge token")
-			return err
 		}
 	}
 }
