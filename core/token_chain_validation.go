@@ -166,6 +166,48 @@ func (c *Core) ValidateTokenChain(user_did string, token_info *wallet.Token, tok
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
 				}
+			case block.TokenPledgedType:
+				//calculate previous block Id
+				prevBlock := block.InitBlock(blocks[i-1], nil)
+				prevBlockId, err = prevBlock.GetBlockID(token_info.TokenID)
+				if err != nil {
+					c.log.Error("invalid previous block")
+					continue
+				}
+				//validate Pledged block
+				response, err = c.Validate_Pledged_or_Unpledged_Block(b, token_info.TokenID, prevBlockId, user_did)
+				if err != nil {
+					c.log.Error("msg", response.Message, "err", err)
+					return response, err
+				}
+			case block.TokenUnpledgedType:
+				//calculate previous block Id
+				prevBlock := block.InitBlock(blocks[i-1], nil)
+				prevBlockId, err = prevBlock.GetBlockID(token_info.TokenID)
+				if err != nil {
+					c.log.Error("invalid previous block")
+					continue
+				}
+				//validate Pledged block
+				response, err = c.Validate_Pledged_or_Unpledged_Block(b, token_info.TokenID, prevBlockId, user_did)
+				if err != nil {
+					c.log.Error("msg", response.Message, "err", err)
+					return response, err
+				}
+			case block.TokenContractCommited:
+				//calculate previous block Id
+				prevBlock := block.InitBlock(blocks[i-1], nil)
+				prevBlockId, err = prevBlock.GetBlockID(token_info.TokenID)
+				if err != nil {
+					c.log.Error("invalid previous block")
+					continue
+				}
+				//validate Pledged block
+				response, err = c.Validate_Pledged_or_Unpledged_Block(b, token_info.TokenID, prevBlockId, user_did)
+				if err != nil {
+					c.log.Error("msg", response.Message, "err", err)
+					return response, err
+				}
 			}
 
 		} else {
@@ -272,6 +314,31 @@ func (c *Core) Validate_RBTBurnt_Block(b *block.Block, token_info wallet.Token, 
 	response.Status = true
 	response.Message = "RBT burnt block validated successfully"
 	c.log.Debug("successfully validated RBT burnt block")
+	return response, nil
+}
+
+// validate block of type : TokenPledgedType = "04" / TokenUnpledgedType = "06" / TokenContractCommited = "11"
+func (c *Core) Validate_Pledged_or_Unpledged_Block(b *block.Block, tokenId string, calculated_prevBlockId string, user_did string) (*model.BasicResponse, error) {
+	response := &model.BasicResponse{}
+
+	//Validate block hash
+	response, err := c.ValidateBlockHash(b, tokenId, calculated_prevBlockId)
+	if err != nil {
+		c.log.Error("msg", response.Message)
+		return response, err
+	}
+
+	//validate burnt-token owner signature
+	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	if err != nil {
+		response.Message = "invalid token owner in RBT burnt block"
+		c.log.Error("invalid token owner in RBT burnt block")
+		return response, fmt.Errorf("failed to validate token owner in RBT burnt block")
+	}
+
+	response.Status = true
+	response.Message = "RBT pledged/unpledged/committed block validated successfully"
+	c.log.Debug("successfully validated RBT pledged/unpledged/committed block")
 	return response, nil
 }
 
