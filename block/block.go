@@ -129,14 +129,12 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 	if b.bb == nil {
 		err = b.blkEncode()
 		if err != nil {
-			fmt.Println("failed to encode block", err.Error(), err)
 			return nil
 		}
 	}
 	if b.bm == nil {
 		err = b.blkDecode()
 		if err != nil {
-			fmt.Println("failed to decode block", err.Error(), err)
 			return nil
 		}
 	}
