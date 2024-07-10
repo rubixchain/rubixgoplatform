@@ -266,7 +266,7 @@ func (c *Core) Validate_RBTTransfer_Block(b *block.Block, tokenId string, calcul
 		return response, err
 	}
 	//Validate sender signature
-	response, err = c.ValidateSender(b, tokenId)
+	response, err = c.ValidateSender(b)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
@@ -477,7 +477,7 @@ func (c *Core) ValidateBlockHash(b *block.Block, tokenId string, calculated_prev
 }
 
 // sender signature verification in a (non-genesis)block
-func (c *Core) ValidateSender(b *block.Block, tokenId string) (*model.BasicResponse, error) {
+func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}

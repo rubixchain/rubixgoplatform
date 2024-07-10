@@ -660,6 +660,20 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	defer p.Close()
+
+	_, err = c.ValidateSender(b)
+	if err != nil {
+		c.log.Error("failed to validate sender", "err", err)
+		crep.Message = "failed to validate sender"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	_, err = c.ValidateQuorums(b, did)
+	if err != nil {
+		c.log.Error("failed to validate quorum", "err", err)
+		crep.Message = "failed to validate quorum"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	for _, ti := range sr.TokenInfo {
 		t := ti.Token
 		pblkID, err := b.GetPrevBlockID(t)
