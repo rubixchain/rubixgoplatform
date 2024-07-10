@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
-	bk "github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -23,7 +22,7 @@ func tcMarshal(str string, m interface{}) (string, error) {
 				str = str + ","
 			}
 			c1 = true
-			decodedValue := bk.DecodeNestedStructure("", v)
+			decodedValue := block.DecodeNestedStructure("", v)
 			str, err = tcMarshal(str, decodedValue)
 			if err != nil {
 				return "", err
@@ -40,7 +39,7 @@ func tcMarshal(str string, m interface{}) (string, error) {
 			}
 			c1 = true
 			// Recursively decode each element in the slice
-			decodedValue := bk.DecodeNestedStructure("", v)
+			decodedValue := block.DecodeNestedStructure("", v)
 			str, err = tcMarshal(str, decodedValue)
 			if err != nil {
 				return "", err
@@ -56,14 +55,14 @@ func tcMarshal(str string, m interface{}) (string, error) {
 			}
 			c1 = true
 
-			decodedKey, exists := bk.KeyMap[k]
+			decodedKey, exists := block.KeyMap[k]
 			if !exists {
 				decodedKey = k
 			}
 			str = str + "\"" + decodedKey + "\":"
 
 			// Recursively decode and marshal the value
-			decodedValue := bk.DecodeNestedStructure(decodedKey, v)
+			decodedValue := block.DecodeNestedStructure(decodedKey, v)
 			str, err = tcMarshal(str, decodedValue)
 			if err != nil {
 				return "", err
@@ -81,14 +80,14 @@ func tcMarshal(str string, m interface{}) (string, error) {
 
 			// Convert interface{} key to string
 			keyStr := fmt.Sprintf("%v", k)
-			decodedKey, exists := bk.KeyMap[keyStr]
+			decodedKey, exists := block.KeyMap[keyStr]
 			if !exists {
 				decodedKey = keyStr
 			}
 			str = str + "\"" + decodedKey + "\":"
 
 			// Recursively decode and marshal the value
-			decodedValue := bk.DecodeNestedStructure(decodedKey, v)
+			decodedValue := block.DecodeNestedStructure(decodedKey, v)
 			str, err = tcMarshal(str, decodedValue)
 			if err != nil {
 				return "", err
@@ -193,7 +192,7 @@ func (cmd *Command) dumpTokenChain() {
 // Function to decode a block's data
 func decodeBlock(blockData map[string]interface{}) map[string]interface{} {
 	// Directly use your DecodeNestedStructure function
-	return bk.DecodeNestedStructure("", blockData).(map[string]interface{})
+	return block.DecodeNestedStructure("", blockData).(map[string]interface{})
 }
 
 // Helper function to find nested key mappings (adapted to your KeyMap format)
