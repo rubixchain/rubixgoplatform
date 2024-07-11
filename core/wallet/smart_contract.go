@@ -44,6 +44,7 @@ func (w *Wallet) GetSmartContractToken(smartContractToken string) ([]SmartContra
 	}
 
 	for i := range sc {
+		sc[i].ContractStatus = TokenIsGenerated
 		err := w.s.Update(SmartContractStorage, &sc[i], "smart_contract_hash=?", sc[i].SmartContractHash)
 		if err != nil {
 			return nil, err

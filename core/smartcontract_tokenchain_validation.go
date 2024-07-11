@@ -118,38 +118,23 @@ func (c *Core) ValidateSmartContractTokenChain(user_did string, token_info walle
 
 			c.log.Info("validating at block height:", block_height)
 
-			//fetch transaction type to validate the block accordingly
-			txn_type := b.GetTransType()
-			switch txn_type {
-			case block.TokenGeneratedType:
-				//validate genesis block
-				response, err = c.ValidateSCGenesisBlock(b, token_info, token_type, user_did)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			case block.TokenDeployedType:
-				prevBlockId := ""
-				//validate smart contract deployed block
-				response, err = c.Validate_SC_Block(b, token_info.SmartContractHash, prevBlockId, user_did)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			case block.TokenExecutedType:
-				//calculate previous block Id
+			//calculate previous block Id
+			if block_height == 0 || i == 0 {
+				prevBlockId = ""
+			} else {
 				prevBlock := block.InitBlock(blocks[i-1], nil)
 				prevBlockId, err = prevBlock.GetBlockID(token_info.SmartContractHash)
 				if err != nil {
 					c.log.Error("invalid previous block")
 					continue
 				}
-				//validate smart contract executed block
-				response, err = c.Validate_SC_Block(b, token_info.SmartContractHash, prevBlockId, user_did)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
+			}
+
+			//validate smart contract executed block
+			response, err = c.Validate_SC_Block(b, token_info.SmartContractHash, prevBlockId, user_did)
+			if err != nil {
+				c.log.Error("msg", response.Message, "err", err)
+				return response, err
 			}
 
 		} else {
@@ -223,30 +208,5 @@ func (c *Core) Validate_SC_Block(b *block.Block, tokenId string, calculated_prev
 		c.log.Debug("successfully validated smart contract executed block")
 		// return response, nil
 	}
-	return response, nil
-}
-
-// genesis block validation : validate block of type: TokenGeneratedType = "05"
-func (c *Core) ValidateSCGenesisBlock(b *block.Block, token_info wallet.SmartContract, token_type int, user_did string) (*model.BasicResponse, error) {
-	response := &model.BasicResponse{}
-
-	//Validate block hash of genesis block
-	response, err := c.ValidateBlockHash(b, token_info.SmartContractHash, "")
-	if err != nil {
-		c.log.Error("msg", response.Message, "err", err)
-		return response, err
-	}
-
-	//initial token owner signature verification
-	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
-	if err != nil {
-		response.Message = "invalid token owner in genesis block"
-		c.log.Error("invalid token owner in genesis block")
-		return response, fmt.Errorf("failed to validate token owner in genesis block")
-	}
-
-	response.Status = true
-	response.Message = "genesis block validated successfully"
-	c.log.Debug("validated genesis block")
 	return response, nil
 }
