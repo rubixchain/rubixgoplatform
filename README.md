@@ -368,3 +368,31 @@ This following options are used for this command
   -didType int
         DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode, 3-Child Mode, 4-Light Mode) (default 0)
 ```
+Validate Token Chain Command
+: To validate RBT and smart contract token chain
+
+```
+./rubixgoplatform validatetokenchain
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+
+  -did string
+        DID address (default "")
+ 
+  -sctValidation bool
+        (default false) provide in case of smart contract token chain validation
+
+  -token string
+        token ID (default "")
+
+  -allmyTokens bool
+        (default false) provide to validate all tokens from tokens table
+
+  -blockCount int
+        number of blocks of the token chain to be validated (default 0)
+      
+      NOTE: Don't provide the flag -blockCount in case you want to validate all the blocks of the token chain
+  
+```

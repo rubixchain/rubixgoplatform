@@ -140,15 +140,21 @@ func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
 	blockCount_str := s.GetQuerry(req, "blockcount")
 	smartContractChainValidation_str := s.GetQuerry(req, "SCChainValidation")
 	blockCount, err := strconv.Atoi(blockCount_str)
-
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to convert blockCount string into integer", nil)
 	}
 
+	if user_did == "" {
+		return s.BasicResponse(req, false, "user did is not provided", nil)
+	}
+	
 	allMyTokens, err := strconv.ParseBool(allMyTokens_str)
 	if err != nil {
 		fmt.Errorf("error converting string to boolean:", err)
 		return s.BasicResponse(req, false, "Error converting string to boolean", nil)
+	}
+	if token == "" && !allMyTokens {
+		return s.BasicResponse(req, false, "token information is not provided to validate", nil)
 	}
 
 	smartContractChainValidation, err := strconv.ParseBool(smartContractChainValidation_str)
