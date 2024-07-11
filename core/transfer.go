@@ -31,7 +31,7 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 	senderDID := req.Sender
 
 	if !isSelfRBTTransfer {
-		if req.TokenCount < MinTrnxAmt {
+		if req.TokenCount < MinDecimalValue(MaxDecimalPlaces) {
 			return nil, fmt.Errorf("input transaction amount is less than minimum transaction amount")
 		}
 	
@@ -181,6 +181,10 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 	// This flag indicates if the call is made for Self Transfer or general token transfer
 	isSelfRBTTransfer := senderDID == receiverdid
+	if req.TokenCount < MinDecimalValue(MaxDecimalPlaces) {
+		resp.Message = "Input transaction amount is less than minimum transaction amount"
+		return resp
+	}
 
 	dc, err := c.SetupDID(reqID, senderDID)
 	if err != nil {
@@ -276,6 +280,10 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 	td, _, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
+		if c.noBalanceQuorumCount > 2 {
+			resp.Message = "Consensus failed due to insufficient balance in Quorum(s), Retry transaction after sometime"
+			return resp
+		}
 		c.log.Error("Consensus failed ", "err", err)
 		resp.Message = "Consensus failed " + err.Error()
 		return resp
