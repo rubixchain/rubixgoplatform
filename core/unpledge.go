@@ -16,7 +16,7 @@ import (
 )
 
 const UnpledgeQueueTable string = "unpledgequeue"
-const pledgePeriodInSeconds int = 100 //7 * 24 * 60 * 60
+const pledgePeriodInSeconds int = 7 * 24 * 60 * 60 // Pledging period: 7 days
 
 type TransTokenBlock struct {
 	TokenID       string `json:"token_id"`
