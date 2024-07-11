@@ -1,7 +1,6 @@
 package command
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -139,6 +138,10 @@ func tcMarshal(str string, m interface{}) (string, error) {
 	return str, nil
 }
 
+// dumpTokenChain dumps the token chain by retrieving blocks from the command's client.
+// It iterates through the blocks, decodes each block, and appends the decoded block to a list.
+// Finally, it marshals the list of decoded blocks into a JSON string and writes it to a file named "dump.json".
+// This method logs debug information about the original and decoded blocks, as well as any errors encountered.
 func (cmd *Command) dumpTokenChain() {
 	blocks := make([]map[string]interface{}, 0)
 	blockID := ""
@@ -156,14 +159,9 @@ func (cmd *Command) dumpTokenChain() {
 		for _, blk := range ds.Blocks {
 			b := block.InitBlock(blk, nil)
 			if b != nil {
-				cmd.log.Debug("Original Block:", "content", b.GetBlockMap())
 				// Decode the block before adding it to the list
 				decodedBlock := decodeBlock(b.GetBlockMap())
 				blocks = append(blocks, decodedBlock)
-
-				// Log the entire decoded block as JSON for easy inspection
-				jsonBlock, _ := json.MarshalIndent(decodedBlock, "", "  ")
-				cmd.log.Debug("Decoded Block:", "content", string(jsonBlock))
 			} else {
 				cmd.log.Error("Invalid block")
 			}
@@ -189,32 +187,9 @@ func (cmd *Command) dumpTokenChain() {
 	cmd.log.Info("Token chain dumped successfully!")
 }
 
-// Function to decode a block's data
-func decodeBlock(blockData map[string]interface{}) map[string]interface{} {
-	// Directly use your DecodeNestedStructure function
-	return block.DecodeNestedStructure("", blockData).(map[string]interface{})
-}
-
-// Helper function to find nested key mappings (adapted to your KeyMap format)
-func findNestedKeyMapping(key string, item map[string]interface{}) (string, bool) {
-	parts := strings.Split(key, "-") // Split by "-" for your KeyMap format
-	current := item
-	for _, part := range parts {
-		if next, ok := current[part]; ok {
-			current, ok = next.(map[string]interface{}) // Move down the nested structure
-			if !ok {
-				return "", false // Not a map, cannot be further nested
-			}
-		} else {
-			return "", false // Key not found in the nested structure
-		}
-	}
-
-	joinedKey := strings.Join(parts, "-") // Reconstruct the original key
-	mappedKey, exists := block.KeyMap[joinedKey]
-	return mappedKey, exists
-}
-
+// dumpSmartContractTokenChain dumps the smart contract token chain by retrieving blocks from the smart contract token chain
+// and saving them to a JSON file named "dump.json". It iterates through the blocks until there are no more blocks to retrieve.
+// The function returns an error if there is any issue with dumping the smart contract token chain.
 func (cmd *Command) dumpSmartContractTokenChain() {
 	blocks := make([]map[string]interface{}, 0)
 	blockID := ""
@@ -231,7 +206,8 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 		for _, blk := range ds.Blocks {
 			b := block.InitBlock(blk, nil)
 			if b != nil {
-				blocks = append(blocks, b.GetBlockMap())
+				decodedBlock := decodeBlock(b.GetBlockMap())
+				blocks = append(blocks, decodedBlock)
 			} else {
 				cmd.log.Error("Invalid block")
 			}
@@ -254,6 +230,37 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 	f.WriteString(str)
 	f.Close()
 	cmd.log.Info("smart contract Token chain dumped successfully!")
+}
+
+// decodeBlock decodes the block data and returns it as a map[string]interface{}.
+func decodeBlock(blockData map[string]interface{}) map[string]interface{} {
+	// Directly using DecodeNestedStructure function
+	return block.DecodeNestedStructure("", blockData).(map[string]interface{})
+}
+
+// findNestedKeyMapping is a helper function to find nested key mappings. It searches for a nested key mapping in the provided item.
+// It takes a key string and an item map as input and returns the mapped key and a boolean indicating if the mapping exists.
+// The key is split by "-" to handle the KeyMap format.
+// It iterates through the nested structure of the item to find the mapping.
+// If the key is not found or the nested structure is not a map, it returns an empty string and false.
+// Finally, it reconstructs the original key and returns the mapped key and a boolean indicating if the mapping exists.
+func findNestedKeyMapping(key string, item map[string]interface{}) (string, bool) {
+	parts := strings.Split(key, "-") // Split by "-" for KeyMap format
+	current := item
+	for _, part := range parts {
+		if next, ok := current[part]; ok {
+			current, ok = next.(map[string]interface{}) // Move down the nested structure
+			if !ok {
+				return "", false // Not a map, cannot be further nested
+			}
+		} else {
+			return "", false // Key not found in the nested structure
+		}
+	}
+
+	joinedKey := strings.Join(parts, "-") // Reconstruct the original key
+	mappedKey, exists := block.KeyMap[joinedKey]
+	return mappedKey, exists
 }
 
 func (cmd *Command) getTokenBlock() {

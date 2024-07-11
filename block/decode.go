@@ -1,6 +1,8 @@
 package block
 
 // Key-to-constant mapping (Note: No duplicate keys)
+// KeyMap is a map that maps string keys to their corresponding values.
+// It is used to store the mapping of keys used in the application.
 var KeyMap = map[string]string{
 	"1":  "TCTokenTypeKey",
 	"2":  "TCTransTypeKey",
@@ -55,7 +57,21 @@ var KeyMap = map[string]string{
 	"5-10-7": "TTCommitedDIDKey",
 }
 
-// DecodeNestedStructure: Recursive function to decode nested structures
+// DecodeNestedStructure decodes a nested structure represented by the given key and content.
+// It recursively traverses the content and decodes it based on the provided key mappings.
+// The decoded structure is returned as an interface{}.
+//
+// Parameters:
+//   - key: The key representing the current nesting level.
+//   - content: The content to be decoded.
+//
+// Returns:
+//
+//	The decoded nested structure as an interface{}.
+//
+// Example usage:
+//
+//	result := DecodeNestedStructure("root", content)
 func DecodeNestedStructure(key string, content interface{}) interface{} {
 
 	switch content := content.(type) { // Type switch for better handling
