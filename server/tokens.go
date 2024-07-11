@@ -90,7 +90,7 @@ type RBTPinRequestSwaggoInput struct {
 // @Produce     json
 // @Param 		input body RBTPinRequestSwaggoInput true "Intitate Pin RBT"
 // @Success 200 {object} model.BasicResponse
-// @Router /api/initiate-pin-rbt [post]
+// @Router /api/initiate-pin-token [post]
 
 func (s *Server) APIInitiatePinRBT(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTPinRequest
@@ -126,7 +126,7 @@ type RBTRecoverRequestSwaggoInput struct {
 // @Produce     json
 // @Param 		input body RBTRecoverRequestSwaggoInput true "Recover-RBT"
 // @Success 200 {object} model.BasicResponse
-// @Router /api/api/recover-rbt [post]
+// @Router /api/recover-token [post]
 
 func (s *Server) APIRecoverRBT(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTRecoverRequest

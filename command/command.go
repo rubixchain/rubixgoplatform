@@ -88,8 +88,8 @@ const (
 	SelfTransferRBT                string = "self-transfer-rbt"
 	RunUnpledge                    string = "run-unpledge"
 	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
-	PinRBTCmd                      string = "pinrbt"
-	RecoverTokensCmd               string = "recovertokens"
+	PinTokenCmd                    string = "pinToken"
+	RecoverTokensCmd               string = "recoverToken"
 )
 
 var commands = []string{VersionCmd,
@@ -139,7 +139,7 @@ var commands = []string{VersionCmd,
 	SelfTransferRBT,
 	RunUnpledge,
 	UnpledgePOWPledgeTokens,
-	PinRBTCmd,
+	PinTokenCmd,
 	RecoverTokensCmd,
 }
 
@@ -637,7 +637,7 @@ func Run(args []string) {
 		cmd.RunUnpledge()
 	case UnpledgePOWPledgeTokens:
 		cmd.UnpledgePOWBasedPledgedTokens()
-	case PinRBTCmd:
+	case PinTokenCmd:
 		cmd.PinRBT()
 	case RecoverTokensCmd:
 		cmd.RecoverTokens()
