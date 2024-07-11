@@ -2,18 +2,12 @@ package wallet
 
 import (
 	"fmt"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
-type DataToken struct {
-	TokenID      string `gorm:"column:token_id;primaryKey" json:"token_id"`
-	DID          string `gorm:"column:did" json:"did"`
-	CommitterDID string `gorm:"column:commiter_did" json:"comiter_did"`
-	BatchID      string `gorm:"column:batch_id" json:"batch_id"`
-	TokenStatus  int    `gorm:"column:token_status;" json:"token_status"`
-}
-
 // CreateDataToken write data token into db
-func (w *Wallet) CreateDataToken(dt *DataToken) error {
+func (w *Wallet) CreateDataToken(dt *model.DataToken) error {
 	err := w.s.Write(DataTokenStorage, dt)
 	if err != nil {
 		w.log.Error("Failed to write data token", "err", err)
@@ -22,10 +16,10 @@ func (w *Wallet) CreateDataToken(dt *DataToken) error {
 	return nil
 }
 
-func (w *Wallet) GetAllDataTokens(did string) ([]DataToken, error) {
+func (w *Wallet) GetAllDataTokens(did string) ([]model.DataToken, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
-	var dts []DataToken
+	var dts []model.DataToken
 	err := w.s.Read(DataTokenStorage, &dts, "did=?", did)
 	if err != nil {
 		return nil, err
@@ -33,10 +27,10 @@ func (w *Wallet) GetAllDataTokens(did string) ([]DataToken, error) {
 	return dts, nil
 }
 
-func (w *Wallet) GetDataToken(batchID string) ([]DataToken, error) {
+func (w *Wallet) GetDataToken(batchID string) ([]model.DataToken, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
-	var dts []DataToken
+	var dts []model.DataToken
 	err := w.s.Read(DataTokenStorage, &dts, "batch_id=? AND token_status=?", batchID, TokenIsFree)
 	if err != nil {
 		return nil, err
@@ -54,10 +48,10 @@ func (w *Wallet) GetDataToken(batchID string) ([]DataToken, error) {
 	return dts, nil
 }
 
-func (w *Wallet) GetDataTokenByDID(did string) ([]DataToken, error) {
+func (w *Wallet) GetDataTokenByDID(did string) ([]model.DataToken, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
-	var dts []DataToken
+	var dts []model.DataToken
 	err := w.s.Read(DataTokenStorage, &dts, "did=?", did)
 	if err != nil {
 		return nil, err
@@ -68,7 +62,7 @@ func (w *Wallet) GetDataTokenByDID(did string) ([]DataToken, error) {
 	return dts, nil
 }
 
-func (w *Wallet) ReleaseDataToken(dts []DataToken) error {
+func (w *Wallet) ReleaseDataToken(dts []model.DataToken) error {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	for i := range dts {
@@ -81,7 +75,7 @@ func (w *Wallet) ReleaseDataToken(dts []DataToken) error {
 	return nil
 }
 
-func (w *Wallet) CommitDataToken(dts []DataToken) error {
+func (w *Wallet) CommitDataToken(dts []model.DataToken) error {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	for i := range dts {

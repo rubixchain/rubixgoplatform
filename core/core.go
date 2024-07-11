@@ -50,6 +50,9 @@ const (
 	APICheckQuorumStatusPath  string = "/api/check-quorum-status"
 	APIGetPeerDIDTypePath     string = "/api/get-peer-didType"
 	APIGetPeerInfoPath        string = "/api/get-peer-info"
+	APIUpdateTokenHashDetails string = "/api/update-tokenhash-details"
+	APIAddUnpledgeDetails     string = "/api/initiate-unpledge"
+	APISelfTransfer           string = "/api/self-transfer"
 )
 
 const (
@@ -266,12 +269,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		c.log.Error("Failed to setup quorum manager", "err", err)
 		return nil, err
 	}
-	err = util.CreateDir(c.cfg.DirPath + "unpledge")
-	if err != nil {
-		c.log.Error("Failed to create unpledge", "err", err)
-		return nil, err
-	}
-	c.up, err = unpledge.InitUnPledge(c.s, c.w, c.testNet, c.cfg.DirPath+"unpledge/", c.Unpledge, c.log)
+	c.up, err = unpledge.InitUnPledge(c.s, c.w, c.testNet, c.log)
 	if err != nil {
 		c.log.Error("Failed to init unpledge", "err", err)
 		return nil, err
@@ -329,6 +327,7 @@ func (c *Core) SetupCore() error {
 	c.SetupToken()
 	c.QuroumSetup()
 	c.PinService()
+	// c.selfTransferService()
 	return nil
 }
 

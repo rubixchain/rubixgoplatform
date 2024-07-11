@@ -2,6 +2,8 @@ package wallet
 
 import (
 	"time"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 const (
@@ -11,28 +13,9 @@ const (
 	ExecuteMode
 )
 
-type TransactionDetails struct {
-	TransactionID   string    `gorm:"column:transaction_id;primaryKey"`
-	TransactionType string    `gorm:"column:transaction_type"`
-	BlockID         string    `gorm:"column:block_id"`
-	Mode            int       `gorm:"column:mode"`
-	SenderDID       string    `gorm:"column:sender_did"`
-	ReceiverDID     string    `gorm:"column:receiver_did"`
-	Amount          float64   `gorm:"column:amount"`
-	TotalTime       float64   `gorm:"column:total_time"`
-	Comment         string    `gorm:"column:comment"`
-	DateTime        time.Time `gorm:"column:date_time"`
-	Status          bool      `gorm:"column:status"`
-	DeployerDID     string    `gorm:"column:deployer_did"`
-}
 
-type TransactionCount struct {
-	DID         string
-	TxnSend     int
-	TxnReceived int
-}
 
-func (w *Wallet) AddTransactionHistory(td *TransactionDetails) error {
+func (w *Wallet) AddTransactionHistory(td *model.TransactionDetails) error {
 	err := w.s.Write(TransactionStorage, td)
 	if err != nil {
 		w.log.Error("Failed to store transaction history", "err", err)
@@ -41,8 +24,8 @@ func (w *Wallet) AddTransactionHistory(td *TransactionDetails) error {
 	return nil
 }
 
-func (w *Wallet) GetTransactionDetailsbyTransactionId(transactionId string) (TransactionDetails, error) {
-	var th TransactionDetails
+func (w *Wallet) GetTransactionDetailsbyTransactionId(transactionId string) (model.TransactionDetails, error) {
+	var th model.TransactionDetails
 	//var tt []w.TokensTransferred
 	//var ql []w.QuorumList
 	err := w.s.Read(TransactionStorage, &th, "transaction_id=?", transactionId)
@@ -53,8 +36,8 @@ func (w *Wallet) GetTransactionDetailsbyTransactionId(transactionId string) (Tra
 	return th, nil
 }
 
-func (w *Wallet) GetTransactionByComment(comment string) ([]TransactionDetails, error) {
-	var td []TransactionDetails
+func (w *Wallet) GetTransactionByComment(comment string) ([]model.TransactionDetails, error) {
+	var td []model.TransactionDetails
 
 	err := w.s.Read(TransactionStorage, &td, "comment=?", comment)
 	if err != nil {
@@ -64,8 +47,8 @@ func (w *Wallet) GetTransactionByComment(comment string) ([]TransactionDetails, 
 	return td, err
 }
 
-func (w *Wallet) GetTransactionByReceiver(receiver string) ([]TransactionDetails, error) {
-	var td []TransactionDetails
+func (w *Wallet) GetTransactionByReceiver(receiver string) ([]model.TransactionDetails, error) {
+	var td []model.TransactionDetails
 
 	err := w.s.Read(TransactionStorage, &td, "receiver_did=?", receiver)
 	if err != nil {
@@ -75,8 +58,8 @@ func (w *Wallet) GetTransactionByReceiver(receiver string) ([]TransactionDetails
 	return td, nil
 }
 
-func (w *Wallet) GetTransactionBySender(sender string) ([]TransactionDetails, error) {
-	var td []TransactionDetails
+func (w *Wallet) GetTransactionBySender(sender string) ([]model.TransactionDetails, error) {
+	var td []model.TransactionDetails
 
 	err := w.s.Read(TransactionStorage, &td, "sender_did=?", sender)
 	if err != nil {
@@ -86,8 +69,8 @@ func (w *Wallet) GetTransactionBySender(sender string) ([]TransactionDetails, er
 	return td, nil
 }
 
-func (w *Wallet) GetTransactionByDID(did string) ([]TransactionDetails, error) {
-	var td []TransactionDetails
+func (w *Wallet) GetTransactionByDID(did string) ([]model.TransactionDetails, error) {
+	var td []model.TransactionDetails
 
 	err := w.s.Read(TransactionStorage, &td, "sender_did=? OR receiver_did=?", did, did)
 	if err != nil {
@@ -97,8 +80,8 @@ func (w *Wallet) GetTransactionByDID(did string) ([]TransactionDetails, error) {
 	return td, nil
 }
 
-func (w *Wallet) GetTransactionByDIDAndDateRange(did string, startDate time.Time, endDate time.Time) ([]TransactionDetails, error) {
-	var td []TransactionDetails
+func (w *Wallet) GetTransactionByDIDAndDateRange(did string, startDate time.Time, endDate time.Time) ([]model.TransactionDetails, error) {
+	var td []model.TransactionDetails
 	err := w.s.Read(TransactionStorage, &td, "date_time >= ? AND date_time <= ? AND sender_did=? OR receiver_did=?", startDate, endDate, did, did)
 	if err != nil {
 		w.log.Error("Failed to get transaction details with did and date range", did, startDate, endDate, "err", err)

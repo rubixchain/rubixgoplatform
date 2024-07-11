@@ -41,6 +41,7 @@ const (
 	TCTokenValueKey        string = "10"
 	TCChildTokensKey       string = "11"
 	TCSenderSignatureKey   string = "12"
+	TCEpochKey             string = "epoch"
 )
 
 const (
@@ -69,6 +70,7 @@ type TokenChainBlock struct {
 	TokenValue        float64           `json:"tokenValue"`
 	ChildTokens       []string          `json:"childTokens"`
 	SenderSignature   *SenderSignature  `json:"senderSignature"`
+	Epoch             int               `json:"epoch"`
 }
 
 type PledgeDetail struct {
@@ -181,6 +183,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		ntcb[TCChildTokensKey] = []string{}
 	} else {
 		ntcb[TCChildTokensKey] = tcb.ChildTokens
+	}
+
+	if tcb.Epoch != 0 {
+		ntcb[TCEpochKey] = tcb.Epoch
 	}
 
 	blk := InitBlock(nil, ntcb)
@@ -709,4 +715,8 @@ func (b *Block) GetTokenValue() float64 {
 
 func (b *Block) GetChildTokens() []string {
 	return util.GetStringSliceFromMap(b.bm, TCChildTokensKey)
+}
+
+func (b *Block) GetEpoch() int64 {
+	return int64(util.GetIntFromMap(b.bm, TCEpochKey))
 }

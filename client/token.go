@@ -1,6 +1,8 @@
 package client
 
 import (
+	"time"
+
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
@@ -28,4 +30,26 @@ func (c *Client) GetAllTokens(didStr string, tokenType string) (*model.TokenResp
 		return nil, err
 	}
 	return &tr, nil
+}
+
+func (c *Client) GetPledgedTokenDetails() (*model.TokenStateResponse, error) {
+	var tr model.TokenStateResponse
+	err := c.sendJSONRequest("GET", setup.APIGetPledgedTokenDetails, nil, nil, &tr, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to get pledged token details", "err", err)
+		return nil, err
+	}
+	return &tr, nil
+}
+
+func (c *Client) GetPinnedInfo(TokenStateHash string) (*model.BasicResponse, error) {
+	m := make(map[string]string)
+	m["tokenstatehash"] = TokenStateHash
+	var br model.BasicResponse
+	err := c.sendJSONRequest("DELETE", setup.APICheckPinnedState, m, nil, &br, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to get Pins", "err", err)
+		return nil, err
+	}
+	return &br, nil
 }
