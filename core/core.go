@@ -54,15 +54,14 @@ const (
 )
 
 const (
-	InvalidPasringErr string  = "invalid json parsing"
-	RubixRootDir      string  = "Rubix/"
-	DefaultMainNetDB  string  = "rubix.db"
-	DefaultTestNetDB  string  = "rubixtest.db"
-	MainNetDir        string  = "MainNet"
-	TestNetDir        string  = "TestNet"
-	TestNetDIDDir     string  = "TestNetDID/"
-	MinTrnxAmt        float64 = 0.00001
-	MaxDecimalPlaces  int     = 5
+	InvalidPasringErr string = "invalid json parsing"
+	RubixRootDir      string = "Rubix/"
+	DefaultMainNetDB  string = "rubix.db"
+	DefaultTestNetDB  string = "rubixtest.db"
+	MainNetDir        string = "MainNet"
+	TestNetDir        string = "TestNet"
+	TestNetDIDDir     string = "TestNetDID/"
+	MaxDecimalPlaces  int    = 5
 )
 
 const (
@@ -76,44 +75,46 @@ const (
 )
 
 type Core struct {
-	cfg           *config.Config
-	cfgFile       string
-	encKey        string
-	log           logger.Logger
-	peerID        string
-	lock          sync.RWMutex
-	ipfsLock      sync.RWMutex
-	qlock         sync.RWMutex
-	rlock         sync.Mutex
-	ipfs          *ipfsnode.Shell
-	ipfsState     bool
-	ipfsChan      chan bool
-	d             *did.DID
-	up            *unpledge.UnPledge
-	didDir        string
-	pm            *ipfsport.PeerManager
-	qm            *QuorumManager
-	l             *ipfsport.Listener
-	ps            *pubsub.PubSub
-	started       bool
-	ipfsApp       string
-	testNet       bool
-	testNetKey    string
-	version       string
-	quorumRequest map[string]*ConsensusStatus
-	pd            map[string]*PledgeDetails
-	webReq        map[string]*did.DIDChan
-	w             *wallet.Wallet
-	qc            map[string]did.DIDCrypto
-	pqc           map[string]did.DIDCrypto
-	sd            map[string]*ServiceDetials
-	s             storage.Storage
-	as            storage.Storage
-	srv           *service.Service
-	arbitaryMode  bool
-	arbitaryAddr  []string
-	ec            *ExplorerClient
-	secret        []byte
+	cfg                  *config.Config
+	cfgFile              string
+	encKey               string
+	log                  logger.Logger
+	peerID               string
+	lock                 sync.RWMutex
+	ipfsLock             sync.RWMutex
+	qlock                sync.RWMutex
+	rlock                sync.Mutex
+	ipfs                 *ipfsnode.Shell
+	ipfsState            bool
+	ipfsChan             chan bool
+	d                    *did.DID
+	up                   *unpledge.UnPledge
+	didDir               string
+	pm                   *ipfsport.PeerManager
+	qm                   *QuorumManager
+	l                    *ipfsport.Listener
+	ps                   *pubsub.PubSub
+	started              bool
+	ipfsApp              string
+	testNet              bool
+	testNetKey           string
+	version              string
+	quorumRequest        map[string]*ConsensusStatus
+	pd                   map[string]*PledgeDetails
+	webReq               map[string]*did.DIDChan
+	w                    *wallet.Wallet
+	qc                   map[string]did.DIDCrypto
+	pqc                  map[string]did.DIDCrypto
+	sd                   map[string]*ServiceDetials
+	s                    storage.Storage
+	as                   storage.Storage
+	srv                  *service.Service
+	arbitaryMode         bool
+	arbitaryAddr         []string
+	ec                   *ExplorerClient
+	secret               []byte
+	quorumCount          int
+	noBalanceQuorumCount int
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {

@@ -344,6 +344,23 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 			c.log.Error("Fetch smart contract failed, failed to create smartcontract folder", "err", err)
 			return
 		}
+		// oldScFolder is set to path of the smartcontract folder
+		oldScFolder := c.cfg.DirPath + "SmartContract/" + fetchSC.SmartContractToken
+		var isPathExist bool
+		//info is set to FileInfo describing the oldScFolder
+		info, err := os.Stat(oldScFolder)
+		//If directory doesn't exist, isPathExist is set to false
+		if os.IsNotExist(err) {
+			isPathExist = false
+		} else {
+			isPathExist = info.IsDir()
+
+		}
+		//If isPathExist true, removing the existing folder which was generated while generating the smartcontract hash
+		if isPathExist {
+			c.log.Debug("removing the existing folder:", oldScFolder, "to add the new folder")
+			os.RemoveAll(oldScFolder)
+		}
 		fetchSC.SmartContractTokenPath, err = c.RenameSCFolder(fetchSC.SmartContractTokenPath, fetchSC.SmartContractToken)
 		if err != nil {
 			c.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
