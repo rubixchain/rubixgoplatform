@@ -95,6 +95,11 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 		
 		// Get the transaction epoch for every token and chec
 		for _, token := range tokensOwnedBySender {
+			// Nodes running old version of rubixgoplatform will not have their TransactionID column of Tokens's table populated
+			// And hence should be skipped from Self Transfer
+			if token.TransactionID == "" {
+				continue
+			}
 			tokenTransactionDetail, err := c.w.GetTransactionDetailsbyTransactionId(token.TransactionID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get transaction details for trx hash: %v, err: %v", token.TransactionID, err)
@@ -285,7 +290,15 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 	et := time.Now()
 	dif := et.Sub(st)
-	td.Amount = req.TokenCount
+	if isSelfRBTTransfer {
+		var amt float64 = 0
+		for _, tknInfo := range tis {
+			amt += tknInfo.TokenValue
+		}
+		td.Amount = amt
+	} else {
+		td.Amount = req.TokenCount
+	}
 	td.TotalTime = float64(dif.Milliseconds())
 
 	if err := c.w.AddTransactionHistory(td); err != nil {
