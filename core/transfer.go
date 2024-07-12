@@ -8,7 +8,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/unpledge"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -101,7 +100,7 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 				return nil, fmt.Errorf("failed to get transaction details for trx hash: %v, err: %v", token.TransactionID, err)
 			}
 
-			if time.Now().Unix() - tokenTransactionDetail.Epoch > int64(unpledge.PledgePeriodInSeconds) {
+			if time.Now().Unix() - tokenTransactionDetail.Epoch > int64(pledgePeriodInSeconds) {
 				if err := c.w.LockToken(&token); err != nil {
 					return nil, fmt.Errorf("failed to lock tokens %v, exiting selfTransfer routine with error: %v", token.TokenID, err.Error())
 				}
