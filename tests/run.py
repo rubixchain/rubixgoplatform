@@ -3,6 +3,7 @@ import os
 import shutil
 import requests
 import argparse
+import binascii
 from node.commands import run_command
 from node.quorum import run_quorum_nodes
 
@@ -12,6 +13,21 @@ from scenarios import (
 )
 
 IPFS_KUBO_VERSION = "v0.21.0"
+
+
+def generate_ipfs_swarm_key(build_name):
+    try:
+        key = os.urandom(32)
+    except Exception as e:
+        print("While trying to read random source:", e)
+        return
+
+    output = "/key/swarm/psk/1.0.0/\n/base16/\n" + binascii.hexlify(key).decode()
+
+    filename = f"./fixtures/testswarm_{build_name}.key"
+
+    with open(filename, "w") as file:
+        file.write(output)
 
 def get_os_info():
     os_name = platform.system()
