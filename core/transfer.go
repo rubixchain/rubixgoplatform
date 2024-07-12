@@ -181,10 +181,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 	// This flag indicates if the call is made for Self Transfer or general token transfer
 	isSelfRBTTransfer := senderDID == receiverdid
-	if req.TokenCount < MinDecimalValue(MaxDecimalPlaces) {
-		resp.Message = "Input transaction amount is less than minimum transaction amount"
-		return resp
-	}
 
 	dc, err := c.SetupDID(reqID, senderDID)
 	if err != nil {
