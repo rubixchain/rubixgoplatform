@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"bytes"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/util"
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
 const (
@@ -376,13 +378,29 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 	return nil
 }
 
-func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string) error {
+func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, ipfsShell *ipfsnode.Shell) ([]string, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
 	err := w.CreateTokenBlock(b)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
+	//quorums using pledgefinality function, to be added to TokenStateHash Table
+	var updatedtokenhashes []string = make([]string, 0)
+	var tokenHashMap map[string]string = make(map[string]string)
+
+	for _, info := range ti {
+		t := info.Token
+		b := w.GetLatestTokenBlock(info.Token, info.TokenType)
+		blockId, _ := b.GetBlockID(t)
+		tokenIDTokenStateData := t + blockId
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
+		tokenIDTokenStateHash, _ := ipfsShell.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		updatedtokenhashes = append(updatedtokenhashes, tokenIDTokenStateHash)
+		tokenHashMap[t] = tokenIDTokenStateHash
 	}
 
 	for i := range ti {
@@ -393,45 +411,52 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			err := util.CreateDir(dir)
 			if err != nil {
 				w.log.Error("Faled to create directory", "err", err)
-				return err
+				return nil, err
 			}
 			defer os.RemoveAll(dir)
 			err = w.Get(ti[i].Token, did, OwnerRole, dir)
 			if err != nil {
 				w.log.Error("Faled to get token", "err", err)
-				return err
+				return nil, err
 			}
 			gb := w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
 			pt := ""
 			if gb != nil {
 				pt, _, _ = gb.GetParentDetials(ti[i].Token)
 			}
+
+			tokenId := ti[i].Token
+			
 			t = Token{
-				TokenID:       ti[i].Token,
+				TokenID:       tokenId,
 				TokenValue:    ti[i].TokenValue,
 				ParentTokenID: pt,
 				DID:           did,
 			}
+			t.TokenStateHash = tokenHashMap[tokenId]
+
 			err = w.s.Write(TokenStorage, &t)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 		t.DID = did
 		t.TokenStatus = TokenIsFree
+		t.TokenStateHash = tokenHashMap[t.TokenID]
+
 		err = w.s.Update(TokenStorage, &t, "token_id=?", ti[i].Token)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
 		//Pinnig the whole tokens and pat tokens
 		ok, err := w.Pin(ti[i].Token, OwnerRole, did, b.GetTid(), senderAddress, receiverAddress, ti[i].TokenValue)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !ok {
-			return fmt.Errorf("failed to pin token")
+			return nil, fmt.Errorf("failed to pin token")
 		}
 	}
 	// for i := range pt {
@@ -451,22 +476,22 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	// 	t.TokenStatus = TokenIsTransferred
 	// 	w.AddTokenBlock(pt[i], tcb)
 	// }
-	return nil
+	return updatedtokenhashes, nil
 }
 
-func (w *Wallet) TokenStateHashUpdate(tokenwithtokenhash []string) {
-	w.l.Lock()
-	defer w.l.Unlock()
-	var t Token
-	for _, val := range tokenwithtokenhash {
-		token := strings.Split(val, ".")[0]
-		tokenstatehash := strings.Split(val, ".")[1]
-		_ = w.s.Read(TokenStorage, &t, "token_id=?", token)
-		t.TokenStateHash = tokenstatehash
-		_ = w.s.Update(TokenStorage, &t, "token_id=?", token)
-	}
+// func (w *Wallet) TokenStateHashUpdate(tokenwithtokenhash []string) {
+// 	w.l.Lock()
+// 	defer w.l.Unlock()
+// 	var t Token
+// 	for _, val := range tokenwithtokenhash {
+// 		token := strings.Split(val, ".")[0]
+// 		tokenstatehash := strings.Split(val, ".")[1]
+// 		_ = w.s.Read(TokenStorage, &t, "token_id=?", token)
+// 		t.TokenStateHash = tokenstatehash
+// 		_ = w.s.Update(TokenStorage, &t, "token_id=?", token)
+// 	}
 
-}
+// }
 
 func (w *Wallet) CommitTokens(did string, rbtTokens []string) error {
 	w.l.Lock()

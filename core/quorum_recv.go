@@ -762,30 +762,12 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 	}
 	senderPeerId, _, _ := util.ParseAddress(sr.Address)
 
-	err = c.w.TokensReceived(did, sr.TokenInfo, b, senderPeerId, c.peerID)
+	updatedTokenStateHashes, err := c.w.TokensReceived(did, sr.TokenInfo, b, senderPeerId, c.peerID, c.ipfs)
 	if err != nil {
 		c.log.Error("Failed to update token status", "err", err)
 		crep.Message = "Failed to update token status"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-
-	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
-	//quorums using pledgefinality function, to be added to TokenStateHash Table
-	var updatedtokenhashes []string
-	var tokenwithtokenhash []string
-	for _, ti := range sr.TokenInfo {
-		t := ti.Token
-		b := c.w.GetLatestTokenBlock(ti.Token, ti.TokenType)
-		blockId, _ := b.GetBlockID(t)
-		tokenIDTokenStateData := t + blockId
-		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
-		tokenIDTokenStateHash, _ := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-		updatedtokenhashes = append(updatedtokenhashes, tokenIDTokenStateHash)
-		tokenwithtokenhash = append(tokenwithtokenhash, t+"."+tokenIDTokenStateHash)
-	}
-
-	//Updating the latest tokenstatehash with the new owner i.e. receiver
-	c.w.TokenStateHashUpdate(tokenwithtokenhash)
 
 	sc := contract.InitContract(b.GetSmartContract(), nil)
 	if sc == nil {
@@ -819,7 +801,8 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 	for _, qrm := range sr.QuorumInfo {
 		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID, *qrm.DIDType)
 	}
-	crep.Result = updatedtokenhashes
+
+	crep.Result = updatedTokenStateHashes
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
