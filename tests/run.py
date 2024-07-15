@@ -14,6 +14,7 @@ from scenarios import (
 
 IPFS_KUBO_VERSION = "v0.21.0"
 
+
 def generate_ipfs_swarm_key(build_name):
     try:
         key = os.urandom(32)
