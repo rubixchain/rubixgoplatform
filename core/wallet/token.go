@@ -327,6 +327,16 @@ func (w *Wallet) UpdateToken(t *Token) error {
 	return nil
 }
 
+func (w *Wallet) UpdateFT(ft *FT) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.s.Update(FTTokenStorage, ft, "token_id=?", ft.tokenid)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block, local bool) error {
 	w.l.Lock()
 	defer w.l.Unlock()
