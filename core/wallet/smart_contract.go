@@ -21,10 +21,16 @@ type CallBackUrl struct {
 }
 
 func (w *Wallet) CreateSmartContractToken(sc *SmartContract) error {
-	err := w.s.Write(SmartContractStorage, sc)
+	var sc_info SmartContract
+	//to check whether smart contract hash already exist in the DB, and write if it doesn't exist
+	err := w.s.Read(SmartContractStorage, &sc_info, "smart_contract_hash=?", sc.SmartContractHash)
 	if err != nil {
-		w.log.Error("Failed to write smart contract token", "err", err)
-		return err
+		err := w.s.Write(SmartContractStorage, sc)
+		if err != nil {
+			w.log.Error("Failed to write smart contract token", "err", err)
+			return err
+		}
+		return nil
 	}
 	return nil
 }

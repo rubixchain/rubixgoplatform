@@ -1,9 +1,12 @@
 package wallet
 
+
 type Credit struct {
 	DID    string `gorm:"column:did"`
 	Credit string `gorm:"column:credit;size:4000"`
+	Tx string `gorm:"column:tx"`
 }
+
 
 func (w *Wallet) StoreCredit(did string, credit string) error {
 	c := &Credit{

@@ -3,10 +3,13 @@ package wallet
 import (
 	"fmt"
 	"os"
+	"strings"
+	"bytes"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/util"
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
 const (
@@ -37,11 +40,13 @@ const (
 )
 
 type Token struct {
-	TokenID       string  `gorm:"column:token_id;primaryKey"`
-	ParentTokenID string  `gorm:"column:parent_token_id"`
-	TokenValue    float64 `gorm:"column:token_value"`
-	DID           string  `gorm:"column:did"`
-	TokenStatus   int     `gorm:"column:token_status;"`
+	TokenID        string  `gorm:"column:token_id;primaryKey"`
+	ParentTokenID  string  `gorm:"column:parent_token_id"`
+	TokenValue     float64 `gorm:"column:token_value"`
+	DID            string  `gorm:"column:did"`
+	TokenStatus    int     `gorm:"column:token_status;"`
+	TokenStateHash string  `gorm:"column:token_state_hash"`
+	TransactionID  string  `gorm:"column:transaction_id"`
 }
 
 func (w *Wallet) CreateToken(t *Token) error {
@@ -107,6 +112,19 @@ func (w *Wallet) GetAllTokens(did string) ([]Token, error) {
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
+	}
+	return t, nil
+}
+
+func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "token_status=? AND did=?", TokenIsFree, did)
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			return []Token{}, nil
+		} else {
+			return nil, err
+		}
 	}
 	return t, nil
 }
@@ -344,6 +362,8 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 				return err
 			}
 			t.TokenStatus = TokenIsTransferred
+			t.TransactionID = b.GetTid()
+	
 			err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
 			if err != nil {
 				return err
@@ -374,13 +394,29 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 	return nil
 }
 
-func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string) error {
+func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, ipfsShell *ipfsnode.Shell) ([]string, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
 	err := w.CreateTokenBlock(b)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
+	//quorums using pledgefinality function, to be added to TokenStateHash Table
+	var updatedtokenhashes []string = make([]string, 0)
+	var tokenHashMap map[string]string = make(map[string]string)
+
+	for _, info := range ti {
+		t := info.Token
+		b := w.GetLatestTokenBlock(info.Token, info.TokenType)
+		blockId, _ := b.GetBlockID(t)
+		tokenIDTokenStateData := t + blockId
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
+		tokenIDTokenStateHash, _ := ipfsShell.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		updatedtokenhashes = append(updatedtokenhashes, tokenIDTokenStateHash)
+		tokenHashMap[t] = tokenIDTokenStateHash
 	}
 
 	for i := range ti {
@@ -391,46 +427,53 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			err := util.CreateDir(dir)
 			if err != nil {
 				w.log.Error("Faled to create directory", "err", err)
-				return err
+				return nil, err
 			}
 			defer os.RemoveAll(dir)
 			err = w.Get(ti[i].Token, did, OwnerRole, dir)
 			if err != nil {
 				w.log.Error("Faled to get token", "err", err)
-				return err
+				return nil, err
 			}
 			gb := w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
 			pt := ""
 			if gb != nil {
 				pt, _, _ = gb.GetParentDetials(ti[i].Token)
 			}
+
+			tokenId := ti[i].Token
+			
 			t = Token{
-				TokenID:       ti[i].Token,
+				TokenID:       tokenId,
 				TokenValue:    ti[i].TokenValue,
 				ParentTokenID: pt,
 				DID:           did,
 			}
+			t.TokenStateHash = tokenHashMap[tokenId]
+
 			err = w.s.Write(TokenStorage, &t)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
-
 		t.DID = did
 		t.TokenStatus = TokenIsFree
+		t.TransactionID = b.GetTid()
+		t.TokenStateHash = tokenHashMap[t.TokenID]
+
 		err = w.s.Update(TokenStorage, &t, "token_id=?", ti[i].Token)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
 		//Pinnig the whole tokens and pat tokens
 		ok, err := w.Pin(ti[i].Token, OwnerRole, did, b.GetTid(), senderAddress, receiverAddress, ti[i].TokenValue)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !ok {
-			return fmt.Errorf("failed to pin token")
+			return nil, fmt.Errorf("failed to pin token")
 		}
 	}
 	// for i := range pt {
@@ -450,8 +493,22 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	// 	t.TokenStatus = TokenIsTransferred
 	// 	w.AddTokenBlock(pt[i], tcb)
 	// }
-	return nil
+	return updatedtokenhashes, nil
 }
+
+// func (w *Wallet) TokenStateHashUpdate(tokenwithtokenhash []string) {
+// 	w.l.Lock()
+// 	defer w.l.Unlock()
+// 	var t Token
+// 	for _, val := range tokenwithtokenhash {
+// 		token := strings.Split(val, ".")[0]
+// 		tokenstatehash := strings.Split(val, ".")[1]
+// 		_ = w.s.Read(TokenStorage, &t, "token_id=?", token)
+// 		t.TokenStateHash = tokenstatehash
+// 		_ = w.s.Update(TokenStorage, &t, "token_id=?", token)
+// 	}
+
+// }
 
 func (w *Wallet) CommitTokens(did string, rbtTokens []string) error {
 	w.l.Lock()
@@ -591,5 +648,102 @@ func (w *Wallet) UnlockLockedTokens(did string, tokenList []string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (w *Wallet) AddTokenStateHash(did string, tokenStateHashes []string, pledgedtokens []string, TransactionID string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var td TokenStateDetails
+	if tokenStateHashes == nil {
+		return nil
+	}
+	concatenatedpledgedtokens := strings.Join(pledgedtokens, ",")
+
+	for _, tokenStateHash := range tokenStateHashes {
+		td.DID = did
+		td.PledgedTokens = concatenatedpledgedtokens
+		td.TokenStateHash = tokenStateHash 
+		td.TransactionID = TransactionID
+
+		err := w.s.Write(TokenStateHash, &td)
+		if err != nil {
+			w.log.Error("Token State Hash could not be added", "token state hash", tokenStateHash, "err", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (w *Wallet) GetTokenStateHashByTransactionID(transactionID string) ([]TokenStateDetails, error) {
+	var td []TokenStateDetails
+	err := w.s.Read(TokenStateHash, &td, "transaction_id = ?", transactionID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			return []TokenStateDetails{}, nil
+		} else {
+			w.log.Error("Failed to get token states", "err", err)
+			return nil, err
+		}
+	}
+	return td, nil
+}
+
+func (w *Wallet) GetAllTokenStateHash() ([]TokenStateDetails, error) {
+	var td []TokenStateDetails
+	err := w.s.Read(TokenStateHash, &td, "did!=?", "")
+	if err != nil {
+		w.log.Error("Failed to get token states", "err", err)
+		return nil, err
+	}
+	return td, nil
+}
+
+func (w *Wallet) RemoveTokenStateHash(tokenstatehash string) error {
+	var td TokenStateDetails
+
+	//Getting all the details about a particular token state hash
+	err := w.s.Read(TokenStateHash, &td, "token_state_hash=?", tokenstatehash)
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			return nil	
+		} else {
+			w.log.Error("Failed to fetch token state from DB", "err", err)
+			return err
+		}
+	}
+
+	err = w.s.Delete(TokenStateHash, &td, "token_state_hash=?", tokenstatehash)
+	if err != nil {
+		w.log.Error("Failed to delete token state hash details from DB", "err", err)
+		return err
+	}
+
+	return nil
+}
+
+func (w *Wallet) RemoveTokenStateHashByTransactionID(transactionID string) error {
+	var td []TokenStateDetails
+
+	//Getting all the details about a particular token state hash
+	err := w.s.Read(TokenStateHash, &td, "transaction_id=?", transactionID)
+	if err != nil {
+		if !strings.Contains(err.Error(), "no records found") {
+			w.log.Error("Failed to fetch token state from DB", "err", err)
+			return err
+		} else {
+			return nil		
+		}
+	}
+
+	if len(td) > 0 {
+		err = w.s.Delete(TokenStateHash, &td, "transaction_id=?", transactionID)
+		if err != nil {
+			w.log.Error("Failed to delete token state hash details from DB", "err", err)
+			return err
+		}
+	}
+	
 	return nil
 }

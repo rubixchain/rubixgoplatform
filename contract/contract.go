@@ -265,7 +265,7 @@ func (c *Contract) GetPledgeMode() int {
 	mi, ok := c.sm[SCPledgeModeKey]
 	// Default mode is POW
 	if !ok {
-		return POWPledgeMode
+		return PeriodicPledgeMode
 	}
 	return mi.(int)
 }

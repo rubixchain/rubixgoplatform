@@ -161,6 +161,10 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIAddExplorer, "POST", s.AuthHandle(s.APIAddExplorer, false, s.AuthError, true))
 	s.AddRoute(setup.APIRemoveExplorer, "POST", s.AuthHandle(s.APIRemoveExplorer, false, s.AuthError, true))
 	s.AddRoute(setup.APIAddPeerDetails, "POST", s.AuthHandle(s.APIAddPeerDetails, false, s.AuthError, true))
+	s.AddRoute(setup.APIGetPledgedTokenDetails, "GET", s.AuthHandle(s.APIGetPledgedTokenDetails, false, s.AuthError, true))
+	s.AddRoute(setup.APICheckPinnedState, "DELETE", s.AuthHandle(s.APICheckPinnedState, false, s.AuthError, true))
+	s.AddRoute(setup.APISelfTransfer, "POST", s.AuthHandle(s.SelfTransferHandle, false, s.AuthError, true))
+	s.AddRoute(setup.APIRunUnpledge, "POST", s.AuthHandle(s.RunUnpledgeHandle, false, s.AuthError, true))
 	s.AddRoute(setup.APIValidateTokenChain, "GET", s.AuthHandle(s.APIValidateTokenChain, false, s.AuthError, false))
 }
 

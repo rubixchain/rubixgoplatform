@@ -94,9 +94,7 @@ def create_and_register_did(config: dict, did_alias: str, did_type: int = 4, reg
     did = cmd_create_did(config["server"], config["grpcPort"], did_type)
     print(f"DID {did} has been created successfully")
 
-    config["dids"] = {
-        did_alias: did
-    }
+    config["dids"][did_alias] = did
 
     if register_did:
         cmd_register_did(did, config["server"], config["grpcPort"])

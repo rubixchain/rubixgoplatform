@@ -44,6 +44,36 @@ definitions:
           $ref: '#/definitions/model.NFTStatus'
         type: array
     type: object
+  model.PledgedTokenStateDetails:
+    properties:
+      did:
+        type: string
+      token:
+        type: string
+      token_state:
+        type: string
+    type: object
+  model.TokenStateResponse:
+    properties:
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+      token_state_details:
+        items:
+          $ref: '#/definitions/model.PledgedTokenStateDetails'
+        type: array
+    type: object
+  model.TransactionCount:
+    properties:
+      did:
+        type: string
+      txnReceived:
+        type: integer
+      txnSend:
+        type: integer
+    type: object
   model.TxnCountForDID:
     properties:
       message:
@@ -53,7 +83,7 @@ definitions:
         type: boolean
       txnCount:
         items:
-          $ref: '#/definitions/wallet.TransactionCount'
+          $ref: '#/definitions/model.TransactionCount'
         type: array
     type: object
   server.DIDPeerMapTemp:
@@ -137,15 +167,6 @@ definitions:
       password:
         type: string
     type: object
-  wallet.TransactionCount:
-    properties:
-      did:
-        type: string
-      txnReceived:
-        type: integer
-      txnSend:
-        type: integer
-    type: object
 info:
   contact:
     email: murali.c@ensurity.com
@@ -198,6 +219,28 @@ paths:
       summary: Add NFTs
       tags:
       - NFT
+  /api/check-pinned-state:
+    delete:
+      consumes:
+      - application/json
+      description: This API is used to check if the token state for which the token
+        is pledged is exhausted or not.
+      parameters:
+      - description: Token State Hash
+        in: query
+        name: tokenstatehash
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Check for exhausted token state hash
+      tags:
+      - Account
   /api/commit-data-token:
     post:
       consumes:
@@ -531,6 +574,20 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
+  /api/get-pledgedtoken-details:
+    get:
+      description: This API allows the user to get details about the tokens the quorums
+        have pledged i.e. which token is pledged for which token state
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.TokenStateResponse'
+      summary: Get details about the pledged tokens
+      tags:
+      - Account
   /api/get-smart-contract-token-chain-data:
     post:
       consumes:
@@ -592,6 +649,29 @@ paths:
       summary: Initiate RBT Transfer
       tags:
       - Account
+  /api/initiate-self-transfer:
+    post:
+      consumes:
+      - application/json
+      description: This API will initiate self RBT transfer for a specific DID
+      operationId: initiate-self-transfer
+      parameters:
+      - description: Intitate RBT transfer
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.RBTTransferRequestSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiate Self Transfer
+      tags:
+      - Account
   /api/register-callback-url:
     post:
       consumes:
@@ -616,6 +696,22 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
+  /api/run-unpledge:
+    post:
+      consumes:
+      - application/json
+      description: This API will initiate self RBT transfer for a specific DID
+      operationId: run-unpledge
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Run Unpledge
+      tags:
+      - Account
   /api/signature-response:
     post:
       consumes:

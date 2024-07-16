@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
+	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -23,6 +23,37 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
+
+func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
+	resp := model.BasicResponse{
+		Status: false,
+	}
+
+	var serverReq *model.AddUnpledgeDetailsRequest
+	c.l.ParseJSON(req, &serverReq)
+
+	var transactionID string = serverReq.TransactionHash
+	var quorumDID string = serverReq.QuorumDID
+	var pledgeTokenHashes []string = serverReq.PledgeTokenHashes
+	var transactionEpoch int64 = serverReq.TransactionEpoch
+
+	if len(pledgeTokenHashes) == 0 {
+		c.log.Error("unable to get information about pledge token hashes")
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+
+	// Add Unpledge details to UnpledgeQueue
+	pledgeTokenHashesStrArr := strings.Join(pledgeTokenHashes, ",")
+	err := c.up.AddUnPledge(transactionID, pledgeTokenHashesStrArr, transactionEpoch, quorumDID)
+	if err != nil {
+		resp.Message = fmt.Sprintf("Error while adding record to UnpledgeQueue table for txId: %v, error: %v", transactionID, err.Error())
+		c.log.Error(fmt.Sprintf("Error while adding record to UnpledgeQueue table for txId: %v, error: %v", transactionID, err.Error()))
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+
+	resp.Status = true
+	return c.l.RenderJSON(req, &resp, http.StatusOK)
+}
 
 func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 	// ::TODO:: Get proper credit score
@@ -204,64 +235,6 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	}
 
 	c.log.Debug("Finished Tokenstate check")
-
-	//check if token is pledgedtoken
-	wt := sc.GetTransTokenInfo()
-
-	for i := range wt {
-		b := c.w.GetLatestTokenBlock(wt[i].Token, wt[i].TokenType)
-		if b == nil {
-			c.log.Error("pledge token check Failed, failed to get latest block")
-			crep.Message = "pledge token check Failed, failed to get latest block"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		if c.checkIsPledged(b) {
-			c.log.Error("Pledge Token check Failed, Token ", wt[i], " is Pledged Token")
-			crep.Message = "Pledge Token check Failed, Token " + wt[i].Token + " is Pledged Token"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		if c.checkIsUnpledged(b) {
-			unpledgeId := c.getUnpledgeId(wt[i].Token, wt[i].TokenType)
-			if unpledgeId == "" {
-				c.log.Error("Failed to fetch proof file CID")
-				crep.Message = "Failed to fetch proof file CID"
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			err := c.ipfs.Get(unpledgeId, c.cfg.DirPath+"unpledge")
-			if err != nil {
-				c.log.Error("Failed to fetch proof file")
-				crep.Message = "Failed to fetch proof file, err " + err.Error()
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			pcb, err := ioutil.ReadFile(c.cfg.DirPath + "unpledge/" + unpledgeId)
-			if err != nil {
-				c.log.Error("Invalid file", "err", err)
-				crep.Message = "Invalid file,err " + err.Error()
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			pcs := util.BytesToString(pcb)
-
-			senderAddr := cr.SenderPeerID + "." + sc.GetSenderDID()
-			rdid, tid, err := c.getProofverificationDetails(wt[i].Token, senderAddr, wt[i].TokenType)
-			if err != nil {
-				c.log.Error("Failed to get pledged for token reciveer did", "err", err)
-				crep.Message = "Failed to get pledged for token reciveer did"
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			pv, err := c.up.ProofVerification(wt[i].Token, pcs, rdid, tid, wt[i].TokenType)
-			if err != nil {
-				c.log.Error("Proof Verification Failed due to error ", err)
-				crep.Message = "Proof Verification Failed due to error " + err.Error()
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			if !pv {
-				c.log.Debug("Proof of Work for Unpledge not verified")
-				crep.Message = "Proof of Work for Unpledge not verified"
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			c.log.Debug("Proof of work verified")
-		}
-	}
 
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
 	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
@@ -535,7 +508,7 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	switch cr.Mode {
-	case RBTTransferMode:
+	case RBTTransferMode, SelfTransferMode:
 		c.log.Debug("RBT consensus started")
 		return c.quorumRBTConsensus(req, did, qdc, &cr)
 	case DTCommitMode:
@@ -578,8 +551,20 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
-	if (pr.TokensRequired) < MinTrnxAmt {
-		c.log.Error("Pledge amount is less than ", MinTrnxAmt)
+	var availableBalance model.DIDAccountInfo
+	availableBalance, err = c.GetAccountInfo(did)
+	if err != nil {
+		c.log.Error("Unable to check quorum balance")
+	}
+	availableRBT := availableBalance.RBTAmount
+	if availableRBT < pr.TokensRequired {
+		c.log.Error("Quorum don't have enough balance to pledge")
+		crep.Message = "Quorum don't have enough balance to pledge"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	if (pr.TokensRequired) < MinDecimalValue(MaxDecimalPlaces) {
+		c.log.Error("Pledge amount is less than ", MinDecimalValue(MaxDecimalPlaces))
 		crep.Message = "Pledge amount is less than minimum transcation amount"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
@@ -632,7 +617,175 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &presp, http.StatusOK)
 }
 
-func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
+func (c *Core) updateReceiverToken(
+	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
+	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int,
+) ([]string, error) {
+	var receiverPeerId string = ""
+	var receiverDID string = ""
+
+	if receiverAddress != "" {
+		var ok bool
+		receiverPeerId, receiverDID, ok = util.ParseAddress(receiverAddress)
+		if !ok {
+			return nil, fmt.Errorf("Unable to parse receiver address: %v", receiverAddress)
+		}
+	} else {
+		var ok bool
+		receiverPeerId, receiverDID, ok = util.ParseAddress(senderAddress)
+		if !ok {
+			return nil, fmt.Errorf("Unable to parse receiver address: %v", senderAddress)
+		}
+	}
+
+	b := block.InitBlock(tokenChainBlock, nil)
+	if b == nil {
+		return nil, fmt.Errorf("invalid token chain block")
+	}
+
+	var senderPeer *ipfsport.Peer
+
+	if receiverAddress != "" {
+		var err error
+		senderPeer, err = c.getPeer(senderAddress, "")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get peer : %v", err.Error())
+		}
+		defer senderPeer.Close()
+
+		_, err = c.ValidateSender(b)
+		if err != nil {
+			c.log.Error("failed to validate sender", "err", err)
+			return nil, err
+		}
+		_, err = c.ValidateQuorums(b, receiverDID)
+		if err != nil {
+			c.log.Error("failed to validate quorum", "err", err)
+			return nil, err
+		}
+
+		for _, ti := range tokenInfo {
+			t := ti.Token
+			pblkID, err := b.GetPrevBlockID(t)
+			if err != nil {
+				return nil, fmt.Errorf("failed to sync token chain block, missing previous block id for token %v, error: %v", t, err)
+			}
+
+			err = c.syncTokenChainFrom(senderPeer, pblkID, t, ti.TokenType)
+			if err != nil {
+				return nil, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
+			}
+
+			if c.TokenType(PartString) == ti.TokenType {
+				gb := c.w.GetGenesisTokenBlock(t, ti.TokenType)
+				if gb == nil {
+					return nil, fmt.Errorf("failed to get genesis block for token %v, err: %v", t, err)
+				}
+				pt, _, err := gb.GetParentDetials(t)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
+				}
+				err = c.syncParentToken(senderPeer, pt)
+				if err != nil {
+					return nil, fmt.Errorf("failed to sync parent token %v childtoken %v err : ", pt, t, err)
+				}
+			}
+			ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch previous block for token: % err : %v", t, err)
+			}
+			ptcb := block.InitBlock(ptcbArray, nil)
+			if c.checkIsPledged(ptcb) {
+				return nil, fmt.Errorf("Token " + t + " is a pledged Token")
+			}
+		}
+	}
+
+	senderPeerId, _, ok := util.ParseAddress(senderAddress)
+	if !ok {
+		return nil, fmt.Errorf("Unable to parse sender address: %v", senderAddress)
+	}
+
+	results := make([]MultiPinCheckRes, len(tokenInfo))
+	var wg sync.WaitGroup
+	for i, ti := range tokenInfo {
+		t := ti.Token
+		wg.Add(1)
+
+		go c.pinCheck(t, i, senderPeerId, receiverPeerId, results, &wg)
+	}
+	wg.Wait()
+
+	for i := range results {
+		if results[i].Error != nil {
+			return nil, fmt.Errorf("Error while cheking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
+		}
+		if results[i].Status {
+			return nil, fmt.Errorf("Token %v has multiple owners: %v", results[i].Token, results[i].Owners)
+		}
+	}
+
+	tokenStateCheckResult := make([]TokenStateCheckResult, len(tokenInfo))
+	for i, ti := range tokenInfo {
+		t := ti.Token
+		wg.Add(1)
+		go c.checkTokenState(t, receiverDID, i, tokenStateCheckResult, &wg, quorumList, ti.TokenType)
+	}
+	wg.Wait()
+
+	for i := range tokenStateCheckResult {
+		if tokenStateCheckResult[i].Error != nil {
+			return nil, fmt.Errorf("Error while cheking Token State Message : %v", tokenStateCheckResult[i].Message)
+		}
+		if tokenStateCheckResult[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
+			return nil, fmt.Errorf("Token state has been exhausted, Token being Double spent: %v, msg: %v", tokenStateCheckResult[i].Token, tokenStateCheckResult[i].Message)
+		}
+		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
+	}
+
+	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, c.ipfs)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
+	}
+
+	sc := contract.InitContract(b.GetSmartContract(), nil)
+	if sc == nil {
+		return nil, fmt.Errorf("Failed to update token status, missing smart contract")
+	}
+
+	bid, err := b.GetBlockID(tokenInfo[0].Token)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
+	}
+
+	// Only save the transaction details in Transaction history table whenever
+	// its a general RBT transfer
+	if sc.GetSenderDID() != sc.GetReceiverDID() {
+		td := &model.TransactionDetails{
+			TransactionID:   b.GetTid(),
+			TransactionType: b.GetTransType(),
+			BlockID:         bid,
+			Mode:            wallet.RecvMode,
+			Amount:          sc.GetTotalRBTs(),
+			SenderDID:       sc.GetSenderDID(),
+			ReceiverDID:     sc.GetReceiverDID(),
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+			Epoch:           int64(transactionEpoch),
+		}
+		c.w.AddTransactionHistory(td)
+	}
+
+	//Adding quorums to DIDPeerTable of receiver
+	for _, qrm := range quorumInfo {
+		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID, *qrm.DIDType)
+	}
+	return updatedTokenStateHashes, nil
+}
+
+func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var sr SendTokenRequest
 
@@ -640,179 +793,32 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 	crep := model.BasicResponse{
 		Status: false,
 	}
-
 	if err != nil {
 		c.log.Error("Failed to parse json request", "err", err)
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	b := block.InitBlock(sr.TokenChainBlock, nil)
-	if b == nil {
-		c.log.Error("Invalid token chain block", "err", err)
-		crep.Message = "Invalid token chain block"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
 
-	p, err := c.getPeer(sr.Address, "")
+	receiverAddress := c.peerID + "." + did
+
+	updatedtokenhashes, err := c.updateReceiverToken(
+		sr.Address,
+		receiverAddress,
+		sr.TokenInfo,
+		sr.TokenChainBlock,
+		sr.QuorumList,
+		sr.QuorumInfo,
+		sr.TransactionEpoch,
+	)
 	if err != nil {
-		c.log.Error("failed to get peer", "err", err)
-		crep.Message = "failed to get peer"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	defer p.Close()
-
-	_, err = c.ValidateSender(b)
-	if err != nil {
-		c.log.Error("failed to validate sender", "err", err)
-		crep.Message = "failed to validate sender"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	_, err = c.ValidateQuorums(b, did)
-	if err != nil {
-		c.log.Error("failed to validate quorum", "err", err)
-		crep.Message = "failed to validate quorum"
+		c.log.Error(err.Error())
+		crep.Message = err.Error()
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
-	for _, ti := range sr.TokenInfo {
-		t := ti.Token
-		pblkID, err := b.GetPrevBlockID(t)
-		if err != nil {
-			c.log.Error("failed to sync token chain block, missing previous block id for token ", t, " err : ", err)
-			crep.Message = "failed to sync token chain block, missing previous block id for token " + t
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		err = c.syncTokenChainFrom(p, pblkID, t, ti.TokenType)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
-			c.log.Error(errMsg, "err", err)
-			crep.Message = errMsg
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-
-		if c.TokenType(PartString) == ti.TokenType {
-			gb := c.w.GetGenesisTokenBlock(t, ti.TokenType)
-			if gb == nil {
-				c.log.Error("failed to get genesis block for token ", t, "err : ", err)
-				crep.Message = "failed to get genesis block for token " + t
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			pt, _, err := gb.GetParentDetials(t)
-			if err != nil {
-				c.log.Error("failed to get parent details for token ", t, " err : ", err)
-				crep.Message = "failed to get parent details for token " + t
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-			err = c.syncParentToken(p, pt)
-			if err != nil {
-				c.log.Error("failed to sync parent token ", pt, " childtoken ", t, " err : ", err)
-				crep.Message = "failed to sync parent token " + pt + " childtoken " + t
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
-			}
-		}
-		ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
-		if err != nil {
-			c.log.Error("Failed to fetch previous block for token ", t, " err : ", err)
-			crep.Message = "Failed to fetch previous block for token " + t
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		ptcb := block.InitBlock(ptcbArray, nil)
-		if c.checkIsPledged(ptcb) {
-			c.log.Error("Token is a pledged Token", "token", t)
-			crep.Message = "Token " + t + " is a pledged Token"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-	}
-
-	results := make([]MultiPinCheckRes, len(sr.TokenInfo))
-	var wg sync.WaitGroup
-	for i, ti := range sr.TokenInfo {
-		t := ti.Token
-		senderPeerId, _, ok := util.ParseAddress(sr.Address)
-		if !ok {
-			c.log.Error("Error occured", "error", err)
-			crep.Message = "Unable to parse sender address"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		wg.Add(1)
-		go c.pinCheck(t, i, senderPeerId, c.peerID, results, &wg)
-	}
-	wg.Wait()
-	for i := range results {
-		if results[i].Error != nil {
-			c.log.Error("Error occured", "error", err)
-			crep.Message = "Error while cheking Token multiple Pins"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		if results[i].Status {
-			c.log.Error("Token has multiple owners", "token", results[i].Token, "owners", results[i].Owners)
-			crep.Message = "Token has multiple owners"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-	}
-
-	//tokenstate check
-
-	tokenStateCheckResult := make([]TokenStateCheckResult, len(sr.TokenInfo))
-	for i, ti := range sr.TokenInfo {
-		t := ti.Token
-		wg.Add(1)
-		go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, sr.QuorumList, ti.TokenType)
-	}
-	wg.Wait()
-
-	for i := range tokenStateCheckResult {
-		if tokenStateCheckResult[i].Error != nil {
-			c.log.Error("Error occured", "error", err)
-			crep.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		if tokenStateCheckResult[i].Exhausted {
-			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
-			crep.Message = tokenStateCheckResult[i].Message
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
-	}
-	senderPeerId, _, _ := util.ParseAddress(sr.Address)
-	err = c.w.TokensReceived(did, sr.TokenInfo, b, senderPeerId, c.peerID)
-	if err != nil {
-		c.log.Error("Failed to update token status", "err", err)
-		crep.Message = "Failed to update token status"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	sc := contract.InitContract(b.GetSmartContract(), nil)
-	if sc == nil {
-		c.log.Error("Failed to update token status, missing smart contract")
-		crep.Message = "Failed to update token status, missing smart contract"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	bid, err := b.GetBlockID(sr.TokenInfo[0].Token)
-	if err != nil {
-		c.log.Error("Failed to update token status, failed to get block ID", "err", err)
-		crep.Message = "Failed to update token status, failed to get block ID"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	td := &wallet.TransactionDetails{
-		TransactionID:   b.GetTid(),
-		TransactionType: b.GetTransType(),
-		BlockID:         bid,
-		Mode:            wallet.RecvMode,
-		Amount:          sc.GetTotalRBTs(),
-		SenderDID:       sc.GetSenderDID(),
-		ReceiverDID:     sc.GetReceiverDID(),
-		Comment:         sc.GetComment(),
-		DateTime:        time.Now(),
-		Status:          true,
-	}
-	c.w.AddTransactionHistory(td)
 	crep.Status = true
 	crep.Message = "Token received successfully"
-
-	//Adding quorums to DIDPeerTable of receiver
-	for _, qrm := range sr.QuorumInfo {
-		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID, *qrm.DIDType)
-	}
+	crep.Result = updatedtokenhashes
 
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
@@ -878,16 +884,21 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	b := block.InitBlock(ur.TokenChainBlock, nil)
 	tks := b.GetTransTokens()
+
 	refID := ""
+	var refIDArr []string = make([]string, 0)
 	if len(tks) > 0 {
-		id, err := b.GetBlockID(tks[0])
-		if err != nil {
-			c.log.Error("Failed to get block ID")
-			crep.Message = "Failed to get block ID"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		for _, tkn := range tks {
+			id, err := b.GetBlockID(tkn)
+			if err != nil {
+				c.log.Error("Failed to get block ID")
+				crep.Message = "Failed to get block ID"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			refIDArr = append(refIDArr, fmt.Sprintf("%v_%v_%v", tkn, b.GetTokenType(tkn), id))
 		}
-		refID = fmt.Sprintf("%s,%d,%s", tks[0], b.GetTokenType(tks[0]), id)
 	}
+	refID = strings.Join(refIDArr, ",")
 
 	ctcb := make(map[string]*block.Block)
 	tsb := make([]block.TransTokens, 0)
@@ -923,6 +934,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		ctcb[t] = lb
 	}
+
 	tcb := block.TokenChainBlock{
 		TransactionType: block.TokenPledgedType,
 		TokenOwner:      did,
@@ -931,7 +943,9 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			RefID:   refID,
 			Tokens:  tsb,
 		},
+		Epoch: ur.TransactionEpoch,
 	}
+
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
 		c.log.Error("Failed to create new token chain block - qrm rec")
@@ -959,9 +973,14 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
-	for _, t := range ur.PledgedTokens {
-		c.up.AddUnPledge(t)
+	//Adding to the Token State Hash Table
+	if ur.TransferredTokenStateHashes != nil {
+		err = c.w.AddTokenStateHash(did, ur.TransferredTokenStateHashes, ur.PledgedTokens, ur.TransactionID)
 	}
+	if err != nil {
+		c.log.Error("Failed to add token state hash", "err", err)
+	}
+
 	crep.Status = true
 	crep.Message = "Token pledge status updated"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -1021,8 +1040,8 @@ func (c *Core) mapDIDArbitration(req *ensweb.Request) *ensweb.Result {
 	}
 	err = c.srv.UpdateTokenDetials(nd)
 	if err != nil {
-		c.log.Error("Failed to update table detials", "err", err)
-		br.Message = "Failed to update token detials"
+		c.log.Error("Failed to update table details", "err", err)
+		br.Message = "Failed to update token details"
 		return c.l.RenderJSON(req, &br, http.StatusOK)
 	}
 	dm := &service.DIDMap{
@@ -1260,91 +1279,6 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &srep, http.StatusOK)
 }
 
-func (c *Core) getProofverificationDetails(tokenID string, senderAddr string, tknType int) (string, string, error) {
-	var receiverDID, txnId string
-
-	blk := c.w.GetLatestTokenBlock(tokenID, tknType)
-
-	pbid, err := blk.GetPrevBlockID(tokenID)
-	if err != nil {
-		c.log.Error("Failed to get the block id. Unable to verify proof file")
-		return "", "", err
-	}
-	pBlk, err := c.w.GetTokenBlock(tokenID, tknType, pbid)
-	if err != nil {
-		c.log.Error("Failed to get the Previous Block Unable to verify proof file")
-		return "", "", err
-	}
-
-	prevBlk := block.InitBlock(pBlk, nil)
-	if prevBlk == nil {
-		c.log.Error("Failed to initialize the Previous Block Unable to verify proof file")
-		return "", "", fmt.Errorf("Failed to initilaize previous block")
-	}
-	tokenPledgedForDetailsStr := prevBlk.GetTokenPledgedForDetails()
-	tokenPledgedForDetailsBlkArray := prevBlk.GetTransBlock()
-
-	if tokenPledgedForDetailsStr == "" && tokenPledgedForDetailsBlkArray == nil {
-		c.log.Error("Failed to get details pledged for token. Unable to verify proof file")
-		return "", "", fmt.Errorf("Failed to get deatils of pledged for token")
-	}
-
-	if tokenPledgedForDetailsBlkArray != nil {
-		tokenPledgedForDetailsBlk := block.InitBlock(tokenPledgedForDetailsBlkArray, nil)
-		receiverDID = tokenPledgedForDetailsBlk.GetReceiverDID()
-		txnId = tokenPledgedForDetailsBlk.GetTid()
-	}
-
-	if tokenPledgedForDetailsStr != "" {
-		tpfdArray := strings.Split(tokenPledgedForDetailsStr, ",")
-
-		tokenPledgedFor := tpfdArray[0]
-		tokenPledgedForTypeStr := tpfdArray[1]
-		tokenPledgedForBlockId := tpfdArray[2]
-
-		tokenPledgedForType, err := strconv.Atoi(tokenPledgedForTypeStr)
-		if err != nil {
-			c.log.Error("Failed toconvert to integer", "err", err)
-			return "", "", err
-		}
-		//check if token chain of token pledged for already synced to node
-		//TODO: Change proof verification method
-		var pledgedforBlk *block.Block
-
-		pledgedfBlk, err := c.w.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
-
-		if err != nil {
-			c.log.Error("Failed to get the pledged for token's Block Unable to verify proof file, Error: " + err.Error())
-			c.log.Debug("Unable get token block from storage..Proceeding for syncing...")
-			p, err := c.getPeer(senderAddr, "")
-			if err != nil {
-				c.log.Error("Failed to get peer", "err", err)
-				return "", "", err
-			}
-			err = c.syncTokenChainFrom(p, tokenPledgedForBlockId, tokenPledgedFor, tokenPledgedForType)
-			if err != nil {
-				c.log.Error("Failed to sync token chain block", "err", err)
-				return "", "", err
-			}
-			tcbArray, err := c.w.GetTokenBlock(tokenPledgedFor, tokenPledgedForType, tokenPledgedForBlockId)
-			if err != nil {
-				c.log.Error("Failed to fetch previous block", "err", err)
-				return "", "", err
-			}
-			pledgedforBlk = block.InitBlock(tcbArray, nil)
-		} else if pledgedfBlk != nil {
-			pledgedforBlk = block.InitBlock(pledgedfBlk, nil)
-			if pledgedforBlk == nil {
-				c.log.Error("Failed to initialize the pledged for token's Block Unable to verify proof file")
-				return "", "", fmt.Errorf("Failed to initilaize previous block")
-			}
-		}
-		receiverDID = pledgedforBlk.GetReceiverDID()
-		txnId = pledgedforBlk.GetTid()
-	}
-	return receiverDID, txnId, nil
-}
-
 func (c *Core) unlockTokens(req *ensweb.Request) *ensweb.Result {
 	var tokenList TokenList
 	err := c.l.ParseJSON(req, &tokenList)
@@ -1363,7 +1297,20 @@ func (c *Core) unlockTokens(req *ensweb.Request) *ensweb.Result {
 	}
 	crep.Status = true
 	crep.Message = "Tokens Unlocked Successfully."
-	c.log.Info("Tokens Unclocked")
+	c.log.Info("Tokens Unlocked")
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
+
+}
+
+func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
+	c.log.Debug("Updating tokenStateHashDetails in DB")
+	tokenIDTokenStateHash := c.l.GetQuerry(req, "tokenIDTokenStateHash")
+	c.log.Debug("tokenIDTokenStateHash from query", tokenIDTokenStateHash)
+
+	err := c.w.RemoveTokenStateHash(tokenIDTokenStateHash)
+	if err == nil {
+		fmt.Println("removed hash successfully")
+	}
+	return c.l.RenderJSON(req, nil, http.StatusOK)
 
 }

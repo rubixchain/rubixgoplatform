@@ -86,6 +86,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/check-pinned-state": {
+            "delete": {
+                "description": "This API is used to check if the token state for which the token is pledged is exhausted or not.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Check for exhausted token state hash",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Token State Hash",
+                        "name": "tokenstatehash",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/commit-data-token": {
             "post": {
                 "description": "This API will create data token",
@@ -590,6 +622,26 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/get-pledgedtoken-details": {
+            "get": {
+                "description": "This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Get details about the pledged tokens",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.TokenStateResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/get-smart-contract-token-chain-data": {
             "post": {
                 "description": "This API will return smart contract token chain data",
@@ -683,6 +735,41 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/initiate-self-transfer": {
+            "post": {
+                "description": "This API will initiate self RBT transfer for a specific DID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Initiate Self Transfer",
+                "operationId": "initiate-self-transfer",
+                "parameters": [
+                    {
+                        "description": "Intitate RBT transfer",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.RBTTransferRequestSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/register-callback-url": {
             "post": {
                 "description": "This API will register call back url for when updated come for smart contract token",
@@ -708,6 +795,30 @@ const docTemplate = `{
                         }
                     }
                 ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/run-unpledge": {
+            "post": {
+                "description": "This API will initiate self RBT transfer for a specific DID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Run Unpledge",
+                "operationId": "run-unpledge",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -881,6 +992,52 @@ const docTemplate = `{
                 }
             }
         },
+        "model.PledgedTokenStateDetails": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "token_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.TokenStateResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
+                },
+                "token_state_details": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.PledgedTokenStateDetails"
+                    }
+                }
+            }
+        },
+        "model.TransactionCount": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "txnReceived": {
+                    "type": "integer"
+                },
+                "txnSend": {
+                    "type": "integer"
+                }
+            }
+        },
         "model.TxnCountForDID": {
             "type": "object",
             "properties": {
@@ -894,7 +1051,7 @@ const docTemplate = `{
                 "txnCount": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/wallet.TransactionCount"
+                        "$ref": "#/definitions/model.TransactionCount"
                     }
                 }
             }
@@ -1022,20 +1179,6 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string"
-                }
-            }
-        },
-        "wallet.TransactionCount": {
-            "type": "object",
-            "properties": {
-                "did": {
-                    "type": "string"
-                },
-                "txnReceived": {
-                    "type": "integer"
-                },
-                "txnSend": {
-                    "type": "integer"
                 }
             }
         }

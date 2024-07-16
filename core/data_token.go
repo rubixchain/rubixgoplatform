@@ -11,7 +11,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -170,7 +169,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		br.Message = "Failed to create data token, failed to add rac token to ipfs"
 		return &br
 	}
-	err = c.w.CreateDataToken(&wallet.DataToken{TokenID: dt, DID: dr.DID, CommitterDID: comDid, BatchID: bid})
+	err = c.w.CreateDataToken(&model.DataToken{TokenID: dt, DID: dr.DID, CommitterDID: comDid, BatchID: bid})
 	if err != nil {
 		c.log.Error("Failed to create data token, write failed", "err", err)
 		br.Message = "Failed to create data token, write failed"
@@ -264,7 +263,7 @@ func (c *Core) CommitDataToken(reqID string, did string, batchID string) {
 	dc.OutChan <- br
 }
 
-func (c *Core) finishDataCommit(br *model.BasicResponse, dts []wallet.DataToken) {
+func (c *Core) finishDataCommit(br *model.BasicResponse, dts []model.DataToken) {
 	if br.Status {
 		c.w.CommitDataToken(dts)
 	} else {
@@ -305,7 +304,7 @@ func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.
 	}
 	sct := &contract.ContractType{
 		Type:       contract.SCDataTokenCommitType,
-		PledgeMode: contract.POWPledgeMode,
+		PledgeMode: contract.PeriodicPledgeMode,
 		TransInfo:  tsi,
 		ReqID:      reqID,
 	}
@@ -378,7 +377,7 @@ func (c *Core) CheckDataToken(dt string) bool {
 	return true
 }
 
-func (c *Core) GetDataTokens(did string) []wallet.DataToken {
+func (c *Core) GetDataTokens(did string) []model.DataToken {
 	dt, err := c.w.GetDataTokenByDID(did)
 	if err != nil {
 		c.log.Error("failed to get data tokens", "err", err)

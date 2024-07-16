@@ -4,11 +4,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
-func (c *Core) GetTxnDetailsByID(txnID string) (wallet.TransactionDetails, error) {
-	var th wallet.TransactionDetails
+func (c *Core) GetTxnDetailsByID(txnID string) (model.TransactionDetails, error) {
+	var th model.TransactionDetails
 	res, err := c.w.GetTransactionDetailsbyTransactionId(txnID)
 	if err != nil {
 		return th, err
@@ -16,12 +16,12 @@ func (c *Core) GetTxnDetailsByID(txnID string) (wallet.TransactionDetails, error
 	return res, nil
 }
 
-func (c *Core) GetTxnDetailsByDID(did string, role string, startDateStr string, endDateStr string) ([]wallet.TransactionDetails, error) {
+func (c *Core) GetTxnDetailsByDID(did string, role string, startDateStr string, endDateStr string) ([]model.TransactionDetails, error) {
 	var startDate time.Time
 	var endDate time.Time
 	var err error
 
-	var result []wallet.TransactionDetails
+	var result []model.TransactionDetails
 
 	if role == "" {
 		result, err = c.w.GetTransactionByDID(did)
@@ -80,7 +80,7 @@ func (c *Core) GetTxnDetailsByDID(did string, role string, startDateStr string, 
 	return nil, nil
 }
 
-func (c *Core) GetTxnDetailsByComment(comment string) ([]wallet.TransactionDetails, error) {
+func (c *Core) GetTxnDetailsByComment(comment string) ([]model.TransactionDetails, error) {
 	res, err := c.w.GetTransactionByComment(comment)
 	if err != nil {
 		return nil, err
@@ -89,8 +89,8 @@ func (c *Core) GetTxnDetailsByComment(comment string) ([]wallet.TransactionDetai
 }
 
 // FilterTxnDetailsByDateRange filters TransactionDetails by a date range.
-func (c *Core) FilterTxnDetailsByDateRange(transactions []wallet.TransactionDetails, startDate time.Time, endDate time.Time) ([]wallet.TransactionDetails, error) {
-	var filteredTransactions []wallet.TransactionDetails
+func (c *Core) FilterTxnDetailsByDateRange(transactions []model.TransactionDetails, startDate time.Time, endDate time.Time) ([]model.TransactionDetails, error) {
+	var filteredTransactions []model.TransactionDetails
 	for _, txn := range transactions {
 		txnDateTimeStr := txn.DateTime.Format("2006-01-02")
 		txnDateTimeParsed, err := time.Parse("2006-01-02", txnDateTimeStr)
@@ -105,8 +105,8 @@ func (c *Core) FilterTxnDetailsByDateRange(transactions []wallet.TransactionDeta
 	return filteredTransactions, nil
 }
 
-func (c *Core) GetCountofTxn(did string) (wallet.TransactionCount, error) {
-	result := wallet.TransactionCount{
+func (c *Core) GetCountofTxn(did string) (model.TransactionCount, error) {
+	result := model.TransactionCount{
 		DID: did,
 	}
 	txnAsSender, err := c.w.GetTransactionBySender(did)
