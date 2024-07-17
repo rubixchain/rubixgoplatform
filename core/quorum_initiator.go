@@ -364,8 +364,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		delete(c.pd, cr.ReqID)
 		c.qlock.Unlock()
 	}()
-	c.quorumCount = 0
-	c.noBalanceQuorumCount = 0
+	c.quorumCount = QuorumRequired - len(cr.QuorumList)
+	c.noBalanceQuorumCount = QuorumRequired - len(cr.QuorumList)
 	for _, a := range cr.QuorumList {
 		//This part of code is trying to connect to the quorums in quorum list, where various functions are called to pledge the tokens
 		//and checking of transaction by the quorum i.e. consensus for the transaction. Once the quorum is connected, it pledges and
