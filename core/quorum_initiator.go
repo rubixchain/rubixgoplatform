@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	QuorumRequired       int = 7
 	MinQuorumRequired    int = 5
 	MinConsensusRequired int = 5
 )
@@ -73,7 +74,7 @@ type ConsensusStatus struct {
 }
 
 type PledgeDetails struct {
-	//TransferAmount         float64
+	TransferAmount         float64
 	RemPledgeTokens        float64
 	NumPledgedTokens       int
 	PledgedTokens          map[string][]string
@@ -313,8 +314,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	case SmartContractExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
 	}
+	minValue := MinDecimalValue(MaxDecimalPlaces)
+	minTotalPledgeAmount := minValue * float64(MinQuorumRequired)
+	if reqPledgeTokens < minTotalPledgeAmount {
+		reqPledgeTokens = minTotalPledgeAmount
+	}
 	pd := PledgeDetails{
-		//TransferAmount:         reqPledgeTokens,
+		TransferAmount:         reqPledgeTokens,
 		RemPledgeTokens:        floatPrecision(reqPledgeTokens, MaxDecimalPlaces),
 		NumPledgedTokens:       0,
 		PledgedTokens:          make(map[string][]string),
@@ -340,7 +346,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, errFQL
 		}
 		cr.QuorumList = finalQl
-		if len(finalQl) != MinQuorumRequired {
+		if len(finalQl) < MinQuorumRequired {
 			c.log.Error("quorum(s) are unavailable for this trnx")
 			return nil, nil, fmt.Errorf("quorum(s) are unavailable for this trnx. retry trnx after some time")
 		}
@@ -358,6 +364,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		delete(c.pd, cr.ReqID)
 		c.qlock.Unlock()
 	}()
+	c.quorumCount = 0
+	c.noBalanceQuorumCount = 0
 	for _, a := range cr.QuorumList {
 		//This part of code is trying to connect to the quorums in quorum list, where various functions are called to pledge the tokens
 		//and checking of transaction by the quorum i.e. consensus for the transaction. Once the quorum is connected, it pledges and
@@ -391,7 +399,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	}
 	if err != nil {
-		unlockErr := c.checkLokedTokens(cr, ql)
+		unlockErr := c.checkLockedTokens(cr, ql)
 		if unlockErr != nil {
 			c.log.Error(unlockErr.Error() + "Locked tokens could not be unlocked")
 		}
@@ -782,15 +790,6 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 		}
 		return
 	}
-	pledgingQuorumDID := make([]string, 0, len(pd.PledgedTokens))
-	for k := range pd.PledgedTokens {
-		pledgingQuorumDID = append(pledgingQuorumDID, k)
-	}
-	var pledgingDID string
-	if len(pledgingQuorumDID) > 0 {
-		pledgingDID = pledgingQuorumDID[0]
-	}
-
 	var signType string
 
 	//signType = 0 => Pki based sign in lite mode
@@ -813,19 +812,12 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 				Hash:          hash,
 				SignType:      signType,
 			}
-			if cs.Result.SuccessCount < MinConsensusRequired-1 {
-				cs.P[did] = p
-				cs.Credit.Credit = append(cs.Credit.Credit, csig)
-				cs.Result.SuccessCount++
-				if did == pledgingDID {
-					cs.Result.PledgingDIDSignStatus = true
+			if cs.Result.SuccessCount < MinConsensusRequired {
+				if _, ok := pd.PledgedTokens[did]; ok {
+					cs.P[did] = p
+					cs.Credit.Credit = append(cs.Credit.Credit, csig)
+					cs.Result.SuccessCount++
 				}
-			} else if (did == pledgingDID || cs.Result.PledgingDIDSignStatus) && cs.Result.SuccessCount == MinConsensusRequired-1 {
-				cs.P[did] = p
-				cs.Credit.Credit = append(cs.Credit.Credit, csig)
-				cs.Result.SuccessCount++
-			} else {
-				p.Close()
 			}
 		} else {
 			cs.Result.FailedCount++
@@ -853,6 +845,11 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	}
 	err = c.initPledgeQuorumToken(cr, p, qt)
 	if err != nil {
+		if strings.Contains(err.Error(), "don't have enough balance to pledge") {
+			c.log.Error("Quorum failed to pledge token")
+			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+			return
+		}
 		c.log.Error("Failed to pledge token", "err", err)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
@@ -1061,6 +1058,21 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	if cr.Mode == SmartContractDeployMode {
 		bti.DeployerDID = sc.GetDeployerDID()
 
+		//Fetching deployer signature to add it to transaction details
+		sign_data, deployer_share_sign, deployer_priv_sign, err := sc.GetHashSig(bti.DeployerDID)
+		if err != nil {
+			c.log.Error("failed to fetch deployer sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch deployer sign")
+		}
+		deployer_sign_type := dc.GetSignType()
+		deployer_sign := &block.InitiatorSignature{
+			NLSS_share:   deployer_share_sign,
+			Private_sign: deployer_priv_sign,
+			DID:          bti.DeployerDID,
+			Hash:         sign_data,
+			SignType:     deployer_sign_type,
+		}
+
 		var smartContractTokenValue float64
 
 		commitedTokens := sc.GetCommitedTokensInfo()
@@ -1085,24 +1097,42 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 
 		tcb = block.TokenChainBlock{
-			TransactionType: block.TokenGeneratedType,
-			TokenOwner:      sc.GetDeployerDID(),
-			TransInfo:       bti,
-			QuorumSignature: credit,
-			SmartContract:   sc.GetBlock(),
-			GenesisBlock:    smartContractGensisBlock,
-			PledgeDetails:   ptds,
+			TransactionType:    block.TokenDeployedType,
+			TokenOwner:         sc.GetDeployerDID(),
+			TransInfo:          bti,
+			QuorumSignature:    credit,
+			SmartContract:      sc.GetBlock(),
+			GenesisBlock:       smartContractGensisBlock,
+			PledgeDetails:      ptds,
+			InitiatorSignature: deployer_sign,
 		}
 	} else if cr.Mode == SmartContractExecuteMode {
 		bti.ExecutorDID = sc.GetExecutorDID()
+
+		//Fetching executor signature to add it to transaction details
+		sign_data, executor_share_sign, executor_priv_sign, err := sc.GetHashSig(bti.ExecutorDID)
+		if err != nil {
+			c.log.Error("failed to fetch executor sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch executor sign")
+		}
+		executor_sign_type := dc.GetSignType()
+		executor_sign := &block.InitiatorSignature{
+			NLSS_share:   executor_share_sign,
+			Private_sign: executor_priv_sign,
+			DID:          bti.ExecutorDID,
+			Hash:         sign_data,
+			SignType:     executor_sign_type,
+		}
+
 		tcb = block.TokenChainBlock{
-			TransactionType:   block.TokenGeneratedType,
-			TokenOwner:        sc.GetExecutorDID(),
-			TransInfo:         bti,
-			QuorumSignature:   credit,
-			SmartContract:     sc.GetBlock(),
-			PledgeDetails:     ptds,
-			SmartContractData: sc.GetSmartContractData(),
+			TransactionType:    block.TokenExecutedType,
+			TokenOwner:         sc.GetExecutorDID(),
+			TransInfo:          bti,
+			QuorumSignature:    credit,
+			SmartContract:      sc.GetBlock(),
+			PledgeDetails:      ptds,
+			SmartContractData:  sc.GetSmartContractData(),
+			InitiatorSignature: executor_sign,
 		}
 	} else {
 		//Fetching sender signature to add it to transaction details
@@ -1113,7 +1143,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			return nil, fmt.Errorf("failed to fetch sender sign")
 		}
 		sender_sign_type := dc.GetSignType()
-		sender_sign := &block.SenderSignature{
+		sender_sign := &block.InitiatorSignature{
 			NLSS_share:   sender_share_sign,
 			Private_sign: sender_priv_sign,
 			DID:          senderdid,
@@ -1124,13 +1154,13 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		bti.SenderDID = sc.GetSenderDID()
 		bti.ReceiverDID = sc.GetReceiverDID()
 		tcb = block.TokenChainBlock{
-			TransactionType: block.TokenTransferredType,
-			TokenOwner:      sc.GetReceiverDID(),
-			TransInfo:       bti,
-			QuorumSignature: credit,
-			SmartContract:   sc.GetBlock(),
-			PledgeDetails:   ptds,
-			SenderSignature: sender_sign,
+			TransactionType:    block.TokenTransferredType,
+			TokenOwner:         sc.GetReceiverDID(),
+			TransInfo:          bti,
+			QuorumSignature:    credit,
+			SmartContract:      sc.GetBlock(),
+			PledgeDetails:      ptds,
+			InitiatorSignature: sender_sign,
 		}
 	}
 
@@ -1221,17 +1251,12 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			return err
 		}
 
-		//pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
-
+		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
 		// Request pledage token
-		if pd.RemPledgeTokens != 0 {
+		if pd.RemPledgeTokens > 0 {
 			pr := PledgeRequest{
-				TokensRequired: pd.RemPledgeTokens,
+				TokensRequired: CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPlaces), // Request the determined number of tokens per quorum,
 			}
-			// l := len(pd.PledgedTokens)
-			// for i := pd.NumPledgedTokens; i < l; i++ {
-			// 	pr.Tokens = append(pr.Tokens, cr.WholeTokens[i])
-			// }
 			var prs PledgeReply
 			err := p.SendJSONRequest("POST", APIReqPledgeToken, nil, &pr, &prs, true)
 			if err != nil {
@@ -1240,7 +1265,16 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 				cs.PledgeLock.Unlock()
 				return err
 			}
+			if strings.Contains(prs.Message, "Quorum don't have enough balance to pledge") {
+				c.quorumCount++
+				c.noBalanceQuorumCount++
+				cs.PledgeLock.Unlock()
+				did := p.GetPeerDID()
+				c.log.Error("Quorum (DID:" + did + ") don't have enough balance to pledge")
+				return fmt.Errorf("Quorum (DID:" + did + ") don't have enough balance to pledge")
+			}
 			if prs.Status {
+				c.quorumCount++
 				did := p.GetPeerDID()
 				pd.PledgedTokens[did] = make([]string, 0)
 				for i, t := range prs.Tokens {
@@ -1248,7 +1282,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 					if !c.checkIsPledged(ptcb) {
 						pd.NumPledgedTokens++
 						pd.RemPledgeTokens = pd.RemPledgeTokens - prs.TokenValue[i]
-						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, 10)
+						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, MaxDecimalPlaces)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
 						pd.TokenList = append(pd.TokenList, t)
@@ -1272,13 +1306,18 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			err := fmt.Errorf("invalid pledge request")
 			return err
 		}
-
-		if pd.RemPledgeTokens == 0 {
+		if pd.RemPledgeTokens > 0 {
+			if c.quorumCount < QuorumRequired {
+				if count == 300 {
+					err := fmt.Errorf("Unable to pledge after wait")
+					return err
+				}
+			} else if c.quorumCount == QuorumRequired {
+				err := fmt.Errorf("Unable to pledge")
+				return err
+			}
+		} else if pd.RemPledgeTokens <= 0 {
 			return nil
-		} else if count == 300 {
-			c.log.Error("Unable to pledge token")
-			err := fmt.Errorf("unable to pledge token")
-			return err
 		}
 	}
 }
@@ -1411,35 +1450,33 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 	return nil
 }
 
-func (c *Core) checkLokedTokens(cr *ConensusRequest, quorumList []string) error {
-	// var err error
+func (c *Core) checkLockedTokens(cr *ConensusRequest, quorumList []string) error {
 	pd := c.pd[cr.ReqID]
 
 	pledgingQuorumDID := make([]string, 0, len(pd.PledgedTokens))
 	for k := range pd.PledgedTokens {
 		pledgingQuorumDID = append(pledgingQuorumDID, k)
 	}
-	var pledgingDID string
-	if len(pledgingQuorumDID) > 0 {
-		pledgingDID = pledgingQuorumDID[0]
-	}
+
 	var br model.BasicResponse
-	for _, addr := range quorumList {
-		peerID, did, _ := util.ParseAddress(addr)
-		if did == pledgingDID {
-			p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
-			if err != nil {
-				c.log.Error("Failed to get peer connection", "err", err)
-				return err
-			}
-			tokenList := TokenList{
-				Tokens: pd.PledgedTokens[pledgingDID],
-				DID:    pledgingDID,
-			}
-			err = p.SendJSONRequest("POST", APIUnlockTokens, nil, &tokenList, &br, true)
-			if err != nil {
-				c.log.Error("Invalid response for pledge request", "err", err)
-				return err
+	for _, pledgingDID := range pledgingQuorumDID {
+		for _, addr := range quorumList {
+			peerID, did, _ := util.ParseAddress(addr)
+			if did == pledgingDID {
+				p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
+				if err != nil {
+					c.log.Error("Failed to get peer connection", "err", err)
+					return err
+				}
+				tokenList := TokenList{
+					Tokens: pd.PledgedTokens[pledgingDID],
+					DID:    pledgingDID,
+				}
+				err = p.SendJSONRequest("POST", APIUnlockTokens, nil, &tokenList, &br, true)
+				if err != nil {
+					c.log.Error("Invalid response for pledge request", "err", err)
+					return err
+				}
 			}
 		}
 	}

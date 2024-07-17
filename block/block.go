@@ -74,17 +74,17 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType   string            `json:"transactionType"`
-	TokenOwner        string            `json:"owner"`
-	GenesisBlock      *GenesisBlock     `json:"genesisBlock"`
-	TransInfo         *TransInfo        `json:"transInfo"`
-	PledgeDetails     []PledgeDetail    `json:"pledgeDetails"`
-	QuorumSignature   []CreditSignature `json:"quorumSignature"`
-	SmartContract     []byte            `json:"smartContract"`
-	SmartContractData string            `json:"smartContractData"`
-	TokenValue        float64           `json:"tokenValue"`
-	ChildTokens       []string          `json:"childTokens"`
-	SenderSignature   *SenderSignature  `json:"senderSignature"`
+	TransactionType    string              `json:"transactionType"`
+	TokenOwner         string              `json:"owner"`
+	GenesisBlock       *GenesisBlock       `json:"genesisBlock"`
+	TransInfo          *TransInfo          `json:"transInfo"`
+	PledgeDetails      []PledgeDetail      `json:"pledgeDetails"`
+	QuorumSignature    []CreditSignature   `json:"quorumSignature"`
+	SmartContract      []byte              `json:"smartContract"`
+	SmartContractData  string              `json:"smartContractData"`
+	TokenValue         float64             `json:"tokenValue"`
+	ChildTokens        []string            `json:"childTokens"`
+	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
 }
 
 type PledgeDetail struct {
@@ -109,10 +109,10 @@ type CreditSignature struct {
 	SignType      string `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
 
-type SenderSignature struct {
+type InitiatorSignature struct {
 	NLSS_share   string `json:"nlss_share_signature"`
 	Private_sign string `json:"priv_signature"`
-	DID          string `json:"sender_did"`
+	DID          string `json:"initiator_did"`
 	Hash         string `json:"hash"`
 	SignType     int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
@@ -185,8 +185,8 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
-	if tcb.SenderSignature != nil {
-		ntcb[TCSenderSignatureKey] = tcb.SenderSignature
+	if tcb.InitiatorSignature != nil {
+		ntcb[TCSenderSignatureKey] = tcb.InitiatorSignature
 	}
 
 	if floatPrecisionToMaxDecimalPlaces(tcb.TokenValue) > floatPrecisionToMaxDecimalPlaces(0) {
