@@ -6,6 +6,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (c *Core) SmartContractTokenChainValidation(user_did string, allMyTokens bool, tokenId string, blockCount int) (*model.BasicResponse, error) {
@@ -55,7 +57,7 @@ func (c *Core) SmartContractTokenChainValidation(user_did string, allMyTokens bo
 		response, err = c.ValidateSmartContractTokenChain(user_did, token_info[0], token_type, blockCount)
 		if err != nil || !response.Status {
 			c.log.Error("token chain validation failed for token:", tokenId, "Error :", err, "msg:", response.Message)
-			if token_info[0].ContractStatus == wallet.TokenIsDeployed || token_info[0].ContractStatus == wallet.TokenIsExecuted {
+			if token_info[0].ContractStatus == wallet.TokenIsDeployed {
 				response, err1 := c.LockInvalidToken(tokenId, token_type, user_did)
 				if err1 != nil {
 					c.log.Error(response.Message, tokenId)
@@ -118,23 +120,39 @@ func (c *Core) ValidateSmartContractTokenChain(user_did string, token_info walle
 
 			c.log.Info("validating at block height:", block_height)
 
-			//calculate previous block Id
-			if block_height == 0 || i == 0 {
-				prevBlockId = ""
-			} else {
+			//fetch transaction type to validate the block accordingly
+			txn_type := b.GetTransType()
+			switch txn_type {
+			case block.TokenDeployedType:
+				prevBlockId := ""
+				//validate smart contract deployed block
+				response, err = c.Validate_SC_Block(b, token_info.SmartContractHash, prevBlockId, user_did)
+				if err != nil {
+					c.log.Error("msg", response.Message, "err", err)
+					return response, err
+				}
+			case block.TokenExecutedType:
+				//calculate previous block Id
 				prevBlock := block.InitBlock(blocks[i-1], nil)
 				prevBlockId, err = prevBlock.GetBlockID(token_info.SmartContractHash)
 				if err != nil {
 					c.log.Error("invalid previous block")
 					continue
 				}
-			}
-
-			//validate smart contract executed block
-			response, err = c.Validate_SC_Block(b, token_info.SmartContractHash, prevBlockId, user_did)
-			if err != nil {
-				c.log.Error("msg", response.Message, "err", err)
-				return response, err
+				//validate smart contract executed block
+				response, err = c.Validate_SC_Block(b, token_info.SmartContractHash, prevBlockId, user_did)
+				if err != nil {
+					c.log.Error("msg", response.Message, "err", err)
+					return response, err
+				}
+			default:
+				prevBlockId := ""
+				//validate smart contract deployed block
+				response, err = c.Validate_SC_Block(b, token_info.SmartContractHash, prevBlockId, user_did)
+				if err != nil {
+					c.log.Error("msg", response.Message, "err", err)
+					return response, err
+				}
 			}
 
 		} else {
@@ -184,14 +202,14 @@ func (c *Core) Validate_SC_Block(b *block.Block, tokenId string, calculated_prev
 		return response, err
 	}
 
-	//validate pledged quorum signature
-	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	//Validate sender signature
+	response, err = c.ValidateTxnInitiator(b)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
 	}
 
-	//validate all quorums' signatures
+	//validate quorums signature
 	response, err = c.ValidateQuorums(b, user_did)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
@@ -208,5 +226,75 @@ func (c *Core) Validate_SC_Block(b *block.Block, tokenId string, calculated_prev
 		c.log.Debug("successfully validated smart contract executed block")
 		// return response, nil
 	}
+	return response, nil
+}
+
+// Deployer/Executor signature verification in a (non-genesis)block
+func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error) {
+	response := &model.BasicResponse{
+		Status: false,
+	}
+
+	var initiator string
+	txn_type := b.GetTransType()
+	if txn_type == block.TokenDeployedType {
+		initiator = b.GetDeployerDID()
+	} else if txn_type == block.TokenExecutedType {
+		initiator = b.GetExecutorDID()
+	} else {
+		c.log.Info("Failed to identify transaction type, transaction initiated with old executable")
+		response.Message = "Failed to identify transaction type"
+		return response, nil
+	}
+
+	initiator_sign := b.GetInitiatorSignature()
+	//check if it is a block addded to chain before adding initiator signature to block structure
+	if initiator_sign == nil {
+		c.log.Info("old block, initiator signature not found")
+		response.Message = "old block, initiator signature not found"
+		return response, nil
+	} else if initiator_sign.DID != initiator {
+		c.log.Info("invalid initiator, initiator did does not match")
+		response.Message = "invalid initiator, initiator did does not match"
+		return response, fmt.Errorf("invalid initiator, initiator did does not match")
+	}
+
+	var initiator_didType int
+	//sign type = 0, means it is a BIP signature and the did was created in light mode
+	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
+	//and thus the did could be initialised in basic mode to fetch the public key
+	if initiator_sign.SignType == 0 {
+		initiator_didType = did.LiteDIDMode
+	} else {
+		initiator_didType = did.BasicDIDMode
+	}
+
+	//Initialise initiator did
+	didCrypto, err := c.InitialiseDID(initiator, initiator_didType)
+	if err != nil {
+		c.log.Error("failed to initialise initiator did:", initiator)
+		response.Message = "failed to initialise initiator did"
+		return response, err
+	}
+
+	//initiator signature verification
+	if initiator_didType == did.LiteDIDMode {
+		response.Status, err = didCrypto.PvtVerify([]byte(initiator_sign.Hash), util.StrToHex(initiator_sign.Private_sign))
+		if err != nil {
+			c.log.Error("failed to verify initiator:", initiator, "err", err)
+			response.Message = "invalid initiator"
+			return response, err
+		}
+	} else {
+		response.Status, err = didCrypto.NlssVerify(initiator_sign.Hash, util.StrToHex(initiator_sign.NLSS_share), util.StrToHex(initiator_sign.Private_sign))
+		if err != nil {
+			c.log.Error("failed to verify initiator:", initiator, "err", err)
+			response.Message = "invalid initiator"
+			return response, err
+		}
+	}
+
+	response.Message = "initiator validated successfully"
+	c.log.Debug("initiator (deployer/executor) validated successfully")
 	return response, nil
 }

@@ -282,9 +282,9 @@ func (c *Core) LockInvalidTokenResponse(req *ensweb.Request) *ensweb.Result { //
 				break
 			}
 		}
-		if sctoken.ContractStatus != wallet.TokenIsDeployed && sctoken.ContractStatus != wallet.TokenIsExecuted {
-			c.log.Error("Smart contract is not in deployed or executed state, can not lock")
-			resp.Message = "Smart contract is not in deployed or executed state, can't lock"
+		if sctoken.ContractStatus != wallet.TokenIsDeployed {
+			c.log.Error("Smart contract is not in deployed state, can not lock")
+			resp.Message = "Smart contract is not in deployed state, can't lock"
 			return c.l.RenderJSON(req, &resp, http.StatusOK)
 		}
 		err = c.w.LockSmartContract(&sctoken)

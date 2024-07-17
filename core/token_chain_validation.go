@@ -266,14 +266,7 @@ func (c *Core) Validate_RBTTransfer_Block(b *block.Block, tokenId string, calcul
 		return response, err
 	}
 	//Validate sender signature
-	response, err = c.ValidateSender(b, tokenId)
-	if err != nil {
-		c.log.Error("msg", response.Message, "err", err)
-		return response, err
-	}
-
-	//validate pledged quorum signature
-	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	response, err = c.ValidateSender(b)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
@@ -304,7 +297,7 @@ func (c *Core) Validate_RBTBurnt_Block(b *block.Block, token_info wallet.Token, 
 	}
 
 	//validate burnt-token owner signature
-	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	response, err = c.Validate_Token_Owner(b, user_did)
 	if err != nil {
 		response.Message = "invalid token owner in RBT burnt block"
 		c.log.Error("invalid token owner in RBT burnt block")
@@ -329,7 +322,7 @@ func (c *Core) Validate_Pledged_or_Unpledged_Block(b *block.Block, tokenId strin
 	}
 
 	//validate burnt-token owner signature
-	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	response, err = c.Validate_Token_Owner(b, user_did)
 	if err != nil {
 		response.Message = "invalid token owner in RBT burnt block"
 		c.log.Error("invalid token owner in RBT burnt block")
@@ -354,7 +347,7 @@ func (c *Core) ValidateGenesisBlock(b *block.Block, token_info wallet.Token, tok
 	}
 
 	//initial token owner signature verification
-	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	response, err = c.Validate_Token_Owner(b, user_did)
 	if err != nil {
 		response.Message = "invalid token owner in genesis block"
 		c.log.Error("invalid token owner in genesis block")
@@ -477,7 +470,7 @@ func (c *Core) ValidateBlockHash(b *block.Block, tokenId string, calculated_prev
 }
 
 // sender signature verification in a (non-genesis)block
-func (c *Core) ValidateSender(b *block.Block, tokenId string) (*model.BasicResponse, error) {
+func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
@@ -485,12 +478,12 @@ func (c *Core) ValidateSender(b *block.Block, tokenId string) (*model.BasicRespo
 	// block_map := b.GetBlockMap()
 	sender := b.GetSenderDID()
 
-	sender_sign := b.GetSenderSignature()
+	sender_sign := b.GetInitiatorSignature()
 	//check if it is a block addded to chain before adding sender signature to block structure
 	if sender_sign == nil {
 		c.log.Info("old block, sender signature not found")
 		response.Message = "old block, sender signature not found"
-		return response, fmt.Errorf("old block, sender signature not found")
+		return response, nil
 	} else if sender_sign.DID != sender {
 		c.log.Info("invalid sender, sender did does not match")
 		response.Message = "invalid sender, sender did does not match"
@@ -537,8 +530,8 @@ func (c *Core) ValidateSender(b *block.Block, tokenId string) (*model.BasicRespo
 	return response, nil
 }
 
-// pledged quorum signature verification
-func (c *Core) Validate_Owner_or_PledgedQuorum(b *block.Block, user_did string) (*model.BasicResponse, error) {
+// token owner signature verification
+func (c *Core) Validate_Token_Owner(b *block.Block, user_did string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
@@ -573,11 +566,11 @@ func (c *Core) Validate_Owner_or_PledgedQuorum(b *block.Block, user_did string) 
 
 	response.Status = true
 	response.Message = "block validated successfully"
-	c.log.Debug("validated signer (token owner / pledged quorum) successfully")
+	c.log.Debug("validated token owner successfully")
 	return response, nil
 }
 
-// quorum signature validation
+// quorums signature validation
 func (c *Core) ValidateQuorums(b *block.Block, user_did string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
