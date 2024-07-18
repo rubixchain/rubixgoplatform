@@ -161,6 +161,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetAllExplorer, "GET", s.AuthHandle(s.APIGetAllExplorer, false, s.AuthError, true))
 	s.AddRoute(setup.APIAddExplorer, "POST", s.AuthHandle(s.APIAddExplorer, false, s.AuthError, true))
 	s.AddRoute(setup.APIRemoveExplorer, "POST", s.AuthHandle(s.APIRemoveExplorer, false, s.AuthError, true))
+	s.AddRoute(setup.APICreateFT, "POST", s.AuthHandle(s.APICreateFT, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {

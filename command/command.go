@@ -82,6 +82,7 @@ const (
 	AddExplorerCmd                 string = "addexplorer"
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
+	CreateFTCmd                    string = "createft"
 )
 
 var commands = []string{VersionCmd,
@@ -249,6 +250,8 @@ type Command struct {
 	links              []string
 	mnemonicFile       string
 	ChildPath          int
+	ftName             string
+	ftCount            int
 }
 
 func showVersion() {
@@ -445,6 +448,8 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 	flag.StringVar(&links, "links", "", "Explorer url")
+	flag.StringVar(&cmd.ftName, "ftName", "", "Four character string to represent the FT")
+	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -602,6 +607,8 @@ func Run(args []string) {
 		cmd.removeExplorer()
 	case GetAllExplorerCmd:
 		cmd.getAllExplorer()
+	case CreateFTCmd:
+		cmd.createFT()
 	default:
 		cmd.log.Error("Invalid command")
 	}
