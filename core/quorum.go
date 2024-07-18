@@ -82,25 +82,25 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string) []string {
 			return nil
 		}
 		var quorumAddrList []string
-		quorumCount := 0
+		quorumAddrCount := 0
 		for _, q := range quorumList {
 			addr := string(q.PeerID + "." + q.DID)
 			quorumAddrList = append(quorumAddrList, addr)
-			quorumCount = quorumCount + 1
-			if quorumCount == 7 {
+			quorumAddrCount = quorumAddrCount + 1
+			if quorumAddrCount == 7 {
 				break
 			}
 		}
 		return quorumAddrList
 	case QuorumTypeTwo:
 		var quorumAddrList []string
-		quorumCount := 0
+		quorumAddrCount := 0
 		for _, q := range qm.ql {
 			peerID := qm.GetPeerID(q)
 			addr := string(peerID + "." + q)
 			quorumAddrList = append(quorumAddrList, addr)
-			quorumCount = quorumCount + 1
-			if quorumCount == 7 {
+			quorumAddrCount = quorumAddrCount + 1
+			if quorumAddrCount == 7 {
 				break
 			}
 		}
