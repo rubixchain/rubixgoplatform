@@ -262,6 +262,27 @@ func (w *Wallet) GetToken(token string, token_Status int) (*Token, error) {
 	return &t, nil
 }
 
+func (w *Wallet) GetAllFreeToken(did string) ([]Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=?", did, TokenIsFree)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	for i := range t {
+		t[i].TokenStatus = TokenIsLocked
+		err = w.s.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return nil, err
+		}
+	}
+	//::TODO:: Part Tokens
+	return t, nil
+}
+
 func (w *Wallet) ReadToken(token string) (*Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
