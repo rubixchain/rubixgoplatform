@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -17,6 +18,7 @@ import (
 type SendRecoverRequest struct {
 	Address   string                  `json:"peer_id"`
 	Signature signModule.DIDSignature `json:"Signature"`
+	Hash      string                  `json:"hash"`
 }
 
 func (c *Core) InitiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) {
@@ -60,13 +62,24 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 		return resp
 	}
 	defer p.Close()
+	var hashResponse model.BasicResponse
+	err = p.SendJSONRequest("GET", APIRequestSigningHash, nil, nil, &hashResponse, true)
+	if err != nil {
+		c.log.Error("Unable to send Recover Token Request to the pinned node", "err", err)
+		return &hashResponse
+	}
+	if !hashResponse.Status {
+		c.log.Error("Failed to get hash for signing from the pinned node")
+		return &hashResponse
+	}
+	hashForSign := hashResponse.Message
 	var signFunc *signModule.DIDLite
 	if req.Password == "" {
 		signFunc = signModule.InitDIDLiteWithPassword(did, c.didDir, "mypassword")
 	} else {
 		signFunc = signModule.InitDIDLiteWithPassword(did, c.didDir, req.Password)
 	}
-	pvtSign, err := signFunc.PvtSign([]byte(did))
+	pvtSign, err := signFunc.PvtSign([]byte(hashForSign))
 	if err != nil {
 		c.log.Error("Failed to sign while recovering RBT")
 		resp.Message = "Failed to sign, " + err.Error()
@@ -79,6 +92,7 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 	sr := SendRecoverRequest{
 		Address:   req.Sender,
 		Signature: signature,
+		Hash:      hashForSign,
 	}
 	var br model.BasicResponse
 	err = p.SendJSONRequest("POST", APIRecoverPinnedRBT, nil, &sr, &br, true)
@@ -196,7 +210,7 @@ func (c *Core) recoverPinnedToken(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	signFunc := signModule.InitDIDLite(recoverNodeDID, c.didDir, nil)
-	verified, err := signFunc.PvtVerify([]byte(recoverNodeDID), sr.Signature.Signature)
+	verified, err := signFunc.PvtVerify([]byte(sr.Hash), sr.Signature.Signature)
 	if !verified {
 		c.log.Error("Failed to verify signature of sender, Unable to recover tokens", "err", err)
 		crep.Message = "Failed to verify signature of sender, Unable to recover tokens"
@@ -232,6 +246,17 @@ func (c *Core) recoverPinnedToken(req *ensweb.Request) *ensweb.Result {
 	crep.Status = true
 	crep.Message = "Token Recovered Succesfully"
 	crep.Result = tis
+	return c.l.RenderJSON(req, &crep, http.StatusOK)
+}
+
+func (c *Core) requestSigningHash(req *ensweb.Request) *ensweb.Result {
+	c.log.Info("Request for Sign Hash received")
+	crep := model.BasicResponse{
+		Status: false,
+	}
+	hashForSign := uuid.New().String()
+	crep.Status = true
+	crep.Message = hashForSign
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 

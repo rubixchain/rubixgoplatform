@@ -173,6 +173,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIUpdateTokenHashDetails, "POST", c.updateTokenHashDetails)
 	c.l.AddRoute(APIAddUnpledgeDetails, "POST", c.addUnpledgeDetails)
 	c.l.AddRoute(APIRecoverPinnedRBT, "POST", c.recoverPinnedToken)
+	c.l.AddRoute(APIRequestSigningHash, "GET", c.requestSigningHash)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)

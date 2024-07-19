@@ -53,6 +53,7 @@ const (
 	APIAddUnpledgeDetails     string = "/api/initiate-unpledge"
 	APISelfTransfer           string = "/api/self-transfer"
 	APIRecoverPinnedRBT       string = "/api/recover-pinned-rbt"
+	APIRequestSigningHash     string = "/api/request-signing-hash"
 )
 
 const (
