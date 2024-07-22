@@ -72,6 +72,7 @@ const (
 	APICheckPinnedState                 string = "/api/check-pinned-state"
 	APISelfTransfer                     string = "/api/initiate-self-transfer"
 	APIRunUnpledge                      string = "/api/run-unpledge"
+	APIUnpledgePOWPledgeTokens          string = "/api/unpledge-pow-unpledge-tokens"
 )
 
 // jwt.RegisteredClaims

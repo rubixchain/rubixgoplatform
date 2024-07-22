@@ -42,12 +42,20 @@ func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &resp, http.StatusOK)
 	}
 
-	// Add Unpledge details to UnpledgeQueue
+	// Add Unpledge details to UnpledgeSequence table
 	pledgeTokenHashesStrArr := strings.Join(pledgeTokenHashes, ",")
-	err := c.up.AddUnPledge(transactionID, pledgeTokenHashesStrArr, transactionEpoch, quorumDID)
+
+	unpledgeSequenceInfo := &wallet.UnpledgeSequenceInfo{
+		TransactionID: transactionID,
+		PledgeTokens: pledgeTokenHashesStrArr,
+		Epoch: transactionEpoch,
+		QuorumDID: quorumDID,
+	}
+
+	err := c.w.AddUnpledgeSequenceInfo(unpledgeSequenceInfo)
 	if err != nil {
-		resp.Message = fmt.Sprintf("Error while adding record to UnpledgeQueue table for txId: %v, error: %v", transactionID, err.Error())
-		c.log.Error(fmt.Sprintf("Error while adding record to UnpledgeQueue table for txId: %v, error: %v", transactionID, err.Error()))
+		resp.Message = fmt.Sprintf("Error while adding record to UnpledgeSequence table for txId: %v, error: %v", transactionID, err.Error())
+		c.log.Error(fmt.Sprintf("Error while adding record to UnpledgeSequence table for txId: %v, error: %v", transactionID, err.Error()))
 		return c.l.RenderJSON(req, &resp, http.StatusOK)
 	}
 
@@ -993,7 +1001,11 @@ func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	err = c.w.StoreCredit(did, base64.StdEncoding.EncodeToString(jb))
+	// TODO: quorumCredit was earlier used to pass QuorumSignature as Credit information
+	// to other nodes. While working on Credit Restructing, this function would require changes.
+	// Following nil input to third argument is a temp fix, since quorumCredit is not called anywhere
+	// in this implementation
+	err = c.w.StoreCredit(did, base64.StdEncoding.EncodeToString(jb), nil)
 	if err != nil {
 		c.log.Error("Failed to store credit", "err", err)
 		crep.Message = "Failed to store credit"

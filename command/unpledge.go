@@ -7,5 +7,15 @@ func (cmd *Command) RunUnpledge() {
 		return
 	}
 
-	cmd.log.Debug(msg)
+	cmd.log.Info(msg)
+}
+
+func (cmd *Command) UnpledgePOWBasedPledgedTokens() {
+	msg, status := cmd.c.UnpledgePOWBasedPledgedTokens()
+	if !status {
+		cmd.log.Error(msg)
+		return
+	}
+
+	cmd.log.Info(msg)
 }

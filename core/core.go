@@ -16,7 +16,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
-	"github.com/rubixchain/rubixgoplatform/core/unpledge"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	didm "github.com/rubixchain/rubixgoplatform/did"
@@ -90,7 +89,6 @@ type Core struct {
 	ipfsState            bool
 	ipfsChan             chan bool
 	d                    *did.DID
-	up                   *unpledge.UnPledge
 	didDir               string
 	pm                   *ipfsport.PeerManager
 	qm                   *QuorumManager
@@ -268,11 +266,6 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	c.qm, err = NewQuorumManager(c.s, c.log)
 	if err != nil {
 		c.log.Error("Failed to setup quorum manager", "err", err)
-		return nil, err
-	}
-	c.up, err = unpledge.InitUnPledge(c.s, c.w, c.testNet, c.log)
-	if err != nil {
-		c.log.Error("Failed to init unpledge", "err", err)
 		return nil, err
 	}
 	if c.arbitaryMode {

@@ -347,6 +347,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Error("Failed to get required quorums")
 		return nil, nil, fmt.Errorf("failed to get required quorums")
 	}
+
 	var finalQl []string
 	var errFQL error
 	if cr.Type == 2 {
@@ -1139,7 +1140,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	var err error
 	p, err = c.getPeer(addr, sc.GetSenderDID())
 	if err != nil {
-		c.log.Error("Failed to get peer connection", "err", err)
+		c.log.Error(fmt.Sprintf("Failed to get peer connection while connecting to quorum address %v, err: %v", addr, err))
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)
 		return
 	}

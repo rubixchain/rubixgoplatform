@@ -807,7 +807,7 @@ const docTemplate = `{
         },
         "/api/run-unpledge": {
             "post": {
-                "description": "This API will initiate self RBT transfer for a specific DID",
+                "description": "This API will unpledge all Pledged RBT tokens",
                 "consumes": [
                     "application/json"
                 ],
@@ -911,6 +911,30 @@ const docTemplate = `{
                         }
                     }
                 ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/unpledge-pow-unpledge-tokens": {
+            "post": {
+                "description": "This API will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Unpledge POW Based pledge Tokens",
+                "operationId": "unpledge-pow-unpledge-tokens",
                 "responses": {
                     "200": {
                         "description": "OK",

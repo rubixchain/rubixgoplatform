@@ -1,8 +1,6 @@
 package core
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,51 +13,54 @@ import (
 	tkn "github.com/rubixchain/rubixgoplatform/token"
 )
 
-const UnpledgeQueueTable string = "unpledgequeue"
 const pledgePeriodInSeconds int = 7 * 24 * 60 * 60 // Pledging period: 7 days
 
-type TransTokenBlock struct {
-	TokenID       string `json:"token_id"`
-	TransferBlock string `json:"token_block"`
-}
-
-type PledgeUnpledgeBlock struct {
-	TokenID       string `json:"token_id"`
-	PledgeBlock   string `json:"pledge_block"`
-	UnpledgeBlock string `json:"unpledge_block"`
-}
-
-type PledgeInformation struct {
-	TokenID         string `json:"token_id"`
-	TokenType       int    `json:"token_type"`
-	PledgeBlockID   string `json:"pledge_block_id"`
-	UnpledgeBlockID string `json:"unpledge_block_id"`
-	QuorumDID       string `json:"quorum_did"`
-	TransactionID   string `json:"transaction_id"`
-}
-
-type UnpledgeQueueInfo struct {
-	TransactionID string `gorm:"column:tx_id;primaryKey"`
-	PledgeTokens  string `gorm:"column:pledge_tokens"`
-	Epoch         int64  `gorm:"column:epoch"`
-	QuorumDID     string `gorm:"column:quorum_did"`
-}
-
-func (c *Core) InititateUnpledgeProcess() error {
-	// Get the list of transactions from the unpledgeQueue table
-	var UnpledgeQueueInfoList []UnpledgeQueueInfo
-	err := c.s.Read(UnpledgeQueueTable, &UnpledgeQueueInfoList, "tx_id != ?", "")
+func (c *Core) ForceUnpledgePOWBasedPledgedTokens() error {
+	// Load data from UnpledgeQueueInfo table
+	unpledgeQueueInfo, err := c.w.Migration_GetUnpledgeQueueInfo()
 	if err != nil {
-		if strings.Contains(err.Error(), "no records found") {
-			c.log.Info("No tokens left to unpledge")
-		} else {
-			return err
+		return err
+	}
+
+	// unpledge all POW based pledged tokens
+	for _, info := range unpledgeQueueInfo {
+		pledgeToken := info.Token
+		pledgeTokenType, err := getTokenType(c.w, pledgeToken, c.testNet)
+		if err != nil {
+			return fmt.Errorf("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
+		}
+		pledgeTokenOwner, err := getTokenOwner(c.w, pledgeToken)
+		if err != nil {
+			return fmt.Errorf("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
+		}
+		
+		_, _, err = unpledgeToken(c, pledgeToken, pledgeTokenType, pledgeTokenOwner)
+		if err != nil {
+			c.log.Error("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
+			return fmt.Errorf("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
 		}
 	}
 
-	var pledgeInformation []*PledgeInformation
+	// Drop the UnpledgeSequence table
+	tableDropErr := c.w.Migration_DropUnpledgeQueueTable()
+	if tableDropErr != nil {
+		return tableDropErr
+	}
 
-	for _, info := range UnpledgeQueueInfoList {
+	return nil
+}
+
+
+func (c *Core) InititateUnpledgeProcess() error {
+	// Get the list of transactions from the unpledgeQueue table
+	unpledgeSequenceInfo, err := c.w.GetUnpledgeSequenceDetails()
+	if err != nil {
+		return err
+	}
+
+	var pledgeInformation []*wallet.PledgeInformation
+
+	for _, info := range unpledgeSequenceInfo {
 		var readyToUnpledge bool = false
 
 		// Get all the token hashes by their transaction ID.
@@ -84,7 +85,6 @@ func (c *Core) InititateUnpledgeProcess() error {
 		} else {
 			readyToUnpledge = true
 			c.log.Debug("All tokens have undergone state chanage. Proceeding to unpledge...")
-
 		}
 
 		if readyToUnpledge {
@@ -94,40 +94,156 @@ func (c *Core) InititateUnpledgeProcess() error {
 				return err
 			}
 
-			creditStorageErr := storeCredit(c, info.TransactionID, info.QuorumDID, pledgeInformation)
+			
+			creditStorageErr := c.w.StoreCredit(info.TransactionID, info.QuorumDID, pledgeInformation)
 			if creditStorageErr != nil {
-				c.log.Error(fmt.Sprintf("failed while storing credits, err: %v", creditStorageErr.Error()))
-				return err
+				errMsg := fmt.Errorf("failed while storing credits, err: %v", creditStorageErr.Error())
+				c.log.Error(errMsg.Error())
+				return errMsg
 			}
 
-			c.s.Delete(UnpledgeQueueTable, &UnpledgeQueueInfo{}, "tx_id = ?", info.TransactionID)
-			c.log.Info(fmt.Sprintf("Unpledging for tx %v are successful. Credits have been awarded", info.TransactionID))
+			removeUnpledgeSequenceInfoErr := c.w.RemoveUnpledgeSequenceInfo(info.TransactionID)
+			if removeUnpledgeSequenceInfoErr != nil {
+				errMsg := fmt.Errorf("failed to remove unpledgeSequenceInfo record for transaction: %v, error: %v", info.TransactionID, removeUnpledgeSequenceInfoErr)
+				c.log.Error(errMsg.Error())
+				
+				// Remove the corresponding stored credit 
+				creditRemovalErr := c.w.RemoveCredit(info.TransactionID)
+				if creditRemovalErr != nil {
+					errMsg := fmt.Errorf("failed to remove credit for transaction ID: %v", creditRemovalErr)
+					c.log.Error(errMsg.Error())
+					return errMsg
+				}
+
+				return errMsg
+			}
+			c.log.Info(fmt.Sprintf("Unpledging for transaction %v was successful. Credits have been awarded", info.TransactionID))
 		}
 	}
 
 	return nil
 }
 
-func storeCredit(c *Core, txID string, quorumDID string, pledgeInfo []*PledgeInformation) error {
-	pledgeInfoBytes, err := json.Marshal(pledgeInfo)
+func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID string) (pledgeID string, unpledgeId string, err error) {
+	b := c.w.GetLatestTokenBlock(pledgeToken, pledgeTokenType)
+	if b == nil {
+		c.log.Error("Failed to unpledge invalid tokne chain block for token ", pledgeToken, " having token type as ", pledgeTokenType)
+		return "", "", fmt.Errorf("failed to unpledge invalid tokne chain block for token ", pledgeToken, " having token type as ", pledgeTokenType)
+	}
+
+	if b.GetTransType() != block.TokenPledgedType {
+		c.log.Error(fmt.Sprintf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken))
+		return "", "", fmt.Errorf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken)
+	}
+
+	pledgeID, err = b.GetBlockID(pledgeToken)
 	if err != nil {
-		return fmt.Errorf("failed while marshalling credits: %v", err.Error())
-	}
-	pledgeInfoEncoded := base64.StdEncoding.EncodeToString(pledgeInfoBytes)
-
-	credit := &wallet.Credit{
-		DID:    quorumDID,
-		Credit: pledgeInfoEncoded,
-		Tx:     txID,
+		errMsg := fmt.Sprintf("failed while unpledging token %v, unable to fetch block ID", pledgeToken)
+		c.log.Error(errMsg)
+		return "", "", errors.New(errMsg)
 	}
 
-	return c.s.Write(wallet.CreditStorage, credit)
+	ctcb := make(map[string]*block.Block)
+	tsb := make([]block.TransTokens, 0)
+
+	ts := block.TransTokens{
+		Token:     pledgeToken,
+		TokenType: pledgeTokenType,
+	}
+
+	dc, ok := c.qc[quorumDID]
+	if !ok {
+		c.log.Error("Failed to get quorum did crypto")
+		return "", "", fmt.Errorf("failed to get quorum did crypto")
+	}
+	tsb = append(tsb, ts)
+	ctcb[pledgeToken] = b
+	currentTime := time.Now()
+
+	tcb := block.TokenChainBlock{
+		TransactionType: block.TokenUnpledgedType,
+		TokenOwner:      quorumDID,
+		TransInfo: &block.TransInfo{
+			Comment: "Token is un pledged at " + currentTime.String(),
+			Tokens:  tsb,
+		},
+		Epoch: int(currentTime.Unix()),
+	}
+
+	nb := block.CreateNewBlock(ctcb, &tcb)
+	if nb == nil {
+		c.log.Error("Failed to create new token chain block")
+		return "", "", fmt.Errorf("failed to create new token chain block")
+	}
+
+	err = nb.UpdateSignature(dc)
+	if err != nil {
+		c.log.Error("Failed to update the signature", "err", err)
+		return "", "", fmt.Errorf("failed to update the signature")
+	}
+
+	err = c.w.CreateTokenBlock(nb)
+	if err != nil {
+		c.log.Error("Failed to update token chain block", "err", err)
+		return "", "", err
+	}
+
+	err = c.w.UnpledgeWholeToken(quorumDID, pledgeToken, pledgeTokenType)
+	if err != nil {
+		c.log.Error("Failed to update un pledge token", "err", err)
+		return "", "", err
+	}
+
+	unpledgeId, err = nb.GetBlockID(pledgeToken)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed while unpledging token %v, unable to fetch block ID", pledgeToken)
+		c.log.Error(errMsg)
+		return "", "", errors.New(errMsg)
+	}
+
+	return
 }
 
-func unpledgeAllTokens(c *Core, transactionID string, pledgeTokens string, quorumDID string) ([]*PledgeInformation, error) {
-	c.log.Debug(fmt.Sprintf("Executing Callback for tx for unpledging: %v", transactionID))
+func getTokenType(w *wallet.Wallet, tokenHash string, isTestnet bool) (int, error) {
+	var tokenType int = -1
+	
+	walletToken, err := w.ReadToken(tokenHash)
+	if err != nil {
+		return tokenType, err
+	}
 
-	var pledgeInfoList []*PledgeInformation = make([]*PledgeInformation, 0)
+	if isTestnet {
+		if walletToken.TokenValue == 1 {
+			tokenType = tkn.TestTokenType
+		} else if walletToken.TokenValue < 1 {
+			tokenType = tkn.TestPartTokenType
+		}
+	} else {
+		if walletToken.TokenValue == 1 {
+			tokenType = tkn.RBTTokenType
+		} else if walletToken.TokenValue < 1 {
+			tokenType = tkn.PartTokenType
+		}
+	}
+
+	return tokenType, nil
+}
+
+
+func getTokenOwner(w *wallet.Wallet, tokenHash string) (string, error) {
+	walletToken, err := w.ReadToken(tokenHash)
+	if err != nil {
+		return "", err
+	}
+
+	return walletToken.DID, nil
+}
+
+
+func unpledgeAllTokens(c *Core, transactionID string, pledgeTokens string, quorumDID string) ([]*wallet.PledgeInformation, error) {
+	c.log.Debug(fmt.Sprintf("Executing Callback for tx for unpledging: %v", transactionID))
+	
+	var pledgeInfoList []*wallet.PledgeInformation = make([]*wallet.PledgeInformation, 0)
 	pledgeTokensList := strings.Split(pledgeTokens, ",")
 
 	if len(pledgeTokensList) == 0 {
@@ -135,247 +251,20 @@ func unpledgeAllTokens(c *Core, transactionID string, pledgeTokens string, quoru
 	}
 
 	for _, pledgeToken := range pledgeTokensList {
-		var tokenValue float64
-		var tokenType int
+		pledgeTokenType, err := getTokenType(c.w, pledgeToken, c.testNet)
+		if err != nil {
+			return nil, fmt.Errorf("failed while unpledging token %v, err: %v", pledgeToken, err)
+		}
 
-		// Read Token from token hash
-		walletToken, err := c.w.ReadToken(pledgeToken)
+		pledgeTokenBlockID, unpledgeTokenBlockID, err := unpledgeToken(c, pledgeToken, pledgeTokenType, quorumDID)
 		if err != nil {
 			return nil, err
-		}
-		tokenValue = walletToken.TokenValue
-
-		c.log.Debug(fmt.Sprintf("Tx: %v, Status of pledge token %v is %v", transactionID, pledgeToken, walletToken.TokenStatus))
-
-		if c.testNet {
-			if tokenValue == 1 {
-				tokenType = tkn.TestTokenType
-			} else if tokenValue < 1 {
-				tokenType = tkn.TestPartTokenType
-			}
-		} else {
-			if tokenValue == 1 {
-				tokenType = tkn.RBTTokenType
-			} else if tokenValue < 1 {
-				tokenType = tkn.PartTokenType
-			}
-		}
-
-		b := c.w.GetLatestTokenBlock(pledgeToken, tokenType)
-		if b == nil {
-			c.log.Error("Failed to unpledge invalid tokne chain block for token ", pledgeToken, " having token type as ", tokenType)
-			return nil, fmt.Errorf("Failed to unpledge invalid tokne chain block for token ", pledgeToken, " having token type as ", tokenType)
-		}
-
-		if b.GetTransType() != block.TokenPledgedType {
-			c.log.Error(fmt.Sprintf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken))
-			return nil, fmt.Errorf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken)
-		}
-
-		pledgeTokenBlockID, err := b.GetBlockID(pledgeToken)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed while unpledging token %v, unable to fetch block ID", pledgeToken)
-			c.log.Error(errMsg)
-			return nil, errors.New(errMsg)
-		}
-
-		ctcb := make(map[string]*block.Block)
-		tsb := make([]block.TransTokens, 0)
-
-		ts := block.TransTokens{
-			Token:     pledgeToken,
-			TokenType: tokenType,
-		}
-
-		dc, ok := c.qc[quorumDID]
-		if !ok {
-			c.log.Error("Failed to get quorum did crypto")
-			return nil, fmt.Errorf("failed to get quorum did crypto")
-		}
-		tsb = append(tsb, ts)
-		ctcb[pledgeToken] = b
-		currentTime := time.Now()
-
-		tcb := block.TokenChainBlock{
-			TransactionType: block.TokenUnpledgedType,
-			TokenOwner:      quorumDID,
-			TransInfo: &block.TransInfo{
-				Comment: "Token is un pledged at " + currentTime.String(),
-				Tokens:  tsb,
-			},
-			Epoch: int(currentTime.Unix()),
-		}
-
-		nb := block.CreateNewBlock(ctcb, &tcb)
-		if nb == nil {
-			c.log.Error("Failed to create new token chain block")
-			return nil, fmt.Errorf("failed to create new token chain block")
-		}
-
-		err = nb.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update the signature", "err", err)
-			return nil, fmt.Errorf("failed to update the signature")
-		}
-
-		err = c.w.CreateTokenBlock(nb)
-		if err != nil {
-			c.log.Error("Failed to update token chain block", "err", err)
-			return nil, err
-		}
-
-		err = c.w.UnpledgeWholeToken(quorumDID, pledgeToken, tokenType)
-		if err != nil {
-			c.log.Error("Failed to update un pledge token", "err", err)
-			return nil, err
-		}
-
-		unpledgeTokenBlockID, err := nb.GetBlockID(pledgeToken)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed while unpledging token %v, unable to fetch block ID", pledgeToken)
-			c.log.Error(errMsg)
-			return nil, errors.New(errMsg)
 		}
 
 		// Add pledge and unpledge block information of a Pledged token
-		pledgeInfoList = append(pledgeInfoList, &PledgeInformation{
+		pledgeInfoList = append(pledgeInfoList, &wallet.PledgeInformation{
 			TokenID:         pledgeToken,
-			TokenType:       tokenType,
-			PledgeBlockID:   pledgeTokenBlockID,
-			UnpledgeBlockID: unpledgeTokenBlockID,
-			QuorumDID:       quorumDID,
-			TransactionID:   transactionID,
-		})
-	}
-
-	// If the unpledging is happening after the pledging period, we can safely remove
-	// the TokenStateHash table records for the input transactionID
-	err := c.w.RemoveTokenStateHashByTransactionID(transactionID)
-	if err != nil {
-		return nil, err
-	}
-
-	return pledgeInfoList, nil
-}
-
-// type UnpledgeCBType func(transactionID string, pledgeTokens string, quorumDID string) ([]*PledgeInformation, error)
-func (c *Core) ExecuteUnpledge(transactionID string, pledgeTokens string, quorumDID string) ([]*PledgeInformation, error) {
-	c.log.Debug(fmt.Sprintf("Executing Callback for tx for unpledging: %v", transactionID))
-
-	var pledgeInfoList []*PledgeInformation = make([]*PledgeInformation, 0)
-	pledgeTokensList := strings.Split(pledgeTokens, ",")
-
-	if len(pledgeTokensList) == 0 {
-		return nil, fmt.Errorf("expected atleast one pledged token for unpledging")
-	}
-
-	for _, pledgeToken := range pledgeTokensList {
-		var tokenValue float64
-		var tokenType int
-
-		// Read Token from token hash
-		walletToken, err := c.w.ReadToken(pledgeToken)
-		if err != nil {
-			return nil, err
-		}
-		tokenValue = walletToken.TokenValue
-
-		c.log.Debug(fmt.Sprintf("Tx: %v, Status of pledge token %v is %v", transactionID, pledgeToken, walletToken.TokenStatus))
-
-		if c.testNet {
-			if tokenValue == 1 {
-				tokenType = tkn.TestTokenType
-			} else if tokenValue < 1 {
-				tokenType = tkn.TestPartTokenType
-			}
-		} else {
-			if tokenValue == 1 {
-				tokenType = tkn.RBTTokenType
-			} else if tokenValue < 1 {
-				tokenType = tkn.PartTokenType
-			}
-		}
-
-		b := c.w.GetLatestTokenBlock(pledgeToken, tokenType)
-		if b == nil {
-			c.log.Error("Failed to unpledge invalid tokne chain block for token ", pledgeToken, " having token type as ", tokenType)
-			return nil, fmt.Errorf("Failed to unpledge invalid tokne chain block for token ", pledgeToken, " having token type as ", tokenType)
-		}
-
-		if b.GetTransType() != block.TokenPledgedType {
-			c.log.Error(fmt.Sprintf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken))
-			return nil, fmt.Errorf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken)
-		}
-
-		pledgeTokenBlockID, err := b.GetBlockID(pledgeToken)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed while unpledging token %v, unable to fetch block ID", pledgeToken)
-			c.log.Error(errMsg)
-			return nil, errors.New(errMsg)
-		}
-
-		ctcb := make(map[string]*block.Block)
-		tsb := make([]block.TransTokens, 0)
-
-		ts := block.TransTokens{
-			Token:     pledgeToken,
-			TokenType: tokenType,
-		}
-
-		dc, ok := c.qc[quorumDID]
-		if !ok {
-			c.log.Error("Failed to get quorum did crypto")
-			return nil, fmt.Errorf("failed to get quorum did crypto")
-		}
-		tsb = append(tsb, ts)
-		ctcb[pledgeToken] = b
-		currentTime := time.Now()
-
-		tcb := block.TokenChainBlock{
-			TransactionType: block.TokenUnpledgedType,
-			TokenOwner:      quorumDID,
-			TransInfo: &block.TransInfo{
-				Comment: "Token is un pledged at " + currentTime.String(),
-				Tokens:  tsb,
-			},
-			Epoch: int(currentTime.Unix()),
-		}
-
-		nb := block.CreateNewBlock(ctcb, &tcb)
-		if nb == nil {
-			c.log.Error("Failed to create new token chain block")
-			return nil, fmt.Errorf("failed to create new token chain block")
-		}
-
-		err = nb.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update the signature", "err", err)
-			return nil, fmt.Errorf("failed to update the signature")
-		}
-
-		err = c.w.CreateTokenBlock(nb)
-		if err != nil {
-			c.log.Error("Failed to update token chain block", "err", err)
-			return nil, err
-		}
-
-		err = c.w.UnpledgeWholeToken(quorumDID, pledgeToken, tokenType)
-		if err != nil {
-			c.log.Error("Failed to update un pledge token", "err", err)
-			return nil, err
-		}
-
-		unpledgeTokenBlockID, err := nb.GetBlockID(pledgeToken)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed while unpledging token %v, unable to fetch block ID", pledgeToken)
-			c.log.Error(errMsg)
-			return nil, errors.New(errMsg)
-		}
-
-		// Add pledge and unpledge block information of a Pledged token
-		pledgeInfoList = append(pledgeInfoList, &PledgeInformation{
-			TokenID:         pledgeToken,
-			TokenType:       tokenType,
+			TokenType:       pledgeTokenType,
 			PledgeBlockID:   pledgeTokenBlockID,
 			UnpledgeBlockID: unpledgeTokenBlockID,
 			QuorumDID:       quorumDID,

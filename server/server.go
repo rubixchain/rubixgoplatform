@@ -165,6 +165,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APICheckPinnedState, "DELETE", s.AuthHandle(s.APICheckPinnedState, false, s.AuthError, true))
 	s.AddRoute(setup.APISelfTransfer, "POST", s.AuthHandle(s.SelfTransferHandle, false, s.AuthError, true))
 	s.AddRoute(setup.APIRunUnpledge, "POST", s.AuthHandle(s.RunUnpledgeHandle, false, s.AuthError, true))
+	s.AddRoute(setup.APIUnpledgePOWPledgeTokens, "POST", s.AuthHandle(s.UnpledgePoWBasedPledgedTokens, false, s.AuthError, true))
 }
 
 func (s *Server) ExitFunc() error {

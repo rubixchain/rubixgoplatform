@@ -13,6 +13,7 @@ type Storage interface {
 	WriteBatch(storageName string, vaule interface{}, batchSize int) error
 	ReadWithOffset(storageName string, offset int, limit int, vaule interface{}, querryString string, querryVaule ...interface{}) error
 	GetDataCount(stroageName string, querryString string, querryVaule ...interface{}) int64
+	Drop(storageName string, value interface{}) error
 	Close() error
 }
 

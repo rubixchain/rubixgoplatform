@@ -87,6 +87,7 @@ const (
 	CheckPinnedState               string = "checkpinnedstate"
 	SelfTransferRBT                string = "self-transfer-rbt"
 	RunUnpledge                    string = "run-unpledge"
+	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
 )
 
 var commands = []string{VersionCmd,
@@ -135,6 +136,7 @@ var commands = []string{VersionCmd,
 	AddPeerDetailsCmd,
 	SelfTransferRBT,
 	RunUnpledge,
+	UnpledgePOWPledgeTokens,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -183,6 +185,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command is to add the peer details manually",
 	"This command will initiate a self RBT transfer",
 	"This command will unpledge all the pledged tokens",
+	"This command will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
 }
 
 type Command struct {
@@ -626,6 +629,8 @@ func Run(args []string) {
 		cmd.SelfTransferRBT()
 	case RunUnpledge:
 		cmd.RunUnpledge()
+	case UnpledgePOWPledgeTokens:
+		cmd.UnpledgePOWBasedPledgedTokens()
 	default:
 		cmd.log.Error("Invalid command")
 	}
