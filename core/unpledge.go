@@ -13,7 +13,7 @@ import (
 	tkn "github.com/rubixchain/rubixgoplatform/token"
 )
 
-const pledgePeriodInSeconds int = 60 // Pledging period: 7 days
+const pledgePeriodInSeconds int = 7 * 24 * 60 * 60 // Pledging period: 7 days
 
 func (c *Core) ForceUnpledgePOWBasedPledgedTokens() error {
 	// Load data from UnpledgeQueueInfo table
