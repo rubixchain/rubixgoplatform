@@ -49,14 +49,6 @@ func (w *Wallet) GetSmartContractToken(smartContractToken string) ([]SmartContra
 		return nil, fmt.Errorf("no smart contract token is available to commit")
 	}
 
-	for i := range sc {
-		sc[i].ContractStatus = TokenIsGenerated
-		err := w.s.Update(SmartContractStorage, &sc[i], "smart_contract_hash=?", sc[i].SmartContractHash)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return sc, nil
 }
 
@@ -64,7 +56,7 @@ func (w *Wallet) GetSmartContractTokenByDeployer(did string) ([]SmartContract, e
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	var sc []SmartContract
-	err := w.s.Read(SmartContractStorage, &sc, "did=?", did)
+	err := w.s.Read(SmartContractStorage, &sc, "deployer=?", did)
 	if err != nil {
 		return nil, err
 	}
