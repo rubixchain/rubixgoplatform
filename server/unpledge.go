@@ -20,7 +20,7 @@ import (
 func (s *Server) RunUnpledgeHandle(req *ensweb.Request) *ensweb.Result {
 	var resp model.BasicResponse
 
-	err := s.c.InititateUnpledgeProcess()
+	msg, err := s.c.InititateUnpledgeProcess()
 	if err != nil {
 		errMsg := fmt.Sprintf("%v: %v", setup.APIRunUnpledge, err.Error())
 		resp.Status = false
@@ -30,7 +30,7 @@ func (s *Server) RunUnpledgeHandle(req *ensweb.Request) *ensweb.Result {
 	}
 
 	resp.Status = true
-	resp.Message = "Unpledging of pledged tokens is successful"
+	resp.Message = msg
 	return s.RenderJSON(req, resp, http.StatusOK)
 }
 

@@ -13,7 +13,7 @@ import (
 	tkn "github.com/rubixchain/rubixgoplatform/token"
 )
 
-const pledgePeriodInSeconds int = 7 * 24 * 60 * 60 // Pledging period: 7 days
+const pledgePeriodInSeconds int = 60 // Pledging period: 7 days
 
 func (c *Core) ForceUnpledgePOWBasedPledgedTokens() error {
 	// Load data from UnpledgeQueueInfo table
@@ -51,11 +51,19 @@ func (c *Core) ForceUnpledgePOWBasedPledgedTokens() error {
 }
 
 
-func (c *Core) InititateUnpledgeProcess() error {
+
+
+func (c *Core) InititateUnpledgeProcess() (string, error) {
+	c.log.Info("Unpledging process has started...")
+	var totalUnpledgeAmount float64 = 0.0
+
 	// Get the list of transactions from the unpledgeQueue table
 	unpledgeSequenceInfo, err := c.w.GetUnpledgeSequenceDetails()
 	if err != nil {
-		return err
+		return "", err
+	}
+	if len(unpledgeSequenceInfo) == 0 {
+		return "No tokens present to unpledge", nil
 	}
 
 	var pledgeInformation []*wallet.PledgeInformation
@@ -69,7 +77,7 @@ func (c *Core) InititateUnpledgeProcess() error {
 		tokenStateHashDetails, err := c.w.GetTokenStateHashByTransactionID(info.TransactionID)
 		if err != nil {
 			c.log.Error(fmt.Sprintf("error occured while fetching token state hashes for transaction ID: %v", info.TransactionID))
-			return err
+			return "", err
 		}
 
 		// Not all tokens have undergone state change
@@ -91,7 +99,7 @@ func (c *Core) InititateUnpledgeProcess() error {
 			pledgeInformation, err = unpledgeAllTokens(c, info.TransactionID, info.PledgeTokens, info.QuorumDID)
 			if err != nil {
 				c.log.Error(fmt.Sprintf("failed while unpledging tokens for transaction: %v", info.TransactionID))
-				return err
+				return "", err
 			}
 
 			
@@ -99,7 +107,7 @@ func (c *Core) InititateUnpledgeProcess() error {
 			if creditStorageErr != nil {
 				errMsg := fmt.Errorf("failed while storing credits, err: %v", creditStorageErr.Error())
 				c.log.Error(errMsg.Error())
-				return errMsg
+				return "", errMsg
 			}
 
 			removeUnpledgeSequenceInfoErr := c.w.RemoveUnpledgeSequenceInfo(info.TransactionID)
@@ -112,16 +120,23 @@ func (c *Core) InititateUnpledgeProcess() error {
 				if creditRemovalErr != nil {
 					errMsg := fmt.Errorf("failed to remove credit for transaction ID: %v", creditRemovalErr)
 					c.log.Error(errMsg.Error())
-					return errMsg
+					return "", errMsg
 				}
 
-				return errMsg
+				return "", errMsg
 			}
-			c.log.Info(fmt.Sprintf("Unpledging for transaction %v was successful. Credits have been awarded", info.TransactionID))
+			
+			unpledgeAmountForTransaction, err := c.getTotalAmountFromTokenHashes(strings.Split(info.PledgeTokens, ","))
+			if err != nil {
+				return "", fmt.Errorf("failed while getting total pledge amount for transaction id: %v, err: %v", info.TransactionID, err)
+			}
+
+			totalUnpledgeAmount += unpledgeAmountForTransaction
+			c.log.Info(fmt.Sprintf("Unpledging for transaction %v was successful and credits have been awarded. Total Unpledge Amount: %v RBT", info.TransactionID, unpledgeAmountForTransaction))
 		}
 	}
 
-	return nil
+	return fmt.Sprintf("Unpledging of pledged tokens was successful, Total Unpledge Amount: %v RBT", totalUnpledgeAmount), nil
 }
 
 func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID string) (pledgeID string, unpledgeId string, err error) {

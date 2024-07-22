@@ -19,10 +19,9 @@ type UnpledgeSequenceInfo struct {
 }
 
 // Methods specific to Periodic Pledging
-
 func (w *Wallet) GetUnpledgeSequenceDetails() ([]*UnpledgeSequenceInfo, error) {
 	var unpledgeSequenceDetails []*UnpledgeSequenceInfo
-	err := w.s.Read(UnpledgeSequence, &unpledgeSequenceDetails, "tx_id = ?", "")
+	err := w.s.Read(UnpledgeSequence, &unpledgeSequenceDetails, "tx_id != ?", "")
 	if err != nil {
 		if strings.Contains(err.Error(), "no records found") {
 			return []*UnpledgeSequenceInfo{}, nil
