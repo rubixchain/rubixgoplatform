@@ -299,7 +299,7 @@ func (c *Core) addNFTSaleContract(reqID string, sr *NFTSaleReq) *model.BasicResp
 	}
 	sct := &contract.ContractType{
 		Type:       contract.SCNFTSaleContractType,
-		PledgeMode: contract.POWPledgeMode,
+		PledgeMode: contract.PeriodicPledgeMode,
 		TotalRBTs:  totalAmount,
 		TransInfo: &contract.TransInfo{
 			SenderDID:   did,

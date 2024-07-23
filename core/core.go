@@ -16,7 +16,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
-	"github.com/rubixchain/rubixgoplatform/core/unpledge"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	didm "github.com/rubixchain/rubixgoplatform/did"
@@ -50,6 +49,9 @@ const (
 	APICheckQuorumStatusPath  string = "/api/check-quorum-status"
 	APIGetPeerDIDTypePath     string = "/api/get-peer-didType"
 	APIGetPeerInfoPath        string = "/api/get-peer-info"
+	APIUpdateTokenHashDetails string = "/api/update-tokenhash-details"
+	APIAddUnpledgeDetails     string = "/api/initiate-unpledge"
+	APISelfTransfer           string = "/api/self-transfer"
 )
 
 const (
@@ -87,7 +89,6 @@ type Core struct {
 	ipfsState            bool
 	ipfsChan             chan bool
 	d                    *did.DID
-	up                   *unpledge.UnPledge
 	didDir               string
 	pm                   *ipfsport.PeerManager
 	qm                   *QuorumManager
@@ -267,16 +268,6 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		c.log.Error("Failed to setup quorum manager", "err", err)
 		return nil, err
 	}
-	err = util.CreateDir(c.cfg.DirPath + "unpledge")
-	if err != nil {
-		c.log.Error("Failed to create unpledge", "err", err)
-		return nil, err
-	}
-	c.up, err = unpledge.InitUnPledge(c.s, c.w, c.testNet, c.cfg.DirPath+"unpledge/", c.Unpledge, c.log)
-	if err != nil {
-		c.log.Error("Failed to init unpledge", "err", err)
-		return nil, err
-	}
 	if c.arbitaryMode {
 		c.srv, err = service.NewService(c.s, c.as, c.log)
 		if err != nil {
@@ -330,6 +321,7 @@ func (c *Core) SetupCore() error {
 	c.SetupToken()
 	c.QuroumSetup()
 	c.PinService()
+	// c.selfTransferService()
 	return nil
 }
 

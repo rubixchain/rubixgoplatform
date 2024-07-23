@@ -701,7 +701,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 				c.log.Error("Failed to migrate, failed to marshal credit", "err", err)
 				return fmt.Errorf("failed to migrate, failed to marshal credit")
 			}
-			err = c.w.StoreCredit(did, base64.StdEncoding.EncodeToString(jb))
+			err = c.w.StoreCredit(did, base64.StdEncoding.EncodeToString(jb), nil)
 			if err != nil {
 				c.log.Error("Failed to migrate, failed to store credit", "err", err)
 				return fmt.Errorf("failed to migrate, failed to store credit")

@@ -68,6 +68,11 @@ const (
 	APIAddExplorer                      string = "/api/add-explorer"
 	APIRemoveExplorer                   string = "/api/remove-explorer"
 	APIAddPeerDetails                   string = "/api/add-peer-details"
+	APIGetPledgedTokenDetails           string = "/api/get-pledgedtoken-details"
+	APICheckPinnedState                 string = "/api/check-pinned-state"
+	APISelfTransfer                     string = "/api/initiate-self-transfer"
+	APIRunUnpledge                      string = "/api/run-unpledge"
+	APIUnpledgePOWPledgeTokens          string = "/api/unpledge-pow-unpledge-tokens"
 )
 
 // jwt.RegisteredClaims

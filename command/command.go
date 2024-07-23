@@ -83,6 +83,11 @@ const (
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
 	AddPeerDetailsCmd              string = "addpeerdetails"
+	GetPledgedTokenDetailsCmd      string = "getpledgedtokendetails"
+	CheckPinnedState               string = "checkpinnedstate"
+	SelfTransferRBT                string = "self-transfer-rbt"
+	RunUnpledge                    string = "run-unpledge"
+	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
 )
 
 var commands = []string{VersionCmd,
@@ -129,7 +134,11 @@ var commands = []string{VersionCmd,
 	GetSmartContractData,
 	GetPeerID,
 	AddPeerDetailsCmd,
+	SelfTransferRBT,
+	RunUnpledge,
+	UnpledgePOWPledgeTokens,
 }
+
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -173,7 +182,11 @@ var commandsHelp = []string{"To get tool version",
 	"This command gets token block",
 	"This command gets the smartcontract data from latest block",
 	"This command will fetch the peer ID of the node",
-	"This command is to add the peer details manually"}
+	"This command is to add the peer details manually",
+	"This command will initiate a self RBT transfer",
+	"This command will unpledge all the pledged tokens",
+	"This command will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
+}
 
 type Command struct {
 	cfg                config.Config
@@ -251,6 +264,7 @@ type Command struct {
 	links              []string
 	mnemonicFile       string
 	ChildPath          int
+	TokenState         string
 }
 
 func showVersion() {
@@ -447,6 +461,7 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 	flag.StringVar(&links, "links", "", "Explorer url")
+	flag.StringVar(&cmd.TokenState, "tokenstatehash", "", "Give Token State Hash to check state")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -606,6 +621,16 @@ func Run(args []string) {
 		cmd.getAllExplorer()
 	case AddPeerDetailsCmd:
 		cmd.AddPeerDetails()
+	case GetPledgedTokenDetailsCmd:
+		cmd.GetPledgedTokenDetails()
+	case CheckPinnedState:
+		cmd.CheckPinnedState()
+	case SelfTransferRBT:
+		cmd.SelfTransferRBT()
+	case RunUnpledge:
+		cmd.RunUnpledge()
+	case UnpledgePOWPledgeTokens:
+		cmd.UnpledgePOWBasedPledgedTokens()
 	default:
 		cmd.log.Error("Invalid command")
 	}

@@ -3,15 +3,31 @@ import os
 import shutil
 import requests
 import argparse
+import binascii
 from node.commands import run_command
 from node.quorum import run_quorum_nodes
 
 from scenarios import (
     rbt_transfer,
-    bip39_nlss_test,
+    bip39_nlss_test
 )
 
 IPFS_KUBO_VERSION = "v0.21.0"
+
+
+def generate_ipfs_swarm_key(build_name):
+    try:
+        key = os.urandom(32)
+    except Exception as e:
+        print("While trying to read random source:", e)
+        return
+
+    output = "/key/swarm/psk/1.0.0/\n/base16/\n" + binascii.hexlify(key).decode()
+
+    filename = f"./fixtures/testswarm_{build_name}.key"
+
+    with open(filename, "w") as file:
+        file.write(output)
 
 def get_os_info():
     os_name = platform.system()
@@ -136,27 +152,30 @@ if __name__=='__main__':
         if os_name is None:
             exit(1)
 
-        if not skip_prerequisite:
-            os.chdir("../")
-            print(f"Building Rubix binary for {os_name}\n")
-            build_command = ""
-            if os_name == "Linux":
-                build_command = "make compile-linux"
-            elif os_name == "Windows":
-                build_command = "make compile-windows"
-            elif os_name == "Darwin":
-                build_command = "make compile-mac"
-            
-            output, code = run_command(build_command)
-            if code != 0:
-                print("build failed with error:", output)
-                exit(1)
-            else:
-                print("\nBuild successful\n")
+        generate_ipfs_swarm_key(build_folder)
 
+        os.chdir("../")
+        print(f"Building Rubix binary for {os_name}\n")
+        build_command = ""
+        if os_name == "Linux":
+            build_command = "make compile-linux"
+        elif os_name == "Windows":
+            build_command = "make compile-windows"
+        elif os_name == "Darwin":
+            build_command = "make compile-mac"
+        
+        output, code = run_command(build_command)
+        if code != 0:
+            print("build failed with error:", output)
+            exit(1)
+        else:
+            print("\nBuild successful\n")
+
+        if not skip_prerequisite:
             download_ipfs_binary(os_name, IPFS_KUBO_VERSION, build_folder)
             copy_fixtures_to_build_dir(build_folder)
-            os.chdir("./tests")
+       
+        os.chdir("./tests")
         
         run_quorum_nodes(run_nodes_only, skip_adding_quorums=skip_adding_quorums)
     

@@ -92,7 +92,7 @@ func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 func (c *Core) getPeer(addr string, self_did string) (*ipfsport.Peer, error) {
 	peerID, did, ok := util.ParseAddress(addr)
 	if !ok {
-		return nil, fmt.Errorf("invalid address")
+		return nil, fmt.Errorf("invalid address: %v", addr)
 	}
 	// check if addr contains the peer ID
 	if peerID == "" {

@@ -68,3 +68,8 @@ func (s *StorageDB) Close() error {
 	}
 	return db.Close()
 }
+
+// Drop will remove the table from DB
+func (s *StorageDB) Drop(storageName string, value interface{}) error {
+	return s.ad.DropTable(storageName, value)
+}
