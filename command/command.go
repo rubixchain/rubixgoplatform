@@ -55,6 +55,7 @@ const (
 	GetAccountInfoCmd              string = "getaccountinfo"
 	SetupServiceCmd                string = "setupservice"
 	DumpTokenChainCmd              string = "dumptokenchain"
+	DecodeTokenChainCmd            string = "decodetokenchain"
 	RegsiterDIDCmd                 string = "registerdid"
 	SetupDIDCmd                    string = "setupdid"
 	ShutDownCmd                    string = "shutdown"
@@ -104,6 +105,7 @@ var commands = []string{VersionCmd,
 	GetAccountInfoCmd,
 	SetupServiceCmd,
 	DumpTokenChainCmd,
+	DecodeTokenChainCmd,
 	RegsiterDIDCmd,
 	SetupDBCmd,
 	ShutDownCmd,
@@ -149,6 +151,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will help to get account information",
 	"This command enable explorer service on the node",
 	"This command will dump the token chain into file",
+	"This command will decode the token chain into file",
 	"This command will register DID peer map across the network",
 	"This command will setup the DID with peer",
 	"This command will shutdown the rubix node",
@@ -554,6 +557,8 @@ func Run(args []string) {
 		cmd.GetAccountInfo()
 	case DumpTokenChainCmd:
 		cmd.dumpTokenChain()
+	case DecodeTokenChainCmd:
+		cmd.decodeTokenChain()
 	case RegsiterDIDCmd:
 		cmd.RegsiterDIDCmd()
 	case SetupDIDCmd:
