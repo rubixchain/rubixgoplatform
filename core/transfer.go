@@ -48,7 +48,7 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 			}
 		}
 
-		reqTokens, remainingAmount, err := c.GetRequiredTokens(senderDID, req.TokenCount)
+		reqTokens, remainingAmount, err := c.GetRequiredTokens(senderDID, req.TokenCount, RBTTransferMode)
 		if err != nil {
 			c.w.ReleaseTokens(reqTokens)
 			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
@@ -62,7 +62,7 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 		// this method locks the token needs to be released or
 		// removed once it done with the transfer
 		if remainingAmount > 0 {
-			wt, err := c.GetTokens(dc, senderDID, remainingAmount)
+			wt, err := c.GetTokens(dc, senderDID, remainingAmount, RBTTransferMode)
 			if err != nil {
 				return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
 			}
@@ -496,7 +496,7 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 	}
 	sct := &contract.ContractType{
 		Type:       contract.SCRBTDirectType,
-		PledgeMode: contract.POWPledgeMode,
+		PledgeMode: contract.PeriodicPledgeMode,
 		TotalRBTs:  req.TokenCount,
 		TransInfo: &contract.TransInfo{
 			SenderDID:      did,

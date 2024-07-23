@@ -633,7 +633,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) updateReceiverToken(
 	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
-	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int,
+	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool,
 ) ([]string, error) {
 	var receiverPeerId string = ""
 	var receiverDID string = ""
@@ -747,7 +747,7 @@ func (c *Core) updateReceiverToken(
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
 
-	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, c.ipfs, sr.PinningServiceMode)
+	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
@@ -803,7 +803,6 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 	}
 
 	receiverAddress := c.peerID + "." + did
-
 	updatedtokenhashes, err := c.updateReceiverToken(
 		sr.Address,
 		receiverAddress,
@@ -812,6 +811,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 		sr.QuorumList,
 		sr.QuorumInfo,
 		sr.TransactionEpoch,
+		sr.PinningServiceMode,
 	)
 	if err != nil {
 		c.log.Error(err.Error())

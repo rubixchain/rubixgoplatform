@@ -464,9 +464,8 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		if err != nil || t.TokenID == "" {
 			// Token doesn't exist, proceed to handle it
 			dir := util.GetRandString()
-			err := util.CreateDir(dir)
-			if err != nil {
-				w.log.Error("Faled to create directory", "err", err)
+			if err := util.CreateDir(dir); err != nil {
+				w.log.Error("Failed to create directory", "err", err)
 				return nil, err
 			}
 			defer os.RemoveAll(dir)
@@ -484,21 +483,17 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 				parentTokenID, _, _ = gb.GetParentDetials(tokenInfo.Token)
 			}
 
-			tokenId := ti[i].Token
-
 			// Create new token entry
 			t = Token{
-				TokenID:       tokenId,
-				TokenValue:    ti[i].TokenValue,
-				ParentTokenID: pt,
 				TokenID:       tokenInfo.Token,
 				TokenValue:    tokenInfo.TokenValue,
 				ParentTokenID: parentTokenID,
 				DID:           tokenInfo.OwnerDID,
 			}
-			t.TokenStateHash = tokenHashMap[tokenId]
+			t.TokenStateHash = tokenHashMap[tokenInfo.Token]
 
-			if err := w.s.Write(TokenStorage, &t); err != nil {
+			err = w.s.Write(TokenStorage, &t)
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -515,26 +510,20 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		// Update token status
 		t.DID = ownerdid
 		t.TokenStatus = tokenStatus
-		t.TransactionID = b.GetTid()
-		t.TokenStateHash = tokenHashMap[t.TokenID]
 
-		if err := w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token); err != nil {
+		err = w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token)
+		if err != nil {
 			return nil, err
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-
-		// Pin the token
+		//Pinnig the whole tokens and pat tokens
 		ok, err := w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
-			msg := "failed to pin token"
-			if pinningServiceMode {
-				msg = "failed to pin token as Service"
-			}
-			return fmt.Errorf(msg)
+			return nil, fmt.Errorf("failed to pin token")
 		}
 	}
 	// for i := range pt {

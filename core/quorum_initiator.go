@@ -567,7 +567,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
 		}
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, err
@@ -620,17 +620,112 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			QuorumList:         cr.QuorumList,
 			PinningServiceMode: true,
 		}
+		//fetching quorums' info from PeerDIDTable to share with the receiver
+		for _, qrm := range sr.QuorumList {
+			//fetch peer id & did of the quorum
+			qpid, qdid, ok := util.ParseAddress(qrm)
+			if !ok {
+				c.log.Error("could not parse quorum address:", qrm)
+			}
+			if qpid == "" {
+				qpid = c.w.GetPeerID(qdid)
+			}
+
+			var qrmInfo QuorumDIDPeerMap
+			//fetch did type of the quorum
+			qDidType, err := c.w.GetPeerDIDType(qdid)
+			if err != nil {
+				c.log.Error("could not fetch did type for quorum:", qdid, "error", err)
+			}
+			if qDidType == -1 {
+				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
+				didtype_, msg, err := c.GetPeerdidType_fromPeer(qpid, qdid, dc.GetDID())
+				if err != nil {
+					c.log.Error("error", err, "msg", msg)
+					qrmInfo.DIDType = nil
+				} else {
+					qDidType = didtype_
+					qrmInfo.DIDType = &qDidType
+				}
+			} else {
+				qrmInfo.DIDType = &qDidType
+			}
+			//add quorum details to the data to be shared
+			qrmInfo.DID = qdid
+			qrmInfo.PeerID = qpid
+			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
+		}
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
 			return nil, nil, err
 		}
-		if !br.Status {
-			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
-			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
+
+		if strings.Contains(br.Message, "failed to sync tokenchain") {
+			tokenPrefix := "Token: "
+			issueTypePrefix := "issueType: "
+
+			// Find the starting indexes of pt and issueType values
+			ptStart := strings.Index(br.Message, tokenPrefix) + len(tokenPrefix)
+			issueTypeStart := strings.Index(br.Message, issueTypePrefix) + len(issueTypePrefix)
+
+			// Extracting the substrings from the message
+			token := br.Message[ptStart : strings.Index(br.Message[ptStart:], ",")+ptStart]
+			issueType := br.Message[issueTypeStart:]
+
+			c.log.Debug("String: token is ", token, " issuetype is ", issueType)
+			issueTypeInt, err1 := strconv.Atoi(issueType)
+			if err1 != nil {
+				errMsg := fmt.Sprintf("Consensus failed due to token chain sync issue, issueType string conversion, err %v", err1)
+				c.log.Error(errMsg)
+				return nil, nil, fmt.Errorf(errMsg)
+			}
+			c.log.Debug("issue type in int is ", issueTypeInt)
+			syncIssueTokenDetails, err2 := c.w.ReadToken(token)
+			if err2 != nil {
+				errMsg := fmt.Sprintf("Consensus failed due to tokenchain sync issue, err %v", err2)
+				c.log.Error(errMsg)
+				return nil, nil, fmt.Errorf(errMsg)
+			}
+			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
+			if issueTypeInt == TokenChainNotSynced {
+				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
+				c.w.UpdateToken(syncIssueTokenDetails)
+				return nil, nil, errors.New(br.Message)
+			}
 		}
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), true)
+
+		if !br.Status {
+			c.log.Error("Unable to send tokens to pinning node", "msg", br.Message)
+			return nil, nil, fmt.Errorf("unable to send tokens to pinning node, " + br.Message)
+		}
+
+		// br.Result will contain the new token state after sending tokens to receiver as a response to APISendReceiverToken
+		newtokenhashresult, ok := br.Result.([]interface{})
+		if !ok {
+			c.log.Error("Type assertion to string failed")
+			return nil, nil, fmt.Errorf("Type assertion to string failed")
+		}
+		var newtokenhashes []string
+		for i, newTokenHash := range newtokenhashresult {
+			statehash, ok := newTokenHash.(string)
+			if !ok {
+				c.log.Error("Type assertion to string failed at index", i)
+				return nil, nil, fmt.Errorf("Type assertion to string failed at index", i)
+			}
+			newtokenhashes = append(newtokenhashes, statehash)
+		}
+
+		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
+		if pledgeFinalityError != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", err)
+			return nil, nil, pledgeFinalityError
+		}
+
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, err
@@ -647,7 +742,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, err
 		}
 
-		td := wallet.TransactionDetails{
+		td := model.TransactionDetails{
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
@@ -657,6 +752,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
 			Status:          true,
+			Epoch:           int64(cr.TransactionEpoch),
+		}
+		err = c.initiateUnpledgingProcess(cr, td.TransactionID, td.Epoch)
+		if err != nil {
+			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
+			return nil, nil, err
 		}
 		return &td, pl, nil
 	case SelfTransferMode:
@@ -700,7 +801,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		// Self update for self transfer tokens
-		updatedTokenHashes, err := c.updateReceiverToken(selfAddress, "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, cr.TransactionEpoch)
+		updatedTokenHashes, err := c.updateReceiverToken(selfAddress, "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, cr.TransactionEpoch, false)
 		if err != nil {
 			errMsg := fmt.Errorf("failed while update of self transfer tokens, err: %v", err)
 			c.log.Error(errMsg.Error())
