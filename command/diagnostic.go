@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -13,137 +12,128 @@ import (
 
 func tcMarshal(str string, m interface{}) (string, error) {
 	var err error
-
 	switch mt := m.(type) {
 	case []map[string]interface{}:
 		str = str + "["
 		c1 := false
-		for _, v := range mt { // Iterate directly over the slice
+		for i := range mt {
 			if c1 {
 				str = str + ","
 			}
 			c1 = true
-			decodedValue := block.DecodeNestedStructure("", v)
-			str, err = tcMarshal(str, decodedValue)
+			str, err = tcMarshal(str, mt[i])
 			if err != nil {
 				return "", err
 			}
 		}
 		str = str + "]"
+	case map[string]interface{}:
+		str = str + "{"
+		c1 := false
+		for k, v := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			str = str + "\"" + k + "\":"
+			s, ok := v.(string)
+			if ok {
+				str = str + "\"" + s + "\""
+			} else {
+				str, err = tcMarshal(str, v)
+				if err != nil {
+					return "", err
+				}
+			}
+		}
+		str = str + "}"
+	case map[string]string:
+		str = str + "{"
+		c1 := false
+		for k, v := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			str = str + "\"" + k + "\":"
+			str = str + "\"" + v + "\""
+		}
 
+		str = str + "}"
+	case map[interface{}]interface{}:
+		str = str + "{"
+		c1 := false
+		for k, v := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			str = str + "\"" + k.(string) + "\":"
+			str, err = tcMarshal(str, v)
+			if err != nil {
+				return "", err
+			}
+		}
+
+		str = str + "}"
+	case []string:
+		str = str + "["
+		c1 := false
+		for _, mf := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			str, err = tcMarshal(str, mf)
+			if err != nil {
+				return "", err
+			}
+		}
+		str = str + "]"
+	case []byte:
+		str = str + "\"" + util.HexToStr(mt) + "\""
+	case string:
+		str = str + "\"" + mt + "\""
 	case []interface{}:
 		str = str + "["
 		c1 := false
-		for _, v := range mt { // Iterate directly over the slice
+		for _, mf := range mt {
 			if c1 {
 				str = str + ","
 			}
 			c1 = true
-			// Recursively decode each element in the slice
-			decodedValue := block.DecodeNestedStructure("", v)
-			str, err = tcMarshal(str, decodedValue)
-			if err != nil {
-				return "", err
+			s, ok := mf.(string)
+			if ok {
+				str = str + "\"" + s + "\""
+			} else {
+				str, err = tcMarshal(str, mf)
+				if err != nil {
+					return "", err
+				}
 			}
 		}
 		str = str + "]"
-	case map[string]interface{}: // Handle map[string]interface{}
-		str = str + "{"
-		c1 := false
-		for k, v := range mt {
-			if c1 {
-				str = str + ","
-			}
-			c1 = true
-
-			decodedKey, exists := block.KeyMap[k]
-			if !exists {
-				decodedKey = k
-			}
-			str = str + "\"" + decodedKey + "\":"
-
-			// Recursively decode and marshal the value
-			decodedValue := block.DecodeNestedStructure(decodedKey, v)
-			str, err = tcMarshal(str, decodedValue)
-			if err != nil {
-				return "", err
-			}
-		}
-		str = str + "}"
-	case map[interface{}]interface{}: // Handle map[interface{}]interface{}
-		str = str + "{"
-		c1 := false
-		for k, v := range mt {
-			if c1 {
-				str = str + ","
-			}
-			c1 = true
-
-			// Convert interface{} key to string
-			keyStr := fmt.Sprintf("%v", k)
-			decodedKey, exists := block.KeyMap[keyStr]
-			if !exists {
-				decodedKey = keyStr
-			}
-			str = str + "\"" + decodedKey + "\":"
-
-			// Recursively decode and marshal the value
-			decodedValue := block.DecodeNestedStructure(decodedKey, v)
-			str, err = tcMarshal(str, decodedValue)
-			if err != nil {
-				return "", err
-			}
-		}
-		str = str + "}"
-	case map[string]string: // Handle map[string]string (no decoding needed)
-		str = str + "{"
-		c1 := false
-		for k, v := range mt {
-			if c1 {
-				str = str + ","
-			}
-			c1 = true
-			str = str + "\"" + k + "\":\"" + v + "\""
-		}
-		str = str + "}"
-
-	case []string: // Handle slice of strings (no decoding needed)
-		str = str + "["
-		c1 := false
-		for _, s := range mt {
-			if c1 {
-				str = str + ","
-			}
-			c1 = true
-			str = str + "\"" + s + "\""
-		}
-		str = str + "]"
-
-	case []byte: // Handle byte slices
-		str = str + "\"" + util.HexToStr(mt) + "\""
-
-	case string:
-		str = str + "\"" + mt + "\""
-
-	case uint64, int: // Handle integers
+	case uint64:
 		str = str + fmt.Sprintf("%d", mt)
-
-	case float64: // Handle floating-point numbers
+	case int:
+		str = str + fmt.Sprintf("%d", mt)
+	case float64:
+		// TokenValue (key: "10") is a float value and needs to have a precision of 5
+		// in the output dump file
 		str = str + fmt.Sprintf("%.5f", mt)
-
-	case nil: // Handle nil values
-		str = str + "null"
-
-	default: // Handle unsupported types
+	case interface{}:
+		str, err = tcMarshal(str, mt)
+		if err != nil {
+			return "", err
+		}
+	case nil:
+		str = str + "\"" + "\""
+	default:
 		return "", fmt.Errorf("invalid type %T", mt)
 	}
 	return str, nil
 }
 
-// dumpTokenChain dumps the token chain by retrieving blocks from the command's client.
-// It iterates through the blocks, decodes each block, and appends the decoded block to a list.
-// Finally, it marshals the list of decoded blocks into a JSON string and writes it to a file named "dump.json".
-// This method logs debug information about the original and decoded blocks, as well as any errors encountered.
 func (cmd *Command) dumpTokenChain() {
 	blocks := make([]map[string]interface{}, 0)
 	blockID := ""
@@ -157,13 +147,10 @@ func (cmd *Command) dumpTokenChain() {
 			cmd.log.Error("Failed to dump token chain", "msg", ds.Message)
 			return
 		}
-
 		for _, blk := range ds.Blocks {
 			b := block.InitBlock(blk, nil)
 			if b != nil {
-				// Decode the block before adding it to the list
-				decodedBlock := decodeBlock(b.GetBlockMap())
-				blocks = append(blocks, decodedBlock)
+				blocks = append(blocks, b.GetBlockMap())
 			} else {
 				cmd.log.Error("Invalid block")
 			}
@@ -173,8 +160,7 @@ func (cmd *Command) dumpTokenChain() {
 			break
 		}
 	}
-
-	str, err := tcMarshal("", blocks) // Pass nil for keys to use all keys
+	str, err := tcMarshal("", blocks)
 	if err != nil {
 		cmd.log.Error("Failed to dump token chain", "err", err)
 		return
@@ -187,6 +173,47 @@ func (cmd *Command) dumpTokenChain() {
 	f.WriteString(str)
 	f.Close()
 	cmd.log.Info("Token chain dumped successfully!")
+}
+
+func (cmd *Command) dumpSmartContractTokenChain() {
+	blocks := make([]map[string]interface{}, 0)
+	blockID := ""
+	for {
+		ds, err := cmd.c.DumpSmartContractTokenChain(cmd.smartContractToken, blockID)
+		if err != nil {
+			cmd.log.Error("Failed to dump smart contract token chain", "err", err)
+			return
+		}
+		if !ds.Status {
+			cmd.log.Error("Failed to dump smart contract token chain", "msg", ds.Message)
+			return
+		}
+		for _, blk := range ds.Blocks {
+			b := block.InitBlock(blk, nil)
+			if b != nil {
+				blocks = append(blocks, b.GetBlockMap())
+			} else {
+				cmd.log.Error("Invalid block")
+			}
+		}
+		blockID = ds.NextBlockID
+		if ds.NextBlockID == "" {
+			break
+		}
+	}
+	str, err := tcMarshal("", blocks)
+	if err != nil {
+		cmd.log.Error("Failed to dump smart contract token chain", "err", err)
+		return
+	}
+	f, err := os.Create("dump.json")
+	if err != nil {
+		cmd.log.Error("Failed to dump smart contract token chain", "err", err)
+		return
+	}
+	f.WriteString(str)
+	f.Close()
+	cmd.log.Info("smart contract Token chain dumped successfully!")
 }
 
 // decodeTokenChain decodes a JSON file, transforms its data, and writes the transformed data back to a file.
@@ -236,82 +263,6 @@ func (cmd *Command) decodeTokenChain() {
 	}
 
 	fmt.Println("Transformation complete. Check output.json for results.")
-}
-
-// dumpSmartContractTokenChain dumps the smart contract token chain by retrieving blocks from the smart contract token chain
-// and saving them to a JSON file named "dump.json". It iterates through the blocks until there are no more blocks to retrieve.
-// The function returns an error if there is any issue with dumping the smart contract token chain.
-func (cmd *Command) dumpSmartContractTokenChain() {
-	blocks := make([]map[string]interface{}, 0)
-	blockID := ""
-	for {
-		ds, err := cmd.c.DumpSmartContractTokenChain(cmd.smartContractToken, blockID)
-		if err != nil {
-			cmd.log.Error("Failed to dump smart contract token chain", "err", err)
-			return
-		}
-		if !ds.Status {
-			cmd.log.Error("Failed to dump smart contract token chain", "msg", ds.Message)
-			return
-		}
-		for _, blk := range ds.Blocks {
-			b := block.InitBlock(blk, nil)
-			if b != nil {
-				decodedBlock := decodeBlock(b.GetBlockMap())
-				blocks = append(blocks, decodedBlock)
-			} else {
-				cmd.log.Error("Invalid block")
-			}
-		}
-		blockID = ds.NextBlockID
-		if ds.NextBlockID == "" {
-			break
-		}
-	}
-	str, err := tcMarshal("", blocks)
-	if err != nil {
-		cmd.log.Error("Failed to dump smart contract token chain", "err", err)
-		return
-	}
-	f, err := os.Create("dump.json")
-	if err != nil {
-		cmd.log.Error("Failed to dump smart contract token chain", "err", err)
-		return
-	}
-	f.WriteString(str)
-	f.Close()
-	cmd.log.Info("smart contract Token chain dumped successfully!")
-}
-
-// decodeBlock decodes the block data and returns it as a map[string]interface{}.
-func decodeBlock(blockData map[string]interface{}) map[string]interface{} {
-	// Directly using DecodeNestedStructure function
-	return block.DecodeNestedStructure("", blockData).(map[string]interface{})
-}
-
-// findNestedKeyMapping is a helper function to find nested key mappings. It searches for a nested key mapping in the provided item.
-// It takes a key string and an item map as input and returns the mapped key and a boolean indicating if the mapping exists.
-// The key is split by "-" to handle the KeyMap format.
-// It iterates through the nested structure of the item to find the mapping.
-// If the key is not found or the nested structure is not a map, it returns an empty string and false.
-// Finally, it reconstructs the original key and returns the mapped key and a boolean indicating if the mapping exists.
-func findNestedKeyMapping(key string, item map[string]interface{}) (string, bool) {
-	parts := strings.Split(key, "-") // Split by "-" for KeyMap format
-	current := item
-	for _, part := range parts {
-		if next, ok := current[part]; ok {
-			current, ok = next.(map[string]interface{}) // Move down the nested structure
-			if !ok {
-				return "", false // Not a map, cannot be further nested
-			}
-		} else {
-			return "", false // Key not found in the nested structure
-		}
-	}
-
-	joinedKey := strings.Join(parts, "-") // Reconstruct the original key
-	mappedKey, exists := block.KeyMap[joinedKey]
-	return mappedKey, exists
 }
 
 func (cmd *Command) getTokenBlock() {
