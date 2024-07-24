@@ -58,6 +58,7 @@ type Wallet struct {
 	dtcs                           *ChainDB
 	ntcs                           *ChainDB
 	smartContractTokenChainStorage *ChainDB
+	FTChainStorage                 *ChainDB
 }
 
 func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, error) {
@@ -149,6 +150,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	}
 	w.smartContractTokenChainStorage.DB = *smartcontracTokenchainstorageDB
 
+	FTtokenStorageDB, err := leveldb.OpenFile(dir+FTChainStorage, op)
+	if err != nil {
+		w.log.Error("failed to configure token chain block storage", "err", err)
+		return nil, fmt.Errorf("failed to configure token chain block storage")
+	}
+	w.FTChainStorage.DB = *FTtokenStorageDB
 	err = w.s.Init(CallBackUrlStorage, &CallBackUrl{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Smart Contract Callback Url storage", "err", err)

@@ -51,6 +51,8 @@ func (c *Core) TokenType(tt string) int {
 		return token.DataTokenType
 	case SmartContractString:
 		return token.SmartContractTokenType
+	case FTString:
+		return token.FTTokenType
 	}
 	return token.RBTTokenType
 }

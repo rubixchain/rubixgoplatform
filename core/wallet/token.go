@@ -47,7 +47,9 @@ type Token struct {
 func (w *Wallet) CreateToken(t *Token) error {
 	return w.s.Write(TokenStorage, t)
 }
-
+func (w *Wallet) CreateFT(ft *FT) error {
+	return w.s.Write(FTTokenStorage, ft)
+}
 func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -321,16 +323,6 @@ func (w *Wallet) UpdateToken(t *Token) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	err := w.s.Update(TokenStorage, t, "token_id=?", t.TokenID)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (w *Wallet) UpdateFT(ft *FT) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-	err := w.s.Update(FTTokenStorage, ft, "token_id=?", ft.tokenid)
 	if err != nil {
 		return err
 	}

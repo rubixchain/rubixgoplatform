@@ -79,6 +79,7 @@ type RacFTInfo struct {
 	Parents string
 	FTNum   int
 	FTName  string
+	FTValue float64
 }
 
 type RacBlock struct {

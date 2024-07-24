@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/rac"
 )
 
-func (c *Core) CreateFTs(dc did.DIDCrypto, tokenName string, numTokens int, numWholeTokens int, did string) ([]wallet.Token, error) {
+func (c *Core) CreateFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTokens int, did string) ([]wallet.FT, error) {
 	if dc == nil {
 		return nil, fmt.Errorf("DID crypto is not initialized")
 	}
 
 	// Validate input parameters
-	if numTokens <= 0 {
+	if numFTs <= 0 {
 		return nil, fmt.Errorf("number of tokens to create must be greater than zero")
 	}
 	if numWholeTokens <= 0 {
@@ -24,36 +25,35 @@ func (c *Core) CreateFTs(dc did.DIDCrypto, tokenName string, numTokens int, numW
 	}
 
 	// Fetch whole tokens using GetToken
-	wholeTokens := make([]wallet.Token, 0, numWholeTokens)
-	for i := 0; i < numWholeTokens; i++ {
-		tkn, err := c.w.GetToken(fmt.Sprintf("%s-%d", tokenName, i), wallet.TokenIsFree) // Assuming token IDs are formatted this way
-		if err != nil || tkn == nil {
-			return nil, fmt.Errorf("failed to fetch whole token %d: %v", i, err)
-		}
-		wholeTokens = append(wholeTokens, *tkn)
+	wholeTokens, err := c.w.GetTokens(did, float64(numWholeTokens))
+	if err != nil || wholeTokens == nil {
+		c.log.Error("Failed to fetch whole token for FT creation")
+		return nil, err
 	}
 
 	// Calculate the value of each fractional token
-	fractionalValue := float64(len(wholeTokens)) / float64(numTokens)
+	fractionalValue := float64(len(wholeTokens)) / float64(numFTs)
 
 	// Create a slice to hold the new tokens
-	newTokens := make([]wallet.Token, 0, numTokens)
+	newFTs := make([]wallet.FT, 0, numFTs)
+	newFTTokenIDs := make([]string, 0, numFTs)
 
 	// Create RAC type for fractional tokens
-	for i := 0; i < numTokens; i++ {
+	for i := 0; i < numFTs; i++ {
 		// Use the TokenID of the whole token as the Parent
 		parentTokenID := wholeTokens[i%len(wholeTokens)].TokenID // Use modulo to cycle through available whole tokens
 
 		racType := &rac.RacType{
-			Type:        rac.RacPartTokenType,
+			Type:        c.RACFTType(),
 			DID:         did,
 			TokenNumber: uint64(i),
-			TotalSupply: 1, // Each fractional token is created individually
+			TotalSupply: 1,
 			TimeStamp:   time.Now().String(),
-			PartInfo: &rac.RacPartInfo{
-				Parent:  parentTokenID, // Use the fetched token ID
-				PartNum: i,
-				Value:   fractionalValue,
+			FTInfo: &rac.RacFTInfo{
+				Parents: parentTokenID, // Use the fetched token ID
+				FTNum:   i,
+				FTName:  FTName,
+				FTValue: fractionalValue,
 			},
 		}
 
@@ -79,31 +79,114 @@ func (c *Core) CreateFTs(dc did.DIDCrypto, tokenName string, numTokens int, numW
 		// Add the RAC block to the wallet
 		racBlockData := racBlocks[0].GetBlock()
 		fr := bytes.NewBuffer(racBlockData)
-		pt, err := c.w.Add(fr, did, wallet.AddFunc)
+		ftID, err := c.w.Add(fr, did, wallet.AddFunc)
 		if err != nil {
-			c.log.Error("Failed to add RAC token to IPFS", "err", err)
+			c.log.Error("Failed to create FT, Failed to add RAC token to IPFS", "err", err)
 			return nil, err
 		}
 
-		// Create the new token
-		token := &wallet.Token{
-			TokenID:       pt,
-			ParentTokenID: parentTokenID, // Link to the parent token
-			TokenValue:    fractionalValue,
-			DID:           did,
-			TokenStatus:   wallet.TokenIsFree,
+		newFTTokenIDs[i] = ftID
+		bti := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     ftID,
+					TokenType: c.TokenType(FTString),
+				},
+			},
+			Comment: "FT generated at : " + time.Now().String(),
 		}
+		tcb := &block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner:      did,
+			TransInfo:       bti,
+			GenesisBlock: &block.GenesisBlock{
+				Info: []block.GenesisTokenInfo{
+					{
+						Token:    ftID,
+						ParentID: parentTokenID,
+					},
+				},
+			},
+			TokenValue: fractionalValue,
+		}
+		ctcb := make(map[string]*block.Block)
+		ctcb[ftID] = nil
+		block := block.CreateNewBlock(ctcb, tcb)
+		if block == nil {
+			return nil, fmt.Errorf("failed to create new block")
+		}
+		err = block.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("FT creation failed, failed to update signature", "err", err)
+			return nil, err
+		}
+		err = c.w.AddTokenBlock(ftID, block)
+		if err != nil {
+			c.log.Error("Failed to create FT, failed to add token chan block", "err", err)
+			return nil, err
+		}
+		// Create the new token
+		ft := &wallet.FT{
+			FTName:        FTName,
+			TokenID:       ftID,
+			ParentTokenID: parentTokenID,
+		}
+		newFTs = append(newFTs, *ft)
+	}
 
-		// Create the token in the wallet
-		err = c.w.CreateToken(token)
+	for i := range wholeTokens {
+
+		release := true
+		defer c.relaseToken(&release, wholeTokens[i].TokenID)
+		ptts := RBTString
+		if wholeTokens[i].ParentTokenID != "" && wholeTokens[i].TokenValue < 1 {
+			ptts = PartString
+		}
+		ptt := c.TokenType(ptts)
+
+		bti := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     wholeTokens[i].TokenID,
+					TokenType: ptt,
+				},
+			},
+			Comment: "Token burnt at : " + time.Now().String(),
+		}
+		tcb := &block.TokenChainBlock{
+			TransactionType: block.TokenBurntType,
+			TokenOwner:      did,
+			TransInfo:       bti,
+			TokenValue:      wholeTokens[i].TokenValue,
+			ChildTokens:     newFTTokenIDs,
+		}
+		ctcb := make(map[string]*block.Block)
+		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
+		block := block.CreateNewBlock(ctcb, tcb)
+		if block == nil {
+			return nil, fmt.Errorf("failed to create new block")
+		}
+		err = block.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("FT creation failed, failed to update signature", "err", err)
+			return nil, err
+		}
+		err = c.w.AddTokenBlock(wholeTokens[i].TokenID, block)
+		if err != nil {
+			c.log.Error("FT creation failed, failed to add token block", "err", err)
+			return nil, err
+		}
+	}
+
+	// Create the token in the wallet
+	for i := range newFTs {
+		ft := &newFTs[i]
+		err = c.w.CreateFT(ft)
 		if err != nil {
 			c.log.Error("Failed to create fractional token", "err", err)
 			return nil, err
 		}
-
-		// Append the newly created token to the slice
-		newTokens = append(newTokens, *token)
 	}
 
-	return newTokens, nil
+	return newFTs, nil
 }
