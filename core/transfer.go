@@ -113,7 +113,9 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 			}
 		}
 
-		c.log.Debug("Tokens acquired for self transfer")
+		if len(tokensForTransfer) > 0 {
+			c.log.Debug("Tokens acquired for self transfer")
+		}
 		return tokensForTransfer, nil
 	}
 }

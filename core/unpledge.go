@@ -50,9 +50,6 @@ func (c *Core) ForceUnpledgePOWBasedPledgedTokens() error {
 	return nil
 }
 
-
-
-
 func (c *Core) InititateUnpledgeProcess() (string, error) {
 	c.log.Info("Unpledging process has started...")
 	var totalUnpledgeAmount float64 = 0.0
@@ -136,7 +133,11 @@ func (c *Core) InititateUnpledgeProcess() (string, error) {
 		}
 	}
 
-	return fmt.Sprintf("Unpledging of pledged tokens was successful, Total Unpledge Amount: %v RBT", totalUnpledgeAmount), nil
+	if totalUnpledgeAmount > 0 {
+		return fmt.Sprintf("Unpledging of pledged tokens was successful, Total Unpledge Amount: %v RBT", totalUnpledgeAmount), nil
+	} else {
+		return "No tokens present to unpledge", nil
+	}
 }
 
 func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID string) (pledgeID string, unpledgeId string, err error) {

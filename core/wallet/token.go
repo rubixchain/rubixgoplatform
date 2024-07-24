@@ -490,7 +490,6 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 				ParentTokenID: parentTokenID,
 				DID:           tokenInfo.OwnerDID,
 			}
-			t.TokenStateHash = tokenHashMap[tokenInfo.Token]
 
 			err = w.s.Write(TokenStorage, &t)
 			if err != nil {
@@ -510,6 +509,8 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		// Update token status
 		t.DID = ownerdid
 		t.TokenStatus = tokenStatus
+		t.TransactionID = b.GetTid()
+		t.TokenStateHash = tokenHashMap[tokenInfo.Token]
 
 		err = w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token)
 		if err != nil {
