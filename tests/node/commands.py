@@ -128,6 +128,20 @@ def cmd_register_did(did_id, server_port, grpc_port):
     os.chdir("../tests")
     return output
 
+def cmd_add_peer_details(peer_id, did_id, did_type, server_port, grpc_port):
+    os.chdir("../" + get_build_dir())
+    cmd_string = f"./rubixgoplatform node peer add --peerID {peer_id} --did {did_id} --didType {did_type} --port {server_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform node peer add --peerID {peer_id} --did {did_id} --didType {did_type} --port {server_port}"
+    output, code = run_command(cmd_string, True)
+    print(output)
+
+    if code != 0:
+        raise Exception("Error occurred while run the command: " + cmd_string)
+
+    os.chdir("../tests")
+    return output
+
 def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform tx rbt generate-test-tokens --did {did_id} --numTokens {numTokens} --port {server_port}"
@@ -141,11 +155,11 @@ def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
     os.chdir("../tests")
     return output
 
-def cmd_add_quorum_dids(server_port, grpc_port):
+def cmd_add_quorum_dids(server_port, grpc_port, quorumlist = "quorumlist.json"):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform quorum add --port {server_port}"
+    cmd_string = f"./rubixgoplatform quorum add --port {server_port} --quorumList {quorumlist}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform quorum add --port {server_port}"
+        cmd_string = f".\\rubixgoplatform quorum add --port {server_port} --quorumList {quorumlist}"
     output, code = run_command(cmd_string, True)
     print(output)
     if code != 0:
@@ -180,9 +194,9 @@ def cmd_setup_quorum_dids(did, server_port, grpc_port):
 
 def cmd_get_peer_id(server_port, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform node peer-id --port {server_port}"
+    cmd_string = f"./rubixgoplatform node peer local-id --port {server_port}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform node peer-id --port {server_port}"
+        cmd_string = f".\\rubixgoplatform node peer local-id --port {server_port}"
     output, code = run_command(cmd_string)
 
     if code != 0:

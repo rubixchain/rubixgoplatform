@@ -193,7 +193,7 @@ func createDID(cmdCfg *CommandConfig) *cobra.Command {
 	cmd.Flags().BoolVar(&cmdCfg.forcePWD, "fp", false, "Force password entry")
 	cmd.Flags().StringVar(&cmdCfg.privPWD, "privPWD", "mypassword", "Private key password")
 	cmd.Flags().StringVar(&cmdCfg.quorumPWD, "quorumPWD", "mypassword", "Quorum key password")
-	cmd.Flags().IntVar(&cmdCfg.didType, "didType", 0, "DID Creation type")
+	cmd.Flags().IntVar(&cmdCfg.didType, "didType", 4, "DID Creation type")
 	cmd.Flags().StringVar(&cmdCfg.imgFile, "imgFile", did.ImgFileName, "DID creation image")
 	cmd.Flags().StringVar(&cmdCfg.privKeyFile, "privKeyFile", did.PvtKeyFileName, "Private key file")
 	cmd.Flags().StringVar(&cmdCfg.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")

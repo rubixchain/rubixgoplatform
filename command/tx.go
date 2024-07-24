@@ -34,6 +34,7 @@ func txTokenCommandGroup(cmdCfg *CommandConfig) *cobra.Command {
 	cmd.AddCommand(
 		transferRBTCmd(cmdCfg),
 		generateTestRBTCmd(cmdCfg),
+		selfTransferRBTCmd(cmdCfg),
 	)
 
 	return cmd

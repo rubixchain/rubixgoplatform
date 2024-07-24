@@ -44,6 +44,40 @@ func transferRBTCmd(cmdCfg *CommandConfig) *cobra.Command {
 	return cmd
 }
 
+func selfTransferRBTCmd(cmdCfg *CommandConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "self-transfer",
+		Short: "Self transfer RBT tokens",
+		Long:  "Self transfer RBT tokens",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			rt := model.RBTTransferRequest{
+				Receiver:   cmdCfg.senderAddr,
+				Sender:     cmdCfg.senderAddr,
+				Type:       cmdCfg.transType,
+			}
+
+			br, err := cmdCfg.c.TransferRBT(&rt)
+			if err != nil {
+				cmdCfg.log.Error("Failed Self RBT transfer", "err", err)
+				return nil
+			}
+			msg, status := signatureResponse(cmdCfg, br)
+			if !status {
+				cmdCfg.log.Error("Failed to self trasnfer RBT", "msg", msg)
+				return nil
+			}
+			cmdCfg.log.Info(msg)
+			cmdCfg.log.Info("Self RBT transfered successfully")
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&cmdCfg.senderAddr, "senderAddr", "", "Sender address")
+	cmd.Flags().IntVar(&cmdCfg.transType, "transType", 2, "Transaction type")
+
+	return cmd
+}
+
 func generateTestRBTCmd(cmdCfg *CommandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "generate-test-tokens",

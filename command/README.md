@@ -12,6 +12,8 @@ Rubix CLI has the following top-level commands:
 - [did](#did-command)
 - [explorer](#explorer-command)
 - [node](#node-command)
+  - [node peer](#node-peer)
+  - [node pledge-tokens](#node-pledge-tokens)
 - [quorum](#quorum-command)
 - [run](#run-command)
 - [tx](#tx-commands)
@@ -19,6 +21,7 @@ Rubix CLI has the following top-level commands:
   - [tx smart-contract](#tx-smart-contract)
   - [tx nft](#tx-nft)
   - [tx data-token](#tx-data-token)
+- [upgrade](#)
 - [version](#version-command)
 
 `addr` and `port` are Global Glags, which can be used in any command. Their default values are `localhost` and `20000` respectively.
@@ -86,8 +89,30 @@ It consists of subcommands that are associated with Rubix node.
 - `quorum-status`: check the status of quorum
 - `release-rbt-tokens`: Release all locked RBT tokens
 - `shutdown`: shut down the node
+- `list-pledge-tokens`: List all pledge tokens of a node
+- `token-state-pinned-info`: Check if a Token state is pinned
 
 To know more about the flags, run `rubixgoplatform node [command] --help`
+
+<a name="node-peer"></a>**`node peer` Commands**
+
+It consists of subcommands associated with peer info of a node
+
+- `add`: Add Peer details
+- `local-id`: Get the local IPFS peer id
+- `ping`: pings a peer
+- `quorum-status`: check the status of quorum
+
+To know more about the flags, run `rubixgoplatform node peer [command] --help`
+
+<a name="node-pledge-tokens"></a>**`node pledge-tokens` Commands**
+
+It consists of subcommands associated with pledge tokens of a node
+
+- `list-token-states`: List all pledge token states of a node
+- `unpledge`: Unpledge all pledged tokens
+
+To know more about the flags, run `rubixgoplatform node pledge-tokens [command] --help`
 
 ### `quorum` Command
 
@@ -114,6 +139,7 @@ It consists of subcommands associated with RBT tokens
 
 - `generate-test-tokens`: Generate Test RBT tokens
 - `transfer`: Transfer RBT tokens
+- `self-transfer`: Self transfer RBT tokens
 
 To know more about the flags, run `rubixgoplatform tx rbt [command] --help`
 

@@ -99,6 +99,7 @@ type CommandConfig struct {
 	links              []string
 	mnemonicFile       string
 	ChildPath          int
+	TokenState         string
 }
 
 func (cmd *CommandConfig) getURL(url string) string {
@@ -259,6 +260,7 @@ func init() {
 		quorumCommandGroup(commandCfg),
 		txCommandGroup(commandCfg),
 		chainDumpCommandGroup(commandCfg),
+		upgradeGroup(commandCfg),
 		versionCmd(),
 	)
 

@@ -1,6 +1,6 @@
 package contract
 
 const (
-	POWPledgeMode int = iota
+	PeriodicPledgeMode int = iota
 	NoPledgeMode
 )

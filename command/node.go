@@ -2,12 +2,14 @@ package command
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/spf13/cobra"
 )
 
@@ -19,23 +21,198 @@ func nodeGroup(cmdCfg *CommandConfig) *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		shutDownCmd(cmdCfg),
-		ping(cmdCfg),
-		checkQuorumStatus(cmdCfg),
-		peerIDCmd(cmdCfg),
 		migrateNodeCmd(cmdCfg),
 		lockRBTTokensCmd(cmdCfg),
 		releaseAllLockedRBTTokensCmd(cmdCfg),
+		checkPinnedStateCmd(cmdCfg),
+		pledgeGroup(cmdCfg),
+		peerGroup(cmdCfg),
+		shutDownCmd(cmdCfg),
 	)
 
 	return cmd
 }
 
-func peerIDCmd(cmdCfg *CommandConfig) *cobra.Command {
+func pledgeGroup(cmdCfg *CommandConfig) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "peer-id",
-		Short: "Get the IPFS peer id",
-		Long:  "Get the IPFS peer id",
+		Use:   "pledge-tokens",
+		Short: "Pledge tokens related subcommands",
+		Long:  "Pledge tokens related subcommands",
+	}
+
+	cmd.AddCommand(
+		runUnpledgeCmd(cmdCfg),
+		getPledgedTokenStateDetailsCmd(cmdCfg),
+	)
+
+	return cmd
+}
+
+func peerGroup(cmdCfg *CommandConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use: "peer",
+		Short: "peer related subcommands",
+		Long: "peer related subcommands",
+	}
+
+	cmd.AddCommand(
+		ping(cmdCfg),
+		checkQuorumStatus(cmdCfg),
+		getLocalPeerIDCmd(cmdCfg),
+		addPeerDetailsCmd(cmdCfg),
+	)
+
+	return cmd
+}
+
+func runUnpledgeCmd(cmdCfg *CommandConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "unpledge",
+		Short: "Unpledge all pledged tokens",
+		Long:  "Unpledge all pledged tokens",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			msg, status := cmdCfg.c.RunUnpledge()
+			cmdCfg.log.Info("Unpledging of pledged tokens has started")
+			if !status {
+				cmdCfg.log.Error(msg)
+				return errors.New(msg)
+			}
+
+			cmdCfg.log.Info(msg)
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func addPeerDetailsCmd(cmdCfg *CommandConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "add",
+		Short: "Add Peer details",
+		Long:  "Add Peer details",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var peerID string
+			var did string
+			var err error
+			if cmdCfg.peerID == "" {
+				fmt.Print("Enter PeerID : ")
+				_, err = fmt.Scan(&peerID)
+				if err != nil {
+					cmdCfg.log.Error("Failed to get PeerID")
+					return err
+				}
+			} else {
+				peerID = cmdCfg.peerID
+			}
+			if !strings.HasPrefix(peerID, "12D3KooW") || len(peerID) < 52 {
+				cmdCfg.log.Error("Invalid PeerID")
+				return err
+			}
+		
+			if cmdCfg.did == "" {
+				fmt.Print("Enter DID : ")
+				_, err = fmt.Scan(&did)
+				if err != nil {
+					cmdCfg.log.Error("Failed to get DID")
+					return err
+				}
+			} else {
+				did = cmdCfg.did
+			}
+			if !strings.HasPrefix(did, "bafybmi") || len(did) < 59 {
+				cmdCfg.log.Error("Invalid DID")
+				return err
+			}
+		
+			// did_type = cmdCfg.didType
+			if cmdCfg.didType < 0 || cmdCfg.didType > 4 {
+				cmdCfg.log.Error("DID Type should be between 0 and 4")
+				return err
+			}
+		
+			peerDetail := wallet.DIDPeerMap{
+				PeerID:  peerID,
+				DID:     did,
+				DIDType: &cmdCfg.didType,
+			}
+			msg, status := cmdCfg.c.AddPeer(&peerDetail)
+			if !status {
+				cmdCfg.log.Error("failed to add peer in DB", "message", msg)
+				return fmt.Errorf("failed to add peer in DB, err: %v", msg)
+			}
+			cmdCfg.log.Info("Peer added successfully")
+			
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&cmdCfg.peerID, "peerID", "", "Peer ID")
+	cmd.Flags().StringVar(&cmdCfg.did, "did", "", "DID")
+	cmd.Flags().IntVar(&cmdCfg.didType, "didType", 4, "DID Creation Type")
+
+	return cmd
+}
+
+func getPledgedTokenStateDetailsCmd(cmdCfg *CommandConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list-token-states",
+		Short: "List all pledge token states of a node",
+		Long:  "List all pledge token states of a node",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			info, err := cmdCfg.c.GetPledgedTokenDetails()
+			if err != nil {
+				cmdCfg.log.Error("Invalid response from the node", "err", err)
+				return err
+			}
+			fmt.Printf("Response : %v\n", info)
+			if !info.Status {
+				cmdCfg.log.Error("Failed to get account info", "message", info.Message)
+			} else {
+				cmdCfg.log.Info("Successfully got the pledged token states info")
+				fmt.Println("DID	", "Pledged Token	", "Token State")
+				for _, i := range info.PledgedTokenStateDetails {
+					fmt.Println(i.DID, "	", i.TokensPledged, "	", i.TokenStateHash)
+				}
+			}
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func checkPinnedStateCmd(cmdCfg *CommandConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "token-state-pinned-info",
+		Short: "Check if a Token state is pinned",
+		Long:  "Check if a Token state is pinned",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			info, err := cmdCfg.c.GetPinnedInfo(cmdCfg.TokenState)
+			if err != nil {
+				cmdCfg.log.Error("Invalid response from the node", "err", err)
+				return err
+			}
+			fmt.Printf("Response : %v\n", info)
+			if !info.Status {
+				cmdCfg.log.Debug("Pin not available", "message", info.Message)
+			} else {
+				cmdCfg.log.Info("Token State is Pinned")
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&cmdCfg.TokenState, "tokenstatehash", "", "Token State Hash")
+
+	return cmd
+}
+
+func getLocalPeerIDCmd(cmdCfg *CommandConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "local-id",
+		Short: "Get the local IPFS peer id",
+		Long:  "Get the local IPFS peer id",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			msg, status := cmdCfg.c.PeerID()
 			if !status {
@@ -187,7 +364,7 @@ func migrateNodeCmd(cmdCfg *CommandConfig) *cobra.Command {
 	cmd.Flags().BoolVar(&cmdCfg.forcePWD, "fp", false, "Force password entry")
 	cmd.Flags().StringVar(&cmdCfg.privPWD, "privPWD", "mypassword", "Private key password")
 	cmd.Flags().StringVar(&cmdCfg.quorumPWD, "quorumPWD", "mypassword", "Quorum key password")
-	cmd.Flags().IntVar(&cmdCfg.didType, "didType", 0, "DID Creation type")
+	cmd.Flags().IntVar(&cmdCfg.didType, "didType", 4, "DID Creation type")
 	cmd.Flags().DurationVar(&cmdCfg.timeout, "timeout", 0, "Timeout for the server")
 
 	return cmd
