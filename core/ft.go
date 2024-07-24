@@ -6,29 +6,53 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/rac"
 )
 
-func (c *Core) CreateFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTokens int, did string) ([]wallet.FT, error) {
+func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken float64) {
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		c.log.Error("Failed to setup DID")
+		return
+	}
+	err = c.createFTs(dc, ftname, ftcount, wholeToken, did)
+	br := model.BasicResponse{
+		Status:  true,
+		Message: "DID registered successfully",
+	}
+	if err != nil {
+		br.Status = false
+		br.Message = err.Error()
+	}
+	channel := c.GetWebReq(reqID)
 	if dc == nil {
-		return nil, fmt.Errorf("DID crypto is not initialized")
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	channel.OutChan <- &br
+}
+
+func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTokens float64, did string) error {
+	if dc == nil {
+		return fmt.Errorf("DID crypto is not initialized")
 	}
 
 	// Validate input parameters
 	if numFTs <= 0 {
-		return nil, fmt.Errorf("number of tokens to create must be greater than zero")
+		return fmt.Errorf("number of tokens to create must be greater than zero")
 	}
 	if numWholeTokens <= 0 {
-		return nil, fmt.Errorf("number of whole tokens must be greater than zero")
+		return fmt.Errorf("number of whole tokens must be greater than zero")
 	}
 
 	// Fetch whole tokens using GetToken
 	wholeTokens, err := c.w.GetTokens(did, float64(numWholeTokens))
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
-		return nil, err
+		return err
 	}
 
 	// Calculate the value of each fractional token
@@ -61,19 +85,19 @@ func (c *Core) CreateFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		racBlocks, err := rac.CreateRac(racType)
 		if err != nil {
 			c.log.Error("Failed to create RAC block", "err", err)
-			return nil, err
+			return err
 		}
 
 		// Expect one block to be created
 		if len(racBlocks) != 1 {
-			return nil, fmt.Errorf("failed to create RAC block")
+			return fmt.Errorf("failed to create RAC block")
 		}
 
 		// Update the signature of the RAC block
 		err = racBlocks[0].UpdateSignature(dc)
 		if err != nil {
 			c.log.Error("Failed to update DID signature", "err", err)
-			return nil, err
+			return err
 		}
 
 		// Add the RAC block to the wallet
@@ -82,7 +106,7 @@ func (c *Core) CreateFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		ftID, err := c.w.Add(fr, did, wallet.AddFunc)
 		if err != nil {
 			c.log.Error("Failed to create FT, Failed to add RAC token to IPFS", "err", err)
-			return nil, err
+			return err
 		}
 
 		newFTTokenIDs[i] = ftID
@@ -113,17 +137,17 @@ func (c *Core) CreateFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		ctcb[ftID] = nil
 		block := block.CreateNewBlock(ctcb, tcb)
 		if block == nil {
-			return nil, fmt.Errorf("failed to create new block")
+			return fmt.Errorf("failed to create new block")
 		}
 		err = block.UpdateSignature(dc)
 		if err != nil {
 			c.log.Error("FT creation failed, failed to update signature", "err", err)
-			return nil, err
+			return err
 		}
 		err = c.w.AddTokenBlock(ftID, block)
 		if err != nil {
 			c.log.Error("Failed to create FT, failed to add token chan block", "err", err)
-			return nil, err
+			return err
 		}
 		// Create the new token
 		ft := &wallet.FT{
@@ -164,17 +188,17 @@ func (c *Core) CreateFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
 		block := block.CreateNewBlock(ctcb, tcb)
 		if block == nil {
-			return nil, fmt.Errorf("failed to create new block")
+			return fmt.Errorf("failed to create new block")
 		}
 		err = block.UpdateSignature(dc)
 		if err != nil {
 			c.log.Error("FT creation failed, failed to update signature", "err", err)
-			return nil, err
+			return err
 		}
 		err = c.w.AddTokenBlock(wholeTokens[i].TokenID, block)
 		if err != nil {
 			c.log.Error("FT creation failed, failed to add token block", "err", err)
-			return nil, err
+			return err
 		}
 	}
 
@@ -184,9 +208,8 @@ func (c *Core) CreateFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		err = c.w.CreateFT(ft)
 		if err != nil {
 			c.log.Error("Failed to create fractional token", "err", err)
-			return nil, err
+			return err
 		}
 	}
-
-	return newFTs, nil
+	return nil
 }
