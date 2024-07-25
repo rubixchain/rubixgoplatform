@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -147,13 +146,42 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		return fmt.Errorf("DID is not exist")
 	}
 
-	for i := 0; i < num; i++ {
+	var tokendetail token.FaucetToken
+	c.s.Read(wallet.FaucetTokenDetail, &tokendetail, "faucet_id=?", token.FaucetName)
 
+	//Updating the Faucet token table for the first time when empty
+	if tokendetail == (token.FaucetToken{}) {
+		tokendetail.LatestTokenNumber = 0
+		tokendetail.TokenLevel = 1
+		count := token.MaxTokenFromLevel(tokendetail.TokenLevel)
+		tokendetail.FaucetID = token.FaucetName
+		tokendetail.MaxToken = count
+		tokendetail.MinToken = 1
+		tokendetail.LatestTokenNumber = 0
+		c.s.Write(wallet.FaucetTokenDetail, &tokendetail)
+	}
+
+	//Updating the Faucet token details with each new token
+	for i := 0; i < num; i++ {
+		tokendetail.LatestTokenNumber += 1
+
+		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
+		if tokendetail.LatestTokenNumber == tokendetail.MaxToken+1 {
+			tokendetail.TokenLevel += 1
+			count := token.MaxTokenFromLevel(tokendetail.TokenLevel)
+			tokendetail.MaxToken = token.MaxTokenFromLevel(tokendetail.TokenLevel-1) + count
+			tokendetail.MinToken = token.MaxTokenFromLevel(tokendetail.TokenLevel-1) + 1
+		} else if tokendetail.LatestTokenNumber < tokendetail.MinToken && tokendetail.LatestTokenNumber > tokendetail.MaxToken+1 {
+			c.log.Error("Invalid token number")
+			return fmt.Errorf("invalid token number")
+		}
 		rt := &rac.RacType{
 			Type:        rac.RacTestTokenType,
 			DID:         did,
 			TotalSupply: 1,
-			TimeStamp:   time.Now().String(),
+			TokenNumber: uint64(tokendetail.LatestTokenNumber),
+			TokenLevel:  uint64(tokendetail.TokenLevel),
+			CreatorID:   token.FaucetName,
 		}
 
 		r, err := rac.CreateRac(rt)
@@ -242,6 +270,13 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		err = c.w.CreateToken(t)
 		if err != nil {
 			c.log.Error("Failed to create token", "err", err)
+			return err
+		}
+
+		//Updating the Faucet token table with latest token number and level once the tokens are generated
+		err = c.s.Update(wallet.FaucetTokenDetail, &tokendetail, "faucet_id=?", token.FaucetName)
+		if err != nil {
+			c.log.Error("Failed to update latest token number in Faucet", "err", err)
 			return err
 		}
 	}

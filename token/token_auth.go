@@ -68,7 +68,7 @@ func calcSHA256(targetHash string, maxNumber int) int {
 	return -1
 }
 
-func maxTokenFromLevel(level int) int {
+func MaxTokenFromLevel(level int) int {
 	val := TokenMap[level]
 	return val
 }
@@ -86,7 +86,7 @@ func ValidateWholeToken(tokenDetials string) (int, int, bool, error) {
 		return -1, -1, false, err
 	}
 	tokenVal := -1
-	tokenVal = calcSHA256(tokenCountHash, maxTokenFromLevel(tokenLevel))
+	tokenVal = calcSHA256(tokenCountHash, MaxTokenFromLevel(tokenLevel))
 	if tokenVal == -1 {
 		return -1, -1, false, fmt.Errorf("token Count is invalid")
 	}

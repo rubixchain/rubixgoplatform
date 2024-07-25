@@ -55,6 +55,7 @@ type RacType struct {
 	DID          string
 	TokenNumber  uint64
 	TotalSupply  uint64
+	TokenLevel   uint64
 	TimeStamp    string
 	CreatorID    string
 	CreatorInput string
