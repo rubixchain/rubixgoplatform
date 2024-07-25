@@ -11,6 +11,7 @@ const (
 	RecvMode
 	DeployMode
 	ExecuteMode
+	PinningServiceMode
 )
 
 

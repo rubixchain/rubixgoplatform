@@ -56,6 +56,7 @@ const (
 	TokenDeployedType     string = "09"
 	TokenExecutedType     string = "10"
 	TokenContractCommited string = "11"
+	TokenPinnedAsService  string = "12"
 )
 
 type TokenChainBlock struct {
@@ -197,6 +198,7 @@ func (b *Block) blkDecode() error {
 	var m map[string]interface{}
 	err := cbor.Unmarshal(b.bb, &m)
 	if err != nil {
+		fmt.Println("failed to decode block", err.Error(), err)
 		return nil
 	}
 	si, sok := m[TCBlockContentSigKey]
@@ -601,6 +603,9 @@ func (b *Block) GetReceiverDID() string {
 }
 func (b *Block) GetDeployerDID() string {
 	return b.getTrasnInfoString(TIDeployerDIDKey)
+}
+func (b *Block) GetPinningNodeDID() string {
+	return b.getTrasnInfoString(TIPinningDIDKey)
 }
 
 func (b *Block) GetExecutorDID() string {

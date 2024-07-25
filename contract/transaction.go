@@ -1,6 +1,10 @@
 package contract
 
-import "github.com/rubixchain/rubixgoplatform/util"
+import (
+	"time"
+
+	"github.com/rubixchain/rubixgoplatform/util"
+)
 
 // ----------TransInfo----------------------
 // {
@@ -29,6 +33,7 @@ const (
 	TSCommitedTokenInfoKey  string = "8"
 	TSExecutorDIDKey        string = "9"
 	TSSmartContractDataKey  string = "10"
+	TSPinningDIDKey         string = "11"
 )
 
 const (
@@ -43,20 +48,29 @@ type TokenInfo struct {
 	TokenType  int     `json:"tokenType"`
 	TokenValue float64 `json:"tokenValue"`
 	OwnerDID   string  `json:"ownerDID"`
-	BlockID    string  `json:"blockID"`
+
+	BlockID string `json:"blockID"`
+}
+
+type PinInfo struct {
+	PinnedFrom time.Time `json:"pinnedFrom"`
+	PinnedTo   time.Time `json:"pinnedTo"`
 }
 
 type TransInfo struct {
-	SenderDID          string      `json:"senderDID"`
-	ReceiverDID        string      `json:"receiverDID"`
-	Comment            string      `json:"comment"`
-	TransTokens        []TokenInfo `json:"TransTokens"`
-	ExchangeTokens     []TokenInfo `json:"excahngeTokens"`
-	CommitedTokens     []TokenInfo `json:"comitedtokens"`
-	DeployerDID        string      `json:"deployerDID`
-	SmartContractToken string      `json:"smartcontractToken`
-	ExecutorDID        string      `json:"executorDID"`
-	SmartContractData  string      `json:"smartcontractdata"`
+	SenderDID            string      `json:"senderDID"`
+	ReceiverDID          string      `json:"receiverDID"`
+	PinningNodeDID       string      `json:"pinningNodeDID"`
+	Comment              string      `json:"comment"`
+	TransTokens          []TokenInfo `json:"TransTokens"`
+	ExchangeTokens       []TokenInfo `json:"excahngeTokens"`
+	CommitedTokens       []TokenInfo `json:"comitedtokens"`
+	PinningServiceTokens []TokenInfo `json:"pinnedTokens"`
+	PinningInfo          PinInfo     `json:"pinningInfo"`
+	DeployerDID          string      `json:"deployerDID"`
+	SmartContractToken   string      `json:"smartcontractToken"`
+	ExecutorDID          string      `json:"executorDID"`
+	SmartContractData    string      `json:"smartcontractdata"`
 }
 
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {
@@ -85,6 +99,9 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 	}
 	if ts.ExecutorDID != "" {
 		ntsb[TSExecutorDIDKey] = ts.ExecutorDID
+	}
+	if ts.PinningNodeDID != "" {
+		ntsb[TSPinningDIDKey] = ts.PinningNodeDID
 	}
 	if ts.SmartContractToken != "" {
 		ntsb[TSSmartContractTokenKey] = ts.SmartContractToken
