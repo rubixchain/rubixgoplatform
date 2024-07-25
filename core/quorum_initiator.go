@@ -32,6 +32,7 @@ const (
 	SmartContractDeployMode
 	SmartContractExecuteMode
 	SelfTransferMode
+	PinningServiceMode
 )
 const (
 	AlphaQuorumType int = iota
@@ -52,6 +53,7 @@ type ConensusRequest struct {
 	ExecuterPeerID     string   `json:"executor_peer_id"`
 	TransactionID      string   `json:"transaction_id"`
 	TransactionEpoch   int      `json:"transaction_epoch"`
+	PinningNodePeerID  string   `json:"pinning_node_peer_id"`
 }
 
 type ConensusReply struct {
@@ -109,12 +111,13 @@ type UpdatePledgeRequest struct {
 }
 
 type SendTokenRequest struct {
-	Address          string               `json:"peer_id"`
-	TokenInfo        []contract.TokenInfo `json:"token_info"`
-	TokenChainBlock  []byte               `json:"token_chain_block"`
-	QuorumList       []string             `json:"quorum_list"`
-	QuorumInfo       []QuorumDIDPeerMap   `json:"quorum_info"`
-	TransactionEpoch int                  `json:"transaction_epoch"`
+	Address            string               `json:"peer_id"`
+	TokenInfo          []contract.TokenInfo `json:"token_info"`
+	TokenChainBlock    []byte               `json:"token_chain_block"`
+	QuorumList         []string             `json:"quorum_list"`
+	QuorumInfo         []QuorumDIDPeerMap   `json:"quorum_info"`
+	TransactionEpoch   int                  `json:"transaction_epoch"`
+	PinningServiceMode bool                 `json:"pinning_service_mode"`
 }
 
 type PledgeReply struct {
@@ -169,6 +172,8 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIUnlockTokens, "POST", c.unlockTokens)
 	c.l.AddRoute(APIUpdateTokenHashDetails, "POST", c.updateTokenHashDetails)
 	c.l.AddRoute(APIAddUnpledgeDetails, "POST", c.addUnpledgeDetails)
+	c.l.AddRoute(APIRecoverPinnedRBT, "POST", c.recoverPinnedToken)
+	c.l.AddRoute(APIRequestSigningHash, "GET", c.requestSigningHash)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
@@ -307,7 +312,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 	// TODO:: Need to correct for part tokens
 	switch cr.Mode {
-	case RBTTransferMode, NFTSaleContractMode, SelfTransferMode:
+	case RBTTransferMode, NFTSaleContractMode, SelfTransferMode, PinningServiceMode:
 		ti := sc.GetTransTokenInfo()
 		for i := range ti {
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
@@ -451,11 +456,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		defer rp.Close()
 		sr := SendTokenRequest{
-			Address:          cr.SenderPeerID + "." + sc.GetSenderDID(),
-			TokenInfo:        ti,
-			TokenChainBlock:  nb.GetBlock(),
-			QuorumList:       cr.QuorumList,
-			TransactionEpoch: cr.TransactionEpoch,
+			Address:            cr.SenderPeerID + "." + sc.GetSenderDID(),
+			TokenInfo:          ti,
+			TokenChainBlock:    nb.GetBlock(),
+			QuorumList:         cr.QuorumList,
+			TransactionEpoch:   cr.TransactionEpoch,
+			PinningServiceMode: false,
 		}
 
 		//fetching quorums' info from PeerDIDTable to share with the receiver
@@ -561,36 +567,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
 		}
-
-		//Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
-		for _, tokeninfo := range ti {
-			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
-			signers, _ := b.GetSigner()
-
-			//if signer is similar to sender did skip this token, as the block is the genesys block
-			if signers[0] == sc.GetSenderDID() {
-				continue
-			}
-			//concat tokenId and BlockID
-			bid, _ := b.GetBlockID(tokeninfo.Token)
-			prevtokenIDTokenStateData := tokeninfo.Token + bid
-			prevtokenIDTokenStateBuffer := bytes.NewBuffer([]byte(prevtokenIDTokenStateData))
-
-			//add to ipfs get only the hash of the token+tokenstate. This is the hash just before transferring i.e. the exhausted token state hash, and updating in Sender side
-			prevtokenIDTokenStateHash, _ := c.ipfs.Add(prevtokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-
-			//send this exhausted hash to old quorums to unpledge
-			for _, signer := range signers {
-				signer_peeerId := c.w.GetPeerID(signer)
-				signer_addr := signer_peeerId + "." + signer
-				p, _ := c.getPeer(signer_addr, "")
-				m := make(map[string]string)
-				m["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
-				_ = p.SendJSONRequest("POST", APIUpdateTokenHashDetails, m, nil, nil, true)
-			}
-		}
-
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, err
@@ -625,6 +602,163 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, err
 		}
 
+		return &td, pl, nil
+	case PinningServiceMode:
+		c.log.Debug("Mode = PinningServiceMode ")
+		c.log.Debug("Pinning Node PeerId", cr.PinningNodePeerID)
+		c.log.Debug("Pinning Service DID", sc.GetPinningServiceDID())
+		rp, err := c.getPeer(cr.PinningNodePeerID+"."+sc.GetPinningServiceDID(), "")
+		if err != nil {
+			c.log.Error("Pinning Node not connected", "err", err)
+			return nil, nil, err
+		}
+		defer rp.Close()
+		sr := SendTokenRequest{
+			Address:            cr.SenderPeerID + "." + sc.GetSenderDID(),
+			TokenInfo:          ti,
+			TokenChainBlock:    nb.GetBlock(),
+			QuorumList:         cr.QuorumList,
+			PinningServiceMode: true,
+		}
+		//fetching quorums' info from PeerDIDTable to share with the receiver
+		for _, qrm := range sr.QuorumList {
+			//fetch peer id & did of the quorum
+			qpid, qdid, ok := util.ParseAddress(qrm)
+			if !ok {
+				c.log.Error("could not parse quorum address:", qrm)
+			}
+			if qpid == "" {
+				qpid = c.w.GetPeerID(qdid)
+			}
+
+			var qrmInfo QuorumDIDPeerMap
+			//fetch did type of the quorum
+			qDidType, err := c.w.GetPeerDIDType(qdid)
+			if err != nil {
+				c.log.Error("could not fetch did type for quorum:", qdid, "error", err)
+			}
+			if qDidType == -1 {
+				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
+				didtype_, msg, err := c.GetPeerdidType_fromPeer(qpid, qdid, dc.GetDID())
+				if err != nil {
+					c.log.Error("error", err, "msg", msg)
+					qrmInfo.DIDType = nil
+				} else {
+					qDidType = didtype_
+					qrmInfo.DIDType = &qDidType
+				}
+			} else {
+				qrmInfo.DIDType = &qDidType
+			}
+			//add quorum details to the data to be shared
+			qrmInfo.DID = qdid
+			qrmInfo.PeerID = qpid
+			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
+		}
+		var br model.BasicResponse
+		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
+		if err != nil {
+			c.log.Error("Unable to send tokens to receiver", "err", err)
+			return nil, nil, err
+		}
+
+		if strings.Contains(br.Message, "failed to sync tokenchain") {
+			tokenPrefix := "Token: "
+			issueTypePrefix := "issueType: "
+
+			// Find the starting indexes of pt and issueType values
+			ptStart := strings.Index(br.Message, tokenPrefix) + len(tokenPrefix)
+			issueTypeStart := strings.Index(br.Message, issueTypePrefix) + len(issueTypePrefix)
+
+			// Extracting the substrings from the message
+			token := br.Message[ptStart : strings.Index(br.Message[ptStart:], ",")+ptStart]
+			issueType := br.Message[issueTypeStart:]
+
+			c.log.Debug("String: token is ", token, " issuetype is ", issueType)
+			issueTypeInt, err1 := strconv.Atoi(issueType)
+			if err1 != nil {
+				errMsg := fmt.Sprintf("Consensus failed due to token chain sync issue, issueType string conversion, err %v", err1)
+				c.log.Error(errMsg)
+				return nil, nil, fmt.Errorf(errMsg)
+			}
+			c.log.Debug("issue type in int is ", issueTypeInt)
+			syncIssueTokenDetails, err2 := c.w.ReadToken(token)
+			if err2 != nil {
+				errMsg := fmt.Sprintf("Consensus failed due to tokenchain sync issue, err %v", err2)
+				c.log.Error(errMsg)
+				return nil, nil, fmt.Errorf(errMsg)
+			}
+			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
+			if issueTypeInt == TokenChainNotSynced {
+				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
+				c.w.UpdateToken(syncIssueTokenDetails)
+				return nil, nil, errors.New(br.Message)
+			}
+		}
+
+		if !br.Status {
+			c.log.Error("Unable to send tokens to pinning node", "msg", br.Message)
+			return nil, nil, fmt.Errorf("unable to send tokens to pinning node, " + br.Message)
+		}
+
+		// br.Result will contain the new token state after sending tokens to receiver as a response to APISendReceiverToken
+		newtokenhashresult, ok := br.Result.([]interface{})
+		if !ok {
+			c.log.Error("Type assertion to string failed")
+			return nil, nil, fmt.Errorf("Type assertion to string failed")
+		}
+		var newtokenhashes []string
+		for i, newTokenHash := range newtokenhashresult {
+			statehash, ok := newTokenHash.(string)
+			if !ok {
+				c.log.Error("Type assertion to string failed at index", i)
+				return nil, nil, fmt.Errorf("Type assertion to string failed at index", i)
+			}
+			newtokenhashes = append(newtokenhashes, statehash)
+		}
+
+		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
+		if pledgeFinalityError != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", err)
+			return nil, nil, pledgeFinalityError
+		}
+
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
+		if err != nil {
+			c.log.Error("Failed to transfer tokens", "err", err)
+			return nil, nil, err
+		}
+		//Commented out this unpinning part so that the unpin is not done from the sender side
+		// for _, t := range ti {
+		// 	c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+		// }
+		//call ipfs repo gc after unpinnning
+		// c.ipfsRepoGc()
+		nbid, err := nb.GetBlockID(ti[0].Token)
+		if err != nil {
+			c.log.Error("Failed to get block id", "err", err)
+			return nil, nil, err
+		}
+
+		td := model.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			BlockID:         nbid,
+			Mode:            wallet.PinningServiceMode,
+			SenderDID:       sc.GetSenderDID(),
+			ReceiverDID:     sc.GetPinningServiceDID(),
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+			Epoch:           int64(cr.TransactionEpoch),
+		}
+		err = c.initiateUnpledgingProcess(cr, td.TransactionID, td.Epoch)
+		if err != nil {
+			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
+			return nil, nil, err
+		}
 		return &td, pl, nil
 	case SelfTransferMode:
 		var quorumInfo []QuorumDIDPeerMap = make([]QuorumDIDPeerMap, 0)
@@ -667,7 +801,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		// Self update for self transfer tokens
-		updatedTokenHashes, err := c.updateReceiverToken(selfAddress, "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, cr.TransactionEpoch)
+		updatedTokenHashes, err := c.updateReceiverToken(selfAddress, "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, cr.TransactionEpoch, false)
 		if err != nil {
 			errMsg := fmt.Errorf("failed while update of self transfer tokens, err: %v", err)
 			c.log.Error(errMsg.Error())
@@ -1436,6 +1570,17 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SmartContractData:  sc.GetSmartContractData(),
 			InitiatorSignature: executor_sign,
 			Epoch:              cr.TransactionEpoch,
+		}
+	} else if cr.Mode == PinningServiceMode {
+		bti.SenderDID = sc.GetSenderDID()
+		bti.PinningNodeDID = sc.GetPinningServiceDID()
+		tcb = block.TokenChainBlock{
+			TransactionType: block.TokenPinnedAsService,
+			TokenOwner:      sc.GetSenderDID(),
+			TransInfo:       bti,
+			QuorumSignature: credit,
+			SmartContract:   sc.GetBlock(),
+			PledgeDetails:   ptds,
 		}
 	} else {
 		//Fetching sender signature to add it to transaction details

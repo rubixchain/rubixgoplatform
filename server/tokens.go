@@ -71,6 +71,81 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+// function for Pinning RBT as service
+
+type RBTPinRequestSwaggoInput struct {
+	PinningNode string  `json:"pinningNode"`
+	Sender      string  `json:"sender"`
+	TokenCount  float64 `json:"tokenCOunt"`
+	Comment     string  `json:"comment"`
+	Type        int     `json:"type"`
+}
+
+// ShowAccount godoc
+// @Summary     Initiate Pin RBT
+// @Description This API will pin rbt in the Pinning node on behalf of the sender
+// @Tags        Account
+// @ID 			initiate-pin-rbt
+// @Accept      json
+// @Produce     json
+// @Param 		input body RBTPinRequestSwaggoInput true "Intitate Pin RBT"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/initiate-pin-token [post]
+
+func (s *Server) APIInitiatePinRBT(req *ensweb.Request) *ensweb.Result {
+	var rbtReq model.RBTPinRequest
+	err := s.ParseJSON(req, &rbtReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	_, did, ok := util.ParseAddress(rbtReq.Sender)
+	if !ok {
+		return s.BasicResponse(req, false, "Invalid sender address", nil)
+	}
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.InitiatePinRBT(req.ID, &rbtReq)
+	return s.didResponse(req, req.ID)
+}
+
+type RBTRecoverRequestSwaggoInput struct {
+	PinningNode string  `json:"pinningNode"`
+	Sender      string  `json:"sender"`
+	TokenCount  float64 `json:"tokenCOunt"`
+	Password    string  `json:"password"`
+}
+
+// ShowAccount godoc
+// @Summary     Recover RBT Token and Tokenchain from the pinning node
+// @Description This API will recover token and tokenchain from the Pinning node to the node which has pinned the token
+// @Tags        Account
+// @ID 			recover-rbt
+// @Accept      json
+// @Produce     json
+// @Param 		input body RBTRecoverRequestSwaggoInput true "Recover-RBT"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/recover-token [post]
+
+func (s *Server) APIRecoverRBT(req *ensweb.Request) *ensweb.Result {
+	var rbtReq model.RBTRecoverRequest
+	err := s.ParseJSON(req, &rbtReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	_, did, ok := util.ParseAddress(rbtReq.Sender)
+	if !ok {
+		return s.BasicResponse(req, false, "Invalid sender address", nil)
+	}
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.InitiateRecoverRBT(req.ID, &rbtReq)
+	return s.didResponse(req, req.ID)
+}
+
 // ShowAccount godoc
 // @Summary      Check account balance
 // @Description  For a mentioned DID, check the account balance

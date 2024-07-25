@@ -26,3 +26,13 @@ func (c *Client) SelfTransferRBT(rt *model.RBTTransferRequest) (*model.BasicResp
 	}
 	return &br, nil
 }
+
+func (c *Client) PinRBT(rt *model.RBTPinRequest) (*model.BasicResponse, error) {
+	var br model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIInitiatePinRBT, nil, rt, &br, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to Pin RBT as a service", "err", err)
+		return nil, err
+	}
+	return &br, nil
+}

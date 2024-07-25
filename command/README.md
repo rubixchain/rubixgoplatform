@@ -21,7 +21,8 @@ Rubix CLI has the following top-level commands:
   - [tx smart-contract](#tx-smart-contract)
   - [tx nft](#tx-nft)
   - [tx data-token](#tx-data-token)
-- [upgrade](#)
+- [upgrade](#upgrade-command)
+- [pin-service](#pin-service-command)
 - [version](#version-command)
 
 `addr` and `port` are Global Glags, which can be used in any command. Their default values are `localhost` and `20000` respectively.
@@ -84,12 +85,10 @@ It consists of subcommands that are associated with Rubix node.
 
 - `lock-rbt-tokens`: Lock RBT tokens
 - `migrate`: Migrate Node
-- `peer-id`: Get the IPFS peer id
-- `ping`: pings a peer
-- `quorum-status`: check the status of quorum
+- `peer`: Peer related subcommands
 - `release-rbt-tokens`: Release all locked RBT tokens
 - `shutdown`: shut down the node
-- `list-pledge-tokens`: List all pledge tokens of a node
+- `pledge-tokens`: Pledge tokens related subcommands
 - `token-state-pinned-info`: Check if a Token state is pinned
 
 To know more about the flags, run `rubixgoplatform node [command] --help`
@@ -173,6 +172,23 @@ It consists of subcommands associated with Data tokens
 - `create`: Create a Data Token
 
 To know more about the flags, run `rubixgoplatform tx data-token [command] --help`
+
+### `pin-service` Command
+
+It consists of subcommands associated with Token pinning and recovery
+
+- `pin`: Pins a token on a pinning service provider node
+- `recover`: Recovers the pinned token from the pinning service provider node
+
+To know more about the flags, run `rubixgoplatform pin-service [command] --help`
+
+### `upgrade` Command
+
+It consists of subcommands associated with operations related to node version migrations
+
+- `unpledge-pow-tokens`: Unpledge any pledge tokens which were pledged as part of PoW based pledging
+
+To know more about the flags, run `rubixgoplatform upgrade [command] --help`
 
 ### `version` Command
 

@@ -100,6 +100,7 @@ type CommandConfig struct {
 	mnemonicFile       string
 	ChildPath          int
 	TokenState         string
+	pinningAddress     string
 }
 
 func (cmd *CommandConfig) getURL(url string) string {
@@ -261,6 +262,7 @@ func init() {
 		txCommandGroup(commandCfg),
 		chainDumpCommandGroup(commandCfg),
 		upgradeGroup(commandCfg),
+		pinningServiceCommand(commandCfg),
 		versionCmd(),
 	)
 
