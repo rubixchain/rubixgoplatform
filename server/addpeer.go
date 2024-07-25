@@ -1,6 +1,7 @@
 package server
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -32,10 +33,12 @@ func (s *Server) APIAddPeerDetails(req *ensweb.Request) *ensweb.Result {
 	if pd.DIDType < 0 || pd.DIDType > 4 {
 		return s.BasicResponse(req, false, "Invalid DID Type", nil)
 	}
-	if !strings.HasPrefix(pd.PeerID, "12D3KooW") || len(pd.PeerID) < 52 {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(pd.PeerID)
+	if !strings.HasPrefix(pd.PeerID, "12D3KooW") || len(pd.PeerID) != 52 || !is_alphanumeric {
 		return s.BasicResponse(req, false, "Invalid Peer ID", nil)
 	}
-	if !strings.HasPrefix(pd.DID, "bafybmi") || len(pd.DID) < 59 {
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(pd.DID)
+	if !strings.HasPrefix(pd.DID, "bafybmi") || len(pd.DID) != 59 || !is_alphanumeric {
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
 	peer_detail.DID = pd.DID

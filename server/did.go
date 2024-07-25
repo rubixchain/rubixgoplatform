@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -59,6 +60,11 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		s.log.Error("failed to parse did configuration", "err", err)
 		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
+	}
+
+	if didCreate.Type < 0 || didCreate.Type > 4 {
+		s.log.Error("DID Type should be between 0 and 4")
+		return s.BasicResponse(req, false, "DID Type should be between 0 and 4", nil)
 	}
 
 	for _, fileName := range fileNames {
@@ -172,6 +178,11 @@ func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 	if !ok {
 		return s.BasicResponse(req, false, "Failed to parse input", nil)
 	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(didStr)
+	if !strings.HasPrefix(didStr, "bafybmi") || len(didStr) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
 	s.c.AddWebReq(req)
 
 	go s.c.RegisterDID(req.ID, didStr)
@@ -200,6 +211,11 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		s.log.Error("failed to parse did configuration", "err", err)
 		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
+	}
+
+	if didCreate.Type < 0 || didCreate.Type > 4 {
+		s.log.Error("DID Type should be between 0 and 4")
+		return s.BasicResponse(req, false, "DID Type should be between 0 and 4", nil)
 	}
 
 	for _, fileName := range fileNames {

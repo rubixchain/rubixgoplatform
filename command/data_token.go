@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
@@ -12,6 +14,20 @@ import (
 )
 
 func (cmd *Command) createDataToken() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
 	dt := client.DataTokenReq{
 		DID:      cmd.did,
 		UserID:   cmd.userID,
@@ -59,6 +75,20 @@ func (cmd *Command) createDataToken() {
 }
 
 func (cmd *Command) commitDataToken() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
 	br, err := cmd.c.CommitDataToken(cmd.did, cmd.batchID)
 	if err != nil {
 		cmd.log.Error("Failed to commit data token", "err", err)

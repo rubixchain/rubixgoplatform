@@ -14,6 +14,10 @@ func (s *Server) APIMigrateNode(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to parse input", nil)
 	}
+	if m.DIDType < 0 || m.DIDType > 4 {
+		s.log.Error("DID Type should be between 0 and 4")
+		return s.BasicResponse(req, false, "DID Type should be between 0 and 4", nil)
+	}
 	didDir := DIDRootDir
 	if s.cfg.EnableAuth {
 		// always expect client tokne to present
