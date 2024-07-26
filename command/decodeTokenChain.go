@@ -20,6 +20,7 @@ var keyMapping = map[string]string{
 	"12": "TCSenderSignatureKey",
 	"98": "TCBlockHashKey",
 	"99": "TCSignatureKey",
+	"epoch": "TCEpoch",
 	// Keys under "4"
 	"4-1": "GBTypeKey",
 	"4-2": "GBInfoKey",
