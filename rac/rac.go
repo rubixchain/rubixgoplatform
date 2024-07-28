@@ -42,6 +42,7 @@ const (
 	RacSignKey         string = "99"
 	RacBlockCotent     string = "1"
 	RacBlockSig        string = "2"
+	RacTokenLevelKey   string = "14"
 )
 
 const (
@@ -115,8 +116,10 @@ func CreateRac(r *RacType) ([]*RacBlock, error) {
 		if r.CreatorInput != "" {
 			m[RacCreatorInputKey] = r.CreatorInput
 		}
-		if r.CreatorID != "" {
+		if r.CreatorID != "" && r.TokenLevel > 0 {
 			m[RacCreatorIDKey] = r.CreatorID
+			m[RacTokenLevelKey] = r.TokenLevel
+			m[RacTokenNumberKey] = r.TokenNumber
 		}
 		if r.TimeStamp != "" {
 			m[RacTimeStampKey] = r.TimeStamp

@@ -12,7 +12,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
-	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -189,31 +188,15 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to create rac block", "err", err)
 			return fmt.Errorf("failed to create rac block")
 		}
-
-		// Assuming bo block token creation
-		// ha, err := r[0].GetHash()
-		// if err != nil {
-		// 	c.log.Error("Failed to calculate rac hash", "err", err)
-		// 	return err
-		// }
-		// sig, err := dc.PvtSign([]byte(ha))
-		// if err != nil {
-		// 	c.log.Error("Failed to get rac signature", "err", err)
-		// 	return err
-		// }
 		err = r[0].UpdateSignature(dc)
 		if err != nil {
 			c.log.Error("Failed to update rac signature", "err", err)
 			return err
 		}
 
-		tb := r[0].GetBlock()
-		if tb == nil {
-			c.log.Error("Failed to get rac block")
-			return err
-		}
-		tk := util.HexToStr(tb)
-		nb := bytes.NewBuffer([]byte(tk))
+		tokenstr := fmt.Sprintf("Faucet Name : %s, Token Level : %d, Token Number : %d", rt.CreatorID, rt.TokenLevel, rt.TokenNumber)
+
+		nb := bytes.NewBuffer([]byte(tokenstr))
 		id, err := c.w.Add(nb, did, wallet.OwnerRole)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
