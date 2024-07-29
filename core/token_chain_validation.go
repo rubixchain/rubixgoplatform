@@ -8,6 +8,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -384,8 +385,36 @@ func (c *Core) Validate_ParentToken_LatestBlock(parent_tokenId string, user_did 
 
 	parent_token_info, err := c.w.ReadToken(parent_tokenId)
 	if err != nil {
-		response.Message = "Failed to get parent token chain block, parent token does not exist"
-		return response, err
+		b, err := c.getFromIPFS(parent_tokenId)
+		if err != nil {
+			c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parent_tokenId)
+			response.Message = "failed to get parent token detials from ipfs"
+			return response, err
+		}
+		_, iswholeToken, _ := token.CheckWholeToken(string(b))
+		token_type := token.RBTTokenType
+		token_value := float64(1)
+		token_owner := ""
+		if !iswholeToken {
+			blk := util.StrToHex(string(b))
+			rb, err := rac.InitRacBlock(blk, nil)
+			if err != nil {
+				c.log.Error("invalid token, invalid rac block", "err", err)
+				response.Message = "invalid token, invalid rac block"
+				return response, err
+			}
+			token_type = rac.RacType2TokenType(rb.GetRacType())
+			if c.TokenType(PartString) == token_type {
+				token_value = rb.GetRacValue()
+			}
+			token_owner = rb.GetDID()
+		}
+		parent_token_info = &wallet.Token{
+			TokenID:     parent_tokenId,
+			TokenValue:  token_value,
+			TokenStatus: wallet.TokenIsBurnt,
+			DID:         token_owner,
+		}
 	}
 
 	if parent_token_info.TokenStatus != wallet.TokenIsBurnt {
@@ -408,7 +437,16 @@ func (c *Core) Validate_ParentToken_LatestBlock(parent_tokenId string, user_did 
 	}
 
 	//if parent token is also a part token, then validate it's parent token latest block
-	if parent_token_type == token.TestPartTokenType {
+	if parent_token_type == c.TokenType(PartString) {
+		if parent_token_info.ParentTokenID == "" {
+			genesis_block := c.w.GetGenesisTokenBlock(parent_tokenId, parent_token_type)
+			grand_parent_token, _, err := genesis_block.GetParentDetials(parent_tokenId)
+			if err != nil {
+				c.log.Error("failed to get grand parent tokens to validate")
+			}
+			c.log.Debug("grand parent token:", grand_parent_token)
+			parent_token_info.ParentTokenID = grand_parent_token
+		}
 		response, err = c.Validate_ParentToken_LatestBlock(parent_token_info.ParentTokenID, user_did)
 		if err != nil {
 			c.log.Error("msg", response.Message, "err", err)
