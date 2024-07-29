@@ -36,6 +36,10 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 }
 
 func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTokens float64, did string) error {
+	fmt.Println("FT name is ", FTName)
+	fmt.Println("FT count is ", numFTs)
+	fmt.Println("num Whole token is ", numWholeTokens)
+	fmt.Println("DID is ", did)
 	if dc == nil {
 		return fmt.Errorf("DID crypto is not initialized")
 	}
@@ -60,7 +64,7 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 
 	// Create a slice to hold the new tokens
 	newFTs := make([]wallet.FT, 0, numFTs)
-	newFTTokenIDs := make([]string, 0, numFTs)
+	newFTTokenIDs := make([]string, numFTs)
 
 	// Create RAC type for fractional tokens
 	for i := 0; i < numFTs; i++ {
@@ -108,7 +112,7 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			c.log.Error("Failed to create FT, Failed to add RAC token to IPFS", "err", err)
 			return err
 		}
-
+		fmt.Println("ft ID is ", ftID)
 		newFTTokenIDs[i] = ftID
 		bti := &block.TransInfo{
 			Tokens: []block.TransTokens{
@@ -151,8 +155,8 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		}
 		// Create the new token
 		ft := &wallet.FT{
-			FTName:        FTName,
 			TokenID:       ftID,
+			FTName:        FTName,
 			ParentTokenID: parentTokenID,
 		}
 		newFTs = append(newFTs, *ft)
@@ -205,6 +209,7 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 	// Create the token in the wallet
 	for i := range newFTs {
 		ft := &newFTs[i]
+		fmt.Println("ft is ", ft)
 		err = c.w.CreateFT(ft)
 		if err != nil {
 			c.log.Error("Failed to create fractional token", "err", err)

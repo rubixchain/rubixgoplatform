@@ -111,7 +111,7 @@ func InitRacBlock(bb []byte, bm map[string]interface{}) (*RacBlock, error) {
 }
 
 func CreateRac(r *RacType) ([]*RacBlock, error) {
-	if r.Type == 1 || r.Type > RacTestPartTokenType {
+	if r.Type == 1 || r.Type > RacTestFTType {
 		return nil, fmt.Errorf("rac type is not supported")
 	}
 	rb := make([]*RacBlock, 0)

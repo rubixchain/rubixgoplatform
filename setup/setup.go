@@ -68,6 +68,7 @@ const (
 	APIAddExplorer                      string = "/api/add-explorer"
 	APIRemoveExplorer                   string = "/api/remove-explorer"
 	APICreateFT                         string = "/api/createft"
+	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
 )
 
 // jwt.RegisteredClaims
