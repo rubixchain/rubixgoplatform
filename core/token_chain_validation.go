@@ -12,11 +12,17 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func (c *Core) TokenChainValidation(user_did string, allMyTokens bool, tokenId string, blockCount int) (*model.BasicResponse, error) {
+func (c *Core) TokenChainValidation(user_did string, tokenId string, blockCount int) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
-	if allMyTokens { //if provided the boolean flag 'allmyToken', all the tokens' chain from tokens table will be validated
+	ok := c.w.IsDIDExist(user_did)
+	if !ok {
+		response.Message = "Invalid did"
+		return response, fmt.Errorf("invalid did: %v", user_did)
+	}
+
+	if tokenId == "" { //if provided the boolean flag 'allmyToken', all the tokens' chain from tokens table will be validated
 		c.log.Info("Validating all tokens from your tokens table")
 		tokens_list, err := c.w.GetAllTokens(user_did)
 		if err != nil {

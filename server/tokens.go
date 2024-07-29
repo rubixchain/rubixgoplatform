@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"strings"
 	"strconv"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -309,7 +309,6 @@ func (s *Server) APICheckPinnedState(req *ensweb.Request) *ensweb.Result {
 func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
 	user_did := s.GetQuerry(req, "did")
 	token := s.GetQuerry(req, "token")
-	allMyTokens_str := s.GetQuerry(req, "allmytokens")
 	blockCount_str := s.GetQuerry(req, "blockcount")
 	smartContractChainValidation_str := s.GetQuerry(req, "SCChainValidation")
 	blockCount, err := strconv.Atoi(blockCount_str)
@@ -320,32 +319,22 @@ func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
 	if user_did == "" {
 		return s.BasicResponse(req, false, "user did is not provided", nil)
 	}
-	
-	allMyTokens, err := strconv.ParseBool(allMyTokens_str)
-	if err != nil {
-		fmt.Errorf("error converting string to boolean:", err)
-		return s.BasicResponse(req, false, "Error converting string to boolean", nil)
-	}
-	if token == "" && !allMyTokens {
-		return s.BasicResponse(req, false, "token information is not provided to validate", nil)
-	}
 
 	smartContractChainValidation, err := strconv.ParseBool(smartContractChainValidation_str)
 	if err != nil {
-		fmt.Errorf("error converting string to boolean:", err)
 		return s.BasicResponse(req, false, "Error converting string to boolean", nil)
 	}
 
 	var br *model.BasicResponse
 	if smartContractChainValidation {
 		s.log.Debug("validating smart contract")
-		br, err = s.c.SmartContractTokenChainValidation(user_did, allMyTokens, token, blockCount)
+		br, err = s.c.SmartContractTokenChainValidation(user_did, token, blockCount)
 		if err != nil {
 			return s.BasicResponse(req, false, "Failed to validate token(s)", nil)
 		}
 	} else {
 		s.log.Debug("validating rbt token")
-		br, err = s.c.TokenChainValidation(user_did, allMyTokens, token, blockCount)
+		br, err = s.c.TokenChainValidation(user_did, token, blockCount)
 		if err != nil {
 			return s.BasicResponse(req, false, "Failed to validate token(s)", nil)
 		}

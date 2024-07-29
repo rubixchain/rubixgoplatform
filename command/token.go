@@ -48,7 +48,16 @@ func (cmd *Command) GenerateTestRBT() {
 }
 
 func (cmd *Command) ValidateTokenchain() {
-	br, err := cmd.c.ValidateTokenchain(cmd.did, cmd.smartContractChainValidation, cmd.allMyTokens, cmd.token, cmd.blockCount)
+	if cmd.did == "" {
+		cmd.log.Info("Tokenchain-validator did cannot be empty")
+		fmt.Print("Enter tokenchain-validator DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get tokenchain-validator DID")
+			return
+		}
+	}
+	br, err := cmd.c.ValidateTokenchain(cmd.did, cmd.smartContractChainValidation, cmd.token, cmd.blockCount)
 	if err != nil {
 		cmd.log.Error("failed to validate token chain", "err", err)
 		return
