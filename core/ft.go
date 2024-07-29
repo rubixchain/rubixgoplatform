@@ -204,6 +204,13 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			c.log.Error("FT creation failed, failed to add token block", "err", err)
 			return err
 		}
+		wholeTokens[i].TokenStatus = wallet.TokenIsBurnt
+		err = c.w.UpdateToken(&wholeTokens[i])
+		if err != nil {
+			c.log.Error("FT token creation failed, failed to update token status", "err", err)
+			return err
+		}
+		release = false
 	}
 
 	// Create the token in the wallet
