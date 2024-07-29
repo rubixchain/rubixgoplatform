@@ -3,6 +3,8 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -13,6 +15,11 @@ import (
 func (s *Server) APIGetAllTokens(req *ensweb.Request) *ensweb.Result {
 	tokenType := s.GetQuerry(req, "type")
 	did := s.GetQuerry(req, "did")
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
 	tr, err := s.c.GetAllTokens(did, tokenType)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to get tokens", nil)
@@ -26,6 +33,16 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(tr.DID)
+	if !strings.HasPrefix(tr.DID, "bafybmi") || len(tr.DID) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+	if tr.NumberOfTokens <= 0 {
+		s.log.Error("Invalid RBT amount, tokens generated should be a whole number and greater than 0")
+		return s.BasicResponse(req, false, "Invalid RBT amount, tokens generated should be a whole number and greater than 0", nil)
+	}
+
 	if !s.validateDIDAccess(req, tr.DID) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
@@ -62,6 +79,24 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	_, did, ok := util.ParseAddress(rbtReq.Sender)
 	if !ok {
 		return s.BasicResponse(req, false, "Invalid sender address", nil)
+	}
+	is_alphanumeric_sender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(rbtReq.Sender)
+	is_alphanumeric_receiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(rbtReq.Receiver)
+	if !is_alphanumeric_sender || !is_alphanumeric_receiver {
+		s.log.Error("Invalid sender or receiver address. Please provide valid DID")
+		return s.BasicResponse(req, false, "Invalid sender or receiver address", nil)
+	}
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !strings.HasPrefix(rbtReq.Receiver, "bafybmi") || len(rbtReq.Receiver) != 59 {
+		s.log.Error("Invalid sender or receiver DID")
+		return s.BasicResponse(req, false, "Invalid sender or receiver DID", nil)
+	}
+	if rbtReq.TokenCount < 0.00001 {
+		s.log.Error("Invalid RBT amount. RBT amount should be atlease 0.00001")
+		return s.BasicResponse(req, false, "Invalid RBT amount. RBT amount should be atlease 0.00001", nil)
+	}
+	if rbtReq.Type < 1 || rbtReq.Type > 2 {
+		s.log.Error("Invalid trans type. TransType should be 1 or 2")
+		return s.BasicResponse(req, false, "Invalid trans type. TransType should be 1 or 2", nil)
 	}
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
@@ -159,6 +194,12 @@ func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
 	info, err := s.c.GetAccountInfo(did)
 	if err != nil {

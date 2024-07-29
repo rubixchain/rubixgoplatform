@@ -3,6 +3,10 @@ package command
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
+	"io/ioutil"
+	"encoding/json"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -19,6 +23,7 @@ func chainDumpCommandGroup(cmdCfg *CommandConfig) *cobra.Command {
 	cmd.AddCommand(
 		tokenChainDumpCmd(cmdCfg),
 		smartContractChainDumpCmd(cmdCfg),
+		decodeTokenChain(cmdCfg),
 	)
 
 	return cmd
@@ -30,6 +35,22 @@ func tokenChainDumpCmd(cmdCfg *CommandConfig) *cobra.Command {
 		Short: "Get the dump of Token chain",
 		Long: "Get the dump of Token chain",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmdCfg.token == "" {
+				cmdCfg.log.Info("token id cannot be empty")
+				fmt.Print("Enter Token Id : ")
+				_, err := fmt.Scan(&cmdCfg.token)
+				if err != nil {
+					cmdCfg.log.Error("Failed to get Token ID")
+					return nil
+				}
+			}
+			isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmdCfg.token)
+		
+			if len(cmdCfg.token) != 46 || !strings.HasPrefix(cmdCfg.token, "Qm") || !isAlphanumeric {
+				cmdCfg.log.Error("Invalid token")
+				return nil
+			}
+
 			blocks := make([]map[string]interface{}, 0)
 			blockID := ""
 			for {
@@ -72,7 +93,7 @@ func tokenChainDumpCmd(cmdCfg *CommandConfig) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&cmdCfg.token, "token", "", "Token Hash")
+	cmd.Flags().StringVar(&cmdCfg.token, "tokenHash", "", "Token Hash")
 
 	return cmd
 }
@@ -83,6 +104,22 @@ func smartContractChainDumpCmd(cmdCfg *CommandConfig) *cobra.Command {
 		Short: "Get the dump of Smart Contract chain",
 		Long: "Get the dump of Smart Contract chain",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmdCfg.smartContractToken == "" {
+				cmdCfg.log.Info("smart contract token id cannot be empty")
+				fmt.Print("Enter SC Token Id : ")
+				_, err := fmt.Scan(&cmdCfg.smartContractToken)
+				if err != nil {
+					cmdCfg.log.Error("Failed to get SC Token ID")
+					return nil
+				}
+			}
+			is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmdCfg.smartContractToken)
+		
+			if len(cmdCfg.smartContractToken) != 46 || !strings.HasPrefix(cmdCfg.smartContractToken, "Qm") || !is_alphanumeric {
+				cmdCfg.log.Error("Invalid smart contract token")
+				return nil
+			}
+
 			blocks := make([]map[string]interface{}, 0)
 			blockID := ""
 			for {
@@ -128,6 +165,72 @@ func smartContractChainDumpCmd(cmdCfg *CommandConfig) *cobra.Command {
 	cmd.Flags().StringVar(&cmdCfg.smartContractToken, "sct", "", "Smart contract token hash")
 
 	return cmd
+}
+
+// decodeTokenChain decodes a JSON file, transforms its data, and writes the transformed data back to a file.
+func decodeTokenChain(cmdCfg *CommandConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use: "decode-token-chain",
+		Short: "Decode Token chain",
+		Long: "Decond Token chain",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Open the input JSON file
+			file, err := os.Open("dump.json")
+			if err != nil {
+				errMsg := fmt.Errorf("error opening file: %v", err)
+				cmdCfg.log.Error(errMsg.Error())
+				return errMsg
+			}
+			defer file.Close()
+
+			// Read the JSON file
+			byteValue, err := ioutil.ReadAll(file)
+			if err != nil {
+				errMsg := fmt.Errorf("error reading file: %v", err)
+				cmdCfg.log.Error(errMsg.Error())
+				return errMsg
+			}
+
+			// Parse the JSON data
+			var data []interface{}
+			err = json.Unmarshal(byteValue, &data)
+			if err != nil {
+				errMsg := fmt.Errorf("error parsing JSON: %v", err)
+				cmdCfg.log.Error(errMsg.Error())
+				return errMsg
+			}
+
+			// Transform the JSON data
+			for i, item := range data {
+				flattenedItem := flattenKeys("", item)
+				mappedItem := applyKeyMapping(flattenedItem)
+				data[i] = mappedItem
+			}
+
+			// Convert the transformed data back to JSON
+			output, err := json.MarshalIndent(data, "", "  ")
+			if err != nil {
+				errMsg := fmt.Errorf("error marshaling JSON: %v", err)
+				cmdCfg.log.Error(errMsg.Error())
+				return errMsg
+			}
+
+			// Write the output to a file
+			err = ioutil.WriteFile("output.json", output, 0644)
+			if err != nil {
+				errMsg := fmt.Errorf("error writing file: %v", err)
+				cmdCfg.log.Error(errMsg.Error())
+				return errMsg
+			}
+
+			cmdCfg.log.Info("Transformation complete. Check output.json for results.")
+			return nil
+		},
+	}
+
+	return cmd
+	
+	
 }
 
 func tcMarshal(str string, m interface{}) (string, error) {

@@ -13,7 +13,6 @@ Rubix CLI has the following top-level commands:
 - [explorer](#explorer-command)
 - [node](#node-command)
   - [node peer](#node-peer)
-  - [node pledge-tokens](#node-pledge-tokens)
 - [quorum](#quorum-command)
 - [run](#run-command)
 - [tx](#tx-commands)
@@ -46,6 +45,7 @@ It consists of subcommands that are associated with Token chain and SmartContrac
 
 - `smart-contract`: Get the dump of Smart Contract chain
 - `token`: Get the dump of Token chain
+- `decode-token-chain`: Decodes token chain dump
 
 To know more about the flags, run `rubixgoplatform chain-dump [command] --help`
 
@@ -88,7 +88,6 @@ It consists of subcommands that are associated with Rubix node.
 - `peer`: Peer related subcommands
 - `release-rbt-tokens`: Release all locked RBT tokens
 - `shutdown`: shut down the node
-- `pledge-tokens`: Pledge tokens related subcommands
 - `token-state-pinned-info`: Check if a Token state is pinned
 
 To know more about the flags, run `rubixgoplatform node [command] --help`
@@ -104,15 +103,6 @@ It consists of subcommands associated with peer info of a node
 
 To know more about the flags, run `rubixgoplatform node peer [command] --help`
 
-<a name="node-pledge-tokens"></a>**`node pledge-tokens` Commands**
-
-It consists of subcommands associated with pledge tokens of a node
-
-- `list-token-states`: List all pledge token states of a node
-- `unpledge`: Unpledge all pledged tokens
-
-To know more about the flags, run `rubixgoplatform node pledge-tokens [command] --help`
-
 ### `quorum` Command
 
 It consists of subcommands that are associated with Quorums. 
@@ -121,6 +111,8 @@ It consists of subcommands that are associated with Quorums.
 - `list`: List all Quorums
 - `remove-all`: Remove all Quorums
 - `setup`: Setup up DID as a Quorum
+- `list-token-states`: List all pledge token states of a node
+- `unpledge`: Unpledge all pledged tokens
 
 To know more about the flags, run `rubixgoplatform quorum [command] --help`
 

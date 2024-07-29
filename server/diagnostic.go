@@ -2,6 +2,8 @@ package server
 
 import (
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -13,6 +15,11 @@ func (s *Server) APIDumpTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(dr.Token)
+	if len(dr.Token) != 46 || !strings.HasPrefix(dr.Token, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid token")
+		return s.BasicResponse(req, false, "Invalid token", nil)
+	}
 	drep := s.c.DumpTokenChain(&dr)
 	return s.RenderJSON(req, drep, http.StatusOK)
 }
@@ -22,6 +29,11 @@ func (s *Server) APIDumpSmartContractTokenChainBlock(req *ensweb.Request) *enswe
 	err := s.ParseJSON(req, &dr)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(dr.Token)
+	if len(dr.Token) != 46 || !strings.HasPrefix(dr.Token, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid smart contract token")
+		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
 	}
 	drep := s.c.DumpSmartContractTokenChain(&dr)
 	return s.RenderJSON(req, drep, http.StatusOK)

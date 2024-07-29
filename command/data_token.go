@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
@@ -18,6 +20,20 @@ func createDataToken(cmdCfg *CommandConfig) *cobra.Command {
 		Short: "Create a Data Token",
 		Long:  "Create a Data Token",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmdCfg.did == "" {
+				cmdCfg.log.Info("DID cannot be empty")
+				fmt.Print("Enter DID : ")
+				_, err := fmt.Scan(&cmdCfg.did)
+				if err != nil {
+					cmdCfg.log.Error("Failed to get DID")
+					return nil
+				}
+			}
+			is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmdCfg.did)
+			if !strings.HasPrefix(cmdCfg.did, "bafybmi") || len(cmdCfg.did) != 59 || !is_alphanumeric {
+				cmdCfg.log.Error("Invalid DID")
+				return nil
+			}
 			dt := client.DataTokenReq{
 				DID:      cmdCfg.did,
 				UserID:   cmdCfg.userID,
@@ -81,6 +97,21 @@ func commitDataToken(cmdCfg *CommandConfig) *cobra.Command {
 		Short: "Commit a Data Token",
 		Long:  "Commit a Data Token",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmdCfg.did == "" {
+				cmdCfg.log.Info("DID cannot be empty")
+				fmt.Print("Enter DID : ")
+				_, err := fmt.Scan(&cmdCfg.did)
+				if err != nil {
+					cmdCfg.log.Error("Failed to get DID")
+					return nil
+				}
+			}
+			is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmdCfg.did)
+			if !strings.HasPrefix(cmdCfg.did, "bafybmi") || len(cmdCfg.did) != 59 || !is_alphanumeric {
+				cmdCfg.log.Error("Invalid DID")
+				return nil
+			}
+			
 			br, err := cmdCfg.c.CommitDataToken(cmdCfg.did, cmdCfg.batchID)
 			if err != nil {
 				cmdCfg.log.Error("Failed to commit data token", "err", err)

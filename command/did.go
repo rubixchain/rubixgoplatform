@@ -6,6 +6,8 @@ import (
 	"image"
 	"io/ioutil"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -237,6 +239,21 @@ func registerDID(cmdCfg *CommandConfig) *cobra.Command {
 		Short: "Register DID",
 		Long:  "Register DID",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmdCfg.did == "" {
+				cmdCfg.log.Info("DID cannot be empty")
+				fmt.Print("Enter DID : ")
+				_, err := fmt.Scan(&cmdCfg.did)
+				if err != nil {
+					cmdCfg.log.Error("Failed to get DID")
+					return nil
+				}
+			}
+			is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmdCfg.did)
+			if !strings.HasPrefix(cmdCfg.did, "bafybmi") || len(cmdCfg.did) != 59 || !is_alphanumeric {
+				cmdCfg.log.Error("Invalid DID")
+				return nil
+			}
+
 			br, err := cmdCfg.c.RegisterDID(cmdCfg.did)
 
 			if err != nil {
@@ -275,6 +292,21 @@ func accountInfoCmd(cmdCfg *CommandConfig) *cobra.Command {
 		Short: "Get the account balance information of a DID",
 		Long:  "Get the account balance information of a DID",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmdCfg.did == "" {
+				cmdCfg.log.Info("DID cannot be empty")
+				fmt.Print("Enter DID : ")
+				_, err := fmt.Scan(&cmdCfg.did)
+				if err != nil {
+					cmdCfg.log.Error("Failed to get DID")
+					return nil
+				}
+			}
+			is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmdCfg.did)
+			if !strings.HasPrefix(cmdCfg.did, "bafybmi") || len(cmdCfg.did) != 59 || !is_alphanumeric {
+				cmdCfg.log.Error("Invalid DID")
+				return nil 
+			}
+
 			info, err := cmdCfg.c.GetAccountInfo(cmdCfg.did)
 			if err != nil {
 				cmdCfg.log.Error("Invalid response from the node", "err", err)

@@ -2,10 +2,10 @@ package command
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core"
@@ -25,7 +25,6 @@ func nodeGroup(cmdCfg *CommandConfig) *cobra.Command {
 		lockRBTTokensCmd(cmdCfg),
 		releaseAllLockedRBTTokensCmd(cmdCfg),
 		checkPinnedStateCmd(cmdCfg),
-		pledgeGroup(cmdCfg),
 		peerGroup(cmdCfg),
 		shutDownCmd(cmdCfg),
 	)
@@ -33,26 +32,11 @@ func nodeGroup(cmdCfg *CommandConfig) *cobra.Command {
 	return cmd
 }
 
-func pledgeGroup(cmdCfg *CommandConfig) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "pledge-tokens",
-		Short: "Pledge tokens related subcommands",
-		Long:  "Pledge tokens related subcommands",
-	}
-
-	cmd.AddCommand(
-		runUnpledgeCmd(cmdCfg),
-		getPledgedTokenStateDetailsCmd(cmdCfg),
-	)
-
-	return cmd
-}
-
 func peerGroup(cmdCfg *CommandConfig) *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "peer",
+		Use:   "peer",
 		Short: "peer related subcommands",
-		Long: "peer related subcommands",
+		Long:  "peer related subcommands",
 	}
 
 	cmd.AddCommand(
@@ -61,27 +45,6 @@ func peerGroup(cmdCfg *CommandConfig) *cobra.Command {
 		getLocalPeerIDCmd(cmdCfg),
 		addPeerDetailsCmd(cmdCfg),
 	)
-
-	return cmd
-}
-
-func runUnpledgeCmd(cmdCfg *CommandConfig) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "unpledge",
-		Short: "Unpledge all pledged tokens",
-		Long:  "Unpledge all pledged tokens",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			msg, status := cmdCfg.c.RunUnpledge()
-			cmdCfg.log.Info("Unpledging of pledged tokens has started")
-			if !status {
-				cmdCfg.log.Error(msg)
-				return errors.New(msg)
-			}
-
-			cmdCfg.log.Info(msg)
-			return nil
-		},
-	}
 
 	return cmd
 }
@@ -105,11 +68,12 @@ func addPeerDetailsCmd(cmdCfg *CommandConfig) *cobra.Command {
 			} else {
 				peerID = cmdCfg.peerID
 			}
-			if !strings.HasPrefix(peerID, "12D3KooW") || len(peerID) < 52 {
+			is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(peerID)
+			if !strings.HasPrefix(peerID, "12D3KooW") || len(peerID) != 52 || !is_alphanumeric {
 				cmdCfg.log.Error("Invalid PeerID")
-				return err
+				return fmt.Errorf("invalid peerID: %v", peerID)
 			}
-		
+
 			if cmdCfg.did == "" {
 				fmt.Print("Enter DID : ")
 				_, err = fmt.Scan(&did)
@@ -120,17 +84,18 @@ func addPeerDetailsCmd(cmdCfg *CommandConfig) *cobra.Command {
 			} else {
 				did = cmdCfg.did
 			}
-			if !strings.HasPrefix(did, "bafybmi") || len(did) < 59 {
+			is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+			if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
 				cmdCfg.log.Error("Invalid DID")
-				return err
+				return fmt.Errorf("invalid did: %v", did)
 			}
-		
+
 			// did_type = cmdCfg.didType
 			if cmdCfg.didType < 0 || cmdCfg.didType > 4 {
 				cmdCfg.log.Error("DID Type should be between 0 and 4")
 				return err
 			}
-		
+
 			peerDetail := wallet.DIDPeerMap{
 				PeerID:  peerID,
 				DID:     did,
@@ -142,7 +107,7 @@ func addPeerDetailsCmd(cmdCfg *CommandConfig) *cobra.Command {
 				return fmt.Errorf("failed to add peer in DB, err: %v", msg)
 			}
 			cmdCfg.log.Info("Peer added successfully")
-			
+
 			return nil
 		},
 	}
@@ -150,34 +115,6 @@ func addPeerDetailsCmd(cmdCfg *CommandConfig) *cobra.Command {
 	cmd.Flags().StringVar(&cmdCfg.peerID, "peerID", "", "Peer ID")
 	cmd.Flags().StringVar(&cmdCfg.did, "did", "", "DID")
 	cmd.Flags().IntVar(&cmdCfg.didType, "didType", 4, "DID Creation Type")
-
-	return cmd
-}
-
-func getPledgedTokenStateDetailsCmd(cmdCfg *CommandConfig) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "list-token-states",
-		Short: "List all pledge token states of a node",
-		Long:  "List all pledge token states of a node",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			info, err := cmdCfg.c.GetPledgedTokenDetails()
-			if err != nil {
-				cmdCfg.log.Error("Invalid response from the node", "err", err)
-				return err
-			}
-			fmt.Printf("Response : %v\n", info)
-			if !info.Status {
-				cmdCfg.log.Error("Failed to get account info", "message", info.Message)
-			} else {
-				cmdCfg.log.Info("Successfully got the pledged token states info")
-				fmt.Println("DID	", "Pledged Token	", "Token State")
-				for _, i := range info.PledgedTokenStateDetails {
-					fmt.Println(i.DID, "	", i.TokensPledged, "	", i.TokenStateHash)
-				}
-			}
-			return nil
-		},
-	}
 
 	return cmd
 }
@@ -256,6 +193,16 @@ func ping(cmdCfg *CommandConfig) *cobra.Command {
 		Short: "pings a peer",
 		Long:  "pings a peer",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmdCfg.peerID == "" {
+				cmdCfg.log.Error("PeerID cannot be empty. Please use flag peerId")
+				return nil
+			}
+			is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmdCfg.peerID)
+			if !strings.HasPrefix(cmdCfg.peerID, "12D3KooW") || len(cmdCfg.peerID) != 52 || !is_alphanumeric {
+				cmdCfg.log.Error("Invalid PeerID")
+				return nil
+			}
+
 			msg, status := cmdCfg.c.Ping(cmdCfg.peerID)
 			if !status {
 				cmdCfg.log.Error("Ping failed", "message", msg)
@@ -278,6 +225,21 @@ func checkQuorumStatus(cmdCfg *CommandConfig) *cobra.Command {
 		Long:  "check the status of quorum",
 		Short: "check the status of quorum",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmdCfg.quorumAddr == "" {
+				cmdCfg.log.Info("Quorum Address cannot be empty")
+				fmt.Print("Enter Quorum Address : ")
+				_, err := fmt.Scan(&cmdCfg.quorumAddr)
+				if err != nil {
+					cmdCfg.log.Error("Failed to get Quorum Address")
+					return nil
+				}
+			}
+			is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmdCfg.quorumAddr)
+			if !strings.HasPrefix(cmdCfg.quorumAddr, "bafybmi") || len(cmdCfg.quorumAddr) != 59 || !is_alphanumeric {
+				cmdCfg.log.Error("Invalid DID of the quorum")
+				return nil
+			}
+
 			msg, _ := cmdCfg.c.CheckQuorumStatus(cmdCfg.quorumAddr)
 			//Verification with "status" pending !
 			if strings.Contains(msg, "Quorum is setup") {
@@ -336,7 +298,10 @@ func migrateNodeCmd(cmdCfg *CommandConfig) *cobra.Command {
 				}
 				cmdCfg.quorumPWD = pwd
 			}
-
+			if cmdCfg.didType < 0 || cmdCfg.didType > 4 {
+				cmdCfg.log.Error("DID Type should be between 0 and 4")
+				return nil
+			}
 			r := core.MigrateRequest{
 				DIDType:   cmdCfg.didType,
 				PrivPWD:   cmdCfg.privPWD,
@@ -406,12 +371,11 @@ func lockRBTTokensCmd(cmdCfg *CommandConfig) *cobra.Command {
 	return cmd
 }
 
-
 func releaseAllLockedRBTTokensCmd(cmdCfg *CommandConfig) *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "release-rbt-tokens",
+		Use:   "release-rbt-tokens",
 		Short: "Release all locked RBT tokens",
-		Long: "Release all locked RBT tokens",
+		Long:  "Release all locked RBT tokens",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resp, err := cmdCfg.c.ReleaseAllLockedTokens()
 			if err != nil {

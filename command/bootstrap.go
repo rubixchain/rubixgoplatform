@@ -2,6 +2,8 @@ package command
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -26,6 +28,47 @@ func bootstrapCommandGroup(cmdCfg *CommandConfig) *cobra.Command {
 	return cmd
 }
 
+
+func customBootStrap(cmdCfg *CommandConfig) *cobra.Command {	
+	cmd := &cobra.Command{
+		Use: "custom",
+		Short: "Some feat of Bootstrap",
+		Long: "Some feat of Bootstrap",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			peers, err := cmd.Flags().GetStringArray(peersFlag)
+			if err != nil {
+				return err
+			}
+
+			if len(peers) == 0 {
+				errMsg := errors.New("peers are required for bootstrap")
+				cmdCfg.log.Error(errMsg.Error())
+				return errMsg
+			}
+			for _, peer := range peers {
+				if !strings.HasSuffix(peer, "/") {
+					errMsg := fmt.Errorf("invalid bootstrap peer : %v", peer)
+					cmdCfg.log.Error(errMsg.Error())
+					return errMsg
+				}
+			}
+			msg, status := cmdCfg.c.AddBootStrap(peers)
+			if !status {
+				cmdCfg.log.Error("Add bootstrap command failed, " + msg)
+				return nil
+			} else {
+				cmdCfg.log.Info("Add bootstrap command finished, " + msg)
+				return nil
+			}
+		},
+	}
+
+	cmd.Flags().StringSlice(peersFlag, []string{}, "Bootstrap peers, mutiple peers will be seprated by comma")
+
+	return cmd
+}
+
 func addBootStrap(cmdCfg *CommandConfig) *cobra.Command {	
 	cmd := &cobra.Command{
 		Use: "add",
@@ -41,10 +84,16 @@ func addBootStrap(cmdCfg *CommandConfig) *cobra.Command {
 			if len(peers) == 0 {
 				errMsg := errors.New("peers are required for bootstrap")
 				cmdCfg.log.Error(errMsg.Error())
-				return nil
+				return errMsg
+			}
+			for _, peer := range peers {
+				if !strings.HasSuffix(peer, "/") {
+					errMsg := fmt.Errorf("invalid bootstrap peer : %v", peer)
+					cmdCfg.log.Error(errMsg.Error())
+					return errMsg
+				}
 			}
 			msg, status := cmdCfg.c.AddBootStrap(peers)
-		
 			if !status {
 				cmdCfg.log.Error("Add bootstrap command failed, " + msg)
 				return nil
@@ -72,9 +121,18 @@ func removeBootStrap(cmdCfg *CommandConfig) *cobra.Command {
 				return err
 			}
 
+			for _, peer := range peers {
+				if !strings.HasSuffix(peer, "/") {
+					errMsg := fmt.Errorf("invalid bootstrap peer : %s", peer)
+					cmdCfg.log.Error(errMsg.Error())
+					return errMsg
+				}
+			}
+
 			if len(peers) == 0 {
-				cmdCfg.log.Error("Peers required for bootstrap")
-				return nil
+				errMsg := fmt.Errorf("peers required for bootstrap")
+				cmdCfg.log.Error(errMsg.Error())
+				return errMsg
 			}
 
 			msg, status := cmdCfg.c.RemoveBootStrap(peers)
@@ -123,8 +181,9 @@ func getAllBootStrap(cmdCfg *CommandConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			peers, msg, status := cmdCfg.c.GetAllBootStrap()
 			if !status {
-				cmdCfg.log.Error("Get all bootstrap command failed, " + msg)
-				return nil
+				errMsg := fmt.Errorf("unable to retrieve all bootstrap peers, %v", msg)
+				cmdCfg.log.Error(errMsg.Error())
+				return errMsg
 			} else {
 				cmdCfg.log.Info("Get all bootstrap command finished, " + msg)
 				cmdCfg.log.Info("Bootstrap peers", "peers", peers)

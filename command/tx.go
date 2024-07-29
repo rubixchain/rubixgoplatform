@@ -81,6 +81,11 @@ func getTxnDetails(cmdCfg *CommandConfig) *cobra.Command {
 		Short: "Get transaction details",
 		Long:  "Get transaction details",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmdCfg.did == "" || cmdCfg.txnID == "" || cmdCfg.transComment == "" {
+				cmdCfg.log.Error("Please provide did or transaction id or transaction comment to get transaction details")
+				return nil
+			}
+
 			if cmdCfg.txnID != "" {
 				res, err := cmdCfg.c.GetTxnByID(cmdCfg.txnID)
 				if err != nil {
