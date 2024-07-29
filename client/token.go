@@ -53,3 +53,16 @@ func (c *Client) GetPinnedInfo(TokenStateHash string) (*model.BasicResponse, err
 	}
 	return &br, nil
 }
+
+func (c *Client) GenerateFaucetTestRBT(level int, didStr string) (*model.BasicResponse, error) {
+	m := model.FaucetRBTGenerateRequest{
+		LevelOfToken: level,
+		DID:          didStr,
+	}
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIGenerateFaucetTestToken, nil, &m, &rm)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}

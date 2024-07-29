@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -12,6 +13,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -145,42 +147,13 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		return fmt.Errorf("DID is not exist")
 	}
 
-	var tokendetail token.FaucetToken
-	c.s.Read(wallet.FaucetTokenDetail, &tokendetail, "faucet_id=?", token.FaucetName)
-
-	//Updating the Faucet token table for the first time when empty
-	if tokendetail == (token.FaucetToken{}) {
-		tokendetail.LatestTokenNumber = 0
-		tokendetail.TokenLevel = 1
-		count := token.MaxTokenFromLevel(tokendetail.TokenLevel)
-		tokendetail.FaucetID = token.FaucetName
-		tokendetail.MaxToken = count
-		tokendetail.MinToken = 1
-		tokendetail.LatestTokenNumber = 0
-		c.s.Write(wallet.FaucetTokenDetail, &tokendetail)
-	}
-
-	//Updating the Faucet token details with each new token
 	for i := 0; i < num; i++ {
-		tokendetail.LatestTokenNumber += 1
 
-		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
-		if tokendetail.LatestTokenNumber == tokendetail.MaxToken+1 {
-			tokendetail.TokenLevel += 1
-			count := token.MaxTokenFromLevel(tokendetail.TokenLevel)
-			tokendetail.MaxToken = token.MaxTokenFromLevel(tokendetail.TokenLevel-1) + count
-			tokendetail.MinToken = token.MaxTokenFromLevel(tokendetail.TokenLevel-1) + 1
-		} else if tokendetail.LatestTokenNumber < tokendetail.MinToken && tokendetail.LatestTokenNumber > tokendetail.MaxToken+1 {
-			c.log.Error("Invalid token number")
-			return fmt.Errorf("invalid token number")
-		}
 		rt := &rac.RacType{
 			Type:        rac.RacTestTokenType,
 			DID:         did,
 			TotalSupply: 1,
-			TokenNumber: uint64(tokendetail.LatestTokenNumber),
-			TokenLevel:  uint64(tokendetail.TokenLevel),
-			CreatorID:   token.FaucetName,
+			TimeStamp:   time.Now().String(),
 		}
 
 		r, err := rac.CreateRac(rt)
@@ -188,15 +161,31 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to create rac block", "err", err)
 			return fmt.Errorf("failed to create rac block")
 		}
+
+		// Assuming bo block token creation
+		// ha, err := r[0].GetHash()
+		// if err != nil {
+		// 	c.log.Error("Failed to calculate rac hash", "err", err)
+		// 	return err
+		// }
+		// sig, err := dc.PvtSign([]byte(ha))
+		// if err != nil {
+		// 	c.log.Error("Failed to get rac signature", "err", err)
+		// 	return err
+		// }
 		err = r[0].UpdateSignature(dc)
 		if err != nil {
 			c.log.Error("Failed to update rac signature", "err", err)
 			return err
 		}
 
-		tokenstr := fmt.Sprintf("Faucet Name : %s, Token Level : %d, Token Number : %d", rt.CreatorID, rt.TokenLevel, rt.TokenNumber)
-
-		nb := bytes.NewBuffer([]byte(tokenstr))
+		tb := r[0].GetBlock()
+		if tb == nil {
+			c.log.Error("Failed to get rac block")
+			return err
+		}
+		tk := util.HexToStr(tb)
+		nb := bytes.NewBuffer([]byte(tk))
 		id, err := c.w.Add(nb, did, wallet.OwnerRole)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
@@ -253,13 +242,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		err = c.w.CreateToken(t)
 		if err != nil {
 			c.log.Error("Failed to create token", "err", err)
-			return err
-		}
-
-		//Updating the Faucet token table with latest token number and level once the tokens are generated
-		err = c.s.Update(wallet.FaucetTokenDetail, &tokendetail, "faucet_id=?", token.FaucetName)
-		if err != nil {
-			c.log.Error("Failed to update latest token number in Faucet", "err", err)
 			return err
 		}
 	}
@@ -545,4 +527,120 @@ func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
 		return nil, err
 	}
 	return requiredTokens, nil
+}
+
+func (c *Core) GenerateFaucetTestTokens(reqID string, level int, did string) {
+	err := c.generateTestTokensFaucet(reqID, level, did)
+	br := model.BasicResponse{
+		Status:  true,
+		Message: "DID registered successfully",
+	}
+	if err != nil {
+		br.Status = false
+		br.Message = err.Error()
+	}
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- &br
+}
+
+func (c *Core) generateTestTokensFaucet(reqID string, level int, did string) error {
+	if !c.testNet {
+		return fmt.Errorf("generate test token is available in test net")
+	}
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		return fmt.Errorf("DID is not exist")
+	}
+
+	count := token.MaxTokenFromLevel(level)
+
+	// Creating all tokens at the level
+	for i := 1; i <= count; i++ {
+		rt := &rac.RacType{
+			Type:        rac.RacTestTokenType,
+			DID:         did,
+			TotalSupply: 1,
+			TokenNumber: uint64(i),
+			TokenLevel:  uint64(level),
+			CreatorID:   token.FaucetName,
+		}
+
+		r, err := rac.CreateRacFaucet(rt)
+		if err != nil {
+			c.log.Error("Failed to create rac block", "err", err)
+			return fmt.Errorf("failed to create rac block")
+		}
+		err = r.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to update rac signature", "err", err)
+			return err
+		}
+
+		tokenstr := fmt.Sprintf("Faucet Name : %s, Token Level : %d, Token Number : %d", rt.CreatorID, rt.TokenLevel, rt.TokenNumber)
+
+		nb := bytes.NewBuffer([]byte(tokenstr))
+		id, err := c.w.Add(nb, did, wallet.OwnerRole)
+		if err != nil {
+			c.log.Error("Failed to add token to network", "err", err)
+			return err
+		}
+		gb := &block.GenesisBlock{
+			Type: block.TokenGeneratedType,
+			Info: []block.GenesisTokenInfo{
+				{Token: id},
+			},
+		}
+		ti := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     id,
+					TokenType: token.TestTokenType,
+				},
+			},
+		}
+
+		tcb := &block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner:      did,
+			GenesisBlock:    gb,
+			TransInfo:       ti,
+			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+		}
+
+		ctcb := make(map[string]*block.Block)
+		ctcb[id] = nil
+
+		blk := block.CreateNewBlock(ctcb, tcb)
+
+		if blk == nil {
+			c.log.Error("Failed to create new token chain block")
+			return fmt.Errorf("failed to create new token chain block")
+		}
+		err = blk.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to update did signature", "err", err)
+			return fmt.Errorf("failed to update did signature")
+		}
+		t := &wallet.Token{
+			TokenID:     id,
+			DID:         did,
+			TokenValue:  1,
+			TokenStatus: wallet.TokenIsFree,
+		}
+		err = c.w.CreateTokenBlock(blk)
+		if err != nil {
+			c.log.Error("Failed to add token chain", "err", err)
+			return err
+		}
+		err = c.w.CreateToken(t)
+		if err != nil {
+			c.log.Error("Failed to create token", "err", err)
+			return err
+		}
+	}
+	return nil
 }

@@ -90,6 +90,7 @@ const (
 	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
 	PinTokenCmd                    string = "pinToken"
 	RecoverTokensCmd               string = "recoverToken"
+	GenerateFaucetTestRBTCmd       string = "generatefaucetrbt"
 )
 
 var commands = []string{VersionCmd,
@@ -270,6 +271,7 @@ type Command struct {
 	ChildPath          int
 	TokenState         string
 	pinningAddress     string
+	levelofToken       int
 }
 
 func showVersion() {
@@ -468,6 +470,7 @@ func Run(args []string) {
 	flag.StringVar(&links, "links", "", "Explorer url")
 	flag.StringVar(&cmd.TokenState, "tokenstatehash", "", "Give Token State Hash to check state")
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
+	flag.IntVar(&cmd.levelofToken, "level", 0, "Level for which tokens need to be generated")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -641,6 +644,8 @@ func Run(args []string) {
 		cmd.PinRBT()
 	case RecoverTokensCmd:
 		cmd.RecoverTokens()
+	case GenerateFaucetTestRBTCmd:
+		cmd.GenerateFaucetTestRBT()
 	default:
 		cmd.log.Error("Invalid command")
 	}

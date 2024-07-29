@@ -46,3 +46,35 @@ func (cmd *Command) GenerateTestRBT() {
 	}
 	cmd.log.Info("Test RBT generated successfully")
 }
+
+func (cmd *Command) GenerateFaucetTestRBT() {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+	if cmd.levelofToken <= 0 {
+		cmd.log.Error("Invalid level number, level should be greater than 0")
+		return
+	}
+
+	br, err := cmd.c.GenerateFaucetTestRBT(cmd.levelofToken, cmd.did)
+
+	if err != nil {
+		cmd.log.Error("Failed to generate RBT", "err", err)
+		return
+	}
+
+	if !br.Status {
+		cmd.log.Error("Failed to generate RBT", "msg", br.Message)
+		return
+	}
+
+	msg, status := cmd.SignatureResponse(br)
+
+	if !status {
+		cmd.log.Error("Failed to generate test RBT, " + msg)
+		return
+	}
+	cmd.log.Info("Test RBT generated successfully")
+}
