@@ -100,6 +100,9 @@ func (c *Core) CheckQuorumStatusResponse(req *ensweb.Request) *ensweb.Result { /
 // CheckQuorumStatus will ping the peer & get the response
 func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error) { //
 	q := make(map[string]string)
+	if peerID == "" {
+		peerID = c.qm.GetPeerID(did)
+	}
 	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
 	if err != nil {
 		return "Quorum Connection Error", false, fmt.Errorf("quorum connection error")

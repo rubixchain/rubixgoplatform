@@ -37,7 +37,7 @@ func CeilfloatPrecision(num float64, precision int) float64 {
 	return float64(Ceilround(num*output)) / output
 }
 
-func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.Token, error) {
+func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode int) ([]wallet.Token, error) {
 	wholeValue := int(value)
 	var err error
 	fv := float64(wholeValue)
@@ -46,7 +46,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	remWhole := 0
 	wt := make([]wallet.Token, 0)
 	if wholeValue != 0 {
-		wt, remWhole, err = c.w.GetWholeTokens(did, wholeValue)
+		wt, remWhole, err = c.w.GetWholeTokens(did, wholeValue, trnxMode)
 		if err != nil {
 			c.log.Error("failed to get token", "err", err)
 			return nil, err

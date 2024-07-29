@@ -2,6 +2,8 @@ package command
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 func (cmd *Command) AddQuorurm() {
@@ -46,6 +48,21 @@ func (cmd *Command) SetupQuorum() {
 			return
 		}
 		cmd.quorumPWD = pwd
+	}
+
+	if cmd.did == "" {
+		cmd.log.Info("Quorum DID cannot be empty")
+		fmt.Print("Enter Quorum DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get Quorum DID")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
 	}
 	msg, status := cmd.c.SetupQuorum(cmd.did, cmd.quorumPWD, cmd.privPWD)
 

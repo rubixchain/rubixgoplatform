@@ -83,6 +83,13 @@ const (
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
 	AddPeerDetailsCmd              string = "addpeerdetails"
+	GetPledgedTokenDetailsCmd      string = "getpledgedtokendetails"
+	CheckPinnedState               string = "checkpinnedstate"
+	SelfTransferRBT                string = "self-transfer-rbt"
+	RunUnpledge                    string = "run-unpledge"
+	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
+	PinTokenCmd                    string = "pinToken"
+	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
 )
 
@@ -130,9 +137,15 @@ var commands = []string{VersionCmd,
 	GetSmartContractData,
 	GetPeerID,
 	AddPeerDetailsCmd,
+	SelfTransferRBT,
+	RunUnpledge,
+	UnpledgePOWPledgeTokens,
+	PinTokenCmd,
+	RecoverTokensCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
 }
+
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -176,7 +189,11 @@ var commandsHelp = []string{"To get tool version",
 	"This command gets token block",
 	"This command gets the smartcontract data from latest block",
 	"This command will fetch the peer ID of the node",
-	"This command is to add the peer details manually"}
+	"This command is to add the peer details manually",
+	"This command will initiate a self RBT transfer",
+	"This command will unpledge all the pledged tokens",
+	"This command will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
+}
 
 type Command struct {
 	cfg                config.Config
@@ -254,6 +271,8 @@ type Command struct {
 	links              []string
 	mnemonicFile       string
 	ChildPath          int
+	TokenState         string
+	pinningAddress     string
 	blockCount         int
 	allMyTokens        bool
 	smartContractChainValidation bool
@@ -453,6 +472,8 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 	flag.StringVar(&links, "links", "", "Explorer url")
+	flag.StringVar(&cmd.TokenState, "tokenstatehash", "", "Give Token State Hash to check state")
+	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.allMyTokens, "allmyTokens", false, "Validate token chain of all the tokens of the user")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
@@ -615,6 +636,20 @@ func Run(args []string) {
 		cmd.getAllExplorer()
 	case AddPeerDetailsCmd:
 		cmd.AddPeerDetails()
+	case GetPledgedTokenDetailsCmd:
+		cmd.GetPledgedTokenDetails()
+	case CheckPinnedState:
+		cmd.CheckPinnedState()
+	case SelfTransferRBT:
+		cmd.SelfTransferRBT()
+	case RunUnpledge:
+		cmd.RunUnpledge()
+	case UnpledgePOWPledgeTokens:
+		cmd.UnpledgePOWBasedPledgedTokens()
+	case PinTokenCmd:
+		cmd.PinRBT()
+	case RecoverTokensCmd:
+		cmd.RecoverTokens()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
 	default:

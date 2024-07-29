@@ -1,6 +1,10 @@
 package server
 
 import (
+	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/rubixchain/rubixgoplatform/core"
 	cc "github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -32,6 +36,16 @@ func (s *Server) APIAddBootStrap(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
 	}
+	if len(m.Peers) == 0 {
+		s.log.Error("bootstrap Peers required to add")
+		return s.BasicResponse(req, false, "Bootstrap Peers required to add", nil)
+	}
+	for _, peer := range m.Peers {
+		if !strings.HasSuffix(peer, "/") {
+			s.log.Error(fmt.Sprintf("Invalid bootstrap peer : %s", peer))
+			return s.BasicResponse(req, false, "Invalid bootstrap peer", nil)
+		}
+	}
 	err = s.c.AddBootStrap(m.Peers)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to add bootstrap peers, "+err.Error(), nil)
@@ -45,6 +59,16 @@ func (s *Server) APIRemoveBootStrap(req *ensweb.Request) *ensweb.Result {
 	err := s.ParseJSON(req, &m)
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	if len(m.Peers) == 0 {
+		s.log.Error("Bootstrap peers required to remove")
+		return s.BasicResponse(req, false, "Bootstrap peers required to remove", nil)
+	}
+	for _, peer := range m.Peers {
+		if !strings.HasSuffix(peer, "/") {
+			s.log.Error(fmt.Sprintf("Invalid bootstrap peer : %s", peer))
+			return s.BasicResponse(req, false, "Invalid bootstrap peer", nil)
+		}
 	}
 	err = s.c.RemoveBootStrap(m.Peers)
 	if err != nil {
@@ -77,6 +101,17 @@ func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
 	err := s.ParseJSON(req, &ql)
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	if len(ql) < 5 {
+		s.log.Error("Length of Quorum list should be atleast 5")
+		return s.BasicResponse(req, false, "Length of Quorum list should be atleast 5", nil)
+	}
+	for _, q := range ql {
+		is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(q.Address)
+		if !strings.HasPrefix(q.Address, "bafybmi") || len(q.Address) != 59 || !is_alphanumeric {
+			s.log.Error(fmt.Sprintf("Invalid quorum DID : %s", q.Address))
+			return s.BasicResponse(req, false, fmt.Sprintf("Invalid quorum DID : %s", q.Address), nil)
+		}
 	}
 	err = s.c.AddQuorum(ql)
 	if err != nil {
@@ -132,6 +167,10 @@ func (s *Server) APIAddExplorer(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
 	}
+	if len(m.Links) == 0 {
+		s.log.Error("explorer links required to add")
+		return s.BasicResponse(req, false, "explorer links required to add", nil)
+	}
 	err = s.c.AddExplorer(m.Links)
 	if err != nil {
 		return s.BasicResponse(req, false, "failed to add explorer, "+err.Error(), nil)
@@ -145,6 +184,10 @@ func (s *Server) APIRemoveExplorer(req *ensweb.Request) *ensweb.Result {
 	err := s.ParseJSON(req, &m)
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
+	}
+	if len(m.Links) == 0 {
+		s.log.Error("explorer links required to remove")
+		return s.BasicResponse(req, false, "explorer links required to remove", nil)
 	}
 	err = s.c.RemoveExplorer(m.Links)
 	if err != nil {

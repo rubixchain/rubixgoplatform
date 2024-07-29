@@ -41,6 +41,7 @@ const (
 	TCTokenValueKey         string = "10"
 	TCChildTokensKey        string = "11"
 	TCInitiatorSignatureKey string = "12"
+	TCEpochKey              string = "epoch"
 )
 
 const (
@@ -55,6 +56,7 @@ const (
 	TokenDeployedType     string = "09"
 	TokenExecutedType     string = "10"
 	TokenContractCommited string = "11"
+	TokenPinnedAsService  string = "12"
 )
 
 const (
@@ -85,6 +87,7 @@ type TokenChainBlock struct {
 	TokenValue         float64             `json:"tokenValue"`
 	ChildTokens        []string            `json:"childTokens"`
 	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
+	Epoch              int                 `json:"epoch"`
 }
 
 type PledgeDetail struct {
@@ -199,6 +202,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		ntcb[TCChildTokensKey] = tcb.ChildTokens
 	}
 
+	if tcb.Epoch != 0 {
+		ntcb[TCEpochKey] = tcb.Epoch
+	}
+
 	blk := InitBlock(nil, ntcb)
 	return blk
 }
@@ -207,6 +214,7 @@ func (b *Block) blkDecode() error {
 	var m map[string]interface{}
 	err := cbor.Unmarshal(b.bb, &m)
 	if err != nil {
+		fmt.Println("failed to decode block", err.Error(), err)
 		return nil
 	}
 	si, sok := m[TCBlockContentSigKey]
@@ -612,6 +620,9 @@ func (b *Block) GetReceiverDID() string {
 func (b *Block) GetDeployerDID() string {
 	return b.getTrasnInfoString(TIDeployerDIDKey)
 }
+func (b *Block) GetPinningNodeDID() string {
+	return b.getTrasnInfoString(TIPinningDIDKey)
+}
 
 func (b *Block) GetExecutorDID() string {
 	return b.getTrasnInfoString(TIExecutorDIDKey)
@@ -725,6 +736,10 @@ func (b *Block) GetTokenValue() float64 {
 
 func (b *Block) GetChildTokens() []string {
 	return util.GetStringSliceFromMap(b.bm, TCChildTokensKey)
+}
+
+func (b *Block) GetEpoch() int64 {
+	return int64(util.GetIntFromMap(b.bm, TCEpochKey))
 }
 
 // Fetch initiator signature details from the given block

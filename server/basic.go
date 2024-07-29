@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -56,8 +57,17 @@ func (s *Server) shutDown() {
 
 // APIPing will ping to given peer
 func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
-	peerdID := s.GetQuerry(req, "peerID")
-	str, err := s.c.PingPeer(peerdID)
+	peerID := s.GetQuerry(req, "peerID")
+	if peerID == "" {
+		s.log.Error("PeerID cannot be empty")
+		return s.BasicResponse(req, false, "PeerID cannot be empty", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(peerID)
+	if !strings.HasPrefix(peerID, "12D3KooW") || len(peerID) != 52 || !is_alphanumeric {
+		s.log.Error("Invalid PeerID")
+		return s.BasicResponse(req, false, "Invalid PeerID", nil)
+	}
+	str, err := s.c.PingPeer(peerID)
 	if err != nil {
 		s.log.Error("ping failed", "err", err)
 		return s.BasicResponse(req, false, str, nil)
@@ -68,17 +78,14 @@ func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 // APIPing will ping to given peer
 func (s *Server) APICheckQuorumStatus(req *ensweb.Request) *ensweb.Result {
 	qAddress := s.GetQuerry(req, "quorumAddress")
-	// Split the string into two parts based on a delimiter
-	parts := strings.Split(qAddress, ".")
-	if len(parts) != 2 {
-		// Handle the case where the string doesn't contain exactly two parts
-		s.log.Error("Invalid quorumAddress format, required format is PeerID.dID")
-		return s.BasicResponse(req, false, "Invalid Quorum Address Format", nil)
+	DID := qAddress
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(DID)
+	if !strings.HasPrefix(DID, "bafybmi") || len(DID) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID of the quorum")
+		return s.BasicResponse(req, false, "Invalid DID of the quorum", nil)
 	}
-	// Assign the first part to "peerID" and the second part to "dID"
-	peerID := parts[0]
-	dID := parts[1]
-	str, status, err := s.c.CheckQuorumStatus(peerID, dID)
+
+	str, status, err := s.c.CheckQuorumStatus("", DID)
 	if err != nil {
 		s.log.Error("Quorum status check failed", "err", err)
 		return s.BasicResponse(req, false, str, nil)

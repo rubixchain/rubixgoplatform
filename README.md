@@ -368,6 +368,31 @@ This following options are used for this command
   -didType int
         DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode, 3-Child Mode, 4-Light Mode) (default 0)
 ```
+
+To check details about the token states for which pledging has been done
+: To check for what token states the pledging has been done, and which tokens are pledged
+
+```
+./rubixgoplatform getpledgedtokendetails
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+```
+
+To check tokenstatehash status
+: To check if a particular tokenstatehash is exhausted, i.e if it has been transferred further
+
+```
+./rubixgoplatform tokenstatehash
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+        
+  -tokenstatehash string
+        TokenState Hash, for which the status needs to be checked
+```
 Validate Token Chain Command
 : To validate RBT and smart contract token chain
 

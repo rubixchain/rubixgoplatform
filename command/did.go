@@ -6,6 +6,8 @@ import (
 	"image"
 	"io/ioutil"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -49,6 +51,10 @@ func (cmd *Command) CreateDID() {
 			return
 		}
 		cmd.quorumPWD = pwd
+	}
+	if cmd.didType < 0 || cmd.didType > 4 {
+		cmd.log.Error("DID Type should be between 0 and 4")
+		return
 	}
 	if cmd.didType == did.LiteDIDMode {
 		if cmd.privKeyFile == "" || cmd.pubKeyFile == "" {
@@ -180,6 +186,20 @@ func (cmd *Command) GetAllDID() {
 }
 
 func (cmd *Command) RegsiterDIDCmd() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
 	br, err := cmd.c.RegisterDID(cmd.did)
 
 	if err != nil {
@@ -202,6 +222,11 @@ func (cmd *Command) RegsiterDIDCmd() {
 }
 
 func (cmd *Command) SetupDIDCmd() {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
 	br, err := cmd.c.RegisterDID(cmd.did)
 
 	if err != nil {
@@ -322,6 +347,20 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 }
 
 func (cmd *Command) GetAccountInfo() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
 	info, err := cmd.c.GetAccountInfo(cmd.did)
 	if err != nil {
 		cmd.log.Error("Invalid response from the node", "err", err)
@@ -332,6 +371,6 @@ func (cmd *Command) GetAccountInfo() {
 		cmd.log.Error("Failed to get account info", "message", info.Message)
 	} else {
 		cmd.log.Info("Successfully got the account information")
-		fmt.Printf("RBT : %10.5f, Locked RBT : %10.5f, Pledged RBT : %10.5f\n", info.AccountInfo[0].RBTAmount, info.AccountInfo[0].LockedRBT, info.AccountInfo[0].PledgedRBT)
+		fmt.Printf("RBT : %10.5f, Locked RBT : %10.5f, Pledged RBT : %10.5f, Pinned RBT : %10.5f\n", info.AccountInfo[0].RBTAmount, info.AccountInfo[0].LockedRBT, info.AccountInfo[0].PledgedRBT, info.AccountInfo[0].PinnedRBT)
 	}
 }

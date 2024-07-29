@@ -4,7 +4,7 @@ import "fmt"
 
 func (cmd *Command) addExplorer() {
 	if len(cmd.links) == 0 {
-		cmd.log.Error("links required for Explorer")
+		cmd.log.Error("provide explorer links required to add")
 		return
 	}
 	msg, status := cmd.c.AddExplorer(cmd.links)
@@ -18,7 +18,7 @@ func (cmd *Command) addExplorer() {
 
 func (cmd *Command) removeExplorer() {
 	if len(cmd.links) == 0 {
-		cmd.log.Error("links required for Explorer")
+		cmd.log.Error("provide explorer links required to remove")
 		return
 	}
 	msg, status := cmd.c.RemoveExplorer(cmd.links)

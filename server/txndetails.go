@@ -2,9 +2,10 @@ package server
 
 import (
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -29,7 +30,7 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 					Status:  true,
 					Message: "no records present for this Transaction ID : " + txnID,
 				},
-				TxnDetails: make([]wallet.TransactionDetails, 0),
+				TxnDetails: make([]model.TransactionDetails, 0),
 			}
 			return s.RenderJSON(req, &td, http.StatusOK)
 		}
@@ -39,7 +40,7 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 				Status:  false,
 				Message: err.Error(),
 			},
-			TxnDetails: make([]wallet.TransactionDetails, 0),
+			TxnDetails: make([]model.TransactionDetails, 0),
 		}
 		return s.RenderJSON(req, &td, http.StatusOK)
 	}
@@ -48,7 +49,7 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 			Status:  true,
 			Message: "Retrieved Txn Details",
 		},
-		TxnDetails: make([]wallet.TransactionDetails, 0),
+		TxnDetails: make([]model.TransactionDetails, 0),
 	}
 	td.TxnDetails = append(td.TxnDetails, res)
 
@@ -69,6 +70,11 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 // @Router /api/get-by-did [get]
 func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "DID")
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
 	role := s.GetQuerry(req, "Role")
 	startDate := s.GetQuerry(req, "StartDate")
 	endDate := s.GetQuerry(req, "EndDate")
@@ -80,7 +86,7 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 				Message: "Either use Date range or Role for filter",
 				Result:  "",
 			},
-			TxnDetails: make([]wallet.TransactionDetails, 0),
+			TxnDetails: make([]model.TransactionDetails, 0),
 		}
 		return s.RenderJSON(req, &td, http.StatusOK)
 	}
@@ -95,7 +101,7 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 					Message: "no records present for this DID : " + did,
 					Result:  "No data found",
 				},
-				TxnDetails: make([]wallet.TransactionDetails, 0),
+				TxnDetails: make([]model.TransactionDetails, 0),
 			}
 			return s.RenderJSON(req, &td, http.StatusOK)
 		}
@@ -106,7 +112,7 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 				Message: err.Error(),
 				Result:  "No data found",
 			},
-			TxnDetails: make([]wallet.TransactionDetails, 0),
+			TxnDetails: make([]model.TransactionDetails, 0),
 		}
 		return s.RenderJSON(req, &td, http.StatusOK)
 	}
@@ -116,7 +122,7 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 			Message: "Retrieved Txn Details",
 			Result:  "Successful",
 		},
-		TxnDetails: make([]wallet.TransactionDetails, 0),
+		TxnDetails: make([]model.TransactionDetails, 0),
 	}
 
 	td.TxnDetails = append(td.TxnDetails, res...)
@@ -144,7 +150,7 @@ func (s *Server) APIGetTxnByComment(req *ensweb.Request) *ensweb.Result {
 					Status:  true,
 					Message: "no records present for the comment : " + comment,
 				},
-				TxnDetails: make([]wallet.TransactionDetails, 0),
+				TxnDetails: make([]model.TransactionDetails, 0),
 			}
 			return s.RenderJSON(req, &td, http.StatusOK)
 		}
@@ -154,7 +160,7 @@ func (s *Server) APIGetTxnByComment(req *ensweb.Request) *ensweb.Result {
 				Status:  false,
 				Message: err.Error(),
 			},
-			TxnDetails: make([]wallet.TransactionDetails, 0),
+			TxnDetails: make([]model.TransactionDetails, 0),
 		}
 		return s.RenderJSON(req, &td, http.StatusOK)
 	}
@@ -163,7 +169,7 @@ func (s *Server) APIGetTxnByComment(req *ensweb.Request) *ensweb.Result {
 			Status:  true,
 			Message: "Retrieved Txn Details",
 		},
-		TxnDetails: make([]wallet.TransactionDetails, 0),
+		TxnDetails: make([]model.TransactionDetails, 0),
 	}
 
 	for i := range res {
