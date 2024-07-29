@@ -62,15 +62,11 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 	// Calculate the value of each fractional token
 	fractionalValue := float64(len(wholeTokens)) / float64(numFTs)
 
-	// Create a slice to hold the new tokens
 	newFTs := make([]wallet.FT, 0, numFTs)
 	newFTTokenIDs := make([]string, numFTs)
 
-	// Create RAC type for fractional tokens
 	for i := 0; i < numFTs; i++ {
-		// Use the TokenID of the whole token as the Parent
-		parentTokenID := wholeTokens[i%len(wholeTokens)].TokenID // Use modulo to cycle through available whole tokens
-
+		parentTokenID := wholeTokens[i%len(wholeTokens)].TokenID
 		racType := &rac.RacType{
 			Type:        c.RACFTType(),
 			DID:         did,
@@ -78,7 +74,7 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			TotalSupply: 1,
 			TimeStamp:   time.Now().String(),
 			FTInfo: &rac.RacFTInfo{
-				Parents: parentTokenID, // Use the fetched token ID
+				Parents: parentTokenID,
 				FTNum:   i,
 				FTName:  FTName,
 				FTValue: fractionalValue,
@@ -92,7 +88,6 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			return err
 		}
 
-		// Expect one block to be created
 		if len(racBlocks) != 1 {
 			return fmt.Errorf("failed to create RAC block")
 		}
@@ -104,7 +99,6 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			return err
 		}
 
-		// Add the RAC block to the wallet
 		racBlockData := racBlocks[0].GetBlock()
 		fr := bytes.NewBuffer(racBlockData)
 		ftID, err := c.w.Add(fr, did, wallet.AddFunc)
@@ -214,7 +208,6 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		release = false
 	}
 
-	// Create the token in the wallet
 	for i := range newFTs {
 		ft := &newFTs[i]
 		fmt.Println("ft is ", ft)
