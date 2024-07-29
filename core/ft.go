@@ -130,8 +130,9 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			GenesisBlock: &block.GenesisBlock{
 				Info: []block.GenesisTokenInfo{
 					{
-						Token:    ftID,
-						ParentID: parentTokenID,
+						Token:       ftID,
+						ParentID:    parentTokenID,
+						TokenNumber: i,
 					},
 				},
 			},
