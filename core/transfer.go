@@ -217,7 +217,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// Get the receiver & do sanity check
 	var rpeerid string = ""
 	if !isSelfRBTTransfer {
-		rpeerid := c.w.GetPeerID(receiverdid)
+		rpeerid = c.w.GetPeerID(receiverdid)
 		if rpeerid == "" {
 			c.log.Error("Peer ID not found", "did", receiverdid)
 			resp.Message = "invalid address, Peer ID not found"
