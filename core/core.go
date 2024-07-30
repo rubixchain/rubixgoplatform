@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path"
 	"sync"
 	"time"
 
@@ -54,6 +55,7 @@ const (
 	APISelfTransfer           string = "/api/self-transfer"
 	APIRecoverPinnedRBT       string = "/api/recover-pinned-rbt"
 	APIRequestSigningHash     string = "/api/request-signing-hash"
+	APILockInvalidToken       string = "/api/lock-invalid-token"
 )
 
 const (
@@ -155,14 +157,14 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	update := false
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
 		cfg.CfgData.StorageConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.StorageConfig.DBAddress = cfg.DirPath + RubixRootDir + DefaultMainNetDB
+		cfg.CfgData.StorageConfig.DBAddress = path.Join(cfg.DirPath, RubixRootDir, DefaultMainNetDB)
 		cfg.CfgData.StorageConfig.DBType = "Sqlite3"
 		update = true
 	}
 
 	if cfg.CfgData.TestStorageConfig.StorageType == 0 {
 		cfg.CfgData.TestStorageConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.TestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + DefaultTestNetDB
+		cfg.CfgData.TestStorageConfig.DBAddress = path.Join(cfg.DirPath, RubixRootDir, DefaultTestNetDB)
 		cfg.CfgData.TestStorageConfig.DBType = "Sqlite3"
 		update = true
 	}
@@ -182,9 +184,9 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		arbitaryMode:  am,
 		secret:        util.GetRandBytes(32),
 	}
-	c.didDir = c.cfg.DirPath + RubixRootDir
+	c.didDir = path.Join(c.cfg.DirPath, RubixRootDir)
 	if c.testNet {
-		c.didDir = c.cfg.DirPath + RubixRootDir + TestNetDIDDir
+		c.didDir = path.Join(c.cfg.DirPath, RubixRootDir, TestNetDIDDir)
 
 	}
 	if _, err := os.Stat(c.didDir); os.IsNotExist(err) {
@@ -207,23 +209,23 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if update {
 		c.updateConfig()
 	}
-	if _, err := os.Stat(cfg.DirPath + RubixRootDir + MainNetDir); os.IsNotExist(err) {
-		err := os.MkdirAll(cfg.DirPath+RubixRootDir+MainNetDir, os.ModeDir|os.ModePerm)
+	if _, err := os.Stat(path.Join(cfg.DirPath, RubixRootDir, MainNetDir)); os.IsNotExist(err) {
+		err := os.MkdirAll(path.Join(cfg.DirPath, RubixRootDir, MainNetDir), os.ModeDir|os.ModePerm)
 		if err != nil {
 			c.log.Error("Failed to create main net directory", "err", err)
 			return nil, err
 		}
 	}
-	tcDir := cfg.DirPath + RubixRootDir + MainNetDir + "/"
+	tcDir := path.Join(cfg.DirPath, RubixRootDir, MainNetDir)
 	if testNet {
-		if _, err := os.Stat(cfg.DirPath + RubixRootDir + TestNetDir); os.IsNotExist(err) {
-			err := os.MkdirAll(cfg.DirPath+RubixRootDir+TestNetDir, os.ModeDir|os.ModePerm)
+		if _, err := os.Stat(path.Join(cfg.DirPath, RubixRootDir, TestNetDir)); os.IsNotExist(err) {
+			err := os.MkdirAll(path.Join(cfg.DirPath, RubixRootDir, TestNetDir), os.ModeDir|os.ModePerm)
 			if err != nil {
 				c.log.Error("Failed to create test net directory", "err", err)
 				return nil, err
 			}
 		}
-		tcDir = cfg.DirPath + RubixRootDir + TestNetDir + "/"
+		tcDir = path.Join(cfg.DirPath, RubixRootDir, TestNetDir)
 	}
 
 	sc := cfg.CfgData.StorageConfig
@@ -405,20 +407,20 @@ func (c *Core) StopCore() {
 }
 
 func (c *Core) CreateTempFolder() (string, error) {
-	folderName := c.cfg.DirPath + "temp/" + uuid.New().String()
+	folderName := path.Join(c.cfg.DirPath, "temp", uuid.New().String())
 	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
 	return folderName, err
 }
 
 func (c *Core) CreateSCTempFolder() (string, error) {
-	folderName := c.cfg.DirPath + "SmartContract/" + uuid.New().String()
+	folderName := path.Join(c.cfg.DirPath, "SmartContract", uuid.New().String())
 	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
 	return folderName, err
 }
 
 func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
 
-	scFolderName := c.cfg.DirPath + "SmartContract/" + smartContractName
+	scFolderName := path.Join(c.cfg.DirPath, "SmartContract", smartContractName)
 	err := os.Rename(tempFolderPath, scFolderName)
 	if err != nil {
 		c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
@@ -606,20 +608,21 @@ func (c *Core) SetupForienDIDQuorum(didStr string, self_did string) (did.DIDCryp
 }
 
 func (c *Core) FetchDID(did string) error {
-	_, err := os.Stat(c.didDir + did)
+	didPath := path.Join(c.didDir, did)
+	_, err := os.Stat(didPath)
 	if err != nil {
-		err = os.MkdirAll(c.didDir+did, os.ModeDir|os.ModePerm)
+		err = os.MkdirAll(didPath, os.ModeDir|os.ModePerm)
 		if err != nil {
 			c.log.Error("failed to create directory", "err", err)
 			return err
 		}
-		err = c.ipfs.Get(did, c.didDir+did+"/")
+		err = c.ipfs.Get(did, didPath)
 		if err == nil {
-			_, e := os.Stat(c.didDir + did + "/" + didm.MasterDIDFileName)
+			_, e := os.Stat(path.Join(didPath, didm.MasterDIDFileName))
 			// Fetch the master DID also
 			if e == nil {
 				var rb []byte
-				rb, err = ioutil.ReadFile(c.didDir + did + "/" + didm.MasterDIDFileName)
+				rb, err = ioutil.ReadFile(path.Join(didPath, didm.MasterDIDFileName))
 				if err == nil {
 					return c.FetchDID(string(rb))
 				}

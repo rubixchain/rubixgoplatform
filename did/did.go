@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 
@@ -313,7 +314,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	newDIrName := d.dir + did
+	newDIrName := path.Join(d.dir, did)
 
 	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
 	if err != nil {

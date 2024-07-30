@@ -57,9 +57,9 @@ def cmd_run_rubix_servers(node_name, server_port_idx):
 
     cmd_string = ""
     if is_windows_os():
-        cmd_string = f"powershell -Command  Start-Process -FilePath '.\\rubixgoplatform.exe' -ArgumentList 'run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}' -WindowStyle Hidden"
+        cmd_string = f"powershell -Command  Start-Process -FilePath '.\\rubixgoplatform.exe' -ArgumentList 'run --p {node_name} --n {server_port_idx} --s --testNet --grpcPort {grpc_port}' -WindowStyle Hidden"
     else:
-        cmd_string = f"tmux new -s {node_name} -d ./rubixgoplatform run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}"
+        cmd_string = f"tmux new -s {node_name} -d ./rubixgoplatform run --p {node_name} --n {server_port_idx} --s --testNet --grpcPort {grpc_port}"
     
     _, code = run_command(cmd_string)
     if code != 0:
@@ -93,9 +93,9 @@ def check_if_nodes_is_running(server_idx):
 def cmd_create_did(server_port, grpc_port, did_type = 4):
     os.chdir("../" + get_build_dir())
 
-    cmd_string = f"./rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port} -didType {did_type}"
+    cmd_string = f"./rubixgoplatform did create --port {server_port} --didType {did_type}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port} -didType {did_type}"
+        cmd_string = f".\\rubixgoplatform did create --port {server_port} --didType {did_type}"
     output, code = run_command(cmd_string, True)
     print(output)
     
@@ -116,9 +116,9 @@ def cmd_create_did(server_port, grpc_port, did_type = 4):
 
 def cmd_register_did(did_id, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform registerdid -did {did_id} -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform did register --did {did_id} --port {server_port}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform registerdid -did {did_id} -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform did register --did {did_id} --port {server_port}"
     output, code = run_command(cmd_string, True)
     print(output)
 
@@ -130,9 +130,9 @@ def cmd_register_did(did_id, server_port, grpc_port):
 
 def cmd_add_peer_details(peer_id, did_id, did_type, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform addpeerdetails -peerID {peer_id} -did {did_id} -didType {did_type} -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform node peer add --peerID {peer_id} --did {did_id} --didType {did_type} --port {server_port}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform addpeerdetails -peerID {peer_id} -did {did_id} -didType {did_type} -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform node peer add --peerID {peer_id} --did {did_id} --didType {did_type} --port {server_port}"
     output, code = run_command(cmd_string, True)
     print(output)
 
@@ -144,9 +144,9 @@ def cmd_add_peer_details(peer_id, did_id, did_type, server_port, grpc_port):
 
 def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform tx rbt generate-test-tokens --did {did_id} --numTokens {numTokens} --port {server_port}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform tx rbt generate-test-tokens --did {did_id} --numTokens {numTokens} --port {server_port}"
     output, code = run_command(cmd_string, True)
     
     if code != 0:
@@ -157,9 +157,9 @@ def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
 
 def cmd_add_quorum_dids(server_port, grpc_port, quorumlist = "quorumlist.json"):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port} -quorumList {quorumlist}"
+    cmd_string = f"./rubixgoplatform quorum add --port {server_port} --quorumList {quorumlist}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port} -quorumList {quorumlist}"
+        cmd_string = f".\\rubixgoplatform quorum add --port {server_port} --quorumList {quorumlist}"
     output, code = run_command(cmd_string, True)
     print(output)
     if code != 0:
@@ -170,9 +170,9 @@ def cmd_add_quorum_dids(server_port, grpc_port, quorumlist = "quorumlist.json"):
 
 def cmd_shutdown_node(server_port, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform shutdown -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform node shutdown --port {server_port}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform shutdown -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform node shutdown --port {server_port}"
     output, _ = run_command(cmd_string, True)
     print(output)
 
@@ -181,9 +181,9 @@ def cmd_shutdown_node(server_port, grpc_port):
 
 def cmd_setup_quorum_dids(did, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform setupquorum -did {did} -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform quorum setup --did {did} --port {server_port}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform setupquorum -did {did} -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform quorum setup --did {did} --port {server_port}"
     output, code = run_command(cmd_string, True)
     print(output)
     if code != 0:
@@ -194,9 +194,9 @@ def cmd_setup_quorum_dids(did, server_port, grpc_port):
 
 def cmd_get_peer_id(server_port, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform get-peer-id -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform node peer local-id --port {server_port}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform get-peer-id -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform node peer local-id --port {server_port}"
     output, code = run_command(cmd_string)
 
     if code != 0:
@@ -206,9 +206,9 @@ def cmd_get_peer_id(server_port, grpc_port):
 
 def check_account_info(did, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform getaccountinfo -did {did} -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform did info --did {did} --port {server_port}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform getaccountinfo -did {did} -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform did info --did {did} --port {server_port}"
     output, code = run_command(cmd_string)
 
     if code != 0:
@@ -219,9 +219,9 @@ def check_account_info(did, server_port, grpc_port):
 # Note: address != did, address = peerId.didId 
 def cmd_rbt_transfer(sender_address, receiver_address, rbt_amount, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform transferrbt -senderAddr {sender_address} -receiverAddr {receiver_address} -rbtAmount {rbt_amount} -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform tx rbt transfer --senderAddr {sender_address} --receiverAddr {receiver_address} --rbtAmount {rbt_amount} --port {server_port}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform transferrbt -senderAddr {sender_address} -receiverAddr {receiver_address} -rbtAmount {rbt_amount} -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform tx rbt transfer --senderAddr {sender_address} --receiverAddr {receiver_address} --rbtAmount {rbt_amount} --port {server_port}"
     output, code = run_command(cmd_string, True)
     print(output)
     if code != 0:
