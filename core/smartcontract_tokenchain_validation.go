@@ -35,17 +35,8 @@ func (c *Core) SmartContractTokenChainValidation(user_did string, tokenId string
 
 			response, err = c.ValidateSmartContractTokenChain(user_did, token_info, token_type, blockCount)
 			if err != nil || !response.Status {
-				c.log.Error("token chain validation failed for token:", token_info.SmartContractHash, "\nError :", err, "\nmsg:", response.Message)
-				if token_info.ContractStatus == wallet.TokenIsFree {
-					//if token chain validation failed and the validator is the current owner of the token,
-					//then lock the token
-					response, err = c.LockInvalidToken(token_info.SmartContractHash, token_type, user_did)
-					if err != nil {
-						c.log.Error(response.Message, token_info.SmartContractHash)
-						return response, err
-					}
-					c.log.Info(response.Message, token_info.SmartContractHash)
-				}
+				c.log.Error("token chain validation failed for token:", token_info.SmartContractHash, "Error :", err, "msg:", response.Message)
+				return response, err
 			}
 		}
 
@@ -63,15 +54,6 @@ func (c *Core) SmartContractTokenChainValidation(user_did string, tokenId string
 		response, err = c.ValidateSmartContractTokenChain(user_did, token_info[0], token_type, blockCount)
 		if err != nil || !response.Status {
 			c.log.Error("token chain validation failed for token:", tokenId, "Error :", err, "msg:", response.Message)
-			if token_info[0].ContractStatus == wallet.TokenIsDeployed {
-				response, err1 := c.LockInvalidToken(tokenId, token_type, user_did)
-				if err1 != nil {
-					c.log.Error(response.Message, tokenId)
-					return response, err1
-				}
-				c.log.Info(response.Message, tokenId)
-				return response, err
-			}
 			return response, err
 		}
 	}

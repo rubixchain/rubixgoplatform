@@ -123,10 +123,3 @@ func (w *Wallet) GetSmartContractTokenUrl(smartcontracttoken string) (string, er
 	url := callback.CallBackUrl
 	return url, nil
 }
-
-func (w *Wallet) LockSmartContract(wt *SmartContract) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-	wt.ContractStatus = TokenIsLocked
-	return w.s.Update(SmartContractStorage, wt, "deployer=? AND smart_contract_hash=?", wt.Deployer, wt.SmartContractHash)
-}

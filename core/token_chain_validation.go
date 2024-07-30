@@ -46,19 +46,8 @@ func (c *Core) TokenChainValidation(user_did string, tokenId string, blockCount 
 			//Validate tokenchain for each token in the tokens table
 			response, err = c.ValidateTokenChain(user_did, token_info, token_type, blockCount)
 			if err != nil || !response.Status {
-				c.log.Error("token chain validation failed for token:", tkn.TokenID, "\nError :", err, "\nmsg:", response.Message)
-				if token_info.TokenStatus == wallet.TokenIsFree {
-					//if token chain validation failed and the validator is the current owner of the token,
-					//then lock the token
-					response, err = c.LockInvalidToken(tkn.TokenID, token_type, user_did)
-					if err != nil {
-						c.log.Error(response.Message, tkn.TokenID)
-						return response, err
-					}
-					c.log.Info(response.Message, tkn.TokenID)
-				} else {
-					c.log.Error("token is not free, token state is", token_info.TokenStatus)
-				}
+				c.log.Error("token chain validation failed for token:", tkn.TokenID, "Error :", err, "msg:", response.Message)
+				return response, err
 			}
 		}
 
@@ -79,16 +68,7 @@ func (c *Core) TokenChainValidation(user_did string, tokenId string, blockCount 
 		//Validate tokenchain for the provided token
 		response, err = c.ValidateTokenChain(user_did, token_info, token_type, blockCount)
 		if err != nil || !response.Status {
-			c.log.Error("token chain validation failed for token:", tokenId, "\nError :", err, "\nmsg:", response.Message)
-			if token_info.TokenStatus == wallet.TokenIsFree {
-				response, err1 := c.LockInvalidToken(tokenId, token_type, user_did)
-				if err1 != nil {
-					c.log.Error(response.Message, tokenId)
-					return response, err1
-				}
-				c.log.Info(response.Message, tokenId)
-				return response, err
-			}
+			c.log.Error("token chain validation failed for token:", tokenId, "Error :", err, "msg:", response.Message)
 			return response, err
 		}
 	}
