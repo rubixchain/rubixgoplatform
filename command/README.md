@@ -22,6 +22,7 @@ Rubix CLI has the following top-level commands:
   - [tx data-token](#tx-data-token)
 - [upgrade](#upgrade-command)
 - [pin-service](#pin-service-command)
+- [validate-chain](#validate-chain-command)
 - [version](#version-command)
 
 `addr` and `port` are Global Glags, which can be used in any command. Their default values are `localhost` and `20000` respectively.
@@ -181,6 +182,12 @@ It consists of subcommands associated with operations related to node version mi
 - `unpledge-pow-tokens`: Unpledge any pledge tokens which were pledged as part of PoW based pledging
 
 To know more about the flags, run `rubixgoplatform upgrade [command] --help`
+
+### `validate-chain` Command
+
+This command validates token chain and smart contract chain.
+
+To know more about the flags, run `rubixgoplatform validate-chain --help`
 
 ### `version` Command
 
