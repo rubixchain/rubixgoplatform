@@ -7,11 +7,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func pinningServiceCommand(commandCfg *CommandConfig) *cobra.Command {
+func pinningServiceCommandGroup(commandCfg *CommandConfig) *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "pin-service",
+		Use:   "pin-service",
 		Short: "Token pinning and recover related subcommands",
-		Long: "Token pinning and recover related subcommands",
+		Long:  "Token pinning and recover related subcommands",
 	}
 
 	cmd.AddCommand(
@@ -33,7 +33,7 @@ func recoverTokenCmd(cmdCfg *CommandConfig) *cobra.Command {
 				Sender:      cmdCfg.senderAddr,
 				TokenCount:  cmdCfg.rbtAmount,
 			}
-		
+
 			br, err := cmdCfg.c.RecoverRBT(&rt)
 			if err != nil {
 				cmdCfg.log.Error("Failed to Recover the Tokens", "err", err)
@@ -62,7 +62,7 @@ func pinRBTCmd(cmdCfg *CommandConfig) *cobra.Command {
 		Use:   "pin",
 		Long:  "Pins a token on a pinning service provider node",
 		Short: "Pins a token on a pinning service provider node",
-		RunE: func(cmd *cobra.Command, args []string) error {			
+		RunE: func(cmd *cobra.Command, args []string) error {
 			rt := model.RBTPinRequest{
 				PinningNode: cmdCfg.pinningAddress,
 				Sender:      cmdCfg.senderAddr,
@@ -98,4 +98,3 @@ func pinRBTCmd(cmdCfg *CommandConfig) *cobra.Command {
 
 	return cmd
 }
-

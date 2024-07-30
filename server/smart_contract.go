@@ -408,8 +408,8 @@ func (s *Server) APIExecuteSmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
 	}
 
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(executeReq.ExecutorAddress)
-	if !strings.HasPrefix(executeReq.ExecutorAddress, "bafybmi") || len(executeReq.ExecutorAddress) != 59 || !is_alphanumeric {
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid executer DID")
 		return s.BasicResponse(req, false, "Invalid executer DID", nil)
 	}

@@ -40,6 +40,7 @@ Rubix is a highly scalable, zero-free blockchain that overcomes the scale, cost,
     <details>
     <summary>Windows Installation</summary>
         
+<<<<<<< HEAD
     - In Powershell, run the following to install the IPFS kubo client:
 
     ```
@@ -124,3 +125,36 @@ Rubix is a highly scalable, zero-free blockchain that overcomes the scale, cost,
 ## Rubix CLI
 
 Please refer [Rubix CLI](./command/README.md) docs for more details on the `rubixgoplatform` CLI
+=======
+  -tokenstatehash string
+        TokenState Hash, for which the status needs to be checked
+```
+Validate Token Chain Command
+: To validate RBT and smart contract token chain
+
+```
+./rubixgoplatform validatetokenchain
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+
+  -did string
+        DID address (default "")
+ 
+  -sctValidation bool
+        (default false) provide in case of smart contract token chain validation
+
+  -token string
+        token ID (default "")
+
+  -allmyTokens bool
+        (default false) provide to validate all tokens from tokens table
+
+  -blockCount int
+        number of blocks of the token chain to be validated (default 0)
+      
+      NOTE: Don't provide the flag -blockCount in case you want to validate all the blocks of the token chain
+  
+```
+>>>>>>> 7593733ff89c2ef5aca349a68ce18bf77560fb3a

@@ -55,6 +55,7 @@ const (
 	APISelfTransfer           string = "/api/self-transfer"
 	APIRecoverPinnedRBT       string = "/api/recover-pinned-rbt"
 	APIRequestSigningHash     string = "/api/request-signing-hash"
+	APILockInvalidToken       string = "/api/lock-invalid-token"
 )
 
 const (

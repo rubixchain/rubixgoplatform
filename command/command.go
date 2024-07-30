@@ -24,83 +24,85 @@ import (
 )
 
 type CommandConfig struct {
-	cfg                config.Config
-	c                  *client.Client
-	sc                 *contract.Contract
-	encKey             string
-	start              bool
-	node               uint
-	runDir             string
-	logFile            string
-	logLevel           string
-	cfgFile            string
-	testNet            bool
-	testNetKey         string
-	addr               string
-	port               string
-	peerID             string
-	peers              []string
-	log                logger.Logger
-	didRoot            bool
-	didType            int
-	didSecret          string
-	forcePWD           bool
-	privPWD            string
-	quorumPWD          string
-	imgFile            string
-	didImgFile         string
-	privImgFile        string
-	pubImgFile         string
-	privKeyFile        string
-	pubKeyFile         string
-	quorumList         string
-	srvName            string
-	storageType        int
-	dbName             string
-	dbType             string
-	dbAddress          string
-	dbPort             string
-	dbUserName         string
-	dbPassword         string
-	senderAddr         string
-	receiverAddr       string
-	rbtAmount          float64
-	transComment       string
-	transType          int
-	numTokens          int
-	enableAuth         bool
-	did                string
-	token              string
-	arbitaryMode       bool
-	tokenList          string
-	batchID            string
-	fileMode           bool
-	file               string
-	userID             string
-	userInfo           string
-	timeout            time.Duration
-	txnID              string
-	role               string
-	date               time.Time
-	grpcAddr           string
-	grpcPort           int
-	grpcSecure         bool
-	deployerAddr       string
-	binaryCodePath     string
-	rawCodePath        string
-	schemaFilePath     string
-	smartContractToken string
-	newContractBlock   string
-	publishType        int
-	smartContractData  string
-	executorAddr       string
-	latest             bool
-	quorumAddr         string
-	links              []string
-	mnemonicFile       string
-	ChildPath          int
-	TokenState         string
-	pinningAddress     string
+	cfg                          config.Config
+	c                            *client.Client
+	sc                           *contract.Contract
+	encKey                       string
+	start                        bool
+	node                         uint
+	runDir                       string
+	logFile                      string
+	logLevel                     string
+	cfgFile                      string
+	testNet                      bool
+	testNetKey                   string
+	addr                         string
+	port                         string
+	peerID                       string
+	peers                        []string
+	log                          logger.Logger
+	didRoot                      bool
+	didType                      int
+	didSecret                    string
+	forcePWD                     bool
+	privPWD                      string
+	quorumPWD                    string
+	imgFile                      string
+	didImgFile                   string
+	privImgFile                  string
+	pubImgFile                   string
+	privKeyFile                  string
+	pubKeyFile                   string
+	quorumList                   string
+	srvName                      string
+	storageType                  int
+	dbName                       string
+	dbType                       string
+	dbAddress                    string
+	dbPort                       string
+	dbUserName                   string
+	dbPassword                   string
+	senderAddr                   string
+	receiverAddr                 string
+	rbtAmount                    float64
+	transComment                 string
+	transType                    int
+	numTokens                    int
+	enableAuth                   bool
+	did                          string
+	token                        string
+	arbitaryMode                 bool
+	tokenList                    string
+	batchID                      string
+	fileMode                     bool
+	file                         string
+	userID                       string
+	userInfo                     string
+	timeout                      time.Duration
+	txnID                        string
+	role                         string
+	date                         time.Time
+	grpcAddr                     string
+	grpcPort                     int
+	grpcSecure                   bool
+	deployerAddr                 string
+	binaryCodePath               string
+	rawCodePath                  string
+	schemaFilePath               string
+	smartContractToken           string
+	newContractBlock             string
+	publishType                  int
+	smartContractData            string
+	executorAddr                 string
+	latest                       bool
+	quorumAddr                   string
+	links                        []string
+	mnemonicFile                 string
+	ChildPath                    int
+	TokenState                   string
+	pinningAddress               string
+	blockCount                   int
+	smartContractChainValidation bool
 }
 
 func (cmd *CommandConfig) getURL(url string) string {
@@ -208,7 +210,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		commandCfg.log = logger.New(logOptions)
-		
+
 		// Get addr and port
 		commandCfg.addr, err = cmd.Root().PersistentFlags().GetString("addr")
 		if err != nil {
@@ -262,20 +264,21 @@ func init() {
 		txCommandGroup(commandCfg),
 		chainDumpCommandGroup(commandCfg),
 		upgradeGroup(commandCfg),
-		pinningServiceCommand(commandCfg),
+		pinningServiceCommandGroup(commandCfg),
+		validateCommand(commandCfg),
 		versionCmd(),
 	)
 
-	// Disables the default help command. Not to be confused with the help flag (`--help` or `-h`) 
+	// Disables the default help command. Not to be confused with the help flag (`--help` or `-h`)
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 }
 
 func runApplication(cmdCfg *CommandConfig) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "run",
-		Short:   "Run Rubix Core",
-		Long:    "Run Rubix Core",
-		Args:    cobra.NoArgs,
+		Use:   "run",
+		Short: "Run Rubix Core",
+		Long:  "Run Rubix Core",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := os.MkdirAll(cmdCfg.runDir, os.ModePerm); err != nil {
 				fmt.Println("Error creating directories:", err)
@@ -311,7 +314,7 @@ func runApplication(cmdCfg *CommandConfig) *cobra.Command {
 			scfg.EnableAuth = cmdCfg.enableAuth
 			if cmdCfg.enableAuth {
 				scfg.DBType = "Sqlite3"
-				scfg.DBAddress =  path.Join(cmdCfg.cfg.DirPath, "rubix.db")
+				scfg.DBAddress = path.Join(cmdCfg.cfg.DirPath, "rubix.db")
 			}
 			// scfg := &srvcfg.Config{
 			// 	HostAddress: cmd.cfg.NodeAddress,
