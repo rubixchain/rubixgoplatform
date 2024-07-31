@@ -24,7 +24,11 @@ def generate_ipfs_swarm_key(build_name):
 
     output = "/key/swarm/psk/1.0.0/\n/base16/\n" + binascii.hexlify(key).decode()
 
-    filename = f"./fixtures/testswarm_{build_name}.key"
+    directory = "./test_swarm_key"
+    filename = f"{directory}/testswarm_{build_name}.key"
+
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
     with open(filename, "w") as file:
         file.write(output)
@@ -121,7 +125,8 @@ def copy_fixtures_to_build_dir(build_directory):
         raise FileNotFoundError(f"Copy operation for didimage.png.file failed. Destination file not found: {image_file_dest}")
     
     # Copy testswarm.key
-    swarmkey_src = os.path.join(fixtures_directory, f"testswarm_{build_directory}.key")
+    swarm_key_dir = os.path.join("tests", "test_swarm_key")
+    swarmkey_src = os.path.join(swarm_key_dir, f"testswarm_{build_directory}.key")
     swarmkey_dest = os.path.join(build_directory, f"testswarm.key")
     shutil.copyfile(swarmkey_src, swarmkey_dest)
 
