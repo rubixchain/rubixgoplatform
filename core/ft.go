@@ -3,6 +3,8 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -99,9 +101,15 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			return err
 		}
 
-		racBlockData := racBlocks[0].GetBlock()
-		fr := bytes.NewBuffer(racBlockData)
-		ftID, err := c.w.Add(fr, did, wallet.AddFunc)
+		// racBlockData := racBlocks[0].GetBlock()
+		// fr := bytes.NewBuffer(racBlockData)
+
+		ftnumString := strconv.Itoa(i)
+		parts := []string{FTName, ftnumString}
+		result := strings.Join(parts, "")
+		byteArray := []byte(result)
+		ftBuffer := bytes.NewBuffer(byteArray)
+		ftID, err := c.w.Add(ftBuffer, did, wallet.AddFunc)
 		if err != nil {
 			c.log.Error("Failed to create FT, Failed to add RAC token to IPFS", "err", err)
 			return err
