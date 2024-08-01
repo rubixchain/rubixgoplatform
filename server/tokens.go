@@ -90,9 +90,9 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Invalid sender or receiver DID")
 		return s.BasicResponse(req, false, "Invalid sender or receiver DID", nil)
 	}
-	if rbtReq.TokenCount < 0.00001 {
-		s.log.Error("Invalid RBT amount. RBT amount should be atlease 0.00001")
-		return s.BasicResponse(req, false, "Invalid RBT amount. RBT amount should be atlease 0.00001", nil)
+	if rbtReq.TokenCount < 0.001 {
+		s.log.Error("Invalid RBT amount. RBT amount should be atlease 0.001")
+		return s.BasicResponse(req, false, "Invalid RBT amount. RBT amount should be atlease 0.001", nil)
 	}
 	if rbtReq.Type < 1 || rbtReq.Type > 2 {
 		s.log.Error("Invalid trans type. TransType should be 1 or 2")
