@@ -117,16 +117,15 @@ type RBTPinRequestSwaggoInput struct {
 }
 
 // ShowAccount godoc
-// @Summary     Initiate Pin RBT
-// @Description This API will pin rbt in the Pinning node on behalf of the sender
+// @Summary     Initiate Pin Token
+// @Description This API will pin token in the Pinning node on behalf of the sender
 // @Tags        Account
-// @ID 			initiate-pin-rbt
+// @ID 			initiate-pin-token
 // @Accept      json
 // @Produce     json
-// @Param 		input body RBTPinRequestSwaggoInput true "Intitate Pin RBT"
+// @Param 		input body RBTPinRequestSwaggoInput true "Intitate Pin Token"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/initiate-pin-token [post]
-
 func (s *Server) APIInitiatePinRBT(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTPinRequest
 	err := s.ParseJSON(req, &rbtReq)
@@ -153,16 +152,15 @@ type RBTRecoverRequestSwaggoInput struct {
 }
 
 // ShowAccount godoc
-// @Summary     Recover RBT Token and Tokenchain from the pinning node
+// @Summary     Recover Token and Tokenchain from the pinning node
 // @Description This API will recover token and tokenchain from the Pinning node to the node which has pinned the token
 // @Tags        Account
-// @ID 			recover-rbt
+// @ID 			recover-token
 // @Accept      json
 // @Produce     json
-// @Param 		input body RBTRecoverRequestSwaggoInput true "Recover-RBT"
+// @Param 		input body RBTRecoverRequestSwaggoInput true "Recover-Token"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/recover-token [post]
-
 func (s *Server) APIRecoverRBT(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTRecoverRequest
 	err := s.ParseJSON(req, &rbtReq)
