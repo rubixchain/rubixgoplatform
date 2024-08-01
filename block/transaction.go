@@ -43,6 +43,7 @@ const (
 	TIDeployerDIDKey    string = "8"
 	TIExecutorDIDKey    string = "9"
 	TICommitedTokensKey string = "10"
+	TIPinningDIDKey     string = "11"
 )
 
 const (
@@ -69,15 +70,16 @@ type TransTokens struct {
 }
 
 type TransInfo struct {
-	SenderDID   string        `json:"senderDID"`
-	ReceiverDID string        `json:"receiverDID"`
-	Comment     string        `json:"comment"`
-	TID         string        `json:"tid"`
-	Block       []byte        `json:"block"`
-	RefID       string        `json:"refID"`
-	Tokens      []TransTokens `json:"tokens"`
-	DeployerDID string        `json:"deployerDID"`
-	ExecutorDID string        `json:"executorDID"`
+	SenderDID      string        `json:"senderDID"`
+	ReceiverDID    string        `json:"receiverDID"`
+	Comment        string        `json:"comment"`
+	TID            string        `json:"tid"`
+	Block          []byte        `json:"block"`
+	RefID          string        `json:"refID"`
+	Tokens         []TransTokens `json:"tokens"`
+	DeployerDID    string        `json:"deployerDID"`
+	ExecutorDID    string        `json:"executorDID"`
+	PinningNodeDID string        `json:"pinningNodeDID"`
 }
 
 func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
@@ -122,6 +124,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	}
 	if ti.ReceiverDID != "" {
 		ntib[TIReceiverDIDKey] = ti.ReceiverDID
+	}
+	if ti.PinningNodeDID != "" {
+		ntib[TIPinningDIDKey] = ti.PinningNodeDID
 	}
 	if ti.DeployerDID != "" {
 		ntib[TIDeployerDIDKey] = ti.DeployerDID

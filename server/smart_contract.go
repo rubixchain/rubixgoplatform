@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -51,10 +53,31 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(deployReq.SmartContractToken)
+	if len(deployReq.SmartContractToken) != 46 || !strings.HasPrefix(deployReq.SmartContractToken, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid smart contract token")
+		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
+	}
 	_, did, ok := util.ParseAddress(deployReq.DeployerAddress)
 	if !ok {
 		return s.BasicResponse(req, false, "Invalid Deployer address", nil)
 	}
+
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid deployer DID")
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+
+	if deployReq.RBTAmount < 0.001 {
+		s.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.001")
+		return s.BasicResponse(req, false, "Invalid RBT amount. Minimum RBT amount should be 0.001", nil)
+	}
+	if deployReq.QuorumType < 1 || deployReq.QuorumType > 2 {
+		s.log.Error("Invalid quorum type")
+		return s.BasicResponse(req, false, "Invalid quorum type", nil)
+	}
+
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
@@ -184,6 +207,12 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 
 	deploySC.DID = did["did"][0]
 
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(deploySC.DID)
+	if !strings.HasPrefix(deploySC.DID, "bafybmi") || len(deploySC.DID) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+
 	if !s.validateDIDAccess(req, deploySC.DID) {
 		return s.BasicResponse(req, false, "Ensure you enter the correct DID", nil)
 	}
@@ -267,6 +296,13 @@ func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Fetch smart contract failed, failed to fetch smartcontract token value", "err", err)
 		return s.BasicResponse(req, false, "Fetch smart contract failed, failed to fetch smartcontract token value", nil)
 	}
+
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(fetchSC.SmartContractToken)
+	if len(fetchSC.SmartContractToken) != 46 || !strings.HasPrefix(fetchSC.SmartContractToken, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid smart contract token")
+		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
+	}
+
 	fetchSC.SmartContractTokenPath, err = s.c.RenameSCFolder(fetchSC.SmartContractTokenPath, fetchSC.SmartContractToken)
 	if err != nil {
 		s.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
@@ -291,6 +327,23 @@ func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(request, false, "Failed to parse input", nil)
 	}
 
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(newEvent.SmartContractToken)
+
+	if len(newEvent.SmartContractToken) != 46 || !strings.HasPrefix(newEvent.SmartContractToken, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid smart contract token")
+		return s.BasicResponse(request, false, "Invalid smart contract token", nil)
+	}
+
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(newEvent.Did)
+	if !strings.HasPrefix(newEvent.Did, "bafybmi") || len(newEvent.Did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(request, false, "Invalid DID", nil)
+	}
+	if newEvent.Type < 1 || newEvent.Type > 2 {
+		s.log.Error("Invalid publish type")
+		return s.BasicResponse(request, false, "Invalid publish type", nil)
+	}
+
 	go s.c.PublishNewEvent(&newEvent)
 	return s.BasicResponse(request, true, "Smart contract published successfully", nil)
 }
@@ -309,6 +362,11 @@ func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 	err := s.ParseJSON(request, &newSubscription)
 	if err != nil {
 		return s.BasicResponse(request, false, "Failed to parse input", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(newSubscription.SmartContractToken)
+	if len(newSubscription.SmartContractToken) != 46 || !strings.HasPrefix(newSubscription.SmartContractToken, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid smart contract token")
+		return s.BasicResponse(request, false, "Invalid smart contract token", nil)
 	}
 	topic := newSubscription.SmartContractToken
 	s.c.AddWebReq(request)
@@ -341,7 +399,22 @@ func (s *Server) APIExecuteSmartContract(req *ensweb.Request) *ensweb.Result {
 	}
 	_, did, ok := util.ParseAddress(executeReq.ExecutorAddress)
 	if !ok {
-		return s.BasicResponse(req, false, "Invalid Deployer address", nil)
+		return s.BasicResponse(req, false, "Invalid Executer address", nil)
+	}
+
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(executeReq.SmartContractToken)
+	if len(executeReq.SmartContractToken) != 46 || !strings.HasPrefix(executeReq.SmartContractToken, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid smart contract token")
+		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
+	}
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid executer DID")
+		return s.BasicResponse(req, false, "Invalid executer DID", nil)
+	}
+	if executeReq.QuorumType < 1 || executeReq.QuorumType > 2 {
+		s.log.Error("Invalid quorum type")
+		return s.BasicResponse(req, false, "Invalid quorum type", nil)
 	}
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)

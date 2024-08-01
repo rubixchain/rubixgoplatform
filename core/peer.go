@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -62,6 +64,23 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 
 func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
+	peer_peerid := c.l.GetQuerry(req, "self_peerId")
+	peer_did := c.l.GetQuerry(req, "self_did")
+	peer_did_type := c.l.GetQuerry(req, "self_did_type")
+
+	//If the peer's DID type string is not empty, register the peer, if not already registered
+	if peer_did_type != "" {
+		peer_did_type_int, err1 := strconv.Atoi(peer_did_type)
+		if err1 != nil {
+			c.log.Debug("could not convert string to integer:", err1)
+		}
+
+		err2 := c.w.AddDIDPeerMap(peer_did, peer_peerid, peer_did_type_int)
+		if err2 != nil {
+			c.log.Debug("could not add quorum details to DID peer table:", err2)
+		}
+
+	}
 	exist := c.w.IsDIDExist(did)
 	ps := model.PeerStatusResponse{
 		Version:   c.version,
@@ -70,10 +89,10 @@ func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &ps, http.StatusOK)
 }
 
-func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
+func (c *Core) getPeer(addr string, self_did string) (*ipfsport.Peer, error) {
 	peerID, did, ok := util.ParseAddress(addr)
 	if !ok {
-		return nil, fmt.Errorf("invalid address")
+		return nil, fmt.Errorf("invalid address: %v", addr)
 	}
 	// check if addr contains the peer ID
 	if peerID == "" {
@@ -89,6 +108,18 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 	}
 	q := make(map[string]string)
 	q["did"] = did
+
+	//share self information to the peer, if required
+	if self_did != "" {
+		q["self_peerId"] = c.peerID
+		q["self_did"] = self_did
+		self_dt, err := c.w.GetDID(self_did)
+		if err != nil {
+			c.log.Info("could not fetch did type of peer:", self_did)
+		} else {
+			q["self_did_type"] = strconv.Itoa(self_dt.Type)
+		}
+	}
 	var ps model.PeerStatusResponse
 	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps, false)
 	if err != nil {
@@ -123,4 +154,13 @@ func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
 	} */
 	// TODO:: Valid the peer version before proceesing
 	return p, nil
+}
+
+func (c *Core) AddPeerDetails(peer_detail wallet.DIDPeerMap) error {
+	err := c.w.AddDIDPeerMap(peer_detail.DID, peer_detail.PeerID, *peer_detail.DIDType)
+	if err != nil {
+		c.log.Error("Failed to add PeerDetails to DIDPeerTable", "err", err)
+		return err
+	}
+	return nil
 }

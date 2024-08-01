@@ -18,15 +18,15 @@ func (c *Core) relaseToken(release *bool, token string) {
 		c.w.ReleaseToken(token)
 	}
 }
-
+func MinDecimalValue(num int) float64 {
+	return math.Pow(10, float64(-num))
+}
 func round(num float64) int {
 	return int(num + math.Copysign(0.5, num))
 }
-
 func Ceilround(num float64) int {
-	return int(math.Floor(num))
+	return int(math.Ceil(num))
 }
-
 func floatPrecision(num float64, precision int) float64 {
 	precision = MaxDecimalPlaces
 	output := math.Pow(10, float64(precision))
@@ -37,7 +37,7 @@ func CeilfloatPrecision(num float64, precision int) float64 {
 	return float64(Ceilround(num*output)) / output
 }
 
-func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.Token, error) {
+func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode int) ([]wallet.Token, error) {
 	wholeValue := int(value)
 	var err error
 	fv := float64(wholeValue)
@@ -46,7 +46,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	remWhole := 0
 	wt := make([]wallet.Token, 0)
 	if wholeValue != 0 {
-		wt, remWhole, err = c.w.GetWholeTokens(did, wholeValue)
+		wt, remWhole, err = c.w.GetWholeTokens(did, wholeValue, trnxMode)
 		if err != nil {
 			c.log.Error("failed to get token", "err", err)
 			return nil, err
@@ -99,7 +99,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 	for i := range pt {
 		if pt[i].TokenValue <= rem {
 			wt = append(wt, pt[i])
-			rem = floatPrecision(rem-pt[i].TokenValue, 10)
+			rem = floatPrecision(rem-pt[i].TokenValue, MaxDecimalPlaces)
 			idx = append(idx, i)
 		} else {
 			rpt = append(rpt, pt[i])
@@ -111,7 +111,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64) ([]wallet.
 		return wt, nil
 	}
 	if len(rpt) > 0 {
-		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, 10)}
+		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, MaxDecimalPlaces)}
 		c.w.ReleaseToken(rpt[0].TokenID)
 		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts, 2)
 		if err != nil {

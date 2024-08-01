@@ -16,7 +16,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
-	"github.com/rubixchain/rubixgoplatform/core/unpledge"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	didm "github.com/rubixchain/rubixgoplatform/did"
@@ -49,18 +48,23 @@ const (
 	APIUnlockTokens           string = "/api/unlock-tokens"
 	APICheckQuorumStatusPath  string = "/api/check-quorum-status"
 	APIGetPeerDIDTypePath     string = "/api/get-peer-didType"
+	APIGetPeerInfoPath        string = "/api/get-peer-info"
+	APIUpdateTokenHashDetails string = "/api/update-tokenhash-details"
+	APIAddUnpledgeDetails     string = "/api/initiate-unpledge"
+	APISelfTransfer           string = "/api/self-transfer"
+	APIRecoverPinnedRBT       string = "/api/recover-pinned-rbt"
+	APIRequestSigningHash     string = "/api/request-signing-hash"
 )
 
 const (
-	InvalidPasringErr string  = "invalid json parsing"
-	RubixRootDir      string  = "Rubix/"
-	DefaultMainNetDB  string  = "rubix.db"
-	DefaultTestNetDB  string  = "rubixtest.db"
-	MainNetDir        string  = "MainNet"
-	TestNetDir        string  = "TestNet"
-	TestNetDIDDir     string  = "TestNetDID/"
-	MinTrnxAmt        float64 = 0.00001
-	MaxDecimalPlaces  int     = 5
+	InvalidPasringErr string = "invalid json parsing"
+	RubixRootDir      string = "Rubix/"
+	DefaultMainNetDB  string = "rubix.db"
+	DefaultTestNetDB  string = "rubixtest.db"
+	MainNetDir        string = "MainNet"
+	TestNetDir        string = "TestNet"
+	TestNetDIDDir     string = "TestNetDID/"
+	MaxDecimalPlaces  int    = 3
 )
 
 const (
@@ -74,44 +78,45 @@ const (
 )
 
 type Core struct {
-	cfg           *config.Config
-	cfgFile       string
-	encKey        string
-	log           logger.Logger
-	peerID        string
-	lock          sync.RWMutex
-	ipfsLock      sync.RWMutex
-	qlock         sync.RWMutex
-	rlock         sync.Mutex
-	ipfs          *ipfsnode.Shell
-	ipfsState     bool
-	ipfsChan      chan bool
-	d             *did.DID
-	up            *unpledge.UnPledge
-	didDir        string
-	pm            *ipfsport.PeerManager
-	qm            *QuorumManager
-	l             *ipfsport.Listener
-	ps            *pubsub.PubSub
-	started       bool
-	ipfsApp       string
-	testNet       bool
-	testNetKey    string
-	version       string
-	quorumRequest map[string]*ConsensusStatus
-	pd            map[string]*PledgeDetails
-	webReq        map[string]*did.DIDChan
-	w             *wallet.Wallet
-	qc            map[string]did.DIDCrypto
-	pqc           map[string]did.DIDCrypto
-	sd            map[string]*ServiceDetials
-	s             storage.Storage
-	as            storage.Storage
-	srv           *service.Service
-	arbitaryMode  bool
-	arbitaryAddr  []string
-	ec            *ExplorerClient
-	secret        []byte
+	cfg                  *config.Config
+	cfgFile              string
+	encKey               string
+	log                  logger.Logger
+	peerID               string
+	lock                 sync.RWMutex
+	ipfsLock             sync.RWMutex
+	qlock                sync.RWMutex
+	rlock                sync.Mutex
+	ipfs                 *ipfsnode.Shell
+	ipfsState            bool
+	ipfsChan             chan bool
+	d                    *did.DID
+	didDir               string
+	pm                   *ipfsport.PeerManager
+	qm                   *QuorumManager
+	l                    *ipfsport.Listener
+	ps                   *pubsub.PubSub
+	started              bool
+	ipfsApp              string
+	testNet              bool
+	testNetKey           string
+	version              string
+	quorumRequest        map[string]*ConsensusStatus
+	pd                   map[string]*PledgeDetails
+	webReq               map[string]*did.DIDChan
+	w                    *wallet.Wallet
+	qc                   map[string]did.DIDCrypto
+	pqc                  map[string]did.DIDCrypto
+	sd                   map[string]*ServiceDetials
+	s                    storage.Storage
+	as                   storage.Storage
+	srv                  *service.Service
+	arbitaryMode         bool
+	arbitaryAddr         []string
+	ec                   *ExplorerClient
+	secret               []byte
+	quorumCount          int
+	noBalanceQuorumCount int
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {
@@ -265,16 +270,6 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		c.log.Error("Failed to setup quorum manager", "err", err)
 		return nil, err
 	}
-	err = util.CreateDir(c.cfg.DirPath + "unpledge")
-	if err != nil {
-		c.log.Error("Failed to create unpledge", "err", err)
-		return nil, err
-	}
-	c.up, err = unpledge.InitUnPledge(c.s, c.w, c.testNet, c.cfg.DirPath+"unpledge/", c.Unpledge, c.log)
-	if err != nil {
-		c.log.Error("Failed to init unpledge", "err", err)
-		return nil, err
-	}
 	if c.arbitaryMode {
 		c.srv, err = service.NewService(c.s, c.as, c.log)
 		if err != nil {
@@ -328,6 +323,7 @@ func (c *Core) SetupCore() error {
 	c.SetupToken()
 	c.QuroumSetup()
 	c.PinService()
+	// c.selfTransferService()
 	return nil
 }
 
@@ -527,7 +523,7 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 }
 
 // Initializes the did in it's corresponding did mode (basic/ lite)
-func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
+func (c *Core) SetupForienDID(didStr string, self_did string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		c.log.Error("couldn't fetch did")
@@ -539,16 +535,33 @@ func (c *Core) SetupForienDID(didStr string) (did.DIDCrypto, error) {
 	didtype, err := c.w.GetPeerDIDType(didStr)
 	if err != nil {
 		dt, err1 := c.w.GetDID(didStr)
-		if err1 != nil {
-			return nil, fmt.Errorf("couldn't fetch did type")
+		if err1 != nil || dt.Type == -1 {
+			peerId := c.w.GetPeerID(didStr)
+
+			if peerId == "" {
+				return nil, err
+			}
+			if self_did != "" {
+				didtype_, msg, err2 := c.GetPeerdidType_fromPeer(peerId, didStr, self_did)
+				if err2 != nil {
+					c.log.Error(msg)
+					return nil, err2
+				}
+				didtype = didtype_
+				peerUpdateResult, err3 := c.w.UpdatePeerDIDType(didStr, didtype)
+				if !peerUpdateResult {
+					c.log.Error("couldn't update did type in peer did table", err3)
+				}
+			}
+		} else {
+			didtype = dt.Type
 		}
-		didtype = dt.Type
 	}
 	return c.InitialiseDID(didStr, didtype)
 }
 
 // Initializes the quorum in it's corresponding did mode (basic/ lite)
-func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
+func (c *Core) SetupForienDIDQuorum(didStr string, self_did string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err
@@ -566,7 +579,7 @@ func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 			if peerId == "" {
 				return nil, err
 			}
-			didtype_, msg, err2 := c.GetPeerdidType_fromPeer(peerId, didStr)
+			didtype_, msg, err2 := c.GetPeerdidType_fromPeer(peerId, didStr, self_did)
 			if err2 != nil {
 				c.log.Error(msg)
 				return nil, err2
@@ -588,7 +601,7 @@ func (c *Core) SetupForienDIDQuorum(didStr string) (did.DIDCrypto, error) {
 	case did.LiteDIDMode:
 		return did.InitDIDQuorum_Lt(didStr, c.didDir, ""), nil
 	default:
-		return nil, fmt.Errorf("invalid did type")
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	}
 }
 
@@ -632,6 +645,6 @@ func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) 
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	default:
-		return nil, fmt.Errorf("invalid did type, couldn't initialise")
+		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	}
 }

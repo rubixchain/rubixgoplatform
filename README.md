@@ -349,3 +349,47 @@ This following options are used for this command
   -port string
         Server/Host port (default "20000")
 ```
+To add the peer details manually
+: To add the peer details by providing peerID, did and didType of the peer
+
+```
+./rubixgoplatform addpeerdetails
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+  
+  -peerID string
+        Peerd ID
+      
+  -did string
+        DID address (default "")
+
+  -didType int
+        DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode, 3-Child Mode, 4-Light Mode) (default 0)
+```
+
+To check details about the token states for which pledging has been done
+: To check for what token states the pledging has been done, and which tokens are pledged
+
+```
+./rubixgoplatform getpledgedtokendetails
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+```
+
+To check tokenstatehash status
+: To check if a particular tokenstatehash is exhausted, i.e if it has been transferred further
+
+```
+./rubixgoplatform tokenstatehash
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+        
+  -tokenstatehash string
+        TokenState Hash, for which the status needs to be checked
+```

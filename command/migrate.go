@@ -42,6 +42,10 @@ func (cmd *Command) MigrateNodeCmd() {
 		}
 		cmd.quorumPWD = pwd
 	}
+	if cmd.didType < 0 || cmd.didType > 4 {
+		cmd.log.Error("DID Type should be between 0 and 4")
+		return
+	}
 	r := core.MigrateRequest{
 		DIDType:   cmd.didType,
 		PrivPWD:   cmd.privPWD,

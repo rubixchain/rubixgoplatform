@@ -28,6 +28,8 @@ func (c *Core) DeploySmartContractToken(reqID string, deployReq *model.DeploySma
  */
 func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySmartContractRequest) *model.BasicResponse {
 	st := time.Now()
+	txEpoch := int(st.Unix())
+
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -49,7 +51,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		return resp
 	}
 	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
-	rbtTokensToCommitDetails, err := c.GetTokens(didCryptoLib, did, deployReq.RBTAmount)
+	rbtTokensToCommitDetails, err := c.GetTokens(didCryptoLib, did, deployReq.RBTAmount, SmartContractDeployMode)
 	if err != nil {
 		c.log.Error("Failed to retrieve Tokens to be committed", "err", err)
 		resp.Message = "Failed to retrieve Tokens to be committed , err : " + err.Error()
@@ -105,7 +107,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 
 	consensusContractDetails := &contract.ContractType{
 		Type:       contract.SmartContractDeployType,
-		PledgeMode: contract.POWPledgeMode,
+		PledgeMode: contract.PeriodicPledgeMode,
 		TotalRBTs:  deployReq.RBTAmount,
 		TransInfo: &contract.TransInfo{
 			DeployerDID:        did,
@@ -142,6 +144,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		ContractBlock:      consensusContract.GetBlock(),
 		SmartContractToken: deployReq.SmartContractToken,
 		Mode:               SmartContractDeployMode,
+		TransactionEpoch:   txEpoch,
 	}
 
 	txnDetails, _, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)
@@ -189,6 +192,8 @@ func (c *Core) ExecuteSmartContractToken(reqID string, executeReq *model.Execute
 
 func (c *Core) executeSmartContractToken(reqID string, executeReq *model.ExecuteSmartContractRequest) *model.BasicResponse {
 	st := time.Now()
+	txEpoch := int(st.Unix())
+	
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -245,7 +250,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	//create teh consensuscontract
 	consensusContractDetails := &contract.ContractType{
 		Type:       contract.SmartContractDeployType,
-		PledgeMode: contract.POWPledgeMode,
+		PledgeMode: contract.PeriodicPledgeMode,
 		TotalRBTs:  smartContractValue,
 		TransInfo: &contract.TransInfo{
 			ExecutorDID:        did,
@@ -283,6 +288,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		ContractBlock:      consensusContract.GetBlock(),
 		SmartContractToken: executeReq.SmartContractToken,
 		Mode:               SmartContractExecuteMode,
+		TransactionEpoch:   txEpoch,
 	}
 
 	txnDetails, _, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)

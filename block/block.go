@@ -40,6 +40,8 @@ const (
 	TCSmartContractDataKey string = "9"
 	TCTokenValueKey        string = "10"
 	TCChildTokensKey       string = "11"
+	TCSenderSignatureKey   string = "12"
+	TCEpochKey             string = "epoch"
 )
 
 const (
@@ -54,19 +56,22 @@ const (
 	TokenDeployedType     string = "09"
 	TokenExecutedType     string = "10"
 	TokenContractCommited string = "11"
+	TokenPinnedAsService  string = "12"
 )
 
 type TokenChainBlock struct {
-	TransactionType   string         `json:"transactionType"`
-	TokenOwner        string         `json:"owner"`
-	GenesisBlock      *GenesisBlock  `json:"genesisBlock"`
-	TransInfo         *TransInfo     `json:"transInfo"`
-	PledgeDetails     []PledgeDetail `json:"pledgeDetails"`
-	QuorumSignature   []string       `json:"quorumSignature"`
-	SmartContract     []byte         `json:"smartContract"`
-	SmartContractData string         `json:"smartContractData"`
-	TokenValue        float64        `json:"tokenValue"`
-	ChildTokens       []string       `json:"childTokens"`
+	TransactionType    string              `json:"transactionType"`
+	TokenOwner         string              `json:"owner"`
+	GenesisBlock       *GenesisBlock       `json:"genesisBlock"`
+	TransInfo          *TransInfo          `json:"transInfo"`
+	PledgeDetails      []PledgeDetail      `json:"pledgeDetails"`
+	QuorumSignature    []CreditSignature   `json:"quorumSignature"`
+	SmartContract      []byte              `json:"smartContract"`
+	SmartContractData  string              `json:"smartContractData"`
+	TokenValue         float64             `json:"tokenValue"`
+	ChildTokens        []string            `json:"childTokens"`
+	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
+	Epoch              int                 `json:"epoch"`
 }
 
 type PledgeDetail struct {
@@ -81,6 +86,22 @@ type Block struct {
 	bm  map[string]interface{}
 	op  bool
 	log logger.Logger
+}
+
+type CreditSignature struct {
+	Signature     string `json:"signature"`
+	PrivSignature string `json:"priv_signature"`
+	DID           string `json:"did"`
+	Hash          string `json:"hash"`
+	SignType      string `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
+}
+
+type InitiatorSignature struct {
+	NLSS_share   string `json:"nlss_share_signature"`
+	Private_sign string `json:"priv_signature"`
+	DID          string `json:"initiator_did"`
+	Hash         string `json:"hash"`
+	SignType     int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
 
 type BlockOption func(b *Block)
@@ -151,6 +172,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
+	if tcb.InitiatorSignature != nil {
+		ntcb[TCSenderSignatureKey] = tcb.InitiatorSignature
+	}
 
 	if floatPrecisionToMaxDecimalPlaces(tcb.TokenValue) > floatPrecisionToMaxDecimalPlaces(0) {
 		ntcb[TCTokenValueKey] = floatPrecisionToMaxDecimalPlaces(tcb.TokenValue)
@@ -162,6 +186,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		ntcb[TCChildTokensKey] = tcb.ChildTokens
 	}
 
+	if tcb.Epoch != 0 {
+		ntcb[TCEpochKey] = tcb.Epoch
+	}
+
 	blk := InitBlock(nil, ntcb)
 	return blk
 }
@@ -170,6 +198,7 @@ func (b *Block) blkDecode() error {
 	var m map[string]interface{}
 	err := cbor.Unmarshal(b.bb, &m)
 	if err != nil {
+		fmt.Println("failed to decode block", err.Error(), err)
 		return nil
 	}
 	si, sok := m[TCBlockContentSigKey]
@@ -575,6 +604,9 @@ func (b *Block) GetReceiverDID() string {
 func (b *Block) GetDeployerDID() string {
 	return b.getTrasnInfoString(TIDeployerDIDKey)
 }
+func (b *Block) GetPinningNodeDID() string {
+	return b.getTrasnInfoString(TIPinningDIDKey)
+}
 
 func (b *Block) GetExecutorDID() string {
 	return b.getTrasnInfoString(TIExecutorDIDKey)
@@ -688,4 +720,8 @@ func (b *Block) GetTokenValue() float64 {
 
 func (b *Block) GetChildTokens() []string {
 	return util.GetStringSliceFromMap(b.bm, TCChildTokensKey)
+}
+
+func (b *Block) GetEpoch() int64 {
+	return int64(util.GetIntFromMap(b.bm, TCEpochKey))
 }

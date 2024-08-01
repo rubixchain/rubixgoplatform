@@ -1,6 +1,8 @@
 package core
 
 import (
+	"fmt"
+
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 )
@@ -12,6 +14,21 @@ const (
 	DataString          string = "data"
 	SmartContractString string = "sc"
 )
+
+func (c *Core) getTotalAmountFromTokenHashes(tokenHashes []string) (float64, error) {
+	var totalAmount float64 = 0.0
+
+	for _, tokenHash := range tokenHashes {
+		walletToken, err := c.w.ReadToken(tokenHash)
+		if err != nil {
+			return 0.0, fmt.Errorf("getTotalAmountFromTokenHashes: failed to read token %v, err: %v", tokenHash, err)
+		}
+
+		totalAmount += floatPrecision(walletToken.TokenValue, MaxDecimalPlaces)
+	}
+
+	return floatPrecision(totalAmount, MaxDecimalPlaces), nil
+} 
 
 func (c *Core) RACPartTokenType() int {
 	if c.testNet {

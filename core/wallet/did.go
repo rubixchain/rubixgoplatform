@@ -1,5 +1,12 @@
 package wallet
 
+import (
+	"encoding/hex"
+	"fmt"
+
+	"github.com/ipfs/go-cid"
+)
+
 type DIDType struct {
 	DID     string `gorm:"column:did;primaryKey"`
 	Type    int    `gorm:"column:type"`
@@ -84,9 +91,12 @@ func (w *Wallet) IsDIDExist(did string) bool {
 }
 
 func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
-	lastChar := string(did[len(did)-1])
+	lastChar, err := w.GetLastChar(did)
+	if err != nil {
+		return err
+	}
 	var dm DIDPeerMap
-	err := w.s.Read(DIDStorage, &dm, "did=?", did)
+	err = w.s.Read(DIDStorage, &dm, "did=?", did)
 	if err == nil {
 		return nil
 	}
@@ -117,9 +127,12 @@ func (w *Wallet) AddDIDLastChar() error {
 	}
 	for _, dm := range existingDIDPeer {
 		did := dm.DID
-		lastChar := string(did[len(did)-1])
+		lastChar, err := w.GetLastChar(did)
+		if err != nil {
+			continue
+		}
 		dm.DIDLastChar = lastChar
-		err := w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+		err = w.s.Update(DIDPeerStorage, &dm, "did=?", did)
 		w.log.Info("DID Peer table updated")
 		if err != nil {
 			w.log.Error("Unable to update DID Peer table.")
@@ -128,6 +141,21 @@ func (w *Wallet) AddDIDLastChar() error {
 	}
 	return nil
 }
+
+func (w *Wallet) GetLastChar(did string) (string, error) {
+	// Parse the did
+	c, err := cid.Decode(did)
+	if err != nil {
+		w.log.Error(fmt.Sprintf("Failed to decode DID %v : %v", did, err))
+		return "", err
+	}
+	multihashDigest := c.Hash()
+	// Convert the multihash digest to hexadecimal - to compare with txnID
+	hexDigest := hex.EncodeToString(multihashDigest)
+	lastchar := string(hexDigest[len(hexDigest)-1])
+	return lastchar, nil
+}
+
 func (w *Wallet) GetPeerID(did string) string {
 	var dm DIDPeerMap
 	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
@@ -164,7 +192,7 @@ func (w *Wallet) UpdatePeerDIDType(did string, didtype int) (bool, error) {
 
 	err1 := w.s.Update(DIDPeerStorage, &dm, "did=?", did)
 	if err1 != nil {
-		w.log.Error("couldn't update did type in peer did table")
+		w.log.Error("couldn't update did type in peer did table for:", did)
 		return false, err1
 	}
 	return true, nil

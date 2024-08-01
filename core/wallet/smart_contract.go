@@ -21,10 +21,16 @@ type CallBackUrl struct {
 }
 
 func (w *Wallet) CreateSmartContractToken(sc *SmartContract) error {
-	err := w.s.Write(SmartContractStorage, sc)
+	var sc_info SmartContract
+	//to check whether smart contract hash already exist in the DB, and write if it doesn't exist
+	err := w.s.Read(SmartContractStorage, &sc_info, "smart_contract_hash=?", sc.SmartContractHash)
 	if err != nil {
-		w.log.Error("Failed to write smart contract token", "err", err)
-		return err
+		err := w.s.Write(SmartContractStorage, sc)
+		if err != nil {
+			w.log.Error("Failed to write smart contract token", "err", err)
+			return err
+		}
+		return nil
 	}
 	return nil
 }
@@ -43,14 +49,6 @@ func (w *Wallet) GetSmartContractToken(smartContractToken string) ([]SmartContra
 		return nil, fmt.Errorf("no smart contract token is available to commit")
 	}
 
-	for i := range sc {
-		sc[i].ContractStatus = TokenIsGenerated
-		err := w.s.Update(SmartContractStorage, &sc[i], "smart_contract_hash=?", sc[i].SmartContractHash)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return sc, nil
 }
 
@@ -58,7 +56,7 @@ func (w *Wallet) GetSmartContractTokenByDeployer(did string) ([]SmartContract, e
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	var sc []SmartContract
-	err := w.s.Read(SmartContractStorage, &sc, "did=?", did)
+	err := w.s.Read(SmartContractStorage, &sc, "deployer=?", did)
 	if err != nil {
 		return nil, err
 	}
