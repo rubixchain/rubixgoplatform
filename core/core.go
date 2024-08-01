@@ -64,9 +64,10 @@ const (
 	MainNetDir        string = "MainNet"
 	TestNetDir        string = "TestNet"
 	TestNetDIDDir     string = "TestNetDID/"
-	MaxDecimalPlaces  int    = 5
+	MaxDecimalPlaces  int    = 3
 	TokenValidatorURL string = "http://localhost:8080"
-)
+
+
 
 const (
 	NodePort    uint16 = 20000

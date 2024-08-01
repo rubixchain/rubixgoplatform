@@ -28,10 +28,7 @@ linux/
 mac/
 windows/
 dist/
-
-testswarm_linux.key
-testswarm_windows.key
-testswarm_mac.key
+test_swarm_key/
 
 # used for testing purpose
 !node_registry.json

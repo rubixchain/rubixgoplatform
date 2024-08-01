@@ -69,9 +69,9 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
 
-	if deployReq.RBTAmount < 0.00001 {
-		s.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.00001")
-		return s.BasicResponse(req, false, "Invalid RBT amount. Minimum RBT amount should be 0.00001", nil)
+	if deployReq.RBTAmount < 0.001 {
+		s.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.001")
+		return s.BasicResponse(req, false, "Invalid RBT amount. Minimum RBT amount should be 0.001", nil)
 	}
 	if deployReq.QuorumType < 1 || deployReq.QuorumType > 2 {
 		s.log.Error("Invalid quorum type")

@@ -24,10 +24,10 @@ func (c *Core) getTotalAmountFromTokenHashes(tokenHashes []string) (float64, err
 			return 0.0, fmt.Errorf("getTotalAmountFromTokenHashes: failed to read token %v, err: %v", tokenHash, err)
 		}
 
-		totalAmount += walletToken.TokenValue
+		totalAmount += floatPrecision(walletToken.TokenValue, MaxDecimalPlaces)
 	}
 
-	return totalAmount, nil
+	return floatPrecision(totalAmount, MaxDecimalPlaces), nil
 } 
 
 func (c *Core) RACPartTokenType() int {

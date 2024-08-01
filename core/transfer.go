@@ -260,7 +260,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		ti := contract.TokenInfo{
 			Token:      tokensForTxn[i].TokenID,
 			TokenType:  tt,
-			TokenValue: tokensForTxn[i].TokenValue,
+			TokenValue: floatPrecision(tokensForTxn[i].TokenValue, MaxDecimalPlaces),
 			OwnerDID:   tokensForTxn[i].DID,
 			BlockID:    bid,
 		}
@@ -489,7 +489,7 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 		ti := contract.TokenInfo{
 			Token:      tokensForTxn[i].TokenID,
 			TokenType:  tt,
-			TokenValue: tokensForTxn[i].TokenValue,
+			TokenValue: floatPrecision(tokensForTxn[i].TokenValue, MaxDecimalPlaces),
 			OwnerDID:   did,
 			BlockID:    bid,
 		}
