@@ -700,6 +700,41 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/initiate-pin-token": {
+            "post": {
+                "description": "This API will pin token in the Pinning node on behalf of the sender",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Initiate Pin Token",
+                "operationId": "initiate-pin-token",
+                "parameters": [
+                    {
+                        "description": "Intitate Pin Token",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.RBTPinRequestSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/initiate-rbt-transfer": {
             "post": {
                 "description": "This API will initiate RBT transfer to the specified dID",
@@ -757,6 +792,41 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/server.RBTSelfTransferRequestSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/recover-token": {
+            "post": {
+                "description": "This API will recover token and tokenchain from the Pinning node to the node which has pinned the token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Recover Token and Tokenchain from the pinning node",
+                "operationId": "recover-token",
+                "parameters": [
+                    {
+                        "description": "Recover-Token",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.RBTRecoverRequestSwaggoInput"
                         }
                     }
                 ],
@@ -1158,6 +1228,43 @@ const docTemplate = `{
             "properties": {
                 "smartContractToken": {
                     "type": "string"
+                }
+            }
+        },
+        "server.RBTPinRequestSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "pinningNode": {
+                    "type": "string"
+                },
+                "sender": {
+                    "type": "string"
+                },
+                "tokenCOunt": {
+                    "type": "number"
+                },
+                "type": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.RBTRecoverRequestSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "pinningNode": {
+                    "type": "string"
+                },
+                "sender": {
+                    "type": "string"
+                },
+                "tokenCOunt": {
+                    "type": "number"
                 }
             }
         },

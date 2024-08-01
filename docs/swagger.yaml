@@ -138,6 +138,30 @@ definitions:
       smartContractToken:
         type: string
     type: object
+  server.RBTPinRequestSwaggoInput:
+    properties:
+      comment:
+        type: string
+      pinningNode:
+        type: string
+      sender:
+        type: string
+      tokenCOunt:
+        type: number
+      type:
+        type: integer
+    type: object
+  server.RBTRecoverRequestSwaggoInput:
+    properties:
+      password:
+        type: string
+      pinningNode:
+        type: string
+      sender:
+        type: string
+      tokenCOunt:
+        type: number
+    type: object
   server.RBTSelfTransferRequestSwaggoInput:
     properties:
       sender:
@@ -633,6 +657,29 @@ paths:
       summary: Get ALL NFTs
       tags:
       - NFT
+  /api/initiate-pin-token:
+    post:
+      consumes:
+      - application/json
+      description: This API will pin token in the Pinning node on behalf of the sender
+      operationId: initiate-pin-token
+      parameters:
+      - description: Intitate Pin Token
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.RBTPinRequestSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiate Pin Token
+      tags:
+      - Account
   /api/initiate-rbt-transfer:
     post:
       consumes:
@@ -677,6 +724,30 @@ paths:
           schema:
             $ref: '#/definitions/model.BasicResponse'
       summary: Initiate Self Transfer
+      tags:
+      - Account
+  /api/recover-token:
+    post:
+      consumes:
+      - application/json
+      description: This API will recover token and tokenchain from the Pinning node
+        to the node which has pinned the token
+      operationId: recover-token
+      parameters:
+      - description: Recover-Token
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.RBTRecoverRequestSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Recover Token and Tokenchain from the pinning node
       tags:
       - Account
   /api/register-callback-url:
