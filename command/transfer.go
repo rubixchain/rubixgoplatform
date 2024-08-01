@@ -37,8 +37,8 @@ func (cmd *Command) TransferRBT() {
 		cmd.log.Error("Invalid sender or receiver DID")
 		return
 	}
-	if cmd.rbtAmount < 0.00001 {
-		cmd.log.Error("Invalid RBT amount. RBT amount should be atlease 0.00001")
+	if cmd.rbtAmount < 0.001 {
+		cmd.log.Error("Invalid RBT amount. RBT amount should be atlease 0.001")
 		return
 	}
 	if cmd.transType < 1 || cmd.transType > 2 {
