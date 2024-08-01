@@ -751,12 +751,12 @@ const docTemplate = `{
                 "operationId": "initiate-self-transfer",
                 "parameters": [
                     {
-                        "description": "Intitate RBT transfer",
+                        "description": "Intitate Self RBT transfer",
                         "name": "input",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.RBTTransferRequestSwaggoInput"
+                            "$ref": "#/definitions/server.RBTSelfTransferRequestSwaggoInput"
                         }
                     }
                 ],
@@ -1158,6 +1158,17 @@ const docTemplate = `{
             "properties": {
                 "smartContractToken": {
                     "type": "string"
+                }
+            }
+        },
+        "server.RBTSelfTransferRequestSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "sender": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "integer"
                 }
             }
         },

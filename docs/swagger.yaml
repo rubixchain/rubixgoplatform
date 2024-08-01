@@ -138,6 +138,13 @@ definitions:
       smartContractToken:
         type: string
     type: object
+  server.RBTSelfTransferRequestSwaggoInput:
+    properties:
+      sender:
+        type: string
+      type:
+        type: integer
+    type: object
   server.RBTTransferRequestSwaggoInput:
     properties:
       comment:
@@ -656,12 +663,12 @@ paths:
       description: This API will initiate self RBT transfer for a specific DID
       operationId: initiate-self-transfer
       parameters:
-      - description: Intitate RBT transfer
+      - description: Intitate Self RBT transfer
         in: body
         name: input
         required: true
         schema:
-          $ref: '#/definitions/server.RBTTransferRequestSwaggoInput'
+          $ref: '#/definitions/server.RBTSelfTransferRequestSwaggoInput'
       produces:
       - application/json
       responses:
