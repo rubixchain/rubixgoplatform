@@ -20,8 +20,8 @@ const (
 	TestSmartContractTokenType
 )
 
-func GetWholeTokenValue(tokenDetials string) (int, string, bool, error) {
-	trimmedResult := strings.TrimSpace(tokenDetials)
+func GetWholeTokenValue(tokenDetails string) (int, string, bool, error) {
+	trimmedResult := strings.TrimSpace(tokenDetails)
 	tokenLevel := string(trimmedResult[:len(trimmedResult)-64])
 	tokenCountHash := string(trimmedResult[len(trimmedResult)-64:])
 	tokenLevelInt, err := strconv.Atoi(tokenLevel)
@@ -38,21 +38,26 @@ func GetWholeTokenValue(tokenDetials string) (int, string, bool, error) {
 	return tokenLevelInt, tokenCountHash, needMigration, nil
 }
 
-func CheckWholeToken(tokenDetials string) (string, bool, error) {
+func CheckWholeToken(tokenDetails string, testNet bool) (string, bool, error) {
 	isWholeToken := true
-	trimmedResult := strings.TrimSpace(tokenDetials)
-	tokenLevel := string(trimmedResult[:len(trimmedResult)-64])
-	tokenCountHash := string(trimmedResult[len(trimmedResult)-64:])
-	tokenLevelInt, err := strconv.Atoi(tokenLevel)
-	if err != nil {
-		return "", !isWholeToken, err
-	}
-	if len(tokenLevel) < 3 {
-		if tokenLevelInt != 1 {
-			return "", !isWholeToken, fmt.Errorf("invalid token level format")
+	trimmedResult := strings.Split(strings.TrimSpace(tokenDetails), ",")
+	if testNet && len(trimmedResult) == 3 {
+		return "", !isWholeToken, nil
+	} else {
+		trimmedResultVal := trimmedResult[0]
+		tokenLevel := string(trimmedResultVal[:len(trimmedResultVal)-64])
+		// tokenCountHash := string(trimmedResultVal[len(trimmedResult)-64:])
+		tokenLevelInt, err := strconv.Atoi(tokenLevel) //It will always be 0
+		if err != nil {
+			return "", !isWholeToken, err
+		}
+		if len(tokenLevel) < 3 {
+			if tokenLevelInt != 1 {
+				return "", !isWholeToken, fmt.Errorf("invalid token level format")
+			}
 		}
 	}
-	return tokenCountHash, isWholeToken, nil
+	return "", isWholeToken, nil
 
 }
 
