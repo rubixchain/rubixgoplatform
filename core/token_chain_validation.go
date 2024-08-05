@@ -19,8 +19,8 @@ func (c *Core) TokenChainValidation(user_did string, tokenId string, blockCount 
 	}
 	ok := c.w.IsDIDExist(user_did)
 	if !ok {
-		response.Message = "Invalid did"
-		return response, fmt.Errorf("invalid did: %v", user_did)
+		response.Message = "Invalid did, please pass did of the tokenchain validator"
+		return response, fmt.Errorf("invalid did: %v, please pass did of the tokenchain validator", user_did)
 	}
 
 	if tokenId == "" { //if provided the boolean flag 'allmyToken', all the tokens' chain from tokens table will be validated
