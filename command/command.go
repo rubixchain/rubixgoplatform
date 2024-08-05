@@ -91,6 +91,7 @@ const (
 	PinTokenCmd                    string = "pinToken"
 	RecoverTokensCmd               string = "recoverToken"
 	GenerateFaucetTestRBTCmd       string = "generatefaucetrbt"
+	FaucetTokenCheck               string = "faucettokencheck"
 )
 
 var commands = []string{VersionCmd,
@@ -646,6 +647,8 @@ func Run(args []string) {
 		cmd.RecoverTokens()
 	case GenerateFaucetTestRBTCmd:
 		cmd.GenerateFaucetTestRBT()
+	case FaucetTokenCheck:
+		cmd.FaucetTokenCheck()
 	default:
 		cmd.log.Error("Invalid command")
 	}

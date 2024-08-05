@@ -66,3 +66,14 @@ func (c *Client) GenerateFaucetTestRBT(level int, didStr string) (*model.BasicRe
 	}
 	return &rm, nil
 }
+
+func (c *Client) FaucetTokenCheck(token string) (*model.BasicResponse, error) {
+	m := make(map[string]string)
+	m["token"] = token
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIFaucetTokenCheck, m, nil, &rm)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}

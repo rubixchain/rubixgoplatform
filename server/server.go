@@ -169,6 +169,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIInitiatePinRBT, "POST", s.AuthHandle(s.APIInitiatePinRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIRecoverRBT, "POST", s.AuthHandle(s.APIRecoverRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIGenerateFaucetTestToken, "POST", s.AuthHandle(s.APIGenerateFaucetTestToken, true, s.AuthError, false))
+	s.AddRoute(setup.APIFaucetTokenCheck, "GET", s.AuthHandle(s.APIFaucetTokenCheck, false, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {

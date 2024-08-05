@@ -76,6 +76,7 @@ const (
 	APIInitiatePinRBT                   string = "/api/initiate-pin-token"
 	APIRecoverRBT                       string = "/api/recover-token"
 	APIGenerateFaucetTestToken          string = "/api/generate-faucettest-token"
+	APIFaucetTokenCheck                 string = "/api/faucet-token-check"
 )
 
 // jwt.RegisteredClaims

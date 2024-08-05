@@ -644,3 +644,27 @@ func (c *Core) generateTestTokensFaucet(reqID string, level int, did string) err
 	}
 	return nil
 }
+
+func (c *Core) FaucetTokenCheck(token string) model.BasicResponse {
+	br := model.BasicResponse{
+		Status: false,
+	}
+	b, err := c.getFromIPFS(token)
+	if err != nil {
+		c.log.Error("failed to get token details from ipfs", "err", err, "token", token)
+		br.Message = "Cannot find token details"
+		return br
+	}
+
+	tokenval := string(b)
+	tokencontent := strings.Split(tokenval, ",")
+	if len(tokencontent) != 3 {
+		br.Message = "Non-faucet token"
+		return br
+	}
+
+	br.Status = true
+	br.Message = tokenval
+
+	return br
+}

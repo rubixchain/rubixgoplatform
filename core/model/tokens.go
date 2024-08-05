@@ -81,6 +81,6 @@ type TokenStateResponse struct {
 }
 
 type FaucetRBTGenerateRequest struct {
-	LevelOfToken int    `json:"number_of_tokens"`
+	LevelOfToken int    `json:"token_level"`
 	DID          string `json:"did"`
 }

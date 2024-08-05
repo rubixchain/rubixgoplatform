@@ -328,3 +328,10 @@ func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result 
 	go s.c.GenerateFaucetTestTokens(req.ID, tr.LevelOfToken, tr.DID)
 	return s.didResponse(req, req.ID)
 }
+
+func (s *Server) APIFaucetTokenCheck(req *ensweb.Request) *ensweb.Result {
+	token := s.GetQuerry(req, "token")
+
+	br := s.c.FaucetTokenCheck(token)
+	return s.RenderJSON(req, br, http.StatusOK)
+}
