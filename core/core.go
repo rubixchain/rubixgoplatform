@@ -65,7 +65,7 @@ const (
 	TestNetDir        string = "TestNet"
 	TestNetDIDDir     string = "TestNetDID/"
 	MaxDecimalPlaces  int    = 3
-	TokenValidatorURL string = "http://localhost:8080"
+	TokenValidatorURL string = "http://103.209.145.177:8000"
 )
 
 const (
