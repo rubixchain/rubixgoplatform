@@ -77,6 +77,7 @@ const (
 	APIRecoverRBT                       string = "/api/recover-token"
 	APIGenerateFaucetTestToken          string = "/api/generate-faucettest-token"
 	APIFaucetTokenCheck                 string = "/api/faucet-token-check"
+	APIValidateTokenChain               string = "/api/validate-token-chain"
 )
 
 // jwt.RegisteredClaims

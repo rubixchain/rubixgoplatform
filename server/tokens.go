@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -90,9 +91,9 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Invalid sender or receiver DID")
 		return s.BasicResponse(req, false, "Invalid sender or receiver DID", nil)
 	}
-	if rbtReq.TokenCount < 0.00001 {
-		s.log.Error("Invalid RBT amount. RBT amount should be atlease 0.00001")
-		return s.BasicResponse(req, false, "Invalid RBT amount. RBT amount should be atlease 0.00001", nil)
+	if rbtReq.TokenCount < 0.001 {
+		s.log.Error("Invalid RBT amount. RBT amount should be atlease 0.001")
+		return s.BasicResponse(req, false, "Invalid RBT amount. RBT amount should be atlease 0.001", nil)
 	}
 	if rbtReq.Type < 1 || rbtReq.Type > 2 {
 		s.log.Error("Invalid trans type. TransType should be 1 or 2")
@@ -117,16 +118,15 @@ type RBTPinRequestSwaggoInput struct {
 }
 
 // ShowAccount godoc
-// @Summary     Initiate Pin RBT
-// @Description This API will pin rbt in the Pinning node on behalf of the sender
+// @Summary     Initiate Pin Token
+// @Description This API will pin token in the Pinning node on behalf of the sender
 // @Tags        Account
-// @ID 			initiate-pin-rbt
+// @ID 			initiate-pin-token
 // @Accept      json
 // @Produce     json
-// @Param 		input body RBTPinRequestSwaggoInput true "Intitate Pin RBT"
+// @Param 		input body RBTPinRequestSwaggoInput true "Intitate Pin Token"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/initiate-pin-token [post]
-
 func (s *Server) APIInitiatePinRBT(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTPinRequest
 	err := s.ParseJSON(req, &rbtReq)
@@ -153,16 +153,15 @@ type RBTRecoverRequestSwaggoInput struct {
 }
 
 // ShowAccount godoc
-// @Summary     Recover RBT Token and Tokenchain from the pinning node
+// @Summary     Recover Token and Tokenchain from the pinning node
 // @Description This API will recover token and tokenchain from the Pinning node to the node which has pinned the token
 // @Tags        Account
-// @ID 			recover-rbt
+// @ID 			recover-token
 // @Accept      json
 // @Produce     json
-// @Param 		input body RBTRecoverRequestSwaggoInput true "Recover-RBT"
+// @Param 		input body RBTRecoverRequestSwaggoInput true "Recover-Token"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/recover-token [post]
-
 func (s *Server) APIRecoverRBT(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTRecoverRequest
 	err := s.ParseJSON(req, &rbtReq)
@@ -302,6 +301,43 @@ func (s *Server) APICheckPinnedState(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
 	br.Message = "Got Pins on " + tokenstatehash + ". Updated the pledging detail in table and removed from pledged token state table."
+	return s.RenderJSON(req, br, http.StatusOK)
+}
+
+func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
+	user_did := s.GetQuerry(req, "did")
+	token := s.GetQuerry(req, "token")
+	blockCount_str := s.GetQuerry(req, "blockcount")
+	smartContractChainValidation_str := s.GetQuerry(req, "SCChainValidation")
+	blockCount, err := strconv.Atoi(blockCount_str)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to convert blockCount string into integer", nil)
+	}
+
+	if user_did == "" {
+		return s.BasicResponse(req, false, "user did is not provided", nil)
+	}
+
+	smartContractChainValidation, err := strconv.ParseBool(smartContractChainValidation_str)
+	if err != nil {
+		return s.BasicResponse(req, false, "Error converting string to boolean", nil)
+	}
+
+	var br *model.BasicResponse
+	if smartContractChainValidation {
+		s.log.Debug("validating smart contract")
+		br, err = s.c.SmartContractTokenChainValidation(user_did, token, blockCount)
+		if err != nil {
+			return s.BasicResponse(req, false, br.Message, nil)
+		}
+	} else {
+		s.log.Debug("validating rbt token")
+		br, err = s.c.TokenChainValidation(user_did, token, blockCount)
+		if err != nil {
+			return s.BasicResponse(req, false, br.Message, nil)
+		}
+	}
+
 	return s.RenderJSON(req, br, http.StatusOK)
 }
 

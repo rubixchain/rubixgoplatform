@@ -69,9 +69,9 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
 
-	if deployReq.RBTAmount < 0.00001 {
-		s.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.00001")
-		return s.BasicResponse(req, false, "Invalid RBT amount. Minimum RBT amount should be 0.00001", nil)
+	if deployReq.RBTAmount < 0.001 {
+		s.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.001")
+		return s.BasicResponse(req, false, "Invalid RBT amount. Minimum RBT amount should be 0.001", nil)
 	}
 	if deployReq.QuorumType < 1 || deployReq.QuorumType > 2 {
 		s.log.Error("Invalid quorum type")
@@ -407,9 +407,8 @@ func (s *Server) APIExecuteSmartContract(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Invalid smart contract token")
 		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
 	}
-
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(executeReq.ExecutorAddress)
-	if !strings.HasPrefix(executeReq.ExecutorAddress, "bafybmi") || len(executeReq.ExecutorAddress) != 59 || !is_alphanumeric {
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid executer DID")
 		return s.BasicResponse(req, false, "Invalid executer DID", nil)
 	}

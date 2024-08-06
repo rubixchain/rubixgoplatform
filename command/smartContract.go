@@ -196,8 +196,8 @@ func (cmd *Command) deploySmartcontract() {
 		cmd.log.Error("Invalid deployer DID")
 		return
 	}
-	if cmd.rbtAmount < 0.00001 {
-		cmd.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.00001")
+	if cmd.rbtAmount < 0.001 {
+		cmd.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.001")
 		return
 	}
 	if cmd.transType < 1 || cmd.transType > 2 {

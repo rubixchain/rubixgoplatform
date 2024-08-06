@@ -25,23 +25,23 @@ import (
 // }
 
 const (
-	TCTokenTypeKey         string = "1"
-	TCTransTypeKey         string = "2"
-	TCTokenOwnerKey        string = "3"
-	TCGenesisBlockKey      string = "4"
-	TCTransInfoKey         string = "5"
-	TCSmartContractKey     string = "6"
-	TCQuorumSignatureKey   string = "7"
-	TCPledgeDetailsKey     string = "8"
-	TCBlockHashKey         string = "98"
-	TCSignatureKey         string = "99"
-	TCBlockContentKey      string = "1"
-	TCBlockContentSigKey   string = "2"
-	TCSmartContractDataKey string = "9"
-	TCTokenValueKey        string = "10"
-	TCChildTokensKey       string = "11"
-	TCSenderSignatureKey   string = "12"
-	TCEpochKey             string = "epoch"
+	TCTokenTypeKey          string = "1"
+	TCTransTypeKey          string = "2"
+	TCTokenOwnerKey         string = "3"
+	TCGenesisBlockKey       string = "4"
+	TCTransInfoKey          string = "5"
+	TCSmartContractKey      string = "6"
+	TCQuorumSignatureKey    string = "7"
+	TCPledgeDetailsKey      string = "8"
+	TCBlockHashKey          string = "98"
+	TCSignatureKey          string = "99"
+	TCBlockContentKey       string = "1"
+	TCBlockContentSigKey    string = "2"
+	TCSmartContractDataKey  string = "9"
+	TCTokenValueKey         string = "10"
+	TCChildTokensKey        string = "11"
+	TCInitiatorSignatureKey string = "12"
+	TCEpochKey              string = "epoch"
 )
 
 const (
@@ -57,6 +57,22 @@ const (
 	TokenExecutedType     string = "10"
 	TokenContractCommited string = "11"
 	TokenPinnedAsService  string = "12"
+)
+
+const (
+	Initiator_NLSS_share   string = "nlss_share_signature"
+	Initiator_Private_sign string = "priv_signature"
+	Initiator_DID          string = "initiator_did"
+	Initiator_Hash         string = "hash"
+	Initiator_SignType     string = "sign_type"
+)
+
+const (
+	CreditSig_Signature     string = "signature"
+	CreditSig_PrivSignature string = "priv_signature"
+	CreditSig_DID           string = "did"
+	CreditSig_Hash          string = "hash"
+	CreditSig_SignType      string = "sign_type"
 )
 
 type TokenChainBlock struct {
@@ -173,7 +189,7 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
 	if tcb.InitiatorSignature != nil {
-		ntcb[TCSenderSignatureKey] = tcb.InitiatorSignature
+		ntcb[TCInitiatorSignatureKey] = tcb.InitiatorSignature
 	}
 
 	if floatPrecisionToMaxDecimalPlaces(tcb.TokenValue) > floatPrecisionToMaxDecimalPlaces(0) {
@@ -724,4 +740,78 @@ func (b *Block) GetChildTokens() []string {
 
 func (b *Block) GetEpoch() int64 {
 	return int64(util.GetIntFromMap(b.bm, TCEpochKey))
+}
+
+// Fetch initiator signature details from the given block
+func (b *Block) GetInitiatorSignature() *InitiatorSignature {
+	var initiator_sign InitiatorSignature
+	s, ok := b.bm[TCInitiatorSignatureKey]
+	if !ok || s == nil {
+		return nil
+	}
+	//fetch initiator did
+	did_ := util.GetFromMap(s, Initiator_DID)
+	initiator_sign.DID = did_.(string)
+	//fetch initiator sign type
+	sign_type_ := util.GetFromMap(s, Initiator_SignType)
+	initiator_sign.SignType = int(sign_type_.(uint64))
+	//fetch initiator nlss share sign
+	nlss_share_ := util.GetFromMap(s, Initiator_NLSS_share)
+	initiator_sign.NLSS_share = nlss_share_.(string)
+	//fetch initiator private sign
+	priv_sign_ := util.GetFromMap(s, Initiator_Private_sign)
+	initiator_sign.Private_sign = priv_sign_.(string)
+	//fetch initiator hash / signed data
+	signed_data_ := util.GetFromMap(s, Initiator_Hash)
+	initiator_sign.Hash = signed_data_.(string)
+
+	return &initiator_sign
+}
+
+// Fetch quorums' signature details from the given block
+func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
+	var quorum_sign_list []CreditSignature
+	s := b.bm[TCQuorumSignatureKey]
+
+	qrmSignList_map, ok := s.([]interface{})
+	if !ok {
+		fmt.Println("not of type []interface{}")
+		return nil, fmt.Errorf("failed to fetch quorums' signature information from block map")
+	}
+	for _, qrmSignList_ := range qrmSignList_map {
+		var quorum_sig CreditSignature
+		//fetch quorum did
+		qrm_did := util.GetFromMap(qrmSignList_, CreditSig_DID)
+		quorum_sig.DID = qrm_did.(string)
+		// 	//fetch quorum sign type
+		sign_type_ := util.GetFromMap(qrmSignList_, CreditSig_SignType)
+		quorum_sig.SignType = sign_type_.(string)
+		// 	//fetch quorum nlss share sign
+		nlss_share_ := util.GetFromMap(qrmSignList_, CreditSig_Signature)
+		quorum_sig.Signature = nlss_share_.(string)
+		// 	//fetch quorum private sign
+		priv_sign_ := util.GetFromMap(qrmSignList_, CreditSig_PrivSignature)
+		quorum_sig.PrivSignature = priv_sign_.(string)
+		quorum_sign_list = append(quorum_sign_list, quorum_sig)
+	}
+
+	return quorum_sign_list, nil
+}
+
+// calculate block hash from block data
+func (b *Block) CalculateBlockHash() (string, error) {
+	var m map[string]interface{}
+
+	err := cbor.Unmarshal(b.bb, &m)
+	if err != nil {
+		return "", err
+	}
+	bc, ok := m[TCBlockContentKey]
+	if !ok {
+		return "", fmt.Errorf("invalid block, block content missing")
+	}
+	hb := util.CalculateHash(bc.([]byte), "SHA3-256")
+	block_hash := util.HexToStr(hb)
+
+	return block_hash, nil
 }
