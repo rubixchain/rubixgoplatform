@@ -17,6 +17,8 @@ def setup():
     config_B = node_config["node10"]
 
     create_and_register_did(config_A, "did_a", register_did=False)
+    create_and_register_did(config_A, "did_a1", register_did=False)
+    create_and_register_did(config_A, "did_a2", register_did=False)
     create_and_register_did(config_B, "did_b", register_did=False)
 
     save_to_config_file(__node_config_path, node_config)
@@ -46,10 +48,32 @@ def run(skip_setup: bool = False):
         node_config = load_from_config_file(__node_config_path)
 
     shuttle_transfer(node_config)
+    did_on_same_server_transfer(node_config)
     insufficient_balance_transfer(node_config)
     max_decimal_place_transfer(node_config)
 
     print("\n-------------- Tests Completed -------------------\n")
+
+def did_on_same_server_transfer(config):
+    node_A_info = config["node9"]
+    server_port_A, grpc_port_A = node_A_info["server"], node_A_info["grpcPort"]
+    did_A1, did_A2 = get_did_by_alias(node_A_info, "did_a1"), get_did_by_alias(node_A_info, "did_a2")
+
+    print("------ Test Case (PASS): Transfer between DID's on same server ------\n")
+  
+    print("\n1. Generating 2 whole RBT for A")
+    expect_success(fund_did_with_rbt)(node_A_info, did_A1, 2)
+    print("Funded node A with 2 RBT")
+
+    print("\n2. Transferring 1 RBT from A to B (both present on same node)....")
+    expect_success(rbt_transfer)(did_A1, did_A2, 1, server_port_A, grpc_port_A)
+    print("Transferred 1 RBT from A to B")
+
+    print("\n3. Transferring 1 RBT from B to A (both present on same node)....")
+    expect_success(rbt_transfer)(did_A2, did_A1, 1, server_port_A, grpc_port_A)
+    print("Transferred 1 RBT from A to B")
+
+    print("\n------ Test Case (PASS): Transfer between DID's on same server completed ------\n")
 
 def max_decimal_place_transfer(config):
     node_A_info, node_B_info = config["node9"], config["node10"]
