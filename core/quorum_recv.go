@@ -762,9 +762,10 @@ func (c *Core) updateReceiverToken(
 		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
 	}
 
-	// Only save the transaction details in Transaction history table whenever
-	// its a general RBT transfer
-	if sc.GetSenderDID() != sc.GetReceiverDID() {
+	// Store the transaction info only when we are dealing with RBT transfer between
+	// two DIDs that are situated on different nodes, as this avoid Unique Constraint
+	// issue while adding to Transaction History table from the Sender's end
+	if sc.GetSenderDID() != sc.GetReceiverDID() && senderPeerId != receiverPeerId {
 		td := &model.TransactionDetails{
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
