@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -300,5 +301,42 @@ func (s *Server) APICheckPinnedState(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
 	br.Message = "Got Pins on " + tokenstatehash + ". Updated the pledging detail in table and removed from pledged token state table."
+	return s.RenderJSON(req, br, http.StatusOK)
+}
+
+func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
+	user_did := s.GetQuerry(req, "did")
+	token := s.GetQuerry(req, "token")
+	blockCount_str := s.GetQuerry(req, "blockcount")
+	smartContractChainValidation_str := s.GetQuerry(req, "SCChainValidation")
+	blockCount, err := strconv.Atoi(blockCount_str)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to convert blockCount string into integer", nil)
+	}
+
+	if user_did == "" {
+		return s.BasicResponse(req, false, "user did is not provided", nil)
+	}
+
+	smartContractChainValidation, err := strconv.ParseBool(smartContractChainValidation_str)
+	if err != nil {
+		return s.BasicResponse(req, false, "Error converting string to boolean", nil)
+	}
+
+	var br *model.BasicResponse
+	if smartContractChainValidation {
+		s.log.Debug("validating smart contract")
+		br, err = s.c.SmartContractTokenChainValidation(user_did, token, blockCount)
+		if err != nil {
+			return s.BasicResponse(req, false, br.Message, nil)
+		}
+	} else {
+		s.log.Debug("validating rbt token")
+		br, err = s.c.TokenChainValidation(user_did, token, blockCount)
+		if err != nil {
+			return s.BasicResponse(req, false, br.Message, nil)
+		}
+	}
+
 	return s.RenderJSON(req, br, http.StatusOK)
 }
