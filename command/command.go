@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.17"
+	version string = "0.0.18"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -87,6 +87,9 @@ const (
 	CheckPinnedState               string = "checkpinnedstate"
 	SelfTransferRBT                string = "self-transfer-rbt"
 	RunUnpledge                    string = "run-unpledge"
+	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
+	PinTokenCmd                    string = "pinToken"
+	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
 )
 
@@ -136,6 +139,9 @@ var commands = []string{VersionCmd,
 	AddPeerDetailsCmd,
 	SelfTransferRBT,
 	RunUnpledge,
+	UnpledgePOWPledgeTokens,
+	PinTokenCmd,
+	RecoverTokensCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
 }
@@ -186,87 +192,88 @@ var commandsHelp = []string{"To get tool version",
 	"This command is to add the peer details manually",
 	"This command will initiate a self RBT transfer",
 	"This command will unpledge all the pledged tokens",
+	"This command will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
 }
 
 type Command struct {
-	cfg                config.Config
-	c                  *client.Client
-	sc                 *contract.Contract
-	encKey             string
-	start              bool
-	node               uint
-	runDir             string
-	logFile            string
-	logLevel           string
-	cfgFile            string
-	testNet            bool
-	testNetKey         string
-	addr               string
-	port               string
-	peerID             string
-	peers              []string
-	log                logger.Logger
-	didRoot            bool
-	didType            int
-	didSecret          string
-	forcePWD           bool
-	privPWD            string
-	quorumPWD          string
-	imgFile            string
-	didImgFile         string
-	privImgFile        string
-	pubImgFile         string
-	privKeyFile        string
-	pubKeyFile         string
-	quorumList         string
-	srvName            string
-	storageType        int
-	dbName             string
-	dbType             string
-	dbAddress          string
-	dbPort             string
-	dbUserName         string
-	dbPassword         string
-	senderAddr         string
-	receiverAddr       string
-	rbtAmount          float64
-	transComment       string
-	transType          int
-	numTokens          int
-	enableAuth         bool
-	did                string
-	token              string
-	arbitaryMode       bool
-	tokenList          string
-	batchID            string
-	fileMode           bool
-	file               string
-	userID             string
-	userInfo           string
-	timeout            time.Duration
-	txnID              string
-	role               string
-	date               time.Time
-	grpcAddr           string
-	grpcPort           int
-	grpcSecure         bool
-	deployerAddr       string
-	binaryCodePath     string
-	rawCodePath        string
-	schemaFilePath     string
-	smartContractToken string
-	newContractBlock   string
-	publishType        int
-	smartContractData  string
-	executorAddr       string
-	latest             bool
-	quorumAddr         string
-	links              []string
-	mnemonicFile       string
-	ChildPath          int
-	TokenState         string
-	blockCount         int
-	allMyTokens        bool
+	cfg                          config.Config
+	c                            *client.Client
+	sc                           *contract.Contract
+	encKey                       string
+	start                        bool
+	node                         uint
+	runDir                       string
+	logFile                      string
+	logLevel                     string
+	cfgFile                      string
+	testNet                      bool
+	testNetKey                   string
+	addr                         string
+	port                         string
+	peerID                       string
+	peers                        []string
+	log                          logger.Logger
+	didRoot                      bool
+	didType                      int
+	didSecret                    string
+	forcePWD                     bool
+	privPWD                      string
+	quorumPWD                    string
+	imgFile                      string
+	didImgFile                   string
+	privImgFile                  string
+	pubImgFile                   string
+	privKeyFile                  string
+	pubKeyFile                   string
+	quorumList                   string
+	srvName                      string
+	storageType                  int
+	dbName                       string
+	dbType                       string
+	dbAddress                    string
+	dbPort                       string
+	dbUserName                   string
+	dbPassword                   string
+	senderAddr                   string
+	receiverAddr                 string
+	rbtAmount                    float64
+	transComment                 string
+	transType                    int
+	numTokens                    int
+	enableAuth                   bool
+	did                          string
+	token                        string
+	arbitaryMode                 bool
+	tokenList                    string
+	batchID                      string
+	fileMode                     bool
+	file                         string
+	userID                       string
+	userInfo                     string
+	timeout                      time.Duration
+	txnID                        string
+	role                         string
+	date                         time.Time
+	grpcAddr                     string
+	grpcPort                     int
+	grpcSecure                   bool
+	deployerAddr                 string
+	binaryCodePath               string
+	rawCodePath                  string
+	schemaFilePath               string
+	smartContractToken           string
+	newContractBlock             string
+	publishType                  int
+	smartContractData            string
+	executorAddr                 string
+	latest                       bool
+	quorumAddr                   string
+	links                        []string
+	mnemonicFile                 string
+	ChildPath                    int
+	TokenState                   string
+	pinningAddress               string
+	blockCount                   int
 	smartContractChainValidation bool
 }
 
@@ -465,8 +472,8 @@ func Run(args []string) {
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 	flag.StringVar(&links, "links", "", "Explorer url")
 	flag.StringVar(&cmd.TokenState, "tokenstatehash", "", "Give Token State Hash to check state")
+	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
-	flag.BoolVar(&cmd.allMyTokens, "allmyTokens", false, "Validate token chain of all the tokens of the user")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
 
 	if len(os.Args) < 2 {
@@ -635,6 +642,12 @@ func Run(args []string) {
 		cmd.SelfTransferRBT()
 	case RunUnpledge:
 		cmd.RunUnpledge()
+	case UnpledgePOWPledgeTokens:
+		cmd.UnpledgePOWBasedPledgedTokens()
+	case PinTokenCmd:
+		cmd.PinRBT()
+	case RecoverTokensCmd:
+		cmd.RecoverTokens()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
 	default:

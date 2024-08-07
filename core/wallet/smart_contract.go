@@ -49,13 +49,6 @@ func (w *Wallet) GetSmartContractToken(smartContractToken string) ([]SmartContra
 		return nil, fmt.Errorf("no smart contract token is available to commit")
 	}
 
-	for i := range sc {
-		err := w.s.Update(SmartContractStorage, &sc[i], "smart_contract_hash=?", sc[i].SmartContractHash)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return sc, nil
 }
 
@@ -129,11 +122,4 @@ func (w *Wallet) GetSmartContractTokenUrl(smartcontracttoken string) (string, er
 	}
 	url := callback.CallBackUrl
 	return url, nil
-}
-
-func (w *Wallet) LockSmartContract(wt *SmartContract) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-	wt.ContractStatus = TokenIsLocked
-	return w.s.Update(SmartContractStorage, wt, "deployer=? AND smart_contract_hash=?", wt.Deployer, wt.SmartContractHash)
 }

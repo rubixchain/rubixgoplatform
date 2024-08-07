@@ -29,6 +29,8 @@ const (
 	SmartContractStorage           string = "smartcontract"
 	CallBackUrlStorage             string = "callbackurl"
 	TokenStateHash                 string = "TokenStateHashTable"
+	UnpledgeQueueTable             string = "unpledgequeue"
+	UnpledgeSequence               string = "UnpledgeSequence"
 )
 
 type WalletConfig struct {
@@ -135,6 +137,11 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	err = w.s.Init(SmartContractStorage, &SmartContract{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Smart Contract storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(UnpledgeSequence, &UnpledgeSequenceInfo{}, true)
+	if err != nil {
+		w.log.Error("failed to init UnpledgeSequence table", "err", err)
 		return nil, err
 	}
 

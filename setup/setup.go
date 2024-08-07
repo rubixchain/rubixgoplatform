@@ -72,6 +72,9 @@ const (
 	APICheckPinnedState                 string = "/api/check-pinned-state"
 	APISelfTransfer                     string = "/api/initiate-self-transfer"
 	APIRunUnpledge                      string = "/api/run-unpledge"
+	APIUnpledgePOWPledgeTokens          string = "/api/unpledge-pow-unpledge-tokens"
+	APIInitiatePinRBT                   string = "/api/initiate-pin-token"
+	APIRecoverRBT                       string = "/api/recover-token"
 	APIValidateTokenChain               string = "/api/validate-token-chain"
 )
 

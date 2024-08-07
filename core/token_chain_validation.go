@@ -8,15 +8,22 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func (c *Core) TokenChainValidation(user_did string, allMyTokens bool, tokenId string, blockCount int) (*model.BasicResponse, error) {
+func (c *Core) TokenChainValidation(user_did string, tokenId string, blockCount int) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
-	if allMyTokens { //if provided the boolean flag 'allmyToken', all the tokens' chain from tokens table will be validated
+	ok := c.w.IsDIDExist(user_did)
+	if !ok {
+		response.Message = "Invalid did, please pass did of the tokenchain validator"
+		return response, fmt.Errorf("invalid did: %v, please pass did of the tokenchain validator", user_did)
+	}
+
+	if tokenId == "" { //if provided the boolean flag 'allmyToken', all the tokens' chain from tokens table will be validated
 		c.log.Info("Validating all tokens from your tokens table")
 		tokens_list, err := c.w.GetAllTokens(user_did)
 		if err != nil {
@@ -39,19 +46,8 @@ func (c *Core) TokenChainValidation(user_did string, allMyTokens bool, tokenId s
 			//Validate tokenchain for each token in the tokens table
 			response, err = c.ValidateTokenChain(user_did, token_info, token_type, blockCount)
 			if err != nil || !response.Status {
-				c.log.Error("token chain validation failed for token:", tkn.TokenID, "\nError :", err, "\nmsg:", response.Message)
-				if token_info.TokenStatus == wallet.TokenIsFree {
-					//if token chain validation failed and the validator is the current owner of the token,
-					//then lock the token
-					response, err = c.LockInvalidToken(tkn.TokenID, token_type, user_did)
-					if err != nil {
-						c.log.Error(response.Message, tkn.TokenID)
-						return response, err
-					}
-					c.log.Info(response.Message, tkn.TokenID)
-				} else {
-					c.log.Error("token is not free, token state is", token_info.TokenStatus)
-				}
+				c.log.Error("token chain validation failed for token:", tkn.TokenID, "Error :", err, "msg:", response.Message)
+				return response, err
 			}
 		}
 
@@ -72,16 +68,7 @@ func (c *Core) TokenChainValidation(user_did string, allMyTokens bool, tokenId s
 		//Validate tokenchain for the provided token
 		response, err = c.ValidateTokenChain(user_did, token_info, token_type, blockCount)
 		if err != nil || !response.Status {
-			c.log.Error("token chain validation failed for token:", tokenId, "\nError :", err, "\nmsg:", response.Message)
-			if token_info.TokenStatus == wallet.TokenIsFree {
-				response, err1 := c.LockInvalidToken(tokenId, token_type, user_did)
-				if err1 != nil {
-					c.log.Error(response.Message, tokenId)
-					return response, err1
-				}
-				c.log.Info(response.Message, tokenId)
-				return response, err
-			}
+			c.log.Error("token chain validation failed for token:", tokenId, "Error :", err, "msg:", response.Message)
 			return response, err
 		}
 	}
@@ -272,13 +259,6 @@ func (c *Core) Validate_RBTTransfer_Block(b *block.Block, tokenId string, calcul
 		return response, err
 	}
 
-	//validate pledged quorum signature
-	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
-	if err != nil {
-		c.log.Error("msg", response.Message, "err", err)
-		return response, err
-	}
-
 	//validate all quorums' signatures
 	response, err = c.ValidateQuorums(b, user_did)
 	if err != nil {
@@ -304,7 +284,7 @@ func (c *Core) Validate_RBTBurnt_Block(b *block.Block, token_info wallet.Token, 
 	}
 
 	//validate burnt-token owner signature
-	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	response, err = c.Validate_Token_Owner(b, user_did)
 	if err != nil {
 		response.Message = "invalid token owner in RBT burnt block"
 		c.log.Error("invalid token owner in RBT burnt block")
@@ -329,7 +309,7 @@ func (c *Core) Validate_Pledged_or_Unpledged_Block(b *block.Block, tokenId strin
 	}
 
 	//validate burnt-token owner signature
-	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	response, err = c.Validate_Token_Owner(b, user_did)
 	if err != nil {
 		response.Message = "invalid token owner in RBT burnt block"
 		c.log.Error("invalid token owner in RBT burnt block")
@@ -354,7 +334,7 @@ func (c *Core) ValidateGenesisBlock(b *block.Block, token_info wallet.Token, tok
 	}
 
 	//initial token owner signature verification
-	response, err = c.Validate_Owner_or_PledgedQuorum(b, user_did)
+	response, err = c.Validate_Token_Owner(b, user_did)
 	if err != nil {
 		response.Message = "invalid token owner in genesis block"
 		c.log.Error("invalid token owner in genesis block")
@@ -385,8 +365,36 @@ func (c *Core) Validate_ParentToken_LatestBlock(parent_tokenId string, user_did 
 
 	parent_token_info, err := c.w.ReadToken(parent_tokenId)
 	if err != nil {
-		response.Message = "Failed to get parent token chain block, parent token does not exist"
-		return response, err
+		b, err := c.getFromIPFS(parent_tokenId)
+		if err != nil {
+			c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parent_tokenId)
+			response.Message = "failed to get parent token detials from ipfs"
+			return response, err
+		}
+		_, iswholeToken, _ := token.CheckWholeToken(string(b))
+		token_type := token.RBTTokenType
+		token_value := float64(1)
+		token_owner := ""
+		if !iswholeToken {
+			blk := util.StrToHex(string(b))
+			rb, err := rac.InitRacBlock(blk, nil)
+			if err != nil {
+				c.log.Error("invalid token, invalid rac block", "err", err)
+				response.Message = "invalid token, invalid rac block"
+				return response, err
+			}
+			token_type = rac.RacType2TokenType(rb.GetRacType())
+			if c.TokenType(PartString) == token_type {
+				token_value = rb.GetRacValue()
+			}
+			token_owner = rb.GetDID()
+		}
+		parent_token_info = &wallet.Token{
+			TokenID:     parent_tokenId,
+			TokenValue:  token_value,
+			TokenStatus: wallet.TokenIsBurnt,
+			DID:         token_owner,
+		}
 	}
 
 	if parent_token_info.TokenStatus != wallet.TokenIsBurnt {
@@ -409,7 +417,16 @@ func (c *Core) Validate_ParentToken_LatestBlock(parent_tokenId string, user_did 
 	}
 
 	//if parent token is also a part token, then validate it's parent token latest block
-	if parent_token_type == token.TestPartTokenType {
+	if parent_token_type == c.TokenType(PartString) {
+		if parent_token_info.ParentTokenID == "" {
+			genesis_block := c.w.GetGenesisTokenBlock(parent_tokenId, parent_token_type)
+			grand_parent_token, _, err := genesis_block.GetParentDetials(parent_tokenId)
+			if err != nil {
+				c.log.Error("failed to get grand parent tokens to validate")
+			}
+			c.log.Debug("grand parent token:", grand_parent_token)
+			parent_token_info.ParentTokenID = grand_parent_token
+		}
 		response, err = c.Validate_ParentToken_LatestBlock(parent_token_info.ParentTokenID, user_did)
 		if err != nil {
 			c.log.Error("msg", response.Message, "err", err)
@@ -485,12 +502,12 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 	// block_map := b.GetBlockMap()
 	sender := b.GetSenderDID()
 
-	sender_sign := b.GetSenderSignature()
+	sender_sign := b.GetInitiatorSignature()
 	//check if it is a block addded to chain before adding sender signature to block structure
 	if sender_sign == nil {
 		c.log.Info("old block, sender signature not found")
 		response.Message = "old block, sender signature not found"
-		return response, fmt.Errorf("old block, sender signature not found")
+		return response, nil
 	} else if sender_sign.DID != sender {
 		c.log.Info("invalid sender, sender did does not match")
 		response.Message = "invalid sender, sender did does not match"
@@ -537,8 +554,8 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 	return response, nil
 }
 
-// pledged quorum signature verification
-func (c *Core) Validate_Owner_or_PledgedQuorum(b *block.Block, user_did string) (*model.BasicResponse, error) {
+// token owner signature verification
+func (c *Core) Validate_Token_Owner(b *block.Block, user_did string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
@@ -573,11 +590,11 @@ func (c *Core) Validate_Owner_or_PledgedQuorum(b *block.Block, user_did string) 
 
 	response.Status = true
 	response.Message = "block validated successfully"
-	c.log.Debug("validated signer (token owner / pledged quorum) successfully")
+	c.log.Debug("validated token owner successfully")
 	return response, nil
 }
 
-// quorum signature validation
+// quorums signature validation
 func (c *Core) ValidateQuorums(b *block.Block, user_did string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,

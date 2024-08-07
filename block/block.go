@@ -25,23 +25,23 @@ import (
 // }
 
 const (
-	TCTokenTypeKey         string = "1"
-	TCTransTypeKey         string = "2"
-	TCTokenOwnerKey        string = "3"
-	TCGenesisBlockKey      string = "4"
-	TCTransInfoKey         string = "5"
-	TCSmartContractKey     string = "6"
-	TCQuorumSignatureKey   string = "7"
-	TCPledgeDetailsKey     string = "8"
-	TCBlockHashKey         string = "98"
-	TCSignatureKey         string = "99"
-	TCBlockContentKey      string = "1"
-	TCBlockContentSigKey   string = "2"
-	TCSmartContractDataKey string = "9"
-	TCTokenValueKey        string = "10"
-	TCChildTokensKey       string = "11"
-	TCSenderSignatureKey   string = "12"
-	TCEpochKey             string = "epoch"
+	TCTokenTypeKey          string = "1"
+	TCTransTypeKey          string = "2"
+	TCTokenOwnerKey         string = "3"
+	TCGenesisBlockKey       string = "4"
+	TCTransInfoKey          string = "5"
+	TCSmartContractKey      string = "6"
+	TCQuorumSignatureKey    string = "7"
+	TCPledgeDetailsKey      string = "8"
+	TCBlockHashKey          string = "98"
+	TCSignatureKey          string = "99"
+	TCBlockContentKey       string = "1"
+	TCBlockContentSigKey    string = "2"
+	TCSmartContractDataKey  string = "9"
+	TCTokenValueKey         string = "10"
+	TCChildTokensKey        string = "11"
+	TCInitiatorSignatureKey string = "12"
+	TCEpochKey              string = "epoch"
 )
 
 const (
@@ -56,14 +56,15 @@ const (
 	TokenDeployedType     string = "09"
 	TokenExecutedType     string = "10"
 	TokenContractCommited string = "11"
+	TokenPinnedAsService  string = "12"
 )
 
 const (
-	Sender_NLSS_share   string = "nlss_share_signature"
-	Sender_Private_sign string = "priv_signature"
-	Sender_DID          string = "sender_did"
-	Sender_Hash         string = "hash"
-	Sender_SignType     string = "sign_type"
+	Initiator_NLSS_share   string = "nlss_share_signature"
+	Initiator_Private_sign string = "priv_signature"
+	Initiator_DID          string = "initiator_did"
+	Initiator_Hash         string = "hash"
+	Initiator_SignType     string = "sign_type"
 )
 
 const (
@@ -75,18 +76,18 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType   string            `json:"transactionType"`
-	TokenOwner        string            `json:"owner"`
-	GenesisBlock      *GenesisBlock     `json:"genesisBlock"`
-	TransInfo         *TransInfo        `json:"transInfo"`
-	PledgeDetails     []PledgeDetail    `json:"pledgeDetails"`
-	QuorumSignature   []CreditSignature `json:"quorumSignature"`
-	SmartContract     []byte            `json:"smartContract"`
-	SmartContractData string            `json:"smartContractData"`
-	TokenValue        float64           `json:"tokenValue"`
-	ChildTokens       []string          `json:"childTokens"`
-	SenderSignature   *SenderSignature  `json:"senderSignature"`
-	Epoch             int               `json:"epoch"`
+	TransactionType    string              `json:"transactionType"`
+	TokenOwner         string              `json:"owner"`
+	GenesisBlock       *GenesisBlock       `json:"genesisBlock"`
+	TransInfo          *TransInfo          `json:"transInfo"`
+	PledgeDetails      []PledgeDetail      `json:"pledgeDetails"`
+	QuorumSignature    []CreditSignature   `json:"quorumSignature"`
+	SmartContract      []byte              `json:"smartContract"`
+	SmartContractData  string              `json:"smartContractData"`
+	TokenValue         float64             `json:"tokenValue"`
+	ChildTokens        []string            `json:"childTokens"`
+	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
+	Epoch              int                 `json:"epoch"`
 }
 
 type PledgeDetail struct {
@@ -111,10 +112,10 @@ type CreditSignature struct {
 	SignType      string `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
 
-type SenderSignature struct {
+type InitiatorSignature struct {
 	NLSS_share   string `json:"nlss_share_signature"`
 	Private_sign string `json:"priv_signature"`
-	DID          string `json:"sender_did"`
+	DID          string `json:"initiator_did"`
 	Hash         string `json:"hash"`
 	SignType     int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
@@ -187,8 +188,8 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
-	if tcb.SenderSignature != nil {
-		ntcb[TCSenderSignatureKey] = tcb.SenderSignature
+	if tcb.InitiatorSignature != nil {
+		ntcb[TCInitiatorSignatureKey] = tcb.InitiatorSignature
 	}
 
 	if floatPrecisionToMaxDecimalPlaces(tcb.TokenValue) > floatPrecisionToMaxDecimalPlaces(0) {
@@ -213,6 +214,7 @@ func (b *Block) blkDecode() error {
 	var m map[string]interface{}
 	err := cbor.Unmarshal(b.bb, &m)
 	if err != nil {
+		fmt.Println("failed to decode block", err.Error(), err)
 		return nil
 	}
 	si, sok := m[TCBlockContentSigKey]
@@ -618,6 +620,9 @@ func (b *Block) GetReceiverDID() string {
 func (b *Block) GetDeployerDID() string {
 	return b.getTrasnInfoString(TIDeployerDIDKey)
 }
+func (b *Block) GetPinningNodeDID() string {
+	return b.getTrasnInfoString(TIPinningDIDKey)
+}
 
 func (b *Block) GetExecutorDID() string {
 	return b.getTrasnInfoString(TIExecutorDIDKey)
@@ -737,30 +742,30 @@ func (b *Block) GetEpoch() int64 {
 	return int64(util.GetIntFromMap(b.bm, TCEpochKey))
 }
 
-// Fetch sender signature details from the given block
-func (b *Block) GetSenderSignature() *SenderSignature {
-	var sender_sign SenderSignature
-	s, ok := b.bm[TCSenderSignatureKey]
+// Fetch initiator signature details from the given block
+func (b *Block) GetInitiatorSignature() *InitiatorSignature {
+	var initiator_sign InitiatorSignature
+	s, ok := b.bm[TCInitiatorSignatureKey]
 	if !ok || s == nil {
 		return nil
 	}
-	//fetch sender did
-	did_ := util.GetFromMap(s, Sender_DID)
-	sender_sign.DID = did_.(string)
-	//fetch sender sign type
-	sign_type_ := util.GetFromMap(s, Sender_SignType)
-	sender_sign.SignType = int(sign_type_.(uint64))
-	//fetch sender nlss share sign
-	nlss_share_ := util.GetFromMap(s, Sender_NLSS_share)
-	sender_sign.NLSS_share = nlss_share_.(string)
-	//fetch sender private sign
-	priv_sign_ := util.GetFromMap(s, Sender_Private_sign)
-	sender_sign.Private_sign = priv_sign_.(string)
-	//fetch sender hash / signed data
-	signed_data_ := util.GetFromMap(s, Sender_Hash)
-	sender_sign.Hash = signed_data_.(string)
+	//fetch initiator did
+	did_ := util.GetFromMap(s, Initiator_DID)
+	initiator_sign.DID = did_.(string)
+	//fetch initiator sign type
+	sign_type_ := util.GetFromMap(s, Initiator_SignType)
+	initiator_sign.SignType = int(sign_type_.(uint64))
+	//fetch initiator nlss share sign
+	nlss_share_ := util.GetFromMap(s, Initiator_NLSS_share)
+	initiator_sign.NLSS_share = nlss_share_.(string)
+	//fetch initiator private sign
+	priv_sign_ := util.GetFromMap(s, Initiator_Private_sign)
+	initiator_sign.Private_sign = priv_sign_.(string)
+	//fetch initiator hash / signed data
+	signed_data_ := util.GetFromMap(s, Initiator_Hash)
+	initiator_sign.Hash = signed_data_.(string)
 
-	return &sender_sign
+	return &initiator_sign
 }
 
 // Fetch quorums' signature details from the given block
@@ -778,13 +783,13 @@ func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
 		//fetch quorum did
 		qrm_did := util.GetFromMap(qrmSignList_, CreditSig_DID)
 		quorum_sig.DID = qrm_did.(string)
-		// 	//fetch sender sign type
+		// 	//fetch quorum sign type
 		sign_type_ := util.GetFromMap(qrmSignList_, CreditSig_SignType)
 		quorum_sig.SignType = sign_type_.(string)
-		// 	//fetch sender nlss share sign
+		// 	//fetch quorum nlss share sign
 		nlss_share_ := util.GetFromMap(qrmSignList_, CreditSig_Signature)
 		quorum_sig.Signature = nlss_share_.(string)
-		// 	//fetch sender private sign
+		// 	//fetch quorum private sign
 		priv_sign_ := util.GetFromMap(qrmSignList_, CreditSig_PrivSignature)
 		quorum_sig.PrivSignature = priv_sign_.(string)
 		quorum_sign_list = append(quorum_sign_list, quorum_sig)

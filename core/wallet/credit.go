@@ -1,19 +1,42 @@
 package wallet
 
+import (
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+)
 
+// TODO: Credit structure needs to be worked upon
 type Credit struct {
 	DID    string `gorm:"column:did"`
 	Credit string `gorm:"column:credit;size:4000"`
-	Tx string `gorm:"column:tx"`
+	Tx     string `gorm:"column:tx"`
 }
 
+// TODO: Credit structure needs to be worked upon
+type PledgeInformation struct {
+	TokenID         string `json:"token_id"`
+	TokenType       int    `json:"token_type"`
+	PledgeBlockID   string `json:"pledge_block_id"`
+	UnpledgeBlockID string `json:"unpledge_block_id"`
+	QuorumDID       string `json:"quorum_did"`
+	TransactionID   string `json:"transaction_id"`
+}
 
-func (w *Wallet) StoreCredit(did string, credit string) error {
-	c := &Credit{
-		DID:    did,
-		Credit: credit,
+func (w *Wallet) StoreCredit(transactionID string, quorumDID string, pledgeInfo []*PledgeInformation) error {
+	pledgeInfoBytes, err := json.Marshal(pledgeInfo)
+	if err != nil {
+		return fmt.Errorf("failed while marshalling credits: %v", err.Error())
 	}
-	return w.s.Write(CreditStorage, c)
+	pledgeInfoEncoded := base64.StdEncoding.EncodeToString(pledgeInfoBytes)
+
+	credit := &Credit{
+		DID:    quorumDID,
+		Credit: pledgeInfoEncoded,
+		Tx:     transactionID,
+	}
+
+	return w.s.Write(CreditStorage, credit)
 }
 
 func (w *Wallet) GetCredit(did string) ([]string, error) {
@@ -29,12 +52,13 @@ func (w *Wallet) GetCredit(did string) ([]string, error) {
 	return str, nil
 }
 
-func (w *Wallet) RemoveCredit(did string, credit []string) error {
-	for _, c := range credit {
-		err := w.s.Delete(CreditStorage, &c, "did=? AND credit=?", did, c)
-		if err != nil {
-			return err
-		}
+func (w *Wallet) RemoveCredit(transactionID string) error {
+	err := w.s.Delete(CreditStorage, &Credit{}, "tx = ?", transactionID)
+	if err != nil {
+		errMsg := fmt.Errorf("failed to remove Credit for transaction: %v", transactionID)
+		w.log.Error(errMsg.Error())
+		return errMsg
 	}
+
 	return nil
 }

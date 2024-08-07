@@ -42,12 +42,20 @@ func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &resp, http.StatusOK)
 	}
 
-	// Add Unpledge details to UnpledgeQueue
+	// Add Unpledge details to UnpledgeSequence table
 	pledgeTokenHashesStrArr := strings.Join(pledgeTokenHashes, ",")
-	err := c.up.AddUnPledge(transactionID, pledgeTokenHashesStrArr, transactionEpoch, quorumDID)
+
+	unpledgeSequenceInfo := &wallet.UnpledgeSequenceInfo{
+		TransactionID: transactionID,
+		PledgeTokens:  pledgeTokenHashesStrArr,
+		Epoch:         transactionEpoch,
+		QuorumDID:     quorumDID,
+	}
+
+	err := c.w.AddUnpledgeSequenceInfo(unpledgeSequenceInfo)
 	if err != nil {
-		resp.Message = fmt.Sprintf("Error while adding record to UnpledgeQueue table for txId: %v, error: %v", transactionID, err.Error())
-		c.log.Error(fmt.Sprintf("Error while adding record to UnpledgeQueue table for txId: %v, error: %v", transactionID, err.Error()))
+		resp.Message = fmt.Sprintf("Error while adding record to UnpledgeSequence table for txId: %v, error: %v", transactionID, err.Error())
+		c.log.Error(fmt.Sprintf("Error while adding record to UnpledgeSequence table for txId: %v, error: %v", transactionID, err.Error()))
 		return c.l.RenderJSON(req, &resp, http.StatusOK)
 	}
 
@@ -148,6 +156,12 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	ti := sc.GetTransTokenInfo()
 	results := make([]MultiPinCheckRes, len(ti))
 	var wg sync.WaitGroup
+	var receiverPeerId = cr.ReceiverPeerID
+	if receiverPeerId == "" {
+		c.log.Debug("Receiver peer id is nil: checking for pinning node peer id")
+		receiverPeerId = cr.PinningNodePeerID
+		c.log.Debug("Pinning Node Peer Id", receiverPeerId)
+	}
 	for i := range ti {
 		wg.Add(1)
 		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
@@ -508,7 +522,7 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	switch cr.Mode {
-	case RBTTransferMode, SelfTransferMode:
+	case RBTTransferMode, SelfTransferMode, PinningServiceMode:
 		c.log.Debug("RBT consensus started")
 		return c.quorumRBTConsensus(req, did, qdc, &cr)
 	case DTCommitMode:
@@ -578,7 +592,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 
 	dc := c.pqc[did]
-	wt, err := c.GetTokens(dc, did, pr.TokensRequired)
+	wt, err := c.GetTokens(dc, did, pr.TokensRequired, RBTTransferMode)
 	if err != nil {
 		crep.Message = "Failed to get tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -619,7 +633,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) updateReceiverToken(
 	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
-	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int,
+	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool,
 ) ([]string, error) {
 	var receiverPeerId string = ""
 	var receiverDID string = ""
@@ -744,7 +758,7 @@ func (c *Core) updateReceiverToken(
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
 
-	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, c.ipfs)
+	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
@@ -800,7 +814,6 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 	}
 
 	receiverAddress := c.peerID + "." + did
-
 	updatedtokenhashes, err := c.updateReceiverToken(
 		sr.Address,
 		receiverAddress,
@@ -809,6 +822,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 		sr.QuorumList,
 		sr.QuorumInfo,
 		sr.TransactionEpoch,
+		sr.PinningServiceMode,
 	)
 	if err != nil {
 		c.log.Error(err.Error())
@@ -1004,7 +1018,11 @@ func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	err = c.w.StoreCredit(did, base64.StdEncoding.EncodeToString(jb))
+	// TODO: quorumCredit was earlier used to pass QuorumSignature as Credit information
+	// to other nodes. While working on Credit Restructing, this function would require changes.
+	// Following nil input to third argument is a temp fix, since quorumCredit is not called anywhere
+	// in this implementation
+	err = c.w.StoreCredit(did, base64.StdEncoding.EncodeToString(jb), nil)
 	if err != nil {
 		c.log.Error("Failed to store credit", "err", err)
 		crep.Message = "Failed to store credit"

@@ -31,6 +31,7 @@ func (c *Core) validateSigner(b *block.Block, self_did string, p *ipfsport.Peer)
 		c.log.Error("failed to get signers", "err", err)
 		return false, fmt.Errorf("failed to get signers", "err", err)
 	}
+	c.log.Debug("Signers", signers)
 	for _, signer := range signers {
 		var dc did.DIDCrypto
 		switch b.GetTransType() {
@@ -219,6 +220,18 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		if b == nil {
 			c.log.Error("Invalid token chain block")
 			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
+		}
+		c.log.Info("Validating token ownership", "token", ti[i].Token, "owner", b.GetOwner(), "sender", sc.GetSenderDID())
+		pinningNodeDID := b.GetPinningNodeDID()
+		ownerDID := b.GetOwner()
+		senderDID := sc.GetSenderDID()
+
+		if pinningNodeDID != "" {
+			c.log.Info("The token is Pinned as a service on Node ", pinningNodeDID)
+			if ownerDID != senderDID {
+				c.log.Error("Invalid token owner: The token is Pinned as a service", "owner", ownerDID, "The node which is trying to transfer", senderDID)
+				return false, fmt.Errorf("Invalid token owner: The token is Pinned as a service")
+			}
 		}
 		signatureValidation, err := c.validateSigner(b, quorumDID, p)
 		if !signatureValidation || err != nil {
