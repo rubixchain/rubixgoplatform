@@ -64,9 +64,25 @@ func (cmd *Command) getFTinfo() {
 		cmd.log.Error("Failed to get FT info", "message", info.Message)
 	} else {
 		cmd.log.Info("Successfully got FT information")
-		fmt.Printf("")
+		var ftNames []string
+		var ftCounts []string
 		for _, result := range info.FTInfo {
-			fmt.Printf("%+v\n", result)
+			ftNames = append(ftNames, result.FTName)
+			ftCounts = append(ftCounts, fmt.Sprintf("%d", result.FTCount))
 		}
+		maxNameLength := 0
+		for _, name := range ftNames {
+			if len(name) > maxNameLength {
+				maxNameLength = len(name)
+			}
+		}
+		// Print the output
+		for i, name := range ftNames {
+			fmt.Printf("%-*s: %s", maxNameLength, name, ftCounts[i])
+			if i < len(ftNames)-1 {
+				fmt.Print(", ")
+			}
+		}
+		fmt.Println() // Print a newline at the end
 	}
 }
