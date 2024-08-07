@@ -113,6 +113,16 @@ func (w *Wallet) GetAllTokens(did string) ([]Token, error) {
 	return t, nil
 }
 
+func (w *Wallet) GetAllFTs() ([]FT, error) {
+	var FT []FT
+	err := w.s.Read(FTTokenStorage, &FT, "ft_name!=?", "")
+	if err != nil {
+		w.log.Error("Failed to get FTs", "err", err)
+		return nil, err
+	}
+	return FT, nil
+}
+
 func (w *Wallet) GetAllPledgedTokens() ([]Token, error) {
 	var t []Token
 	err := w.s.Read(TokenStorage, &t, "token_status=?", TokenIsPledged)

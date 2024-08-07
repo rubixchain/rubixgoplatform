@@ -12,6 +12,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/rac"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken float64) {
@@ -111,7 +112,7 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		ftBuffer := bytes.NewBuffer(byteArray)
 		ftID, err := c.w.Add(ftBuffer, did, wallet.AddFunc)
 		if err != nil {
-			c.log.Error("Failed to create FT, Failed to add RAC token to IPFS", "err", err)
+			c.log.Error("Failed to create FT, Failed to add token to IPFS", "err", err)
 			return err
 		}
 		fmt.Println("ft ID is ", ftID)
@@ -226,4 +227,75 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		}
 	}
 	return nil
+}
+
+func (c *Core) GetFTInfo() ([]model.FTInfo, error) {
+	FT, err := c.w.GetAllFTs()
+	if err != nil && err.Error() != "no records found" {
+		c.log.Error("Failed to get tokens", "err", err)
+		return []model.FTInfo{}, fmt.Errorf("failed to get tokens")
+	}
+	ftNameCounts := make(map[string]int)
+
+	ftCount := 0
+	for _, t := range FT {
+		ftCount++
+		ftNameCounts[t.FTName]++
+	}
+	info := make([]model.FTInfo, 0, len(ftNameCounts))
+	for name, count := range ftNameCounts {
+		info = append(info, model.FTInfo{
+			FTName:  name,
+			FTCount: count,
+		})
+	}
+	return info, nil
+}
+
+func (c *Core) InitiateFTTransfer(reqID string, req *model.TransferFTReq) {
+	br := c.initiateFTTransfer(reqID, req)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
+
+func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model.BasicResponse {
+	st := time.Now()
+	resp := &model.BasicResponse{
+		Status: false,
+	}
+	if req.Sender == req.Receiver {
+		resp.Message = "Sender and receiver cannot be same"
+		return resp
+	}
+	if !strings.Contains(req.Sender, ".") || !strings.Contains(req.Receiver, ".") {
+		resp.Message = "Sender and receiver address should be of the format PeerID.DID"
+		return resp
+	}
+	_, did, ok := util.ParseAddress(req.Sender)
+	if !ok {
+		resp.Message = "Invalid sender DID"
+		return resp
+	}
+
+	rpeerid, rdid, ok := util.ParseAddress(req.Receiver)
+	if !ok {
+		resp.Message = "Invalid receiver DID"
+		return resp
+	}
+	if req.FTCount < 0 {
+		resp.Message = "Input transaction amount is less than minimum FT transaction amount"
+		return resp
+	}
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		resp.Message = "Failed to setup DID, " + err.Error()
+		return resp
+	}
+	fmt.Println(rpeerid, did, rdid, dc, st)
+
+	return resp
 }

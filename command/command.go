@@ -84,6 +84,8 @@ const (
 	GetAllExplorerCmd              string = "getallexplorer"
 	CreateFTCmd                    string = "createft"
 	DumpFTTokenChainCmd            string = "dumpft"
+	TransferFTCmd                  string = "transferft"
+	GetFTInfoCmd                   string = "getftinfo"
 )
 
 var commands = []string{VersionCmd,
@@ -132,6 +134,8 @@ var commands = []string{VersionCmd,
 	CheckQuorumStatusCmd,
 	CreateFTCmd,
 	DumpFTTokenChainCmd,
+	TransferFTCmd,
+	GetFTInfoCmd,
 }
 var commandsHelp = []string{"To get tool version",
 	"To get help",
@@ -177,7 +181,11 @@ var commandsHelp = []string{"To get tool version",
 	"This command gets the smartcontract data from latest block",
 	"This command will fetch the peer ID of the node",
 	"",
-	"This command will create FT"}
+	"This command will create FT",
+	"This command will dump the token chain of FT",
+	"This command will transfer FT",
+	"This command will give the balance of FTs",
+}
 
 type Command struct {
 	cfg                config.Config
@@ -616,6 +624,10 @@ func Run(args []string) {
 		cmd.createFT()
 	case DumpFTTokenChainCmd:
 		cmd.dumpFTTokenchain()
+	case TransferFTCmd:
+		cmd.transferFT()
+	case GetFTInfoCmd:
+		cmd.getFTinfo()
 	default:
 		cmd.log.Error("Invalid command")
 	}
