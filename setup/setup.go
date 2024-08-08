@@ -75,9 +75,9 @@ const (
 	APIUnpledgePOWPledgeTokens          string = "/api/unpledge-pow-unpledge-tokens"
 	APIInitiatePinRBT                   string = "/api/initiate-pin-token"
 	APIRecoverRBT                       string = "/api/recover-token"
+	APIValidateTokenChain               string = "/api/validate-token-chain"
 	APIGenerateFaucetTestToken          string = "/api/generate-faucettest-token"
 	APIFaucetTokenCheck                 string = "/api/faucet-token-check"
-	APIValidateTokenChain               string = "/api/validate-token-chain"
 )
 
 // jwt.RegisteredClaims

@@ -118,5 +118,5 @@ func (cmd *Command) FaucetTokenCheck() {
 	}
 	fmt.Println(br.Message)
 
-	cmd.log.Info("Got token details successfully")
+	cmd.log.Info("Validated token details successfully")
 }

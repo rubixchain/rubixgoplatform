@@ -93,6 +93,7 @@ const (
 	GenerateFaucetTestRBTCmd       string = "generatefaucetrbt"
 	FaucetTokenCheck               string = "faucettokencheck"
 	ValidateTokenchainCmd          string = "validatetokenchain"
+	FaucetTokenChainValidate       string = "faucettokenchainvalidate"
 )
 
 var commands = []string{VersionCmd,

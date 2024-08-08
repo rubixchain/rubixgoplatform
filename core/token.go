@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -645,13 +646,14 @@ func (c *Core) generateTestTokensFaucet(reqID string, level int, did string) err
 	return nil
 }
 
-func (c *Core) FaucetTokenCheck(token string) model.BasicResponse {
+func (c *Core) FaucetTokenCheck(tokenID string) model.BasicResponse {
 	br := model.BasicResponse{
 		Status: false,
 	}
-	b, err := c.getFromIPFS(token)
+	//Cheking if token is valid
+	b, err := c.getFromIPFS(tokenID)
 	if err != nil {
-		c.log.Error("failed to get token details from ipfs", "err", err, "token", token)
+		c.log.Error("failed to get token details from ipfs", "err", err, "token", tokenID)
 		br.Message = "Cannot find token details"
 		return br
 	}
@@ -663,8 +665,36 @@ func (c *Core) FaucetTokenCheck(token string) model.BasicResponse {
 		return br
 	}
 
+	faucetName := strings.TrimSpace(strings.Split(tokencontent[0], ":")[1])
+	if faucetName != token.FaucetName {
+		br.Message = "Invalid faucet name"
+		return br
+	}
+
+	tokenLevel := 1 //Need to change token number
+
+	tokenNumber, err := strconv.Atoi(strings.TrimSpace(strings.Split(tokencontent[2], ":")[1]))
+	if err != nil {
+		br.Message = "Invalid token number"
+		return br
+	}
+	if tokenNumber > token.TokenMap[tokenLevel] {
+		br.Message = "Invalid token number"
+		return br
+	}
+
+	//Validating token chain
+	tokenType := c.TokenType(RBTString)
+	genBlock := c.w.GetGenesisTokenBlock(tokenID, tokenType)
+	response, err := c.Validate_Token_Owner(genBlock, "bafybmif2cnmxooupsefy2rdy3vf3yt7xoojess4zedmoqvh3neezhi6uyq") //The did will be hardcoded to match the faucet DID
+	if err != nil {
+		c.log.Error("msg", response.Message, "err", err)
+		br.Message = "Couldn't validate token chain"
+		return br
+	}
+
 	br.Status = true
-	br.Message = tokenval
+	br.Message = "Token owner validated successfully. Token details = " + tokenval
 
 	return br
 }
