@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -527,4 +528,173 @@ func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
 		return nil, err
 	}
 	return requiredTokens, nil
+}
+
+func (c *Core) GenerateFaucetTestTokens(reqID string, level int, did string) {
+	err := c.generateTestTokensFaucet(reqID, level, did)
+	br := model.BasicResponse{
+		Status:  true,
+		Message: "DID registered successfully",
+	}
+	if err != nil {
+		br.Status = false
+		br.Message = err.Error()
+	}
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- &br
+}
+
+func (c *Core) generateTestTokensFaucet(reqID string, level int, did string) error {
+	if !c.testNet {
+		return fmt.Errorf("generate test token is available in test net")
+	}
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		return fmt.Errorf("DID is not exist")
+	}
+
+	count := token.MaxTokenFromLevel(level)
+
+	// Creating all tokens at the level
+	for i := 1; i <= count; i++ {
+		rt := &rac.RacType{
+			Type:        rac.RacTestTokenType,
+			DID:         did,
+			TotalSupply: 1,
+			TokenNumber: uint64(i),
+			TokenLevel:  uint64(level),
+			CreatorID:   token.FaucetName,
+		}
+
+		r, err := rac.CreateRacFaucet(rt)
+		if err != nil {
+			c.log.Error("Failed to create rac block", "err", err)
+			return fmt.Errorf("failed to create rac block")
+		}
+		err = r.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to update rac signature", "err", err)
+			return err
+		}
+
+		tokenstr := fmt.Sprintf("Faucet Name : %s, Token Level : %d, Token Number : %d", rt.CreatorID, rt.TokenLevel, rt.TokenNumber)
+
+		nb := bytes.NewBuffer([]byte(tokenstr))
+		id, err := c.w.Add(nb, did, wallet.OwnerRole)
+		if err != nil {
+			c.log.Error("Failed to add token to network", "err", err)
+			return err
+		}
+		gb := &block.GenesisBlock{
+			Type: block.TokenGeneratedType,
+			Info: []block.GenesisTokenInfo{
+				{Token: id},
+			},
+		}
+		ti := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     id,
+					TokenType: token.TestTokenType,
+				},
+			},
+		}
+
+		tcb := &block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner:      did,
+			GenesisBlock:    gb,
+			TransInfo:       ti,
+			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+		}
+
+		ctcb := make(map[string]*block.Block)
+		ctcb[id] = nil
+
+		blk := block.CreateNewBlock(ctcb, tcb)
+
+		if blk == nil {
+			c.log.Error("Failed to create new token chain block")
+			return fmt.Errorf("failed to create new token chain block")
+		}
+		err = blk.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to update did signature", "err", err)
+			return fmt.Errorf("failed to update did signature")
+		}
+		t := &wallet.Token{
+			TokenID:     id,
+			DID:         did,
+			TokenValue:  1,
+			TokenStatus: wallet.TokenIsFree,
+		}
+		err = c.w.CreateTokenBlock(blk)
+		if err != nil {
+			c.log.Error("Failed to add token chain", "err", err)
+			return err
+		}
+		err = c.w.CreateToken(t)
+		if err != nil {
+			c.log.Error("Failed to create token", "err", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Core) FaucetTokenCheck(tokenID string) model.BasicResponse {
+	br := model.BasicResponse{
+		Status: false,
+	}
+	//Cheking if token is valid
+	b, err := c.getFromIPFS(tokenID)
+	if err != nil {
+		c.log.Error("failed to get token details from ipfs", "err", err, "token", tokenID)
+		br.Message = "Cannot find token details"
+		return br
+	}
+
+	tokenval := string(b)
+	tokencontent := strings.Split(tokenval, ",")
+	if len(tokencontent) != 3 {
+		br.Message = "Non-faucet token"
+		return br
+	}
+
+	faucetName := strings.TrimSpace(strings.Split(tokencontent[0], ":")[1])
+	if faucetName != token.FaucetName {
+		br.Message = "Invalid faucet name"
+		return br
+	}
+
+	tokenLevel := 1 //Need to change token number
+
+	tokenNumber, err := strconv.Atoi(strings.TrimSpace(strings.Split(tokencontent[2], ":")[1]))
+	if err != nil {
+		br.Message = "Invalid token number"
+		return br
+	}
+	if tokenNumber > token.TokenMap[tokenLevel] {
+		br.Message = "Invalid token number"
+		return br
+	}
+
+	//Validating token chain
+	tokenType := c.TokenType(RBTString)
+	genBlock := c.w.GetGenesisTokenBlock(tokenID, tokenType)
+	response, err := c.Validate_Token_Owner(genBlock, "bafybmif2cnmxooupsefy2rdy3vf3yt7xoojess4zedmoqvh3neezhi6uyq") //The did will be hardcoded to match the faucet DID
+	if err != nil {
+		c.log.Error("msg", response.Message, "err", err)
+		br.Message = "Couldn't validate token chain"
+		return br
+	}
+
+	br.Status = true
+	br.Message = "Token owner validated successfully. Token details = " + tokenval
+
+	return br
 }

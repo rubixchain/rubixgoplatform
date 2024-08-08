@@ -231,7 +231,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		}
 		defer p.Close()
 	}
-
 	wta := make([]string, 0)
 	for i := range tokensForTxn {
 		wta = append(wta, tokensForTxn[i].TokenID)

@@ -1,5 +1,7 @@
 package token
 
+const FaucetName = "faucet1"
+
 var TokenMap = map[int]int{
 	0:  0,
 	1:  5000000,

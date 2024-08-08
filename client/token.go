@@ -70,3 +70,27 @@ func (c *Client) ValidateTokenchain(user_did string, smartContractChainValidatio
 	}
 	return &br, nil
 }
+
+func (c *Client) GenerateFaucetTestRBT(level int, didStr string) (*model.BasicResponse, error) {
+	m := model.FaucetRBTGenerateRequest{
+		LevelOfToken: level,
+		DID:          didStr,
+	}
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIGenerateFaucetTestToken, nil, &m, &rm)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}
+
+func (c *Client) FaucetTokenCheck(token string) (*model.BasicResponse, error) {
+	m := make(map[string]string)
+	m["token"] = token
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIFaucetTokenCheck, m, nil, &rm)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}

@@ -90,7 +90,10 @@ const (
 	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
 	PinTokenCmd                    string = "pinToken"
 	RecoverTokensCmd               string = "recoverToken"
+	GenerateFaucetTestRBTCmd       string = "generatefaucetrbt"
+	FaucetTokenCheck               string = "faucettokencheck"
 	ValidateTokenchainCmd          string = "validatetokenchain"
+	FaucetTokenChainValidate       string = "faucettokenchainvalidate"
 )
 
 var commands = []string{VersionCmd,
@@ -275,6 +278,7 @@ type Command struct {
 	pinningAddress               string
 	blockCount                   int
 	smartContractChainValidation bool
+	levelofToken                 int
 }
 
 func showVersion() {
@@ -475,6 +479,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
+	flag.IntVar(&cmd.levelofToken, "level", 0, "Level for which tokens need to be generated")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -650,6 +655,10 @@ func Run(args []string) {
 		cmd.RecoverTokens()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
+	case GenerateFaucetTestRBTCmd:
+		cmd.GenerateFaucetTestRBT()
+	case FaucetTokenCheck:
+		cmd.FaucetTokenCheck()
 	default:
 		cmd.log.Error("Invalid command")
 	}
