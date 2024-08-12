@@ -252,7 +252,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 }
 
 func (c *Core) GetAllQuorum() []string {
-	return c.qm.GetQuorum(QuorumTypeTwo, "")
+	return c.qm.GetQuorum(QuorumTypeTwo, "", c.peerID)
 }
 
 func (c *Core) AddQuorum(ql []QuorumData) error {
@@ -347,7 +347,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	lastCharTID := string(tid[len(tid)-1])
 	cr.TransactionID = tid
 
-	ql := c.qm.GetQuorum(cr.Type, lastCharTID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
+	ql := c.qm.GetQuorum(cr.Type, lastCharTID, c.peerID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
 	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
 		return nil, nil, fmt.Errorf("failed to get required quorums")
@@ -474,12 +474,30 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if qpid == "" {
 				qpid = c.w.GetPeerID(qdid)
 			}
+			// Initiatitor is part of Quorum Node
+			if qpid == "" {
+				_, err := c.w.GetDID(qdid)
+				if err != nil {
+					return nil, nil, fmt.Errorf("unable to fetch peerID for quorum DID: %v which fetching quorum information", qdid)
+				} else {
+					qpid = c.peerID
+				}		
+			}
 
 			var qrmInfo QuorumDIDPeerMap
 			//fetch did type of the quorum
 			qDidType, err := c.w.GetPeerDIDType(qdid)
 			if err != nil {
-				c.log.Error("could not fetch did type for quorum:", qdid, "error", err)
+				if strings.Contains(err.Error(), "no records found") {
+					didInfo, err := c.w.GetDID(qdid)
+					if err != nil {
+						return nil, nil, err
+					} else {
+						qDidType = didInfo.Type
+					}
+				} else {
+					c.log.Error(fmt.Sprintf("could not fetch did type for quorum: %v while gathering quorum information, err: %v", qdid, err))
+				}
 			}
 			if qDidType == -1 {
 				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
@@ -1268,7 +1286,6 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 }
 
 func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contract.Contract) {
-	defer c.w.ReleaseAllLockedTokens()
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
 	var err error

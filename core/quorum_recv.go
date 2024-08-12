@@ -906,12 +906,26 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 
 	ctcb := make(map[string]*block.Block)
 	tsb := make([]block.TransTokens, 0)
-	for _, t := range tks {
-		err = c.w.AddTokenBlock(t, b)
-		if err != nil {
-			c.log.Error("Failed to add token block", "token", t)
-			crep.Message = "Failed to add token block"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
+	// Generally, addition of a token block happens on Sender, Receiver
+	// and Quorum's end.
+	//
+	// If both sender and receiver happen to be on a Non-Quorum server, this is
+	// not an issue since we skip TokensTable and Token chain update, if the reciever
+	// and sender peer as seem. Thus, multiple update of same block to the Token's tokenchain
+	// is avoided
+	//
+	// However in case both sender and receiver happen to be a Quorum server, even though the above
+	// scenario is covered, but since the token block is also added on Quorum's end, we end up in a 
+	// situation where update of same block happens twice. Hence the following check ensures that we
+	// skip the addition of block here, if sender and receiver happen to be on a Quoeum node.
+	if !c.w.IsDIDExist(b.GetReceiverDID()) && !c.w.IsDIDExist(b.GetSenderDID()) {
+		for _, t := range tks {
+			err = c.w.AddTokenBlock(t, b)
+			if err != nil {
+				c.log.Error("Failed to add token block", "token", t)
+				crep.Message = "Failed to add token block"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
 		}
 	}
 	for _, t := range ur.PledgedTokens {

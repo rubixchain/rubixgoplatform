@@ -95,7 +95,7 @@ func NewQuorumManager(s storage.Storage, log logger.Logger) (*QuorumManager, err
 }
 
 // GetQuorum will get the configured or available quorum
-func (qm *QuorumManager) GetQuorum(t int, lastChar string) []string {
+func (qm *QuorumManager) GetQuorum(t int, lastChar string, selfPeer string) []string {
 	//QuorumTypeOne is to select quorums from the public pool of quorums instead of a private subnet.
 	//Once a new node is created, it will create a DID. Using the command "registerdid", the peerID and DID will be
 	//published in the network, and all the nodes listening to the subscription will have the DID added on the DIDPeerTable
@@ -130,7 +130,7 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string) []string {
 		var quorumAddrList []string
 		quorumAddrCount := 0
 		for _, q := range qm.ql {
-			peerID := qm.GetPeerID(q)
+			peerID := qm.GetPeerID(q, selfPeer)
 			addr := string(peerID + "." + q)
 			quorumAddrList = append(quorumAddrList, addr)
 			quorumAddrCount = quorumAddrCount + 1
@@ -165,11 +165,19 @@ func (qm *QuorumManager) RemoveAllQuorum(t int) error {
 	return err
 }
 
-func (qm *QuorumManager) GetPeerID(did string) string {
+func (qm *QuorumManager) GetPeerID(did string, selfPeer string) string {
 	var dm QuorumDIDPeerMap
 	err := qm.s.Read(wallet.DIDPeerStorage, &dm, "did=?", did)
-	if err != nil {
-		return ""
+	if err != nil && strings.Contains(err.Error(), "no records found") {
+		// Check if the Quorum DID is part of the same node by looking in DIDTable
+		var dt wallet.DIDType
+		err2 := qm.s.Read(wallet.DIDStorage, &dt, "did=?", did)
+		if err2 != nil {
+			return ""
+		} else {
+			return selfPeer
+		}
+	} else {
+		return dm.PeerID
 	}
-	return dm.PeerID
 }
