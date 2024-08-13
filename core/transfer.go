@@ -315,6 +315,13 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = "Consensus failed" + err.Error()
 		return resp
 	} */
+	accountstate, err := c.w.CalculateAccountState(senderDID)
+	if err != nil {
+		c.log.Error(err.Error())
+		resp.Message = err.Error()
+		return resp
+	}
+	c.w.UpdateAccountState(senderDID, accountstate)
 	etrans := &ExplorerTrans{
 		TID:         td.TransactionID,
 		SenderDID:   senderDID,

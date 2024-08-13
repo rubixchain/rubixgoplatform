@@ -10,6 +10,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -116,6 +117,21 @@ func (w *Wallet) GetAllTokens(did string) ([]Token, error) {
 		return nil, err
 	}
 	return t, nil
+}
+
+func (w *Wallet) CalculateAccountState(did string) (string, error) {
+	var t []Token
+	err := w.s.Read(TokenStorage, &t, "did=?", did)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return "", err
+	}
+	hash := sha3.New256()
+	for _, token := range t {
+		hash.Write([]byte(token.TokenStateHash))
+	}
+	accountState := util.HexToStr(hash.Sum(nil))
+	return accountState, nil
 }
 
 func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {

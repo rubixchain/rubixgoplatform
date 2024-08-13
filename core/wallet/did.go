@@ -8,11 +8,12 @@ import (
 )
 
 type DIDType struct {
-	DID     string `gorm:"column:did;primaryKey"`
-	Type    int    `gorm:"column:type"`
-	DIDDir  string `gorm:"column:did_dir"`
-	RootDID int    `gorm:"column:root_did"`
-	Config  string `gorm:"column:config"`
+	DID      string `gorm:"column:did;primaryKey"`
+	Type     int    `gorm:"column:type"`
+	DIDDir   string `gorm:"column:did_dir"`
+	RootDID  int    `gorm:"column:root_did"`
+	Config   string `gorm:"column:config"`
+	DIDState string `gorm:"column:did_state"`
 }
 
 type DIDPeerMap struct {
@@ -194,6 +195,25 @@ func (w *Wallet) UpdatePeerDIDType(did string, didtype int) (bool, error) {
 	if err1 != nil {
 		w.log.Error("couldn't update did type in peer did table for:", did)
 		return false, err1
+	}
+	return true, nil
+}
+
+// Updates did type of the given did in PeerDIDTable
+func (w *Wallet) UpdateAccountState(did string, accountState string) (bool, error) {
+	var dm DIDType
+	err := w.s.Read(DIDStorage, &dm, "did=?", did)
+	if err != nil {
+		w.log.Error("couldn't read from did table")
+		return false, err
+	}
+	dm.DIDState = accountState
+	err1 := w.s.Update(DIDStorage, &dm, "did=?", did)
+	if err1 != nil {
+		w.log.Error("couldn't update account state in did table for:", did)
+		return false, err1
+	} else {
+		w.log.Debug("AccountState ", accountState)
 	}
 	return true, nil
 }
