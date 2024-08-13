@@ -914,10 +914,10 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	// and sender peer as seem. Thus, multiple update of same block to the Token's tokenchain
 	// is avoided
 	//
-	// However in case both sender and receiver happen to be a Quorum server, even though the above
-	// scenario is covered, but since the token block is also added on Quorum's end, we end up in a 
+	// However in case either sender or receiver happen to be a Quorum server, even though the above
+	// scenario is covered , but since the token block is also added on Quorum's end, we end up in a 
 	// situation where update of same block happens twice. Hence the following check ensures that we
-	// skip the addition of block here, if sender and receiver happen to be on a Quoeum node.
+	// skip the addition of block here, if either sender or receiver happen to be on a Quorum node.
 	if !c.w.IsDIDExist(b.GetReceiverDID()) && !c.w.IsDIDExist(b.GetSenderDID()) {
 		for _, t := range tks {
 			err = c.w.AddTokenBlock(t, b)
