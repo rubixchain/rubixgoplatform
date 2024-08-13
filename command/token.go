@@ -77,12 +77,12 @@ func (cmd *Command) GenerateFaucetTestRBT() {
 		cmd.log.Error("Invalid DID")
 		return
 	}
-	if cmd.levelofToken <= 0 {
-		cmd.log.Error("Invalid level number, level should be greater than 0")
+	if cmd.numTokens <= 0 {
+		cmd.log.Error("Invalid RBT amount, tokens generated should be a whole number and greater than 0")
 		return
 	}
 
-	br, err := cmd.c.GenerateFaucetTestRBT(cmd.levelofToken, cmd.did)
+	br, err := cmd.c.GenerateFaucetTestRBT(cmd.numTokens, cmd.did)
 
 	if err != nil {
 		cmd.log.Error("Failed to generate RBT", "err", err)

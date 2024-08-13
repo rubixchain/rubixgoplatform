@@ -83,3 +83,9 @@ var TokenMap = map[int]int{
 	77: 19558,
 	78: 17602,
 }
+
+type FaucetToken struct {
+	TokenLevel        int    `gorm:"column:token_level"`
+	FaucetID          string `gorm:"column:faucet_id"`
+	LatestTokenNumber int    `gorm:"column:latest_token_number;"`
+}

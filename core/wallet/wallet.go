@@ -7,6 +7,7 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -31,6 +32,7 @@ const (
 	TokenStateHash                 string = "TokenStateHashTable"
 	UnpledgeQueueTable             string = "unpledgequeue"
 	UnpledgeSequence               string = "UnpledgeSequence"
+	FaucetTokenDetail              string = "FaucetTokenDetails"
 )
 
 type WalletConfig struct {
@@ -142,6 +144,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	err = w.s.Init(UnpledgeSequence, &UnpledgeSequenceInfo{}, true)
 	if err != nil {
 		w.log.Error("failed to init UnpledgeSequence table", "err", err)
+		return nil, err
+	}
+
+	err = w.s.Init(FaucetTokenDetail, &token.FaucetToken{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize Token", "err", err)
 		return nil, err
 	}
 

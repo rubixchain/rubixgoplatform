@@ -352,7 +352,7 @@ func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result 
 		s.log.Error("Invalid DID")
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
-	if tr.LevelOfToken <= 0 {
+	if tr.TokenCount <= 0 {
 		s.log.Error("Invalid level number, level should be greater than 0")
 		return s.BasicResponse(req, false, "Invalid level number, level should be greater than 0", nil)
 	}
@@ -361,7 +361,7 @@ func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result 
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.c.GenerateFaucetTestTokens(req.ID, tr.LevelOfToken, tr.DID)
+	go s.c.GenerateFaucetTestTokens(req.ID, tr.TokenCount, tr.DID)
 	return s.didResponse(req, req.ID)
 }
 
