@@ -715,7 +715,7 @@ func (c *Core) FaucetTokenCheck(tokenID string) model.BasicResponse {
 		br.Message = "Invalid token level"
 		return br
 	}
-	if tokenLevel != 1 { //Need to change token number
+	if tokenLevel != 1 { //Need to change token level
 		br.Message = "Invalid token level"
 		return br
 	}
@@ -736,7 +736,7 @@ func (c *Core) FaucetTokenCheck(tokenID string) model.BasicResponse {
 	response, err := c.Validate_Token_Owner(genBlock, "bafybmif2cnmxooupsefy2rdy3vf3yt7xoojess4zedmoqvh3neezhi6uyq") //The did will be hardcoded to match the faucet DID
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
-		br.Message = "Couldn't validate token chain"
+		br.Message = "Token Details : " + tokenval + " Couldn't validate token chain"
 		return br
 	}
 
