@@ -164,6 +164,7 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			TokenID:       ftID,
 			FTName:        FTName,
 			ParentTokenID: parentTokenID,
+			TokenStatus:   wallet.TokenIsGenerated,
 		}
 		newFTs = append(newFTs, *ft)
 	}
