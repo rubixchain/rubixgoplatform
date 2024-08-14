@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
 func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken float64) {
@@ -295,7 +297,112 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
-	fmt.Println(rpeerid, did, rdid, dc, st)
+	FTs := make([]wallet.FT, 0)
+	FTsForTxn, err := c.w.GetFTsByName(req.FTName)
+	AvailableFTCount := len(FTsForTxn)
 
+	if err != nil {
+		c.log.Error("Failed to get FTs", "err", err)
+		resp.Message = "Insufficient FTs or FTs are locked or " + err.Error()
+		return resp
+	} else {
+		if req.FTCount > AvailableFTCount {
+			c.log.Error(fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount))
+			resp.Message = fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount)
+			return resp
+		}
+	}
+	if len(FTsForTxn) != 0 {
+		FTs = append(FTs, FTsForTxn...)
+	}
+
+	//TODO: Pinning of tokens
+
+	p, err := c.getPeer(req.Receiver)
+	if err != nil {
+		resp.Message = "Failed to get receiver peer, " + err.Error()
+		return resp
+	}
+	defer p.Close()
+
+	FTTokenIDs := make([]string, 0)
+	for i := range FTsForTxn {
+		FTTokenIDs = append(FTTokenIDs, FTsForTxn[i].TokenID)
+	}
+	TokenInfo := make([]contract.TokenInfo, 0)
+	for i := range FTsForTxn {
+		tt := c.TokenType(FTString)
+		blk := c.w.GetLatestTokenBlock(FTsForTxn[i].TokenID, tt)
+		if blk == nil {
+			c.log.Error("failed to get latest block, invalid token chain")
+			resp.Message = "failed to get latest block, invalid token chain"
+			return resp
+		}
+		bid, err := blk.GetBlockID(FTsForTxn[i].TokenID)
+		if err != nil {
+			c.log.Error("failed to get block id", "err", err)
+			resp.Message = "failed to get block id, " + err.Error()
+			return resp
+		}
+		ti := contract.TokenInfo{
+			Token:      FTsForTxn[i].TokenID,
+			TokenType:  tt,
+			TokenValue: 0,
+			OwnerDID:   did,
+			BlockID:    bid,
+		}
+		TokenInfo = append(TokenInfo, ti)
+	}
+	sct := &contract.ContractType{
+		Type:       contract.SCFTType,
+		PledgeMode: contract.POWPledgeMode,
+		TransInfo: &contract.TransInfo{
+			SenderDID:   did,
+			ReceiverDID: rdid,
+			Comment:     req.Comment,
+			TransTokens: TokenInfo,
+		},
+		ReqID: reqID,
+	}
+	sc := contract.CreateNewContract(sct)
+	err = sc.UpdateSignature(dc)
+	if err != nil {
+		c.log.Error(err.Error())
+		resp.Message = err.Error()
+		return resp
+	}
+	cr := &ConensusRequest{
+		ReqID:          uuid.New().String(),
+		Type:           req.Type,
+		SenderPeerID:   c.peerID,
+		ReceiverPeerID: rpeerid,
+		ContractBlock:  sc.GetBlock(),
+	}
+	td, _, err := c.initiateConsensus(cr, sc, dc)
+	if err != nil {
+		c.log.Error("Consensus failed ", "err", err)
+		resp.Message = "Consensus failed " + err.Error()
+		return resp
+	}
+	et := time.Now()
+	dif := et.Sub(st)
+	td.Amount = float64(req.FTCount)
+	td.TotalTime = float64(dif.Milliseconds())
+	c.w.AddTransactionHistory(td)
+	etrans := &ExplorerTrans{
+		TID:         td.TransactionID,
+		SenderDID:   did,
+		ReceiverDID: rdid,
+		Amount:      float64(req.FTCount),
+		TrasnType:   req.Type,
+		TokenIDs:    FTTokenIDs,
+		QuorumList:  cr.QuorumList,
+		TokenTime:   float64(dif.Milliseconds()),
+	}
+	c.ec.ExplorerTransaction(etrans)
+	c.log.Info("FT Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
+	resp.Status = true
+	msg := fmt.Sprintf("FT Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
+	resp.Message = msg
 	return resp
 }

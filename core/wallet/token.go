@@ -123,6 +123,16 @@ func (w *Wallet) GetAllFTs() ([]FT, error) {
 	return FT, nil
 }
 
+func (w *Wallet) GetFTsByName(ftName string) ([]FT, error) {
+	var FT []FT
+	err := w.s.Read(FTTokenStorage, &FT, "ft_name=?", ftName)
+	if err != nil {
+		w.log.Error("Failed to get FTs by name", "err", err)
+		return nil, err
+	}
+	return FT, nil
+}
+
 func (w *Wallet) GetAllPledgedTokens() ([]Token, error) {
 	var t []Token
 	err := w.s.Read(TokenStorage, &t, "token_status=?", TokenIsPledged)

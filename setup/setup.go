@@ -69,7 +69,7 @@ const (
 	APIRemoveExplorer                   string = "/api/remove-explorer"
 	APICreateFT                         string = "/api/createft"
 	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
-	APIInitiateFTTransfer               string = "api/initiate-ft-tranfer"
+	APIInitiateFTTransfer               string = "/api/initiate-ft-tranfer"
 	APIGetFTInfo                        string = "/api/get-ft-info"
 )
 

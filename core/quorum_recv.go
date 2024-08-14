@@ -39,6 +39,7 @@ func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 func (c *Core) verifyContract(cr *ConensusRequest) (bool, *contract.Contract) {
 	sc := contract.InitContract(cr.ContractBlock, nil)
 	// setup the did to verify the signature
+	fmt.Println("Sender DID is ", sc.GetSenderDID())
 	dc, err := c.SetupForienDID(sc.GetSenderDID())
 	if err != nil {
 		c.log.Error("Failed to get DID", "err", err)

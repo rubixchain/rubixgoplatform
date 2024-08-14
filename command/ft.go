@@ -47,7 +47,7 @@ func (cmd *Command) transferFT() {
 	}
 	msg, status := cmd.SignatureResponse(br)
 	if !status {
-		cmd.log.Error("Failed to trasnfer FT", "msg", msg)
+		cmd.log.Error("Failed to transfer FT", "msg", msg)
 		return
 	}
 	cmd.log.Info(msg)
