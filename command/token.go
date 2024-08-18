@@ -111,7 +111,7 @@ func (cmd *Command) FaucetTokenCheck() {
 		return
 	}
 
-	br, err := cmd.c.FaucetTokenCheck(cmd.token)
+	br, err := cmd.c.FaucetTokenCheck(cmd.token, cmd.did)
 	if err != nil {
 		cmd.log.Info("Cannot get token details")
 		return

@@ -1,12 +1,12 @@
 package token
 
-const FaucetName = "faucet1"
+const FaucetName = "faucettest1"
 
 var TokenMap = map[int]int{
 	0:  0,
 	1:  5000000,
 	2:  2425000,
-	3:  2303750,
+	3:  2188563,
 	4:  2188563,
 	5:  2079134,
 	6:  1975178,
@@ -85,7 +85,7 @@ var TokenMap = map[int]int{
 }
 
 type FaucetToken struct {
-	TokenLevel        int    `gorm:"column:token_level"`
-	FaucetID          string `gorm:"column:faucet_id"`
-	LatestTokenNumber int    `gorm:"column:latest_token_number;"`
+	TokenLevel         int    `json:"token_level"`
+	FaucetID           string `json:"faucet_id"`
+	CurrentTokenNumber int    `json:"current_token_number"`
 }
