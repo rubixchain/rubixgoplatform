@@ -307,6 +307,16 @@ This following options are used for this command
   -token string
         Token address (default "")
 ```
+To decode the dumped tokenchain
+: To decode the dump tokenchain on the node use this command.
+
+```
+./rubixgoplatform decodetokenchain
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+```
 To Migrate Existing Java Node to RubixGo
 : To dump token chain on the node use this command.
 ```
