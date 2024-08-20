@@ -28,6 +28,7 @@ const (
 	NFTSaleContractMode
 	SmartContractDeployMode
 	SmartContractExecuteMode
+	FTTrasnferMode
 )
 const (
 	AlphaQuorumType int = iota
@@ -311,6 +312,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	case SmartContractExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
+	case FTTrasnferMode:
+		ti := sc.GetTransTokenInfo()
+		fmt.Println("Transtoken Info is ", ti)
+		for i := range ti {
+			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
+		}
+		fmt.Println("reqPledgeToken is ", reqPledgeTokens)
 	}
 	pd := PledgeDetails{
 		//TransferAmount:         reqPledgeTokens,
@@ -320,6 +328,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		PledgedTokenChainBlock: make(map[string]interface{}),
 		TokenList:              make([]string, 0),
 	}
+	fmt.Println("Pledge details in initate consensus is ", pd)
 	//getting last character from TID
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
@@ -358,6 +367,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.qlock.Unlock()
 	}()
 	for _, a := range cr.QuorumList {
+		fmt.Println("connecting to quorum................................. ", a)
 		//This part of code is trying to connect to the quorums in quorum list, where various functions are called to pledge the tokens
 		//and checking of transaction by the quorum i.e. consensus for the transaction. Once the quorum is connected, it pledges and
 		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
@@ -396,6 +406,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		return nil, nil, err
 	}
+	fmt.Println("PD before pledgeQuorumtoken is ", pd)
 
 	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
 	if err != nil {
@@ -406,6 +417,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	ti := sc.GetTransTokenInfo()
 	c.qlock.Lock()
 	pds := c.pd[cr.ReqID]
+	fmt.Println("PD after pledgeQuorumtoken is ", pds)
 	c.qlock.Unlock()
 	pl := make(map[string]map[string]float64)
 	for _, d := range cr.QuorumList {
@@ -421,7 +433,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 		}
 	}
-	if cr.Mode == RBTTransferMode {
+	if cr.Mode == RBTTransferMode || cr.Mode == FTTrasnferMode {
 		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
@@ -440,6 +452,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Unable to send tokens to receiver", "err", err)
 			return nil, nil, err
 		}
+		fmt.Println("Send request is ", sr)
+		fmt.Println("Responce is ", br)
 		if strings.Contains(br.Message, "failed to sync tokenchain") {
 			tokenPrefix := "Token: "
 			issueTypePrefix := "issueType: "
@@ -535,6 +549,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		return &td, pl, nil
 	} else if cr.Mode == SmartContractDeployMode {
+		fmt.Println("Entered deploy mode..........")
 		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
 		if err != nil {
@@ -605,7 +620,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		return &txnDetails, pl, nil
 	} else { //execute mode
-
+		fmt.Println("Entered execute mode..........")
 		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
 		if err != nil {
@@ -762,11 +777,13 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	} else {
 		signType = "1"
 	}
+	fmt.Println("Pledge quorum DIDs are ", pledgingQuorumDID)
 
 	switch qt {
 	case 0:
 		cs.Result.RunningCount--
 		if status {
+			fmt.Println()
 			did := p.GetPeerDID()
 			csig := CreditSignature{
 				Signature:     util.HexToStr(ss),
@@ -928,6 +945,10 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
+	fmt.Println("cresp.Message is ", cresp.Message)
+	fmt.Println("cresp.ReqID is ", cresp.ReqID)
+	fmt.Println("cresp.Status is ", cresp.Status)
+	fmt.Println("cr.ReqID is ", cr.ReqID)
 	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
 }
 
@@ -1165,6 +1186,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 
 func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt int) error {
 	if qt == AlphaQuorumType {
+		fmt.Println("Init-pledge-quorum_token started")
 		c.qlock.Lock()
 		cs, ok := c.quorumRequest[cr.ReqID]
 		c.qlock.Unlock()
@@ -1182,11 +1204,13 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			err := fmt.Errorf("invalid pledge request")
 			return err
 		}
+		fmt.Println("token list in Pledge details is ", pd.TokenList)
 
 		//pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
 
 		// Request pledage token
 		if pd.RemPledgeTokens != 0 {
+			fmt.Println("REM != 0")
 			pr := PledgeRequest{
 				TokensRequired: pd.RemPledgeTokens,
 			}
@@ -1196,6 +1220,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			// }
 			var prs PledgeReply
 			err := p.SendJSONRequest("POST", APIReqPledgeToken, nil, &pr, &prs, true)
+			fmt.Println("Pledge reply is ", prs)
 			if err != nil {
 				c.log.Error("Invalid response for pledge request", "err", err)
 				err := fmt.Errorf("invalid pledge request")

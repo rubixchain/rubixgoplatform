@@ -208,6 +208,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 
 	//check if token is pledgedtoken
 	wt := sc.GetTransTokenInfo()
+	fmt.Println("Trans Info in quorum recv is ", wt)
 
 	for i := range wt {
 		b := c.w.GetLatestTokenBlock(wt[i].Token, wt[i].TokenType)
@@ -216,12 +217,15 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			crep.Message = "pledge token check Failed, failed to get latest block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
+		fmt.Println("Pledge check is ", c.checkIsPledged(b))
+		fmt.Println("UNPledge check is ", c.checkIsUnpledged(b))
 		if c.checkIsPledged(b) {
 			c.log.Error("Pledge Token check Failed, Token ", wt[i], " is Pledged Token")
 			crep.Message = "Pledge Token check Failed, Token " + wt[i].Token + " is Pledged Token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		if c.checkIsUnpledged(b) {
+			fmt.Println("Unpledge check loop started")
 			unpledgeId := c.getUnpledgeId(wt[i].Token, wt[i].TokenType)
 			if unpledgeId == "" {
 				c.log.Error("Failed to fetch proof file CID")
@@ -263,9 +267,12 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			c.log.Debug("Proof of work verified")
 		}
 	}
-
+	fmt.Println("DID crypto is ", qdc)
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
+	fmt.Println("Q Hash is ", qHash)
 	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	fmt.Println("err is ", err)
+	fmt.Println("Sign array is ", qsb)
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
@@ -276,6 +283,8 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	crep.Message = "Conensus finished successfully"
 	crep.ShareSig = qsb
 	crep.PrivSig = ppb
+	fmt.Println("Share sign is ", qsb)
+	fmt.Println("Pvt sign is ", ppb)
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
@@ -551,6 +560,9 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	case SmartContractExecuteMode:
 		c.log.Debug("Smart contract Consensus for execution started")
 		return c.quorumSmartContractConsensus(req, did, qdc, &cr)
+	case FTTrasnferMode:
+		c.log.Debug("FT consensus started")
+		return c.quorumRBTConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
 		crep.Message = "Invalid consensus mode"

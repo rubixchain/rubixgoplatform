@@ -165,6 +165,7 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			FTName:        FTName,
 			ParentTokenID: parentTokenID,
 			TokenStatus:   wallet.TokenIsGenerated,
+			TokenValue:    fractionalValue,
 		}
 		newFTs = append(newFTs, *ft)
 	}
@@ -299,9 +300,9 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		return resp
 	}
 	FTs := make([]wallet.FT, 0)
-	FTsForTxn, err := c.w.GetFTsByName(req.FTName)
-	AvailableFTCount := len(FTsForTxn)
-
+	AllFTs, err := c.w.GetFTsByName(req.FTName)
+	FTsForTxn := AllFTs[:req.FTCount]
+	AvailableFTCount := len(AllFTs)
 	if err != nil {
 		c.log.Error("Failed to get FTs", "err", err)
 		resp.Message = "Insufficient FTs or FTs are locked or " + err.Error()
@@ -348,7 +349,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		ti := contract.TokenInfo{
 			Token:      FTsForTxn[i].TokenID,
 			TokenType:  tt,
-			TokenValue: 0,
+			TokenValue: FTsForTxn[i].TokenValue,
 			OwnerDID:   did,
 			BlockID:    bid,
 		}
@@ -373,6 +374,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		return resp
 	}
 	cr := &ConensusRequest{
+		Mode:           FTTrasnferMode,
 		ReqID:          uuid.New().String(),
 		Type:           req.Type,
 		SenderPeerID:   c.peerID,
