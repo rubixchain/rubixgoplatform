@@ -328,13 +328,13 @@ func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
 		s.log.Debug("validating smart contract")
 		br, err = s.c.SmartContractTokenChainValidation(user_did, token, blockCount)
 		if err != nil {
-			return s.BasicResponse(req, false, "Failed to validate token(s)", nil)
+			return s.BasicResponse(req, false, br.Message, nil)
 		}
 	} else {
 		s.log.Debug("validating rbt token")
 		br, err = s.c.TokenChainValidation(user_did, token, blockCount)
 		if err != nil {
-			return s.BasicResponse(req, false, "Failed to validate token(s)", nil)
+			return s.BasicResponse(req, false, br.Message, nil)
 		}
 	}
 
