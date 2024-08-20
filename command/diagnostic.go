@@ -1,7 +1,9 @@
 package command
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
@@ -245,6 +247,55 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 	f.WriteString(str)
 	f.Close()
 	cmd.log.Info("smart contract Token chain dumped successfully!")
+}
+
+// decodeTokenChain decodes a JSON file, transforms its data, and writes the transformed data back to a file.
+func (cmd *Command) decodeTokenChain() {
+	// Open the input JSON file
+	file, err := os.Open("dump.json")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	// Read the JSON file
+	byteValue, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return
+	}
+
+	// Parse the JSON data
+	var data []interface{}
+	err = json.Unmarshal(byteValue, &data)
+	if err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return
+	}
+
+	// Transform the JSON data
+	for i, item := range data {
+		flattenedItem := flattenKeys("", item)
+		mappedItem := applyKeyMapping(flattenedItem)
+		data[i] = mappedItem
+	}
+
+	// Convert the transformed data back to JSON
+	output, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return
+	}
+
+	// Write the output to a file
+	err = ioutil.WriteFile("output.json", output, 0644)
+	if err != nil {
+		fmt.Println("Error writing file:", err)
+		return
+	}
+
+	fmt.Println("Transformation complete. Check output.json for results.")
 }
 
 func (cmd *Command) getTokenBlock() {
