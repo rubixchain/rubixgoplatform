@@ -59,6 +59,7 @@ func InitDID(dir string, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
+	var _mnemonic []byte
 	dirName := d.dir + temp.String()
 	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
 	if err != nil {
@@ -79,10 +80,16 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			return "", err
 		}
 
-		_mnemonic, err := os.ReadFile(didCreate.MnemonicFile)
-		if err != nil {
-			d.log.Debug("failed to read mnemonic file", "err", err)
+		_, err := os.Stat(didCreate.MnemonicFile)
+		if os.IsNotExist(err) {
+			d.log.Debug("mnemonic file does not exist , creating new")
+		} else {
+			_mnemonic, err = os.ReadFile(didCreate.MnemonicFile)
+			if err != nil {
+				d.log.Error("failed to read file", "err", err)
+			}
 		}
+
 		var mnemonic string
 		if _mnemonic == nil {
 			mnemonic = crypto.BIPGenerateMnemonic()

@@ -1,8 +1,17 @@
 package command
 
-import "fmt"
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
 
 func (cmd *Command) getTxnDetails() {
+	if cmd.did == "" && cmd.txnID == "" && cmd.transComment == "" {
+		cmd.log.Error("Please provide did or transaction id or transaction comment to get transaction details")
+		return
+	}
+
 	if cmd.txnID != "" {
 		res, err := cmd.c.GetTxnByID(cmd.txnID)
 		if err != nil {
@@ -19,6 +28,11 @@ func (cmd *Command) getTxnDetails() {
 	}
 
 	if cmd.did != "" {
+		is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+		if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+			cmd.log.Error("Invalid DID")
+			return
+		}
 		res, err := cmd.c.GetTxnByDID(cmd.did, cmd.role)
 		if err != nil {
 			cmd.log.Error("Invalid response from the node", "err", err)

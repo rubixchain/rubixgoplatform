@@ -266,7 +266,7 @@ func (c *Contract) GetPledgeMode() int {
 	mi, ok := c.sm[SCPledgeModeKey]
 	// Default mode is POW
 	if !ok {
-		return POWPledgeMode
+		return PeriodicPledgeMode
 	}
 	return mi.(int)
 }
@@ -293,6 +293,10 @@ func (c *Contract) GetSmartContractData() string {
 
 func (c *Contract) GetComment() string {
 	return c.getTransInfoString(TSCommentKey)
+}
+
+func (c *Contract) GetPinningServiceDID() string {
+	return c.getTransInfoString(TSPinningDIDKey)
 }
 
 func (c *Contract) GetTransTokenInfo() []TokenInfo {

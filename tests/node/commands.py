@@ -65,8 +65,8 @@ def cmd_run_rubix_servers(node_name, server_port_idx):
     if code != 0:
         raise Exception("Error occurred while run the command: " + cmd_string)
     
-    print("Waiting for 40 seconds before checking if its running....")
-    time.sleep(40)
+    print("Waiting for 80 seconds before checking if its running....")
+    time.sleep(80)
     try:
         check_if_nodes_is_running(server_port_idx)
     except Exception as e:
@@ -128,6 +128,20 @@ def cmd_register_did(did_id, server_port, grpc_port):
     os.chdir("../tests")
     return output
 
+def cmd_add_peer_details(peer_id, did_id, did_type, server_port, grpc_port):
+    os.chdir("../" + get_build_dir())
+    cmd_string = f"./rubixgoplatform addpeerdetails -peerID {peer_id} -did {did_id} -didType {did_type} -port {server_port} -grpcPort {grpc_port}"
+    if is_windows_os():
+        cmd_string = f".\\rubixgoplatform addpeerdetails -peerID {peer_id} -did {did_id} -didType {did_type} -port {server_port} -grpcPort {grpc_port}"
+    output, code = run_command(cmd_string, True)
+    print(output)
+
+    if code != 0:
+        raise Exception("Error occurred while run the command: " + cmd_string)
+
+    os.chdir("../tests")
+    return output
+
 def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -grpcPort {grpc_port}"
@@ -141,11 +155,11 @@ def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port):
     os.chdir("../tests")
     return output
 
-def cmd_add_quorum_dids(server_port, grpc_port):
+def cmd_add_quorum_dids(server_port, grpc_port, quorumlist = "quorumlist.json"):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port} -quorumList {quorumlist}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform addquorum -port {server_port} -grpcPort {grpc_port} -quorumList {quorumlist}"
     output, code = run_command(cmd_string, True)
     print(output)
     if code != 0:

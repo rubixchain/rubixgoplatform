@@ -22,25 +22,37 @@ type TokenStateCheckResult struct {
 	Error                 error
 	Message               string
 	tokenIDTokenStateData string
+	tokenIDTokenStateHash string
 }
 
-func (c *Core) validateSigner(b *block.Block) (bool, error) {
+func (c *Core) validateSigner(b *block.Block, self_did string, p *ipfsport.Peer) (bool, error) {
 	signers, err := b.GetSigner()
 	if err != nil {
 		c.log.Error("failed to get signers", "err", err)
 		return false, fmt.Errorf("failed to get signers", "err", err)
 	}
+	c.log.Debug("Signers", signers)
 	for _, signer := range signers {
 		var dc did.DIDCrypto
 		switch b.GetTransType() {
 		case block.TokenGeneratedType, block.TokenBurntType:
-			dc, err = c.SetupForienDID(signer)
+			dc, err = c.SetupForienDID(signer, self_did)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
 		default:
-			dc, err = c.SetupForienDIDQuorum(signer)
+			signer_peeerId := c.w.GetPeerID(signer)
+			if signer_peeerId == "" {
+				signer_details, err := c.GetPeerInfo(p, signer)
+				if err != nil || signer_details.PeerInfo.PeerID == "" {
+					c.log.Error("failed to fetch details of the signer", signer, "msg", signer_details.Message)
+					return signer_details.Status, err
+				}
+				signer_details.PeerInfo.DID = signer
+				c.AddPeerDetails(signer_details.PeerInfo)
+			}
+			dc, err = c.SetupForienDIDQuorum(signer, self_did)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID quorum : ", signer, "err", err)
@@ -150,7 +162,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			continue
 		}
 	}
-	p, err := c.getPeer(address)
+	p, err := c.getPeer(address, quorumDID)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return false, err
@@ -209,7 +221,19 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Error("Invalid token chain block")
 			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
 		}
-		signatureValidation, err := c.validateSigner(b)
+		c.log.Info("Validating token ownership", "token", ti[i].Token, "owner", b.GetOwner(), "sender", sc.GetSenderDID())
+		pinningNodeDID := b.GetPinningNodeDID()
+		ownerDID := b.GetOwner()
+		senderDID := sc.GetSenderDID()
+
+		if pinningNodeDID != "" {
+			c.log.Info("The token is Pinned as a service on Node ", pinningNodeDID)
+			if ownerDID != senderDID {
+				c.log.Error("Invalid token owner: The token is Pinned as a service", "owner", ownerDID, "The node which is trying to transfer", senderDID)
+				return false, fmt.Errorf("Invalid token owner: The token is Pinned as a service")
+			}
+		}
+		signatureValidation, err := c.validateSigner(b, quorumDID, p)
 		if !signatureValidation || err != nil {
 			return false, err
 		}
@@ -329,6 +353,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 
 	//add to ipfs get only the hash of the token+tokenstate
 	tokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	result.tokenIDTokenStateHash = tokenIDTokenStateHash
 	if err != nil {
 		c.log.Error("Error adding data to ipfs", err)
 		result.Error = err

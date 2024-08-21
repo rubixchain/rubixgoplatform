@@ -1,8 +1,12 @@
 package command
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -133,6 +137,22 @@ func tcMarshal(str string, m interface{}) (string, error) {
 }
 
 func (cmd *Command) dumpTokenChain() {
+	if cmd.token == "" {
+		cmd.log.Info("token id cannot be empty")
+		fmt.Print("Enter Token Id : ")
+		_, err := fmt.Scan(&cmd.token)
+		if err != nil {
+			cmd.log.Error("Failed to get Token ID")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.token)
+
+	if len(cmd.token) != 46 || !strings.HasPrefix(cmd.token, "Qm") || !is_alphanumeric {
+		cmd.log.Error("Invalid token")
+		return
+	}
+
 	blocks := make([]map[string]interface{}, 0)
 	blockID := ""
 	for {
@@ -215,6 +235,21 @@ func (cmd *Command) dumpFTTokenchain() {
 }
 
 func (cmd *Command) dumpSmartContractTokenChain() {
+	if cmd.smartContractToken == "" {
+		cmd.log.Info("smart contract token id cannot be empty")
+		fmt.Print("Enter SC Token Id : ")
+		_, err := fmt.Scan(&cmd.smartContractToken)
+		if err != nil {
+			cmd.log.Error("Failed to get SC Token ID")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
+		cmd.log.Error("Invalid smart contract token")
+		return
+	}
 	blocks := make([]map[string]interface{}, 0)
 	blockID := ""
 	for {
@@ -253,6 +288,55 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 	f.WriteString(str)
 	f.Close()
 	cmd.log.Info("smart contract Token chain dumped successfully!")
+}
+
+// decodeTokenChain decodes a JSON file, transforms its data, and writes the transformed data back to a file.
+func (cmd *Command) decodeTokenChain() {
+	// Open the input JSON file
+	file, err := os.Open("dump.json")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	// Read the JSON file
+	byteValue, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return
+	}
+
+	// Parse the JSON data
+	var data []interface{}
+	err = json.Unmarshal(byteValue, &data)
+	if err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return
+	}
+
+	// Transform the JSON data
+	for i, item := range data {
+		flattenedItem := flattenKeys("", item)
+		mappedItem := applyKeyMapping(flattenedItem)
+		data[i] = mappedItem
+	}
+
+	// Convert the transformed data back to JSON
+	output, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return
+	}
+
+	// Write the output to a file
+	err = ioutil.WriteFile("output.json", output, 0644)
+	if err != nil {
+		fmt.Println("Error writing file:", err)
+		return
+	}
+
+	fmt.Println("Transformation complete. Check output.json for results.")
 }
 
 func (cmd *Command) getTokenBlock() {

@@ -10,6 +10,40 @@
         "version": "0.9"
     },
     "paths": {
+        "/api/add-peer-details": {
+            "post": {
+                "description": "This API allows the user to add peer details manually",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Add Peer",
+                "parameters": [
+                    {
+                        "description": "Peer Details",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.DIDPeerMapTemp"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/addnftsale": {
             "post": {
                 "description": "This API will put NFTs for sale",
@@ -32,6 +66,38 @@
                         "schema": {
                             "$ref": "#/definitions/core.NFTSaleReq"
                         }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/check-pinned-state": {
+            "delete": {
+                "description": "This API is used to check if the token state for which the token is pledged is exhausted or not.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Check for exhausted token state hash",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Token State Hash",
+                        "name": "tokenstatehash",
+                        "in": "query",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -548,6 +614,26 @@
                 }
             }
         },
+        "/api/get-pledgedtoken-details": {
+            "get": {
+                "description": "This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Get details about the pledged tokens",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.TokenStateResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/get-smart-contract-token-chain-data": {
             "post": {
                 "description": "This API will return smart contract token chain data",
@@ -606,6 +692,41 @@
                 }
             }
         },
+        "/api/initiate-pin-token": {
+            "post": {
+                "description": "This API will pin token in the Pinning node on behalf of the sender",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Initiate Pin Token",
+                "operationId": "initiate-pin-token",
+                "parameters": [
+                    {
+                        "description": "Intitate Pin Token",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.RBTPinRequestSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/initiate-rbt-transfer": {
             "post": {
                 "description": "This API will initiate RBT transfer to the specified dID",
@@ -628,6 +749,76 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/server.RBTTransferRequestSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/initiate-self-transfer": {
+            "post": {
+                "description": "This API will initiate self RBT transfer for a specific DID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Initiate Self Transfer",
+                "operationId": "initiate-self-transfer",
+                "parameters": [
+                    {
+                        "description": "Intitate Self RBT transfer",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.RBTSelfTransferRequestSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/recover-token": {
+            "post": {
+                "description": "This API will recover token and tokenchain from the Pinning node to the node which has pinned the token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Recover Token and Tokenchain from the pinning node",
+                "operationId": "recover-token",
+                "parameters": [
+                    {
+                        "description": "Recover-Token",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.RBTRecoverRequestSwaggoInput"
                         }
                     }
                 ],
@@ -666,6 +857,30 @@
                         }
                     }
                 ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/run-unpledge": {
+            "post": {
+                "description": "This API will unpledge all Pledged RBT tokens",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Run Unpledge",
+                "operationId": "run-unpledge",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -767,6 +982,30 @@
                     }
                 }
             }
+        },
+        "/api/unpledge-pow-unpledge-tokens": {
+            "post": {
+                "description": "This API will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Unpledge POW Based pledge Tokens",
+                "operationId": "unpledge-pow-unpledge-tokens",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -839,6 +1078,52 @@
                 }
             }
         },
+        "model.PledgedTokenStateDetails": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "token_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.TokenStateResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
+                },
+                "token_state_details": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.PledgedTokenStateDetails"
+                    }
+                }
+            }
+        },
+        "model.TransactionCount": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "txnReceived": {
+                    "type": "integer"
+                },
+                "txnSend": {
+                    "type": "integer"
+                }
+            }
+        },
         "model.TxnCountForDID": {
             "type": "object",
             "properties": {
@@ -852,8 +1137,22 @@
                 "txnCount": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/wallet.TransactionCount"
+                        "$ref": "#/definitions/model.TransactionCount"
                     }
+                }
+            }
+        },
+        "server.DIDPeerMapTemp": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "didtype": {
+                    "type": "integer"
+                },
+                "peerID": {
+                    "type": "string"
                 }
             }
         },
@@ -924,6 +1223,54 @@
                 }
             }
         },
+        "server.RBTPinRequestSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "pinningNode": {
+                    "type": "string"
+                },
+                "sender": {
+                    "type": "string"
+                },
+                "tokenCOunt": {
+                    "type": "number"
+                },
+                "type": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.RBTRecoverRequestSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "pinningNode": {
+                    "type": "string"
+                },
+                "sender": {
+                    "type": "string"
+                },
+                "tokenCOunt": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.RBTSelfTransferRequestSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "sender": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "integer"
+                }
+            }
+        },
         "server.RBTTransferRequestSwaggoInput": {
             "type": "object",
             "properties": {
@@ -966,20 +1313,6 @@
                 },
                 "password": {
                     "type": "string"
-                }
-            }
-        },
-        "wallet.TransactionCount": {
-            "type": "object",
-            "properties": {
-                "did": {
-                    "type": "string"
-                },
-                "txnReceived": {
-                    "type": "integer"
-                },
-                "txnSend": {
-                    "type": "integer"
                 }
             }
         }

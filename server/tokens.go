@@ -1,7 +1,11 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -12,6 +16,11 @@ import (
 func (s *Server) APIGetAllTokens(req *ensweb.Request) *ensweb.Result {
 	tokenType := s.GetQuerry(req, "type")
 	did := s.GetQuerry(req, "did")
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
 	tr, err := s.c.GetAllTokens(did, tokenType)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to get tokens", nil)
@@ -25,6 +34,16 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(tr.DID)
+	if !strings.HasPrefix(tr.DID, "bafybmi") || len(tr.DID) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+	if tr.NumberOfTokens <= 0 {
+		s.log.Error("Invalid RBT amount, tokens generated should be a whole number and greater than 0")
+		return s.BasicResponse(req, false, "Invalid RBT amount, tokens generated should be a whole number and greater than 0", nil)
+	}
+
 	if !s.validateDIDAccess(req, tr.DID) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
@@ -62,11 +81,102 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	if !ok {
 		return s.BasicResponse(req, false, "Invalid sender address", nil)
 	}
+	is_alphanumeric_sender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(rbtReq.Sender)
+	is_alphanumeric_receiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(rbtReq.Receiver)
+	if !is_alphanumeric_sender || !is_alphanumeric_receiver {
+		s.log.Error("Invalid sender or receiver address. Please provide valid DID")
+		return s.BasicResponse(req, false, "Invalid sender or receiver address", nil)
+	}
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !strings.HasPrefix(rbtReq.Receiver, "bafybmi") || len(rbtReq.Receiver) != 59 {
+		s.log.Error("Invalid sender or receiver DID")
+		return s.BasicResponse(req, false, "Invalid sender or receiver DID", nil)
+	}
+	if rbtReq.TokenCount < 0.001 {
+		s.log.Error("Invalid RBT amount. RBT amount should be atlease 0.001")
+		return s.BasicResponse(req, false, "Invalid RBT amount. RBT amount should be atlease 0.001", nil)
+	}
+	if rbtReq.Type < 1 || rbtReq.Type > 2 {
+		s.log.Error("Invalid trans type. TransType should be 1 or 2")
+		return s.BasicResponse(req, false, "Invalid trans type. TransType should be 1 or 2", nil)
+	}
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
 	go s.c.InitiateRBTTransfer(req.ID, &rbtReq)
+	return s.didResponse(req, req.ID)
+}
+
+// function for Pinning RBT as service
+
+type RBTPinRequestSwaggoInput struct {
+	PinningNode string  `json:"pinningNode"`
+	Sender      string  `json:"sender"`
+	TokenCount  float64 `json:"tokenCOunt"`
+	Comment     string  `json:"comment"`
+	Type        int     `json:"type"`
+}
+
+// ShowAccount godoc
+// @Summary     Initiate Pin Token
+// @Description This API will pin token in the Pinning node on behalf of the sender
+// @Tags        Account
+// @ID 			initiate-pin-token
+// @Accept      json
+// @Produce     json
+// @Param 		input body RBTPinRequestSwaggoInput true "Intitate Pin Token"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/initiate-pin-token [post]
+func (s *Server) APIInitiatePinRBT(req *ensweb.Request) *ensweb.Result {
+	var rbtReq model.RBTPinRequest
+	err := s.ParseJSON(req, &rbtReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	_, did, ok := util.ParseAddress(rbtReq.Sender)
+	if !ok {
+		return s.BasicResponse(req, false, "Invalid sender address", nil)
+	}
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.InitiatePinRBT(req.ID, &rbtReq)
+	return s.didResponse(req, req.ID)
+}
+
+type RBTRecoverRequestSwaggoInput struct {
+	PinningNode string  `json:"pinningNode"`
+	Sender      string  `json:"sender"`
+	TokenCount  float64 `json:"tokenCOunt"`
+	Password    string  `json:"password"`
+}
+
+// ShowAccount godoc
+// @Summary     Recover Token and Tokenchain from the pinning node
+// @Description This API will recover token and tokenchain from the Pinning node to the node which has pinned the token
+// @Tags        Account
+// @ID 			recover-token
+// @Accept      json
+// @Produce     json
+// @Param 		input body RBTRecoverRequestSwaggoInput true "Recover-Token"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/recover-token [post]
+func (s *Server) APIRecoverRBT(req *ensweb.Request) *ensweb.Result {
+	var rbtReq model.RBTRecoverRequest
+	err := s.ParseJSON(req, &rbtReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	_, did, ok := util.ParseAddress(rbtReq.Sender)
+	if !ok {
+		return s.BasicResponse(req, false, "Invalid sender address", nil)
+	}
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.InitiateRecoverRBT(req.ID, &rbtReq)
 	return s.didResponse(req, req.ID)
 }
 
@@ -83,6 +193,12 @@ func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
 	info, err := s.c.GetAccountInfo(did)
 	if err != nil {
@@ -129,4 +245,98 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	s.c.UpateWebReq(resp.ID, req)
 	dc.InChan <- resp
 	return s.didResponse(req, resp.ID)
+}
+
+// APIGetPledgedTokenDetails godoc
+// @Summary     Get details about the pledged tokens
+// @Description This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state
+// @Tags        Account
+// @Produce     json
+// @Success     200 {object} model.TokenStateResponse
+// @Router      /api/get-pledgedtoken-details [get]
+func (s *Server) APIGetPledgedTokenDetails(req *ensweb.Request) *ensweb.Result {
+	pledgedTokenInfo, err := s.c.GetPledgedInfo()
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	tokenstateresponse := model.TokenStateResponse{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "Got pledged tokens with token states info successfully",
+		},
+		PledgedTokenStateDetails: make([]model.PledgedTokenStateDetails, 0),
+	}
+	tokenstateresponse.PledgedTokenStateDetails = append(tokenstateresponse.PledgedTokenStateDetails, pledgedTokenInfo...)
+	return s.RenderJSON(req, tokenstateresponse, http.StatusOK)
+}
+
+// APICheckPinnedState godoc
+// @Summary     Check for exhausted token state hash
+// @Description This API is used to check if the token state for which the token is pledged is exhausted or not.
+// @Tags        Account
+// @Accept      json
+// @Produce     json
+// @Param       tokenstatehash	query	string	true	"Token State Hash"
+// @Success 	200		{object}	model.BasicResponse
+// @Router /api/check-pinned-state [delete]
+func (s *Server) APICheckPinnedState(req *ensweb.Request) *ensweb.Result {
+	tokenstatehash := s.GetQuerry(req, "tokenstatehash")
+
+	provList, err := s.c.GetDHTddrs(tokenstatehash)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	var br model.BasicResponse
+	if len(provList) == 0 {
+		br.Status = false
+		br.Message = fmt.Sprintf("No pins available on %s", tokenstatehash)
+		return s.RenderJSON(req, br, http.StatusOK)
+	} else {
+		br.Status = true
+		br.Result = provList
+	}
+
+	err = s.c.UpdatePledgedTokenInfo(tokenstatehash)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	br.Message = "Got Pins on " + tokenstatehash + ". Updated the pledging detail in table and removed from pledged token state table."
+	return s.RenderJSON(req, br, http.StatusOK)
+}
+
+func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
+	user_did := s.GetQuerry(req, "did")
+	token := s.GetQuerry(req, "token")
+	blockCount_str := s.GetQuerry(req, "blockcount")
+	smartContractChainValidation_str := s.GetQuerry(req, "SCChainValidation")
+	blockCount, err := strconv.Atoi(blockCount_str)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to convert blockCount string into integer", nil)
+	}
+
+	if user_did == "" {
+		return s.BasicResponse(req, false, "user did is not provided", nil)
+	}
+
+	smartContractChainValidation, err := strconv.ParseBool(smartContractChainValidation_str)
+	if err != nil {
+		return s.BasicResponse(req, false, "Error converting string to boolean", nil)
+	}
+
+	var br *model.BasicResponse
+	if smartContractChainValidation {
+		s.log.Debug("validating smart contract")
+		br, err = s.c.SmartContractTokenChainValidation(user_did, token, blockCount)
+		if err != nil {
+			return s.BasicResponse(req, false, br.Message, nil)
+		}
+	} else {
+		s.log.Debug("validating rbt token")
+		br, err = s.c.TokenChainValidation(user_did, token, blockCount)
+		if err != nil {
+			return s.BasicResponse(req, false, br.Message, nil)
+		}
+	}
+
+	return s.RenderJSON(req, br, http.StatusOK)
 }

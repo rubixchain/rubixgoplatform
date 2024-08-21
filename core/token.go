@@ -51,39 +51,39 @@ func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error)
 		if err != nil {
 			return tr, nil
 		}
-		tr.TokenDetials = make([]model.TokenDetial, 0)
+		tr.TokenDetails = make([]model.TokenDetail, 0)
 		for _, t := range tkns {
-			td := model.TokenDetial{
+			td := model.TokenDetail{
 				Token:  t.TokenID,
 				Status: t.TokenStatus,
 			}
-			tr.TokenDetials = append(tr.TokenDetials, td)
+			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
 	case model.DTType:
 		tkns, err := c.w.GetAllDataTokens(did)
 		if err != nil {
 			return tr, nil
 		}
-		tr.TokenDetials = make([]model.TokenDetial, 0)
+		tr.TokenDetails = make([]model.TokenDetail, 0)
 		for _, t := range tkns {
-			td := model.TokenDetial{
+			td := model.TokenDetail{
 				Token:  t.TokenID,
 				Status: t.TokenStatus,
 			}
-			tr.TokenDetials = append(tr.TokenDetials, td)
+			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
 	case model.NFTType:
 		tkns := c.w.GetAllNFT(did)
 		if tkns == nil {
 			return tr, nil
 		}
-		tr.TokenDetials = make([]model.TokenDetial, 0)
+		tr.TokenDetails = make([]model.TokenDetail, 0)
 		for _, t := range tkns {
-			td := model.TokenDetial{
+			td := model.TokenDetail{
 				Token:  t.TokenID,
 				Status: t.TokenStatus,
 			}
-			tr.TokenDetials = append(tr.TokenDetials, td)
+			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
 	default:
 		tr.BasicResponse.Status = false
@@ -112,6 +112,9 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 		case wallet.TokenIsPledged:
 			info.PledgedRBT = info.PledgedRBT + t.TokenValue
 			info.PledgedRBT = floatPrecision(info.PledgedRBT, MaxDecimalPlaces)
+		case wallet.TokenIsPinnedAsService:
+			info.PinnedRBT = info.PinnedRBT + t.TokenValue
+			info.PinnedRBT = floatPrecision(info.PinnedRBT, MaxDecimalPlaces)
 		}
 	}
 	return info, nil
@@ -336,7 +339,7 @@ func (c *Core) getFromIPFS(path string) ([]byte, error) {
 // 	// c.log.Debug("Token recevied", "token", tp.Token)
 // }
 
-func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token, float64, error) {
+func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]wallet.Token, float64, error) {
 	requiredTokens := make([]wallet.Token, 0)
 	var remainingAmount float64
 	wholeValue := int(txnAmount)
@@ -348,7 +351,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 	if wholeValue != 0 {
 		//extract the whole amount part that is the integer value of txn amount
 		//serach for the required whole amount
-		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue)
+		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode)
 		if err != nil && err.Error() != "no records found" {
 			c.w.ReleaseTokens(wholeTokens)
 			c.log.Error("failed to search for whole tokens", "err", err)
@@ -489,4 +492,39 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64) ([]wallet.Token,
 	defer c.w.ReleaseTokens(requiredTokens)
 	remainingAmount = floatPrecision(remainingAmount, MaxDecimalPlaces)
 	return requiredTokens, remainingAmount, nil
+}
+
+func (c *Core) GetPledgedInfo() ([]model.PledgedTokenStateDetails, error) {
+	wt, err := c.w.GetAllTokenStateHash()
+	if err != nil && err.Error() != "no records found" {
+		c.log.Error("Failed to get token state hashes", "err", err)
+		return []model.PledgedTokenStateDetails{}, fmt.Errorf("failed to get token states")
+	}
+	info := []model.PledgedTokenStateDetails{}
+	for _, t := range wt {
+		k := model.PledgedTokenStateDetails{
+			DID:            t.DID,
+			TokensPledged:  t.PledgedTokens,
+			TokenStateHash: t.TokenStateHash,
+		}
+		info = append(info, k)
+	}
+	return info, nil
+}
+
+func (c *Core) UpdatePledgedTokenInfo(tokenstatehash string) error {
+	err := c.w.RemoveTokenStateHash(tokenstatehash)
+	if err != nil && err.Error() != "no records found" {
+		c.log.Error("Failed to get token state hash", "err", err)
+	}
+	return nil
+}
+
+func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
+	requiredTokens, err := c.w.GetAllPinnedTokens(did)
+	if err != nil {
+		c.log.Error("Error retrieving pinned tokens from database :", err)
+		return nil, err
+	}
+	return requiredTokens, nil
 }

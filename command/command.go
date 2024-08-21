@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.17"
+	version string = "0.0.18"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -55,6 +55,7 @@ const (
 	GetAccountInfoCmd              string = "getaccountinfo"
 	SetupServiceCmd                string = "setupservice"
 	DumpTokenChainCmd              string = "dumptokenchain"
+	DecodeTokenChainCmd            string = "decodetokenchain"
 	RegsiterDIDCmd                 string = "registerdid"
 	SetupDIDCmd                    string = "setupdid"
 	ShutDownCmd                    string = "shutdown"
@@ -82,6 +83,15 @@ const (
 	AddExplorerCmd                 string = "addexplorer"
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
+	AddPeerDetailsCmd              string = "addpeerdetails"
+	GetPledgedTokenDetailsCmd      string = "getpledgedtokendetails"
+	CheckPinnedState               string = "checkpinnedstate"
+	SelfTransferRBT                string = "self-transfer-rbt"
+	RunUnpledge                    string = "run-unpledge"
+	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
+	PinTokenCmd                    string = "pinToken"
+	RecoverTokensCmd               string = "recoverToken"
+	ValidateTokenchainCmd          string = "validatetokenchain"
 	CreateFTCmd                    string = "createft"
 	DumpFTTokenChainCmd            string = "dumpft"
 	TransferFTCmd                  string = "transferft"
@@ -107,6 +117,7 @@ var commands = []string{VersionCmd,
 	GetAccountInfoCmd,
 	SetupServiceCmd,
 	DumpTokenChainCmd,
+	DecodeTokenChainCmd,
 	RegsiterDIDCmd,
 	SetupDBCmd,
 	ShutDownCmd,
@@ -131,12 +142,20 @@ var commands = []string{VersionCmd,
 	GetTokenBlock,
 	GetSmartContractData,
 	GetPeerID,
+	AddPeerDetailsCmd,
+	SelfTransferRBT,
+	RunUnpledge,
+	UnpledgePOWPledgeTokens,
+	PinTokenCmd,
+	RecoverTokensCmd,
 	CheckQuorumStatusCmd,
+	ValidateTokenchainCmd,
 	CreateFTCmd,
 	DumpFTTokenChainCmd,
 	TransferFTCmd,
 	GetFTInfoCmd,
 }
+
 var commandsHelp = []string{"To get tool version",
 	"To get help",
 	"To run the rubix core",
@@ -156,6 +175,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will help to get account information",
 	"This command enable explorer service on the node",
 	"This command will dump the token chain into file",
+	"This command will decode the token chain into file",
 	"This command will register DID peer map across the network",
 	"This command will setup the DID with peer",
 	"This command will shutdown the rubix node",
@@ -180,7 +200,10 @@ var commandsHelp = []string{"To get tool version",
 	"This command gets token block",
 	"This command gets the smartcontract data from latest block",
 	"This command will fetch the peer ID of the node",
-	"",
+	"This command is to add the peer details manually",
+	"This command will initiate a self RBT transfer",
+	"This command will unpledge all the pledged tokens",
+	"This command will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
 	"This command will create FT",
 	"This command will dump the token chain of FT",
 	"This command will transfer FT",
@@ -188,83 +211,87 @@ var commandsHelp = []string{"To get tool version",
 }
 
 type Command struct {
-	cfg                config.Config
-	c                  *client.Client
-	sc                 *contract.Contract
-	encKey             string
-	start              bool
-	node               uint
-	runDir             string
-	logFile            string
-	logLevel           string
-	cfgFile            string
-	testNet            bool
-	testNetKey         string
-	addr               string
-	port               string
-	peerID             string
-	peers              []string
-	log                logger.Logger
-	didRoot            bool
-	didType            int
-	didSecret          string
-	forcePWD           bool
-	privPWD            string
-	quorumPWD          string
-	imgFile            string
-	didImgFile         string
-	privImgFile        string
-	pubImgFile         string
-	privKeyFile        string
-	pubKeyFile         string
-	quorumList         string
-	srvName            string
-	storageType        int
-	dbName             string
-	dbType             string
-	dbAddress          string
-	dbPort             string
-	dbUserName         string
-	dbPassword         string
-	senderAddr         string
-	receiverAddr       string
-	rbtAmount          float64
-	transComment       string
-	transType          int
-	numTokens          int
-	enableAuth         bool
-	did                string
-	token              string
-	arbitaryMode       bool
-	tokenList          string
-	batchID            string
-	fileMode           bool
-	file               string
-	userID             string
-	userInfo           string
-	timeout            time.Duration
-	txnID              string
-	role               string
-	date               time.Time
-	grpcAddr           string
-	grpcPort           int
-	grpcSecure         bool
-	deployerAddr       string
-	binaryCodePath     string
-	rawCodePath        string
-	schemaFilePath     string
-	smartContractToken string
-	newContractBlock   string
-	publishType        int
-	smartContractData  string
-	executorAddr       string
-	latest             bool
-	quorumAddr         string
-	links              []string
-	mnemonicFile       string
-	ChildPath          int
-	ftName             string
-	ftCount            int
+	cfg                          config.Config
+	c                            *client.Client
+	sc                           *contract.Contract
+	encKey                       string
+	start                        bool
+	node                         uint
+	runDir                       string
+	logFile                      string
+	logLevel                     string
+	cfgFile                      string
+	testNet                      bool
+	testNetKey                   string
+	addr                         string
+	port                         string
+	peerID                       string
+	peers                        []string
+	log                          logger.Logger
+	didRoot                      bool
+	didType                      int
+	didSecret                    string
+	forcePWD                     bool
+	privPWD                      string
+	quorumPWD                    string
+	imgFile                      string
+	didImgFile                   string
+	privImgFile                  string
+	pubImgFile                   string
+	privKeyFile                  string
+	pubKeyFile                   string
+	quorumList                   string
+	srvName                      string
+	storageType                  int
+	dbName                       string
+	dbType                       string
+	dbAddress                    string
+	dbPort                       string
+	dbUserName                   string
+	dbPassword                   string
+	senderAddr                   string
+	receiverAddr                 string
+	rbtAmount                    float64
+	transComment                 string
+	transType                    int
+	numTokens                    int
+	enableAuth                   bool
+	did                          string
+	token                        string
+	arbitaryMode                 bool
+	tokenList                    string
+	batchID                      string
+	fileMode                     bool
+	file                         string
+	userID                       string
+	userInfo                     string
+	timeout                      time.Duration
+	txnID                        string
+	role                         string
+	date                         time.Time
+	grpcAddr                     string
+	grpcPort                     int
+	grpcSecure                   bool
+	deployerAddr                 string
+	binaryCodePath               string
+	rawCodePath                  string
+	schemaFilePath               string
+	smartContractToken           string
+	newContractBlock             string
+	publishType                  int
+	smartContractData            string
+	executorAddr                 string
+	latest                       bool
+	quorumAddr                   string
+	links                        []string
+	mnemonicFile                 string
+	ChildPath                    int
+	TokenState                   string
+	pinningAddress               string
+	blockCount                   int
+	smartContractChainValidation bool
+	ftName                       string
+	ftCount                      int
 }
 
 func showVersion() {
@@ -461,6 +488,10 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 	flag.StringVar(&links, "links", "", "Explorer url")
+	flag.StringVar(&cmd.TokenState, "tokenstatehash", "", "Give Token State Hash to check state")
+	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
+	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
+	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
 	flag.StringVar(&cmd.ftName, "ftName", "", "Four character string to represent the FT")
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 
@@ -570,6 +601,8 @@ func Run(args []string) {
 		cmd.GetAccountInfo()
 	case DumpTokenChainCmd:
 		cmd.dumpTokenChain()
+	case DecodeTokenChainCmd:
+		cmd.decodeTokenChain()
 	case RegsiterDIDCmd:
 		cmd.RegsiterDIDCmd()
 	case SetupDIDCmd:
@@ -620,6 +653,24 @@ func Run(args []string) {
 		cmd.removeExplorer()
 	case GetAllExplorerCmd:
 		cmd.getAllExplorer()
+	case AddPeerDetailsCmd:
+		cmd.AddPeerDetails()
+	case GetPledgedTokenDetailsCmd:
+		cmd.GetPledgedTokenDetails()
+	case CheckPinnedState:
+		cmd.CheckPinnedState()
+	case SelfTransferRBT:
+		cmd.SelfTransferRBT()
+	case RunUnpledge:
+		cmd.RunUnpledge()
+	case UnpledgePOWPledgeTokens:
+		cmd.UnpledgePOWBasedPledgedTokens()
+	case PinTokenCmd:
+		cmd.PinRBT()
+	case RecoverTokensCmd:
+		cmd.RecoverTokens()
+	case ValidateTokenchainCmd:
+		cmd.ValidateTokenchain()
 	case CreateFTCmd:
 		cmd.createFT()
 	case DumpFTTokenChainCmd:

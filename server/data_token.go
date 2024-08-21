@@ -2,6 +2,8 @@ package server
 
 import (
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -26,6 +28,11 @@ func (s *Server) APICreateDataToken(req *ensweb.Request) *ensweb.Result {
 	var dr core.DataTokenReq
 	var err error
 	dr.DID = s.GetQuerry(req, "did")
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(dr.DID)
+	if !strings.HasPrefix(dr.DID, "bafybmi") || len(dr.DID) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
 	dr.FolderName, err = s.c.CreateTempFolder()
 	if err != nil {
 		s.log.Error("failed to create folder", "err", err)
@@ -59,6 +66,11 @@ func (s *Server) APICreateDataToken(req *ensweb.Request) *ensweb.Result {
 // @Router       /api/commit-data-token [post]
 func (s *Server) APICommitDataToken(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
 	batchID := s.GetQuerry(req, "batchID")
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
@@ -96,6 +108,11 @@ func (s *Server) APIGetDataToken(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
 	if did == "" {
 		s.BasicResponse(req, false, "DID is required", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
 	dt := s.c.GetDataTokens(did)
 	resp := model.DataTokenResponse{

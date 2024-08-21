@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -27,6 +28,9 @@ const (
 	SmartContractTokenChainStorage string = "smartcontractokenchainstorage"
 	SmartContractStorage           string = "smartcontract"
 	CallBackUrlStorage             string = "callbackurl"
+	TokenStateHash                 string = "TokenStateHashTable"
+	UnpledgeQueueTable             string = "unpledgequeue"
+	UnpledgeSequence               string = "UnpledgeSequence"
 	FTTokenStorage                 string = "FTTokenStorage"
 	FTChainStorage                 string = "ftchainstorage"
 )
@@ -104,7 +108,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize whole token storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(DataTokenStorage, &DataToken{}, true)
+	err = w.s.Init(DataTokenStorage, &model.DataToken{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize data token storage", "err", err)
 		return nil, err
@@ -124,7 +128,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize DID Peer storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TransactionStorage, &TransactionDetails{}, true)
+	err = w.s.Init(TransactionStorage, &model.TransactionDetails{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Transaction storage", "err", err)
 		return nil, err
@@ -137,6 +141,11 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	err = w.s.Init(SmartContractStorage, &SmartContract{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Smart Contract storage", "err", err)
+		return nil, err
+	}
+	err = w.s.Init(UnpledgeSequence, &UnpledgeSequenceInfo{}, true)
+	if err != nil {
+		w.log.Error("failed to init UnpledgeSequence table", "err", err)
 		return nil, err
 	}
 	err = w.s.Init(FTTokenStorage, FT{}, true)
@@ -160,6 +169,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	err = w.s.Init(CallBackUrlStorage, &CallBackUrl{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Smart Contract Callback Url storage", "err", err)
+		return nil, err
+	}
+
+	err = w.s.Init(TokenStateHash, &TokenStateDetails{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize TokenStateHash", "err", err)
 		return nil, err
 	}
 

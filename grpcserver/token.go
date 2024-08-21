@@ -87,7 +87,7 @@ func (rn *RubixNative) GetAllTokens(ctx context.Context, in *protos.TokenReq) (*
 	resp := &protos.TokenResp{
 		TokenDetials: make([]*protos.TokenDetial, 0),
 	}
-	for _, td := range tr.TokenDetials {
+	for _, td := range tr.TokenDetails {
 		t := &protos.TokenDetial{
 			Token:      td.Token,
 			TokenState: int32(td.Status),
