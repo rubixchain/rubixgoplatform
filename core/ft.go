@@ -320,7 +320,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 
 	//TODO: Pinning of tokens
 
-	p, err := c.getPeer(req.Receiver)
+	p, err := c.getPeer(req.Receiver, "")
 	if err != nil {
 		resp.Message = "Failed to get receiver peer, " + err.Error()
 		return resp
@@ -357,7 +357,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 	sct := &contract.ContractType{
 		Type:       contract.SCFTType,
-		PledgeMode: contract.POWPledgeMode,
+		PledgeMode: contract.PeriodicPledgeMode,
 		TransInfo: &contract.TransInfo{
 			SenderDID:   did,
 			ReceiverDID: rdid,
