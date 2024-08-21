@@ -201,6 +201,10 @@ This following options are used for this command
         Server/Host port (default "20000")
   -quorumPWD string
         Quroum key password (default "mypassword")
+        use, in case did is created in NLSS modes - didType : 0 to 3
+  -privPWD string
+        Private key password (default "mypassword")
+        use, in case did is created in lite mode - didType : 4
   -fp forcepassword
         Enter the  Quroum key password in terminal
 ```

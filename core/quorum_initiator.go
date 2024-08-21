@@ -202,12 +202,6 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	//it will initiate DIDQuorumc
 	switch dt.Type {
 	case did.LiteDIDMode:
-		dc := did.InitDIDQuorum_Lt(didStr, c.didDir, pwd)
-		if dc == nil {
-			c.log.Error("Failed to setup quorum")
-			return fmt.Errorf("failed to setup quorum")
-		}
-		c.qc[didStr] = dc
 		if pvtKeyPwd != "" {
 			dc := did.InitDIDLiteWithPassword(didStr, c.didDir, pvtKeyPwd)
 			if dc == nil {
@@ -215,6 +209,10 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 				return fmt.Errorf("failed to setup quorum")
 			}
 			c.pqc[didStr] = dc
+			c.qc[didStr] = dc
+		} else {
+			c.log.Error("Failed to setup quorum as privPWD is not privided")
+			return fmt.Errorf("failed to setup quorum, privPWD not provided")
 		}
 	case did.BasicDIDMode:
 		dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
@@ -1289,6 +1287,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
+	c.log.Debug("-----pledging done, now getting consensus------")
 	var cresp ConensusReply
 	err = p.SendJSONRequest("POST", APIQuorumConsensus, nil, cr, &cresp, true, 10*time.Minute)
 	if err != nil {
@@ -1297,6 +1296,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		return
 	}
 
+	c.log.Debug("-----got consensus------")
 	if strings.Contains(cresp.Message, "parent token is not in burnt stage") {
 		ptPrefix := "pt: "
 		issueTypePrefix := "issueType: "
@@ -1398,6 +1398,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
+	c.log.Debug("-----connecting to quorum done------")
 	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
 }
 
@@ -1681,6 +1682,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 }
 
 func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt int) error {
+	c.log.Debug("-----initiating to pledge by quorum------")
 	if qt == AlphaQuorumType {
 		c.qlock.Lock()
 		cs, ok := c.quorumRequest[cr.ReqID]
