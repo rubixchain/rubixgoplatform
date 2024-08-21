@@ -762,9 +762,10 @@ func (c *Core) updateReceiverToken(
 		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
 	}
 
-	// Only save the transaction details in Transaction history table whenever
-	// its a general RBT transfer
-	if sc.GetSenderDID() != sc.GetReceiverDID() {
+	// Store the transaction info only when we are dealing with RBT transfer between
+	// two DIDs that are situated on different nodes, as this avoid Unique Constraint
+	// issue while adding to Transaction History table from the Sender's end
+	if sc.GetSenderDID() != sc.GetReceiverDID() && senderPeerId != receiverPeerId {
 		td := &model.TransactionDetails{
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
@@ -905,12 +906,26 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 
 	ctcb := make(map[string]*block.Block)
 	tsb := make([]block.TransTokens, 0)
-	for _, t := range tks {
-		err = c.w.AddTokenBlock(t, b)
-		if err != nil {
-			c.log.Error("Failed to add token block", "token", t)
-			crep.Message = "Failed to add token block"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
+	// Generally, addition of a token block happens on Sender, Receiver
+	// and Quorum's end.
+	//
+	// If both sender and receiver happen to be on a Non-Quorum server, this is
+	// not an issue since we skip TokensTable and Token chain update, if the reciever
+	// and sender peer as seem. Thus, multiple update of same block to the Token's tokenchain
+	// is avoided
+	//
+	// However in case either sender or receiver happen to be a Quorum server, even though the above
+	// scenario is covered , but since the token block is also added on Quorum's end, we end up in a 
+	// situation where update of same block happens twice. Hence the following check ensures that we
+	// skip the addition of block here, if either sender or receiver happen to be on a Quorum node.
+	if !c.w.IsDIDExist(b.GetReceiverDID()) && !c.w.IsDIDExist(b.GetSenderDID()) {
+		for _, t := range tks {
+			err = c.w.AddTokenBlock(t, b)
+			if err != nil {
+				c.log.Error("Failed to add token block", "token", t)
+				crep.Message = "Failed to add token block"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
 		}
 	}
 	for _, t := range ur.PledgedTokens {
