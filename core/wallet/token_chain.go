@@ -36,7 +36,7 @@ const TCBlockCountLimit int = 100
 
 type TokenStateDetails struct {
 	DID            string `gorm:"column:did" json:"did"`
-	TokenStateHash string `gorm:"column:token_state_hash;primaryKey" json:"token_state_hash"`
+	TokenStateHash string `gorm:"column:token_state_hash" json:"token_state_hash"`
 	PledgedTokens  string `gorm:"column:pledged_token" json:"pledged_token"`
 	TransactionID  string `gorm:"column:transaction_id" json:"transaction_id"`
 }

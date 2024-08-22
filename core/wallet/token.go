@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -376,35 +377,39 @@ func (w *Wallet) UpdateToken(t *Token) error {
 	return nil
 }
 
-func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block, local bool, pinningServiceMode bool) error {
+func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block, local bool, pinningServiceMode bool, peerList map[string]bool, peerID string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// ::TODO:: need to address part & other tokens
 	// Skip update if it is local DID
-	if !local {
+	if local {
+		return nil
+	}
+	if !peerList[peerID] {
 		err := w.CreateTokenBlock(b)
 		if err != nil {
 			return err
 		}
-		var tokenStatus int
-		if pinningServiceMode {
-			tokenStatus = TokenIsPinnedAsService
-		} else {
-			tokenStatus = TokenIsTransferred
+		peerList[peerID] = true
+	}
+	var tokenStatus int
+	if pinningServiceMode {
+		tokenStatus = TokenIsPinnedAsService
+	} else {
+		tokenStatus = TokenIsTransferred
+	}
+	for i := range ti {
+		var t Token
+		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
+		if err != nil {
+			return err
 		}
-		for i := range ti {
-			var t Token
-			err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
-			if err != nil {
-				return err
-			}
-			t.TokenStatus = tokenStatus
-			t.TransactionID = b.GetTid()
+		t.TokenStatus = tokenStatus
+		t.TransactionID = b.GetTid()
 
-			err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
-			if err != nil {
-				return err
-			}
+		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, ti[i].Token)
+		if err != nil {
+			return err
 		}
 	}
 	// for i := range pt {
@@ -431,14 +436,26 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 	return nil
 }
 
-func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell) ([]string, error) {
+func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell, peerList map[string]bool) ([]string, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
-	err := w.CreateTokenBlock(b)
-	if err != nil {
-		return nil, err
+	if val, ok := peerList[receiverPeerId]; !ok {
+		w.log.Error("Failed to find receiver peerID in peerList", "err", false)
+		return nil, errors.New("failed to find receiver peerID in peerList")
+	} else {
+		if !val {
+			peerList[receiverPeerId] = true
+			err := w.CreateTokenBlock(b)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
+	// err := w.CreateTokenBlock(b)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
 	//quorums using pledgefinality function, to be added to TokenStateHash Table

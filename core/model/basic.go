@@ -26,3 +26,9 @@ type GetDIDTypeResponse struct {
 	DidType int
 	BasicResponse
 }
+
+type PeerResponse struct {
+	BasicResponse  BasicResponse
+	TokenStateHash []string
+	PeerList       map[string]bool
+}
