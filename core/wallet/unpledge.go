@@ -12,7 +12,7 @@ type migration_UnpledgeQueueInfo struct {
 
 // Unpledging info associated with Periodic Pledging
 type UnpledgeSequenceInfo struct {
-	TransactionID string `gorm:"column:tx_id;primaryKey"`
+	TransactionID string `gorm:"column:tx_id"`
 	PledgeTokens  string `gorm:"column:pledge_tokens"`
 	Epoch         int64  `gorm:"column:epoch"`
 	QuorumDID     string `gorm:"column:quorum_did"`
@@ -75,7 +75,7 @@ func (w *Wallet) Migration_GetUnpledgeQueueInfo() ([]migration_UnpledgeQueueInfo
 				w.log.Info("no PoW based pledged tokens left to unpledge")
 				return nil, nil
 			} else {
-				errMsg := fmt.Errorf("unable to read to pledge tokens from unpledgequeue table: %v", err) 
+				errMsg := fmt.Errorf("unable to read to pledge tokens from unpledgequeue table: %v", err)
 				w.log.Error(errMsg.Error())
 				return nil, errMsg
 			}

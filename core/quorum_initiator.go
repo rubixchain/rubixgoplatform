@@ -102,12 +102,13 @@ type SignatureReply struct {
 }
 
 type UpdatePledgeRequest struct {
-	Mode                        int      `json:"mode"`
-	PledgedTokens               []string `json:"pledged_tokens"`
-	TokenChainBlock             []byte   `json:"token_chain_block"`
-	TransferredTokenStateHashes []string `json:"token_state_hash_info"`
-	TransactionID               string   `json:"transaction_id"`
-	TransactionEpoch            int      `json:"transaction_epoch"`
+	Mode                        int             `json:"mode"`
+	PledgedTokens               []string        `json:"pledged_tokens"`
+	TokenChainBlock             []byte          `json:"token_chain_block"`
+	TransferredTokenStateHashes []string        `json:"token_state_hash_info"`
+	TransactionID               string          `json:"transaction_id"`
+	TransactionEpoch            int             `json:"transaction_epoch"`
+	PeerList                    map[string]bool `json:"peer_list"`
 }
 
 type SendTokenRequest struct {
@@ -118,6 +119,7 @@ type SendTokenRequest struct {
 	QuorumInfo         []QuorumDIDPeerMap   `json:"quorum_info"`
 	TransactionEpoch   int                  `json:"transaction_epoch"`
 	PinningServiceMode bool                 `json:"pinning_service_mode"`
+	PeerList           map[string]bool      `json:"peer_list"`
 }
 
 type PledgeReply struct {
@@ -329,6 +331,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	case SmartContractExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
 	}
+	peerList := map[string]bool{}
 	minValue := MinDecimalValue(MaxDecimalPlaces)
 	minTotalPledgeAmount := minValue * float64(MinQuorumRequired)
 	if reqPledgeTokens < minTotalPledgeAmount {
@@ -388,7 +391,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
 		//as well. Each quorums should pledge equal amount of tokens and hence, it should have a total of (Transacting RBTs/5) tokens
 		//available for pledging.
-		go c.connectQuorum(cr, a, AlphaQuorumType, sc)
+		go c.connectQuorum(cr, a, AlphaQuorumType, sc, peerList)
 	}
 	loop := true
 	var err error
@@ -449,6 +452,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 	switch cr.Mode {
 	case RBTTransferMode:
+		util.AddToPeerMap(peerList, cr.ReceiverPeerID)
+		util.AddToPeerMap(peerList, cr.SenderPeerID)
 		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID(), "")
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
@@ -462,8 +467,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			QuorumList:         cr.QuorumList,
 			TransactionEpoch:   cr.TransactionEpoch,
 			PinningServiceMode: false,
+			PeerList:           peerList,
 		}
-
+		// if _, exists := peerList[cr.ReceiverPeerID]; !exists {
+		// 	peerList[cr.ReceiverPeerID] = true
+		// }
 		//fetching quorums' info from PeerDIDTable to share with the receiver
 		for _, qrm := range sr.QuorumList {
 			//fetch peer id & did of the quorum
@@ -481,7 +489,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 					return nil, nil, fmt.Errorf("unable to fetch peerID for quorum DID: %v which fetching quorum information", qdid)
 				} else {
 					qpid = c.peerID
-				}		
+				}
 			}
 
 			var qrmInfo QuorumDIDPeerMap
@@ -518,23 +526,24 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
 		}
 
-		var br model.BasicResponse
-		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
+		var pr model.PeerResponse
+		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &pr, true)
+		peerList = pr.PeerList
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
 			return nil, nil, err
 		}
-		if strings.Contains(br.Message, "failed to sync tokenchain") {
+		if strings.Contains(pr.BasicResponse.Message, "failed to sync tokenchain") {
 			tokenPrefix := "Token: "
 			issueTypePrefix := "issueType: "
 
 			// Find the starting indexes of pt and issueType values
-			ptStart := strings.Index(br.Message, tokenPrefix) + len(tokenPrefix)
-			issueTypeStart := strings.Index(br.Message, issueTypePrefix) + len(issueTypePrefix)
+			ptStart := strings.Index(pr.BasicResponse.Message, tokenPrefix) + len(tokenPrefix)
+			issueTypeStart := strings.Index(pr.BasicResponse.Message, issueTypePrefix) + len(issueTypePrefix)
 
 			// Extracting the substrings from the message
-			token := br.Message[ptStart : strings.Index(br.Message[ptStart:], ",")+ptStart]
-			issueType := br.Message[issueTypeStart:]
+			token := pr.BasicResponse.Message[ptStart : strings.Index(pr.BasicResponse.Message[ptStart:], ",")+ptStart]
+			issueType := pr.BasicResponse.Message[issueTypeStart:]
 
 			c.log.Debug("String: token is ", token, " issuetype is ", issueType)
 			issueTypeInt, err1 := strconv.Atoi(issueType)
@@ -555,37 +564,23 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
 				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
 				c.w.UpdateToken(syncIssueTokenDetails)
-				return nil, nil, errors.New(br.Message)
+				return nil, nil, errors.New(pr.BasicResponse.Message)
 			}
 		}
-		if !br.Status {
-			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
-			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
+		if !pr.BasicResponse.Status {
+			c.log.Error("Unable to send tokens to receiver", "msg", pr.BasicResponse.Message)
+			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + pr.BasicResponse.Message)
 		}
 
-		// br.Result will contain the new token state after sending tokens to receiver as a response to APISendReceiverToken
-		newtokenhashresult, ok := br.Result.([]interface{})
-		if !ok {
-			c.log.Error("Type assertion to string failed")
-			return nil, nil, fmt.Errorf("Type assertion to string failed")
-		}
-		var newtokenhashes []string
-		for i, newTokenHash := range newtokenhashresult {
-			statehash, ok := newTokenHash.(string)
-			if !ok {
-				c.log.Error("Type assertion to string failed at index", i)
-				return nil, nil, fmt.Errorf("Type assertion to string failed at index", i)
-			}
-			newtokenhashes = append(newtokenhashes, statehash)
-		}
-
+		// pr.TokenStateHash will contain the new token state after sending tokens to receiver and pr.PeerList will store the updated PeerList as a response to APISendReceiverToken
+		newtokenhashes := pr.TokenStateHash
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid, peerList)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
 		}
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode, peerList, c.peerID)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, err
@@ -622,6 +617,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		return &td, pl, nil
 	case PinningServiceMode:
+		util.AddToPeerMap(peerList, cr.SenderPeerID)
 		c.log.Debug("Mode = PinningServiceMode ")
 		c.log.Debug("Pinning Node PeerId", cr.PinningNodePeerID)
 		c.log.Debug("Pinning Service DID", sc.GetPinningServiceDID())
@@ -637,6 +633,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TokenChainBlock:    nb.GetBlock(),
 			QuorumList:         cr.QuorumList,
 			PinningServiceMode: true,
+			PeerList:           peerList,
 		}
 		//fetching quorums' info from PeerDIDTable to share with the receiver
 		for _, qrm := range sr.QuorumList {
@@ -737,13 +734,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid, peerList)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
 		}
 
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode, peerList, c.peerID)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, err
@@ -779,6 +776,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		return &td, pl, nil
 	case SelfTransferMode:
+		util.AddToPeerMap(peerList, cr.ReceiverPeerID)
 		var quorumInfo []QuorumDIDPeerMap = make([]QuorumDIDPeerMap, 0)
 		var selfAddress string = cr.ReceiverPeerID + "." + sc.GetReceiverDID()
 
@@ -819,7 +817,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		// Self update for self transfer tokens
-		updatedTokenHashes, err := c.updateReceiverToken(selfAddress, "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, cr.TransactionEpoch, false)
+		updatedTokenHashes, err := c.updateReceiverToken(selfAddress, "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, cr.TransactionEpoch, false, peerList)
 		if err != nil {
 			errMsg := fmt.Errorf("failed while update of self transfer tokens, err: %v", err)
 			c.log.Error(errMsg.Error())
@@ -828,7 +826,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, updatedTokenHashes, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, updatedTokenHashes, tid, peerList)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
@@ -905,13 +903,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		//trigger pledge finality to the quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, nil, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, nil, tid, peerList)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
 		}
 		return &td, pl, nil
 	case SmartContractDeployMode:
+		util.AddToPeerMap(peerList, cr.DeployerPeerID)
 		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
 		if err != nil {
@@ -957,7 +956,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Info(fmt.Sprintf("New smart contract token hash after being deployed : %s", newtokenIDTokenStateHash))
 
 		//trigger pledge finality to the quorum and adding the details in token hash table
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid, peerList)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
@@ -996,6 +995,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		return &txnDetails, pl, nil
 	case SmartContractExecuteMode:
+		util.AddToPeerMap(peerList, cr.ExecuterPeerID)
 		//Get the latest block details before being executed to get the old signers
 		b := c.w.GetLatestTokenBlock(cr.SmartContractToken, nb.GetTokenType(cr.SmartContractToken))
 		signers, _ := b.GetSigner()
@@ -1026,7 +1026,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Info(fmt.Sprintf("New smart contract token hash after being executed : %s", newtokenIDTokenStateHash))
 
 		//trigger pledge finality to the quorum and adding the details in token hash table
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid, peerList)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
@@ -1150,7 +1150,7 @@ func (c *Core) initiateUnpledgingProcess(cr *ConensusRequest, transactionHash st
 	return nil
 }
 
-func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, newTokenStateHashes []string, transactionId string) error {
+func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, newTokenStateHashes []string, transactionId string, peerList map[string]bool) error {
 	c.log.Debug("Proceeding for pledge finality")
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
@@ -1183,7 +1183,9 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			return err
 		}
 		defer qPeer.Close()
-		var br model.BasicResponse
+		fmt.Println("Calling DID : ", k)
+		fmt.Println("Calling PeerID : ", qPeer)
+		var pr model.PeerResponse
 		ur := UpdatePledgeRequest{
 			Mode:                        cr.Mode,
 			PledgedTokens:               v,
@@ -1191,6 +1193,7 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			TransactionID:               transactionId,
 			TransferredTokenStateHashes: nil,
 			TransactionEpoch:            cr.TransactionEpoch,
+			PeerList:                    peerList,
 		}
 
 		if newTokenStateHashes != nil {
@@ -1198,15 +1201,16 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			ur.TransferredTokenStateHashes = newTokenStateHashes
 		}
 
-		err = qPeer.SendJSONRequest("POST", APIUpdatePledgeToken, nil, &ur, &br, true)
+		err = qPeer.SendJSONRequest("POST", APIUpdatePledgeToken, nil, &ur, &pr, true)
 		if err != nil {
 			c.log.Error("Failed to update pledge token status", "err", err)
 			return fmt.Errorf("failed to update pledge token status")
 		}
-		if !br.Status {
-			c.log.Error("Failed to update pledge token status", "msg", br.Message)
+		if !pr.BasicResponse.Status {
+			c.log.Error("Failed to update pledge token status", "msg", pr.BasicResponse.Message)
 			return fmt.Errorf("failed to update pledge token status")
 		}
+		peerList = pr.PeerList
 	}
 	return nil
 }
@@ -1285,7 +1289,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	}
 }
 
-func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contract.Contract) {
+func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contract.Contract, peerList map[string]bool) {
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
 	var err error
@@ -1415,6 +1419,8 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
+	peerID, _, _ := util.ParseAddress(addr)
+	util.AddToPeerMap(peerList, peerID)
 	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
 }
 

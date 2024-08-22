@@ -633,8 +633,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) updateReceiverToken(
 	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
-	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool,
-) ([]string, error) {
+	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool, peerList map[string]bool) ([]string, error) {
 	var receiverPeerId string = ""
 	var receiverDID string = ""
 
@@ -706,7 +705,7 @@ func (c *Core) updateReceiverToken(
 
 	senderPeerId, _, ok := util.ParseAddress(senderAddress)
 	if !ok {
-		return nil, fmt.Errorf("Unable to parse sender address: %v", senderAddress)
+		return nil, fmt.Errorf("unable to parse sender address: %v", senderAddress)
 	}
 
 	results := make([]MultiPinCheckRes, len(tokenInfo))
@@ -747,19 +746,19 @@ func (c *Core) updateReceiverToken(
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
 
-	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs)
+	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs, peerList)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
+		return nil, fmt.Errorf("failed to update token status, error: %v", err)
 	}
 
 	sc := contract.InitContract(b.GetSmartContract(), nil)
 	if sc == nil {
-		return nil, fmt.Errorf("Failed to update token status, missing smart contract")
+		return nil, fmt.Errorf("failed to update token status, missing smart contract")
 	}
 
 	bid, err := b.GetBlockID(tokenInfo[0].Token)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
+		return nil, fmt.Errorf("failed to update token status, failed to get block ID, err: %v", err)
 	}
 
 	// Store the transaction info only when we are dealing with RBT transfer between
@@ -794,12 +793,11 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 	var sr SendTokenRequest
 
 	err := c.l.ParseJSON(req, &sr)
-	crep := model.BasicResponse{
-		Status: false,
-	}
+	crep := model.PeerResponse{}
+
 	if err != nil {
 		c.log.Error("Failed to parse json request", "err", err)
-		crep.Message = "Failed to parse json request"
+		crep.BasicResponse.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
@@ -813,17 +811,18 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 		sr.QuorumInfo,
 		sr.TransactionEpoch,
 		sr.PinningServiceMode,
+		sr.PeerList,
 	)
 	if err != nil {
 		c.log.Error(err.Error())
-		crep.Message = err.Error()
+		crep.BasicResponse.Message = err.Error()
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
-	crep.Status = true
-	crep.Message = "Token received successfully"
-	crep.Result = updatedtokenhashes
-
+	crep.BasicResponse.Status = true
+	crep.BasicResponse.Message = "Token received successfully"
+	crep.TokenStateHash = updatedtokenhashes
+	crep.PeerList = sr.PeerList
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
@@ -869,21 +868,23 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	c.log.Debug("incoming request for pledge finlaity")
 	did := c.l.GetQuerry(req, "did")
 	c.log.Debug("DID from query", did)
+	peerID := c.GetPeerID()
+
 	var ur UpdatePledgeRequest
 	err := c.l.ParseJSON(req, &ur)
-	crep := model.BasicResponse{
-		Status: false,
-	}
+	crep := model.PeerResponse{}
+	fmt.Println("Incoming peermap : ", ur.PeerList)
+	crep.BasicResponse.Status = false
 	if err != nil {
 		c.log.Error("Failed to parse json request", "err", err)
-		crep.Message = "Failed to parse json request"
+		crep.BasicResponse.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	dc, ok := c.qc[did]
 	if !ok {
 		c.log.Debug("did crypto initilisation failed")
 		c.log.Error("Failed to setup quorum crypto")
-		crep.Message = "Failed to setup quorum crypto"
+		crep.BasicResponse.Message = "Failed to setup quorum crypto"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	b := block.InitBlock(ur.TokenChainBlock, nil)
@@ -896,7 +897,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			id, err := b.GetBlockID(tkn)
 			if err != nil {
 				c.log.Error("Failed to get block ID")
-				crep.Message = "Failed to get block ID"
+				crep.BasicResponse.Message = "Failed to get block ID"
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 			refIDArr = append(refIDArr, fmt.Sprintf("%v_%v_%v", tkn, b.GetTokenType(tkn), id))
@@ -915,24 +916,29 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	// is avoided
 	//
 	// However in case either sender or receiver happen to be a Quorum server, even though the above
-	// scenario is covered , but since the token block is also added on Quorum's end, we end up in a 
+	// scenario is covered , but since the token block is also added on Quorum's end, we end up in a
 	// situation where update of same block happens twice. Hence the following check ensures that we
 	// skip the addition of block here, if either sender or receiver happen to be on a Quorum node.
-	if !c.w.IsDIDExist(b.GetReceiverDID()) && !c.w.IsDIDExist(b.GetSenderDID()) {
+
+	//Checking if the trans token chain block by the peer has already been added
+	if !ur.PeerList[peerID] {
 		for _, t := range tks {
 			err = c.w.AddTokenBlock(t, b)
 			if err != nil {
 				c.log.Error("Failed to add token block", "token", t)
-				crep.Message = "Failed to add token block"
+				crep.BasicResponse.Message = "Failed to add token block"
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 		}
+		ur.PeerList[peerID] = true
 	}
+	crep.PeerList = ur.PeerList
+
 	for _, t := range ur.PledgedTokens {
 		tk, err := c.w.ReadToken(t)
 		if err != nil {
 			c.log.Error("failed to read token from wallet")
-			crep.Message = "failed to read token from wallet"
+			crep.BasicResponse.Message = "failed to read token from wallet"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		ts := RBTString
@@ -947,7 +953,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		lb := c.w.GetLatestTokenBlock(t, c.TokenType(ts))
 		if lb == nil {
 			c.log.Error("Failed to get token chain block")
-			crep.Message = "Failed to get token chain block"
+			crep.BasicResponse.Message = "Failed to get token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		ctcb[t] = lb
@@ -967,26 +973,26 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
 		c.log.Error("Failed to create new token chain block - qrm rec")
-		crep.Message = "Failed to create new token chain block -qrm rec"
+		crep.BasicResponse.Message = "Failed to create new token chain block -qrm rec"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	err = nb.UpdateSignature(dc)
 	if err != nil {
 		c.log.Error("Failed to update signature to block", "err", err)
-		crep.Message = "Failed to update signature to block"
+		crep.BasicResponse.Message = "Failed to update signature to block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	err = c.w.CreateTokenBlock(nb)
 	if err != nil {
 		c.log.Error("Failed to update token chain block", "err", err)
-		crep.Message = "Failed to update token chain block"
+		crep.BasicResponse.Message = "Failed to update token chain block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	for _, t := range ur.PledgedTokens {
 		err = c.w.PledgeWholeToken(did, t, nb)
 		if err != nil {
 			c.log.Error("Failed to update pledge token", "err", err)
-			crep.Message = "Failed to update pledge token"
+			crep.BasicResponse.Message = "Failed to update pledge token"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
@@ -999,8 +1005,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		c.log.Error("Failed to add token state hash", "err", err)
 	}
 
-	crep.Status = true
-	crep.Message = "Token pledge status updated"
+	crep.BasicResponse.Status = true
+	crep.BasicResponse.Message = "Token pledge status updated"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
