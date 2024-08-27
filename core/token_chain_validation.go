@@ -13,38 +13,38 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func (c *Core) TokenChainValidation(user_did string, tokenId string, blockCount int) (*model.BasicResponse, error) {
+func (c *Core) TokenChainValidation(userDID string, tokenId string, blockCount int) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
-	ok := c.w.IsDIDExist(user_did)
+	ok := c.w.IsDIDExist(userDID)
 	if !ok {
 		response.Message = "Invalid did, please pass did of the tokenchain validator"
-		return response, fmt.Errorf("invalid did: %v, please pass did of the tokenchain validator", user_did)
+		return response, fmt.Errorf("invalid did: %v, please pass did of the tokenchain validator", userDID)
 	}
 
 	if tokenId == "" { //if provided the boolean flag 'allmyToken', all the tokens' chain from tokens table will be validated
 		c.log.Info("Validating all tokens from your tokens table")
-		tokens_list, err := c.w.GetAllTokens(user_did)
+		tokensList, err := c.w.GetAllTokens(userDID)
 		if err != nil {
 			response.Message = "failed to fetch all tokens"
 			return response, err
 		}
-		for _, tkn := range tokens_list {
+		for _, tkn := range tokensList {
 			//Fetch token information
-			token_info, err := c.w.ReadToken(tkn.TokenID)
+			tokenInfo, err := c.w.ReadToken(tkn.TokenID)
 			if err != nil {
 				response.Message = "Failed to get token chain block, token does not exist"
 				return response, err
 			}
 			//Get token type
-			type_string := RBTString
-			if token_info.TokenValue < 1.0 {
-				type_string = PartString
+			typeString := RBTString
+			if tokenInfo.TokenValue < 1.0 {
+				typeString = PartString
 			}
-			token_type := c.TokenType(type_string)
+			tokenType := c.TokenType(typeString)
 			//Validate tokenchain for each token in the tokens table
-			response, err = c.ValidateTokenChain(user_did, token_info, token_type, blockCount)
+			response, err = c.ValidateTokenChain(userDID, tokenInfo, tokenType, blockCount)
 			if err != nil || !response.Status {
 				c.log.Error("token chain validation failed for token:", tkn.TokenID, "Error :", err, "msg:", response.Message)
 				return response, err
@@ -53,20 +53,20 @@ func (c *Core) TokenChainValidation(user_did string, tokenId string, blockCount 
 
 	} else {
 		//Fetch token information
-		token_info, err := c.w.ReadToken(tokenId)
+		tokenInfo, err := c.w.ReadToken(tokenId)
 		if err != nil {
 			response.Message = "Failed to get token chain block, token does not exist"
 			return response, err
 		}
 
 		//Get token type
-		type_string := RBTString
-		if token_info.TokenValue < 1.0 {
-			type_string = PartString
+		typeString := RBTString
+		if tokenInfo.TokenValue < 1.0 {
+			typeString = PartString
 		}
-		token_type := c.TokenType(type_string)
+		tokenType := c.TokenType(typeString)
 		//Validate tokenchain for the provided token
-		response, err = c.ValidateTokenChain(user_did, token_info, token_type, blockCount)
+		response, err = c.ValidateTokenChain(userDID, tokenInfo, tokenType, blockCount)
 		if err != nil || !response.Status {
 			c.log.Error("token chain validation failed for token:", tokenId, "Error :", err, "msg:", response.Message)
 			return response, err
@@ -76,12 +76,12 @@ func (c *Core) TokenChainValidation(user_did string, tokenId string, blockCount 
 }
 
 // Validates tokenchain for the given token upto the specified block height
-func (c *Core) ValidateTokenChain(user_did string, token_info *wallet.Token, token_type int, blockCount int) (*model.BasicResponse, error) {
-	c.log.Info("--------validating tokenchain", token_info.TokenID, "---------")
+func (c *Core) ValidateTokenChain(userDID string, tokenInfo *wallet.Token, tokenType int, blockCount int) (*model.BasicResponse, error) {
+	c.log.Info("--------validating tokenchain", tokenInfo.TokenID, "---------")
 	response := &model.BasicResponse{
 		Status: false,
 	}
-	validated_block_count := 0
+	validatedBlockCount := 0
 	blockId := ""
 
 	var blocks [][]byte
@@ -94,7 +94,7 @@ func (c *Core) ValidateTokenChain(user_did string, token_info *wallet.Token, tok
 	for {
 		//GetAllTokenBlocks returns next 100 blocks and nextBlockID of the 100th block,
 		//starting from the given block Id, in the direction: genesis to latest block
-		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(token_info.TokenID, token_type, blockId)
+		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(tokenInfo.TokenID, tokenType, blockId)
 		if err != nil {
 			response.Message = "Failed to get token chain block"
 			return response, err
@@ -109,46 +109,46 @@ func (c *Core) ValidateTokenChain(user_did string, token_info *wallet.Token, tok
 	c.log.Info("token chain length", len(blocks))
 	for i := len(blocks) - 1; i >= 0; i-- {
 		b := block.InitBlock(blocks[i], nil)
-		//validated_block_count keeps count of the number of blocks validated, including failed blocks
-		validated_block_count++
+		//validatedBlockCount keeps count of the number of blocks validated, including failed blocks
+		validatedBlockCount++
 
 		if b != nil {
 			//calculate block height
-			block_height, err := b.GetBlockNumber(token_info.TokenID)
+			blockHeight, err := b.GetBlockNumber(tokenInfo.TokenID)
 			if err != nil {
 				response.Message = "failed to fetch BlockNumber"
 				return response, fmt.Errorf("invalid token chain block")
 			}
 
-			c.log.Info("validating at block height:", block_height)
+			c.log.Info("validating at block height:", blockHeight)
 
 			//fetch transaction type to validate the block accordingly
-			txn_type := b.GetTransType()
-			switch txn_type {
+			txnType := b.GetTransType()
+			switch txnType {
 			case block.TokenTransferredType:
 				//calculate previous block Id
 				prevBlock := block.InitBlock(blocks[i-1], nil)
-				prevBlockId, err = prevBlock.GetBlockID(token_info.TokenID)
+				prevBlockId, err = prevBlock.GetBlockID(tokenInfo.TokenID)
 				if err != nil {
 					c.log.Error("invalid previous block")
 					continue
 				}
 				//validate rbt transfer block
-				response, err = c.Validate_RBTTransfer_Block(b, token_info.TokenID, prevBlockId, user_did)
+				response, err = c.ValidateRBTTransferBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
 				if err != nil {
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
 				}
 			case block.TokenGeneratedType:
 				//validate genesis block
-				response, err = c.ValidateGenesisBlock(b, *token_info, token_type, user_did)
+				response, err = c.ValidateGenesisBlock(b, *tokenInfo, tokenType, userDID)
 				if err != nil {
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
 				}
 			case block.TokenBurntType:
 				//validate RBT burnt block
-				response, err = c.Validate_RBTBurnt_Block(b, *token_info, prevBlockId, user_did)
+				response, err = c.ValidateRBTBurntBlock(b, *tokenInfo, prevBlockId, userDID)
 				if err != nil {
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
@@ -156,13 +156,13 @@ func (c *Core) ValidateTokenChain(user_did string, token_info *wallet.Token, tok
 			case block.TokenPledgedType:
 				//calculate previous block Id
 				prevBlock := block.InitBlock(blocks[i-1], nil)
-				prevBlockId, err = prevBlock.GetBlockID(token_info.TokenID)
+				prevBlockId, err = prevBlock.GetBlockID(tokenInfo.TokenID)
 				if err != nil {
 					c.log.Error("invalid previous block")
 					continue
 				}
 				//validate Pledged block
-				response, err = c.Validate_Pledged_or_Unpledged_Block(b, token_info.TokenID, prevBlockId, user_did)
+				response, err = c.ValidatePledgedUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
 				if err != nil {
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
@@ -170,13 +170,13 @@ func (c *Core) ValidateTokenChain(user_did string, token_info *wallet.Token, tok
 			case block.TokenUnpledgedType:
 				//calculate previous block Id
 				prevBlock := block.InitBlock(blocks[i-1], nil)
-				prevBlockId, err = prevBlock.GetBlockID(token_info.TokenID)
+				prevBlockId, err = prevBlock.GetBlockID(tokenInfo.TokenID)
 				if err != nil {
 					c.log.Error("invalid previous block")
 					continue
 				}
 				//validate Pledged block
-				response, err = c.Validate_Pledged_or_Unpledged_Block(b, token_info.TokenID, prevBlockId, user_did)
+				response, err = c.ValidatePledgedUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
 				if err != nil {
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
@@ -184,13 +184,13 @@ func (c *Core) ValidateTokenChain(user_did string, token_info *wallet.Token, tok
 			case block.TokenContractCommited:
 				//calculate previous block Id
 				prevBlock := block.InitBlock(blocks[i-1], nil)
-				prevBlockId, err = prevBlock.GetBlockID(token_info.TokenID)
+				prevBlockId, err = prevBlock.GetBlockID(tokenInfo.TokenID)
 				if err != nil {
 					c.log.Error("invalid previous block")
 					continue
 				}
 				//validate Pledged block
-				response, err = c.Validate_Pledged_or_Unpledged_Block(b, token_info.TokenID, prevBlockId, user_did)
+				response, err = c.ValidatePledgedUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
 				if err != nil {
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
@@ -201,35 +201,35 @@ func (c *Core) ValidateTokenChain(user_did string, token_info *wallet.Token, tok
 			c.log.Error("Invalid block")
 		}
 
-		c.log.Info("validated_block_count", validated_block_count)
+		c.log.Info("validatedBlockCount", validatedBlockCount)
 		// //If blockCount is provided, then we will stop validating when we reach the blockCount
-		// //If blockCount is not provided,i.e., is 0, then it will never be equal to validated_block_count
+		// //If blockCount is not provided,i.e., is 0, then it will never be equal to validatedBlockCount
 		// //and thus will be continued till genesis block
-		if validated_block_count == blockCount {
+		if validatedBlockCount == blockCount {
 			break
 		}
 	}
 
 	//Get latest block in the token chain
-	latestBlock := c.w.GetLatestTokenBlock(token_info.TokenID, token_type)
+	latestBlock := c.w.GetLatestTokenBlock(tokenInfo.TokenID, tokenType)
 
 	if latestBlock.GetTransType() == block.TokenTransferredType {
 		//Verify if the token is pinned only by the current owner aka receiver in the latest block
-		response, err = c.CurrentOwnerPinCheck(latestBlock, token_info.TokenID, user_did)
+		response, err = c.CurrentOwnerPinCheck(latestBlock, tokenInfo.TokenID, userDID)
 		if err != nil {
 			c.log.Error("msg", response.Message)
 			return response, err
 		}
 
 		//verify if the current token state is pinned by the quorums in the latest block
-		response, err = c.CurrentQuorumStatePinCheck(latestBlock, token_info.TokenID, token_type, user_did)
+		response, err = c.CurrentQuorumStatePinCheck(latestBlock, tokenInfo.TokenID, tokenType, userDID)
 		if err != nil {
 			c.log.Error("msg", response.Message)
 			return response, err
 		}
 	} else {
 		//Verify if the token is pinned only by the current owner aka receiver in the latest block
-		response, err = c.CurrentOwnerPinCheck(latestBlock, token_info.TokenID, user_did)
+		response, err = c.CurrentOwnerPinCheck(latestBlock, tokenInfo.TokenID, userDID)
 		if err != nil {
 			c.log.Error("msg", response.Message)
 			return response, err
@@ -243,11 +243,11 @@ func (c *Core) ValidateTokenChain(user_did string, token_info *wallet.Token, tok
 }
 
 // validate block of type: TokenTransferredType = "02" / TokenDeployedType = "09" / TokenExecutedType = "10"
-func (c *Core) Validate_RBTTransfer_Block(b *block.Block, tokenId string, calculated_prevBlockId string, user_did string) (*model.BasicResponse, error) {
+func (c *Core) ValidateRBTTransferBlock(b *block.Block, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{}
 
 	//Validate block hash
-	response, err := c.ValidateBlockHash(b, tokenId, calculated_prevBlockId)
+	response, err := c.ValidateBlockHash(b, tokenId, calculatedPrevBlockId)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
@@ -260,7 +260,7 @@ func (c *Core) Validate_RBTTransfer_Block(b *block.Block, tokenId string, calcul
 	}
 
 	//validate all quorums' signatures
-	response, err = c.ValidateQuorums(b, user_did)
+	response, err = c.ValidateQuorums(b, userDID)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
@@ -273,18 +273,18 @@ func (c *Core) Validate_RBTTransfer_Block(b *block.Block, tokenId string, calcul
 }
 
 // validate block of type : TokenBurntType = "08"
-func (c *Core) Validate_RBTBurnt_Block(b *block.Block, token_info wallet.Token, calculated_prevBlockId string, user_did string) (*model.BasicResponse, error) {
+func (c *Core) ValidateRBTBurntBlock(b *block.Block, tokenInfo wallet.Token, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{}
 
 	//Validate block hash
-	response, err := c.ValidateBlockHash(b, token_info.TokenID, calculated_prevBlockId)
+	response, err := c.ValidateBlockHash(b, tokenInfo.TokenID, calculatedPrevBlockId)
 	if err != nil {
 		c.log.Error("msg", response.Message)
 		return response, err
 	}
 
 	//validate burnt-token owner signature
-	response, err = c.Validate_Token_Owner(b, user_did)
+	response, err = c.ValidateTokenOwner(b, userDID)
 	if err != nil {
 		response.Message = "invalid token owner in RBT burnt block"
 		c.log.Error("invalid token owner in RBT burnt block")
@@ -298,18 +298,18 @@ func (c *Core) Validate_RBTBurnt_Block(b *block.Block, token_info wallet.Token, 
 }
 
 // validate block of type : TokenPledgedType = "04" / TokenUnpledgedType = "06" / TokenContractCommited = "11"
-func (c *Core) Validate_Pledged_or_Unpledged_Block(b *block.Block, tokenId string, calculated_prevBlockId string, user_did string) (*model.BasicResponse, error) {
+func (c *Core) ValidatePledgedUnpledgedBlock(b *block.Block, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{}
 
 	//Validate block hash
-	response, err := c.ValidateBlockHash(b, tokenId, calculated_prevBlockId)
+	response, err := c.ValidateBlockHash(b, tokenId, calculatedPrevBlockId)
 	if err != nil {
 		c.log.Error("msg", response.Message)
 		return response, err
 	}
 
 	//validate burnt-token owner signature
-	response, err = c.Validate_Token_Owner(b, user_did)
+	response, err = c.ValidateTokenOwner(b, userDID)
 	if err != nil {
 		response.Message = "invalid token owner in RBT burnt block"
 		c.log.Error("invalid token owner in RBT burnt block")
@@ -323,18 +323,18 @@ func (c *Core) Validate_Pledged_or_Unpledged_Block(b *block.Block, tokenId strin
 }
 
 // genesis block validation : validate block of type: TokenGeneratedType = "05"
-func (c *Core) ValidateGenesisBlock(b *block.Block, token_info wallet.Token, token_type int, user_did string) (*model.BasicResponse, error) {
+func (c *Core) ValidateGenesisBlock(b *block.Block, tokenInfo wallet.Token, tokenType int, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{}
 
 	//Validate block hash of genesis block
-	response, err := c.ValidateBlockHash(b, token_info.TokenID, "")
+	response, err := c.ValidateBlockHash(b, tokenInfo.TokenID, "")
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
 	}
 
 	//initial token owner signature verification
-	response, err = c.Validate_Token_Owner(b, user_did)
+	response, err = c.ValidateTokenOwner(b, userDID)
 	if err != nil {
 		response.Message = "invalid token owner in genesis block"
 		c.log.Error("invalid token owner in genesis block")
@@ -342,8 +342,8 @@ func (c *Core) ValidateGenesisBlock(b *block.Block, token_info wallet.Token, tok
 	}
 
 	//if part token, validate parent token chain
-	if token_type == token.TestPartTokenType {
-		response, err = c.Validate_ParentToken_LatestBlock(token_info.ParentTokenID, user_did)
+	if tokenType == token.TestPartTokenType {
+		response, err = c.ValidateParentTokenLatestBlock(tokenInfo.ParentTokenID, userDID)
 		if err != nil {
 			c.log.Error("msg", response.Message, "err", err)
 			return response, err
@@ -357,24 +357,24 @@ func (c *Core) ValidateGenesisBlock(b *block.Block, token_info wallet.Token, tok
 }
 
 // Validate Parent token latest block if token is part token
-func (c *Core) Validate_ParentToken_LatestBlock(parent_tokenId string, user_did string) (*model.BasicResponse, error) {
-	c.log.Debug("validating parent token chain latest block", parent_tokenId)
+func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID string) (*model.BasicResponse, error) {
+	c.log.Debug("validating parent token chain latest block", parentTokenId)
 	response := &model.BasicResponse{
 		Status: false,
 	}
 
-	parent_token_info, err := c.w.ReadToken(parent_tokenId)
+	parentTokenInfo, err := c.w.ReadToken(parentTokenId)
 	if err != nil {
-		b, err := c.getFromIPFS(parent_tokenId)
+		b, err := c.getFromIPFS(parentTokenId)
 		if err != nil {
-			c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parent_tokenId)
+			c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parentTokenId)
 			response.Message = "failed to get parent token detials from ipfs"
 			return response, err
 		}
 		_, iswholeToken, _ := token.CheckWholeToken(string(b))
-		token_type := token.RBTTokenType
-		token_value := float64(1)
-		token_owner := ""
+		tokenType := token.RBTTokenType
+		tokenValue := float64(1)
+		tokenOwner := ""
 		if !iswholeToken {
 			blk := util.StrToHex(string(b))
 			rb, err := rac.InitRacBlock(blk, nil)
@@ -383,81 +383,81 @@ func (c *Core) Validate_ParentToken_LatestBlock(parent_tokenId string, user_did 
 				response.Message = "invalid token, invalid rac block"
 				return response, err
 			}
-			token_type = rac.RacType2TokenType(rb.GetRacType())
-			if c.TokenType(PartString) == token_type {
-				token_value = rb.GetRacValue()
+			tokenType = rac.RacType2TokenType(rb.GetRacType())
+			if c.TokenType(PartString) == tokenType {
+				tokenValue = rb.GetRacValue()
 			}
-			token_owner = rb.GetDID()
+			tokenOwner = rb.GetDID()
 		}
-		parent_token_info = &wallet.Token{
-			TokenID:     parent_tokenId,
-			TokenValue:  token_value,
+		parentTokenInfo = &wallet.Token{
+			TokenID:     parentTokenId,
+			TokenValue:  tokenValue,
 			TokenStatus: wallet.TokenIsBurnt,
-			DID:         token_owner,
+			DID:         tokenOwner,
 		}
 	}
 
-	if parent_token_info.TokenStatus != wallet.TokenIsBurnt {
+	if parentTokenInfo.TokenStatus != wallet.TokenIsBurnt {
 		response.Message = "parent token not in burnt state"
 		c.log.Error("msg", response.Message)
 		return response, err
 	}
-	type_string := RBTString
-	if parent_token_info.TokenValue < 1.0 {
-		type_string = PartString
+	typeString := RBTString
+	if parentTokenInfo.TokenValue < 1.0 {
+		typeString = PartString
 	}
-	parent_token_type := c.TokenType(type_string)
+	parentTokenType := c.TokenType(typeString)
 
 	//Get latest block in the token chain
-	parent_token_latestBlock := c.w.GetLatestTokenBlock(parent_tokenId, parent_token_type)
-	response, err = c.Validate_RBTBurnt_Block(parent_token_latestBlock, *parent_token_info, "", user_did)
+	parentTokenLatestBlock := c.w.GetLatestTokenBlock(parentTokenId, parentTokenType)
+	response, err = c.ValidateRBTBurntBlock(parentTokenLatestBlock, *parentTokenInfo, "", userDID)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
 	}
 
 	//if parent token is also a part token, then validate it's parent token latest block
-	if parent_token_type == c.TokenType(PartString) {
-		if parent_token_info.ParentTokenID == "" {
-			genesis_block := c.w.GetGenesisTokenBlock(parent_tokenId, parent_token_type)
-			grand_parent_token, _, err := genesis_block.GetParentDetials(parent_tokenId)
+	if parentTokenType == c.TokenType(PartString) {
+		if parentTokenInfo.ParentTokenID == "" {
+			genesisBlock := c.w.GetGenesisTokenBlock(parentTokenId, parentTokenType)
+			grandParentToken, _, err := genesisBlock.GetParentDetials(parentTokenId)
 			if err != nil {
 				c.log.Error("failed to get grand parent tokens to validate")
 			}
-			c.log.Debug("grand parent token:", grand_parent_token)
-			parent_token_info.ParentTokenID = grand_parent_token
+			c.log.Debug("grand parent token:", grandParentToken)
+			parentTokenInfo.ParentTokenID = grandParentToken
 		}
-		response, err = c.Validate_ParentToken_LatestBlock(parent_token_info.ParentTokenID, user_did)
+		response, err = c.ValidateParentTokenLatestBlock(parentTokenInfo.ParentTokenID, userDID)
 		if err != nil {
 			c.log.Error("msg", response.Message, "err", err)
 			return response, err
 		}
 	}
 
-	c.log.Debug("validated parent tokenchain latest block:", parent_tokenId)
+	c.log.Debug("validated parent tokenchain latest block:", parentTokenId)
 	response.Status = true
 	response.Message = "validated parent tokenchain latest block"
 	return response, nil
 }
 
 // Validate block hash and previous block hash
-func (c *Core) ValidateBlockHash(b *block.Block, tokenId string, calculated_prevBlockId string) (*model.BasicResponse, error) {
+func (c *Core) ValidateBlockHash(b *block.Block, tokenId string, calculatedPrevBlockId string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
 
 	//fetching block hash from block map using key 'TCBlockHash'
-	stored_blockHash, err := b.GetHash()
+	storedBlockHash, err := b.GetHash()
 	if err != nil {
 		c.log.Error("failed to fetch block hash")
 		response.Message = "failed to fetch block hash, could not validate block hash"
 		return response, err
 	}
 
-	//if previous block Id verification is not neessary, then calculated_prevBlockId can be paased as an empty string
-	if calculated_prevBlockId != "" {
+	//if previous block Id verification is not neessary, then calculatedPrevBlockId can be paased as an empty string
+	if calculatedPrevBlockId != "" {
 		//fetching previous block-Id from block map using key 'TTPreviousBlockIDKey'
-		stored_prevBlockId, err := b.GetPrevBlockID(tokenId)
+		storedPrevBlockId, err := b.GetPrevBlockID(tokenId)
 		if err != nil {
 			c.log.Error("failed to fetch previous-block-Id")
 			response.Message = "failed to fetch previous-block-Id, could not validate block hash"
@@ -465,7 +465,7 @@ func (c *Core) ValidateBlockHash(b *block.Block, tokenId string, calculated_prev
 		}
 
 		//check the validity of the stored previous block-ID
-		if calculated_prevBlockId != stored_prevBlockId {
+		if calculatedPrevBlockId != storedPrevBlockId {
 			c.log.Error("previous-block-Id does not match")
 			response.Message = "previous-block-Id does not match, block hash validation failed"
 			return response, err
@@ -473,16 +473,15 @@ func (c *Core) ValidateBlockHash(b *block.Block, tokenId string, calculated_prev
 	}
 
 	//calculate block hash from block data
-	calculated_blockHash, err := b.CalculateBlockHash()
+	calculatedBlockHash, err := b.CalculateBlockHash()
 	if err != nil {
 		c.log.Error("err", err)
 	}
 
-	// block_hash_map := blockMap[TCBlockHashKey]
-	if stored_blockHash != calculated_blockHash {
+	if storedBlockHash != calculatedBlockHash {
 		c.log.Error("block hash does not match")
-		c.log.Debug("stored block hash", stored_blockHash)
-		c.log.Debug("calculated block hash", calculated_blockHash)
+		c.log.Debug("stored block hash", storedBlockHash)
+		c.log.Debug("calculated block hash", calculatedBlockHash)
 		response.Message = "block hash does not match, block hash validation failed"
 		return response, fmt.Errorf("block hash does not match, block hash validation failed")
 	}
@@ -499,33 +498,32 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 		Status: false,
 	}
 
-	// block_map := b.GetBlockMap()
 	sender := b.GetSenderDID()
 
-	sender_sign := b.GetInitiatorSignature()
+	senderSign := b.GetInitiatorSignature()
 	//check if it is a block addded to chain before adding sender signature to block structure
-	if sender_sign == nil {
+	if senderSign == nil {
 		c.log.Info("old block, sender signature not found")
 		response.Message = "old block, sender signature not found"
 		return response, nil
-	} else if sender_sign.DID != sender {
+	} else if senderSign.DID != sender {
 		c.log.Info("invalid sender, sender did does not match")
 		response.Message = "invalid sender, sender did does not match"
 		return response, fmt.Errorf("invalid sender, sender did does not match")
 	}
 
-	var sender_didType int
+	var senderDIDType int
 	//sign type = 0, means it is a BIP signature and the did was created in light mode
 	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
 	//and thus the did could be initialised in basic mode to fetch the public key
-	if sender_sign.SignType == 0 {
-		sender_didType = did.LiteDIDMode
+	if senderSign.SignType == 0 {
+		senderDIDType = did.LiteDIDMode
 	} else {
-		sender_didType = did.BasicDIDMode
+		senderDIDType = did.BasicDIDMode
 	}
 
 	//Initialise sender did
-	didCrypto, err := c.InitialiseDID(sender, sender_didType)
+	didCrypto, err := c.InitialiseDID(sender, senderDIDType)
 	if err != nil {
 		c.log.Error("failed to initialise sender did:", sender)
 		response.Message = "failed to initialise sender did"
@@ -533,15 +531,15 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 	}
 
 	//sender signature verification
-	if sender_didType == did.LiteDIDMode {
-		response.Status, err = didCrypto.PvtVerify([]byte(sender_sign.Hash), util.StrToHex(sender_sign.Private_sign))
+	if senderDIDType == did.LiteDIDMode {
+		response.Status, err = didCrypto.PvtVerify([]byte(senderSign.Hash), util.StrToHex(senderSign.PrivateSign))
 		if err != nil {
 			c.log.Error("failed to verify sender:", sender, "err", err)
 			response.Message = "invalid sender"
 			return response, err
 		}
 	} else {
-		response.Status, err = didCrypto.NlssVerify(sender_sign.Hash, util.StrToHex(sender_sign.NLSS_share), util.StrToHex(sender_sign.Private_sign))
+		response.Status, err = didCrypto.NlssVerify(senderSign.Hash, util.StrToHex(senderSign.NLSSshare), util.StrToHex(senderSign.PrivateSign))
 		if err != nil {
 			c.log.Error("failed to verify sender:", sender, "err", err)
 			response.Message = "invalid sender"
@@ -555,7 +553,7 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 }
 
 // token owner signature verification
-func (c *Core) Validate_Token_Owner(b *block.Block, user_did string) (*model.BasicResponse, error) {
+func (c *Core) ValidateTokenOwner(b *block.Block, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
@@ -569,13 +567,13 @@ func (c *Core) Validate_Token_Owner(b *block.Block, user_did string) (*model.Bas
 		var dc did.DIDCrypto
 		switch b.GetTransType() {
 		case block.TokenGeneratedType, block.TokenBurntType:
-			dc, err = c.SetupForienDID(signer, user_did)
+			dc, err = c.SetupForienDID(signer, userDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID", signer, "err", err)
 				return response, err
 			}
 		default:
-			dc, err = c.SetupForienDIDQuorum(signer, user_did)
+			dc, err = c.SetupForienDIDQuorum(signer, userDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", signer, "err", err)
 				return response, err
@@ -595,33 +593,33 @@ func (c *Core) Validate_Token_Owner(b *block.Block, user_did string) (*model.Bas
 }
 
 // quorums signature validation
-func (c *Core) ValidateQuorums(b *block.Block, user_did string) (*model.BasicResponse, error) {
+func (c *Core) ValidateQuorums(b *block.Block, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
 
 	//signed data aka transaction Id
-	signed_data := b.GetTid()
-	quorum_sign_list, err := b.GetQuorumSignatureList()
-	if err != nil || quorum_sign_list == nil {
+	signedData := b.GetTid()
+	quorumSignList, err := b.GetQuorumSignatureList()
+	if err != nil || quorumSignList == nil {
 		c.log.Error("failed to get quorum signature list")
 	}
 
 	response.Status = true
-	for _, qrm := range quorum_sign_list {
-		qrm_DIDCrypto, err := c.SetupForienDIDQuorum(qrm.DID, user_did)
+	for _, qrm := range quorumSignList {
+		qrmDIDCrypto, err := c.SetupForienDIDQuorum(qrm.DID, userDID)
 		if err != nil {
 			c.log.Error("failed to initialise quorum:", qrm.DID, "err", err)
 			continue
 		}
 		var verificationStatus bool
 		if qrm.SignType == "0" { //qrm sign type = 0, means qrm signature is BIP sign and DID is created in Lite mode
-			verificationStatus, err = qrm_DIDCrypto.PvtVerify([]byte(signed_data), util.StrToHex(qrm.PrivSignature))
+			verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(signedData), util.StrToHex(qrm.PrivSignature))
 			if err != nil {
 				c.log.Error("failed signature verification for quorum:", qrm.DID)
 			}
 		} else {
-			verificationStatus, err = qrm_DIDCrypto.NlssVerify((signed_data), util.StrToHex(qrm.Signature), util.StrToHex(qrm.PrivSignature))
+			verificationStatus, err = qrmDIDCrypto.NlssVerify((signedData), util.StrToHex(qrm.Signature), util.StrToHex(qrm.PrivSignature))
 			if err != nil {
 				c.log.Error("failed signature verification for quorum:", qrm.DID)
 			}
@@ -635,24 +633,24 @@ func (c *Core) ValidateQuorums(b *block.Block, user_did string) (*model.BasicRes
 }
 
 // latest block owner(receiver) pin check
-func (c *Core) CurrentOwnerPinCheck(b *block.Block, tokenId string, user_did string) (*model.BasicResponse, error) {
+func (c *Core) CurrentOwnerPinCheck(b *block.Block, tokenId string, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
 
 	//current owner should be the receiver in the latest block
-	current_owner := b.GetOwner()
-	var current_ownerPeerID string
-	if current_owner == user_did {
-		current_ownerPeerID = c.peerID
+	currentOwner := b.GetOwner()
+	var currentOwnerPeerID string
+	if currentOwner == userDID {
+		currentOwnerPeerID = c.peerID
 	} else {
-		current_ownerPeerID = c.w.GetPeerID(current_owner)
+		currentOwnerPeerID = c.w.GetPeerID(currentOwner)
 	}
 
 	results := make([]MultiPinCheckRes, 1)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go c.pinCheck(tokenId, 0, current_ownerPeerID, "", results, &wg)
+	go c.pinCheck(tokenId, 0, currentOwnerPeerID, "", results, &wg)
 	wg.Wait()
 	for i := range results {
 		if results[i].Error != nil {
@@ -674,29 +672,29 @@ func (c *Core) CurrentOwnerPinCheck(b *block.Block, tokenId string, user_did str
 }
 
 // latest block pledged quorum pin check
-func (c *Core) CurrentQuorumStatePinCheck(b *block.Block, tokenId string, token_type int, user_did string) (*model.BasicResponse, error) {
+func (c *Core) CurrentQuorumStatePinCheck(b *block.Block, tokenId string, tokenType int, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
 
 	//Get quorumList along with peerIds : QuorumList
 	var quorumList []string
-	quorum_sign_list, err := b.GetQuorumSignatureList()
-	if err != nil || quorum_sign_list == nil {
+	quorumSignList, err := b.GetQuorumSignatureList()
+	if err != nil || quorumSignList == nil {
 		c.log.Error("failed to get quorum signature list from latest block")
 		response.Message = "state pincheck failed"
 		return response, err
 	}
-	for _, qrm := range quorum_sign_list {
-		qrm_peerId := c.w.GetPeerID(qrm.DID)
-		quorumList = append(quorumList, qrm_peerId+"."+qrm.DID)
+	for _, qrm := range quorumSignList {
+		qrmPeerID := c.w.GetPeerID(qrm.DID)
+		quorumList = append(quorumList, qrmPeerID+"."+qrm.DID)
 	}
 
 	tokenStateCheckResult := make([]TokenStateCheckResult, 1)
 	c.log.Debug("entering validation to check if token state is exhausted")
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go c.checkTokenState(tokenId, user_did, 0, tokenStateCheckResult, &wg, quorumList, token_type)
+	go c.checkTokenState(tokenId, userDID, 0, tokenStateCheckResult, &wg, quorumList, tokenType)
 	wg.Wait()
 
 	for i := range tokenStateCheckResult {

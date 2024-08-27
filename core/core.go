@@ -523,7 +523,7 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 }
 
 // Initializes the did in it's corresponding did mode (basic/ lite)
-func (c *Core) SetupForienDID(didStr string, self_did string) (did.DIDCrypto, error) {
+func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		c.log.Error("couldn't fetch did")
@@ -541,13 +541,12 @@ func (c *Core) SetupForienDID(didStr string, self_did string) (did.DIDCrypto, er
 			if peerId == "" {
 				return nil, err
 			}
-			if self_did != "" {
-				didtype_, msg, err2 := c.GetPeerdidType_fromPeer(peerId, didStr, self_did)
+			if selfDID != "" {
+				didtype, msg, err2 := c.GetPeerdidTypeFromPeer(peerId, didStr, selfDID)
 				if err2 != nil {
 					c.log.Error(msg)
 					return nil, err2
 				}
-				didtype = didtype_
 				peerUpdateResult, err3 := c.w.UpdatePeerDIDType(didStr, didtype)
 				if !peerUpdateResult {
 					c.log.Error("couldn't update did type in peer did table", err3)
@@ -561,7 +560,7 @@ func (c *Core) SetupForienDID(didStr string, self_did string) (did.DIDCrypto, er
 }
 
 // Initializes the quorum in it's corresponding did mode (basic/ lite)
-func (c *Core) SetupForienDIDQuorum(didStr string, self_did string) (did.DIDCrypto, error) {
+func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err
@@ -579,7 +578,7 @@ func (c *Core) SetupForienDIDQuorum(didStr string, self_did string) (did.DIDCryp
 			if peerId == "" {
 				return nil, err
 			}
-			didtype_, msg, err2 := c.GetPeerdidType_fromPeer(peerId, didStr, self_did)
+			didtype_, msg, err2 := c.GetPeerdidTypeFromPeer(peerId, didStr, selfDID)
 			if err2 != nil {
 				c.log.Error(msg)
 				return nil, err2
@@ -599,7 +598,7 @@ func (c *Core) SetupForienDIDQuorum(didStr string, self_did string) (did.DIDCryp
 	case did.BasicDIDMode:
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.LiteDIDMode:
-		return did.InitDIDQuorum_Lt(didStr, c.didDir, ""), nil
+		return did.InitDIDQuorumLite(didStr, c.didDir, ""), nil
 	default:
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	}

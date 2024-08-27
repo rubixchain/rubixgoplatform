@@ -60,19 +60,19 @@ const (
 )
 
 const (
-	Initiator_NLSS_share   string = "nlss_share_signature"
-	Initiator_Private_sign string = "priv_signature"
-	Initiator_DID          string = "initiator_did"
-	Initiator_Hash         string = "hash"
-	Initiator_SignType     string = "sign_type"
+	InitiatorNLSSshare   string = "nlss_share_signature"
+	InitiatorPrivateSign string = "priv_signature"
+	InitiatorDID          string = "InitiatorDID"
+	InitiatorHash         string = "hash"
+	InitiatorSignType     string = "sign_type"
 )
 
 const (
-	CreditSig_Signature     string = "signature"
-	CreditSig_PrivSignature string = "priv_signature"
-	CreditSig_DID           string = "did"
-	CreditSig_Hash          string = "hash"
-	CreditSig_SignType      string = "sign_type"
+	CreditSigSignature     string = "signature"
+	CreditSigPrivSignature string = "priv_signature"
+	CreditSigDID           string = "did"
+	CreditSigHash          string = "hash"
+	CreditSigSignType      string = "sign_type"
 )
 
 type TokenChainBlock struct {
@@ -113,9 +113,9 @@ type CreditSignature struct {
 }
 
 type InitiatorSignature struct {
-	NLSS_share   string `json:"nlss_share_signature"`
-	Private_sign string `json:"priv_signature"`
-	DID          string `json:"initiator_did"`
+	NLSSshare   string `json:"nlss_share_signature"`
+	PrivateSign string `json:"priv_signature"`
+	DID          string `json:"InitiatorDID"`
 	Hash         string `json:"hash"`
 	SignType     int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
@@ -744,58 +744,58 @@ func (b *Block) GetEpoch() int64 {
 
 // Fetch initiator signature details from the given block
 func (b *Block) GetInitiatorSignature() *InitiatorSignature {
-	var initiator_sign InitiatorSignature
+	var initiatorSign InitiatorSignature
 	s, ok := b.bm[TCInitiatorSignatureKey]
 	if !ok || s == nil {
 		return nil
 	}
 	//fetch initiator did
-	did_ := util.GetFromMap(s, Initiator_DID)
-	initiator_sign.DID = did_.(string)
+	did := util.GetFromMap(s, InitiatorDID)
+	initiatorSign.DID = did.(string)
 	//fetch initiator sign type
-	sign_type_ := util.GetFromMap(s, Initiator_SignType)
-	initiator_sign.SignType = int(sign_type_.(uint64))
+	signType := util.GetFromMap(s, InitiatorSignType)
+	initiatorSign.SignType = int(signType.(uint64))
 	//fetch initiator nlss share sign
-	nlss_share_ := util.GetFromMap(s, Initiator_NLSS_share)
-	initiator_sign.NLSS_share = nlss_share_.(string)
+	nlssShare := util.GetFromMap(s, InitiatorNLSSshare)
+	initiatorSign.NLSSshare = nlssShare.(string)
 	//fetch initiator private sign
-	priv_sign_ := util.GetFromMap(s, Initiator_Private_sign)
-	initiator_sign.Private_sign = priv_sign_.(string)
+	privSign := util.GetFromMap(s, InitiatorPrivateSign)
+	initiatorSign.PrivateSign = privSign.(string)
 	//fetch initiator hash / signed data
-	signed_data_ := util.GetFromMap(s, Initiator_Hash)
-	initiator_sign.Hash = signed_data_.(string)
+	signedData := util.GetFromMap(s, InitiatorHash)
+	initiatorSign.Hash = signedData.(string)
 
-	return &initiator_sign
+	return &initiatorSign
 }
 
 // Fetch quorums' signature details from the given block
 func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
-	var quorum_sign_list []CreditSignature
+	var quorumSignList []CreditSignature
 	s := b.bm[TCQuorumSignatureKey]
 
-	qrmSignList_map, ok := s.([]interface{})
+	qrmSignListMap, ok := s.([]interface{})
 	if !ok {
 		fmt.Println("not of type []interface{}")
 		return nil, fmt.Errorf("failed to fetch quorums' signature information from block map")
 	}
-	for _, qrmSignList_ := range qrmSignList_map {
-		var quorum_sig CreditSignature
+	for _, qrmSignListMap := range qrmSignListMap {
+		var quorumSig CreditSignature
 		//fetch quorum did
-		qrm_did := util.GetFromMap(qrmSignList_, CreditSig_DID)
-		quorum_sig.DID = qrm_did.(string)
+		qrmDID := util.GetFromMap(qrmSignListMap, CreditSigDID)
+		quorumSig.DID = qrmDID.(string)
 		// 	//fetch quorum sign type
-		sign_type_ := util.GetFromMap(qrmSignList_, CreditSig_SignType)
-		quorum_sig.SignType = sign_type_.(string)
+		signType := util.GetFromMap(qrmSignListMap, CreditSigSignType)
+		quorumSig.SignType = signType.(string)
 		// 	//fetch quorum nlss share sign
-		nlss_share_ := util.GetFromMap(qrmSignList_, CreditSig_Signature)
-		quorum_sig.Signature = nlss_share_.(string)
+		nlssShare := util.GetFromMap(qrmSignListMap, CreditSigSignature)
+		quorumSig.Signature = nlssShare.(string)
 		// 	//fetch quorum private sign
-		priv_sign_ := util.GetFromMap(qrmSignList_, CreditSig_PrivSignature)
-		quorum_sig.PrivSignature = priv_sign_.(string)
-		quorum_sign_list = append(quorum_sign_list, quorum_sig)
+		privSign := util.GetFromMap(qrmSignListMap, CreditSigPrivSignature)
+		quorumSig.PrivSignature = privSign.(string)
+		quorumSignList = append(quorumSignList, quorumSig)
 	}
 
-	return quorum_sign_list, nil
+	return quorumSignList, nil
 }
 
 // calculate block hash from block data
@@ -811,7 +811,7 @@ func (b *Block) CalculateBlockHash() (string, error) {
 		return "", fmt.Errorf("invalid block, block content missing")
 	}
 	hb := util.CalculateHash(bc.([]byte), "SHA3-256")
-	block_hash := util.HexToStr(hb)
+	blockHash := util.HexToStr(hb)
 
-	return block_hash, nil
+	return blockHash, nil
 }
