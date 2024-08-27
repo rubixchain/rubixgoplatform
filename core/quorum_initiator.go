@@ -1210,7 +1210,10 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			c.log.Error("Failed to update pledge token status", "msg", pr.BasicResponse.Message)
 			return fmt.Errorf("failed to update pledge token status")
 		}
-		peerList = pr.PeerList
+
+		for k, v := range pr.PeerList {
+			peerList[k] = v
+		}
 	}
 	return nil
 }
