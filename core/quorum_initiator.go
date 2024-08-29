@@ -1501,7 +1501,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 		deployerSignType := dc.GetSignType()
 		deployerSign := &block.InitiatorSignature{
-			NLSSshare:   deployerNLSSShare,
+			NLSSShare:   deployerNLSSShare,
 			PrivateSign: deployerPrivSign,
 			DID:          bti.DeployerDID,
 			Hash:         signData,
@@ -1553,7 +1553,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 		executorSignType := dc.GetSignType()
 		executorSign := &block.InitiatorSignature{
-			NLSSshare:   executorNLSSShare,
+			NLSSShare:   executorNLSSShare,
 			PrivateSign: executorPrivSign,
 			DID:          bti.ExecutorDID,
 			Hash:         signData,
@@ -1592,7 +1592,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 		senderSignType := dc.GetSignType()
 		senderSign := &block.InitiatorSignature{
-			NLSSshare:   senderNLSSShare,
+			NLSSShare:   senderNLSSShare,
 			PrivateSign: senderPrivSign,
 			DID:          senderdid,
 			Hash:         signData,

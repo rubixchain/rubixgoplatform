@@ -60,11 +60,11 @@ const (
 )
 
 const (
-	InitiatorNLSSshare   string = "nlss_share_signature"
+	InitiatorNLSSShare   string = "nlss_share_signature"
 	InitiatorPrivateSign string = "priv_signature"
-	InitiatorDID          string = "InitiatorDID"
-	InitiatorHash         string = "hash"
-	InitiatorSignType     string = "sign_type"
+	InitiatorDID         string = "InitiatorDID"
+	InitiatorHash        string = "hash"
+	InitiatorSignType    string = "sign_type"
 )
 
 const (
@@ -113,11 +113,11 @@ type CreditSignature struct {
 }
 
 type InitiatorSignature struct {
-	NLSSshare   string `json:"nlss_share_signature"`
+	NLSSShare   string `json:"nlss_share_signature"`
 	PrivateSign string `json:"priv_signature"`
-	DID          string `json:"InitiatorDID"`
-	Hash         string `json:"hash"`
-	SignType     int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
+	DID         string `json:"InitiatorDID"`
+	Hash        string `json:"hash"`
+	SignType    int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
 
 type BlockOption func(b *Block)
@@ -756,8 +756,8 @@ func (b *Block) GetInitiatorSignature() *InitiatorSignature {
 	signType := util.GetFromMap(s, InitiatorSignType)
 	initiatorSign.SignType = int(signType.(uint64))
 	//fetch initiator nlss share sign
-	nlssShare := util.GetFromMap(s, InitiatorNLSSshare)
-	initiatorSign.NLSSshare = nlssShare.(string)
+	nlssShare := util.GetFromMap(s, InitiatorNLSSShare)
+	initiatorSign.NLSSShare = nlssShare.(string)
 	//fetch initiator private sign
 	privSign := util.GetFromMap(s, InitiatorPrivateSign)
 	initiatorSign.PrivateSign = privSign.(string)

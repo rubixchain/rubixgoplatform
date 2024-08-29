@@ -539,7 +539,7 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 			return response, err
 		}
 	} else {
-		response.Status, err = didCrypto.NlssVerify(senderSign.Hash, util.StrToHex(senderSign.NLSSshare), util.StrToHex(senderSign.PrivateSign))
+		response.Status, err = didCrypto.NlssVerify(senderSign.Hash, util.StrToHex(senderSign.NLSSShare), util.StrToHex(senderSign.PrivateSign))
 		if err != nil {
 			c.log.Error("failed to verify sender:", sender, "err", err)
 			response.Message = "invalid sender"
