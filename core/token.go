@@ -702,9 +702,11 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		err = c.w.CreateToken(t)
 		if err != nil {
 			c.log.Error("Failed to create token", "err", err)
+			c.w.RemoveTokenChainBlocklatest(t.TokenID, token.TestTokenType)
 			c.w.UnPin(id, wallet.OwnerRole, did)
 			return &tokendetail, err
 		}
+		tokendetail.TotalCount += 1
 	}
 	return &tokendetail, nil
 }

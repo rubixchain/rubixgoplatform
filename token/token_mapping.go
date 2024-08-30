@@ -88,4 +88,5 @@ type FaucetToken struct {
 	TokenLevel         int    `json:"token_level"`
 	FaucetID           string `json:"faucet_id"`
 	CurrentTokenNumber int    `json:"current_token_number"`
+	TotalCount         int    `json:"total_count"`
 }
