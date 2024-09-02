@@ -776,7 +776,7 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		return br
 	}
 
-	response, err := c.Validate_Token_Owner(genBlock, did)
+	response, err := c.ValidateTokenOwner(genBlock, did)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		br.Message = "Token Details : " + tokenval + " Couldn't validate token chain"
