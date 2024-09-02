@@ -202,7 +202,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	//it will initiate DIDQuorumc
 	switch dt.Type {
 	case did.LiteDIDMode:
-		dc := did.InitDIDQuorum_Lt(didStr, c.didDir, pwd)
+		dc := did.InitDIDQuorumLite(didStr, c.didDir, pwd)
 		if dc == nil {
 			c.log.Error("Failed to setup quorum")
 			return fmt.Errorf("failed to setup quorum")
@@ -483,7 +483,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			if qDidType == -1 {
 				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
-				didtype_, msg, err := c.GetPeerdidType_fromPeer(qpid, qdid, dc.GetDID())
+				didtype_, msg, err := c.GetPeerdidTypeFromPeer(qpid, qdid, dc.GetDID())
 				if err != nil {
 					c.log.Error("error", err, "msg", msg)
 					qrmInfo.DIDType = nil
@@ -639,7 +639,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			if qDidType == -1 {
 				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
-				didtype_, msg, err := c.GetPeerdidType_fromPeer(qpid, qdid, dc.GetDID())
+				didtype_, msg, err := c.GetPeerdidTypeFromPeer(qpid, qdid, dc.GetDID())
 				if err != nil {
 					c.log.Error("error", err, "msg", msg)
 					qrmInfo.DIDType = nil
@@ -783,7 +783,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			if qDidType == -1 {
 				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
-				didtype_, msg, err := c.GetPeerdidType_fromPeer(qpid, qdid, dc.GetDID())
+				didtype_, msg, err := c.GetPeerdidTypeFromPeer(qpid, qdid, dc.GetDID())
 				if err != nil {
 					c.log.Error("error", err, "msg", msg)
 					qrmInfo.DIDType = nil
@@ -1494,18 +1494,18 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		bti.DeployerDID = sc.GetDeployerDID()
 
 		//Fetching deployer signature to add it to transaction details
-		sign_data, deployer_share_sign, deployer_priv_sign, err := sc.GetHashSig(bti.DeployerDID)
+		signData, deployerNLSSShare, deployerPrivSign, err := sc.GetHashSig(bti.DeployerDID)
 		if err != nil {
 			c.log.Error("failed to fetch deployer sign", "err", err)
 			return nil, fmt.Errorf("failed to fetch deployer sign")
 		}
-		deployer_sign_type := dc.GetSignType()
-		deployer_sign := &block.InitiatorSignature{
-			NLSS_share:   deployer_share_sign,
-			Private_sign: deployer_priv_sign,
+		deployerSignType := dc.GetSignType()
+		deployerSign := &block.InitiatorSignature{
+			NLSSShare:   deployerNLSSShare,
+			PrivateSign: deployerPrivSign,
 			DID:          bti.DeployerDID,
-			Hash:         sign_data,
-			SignType:     deployer_sign_type,
+			Hash:         signData,
+			SignType:     deployerSignType,
 		}
 
 		var smartContractTokenValue float64
@@ -1539,25 +1539,25 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SmartContract:      sc.GetBlock(),
 			GenesisBlock:       smartContractGensisBlock,
 			PledgeDetails:      ptds,
-			InitiatorSignature: deployer_sign,
+			InitiatorSignature: deployerSign,
 			Epoch:              cr.TransactionEpoch,
 		}
 	} else if cr.Mode == SmartContractExecuteMode {
 		bti.ExecutorDID = sc.GetExecutorDID()
 
 		//Fetching executor signature to add it to transaction details
-		sign_data, executor_share_sign, executor_priv_sign, err := sc.GetHashSig(bti.ExecutorDID)
+		signData, executorNLSSShare, executorPrivSign, err := sc.GetHashSig(bti.ExecutorDID)
 		if err != nil {
 			c.log.Error("failed to fetch executor sign", "err", err)
 			return nil, fmt.Errorf("failed to fetch executor sign")
 		}
-		executor_sign_type := dc.GetSignType()
-		executor_sign := &block.InitiatorSignature{
-			NLSS_share:   executor_share_sign,
-			Private_sign: executor_priv_sign,
+		executorSignType := dc.GetSignType()
+		executorSign := &block.InitiatorSignature{
+			NLSSShare:   executorNLSSShare,
+			PrivateSign: executorPrivSign,
 			DID:          bti.ExecutorDID,
-			Hash:         sign_data,
-			SignType:     executor_sign_type,
+			Hash:         signData,
+			SignType:     executorSignType,
 		}
 
 		tcb = block.TokenChainBlock{
@@ -1568,7 +1568,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SmartContract:      sc.GetBlock(),
 			PledgeDetails:      ptds,
 			SmartContractData:  sc.GetSmartContractData(),
-			InitiatorSignature: executor_sign,
+			InitiatorSignature: executorSign,
 			Epoch:              cr.TransactionEpoch,
 		}
 	} else if cr.Mode == PinningServiceMode {
@@ -1585,18 +1585,18 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	} else {
 		//Fetching sender signature to add it to transaction details
 		senderdid := sc.GetSenderDID()
-		sign_data, sender_share_sign, sender_priv_sign, err := sc.GetHashSig(senderdid)
+		signData, senderNLSSShare, senderPrivSign, err := sc.GetHashSig(senderdid)
 		if err != nil {
 			c.log.Error("failed to fetch sender sign", "err", err)
 			return nil, fmt.Errorf("failed to fetch sender sign")
 		}
-		sender_sign_type := dc.GetSignType()
-		sender_sign := &block.InitiatorSignature{
-			NLSS_share:   sender_share_sign,
-			Private_sign: sender_priv_sign,
+		senderSignType := dc.GetSignType()
+		senderSign := &block.InitiatorSignature{
+			NLSSShare:   senderNLSSShare,
+			PrivateSign: senderPrivSign,
 			DID:          senderdid,
-			Hash:         sign_data,
-			SignType:     sender_sign_type,
+			Hash:         signData,
+			SignType:     senderSignType,
 		}
 
 		bti.SenderDID = sc.GetSenderDID()
@@ -1608,7 +1608,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			QuorumSignature:    credit,
 			SmartContract:      sc.GetBlock(),
 			PledgeDetails:      ptds,
-			InitiatorSignature: sender_sign,
+			InitiatorSignature: senderSign,
 			Epoch:              cr.TransactionEpoch,
 		}
 	}
