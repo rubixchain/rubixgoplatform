@@ -71,6 +71,7 @@ type TransInfo struct {
 	SmartContractToken   string      `json:"smartcontractToken"`
 	ExecutorDID          string      `json:"executorDID"`
 	SmartContractData    string      `json:"smartcontractdata"`
+	NFT                  string      `json:"nft"`
 }
 
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {

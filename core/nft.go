@@ -4,327 +4,302 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"strings"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-type NFTReq struct {
-	DID        string
-	NumTokens  int
-	Fields     map[string][]string
-	FileNames  []string
-	FolderName string
+type CreateNFTRequest struct {
+	NFTFilePath string
+	DID         string
 }
 
-type NFTSale struct {
-	Token  string  `json:"token"`
-	Amount float64 `json:"amount"`
+type deployNFTRequest struct {
+	nft        string
+	did        string
+	quorumType int
 }
 
-type NFTSaleReq struct {
-	Type   int       `json:"type"`
-	DID    string    `json:"did"`
-	Tokens []NFTSale `json:"tokens"`
-}
+func (c *Core) CreateNFTRequest(requestID string, createNFTRequest *CreateNFTRequest) *model.BasicResponse {
 
-func (c *Core) CreateNFT(reqID string, nr *NFTReq) {
-	defer os.RemoveAll(nr.FolderName)
-	br := c.createNFT(reqID, nr)
-	dc := c.GetWebReq(reqID)
-	if dc == nil {
-		c.log.Error("Failed to create NFT, failed to get did channel")
-		return
+	//	defer os.RemoveAll(smartContractTokenRequest.SCPath)
+	dc, err := c.SetupDID(reqID, createNFTRequest.DID)
+	if err != nil {
+		c.log.Error("Failed to setup DID")
 	}
-	dc.OutChan <- br
+
+	createNFTResponse := c.createNFT(requestID, createNFTRequest, dc)
+	didChannel := c.GetWebReq(requestID)
+	if dc == nil {
+		c.log.Error("failed to get web request", "requestID", requestID)
+		return nil
+	}
+	didChannel.OutChan <- createNFTResponse
+
+	return createNFTResponse
 }
 
-func (c *Core) createNFT(reqID string, nr *NFTReq) *model.BasicResponse {
-	defer os.RemoveAll(nr.FolderName)
-	br := model.BasicResponse{
+func (c *Core) createNFT(requestID string, createNFTRequest *CreateNFTRequest, dc did.DIDCrypto) *model.BasicResponse {
+	basicResponse := &model.BasicResponse{
 		Status: false,
 	}
 
-	dc, err := c.SetupDID(reqID, nr.DID)
+	nftFile, err := os.Open(createNFTRequest.NFTFilePath)
 	if err != nil {
-		c.log.Error("Failed to create NFT, failed to setup did", "err", err)
-		br.Message = "Failed to create NFT, failed to setup did"
-		return &br
+		c.log.Error("Failed to open the file which should be converted to NFT", "err", err)
+		return basicResponse
 	}
-	userID, ok := nr.Fields[DTUserIDField]
-	if !ok {
-		c.log.Error("Failed to create NFT, user ID missing")
-		br.Message = "Failed to create NFT, user ID missing"
-		return &br
-	}
-	rt := rac.RacType{
-		Type:        c.TokenType(NFTString),
-		DID:         nr.DID,
-		TotalSupply: uint64(nr.NumTokens),
-		CreatorID:   userID[0],
-	}
-	userInfo, ok := nr.Fields[DTUserInfoField]
-	if ok {
-		rt.CreatorInput = userInfo[0]
-	}
-	fileInfo, fok := nr.Fields[DTFileInfoField]
-	if fok {
-		var fi map[string]map[string]string
-		err := json.Unmarshal([]byte(fileInfo[0]), &fi)
-		if err != nil {
-			c.log.Error("Failed to create NFT, invalid file info")
-			br.Message = "Failed to create NFT, invalid file info"
-			return &br
-		}
-		for k, v := range fi {
-			ch, ok := v[DTFileHashField]
-			if ok {
-				if rt.ContentHash == nil {
-					rt.ContentHash = make(map[string]string)
-				}
-				rt.ContentHash[k] = ch
-			}
-			cu, ok := v[DTFileURLField]
-			if ok {
-				if rt.ContentURL == nil {
-					rt.ContentURL = make(map[string]string)
-				}
-				rt.ContentURL[k] = cu
-			}
-			ti, ok := v[DTFileTransInfoField]
-			if ok {
-				if rt.TransInfo == nil {
-					rt.TransInfo = make(map[string]string)
-				}
-				rt.TransInfo[k] = ti
-			}
-		}
+	defer nftFile.Close()
+
+	// Add the file which needs to be converted to NFT to IPFS
+	nftFileHash, err := c.ipfs.Add(nftFile)
+	if err != nil {
+		c.log.Error("Failed to add nft file to IPFS", "err", err)
+		return basicResponse
 	}
 
-	for _, file := range nr.FileNames {
-		fn := strings.TrimPrefix(file, nr.FolderName+"/")
-		fb, err := ioutil.ReadFile(file)
-		if err != nil {
-			c.log.Error("Failed to create NFT, failed to read file", "err", err)
-			br.Message = "Failed to create NFT, failed to read file"
-			return &br
-		}
-		hb := util.CalculateHash(fb, "SHA3-256")
-		fbr := bytes.NewBuffer(fb)
-		fileUrl, err := c.ipfs.Add(fbr)
-		if err != nil {
-			c.log.Error("Failed to create NFT, failed to add file to ipfs", "err", err)
-			br.Message = "Failed to create NFT, failed to add file to ipfs"
-			return &br
-		}
-		if rt.ContentHash == nil {
-			rt.ContentHash = make(map[string]string)
-		}
-		rt.ContentHash[fn] = util.HexToStr(hb)
-		if rt.ContentURL == nil {
-			rt.ContentURL = make(map[string]string)
-		}
-		rt.ContentURL[fn] = fileUrl
-	}
-
-	dtb, err := rac.CreateRac(&rt)
-	if err != nil {
-		c.log.Error("Failed to create NFT, failed to create rac block", "err", err)
-		br.Message = "Failed to create NFT, failed to create rac block"
-		return &br
-	}
-	nfts := make([]string, 0)
-	for _, b := range dtb {
-		err = b.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to create NFT, failed to update signature", "err", err)
-			br.Message = "Failed to create NFT, failed to update signature"
-			return &br
-		}
-		rtb := b.GetBlock()
-		td := util.HexToStr(rtb)
-		fr := bytes.NewBuffer([]byte(td))
-		nt, err := c.ipfs.Add(fr)
-		if err != nil {
-			c.log.Error("Failed to create NFT, failed to add rac token to ipfs", "err", err)
-			br.Message = "Failed to create NFT, failed to add rac token to ipfs"
-			return &br
-		}
-		nfts = append(nfts, nt)
-	}
-	bgti := make([]block.GenesisTokenInfo, 0)
-	btt := make([]block.TransTokens, 0)
-	ctcb := make(map[string]*block.Block)
-	for _, nt := range nfts {
-		ctcb[nt] = nil
-		bgti = append(bgti, block.GenesisTokenInfo{Token: nt})
-		btt = append(btt, block.TransTokens{Token: nt, TokenType: c.TokenType(NFTString)})
-	}
-	gb := &block.GenesisBlock{
-		Type: block.TokenGeneratedType,
-		Info: bgti,
-	}
-	bti := &block.TransInfo{
-		Tokens:  btt,
-		Comment: "NFT generated at : " + time.Now().String(),
-	}
-	tcb := &block.TokenChainBlock{
-		TransactionType: block.TokenGeneratedType,
-		TokenOwner:      nr.DID,
-		GenesisBlock:    gb,
-		TransInfo:       bti,
-	}
-	blk := block.CreateNewBlock(ctcb, tcb)
-	if blk == nil {
-		c.log.Error("Failed to create NFT, unable to create token chain")
-		br.Message = "Failed to create NFT, unable to create token chain"
-		return &br
-	}
-	err = blk.UpdateSignature(dc)
-	if err != nil {
-		c.log.Error("Failed to create NFT, failed to update signature", "err", err)
-		br.Message = "Failed to create NFT, failed to update signature"
-		return &br
-	}
-	msg := ""
-	for _, nt := range nfts {
-		err = c.w.AddTokenBlock(nt, blk)
-		if err != nil {
-			c.log.Error("Failed to create NFT, failed to add token chain block", "err", err)
-			br.Message = "Failed to create NFT, failed to add token chain block"
-			return &br
-		}
-		err = c.w.CreateNFT(&wallet.NFT{TokenID: nt, DID: nr.DID})
-		if err != nil {
-			c.log.Error("Failed to create NFT, write failed", "err", err)
-			br.Message = "Failed to create NFT, write failed"
-			return &br
-		}
-		if msg != "" {
-			msg = msg + ","
-		}
-		msg = msg + nt
-	}
-	br.Status = true
-	br.Message = msg
-	return &br
-}
-
-func (c *Core) GetAllNFT(did string) model.NFTTokens {
-	resp := model.NFTTokens{
-		BasicResponse: model.BasicResponse{
-			Status:  true,
-			Message: "Got all NFTs successfully",
+	nft := rac.RacType{
+		Type:      c.TokenType(NFTString),
+		DID:       createNFTRequest.DID,
+		CreatorID: createNFTRequest.DID,
+		TimeStamp: time.Now().String(),
+		NFTInfo: &rac.RacNFTInfo{
+			Creator:            createNFTRequest.DID,
+			ContentHash:        nftFileHash,
+			ContentDescription: "", //Content Description to be added
 		},
-		Tokens: make([]model.NFTStatus, 0),
 	}
-	tkns := c.w.GetAllNFT(did)
-	for _, tkn := range tkns {
-		resp.Tokens = append(resp.Tokens, model.NFTStatus{Token: tkn.TokenID, TokenStatus: tkn.TokenStatus})
+	racBlocks, err := rac.CreateRac(&nft)
+	if err != nil {
+		c.log.Error("Failed to create rac", "err", err)
+		return basicResponse
 	}
-	return resp
+
+	if len(racBlocks) != 1 {
+		c.log.Error("Failed to create RAC NFT block")
+		return basicResponse
+	}
+
+	// Update the signature of the RAC block
+	err = racBlocks[0].UpdateSignature(dc)
+	if err != nil {
+		c.log.Error("Failed to update DID signature in RAC NFT Block", "err", err)
+		return basicResponse
+	}
+
+	// smartContractTokenJSON, err := json.MarshalIndent(smartContractToken, "", "  ")
+	// if err != nil {
+	// 	c.log.Error("Failed to marshal SmartContractToken struct", "err", err)
+	// 	return basicResponse
+	// }
+	nftData, err := json.Marshal(racBlocks)
+	if err != nil {
+		c.log.Error("Failed to marshal RAC NFT block", "err", err)
+	}
+	nftTokenHash, err := c.ipfs.Add(bytes.NewReader(nftData))
+	if err != nil {
+		c.log.Error("Failed to add SmartContractToken to IPFS", "err", err)
+		return basicResponse
+	}
+
+	c.log.Info("The nft token hash generated ", nftTokenHash)
+
+	// Set the response status and message
+	nftTokenResponse := &SmartContractTokenResponse{
+		Message: "NFT Token generated successfully",
+		Result:  nftTokenHash,
+	}
+	fmt.Println("NFTResponse : ", nftTokenResponse)
+	// _, err = c.RenameSCFolder(smartContractTokenRequest.SCPath, smartContractTokenHash)
+	// if err != nil {
+	// 	c.log.Error("Failed to rename SC folder", "err", err)
+	// 	return basicResponse
+	// }
+	//err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, SchemaCodeHash: schemaCodeHash, ContractStatus: 6})
+	nftTokenDetails := wallet.NFT{
+		TokenID:     nftTokenHash,
+		DID:         nft.DID,
+		TokenStatus: 0,
+		TokenValue:  0,
+	}
+	c.w.CreateNFT(&nftTokenDetails) //To be done : Write the created token details onto the db
+	// Set the response values
+	// basicResponse.Status = true
+	// basicResponse.Message = smartContractTokenResponse.Message
+	// basicResponse.Result = smartContractTokenResponse
+
+	return basicResponse
 }
 
-func (c *Core) AddNFTSaleContract(reqID string, sr *NFTSaleReq) {
-	br := c.addNFTSaleContract(reqID, sr)
-	dc := c.GetWebReq(reqID)
-	if dc == nil {
-		c.log.Error("Failed to add NFT for sale, failed to get did channel")
-		return
-	}
-	dc.OutChan <- br
-}
+func (c *Core) deployNFT(reqID string, deployReq deployNFTRequest) *model.BasicResponse {
+	st := time.Now()
+	txEpoch := int(st.Unix())
 
-func (c *Core) addNFTSaleContract(reqID string, sr *NFTSaleReq) *model.BasicResponse {
 	resp := &model.BasicResponse{
 		Status: false,
 	}
-	did := sr.DID
-	dc, err := c.SetupDID(reqID, did)
-	if err != nil {
-		resp.Message = "Failed to setup DID, " + err.Error()
+	_, did, ok := util.ParseAddress(deployReq.did)
+	if !ok {
+		resp.Message = "Invalid Deployer DID"
 		return resp
 	}
-	nts := make([]wallet.NFT, 0)
-	for _, t := range sr.Tokens {
-		nt, err := c.w.GetNFT(did, t.Token, true)
-		if err == nil {
-			nt.TokenValue = t.Amount
-			nts = append(nts, *nt)
-		}
+	didCryptoLib, err := c.SetupDID(reqID, did)
+	if err != nil {
+		resp.Message = "Failed to setup Deployer DID of the NFT deployer, " + err.Error()
+		return resp
+	}
+	//check the NFT from the db
+	nft, err := c.w.GetNFT(did, deployReq.nft, false)
+	if err != nil {
+		c.log.Error("Failed to retrieve nft details from storage", err)
+		resp.Message = err.Error()
+		return resp
 	}
 
-	// // release the locked tokens before exit
-	// defer c.w.ReleaseTokens(wt)
+	fmt.Println("The nft info fetched from the db is : ", nft)
+	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
+	// rbtTokensToCommitDetails, err := c.GetTokens(didCryptoLib, did, deployReq.RBTAmount, SmartContractDeployMode)
+	// if err != nil {
+	// 	c.log.Error("Failed to retrieve Tokens to be committed", "err", err)
+	// 	resp.Message = "Failed to retrieve Tokens to be committed , err : " + err.Error()
+	// 	return resp
+	// }
 
-	wta := make([]string, 0)
-	for i := range nts {
-		wta = append(wta, nts[i].TokenID)
+	// rbtTokensToCommit := make([]string, 0)
+
+	// defer c.w.ReleaseTokens(rbtTokensToCommitDetails)
+
+	// for i := range rbtTokensToCommitDetails {
+	// 	c.w.Pin(rbtTokensToCommitDetails[i].TokenID, wallet.OwnerRole, did, "NA", "NA", "NA", float64(0)) //TODO: Ensure whether trnxId should be added ?
+	// 	rbtTokensToCommit = append(rbtTokensToCommit, rbtTokensToCommitDetails[i].TokenID)
+	// }
+
+	//rbtTokenInfoArray := make([]contract.TokenInfo, 0)
+	nftInfoArray := make([]contract.TokenInfo, 0)
+	// for i := range rbtTokensToCommitDetails {
+	// 	tokenTypeString := "rbt"
+	// 	if rbtTokensToCommitDetails[i].TokenValue != 1 {
+	// 		tokenTypeString = "part"
+	// 	}
+	// 	tokenType := c.TokenType(tokenTypeString)
+	// 	latestBlk := c.w.GetLatestTokenBlock(rbtTokensToCommitDetails[i].TokenID, tokenType)
+	// 	if latestBlk == nil {
+	// 		c.log.Error("failed to get latest block, invalid token chain")
+	// 		resp.Message = "failed to get latest block, invalid token chain"
+	// 		return resp
+	// 	}
+	// 	blockId, err := latestBlk.GetBlockID(rbtTokensToCommitDetails[i].TokenID)
+	// 	if err != nil {
+	// 		c.log.Error("failed to get block id", "err", err)
+	// 		resp.Message = "failed to get block id, " + err.Error()
+	// 		return resp
+	// 	}
+	// 	tokenInfo := contract.TokenInfo{
+	// 		Token:      rbtTokensToCommitDetails[i].TokenID,
+	// 		TokenType:  tokenType,
+	// 		TokenValue: rbtTokensToCommitDetails[i].TokenValue,
+	// 		OwnerDID:   rbtTokensToCommitDetails[i].DID,
+	// 		BlockID:    blockId,
+	// 	}
+	// 	rbtTokenInfoArray = append(rbtTokenInfoArray, tokenInfo)
+	// }
+
+	nftInfo := contract.TokenInfo{
+		Token:      deployReq.nft,
+		TokenType:  c.TokenType(NFTString),
+		TokenValue: 0,
+		OwnerDID:   did,
 	}
-	totalAmount := float64(0)
-	tis := make([]contract.TokenInfo, 0)
-	for i := range nts {
-		tts := NFTString
-		tt := c.TokenType(tts)
-		blk := c.w.GetLatestTokenBlock(nts[i].TokenID, tt)
-		if blk == nil {
-			c.log.Error("failed to get latest block, invalid token chain")
-			resp.Message = "failed to get latest block, invalid token chain"
-			return resp
-		}
-		bid, err := blk.GetBlockID(nts[i].TokenID)
-		if err != nil {
-			c.log.Error("failed to get block id", "err", err)
-			resp.Message = "failed to get block id, " + err.Error()
-			return resp
-		}
-		totalAmount = totalAmount + nts[i].TokenValue
-		ti := contract.TokenInfo{
-			Token:      nts[i].TokenID,
-			TokenType:  tt,
-			TokenValue: nts[i].TokenValue,
-			OwnerDID:   nts[i].DID,
-			BlockID:    bid,
-		}
-		tis = append(tis, ti)
-	}
-	sct := &contract.ContractType{
-		Type:       contract.SCNFTSaleContractType,
+	nftInfoArray = append(nftInfoArray, nftInfo)
+
+	consensusContractDetails := &contract.ContractType{
+		Type:       contract.NFTDeployType,
 		PledgeMode: contract.PeriodicPledgeMode,
-		TotalRBTs:  totalAmount,
+		TotalRBTs:  1,
 		TransInfo: &contract.TransInfo{
-			SenderDID:   did,
-			Comment:     "Putting sale contract for NFTs",
-			TransTokens: tis,
+			DeployerDID: did,
+			NFT:         deployReq.nft,
+			TransTokens: nftInfoArray,
 		},
 		ReqID: reqID,
 	}
-	sc := contract.CreateNewContract(sct)
-	err = sc.UpdateSignature(dc)
+	consensusContract := contract.CreateNewContract(consensusContractDetails)
+	if consensusContract == nil {
+		c.log.Error("Failed to create Consensus contract while deploying nft")
+		resp.Message = "Failed to create Consensus contract while deploying nft"
+		return resp
+	}
+	err = consensusContract.UpdateSignature(didCryptoLib)
 	if err != nil {
 		c.log.Error(err.Error())
 		resp.Message = err.Error()
 		return resp
 	}
-	cr := &ConensusRequest{
-		ReqID:         uuid.New().String(),
-		Type:          sr.Type,
-		SenderPeerID:  c.peerID,
-		ContractBlock: sc.GetBlock(),
+
+	consensusContractBlock := consensusContract.GetBlock()
+	if consensusContractBlock == nil {
+		c.log.Error("failed to create consensus contract block while deploying nft")
+		resp.Message = "failed to create consensus contract block while deployingn nft"
+		return resp
 	}
-	_, _, err = c.initiateConsensus(cr, sc, dc)
-	c.log.Info("NFTs sale contract added successfully")
+	conensusRequest := &ConensusRequest{
+		ReqID:            uuid.New().String(),
+		Type:             deployReq.quorumType,
+		DeployerPeerID:   c.peerID,
+		ContractBlock:    consensusContract.GetBlock(),
+		NFT:              deployReq.nft,
+		Mode:             NFTDeployMode,
+		TransactionEpoch: txEpoch,
+	}
+
+	txnDetails, _, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)
+
+	if err != nil {
+		c.log.Error("Consensus failed", "err", err)
+		resp.Message = "Consensus failed" + err.Error()
+		return resp
+	}
+	et := time.Now()
+	dif := et.Sub(st)
+	//txnDetails.Amount = deployReq.RBTAmount
+	txnDetails.TotalTime = float64(dif.Milliseconds())
+	c.w.AddTransactionHistory(txnDetails)
+	tokens := make([]string, 0)
+	//tokens = append(tokens, deployReq.SmartContractToken)
+	explorerTrans := &ExplorerTrans{
+		TID:         txnDetails.TransactionID,
+		DeployerDID: did,
+		//Amount:      deployReq.RBTAmount,
+		TrasnType:  conensusRequest.Type,
+		TokenIDs:   tokens,
+		QuorumList: conensusRequest.QuorumList,
+		TokenTime:  float64(dif.Milliseconds()),
+		//BlockHash:   txnDetails.BlockID,
+	}
+	c.ec.ExplorerTransaction(explorerTrans)
+
+	c.log.Info("NFT Deployed successfully", "duration", dif)
 	resp.Status = true
-	msg := fmt.Sprintf("NFTs sale contract added successfully")
+	msg := fmt.Sprintf("NFT Deployed successfully in %v", dif)
 	resp.Message = msg
 	return resp
+}
+
+func (c *Core) publishNewNftEvent(newEvent *model.NFTDeployEvent) error {
+	topic := newEvent.NFT
+	if c.ps != nil {
+		err := c.ps.Publish(topic, newEvent)
+		if err != nil {
+			c.log.Error("Failed to publish new event", "err", err)
+		}
+		c.log.Info("New state published on NFT " + topic)
+	}
+	return nil
 }

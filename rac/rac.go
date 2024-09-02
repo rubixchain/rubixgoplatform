@@ -63,12 +63,19 @@ type RacType struct {
 	ContentURL   map[string]string
 	TransInfo    map[string]string
 	PartInfo     *RacPartInfo
+	NFTInfo      *RacNFTInfo
 }
 
 type RacPartInfo struct {
 	Parent  string
 	PartNum int
 	Value   float64
+}
+
+type RacNFTInfo struct {
+	Creator            string
+	ContentHash        string
+	ContentDescription string
 }
 
 type RacBlock struct {

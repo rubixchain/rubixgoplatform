@@ -9,3 +9,10 @@ type NFTTokens struct {
 	BasicResponse
 	Tokens []NFTStatus `json:"tokens"`
 }
+
+type NFTDeployEvent struct {
+	NFT          string `json:"nft"`
+	Did          string `json:"did"`
+	Type         int    `json:"type"`
+	NFTBlockHash string `json:"smartContractBlockHash"`
+}
