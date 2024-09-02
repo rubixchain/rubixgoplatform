@@ -27,6 +27,14 @@ def setup_quorums(node_config: dict, node_did_alias_map: dict):
             config["grpcPort"]
         )
 
+# Set one DID as quorum
+def setup_quorum(did, server_port, grpc_port):
+    cmd_setup_quorum_dids(
+            did,
+            server_port,
+            grpc_port
+    )
+
 def quorum_config(node_config: dict, node_did_alias_map: dict, skip_adding_quorums: bool = False, quorum_list_file_name = "quorumlist.json"):
     # Prepare quorumlist.json
     quorum_list = []

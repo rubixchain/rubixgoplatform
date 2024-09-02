@@ -101,25 +101,15 @@ type SignatureReply struct {
 	Signature string `json:"signature"`
 }
 
-type UpdatePledgeRequest struct {
-	Mode                        int             `json:"mode"`
-	PledgedTokens               []string        `json:"pledged_tokens"`
-	TokenChainBlock             []byte          `json:"token_chain_block"`
-	TransferredTokenStateHashes []string        `json:"token_state_hash_info"`
-	TransactionID               string          `json:"transaction_id"`
-	TransactionEpoch            int             `json:"transaction_epoch"`
-	PeerList                    map[string]bool `json:"peer_list"`
-}
-
 type SendTokenRequest struct {
-	Address            string               `json:"peer_id"`
-	TokenInfo          []contract.TokenInfo `json:"token_info"`
-	TokenChainBlock    []byte               `json:"token_chain_block"`
-	QuorumList         []string             `json:"quorum_list"`
-	QuorumInfo         []QuorumDIDPeerMap   `json:"quorum_info"`
-	TransactionEpoch   int                  `json:"transaction_epoch"`
-	PinningServiceMode bool                 `json:"pinning_service_mode"`
-	PeerList           map[string]bool      `json:"peer_list"`
+	Address                 string               `json:"peer_id"`
+	TokenInfo               []contract.TokenInfo `json:"token_info"`
+	TokenChainBlock         []byte               `json:"token_chain_block"`
+	QuorumList              []string             `json:"quorum_list"`
+	QuorumInfo              []QuorumDIDPeerMap   `json:"quorum_info"`
+	TransactionEpoch        int                  `json:"transaction_epoch"`
+	PinningServiceMode      bool                 `json:"pinning_service_mode"`
+	ParticipantNodesPeerMap map[string]bool      `json:"peer_list"`
 }
 
 type PledgeReply struct {
@@ -461,13 +451,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		defer rp.Close()
 		sr := SendTokenRequest{
-			Address:            cr.SenderPeerID + "." + sc.GetSenderDID(),
-			TokenInfo:          ti,
-			TokenChainBlock:    nb.GetBlock(),
-			QuorumList:         cr.QuorumList,
-			TransactionEpoch:   cr.TransactionEpoch,
-			PinningServiceMode: false,
-			PeerList:           peerList,
+			Address:                 cr.SenderPeerID + "." + sc.GetSenderDID(),
+			TokenInfo:               ti,
+			TokenChainBlock:         nb.GetBlock(),
+			QuorumList:              cr.QuorumList,
+			TransactionEpoch:        cr.TransactionEpoch,
+			PinningServiceMode:      false,
+			ParticipantNodesPeerMap: peerList,
 		}
 		// if _, exists := peerList[cr.ReceiverPeerID]; !exists {
 		// 	peerList[cr.ReceiverPeerID] = true
@@ -526,9 +516,9 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
 		}
 
-		var pr model.PeerResponse
+		var pr model.UpdatePledgeResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &pr, true)
-		peerList = pr.PeerList
+		peerList = pr.ParticipantNodesPeerMap
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
 			return nil, nil, err
@@ -628,12 +618,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		defer rp.Close()
 		sr := SendTokenRequest{
-			Address:            cr.SenderPeerID + "." + sc.GetSenderDID(),
-			TokenInfo:          ti,
-			TokenChainBlock:    nb.GetBlock(),
-			QuorumList:         cr.QuorumList,
-			PinningServiceMode: true,
-			PeerList:           peerList,
+			Address:                 cr.SenderPeerID + "." + sc.GetSenderDID(),
+			TokenInfo:               ti,
+			TokenChainBlock:         nb.GetBlock(),
+			QuorumList:              cr.QuorumList,
+			PinningServiceMode:      true,
+			ParticipantNodesPeerMap: peerList,
 		}
 		//fetching quorums' info from PeerDIDTable to share with the receiver
 		for _, qrm := range sr.QuorumList {
@@ -859,6 +849,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				p, _ := c.getPeer(signer_addr, "")
 				m := make(map[string]string)
 				m["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
+				m["quorumDID"] = signer
 				_ = p.SendJSONRequest("POST", APIUpdateTokenHashDetails, m, nil, nil, true)
 			}
 		}
@@ -1183,17 +1174,16 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			return err
 		}
 		defer qPeer.Close()
-		fmt.Println("Calling DID : ", k)
-		fmt.Println("Calling PeerID : ", qPeer)
-		var pr model.PeerResponse
-		ur := UpdatePledgeRequest{
+
+		var pr model.UpdatePledgeResponse
+		ur := model.UpdatePledgeRequest{
 			Mode:                        cr.Mode,
 			PledgedTokens:               v,
 			TokenChainBlock:             newBlock.GetBlock(),
 			TransactionID:               transactionId,
 			TransferredTokenStateHashes: nil,
 			TransactionEpoch:            cr.TransactionEpoch,
-			PeerList:                    peerList,
+			ParticipantNodesPeerMap:     peerList,
 		}
 
 		if newTokenStateHashes != nil {
@@ -1211,7 +1201,8 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			return fmt.Errorf("failed to update pledge token status")
 		}
 
-		for k, v := range pr.PeerList {
+		// Update peerList the updated info from APIUpdatePledgeToken call
+		for k, v := range pr.ParticipantNodesPeerMap {
 			peerList[k] = v
 		}
 	}

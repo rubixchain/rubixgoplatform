@@ -513,7 +513,7 @@ func (c *Core) GetPledgedInfo() ([]model.PledgedTokenStateDetails, error) {
 }
 
 func (c *Core) UpdatePledgedTokenInfo(tokenstatehash string) error {
-	err := c.w.RemoveTokenStateHash(tokenstatehash)
+	err := c.w.RemoveTokenStateHash(tokenstatehash, "")
 	if err != nil && err.Error() != "no records found" {
 		c.log.Error("Failed to get token state hash", "err", err)
 	}

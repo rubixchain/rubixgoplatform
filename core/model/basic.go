@@ -27,8 +27,3 @@ type GetDIDTypeResponse struct {
 	BasicResponse
 }
 
-type PeerResponse struct {
-	BasicResponse  BasicResponse
-	TokenStateHash []string
-	PeerList       map[string]bool
-}

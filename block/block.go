@@ -390,17 +390,18 @@ func (b *Block) GetHashSig(did string) (string, string, error) {
 	if !ok {
 		ks, ok := s.(map[interface{}]interface{})
 		if !ok {
-			return "", "", fmt.Errorf("invalid signature block")
+			return "", "", fmt.Errorf("invalid signature block 1")
 		}
 		ksi, ok := ks[did]
 		if !ok {
-			return "", "", fmt.Errorf("invalid signature block")
+			return "", "", fmt.Errorf("invalid signature block 2")
 		}
 		return h.(string), ksi.(string), nil
 	}
+	fmt.Printf( "Checking the final KS: %v \n", ks)
 	ksi, ok := ks[did]
 	if !ok {
-		return "", "", fmt.Errorf("invalid signature block")
+		return "", "", fmt.Errorf("invalid signature block 3")
 	}
 	return h.(string), ksi.(string), nil
 }
@@ -421,7 +422,7 @@ func (b *Block) VerifySignature(dc didmodule.DIDCrypto) error {
 	did := dc.GetDID()
 	h, s, err := b.GetHashSig(did)
 	if err != nil {
-		return fmt.Errorf("failed to read did signature & hash")
+		return fmt.Errorf("failed to read did signature & hash for DID: %v, err: %v", did, err)
 	}
 	ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
 	if err != nil || !ok {

@@ -9,7 +9,8 @@ from node.quorum import run_quorum_nodes
 
 from scenarios import (
     rbt_transfer,
-    bip39_nlss_test
+    bip39_nlss_test,
+    quorum_did_same_srv
 )
 
 IPFS_KUBO_VERSION = "v0.21.0"
@@ -181,14 +182,11 @@ if __name__=='__main__':
             copy_fixtures_to_build_dir(build_folder)
        
         os.chdir("./tests")
-        
-        run_quorum_nodes(run_nodes_only, skip_adding_quorums=skip_adding_quorums)
-    
+ 
     # It will carry list of Python files containing the function `run()`
     # that consists of logic to run all the necessary tests
     modules = [
-        rbt_transfer,
-        bip39_nlss_test,
+        quorum_did_same_srv
     ]
 
     for module in modules:

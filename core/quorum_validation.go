@@ -34,13 +34,14 @@ func (c *Core) validateSigner(b *block.Block, self_did string, p *ipfsport.Peer)
 	c.log.Debug("Signers", signers)
 	for _, signer := range signers {
 		var dc did.DIDCrypto
+
 		switch b.GetTransType() {
 		case block.TokenGeneratedType, block.TokenBurntType:
 			dc, err = c.SetupForienDID(signer, self_did)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
-			}
+			}			
 		default:
 			signer_peeerId := c.w.GetPeerID(signer)
 			if signer_peeerId == "" {
@@ -58,6 +59,7 @@ func (c *Core) validateSigner(b *block.Block, self_did string, p *ipfsport.Peer)
 				return false, fmt.Errorf("failed to setup foreign DID quorum : ", signer, "err", err)
 			}
 		}
+		c.log.Debug(fmt.Sprintf("Analysis: DIDCrypto: %v for did : %v ", dc, self_did))
 		err := b.VerifySignature(dc)
 		if err != nil {
 			c.log.Error("Failed to verify signature", "err", err)
@@ -363,7 +365,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	}
 
 	//check to see if tokenstate was already pinned by current validator, for any previous consensus
-	tokenStatePinInfo, err := c.w.GetStatePinnedInfo(tokenIDTokenStateHash)
+	tokenStatePinInfo, err := c.w.GetStatePinnedInfo(tokenIDTokenStateHash, did)
 	if err != nil {
 		c.log.Error("Error checking if tokenstate pinned earlier", err)
 		result.Error = err

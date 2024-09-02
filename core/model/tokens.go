@@ -79,3 +79,19 @@ type TokenStateResponse struct {
 	BasicResponse
 	PledgedTokenStateDetails []PledgedTokenStateDetails `json:"token_state_details"`
 }
+
+type UpdatePledgeRequest struct {
+	Mode                        int             `json:"mode"`
+	PledgedTokens               []string        `json:"pledged_tokens"`
+	TokenChainBlock             []byte          `json:"token_chain_block"`
+	TransferredTokenStateHashes []string        `json:"token_state_hash_info"`
+	TransactionID               string          `json:"transaction_id"`
+	TransactionEpoch            int             `json:"transaction_epoch"`
+	ParticipantNodesPeerMap     map[string]bool `json:"peer_list"`
+}
+
+type UpdatePledgeResponse struct {
+	BasicResponse           BasicResponse
+	TokenStateHash          []string
+	ParticipantNodesPeerMap map[string]bool
+}

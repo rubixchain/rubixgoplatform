@@ -768,34 +768,53 @@ func (w *Wallet) GetAllTokenStateHash() ([]TokenStateDetails, error) {
 	return td, nil
 }
 
-func (w *Wallet) RemoveTokenStateHash(tokenstatehash string) error {
+func (w *Wallet) RemoveTokenStateHash(tokenstatehash string, quorumDid string) error {
 	var td TokenStateDetails
 
 	//Getting all the details about a particular token state hash
-	err := w.s.Read(TokenStateHash, &td, "token_state_hash=?", tokenstatehash)
-	if err != nil {
-		if strings.Contains(err.Error(), "no records found") {
-			return nil
-		} else {
-			w.log.Error("Failed to fetch token state from DB", "err", err)
+	if quorumDid == "" {
+		err := w.s.Read(TokenStateHash, &td, "token_state_hash=?", tokenstatehash)
+		if err != nil {
+			if strings.Contains(err.Error(), "no records found") {
+				return nil
+			} else {
+				w.log.Error("Failed to fetch token state from DB", "err", err)
+				return err
+			}
+		}
+
+		err = w.s.Delete(TokenStateHash, &td, "token_state_hash=?", tokenstatehash)
+		if err != nil {
+			w.log.Error("Failed to delete token state hash details from DB", "err", err)
+			return err
+		}
+	} else {
+		err := w.s.Read(TokenStateHash, &td, "token_state_hash=? AND did=?", tokenstatehash, quorumDid)
+		if err != nil {
+			if strings.Contains(err.Error(), "no records found") {
+				return nil
+			} else {
+				w.log.Error("Failed to fetch token state from DB", "err", err)
+				return err
+			}
+		}
+
+		err = w.s.Delete(TokenStateHash, &td, "token_state_hash=? AND did=?", tokenstatehash, quorumDid)
+		if err != nil {
+			w.log.Error("Failed to delete token state hash details from DB", "err", err)
 			return err
 		}
 	}
 
-	err = w.s.Delete(TokenStateHash, &td, "token_state_hash=?", tokenstatehash)
-	if err != nil {
-		w.log.Error("Failed to delete token state hash details from DB", "err", err)
-		return err
-	}
 
 	return nil
 }
 
-func (w *Wallet) RemoveTokenStateHashByTransactionID(transactionID string) error {
+func (w *Wallet) RemoveTokenStateHashByTxIDAndQuorumDID(transactionID string, quorumDID string) error {
 	var td []TokenStateDetails
 
 	//Getting all the details about a particular token state hash
-	err := w.s.Read(TokenStateHash, &td, "transaction_id=?", transactionID)
+	err := w.s.Read(TokenStateHash, &td, "transaction_id=? AND did=?", transactionID, quorumDID)
 	if err != nil {
 		if !strings.Contains(err.Error(), "no records found") {
 			w.log.Error("Failed to fetch token state from DB", "err", err)
@@ -806,7 +825,7 @@ func (w *Wallet) RemoveTokenStateHashByTransactionID(transactionID string) error
 	}
 
 	if len(td) > 0 {
-		err = w.s.Delete(TokenStateHash, &td, "transaction_id=?", transactionID)
+		err = w.s.Delete(TokenStateHash, &td, "transaction_id=? AND did=?", transactionID, quorumDID)
 		if err != nil {
 			w.log.Error("Failed to delete token state hash details from DB", "err", err)
 			return err

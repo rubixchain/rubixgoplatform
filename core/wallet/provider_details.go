@@ -2,7 +2,7 @@ package wallet
 
 // struct definition for Mapping token and reason the did is a provider
 type TokenProviderMap struct {
-	Token         string  `gorm:"column:token;primaryKey"`
+	Token         string  `gorm:"column:token"`
 	DID           string  `gorm:"column:did"`
 	FuncID        int     `gorm:"column:func_id"`
 	Role          int     `gorm:"column:role"`
@@ -33,13 +33,13 @@ func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
 
 func (w *Wallet) AddProviderDetails(tokenProviderMap TokenProviderMap) error {
 	var tpm TokenProviderMap
-	err := w.s.Read(TokenProvider, &tpm, "token=?", tokenProviderMap.Token)
+	err := w.s.Read(TokenProvider, &tpm, "token=? AND did=?", tokenProviderMap.Token, tokenProviderMap.DID)
 	if err != nil || tpm.Token == "" {
 		w.log.Info("Token Details not found: Creating new Record")
 		// create new entry
 		return w.s.Write(TokenProvider, tokenProviderMap)
 	}
-	return w.s.Update(TokenProvider, tokenProviderMap, "token=?", tokenProviderMap.Token)
+	return w.s.Update(TokenProvider, tokenProviderMap, "token=? AND did=?", tokenProviderMap.Token, tokenProviderMap.DID)
 }
 
 // Method deletes entry ffrom DB during unpin op

@@ -290,7 +290,7 @@ func unpledgeAllTokens(c *Core, transactionID string, pledgeTokens string, quoru
 
 	// If the unpledging is happening after the pledging period, we can safely remove
 	// the TokenStateHash table records for the input transactionID
-	err := c.w.RemoveTokenStateHashByTransactionID(transactionID)
+	err := c.w.RemoveTokenStateHashByTxIDAndQuorumDID(transactionID, quorumDID)
 	if err != nil {
 		return nil, err
 	}
