@@ -10,48 +10,48 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func (c *Core) SmartContractTokenChainValidation(user_did string, tokenId string, blockCount int) (*model.BasicResponse, error) {
+func (c *Core) SmartContractTokenChainValidation(userDID string, tokenId string, blockCount int) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
-	ok := c.w.IsDIDExist(user_did)
+	ok := c.w.IsDIDExist(userDID)
 	if !ok {
 		response.Message = "Invalid did, please pass did of the tokenchain validator"
-		return response, fmt.Errorf("invalid did: %v, please pass did of the tokenchain validator", user_did)
+		return response, fmt.Errorf("invalid did: %v, please pass did of the tokenchain validator", userDID)
 	}
 
 	if tokenId == "" { //if provided the boolean flag 'allmyToken', all the tokens' chain from tokens table will be validated
 		c.log.Info("Validating all smart contracts from your smart contract table")
-		tokens_list, err := c.w.GetSmartContractTokenByDeployer(user_did)
+		tokensList, err := c.w.GetSmartContractTokenByDeployer(userDID)
 		if err != nil {
 			response.Message = "failed to fetch all smart contract tokens"
 			return response, err
 		}
 		//Validate smart contract tokenchain for each smart contrtact in the smart contract table
-		for _, token_info := range tokens_list {
+		for _, tokenInfo := range tokensList {
 			//Get token type
-			type_string := SmartContractString
-			token_type := c.TokenType(type_string)
+			typeString := SmartContractString
+			tokenType := c.TokenType(typeString)
 
-			response, err = c.ValidateSmartContractTokenChain(user_did, token_info, token_type, blockCount)
+			response, err = c.ValidateSmartContractTokenChain(userDID, tokenInfo, tokenType, blockCount)
 			if err != nil || !response.Status {
-				c.log.Error("token chain validation failed for token:", token_info.SmartContractHash, "Error :", err, "msg:", response.Message)
+				c.log.Error("token chain validation failed for token:", tokenInfo.SmartContractHash, "Error :", err, "msg:", response.Message)
 				return response, err
 			}
 		}
 
 	} else {
 		//Fetch token information
-		token_info, err := c.w.GetSmartContractToken(tokenId)
+		tokenInfo, err := c.w.GetSmartContractToken(tokenId)
 		if err != nil {
 			response.Message = "Failed to get smart contract token, smart contract does not exist"
 			return response, err
 		}
 		//Get token type
-		type_string := SmartContractString
-		token_type := c.TokenType(type_string)
+		typeString := SmartContractString
+		tokenType := c.TokenType(typeString)
 		//Validate tokenchain for the provided token
-		response, err = c.ValidateSmartContractTokenChain(user_did, token_info[0], token_type, blockCount)
+		response, err = c.ValidateSmartContractTokenChain(userDID, tokenInfo[0], tokenType, blockCount)
 		if err != nil || !response.Status {
 			c.log.Error("token chain validation failed for token:", tokenId, "Error :", err, "msg:", response.Message)
 			return response, err
@@ -61,13 +61,13 @@ func (c *Core) SmartContractTokenChainValidation(user_did string, tokenId string
 }
 
 // Validates tokenchain for the given token upto the specified block height
-func (c *Core) ValidateSmartContractTokenChain(user_did string, token_info wallet.SmartContract, token_type int, blockCount int) (*model.BasicResponse, error) {
-	c.log.Info("validating smart copntract tokenchain", token_info.SmartContractHash)
+func (c *Core) ValidateSmartContractTokenChain(userDID string, tokenInfo wallet.SmartContract, tokenType int, blockCount int) (*model.BasicResponse, error) {
+	c.log.Info("validating smart copntract tokenchain", tokenInfo.SmartContractHash)
 	response := &model.BasicResponse{
 		Status: false,
 	}
 
-	validated_block_count := 0
+	validatedBlockCount := 0
 	blockId := ""
 
 	var blocks [][]byte
@@ -80,7 +80,7 @@ func (c *Core) ValidateSmartContractTokenChain(user_did string, token_info walle
 	for {
 		//GetAllTokenBlocks returns next 100 blocks and nextBlockID of the 100th block,
 		//starting from the given block Id, in the direction: genesis to latest block
-		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(token_info.SmartContractHash, token_type, blockId)
+		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(tokenInfo.SmartContractHash, tokenType, blockId)
 		if err != nil {
 			response.Message = "Failed to get token chain block"
 			return response, err
@@ -95,26 +95,26 @@ func (c *Core) ValidateSmartContractTokenChain(user_did string, token_info walle
 	c.log.Info("token chain length", len(blocks))
 	for i := len(blocks) - 1; i >= 0; i-- {
 		b := block.InitBlock(blocks[i], nil)
-		//validated_block_count keeps count of the number of blocks validated, including failed blocks
-		validated_block_count++
+		//validatedBlockCount keeps count of the number of blocks validated, including failed blocks
+		validatedBlockCount++
 
 		if b != nil {
 			//calculate block height
-			block_height, err := b.GetBlockNumber(token_info.SmartContractHash)
+			blockHeight, err := b.GetBlockNumber(tokenInfo.SmartContractHash)
 			if err != nil {
 				response.Message = "failed to fetch BlockNumber"
 				return response, fmt.Errorf("invalid token chain block")
 			}
 
-			c.log.Info("validating at block height:", block_height)
+			c.log.Info("validating at block height:", blockHeight)
 
 			//fetch transaction type to validate the block accordingly
-			txn_type := b.GetTransType()
-			switch txn_type {
+			txnType := b.GetTransType()
+			switch txnType {
 			case block.TokenDeployedType:
 				prevBlockId := ""
 				//validate smart contract deployed block
-				response, err = c.Validate_SC_Block(b, token_info.SmartContractHash, prevBlockId, user_did)
+				response, err = c.ValidateSmartContractBlock(b, tokenInfo.SmartContractHash, prevBlockId, userDID)
 				if err != nil {
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
@@ -122,13 +122,13 @@ func (c *Core) ValidateSmartContractTokenChain(user_did string, token_info walle
 			case block.TokenExecutedType:
 				//calculate previous block Id
 				prevBlock := block.InitBlock(blocks[i-1], nil)
-				prevBlockId, err = prevBlock.GetBlockID(token_info.SmartContractHash)
+				prevBlockId, err = prevBlock.GetBlockID(tokenInfo.SmartContractHash)
 				if err != nil {
 					c.log.Error("invalid previous block")
 					continue
 				}
 				//validate smart contract executed block
-				response, err = c.Validate_SC_Block(b, token_info.SmartContractHash, prevBlockId, user_did)
+				response, err = c.ValidateSmartContractBlock(b, tokenInfo.SmartContractHash, prevBlockId, userDID)
 				if err != nil {
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
@@ -136,7 +136,7 @@ func (c *Core) ValidateSmartContractTokenChain(user_did string, token_info walle
 			default:
 				prevBlockId := ""
 				//validate smart contract deployed block
-				response, err = c.Validate_SC_Block(b, token_info.SmartContractHash, prevBlockId, user_did)
+				response, err = c.ValidateSmartContractBlock(b, tokenInfo.SmartContractHash, prevBlockId, userDID)
 				if err != nil {
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
@@ -147,27 +147,27 @@ func (c *Core) ValidateSmartContractTokenChain(user_did string, token_info walle
 			c.log.Error("Invalid block")
 		}
 
-		c.log.Info("validated_block_count", validated_block_count)
+		c.log.Info("validatedBlockCount", validatedBlockCount)
 		// //If blockCount is provided, then we will stop validating when we reach the blockCount
-		// //If blockCount is not provided,i.e., is 0, then it will never be equal to validated_block_count
+		// //If blockCount is not provided,i.e., is 0, then it will never be equal to validatedBlockCount
 		// //and thus will be continued till genesis block
-		if validated_block_count == blockCount {
+		if validatedBlockCount == blockCount {
 			break
 		}
 	}
 
 	//Get latest block in the token chain
-	latestBlock := c.w.GetLatestTokenBlock(token_info.SmartContractHash, token_type)
+	latestBlock := c.w.GetLatestTokenBlock(tokenInfo.SmartContractHash, tokenType)
 
 	//Verify if the token is pinned only by the current owner aka receiver in the latest block
-	response, err = c.CurrentOwnerPinCheck(latestBlock, token_info.SmartContractHash, user_did)
+	response, err = c.CurrentOwnerPinCheck(latestBlock, tokenInfo.SmartContractHash, userDID)
 	if err != nil {
 		c.log.Error("msg", response.Message)
 		return response, err
 	}
 
 	//verify if the current token state is pinned by the quorums in the latest block
-	response, err = c.CurrentQuorumStatePinCheck(latestBlock, token_info.SmartContractHash, token_type, user_did)
+	response, err = c.CurrentQuorumStatePinCheck(latestBlock, tokenInfo.SmartContractHash, tokenType, userDID)
 	if err != nil {
 		c.log.Error("msg", response.Message)
 		return response, err
@@ -180,11 +180,11 @@ func (c *Core) ValidateSmartContractTokenChain(user_did string, token_info walle
 }
 
 // validate block of type: TokenTransferredType = "02" / TokenDeployedType = "09" / TokenExecutedType = "10"
-func (c *Core) Validate_SC_Block(b *block.Block, tokenId string, calculated_prevBlockId string, user_did string) (*model.BasicResponse, error) {
+func (c *Core) ValidateSmartContractBlock(b *block.Block, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{}
 
 	//Validate block hash
-	response, err := c.ValidateBlockHash(b, tokenId, calculated_prevBlockId)
+	response, err := c.ValidateBlockHash(b, tokenId, calculatedPrevBlockId)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
@@ -198,7 +198,7 @@ func (c *Core) Validate_SC_Block(b *block.Block, tokenId string, calculated_prev
 	}
 
 	//validate quorums signature
-	response, err = c.ValidateQuorums(b, user_did)
+	response, err = c.ValidateQuorums(b, userDID)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
@@ -224,10 +224,10 @@ func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error
 	}
 
 	var initiator string
-	txn_type := b.GetTransType()
-	if txn_type == block.TokenDeployedType {
+	txnType := b.GetTransType()
+	if txnType == block.TokenDeployedType {
 		initiator = b.GetDeployerDID()
-	} else if txn_type == block.TokenExecutedType {
+	} else if txnType == block.TokenExecutedType {
 		initiator = b.GetExecutorDID()
 	} else {
 		c.log.Info("Failed to identify transaction type, transaction initiated with old executable")
@@ -235,30 +235,30 @@ func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error
 		return response, nil
 	}
 
-	initiator_sign := b.GetInitiatorSignature()
+	initiatorSign := b.GetInitiatorSignature()
 	//check if it is a block addded to chain before adding initiator signature to block structure
-	if initiator_sign == nil {
+	if initiatorSign == nil {
 		c.log.Info("old block, initiator signature not found")
 		response.Message = "old block, initiator signature not found"
 		return response, nil
-	} else if initiator_sign.DID != initiator {
+	} else if initiatorSign.DID != initiator {
 		c.log.Info("invalid initiator, initiator did does not match")
 		response.Message = "invalid initiator, initiator did does not match"
 		return response, fmt.Errorf("invalid initiator, initiator did does not match")
 	}
 
-	var initiator_didType int
+	var initiatorDIDType int
 	//sign type = 0, means it is a BIP signature and the did was created in light mode
 	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
 	//and thus the did could be initialised in basic mode to fetch the public key
-	if initiator_sign.SignType == 0 {
-		initiator_didType = did.LiteDIDMode
+	if initiatorSign.SignType == 0 {
+		initiatorDIDType = did.LiteDIDMode
 	} else {
-		initiator_didType = did.BasicDIDMode
+		initiatorDIDType = did.BasicDIDMode
 	}
 
 	//Initialise initiator did
-	didCrypto, err := c.InitialiseDID(initiator, initiator_didType)
+	didCrypto, err := c.InitialiseDID(initiator, initiatorDIDType)
 	if err != nil {
 		c.log.Error("failed to initialise initiator did:", initiator)
 		response.Message = "failed to initialise initiator did"
@@ -266,15 +266,15 @@ func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error
 	}
 
 	//initiator signature verification
-	if initiator_didType == did.LiteDIDMode {
-		response.Status, err = didCrypto.PvtVerify([]byte(initiator_sign.Hash), util.StrToHex(initiator_sign.Private_sign))
+	if initiatorDIDType == did.LiteDIDMode {
+		response.Status, err = didCrypto.PvtVerify([]byte(initiatorSign.Hash), util.StrToHex(initiatorSign.PrivateSign))
 		if err != nil {
 			c.log.Error("failed to verify initiator:", initiator, "err", err)
 			response.Message = "invalid initiator"
 			return response, err
 		}
 	} else {
-		response.Status, err = didCrypto.NlssVerify(initiator_sign.Hash, util.StrToHex(initiator_sign.NLSS_share), util.StrToHex(initiator_sign.Private_sign))
+		response.Status, err = didCrypto.NlssVerify(initiatorSign.Hash, util.StrToHex(initiatorSign.NLSSShare), util.StrToHex(initiatorSign.PrivateSign))
 		if err != nil {
 			c.log.Error("failed to verify initiator:", initiator, "err", err)
 			response.Message = "invalid initiator"
