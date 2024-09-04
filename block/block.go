@@ -62,7 +62,7 @@ const (
 const (
 	InitiatorNLSSShare   string = "nlss_share_signature"
 	InitiatorPrivateSign string = "priv_signature"
-	InitiatorDID         string = "InitiatorDID"
+	InitiatorDID         string = "initiator_did"
 	InitiatorHash        string = "hash"
 	InitiatorSignType    string = "sign_type"
 )
@@ -115,7 +115,7 @@ type CreditSignature struct {
 type InitiatorSignature struct {
 	NLSSShare   string `json:"nlss_share_signature"`
 	PrivateSign string `json:"priv_signature"`
-	DID         string `json:"InitiatorDID"`
+	DID         string `json:"initiator_did"`
 	Hash        string `json:"hash"`
 	SignType    int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
@@ -221,6 +221,14 @@ func (b *Block) blkDecode() error {
 	if !sok && !b.op {
 		return fmt.Errorf("invalid block, missing signature")
 	}
+	initiatorSig, iok := m[TCInitiatorSignatureKey]
+	if iok {
+		delete(b.bm, TCInitiatorSignatureKey)
+	}
+	quorumSig, qok := m[TCQuorumSignatureKey]
+	if qok {
+		delete(b.bm, TCQuorumSignatureKey)
+	}
 	bc, ok := m[TCBlockContentKey]
 	if !ok {
 		return fmt.Errorf("invalid block, missing block content")
@@ -240,6 +248,12 @@ func (b *Block) blkDecode() error {
 		}
 		tcb[TCSignatureKey] = ksb
 	}
+	if iok {
+		tcb[TCInitiatorSignatureKey] = initiatorSig
+	}
+	if qok {
+		tcb[TCQuorumSignatureKey] = quorumSig
+	}
 
 	tcb[TCBlockHashKey] = util.HexToStr(hb)
 
@@ -256,6 +270,14 @@ func (b *Block) blkEncode() error {
 	s, sok := b.bm[TCSignatureKey]
 	if sok {
 		delete(b.bm, TCSignatureKey)
+	}
+	initiatorSig, iok := b.bm[TCInitiatorSignatureKey]
+	if iok {
+		delete(b.bm, TCInitiatorSignatureKey)
+	}
+	quorumSig, qok := b.bm[TCQuorumSignatureKey]
+	if qok {
+		delete(b.bm, TCQuorumSignatureKey)
 	}
 	bc, err := cbor.Marshal(b.bm, cbor.CanonicalEncOptions())
 	if err != nil {
@@ -274,6 +296,14 @@ func (b *Block) blkEncode() error {
 			return err
 		}
 		m[TCBlockContentSigKey] = ksm
+	}
+	if iok {
+		b.bm[TCInitiatorSignatureKey] = initiatorSig
+		m[TCInitiatorSignatureKey] = initiatorSig
+	}
+	if qok {
+		b.bm[TCQuorumSignatureKey] = quorumSig
+		m[TCQuorumSignatureKey] = quorumSig
 	}
 	blk, err := cbor.Marshal(m, cbor.CanonicalEncOptions())
 	if err != nil {
@@ -475,6 +505,28 @@ func (b *Block) ReplaceSignature(did string, sig string) error {
 	return b.blkEncode()
 }
 
+func (b *Block) SignByInitiator(dc didmodule.DIDCrypto) error {
+	did := dc.GetDID()
+	blockHash, err := b.GetHash()
+	if err != nil {
+		return fmt.Errorf("failed to get hash")
+	}
+	nlssSig, pvtSig, err := dc.Sign(blockHash)
+	if err != nil {
+		return fmt.Errorf("failed to get initiator signature:%v; err: %v ", did, err.Error())
+	}
+
+	initiatorSigMap := make(map[string]interface{})
+	initiatorSigMap[InitiatorDID] = did
+	initiatorSigMap[InitiatorSignType] = uint64(dc.GetSignType())
+	initiatorSigMap[InitiatorNLSSShare] = util.HexToStr(nlssSig)
+	initiatorSigMap[InitiatorPrivateSign] = util.HexToStr(pvtSig)
+	initiatorSigMap[InitiatorHash] = blockHash
+	b.bm[TCInitiatorSignatureKey] = initiatorSigMap
+
+	return b.blkEncode()
+}
+
 func (b *Block) GetBlock() []byte {
 	return b.bb
 }
@@ -642,8 +694,16 @@ func (b *Block) GetParentDetials(t string) (string, []string, error) {
 		return "", nil, fmt.Errorf("invalid token chain block, missing genesis block")
 	}
 	p := util.GetStringFromMap(gtm, GIParentIDKey)
-	gp := util.GetStringSliceFromMap(gtm, GIGrandParentIDKey)
-	return p, gp, nil
+	var grandPaas []string
+	grandPaasMap := util.GetFromMap(gtm, GIGrandParentIDKey)
+	if grandPaasMap != nil {
+		gpts := grandPaasMap.([]interface{})
+		for _, gptMap := range gpts {
+			gpt := gptMap.(string)
+			grandPaas = append(grandPaas, gpt)
+		}
+	}
+	return p, grandPaas, nil
 }
 
 func (b *Block) GetTokenDetials(t string) (int, int, error) {
@@ -770,32 +830,33 @@ func (b *Block) GetInitiatorSignature() *InitiatorSignature {
 
 // Fetch quorums' signature details from the given block
 func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
-	var quorumSignList []CreditSignature
-	s := b.bm[TCQuorumSignatureKey]
-
-	qrmSignListMap, ok := s.([]interface{})
+	var quorumSigList []CreditSignature
+	s, ok := b.bm[TCQuorumSignatureKey]
+	if !ok || s == nil {
+		return nil, fmt.Errorf("could not find quorum list in block")
+	}
+	qrmSigListMap, ok := s.([]interface{})
 	if !ok {
-		fmt.Println("not of type []interface{}")
 		return nil, fmt.Errorf("failed to fetch quorums' signature information from block map")
 	}
-	for _, qrmSignListMap := range qrmSignListMap {
+	for _, qrmSigMap := range qrmSigListMap {
 		var quorumSig CreditSignature
 		//fetch quorum did
-		qrmDID := util.GetFromMap(qrmSignListMap, CreditSigDID)
+		qrmDID := util.GetFromMap(qrmSigMap, CreditSigDID)
 		quorumSig.DID = qrmDID.(string)
 		// 	//fetch quorum sign type
-		signType := util.GetFromMap(qrmSignListMap, CreditSigSignType)
+		signType := util.GetFromMap(qrmSigMap, CreditSigSignType)
 		quorumSig.SignType = signType.(string)
 		// 	//fetch quorum nlss share sign
-		nlssShare := util.GetFromMap(qrmSignListMap, CreditSigSignature)
+		nlssShare := util.GetFromMap(qrmSigMap, CreditSigSignature)
 		quorumSig.Signature = nlssShare.(string)
 		// 	//fetch quorum private sign
-		privSign := util.GetFromMap(qrmSignListMap, CreditSigPrivSignature)
+		privSign := util.GetFromMap(qrmSigMap, CreditSigPrivSignature)
 		quorumSig.PrivSignature = privSign.(string)
-		quorumSignList = append(quorumSignList, quorumSig)
+		quorumSigList = append(quorumSigList, quorumSig)
 	}
 
-	return quorumSignList, nil
+	return quorumSigList, nil
 }
 
 // calculate block hash from block data
@@ -806,11 +867,19 @@ func (b *Block) CalculateBlockHash() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	bc, ok := m[TCBlockContentKey]
-	if !ok {
-		return "", fmt.Errorf("invalid block, block content missing")
+	_, iok := m[TCInitiatorSignatureKey]
+	if iok {
+		delete(m, TCInitiatorSignatureKey)
 	}
-	hb := util.CalculateHash(bc.([]byte), "SHA3-256")
+	_, qok := m[TCQuorumSignatureKey]
+	if qok {
+		delete(m, TCQuorumSignatureKey)
+	}
+	bc, err := cbor.Marshal(m, cbor.CanonicalEncOptions())
+	if err != nil {
+		return "",err
+	}
+	hb := util.CalculateHash(bc, "SHA3-256")
 	blockHash := util.HexToStr(hb)
 
 	return blockHash, nil
