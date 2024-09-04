@@ -875,11 +875,11 @@ func (b *Block) CalculateBlockHash() (string, error) {
 	if qok {
 		delete(m, TCQuorumSignatureKey)
 	}
-	bc, err := cbor.Marshal(m, cbor.CanonicalEncOptions())
-	if err != nil {
-		return "",err
+	bc, ok := m[TCBlockContentKey]
+	if !ok {
+		return "", fmt.Errorf("invalid block, missing block content")
 	}
-	hb := util.CalculateHash(bc, "SHA3-256")
+	hb := util.CalculateHash(bc.([]byte), "SHA3-256")
 	blockHash := util.HexToStr(hb)
 
 	return blockHash, nil
