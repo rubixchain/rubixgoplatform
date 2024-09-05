@@ -533,20 +533,21 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
 	// and own did type from DIDTable using GetDID function
 	didtype, err := c.w.GetPeerDIDType(didStr)
-	if err != nil {
+	if err != nil || didtype == -1 {
 		dt, err1 := c.w.GetDID(didStr)
-		if err1 != nil || dt.Type == -1 {
+		if err1 != nil {
 			peerId := c.w.GetPeerID(didStr)
 
 			if peerId == "" {
 				return nil, err
 			}
 			if selfDID != "" {
-				didtype, msg, err2 := c.GetPeerdidTypeFromPeer(peerId, didStr, selfDID)
+				didType, msg, err2 := c.GetPeerdidTypeFromPeer(peerId, didStr, selfDID)
 				if err2 != nil {
 					c.log.Error(msg)
 					return nil, err2
 				}
+				didtype = didType
 				peerUpdateResult, err3 := c.w.UpdatePeerDIDType(didStr, didtype)
 				if !peerUpdateResult {
 					c.log.Error("couldn't update did type in peer did table", err3)
