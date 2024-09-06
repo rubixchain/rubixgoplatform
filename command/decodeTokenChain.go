@@ -17,7 +17,7 @@ var keyMapping = map[string]string{
 	"9":  "TCSmartContractDataKey",
 	"10": "TCTokenValueKey",
 	"11": "TCChildTokensKey",
-	"12": "TCSenderSignatureKey",
+	"12": "TCInitiatorSignatureKey",
 	"98": "TCBlockHashKey",
 	"99": "TCSignatureKey",
 	"epoch": "TCEpoch",

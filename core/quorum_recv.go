@@ -106,7 +106,7 @@ func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	//Validate sender signature
-	response, err := c.ValidateSender(transDTBlock)
+	response, err := c.ValidateTxnInitiator(transDTBlock)
 	if err != nil {
 		c.log.Error("signature request failed, msg", response.Message, "err", err)
 		crep.Message = response.Message
@@ -176,7 +176,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	//Validate sender signature
-	response, err := c.ValidateSender(transTknBlock)
+	response, err := c.ValidateTxnInitiator(transTknBlock)
 	if err != nil {
 		c.log.Error("signature request failed, msg", response.Message, "err", err)
 		crep.Message = response.Message
@@ -318,7 +318,7 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	//Validate sender signature
-	response, err := c.ValidateSender(transNFTBlock)
+	response, err := c.ValidateTxnInitiator(transNFTBlock)
 	if err != nil {
 		c.log.Error("signature request failed, msg", response.Message, "err", err)
 		crep.Message = response.Message
@@ -733,7 +733,7 @@ func (c *Core) updateReceiverToken(
 		}
 		defer senderPeer.Close()
 
-		_, err = c.ValidateSender(b)
+		_, err = c.ValidateTxnInitiator(b)
 		if err != nil {
 			c.log.Error("failed to validate sender", "err", err)
 			return nil, err
@@ -930,31 +930,6 @@ func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &srep, http.StatusOK)
 	}
 
-	//get all pledged toekns' details, and verify each pledged-token chain
-	blockMap := b.GetBlockMap()
-	pledgeInfo_ := blockMap[block.TCPledgeDetailsKey]
-	pledgeInfo_map, ok := pledgeInfo_.(map[interface{}]interface{})
-	if !ok {
-		c.log.Error("failed to convert interface to map for pledge details of the current block")
-		srep.Message = "failed to convert interface to map for pledge details of the current block"
-		return c.l.RenderJSON(req, &srep, http.StatusOK)
-	}
-	for quorum_ := range pledgeInfo_map {
-		quorum := quorum_.(string)
-		if quorum == did {
-			break
-		}
-		pledgedToken_maps := pledgeInfo_map[quorum_].([]interface{})
-		err = c.ValidatePledgedTokens(pledgedToken_maps, quorum, did)
-		if err != nil {
-			c.log.Error("Failed to validate pledged tokens", "err", err)
-			srep.Message = "Failed to validate pledged tokens"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
-		}
-	}
-
-	bhash, _ := b.GetHash()
-	c.log.Debug("before quorum signing on block in signatureRequest", bhash)
 	sig, err := b.GetSignature(dc)
 	if err != nil {
 		c.log.Error("Failed to do signature", "err", err)
@@ -1006,7 +981,31 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	refID = strings.Join(refIDArr, ",")
 
-	//get quorum signature from trans token's block
+	//get all pledged toekns' details, and verify each pledged-token chain
+	blockMap := b.GetBlockMap()
+	pledgeInfo := blockMap[block.TCPledgeDetailsKey]
+	pledgeInfoMap, ok := pledgeInfo.(map[interface{}]interface{})
+	if !ok {
+		c.log.Error("failed to convert interface to map for pledge details of the current block")
+		crep.Message = "failed to convert interface to map for pledge details of the current block"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	for qrm := range pledgeInfoMap {
+		quorum := qrm.(string)
+		c.log.Debug("validating pledge-tokens of quorum", quorum)
+		if quorum == did {
+			continue
+		}
+		pledgedTokenMaps := pledgeInfoMap[qrm].([]interface{})
+		err = c.ValidatePledgedTokens(pledgedTokenMaps, quorum, did)
+		if err != nil {
+			c.log.Error("Failed to validate pledged tokens", "err", err)
+			crep.Message = "Failed to validate pledged tokens"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
+
+	//get quorums' signatures from trans token block to add it to pledge token block
 	quorumSigList, err := b.GetQuorumSignatureList()
 	if err != nil {
 		c.log.Error("failed to fetch quorums' signatures from trans token block; error", err)
@@ -1014,6 +1013,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
+	//get initiator signature from trans token block to add it to pledge token block
+	initiatorSig := b.GetInitiatorSignature()
 	ctcb := make(map[string]*block.Block)
 	tsb := make([]block.TransTokens, 0)
 	for _, t := range tks {
@@ -1057,8 +1058,9 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			RefID:   refID,
 			Tokens:  tsb,
 		},
-		Epoch:           ur.TransactionEpoch,
-		QuorumSignature: quorumSigList,
+		Epoch:              ur.TransactionEpoch,
+		QuorumSignature:    quorumSigList,
+		InitiatorSignature: initiatorSig,
 	}
 
 	nb := block.CreateNewBlock(ctcb, &tcb)

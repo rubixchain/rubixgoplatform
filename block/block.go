@@ -844,13 +844,16 @@ func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
 		//fetch quorum did
 		qrmDID := util.GetFromMap(qrmSigMap, CreditSigDID)
 		quorumSig.DID = qrmDID.(string)
-		// 	//fetch quorum sign type
+		//fetch quorum signed data i.e., transaction hash
+		txnHash := util.GetFromMap(qrmSigMap, CreditSigHash)
+		quorumSig.Hash = txnHash.(string)
+		//fetch quorum sign type
 		signType := util.GetFromMap(qrmSigMap, CreditSigSignType)
 		quorumSig.SignType = signType.(string)
-		// 	//fetch quorum nlss share sign
+		//fetch quorum nlss share sign
 		nlssShare := util.GetFromMap(qrmSigMap, CreditSigSignature)
 		quorumSig.Signature = nlssShare.(string)
-		// 	//fetch quorum private sign
+		//fetch quorum private sign
 		privSign := util.GetFromMap(qrmSigMap, CreditSigPrivSignature)
 		quorumSig.PrivSignature = privSign.(string)
 		quorumSigList = append(quorumSigList, quorumSig)

@@ -158,14 +158,14 @@ func (c *Core) ValidateTokenChain(userDID string, tokenInfo *wallet.Token, token
 					}
 				case block.TokenPledgedType:
 					//validate Pledged block
-					response, err = c.ValidatePledgedUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
+					response, err = c.ValidatePledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
 					if err != nil {
 						c.log.Error("msg", response.Message, "err", err)
 						return response, err
 					}
 				case block.TokenUnpledgedType:
 					//validate Pledged block
-					response, err = c.ValidatePledgedUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
+					response, err = c.ValidateUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
 					if err != nil {
 						c.log.Error("msg", response.Message, "err", err)
 						return response, err
@@ -179,7 +179,7 @@ func (c *Core) ValidateTokenChain(userDID string, tokenInfo *wallet.Token, token
 					// 	continue
 					// }
 					//validate Pledged block
-					response, err = c.ValidatePledgedUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
+					response, err = c.ValidateUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
 					if err != nil {
 						c.log.Error("msg", response.Message, "err", err)
 						return response, err
@@ -248,7 +248,7 @@ func (c *Core) ValidateRBTTransferBlock(b *block.Block, tokenId string, calculat
 		return response, err
 	}
 	//Validate sender signature
-	response, err = c.ValidateSender(b)
+	response, err = c.ValidateTxnInitiator(b)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
@@ -292,8 +292,8 @@ func (c *Core) ValidateRBTBurntBlock(b *block.Block, tokenInfo wallet.Token, cal
 	return response, nil
 }
 
-// validate block of type : TokenPledgedType = "04" / TokenUnpledgedType = "06" / TokenContractCommited = "11"
-func (c *Core) ValidatePledgedUnpledgedBlock(b *block.Block, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
+// validate block of type : TokenPledgedType = "04"
+func (c *Core) ValidatePledgedBlock(b *block.Block, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{}
 
 	//Validate block hash
@@ -303,7 +303,104 @@ func (c *Core) ValidatePledgedUnpledgedBlock(b *block.Block, tokenId string, cal
 		return response, err
 	}
 
-	//validate burnt-token owner signature
+	//validate initiator signature in pledge block
+	initiatorSig := b.GetInitiatorSignature()
+	//check if it is a block addded to chain before adding initiator signature to block structure
+	if initiatorSig == nil {
+		c.log.Info("old block, initiator signature not found")
+		response.Message = "old block, initiator signature not found"
+		return response, nil
+	}
+
+	var initiatorDIDType int
+	//sign type = 0, means it is a BIP signature and the did was created in light mode
+	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
+	//and thus the did could be initialised in basic mode to fetch the public key
+	if initiatorSig.SignType == 0 {
+		initiatorDIDType = did.LiteDIDMode
+	} else {
+		initiatorDIDType = did.BasicDIDMode
+	}
+
+	//Initialise initiator did
+	didCrypto, err := c.InitialiseDID(initiatorSig.DID, initiatorDIDType)
+	if err != nil {
+		c.log.Error("failed to initialise initiator did:", initiatorSig.DID)
+		response.Message = "failed to initialise initiator did"
+		return response, err
+	}
+
+	//initiator signature verification
+	if initiatorDIDType == did.LiteDIDMode {
+		response.Status, err = didCrypto.PvtVerify([]byte(initiatorSig.Hash), util.StrToHex(initiatorSig.PrivateSign))
+		if err != nil {
+			c.log.Error("failed to verify initiator:", initiatorSig.DID, "err", err)
+			response.Message = "invalid initiator"
+			return response, err
+		}
+	} else {
+		response.Status, err = didCrypto.NlssVerify(initiatorSig.Hash, util.StrToHex(initiatorSig.NLSSShare), util.StrToHex(initiatorSig.PrivateSign))
+		if err != nil {
+			c.log.Error("failed to verify initiator:", initiatorSig.DID, "err", err)
+			response.Message = "invalid initiator"
+			return response, err
+		}
+	}
+
+	//validate all quorums' signatures in pledge block
+	quorumSignList, err := b.GetQuorumSignatureList()
+	if err != nil || quorumSignList == nil {
+		c.log.Error("failed to get quorum signature list")
+	}
+
+	response.Status = true
+	for _, qrm := range quorumSignList {
+		qrmDIDCrypto, err := c.SetupForienDIDQuorum(qrm.DID, userDID)
+		if err != nil {
+			c.log.Error("failed to initialise quorum:", qrm.DID, "err", err)
+			continue
+		}
+		var verificationStatus bool
+		if qrm.SignType == "0" { //qrm sign type = 0, means qrm signature is BIP sign and DID is created in Lite mode
+			verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(qrm.Hash), util.StrToHex(qrm.PrivSignature))
+			if err != nil {
+				c.log.Error("failed signature verification for lite-quorum:", qrm.DID, "err", err)
+			}
+		} else {
+			verificationStatus, err = qrmDIDCrypto.NlssVerify((qrm.Hash), util.StrToHex(qrm.Signature), util.StrToHex(qrm.PrivSignature))
+			if err != nil {
+				c.log.Error("failed signature verification for basic-quorum:", qrm.DID, "err", err)
+			}
+		}
+		response.Status = response.Status && verificationStatus
+	}
+
+	//validate pledged-token owner signature
+	response, err = c.ValidateTokenOwner(b, userDID)
+	if err != nil {
+		response.Message = "invalid token owner in RBT burnt block"
+		c.log.Error("invalid token owner in RBT burnt block")
+		return response, fmt.Errorf("failed to validate token owner in RBT burnt block")
+	}
+
+	response.Status = true
+	response.Message = "RBT pledged/unpledged/committed block validated successfully"
+	c.log.Debug("successfully validated RBT pledged/unpledged/committed block")
+	return response, nil
+}
+
+// validate block of type : TokenUnpledgedType = "06" / TokenContractCommited = "11"
+func (c *Core) ValidateUnpledgedBlock(b *block.Block, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
+	response := &model.BasicResponse{}
+
+	//Validate block hash
+	response, err := c.ValidateBlockHash(b, tokenId, calculatedPrevBlockId)
+	if err != nil {
+		c.log.Error("msg", response.Message)
+		return response, err
+	}
+
+	//validate token owner signature
 	response, err = c.ValidateTokenOwner(b, userDID)
 	if err != nil {
 		response.Message = "invalid token owner in RBT burnt block"
@@ -487,63 +584,88 @@ func (c *Core) ValidateBlockHash(b *block.Block, tokenId string, calculatedPrevB
 	return response, nil
 }
 
-// sender signature verification in a (non-genesis)block
-func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
+// Sender/Deployer/Executor signature verification in a block
+func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
 
-	sender := b.GetSenderDID()
-
-	senderSign := b.GetInitiatorSignature()
-	//check if it is a block addded to chain before adding sender signature to block structure
-	if senderSign == nil {
-		c.log.Info("old block, sender signature not found")
-		response.Message = "old block, sender signature not found"
-		return response, nil
-	} else if senderSign.DID != sender {
-		c.log.Info("invalid sender, sender did does not match")
-		response.Message = "invalid sender, sender did does not match"
-		return response, fmt.Errorf("invalid sender, sender did does not match")
-	}
-
-	var senderDIDType int
-	//sign type = 0, means it is a BIP signature and the did was created in light mode
-	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
-	//and thus the did could be initialised in basic mode to fetch the public key
-	if senderSign.SignType == 0 {
-		senderDIDType = did.LiteDIDMode
+	var initiator string
+	txnType := b.GetTransType()
+	if txnType == block.TokenTransferredType {
+		initiator = b.GetSenderDID()
+	} else if txnType == block.TokenDeployedType {
+		initiator = b.GetDeployerDID()
+	} else if txnType == block.TokenExecutedType {
+		initiator = b.GetExecutorDID()
 	} else {
-		senderDIDType = did.BasicDIDMode
+		c.log.Info("Failed to identify transaction type, transaction initiated with old executable")
+		response.Message = "Failed to identify transaction type"
+		return response, nil
 	}
 
-	//Initialise sender did
-	didCrypto, err := c.InitialiseDID(sender, senderDIDType)
+	//signed data i.e., transaction block hash
+	signedData, err := b.GetHash()
 	if err != nil {
-		c.log.Error("failed to initialise sender did:", sender)
-		response.Message = "failed to initialise sender did"
+		c.log.Error("failed to get block hash; error", err)
+		response.Message = "failed to get block hash"
 		return response, err
 	}
 
-	//sender signature verification
-	if senderDIDType == did.LiteDIDMode {
-		response.Status, err = didCrypto.PvtVerify([]byte(senderSign.Hash), util.StrToHex(senderSign.PrivateSign))
+	initiatorSign := b.GetInitiatorSignature()
+	//check if it is a block addded to chain before adding initiator signature to block structure
+	if initiatorSign == nil {
+		c.log.Info("old block, initiator signature not found")
+		response.Message = "old block, initiator signature not found"
+		return response, nil
+	} else if initiatorSign.DID != initiator {
+		c.log.Info("invalid initiator, initiator did does not match")
+		response.Message = "invalid initiator, initiator did does not match"
+		return response, fmt.Errorf("invalid initiator, initiator did does not match")
+	}
+	if initiatorSign.Hash != signedData {
+		c.log.Info("invalid initiator signature, signed msg is not block hash; initiator", initiator)
+		response.Message = "invalid initiator signature, signed msg is not block hash"
+		return response, fmt.Errorf(response.Message)
+	}
+
+	var initiatorDIDType int
+	//sign type = 0, means it is a BIP signature and the did was created in light mode
+	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
+	//and thus the did could be initialised in basic mode to fetch the public key
+	if initiatorSign.SignType == 0 {
+		initiatorDIDType = did.LiteDIDMode
+	} else {
+		initiatorDIDType = did.BasicDIDMode
+	}
+
+	//Initialise initiator did
+	didCrypto, err := c.InitialiseDID(initiator, initiatorDIDType)
+	if err != nil {
+		c.log.Error("failed to initialise initiator did:", initiator)
+		response.Message = "failed to initialise initiator did"
+		return response, err
+	}
+
+	//initiator signature verification
+	if initiatorDIDType == did.LiteDIDMode {
+		response.Status, err = didCrypto.PvtVerify([]byte(initiatorSign.Hash), util.StrToHex(initiatorSign.PrivateSign))
 		if err != nil {
-			c.log.Error("failed to verify sender:", sender, "err", err)
-			response.Message = "invalid sender"
+			c.log.Error("failed to verify initiator:", initiator, "err", err)
+			response.Message = "invalid initiator"
 			return response, err
 		}
 	} else {
-		response.Status, err = didCrypto.NlssVerify(senderSign.Hash, util.StrToHex(senderSign.NLSSShare), util.StrToHex(senderSign.PrivateSign))
+		response.Status, err = didCrypto.NlssVerify(initiatorSign.Hash, util.StrToHex(initiatorSign.NLSSShare), util.StrToHex(initiatorSign.PrivateSign))
 		if err != nil {
-			c.log.Error("failed to verify sender:", sender, "err", err)
-			response.Message = "invalid sender"
+			c.log.Error("failed to verify initiator:", initiator, "err", err)
+			response.Message = "invalid initiator"
 			return response, err
 		}
 	}
 
-	response.Message = "sender validated successfully"
-	c.log.Debug("sender validated successfully")
+	response.Message = "initiator validated successfully"
+	c.log.Debug("initiator (deployer/executor) validated successfully")
 	return response, nil
 }
 
@@ -607,6 +729,11 @@ func (c *Core) ValidateQuorums(b *block.Block, userDID string) (*model.BasicResp
 
 	response.Status = true
 	for _, qrm := range quorumSignList {
+		if qrm.Hash != signedData {
+			c.log.Error("signed data is not block hash for quorum", qrm.DID)
+			response.Message = "invalid quorum signature, signed msg is not block hash"
+			return response, fmt.Errorf(response.Message)
+		}
 		qrmDIDCrypto, err := c.SetupForienDIDQuorum(qrm.DID, userDID)
 		if err != nil {
 			c.log.Error("failed to initialise quorum:", qrm.DID, "err", err)
