@@ -162,5 +162,6 @@ func (c *Core) AddPeerDetails(peer_detail wallet.DIDPeerMap) error {
 		c.log.Error("Failed to add PeerDetails to DIDPeerTable", "err", err)
 		return err
 	}
-	return nil
+
+	return c.FetchDID(peer_detail.DID)
 }

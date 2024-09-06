@@ -41,7 +41,11 @@ func (c *Core) validateSigner(b *block.Block, self_did string, p *ipfsport.Peer)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
-			}			
+			}
+			if dc == nil {
+				c.log.Error("failed to setup foreign DID, DIDCrypto object is nil")
+				return false, fmt.Errorf("failed to setup foreign DID, DIDCrypto object is nil")
+			}
 		default:
 			signer_peeerId := c.w.GetPeerID(signer)
 			if signer_peeerId == "" {
@@ -55,11 +59,15 @@ func (c *Core) validateSigner(b *block.Block, self_did string, p *ipfsport.Peer)
 			}
 			dc, err = c.SetupForienDIDQuorum(signer, self_did)
 			if err != nil {
-				c.log.Error("failed to setup foreign DID quorum", "err", err)
-				return false, fmt.Errorf("failed to setup foreign DID quorum : ", signer, "err", err)
+				c.log.Error(fmt.Sprintf("failed to setup foreign DID quorum : %v, err: %v ", signer, err))
+				return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err: %v ", signer, err)
+			}
+			if dc == nil {
+				c.log.Error("failed to setup foreign DID, DIDCrypto object is nil")
+				return false, fmt.Errorf("failed to setup foreign DID, DIDCrypto object is nil")
 			}
 		}
-		c.log.Debug(fmt.Sprintf("Analysis: DIDCrypto: %v for did : %v ", dc, self_did))
+
 		err := b.VerifySignature(dc)
 		if err != nil {
 			c.log.Error("Failed to verify signature", "err", err)

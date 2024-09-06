@@ -398,7 +398,6 @@ func (b *Block) GetHashSig(did string) (string, string, error) {
 		}
 		return h.(string), ksi.(string), nil
 	}
-	fmt.Printf( "Checking the final KS: %v \n", ks)
 	ksi, ok := ks[did]
 	if !ok {
 		return "", "", fmt.Errorf("invalid signature block 3")

@@ -90,7 +90,7 @@ def node_config_multiple_same_func(node_config):
     # Serv 1 (Node19): Q1, Q2, Q3
     # Serv 2 (Node20): Q4, Q5, Q6, Q7
     quorum_did_arr = []
-    for i in range(1, 6):
+    for i in range(1, 8):
         did = ""
         
         if i <= 3:
@@ -169,8 +169,8 @@ def setup():
 
     node_config = run_nodes()
 
-    node_config_all_same_func(node_config)
-    #node_config_multiple_same_func(node_config)
+    # node_config_all_same_func(node_config)
+    node_config_multiple_same_func(node_config)
 
     save_to_config_file(__node_config_path, node_config)
 
@@ -189,8 +189,8 @@ def run(skip_setup: bool = False):
     else:
         node_config = load_from_config_file(__node_config_path)
 
-    all_quorums_on_same_node(node_config)
-    #quorums_on_multiple_nodes(node_config)
+    # all_quorums_on_same_node(node_config)
+    quorums_on_multiple_nodes(node_config)
 
     print("\n-------------- Tests Completed -------------------\n")
 

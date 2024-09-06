@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"sync"
@@ -524,10 +523,15 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 
 // Initializes the did in it's corresponding did mode (basic/ lite)
 func (c *Core) SetupForienDID(didStr string, self_did string) (did.DIDCrypto, error) {
-	err := c.FetchDID(didStr)
-	if err != nil {
-		c.log.Error("couldn't fetch did")
-		return nil, err
+	_, errFolder := os.Stat(c.didDir + didStr)
+	_, errFolderWithKey := os.Stat(c.didDir + didStr + "/" + didm.PubKeyFileName)
+	
+	if (errFolder != nil) || (errFolderWithKey != nil) {
+		err := c.FetchDID(didStr)
+		if err != nil {
+			c.log.Error("couldn't fetch did")
+			return nil, err
+		}
 	}
 
 	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
@@ -562,9 +566,14 @@ func (c *Core) SetupForienDID(didStr string, self_did string) (did.DIDCrypto, er
 
 // Initializes the quorum in it's corresponding did mode (basic/ lite)
 func (c *Core) SetupForienDIDQuorum(didStr string, self_did string) (did.DIDCrypto, error) {
-	err := c.FetchDID(didStr)
-	if err != nil {
-		return nil, err
+	_, errFolder := os.Stat(c.didDir + didStr)
+	_, errFolderWithKey := os.Stat(c.didDir + didStr + "/" + didm.PubKeyFileName)
+	
+	if (errFolder != nil) || (errFolderWithKey != nil) {
+		err := c.FetchDID(didStr)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
@@ -615,14 +624,11 @@ func (c *Core) FetchDID(did string) error {
 		}
 		err = c.ipfs.Get(did, c.didDir+did+"/")
 		if err == nil {
-			_, e := os.Stat(c.didDir + did + "/" + didm.MasterDIDFileName)
-			// Fetch the master DID also
-			if e == nil {
-				var rb []byte
-				rb, err = ioutil.ReadFile(c.didDir + did + "/" + didm.MasterDIDFileName)
-				if err == nil {
-					return c.FetchDID(string(rb))
-				}
+			_, e := os.Stat(c.didDir + did + "/" + didm.PubKeyFileName)
+			if e != nil {
+				errMsg := fmt.Errorf("Woops we still haven't got the file.")
+				c.log.Error(errMsg.Error())
+				return errMsg
 			}
 		}
 	}

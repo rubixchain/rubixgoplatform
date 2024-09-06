@@ -217,13 +217,17 @@ def check_account_info(did, server_port, grpc_port):
     return output
 
 # Note: address != did, address = peerId.didId 
-def cmd_rbt_transfer(sender_address, receiver_address, rbt_amount, server_port, grpc_port):
+def cmd_rbt_transfer(sender_address, receiver_address, rbt_amount, server_port, grpc_port, retry_count=0):
+    if retry_count == 3:
+        raise Exception("didn't really work")
+    
     os.chdir("../" + get_build_dir())
     cmd_string = f"./rubixgoplatform transferrbt -senderAddr {sender_address} -receiverAddr {receiver_address} -rbtAmount {rbt_amount} -port {server_port} -grpcPort {grpc_port}"
     if is_windows_os():
         cmd_string = f".\\rubixgoplatform transferrbt -senderAddr {sender_address} -receiverAddr {receiver_address} -rbtAmount {rbt_amount} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
     print(output)
+
     if code != 0:
         raise Exception("Error occurred while run the command: " + cmd_string)
 
