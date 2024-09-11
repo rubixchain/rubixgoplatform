@@ -786,3 +786,9 @@ func BytesToString(b []byte) []string {
 	}
 	return lines
 }
+
+func AddToPeerMap(peerMap map[string]bool, peerID string) {
+	if _, exists := peerMap[peerID]; !exists {
+		peerMap[peerID] = false
+	}
+}
