@@ -202,28 +202,26 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	//it will initiate DIDQuorumc
 	switch dt.Type {
 	case did.LiteDIDMode:
-		dc := did.InitDIDQuorumLite(didStr, c.didDir, pwd)
-		if dc == nil {
-			c.log.Error("Failed to setup quorum")
+		if pvtKeyPwd == "" {
+			c.log.Error("Failed to setup lite quorum as privPWD is not privided")
+			return fmt.Errorf("failed to setup lite quorum, as privPWD is not provided")
+		}
+		quorum_dc := did.InitDIDQuorumLite(didStr, c.didDir, pvtKeyPwd)
+		if quorum_dc == nil {
+			c.log.Error("Failed to initialise quorum")
 			return fmt.Errorf("failed to setup quorum")
 		}
-		c.qc[didStr] = dc
-		if pvtKeyPwd != "" {
-			dc := did.InitDIDLiteWithPassword(didStr, c.didDir, pvtKeyPwd)
-			if dc == nil {
-				c.log.Error("Failed to setup quorum as dc is nil")
-				return fmt.Errorf("failed to setup quorum")
-			}
-			c.pqc[didStr] = dc
-			c.qc[didStr] = dc
-		} else {
-			c.log.Error("Failed to setup quorum as privPWD is not privided")
-			return fmt.Errorf("failed to setup quorum, privPWD not provided")
+		c.qc[didStr] = quorum_dc
+		dc := did.InitDIDLiteWithPassword(didStr, c.didDir, pvtKeyPwd)
+		if dc == nil {
+			c.log.Error("Failed to setup quorum as dc is nil")
+			return fmt.Errorf("failed to setup quorum")
 		}
+		c.pqc[didStr] = dc
 	case did.BasicDIDMode:
 		dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
 		if dc == nil {
-			c.log.Error("Failed to setup quorum")
+			c.log.Error("Failed to initialise quorum")
 			return fmt.Errorf("failed to setup quorum")
 		}
 		c.qc[didStr] = dc
@@ -1510,9 +1508,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		deployerSign := &block.InitiatorSignature{
 			NLSSShare:   deployerNLSSShare,
 			PrivateSign: deployerPrivSign,
-			DID:          bti.DeployerDID,
-			Hash:         signData,
-			SignType:     deployerSignType,
+			DID:         bti.DeployerDID,
+			Hash:        signData,
+			SignType:    deployerSignType,
 		}
 
 		var smartContractTokenValue float64
@@ -1562,9 +1560,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		executorSign := &block.InitiatorSignature{
 			NLSSShare:   executorNLSSShare,
 			PrivateSign: executorPrivSign,
-			DID:          bti.ExecutorDID,
-			Hash:         signData,
-			SignType:     executorSignType,
+			DID:         bti.ExecutorDID,
+			Hash:        signData,
+			SignType:    executorSignType,
 		}
 
 		tcb = block.TokenChainBlock{
@@ -1601,9 +1599,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		senderSign := &block.InitiatorSignature{
 			NLSSShare:   senderNLSSShare,
 			PrivateSign: senderPrivSign,
-			DID:          senderdid,
-			Hash:         signData,
-			SignType:     senderSignType,
+			DID:         senderdid,
+			Hash:        signData,
+			SignType:    senderSignType,
 		}
 
 		bti.SenderDID = sc.GetSenderDID()
