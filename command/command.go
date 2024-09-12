@@ -92,6 +92,7 @@ const (
 	PinTokenCmd                    string = "pinToken"
 	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
+	ValidateTokenCmd               string = "validatetoken"
 )
 
 var commands = []string{VersionCmd,
@@ -146,6 +147,7 @@ var commands = []string{VersionCmd,
 	RecoverTokensCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
+	ValidateTokenCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -196,6 +198,11 @@ var commandsHelp = []string{"To get tool version",
 	"This command will initiate a self RBT transfer",
 	"This command will unpledge all the pledged tokens",
 	"This command will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
+	"This command will pin the token",
+	"This command will recover the token",
+	"This command will check the quorum status",
+	"This command will validate the token chain",
+	"This command will validate the token",
 }
 
 type Command struct {
@@ -655,6 +662,8 @@ func Run(args []string) {
 		cmd.RecoverTokens()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
+	case ValidateTokenCmd:
+		cmd.ValidateToken()
 	default:
 		cmd.log.Error("Invalid command")
 	}
