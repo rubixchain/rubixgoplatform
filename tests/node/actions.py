@@ -91,9 +91,9 @@ def setup_rubix_nodes(node_registry_config_key):
             "fp": False,
             "did_type": 4,
         }
-        if idx == 4 or idx == 5 or idx == 11 or idx == 12:
+        if idx == 4 or idx == 5 or idx == 13 or idx == 14:
             cfg["fp"] = True
-        if idx == 5 or idx == 6 or idx == 12:
+        if idx == 5 or idx == 6 or idx == 12 or idx == 14:
             cfg["did_type"] = 0
 
         fetch_peer_id(cfg)
