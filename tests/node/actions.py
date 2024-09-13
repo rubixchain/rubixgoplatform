@@ -21,8 +21,7 @@ def add_quorums(node_config: dict, node_key = "", quorumlist = "quorumlist.json"
 def setup_quorums(node_config: dict, node_did_alias_map: dict):
     for node, config in node_config.items():
         did = get_did_by_alias(config, node_did_alias_map[node])
-        fp_flag = config["fp"]
-        if fp_flag:
+        if node in {"node4", "node5"}:
             priv_pwd="p123"
             quorum_pwd="q123"
         else:
@@ -88,12 +87,9 @@ def setup_rubix_nodes(node_registry_config_key):
             "server": node_server,
             "grpcPort": grpc_server,
             "peerId": "",
-            "fp": False,
             "did_type": 4,
         }
-        if idx == 4 or idx == 5 or idx == 13 or idx == 14:
-            cfg["fp"] = True
-        if idx == 5 or idx == 6 or idx == 12 or idx == 14:
+        if idx in {5, 6, 12, 14}:
             cfg["did_type"] = 0
 
         fetch_peer_id(cfg)
@@ -106,7 +102,7 @@ def fetch_peer_id(config):
     config["peerId"] = peer_id
 
 def create_and_register_did(config: dict, did_alias: str, register_did: bool = True, fp: bool = False):
-    if config["fp"] or fp:
+    if fp:
         print(f"creating did with fp flag")
         did = cmd_create_did(config["server"], config["grpcPort"], config["did_type"], "p123", "q123")
         print(f"DID {did} has been created successfully")
@@ -130,8 +126,6 @@ def create_and_register_did(config: dict, did_alias: str, register_did: bool = T
         return did
 
 def fund_did_with_rbt(node_config: dict, did: str,  rbt_amount: int = 70, priv_pwd="mypassword"):
-    if node_config["fp"]:
-        priv_pwd = "p123"
     cmd_generate_rbt(did, rbt_amount, node_config["server"], node_config["grpcPort"], priv_pwd)
     print("DID ", did, f" is funded with {rbt_amount} RBT")
 
