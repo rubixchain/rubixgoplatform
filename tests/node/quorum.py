@@ -40,6 +40,7 @@ def run_quorum_nodes(only_run_nodes, skip_adding_quorums, node_registry_key = "q
         pprint.pp(node_config)
         print("Quorums have been configured")
     else:
+        node_config = get_quorum_config()
         quorum_config(node_config, node_did_alias_map, True, quorum_list_file_name)
 
 def get_quorum_config():
