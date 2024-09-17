@@ -80,6 +80,7 @@ const (
 	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
 	APIInitiateFTTransfer               string = "/api/initiate-ft-tranfer"
 	APIGetFTInfo                        string = "/api/get-ft-info"
+	APIValidateToken                    string = "/api/validate-token"
 )
 
 // jwt.RegisteredClaims

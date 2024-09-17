@@ -96,6 +96,7 @@ const (
 	DumpFTTokenChainCmd            string = "dumpft"
 	TransferFTCmd                  string = "transferft"
 	GetFTInfoCmd                   string = "getftinfo"
+	ValidateTokenCmd               string = "validatetoken"
 )
 
 var commands = []string{VersionCmd,
@@ -154,6 +155,7 @@ var commands = []string{VersionCmd,
 	DumpFTTokenChainCmd,
 	TransferFTCmd,
 	GetFTInfoCmd,
+	ValidateTokenCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -208,6 +210,11 @@ var commandsHelp = []string{"To get tool version",
 	"This command will dump the token chain of FT",
 	"This command will transfer FT",
 	"This command will give the balance of FTs",
+	"This command will pin the token",
+	"This command will recover the token",
+	"This command will check the quorum status",
+	"This command will validate the token chain",
+	"This command will validate the token",
 }
 
 type Command struct {
@@ -679,6 +686,8 @@ func Run(args []string) {
 		cmd.transferFT()
 	case GetFTInfoCmd:
 		cmd.getFTinfo()
+	case ValidateTokenCmd:
+		cmd.ValidateToken()
 	default:
 		cmd.log.Error("Invalid command")
 	}

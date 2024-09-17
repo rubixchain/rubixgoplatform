@@ -173,6 +173,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIDumpFTTokenChainBlock, "POST", s.AuthHandle(s.APIDumpFTTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIInitiateFTTransfer, "POST", s.AuthHandle(s.APIInitiateFTTransfer, true, s.AuthError, true))
 	s.AddRoute(setup.APIGetFTInfo, "POST", s.AuthHandle(s.APIGetFTInfo, true, s.AuthError, true))
+	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {
