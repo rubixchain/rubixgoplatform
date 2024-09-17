@@ -2,7 +2,9 @@ package core
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -41,10 +43,6 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 }
 
 func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTokens float64, did string) error {
-	fmt.Println("FT name is ", FTName)
-	fmt.Println("FT count is ", numFTs)
-	fmt.Println("num Whole token is ", numWholeTokens)
-	fmt.Println("DID is ", did)
 	if dc == nil {
 		return fmt.Errorf("DID crypto is not initialized")
 	}
@@ -56,6 +54,9 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 	if numWholeTokens <= 0 {
 		return fmt.Errorf("number of whole tokens must be greater than zero")
 	}
+	if numFTs > int(numWholeTokens*1000) {
+		return fmt.Errorf("Max allowed FT count is 1000 for 1 RBT")
+	}
 
 	// Fetch whole tokens using GetToken
 	wholeTokens, err := c.w.GetTokens(did, float64(numWholeTokens))
@@ -63,15 +64,23 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
 	}
+	//TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
+	defer c.w.ReleaseTokens(wholeTokens)
+	fractionalValue, err := c.GetPresiceFractionalValue(len(wholeTokens), numFTs)
+	if err != nil {
+		c.log.Error("Failed to calculate FT token value", err)
+		return err
+	}
 
-	// Calculate the value of each fractional token
-	fractionalValue := float64(len(wholeTokens)) / float64(numFTs)
-
-	newFTs := make([]wallet.FT, 0, numFTs)
+	newFTs := make([]wallet.FTToken, 0, numFTs)
 	newFTTokenIDs := make([]string, numFTs)
 
+	var parentTokenIDsArray []string
+	for _, token := range wholeTokens {
+		parentTokenIDsArray = append(parentTokenIDsArray, token.TokenID)
+	}
+	parentTokenIDs := strings.Join(parentTokenIDsArray, ",")
 	for i := 0; i < numFTs; i++ {
-		parentTokenID := wholeTokens[i%len(wholeTokens)].TokenID
 		racType := &rac.RacType{
 			Type:        c.RACFTType(),
 			DID:         did,
@@ -79,7 +88,7 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			TotalSupply: 1,
 			TimeStamp:   time.Now().String(),
 			FTInfo: &rac.RacFTInfo{
-				Parents: parentTokenID,
+				Parents: parentTokenIDs,
 				FTNum:   i,
 				FTName:  FTName,
 				FTValue: fractionalValue,
@@ -136,7 +145,7 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 				Info: []block.GenesisTokenInfo{
 					{
 						Token:       ftID,
-						ParentID:    parentTokenID,
+						ParentID:    parentTokenIDs,
 						TokenNumber: i,
 					},
 				},
@@ -160,12 +169,12 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			return err
 		}
 		// Create the new token
-		ft := &wallet.FT{
-			TokenID:       ftID,
-			FTName:        FTName,
-			ParentTokenID: parentTokenID,
-			TokenStatus:   wallet.TokenIsGenerated,
-			TokenValue:    fractionalValue,
+		ft := &wallet.FTToken{
+			TokenID:     ftID,
+			FTName:      FTName,
+			TokenStatus: wallet.TokenIsFree,
+			TokenValue:  fractionalValue,
+			DID:         did,
 		}
 		newFTs = append(newFTs, *ft)
 	}
@@ -230,11 +239,12 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 			return err
 		}
 	}
+	c.updateFTTable()
 	return nil
 }
 
 func (c *Core) GetFTInfo() ([]model.FTInfo, error) {
-	FT, err := c.w.GetAllFTs()
+	FT, err := c.w.GetAllFreeFTs()
 	if err != nil && err.Error() != "no records found" {
 		c.log.Error("Failed to get tokens", "err", err)
 		return []model.FTInfo{}, fmt.Errorf("failed to get tokens")
@@ -299,9 +309,8 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
-	FTs := make([]wallet.FT, 0)
-	AllFTs, err := c.w.GetFTsByName(req.FTName)
-	FTsForTxn := AllFTs[:req.FTCount]
+	FTs := make([]wallet.FTToken, 0)
+	AllFTs, err := c.w.GetFreeFTsByName(req.FTName, did)
 	AvailableFTCount := len(AllFTs)
 	if err != nil {
 		c.log.Error("Failed to get FTs", "err", err)
@@ -314,6 +323,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			return resp
 		}
 	}
+	FTsForTxn := AllFTs[:req.FTCount]
 	if len(FTsForTxn) != 0 {
 		FTs = append(FTs, FTsForTxn...)
 	}
@@ -366,6 +376,10 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		},
 		ReqID: reqID,
 	}
+	FTData := model.FTInfo{
+		FTName:  req.FTName,
+		FTCount: req.FTCount,
+	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)
 	if err != nil {
@@ -380,6 +394,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		SenderPeerID:   c.peerID,
 		ReceiverPeerID: rpeerid,
 		ContractBlock:  sc.GetBlock(),
+		FTinfo:         FTData,
 	}
 	td, _, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
@@ -407,5 +422,67 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	resp.Status = true
 	msg := fmt.Sprintf("FT Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
 	resp.Message = msg
+	c.updateFTTable()
 	return resp
+}
+
+func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
+	if b == 0 {
+		return 0, errors.New("FT count should not be zero")
+
+	}
+
+	result := float64(a) / float64(b)
+	decimalPlaces := len(strconv.FormatFloat(result, 'f', -1, 64)) - 2 // Subtract 2 for "0."
+
+	if decimalPlaces > 3 {
+		// Find the nearest possible value for b by checking from b-10 to b+10
+		var nearestB int
+		minDiff := math.MaxFloat64
+		found := false
+
+		for i := b - 10; i <= b+10; i++ {
+			if i <= 0 {
+				continue // Skip non-positive values of b
+			}
+			tempResult := float64(a) / float64(i)
+			tempDecimalPlaces := len(strconv.FormatFloat(tempResult, 'f', -1, 64)) - 2
+
+			if tempDecimalPlaces <= 3 {
+				diff := math.Abs(result - tempResult)
+				if diff < minDiff {
+					minDiff = diff
+					nearestB = i
+					found = true
+				}
+			}
+		}
+
+		if found {
+			return 0, fmt.Errorf("FT value exceeds 3 decimal places, nearest possible value for FT count is %d", nearestB)
+		} else {
+			return 0, fmt.Errorf("FT value exceeds 3 decimal places, no suitable b found within range")
+		}
+	}
+	return result, nil
+}
+
+func (c *Core) updateFTTable() error {
+	fmt.Println("Updating FT table...")
+
+	AllFTs, err := c.w.GetFTsAndCount()
+	if err != nil {
+		c.log.Error("Failed to get FTs and Count")
+		return err
+	}
+
+	for _, Ft := range AllFTs {
+		err = c.s.Update(wallet.FTStorage, &Ft, "ft_name=?", Ft.FTName)
+		if err != nil {
+			c.log.Error("Failed to update FT:", Ft.FTName, "Error:", err)
+			return err
+		}
+	}
+
+	return nil
 }

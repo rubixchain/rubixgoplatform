@@ -78,7 +78,6 @@ func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *contract.Contract) {
 	sc := contract.InitContract(cr.ContractBlock, nil)
 	// setup the did to verify the signature
-	fmt.Println("Sender DID is ", sc.GetSenderDID())
 	dc, err := c.SetupForienDID(sc.GetSenderDID(), self_did)
 	if err != nil {
 		c.log.Error("Failed to get DID", "err", err)
@@ -252,10 +251,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	c.log.Debug("Finished Tokenstate check")
 
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-	fmt.Println("Q Hash is ", qHash)
 	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
-	fmt.Println("err is ", err)
-	fmt.Println("Sign array is ", qsb)
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
@@ -642,7 +638,8 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) updateReceiverToken(
 	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
-	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool,
+	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool, ftinfo *model.FTInfo,
+
 ) ([]string, error) {
 	var receiverPeerId string = ""
 	var receiverDID string = ""
@@ -755,8 +752,10 @@ func (c *Core) updateReceiverToken(
 		}
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
-
-	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs)
+	var FT wallet.FTToken
+	FT.FTName = ftinfo.FTName
+	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs, FT)
+	c.updateFTTable()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
@@ -821,6 +820,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 		sr.QuorumInfo,
 		sr.TransactionEpoch,
 		sr.PinningServiceMode,
+		&sr.FTInfo,
 	)
 	if err != nil {
 		c.log.Error(err.Error())

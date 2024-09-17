@@ -31,8 +31,9 @@ const (
 	TokenStateHash                 string = "TokenStateHashTable"
 	UnpledgeQueueTable             string = "unpledgequeue"
 	UnpledgeSequence               string = "UnpledgeSequence"
-	FTTokenStorage                 string = "FTTokenStorage"
-	FTChainStorage                 string = "ftchainstorage"
+	FTTokenStorage                 string = "FTTokenTable"
+	FTChainStorage                 string = "FTchainstorage"
+	FTStorage                      string = "FTTable"
 )
 
 type WalletConfig struct {
@@ -148,9 +149,13 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("failed to init UnpledgeSequence table", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(FTTokenStorage, FT{}, true)
+	err = w.s.Init(FTTokenStorage, FTToken{}, true)
 	if err != nil {
-		w.log.Error("Failed to initialize FT storahe", "err", err)
+		w.log.Error("Failed to initialize FT Token storage", "err", err)
+	}
+	err = w.s.Init(FTStorage, &FT{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize FT storage", "err", err)
 	}
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)

@@ -42,19 +42,20 @@ const (
 )
 
 type ConensusRequest struct {
-	ReqID              string   `json:"req_id"`
-	Type               int      `json:"type"`
-	Mode               int      `json:"mode"`
-	SenderPeerID       string   `json:"sender_peerd_id"`
-	ReceiverPeerID     string   `json:"receiver_peerd_id"`
-	ContractBlock      []byte   `json:"contract_block"`
-	QuorumList         []string `json:"quorum_list"`
-	DeployerPeerID     string   `json:"deployer_peerd_id"`
-	SmartContractToken string   `json:"smart_contract_token"`
-	ExecuterPeerID     string   `json:"executor_peer_id"`
-	TransactionID      string   `json:"transaction_id"`
-	TransactionEpoch   int      `json:"transaction_epoch"`
-	PinningNodePeerID  string   `json:"pinning_node_peer_id"`
+	ReqID              string       `json:"req_id"`
+	Type               int          `json:"type"`
+	Mode               int          `json:"mode"`
+	SenderPeerID       string       `json:"sender_peerd_id"`
+	ReceiverPeerID     string       `json:"receiver_peerd_id"`
+	ContractBlock      []byte       `json:"contract_block"`
+	QuorumList         []string     `json:"quorum_list"`
+	DeployerPeerID     string       `json:"deployer_peerd_id"`
+	SmartContractToken string       `json:"smart_contract_token"`
+	ExecuterPeerID     string       `json:"executor_peer_id"`
+	TransactionID      string       `json:"transaction_id"`
+	TransactionEpoch   int          `json:"transaction_epoch"`
+	PinningNodePeerID  string       `json:"pinning_node_peer_id"`
+	FTinfo             model.FTInfo `json:"ft_info"`
 }
 
 type ConensusReply struct {
@@ -119,6 +120,7 @@ type SendTokenRequest struct {
 	QuorumInfo         []QuorumDIDPeerMap   `json:"quorum_info"`
 	TransactionEpoch   int                  `json:"transaction_epoch"`
 	PinningServiceMode bool                 `json:"pinning_service_mode"`
+	FTInfo             model.FTInfo         `json:"ft_info"`
 }
 
 type PledgeReply struct {
@@ -331,11 +333,9 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		reqPledgeTokens = sc.GetTotalRBTs()
 	case FTTrasnferMode:
 		ti := sc.GetTransTokenInfo()
-		fmt.Println("Transtoken Info is ", ti)
 		for i := range ti {
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
-		fmt.Println("reqPledgeToken is ", reqPledgeTokens)
 	}
 	minValue := MinDecimalValue(MaxDecimalPlaces)
 	minTotalPledgeAmount := minValue * float64(MinQuorumRequired)
@@ -350,7 +350,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		PledgedTokenChainBlock: make(map[string]interface{}),
 		TokenList:              make([]string, 0),
 	}
-	fmt.Println("Pledge details in initate consensus is ", pd)
 	//getting last character from TID
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
@@ -431,7 +430,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		return nil, nil, err
 	}
-	fmt.Println("PD before pledgeQuorumtoken is ", pd)
 
 	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
 	if err != nil {
@@ -442,7 +440,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	ti := sc.GetTransTokenInfo()
 	c.qlock.Lock()
 	pds := c.pd[cr.ReqID]
-	fmt.Println("PD after pledgeQuorumtoken is ", pds)
 	c.qlock.Unlock()
 	pl := make(map[string]map[string]float64)
 	for _, d := range cr.QuorumList {
@@ -631,6 +628,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			QuorumList:         cr.QuorumList,
 			TransactionEpoch:   cr.TransactionEpoch,
 			PinningServiceMode: false,
+			FTInfo:             cr.FTinfo,
 		}
 
 		//fetching quorums' info from PeerDIDTable to share with the receiver
@@ -973,7 +971,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		// Self update for self transfer tokens
-		updatedTokenHashes, err := c.updateReceiverToken(selfAddress, "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, cr.TransactionEpoch, false)
+		updatedTokenHashes, err := c.updateReceiverToken(selfAddress, "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, cr.TransactionEpoch, false, nil)
 		if err != nil {
 			errMsg := fmt.Errorf("failed while update of self transfer tokens, err: %v", err)
 			c.log.Error(errMsg.Error())
