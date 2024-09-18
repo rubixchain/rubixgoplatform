@@ -650,7 +650,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			if qDidType == -1 {
 				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
-				didtype_, msg, err := c.GetPeerdidType_fromPeer(qpid, qdid, dc.GetDID())
+				didtype_, msg, err := c.GetPeerdidTypeFromPeer(qpid, qdid, dc.GetDID())
 				if err != nil {
 					c.log.Error("error", err, "msg", msg)
 					qrmInfo.DIDType = nil
@@ -1689,9 +1689,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		deployerSign := &block.InitiatorSignature{
 			NLSSShare:   deployerNLSSShare,
 			PrivateSign: deployerPrivSign,
-			DID:          bti.DeployerDID,
-			Hash:         signData,
-			SignType:     deployerSignType,
+			DID:         bti.DeployerDID,
+			Hash:        signData,
+			SignType:    deployerSignType,
 		}
 
 		var smartContractTokenValue float64
@@ -1741,9 +1741,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		executorSign := &block.InitiatorSignature{
 			NLSSShare:   executorNLSSShare,
 			PrivateSign: executorPrivSign,
-			DID:          bti.ExecutorDID,
-			Hash:         signData,
-			SignType:     executorSignType,
+			DID:         bti.ExecutorDID,
+			Hash:        signData,
+			SignType:    executorSignType,
 		}
 
 		tcb = block.TokenChainBlock{
@@ -1780,9 +1780,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		senderSign := &block.InitiatorSignature{
 			NLSSShare:   senderNLSSShare,
 			PrivateSign: senderPrivSign,
-			DID:          senderdid,
-			Hash:         signData,
-			SignType:     senderSignType,
+			DID:         senderdid,
+			Hash:        signData,
+			SignType:    senderSignType,
 		}
 
 		bti.SenderDID = sc.GetSenderDID()
