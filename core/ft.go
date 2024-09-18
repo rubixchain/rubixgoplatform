@@ -43,6 +43,14 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 }
 
 func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTokens float64, did string) error {
+	var FT []wallet.FT
+
+	err := c.s.Read(wallet.FTStorage, &FT, "ft_name!=?", FTName)
+	fmt.Println(FT)
+	if err != nil {
+		c.log.Error("FT Name already exists")
+		return fmt.Errorf("FT Name already exists")
+	}
 	if dc == nil {
 		return fmt.Errorf("DID crypto is not initialized")
 	}
@@ -55,7 +63,7 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 		return fmt.Errorf("number of whole tokens must be greater than zero")
 	}
 	if numFTs > int(numWholeTokens*1000) {
-		return fmt.Errorf("Max allowed FT count is 1000 for 1 RBT")
+		return fmt.Errorf("max allowed FT count is 1000 for 1 RBT")
 	}
 
 	// Fetch whole tokens using GetToken
@@ -115,10 +123,10 @@ func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTo
 
 		// racBlockData := racBlocks[0].GetBlock()
 		// fr := bytes.NewBuffer(racBlockData)
-
+		//TODO : Adding timestamp to creaet FT to prevent sequence error. Need to check if DID can be used instead.
 		ftnumString := strconv.Itoa(i)
-		parts := []string{FTName, ftnumString}
-		result := strings.Join(parts, "")
+		parts := []string{FTName, ftnumString, time.Now().String()}
+		result := strings.Join(parts, " ")
 		byteArray := []byte(result)
 		ftBuffer := bytes.NewBuffer(byteArray)
 		ftID, err := c.w.Add(ftBuffer, did, wallet.AddFunc)

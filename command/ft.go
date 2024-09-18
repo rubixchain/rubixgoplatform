@@ -12,6 +12,11 @@ func (cmd *Command) createFT() {
 		return
 	}
 
+	if cmd.ftCount < 1 {
+		cmd.log.Error("Invalid FT count, minimum FT count is 1")
+		return
+	}
+
 	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, cmd.rbtAmount)
 
 	if err != nil {
