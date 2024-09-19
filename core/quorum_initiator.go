@@ -26,13 +26,14 @@ const (
 )
 const (
 	RBTTransferMode int = iota
-	NFTDeployMode
+	NFTDeployMode       //This value should be confirmed so that this won't break the existing code
 	DTCommitMode
 	NFTSaleContractMode
 	SmartContractDeployMode
 	SmartContractExecuteMode
 	SelfTransferMode
 	PinningServiceMode
+	NFTExecuteMode
 )
 const (
 	AlphaQuorumType int = iota
@@ -329,7 +330,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	case NFTDeployMode:
 		reqPledgeTokens = 1
-	case SmartContractExecuteMode:
+	case SmartContractExecuteMode, NFTExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
 	}
 	minValue := MinDecimalValue(MaxDecimalPlaces)
@@ -1152,6 +1153,88 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		return &txnDetails, pl, nil
+	case NFTExecuteMode:
+		//Get the latest block details before being executed to get the old signers
+		b := c.w.GetLatestTokenBlock(cr.NFT, nb.GetTokenType(cr.NFT))
+		signers, _ := b.GetSigner()
+
+		//Create tokechain for the smart contract token and add genesys block
+		err = c.w.AddTokenBlock(cr.NFT, nb)
+		if err != nil {
+			c.log.Error("NFT chain creation failed", "err", err)
+			return nil, nil, err
+		}
+		//update smart contracttoken status to deployed in DB
+		// err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsExecuted)
+		// if err != nil {
+		// 	c.log.Error("Failed to update smart contract Token execute detail in storage", err)
+		// 	return nil, nil, err
+		// }
+
+		newBlockId, err := nb.GetBlockID(cr.NFT)
+		if err != nil {
+			c.log.Error("failed to get new block id ", "err", err)
+			return nil, nil, err
+		}
+
+		//Latest Smart contract token hash after being executed.
+		nftStateData := cr.NFT + newBlockId
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(nftStateData))
+		newtokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		c.log.Info(fmt.Sprintf("New NFT state hash after being executed : %s", newtokenIDTokenStateHash))
+
+		//trigger pledge finality to the quorum and adding the details in token hash table
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid)
+		if pledgeFinalityError != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", err)
+			return nil, nil, pledgeFinalityError
+		}
+
+		newEvent := model.NFTDeployEvent{
+			NFT:          cr.NFT,
+			Did:          sc.GetExecutorDID(), // This should be confirmed whether the receiver address or the executor address should be passed
+			Type:         ExecuteType,
+			NFTBlockHash: newBlockId,
+		}
+
+		err = c.publishNewNftEvent(&newEvent)
+		if err != nil {
+			c.log.Error("Failed to publish NFT executed  info")
+		}
+
+		//inform old quorums about exhausted smart contract token hash
+		prevBlockId, _ := nb.GetPrevBlockID((cr.NFT))
+		nftTokenStateDataOld := cr.NFT + prevBlockId
+		nftTokenStateDataOldBuffer := bytes.NewBuffer([]byte(nftTokenStateDataOld))
+		oldnfttokenIDTokenStateHash, _ := c.ipfs.Add(nftTokenStateDataOldBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		for _, signer := range signers {
+			signer_peeerId := c.w.GetPeerID(signer)
+			signer_addr := signer_peeerId + "." + signer
+			p, _ := c.getPeer(signer_addr, "")
+			m := make(map[string]string)
+			m["tokenIDTokenStateHash"] = oldnfttokenIDTokenStateHash
+			_ = p.SendJSONRequest("POST", APIUpdateTokenHashDetails, m, nil, nil, true)
+		}
+
+		txnDetails := model.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			BlockID:         newBlockId,
+			Mode:            wallet.ExecuteMode,
+			DeployerDID:     sc.GetExecutorDID(),
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+			Epoch:           int64(cr.TransactionEpoch),
+		}
+
+		err = c.initiateUnpledgingProcess(cr, txnDetails.TransactionID, txnDetails.Epoch)
+		if err != nil {
+			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
+			return nil, nil, err
+		}
+
+		return &txnDetails, pl, nil
 
 	default:
 		err := fmt.Errorf("invalid consensus request mode: %v", cr.Mode)
@@ -1583,7 +1666,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 
 	var tcb block.TokenChainBlock
 
-	if cr.Mode == SmartContractDeployMode {
+	if cr.Mode == SmartContractDeployMode || cr.Mode == NFTDeployMode {
 		bti.DeployerDID = sc.GetDeployerDID()
 
 		//Fetching deployer signature to add it to transaction details
@@ -1635,7 +1718,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: deployerSign,
 			Epoch:              cr.TransactionEpoch,
 		}
-	} else if cr.Mode == SmartContractExecuteMode {
+	} else if cr.Mode == SmartContractExecuteMode || cr.Mode == NFTExecuteMode {
 		bti.ExecutorDID = sc.GetExecutorDID()
 
 		//Fetching executor signature to add it to transaction details

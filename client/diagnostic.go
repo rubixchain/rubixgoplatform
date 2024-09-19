@@ -1,6 +1,8 @@
 package client
 
 import (
+	"fmt"
+
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
@@ -25,6 +27,20 @@ func (c *Client) DumpSmartContractTokenChain(token string, blockID string) (*mod
 	}
 	var drep model.TCDumpReply
 	err := c.sendJSONRequest("POST", setup.APIDumpSmartContractTokenChainBlock, nil, dr, &drep)
+	if err != nil {
+		return nil, err
+	}
+	return &drep, nil
+}
+
+func (c *Client) GetNFTTokenChain(token string, blockID string) (*model.TCDumpReply, error) {
+	dr := &model.TCDumpRequest{
+		Token:   token,
+		BlockID: blockID,
+	}
+	fmt.Println("The TCDumpRequest in GetNFTTokenchain ", dr)
+	var drep model.TCDumpReply
+	err := c.sendJSONRequest("POST", setup.APIGetNFTTokenChain, nil, dr, &drep)
 	if err != nil {
 		return nil, err
 	}

@@ -21,21 +21,29 @@ func NewPubSub(ipfs *ipfsnode.Shell, log logger.Logger) (*PubSub, error) {
 }
 
 func (ps *PubSub) SubscribeTopic(topic string, cb PubSubCallback) error {
+	fmt.Println("SubscribeTopic Function called ")
+	fmt.Println("The topic is :", topic)
+	fmt.Println("The callback is :", cb)
 	f := ps.sub[topic]
 	if f != nil {
 		ps.log.Error("topic already subscribed")
 		return fmt.Errorf("topic already subscribed")
 	}
+	fmt.Println(" The f in SubscribeTopic :", f)
 	ps.sub[topic] = cb
 	p, err := ps.ipfs.PubSubSubscribe(topic)
 	if err != nil {
 		ps.log.Error("topic failed to subscribe", "err", err)
 		return err
 	}
+	fmt.Println("The p in subscribetopic is :", p)
 	go ps.receivePub(topic, p)
 	return nil
 }
 func (ps *PubSub) receivePub(topic string, p *ipfsnode.PubSubSubscription) {
+	fmt.Println("Receivepub function called ")
+	fmt.Println("The topic in receivePub is ", topic)
+	fmt.Println("The p in receivePub is ", p)
 	for {
 		m, err := p.Next()
 		if err != nil {

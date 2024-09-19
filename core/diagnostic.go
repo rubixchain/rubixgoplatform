@@ -62,6 +62,29 @@ func (c *Core) DumpSmartContractTokenChain(dr *model.TCDumpRequest) *model.TCDum
 	return ds
 }
 
+func (c *Core) GetNFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
+	ds := &model.TCDumpReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	_, err := c.w.GetNFTToken(dr.Token)
+	if err != nil {
+		ds.Message = "Failed to get nft, token does not exist"
+		return ds
+	}
+	tokenTypeString := NFTString
+	blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, c.TokenType(tokenTypeString), dr.BlockID)
+	if err != nil {
+		ds.Message = "Failed to get nft token chain block"
+		return ds
+	}
+	ds.Status = true
+	ds.Message = "Successfully got nft token chain block"
+	ds.Blocks = blks
+	ds.NextBlockID = nextID
+	return ds
+}
 func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenChainDataReq) *model.SmartContractDataReply {
 	reply := &model.SmartContractDataReply{
 		BasicResponse: model.BasicResponse{

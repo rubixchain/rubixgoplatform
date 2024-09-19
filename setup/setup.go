@@ -77,6 +77,10 @@ const (
 	APIRecoverRBT                       string = "/api/recover-token"
 	APIValidateTokenChain               string = "/api/validate-token-chain"
 	APIValidateToken                    string = "/api/validate-token"
+	APIDeployNFT                        string = "/api/deploy-nft"
+	APIExecuteNFT                       string = "/api/execute-nft"
+	APIGetNFTTokenChain                 string = "/api/get-nft-token-chain"
+	APISubscribeNFT                     string = "/api/subscribe-nft"
 )
 
 // jwt.RegisteredClaims

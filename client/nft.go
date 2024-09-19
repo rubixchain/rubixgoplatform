@@ -1,50 +1,58 @@
 package client
 
 import (
-	"fmt"
-	"path"
-
-	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
 type CreateNFTReq struct {
-	DID       string
-	NumTokens int
-	UserID    string
-	UserInfo  string
-	FileInfo  string
-	Files     []string
+	DID         string
+	UserID      string
+	NFTFileInfo string
+	NFTFile     string
 }
 
-func (c *Client) CreateNFT(nt *CreateNFTReq) (*model.BasicResponse, error) {
+func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*model.BasicResponse, error) {
 	fields := make(map[string]string)
 	files := make(map[string]string)
-	if nt.UserID != "" {
-		fields[core.DTUserIDField] = nt.UserID
+	if createNFTReq.DID != "" {
+		fields["DID"] = createNFTReq.DID
 	}
-	if nt.UserInfo != "" {
-		fields[core.DTUserInfoField] = nt.UserInfo
+	if createNFTReq.UserID != "" {
+		fields["UserID"] = createNFTReq.UserID
 	}
-	if nt.FileInfo != "" {
-		fields[core.DTFileInfoField] = nt.FileInfo
+	// if nt.UserInfo != "" {
+	// 	fields[core.DTUserInfoField] = nt.UserInfo
+	// }
+	if createNFTReq.NFTFileInfo != "" {
+		files["NFTFileInfo"] = createNFTReq.NFTFileInfo
 	}
-	for _, fn := range nt.Files {
-		fuid := path.Base(fn)
-		files[fuid] = fn
+
+	if createNFTReq.NFTFile != "" {
+		files["NFTFile"] = createNFTReq.NFTFile
 	}
+	// for _, fn := range nt.Files {
+	// 	fuid := path.Base(fn)
+	// 	files[fuid] = fn
+	// }
 	var br model.BasicResponse
-	q := make(map[string]string)
-	q["did"] = nt.DID
-	if nt.NumTokens > 0 {
-		q["numTokens"] = fmt.Sprintf("%d", nt.NumTokens)
-	}
-	err := c.sendMutiFormRequest("POST", setup.APICreateNFT, q, fields, files, &br)
+	err := c.sendMutiFormRequest("POST", setup.APICreateNFT, nil, fields, files, &br)
 	if err != nil {
 		return nil, err
 	}
 	return &br, nil
+}
+
+func (c *Client) SubscribeNFT(nft string) (*model.BasicResponse, error) {
+	var response model.BasicResponse
+	newSubscription := model.NewNFTSubscription{
+		NFT: nft,
+	}
+	err := c.sendJSONRequest("POST", setup.APISubscribeNFT, nil, &newSubscription, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
 }
 
 func (c *Client) GetAllNFTs(did string) (*model.NFTTokens, error) {

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -36,6 +37,22 @@ func (s *Server) APIDumpSmartContractTokenChainBlock(req *ensweb.Request) *enswe
 		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
 	}
 	drep := s.c.DumpSmartContractTokenChain(&dr)
+	return s.RenderJSON(req, drep, http.StatusOK)
+}
+
+func (s *Server) APIGetNFTTokenChain(req *ensweb.Request) *ensweb.Result {
+	var dr model.TCDumpRequest
+	fmt.Println("The TCDUMPRequest :", dr)
+	err := s.ParseJSON(req, &dr)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(dr.Token)
+	if len(dr.Token) != 46 || !strings.HasPrefix(dr.Token, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid NFT")
+		return s.BasicResponse(req, false, "Invalid NFT", nil)
+	}
+	drep := s.c.GetNFTTokenChain(&dr)
 	return s.RenderJSON(req, drep, http.StatusOK)
 }
 

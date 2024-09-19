@@ -417,6 +417,12 @@ func (c *Core) CreateSCTempFolder() (string, error) {
 	return folderName, err
 }
 
+func (c *Core) CreateNFTTempFolder() (string, error) {
+	folderName := c.cfg.DirPath + "NFT/" + uuid.New().String()
+	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
+	return folderName, err
+}
+
 func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
 
 	scFolderName := c.cfg.DirPath + "SmartContract/" + smartContractName

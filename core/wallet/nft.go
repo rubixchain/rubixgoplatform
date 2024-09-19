@@ -11,6 +11,7 @@ type NFT struct {
 
 // CreateNFT write NFT into db
 func (w *Wallet) CreateNFT(nt *NFT) error {
+	fmt.Println("The create NFT function called ")
 	err := w.s.Write(NFTTokenStorage, nt)
 	if err != nil {
 		w.log.Error("Failed to write NFT into db", "err", err)
@@ -56,4 +57,21 @@ func (w *Wallet) GetNFT(did string, nft string, lock bool) (*NFT, error) {
 		}
 	}
 	return &tkns, nil
+}
+
+func (w *Wallet) GetNFTToken(nft string) ([]NFT, error) {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	var tokens []NFT
+	w.log.Debug("nft=?", nft)
+	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nft)
+	if err != nil {
+		w.log.Error("err", err)
+		return nil, err
+	}
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("no smart contract token is available to commit")
+	}
+
+	return tokens, nil
 }

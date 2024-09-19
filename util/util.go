@@ -357,6 +357,7 @@ func ParseAddress(addr string) (string, string, bool) {
 	peerID := ""
 	did := ""
 	// check if addr contains the peer ID
+	fmt.Println("addr in Parse address", addr)
 	if strings.Contains(addr, ".") {
 		str := strings.Split(addr, ".")
 		if len(str) != 2 {
@@ -368,6 +369,7 @@ func ParseAddress(addr string) (string, string, bool) {
 		did = addr
 	}
 	//TODO:: Validation
+	fmt.Println("Did in parseaddress", did)
 	return peerID, did, true
 }
 

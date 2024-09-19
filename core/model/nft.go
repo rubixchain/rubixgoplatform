@@ -1,5 +1,21 @@
 package model
 
+type NFTReq struct {
+	DID        string
+	NumTokens  int
+	Fields     map[string][]string
+	FileNames  []string
+	FolderName string
+}
+
+type CreateNFTReq struct {
+	DID      string
+	UserID   string
+	UserInfo string
+	FileInfo string
+	Files    []string
+}
+
 type NFTStatus struct {
 	Token       string `json:"token"`
 	TokenStatus int    `json:"token_status"`
@@ -14,5 +30,31 @@ type NFTDeployEvent struct {
 	NFT          string `json:"nft"`
 	Did          string `json:"did"`
 	Type         int    `json:"type"`
-	NFTBlockHash string `json:"smartContractBlockHash"`
+	NFTBlockHash string `json:"nftBlockHash"`
+}
+
+type DeployNFTRequest struct {
+	NFT        string
+	DID        string
+	QuorumType int
+}
+
+type ExecuteNFTRequest struct {
+	NFT        string  `json:"nft"`
+	Executor   string  `json:"executor"`
+	Receiver   string  `json:"receiver"`
+	QuorumType int     `json:"quorumType"`
+	Comment    string  `json:"comment"`
+	NFTValue   float64 `json:"nftValue"`
+}
+
+type NewNFTSubscription struct {
+	NFT string `json:"nft"`
+}
+
+type NewNFTEvent struct {
+	NFT          string `json:"nft"`
+	Did          string `json:"did"`
+	Type         int    `json:"type"`
+	NFTBlockHash string `json:"nftBlockHash"`
 }
