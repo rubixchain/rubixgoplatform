@@ -13,19 +13,13 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
 func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken float64) {
-	dc, err := c.SetupDID(reqID, did)
-	if err != nil {
-		c.log.Error("Failed to setup DID")
-		return
-	}
-	err = c.createFTs(dc, ftname, ftcount, wholeToken, did)
+	err := c.createFTs(reqID, ftname, ftcount, wholeToken, did)
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "DID registered successfully",
@@ -35,19 +29,24 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 		br.Message = err.Error()
 	}
 	channel := c.GetWebReq(reqID)
-	if dc == nil {
+	if channel == nil {
 		c.log.Error("Failed to get did channels")
 		return
 	}
 	channel.OutChan <- &br
 }
 
-func (c *Core) createFTs(dc did.DIDCrypto, FTName string, numFTs int, numWholeTokens float64, did string) error {
+func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens float64, did string) error {
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		c.log.Error("Failed to setup DID")
+		return err
+	}
 	var FT []wallet.FT
 
-	err := c.s.Read(wallet.FTStorage, &FT, "ft_name!=?", FTName)
-	fmt.Println(FT)
-	if err != nil {
+	c.s.Read(wallet.FTStorage, &FT, "ft_name=?", FTName)
+
+	if len(FT) != 0 {
 		c.log.Error("FT Name already exists")
 		return fmt.Errorf("FT Name already exists")
 	}

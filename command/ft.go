@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
@@ -14,6 +15,11 @@ func (cmd *Command) createFT() {
 
 	if cmd.ftCount < 1 {
 		cmd.log.Error("Invalid FT count, minimum FT count is 1")
+		return
+	}
+
+	if strings.TrimSpace(cmd.ftName) == "" {
+		cmd.log.Error("FT Name can't be empty")
 		return
 	}
 
