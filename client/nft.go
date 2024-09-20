@@ -1,6 +1,8 @@
 package client
 
 import (
+	"time"
+
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
@@ -41,6 +43,26 @@ func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*model.BasicResponse, er
 		return nil, err
 	}
 	return &br, nil
+}
+
+func (c *Client) ExecuteNFT(executeRequest *model.ExecuteNFTRequest) (*model.BasicResponse, error) {
+	var basicResponse model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIExecuteNFT, nil, executeRequest, &basicResponse, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to Execute NFT", "err", err)
+		return nil, err
+	}
+	return &basicResponse, nil
+}
+
+func (c *Client) DeployNFT(deployRequest *model.DeployNFTRequest) (*model.BasicResponse, error) {
+	var basicResponse model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIDeployNFT, nil, deployRequest, &basicResponse, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to Deploy NFT", "err", err)
+		return nil, err
+	}
+	return &basicResponse, nil
 }
 
 func (c *Client) SubscribeNFT(nft string) (*model.BasicResponse, error) {
