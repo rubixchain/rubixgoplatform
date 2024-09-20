@@ -124,7 +124,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		// fr := bytes.NewBuffer(racBlockData)
 		//TODO : Adding timestamp to creaet FT to prevent sequence error. Need to check if DID can be used instead.
 		ftnumString := strconv.Itoa(i)
-		parts := []string{FTName, ftnumString, time.Now().String()}
+		parts := []string{FTName, ftnumString}
 		result := strings.Join(parts, " ")
 		byteArray := []byte(result)
 		ftBuffer := bytes.NewBuffer(byteArray)
