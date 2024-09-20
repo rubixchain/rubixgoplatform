@@ -58,6 +58,9 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	if numFTs <= 0 {
 		return fmt.Errorf("number of tokens to create must be greater than zero")
 	}
+	if numWholeTokens <= 0 || numWholeTokens != float64(int(numWholeTokens)) {
+		return fmt.Errorf("number of whole tokens must be a positive integer")
+	}
 	if numWholeTokens <= 0 {
 		return fmt.Errorf("number of whole tokens must be greater than zero")
 	}
@@ -66,14 +69,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 
 	// Fetch whole tokens using GetToken
-	wholeTokens, err := c.w.GetTokens(did, float64(numWholeTokens))
+	wholeTokens, err := c.GetTokens(dc, did, float64(numWholeTokens), 0)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
 	}
 	//TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
 	defer c.w.ReleaseTokens(wholeTokens)
-	fractionalValue, err := c.GetPresiceFractionalValue(len(wholeTokens), numFTs)
+	fractionalValue, err := c.GetPresiceFractionalValue(int(numWholeTokens), numFTs)
 	if err != nil {
 		c.log.Error("Failed to calculate FT token value", err)
 		return err
@@ -206,7 +209,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			Comment: "Token burnt at : " + time.Now().String(),
 		}
 		tcb := &block.TokenChainBlock{
-			TransactionType: block.TokenBurntType,
+			TransactionType: block.TokenIsBurntForFT,
 			TokenOwner:      did,
 			TransInfo:       bti,
 			TokenValue:      wholeTokens[i].TokenValue,
@@ -228,7 +231,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			c.log.Error("FT creation failed, failed to add token block", "err", err)
 			return err
 		}
-		wholeTokens[i].TokenStatus = wallet.TokenIsBurnt
+		wholeTokens[i].TokenStatus = wallet.TokenIsBurntForFT
 		err = c.w.UpdateToken(&wholeTokens[i])
 		if err != nil {
 			c.log.Error("FT token creation failed, failed to update token status", "err", err)
@@ -414,6 +417,8 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	td.Amount = float64(req.FTCount)
 	td.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(td)
+
+	//TODO :  Extra details regarding the FT need to added in the explorer
 	etrans := &ExplorerTrans{
 		TID:         td.TransactionID,
 		SenderDID:   did,
@@ -434,11 +439,9 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 }
 
 func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
-	if b == 0 {
-		return 0, errors.New("FT count should not be zero")
-
+	if b == 0 || a == 0 {
+		return 0, errors.New("RBT value or FT count should not be zero")
 	}
-
 	result := float64(a) / float64(b)
 	decimalPlaces := len(strconv.FormatFloat(result, 'f', -1, 64)) - 2 // Subtract 2 for "0."
 

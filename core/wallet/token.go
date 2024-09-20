@@ -29,6 +29,7 @@ const (
 	TokenPledgeIssue
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
+	TokenIsBurntForFT
 )
 const (
 	Zero int = iota
