@@ -55,6 +55,7 @@ const (
 	APIRecoverPinnedRBT       string = "/api/recover-pinned-rbt"
 	APIRequestSigningHash     string = "/api/request-signing-hash"
 	TokenValidatorURL         string = "http://103.209.145.177:8000"
+	APIGetPrevQrmFromPrevSenderPath string = "/api/get-prev-qrms-info-from-sender"
 )
 
 const (
