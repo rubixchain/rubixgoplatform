@@ -279,7 +279,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			c.log.Error("token is burnt, can't transfer anymore; token:", tokeninfo.Token)
 			resp.Message = "token is burnt, can't transfer anymore"
 			return resp
-		default:
+		case block.TokenTransferredType:
 			//fetch all the pledged quorums, if the transaction involved quorums
 			prevQuorums, _ := b.GetSigner()
 			//fetch the sender in the transaction
