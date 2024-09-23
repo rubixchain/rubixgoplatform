@@ -208,7 +208,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 		}
 		quorum_dc := did.InitDIDQuorumLite(didStr, c.didDir, pvtKeyPwd)
 		if quorum_dc == nil {
-			c.log.Error("Failed to initialise quorum")
+			c.log.Error("Failed to setup lite mode quorum")
 			return fmt.Errorf("failed to setup quorum")
 		}
 		c.qc[didStr] = quorum_dc
@@ -221,7 +221,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	case did.BasicDIDMode:
 		dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
 		if dc == nil {
-			c.log.Error("Failed to initialise quorum")
+			c.log.Error("Failed to setup basic mode quorum")
 			return fmt.Errorf("failed to setup quorum")
 		}
 		c.qc[didStr] = dc
@@ -1291,7 +1291,6 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
-	c.log.Debug("-----pledging done, now getting consensus------")
 	var cresp ConensusReply
 	err = p.SendJSONRequest("POST", APIQuorumConsensus, nil, cr, &cresp, true, 10*time.Minute)
 	if err != nil {
@@ -1300,7 +1299,6 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		return
 	}
 
-	c.log.Debug("-----got consensus------")
 	if strings.Contains(cresp.Message, "parent token is not in burnt stage") {
 		ptPrefix := "pt: "
 		issueTypePrefix := "issueType: "
@@ -1402,7 +1400,6 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
-	c.log.Debug("-----connecting to quorum done------")
 	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
 }
 
@@ -1686,7 +1683,6 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 }
 
 func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt int) error {
-	c.log.Debug("-----initiating to pledge by quorum------")
 	if qt == AlphaQuorumType {
 		c.qlock.Lock()
 		cs, ok := c.quorumRequest[cr.ReqID]
