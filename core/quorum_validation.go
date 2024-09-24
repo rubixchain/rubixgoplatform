@@ -405,7 +405,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		}
 		qPeerIds = append(qPeerIds, pId)
 	}
-	updatedList := c.removeStrings(list, qPeerIds)
+	updatedList := c.removeStrings(list, qPeerIds, "")
 	//if pin exist abort
 	if len(updatedList) != 0 {
 		c.log.Debug("Token state is exhausted, Token is being Double spent. Token : ", tokenId)

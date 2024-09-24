@@ -391,7 +391,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	c.quorumCount = QuorumRequired - len(cr.QuorumList)
 	c.noBalanceQuorumCount = QuorumRequired - len(cr.QuorumList)
 	for _, a := range cr.QuorumList {
-		fmt.Println("connecting to quorum................................. ", a)
 		//This part of code is trying to connect to the quorums in quorum list, where various functions are called to pledge the tokens
 		//and checking of transaction by the quorum i.e. consensus for the transaction. Once the quorum is connected, it pledges and
 		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
@@ -515,8 +514,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Unable to send tokens to receiver", "err", err)
 			return nil, nil, err
 		}
-		fmt.Println("Send request is ", sr)
-		fmt.Println("Responce is ", br)
 		if strings.Contains(br.Message, "failed to sync tokenchain") {
 			tokenPrefix := "Token: "
 			issueTypePrefix := "issueType: "
@@ -673,8 +670,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Unable to send tokens to receiver", "err", err)
 			return nil, nil, err
 		}
-		fmt.Println("Send request is ", sr)
-		fmt.Println("Responce is ", br)
 		if strings.Contains(br.Message, "failed to sync tokenchain") {
 			tokenPrefix := "Token: "
 			issueTypePrefix := "issueType: "
@@ -1580,10 +1575,6 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
-	fmt.Println("cresp.Message is ", cresp.Message)
-	fmt.Println("cresp.ReqID is ", cresp.ReqID)
-	fmt.Println("cresp.Status is ", cresp.Status)
-	fmt.Println("cr.ReqID is ", cr.ReqID)
 	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
 }
 
@@ -1868,7 +1859,6 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 
 func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt int) error {
 	if qt == AlphaQuorumType {
-		fmt.Println("Init-pledge-quorum_token started")
 		c.qlock.Lock()
 		cs, ok := c.quorumRequest[cr.ReqID]
 		c.qlock.Unlock()
@@ -1886,18 +1876,15 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			err := fmt.Errorf("invalid pledge request")
 			return err
 		}
-		fmt.Println("token list in Pledge details is ", pd.TokenList)
 
 		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
 		// Request pledage token
 		if pd.RemPledgeTokens > 0 {
-			fmt.Println("REM != 0")
 			pr := PledgeRequest{
 				TokensRequired: CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPlaces), // Request the determined number of tokens per quorum,
 			}
 			var prs PledgeReply
 			err := p.SendJSONRequest("POST", APIReqPledgeToken, nil, &pr, &prs, true)
-			fmt.Println("Pledge reply is ", prs)
 			if err != nil {
 				c.log.Error("Invalid response for pledge request", "err", err)
 				err := fmt.Errorf("invalid pledge request")
@@ -1948,11 +1935,11 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 		if pd.RemPledgeTokens > 0 {
 			if c.quorumCount < QuorumRequired {
 				if count == 300 {
-					err := fmt.Errorf("Unable to pledge after wait")
+					err := fmt.Errorf("unable to pledge after wait")
 					return err
 				}
 			} else if c.quorumCount == QuorumRequired {
-				err := fmt.Errorf("Unable to pledge")
+				err := fmt.Errorf("unable to pledge")
 				return err
 			}
 		} else if pd.RemPledgeTokens <= 0 {

@@ -184,6 +184,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			DID:         did,
 		}
 		newFTs = append(newFTs, *ft)
+		//TODO
+		c.CheckForPins(ftID)
 	}
 
 	for i := range wholeTokens {
@@ -248,6 +250,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 	c.updateFTTable()
 	return nil
+}
+
+// TODO
+func (c *Core) CheckForPins(ftID string) {
+	provList, err := c.GetDHTddrs(ftID)
+
+	print("err : ", err)
+	print("provList : ", provList)
 }
 
 func (c *Core) GetFTInfo() ([]model.FTInfo, error) {
