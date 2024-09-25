@@ -554,6 +554,9 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		if tokenInfo.TokenType == 10 {
 			var FTInfo FTToken
 			err := w.s.Read(FTTokenStorage, &FTInfo, "token_id=?", tokenInfo.Token)
+			if err == nil || FTInfo.TokenID != "" {
+				return nil, fmt.Errorf("FT Token %v already with the receiver", FTInfo.TokenID)
+			}
 			if err != nil || FTInfo.TokenID == "" {
 				// Token doesn't exist, proceed to handle it
 				dir := util.GetRandString()
@@ -617,6 +620,9 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			// Check if token already exists
 			var t Token
 			err := w.s.Read(TokenStorage, &t, "token_id=?", tokenInfo.Token)
+			if err == nil || t.TokenID != "" {
+				return nil, fmt.Errorf("Token %v already with the receiver with token status %v", t.TokenID, t.TokenStatus)
+			}
 			if err != nil || t.TokenID == "" {
 				// Token doesn't exist, proceed to handle it
 				dir := util.GetRandString()

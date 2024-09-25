@@ -650,7 +650,7 @@ func (c *Core) CurrentOwnerPinCheck(b *block.Block, tokenId string, userDID stri
 	results := make([]MultiPinCheckRes, 1)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go c.pinCheck(tokenId, 0, currentOwnerPeerID, "", results, &wg)
+	go c.pinCheck(tokenId, 0, currentOwnerPeerID, "", results, &wg, nil)
 	wg.Wait()
 	for i := range results {
 		if results[i].Error != nil {

@@ -14,11 +14,8 @@ type MultiPinCheckRes struct {
 	Error  error
 }
 
-func (c *Core) removeStrings(strings []string, targets []string, target string) []string {
+func (c *Core) removeStrings(strings []string, targets []string) []string {
 	targetMap := make(map[string]bool)
-	if targets == nil {
-		targets = []string{target}
-	}
 	for _, t := range targets {
 		targetMap[t] = true
 	}
@@ -33,9 +30,22 @@ func (c *Core) removeStrings(strings []string, targets []string, target string) 
 	return result
 }
 
+func (c *Core) removePeerID(provList []string, peerID string) ([]string, bool) {
+	result := []string{}
+	peerIDexists := false
+	for _, s := range provList {
+		if s != peerID {
+			result = append(result, s)
+		} else {
+			peerIDexists = true
+		}
+	}
+	return result, peerIDexists
+}
+
 // Method checks for multiple Pins on token
 // if there are multiple owners the list of owners is returned back
-func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPeerId string, results []MultiPinCheckRes, wg *sync.WaitGroup) {
+func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPeerId string, results []MultiPinCheckRes, wg *sync.WaitGroup, pinnedCorrectly *bool) {
 
 	defer wg.Done()
 	var result MultiPinCheckRes
@@ -67,9 +77,19 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 			result.Owners = provList
 		}
 	default:
-		provList = c.removeStrings(provList, nil, senderPeerId)
+		provList, peerIDexists := c.removePeerID(provList, senderPeerId)
+		if !peerIDexists {
+			*pinnedCorrectly = false
+			c.log.Error("Sender pin is not available")
+			return
+		}
 		if receiverPeerId != "" {
-			provList = c.removeStrings(provList, nil, receiverPeerId)
+			provList, peerIDexists = c.removePeerID(provList, receiverPeerId)
+			if peerIDexists {
+				*pinnedCorrectly = false
+				c.log.Error("Receiver pin is already available")
+				return
+			}
 		}
 		if len(provList) != 0 {
 			for _, peerId := range provList {

@@ -557,14 +557,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		newtokenhashresult, ok := br.Result.([]interface{})
 		if !ok {
 			c.log.Error("Type assertion to string failed")
-			return nil, nil, fmt.Errorf("Type assertion to string failed")
+			return nil, nil, fmt.Errorf("type assertion to string failed")
 		}
 		var newtokenhashes []string
 		for i, newTokenHash := range newtokenhashresult {
 			statehash, ok := newTokenHash.(string)
 			if !ok {
 				c.log.Error("Type assertion to string failed at index", i)
-				return nil, nil, fmt.Errorf("Type assertion to string failed at index", i)
+				return nil, nil, fmt.Errorf("type assertion to string failed at index %v", i)
 			}
 			newtokenhashes = append(newtokenhashes, statehash)
 		}
@@ -572,7 +572,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved", "err", err)
+			c.log.Error("Pledge finality not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
 		}
 		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
@@ -713,14 +713,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		newtokenhashresult, ok := br.Result.([]interface{})
 		if !ok {
 			c.log.Error("Type assertion to string failed")
-			return nil, nil, fmt.Errorf("Type assertion to string failed")
+			return nil, nil, fmt.Errorf("type assertion to string failed")
 		}
 		var newtokenhashes []string
 		for i, newTokenHash := range newtokenhashresult {
 			statehash, ok := newTokenHash.(string)
 			if !ok {
 				c.log.Error("Type assertion to string failed at index", i)
-				return nil, nil, fmt.Errorf("Type assertion to string failed at index", i)
+				return nil, nil, fmt.Errorf("type assertion to string failed at index %v", i)
 			}
 			newtokenhashes = append(newtokenhashes, statehash)
 		}
@@ -871,7 +871,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		newtokenhashresult, ok := br.Result.([]interface{})
 		if !ok {
 			c.log.Error("Type assertion to string failed")
-			return nil, nil, fmt.Errorf("Type assertion to string failed")
+			return nil, nil, fmt.Errorf("type assertion to string failed")
 		}
 		var newtokenhashes []string
 		for i, newTokenHash := range newtokenhashresult {

@@ -162,12 +162,20 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		receiverPeerId = cr.PinningNodePeerID
 		c.log.Debug("Pinning Node Peer Id", receiverPeerId)
 	}
+	//Need to check if sender pin not available or receiver pin already available. In either case, stop the transfer.
+	pinnedCorrectly := true
 	for i := range ti {
 		wg.Add(1)
-		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
+		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg, &pinnedCorrectly)
 	}
 	wg.Wait()
 	fmt.Println("results after pincheck: ", results)
+
+	if !pinnedCorrectly {
+		crep.Message = "Token is not pinned correctly"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	for i := range results {
 		if results[i].Error != nil {
 			c.log.Error("Error occured", "error", results[i].Error)
@@ -282,7 +290,7 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 	var wg sync.WaitGroup
 	for i := range ti {
 		wg.Add(1)
-		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, "", results, &wg)
+		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, "", results, &wg, nil)
 	}
 	wg.Wait()
 	for i := range results {
@@ -416,7 +424,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		results := make([]MultiPinCheckRes, len(commitedTokenInfo))
 		for i := range commitedTokenInfo {
 			wg.Add(1)
-			go c.pinCheck(commitedTokenInfo[i].Token, i, consensusRequest.DeployerPeerID, "", results, &wg)
+			go c.pinCheck(commitedTokenInfo[i].Token, i, consensusRequest.DeployerPeerID, "", results, &wg, nil)
 		}
 		wg.Wait()
 		for i := range results {
@@ -716,15 +724,18 @@ func (c *Core) updateReceiverToken(
 
 	results := make([]MultiPinCheckRes, len(tokenInfo))
 	var wg sync.WaitGroup
+	pinnedCorrectly := true
 	for i, ti := range tokenInfo {
 		t := ti.Token
 		wg.Add(1)
 		fmt.Println("Pin check for token : ", t)
-		go c.pinCheck(t, i, senderPeerId, receiverPeerId, results, &wg)
+		go c.pinCheck(t, i, senderPeerId, receiverPeerId, results, &wg, &pinnedCorrectly)
 	}
 	fmt.Println("results after pincheck: ", results)
 	wg.Wait()
-
+	if !pinnedCorrectly {
+		return nil, fmt.Errorf("Token is not pinned properly")
+	}
 	for i := range results {
 		if results[i].Error != nil {
 			return nil, fmt.Errorf("error while cheking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
@@ -754,6 +765,9 @@ func (c *Core) updateReceiverToken(
 	}
 	var FT wallet.FTToken
 	FT.FTName = ftinfo.FTName
+	// if true {
+	// 	return nil, fmt.Errorf("failed to update token status, error: Testing")
+	// }
 	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs, FT)
 	c.updateFTTable()
 	if err != nil {
@@ -1337,6 +1351,7 @@ func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) handleToken(t string, ti int, tokenType string, senderPeer *ipfsport.Peer, parentTokens *[]string) error {
+	fmt.Println("called")
 	if c.TokenType(tokenType) == ti {
 		gb := c.w.GetGenesisTokenBlock(t, ti)
 		if gb == nil {
