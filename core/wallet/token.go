@@ -134,26 +134,41 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 	return t, nil
 }
 
+// GetFTsAndCount retrieves all free fungible tokens associated with the wallet,
+// counts their occurrences based on FTName and CreatorDID, and returns a slice
+// of FT structs containing this information.
 func (w *Wallet) GetFTsAndCount() ([]FT, error) {
-	Ft, err := w.GetAllFreeFTs()
-	if err != nil && err.Error() != "no records found" {
+	fts, err := w.GetAllFreeFTs()
+	fmt.Println("error is ", err)
+
+	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
 	}
-	ftNameCounts := make(map[string]int)
 
-	ftCount := 0
-	for _, t := range Ft {
-		ftCount++
-		ftNameCounts[t.FTName]++
+	// Use a map to count occurrences of FTName with associated CreatorDID
+	ftNameCreatorCounts := make(map[string]struct {
+		count      int
+		creatorDID string
+	})
+
+	for _, t := range fts {
+		ftNameCreatorCounts[t.FTName] = struct {
+			count      int
+			creatorDID string
+		}{count: ftNameCreatorCounts[t.FTName].count + 1, creatorDID: t.CreatorDID}
 	}
-	info := make([]FT, 0, len(ftNameCounts))
-	for name, count := range ftNameCounts {
+
+	// Prepare the result slice with counted data
+	info := make([]FT, 0, len(ftNameCreatorCounts))
+	for key, data := range ftNameCreatorCounts {
 		info = append(info, FT{
-			FTName:  name,
-			FTCount: count,
+			FTName:     key,
+			FTCount:    data.count,
+			CreatorDID: data.creatorDID,
 		})
 	}
+
 	return info, nil
 }
 
@@ -180,7 +195,7 @@ func (w *Wallet) GetFTsByName(ftName string) ([]FTToken, error) {
 
 func (w *Wallet) GetFreeFTsByName(ftName string, did string) ([]FTToken, error) {
 	var FT []FTToken
-	err := w.s.Read(FTTokenStorage, &FT, "ft_name=? AND token_status =? AND  did=?", ftName, TokenIsFree, did)
+	err := w.s.Read(FTTokenStorage, &FT, "ft_name=? AND token_status =? AND  owner_did=?", ftName, TokenIsFree, did)
 
 	if err != nil {
 		w.log.Error("Failed to get FTs by name", "err", err)
@@ -569,11 +584,18 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 					w.log.Error("Failed to get token", "err", err)
 					return nil, err
 				}
-
+				tt := tokenInfo.TokenType
+				blk := w.GetGenesisTokenBlock(tokenInfo.Token, tt)
+				if blk == nil {
+					w.log.Error("failed to get gensis block for Parent DID updation, invalid token chain")
+					return nil, err
+				}
+				FTOwner := blk.GetOwner()
 				// Create new token entry
 				FTInfo = FTToken{
 					TokenID:    tokenInfo.Token,
 					TokenValue: tokenInfo.TokenValue,
+					CreatorDID: FTOwner,
 				}
 
 				err = w.s.Write(FTTokenStorage, &FTInfo)
@@ -613,7 +635,6 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			if !ok {
 				return nil, fmt.Errorf("failed to pin token")
 			}
-
 		} else {
 			// Check if token already exists
 			var t Token

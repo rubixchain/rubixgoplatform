@@ -127,7 +127,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		// fr := bytes.NewBuffer(racBlockData)
 		//TODO : Adding timestamp to creaet FT to prevent sequence error. Need to check if DID can be used instead.
 		ftnumString := strconv.Itoa(i)
-		parts := []string{FTName, ftnumString}
+		parts := []string{FTName, ftnumString, did}
 		result := strings.Join(parts, " ")
 		byteArray := []byte(result)
 		ftBuffer := bytes.NewBuffer(byteArray)
@@ -175,7 +175,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		}
 		err = c.w.AddTokenBlock(ftID, block)
 		if err != nil {
-			c.log.Error("Failed to create FT, failed to add token chan block", "err", err)
+			c.log.Error("Failed to create FT, failed to add token chain block", "err", err)
 			return err
 		}
 		// Create the new token
@@ -241,7 +241,15 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 
 	for i := range newFTs {
+		tt := c.TokenType(FTString)
+		blk := c.w.GetGenesisTokenBlock(newFTs[i].TokenID, tt)
+		if blk == nil {
+			c.log.Error("failed to get gensis block for Parent DID updation, invalid token chain")
+			return err
+		}
+		FTOwner := blk.GetOwner()
 		ft := &newFTs[i]
+		ft.CreatorDID = FTOwner
 		fmt.Println("ft is ", ft)
 		err = c.w.CreateFT(ft)
 		if err != nil {
