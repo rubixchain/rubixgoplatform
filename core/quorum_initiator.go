@@ -1666,7 +1666,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 
 	var tcb block.TokenChainBlock
 
-	if cr.Mode == SmartContractDeployMode || cr.Mode == NFTDeployMode {
+	if cr.Mode == SmartContractDeployMode {
 		bti.DeployerDID = sc.GetDeployerDID()
 
 		//Fetching deployer signature to add it to transaction details
@@ -1718,7 +1718,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: deployerSign,
 			Epoch:              cr.TransactionEpoch,
 		}
-	} else if cr.Mode == SmartContractExecuteMode || cr.Mode == NFTExecuteMode {
+	} else if cr.Mode == SmartContractExecuteMode {
 		bti.ExecutorDID = sc.GetExecutorDID()
 
 		//Fetching executor signature to add it to transaction details
@@ -1747,6 +1747,89 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: executorSign,
 			Epoch:              cr.TransactionEpoch,
 		}
+
+	} else if cr.Mode == NFTExecuteMode {
+		bti.ExecutorDID = sc.GetExecutorDID()
+
+		//Fetching executor signature to add it to transaction details
+		sign_data, executor_share_sign, executor_priv_sign, err := sc.GetHashSig(bti.ExecutorDID)
+		if err != nil {
+			c.log.Error("failed to fetch executor sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch executor sign")
+		}
+		executor_sign_type := dc.GetSignType()
+		executor_sign := &block.InitiatorSignature{
+			NLSS_share:   executor_share_sign,
+			Private_sign: executor_priv_sign,
+			DID:          bti.ExecutorDID,
+			Hash:         sign_data,
+			SignType:     executor_sign_type,
+		}
+
+		tcb = block.TokenChainBlock{
+			TransactionType:    block.TokenExecutedType,
+			TokenOwner:         sc.GetReceiverDID(),
+			TransInfo:          bti,
+			QuorumSignature:    credit,
+			NFT:                sc.GetBlock(),
+			PledgeDetails:      ptds,
+			TokenValue:         sc.GetTotalRBTs(),
+			InitiatorSignature: executor_sign,
+			Epoch:              cr.TransactionEpoch,
+		}
+
+	} else if cr.Mode == NFTDeployMode {
+		bti.DeployerDID = sc.GetDeployerDID()
+
+		//Fetching deployer signature to add it to transaction details
+		sign_data, deployer_share_sign, deployer_priv_sign, err := sc.GetHashSig(bti.DeployerDID)
+		if err != nil {
+			c.log.Error("failed to fetch deployer sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch deployer sign")
+		}
+		deployer_sign_type := dc.GetSignType()
+		deployer_sign := &block.InitiatorSignature{
+			NLSS_share:   deployer_share_sign,
+			Private_sign: deployer_priv_sign,
+			DID:          bti.DeployerDID,
+			Hash:         sign_data,
+			SignType:     deployer_sign_type,
+		}
+
+		var nftValue float64
+
+		commitedTokens := sc.GetCommitedTokensInfo()
+		commitedTokenInfoArray := make([]block.TransTokens, 0)
+		for i := range commitedTokens {
+			commitedTokenInfo := block.TransTokens{
+				Token:       commitedTokens[i].Token,
+				TokenType:   commitedTokens[i].TokenType,
+				CommitedDID: commitedTokens[i].OwnerDID,
+			}
+			commitedTokenInfoArray = append(commitedTokenInfoArray, commitedTokenInfo)
+			nftValue = nftValue + commitedTokens[i].TokenValue
+		}
+
+		nftGenesisBlock := &block.GenesisBlock{
+			Type: block.TokenGeneratedType,
+			Info: []block.GenesisTokenInfo{
+				{Token: cr.NFT,
+					CommitedTokens: commitedTokenInfoArray},
+			},
+		}
+
+		tcb = block.TokenChainBlock{
+			TransactionType:    block.TokenDeployedType,
+			TokenOwner:         sc.GetDeployerDID(),
+			TransInfo:          bti,
+			QuorumSignature:    credit,
+			NFT:                sc.GetBlock(),
+			GenesisBlock:       nftGenesisBlock,
+			PledgeDetails:      ptds,
+			InitiatorSignature: deployer_sign,
+			Epoch:              cr.TransactionEpoch,
+		}
+
 	} else if cr.Mode == PinningServiceMode {
 		bti.SenderDID = sc.GetSenderDID()
 		bti.PinningNodeDID = sc.GetPinningServiceDID()

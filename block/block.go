@@ -87,6 +87,7 @@ type TokenChainBlock struct {
 	TokenValue         float64             `json:"tokenValue"`
 	ChildTokens        []string            `json:"childTokens"`
 	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
+	NFT                []byte              `json:"nft"`
 	Epoch              int                 `json:"epoch"`
 }
 

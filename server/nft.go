@@ -98,7 +98,23 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
+	fmt.Println("The request which is added to addwebreq", req)
+	fmt.Println("The request id being added", req.ID)
+	// go func() {
 	go s.c.CreateNFTRequest(req.ID, createNFT)
+	//fmt.Println("The nft response in API CreateNFT is  ", nftResponse)
+	// }()
+	//nftToken := nftResponse.Result
+	// dc := s.c.GetWebReq(req.ID)
+	// if dc == nil {
+	// 	s.log.Error("Failed to get dc channel in APICreateNFT ")
+	// }
+
+	// result := dc.OutChan
+	// if result == nil {
+	// 	s.log.Error("Failed to get result in APICreateNFT ")
+	// }
+	// fmt.Println("The result is ", result)
 	return s.didResponse(req, req.ID)
 
 }

@@ -434,6 +434,17 @@ func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (
 	return scFolderName, err
 }
 
+func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error) {
+
+	nftFolderName := c.cfg.DirPath + "NFT/" + nft
+	err := os.Rename(tempFolderPath, nftFolderName)
+	if err != nil {
+		c.log.Error("Unable to rename ", tempFolderPath, " to ", nftFolderName, "error ", err)
+		nftFolderName = ""
+	}
+	return nftFolderName, err
+}
+
 func (c *Core) HandleQuorum(conn net.Conn) {
 
 }
@@ -460,6 +471,7 @@ func (c *Core) updateConfig() error {
 func (c *Core) AddWebReq(req *ensweb.Request) {
 	c.rlock.Lock()
 	defer c.rlock.Unlock()
+	fmt.Println("The request Id in addwebreq", req.ID)
 	c.webReq[req.ID] = &did.DIDChan{
 		ID:      req.ID,
 		InChan:  make(chan interface{}),

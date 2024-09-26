@@ -12,7 +12,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -43,29 +42,29 @@ type FetchNFTRequest struct {
 	NFTPath string
 }
 
-func (c *Core) CreateNFTRequest(requestID string, createNFTRequest NFTReq) *model.BasicResponse {
+func (c *Core) CreateNFTRequest(requestID string, createNFTRequest NFTReq) {
 	defer os.RemoveAll(createNFTRequest.NFTPath)
+	fmt.Println("The request ID in CreateNFTRequest", requestID)
 	//	defer os.RemoveAll(smartContractTokenRequest.SCPath)
-	dc, err := c.SetupDID(reqID, createNFTRequest.DID)
-	if err != nil {
-		c.log.Error("Failed to setup DID")
-	}
+	// dc, err := c.SetupDID(reqID, createNFTRequest.DID)
+	// if err != nil {
+	// 	c.log.Error("Failed to setup DID")
+	// }
 
-	createNFTResponse := c.createNFT(requestID, createNFTRequest, dc)
+	createNFTResponse := c.createNFT(requestID, createNFTRequest)
+	fmt.Println("CreateNFTResponse", createNFTResponse)
 	didChannel := c.GetWebReq(requestID)
-	if dc == nil {
+	if didChannel == nil {
 		c.log.Error("failed to get web request", "requestID", requestID)
-		return nil
 	}
 	didChannel.OutChan <- createNFTResponse
-
-	return createNFTResponse
 }
 
-func (c *Core) createNFT(requestID string, createNFTRequest NFTReq, dc did.DIDCrypto) *model.BasicResponse {
+func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.BasicResponse {
 	basicResponse := &model.BasicResponse{
 		Status: false,
 	}
+	fmt.Println("The request id in createNFT", requestID)
 	fmt.Println("The createNFTRequest which is being send :", createNFTRequest)
 	userID := createNFTRequest.UserID
 	// if !ok {
@@ -178,11 +177,11 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq, dc did.DIDCr
 		Result:  nftHash,
 	}
 	fmt.Println("NFTResponse : ", nftTokenResponse)
-	// _, err = c.RenameSCFolder(smartContractTokenRequest.SCPath, smartContractTokenHash)
-	// if err != nil {
-	// 	c.log.Error("Failed to rename SC folder", "err", err)
-	// 	return basicResponse
-	// }
+	_, err = c.RenameNFTFolder(createNFTRequest.NFTPath, nftHash)
+	if err != nil {
+		c.log.Error("Failed to rename NFT folder", "err", err)
+		return basicResponse
+	}
 	//err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, SchemaCodeHash: schemaCodeHash, ContractStatus: 6})
 	nftTokenDetails := wallet.NFT{
 		TokenID:     nftHash,
@@ -195,7 +194,9 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq, dc did.DIDCr
 	// basicResponse.Status = true
 	// basicResponse.Message = smartContractTokenResponse.Message
 	// basicResponse.Result = smartContractTokenResponse
-
+	basicResponse.Status = true
+	basicResponse.Message = nftTokenResponse.Message
+	basicResponse.Result = nftTokenResponse.Result
 	return basicResponse
 }
 
@@ -408,7 +409,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	//check the smartcontract token from the DB base
 	_, err = c.w.GetNFT(executeReq.Executor, executeReq.NFT, false)
 	if err != nil {
-		c.log.Error("Failed to retrieve smart contract Token details from storage", err)
+		c.log.Error("Failed to retrieve NFT Token details from storage", err)
 		resp.Message = err.Error()
 		return resp
 	}
@@ -417,7 +418,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	tokenType := c.TokenType(NFTString)
 	gensysBlock := c.w.GetGenesisTokenBlock(executeReq.NFT, tokenType)
 	if gensysBlock == nil {
-		c.log.Debug("Gensys block is empty - NFT synced")
+		c.log.Debug("Gensys block is empty - NFT not synced")
 		resp.Message = "Gensys block is empty - NFT not synced"
 		return resp
 	}
