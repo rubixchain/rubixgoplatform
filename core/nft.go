@@ -562,7 +562,7 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	c.log.Info("Update on nft " + newEvent.NFT)
 	if newEvent.Type == 1 {
 		fetchNFT.NFT = newEvent.NFT
-		fetchNFT.NFTPath, err = c.CreateSCTempFolder()
+		fetchNFT.NFTPath, err = c.CreateNFTTempFolder()
 		if err != nil {
 			c.log.Error("Fetch nft failed, failed to create nft folder", "err", err)
 			return
@@ -579,14 +579,14 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 			isPathExist = info.IsDir()
 
 		}
-		//If isPathExist true, removing the existing folder which was generated while generating the smartcontract hash
+
 		if isPathExist {
 			c.log.Debug("removing the existing folder:", oldNFTFolder, "to add the new folder")
 			os.RemoveAll(oldNFTFolder)
 		}
-		fetchNFT.NFTPath, err = c.RenameSCFolder(fetchNFT.NFTPath, fetchNFT.NFT)
+		fetchNFT.NFTPath, err = c.RenameNFTFolder(fetchNFT.NFTPath, fetchNFT.NFT)
 		if err != nil {
-			c.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
+			c.log.Error("Fetch NFT failed, failed to create NFT folder", "err", err)
 			return
 		}
 		c.FetchNFT(requestID, &fetchNFT)
@@ -596,14 +596,14 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	nftFolderPath := c.cfg.DirPath + "NFT/" + nft
 	if _, err := os.Stat(nftFolderPath); os.IsNotExist(err) {
 		fetchNFT.NFT = nft
-		fetchNFT.NFTPath, err = c.CreateSCTempFolder()
+		fetchNFT.NFTPath, err = c.CreateNFTTempFolder()
 		if err != nil {
 			c.log.Error("Fetch nft failed, failed to create nft folder", "err", err)
 			return
 		}
-		fetchNFT.NFTPath, err = c.RenameSCFolder(fetchNFT.NFTPath, nft)
+		fetchNFT.NFTPath, err = c.RenameNFTFolder(fetchNFT.NFTPath, nft)
 		if err != nil {
-			c.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
+			c.log.Error("Fetch NFT failed, failed to create NFT folder", "err", err)
 			return
 		}
 
@@ -737,6 +737,22 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 		return basicResponse
 	}
 
+	// Define a map to hold the parsed JSON data
+	var nftData map[string]interface{}
+
+	// Unmarshal (parse) the JSON into the map
+	err = json.Unmarshal(nftFileInfoContent, &nftData)
+	if err != nil {
+		c.log.Info("Error parsing nft meta data:", err)
+	}
+
+	// Extract the "filename" key value
+	//filename := nftData["filename"].(string)
+	filename, ok := nftData["filename"].(string)
+	if !ok {
+		c.log.Info("Key 'filename' not found or not a string")
+	}
+	c.log.Info("File Name :", filename)
 	// Fetch and store the raw code file
 	nftFile, err := c.ipfs.Cat(nft.NFTFileHash)
 	if err != nil {
@@ -752,7 +768,7 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 		return basicResponse
 	}
 
-	nftFileDestPath := filepath.Join(nftFilePath, "nftFile")
+	nftFileDestPath := filepath.Join(nftFilePath, filename)
 
 	// Read the content of rawCodeFile
 	nftFileContent, err := io.ReadAll(nftFile)
