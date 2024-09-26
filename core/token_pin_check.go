@@ -107,7 +107,7 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 					c.log.Error("Failed to get response from Peer", "err", err)
 					continue
 				}
-				if psr.Role == wallet.OwnerRole || psr.Role == wallet.ParentTokenLockRole {
+				if psr.Role == wallet.OwnerRole || psr.Role == wallet.ParentTokenLockRole || psr.Role == wallet.ParentTokenPinByQuorumRole {
 					ownersProv = append(ownersProv, peerId)
 					continue
 				}

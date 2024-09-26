@@ -767,7 +767,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		return &td, pl, nil
-
 	case PinningServiceMode:
 		c.log.Debug("Mode = PinningServiceMode ")
 		c.log.Debug("Pinning Node PeerId", cr.PinningNodePeerID)
@@ -2066,12 +2065,12 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 	err = nb.UpdateSignature(didCryptoLib)
 	if err != nil {
 		c.log.Error("Failed to update signature to block", "err", err)
-		return fmt.Errorf("Failed to update signature to block")
+		return fmt.Errorf("failed to update signature to block")
 	}
 	err = c.w.CreateTokenBlock(nb)
 	if err != nil {
 		c.log.Error("Failed to update commited rbt token chain block", "err", err)
-		return fmt.Errorf("Failed to update token chain block")
+		return fmt.Errorf("failed to update token chain block")
 	}
 	return nil
 }

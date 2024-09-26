@@ -226,7 +226,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		5. check for pin and if none pin the content
 		6. if pin exist , exit with error token state exhauste
 	*/
-
+	//Checking token state of transferring tokens
 	tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
 	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
 	for i := range ti {
@@ -646,7 +646,6 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 func (c *Core) updateReceiverToken(
 	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
 	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool, ftinfo *model.FTInfo,
-
 ) ([]string, error) {
 	var receiverPeerId string = ""
 	var receiverDID string = ""
@@ -672,8 +671,6 @@ func (c *Core) updateReceiverToken(
 
 	var senderPeer *ipfsport.Peer
 
-	parentTokens := []string{}
-
 	if receiverAddress != "" {
 		var err error
 		senderPeer, err = c.getPeer(senderAddress, "")
@@ -693,15 +690,14 @@ func (c *Core) updateReceiverToken(
 			if err != nil {
 				return nil, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
 			}
-
 			// Handle PartString token
-			err = c.handleToken(t, ti.TokenType, PartString, senderPeer, &parentTokens)
+			parentTokenPart, err := c.handleToken(t, ti.TokenType, PartString, senderPeer)
 			if err != nil {
 				return nil, err
 			}
 
 			// Handle FTString token
-			err = c.handleToken(t, ti.TokenType, FTString, senderPeer, &parentTokens)
+			parentTokenFT, err := c.handleToken(t, ti.TokenType, FTString, senderPeer)
 			if err != nil {
 				return nil, err
 			}
@@ -713,6 +709,20 @@ func (c *Core) updateReceiverToken(
 			ptcb := block.InitBlock(ptcbArray, nil)
 			if c.checkIsPledged(ptcb) {
 				return nil, fmt.Errorf("Token " + t + " is a pledged Token")
+			}
+
+			//Pinning tokens by receiver
+			if parentTokenPart != "" {
+				_, err := c.w.Pin(parentTokenPart, wallet.ParentTokenLockRole, senderAddress, b.GetTid(), senderAddress, receiverAddress, ti.TokenValue)
+				if err != nil {
+					return nil, fmt.Errorf("failed to Pin parent token by receiver, error: %v", err)
+				}
+			}
+			if parentTokenFT != "" {
+				_, err := c.w.Pin(parentTokenFT, wallet.ParentTokenLockRole, senderAddress, b.GetTid(), senderAddress, receiverAddress, ti.TokenValue)
+				if err != nil {
+					return nil, fmt.Errorf("failed to Pin parent token by receiver, error: %v", err)
+				}
 			}
 		}
 	}
@@ -734,7 +744,7 @@ func (c *Core) updateReceiverToken(
 	fmt.Println("results after pincheck: ", results)
 	wg.Wait()
 	if !pinnedCorrectly {
-		return nil, fmt.Errorf("Token is not pinned properly")
+		return nil, fmt.Errorf("token is not pinned properly")
 	}
 	for i := range results {
 		if results[i].Error != nil {
@@ -765,21 +775,10 @@ func (c *Core) updateReceiverToken(
 	}
 	var FT wallet.FTToken
 	FT.FTName = ftinfo.FTName
-	// if true {
-	// 	return nil, fmt.Errorf("failed to update token status, error: Testing")
-	// }
 	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs, FT)
 	c.updateFTTable()
 	if err != nil {
 		return nil, fmt.Errorf("failed to update token status, error: %v", err)
-	}
-
-	//Pinning tokens by receiver
-	for _, t := range parentTokens {
-		_, err := c.w.Pin(t, wallet.ParentTokenLockRole, senderAddress, b.GetTid(), senderAddress, receiverAddress, 1)
-		if err != nil {
-			return nil, fmt.Errorf("failed to Pin parent token by receiver, error: %v", err)
-		}
 	}
 
 	sc := contract.InitContract(b.GetSmartContract(), nil)
@@ -1350,27 +1349,26 @@ func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, nil, http.StatusOK)
 }
 
-func (c *Core) handleToken(t string, ti int, tokenType string, senderPeer *ipfsport.Peer, parentTokens *[]string) error {
+func (c *Core) handleToken(token string, ti int, tokenType string, senderPeer *ipfsport.Peer) (string, error) {
 	fmt.Println("called")
 	if c.TokenType(tokenType) == ti {
-		gb := c.w.GetGenesisTokenBlock(t, ti)
+		gb := c.w.GetGenesisTokenBlock(token, ti)
 		if gb == nil {
-			return fmt.Errorf("failed to get genesis block for token %v", t)
+			return "", fmt.Errorf("failed to get genesis block for token %v", token)
 		}
 
-		pt, _, err := gb.GetParentDetials(t)
+		pt, _, err := gb.GetParentDetials(token)
 		if err != nil {
-			return fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
+			return "", fmt.Errorf("failed to get parent details for token %v, err: %v", token, err)
 		}
 
 		if tokenType == PartString {
 			err = c.syncParentToken(senderPeer, pt)
 			if err != nil {
-				return fmt.Errorf("failed to sync parent token %v child token %v err : %v", pt, t, err)
+				return "", fmt.Errorf("failed to sync parent token %v child token %v err : %v", pt, token, err)
 			}
 		}
-
-		*parentTokens = append(*parentTokens, pt)
+		return pt, nil
 	}
-	return nil
+	return "", nil
 }
