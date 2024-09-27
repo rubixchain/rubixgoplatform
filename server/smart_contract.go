@@ -218,12 +218,9 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	}
 
 	s.c.AddWebReq(req)
-	go func() {
-		basicResponse := s.c.GenerateSmartContractToken(req.ID, &deploySC)
-		fmt.Printf("Basic Response server:  %+v\n", *basicResponse)
-	}()
+	go s.c.GenerateSmartContractToken(req.ID, &deploySC)
 
-	return s.BasicResponse(req, true, "Smart contract generated successfully", nil)
+	return s.didResponse(req, req.ID)
 }
 
 // moveFile tries to rename the file first; if it fails, it falls back to copying
