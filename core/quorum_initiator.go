@@ -320,10 +320,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		for i := range ti {
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
-
 	case DTCommitMode:
 		reqPledgeTokens = 1
-
 	case SmartContractDeployMode:
 		tokenInfo := sc.GetTransTokenInfo()
 		for i := range tokenInfo {

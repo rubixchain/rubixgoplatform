@@ -181,12 +181,23 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		}
 
 		// Handle PartString token
-		parentToken, err := c.handleToken(ti[i].Token, ti[i].TokenType, PartString, p)
+		parentTokenPart, err := c.handleToken(ti[i].Token, ti[i].TokenType, PartString, p)
 		if err != nil {
 			return false, err
 		}
 
-		//Pinning tokens by quorum
+		// Handle FTString token
+		parentTokenFT, err := c.handleToken(ti[i].Token, ti[i].TokenType, FTString, p)
+		if err != nil {
+			return false, err
+		}
+
+		parentToken := parentTokenPart
+		if parentToken == "" {
+			parentToken = parentTokenFT
+		}
+
+		//Pinning Parent tokens by quorum
 		if parentToken != "" {
 			_, err := c.w.Pin(parentToken, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
 			if err != nil {
@@ -194,6 +205,14 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				return false, err
 			}
 		}
+		// //Pinning FT parent tokens by quorum
+		// if parentTokenFT != "" {
+		// 	_, err := c.w.Pin(parentTokenFT, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
+		// 	if err != nil {
+		// 		c.log.Error("Failed to Pin parent token in Quorum", "err", err)
+		// 		return false, err
+		// 	}
+		// }
 
 		// Check the token validation
 		if ti[i].TokenType == token.RBTTokenType {
@@ -214,11 +233,70 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				return false, fmt.Errorf("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn)
 			}
 		}
+
 		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		if b == nil {
 			c.log.Error("Invalid token chain block")
 			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
 		}
+
+		//Validating the latest block of the token ---------------- AshitaBlockCheck
+		err = c.validateLatestBlock(ti[i], quorumDID, sc.GetSenderDID(), parentToken, b)
+		if err != nil {
+			return false, fmt.Errorf("invalid latest token block for token %v", ti[i].Token)
+		}
+
+		// txnType := b.GetTransType()
+		// switch txnType {
+		// case block.TokenTransferredType:
+		// 	//Sender should be the receiver in the latest block
+		// 	if b.GetReceiverDID() != sc.GetSenderDID() {
+		// 		return false, fmt.Errorf("invalid token owner for token %v", ti[i].Token)
+		// 	}
+		// 	//validate latest block for signatures
+		// 	response, err := c.ValidateRBTTransferBlock(b, ti[i].Token, "", quorumDID)
+		// 	if err != nil {
+		// 		c.log.Error("msg", response.Message, "err", err)
+		// 		return false, fmt.Errorf("cannot validate latest block signatures for token %v", ti[i].Token)
+		// 	}
+		// case block.TokenBurntType:
+		// 	return false, fmt.Errorf("token %v is already burnt", ti[i].Token)
+		// case block.TokenPledgedType:
+		// 	return false, fmt.Errorf("token %v is in pledged state", ti[i].Token)
+		// case block.TokenContractCommited:
+		// 	return false, fmt.Errorf("token %v is commited for smart contract ", ti[i].Token)
+		// case block.TokenGeneratedType:
+		// 	//validate genesis block
+		// 	wt := wallet.Token{
+		// 		TokenID:       ti[i].Token,
+		// 		ParentTokenID: parentToken,
+		// 		TokenValue:    ti[i].TokenValue,
+		// 		DID:           ti[i].OwnerDID,
+		// 	}
+		// 	response, err := c.ValidateGenesisBlock(b, wt, ti[i].TokenType, quorumDID)
+		// 	if err != nil {
+		// 		c.log.Error("msg", response.Message, "err", err)
+		// 		return false, fmt.Errorf("cannot validate latest block signatures for token %v", ti[i].Token)
+		// 	}
+		// case block.TokenUnpledgedType:
+		// 	response, err := c.ValidatePledgedUnpledgedBlock(b, ti[i].Token, "", quorumDID)
+		// 	if err != nil {
+		// 		c.log.Error("msg", response.Message, "err", err)
+		// 		return false, fmt.Errorf("cannot validate latest block signatures for token %v", ti[i].Token)
+		// 	}
+		// 	//TODO : Check with Maneesha's latest PR 216
+		// 	prevBlockID, err := b.GetPrevBlockID(ti[i].Token)
+		// 	if err != nil {
+		// 		c.log.Error("msg", response.Message, "err", err)
+		// 		return false, fmt.Errorf("cannot validate previous block for token %v", ti[i].Token)
+		// 	}
+		// 	response, err = c.ValidatePledgedUnpledgedBlock(b, ti[i].Token, prevBlockID, quorumDID)
+		// 	if err != nil {
+		// 		c.log.Error("msg", response.Message, "err", err)
+		// 		return false, fmt.Errorf("cannot validate previous block for token %v", ti[i].Token)
+		// 	}
+		// }
+
 		c.log.Info("Validating token ownership", "token", ti[i].Token, "owner", b.GetOwner(), "sender", sc.GetSenderDID())
 		pinningNodeDID := b.GetPinningNodeDID()
 		ownerDID := b.GetOwner()

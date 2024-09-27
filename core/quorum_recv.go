@@ -162,6 +162,40 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		receiverPeerId = cr.PinningNodePeerID
 		c.log.Debug("Pinning Node Peer Id", receiverPeerId)
 	}
+
+	//Token state check and pinning
+	/*
+		1. get the latest block from token chain,
+		2. retrive the Block Id
+		3. concat token id and blockId
+		4. add to ipfs
+		5. check for pin and if none pin the content
+		6. if pin exist , exit with error token state exhauste
+	*/
+
+	//Checking token state of transferring tokens
+	tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
+	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
+	for i := range ti {
+		wg.Add(1)
+		go c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult, &wg, cr.QuorumList, ti[i].TokenType)
+	}
+	wg.Wait()
+
+	for i := range tokenStateCheckResult {
+		if tokenStateCheckResult[i].Error != nil {
+			c.log.Error("Error occured", "error", tokenStateCheckResult[i].Error)
+			crep.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if tokenStateCheckResult[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
+			crep.Message = tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
+	}
+
 	//Need to check if sender pin not available or receiver pin already available. In either case, stop the transfer.
 	pinnedCorrectly := true
 	for i := range ti {
@@ -217,37 +251,6 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	} */
 
-	//Token state check and pinning
-	/*
-		1. get the latest block from token chain,
-		2. retrive the Block Id
-		3. concat token id and blockId
-		4. add to ipfs
-		5. check for pin and if none pin the content
-		6. if pin exist , exit with error token state exhauste
-	*/
-	//Checking token state of transferring tokens
-	tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
-	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
-	for i := range ti {
-		wg.Add(1)
-		go c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult, &wg, cr.QuorumList, ti[i].TokenType)
-	}
-	wg.Wait()
-
-	for i := range tokenStateCheckResult {
-		if tokenStateCheckResult[i].Error != nil {
-			c.log.Error("Error occured", "error", tokenStateCheckResult[i].Error)
-			crep.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		if tokenStateCheckResult[i].Exhausted {
-			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
-			crep.Message = tokenStateCheckResult[i].Message
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
-	}
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
 	sender := cr.SenderPeerID + "." + sc.GetSenderDID()
 	receiver := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
@@ -711,19 +714,87 @@ func (c *Core) updateReceiverToken(
 				return nil, fmt.Errorf("Token " + t + " is a pledged Token")
 			}
 
+			parentToken := parentTokenPart
+			if parentToken == "" {
+				parentToken = parentTokenFT
+			}
+
 			//Pinning tokens by receiver
-			if parentTokenPart != "" {
-				_, err := c.w.Pin(parentTokenPart, wallet.ParentTokenLockRole, senderAddress, b.GetTid(), senderAddress, receiverAddress, ti.TokenValue)
+			if parentToken != "" {
+				_, err := c.w.Pin(parentToken, wallet.ParentTokenLockRole, senderAddress, b.GetTid(), senderAddress, receiverAddress, ti.TokenValue)
 				if err != nil {
 					return nil, fmt.Errorf("failed to Pin parent token by receiver, error: %v", err)
 				}
 			}
-			if parentTokenFT != "" {
-				_, err := c.w.Pin(parentTokenFT, wallet.ParentTokenLockRole, senderAddress, b.GetTid(), senderAddress, receiverAddress, ti.TokenValue)
-				if err != nil {
-					return nil, fmt.Errorf("failed to Pin parent token by receiver, error: %v", err)
-				}
+			// if parentTokenFT != "" {
+			// 	_, err := c.w.Pin(parentTokenFT, wallet.ParentTokenLockRole, senderAddress, b.GetTid(), senderAddress, receiverAddress, ti.TokenValue)
+			// 	if err != nil {
+			// 		return nil, fmt.Errorf("failed to Pin parent token by receiver, error: %v", err)
+			// 	}
+			// }
+			_, senderDid, _ := util.ParseAddress(senderAddress)
+			b := c.w.GetLatestTokenBlock(ti.Token, ti.TokenType)
+			if b == nil {
+				c.log.Error("Invalid token chain block")
+				return nil, fmt.Errorf("Invalid token chain block for ", ti.Token)
 			}
+			//Validating the latest block of the token ------------ AshitaBlockCheck
+			err = c.validateLatestBlock(ti, receiverDID, senderDid, parentToken, b)
+			if err != nil {
+				return nil, fmt.Errorf("invalid latest token block for token %v", ti.Token)
+			}
+			// txnType := b.GetTransType()
+			// switch txnType {
+			// case block.TokenTransferredType:
+			// 	//Sender should be the receiver in the latest block
+			// 	_, senderDid, _ := util.ParseAddress(senderAddress)
+			// 	if b.GetReceiverDID() != senderDid {
+			// 		return nil, fmt.Errorf("invalid token owner for token %v", ti.Token)
+			// 	}
+			// 	//validate latest block for signatures
+			// 	response, err := c.ValidateRBTTransferBlock(b, ti.Token, "", receiverDID)
+			// 	if err != nil {
+			// 		c.log.Error("msg", response.Message, "err", err)
+			// 		return nil, fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
+			// 	}
+			// case block.TokenBurntType:
+			// 	return nil, fmt.Errorf("token %v is already burnt", ti.Token)
+			// case block.TokenPledgedType:
+			// 	return nil, fmt.Errorf("token %v is in pledged state", ti.Token)
+			// case block.TokenContractCommited:
+			// 	return nil, fmt.Errorf("token %v is commited for smart contract ", ti.Token)
+			// case block.TokenGeneratedType:
+			// 	//validate genesis block
+			// 	wt := wallet.Token{
+			// 		TokenID:       ti.Token,
+			// 		ParentTokenID: parentToken,
+			// 		TokenValue:    ti.TokenValue,
+			// 		DID:           ti.OwnerDID,
+			// 	}
+			// 	response, err := c.ValidateGenesisBlock(b, wt, ti.TokenType, receiverDID)
+			// 	if err != nil {
+			// 		c.log.Error("msg", response.Message, "err", err)
+			// 		return nil, fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
+			// 	}
+			// case block.TokenUnpledgedType:
+			// 	response, err := c.ValidatePledgedUnpledgedBlock(b, ti.Token, "", receiverDID)
+			// 	if err != nil {
+			// 		c.log.Error("msg", response.Message, "err", err)
+			// 		return nil, fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
+			// 	}
+			// 	//TODO : Check with Maneesha's latest PR 216
+			// 	prevBlockID, err := b.GetPrevBlockID(ti.Token)
+			// 	if err != nil {
+			// 		c.log.Error("msg", response.Message, "err", err)
+			// 		return nil, fmt.Errorf("cannot validate previous block for token %v", ti.Token)
+			// 	}
+			// 	response, err = c.ValidatePledgedUnpledgedBlock(b, ti.Token, prevBlockID, receiverDID)
+			// 	if err != nil {
+			// 		c.log.Error("msg", response.Message, "err", err)
+			// 		return nil, fmt.Errorf("cannot validate previous block for token %v", ti.Token)
+			// 	}
+			// }
+
 		}
 	}
 
@@ -731,9 +802,27 @@ func (c *Core) updateReceiverToken(
 	if !ok {
 		return nil, fmt.Errorf("unable to parse sender address: %v", senderAddress)
 	}
+	var wg sync.WaitGroup
+	tokenStateCheckResult := make([]TokenStateCheckResult, len(tokenInfo))
+	for i, ti := range tokenInfo {
+		t := ti.Token
+		wg.Add(1)
+		go c.checkTokenState(t, receiverDID, i, tokenStateCheckResult, &wg, quorumList, ti.TokenType)
+	}
+	wg.Wait()
+
+	for i := range tokenStateCheckResult {
+		if tokenStateCheckResult[i].Error != nil {
+			return nil, fmt.Errorf("error while cheking Token State Message : %v", tokenStateCheckResult[i].Message)
+		}
+		if tokenStateCheckResult[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
+			return nil, fmt.Errorf("token state has been exhausted, Token being Double spent: %v, msg: %v", tokenStateCheckResult[i].Token, tokenStateCheckResult[i].Message)
+		}
+		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
+	}
 
 	results := make([]MultiPinCheckRes, len(tokenInfo))
-	var wg sync.WaitGroup
 	pinnedCorrectly := true
 	for i, ti := range tokenInfo {
 		t := ti.Token
@@ -755,24 +844,6 @@ func (c *Core) updateReceiverToken(
 		}
 	}
 
-	tokenStateCheckResult := make([]TokenStateCheckResult, len(tokenInfo))
-	for i, ti := range tokenInfo {
-		t := ti.Token
-		wg.Add(1)
-		go c.checkTokenState(t, receiverDID, i, tokenStateCheckResult, &wg, quorumList, ti.TokenType)
-	}
-	wg.Wait()
-
-	for i := range tokenStateCheckResult {
-		if tokenStateCheckResult[i].Error != nil {
-			return nil, fmt.Errorf("error while cheking Token State Message : %v", tokenStateCheckResult[i].Message)
-		}
-		if tokenStateCheckResult[i].Exhausted {
-			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
-			return nil, fmt.Errorf("token state has been exhausted, Token being Double spent: %v, msg: %v", tokenStateCheckResult[i].Token, tokenStateCheckResult[i].Message)
-		}
-		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
-	}
 	var FT wallet.FTToken
 	FT.FTName = ftinfo.FTName
 	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs, FT)
@@ -1371,4 +1442,59 @@ func (c *Core) handleToken(token string, ti int, tokenType string, senderPeer *i
 		return pt, nil
 	}
 	return "", nil
+}
+
+// Validating latest block of a token
+func (c *Core) validateLatestBlock(ti contract.TokenInfo, validatorDID string, senderDID string, parentToken string, b *block.Block) error {
+	txnType := b.GetTransType()
+	switch txnType {
+	case block.TokenTransferredType:
+		//Sender should be the receiver in the latest block
+		if b.GetReceiverDID() != senderDID {
+			return fmt.Errorf("invalid token owner for token %v", ti.Token)
+		}
+		//validate latest block for signatures
+		response, err := c.ValidateRBTTransferBlock(b, ti.Token, "", validatorDID)
+		if err != nil {
+			c.log.Error("msg", response.Message, "err", err)
+			return fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
+		}
+	case block.TokenBurntType:
+		return fmt.Errorf("token %v is already burnt", ti.Token)
+	case block.TokenPledgedType:
+		return fmt.Errorf("token %v is in pledged state", ti.Token)
+	case block.TokenContractCommited:
+		return fmt.Errorf("token %v is commited for smart contract ", ti.Token)
+	case block.TokenGeneratedType:
+		//validate genesis block
+		wt := wallet.Token{
+			TokenID:       ti.Token,
+			ParentTokenID: parentToken,
+			TokenValue:    ti.TokenValue,
+			DID:           ti.OwnerDID,
+		}
+		response, err := c.ValidateGenesisBlock(b, wt, ti.TokenType, validatorDID)
+		if err != nil {
+			c.log.Error("msg", response.Message, "err", err)
+			return fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
+		}
+	case block.TokenUnpledgedType:
+		response, err := c.ValidatePledgedUnpledgedBlock(b, ti.Token, "", validatorDID)
+		if err != nil {
+			c.log.Error("msg", response.Message, "err", err)
+			return fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
+		}
+		//TODO : Check with Maneesha's latest PR 216
+		prevBlockID, err := b.GetPrevBlockID(ti.Token)
+		if err != nil {
+			c.log.Error("msg", response.Message, "err", err)
+			return fmt.Errorf("cannot validate previous block for token %v", ti.Token)
+		}
+		response, err = c.ValidatePledgedUnpledgedBlock(b, ti.Token, prevBlockID, validatorDID)
+		if err != nil {
+			c.log.Error("msg", response.Message, "err", err)
+			return fmt.Errorf("cannot validate previous block for token %v", ti.Token)
+		}
+	}
+	return nil
 }
