@@ -163,39 +163,6 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		c.log.Debug("Pinning Node Peer Id", receiverPeerId)
 	}
 
-	//Token state check and pinning
-	/*
-		1. get the latest block from token chain,
-		2. retrive the Block Id
-		3. concat token id and blockId
-		4. add to ipfs
-		5. check for pin and if none pin the content
-		6. if pin exist , exit with error token state exhauste
-	*/
-
-	//Checking token state of transferring tokens
-	tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
-	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
-	for i := range ti {
-		wg.Add(1)
-		go c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult, &wg, cr.QuorumList, ti[i].TokenType)
-	}
-	wg.Wait()
-
-	for i := range tokenStateCheckResult {
-		if tokenStateCheckResult[i].Error != nil {
-			c.log.Error("Error occured", "error", tokenStateCheckResult[i].Error)
-			crep.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		if tokenStateCheckResult[i].Exhausted {
-			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
-			crep.Message = tokenStateCheckResult[i].Message
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
-	}
-
 	//Need to check if sender pin not available or receiver pin already available. In either case, stop the transfer.
 	pinnedCorrectly := true
 	for i := range ti {
@@ -250,6 +217,39 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		crep.Message = "Token ownership check failed"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	} */
+
+	//Token state check and pinning
+	/*
+		1. get the latest block from token chain,
+		2. retrive the Block Id
+		3. concat token id and blockId
+		4. add to ipfs
+		5. check for pin and if none pin the content
+		6. if pin exist , exit with error token state exhauste
+	*/
+
+	//Checking token state of transferring tokens
+	tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
+	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
+	for i := range ti {
+		wg.Add(1)
+		go c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult, &wg, cr.QuorumList, ti[i].TokenType)
+	}
+	wg.Wait()
+
+	for i := range tokenStateCheckResult {
+		if tokenStateCheckResult[i].Error != nil {
+			c.log.Error("Error occured", "error", tokenStateCheckResult[i].Error)
+			crep.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if tokenStateCheckResult[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
+			crep.Message = tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
+	}
 
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
 	sender := cr.SenderPeerID + "." + sc.GetSenderDID()

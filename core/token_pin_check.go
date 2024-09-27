@@ -83,14 +83,14 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 			c.log.Error("Sender pin is not available")
 			return
 		}
-		if receiverPeerId != "" {
-			provList, peerIDexists = c.removePeerID(provList, receiverPeerId)
-			if peerIDexists {
-				*pinnedCorrectly = false
-				c.log.Error("Receiver pin is already available")
-				return
-			}
-		}
+		// if receiverPeerId != "" {
+		// 	provList, peerIDexists = c.removePeerID(provList, receiverPeerId)
+		// 	if peerIDexists {
+		// 		*pinnedCorrectly = false
+		// 		c.log.Error("Receiver pin is already available")
+		// 		return
+		// 	}
+		// }
 		if len(provList) != 0 {
 			for _, peerId := range provList {
 				p, err := c.connectPeer(peerId)
