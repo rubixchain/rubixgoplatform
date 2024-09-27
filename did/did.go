@@ -82,7 +82,13 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 
 		_, err := os.Stat(didCreate.MnemonicFile)
 		if os.IsNotExist(err) {
-			d.log.Debug("mnemonic file does not exist , creating new")
+			if didCreate.MnemonicFile == "" {
+				d.log.Debug("No mnemonic provided , creating new keypair")
+			} else {
+				d.log.Error("Mnemonic file does not exist ", didCreate.MnemonicFile)
+				os.RemoveAll(dirName)
+				return "", err
+			}
 		} else {
 			_mnemonic, err = os.ReadFile(didCreate.MnemonicFile)
 			if err != nil {
