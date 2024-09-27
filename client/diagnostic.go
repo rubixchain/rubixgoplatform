@@ -1,8 +1,6 @@
 package client
 
 import (
-	"fmt"
-
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
@@ -38,7 +36,6 @@ func (c *Client) GetNFTTokenChain(token string, blockID string) (*model.TCDumpRe
 		Token:   token,
 		BlockID: blockID,
 	}
-	fmt.Println("The TCDumpRequest in GetNFTTokenchain ", dr)
 	var drep model.TCDumpReply
 	err := c.sendJSONRequest("POST", setup.APIGetNFTTokenChain, nil, dr, &drep)
 	if err != nil {

@@ -17,12 +17,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-// type DeployNFTRequest struct {
-// 	nft        string
-// 	did        string
-// 	quorumType int
-// }
-
 type NFTReq struct {
 	DID         string
 	UserID      string
@@ -46,15 +40,7 @@ type FetchNFTRequest struct {
 
 func (c *Core) CreateNFTRequest(requestID string, createNFTRequest NFTReq) {
 	defer os.RemoveAll(createNFTRequest.NFTPath)
-	fmt.Println("The request ID in CreateNFTRequest", requestID)
-	//	defer os.RemoveAll(smartContractTokenRequest.SCPath)
-	// dc, err := c.SetupDID(reqID, createNFTRequest.DID)
-	// if err != nil {
-	// 	c.log.Error("Failed to setup DID")
-	// }
-
 	createNFTResponse := c.createNFT(requestID, createNFTRequest)
-	fmt.Println("CreateNFTResponse", createNFTResponse)
 	didChannel := c.GetWebReq(requestID)
 	if didChannel == nil {
 		c.log.Error("failed to get web request", "requestID", requestID)
@@ -66,15 +52,10 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 	basicResponse := &model.BasicResponse{
 		Status: false,
 	}
-	fmt.Println("The request id in createNFT", requestID)
-	fmt.Println("The createNFTRequest which is being send :", createNFTRequest)
+
 	userID := createNFTRequest.UserID
-	// if !ok {
-	// 	c.log.Error("Failed to create NFT, user ID missing")
-	// 	basicResponse.Message = "Failed to create NFT, user ID missing"
-	// 	return basicResponse
-	// }
-	fmt.Println("The userID in createNFT is :", userID)
+	c.log.Info("The user id is :", userID)
+
 	nftFile, err := os.Open(createNFTRequest.NFTFile)
 	if err != nil {
 		c.log.Error("Failed to open the file which should be converted to NFT", "err", err)
@@ -104,18 +85,6 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		return basicResponse
 	}
 
-	// nft := rac.RacType{
-	// 	Type:      c.TokenType(NFTString),
-	// 	DID:       createNFTRequest.DID,
-	// 	CreatorID: createNFTRequest.DID,
-	// 	TimeStamp: time.Now().String(),
-	// 	NFTInfo: &rac.RacNFTInfo{
-	// 		Creator:            createNFTRequest.DID,
-	// 		ContentHash:        nftFileHash,
-	// 		ContentDescription: nftFileInfoHash, //Content Description to be added
-	// 	},
-	// }
-
 	nft := NFT{
 		DID:             createNFTRequest.DID,
 		NFTFileHash:     nftFileHash,
@@ -126,38 +95,6 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		c.log.Error("Failed to create NFT", "err", err)
 		return basicResponse
 	}
-	// racBlocks, err := rac.CreateRac(&nft)
-	// if err != nil {
-	// 	c.log.Error("Failed to create rac", "err", err)
-	// 	return basicResponse
-	// }
-
-	// if len(racBlocks) != 1 {
-	// 	c.log.Error("Failed to create RAC NFT block")
-	// 	return basicResponse
-	// }
-
-	// // Update the signature of the RAC block
-	// err = racBlocks[0].UpdateSignature(dc)
-	// if err != nil {
-	// 	c.log.Error("Failed to update DID signature in RAC NFT Block", "err", err)
-	// 	return basicResponse
-	// }
-
-	// // smartContractTokenJSON, err := json.MarshalIndent(smartContractToken, "", "  ")
-	// // if err != nil {
-	// // 	c.log.Error("Failed to marshal SmartContractToken struct", "err", err)
-	// // 	return basicResponse
-	// // }
-	// nftData, err := json.Marshal(racBlocks)
-	// if err != nil {
-	// 	c.log.Error("Failed to marshal RAC NFT block", "err", err)
-	// }
-	// nftTokenHash, err := c.ipfs.Add(bytes.NewReader(nftData))
-	// if err != nil {
-	// 	c.log.Error("Failed to add SmartContractToken to IPFS", "err", err)
-	// 	return basicResponse
-	// }
 
 	nftJSON, err := json.MarshalIndent(nft, "", "  ")
 	if err != nil {
@@ -178,24 +115,18 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		Message: "NFT Token generated successfully",
 		Result:  nftHash,
 	}
-	fmt.Println("NFTResponse : ", nftTokenResponse)
 	_, err = c.RenameNFTFolder(createNFTRequest.NFTPath, nftHash)
 	if err != nil {
 		c.log.Error("Failed to rename NFT folder", "err", err)
 		return basicResponse
 	}
-	//err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, SchemaCodeHash: schemaCodeHash, ContractStatus: 6})
 	nftTokenDetails := wallet.NFT{
 		TokenID:     nftHash,
 		DID:         nft.DID,
 		TokenStatus: 0,
 		TokenValue:  0,
 	}
-	c.w.CreateNFT(&nftTokenDetails) //To be done : Write the created token details onto the db
-	// Set the response values
-	// basicResponse.Status = true
-	// basicResponse.Message = smartContractTokenResponse.Message
-	// basicResponse.Result = smartContractTokenResponse
+	c.w.CreateNFT(&nftTokenDetails)
 	basicResponse.Status = true
 	basicResponse.Message = nftTokenResponse.Message
 	basicResponse.Result = nftTokenResponse.Result
@@ -213,7 +144,6 @@ func (c *Core) DeployNFT(reqID string, deployReq model.DeployNFTRequest) {
 }
 
 func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.BasicResponse {
-	fmt.Println("DeployNFT function ")
 	st := time.Now()
 	txEpoch := int(st.Unix())
 
@@ -238,54 +168,9 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		return resp
 	}
 
-	fmt.Println("The nft info fetched from the db is : ", nft)
-	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
-	// rbtTokensToCommitDetails, err := c.GetTokens(didCryptoLib, did, deployReq.RBTAmount, SmartContractDeployMode)
-	// if err != nil {
-	// 	c.log.Error("Failed to retrieve Tokens to be committed", "err", err)
-	// 	resp.Message = "Failed to retrieve Tokens to be committed , err : " + err.Error()
-	// 	return resp
-	// }
+	c.log.Info("The nft info fetched from the db is : ", nft)
 
-	// rbtTokensToCommit := make([]string, 0)
-
-	// defer c.w.ReleaseTokens(rbtTokensToCommitDetails)
-
-	// for i := range rbtTokensToCommitDetails {
-	// 	c.w.Pin(rbtTokensToCommitDetails[i].TokenID, wallet.OwnerRole, did, "NA", "NA", "NA", float64(0)) //TODO: Ensure whether trnxId should be added ?
-	// 	rbtTokensToCommit = append(rbtTokensToCommit, rbtTokensToCommitDetails[i].TokenID)
-	// }
-
-	//rbtTokenInfoArray := make([]contract.TokenInfo, 0)
 	nftInfoArray := make([]contract.TokenInfo, 0)
-	// for i := range rbtTokensToCommitDetails {
-	// 	tokenTypeString := "rbt"
-	// 	if rbtTokensToCommitDetails[i].TokenValue != 1 {
-	// 		tokenTypeString = "part"
-	// 	}
-	// 	tokenType := c.TokenType(tokenTypeString)
-	// 	latestBlk := c.w.GetLatestTokenBlock(rbtTokensToCommitDetails[i].TokenID, tokenType)
-	// 	if latestBlk == nil {
-	// 		c.log.Error("failed to get latest block, invalid token chain")
-	// 		resp.Message = "failed to get latest block, invalid token chain"
-	// 		return resp
-	// 	}
-	// 	blockId, err := latestBlk.GetBlockID(rbtTokensToCommitDetails[i].TokenID)
-	// 	if err != nil {
-	// 		c.log.Error("failed to get block id", "err", err)
-	// 		resp.Message = "failed to get block id, " + err.Error()
-	// 		return resp
-	// 	}
-	// 	tokenInfo := contract.TokenInfo{
-	// 		Token:      rbtTokensToCommitDetails[i].TokenID,
-	// 		TokenType:  tokenType,
-	// 		TokenValue: rbtTokensToCommitDetails[i].TokenValue,
-	// 		OwnerDID:   rbtTokensToCommitDetails[i].DID,
-	// 		BlockID:    blockId,
-	// 	}
-	// 	rbtTokenInfoArray = append(rbtTokenInfoArray, tokenInfo)
-	// }
-
 	nftInfo := contract.TokenInfo{
 		Token:      deployReq.NFT,
 		TokenType:  c.TokenType(NFTString),
@@ -390,7 +275,6 @@ func (c *Core) ExecuteNFT(reqID string, executeReq *model.ExecuteNFTRequest) {
 }
 
 func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *model.BasicResponse {
-	fmt.Println("ExecuteNFt function called")
 	st := time.Now()
 	txEpoch := int(st.Unix())
 
@@ -426,13 +310,12 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	}
 	latestBlock := c.w.GetLatestTokenBlock(executeReq.NFT, tokenType)
 	currentOwner := latestBlock.GetOwner()
-	fmt.Println("The current owner of the NFT is :", currentOwner)
-	fmt.Println("The latest block is ", latestBlock)
-	// if currentOwner != executeReq.Executor {
-	// 	c.log.Error("NFT not owned by the executor")
-	// 	resp.Message = "NFT not owned by the executor"
-	// 	return resp
-	// }
+	c.log.Info("The current owner of the NFT is :", currentOwner)
+	if currentOwner != executeReq.Executor {
+		c.log.Error("NFT not owned by the executor")
+		resp.Message = "NFT not owned by the executor"
+		return resp
+	}
 	currentNFTValue := executeReq.NFTValue
 	if err != nil {
 		c.log.Error("Failed to retrieve NFT Value , ", err)
@@ -523,17 +406,6 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		//BlockHash:   txnDetails.BlockID,
 	}
 	c.ec.ExplorerTransaction(explorerTrans)
-	/* newEvent := model.NewContractEvent{
-		Contract:          executeReq.SmartContractToken,
-		Did:               did,
-		Type:              ExecuteType,
-		ContractBlockHash: "",
-	}
-
-	err = c.publishNewEvent(&newEvent)
-	if err != nil {
-		c.log.Error("Failed to publish smart contract executed info")
-	} */
 
 	c.log.Info("NFT Executed successfully", "duration", dif)
 	resp.Status = true
@@ -543,7 +415,6 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 }
 
 func (c *Core) SubsribeNFTSetup(requestID string, topic string) error {
-	fmt.Println("SubscribeNFTSetup function called")
 	reqID = requestID
 	c.l.AddRoute(APIPeerStatus, "GET", c.peerStatus)
 	err := c.ps.SubscribeTopic(topic, c.NFTCallBack)
@@ -555,7 +426,6 @@ func (c *Core) SubsribeNFTSetup(requestID string, topic string) error {
 }
 
 func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
-	fmt.Println("NFTCallBack called ")
 	var newEvent model.NewNFTEvent
 	var fetchNFT FetchNFTRequest
 	requestID := reqID
@@ -571,10 +441,8 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 			c.log.Error("Fetch nft failed, failed to create nft folder", "err", err)
 			return
 		}
-		// oldScFolder is set to path of the smartcontract folder
 		oldNFTFolder := c.cfg.DirPath + "NFT/" + fetchNFT.NFT
 		var isPathExist bool
-		//info is set to FileInfo describing the oldScFolder
 		info, err := os.Stat(oldNFTFolder)
 		//If directory doesn't exist, isPathExist is set to false
 		if os.IsNotExist(err) {
@@ -630,58 +498,9 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 	c.log.Info("Token chain of " + nft + " syncing successful")
-	// curlUrl, err := c.w.GetSmartContractTokenUrl(smartContractToken)
-	// if err != nil {
-	// 	c.log.Error("Failed to get smart contract token URL", "err", err)
-	// 	return
-	// }
-	// payload := map[string]interface{}{
-	// 	"smart_contract_hash": newEvent.SmartContractToken,
-	// 	"port":                c.cfg.NodePort,
-	// }
-	// payLoadBytes, err := json.Marshal(payload)
-	// if err != nil {
-	// 	c.log.Error("Failed to marshal JSON", "err", err)
-	// 	return
-	// }
-	// request, err := http.NewRequest("POST", curlUrl, bytes.NewBuffer(payLoadBytes))
-	// if err != nil {
-	// 	fmt.Println("Error creating HTTP request for smart contract statefile updationcallback: ", err)
-	// 	return
-	// }
-	// request.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	// client := &http.Client{}
-	// response, err := client.Do(request)
-	// if err != nil {
-	// 	fmt.Println("Error sending HTTP request for smart contract statefile updation: ", err)
-	// 	return
-	// }
-	// if response.StatusCode != http.StatusOK {
-	// 	c.log.Error("Error getting response from SC", "status", response.Status)
-	// 	return
-	// }
-	// responseBodyBytes, err := io.ReadAll(response.Body)
-	// if err != nil {
-	// 	fmt.Printf("Error reading response body: %s\n", err)
-	// 	return
-	// }
-	// responseBody := string(responseBodyBytes)
-	// var responseData map[string]interface{}
-	// if err := json.Unmarshal([]byte(responseBody), &responseData); err != nil {
-	// 	c.log.Error("Error parsing JSON:", err)
-	// 	return
-	// }
-	// message, ok := responseData["message"].(string)
-	// if !ok {
-	// 	c.log.Error("Error: 'message' field not found or not a string")
-	// 	return
-	// }
-	// c.log.Debug(message)
-	// defer response.Body.Close()
 }
 
 func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
-	fmt.Println("The FetchNFT function called")
 	basicResponse := &model.BasicResponse{
 		Status: false,
 	}
@@ -692,17 +511,12 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 		return basicResponse
 	}
 
-	// Read the smart contract token JSON
 	nftJSONBytes, err := io.ReadAll(nftJSON)
 	if err != nil {
 		c.log.Error("Failed to read NFT from network", "err", err)
 		return basicResponse
 	}
-
-	// Close the smart contract token JSON reader
 	nftJSON.Close()
-
-	// Parse smart contract token JSON into SmartContractToken struct
 	var nft NFT
 	err = json.Unmarshal(nftJSONBytes, &nft)
 	if err != nil {
@@ -710,9 +524,7 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 		return basicResponse
 	}
 
-	// Fetch and store the binary code file
 	nftFileInfo, err := c.ipfs.Cat(nft.NftFileInfoHash)
-	fmt.Println("The nftfileinfo", nftFileInfo)
 	if err != nil {
 		c.log.Error("Failed to fetch nftfileinfo from network", "err", err)
 		return basicResponse
@@ -727,15 +539,12 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 	}
 
 	nftFileInfoDestPath := filepath.Join(nftFileInfoPath, "nftFileInfo")
-
-	// Read the content of binaryCodeFile
 	nftFileInfoContent, err := io.ReadAll(nftFileInfo)
 	if err != nil {
 		c.log.Error("Failed to read binary code file", "err", err)
 		return basicResponse
 	}
-	//sourceFileName := filepath.Base(nftFileInfo.Name())
-	// Write the content to binaryCodeFileDestPath
+
 	err = os.WriteFile(nftFileInfoDestPath+".json", nftFileInfoContent, 0644)
 	if err != nil {
 		c.log.Error("Failed to write nft file info ", "err", err)
@@ -752,7 +561,6 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 	}
 
 	// Extract the "filename" key value
-	//filename := nftData["filename"].(string)
 	filename, ok := nftData["filename"].(string)
 	if !ok {
 		c.log.Info("Key 'filename' not found or not a string")
@@ -775,7 +583,6 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 
 	nftFileDestPath := filepath.Join(nftFilePath, filename)
 
-	// Read the content of rawCodeFile
 	nftFileContent, err := io.ReadAll(nftFile)
 	if err != nil {
 		c.log.Error("Failed to read nft file", "err", err)
@@ -789,7 +596,6 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 		return basicResponse
 	}
 
-	//	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, SchemaCodeHash: smartContractToken.SchemaCodeHash, ContractStatus: wallet.TokenIsFetched})
 	err = c.w.CreateNFT(&wallet.NFT{TokenID: fetchNFTRequest.NFT, DID: fetchNFTRequest.ReceiverDID, TokenStatus: 0, TokenValue: fetchNFTRequest.NFTValue})
 	if err != nil {
 		c.log.Error("Failed to create NFT", "err", err)

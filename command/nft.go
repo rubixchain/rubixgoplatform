@@ -25,13 +25,6 @@ func (cmd *Command) createNFT() {
 		cmd.log.Error("Failed to create NFT, NFT file Info is required to create NFT")
 		return
 	}
-	// nftRequest := core.NFTReq{
-	// 	DID:         cmd.did,
-	// 	UserID:      cmd.userID,
-	// 	NFTFileInfo: cmd.nftFileInfo,
-	// 	NFTFile:     cmd.nftFilePath,
-	// }
-
 	request := client.CreateNFTReq{
 		DID:         cmd.did,
 		UserID:      cmd.userID,

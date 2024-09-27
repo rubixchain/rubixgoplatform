@@ -177,7 +177,6 @@ func (w *Wallet) GetPeerID(did string) string {
 
 // Fetches did type of the given did from PeerDIDTable
 func (w *Wallet) GetPeerDIDType(did string) (int, error) {
-	fmt.Println("DID in getpeerdidtype :", did)
 	var dm DIDPeerMap
 	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {

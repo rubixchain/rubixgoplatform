@@ -427,7 +427,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}
 
 	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
-	fmt.Println("NB in initiateConsensus", nb)
 	if err != nil {
 		c.log.Error("Failed to pledge token", "err", err)
 		return nil, nil, err
@@ -1072,36 +1071,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("NFT token chain creation failed", "err", err)
 			return nil, nil, err
 		}
-		//update smart contracttoken status to deployed in DB
-
-		//TO DO : Update the NFT status in DB
-
-		// err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsDeployed)
-		// if err != nil {
-		// 	c.log.Error("Failed to update smart contract Token deploy detail in storage", err)
-		// 	return nil, nil, err
-		// }
-		// c.log.Debug("creating commited token block")
-		// //create new committed block to be updated to the commited RBT tokens
-		// err = c.createCommitedTokensBlock(nb, cr.SmartContractToken, dc)
-		// if err != nil {
-		// 	c.log.Error("Failed to create commited RBT tokens block ", "err", err)
-		// 	return nil, nil, err
-		// }
-		// //update committed RBT token with the new block also and lock the RBT
-		// //and change token status to commited, to prevent being used for txn or pledging
-		// commitedRbtTokens, err := nb.GetCommitedTokenDetials(cr.SmartContractToken)
-		// if err != nil {
-		// 	c.log.Error("Failed to fetch commited rbt tokens", "err", err)
-		// 	return nil, nil, err
-		// }
-		// err = c.w.CommitTokens(sc.GetDeployerDID(), commitedRbtTokens)
-		// if err != nil {
-		// 	c.log.Error("Failed to update commited RBT tokens in DB ", "err", err)
-		// 	return nil, nil, err
-		// }
-		owner := nb.GetOwner()
-		fmt.Println("The owner in nft deplomeode in initiateconsensus", owner)
 		newBlockId, err := nb.GetBlockID(cr.NFT)
 		if err != nil {
 			c.log.Error("failed to get new block id of the NFT ", "err", err)
@@ -1121,7 +1090,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, pledgeFinalityError
 		}
 
-		//Todo pubsub - publish smart contract token details
 		newEvent := model.NFTEvent{
 			NFT:          cr.NFT,
 			Did:          sc.GetDeployerDID(),
@@ -1146,8 +1114,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Epoch:           int64(cr.TransactionEpoch),
 		}
 
-		fmt.Println("Transaction details while deploying NFT", txnDetails)
-
 		err = c.initiateUnpledgingProcess(cr, txnDetails.TransactionID, txnDetails.Epoch)
 		if err != nil {
 			c.log.Error("Failed to store transaction details with quorum ", "err", err)
@@ -1160,20 +1126,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		b := c.w.GetLatestTokenBlock(cr.NFT, nb.GetTokenType(cr.NFT))
 		signers, _ := b.GetSigner()
 
-		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.NFT, nb)
 		if err != nil {
 			c.log.Error("NFT chain creation failed", "err", err)
 			return nil, nil, err
 		}
-		//update smart contracttoken status to deployed in DB
-		// err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsExecuted)
-		// if err != nil {
-		// 	c.log.Error("Failed to update smart contract Token execute detail in storage", err)
-		// 	return nil, nil, err
-		// }
-		executeOwner := nb.GetOwner()
-		fmt.Println("ExecuteOwner of NFT", executeOwner)
 		newBlockId, err := nb.GetBlockID(cr.NFT)
 		if err != nil {
 			c.log.Error("failed to get new block id ", "err", err)
@@ -1195,7 +1152,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		newEvent := model.NFTEvent{
 			NFT:          cr.NFT,
-			Did:          sc.GetExecutorDID(), // This should be confirmed whether the receiver address or the executor address should be passed
+			Did:          sc.GetExecutorDID(),
 			ReceiverDid:  sc.GetReceiverDID(),
 			Type:         ExecuteType,
 			NFTBlockHash: newBlockId,
@@ -1207,7 +1164,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Failed to publish NFT executed  info")
 		}
 
-		//inform old quorums about exhausted smart contract token hash
 		prevBlockId, _ := nb.GetPrevBlockID((cr.NFT))
 		nftTokenStateDataOld := cr.NFT + prevBlockId
 		nftTokenStateDataOldBuffer := bytes.NewBuffer([]byte(nftTokenStateDataOld))
@@ -1392,7 +1348,6 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	defer c.qlock.Unlock()
 	cs, ok := c.quorumRequest[id]
 	if !ok {
-		fmt.Println("failed to get quorum consensus")
 		if p != nil {
 			p.Close()
 		}
@@ -1400,7 +1355,6 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	}
 	pd, ok := c.pd[id] //getting details of quorums who pledged
 	if !ok {
-		fmt.Println("failed to get pledged token details")
 		if p != nil {
 			p.Close()
 		}
@@ -1782,7 +1736,6 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: executor_sign,
 			Epoch:              cr.TransactionEpoch,
 		}
-		fmt.Println("The token owner while executing nft", sc.GetReceiverDID())
 
 	} else if cr.Mode == NFTDeployMode {
 		bti.DeployerDID = sc.GetDeployerDID()
@@ -1835,7 +1788,6 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: deployer_sign,
 			Epoch:              cr.TransactionEpoch,
 		}
-		fmt.Println("The token owner while deploying", sc.GetDeployerDID())
 
 	} else if cr.Mode == PinningServiceMode {
 		bti.SenderDID = sc.GetSenderDID()

@@ -23,9 +23,6 @@ func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*model.BasicResponse, er
 	if createNFTReq.UserID != "" {
 		fields["UserID"] = createNFTReq.UserID
 	}
-	// if nt.UserInfo != "" {
-	// 	fields[core.DTUserInfoField] = nt.UserInfo
-	// }
 	if createNFTReq.NFTFileInfo != "" {
 		files["NFTFileInfo"] = createNFTReq.NFTFileInfo
 	}
@@ -33,6 +30,7 @@ func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*model.BasicResponse, er
 	if createNFTReq.NFTFile != "" {
 		files["NFTFile"] = createNFTReq.NFTFile
 	}
+	//To add more than 1 file : Tobe done
 	// for _, fn := range nt.Files {
 	// 	fuid := path.Base(fn)
 	// 	files[fuid] = fn

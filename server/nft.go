@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -98,23 +97,7 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	fmt.Println("The request which is added to addwebreq", req)
-	fmt.Println("The request id being added", req.ID)
-	// go func() {
 	go s.c.CreateNFTRequest(req.ID, createNFT)
-	//fmt.Println("The nft response in API CreateNFT is  ", nftResponse)
-	// }()
-	//nftToken := nftResponse.Result
-	// dc := s.c.GetWebReq(req.ID)
-	// if dc == nil {
-	// 	s.log.Error("Failed to get dc channel in APICreateNFT ")
-	// }
-
-	// result := dc.OutChan
-	// if result == nil {
-	// 	s.log.Error("Failed to get result in APICreateNFT ")
-	// }
-	// fmt.Println("The result is ", result)
 	return s.didResponse(req, req.ID)
 
 }
@@ -140,11 +123,6 @@ func (s *Server) APIDeployNFT(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Invalid deployer DID")
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-
-	// if deployReq.RBTAmount < 0.001 {
-	// 	s.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.001")
-	// 	return s.BasicResponse(req, false, "Invalid RBT amount. Minimum RBT amount should be 0.001", nil)
-	// }
 	if deployReq.QuorumType < 1 || deployReq.QuorumType > 2 {
 		s.log.Error("Invalid quorum type")
 		return s.BasicResponse(req, false, "Invalid quorum type", nil)
@@ -187,54 +165,16 @@ func (s *Server) APIDeployNFT(req *ensweb.Request) *ensweb.Result {
 // 	return s.RenderJSON(req, resp, http.StatusOK)
 // }
 
-// func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
-// 	var executeReq model.ExecuteNFTRequest
-// 	err := s.ParseJSON(req, &executeReq)
-// 	if err != nil {
-// 		return s.BasicResponse(req, false, "Invalid input", err)
-// 	}
-// 	fmt.Println("Execute request :", executeReq)
-// 	_, did, ok := util.ParseAddress(executeReq.ExecutorAddress)
-// 	if !ok {
-// 		return s.BasicResponse(req, false, "Invalid Executer address", nil)
-// 	}
-// 	fmt.Println("The did is ", did)
-// 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(executeReq.NFT)
-// 	if len(executeReq.NFT) != 46 || !strings.HasPrefix(executeReq.NFT, "Qm") || !is_alphanumeric {
-// 		s.log.Error("Invalid NFT")
-// 		return s.BasicResponse(req, false, "Invalid NFT", nil)
-// 	}
-// 	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-// 	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
-// 		s.log.Error("Invalid executer DID")
-// 		return s.BasicResponse(req, false, "Invalid executer DID", nil)
-// 	}
-// 	if executeReq.QuorumType < 1 || executeReq.QuorumType > 2 {
-// 		s.log.Error("Invalid quorum type")
-// 		return s.BasicResponse(req, false, "Invalid quorum type", nil)
-// 	}
-// 	if !s.validateDIDAccess(req, did) {
-// 		return s.BasicResponse(req, false, "DID does not have an access", nil)
-// 	}
-// 	s.c.AddWebReq(req)
-// 	go s.c.ExecuteNFT(req.ID, &executeReq)
-// 	return s.didResponse(req, req.ID)
-// }
-
 func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
 	var executeReq model.ExecuteNFTRequest
 	err := s.ParseJSON(req, &executeReq)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", err)
 	}
-	fmt.Println("Executor :", executeReq.Executor)
-	fmt.Println("Receiver :", executeReq.Receiver)
-	fmt.Println("Execute request :", executeReq)
 	_, did, ok := util.ParseAddress(executeReq.Executor)
 	if !ok {
 		return s.BasicResponse(req, false, "Invalid Executer address", nil)
 	}
-	fmt.Println("The did is ", did)
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(executeReq.NFT)
 	if len(executeReq.NFT) != 46 || !strings.HasPrefix(executeReq.NFT, "Qm") || !is_alphanumeric {
 		s.log.Error("Invalid NFT")
@@ -258,7 +198,6 @@ func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APISubscribeNFT(request *ensweb.Request) *ensweb.Result {
-	fmt.Println("Subscribe nft called ")
 	var newSubscription model.NewNFTSubscription
 	err := s.ParseJSON(request, &newSubscription)
 	if err != nil {

@@ -11,7 +11,6 @@ type NFT struct {
 
 // CreateNFT write NFT into db
 func (w *Wallet) CreateNFT(nt *NFT) error {
-	fmt.Println("The create NFT function called ")
 	err := w.s.Write(NFTTokenStorage, nt)
 	if err != nil {
 		w.log.Error("Failed to write NFT into db", "err", err)

@@ -471,7 +471,6 @@ func (c *Core) updateConfig() error {
 func (c *Core) AddWebReq(req *ensweb.Request) {
 	c.rlock.Lock()
 	defer c.rlock.Unlock()
-	fmt.Println("The request Id in addwebreq", req.ID)
 	c.webReq[req.ID] = &did.DIDChan{
 		ID:      req.ID,
 		InChan:  make(chan interface{}),

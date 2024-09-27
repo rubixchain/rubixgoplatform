@@ -502,8 +502,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 }
 
-func (c *Core) quorumNFTDeployConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, consensusRequest *ConensusRequest) *ensweb.Result {
-	fmt.Println("QuorumNFTDeployConsensus function called")
+func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, consensusRequest *ConensusRequest) *ensweb.Result {
 	consensusReply := ConensusReply{
 		ReqID:  consensusRequest.ReqID,
 		Status: false,
@@ -518,16 +517,6 @@ func (c *Core) quorumNFTDeployConsensus(req *ensweb.Request, did string, qdc did
 	c.log.Info("Verifying the deployer signature while deploying nft")
 
 	var verifyDID string
-
-	// if consensusRequest.Mode == SmartContractDeployMode {
-	// 	c.log.Debug("Fetching Deployer DID")
-	// 	verifyDID = consensusContract.GetDeployerDID()
-	// 	c.log.Debug("deployer did ", verifyDID)
-	// } else {
-	// 	c.log.Debug("Fetching Executor DID")
-	// 	verifyDID = consensusContract.GetExecutorDID()
-	// 	c.log.Debug("executor did ", verifyDID)
-	// }
 
 	if consensusRequest.Mode == NFTDeployMode {
 		c.log.Debug("Fetching NFT Deployer DID")
@@ -607,7 +596,7 @@ func (c *Core) quorumNFTDeployConsensus(req *ensweb.Request, did string, qdc did
 		}
 		wg.Wait()
 	} else {
-		//sync the smartcontract tokenchain
+		//sync the nft tokenchain
 		address := consensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
 		peerConn, err := c.getPeer(address, did)
 		if err != nil {
@@ -616,7 +605,7 @@ func (c *Core) quorumNFTDeployConsensus(req *ensweb.Request, did string, qdc did
 			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 		}
 
-		//3. check token state -- execute mode - pin tokenstate of the smart token chain
+		//3. check token state -- execute mode - pin tokenstate of the nft
 		tokenStateCheckResult = make([]TokenStateCheckResult, len(consensusContract.GetTransTokenInfo()))
 		nftInfo := consensusContract.GetTransTokenInfo()
 		for i, ti := range nftInfo {
@@ -632,32 +621,6 @@ func (c *Core) quorumNFTDeployConsensus(req *ensweb.Request, did string, qdc did
 		}
 		wg.Wait()
 	}
-	// 	//sync the smartcontract tokenchain
-	// 	address := consensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
-	// 	peerConn, err := c.getPeer(address, did)
-	// 	if err != nil {
-	// 		c.log.Error("Failed to get executor peer to sync smart contract token chain", "err", err)
-	// 		consensusReply.Message = "Failed to get executor peer to sync smart contract token chain : "
-	// 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
-	// 	}
-
-	//3. check token state -- execute mode - pin tokenstate of the smart token chain
-	// tokenStateCheckResult = make([]TokenStateCheckResult, len(consensusContract.GetTransTokenInfo()))
-	// nftInfo := consensusContract.GetTransTokenInfo()
-	// for i, ti := range nftInfo {
-	// 	t := ti.Token
-	// 	fmt.Println("The for loop inside quorumNFTDeployConsensus was run these many times :", i)
-	// 	// err = c.syncTokenChainFrom(peerConn, "", ti.Token, ti.TokenType)
-	// 	// if err != nil {
-	// 	// 	c.log.Error("Failed to sync smart contract token chain block fro execution validation", "err", err)
-	// 	// 	consensusReply.Message = "Failed to sync smart contract token chain block fro execution validation"
-	// 	// 	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
-	// 	// }
-	// 	wg.Add(1)
-	// 	go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, consensusRequest.QuorumList, ti.TokenType)
-	// }
-	// wg.Wait()
-	//}
 	for i := range tokenStateCheckResult {
 		if tokenStateCheckResult[i].Error != nil {
 			c.log.Error("Error occured", "error", err)
@@ -732,10 +695,10 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 		return c.quorumSmartContractConsensus(req, did, qdc, &cr)
 	case NFTDeployMode:
 		c.log.Info("NFT deploy consensus started")
-		return c.quorumNFTDeployConsensus(req, did, qdc, &cr)
+		return c.quorumNFTConsensus(req, did, qdc, &cr)
 	case NFTExecuteMode:
 		c.log.Info("NFT execute consensus started")
-		return c.quorumNFTDeployConsensus(req, did, qdc, &cr)
+		return c.quorumNFTConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
 		crep.Message = "Invalid consensus mode"

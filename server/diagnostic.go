@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -42,7 +41,6 @@ func (s *Server) APIDumpSmartContractTokenChainBlock(req *ensweb.Request) *enswe
 
 func (s *Server) APIGetNFTTokenChain(req *ensweb.Request) *ensweb.Result {
 	var dr model.TCDumpRequest
-	fmt.Println("The TCDUMPRequest :", dr)
 	err := s.ParseJSON(req, &dr)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
