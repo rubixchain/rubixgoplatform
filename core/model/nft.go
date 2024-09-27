@@ -26,11 +26,13 @@ type NFTTokens struct {
 	Tokens []NFTStatus `json:"tokens"`
 }
 
-type NFTDeployEvent struct {
-	NFT          string `json:"nft"`
-	Did          string `json:"did"`
-	Type         int    `json:"type"`
-	NFTBlockHash string `json:"nftBlockHash"`
+type NFTEvent struct {
+	NFT          string  `json:"nft"`
+	Did          string  `json:"did"`
+	ReceiverDid  string  `json:"receiverDid"`
+	Type         int     `json:"type"`
+	NFTBlockHash string  `json:"nftBlockHash"`
+	NFTValue     float64 `json:"nftValue"`
 }
 
 type DeployNFTRequest struct {
@@ -54,7 +56,8 @@ type NewNFTSubscription struct {
 
 type NewNFTEvent struct {
 	NFT          string `json:"nft"`
-	Did          string `json:"did"`
+	ExecutorDid  string `json:"executorDid"`
+	ReceiverDid  string `json:"receiverDid"`
 	Type         int    `json:"type"`
 	NFTBlockHash string `json:"nftBlockHash"`
 }

@@ -1122,10 +1122,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		//Todo pubsub - publish smart contract token details
-		newEvent := model.NFTDeployEvent{
+		newEvent := model.NFTEvent{
 			NFT:          cr.NFT,
 			Did:          sc.GetDeployerDID(),
 			NFTBlockHash: newnftIDTokenStateHash,
+			Type:         DeployType,
 		}
 
 		err = c.publishNewNftEvent(&newEvent)
@@ -1192,11 +1193,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, pledgeFinalityError
 		}
 
-		newEvent := model.NFTDeployEvent{
+		newEvent := model.NFTEvent{
 			NFT:          cr.NFT,
 			Did:          sc.GetExecutorDID(), // This should be confirmed whether the receiver address or the executor address should be passed
+			ReceiverDid:  sc.GetReceiverDID(),
 			Type:         ExecuteType,
 			NFTBlockHash: newBlockId,
+			NFTValue:     sc.GetTotalRBTs(),
 		}
 
 		err = c.publishNewNftEvent(&newEvent)

@@ -38,8 +38,10 @@ type NFT struct {
 }
 
 type FetchNFTRequest struct {
-	NFT     string
-	NFTPath string
+	NFT         string
+	NFTPath     string
+	ReceiverDID string
+	NFTValue    float64
 }
 
 func (c *Core) CreateNFTRequest(requestID string, createNFTRequest NFTReq) {
@@ -365,7 +367,7 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	return resp
 }
 
-func (c *Core) publishNewNftEvent(newEvent *model.NFTDeployEvent) error {
+func (c *Core) publishNewNftEvent(newEvent *model.NFTEvent) error {
 	topic := newEvent.NFT
 	if c.ps != nil {
 		err := c.ps.Publish(topic, newEvent)
@@ -608,12 +610,13 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 			c.log.Error("Fetch NFT failed, failed to create NFT folder", "err", err)
 			return
 		}
+		fetchNFT.ReceiverDID = newEvent.ReceiverDid
 
 		c.FetchNFT(requestID, &fetchNFT)
 		c.log.Info("NFT " + nft + " files fetching successful")
 	}
 	publisherPeerID := peerID
-	did := newEvent.Did
+	did := newEvent.ExecutorDid
 	tokenType := token.NFTTokenType
 	address := publisherPeerID + "." + did
 	p, err := c.getPeer(address, "")
@@ -787,7 +790,7 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 	}
 
 	//	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, SchemaCodeHash: smartContractToken.SchemaCodeHash, ContractStatus: wallet.TokenIsFetched})
-	err = c.w.CreateNFT(&wallet.NFT{TokenID: fetchNFTRequest.NFT, DID: "", TokenStatus: 0, TokenValue: 0})
+	err = c.w.CreateNFT(&wallet.NFT{TokenID: fetchNFTRequest.NFT, DID: fetchNFTRequest.ReceiverDID, TokenStatus: 0, TokenValue: fetchNFTRequest.NFTValue})
 	if err != nil {
 		c.log.Error("Failed to create NFT", "err", err)
 		return basicResponse
