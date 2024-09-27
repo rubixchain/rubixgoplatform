@@ -1100,7 +1100,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// 	c.log.Error("Failed to update commited RBT tokens in DB ", "err", err)
 		// 	return nil, nil, err
 		// }
-
+		owner := nb.GetOwner()
+		fmt.Println("The owner in nft deplomeode in initiateconsensus", owner)
 		newBlockId, err := nb.GetBlockID(cr.NFT)
 		if err != nil {
 			c.log.Error("failed to get new block id of the NFT ", "err", err)
@@ -1170,7 +1171,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// 	c.log.Error("Failed to update smart contract Token execute detail in storage", err)
 		// 	return nil, nil, err
 		// }
-
+		executeOwner := nb.GetOwner()
+		fmt.Println("ExecuteOwner of NFT", executeOwner)
 		newBlockId, err := nb.GetBlockID(cr.NFT)
 		if err != nil {
 			c.log.Error("failed to get new block id ", "err", err)
@@ -1777,6 +1779,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: executor_sign,
 			Epoch:              cr.TransactionEpoch,
 		}
+		fmt.Println("The token owner while executing nft", sc.GetReceiverDID())
 
 	} else if cr.Mode == NFTDeployMode {
 		bti.DeployerDID = sc.GetDeployerDID()
@@ -1829,6 +1832,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: deployer_sign,
 			Epoch:              cr.TransactionEpoch,
 		}
+		fmt.Println("The token owner while deploying", sc.GetDeployerDID())
 
 	} else if cr.Mode == PinningServiceMode {
 		bti.SenderDID = sc.GetSenderDID()

@@ -425,11 +425,12 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	latestBlock := c.w.GetLatestTokenBlock(executeReq.NFT, tokenType)
 	currentOwner := latestBlock.GetOwner()
 	fmt.Println("The current owner of the NFT is :", currentOwner)
-	if currentOwner != executeReq.Executor {
-		c.log.Error("NFT not owned by the executor")
-		resp.Message = "NFT not owned by the executor"
-		return resp
-	}
+	fmt.Println("The latest block is ", latestBlock)
+	// if currentOwner != executeReq.Executor {
+	// 	c.log.Error("NFT not owned by the executor")
+	// 	resp.Message = "NFT not owned by the executor"
+	// 	return resp
+	// }
 	currentNFTValue := executeReq.NFTValue
 	if err != nil {
 		c.log.Error("Failed to retrieve NFT Value , ", err)
@@ -453,11 +454,12 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 
 	//create teh consensuscontract
 	consensusContractDetails := &contract.ContractType{
-		Type:       contract.SmartContractDeployType,
+		Type:       contract.NFTExecuteType,
 		PledgeMode: contract.PeriodicPledgeMode,
 		TotalRBTs:  float64(currentNFTValue),
 		TransInfo: &contract.TransInfo{
 			ExecutorDID: did,
+			ReceiverDID: executeReq.Receiver,
 			Comment:     executeReq.Comment,
 			NFT:         executeReq.NFT,
 			TransTokens: nftInfoArray,

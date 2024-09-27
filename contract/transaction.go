@@ -34,6 +34,7 @@ const (
 	TSExecutorDIDKey        string = "9"
 	TSSmartContractDataKey  string = "10"
 	TSPinningDIDKey         string = "11"
+	TSNFTKey                string = "12"
 )
 
 const (
@@ -107,6 +108,9 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 	}
 	if ts.SmartContractToken != "" {
 		ntsb[TSSmartContractTokenKey] = ts.SmartContractToken
+	}
+	if ts.NFT != "" {
+		ntsb[TSNFTKey] = ts.NFT
 	}
 	if ts.Comment != "" {
 		ntsb[TSCommentKey] = ts.Comment
