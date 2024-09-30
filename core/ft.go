@@ -136,7 +136,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			c.log.Error("Failed to create FT, Failed to add token to IPFS", "err", err)
 			return err
 		}
-		c.log.Info("FT created: ", ftID)
+		c.log.Info("FT created: " + ftID)
 		newFTTokenIDs[i] = ftID
 		bti := &block.TransInfo{
 			Tokens: []block.TransTokens{
