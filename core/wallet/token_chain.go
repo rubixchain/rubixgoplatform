@@ -436,7 +436,7 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 		db.l.Lock()
 		err = db.Put([]byte(key), b.GetBlock(), opt)
 		if tt == tkn.TestTokenType {
-			w.log.Debug("Writtent", "key", key)
+			w.log.Debug("Written", "key", key)
 		}
 		db.l.Unlock()
 		return err

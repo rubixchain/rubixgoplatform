@@ -24,5 +24,5 @@ type GetFTInfo struct {
 
 type FTInfo struct {
 	FTName  string `json:"ftname"`
-	FTCount int    `json:"did_type"`
+	FTCount int    `json:"ft_count"`
 }
