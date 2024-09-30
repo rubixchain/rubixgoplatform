@@ -574,7 +574,6 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 
 	// Handle each token
 	for _, tokenInfo := range ti {
-		fmt.Println("Token type in token received is ", tokenInfo.TokenType)
 		if tokenInfo.TokenType == 10 {
 			var FTInfo FTToken
 			err := w.s.Read(FTTokenStorage, &FTInfo, "token_id=?", tokenInfo.Token)
@@ -627,7 +626,6 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			FTInfo.TokenStatus = tokenStatus
 			FTInfo.TransactionID = b.GetTid()
 			FTInfo.TokenStateHash = tokenHashMap[tokenInfo.Token]
-			fmt.Println("FTname in token received is ", ftInfo.FTName)
 
 			err = w.s.Update(FTTokenStorage, &FTInfo, "token_id=?", tokenInfo.Token)
 			if err != nil {

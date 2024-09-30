@@ -136,7 +136,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			c.log.Error("Failed to create FT, Failed to add token to IPFS", "err", err)
 			return err
 		}
-		fmt.Println("ft ID is ", ftID)
+		c.log.Info("FT created: ", ftID)
 		newFTTokenIDs[i] = ftID
 		bti := &block.TransInfo{
 			Tokens: []block.TransTokens{
@@ -250,7 +250,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		FTOwner := blk.GetOwner()
 		ft := &newFTs[i]
 		ft.CreatorDID = FTOwner
-		fmt.Println("ft is ", ft)
 		err = c.w.CreateFT(ft)
 		if err != nil {
 			c.log.Error("Failed to create fractional token", "err", err)
@@ -480,8 +479,6 @@ func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
 }
 
 func (c *Core) updateFTTable() error {
-	fmt.Println("Updating FT table...")
-
 	AllFTs, err := c.w.GetFTsAndCount()
 	// If no records are found, remove all entries from the FT table
 	if err != nil {
@@ -504,10 +501,7 @@ func (c *Core) updateFTTable() error {
 			return err
 		}
 	}
-	fmt.Println("All FTs in update FT Table are ", AllFTs)
-
 	err = c.s.Delete(wallet.FTStorage, &wallet.FT{}, "ft_name!=?", "")
-	fmt.Println("Error is ", err)
 	ReadErr := fmt.Sprint(err)
 	if err != nil {
 		if strings.Contains(ReadErr, "no records found") {
