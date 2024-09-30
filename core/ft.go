@@ -347,7 +347,6 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 
 	//TODO: Pinning of tokens
-
 	p, err := c.getPeer(req.Receiver, "")
 	if err != nil {
 		resp.Message = "Failed to get receiver peer, " + err.Error()
@@ -489,18 +488,45 @@ func (c *Core) updateFTTable() error {
 	fmt.Println("Updating FT table...")
 
 	AllFTs, err := c.w.GetFTsAndCount()
+	// If no records are found, remove all entries from the FT table
 	if err != nil {
-		c.log.Error("Failed to get FTs and Count")
-		return err
-	}
-
-	for _, Ft := range AllFTs {
-		err = c.s.Update(wallet.FTStorage, &Ft, "ft_name=?", Ft.FTName)
-		if err != nil {
-			c.log.Error("Failed to update FT:", Ft.FTName, "Error:", err)
+		fetchErr := fmt.Sprint(err)
+		if strings.Contains(fetchErr, "no records found") {
+			c.log.Info("No records found. Removing all entries from FT table.")
+			err = c.s.Delete(wallet.FTStorage, &wallet.FT{}, "ft_name!=?", "")
+			if err != nil {
+				deleteErr := fmt.Sprint(err)
+				if strings.Contains(deleteErr, "no records found") {
+					c.log.Info("FT table is empty")
+				} else {
+					c.log.Error("Failed to delete all entries from FT table:", err)
+					return err
+				}
+			}
+			return nil
+		} else {
+			c.log.Error("Failed to get FTs and Count")
 			return err
 		}
 	}
+	fmt.Println("All FTs in update FT Table are ", AllFTs)
 
+	err = c.s.Delete(wallet.FTStorage, &wallet.FT{}, "ft_name!=?", "")
+	fmt.Println("Error is ", err)
+	ReadErr := fmt.Sprint(err)
+	if err != nil {
+		if strings.Contains(ReadErr, "no records found") {
+			c.log.Info("FT table is empty")
+		}
+		c.log.Error("Failed to remove current FTs from storage to add new:", err)
+		return err
+	}
+	for _, Ft := range AllFTs {
+		addErr := c.s.Write(wallet.FTStorage, &Ft)
+		if addErr != nil {
+			c.log.Error("Failed to add new FT:", Ft.FTName, "Error:", addErr)
+			return addErr
+		}
+	}
 	return nil
 }
