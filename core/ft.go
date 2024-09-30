@@ -22,7 +22,7 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 	err := c.createFTs(reqID, ftname, ftcount, wholeToken, did)
 	br := model.BasicResponse{
 		Status:  true,
-		Message: "DID registered successfully",
+		Message: "FT created successfully",
 	}
 	if err != nil {
 		br.Status = false
