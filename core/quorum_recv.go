@@ -262,8 +262,6 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	crep.Message = "Conensus finished successfully"
 	crep.ShareSig = qsb
 	crep.PrivSig = ppb
-	fmt.Println("Share sign is ", qsb)
-	fmt.Println("Pvt sign is ", ppb)
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
@@ -755,7 +753,6 @@ func (c *Core) updateReceiverToken(
 	var FT wallet.FTToken
 	FT.FTName = ftinfo.FTName
 	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs, FT)
-	c.updateFTTable()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}

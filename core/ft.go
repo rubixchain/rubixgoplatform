@@ -327,7 +327,6 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
-	FTs := make([]wallet.FTToken, 0)
 	AllFTs, err := c.w.GetFreeFTsByName(req.FTName, did)
 	AvailableFTCount := len(AllFTs)
 	if err != nil {
@@ -342,10 +341,6 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		}
 	}
 	FTsForTxn := AllFTs[:req.FTCount]
-	if len(FTsForTxn) != 0 {
-		FTs = append(FTs, FTsForTxn...)
-	}
-
 	//TODO: Pinning of tokens
 	p, err := c.getPeer(req.Receiver, "")
 	if err != nil {
