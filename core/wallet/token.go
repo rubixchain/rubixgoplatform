@@ -139,34 +139,37 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 // of FT structs containing this information.
 func (w *Wallet) GetFTsAndCount() ([]FT, error) {
 	fts, err := w.GetAllFreeFTs()
-	fmt.Println("error is ", err)
-
 	if err != nil {
-		w.log.Error("Failed to get tokens", "err", err)
+		errStr := fmt.Sprint(err)
+		if strings.Contains(errStr, "no records found") {
+			w.log.Info("No free FTs found")
+			return nil, err
+		}
+		w.log.Error("Failed to free FTs", "err", err)
 		return nil, err
 	}
 
-	// Use a map to count occurrences of FTName with associated CreatorDID
-	ftNameCreatorCounts := make(map[string]struct {
-		count      int
-		creatorDID string
-	})
+	ftNameCreatorCounts := make(map[string]map[string]int)
 
 	for _, t := range fts {
-		ftNameCreatorCounts[t.FTName] = struct {
-			count      int
-			creatorDID string
-		}{count: ftNameCreatorCounts[t.FTName].count + 1, creatorDID: t.CreatorDID}
+		if ftNameCreatorCounts[t.FTName] == nil {
+			ftNameCreatorCounts[t.FTName] = make(map[string]int)
+		}
+		ftNameCreatorCounts[t.FTName][t.CreatorDID]++
 	}
 
-	// Prepare the result slice with counted data
-	info := make([]FT, 0, len(ftNameCreatorCounts))
-	for key, data := range ftNameCreatorCounts {
-		info = append(info, FT{
-			FTName:     key,
-			FTCount:    data.count,
-			CreatorDID: data.creatorDID,
-		})
+	info := make([]FT, 0)
+	idCounter := 1 // Initialize ID counter starting from 1
+	for ftName, creatorCounts := range ftNameCreatorCounts {
+		for creatorDID, count := range creatorCounts {
+			info = append(info, FT{
+				ID:         fmt.Sprintf("%d", idCounter),
+				FTName:     ftName,
+				FTCount:    count,
+				CreatorDID: creatorDID,
+			})
+			idCounter++
+		}
 	}
 
 	return info, nil
@@ -177,6 +180,11 @@ func (w *Wallet) GetAllFreeFTs() ([]FTToken, error) {
 	err := w.s.Read(FTTokenStorage, &FT, "ft_name!=? AND token_status=? OR token_status=?", "", TokenIsFree, TokenIsGenerated)
 
 	if err != nil {
+		readErr := fmt.Sprint(err)
+		if strings.Contains(readErr, "no records found") {
+			w.log.Info("No free FTs")
+			return nil, err
+		}
 		w.log.Error("Failed to get FTs", "err", err)
 		return nil, err
 	}
@@ -198,7 +206,7 @@ func (w *Wallet) GetFreeFTsByName(ftName string, did string) ([]FTToken, error) 
 	err := w.s.Read(FTTokenStorage, &FT, "ft_name=? AND token_status =? AND  owner_did=?", ftName, TokenIsFree, did)
 
 	if err != nil {
-		w.log.Error("Failed to get FTs by name", "err", err)
+		w.log.Error("Failed to get Free FTs by name", "err", err)
 		return nil, err
 	}
 	return FT, nil
