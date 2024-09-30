@@ -209,6 +209,40 @@
                 }
             }
         },
+        "/api/createft": {
+            "post": {
+                "description": "This API endpoint will create FTs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Create FT",
+                "parameters": [
+                    {
+                        "description": "Create FT",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.CreateFTReqSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/createnft": {
             "post": {
                 "description": "This API will create new NFT",
@@ -692,6 +726,40 @@
                 }
             }
         },
+        "/api/initiate-ft-tranfer": {
+            "post": {
+                "description": "This API endpoint will do transfer of FTs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Initiate FT transfer",
+                "parameters": [
+                    {
+                        "description": "Transfer FT",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.TransferFTReqSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/initiate-pin-token": {
             "post": {
                 "description": "This API will pin token in the Pinning node on behalf of the sender",
@@ -1142,6 +1210,23 @@
                 }
             }
         },
+        "server.CreateFTReqSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "ftcount": {
+                    "type": "integer"
+                },
+                "ftname": {
+                    "type": "string"
+                },
+                "tokencount": {
+                    "type": "number"
+                }
+            }
+        },
         "server.DIDPeerMapTemp": {
             "type": "object",
             "properties": {
@@ -1313,6 +1398,32 @@
                 },
                 "password": {
                     "type": "string"
+                }
+            }
+        },
+        "server.TransferFTReqSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "FTCount": {
+                    "type": "integer"
+                },
+                "FTName": {
+                    "type": "string"
+                },
+                "comment": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "receiver": {
+                    "type": "string"
+                },
+                "sender": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "integer"
                 }
             }
         }
