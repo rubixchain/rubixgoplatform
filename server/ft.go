@@ -8,6 +8,32 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
+type CreateFTReqSwaggoInput struct {
+	DID        string  `json:"did"`
+	FTName     string  `json:"ftname"`
+	FTCount    int     `json:"ftcount"`
+	TokenCount float64 `json:"tokencount"`
+}
+
+type TransferFTReqSwaggoInput struct {
+	Receiver string `json:"receiver"`
+	Sender   string `json:"sender"`
+	FTName   string `json:"FTName"`
+	FTCount  int    `json:"FTCount"`
+	Comment  string `json:"comment"`
+	Type     int    `json:"type"`
+	Password string `json:"password"`
+}
+
+// ShowAccount godoc
+// @Summary      Create FT
+// @Description  This API endpoint will create FTs.
+// @Tags         FT
+// @Accept       json
+// @Produce      json
+// @Param        input body CreateFTReqSwaggoInput true "Create FT"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/createft [post]
 func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	var createFTReq model.CreateFTReq
 	err := s.ParseJSON(req, &createFTReq)
@@ -22,6 +48,15 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+// ShowAccount godoc
+// @Summary      Initiate FT transfer
+// @Description  This API endpoint will do transfer of FTs.
+// @Tags         FT
+// @Accept       json
+// @Produce      json
+// @Param        input body TransferFTReqSwaggoInput true "Transfer FT"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/initiate-ft-tranfer [post]
 func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.TransferFTReq
 	err := s.ParseJSON(req, &rbtReq)
