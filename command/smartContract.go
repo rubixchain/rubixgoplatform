@@ -60,7 +60,7 @@ func (cmd *Command) generateSmartContractToken() {
 		cmd.log.Error("Failed to generate smart contract token", "err", err)
 		return
 	}
-	cmd.log.Info("Smart contract token generated successfully")
+	cmd.log.Info(fmt.Sprintf("Smart contract token %v generated successfully", basicResponse.Result))
 
 }
 

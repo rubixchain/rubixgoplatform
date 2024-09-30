@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -48,21 +47,11 @@ func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractR
 	if smartContractRequest.DID != "" {
 		fields["did"] = smartContractRequest.DID
 	}
-
-	for key, value := range fields {
-		fmt.Printf("Field: %s, Value: %s\n", key, value)
-	}
-
-	for key, value := range files {
-		fmt.Printf("File: %s, Value: %s\n", key, value)
-	}
-
 	var basicResponse model.BasicResponse
 	err := c.sendMutiFormRequest("POST", setup.APIGenerateSmartContract, nil, fields, files, &basicResponse)
 	if err != nil {
 		return nil, err
 	}
-
 	return &basicResponse, nil
 
 }
