@@ -170,7 +170,6 @@ func (w *Wallet) GetPeerDIDType(did string) (int, error) {
 	var dm DIDPeerMap
 	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
-		w.log.Error("couldn't fetch did type from peer did table")
 		return -1, err
 	}
 	if dm.DIDType == nil {
