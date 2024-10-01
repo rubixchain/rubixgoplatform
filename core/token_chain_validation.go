@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -141,7 +142,7 @@ func (c *Core) ValidateTokenChain(userDID string, tokenInfo *wallet.Token, token
 				}
 			case block.TokenGeneratedType:
 				//validate genesis block
-				response, err = c.ValidateGenesisBlock(b, *tokenInfo, tokenType, userDID)
+				response, err = c.ValidateGenesisBlock(nil, b, *tokenInfo, tokenType, userDID, true)
 				if err != nil {
 					c.log.Error("msg", response.Message, "err", err)
 					return response, err
@@ -323,7 +324,8 @@ func (c *Core) ValidatePledgedUnpledgedBlock(b *block.Block, tokenId string, cal
 }
 
 // genesis block validation : validate block of type: TokenGeneratedType = "05"
-func (c *Core) ValidateGenesisBlock(b *block.Block, tokenInfo wallet.Token, tokenType int, userDID string) (*model.BasicResponse, error) {
+// isSyncParent - if this is true, the parent token chain sync will happen recursively
+func (c *Core) ValidateGenesisBlock(p *ipfsport.Peer, b *block.Block, tokenInfo wallet.Token, tokenType int, userDID string, isSyncParent bool) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{}
 
 	//Validate block hash of genesis block
@@ -343,7 +345,14 @@ func (c *Core) ValidateGenesisBlock(b *block.Block, tokenInfo wallet.Token, toke
 
 	//if part token, validate parent token chain
 	if tokenType == token.TestPartTokenType {
-		response, err = c.ValidateParentTokenLatestBlock(tokenInfo.ParentTokenID, userDID)
+		if p != nil {
+			err := c.syncTokenChainFrom(p, "", tokenInfo.ParentTokenID, tokenType)
+			if err != nil {
+				c.log.Error("Failed to sync token chain block", "err", err)
+				// return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", ti[i].Token, TokenChainNotSynced)
+			}
+		}
+		response, err = c.ValidateParentTokenLatestBlock(p, tokenInfo.ParentTokenID, userDID, isSyncParent)
 		if err != nil {
 			c.log.Error("msg", response.Message, "err", err)
 			return response, err
@@ -357,7 +366,7 @@ func (c *Core) ValidateGenesisBlock(b *block.Block, tokenInfo wallet.Token, toke
 }
 
 // Validate Parent token latest block if token is part token
-func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID string) (*model.BasicResponse, error) {
+func (c *Core) ValidateParentTokenLatestBlock(p *ipfsport.Peer, parentTokenId string, userDID string, isSyncParent bool) (*model.BasicResponse, error) {
 	c.log.Debug("validating parent token chain latest block", parentTokenId)
 	response := &model.BasicResponse{
 		Status: false,
@@ -410,6 +419,12 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 
 	//Get latest block in the token chain
 	parentTokenLatestBlock := c.w.GetLatestTokenBlock(parentTokenId, parentTokenType)
+	if parentTokenLatestBlock == nil {
+		c.log.Error("could not sync parent token", parentTokenId)
+		response.Status = false
+		response.Message = "parent token chain not found"
+		return response, err
+	}
 	response, err = c.ValidateRBTBurntBlock(parentTokenLatestBlock, *parentTokenInfo, "", userDID)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
@@ -417,7 +432,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 	}
 
 	//if parent token is also a part token, then validate it's parent token latest block
-	if parentTokenType == c.TokenType(PartString) {
+	if parentTokenType == c.TokenType(PartString) && isSyncParent {
 		if parentTokenInfo.ParentTokenID == "" {
 			genesisBlock := c.w.GetGenesisTokenBlock(parentTokenId, parentTokenType)
 			grandParentToken, _, err := genesisBlock.GetParentDetials(parentTokenId)
@@ -427,7 +442,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 			c.log.Debug("grand parent token:", grandParentToken)
 			parentTokenInfo.ParentTokenID = grandParentToken
 		}
-		response, err = c.ValidateParentTokenLatestBlock(parentTokenInfo.ParentTokenID, userDID)
+		response, err = c.ValidateParentTokenLatestBlock(p, parentTokenInfo.ParentTokenID, userDID, isSyncParent)
 		if err != nil {
 			c.log.Error("msg", response.Message, "err", err)
 			return response, err

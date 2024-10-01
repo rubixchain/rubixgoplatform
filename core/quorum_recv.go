@@ -739,61 +739,10 @@ func (c *Core) updateReceiverToken(
 				return nil, fmt.Errorf("Invalid token chain block for ", ti.Token)
 			}
 			//Validating the latest block of the token ------------ AshitaBlockCheck
-			err = c.validateLatestBlock(ti, receiverDID, senderDid, parentToken, b)
+			err = c.validateLatestBlock(senderPeer, ti, receiverDID, senderDid, parentToken, b)
 			if err != nil {
 				return nil, fmt.Errorf("invalid latest token block for token %v", ti.Token)
 			}
-			// txnType := b.GetTransType()
-			// switch txnType {
-			// case block.TokenTransferredType:
-			// 	//Sender should be the receiver in the latest block
-			// 	_, senderDid, _ := util.ParseAddress(senderAddress)
-			// 	if b.GetReceiverDID() != senderDid {
-			// 		return nil, fmt.Errorf("invalid token owner for token %v", ti.Token)
-			// 	}
-			// 	//validate latest block for signatures
-			// 	response, err := c.ValidateRBTTransferBlock(b, ti.Token, "", receiverDID)
-			// 	if err != nil {
-			// 		c.log.Error("msg", response.Message, "err", err)
-			// 		return nil, fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
-			// 	}
-			// case block.TokenBurntType:
-			// 	return nil, fmt.Errorf("token %v is already burnt", ti.Token)
-			// case block.TokenPledgedType:
-			// 	return nil, fmt.Errorf("token %v is in pledged state", ti.Token)
-			// case block.TokenContractCommited:
-			// 	return nil, fmt.Errorf("token %v is commited for smart contract ", ti.Token)
-			// case block.TokenGeneratedType:
-			// 	//validate genesis block
-			// 	wt := wallet.Token{
-			// 		TokenID:       ti.Token,
-			// 		ParentTokenID: parentToken,
-			// 		TokenValue:    ti.TokenValue,
-			// 		DID:           ti.OwnerDID,
-			// 	}
-			// 	response, err := c.ValidateGenesisBlock(b, wt, ti.TokenType, receiverDID)
-			// 	if err != nil {
-			// 		c.log.Error("msg", response.Message, "err", err)
-			// 		return nil, fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
-			// 	}
-			// case block.TokenUnpledgedType:
-			// 	response, err := c.ValidatePledgedUnpledgedBlock(b, ti.Token, "", receiverDID)
-			// 	if err != nil {
-			// 		c.log.Error("msg", response.Message, "err", err)
-			// 		return nil, fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
-			// 	}
-			// 	//TODO : Check with Maneesha's latest PR 216
-			// 	prevBlockID, err := b.GetPrevBlockID(ti.Token)
-			// 	if err != nil {
-			// 		c.log.Error("msg", response.Message, "err", err)
-			// 		return nil, fmt.Errorf("cannot validate previous block for token %v", ti.Token)
-			// 	}
-			// 	response, err = c.ValidatePledgedUnpledgedBlock(b, ti.Token, prevBlockID, receiverDID)
-			// 	if err != nil {
-			// 		c.log.Error("msg", response.Message, "err", err)
-			// 		return nil, fmt.Errorf("cannot validate previous block for token %v", ti.Token)
-			// 	}
-			// }
 
 		}
 	}
@@ -966,7 +915,7 @@ func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
-	c.log.Debug("incoming request for pledge finlaity")
+	c.log.Debug("incoming request for pledge finality")
 	did := c.l.GetQuerry(req, "did")
 	c.log.Debug("DID from query", did)
 	var ur UpdatePledgeRequest
@@ -1445,7 +1394,7 @@ func (c *Core) handleToken(token string, ti int, tokenType string, senderPeer *i
 }
 
 // Validating latest block of a token
-func (c *Core) validateLatestBlock(ti contract.TokenInfo, validatorDID string, senderDID string, parentToken string, b *block.Block) error {
+func (c *Core) validateLatestBlock(p *ipfsport.Peer, ti contract.TokenInfo, validatorDID string, senderDID string, parentToken string, b *block.Block) error {
 	txnType := b.GetTransType()
 	switch txnType {
 	case block.TokenTransferredType:
@@ -1473,7 +1422,7 @@ func (c *Core) validateLatestBlock(ti contract.TokenInfo, validatorDID string, s
 			TokenValue:    ti.TokenValue,
 			DID:           ti.OwnerDID,
 		}
-		response, err := c.ValidateGenesisBlock(b, wt, ti.TokenType, validatorDID)
+		response, err := c.ValidateGenesisBlock(p, b, wt, ti.TokenType, validatorDID, false)
 		if err != nil {
 			c.log.Error("msg", response.Message, "err", err)
 			return fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
