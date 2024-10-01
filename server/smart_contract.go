@@ -101,6 +101,18 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	var deploySC core.GenerateSmartContractRequest
 	var err error
+	_, did, err := s.ParseMultiPartForm(req, "did")
+	if err != nil {
+		s.log.Error("Generate smart contract failed, failed to retrieve DID", "err", err)
+		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve DID", nil)
+	}
+
+	deploySC.DID = did["did"][0]
+	if !s.c.IsDIDExist("", deploySC.DID) {
+		s.log.Error("Generate Smart Contract failed, DID does not exist")
+		return s.BasicResponse(req, false, "DID does not exist", nil)
+	}
+
 	deploySC.SCPath, err = s.c.CreateSCTempFolder()
 	if err != nil {
 		s.log.Error("Generate smart contract failed, failed to create SC folder", "err", err)
@@ -198,14 +210,6 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	deploySC.BinaryCode = binaryCodeDest
 	deploySC.RawCode = rawCodeDest
 	deploySC.SchemaCode = schemaDest
-
-	_, did, err := s.ParseMultiPartForm(req, "did")
-	if err != nil {
-		s.log.Error("Generate smart contract failed, failed to retrieve DID", "err", err)
-		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve DID", nil)
-	}
-
-	deploySC.DID = did["did"][0]
 
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(deploySC.DID)
 	if !strings.HasPrefix(deploySC.DID, "bafybmi") || len(deploySC.DID) != 59 || !is_alphanumeric {
