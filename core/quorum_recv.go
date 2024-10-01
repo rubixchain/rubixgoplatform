@@ -796,9 +796,11 @@ func (c *Core) updateReceiverToken(
 	var FT wallet.FTToken
 	FT.FTName = ftinfo.FTName
 	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs, FT)
-	c.updateFTTable()
 	if err != nil {
 		return nil, fmt.Errorf("failed to update token status, error: %v", err)
+	}
+	if FT != (wallet.FTToken{}) {
+		c.updateFTTable()
 	}
 
 	sc := contract.InitContract(b.GetSmartContract(), nil)
@@ -1408,7 +1410,7 @@ func (c *Core) validateLatestBlock(p *ipfsport.Peer, ti contract.TokenInfo, vali
 			c.log.Error("msg", response.Message, "err", err)
 			return fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
 		}
-	case block.TokenBurntType:
+	case block.TokenBurntType, block.TokenIsBurntForFT:
 		return fmt.Errorf("token %v is already burnt", ti.Token)
 	case block.TokenPledgedType:
 		return fmt.Errorf("token %v is in pledged state", ti.Token)
