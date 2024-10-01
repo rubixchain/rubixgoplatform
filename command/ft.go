@@ -94,6 +94,5 @@ func (cmd *Command) getFTinfo() {
 				fmt.Print(", ")
 			}
 		}
-		cmd.log.Info("........") // Print a newline at the end
 	}
 }
