@@ -87,10 +87,7 @@ def setup_rubix_nodes(node_registry_config_key):
             "server": node_server,
             "grpcPort": grpc_server,
             "peerId": "",
-            "did_type": 4,
         }
-        if idx in {5, 6, 12, 14}:
-            cfg["did_type"] = 0
 
         fetch_peer_id(cfg)
         node_config[node_name] = cfg
@@ -101,12 +98,14 @@ def fetch_peer_id(config):
     peer_id = cmd_get_peer_id(config["server"], config["grpcPort"])
     config["peerId"] = peer_id
 
-def create_and_register_did(config: dict, did_alias: str, register_did: bool = True, fp: bool = False):
+def create_and_register_did(config: dict, did_alias: str, did_type: int = 4, register_did: bool = True, fp: bool = False):
     if fp:
         print(f"creating did with fp flag")
-        did = cmd_create_did(config["server"], config["grpcPort"], config["did_type"], "p123", "q123")
+        did = cmd_create_did(config["server"], config["grpcPort"], did_type, "p123", "q123")
         print(f"DID {did} has been created successfully")
-        config["dids"][did_alias] = did
+        config["dids"][did_alias] = {}
+        config["dids"][did_alias]["did"] = did
+        config["dids"][did_alias]["did_type"] = did_type
 
         if register_did:
             cmd_register_did(did, config["server"], config["grpcPort"], "p123")
@@ -114,10 +113,12 @@ def create_and_register_did(config: dict, did_alias: str, register_did: bool = T
 
         return did
     else:
-        did = cmd_create_did(config["server"], config["grpcPort"], config["did_type"])
+        did = cmd_create_did(config["server"], config["grpcPort"], did_type)
         print(f"DID {did} has been created successfully")
 
-        config["dids"][did_alias] = did
+        config["dids"][did_alias] = {}
+        config["dids"][did_alias]["did"] = did
+        config["dids"][did_alias]["did_type"] = did_type
 
         if register_did:
             cmd_register_did(did, config["server"], config["grpcPort"])

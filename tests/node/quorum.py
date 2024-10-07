@@ -13,6 +13,7 @@ def run_quorum_nodes(only_run_nodes, skip_adding_quorums, node_registry_key = "q
     print("Rubix Quorum nodes are now running")
 
     did_alias = "did_quorum"
+    did_type = 4
     node_did_alias_map = {}
     for node, config in node_config.items():
         node_did_alias_map[node] = did_alias
@@ -21,11 +22,13 @@ def run_quorum_nodes(only_run_nodes, skip_adding_quorums, node_registry_key = "q
 
         print("Creating, Registering and Funding Quorum DIDs\n")
         for node, config in node_config.items():
+            if node in {"node5", "node6"}:
+                did_type = 0
             if node in {"node4", "node5"}:
-                did = create_and_register_did(config, did_alias, register_did=False, fp=True)
+                did = create_and_register_did(config, did_alias, did_type, register_did=False, fp=True)
                 fund_did_with_rbt(config, did, priv_pwd="p123")
             else :
-                did = create_and_register_did(config, did_alias, register_did=False)
+                did = create_and_register_did(config, did_alias, did_type, register_did=False)
                 fund_did_with_rbt(config, did)
 
         #Temporary adding details manually

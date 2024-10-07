@@ -18,11 +18,11 @@ def setup():
 
     # lite and basic dids without fp flag
     create_and_register_did(config_bip39, "bip39_1", register_did=False)
-    create_and_register_did(config_nlss, "nlss_1", register_did=False)
+    create_and_register_did(config_nlss, "nlss_1", 0,register_did=False)
 
     # lite and basic dids with fp flag
     create_and_register_did(config_bip39, "bip39_fp", register_did=False, fp=True)
-    create_and_register_did(config_nlss, "nlss_fp", register_did=False, fp=True)
+    create_and_register_did(config_nlss, "nlss_fp", 0, register_did=False, fp=True)
 
     save_to_config_file(__node_config_path, node_config)
 
@@ -63,7 +63,7 @@ def nlss_to_bip39(node_config):
     quorum_config = get_quorum_config()
     
     for _, val in quorum_config.items():
-        add_peer_details(val["peerId"], val["dids"]["did_quorum"], val["did_type"], server_port_nlss, grpc_port_nlss)
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"]["did"], val["dids"]["did_quorum"]["did_type"], server_port_nlss, grpc_port_nlss)
 
     print("\n ----------Txn from NLSS DID (without fp) to BIP39 DID (without fp)---------")
 
@@ -136,7 +136,7 @@ def bip39_to_nlss(node_config):
     quorum_config = get_quorum_config()
     
     for _, val in quorum_config.items():
-        add_peer_details(val["peerId"], val["dids"]["did_quorum"], val["did_type"], server_port_bip39, grpc_port_bip39)
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"]["did"], val["dids"]["did_quorum"]["did_type"], server_port_bip39, grpc_port_bip39)
 
     print("------ Test Case (PASS): Transferring whole, part and mix RBT from BIP39 DID to NLSS DID ------\n")
 
