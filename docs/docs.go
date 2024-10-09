@@ -218,7 +218,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/createft": {
+        "/api/create-ft": {
             "post": {
                 "description": "This API endpoint will create FTs.",
                 "consumes": [

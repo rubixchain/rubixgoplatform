@@ -33,7 +33,7 @@ type TransferFTReqSwaggoInput struct {
 // @Produce      json
 // @Param        input body CreateFTReqSwaggoInput true "Create FT"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/createft [post]
+// @Router       /api/create-ft [post]
 func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	var createFTReq model.CreateFTReq
 	err := s.ParseJSON(req, &createFTReq)

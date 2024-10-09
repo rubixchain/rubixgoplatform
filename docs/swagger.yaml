@@ -365,7 +365,7 @@ paths:
       summary: Create Data Token
       tags:
       - Data Tokens
-  /api/createft:
+  /api/create-ft:
     post:
       consumes:
       - application/json
