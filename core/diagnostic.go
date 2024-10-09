@@ -165,6 +165,99 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 	return reply
 }
 
+func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq) *model.NFTDataReply { //My comment : Need to make changes here according to the NFT structure
+	reply := &model.NFTDataReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	_, err := c.w.GetNFTToken(getReq.Token)
+	if err != nil {
+		reply.Message = "Failed to get nft data, token does not exist"
+		return reply
+	}
+	nftDataArray := make([]model.NFTData, 0)
+	c.log.Debug("latest flag ", getReq.Latest)
+	if getReq.Latest {
+		latestBlock := c.w.GetLatestTokenBlock(getReq.Token, c.TokenType(NFTString))
+		if latestBlock == nil {
+			reply.Message = "Failed to get nft data, block is empty"
+			return reply
+		}
+		blockNo, err := latestBlock.GetBlockNumber(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get smart contract token latest block number"
+			return reply
+		}
+		blockId, err := latestBlock.GetBlockID(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get smart contract token latest block number"
+			return reply
+		}
+		nftData := latestBlock.GetNFTData()
+		fmt.Println("The nftData is :", nftData)
+		nftOwner := latestBlock.GetOwner()
+		fmt.Println("The nftOwner is :", nftOwner)
+		nftValue := latestBlock.GetTokenValue()
+		fmt.Println("The nftValue is :", nftValue)
+		nftDataStruct := model.NFTData{
+			BlockNo:  blockNo,
+			BlockId:  blockId,
+			NFTData:  nftData,
+			NFTOwner: nftOwner,
+			NFTValue: nftValue,
+		}
+		nftDataArray = append(nftDataArray, nftDataStruct)
+		reply.NFTDataReply = nftDataArray
+		reply.Status = true
+		reply.Message = "Fetched latest block smart contract data"
+		return reply
+	}
+
+	blks, _, err := c.w.GetAllTokenBlocks(getReq.Token, c.TokenType(NFTString), "")
+	if err != nil {
+		reply.Message = "Failed to get nft token blocks"
+		return reply
+	}
+
+	for _, blk := range blks {
+		block := block.InitBlock(blk, nil)
+		if block == nil {
+			reply.Message = "Failed to initialize smart contract block"
+			return reply
+		}
+		blockNo, err := block.GetBlockNumber(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get smart contract token latest block number"
+			return reply
+		}
+		blockId, err := block.GetBlockID(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get smart contract token latest block number"
+			return reply
+		}
+		nftData := block.GetNFTData()
+		fmt.Println("The nftData is :", nftData)
+		nftOwner := block.GetOwner()
+		fmt.Println("The nftOwner is :", nftOwner)
+		nftValue := block.GetTokenValue()
+		fmt.Println("The nftValue is :", nftValue)
+		nftDataStruct := model.NFTData{
+			BlockNo:  blockNo,
+			BlockId:  blockId,
+			NFTData:  nftData,
+			NFTOwner: nftOwner,
+			NFTValue: nftValue,
+		}
+
+		nftDataArray = append(nftDataArray, nftDataStruct)
+	}
+	reply.NFTDataReply = nftDataArray
+	reply.Status = true
+	reply.Message = "Fetched NFT data"
+	return reply
+}
+
 func (c *Core) RegisterCallBackURL(registerReq *model.RegisterCallBackUrlReq) *model.BasicResponse {
 	reply := &model.BasicResponse{
 		Status: false,

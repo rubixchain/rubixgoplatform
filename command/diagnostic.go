@@ -253,7 +253,7 @@ func (cmd *Command) getNFTTokenChain() {
 	if cmd.nft == "" {
 		cmd.log.Info("NFT id cannot be empty")
 		fmt.Print("Enter NFT Id : ")
-		_, err := fmt.Scan(&cmd.smartContractToken)
+		_, err := fmt.Scan(&cmd.nft)
 		if err != nil {
 			cmd.log.Error("Failed to get NFT Token ID")
 			return

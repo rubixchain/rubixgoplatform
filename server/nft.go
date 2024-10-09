@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,15 +13,17 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-// ShowAccount godoc
+// NFT godoc
 // @Summary      Create NFT
 // @Description  This API will create new NFT
 // @Tags         NFT
 // @Accept       mpfd
 // @Produce      mpfd
-// @Param        UserInfo      	   formData      string  false  "User/Entity Info"
-// @Param        FileInfo    	   formData      string  false  "File Info is json string {"FileHash" : "asja", "FileURL": "ass", "FileTransInfo": "asas"}"
-// @Param        FileContent       formData      file    false  "File to be committed"
+// @Param        did        	   formData      string  true   "DID"
+// @Param        UserID      	   formData      string  true  "User/Entity Info"
+// @Param        NFTFileInfo       formData      file  true  "NFTFileInfo is a metadata about the file being given. We are expecting a json file with a mandatory key filename"
+// @Param        NFTFile       formData      file    true  "File to be committed"
+// @Param        Data      	   formData      string  true  "The data which the user wishes to be put in"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/createnft [post]
 func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
@@ -56,8 +59,8 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 
 	nftFile, nftFileHeader, err := s.ParseMultiPartFormFile(req, "NFTFile")
 	if err != nil {
-		s.log.Error("Creation of NFT failed, failed to retirve NFT file", "err", err)
-		return s.BasicResponse(req, false, "Creation of NFT failed, failed to retirve NFT file", nil)
+		s.log.Error("Creation of NFT failed, failed to retrieve NFT file", "err", err)
+		return s.BasicResponse(req, false, "Creation of NFT failed, failed to retrieve NFT file", nil)
 	}
 	nftFileDest := filepath.Join(createNFT.NFTPath, nftFileHeader.Filename)
 	nftFileDestFile, err := os.Create(nftFileDest)
@@ -82,11 +85,17 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 
 	_, did, err := s.ParseMultiPartForm(req, "did")
 	if err != nil {
-		s.log.Error("Creation of NFT failed, failed to retirve DID", "err", err)
+		s.log.Error("Creation of NFT failed, failed to retrieve DID", "err", err)
 		return s.BasicResponse(req, false, "Creation of NFT failed, failed to retrieve DID", nil)
 	}
 	createNFT.DID = did["did"][0]
-
+	_, userId, err := s.ParseMultiPartForm(req, "UserID")
+	if err != nil {
+		s.log.Error("Creation of NFT failed, failed to retrieve UserID", "err", err)
+		return s.BasicResponse(req, false, "Creation of NFT failed, fialed to retrieve UserID", nil)
+	}
+	createNFT.UserID = userId["UserID"][0]
+	fmt.Println("The userID is ", createNFT.UserID)
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(createNFT.DID)
 	if !strings.HasPrefix(createNFT.DID, "bafybmi") || len(createNFT.DID) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid DID")
@@ -102,6 +111,22 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 
 }
 
+type DeployNFTSwaggoInput struct {
+	NFT        string `json:"NFT"`
+	DID        string `json:"DID"`
+	QuorumType int    `json:"QuorumType"`
+}
+
+// NFT godoc
+// @Summary      Deploy NFT
+// @Description  This API will deploy the NFT
+// @Tags         NFT
+// @ID 			 deploy-nft
+// @Accept       json
+// @Produce      json
+// @Param		 input body DeployNFTSwaggoInput true "Deploy nft"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/deploy-nft [post]
 func (s *Server) APIDeployNFT(req *ensweb.Request) *ensweb.Result {
 	var deployReq model.DeployNFTRequest
 	err := s.ParseJSON(req, &deployReq)
@@ -165,6 +190,25 @@ func (s *Server) APIDeployNFT(req *ensweb.Request) *ensweb.Result {
 // 	return s.RenderJSON(req, resp, http.StatusOK)
 // }
 
+type ExecuteNFTSwaggoInput struct {
+	NFT        string  `json:"NFT"`
+	Executor   string  `json:"Executor"`
+	Receiver   string  `json:"Receiver"`
+	QuorumType int     `json:"QuorumType"`
+	Comment    string  `json:"Comment"`
+	NFTValue   float64 `json:"NFTValue"`
+	NFTData    string  `json:"NFTData"`
+}
+
+// NFT godoc
+// @Summary      Execute NFT or transfer of NFT ownership
+// @Description  This API will add a new block which indicates the transfer of ownership of NFT
+// @Tags         NFT
+// @Accept       json
+// @Produce      json
+// @Param		 input body ExecuteNFTSwaggoInput true "Execute NFT and transfer the ownership of particular NFT"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/execute-nft [post]
 func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
 	var executeReq model.ExecuteNFTRequest
 	err := s.ParseJSON(req, &executeReq)
@@ -197,6 +241,19 @@ func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+type NewNFTSwaggoInput struct {
+	NFT string `json:"nft"`
+}
+
+// NFT godoc
+// @Summary      Subscribe to NFT
+// @Description  This API endpoint allows subscribing to a NFT.
+// @Tags         NFT
+// @Accept       json
+// @Produce      json
+// @Param        input body NewNFTSwaggoInput true "Subscribe to input nft"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/subscribe-nft [post]
 func (s *Server) APISubscribeNFT(request *ensweb.Request) *ensweb.Result {
 	var newSubscription model.NewNFTSubscription
 	err := s.ParseJSON(request, &newSubscription)
@@ -205,11 +262,11 @@ func (s *Server) APISubscribeNFT(request *ensweb.Request) *ensweb.Result {
 	}
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(newSubscription.NFT)
 	if len(newSubscription.NFT) != 46 || !strings.HasPrefix(newSubscription.NFT, "Qm") || !is_alphanumeric {
-		s.log.Error("Invalid smart contract token")
-		return s.BasicResponse(request, false, "Invalid smart contract token", nil)
+		s.log.Error("Invalid NFT")
+		return s.BasicResponse(request, false, "Invalid NFT", nil)
 	}
 	topic := newSubscription.NFT
 	s.c.AddWebReq(request)
 	go s.c.SubsribeNFTSetup(request.ID, topic)
-	return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)
+	return s.BasicResponse(request, true, "NFT subscribed successfully", nil)
 }

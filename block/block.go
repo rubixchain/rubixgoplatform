@@ -25,23 +25,25 @@ import (
 // }
 
 const (
-	TCTokenTypeKey          string = "1"
-	TCTransTypeKey          string = "2"
-	TCTokenOwnerKey         string = "3"
-	TCGenesisBlockKey       string = "4"
-	TCTransInfoKey          string = "5"
-	TCSmartContractKey      string = "6"
-	TCQuorumSignatureKey    string = "7"
-	TCPledgeDetailsKey      string = "8"
-	TCBlockHashKey          string = "98"
-	TCSignatureKey          string = "99"
-	TCBlockContentKey       string = "1"
-	TCBlockContentSigKey    string = "2"
-	TCSmartContractDataKey  string = "9"
+	TCTokenTypeKey         string = "1"
+	TCTransTypeKey         string = "2"
+	TCTokenOwnerKey        string = "3"
+	TCGenesisBlockKey      string = "4"
+	TCTransInfoKey         string = "5"
+	TCSmartContractKey     string = "6"
+	TCQuorumSignatureKey   string = "7"
+	TCPledgeDetailsKey     string = "8"
+	TCBlockHashKey         string = "98"
+	TCSignatureKey         string = "99"
+	TCBlockContentKey      string = "1"
+	TCBlockContentSigKey   string = "2"
+	TCSmartContractDataKey string = "9"
+	//My comment : Here we should ensure whether anything else should be added in the key
 	TCTokenValueKey         string = "10"
 	TCChildTokensKey        string = "11"
 	TCInitiatorSignatureKey string = "12"
 	TCEpochKey              string = "epoch"
+	TCNFTDataKey            string = "13" //My comment : Latest addition NFTDatakey
 )
 
 const (
@@ -88,6 +90,7 @@ type TokenChainBlock struct {
 	ChildTokens        []string            `json:"childTokens"`
 	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
 	NFT                []byte              `json:"nft"`
+	NFTData            string              `json:"nftData"`
 	Epoch              int                 `json:"epoch"`
 }
 
@@ -189,6 +192,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
+	if tcb.NFTData != "" {
+		ntcb[TCNFTDataKey] = tcb.NFTData
+	}
+	//My comment : Here need to ensure whether nftdata should be added
 	if tcb.InitiatorSignature != nil {
 		ntcb[TCInitiatorSignatureKey] = tcb.InitiatorSignature
 	}
@@ -718,6 +725,10 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 
 func (b *Block) GetSmartContractData() string {
 	return b.getBlkString(TCSmartContractDataKey)
+}
+
+func (b *Block) GetNFTData() string { //My Comment : This should be according to NFT
+	return b.getBlkString(TCNFTDataKey)
 }
 
 func (b *Block) GetSmartContractValue(t string) (float64, error) {

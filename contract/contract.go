@@ -292,6 +292,10 @@ func (c *Contract) GetSmartContractData() string {
 	return c.getTransInfoString(TSSmartContractDataKey)
 }
 
+func (c *Contract) GetNFTData() string {
+	return c.getTransInfoString(TSNFTDataKey)
+}
+
 func (c *Contract) GetComment() string {
 	return c.getTransInfoString(TSCommentKey)
 }

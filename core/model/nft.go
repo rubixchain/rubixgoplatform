@@ -48,6 +48,7 @@ type ExecuteNFTRequest struct {
 	QuorumType int     `json:"quorumType"`
 	Comment    string  `json:"comment"`
 	NFTValue   float64 `json:"nftValue"`
+	NFTData    string  `json:"nftData"`
 }
 
 type NewNFTSubscription struct {

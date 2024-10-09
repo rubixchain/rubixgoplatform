@@ -296,6 +296,7 @@ type Command struct {
 	nftFileInfo                  string
 	nftFilePath                  string
 	nft                          string
+	nftData                      string
 }
 
 func showVersion() {
@@ -497,6 +498,7 @@ func Run(args []string) {
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
 	flag.StringVar(&cmd.nft, "nft", "", "NFT id")
+	flag.StringVar(&cmd.nftData, "nftData", "", "The nft data")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

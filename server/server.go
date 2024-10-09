@@ -174,6 +174,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetNFTTokenChain, "POST", s.AuthHandle(s.APIGetNFTTokenChain, true, s.AuthError, false))
 	s.AddRoute(setup.APISubscribeNFT, "POST", s.AuthHandle(s.APISubscribeNFT, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetNFTTokenChainData, "POST", s.AuthHandle(s.APIGetNFTTokenChainData, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {

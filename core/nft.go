@@ -12,7 +12,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
@@ -23,12 +22,15 @@ type NFTReq struct {
 	NFTFileInfo string
 	NFTFile     string
 	NFTPath     string
+	Data        string
 }
 
 type NFT struct {
 	DID             string
 	NftFileInfoHash string
 	NFTFileHash     string
+	UserId          string
+	NFTData         string
 }
 
 type FetchNFTRequest struct {
@@ -55,7 +57,12 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 
 	userID := createNFTRequest.UserID
 	c.log.Info("The user id is :", userID)
-
+	nftData := createNFTRequest.Data
+	// nftDataHash, err := c.ipfs.Add(bytes.NewBufferString(nftData))
+	// if err != nil {
+	// 	c.log.Error("failed to add nft data to ipfs", "err", err)
+	// 	return basicResponse
+	// } // If the data passed should be the hash
 	nftFile, err := os.Open(createNFTRequest.NFTFile)
 	if err != nil {
 		c.log.Error("Failed to open the file which should be converted to NFT", "err", err)
@@ -89,6 +96,8 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		DID:             createNFTRequest.DID,
 		NFTFileHash:     nftFileHash,
 		NftFileInfoHash: nftFileInfoHash,
+		UserId:          userID,
+		NFTData:         nftData,
 	}
 
 	if err != nil {
@@ -167,6 +176,22 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		resp.Message = err.Error()
 		return resp
 	}
+	nftJSON, err := c.ipfs.Cat(deployReq.NFT)
+	if err != nil {
+		c.log.Error("Failed to get NFT from network", "err", err)
+	}
+
+	nftJSONBytes, err := io.ReadAll(nftJSON)
+	if err != nil {
+		c.log.Error("Failed to read NFT from network", "err", err)
+	}
+	nftJSON.Close()
+	var nftToken NFT
+	err = json.Unmarshal(nftJSONBytes, &nftToken)
+	fmt.Println("The nft token while deploying is :", nftToken)
+	if err != nil {
+		c.log.Error("Failed to parse nft", "err", err)
+	}
 
 	c.log.Info("The nft info fetched from the db is : ", nft)
 
@@ -186,6 +211,7 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		TransInfo: &contract.TransInfo{
 			DeployerDID: did,
 			NFT:         deployReq.NFT,
+			NFTData:     nftToken.NFTData,
 			TransTokens: nftInfoArray,
 		},
 		ReqID: reqID,
@@ -322,11 +348,11 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		resp.Message = err.Error()
 		return resp
 	}
-	if currentNFTValue == 0 {
-		c.log.Error("NFT Value cannot be 0, ")
-		resp.Message = "NFT Value cannot be 0, "
-		return resp
-	}
+	// if currentNFTValue == 0 {
+	// 	c.log.Error("NFT Value cannot be 0, ")
+	// 	resp.Message = "NFT Value cannot be 0, "
+	// 	return resp
+	// }
 
 	nftInfoArray := make([]contract.TokenInfo, 0)
 	nftInfo := contract.TokenInfo{
@@ -349,6 +375,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 			NFT:         executeReq.NFT,
 			TransTokens: nftInfoArray,
 			NFTValue:    executeReq.NFTValue,
+			NFTData:     executeReq.NFTData,
 		},
 		ReqID: reqID,
 	}
@@ -426,7 +453,7 @@ func (c *Core) SubsribeNFTSetup(requestID string, topic string) error {
 }
 
 func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
-	var newEvent model.NewNFTEvent
+	var newEvent model.NFTEvent
 	var fetchNFT FetchNFTRequest
 	requestID := reqID
 	err := json.Unmarshal(data, &newEvent)
@@ -484,14 +511,16 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 		c.log.Info("NFT " + nft + " files fetching successful")
 	}
 	publisherPeerID := peerID
-	did := newEvent.ExecutorDid
-	tokenType := token.NFTTokenType
+	did := newEvent.Did
+	tokenType := c.TokenType(NFTString)
 	address := publisherPeerID + "." + did
 	p, err := c.getPeer(address, "")
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return
 	}
+	fmt.Println("The nft variable before calling syncTokenChainFrom", nft)
+	fmt.Println("The tokenType variable before calling syncTokenChain from", tokenType)
 	err = c.syncTokenChainFrom(p, "", nft, tokenType)
 	if err != nil {
 		c.log.Error("Failed to sync token chain block", "err", err)

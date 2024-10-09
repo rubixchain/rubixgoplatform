@@ -94,6 +94,7 @@ func (c *Core) getPeer(addr string, selfDID string) (*ipfsport.Peer, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid address: %v", addr)
 	}
+	fmt.Println("The did from getPeer", did, peerID)
 	// check if addr contains the peer ID
 	if peerID == "" {
 		peerID = c.w.GetPeerID(did)

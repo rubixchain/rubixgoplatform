@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -35,6 +36,7 @@ const (
 	TSSmartContractDataKey  string = "10"
 	TSPinningDIDKey         string = "11"
 	TSNFTKey                string = "12"
+	TSNFTDataKey            string = "13" //My Comment added TSNFTDataKey for using in contract.GetNFtData
 )
 
 const (
@@ -74,6 +76,7 @@ type TransInfo struct {
 	SmartContractData    string      `json:"smartcontractdata"`
 	NFT                  string      `json:"nft"`
 	NFTValue             float64     `json:"nftValue"`
+	NFTData              string      `json:"nftData"`
 }
 
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {
@@ -117,6 +120,10 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 	}
 	if ts.SmartContractData != "" {
 		ntsb[TSSmartContractDataKey] = ts.SmartContractData
+	}
+	if ts.NFTData != "" {
+		fmt.Println("The nft data is not empty :", ts.NFTData)
+		ntsb[TSNFTDataKey] = ts.NFTData //
 	}
 
 	if ts.CommitedTokens != nil && len(ts.CommitedTokens) > 0 {
