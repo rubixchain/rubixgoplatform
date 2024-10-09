@@ -324,9 +324,6 @@ func (w *Wallet) getGenesisBlock(tt int, token string) *block.Block {
 
 // getLatestBlock get latest block from the storage
 func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
-	fmt.Println("The get latest block called")
-	fmt.Println("The tokenType in getLatestBlock", tt)
-	fmt.Println("The token in getLatestBlock", token)
 	db := w.getChainDB(tt)
 	if db == nil {
 		w.log.Error("Failed to get latest block, invalid token type")

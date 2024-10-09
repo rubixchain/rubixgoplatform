@@ -1,7 +1,6 @@
 package contract
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -122,8 +121,7 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 		ntsb[TSSmartContractDataKey] = ts.SmartContractData
 	}
 	if ts.NFTData != "" {
-		fmt.Println("The nft data is not empty :", ts.NFTData)
-		ntsb[TSNFTDataKey] = ts.NFTData //
+		ntsb[TSNFTDataKey] = ts.NFTData
 	}
 
 	if ts.CommitedTokens != nil && len(ts.CommitedTokens) > 0 {

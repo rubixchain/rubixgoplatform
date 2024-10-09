@@ -186,20 +186,17 @@ func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq
 		}
 		blockNo, err := latestBlock.GetBlockNumber(getReq.Token)
 		if err != nil {
-			reply.Message = "Failed to get smart contract token latest block number"
+			reply.Message = "Failed to get latest block number"
 			return reply
 		}
 		blockId, err := latestBlock.GetBlockID(getReq.Token)
 		if err != nil {
-			reply.Message = "Failed to get smart contract token latest block number"
+			reply.Message = "Failed to get latest block ID"
 			return reply
 		}
 		nftData := latestBlock.GetNFTData()
-		fmt.Println("The nftData is :", nftData)
 		nftOwner := latestBlock.GetOwner()
-		fmt.Println("The nftOwner is :", nftOwner)
 		nftValue := latestBlock.GetTokenValue()
-		fmt.Println("The nftValue is :", nftValue)
 		nftDataStruct := model.NFTData{
 			BlockNo:  blockNo,
 			BlockId:  blockId,
@@ -210,7 +207,7 @@ func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq
 		nftDataArray = append(nftDataArray, nftDataStruct)
 		reply.NFTDataReply = nftDataArray
 		reply.Status = true
-		reply.Message = "Fetched latest block smart contract data"
+		reply.Message = "Fetched latest block details of nft"
 		return reply
 	}
 
@@ -223,25 +220,22 @@ func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq
 	for _, blk := range blks {
 		block := block.InitBlock(blk, nil)
 		if block == nil {
-			reply.Message = "Failed to initialize smart contract block"
+			reply.Message = "Failed to initialize nft block"
 			return reply
 		}
 		blockNo, err := block.GetBlockNumber(getReq.Token)
 		if err != nil {
-			reply.Message = "Failed to get smart contract token latest block number"
+			reply.Message = "Failed to get latest block number"
 			return reply
 		}
 		blockId, err := block.GetBlockID(getReq.Token)
 		if err != nil {
-			reply.Message = "Failed to get smart contract token latest block number"
+			reply.Message = "Failed to get latest block ID"
 			return reply
 		}
 		nftData := block.GetNFTData()
-		fmt.Println("The nftData is :", nftData)
 		nftOwner := block.GetOwner()
-		fmt.Println("The nftOwner is :", nftOwner)
 		nftValue := block.GetTokenValue()
-		fmt.Println("The nftValue is :", nftValue)
 		nftDataStruct := model.NFTData{
 			BlockNo:  blockNo,
 			BlockId:  blockId,

@@ -188,7 +188,7 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	nftJSON.Close()
 	var nftToken NFT
 	err = json.Unmarshal(nftJSONBytes, &nftToken)
-	fmt.Println("The nft token while deploying is :", nftToken)
+
 	if err != nil {
 		c.log.Error("Failed to parse nft", "err", err)
 	}
@@ -519,8 +519,7 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 		c.log.Error("Failed to get peer", "err", err)
 		return
 	}
-	fmt.Println("The nft variable before calling syncTokenChainFrom", nft)
-	fmt.Println("The tokenType variable before calling syncTokenChain from", tokenType)
+
 	err = c.syncTokenChainFrom(p, "", nft, tokenType)
 	if err != nil {
 		c.log.Error("Failed to sync token chain block", "err", err)

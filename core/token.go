@@ -261,23 +261,16 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 }
 
 func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
-	fmt.Println("API SyncTokenChain called")
 	var tr TCBSyncRequest
 
 	err := c.l.ParseJSON(req, &tr)
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to parse request"}, http.StatusOK)
 	}
-	fmt.Println("The TCBSyncRequest", tr)
-	fmt.Println("tr.token", tr.Token)
-	fmt.Println("tr.TokenType", tr.TokenType)
-	fmt.Println("tr.BlockID", tr.BlockID)
 	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
-	fmt.Println("The block which is got from GetALltokenBlocks function", blks, nextID)
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: err.Error()}, http.StatusOK)
 	}
-	fmt.Println("BLKS in syncTokenChain", blks)
 	return c.l.RenderJSON(req, &TCBSyncReply{Status: true, Message: "Got all blocks", TCBlock: blks, NextBlockID: nextID}, http.StatusOK)
 }
 
@@ -288,9 +281,6 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 	// 	return err
 	// }
 	// defer p.Close()
-	fmt.Println("SyncTokencchainfrom called")
-	fmt.Println("The token in syncTokenChain From :", token)
-	fmt.Println("The tokenType in syncTokenChain From :", tokenType)
 	var err error
 	blk := c.w.GetLatestTokenBlock(token, tokenType)
 	blkID := ""
@@ -304,13 +294,11 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 			return nil
 		}
 	}
-	fmt.Println("The latest block :", blk)
 	tr := TCBSyncRequest{
 		Token:     token,
 		TokenType: tokenType,
 		BlockID:   blkID,
 	}
-	fmt.Println("The tr before sending", tr)
 	for {
 		var trep TCBSyncReply
 		err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &tr, &trep, false)
@@ -318,7 +306,6 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return err
 		}
-		fmt.Println("The api response from SyncTokenChain api is :", trep)
 		if !trep.Status {
 			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
 			return fmt.Errorf(trep.Message)

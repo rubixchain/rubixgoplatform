@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -95,7 +94,6 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Creation of NFT failed, fialed to retrieve UserID", nil)
 	}
 	createNFT.UserID = userId["UserID"][0]
-	fmt.Println("The userID is ", createNFT.UserID)
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(createNFT.DID)
 	if !strings.HasPrefix(createNFT.DID, "bafybmi") || len(createNFT.DID) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid DID")
