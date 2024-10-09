@@ -431,3 +431,28 @@ This following options are used for this command
       NOTE: Don't provide the flag -blockCount in case you want to validate all the blocks of the token chain
   
 ```
+Create FT Command
+: To create fungible tokens
+
+```
+./rubixgoplatform.exe createft
+
+The following flags are used for this command
+  -did string
+        DID address (default "")
+
+  -ftName string
+        Name of the FT to be created (default "")
+
+  -ftCount integer 
+        Number of FTs to be created (default "0")
+
+  -rbtAmount integer
+        Amount of RBT to be used for creating the FT (default "0")
+
+  -port string
+        Server/Host port (default "20000")
+
+```
+
+

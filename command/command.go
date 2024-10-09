@@ -499,7 +499,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
-	flag.StringVar(&cmd.ftName, "ftName", "", "Four character string to represent the FT")
+	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 
 	if len(os.Args) < 2 {
