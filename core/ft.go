@@ -260,8 +260,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	return nil
 }
 
-func (c *Core) GetFTInfo() ([]model.FTInfo, error) {
-	FT, err := c.w.GetAllFreeFTs()
+func (c *Core) GetFTInfo(did string) ([]model.FTInfo, error) {
+	FT, err := c.w.GetFreeFTsByDID(did)
 	if err != nil && err.Error() != "no records found" {
 		c.log.Error("Failed to get tokens", "err", err)
 		return []model.FTInfo{}, fmt.Errorf("failed to get tokens")
@@ -326,7 +326,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
-	AllFTs, err := c.w.GetFreeFTsByName(req.FTName, did)
+	AllFTs, err := c.w.GetFreeFTsByNameAndDID(req.FTName, did)
 	AvailableFTCount := len(AllFTs)
 	if err != nil {
 		c.log.Error("Failed to get FTs", "err", err)

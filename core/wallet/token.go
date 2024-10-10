@@ -134,9 +134,6 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 	return t, nil
 }
 
-// GetFTsAndCount retrieves all free fungible tokens associated with the wallet,
-// counts their occurrences based on FTName and CreatorDID, and returns a slice
-// of FT structs containing this information.
 func (w *Wallet) GetFTsAndCount() ([]FT, error) {
 	fts, err := w.GetAllFreeFTs()
 	if err != nil {
@@ -191,9 +188,9 @@ func (w *Wallet) GetAllFreeFTs() ([]FTToken, error) {
 	return FT, nil
 }
 
-func (w *Wallet) GetFTsByName(ftName string) ([]FTToken, error) {
+func (w *Wallet) GetFreeFTsByDID(did string) ([]FTToken, error) {
 	var FT []FTToken
-	err := w.s.Read(FTTokenStorage, &FT, "ft_name=?", ftName)
+	err := w.s.Read(FTTokenStorage, &FT, "owner_did=? AND token_status=? OR token_status=?", did, TokenIsFree, TokenIsGenerated)
 	if err != nil {
 		w.log.Error("Failed to get FTs by name", "err", err)
 		return nil, err
@@ -201,7 +198,7 @@ func (w *Wallet) GetFTsByName(ftName string) ([]FTToken, error) {
 	return FT, nil
 }
 
-func (w *Wallet) GetFreeFTsByName(ftName string, did string) ([]FTToken, error) {
+func (w *Wallet) GetFreeFTsByNameAndDID(ftName string, did string) ([]FTToken, error) {
 	var FT []FTToken
 	err := w.s.Read(FTTokenStorage, &FT, "ft_name=? AND token_status =? AND  owner_did=?", ftName, TokenIsFree, did)
 

@@ -80,7 +80,7 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
-	info, err := s.c.GetFTInfo()
+	info, err := s.c.GetFTInfo(did)
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
