@@ -314,40 +314,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/execute-nft": {
-            "post": {
-                "description": "This API will add a new block which indicates the transfer of ownership of NFT",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "NFT"
-                ],
-                "summary": "Execute NFT or transfer of NFT ownership",
-                "parameters": [
-                    {
-                        "description": "Execute NFT and transfer the ownership of particular NFT",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.ExecuteNFTSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/execute-smart-contract": {
             "post": {
                 "description": "This API will Execute smart contract Token",
@@ -1090,6 +1056,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/transfer-nft": {
+            "post": {
+                "description": "This API will add a new block which indicates the transfer of ownership of NFT",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Transfer of NFT ownership",
+                "parameters": [
+                    {
+                        "description": "Transfer the ownership of particular NFT",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.TransferNFTSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/unpledge-pow-unpledge-tokens": {
             "post": {
                 "description": "This API will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
@@ -1236,32 +1236,6 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "smartContractToken": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.ExecuteNFTSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "Comment": {
-                    "type": "string"
-                },
-                "Executor": {
-                    "type": "string"
-                },
-                "NFT": {
-                    "type": "string"
-                },
-                "NFTData": {
-                    "type": "string"
-                },
-                "NFTValue": {
-                    "type": "number"
-                },
-                "QuorumType": {
-                    "type": "integer"
-                },
-                "Receiver": {
                     "type": "string"
                 }
             }
@@ -1421,6 +1395,32 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.TransferNFTSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "Comment": {
+                    "type": "string"
+                },
+                "NFT": {
+                    "type": "string"
+                },
+                "NFTData": {
+                    "type": "string"
+                },
+                "NFTValue": {
+                    "type": "number"
+                },
+                "Owner": {
+                    "type": "string"
+                },
+                "QuorumType": {
+                    "type": "integer"
+                },
+                "Receiver": {
                     "type": "string"
                 }
             }

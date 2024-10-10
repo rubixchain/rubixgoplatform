@@ -188,9 +188,9 @@ func (s *Server) APIDeployNFT(req *ensweb.Request) *ensweb.Result {
 // 	return s.RenderJSON(req, resp, http.StatusOK)
 // }
 
-type ExecuteNFTSwaggoInput struct {
+type TransferNFTSwaggoInput struct {
 	NFT        string  `json:"NFT"`
-	Executor   string  `json:"Executor"`
+	Owner      string  `json:"Owner"`
 	Receiver   string  `json:"Receiver"`
 	QuorumType int     `json:"QuorumType"`
 	Comment    string  `json:"Comment"`
@@ -199,35 +199,36 @@ type ExecuteNFTSwaggoInput struct {
 }
 
 // NFT godoc
-// @Summary      Execute NFT or transfer of NFT ownership
+// @Summary      Transfer of NFT ownership
 // @Description  This API will add a new block which indicates the transfer of ownership of NFT
 // @Tags         NFT
 // @Accept       json
 // @Produce      json
-// @Param		 input body ExecuteNFTSwaggoInput true "Execute NFT and transfer the ownership of particular NFT"
+// @Param		 input body TransferNFTSwaggoInput true "Transfer the ownership of particular NFT"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/execute-nft [post]
-func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
-	var executeReq model.ExecuteNFTRequest
-	err := s.ParseJSON(req, &executeReq)
+// @Router       /api/transfer-nft [post]
+func (s *Server) APITransferNFT(req *ensweb.Request) *ensweb.Result {
+	var transferReq model.TransferNFTRequest
+	err := s.ParseJSON(req, &transferReq)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", err)
 	}
-	_, did, ok := util.ParseAddress(executeReq.Executor)
+	_, did, ok := util.ParseAddress(transferReq.Owner)
 	if !ok {
-		return s.BasicResponse(req, false, "Invalid Executer address", nil)
+		return s.BasicResponse(req, false, "Invalid Owner address", nil)
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(executeReq.NFT)
-	if len(executeReq.NFT) != 46 || !strings.HasPrefix(executeReq.NFT, "Qm") || !is_alphanumeric {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(transferReq.NFT)
+	if len(transferReq.NFT) != 46 || !strings.HasPrefix(transferReq.NFT, "Qm") || !is_alphanumeric {
 		s.log.Error("Invalid NFT")
 		return s.BasicResponse(req, false, "Invalid NFT", nil)
 	}
 	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-	if !strings.HasPrefix(executeReq.Executor, "bafybmi") || len(executeReq.Executor) != 59 || !is_alphanumeric {
-		s.log.Error("Invalid executer DID")
-		return s.BasicResponse(req, false, "Invalid executer DID", nil)
+	s.log.Info("The did trying to transfer the nft :", transferReq.Owner)
+	if !strings.HasPrefix(transferReq.Owner, "bafybmi") || len(transferReq.Owner) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid owner DID")
+		return s.BasicResponse(req, false, "Invalid owner DID", nil)
 	}
-	if executeReq.QuorumType < 1 || executeReq.QuorumType > 2 {
+	if transferReq.QuorumType < 1 || transferReq.QuorumType > 2 {
 		s.log.Error("Invalid quorum type")
 		return s.BasicResponse(req, false, "Invalid quorum type", nil)
 	}
@@ -235,7 +236,7 @@ func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.c.ExecuteNFT(req.ID, &executeReq)
+	go s.c.TransferNFT(req.ID, &transferReq)
 	return s.didResponse(req, req.ID)
 }
 

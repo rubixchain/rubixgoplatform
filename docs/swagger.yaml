@@ -80,23 +80,6 @@ definitions:
       smartContractToken:
         type: string
     type: object
-  server.ExecuteNFTSwaggoInput:
-    properties:
-      Comment:
-        type: string
-      Executor:
-        type: string
-      NFT:
-        type: string
-      NFTData:
-        type: string
-      NFTValue:
-        type: number
-      QuorumType:
-        type: integer
-      Receiver:
-        type: string
-    type: object
   server.ExecuteSmartContractSwaggoInput:
     properties:
       comment:
@@ -197,6 +180,23 @@ definitions:
       mode:
         type: integer
       password:
+        type: string
+    type: object
+  server.TransferNFTSwaggoInput:
+    properties:
+      Comment:
+        type: string
+      NFT:
+        type: string
+      NFTData:
+        type: string
+      NFTValue:
+        type: number
+      Owner:
+        type: string
+      QuorumType:
+        type: integer
+      Receiver:
         type: string
     type: object
 info:
@@ -404,29 +404,6 @@ paths:
       summary: Deploy Smart Contract
       tags:
       - Smart Contract
-  /api/execute-nft:
-    post:
-      consumes:
-      - application/json
-      description: This API will add a new block which indicates the transfer of ownership
-        of NFT
-      parameters:
-      - description: Execute NFT and transfer the ownership of particular NFT
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.ExecuteNFTSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Execute NFT or transfer of NFT ownership
-      tags:
-      - NFT
   /api/execute-smart-contract:
     post:
       consumes:
@@ -920,6 +897,29 @@ paths:
       summary: Subscribe to Smart Contract
       tags:
       - Smart Contract
+  /api/transfer-nft:
+    post:
+      consumes:
+      - application/json
+      description: This API will add a new block which indicates the transfer of ownership
+        of NFT
+      parameters:
+      - description: Transfer the ownership of particular NFT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.TransferNFTSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Transfer of NFT ownership
+      tags:
+      - NFT
   /api/unpledge-pow-unpledge-tokens:
     post:
       consumes:

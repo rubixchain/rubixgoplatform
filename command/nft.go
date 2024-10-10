@@ -88,7 +88,7 @@ func (cmd *Command) deployNFT() {
 	cmd.log.Info("NFT Deployed successfully")
 }
 
-func (cmd *Command) executeNFT() {
+func (cmd *Command) transferNFT() {
 	if cmd.nft == "" {
 		cmd.log.Info("NFT id cannot be empty")
 		fmt.Print("Enter NFT Id : ")
@@ -115,15 +115,15 @@ func (cmd *Command) executeNFT() {
 		return
 	}
 
-	executorRequest := model.ExecuteNFTRequest{
+	transferRequest := model.TransferNFTRequest{
 		NFT:        cmd.nft,
-		Executor:   cmd.executorAddr,
+		Owner:      cmd.executorAddr,
 		Receiver:   cmd.receiverAddr,
 		QuorumType: cmd.transType,
 		Comment:    cmd.transComment,
 		NFTValue:   cmd.rbtAmount,
 	}
-	response, err := cmd.c.ExecuteNFT(&executorRequest)
+	response, err := cmd.c.TransferNFT(&transferRequest)
 	if err != nil {
 		cmd.log.Error("Failed to execute NFT, Token ", cmd.nft, "err", err)
 		return

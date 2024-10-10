@@ -41,9 +41,9 @@ type DeployNFTRequest struct {
 	QuorumType int
 }
 
-type ExecuteNFTRequest struct {
+type TransferNFTRequest struct {
 	NFT        string  `json:"nft"`
-	Executor   string  `json:"executor"`
+	Owner      string  `json:"owner"`
 	Receiver   string  `json:"receiver"`
 	QuorumType int     `json:"quorumType"`
 	Comment    string  `json:"comment"`
@@ -57,7 +57,7 @@ type NewNFTSubscription struct {
 
 type NewNFTEvent struct {
 	NFT          string `json:"nft"`
-	ExecutorDid  string `json:"executorDid"`
+	OwnerDid     string `json:"ownerDid"`
 	ReceiverDid  string `json:"receiverDid"`
 	Type         int    `json:"type"`
 	NFTBlockHash string `json:"nftBlockHash"`
