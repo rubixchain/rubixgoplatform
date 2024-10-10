@@ -479,10 +479,10 @@ The following flags are used for this command
   -transType int
         Transaction type (default 2)
 
-  -fp 
-        Force password to be entered on the terminal 
+  -fp string
+        Force password to authenticate transfer (default "")
 
-      NOTE: -fp flag is used for transfer when there is a password created during DID creation
+      NOTE: -fp flag is used when there is a password already created during DID creation
 
 ```
 Get FT Info Command
