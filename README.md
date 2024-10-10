@@ -435,7 +435,7 @@ Create FT Command
 : To create fungible tokens
 
 ```
-./rubixgoplatform.exe createft
+./rubixgoplatform createft
 
 The following flags are used for this command
   -did string
@@ -453,6 +453,64 @@ The following flags are used for this command
   -port string
         Server/Host port (default "20000")
 
+```
+Transfer FT Command
+: To transfer FT
+
+```
+./rubixgoplatform transferft
+
+The following flags are used for this command
+  -ftName string
+        Name of the FT to be transferred (default "")
+
+  -ftCount integer
+        Number of FTs to be created (default "0")
+
+  -senderAddr string
+        Sender address (default "")
+
+  -receiverAddr string
+        Receiver address (default "")
+
+  -port string
+        Server/Host port (default "20000")
+
+  -transType int
+        Transaction type (default 2)
+
+  -fp 
+        Force password to be entered on the terminal 
+
+      NOTE: -fp flag is used for transfer when there is a password created during DID creation
+
+```
+Get FT Info Command
+: To get info of all FTs with the DID.
+
+```
+./rubixgoplatform getftinfo
+The following flags are used for this command
+  -did string
+        DID address (default "")
+
+  -port string
+        Server/Host port (default "20000")
+
+```
+Dump FT command
+: To dump the token chain of an FT.
+
+```
+./rubixgoplatform dumpft 
+
+This following flags are used for this command
+  -port string
+        Server/Host port (default "20000")
+
+  -token string
+        FT token ID (default "")
+        
 ```
 
 
