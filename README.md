@@ -490,6 +490,7 @@ Get FT Info Command
 
 ```
 ./rubixgoplatform getftinfo
+
 The following flags are used for this command
   -did string
         DID address (default "")
@@ -510,7 +511,7 @@ This following flags are used for this command
 
   -token string
         FT token ID (default "")
-        
+
 ```
 
 
