@@ -432,7 +432,7 @@ This following options are used for this command
   
 ```
 Create FT Command
-: To create fungible tokens
+: To create FTs
 
 ```
 ./rubixgoplatform createft
