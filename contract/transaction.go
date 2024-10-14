@@ -35,7 +35,7 @@ const (
 	TSSmartContractDataKey  string = "10"
 	TSPinningDIDKey         string = "11"
 	TSNFTKey                string = "12"
-	TSNFTDataKey            string = "13" //My Comment added TSNFTDataKey for using in contract.GetNFtData
+	TSNFTDataKey            string = "13"
 )
 
 const (

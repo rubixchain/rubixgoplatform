@@ -25,25 +25,24 @@ import (
 // }
 
 const (
-	TCTokenTypeKey         string = "1"
-	TCTransTypeKey         string = "2"
-	TCTokenOwnerKey        string = "3"
-	TCGenesisBlockKey      string = "4"
-	TCTransInfoKey         string = "5"
-	TCSmartContractKey     string = "6"
-	TCQuorumSignatureKey   string = "7"
-	TCPledgeDetailsKey     string = "8"
-	TCBlockHashKey         string = "98"
-	TCSignatureKey         string = "99"
-	TCBlockContentKey      string = "1"
-	TCBlockContentSigKey   string = "2"
-	TCSmartContractDataKey string = "9"
-	//My comment : Here we should ensure whether anything else should be added in the key
+	TCTokenTypeKey          string = "1"
+	TCTransTypeKey          string = "2"
+	TCTokenOwnerKey         string = "3"
+	TCGenesisBlockKey       string = "4"
+	TCTransInfoKey          string = "5"
+	TCSmartContractKey      string = "6"
+	TCQuorumSignatureKey    string = "7"
+	TCPledgeDetailsKey      string = "8"
+	TCBlockHashKey          string = "98"
+	TCSignatureKey          string = "99"
+	TCBlockContentKey       string = "1"
+	TCBlockContentSigKey    string = "2"
+	TCSmartContractDataKey  string = "9"
 	TCTokenValueKey         string = "10"
 	TCChildTokensKey        string = "11"
 	TCInitiatorSignatureKey string = "12"
 	TCEpochKey              string = "epoch"
-	TCNFTDataKey            string = "13" //My comment : Latest addition NFTDatakey
+	TCNFTDataKey            string = "13"
 )
 
 const (
@@ -195,7 +194,6 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.NFTData != "" {
 		ntcb[TCNFTDataKey] = tcb.NFTData
 	}
-	//My comment : Here need to ensure whether nftdata should be added
 	if tcb.InitiatorSignature != nil {
 		ntcb[TCInitiatorSignatureKey] = tcb.InitiatorSignature
 	}
@@ -727,7 +725,7 @@ func (b *Block) GetSmartContractData() string {
 	return b.getBlkString(TCSmartContractDataKey)
 }
 
-func (b *Block) GetNFTData() string { //My Comment : This should be according to NFT
+func (b *Block) GetNFTData() string {
 	return b.getBlkString(TCNFTDataKey)
 }
 

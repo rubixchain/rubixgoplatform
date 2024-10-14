@@ -165,7 +165,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 	return reply
 }
 
-func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq) *model.NFTDataReply { //My comment : Need to make changes here according to the NFT structure
+func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq) *model.NFTDataReply {
 	reply := &model.NFTDataReply{
 		BasicResponse: model.BasicResponse{
 			Status: false,
