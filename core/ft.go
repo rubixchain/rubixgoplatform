@@ -261,6 +261,10 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 }
 
 func (c *Core) GetFTInfo(did string) ([]model.FTInfo, error) {
+	if !c.w.IsDIDExist(did) {
+		c.log.Error("DID does not exist")
+		return nil, fmt.Errorf("DID does not exist")
+	}
 	FT, err := c.w.GetFreeFTsByDID(did)
 	if err != nil && err.Error() != "no records found" {
 		c.log.Error("Failed to get tokens", "err", err)

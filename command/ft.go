@@ -69,6 +69,10 @@ func (cmd *Command) transferFT() {
 
 func (cmd *Command) getFTinfo() {
 	info, err := cmd.c.GetFTInfo(cmd.did)
+	if strings.Contains(fmt.Sprint(err), "DID does not exist") {
+		cmd.log.Error("Failed to get FT info, DID does not exist")
+		return
+	}
 	if err != nil {
 		cmd.log.Error("Unable to get FT info, Invalid response from the node", "err", err)
 		return
