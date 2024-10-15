@@ -25,6 +25,25 @@ definitions:
       status:
         type: boolean
     type: object
+  model.FTInfo:
+    properties:
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
+    type: object
+  model.GetFTInfo:
+    properties:
+      ft_info:
+        items:
+          $ref: '#/definitions/model.FTInfo'
+        type: array
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+    type: object
   model.NFTStatus:
     properties:
       token:
@@ -655,6 +674,28 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
+  /api/get-ft-info:
+    get:
+      consumes:
+      - application/json
+      description: This API endpoint retrieves the names and count of FTs for a given
+        DID.
+      parameters:
+      - description: User DID
+        in: query
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.GetFTInfo'
+      summary: Get FT Info
+      tags:
+      - FT
   /api/get-pledgedtoken-details:
     get:
       description: This API allows the user to get details about the tokens the quorums

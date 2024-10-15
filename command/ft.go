@@ -22,9 +22,11 @@ func (cmd *Command) createFT() {
 		cmd.log.Error("FT Name can't be empty")
 		return
 	}
-
 	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, cmd.rbtAmount)
-
+	if strings.Contains(fmt.Sprint(err), "no records found") || strings.Contains(br.Message, "no records found") {
+		cmd.log.Error("Failed to create FT, No RBT available to create FT")
+		return
+	}
 	if err != nil {
 		cmd.log.Error("Failed to create FT", "err", err)
 		return
@@ -73,6 +75,8 @@ func (cmd *Command) getFTinfo() {
 	}
 	if !info.Status {
 		cmd.log.Error("Failed to get FT info", "message", info.Message)
+	} else if len(info.FTInfo) == 0 {
+		cmd.log.Info("No FTs found")
 	} else {
 		cmd.log.Info("Successfully got FT information")
 		var ftNames []string

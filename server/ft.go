@@ -2,6 +2,8 @@ package server
 
 import (
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -75,10 +77,24 @@ func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+// ShowAccount godoc
+// @Summary      Get FT Info
+// @Description  This API endpoint retrieves the names and count of FTs of a given DID.
+// @Tags         FT
+// @Accept       json
+// @Produce      json
+// @Param        did      	   query      string  true  "User DID"
+// @Success      200  {object}  model.GetFTInfo
+// @Router       /api/get-ft-info [get]
 func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
 	info, err := s.c.GetFTInfo(did)
 	if err != nil {

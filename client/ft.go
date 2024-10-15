@@ -36,7 +36,7 @@ func (c *Client) GetFTInfo(didStr string) (*model.GetFTInfo, error) {
 	m := make(map[string]string)
 	m["did"] = didStr
 	var info model.GetFTInfo
-	err := c.sendJSONRequest("POST", setup.APIGetFTInfo, m, nil, &info)
+	err := c.sendJSONRequest("GET", setup.APIGetFTInfo, m, nil, &info)
 	if err != nil {
 		return nil, err
 	}

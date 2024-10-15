@@ -648,6 +648,38 @@
                 }
             }
         },
+        "/api/get-ft-info": {
+            "get": {
+                "description": "This API endpoint retrieves the names and count of FTs for a given DID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Get FT Info",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User DID",
+                        "name": "did",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.GetFTInfo"
+                        }
+                    }
+                }
+            }
+        },
         "/api/get-pledgedtoken-details": {
             "get": {
                 "description": "This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state",
@@ -1108,6 +1140,35 @@
         "model.BasicResponse": {
             "type": "object",
             "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "model.FTInfo": {
+            "type": "object",
+            "properties": {
+                "ft_count": {
+                    "type": "integer"
+                },
+                "ft_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.GetFTInfo": {
+            "type": "object",
+            "properties": {
+                "ft_info": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.FTInfo"
+                    }
+                },
                 "message": {
                     "type": "string"
                 },
