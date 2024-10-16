@@ -269,6 +269,15 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 			c.log.Error("Failed to create part token, failed to add token chan block", "err", err)
 			return nil, err
 		}
+		newPartToken := &ExplorerCreateToken{
+			TokenID:     pt,
+			TokenValue:  parts[i],
+			BlockNumber: 0,
+			UserDID:     did,
+			TokenType:   c.TokenType(PartString),
+			QuorumList:  []string{},
+		}
+		c.ec.ExplorerTokenCreate(newPartToken)
 	}
 	bti := &block.TransInfo{
 		Tokens: []block.TransTokens{
