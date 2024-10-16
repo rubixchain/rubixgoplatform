@@ -188,16 +188,6 @@ func (w *Wallet) GetAllFreeFTs(did string) ([]FTToken, error) {
 	return FT, nil
 }
 
-func (w *Wallet) GetFreeFTsByDID(did string) ([]FTToken, error) {
-	var FT []FTToken
-	err := w.s.Read(FTTokenStorage, &FT, "owner_did=? AND token_status=? OR token_status=?", did, TokenIsFree, TokenIsGenerated)
-	if err != nil {
-		w.log.Error("Failed to get FTs by name", "err", err)
-		return nil, err
-	}
-	return FT, nil
-}
-
 func (w *Wallet) GetFreeFTsByNameAndDID(ftName string, did string) ([]FTToken, error) {
 	var FT []FTToken
 	err := w.s.Read(FTTokenStorage, &FT, "ft_name=? AND token_status =? AND  owner_did=?", ftName, TokenIsFree, did)
