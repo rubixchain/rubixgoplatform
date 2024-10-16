@@ -31,6 +31,9 @@ const (
 	TokenStateHash                 string = "TokenStateHashTable"
 	UnpledgeQueueTable             string = "unpledgequeue"
 	UnpledgeSequence               string = "UnpledgeSequence"
+	FTTokenStorage                 string = "FTTokenTable"
+	FTChainStorage                 string = "FTchainstorage"
+	FTStorage                      string = "FTTable"
 )
 
 type WalletConfig struct {
@@ -60,6 +63,7 @@ type Wallet struct {
 	dtcs                           *ChainDB
 	ntcs                           *ChainDB
 	smartContractTokenChainStorage *ChainDB
+	FTChainStorage                 *ChainDB
 }
 
 func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, error) {
@@ -72,6 +76,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	w.dtcs = &ChainDB{}
 	w.ntcs = &ChainDB{}
 	w.smartContractTokenChainStorage = &ChainDB{}
+	w.FTChainStorage = &ChainDB{}
 	op := &opt.Options{
 		WriteBuffer: 64 * 1024 * 1024,
 	}
@@ -144,6 +149,14 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("failed to init UnpledgeSequence table", "err", err)
 		return nil, err
 	}
+	err = w.s.Init(FTTokenStorage, FTToken{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize FT Token storage", "err", err)
+	}
+	err = w.s.Init(FTStorage, &FT{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize FT storage", "err", err)
+	}
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {
@@ -152,6 +165,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	}
 	w.smartContractTokenChainStorage.DB = *smartcontracTokenchainstorageDB
 
+	FTtokenStorageDB, err := leveldb.OpenFile(dir+FTChainStorage, op)
+	if err != nil {
+		w.log.Error("failed to configure token chain block storage", "err", err)
+		return nil, fmt.Errorf("failed to configure token chain block storage")
+	}
+	w.FTChainStorage.DB = *FTtokenStorageDB
 	err = w.s.Init(CallBackUrlStorage, &CallBackUrl{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Smart Contract Callback Url storage", "err", err)

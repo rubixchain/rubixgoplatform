@@ -92,6 +92,10 @@ const (
 	PinTokenCmd                    string = "pinToken"
 	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
+	CreateFTCmd                    string = "createft"
+	DumpFTTokenChainCmd            string = "dumpft"
+	TransferFTCmd                  string = "transferft"
+	GetFTInfoCmd                   string = "getftinfo"
 	ValidateTokenCmd               string = "validatetoken"
 )
 
@@ -147,6 +151,10 @@ var commands = []string{VersionCmd,
 	RecoverTokensCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
+	CreateFTCmd,
+	DumpFTTokenChainCmd,
+	TransferFTCmd,
+	GetFTInfoCmd,
 	ValidateTokenCmd,
 }
 
@@ -198,6 +206,10 @@ var commandsHelp = []string{"To get tool version",
 	"This command will initiate a self RBT transfer",
 	"This command will unpledge all the pledged tokens",
 	"This command will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
+	"This command will create FT",
+	"This command will dump the token chain of FT",
+	"This command will transfer FT",
+	"This command will give the balance of FTs",
 	"This command will pin the token",
 	"This command will recover the token",
 	"This command will check the quorum status",
@@ -285,6 +297,8 @@ type Command struct {
 	pinningAddress               string
 	blockCount                   int
 	smartContractChainValidation bool
+	ftName                       string
+	ftCount                      int
 }
 
 func showVersion() {
@@ -485,6 +499,8 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
+	flag.StringVar(&cmd.ftName, "ftName", "", "Four character string to represent the FT")
+	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -662,6 +678,14 @@ func Run(args []string) {
 		cmd.RecoverTokens()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
+	case CreateFTCmd:
+		cmd.createFT()
+	case DumpFTTokenChainCmd:
+		cmd.dumpFTTokenchain()
+	case TransferFTCmd:
+		cmd.transferFT()
+	case GetFTInfoCmd:
+		cmd.getFTinfo()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
 	default:

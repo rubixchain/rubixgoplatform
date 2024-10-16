@@ -38,6 +38,27 @@ func (c *Core) DumpTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	return ds
 }
 
+func (c *Core) DumpFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
+	ds := &model.TCDumpReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+
+	ts := FTString
+
+	blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, c.TokenType(ts), dr.BlockID)
+	if err != nil {
+		ds.Message = "Failed to get token chain block"
+		return ds
+	}
+	ds.Status = true
+	ds.Message = "Successfully got the token chain block"
+	ds.Blocks = blks
+	ds.NextBlockID = nextID
+	return ds
+}
+
 func (c *Core) DumpSmartContractTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	ds := &model.TCDumpReply{
 		BasicResponse: model.BasicResponse{

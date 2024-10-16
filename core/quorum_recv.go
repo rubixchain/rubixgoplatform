@@ -162,11 +162,21 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		receiverPeerId = cr.PinningNodePeerID
 		c.log.Debug("Pinning Node Peer Id", receiverPeerId)
 	}
+
+	//Need to check if sender pin not available or receiver pin already available. In either case, stop the transfer.
+	pinnedCorrectly := true
 	for i := range ti {
 		wg.Add(1)
-		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
+		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg, &pinnedCorrectly)
 	}
 	wg.Wait()
+	fmt.Println("results after pincheck: ", results)
+
+	if !pinnedCorrectly {
+		crep.Message = "Token is not pinned correctly"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	for i := range results {
 		if results[i].Error != nil {
 			c.log.Error("Error occured", "error", results[i].Error)
@@ -218,6 +228,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		6. if pin exist , exit with error token state exhauste
 	*/
 
+	//Checking token state of transferring tokens
 	tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
 	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
 	for i := range ti {
@@ -239,6 +250,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		}
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
+
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
 	sender := cr.SenderPeerID + "." + sc.GetSenderDID()
 	receiver := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
@@ -281,7 +293,7 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 	var wg sync.WaitGroup
 	for i := range ti {
 		wg.Add(1)
-		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, "", results, &wg)
+		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, "", results, &wg, nil)
 	}
 	wg.Wait()
 	for i := range results {
@@ -415,7 +427,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		results := make([]MultiPinCheckRes, len(commitedTokenInfo))
 		for i := range commitedTokenInfo {
 			wg.Add(1)
-			go c.pinCheck(commitedTokenInfo[i].Token, i, consensusRequest.DeployerPeerID, "", results, &wg)
+			go c.pinCheck(commitedTokenInfo[i].Token, i, consensusRequest.DeployerPeerID, "", results, &wg, nil)
 		}
 		wg.Wait()
 		for i := range results {
@@ -537,6 +549,9 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	case SmartContractExecuteMode:
 		c.log.Debug("Smart contract Consensus for execution started")
 		return c.quorumSmartContractConsensus(req, did, qdc, &cr)
+	case FTTrasnferMode:
+		c.log.Debug("FT consensus started")
+		return c.quorumRBTConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
 		crep.Message = "Invalid consensus mode"
@@ -633,7 +648,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) updateReceiverToken(
 	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
-	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool,
+	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool, ftinfo *model.FTInfo,
 ) ([]string, error) {
 	var receiverPeerId string = ""
 	var receiverDID string = ""
@@ -678,56 +693,65 @@ func (c *Core) updateReceiverToken(
 			if err != nil {
 				return nil, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
 			}
-
-			if c.TokenType(PartString) == ti.TokenType {
-				gb := c.w.GetGenesisTokenBlock(t, ti.TokenType)
-				if gb == nil {
-					return nil, fmt.Errorf("failed to get genesis block for token %v, err: %v", t, err)
-				}
-				pt, _, err := gb.GetParentDetials(t)
-				if err != nil {
-					return nil, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
-				}
-				err = c.syncParentToken(senderPeer, pt)
-				if err != nil {
-					return nil, fmt.Errorf("failed to sync parent token %v childtoken %v err : ", pt, t, err)
-				}
+			// Handle PartString token
+			parentTokenPart, err := c.handleToken(t, ti.TokenType, PartString, senderPeer)
+			if err != nil {
+				return nil, err
 			}
+
+			// Handle FTString token
+			parentTokenFT, err := c.handleToken(t, ti.TokenType, FTString, senderPeer)
+			if err != nil {
+				return nil, err
+			}
+
 			ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to fetch previous block for token: % err : %v", t, err)
+				return nil, fmt.Errorf("failed to fetch previous block for token: %v err : %v", t, err)
 			}
 			ptcb := block.InitBlock(ptcbArray, nil)
 			if c.checkIsPledged(ptcb) {
 				return nil, fmt.Errorf("Token " + t + " is a pledged Token")
 			}
+
+			parentToken := parentTokenPart
+			if parentToken == "" {
+				parentToken = parentTokenFT
+			}
+
+			//Pinning tokens by receiver
+			if parentToken != "" {
+				_, err := c.w.Pin(parentToken, wallet.ParentTokenLockRole, senderAddress, b.GetTid(), senderAddress, receiverAddress, ti.TokenValue)
+				if err != nil {
+					return nil, fmt.Errorf("failed to Pin parent token by receiver, error: %v", err)
+				}
+			}
+			// if parentTokenFT != "" {
+			// 	_, err := c.w.Pin(parentTokenFT, wallet.ParentTokenLockRole, senderAddress, b.GetTid(), senderAddress, receiverAddress, ti.TokenValue)
+			// 	if err != nil {
+			// 		return nil, fmt.Errorf("failed to Pin parent token by receiver, error: %v", err)
+			// 	}
+			// }
+			_, senderDid, _ := util.ParseAddress(senderAddress)
+			b := c.w.GetLatestTokenBlock(ti.Token, ti.TokenType)
+			if b == nil {
+				c.log.Error("Invalid token chain block")
+				return nil, fmt.Errorf("Invalid token chain block for ", ti.Token)
+			}
+			//Validating the latest block of the token ------------ AshitaBlockCheck
+			err = c.validateLatestBlock(senderPeer, ti, receiverDID, senderDid, parentToken, b)
+			if err != nil {
+				return nil, fmt.Errorf("invalid latest token block for token %v", ti.Token)
+			}
+
 		}
 	}
 
 	senderPeerId, _, ok := util.ParseAddress(senderAddress)
 	if !ok {
-		return nil, fmt.Errorf("Unable to parse sender address: %v", senderAddress)
+		return nil, fmt.Errorf("unable to parse sender address: %v", senderAddress)
 	}
-
-	results := make([]MultiPinCheckRes, len(tokenInfo))
 	var wg sync.WaitGroup
-	for i, ti := range tokenInfo {
-		t := ti.Token
-		wg.Add(1)
-
-		go c.pinCheck(t, i, senderPeerId, receiverPeerId, results, &wg)
-	}
-	wg.Wait()
-
-	for i := range results {
-		if results[i].Error != nil {
-			return nil, fmt.Errorf("Error while cheking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
-		}
-		if results[i].Status {
-			return nil, fmt.Errorf("Token %v has multiple owners: %v", results[i].Token, results[i].Owners)
-		}
-	}
-
 	tokenStateCheckResult := make([]TokenStateCheckResult, len(tokenInfo))
 	for i, ti := range tokenInfo {
 		t := ti.Token
@@ -738,28 +762,55 @@ func (c *Core) updateReceiverToken(
 
 	for i := range tokenStateCheckResult {
 		if tokenStateCheckResult[i].Error != nil {
-			return nil, fmt.Errorf("Error while cheking Token State Message : %v", tokenStateCheckResult[i].Message)
+			return nil, fmt.Errorf("error while cheking Token State Message : %v", tokenStateCheckResult[i].Message)
 		}
 		if tokenStateCheckResult[i].Exhausted {
 			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
-			return nil, fmt.Errorf("Token state has been exhausted, Token being Double spent: %v, msg: %v", tokenStateCheckResult[i].Token, tokenStateCheckResult[i].Message)
+			return nil, fmt.Errorf("token state has been exhausted, Token being Double spent: %v, msg: %v", tokenStateCheckResult[i].Token, tokenStateCheckResult[i].Message)
 		}
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
 
-	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs)
+	results := make([]MultiPinCheckRes, len(tokenInfo))
+	pinnedCorrectly := true
+	for i, ti := range tokenInfo {
+		t := ti.Token
+		wg.Add(1)
+		fmt.Println("Pin check for token : ", t)
+		go c.pinCheck(t, i, senderPeerId, receiverPeerId, results, &wg, &pinnedCorrectly)
+	}
+	fmt.Println("results after pincheck: ", results)
+	wg.Wait()
+	if !pinnedCorrectly {
+		return nil, fmt.Errorf("token is not pinned properly")
+	}
+	for i := range results {
+		if results[i].Error != nil {
+			return nil, fmt.Errorf("error while cheking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
+		}
+		if results[i].Status {
+			return nil, fmt.Errorf("token %v has multiple owners: %v", results[i].Token, results[i].Owners)
+		}
+	}
+
+	var FT wallet.FTToken
+	FT.FTName = ftinfo.FTName
+	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs, FT)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
+		return nil, fmt.Errorf("failed to update token status, error: %v", err)
+	}
+	if FT != (wallet.FTToken{}) {
+		c.updateFTTable()
 	}
 
 	sc := contract.InitContract(b.GetSmartContract(), nil)
 	if sc == nil {
-		return nil, fmt.Errorf("Failed to update token status, missing smart contract")
+		return nil, fmt.Errorf("failed to update token status, missing smart contract")
 	}
 
 	bid, err := b.GetBlockID(tokenInfo[0].Token)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
+		return nil, fmt.Errorf("failed to update token status, failed to get block ID, err: %v", err)
 	}
 
 	// Only save the transaction details in Transaction history table whenever
@@ -812,6 +863,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 		sr.QuorumInfo,
 		sr.TransactionEpoch,
 		sr.PinningServiceMode,
+		&sr.FTInfo,
 	)
 	if err != nil {
 		c.log.Error(err.Error())
@@ -865,7 +917,7 @@ func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
-	c.log.Debug("incoming request for pledge finlaity")
+	c.log.Debug("incoming request for pledge finality")
 	did := c.l.GetQuerry(req, "did")
 	c.log.Debug("DID from query", did)
 	var ur UpdatePledgeRequest
@@ -1163,7 +1215,6 @@ func (c *Core) syncDIDArbitration(req *ensweb.Request) *ensweb.Result {
 	br.Status = true
 	br.Message = "DID mapped successfully"
 	return c.l.RenderJSON(req, &br, http.StatusOK)
-
 }
 
 func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
@@ -1306,7 +1357,6 @@ func (c *Core) unlockTokens(req *ensweb.Request) *ensweb.Result {
 	crep.Message = "Tokens Unlocked Successfully."
 	c.log.Info("Tokens Unlocked")
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
-
 }
 
 func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
@@ -1319,5 +1369,83 @@ func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
 		fmt.Println("removed hash successfully")
 	}
 	return c.l.RenderJSON(req, nil, http.StatusOK)
+}
 
+func (c *Core) handleToken(token string, ti int, tokenType string, senderPeer *ipfsport.Peer) (string, error) {
+	fmt.Println("called")
+	if c.TokenType(tokenType) == ti {
+		gb := c.w.GetGenesisTokenBlock(token, ti)
+		if gb == nil {
+			return "", fmt.Errorf("failed to get genesis block for token %v", token)
+		}
+
+		pt, _, err := gb.GetParentDetials(token)
+		if err != nil {
+			return "", fmt.Errorf("failed to get parent details for token %v, err: %v", token, err)
+		}
+
+		if tokenType == PartString {
+			err = c.syncParentToken(senderPeer, pt)
+			if err != nil {
+				return "", fmt.Errorf("failed to sync parent token %v child token %v err : %v", pt, token, err)
+			}
+		}
+		return pt, nil
+	}
+	return "", nil
+}
+
+// Validating latest block of a token
+func (c *Core) validateLatestBlock(p *ipfsport.Peer, ti contract.TokenInfo, validatorDID string, senderDID string, parentToken string, b *block.Block) error {
+	txnType := b.GetTransType()
+	switch txnType {
+	case block.TokenTransferredType:
+		//Sender should be the receiver in the latest block
+		if b.GetReceiverDID() != senderDID {
+			return fmt.Errorf("invalid token owner for token %v", ti.Token)
+		}
+		//validate latest block for signatures
+		response, err := c.ValidateRBTTransferBlock(b, ti.Token, "", validatorDID)
+		if err != nil {
+			c.log.Error("msg", response.Message, "err", err)
+			return fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
+		}
+	case block.TokenBurntType, block.TokenIsBurntForFT:
+		return fmt.Errorf("token %v is already burnt", ti.Token)
+	case block.TokenPledgedType:
+		return fmt.Errorf("token %v is in pledged state", ti.Token)
+	case block.TokenContractCommited:
+		return fmt.Errorf("token %v is commited for smart contract ", ti.Token)
+	case block.TokenGeneratedType:
+		//validate genesis block
+		wt := wallet.Token{
+			TokenID:       ti.Token,
+			ParentTokenID: parentToken,
+			TokenValue:    ti.TokenValue,
+			DID:           ti.OwnerDID,
+		}
+		response, err := c.ValidateGenesisBlock(p, b, wt, ti.TokenType, validatorDID, false)
+		if err != nil {
+			c.log.Error("msg", response.Message, "err", err)
+			return fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
+		}
+	case block.TokenUnpledgedType:
+		response, err := c.ValidatePledgedUnpledgedBlock(b, ti.Token, "", validatorDID)
+		if err != nil {
+			c.log.Error("msg", response.Message, "err", err)
+			return fmt.Errorf("cannot validate latest block signatures for token %v", ti.Token)
+		}
+		//TODO : Check with Maneesha's latest PR 216
+		prevBlockID, err := b.GetPrevBlockID(ti.Token)
+		if err != nil {
+			c.log.Error("msg", response.Message, "err", err)
+			return fmt.Errorf("cannot validate previous block for token %v", ti.Token)
+		}
+		response, err = c.ValidatePledgedUnpledgedBlock(b, ti.Token, prevBlockID, validatorDID)
+		if err != nil {
+			c.log.Error("msg", response.Message, "err", err)
+			return fmt.Errorf("cannot validate previous block for token %v", ti.Token)
+		}
+	}
+	return nil
 }

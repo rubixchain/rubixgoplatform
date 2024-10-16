@@ -162,7 +162,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			continue
 		}
 	}
-	p, err := c.getPeer(address, quorumDID)
+	p, err := c.getPeer(address, "") // removed quorumDID passing
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return false, err
@@ -179,23 +179,40 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Error("Failed to get first token chain block")
 			return false, fmt.Errorf("failed to get first token chain block", ti[i].Token)
 		}
-		if c.TokenType(PartString) == ti[i].TokenType {
-			pt, _, err := fb.GetParentDetials(ti[i].Token)
-			if err != nil {
-				c.log.Error("failed to fetch parent token detials", "err", err, "token", ti[i].Token)
-				return false, err
-			}
-			err = c.syncParentToken(p, pt)
-			if err != nil {
-				c.log.Error("failed to sync parent token chain", "token", pt)
-				return false, err
-			}
-			_, err = c.w.Pin(pt, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
+
+		// Handle PartString token
+		parentTokenPart, err := c.handleToken(ti[i].Token, ti[i].TokenType, PartString, p)
+		if err != nil {
+			return false, err
+		}
+
+		// Handle FTString token
+		parentTokenFT, err := c.handleToken(ti[i].Token, ti[i].TokenType, FTString, p)
+		if err != nil {
+			return false, err
+		}
+
+		parentToken := parentTokenPart
+		if parentToken == "" {
+			parentToken = parentTokenFT
+		}
+
+		//Pinning Parent tokens by quorum
+		if parentToken != "" {
+			_, err := c.w.Pin(parentToken, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
 			if err != nil {
 				c.log.Error("Failed to Pin parent token in Quorum", "err", err)
 				return false, err
 			}
 		}
+		// //Pinning FT parent tokens by quorum
+		// if parentTokenFT != "" {
+		// 	_, err := c.w.Pin(parentTokenFT, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
+		// 	if err != nil {
+		// 		c.log.Error("Failed to Pin parent token in Quorum", "err", err)
+		// 		return false, err
+		// 	}
+		// }
 
 		// Check the token validation
 		if ti[i].TokenType == token.RBTTokenType {
@@ -216,11 +233,19 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				return false, fmt.Errorf("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn)
 			}
 		}
+
 		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		if b == nil {
 			c.log.Error("Invalid token chain block")
 			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
 		}
+
+		//Validating the latest block of the token ---------------- AshitaBlockCheck
+		err = c.validateLatestBlock(p, ti[i], quorumDID, sc.GetSenderDID(), parentToken, b)
+		if err != nil {
+			return false, fmt.Errorf("invalid latest token block for token %v", ti[i].Token)
+		}
+
 		c.log.Info("Validating token ownership", "token", ti[i].Token, "owner", b.GetOwner(), "sender", sc.GetSenderDID())
 		pinningNodeDID := b.GetPinningNodeDID()
 		ownerDID := b.GetOwner()
@@ -230,7 +255,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Info("The token is Pinned as a service on Node ", pinningNodeDID)
 			if ownerDID != senderDID {
 				c.log.Error("Invalid token owner: The token is Pinned as a service", "owner", ownerDID, "The node which is trying to transfer", senderDID)
-				return false, fmt.Errorf("Invalid token owner: The token is Pinned as a service")
+				return false, fmt.Errorf("invalid token owner: The token is Pinned as a service")
 			}
 		}
 		signatureValidation, err := c.validateSigner(b, quorumDID, p)
@@ -334,7 +359,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	block := c.w.GetLatestTokenBlock(tokenId, tokenType)
 	if block == nil {
 		c.log.Error("Invalid token chain block, Block is nil")
-		result.Error = fmt.Errorf("Invalid token chain block,Block is nil")
+		result.Error = fmt.Errorf("invalid token chain block,Block is nil")
 		result.Message = "Invalid token chain block"
 		resultArray[index] = result
 		return
