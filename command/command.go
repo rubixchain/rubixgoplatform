@@ -299,6 +299,7 @@ type Command struct {
 	smartContractChainValidation bool
 	ftName                       string
 	ftCount                      int
+	creatorDID                   string
 }
 
 func showVersion() {
@@ -501,6 +502,7 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
 	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
+	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

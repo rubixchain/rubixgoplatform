@@ -8,13 +8,14 @@ type CreateFTReq struct {
 }
 
 type TransferFTReq struct {
-	Receiver string `json:"receiver"`
-	Sender   string `json:"sender"`
-	FTName   string `json:"FTName"`
-	FTCount  int    `json:"FTCount"`
-	Comment  string `json:"comment"`
-	Type     int    `json:"type"`
-	Password string `json:"password"`
+	Receiver   string `json:"receiver"`
+	Sender     string `json:"sender"`
+	FTName     string `json:"FTName"`
+	FTCount    int    `json:"FTCount"`
+	Comment    string `json:"comment"`
+	Type       int    `json:"type"`
+	Password   string `json:"password"`
+	CreatorDID string `json:"creatorDID"`
 }
 
 type GetFTInfo struct {
