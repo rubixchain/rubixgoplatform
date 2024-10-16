@@ -1638,9 +1638,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		deployerSign := &block.InitiatorSignature{
 			NLSSShare:   deployerNLSSShare,
 			PrivateSign: deployerPrivSign,
-			DID:          bti.DeployerDID,
-			Hash:         signData,
-			SignType:     deployerSignType,
+			DID:         bti.DeployerDID,
+			Hash:        signData,
+			SignType:    deployerSignType,
 		}
 
 		var smartContractTokenValue float64
@@ -1690,9 +1690,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		executorSign := &block.InitiatorSignature{
 			NLSSShare:   executorNLSSShare,
 			PrivateSign: executorPrivSign,
-			DID:          bti.ExecutorDID,
-			Hash:         signData,
-			SignType:     executorSignType,
+			DID:         bti.ExecutorDID,
+			Hash:        signData,
+			SignType:    executorSignType,
 		}
 
 		tcb = block.TokenChainBlock{
@@ -1711,18 +1711,18 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		bti.ExecutorDID = sc.GetExecutorDID()
 
 		//Fetching executor signature to add it to transaction details
-		sign_data, executor_share_sign, executor_priv_sign, err := sc.GetHashSig(bti.ExecutorDID)
+		signData, executorNLSSsign, executorPrivSign, err := sc.GetHashSig(bti.ExecutorDID)
 		if err != nil {
 			c.log.Error("failed to fetch executor sign", "err", err)
 			return nil, fmt.Errorf("failed to fetch executor sign")
 		}
-		executor_sign_type := dc.GetSignType()
+		executorSignType := dc.GetSignType()
 		executor_sign := &block.InitiatorSignature{
-			NLSS_share:   executor_share_sign,
-			Private_sign: executor_priv_sign,
-			DID:          bti.ExecutorDID,
-			Hash:         sign_data,
-			SignType:     executor_sign_type,
+			NLSSShare:   executorNLSSsign,
+			PrivateSign: executorPrivSign,
+			DID:         bti.ExecutorDID,
+			Hash:        signData,
+			SignType:    executorSignType,
 		}
 
 		tcb = block.TokenChainBlock{
@@ -1742,18 +1742,18 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		bti.DeployerDID = sc.GetDeployerDID()
 
 		//Fetching deployer signature to add it to transaction details
-		sign_data, deployer_share_sign, deployer_priv_sign, err := sc.GetHashSig(bti.DeployerDID)
+		signData, deployerShareSign, deployerPrivSign, err := sc.GetHashSig(bti.DeployerDID)
 		if err != nil {
 			c.log.Error("failed to fetch deployer sign", "err", err)
 			return nil, fmt.Errorf("failed to fetch deployer sign")
 		}
-		deployer_sign_type := dc.GetSignType()
+		deployerSignType := dc.GetSignType()
 		deployer_sign := &block.InitiatorSignature{
-			NLSS_share:   deployer_share_sign,
-			Private_sign: deployer_priv_sign,
-			DID:          bti.DeployerDID,
-			Hash:         sign_data,
-			SignType:     deployer_sign_type,
+			NLSSShare:   deployerShareSign,
+			PrivateSign: deployerPrivSign,
+			DID:         bti.DeployerDID,
+			Hash:        signData,
+			SignType:    deployerSignType,
 		}
 
 		var nftValue float64
@@ -1814,9 +1814,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		senderSign := &block.InitiatorSignature{
 			NLSSShare:   senderNLSSShare,
 			PrivateSign: senderPrivSign,
-			DID:          senderdid,
-			Hash:         signData,
-			SignType:     senderSignType,
+			DID:         senderdid,
+			Hash:        signData,
+			SignType:    senderSignType,
 		}
 
 		bti.SenderDID = sc.GetSenderDID()
