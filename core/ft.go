@@ -336,7 +336,35 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
-	AllFTs, err := c.w.GetFreeFTsByNameAndDID(req.FTName, did)
+	if req.CreatorDID == "" {
+		// Checking for same FTs with different creators
+		info, err := c.GetFTInfo(did)
+		if err != nil || info == nil {
+			c.log.Error("Failed to get FT info for transfer", "err", err)
+			return resp
+		}
+		ftNameToCreators := make(map[string][]string)
+		for _, ft := range info {
+			ftNameToCreators[ft.FTName] = append(ftNameToCreators[ft.FTName], ft.CreatorDID)
+		}
+		for ftName, creators := range ftNameToCreators {
+			if len(creators) > 1 {
+				c.log.Error(fmt.Sprintf("There are same FTs '%s' with different creators.", ftName))
+				for i, creator := range creators {
+					c.log.Error(fmt.Sprintf("Creator DID %d: %s", i+1, creator))
+				}
+				c.log.Info("Use -creatorDID flag to specify the creator DID and can proceed for transfer")
+				resp.Message = fmt.Sprint("There are same FTs with different creators, use -creatorDID flag to specify creatorDID")
+				return resp
+			}
+		}
+	}
+	var AllFTs []wallet.FTToken
+	if req.CreatorDID != "" {
+		AllFTs, err = c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, req.CreatorDID)
+	} else {
+		AllFTs, err = c.w.GetFreeFTsByNameAndDID(req.FTName, did)
+	}
 	AvailableFTCount := len(AllFTs)
 	if err != nil {
 		c.log.Error("Failed to get FTs", "err", err)
