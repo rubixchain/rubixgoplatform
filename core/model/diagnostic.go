@@ -21,10 +21,23 @@ type SmartContractDataReply struct {
 	SCTDataReply []SCTDataReply
 }
 
+type NFTDataReply struct {
+	BasicResponse
+	NFTDataReply []NFTData
+}
+
 type SCTDataReply struct {
 	BlockNo           uint64
 	BlockId           string
 	SmartContractData string
+}
+
+type NFTData struct {
+	BlockNo  uint64
+	BlockId  string
+	NFTData  string
+	NFTOwner string
+	NFTValue float64
 }
 
 type RegisterCallBackUrlReq struct {

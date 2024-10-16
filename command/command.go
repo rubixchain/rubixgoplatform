@@ -93,6 +93,10 @@ const (
 	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
 	ValidateTokenCmd               string = "validatetoken"
+	GetNFTTokenChainCmd            string = "get-nft-tokenchain"
+	DeployNFTCmd                   string = "deploy-nft"
+	TransferNFTCmd                 string = "transfer-nft"
+	SubscribeNFTCmd                string = "subscribe-nft"
 )
 
 var commands = []string{VersionCmd,
@@ -148,6 +152,10 @@ var commands = []string{VersionCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
 	ValidateTokenCmd,
+	GetNFTTokenChainCmd,
+	DeployNFTCmd,
+	TransferNFTCmd,
+	SubscribeNFTCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -285,6 +293,10 @@ type Command struct {
 	pinningAddress               string
 	blockCount                   int
 	smartContractChainValidation bool
+	nftFileInfo                  string
+	nftFilePath                  string
+	nft                          string
+	nftData                      string
 }
 
 func showVersion() {
@@ -485,6 +497,8 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
+	flag.StringVar(&cmd.nft, "nft", "", "NFT id")
+	flag.StringVar(&cmd.nftData, "nftData", "", "The nft data")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -616,8 +630,8 @@ func Run(args []string) {
 		cmd.SubscribeContract()
 	case CreateNFTCmd:
 		cmd.createNFT()
-	case GetAllNFTCmd:
-		cmd.getAllNFTs()
+	// case GetAllNFTCmd:
+	// 	cmd.getAllNFTs()
 	case DeploySmartContractCmd:
 		cmd.deploySmartcontract()
 	case GenerateSmartContractToken:
@@ -664,6 +678,14 @@ func Run(args []string) {
 		cmd.ValidateTokenchain()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
+	case TransferNFTCmd:
+		cmd.transferNFT()
+	case DeployNFTCmd:
+		cmd.deployNFT()
+	case GetNFTTokenChainCmd:
+		cmd.getNFTTokenChain()
+	case SubscribeNFTCmd:
+		cmd.SubscribeNFT()
 	default:
 		cmd.log.Error("Invalid command")
 	}

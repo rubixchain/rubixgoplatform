@@ -31,6 +31,19 @@ func (c *Client) DumpSmartContractTokenChain(token string, blockID string) (*mod
 	return &drep, nil
 }
 
+func (c *Client) GetNFTTokenChain(token string, blockID string) (*model.TCDumpReply, error) {
+	dr := &model.TCDumpRequest{
+		Token:   token,
+		BlockID: blockID,
+	}
+	var drep model.TCDumpReply
+	err := c.sendJSONRequest("POST", setup.APIGetNFTTokenChain, nil, dr, &drep)
+	if err != nil {
+		return nil, err
+	}
+	return &drep, nil
+}
+
 func (c *Client) GetSmartContractTokenData(token string, latest bool) (*model.SmartContractDataReply, error) {
 	getReq := &model.SmartContractTokenChainDataReq{
 		Token:  token,
@@ -44,6 +57,21 @@ func (c *Client) GetSmartContractTokenData(token string, latest bool) (*model.Sm
 	return &sctDataReply, nil
 
 }
+
+func (c *Client) GetNFTTokenData(token string, latest bool) (*model.NFTDataReply, error) {
+	getReq := &model.SmartContractTokenChainDataReq{
+		Token:  token,
+		Latest: latest,
+	}
+	var nftDataReply model.NFTDataReply
+	err := c.sendJSONRequest("POST", setup.APIGetNFTTokenChainData, nil, getReq, &nftDataReply)
+	if err != nil {
+		return nil, err
+	}
+	return &nftDataReply, nil
+
+}
+
 func (c *Client) RemoveTokenChainBlock(token string, latest bool) (*model.TCRemoveReply, error) {
 	removeReq := &model.TCRemoveRequest{
 		Token:  token,

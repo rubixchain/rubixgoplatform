@@ -16,6 +16,8 @@ const (
 	SCDataTokenCommitType
 	SCNFTSaleContractType
 	SmartContractDeployType
+	NFTDeployType
+	NFTExecuteType
 )
 
 // ----------SmartContract----------------------
@@ -288,6 +290,10 @@ func (c *Contract) GetExecutorDID() string {
 
 func (c *Contract) GetSmartContractData() string {
 	return c.getTransInfoString(TSSmartContractDataKey)
+}
+
+func (c *Contract) GetNFTData() string {
+	return c.getTransInfoString(TSNFTDataKey)
 }
 
 func (c *Contract) GetComment() string {

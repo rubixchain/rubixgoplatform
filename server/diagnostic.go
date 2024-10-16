@@ -39,6 +39,21 @@ func (s *Server) APIDumpSmartContractTokenChainBlock(req *ensweb.Request) *enswe
 	return s.RenderJSON(req, drep, http.StatusOK)
 }
 
+func (s *Server) APIGetNFTTokenChain(req *ensweb.Request) *ensweb.Result {
+	var dr model.TCDumpRequest
+	err := s.ParseJSON(req, &dr)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(dr.Token)
+	if len(dr.Token) != 46 || !strings.HasPrefix(dr.Token, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid NFT")
+		return s.BasicResponse(req, false, "Invalid NFT", nil)
+	}
+	drep := s.c.GetNFTTokenChain(&dr)
+	return s.RenderJSON(req, drep, http.StatusOK)
+}
+
 type GetSmartContractTokenChainDataSwaggoInput struct {
 	Token  string `json:"token"`
 	Latest bool   `json:"latest"`
@@ -62,6 +77,31 @@ func (s *Server) APIGetSmartContractTokenChainData(req *ensweb.Request) *ensweb.
 	}
 	sctdataReply := s.c.GetSmartContractTokenChainData(&getReq)
 	return s.RenderJSON(req, sctdataReply, http.StatusOK)
+}
+
+type GetNFTTokenChainDataSwaggoInput struct {
+	Token  string `json:"token"`
+	Latest bool   `json:"latest"`
+}
+
+// SmartContract godoc
+// @Summary      Get NFT Token Chain Data
+// @Description  This API will return smart contract token chain data
+// @Tags         NFT
+// @ID 			 get-nft-token-chain-data
+// @Accept       json
+// @Produce      json
+// @Param		 input body GetNFTTokenChainDataSwaggoInput true "Returns nft token chain Data"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/get-nft-token-chain-data [post]
+func (s *Server) APIGetNFTTokenChainData(req *ensweb.Request) *ensweb.Result {
+	var getReq model.SmartContractTokenChainDataReq
+	err := s.ParseJSON(req, &getReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	nftDataReply := s.c.GetNFTTokenChainData(&getReq)
+	return s.RenderJSON(req, nftDataReply, http.StatusOK)
 }
 
 type RegisterCallBackURLSwaggoInput struct {
