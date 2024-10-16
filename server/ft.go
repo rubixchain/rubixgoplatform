@@ -89,10 +89,10 @@ func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
 	if !s.validateDIDAccess(req, did) {
-		return s.BasicResponse(req, false, "DID does not have an access", nil)
+		return s.BasicResponse(req, false, "DID does not have access", nil)
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !isAlphanumeric {
 		s.log.Error("Invalid DID")
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}

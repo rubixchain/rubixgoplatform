@@ -23,6 +23,7 @@ type GetFTInfo struct {
 }
 
 type FTInfo struct {
-	FTName  string `json:"ft_name"`
-	FTCount int    `json:"ft_count"`
+	FTName     string `json:"ft_name"`
+	FTCount    int    `json:"ft_count"`
+	CreatorDID string `json:"creator_did"`
 }

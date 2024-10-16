@@ -256,7 +256,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			return err
 		}
 	}
-	c.updateFTTable()
+	c.updateFTTable(did)
 	return nil
 }
 
@@ -265,24 +265,29 @@ func (c *Core) GetFTInfo(did string) ([]model.FTInfo, error) {
 		c.log.Error("DID does not exist")
 		return nil, fmt.Errorf("DID does not exist")
 	}
-	FT, err := c.w.GetFreeFTsByDID(did)
+	FT, err := c.w.GetFTsAndCount(did)
 	if err != nil && err.Error() != "no records found" {
 		c.log.Error("Failed to get tokens", "err", err)
 		return []model.FTInfo{}, fmt.Errorf("failed to get tokens")
 	}
-	ftNameCounts := make(map[string]int)
+	ftInfoMap := make(map[string]map[string]int)
 
-	ftCount := 0
+	// Iterate through retrieved FTs and populate the map
 	for _, t := range FT {
-		ftCount++
-		ftNameCounts[t.FTName]++
+		if ftInfoMap[t.FTName] == nil {
+			ftInfoMap[t.FTName] = make(map[string]int) // Initialize map for each FTName
+		}
+		ftInfoMap[t.FTName][t.CreatorDID] += t.FTCount // Increment count for the specific CreatorDID
 	}
-	info := make([]model.FTInfo, 0, len(ftNameCounts))
-	for name, count := range ftNameCounts {
-		info = append(info, model.FTInfo{
-			FTName:  name,
-			FTCount: count,
-		})
+	info := make([]model.FTInfo, 0)
+	for ftName, creatorCounts := range ftInfoMap {
+		for creatorDID, count := range creatorCounts {
+			info = append(info, model.FTInfo{
+				FTName:     ftName,
+				FTCount:    count,
+				CreatorDID: creatorDID,
+			})
+		}
 	}
 	return info, nil
 }
@@ -439,7 +444,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	resp.Status = true
 	msg := fmt.Sprintf("FT Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
 	resp.Message = msg
-	c.updateFTTable()
+	c.updateFTTable(did)
 	return resp
 }
 
@@ -482,8 +487,8 @@ func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
 	return result, nil
 }
 
-func (c *Core) updateFTTable() error {
-	AllFTs, err := c.w.GetFTsAndCount()
+func (c *Core) updateFTTable(did string) error {
+	AllFTs, err := c.w.GetFTsAndCount(did)
 	// If no records are found, remove all entries from the FT table
 	if err != nil {
 		fetchErr := fmt.Sprint(err)

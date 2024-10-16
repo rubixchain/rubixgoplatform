@@ -757,7 +757,7 @@ func (c *Core) updateReceiverToken(
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
 	if FT != (wallet.FTToken{}) {
-		c.updateFTTable()
+		c.updateFTTable(receiverDID)
 	}
 
 	sc := contract.InitContract(b.GetSmartContract(), nil)

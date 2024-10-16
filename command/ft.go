@@ -85,9 +85,11 @@ func (cmd *Command) getFTinfo() {
 		cmd.log.Info("Successfully got FT information")
 		var ftNames []string
 		var ftCounts []string
+		var creatorDIDs []string
 		for _, result := range info.FTInfo {
 			ftNames = append(ftNames, result.FTName)
 			ftCounts = append(ftCounts, fmt.Sprintf("%d", result.FTCount))
+			creatorDIDs = append(creatorDIDs, result.CreatorDID)
 		}
 		maxNameLength := 0
 		for _, name := range ftNames {
@@ -97,7 +99,7 @@ func (cmd *Command) getFTinfo() {
 		}
 		// Print the output
 		for i, name := range ftNames {
-			fmt.Printf("%-*s: %s", maxNameLength, name, ftCounts[i])
+			fmt.Printf("%-*s: %s (CreatorDID: %s)", maxNameLength, name, ftCounts[i], creatorDIDs[i])
 			if i < len(ftNames)-1 {
 				fmt.Print(", ")
 			}

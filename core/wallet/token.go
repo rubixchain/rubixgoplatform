@@ -134,8 +134,8 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 	return t, nil
 }
 
-func (w *Wallet) GetFTsAndCount() ([]FT, error) {
-	fts, err := w.GetAllFreeFTs()
+func (w *Wallet) GetFTsAndCount(did string) ([]FT, error) {
+	fts, err := w.GetAllFreeFTs(did)
 	if err != nil {
 		errStr := fmt.Sprint(err)
 		if strings.Contains(errStr, "no records found") {
@@ -172,9 +172,9 @@ func (w *Wallet) GetFTsAndCount() ([]FT, error) {
 	return info, nil
 }
 
-func (w *Wallet) GetAllFreeFTs() ([]FTToken, error) {
+func (w *Wallet) GetAllFreeFTs(did string) ([]FTToken, error) {
 	var FT []FTToken
-	err := w.s.Read(FTTokenStorage, &FT, "ft_name!=? AND token_status=? OR token_status=?", "", TokenIsFree, TokenIsGenerated)
+	err := w.s.Read(FTTokenStorage, &FT, "ft_name!=? AND token_status=? OR token_status=? AND owner_did=?", "", TokenIsFree, TokenIsGenerated, did)
 
 	if err != nil {
 		readErr := fmt.Sprint(err)
