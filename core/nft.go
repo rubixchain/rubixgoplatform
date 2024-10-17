@@ -136,6 +136,10 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		TokenValue:  0,
 	}
 	c.w.CreateNFT(&nftTokenDetails)
+	if err != nil {
+		c.log.Error("Failed to write nft to storage", err)
+		return basicResponse
+	}
 	basicResponse.Status = true
 	basicResponse.Message = nftTokenResponse.Message
 	basicResponse.Result = nftTokenResponse.Result
