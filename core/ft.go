@@ -44,7 +44,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 	var FT []wallet.FT
 
-	c.s.Read(wallet.FTStorage, &FT, "ft_name=?", FTName)
+	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND  creator_did=?", FTName, did)
 
 	if len(FT) != 0 {
 		c.log.Error("FT Name already exists")
