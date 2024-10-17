@@ -62,7 +62,7 @@ func (c *Core) DumpSmartContractTokenChain(dr *model.TCDumpRequest) *model.TCDum
 	return ds
 }
 
-func (c *Core) GetNFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
+func (c *Core) DumpNFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	ds := &model.TCDumpReply{
 		BasicResponse: model.BasicResponse{
 			Status: false,

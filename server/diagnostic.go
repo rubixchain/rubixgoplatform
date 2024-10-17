@@ -39,7 +39,7 @@ func (s *Server) APIDumpSmartContractTokenChainBlock(req *ensweb.Request) *enswe
 	return s.RenderJSON(req, drep, http.StatusOK)
 }
 
-func (s *Server) APIGetNFTTokenChain(req *ensweb.Request) *ensweb.Result {
+func (s *Server) APIDumpNFTTokenChain(req *ensweb.Request) *ensweb.Result {
 	var dr model.TCDumpRequest
 	err := s.ParseJSON(req, &dr)
 	if err != nil {
@@ -50,7 +50,7 @@ func (s *Server) APIGetNFTTokenChain(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Invalid NFT")
 		return s.BasicResponse(req, false, "Invalid NFT", nil)
 	}
-	drep := s.c.GetNFTTokenChain(&dr)
+	drep := s.c.DumpNFTTokenChain(&dr)
 	return s.RenderJSON(req, drep, http.StatusOK)
 }
 
@@ -93,7 +93,7 @@ type GetNFTTokenChainDataSwaggoInput struct {
 // @Produce      json
 // @Param		 input body GetNFTTokenChainDataSwaggoInput true "Returns nft token chain Data"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/get-nft-token-chain-data [post]
+// @Router       /api/get-nft-token-chain-data [get]
 func (s *Server) APIGetNFTTokenChainData(req *ensweb.Request) *ensweb.Result {
 	var getReq model.SmartContractTokenChainDataReq
 	err := s.ParseJSON(req, &getReq)

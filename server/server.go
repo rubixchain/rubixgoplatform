@@ -172,9 +172,9 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRecoverRBT, "POST", s.AuthHandle(s.APIRecoverRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateTokenChain, "GET", s.AuthHandle(s.APIValidateTokenChain, false, s.AuthError, false))
 	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetNFTTokenChain, "POST", s.AuthHandle(s.APIGetNFTTokenChain, true, s.AuthError, false))
+	s.AddRoute(setup.APIDumpNFTTokenChain, "GET", s.AuthHandle(s.APIDumpNFTTokenChain, true, s.AuthError, false))
 	s.AddRoute(setup.APISubscribeNFT, "POST", s.AuthHandle(s.APISubscribeNFT, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetNFTTokenChainData, "POST", s.AuthHandle(s.APIGetNFTTokenChainData, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetNFTTokenChainData, "GET", s.AuthHandle(s.APIGetNFTTokenChainData, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {

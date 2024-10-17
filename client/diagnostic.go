@@ -31,13 +31,13 @@ func (c *Client) DumpSmartContractTokenChain(token string, blockID string) (*mod
 	return &drep, nil
 }
 
-func (c *Client) GetNFTTokenChain(token string, blockID string) (*model.TCDumpReply, error) {
+func (c *Client) DumpNFTTokenChain(token string, blockID string) (*model.TCDumpReply, error) {
 	dr := &model.TCDumpRequest{
 		Token:   token,
 		BlockID: blockID,
 	}
 	var drep model.TCDumpReply
-	err := c.sendJSONRequest("POST", setup.APIGetNFTTokenChain, nil, dr, &drep)
+	err := c.sendJSONRequest("GET", setup.APIDumpNFTTokenChain, nil, dr, &drep)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (c *Client) GetNFTTokenData(token string, latest bool) (*model.NFTDataReply
 		Latest: latest,
 	}
 	var nftDataReply model.NFTDataReply
-	err := c.sendJSONRequest("POST", setup.APIGetNFTTokenChainData, nil, getReq, &nftDataReply)
+	err := c.sendJSONRequest("GET", setup.APIGetNFTTokenChainData, nil, getReq, &nftDataReply)
 	if err != nil {
 		return nil, err
 	}

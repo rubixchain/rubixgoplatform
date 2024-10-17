@@ -249,7 +249,7 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 	cmd.log.Info("smart contract Token chain dumped successfully!")
 }
 
-func (cmd *Command) getNFTTokenChain() {
+func (cmd *Command) dumpNFTTokenChain() {
 	if cmd.nft == "" {
 		cmd.log.Info("NFT id cannot be empty")
 		fmt.Print("Enter NFT Id : ")
@@ -268,7 +268,7 @@ func (cmd *Command) getNFTTokenChain() {
 	blocks := make([]map[string]interface{}, 0)
 	blockID := ""
 	for {
-		ds, err := cmd.c.GetNFTTokenChain(cmd.nft, blockID)
+		ds, err := cmd.c.DumpNFTTokenChain(cmd.nft, blockID)
 		if err != nil {
 			cmd.log.Error("Failed to get nft token chain", "err", err)
 			return

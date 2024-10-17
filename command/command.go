@@ -93,7 +93,7 @@ const (
 	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
 	ValidateTokenCmd               string = "validatetoken"
-	GetNFTTokenChainCmd            string = "get-nft-tokenchain"
+	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
 	DeployNFTCmd                   string = "deploy-nft"
 	TransferNFTCmd                 string = "transfer-nft"
 	SubscribeNFTCmd                string = "subscribe-nft"
@@ -152,7 +152,7 @@ var commands = []string{VersionCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
 	ValidateTokenCmd,
-	GetNFTTokenChainCmd,
+	DumpNFTTokenChainCmd,
 	DeployNFTCmd,
 	TransferNFTCmd,
 	SubscribeNFTCmd,
@@ -682,8 +682,8 @@ func Run(args []string) {
 		cmd.transferNFT()
 	case DeployNFTCmd:
 		cmd.deployNFT()
-	case GetNFTTokenChainCmd:
-		cmd.getNFTTokenChain()
+	case DumpNFTTokenChainCmd:
+		cmd.dumpNFTTokenChain()
 	case SubscribeNFTCmd:
 		cmd.SubscribeNFT()
 	default:
