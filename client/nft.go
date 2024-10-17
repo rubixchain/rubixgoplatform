@@ -39,9 +39,9 @@ func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*model.BasicResponse, er
 	return &br, nil
 }
 
-func (c *Client) TransferNFT(transferRequest *model.TransferNFTRequest) (*model.BasicResponse, error) {
+func (c *Client) ExecuteNFT(transferRequest *model.ExecuteNFTRequest) (*model.BasicResponse, error) {
 	var basicResponse model.BasicResponse
-	err := c.sendJSONRequest("POST", setup.APITransferNFT, nil, transferRequest, &basicResponse, time.Minute*2)
+	err := c.sendJSONRequest("POST", setup.APIExecuteNFT, nil, transferRequest, &basicResponse, time.Minute*2)
 	if err != nil {
 		c.log.Error("Failed to Transfer NFT", "err", err)
 		return nil, err

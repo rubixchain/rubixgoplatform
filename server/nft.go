@@ -21,7 +21,6 @@ import (
 // @Param        did        	   formData      string  true   "DID"
 // @Param        metadata       formData      file  true  "NFTFileInfo is a metadata about the file being given. We are expecting a json file with a mandatory key filename"
 // @Param        artifact       formData      file    true  "File to be committed"
-// @Param        Data      	   formData      string  true  "The data which the user wishes to be put in"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/create-nft [post]
 func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
@@ -181,47 +180,47 @@ func (s *Server) APIDeployNFT(req *ensweb.Request) *ensweb.Result {
 // 	return s.RenderJSON(req, resp, http.StatusOK)
 // }
 
-type TransferNFTSwaggoInput struct {
-	NFT        string  `json:"NFT"`
-	Owner      string  `json:"Owner"`
-	Receiver   string  `json:"Receiver"`
-	QuorumType int     `json:"QuorumType"`
-	Comment    string  `json:"Comment"`
-	NFTValue   float64 `json:"NFTValue"`
-	NFTData    string  `json:"NFTData"`
+type ExecuteNFTSwaggoInput struct {
+	NFT        string  `json:"nft"`
+	Owner      string  `json:"owner"`
+	Receiver   string  `json:"receiver"`
+	QuorumType int     `json:"quorum_type"`
+	Comment    string  `json:"comment"`
+	NFTValue   float64 `json:"nft_value"`
+	NFTData    string  `json:"nft_data"`
 }
 
 // NFT godoc
-// @Summary      Transfer of NFT ownership
+// @Summary      Execution of NFT
 // @Description  This API will add a new block which indicates the transfer of ownership of NFT
 // @Tags         NFT
 // @Accept       json
 // @Produce      json
-// @Param		 input body TransferNFTSwaggoInput true "Transfer the ownership of particular NFT"
+// @Param		 input body ExecuteNFTSwaggoInput true "Transfer the ownership of particular NFT"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/transfer-nft [post]
-func (s *Server) APITransferNFT(req *ensweb.Request) *ensweb.Result {
-	var transferReq model.TransferNFTRequest
-	err := s.ParseJSON(req, &transferReq)
+// @Router       /api/execute-nft [post]
+func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
+	var executeReq model.ExecuteNFTRequest
+	err := s.ParseJSON(req, &executeReq)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", err)
 	}
-	_, did, ok := util.ParseAddress(transferReq.Owner)
+	_, did, ok := util.ParseAddress(executeReq.Owner)
 	if !ok {
 		return s.BasicResponse(req, false, "Invalid Owner address", nil)
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(transferReq.NFT)
-	if len(transferReq.NFT) != 46 || !strings.HasPrefix(transferReq.NFT, "Qm") || !is_alphanumeric {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(executeReq.NFT)
+	if len(executeReq.NFT) != 46 || !strings.HasPrefix(executeReq.NFT, "Qm") || !is_alphanumeric {
 		s.log.Error("Invalid NFT")
 		return s.BasicResponse(req, false, "Invalid NFT", nil)
 	}
 	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-	s.log.Info("The did trying to transfer the nft :", transferReq.Owner)
-	if !strings.HasPrefix(transferReq.Owner, "bafybmi") || len(transferReq.Owner) != 59 || !is_alphanumeric {
+	s.log.Info("The did trying to transfer the nft :", executeReq.Owner)
+	if !strings.HasPrefix(executeReq.Owner, "bafybmi") || len(executeReq.Owner) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid owner DID")
 		return s.BasicResponse(req, false, "Invalid owner DID", nil)
 	}
-	if transferReq.QuorumType < 1 || transferReq.QuorumType > 2 {
+	if executeReq.QuorumType < 1 || executeReq.QuorumType > 2 {
 		s.log.Error("Invalid quorum type")
 		return s.BasicResponse(req, false, "Invalid quorum type", nil)
 	}
@@ -229,7 +228,7 @@ func (s *Server) APITransferNFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.c.TransferNFT(req.ID, &transferReq)
+	go s.c.ExecuteNFT(req.ID, &executeReq)
 	return s.didResponse(req, req.ID)
 }
 

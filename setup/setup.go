@@ -78,7 +78,7 @@ const (
 	APIValidateTokenChain               string = "/api/validate-token-chain"
 	APIValidateToken                    string = "/api/validate-token"
 	APIDeployNFT                        string = "/api/deploy-nft"
-	APITransferNFT                      string = "/api/transfer-nft"
+	APIExecuteNFT                       string = "/api/execute-nft"
 	APIDumpNFTTokenChain                string = "/api/dump-nft-token-chain"
 	APISubscribeNFT                     string = "/api/subscribe-nft"
 	APIGetNFTTokenChainData             string = "/api/get-nft-token-chain-data"

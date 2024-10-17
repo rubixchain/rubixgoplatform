@@ -280,8 +280,8 @@ func (c *Core) publishNewNftEvent(newEvent *model.NFTEvent) error {
 	return nil
 }
 
-func (c *Core) TransferNFT(reqID string, transferReq *model.TransferNFTRequest) {
-	br := c.transferNFT(reqID, transferReq)
+func (c *Core) ExecuteNFT(reqID string, executeReq *model.ExecuteNFTRequest) {
+	br := c.executeNFT(reqID, executeReq)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")
@@ -290,7 +290,7 @@ func (c *Core) TransferNFT(reqID string, transferReq *model.TransferNFTRequest) 
 	dc.OutChan <- br
 }
 
-func (c *Core) transferNFT(reqID string, transferReq *model.TransferNFTRequest) *model.BasicResponse {
+func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
 
@@ -298,7 +298,7 @@ func (c *Core) transferNFT(reqID string, transferReq *model.TransferNFTRequest) 
 		Status: false,
 	}
 
-	_, did, ok := util.ParseAddress(transferReq.Owner)
+	_, did, ok := util.ParseAddress(executeReq.Owner)
 	if !ok {
 		resp.Message = "Invalid Executor DID"
 		return resp
@@ -309,7 +309,7 @@ func (c *Core) transferNFT(reqID string, transferReq *model.TransferNFTRequest) 
 		return resp
 	}
 	//check the smartcontract token from the DB base
-	_, err = c.w.GetNFT(transferReq.Owner, transferReq.NFT, false)
+	_, err = c.w.GetNFT(executeReq.Owner, executeReq.NFT, false)
 	if err != nil {
 		c.log.Error("Failed to retrieve NFT Token details from storage", err)
 		resp.Message = err.Error()
@@ -318,21 +318,21 @@ func (c *Core) transferNFT(reqID string, transferReq *model.TransferNFTRequest) 
 
 	//get the gensys block of the amrt contract token
 	tokenType := c.TokenType(NFTString)
-	gensysBlock := c.w.GetGenesisTokenBlock(transferReq.NFT, tokenType)
+	gensysBlock := c.w.GetGenesisTokenBlock(executeReq.NFT, tokenType)
 	if gensysBlock == nil {
 		c.log.Debug("Gensys block is empty - NFT not synced")
 		resp.Message = "Gensys block is empty - NFT not synced"
 		return resp
 	}
-	latestBlock := c.w.GetLatestTokenBlock(transferReq.NFT, tokenType)
+	latestBlock := c.w.GetLatestTokenBlock(executeReq.NFT, tokenType)
 	currentOwner := latestBlock.GetOwner()
 	c.log.Info("The current owner of the NFT is :", currentOwner)
-	if currentOwner != transferReq.Owner {
+	if currentOwner != executeReq.Owner {
 		c.log.Error("NFT not owned by the executor")
 		resp.Message = "NFT not owned by the executor"
 		return resp
 	}
-	currentNFTValue := transferReq.NFTValue
+	currentNFTValue := executeReq.NFTValue
 	if err != nil {
 		c.log.Error("Failed to retrieve NFT Value , ", err)
 		resp.Message = err.Error()
@@ -346,10 +346,10 @@ func (c *Core) transferNFT(reqID string, transferReq *model.TransferNFTRequest) 
 
 	nftInfoArray := make([]contract.TokenInfo, 0)
 	nftInfo := contract.TokenInfo{
-		Token:      transferReq.NFT,
+		Token:      executeReq.NFT,
 		TokenType:  c.TokenType(NFTString),
 		TokenValue: float64(currentNFTValue),
-		OwnerDID:   transferReq.Receiver,
+		OwnerDID:   executeReq.Receiver,
 	}
 	nftInfoArray = append(nftInfoArray, nftInfo)
 
@@ -360,12 +360,12 @@ func (c *Core) transferNFT(reqID string, transferReq *model.TransferNFTRequest) 
 		TotalRBTs:  float64(currentNFTValue),
 		TransInfo: &contract.TransInfo{
 			ExecutorDID: did,
-			ReceiverDID: transferReq.Receiver,
-			Comment:     transferReq.Comment,
-			NFT:         transferReq.NFT,
+			ReceiverDID: executeReq.Receiver,
+			Comment:     executeReq.Comment,
+			NFT:         executeReq.NFT,
 			TransTokens: nftInfoArray,
-			NFTValue:    transferReq.NFTValue,
-			NFTData:     transferReq.NFTData,
+			NFTValue:    executeReq.NFTValue,
+			NFTData:     executeReq.NFTData,
 		},
 		ReqID: reqID,
 	}
@@ -391,10 +391,10 @@ func (c *Core) transferNFT(reqID string, transferReq *model.TransferNFTRequest) 
 	}
 	conensusRequest := &ConensusRequest{
 		ReqID:            uuid.New().String(),
-		Type:             transferReq.QuorumType,
+		Type:             executeReq.QuorumType,
 		ExecuterPeerID:   c.peerID,
 		ContractBlock:    consensusContract.GetBlock(),
-		NFT:              transferReq.NFT,
+		NFT:              executeReq.NFT,
 		Mode:             NFTExecuteMode,
 		TransactionEpoch: txEpoch,
 	}
@@ -412,7 +412,7 @@ func (c *Core) transferNFT(reqID string, transferReq *model.TransferNFTRequest) 
 	txnDetails.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(txnDetails)
 	tokens := make([]string, 0)
-	tokens = append(tokens, transferReq.NFT)
+	tokens = append(tokens, executeReq.NFT)
 	explorerTrans := &ExplorerTrans{
 		TID:         txnDetails.TransactionID,
 		ExecutorDID: did,
@@ -422,7 +422,7 @@ func (c *Core) transferNFT(reqID string, transferReq *model.TransferNFTRequest) 
 		TokenTime:   float64(dif.Milliseconds()),
 		//BlockHash:   txnDetails.BlockID,
 	}
-	err = c.w.UpdateNFTStatus(transferReq.NFT, 4)
+	err = c.w.UpdateNFTStatus(executeReq.NFT, 4)
 	if err != nil {
 		c.log.Error("Failed to update NFT status after transferring", err)
 	}

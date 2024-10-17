@@ -41,7 +41,7 @@ type DeployNFTRequest struct {
 	QuorumType int
 }
 
-type TransferNFTRequest struct {
+type ExecuteNFTRequest struct {
 	NFT        string  `json:"nft"`
 	Owner      string  `json:"owner"`
 	Receiver   string  `json:"receiver"`
