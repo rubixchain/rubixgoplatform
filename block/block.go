@@ -57,6 +57,7 @@ const (
 	TokenExecutedType     string = "10"
 	TokenContractCommited string = "11"
 	TokenPinnedAsService  string = "12"
+	TokenIsBurntForFT     string = "13"
 )
 
 const (

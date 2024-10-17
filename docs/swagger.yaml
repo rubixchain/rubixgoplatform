@@ -25,6 +25,25 @@ definitions:
       status:
         type: boolean
     type: object
+  model.FTInfo:
+    properties:
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
+    type: object
+  model.GetFTInfo:
+    properties:
+      ft_info:
+        items:
+          $ref: '#/definitions/model.FTInfo'
+        type: array
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+    type: object
   model.NFTStatus:
     properties:
       token:
@@ -85,6 +104,17 @@ definitions:
         items:
           $ref: '#/definitions/model.TransactionCount'
         type: array
+    type: object
+  server.CreateFTReqSwaggoInput:
+    properties:
+      did:
+        type: string
+      ftcount:
+        type: integer
+      ftname:
+        type: string
+      tokencount:
+        type: number
     type: object
   server.DIDPeerMapTemp:
     properties:
@@ -197,6 +227,23 @@ definitions:
         type: integer
       password:
         type: string
+    type: object
+  server.TransferFTReqSwaggoInput:
+    properties:
+      FTCount:
+        type: integer
+      FTName:
+        type: string
+      comment:
+        type: string
+      password:
+        type: string
+      receiver:
+        type: string
+      sender:
+        type: string
+      type:
+        type: integer
     type: object
 info:
   contact:
@@ -337,6 +384,28 @@ paths:
       summary: Create Data Token
       tags:
       - Data Tokens
+  /api/create-ft:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint will create FTs.
+      parameters:
+      - description: Create FT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.CreateFTReqSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create FT
+      tags:
+      - FT
   /api/createnft:
     post:
       consumes:
@@ -605,6 +674,28 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
+  /api/get-ft-info:
+    get:
+      consumes:
+      - application/json
+      description: This API endpoint retrieves the names and count of FTs for a given
+        DID.
+      parameters:
+      - description: User DID
+        in: query
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.GetFTInfo'
+      summary: Get FT Info
+      tags:
+      - FT
   /api/get-pledgedtoken-details:
     get:
       description: This API allows the user to get details about the tokens the quorums
@@ -657,6 +748,28 @@ paths:
       summary: Get ALL NFTs
       tags:
       - NFT
+  /api/initiate-ft-tranfer:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint will do transfer of FTs.
+      parameters:
+      - description: Transfer FT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.TransferFTReqSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiate FT transfer
+      tags:
+      - FT
   /api/initiate-pin-token:
     post:
       consumes:
