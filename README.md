@@ -482,7 +482,11 @@ The following flags are used for this command
   -fp string
         Force password to authenticate transfer (default "")
 
+  -creatorDID string
+        FT Creator DID address (default "")
+
       NOTE: -fp flag is used when there is a password already created during DID creation
+            -creatorDID flag is used when there are multiple FTs with same name
 
 ```
 Get FT Info Command
