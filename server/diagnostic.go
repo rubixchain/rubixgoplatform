@@ -65,8 +65,8 @@ func (s *Server) APIGetSmartContractTokenChainData(req *ensweb.Request) *ensweb.
 }
 
 type RegisterCallBackURLSwaggoInput struct {
-	Token       string `json:"token"`
-	CallBackURL string `json:"callbackurl"`
+	Token       string `json:"SmartContractToken"`
+	CallBackURL string `json:"CallBackURL"`
 }
 
 // SmartContract godoc

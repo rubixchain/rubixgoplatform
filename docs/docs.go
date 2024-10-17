@@ -1302,10 +1302,10 @@ const docTemplate = `{
         "server.RegisterCallBackURLSwaggoInput": {
             "type": "object",
             "properties": {
-                "callbackurl": {
+                "CallBackURL": {
                     "type": "string"
                 },
-                "token": {
+                "SmartContractToken": {
                     "type": "string"
                 }
             }

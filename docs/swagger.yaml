@@ -184,9 +184,9 @@ definitions:
     type: object
   server.RegisterCallBackURLSwaggoInput:
     properties:
-      callbackurl:
+      CallBackURL:
         type: string
-      token:
+      SmartContractToken:
         type: string
     type: object
   server.SignatureResponseSwaggoInput:
