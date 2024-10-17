@@ -65,7 +65,7 @@ const (
 	CommitDataTokenCmd             string = "commitdatatoken"
 	SetupDBCmd                     string = "setupdb"
 	GetTxnDetailsCmd               string = "gettxndetails"
-	CreateNFTCmd                   string = "createnft"
+	CreateNFTCmd                   string = "create-nft"
 	GetAllNFTCmd                   string = "getallnft"
 	UpdateConfig                   string = "updateconfig"
 	GenerateSmartContractToken     string = "generatesct"
@@ -293,8 +293,8 @@ type Command struct {
 	pinningAddress               string
 	blockCount                   int
 	smartContractChainValidation bool
-	nftFileInfo                  string
-	nftFilePath                  string
+	metadata                     string
+	artifact                     string
 	nft                          string
 	nftData                      string
 }
@@ -498,6 +498,8 @@ func Run(args []string) {
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
 	flag.StringVar(&cmd.nft, "nft", "", "NFT id")
+	flag.StringVar(&cmd.metadata, "metadata", "", "NFT metadata")
+	flag.StringVar(&cmd.artifact, "artifact", "", "NFT artifact")
 	flag.StringVar(&cmd.nftData, "nftData", "", "The nft data")
 
 	if len(os.Args) < 2 {

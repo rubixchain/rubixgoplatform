@@ -21,15 +21,20 @@ func (cmd *Command) createNFT() {
 		return
 	}
 
-	if cmd.nftFileInfo == "" {
-		cmd.log.Error("Failed to create NFT, NFT file Info is required to create NFT")
+	if cmd.metadata == "" {
+		cmd.log.Error("Failed to create NFT, NFT metadata is required to create NFT")
 		return
 	}
+
+	if cmd.artifact == "" {
+		cmd.log.Error("Failed to create NFT, NFT artifact is required to create NFT")
+		return
+	}
+
 	request := client.CreateNFTReq{
-		DID:         cmd.did,
-		UserID:      cmd.userID,
-		NFTFileInfo: cmd.nftFileInfo,
-		NFTFile:     cmd.nftFilePath,
+		DID:      cmd.did,
+		Metadata: cmd.metadata,
+		Artifact: cmd.artifact,
 	}
 
 	br, err := cmd.c.CreateNFT(&request)

@@ -8,27 +8,23 @@ import (
 )
 
 type CreateNFTReq struct {
-	DID         string
-	UserID      string
-	NFTFileInfo string
-	NFTFile     string
+	DID      string
+	Metadata string
+	Artifact string
 }
 
 func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*model.BasicResponse, error) {
 	fields := make(map[string]string)
 	files := make(map[string]string)
 	if createNFTReq.DID != "" {
-		fields["DID"] = createNFTReq.DID
+		fields["did"] = createNFTReq.DID
 	}
-	if createNFTReq.UserID != "" {
-		fields["UserID"] = createNFTReq.UserID
-	}
-	if createNFTReq.NFTFileInfo != "" {
-		files["NFTFileInfo"] = createNFTReq.NFTFileInfo
+	if createNFTReq.Metadata != "" {
+		files["metadata"] = createNFTReq.Metadata
 	}
 
-	if createNFTReq.NFTFile != "" {
-		files["NFTFile"] = createNFTReq.NFTFile
+	if createNFTReq.Artifact != "" {
+		files["artifact"] = createNFTReq.Artifact
 	}
 	//To add more than 1 file : Tobe done
 	// for _, fn := range nt.Files {

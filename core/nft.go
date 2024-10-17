@@ -17,20 +17,16 @@ import (
 )
 
 type NFTReq struct {
-	DID         string
-	UserID      string
-	NFTFileInfo string
-	NFTFile     string
-	NFTPath     string
-	Data        string
+	DID      string
+	Metadata string
+	Artifact string
+	NFTPath  string
 }
 
 type NFT struct {
-	DID             string
-	NftFileInfoHash string
-	NFTFileHash     string
-	UserId          string
-	NFTData         string
+	DID          string
+	MetadataHash string
+	ArtifactHash string
 }
 
 type FetchNFTRequest struct {
@@ -55,15 +51,7 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		Status: false,
 	}
 
-	userID := createNFTRequest.UserID
-	c.log.Info("The user id is :", userID)
-	nftData := createNFTRequest.Data
-	// nftDataHash, err := c.ipfs.Add(bytes.NewBufferString(nftData))
-	// if err != nil {
-	// 	c.log.Error("failed to add nft data to ipfs", "err", err)
-	// 	return basicResponse
-	// } // If the data passed should be the hash
-	nftFile, err := os.Open(createNFTRequest.NFTFile)
+	nftFile, err := os.Open(createNFTRequest.Artifact)
 	if err != nil {
 		c.log.Error("Failed to open the file which should be converted to NFT", "err", err)
 		return basicResponse
@@ -77,7 +65,7 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		return basicResponse
 	}
 
-	nftFileInfo, err := os.Open(createNFTRequest.NFTFileInfo)
+	nftFileInfo, err := os.Open(createNFTRequest.Metadata)
 	if err != nil {
 		c.log.Error("Failed to open the file which should be converted to NFT", "err", err)
 		return basicResponse
@@ -93,11 +81,9 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 	}
 
 	nft := NFT{
-		DID:             createNFTRequest.DID,
-		NFTFileHash:     nftFileHash,
-		NftFileInfoHash: nftFileInfoHash,
-		UserId:          userID,
-		NFTData:         nftData,
+		DID:          createNFTRequest.DID,
+		MetadataHash: nftFileInfoHash,
+		ArtifactHash: nftFileHash,
 	}
 
 	if err != nil {
@@ -215,7 +201,7 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		TransInfo: &contract.TransInfo{
 			DeployerDID: did,
 			NFT:         deployReq.NFT,
-			NFTData:     nftToken.NFTData,
+			NFTData:     "",
 			TransTokens: nftInfoArray,
 		},
 		ReqID: reqID,
@@ -560,7 +546,7 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 		return basicResponse
 	}
 
-	nftFileInfo, err := c.ipfs.Cat(nft.NftFileInfoHash)
+	nftFileInfo, err := c.ipfs.Cat(nft.MetadataHash)
 	if err != nil {
 		c.log.Error("Failed to fetch nftfileinfo from network", "err", err)
 		return basicResponse
@@ -603,7 +589,7 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 	}
 	c.log.Info("File Name :", filename)
 	// Fetch and store the raw code file
-	nftFile, err := c.ipfs.Cat(nft.NFTFileHash)
+	nftFile, err := c.ipfs.Cat(nft.ArtifactHash)
 	if err != nil {
 		c.log.Error("Failed to fetch nft file from IPFS", "err", err)
 		return basicResponse

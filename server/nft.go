@@ -19,12 +19,11 @@ import (
 // @Accept       mpfd
 // @Produce      mpfd
 // @Param        did        	   formData      string  true   "DID"
-// @Param        UserID      	   formData      string  true  "User/Entity Info"
-// @Param        NFTFileInfo       formData      file  true  "NFTFileInfo is a metadata about the file being given. We are expecting a json file with a mandatory key filename"
-// @Param        NFTFile       formData      file    true  "File to be committed"
+// @Param        metadata       formData      file  true  "NFTFileInfo is a metadata about the file being given. We are expecting a json file with a mandatory key filename"
+// @Param        artifact       formData      file    true  "File to be committed"
 // @Param        Data      	   formData      string  true  "The data which the user wishes to be put in"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/createnft [post]
+// @Router       /api/create-nft [post]
 func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 	var createNFT core.NFTReq
 	var err error
@@ -79,8 +78,8 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Create NFT failed, failed to move NFT file", nil)
 	}
 
-	createNFT.NFTFile = nftFileDest
-	createNFT.NFTFileInfo = nftFileInfoDest
+	createNFT.Artifact = nftFileDest
+	createNFT.Metadata = nftFileInfoDest
 
 	_, did, err := s.ParseMultiPartForm(req, "did")
 	if err != nil {
@@ -88,12 +87,6 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Creation of NFT failed, failed to retrieve DID", nil)
 	}
 	createNFT.DID = did["did"][0]
-	_, userId, err := s.ParseMultiPartForm(req, "UserID")
-	if err != nil {
-		s.log.Error("Creation of NFT failed, failed to retrieve UserID", "err", err)
-		return s.BasicResponse(req, false, "Creation of NFT failed, fialed to retrieve UserID", nil)
-	}
-	createNFT.UserID = userId["UserID"][0]
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(createNFT.DID)
 	if !strings.HasPrefix(createNFT.DID, "bafybmi") || len(createNFT.DID) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid DID")
