@@ -62,6 +62,29 @@ func (c *Core) DumpSmartContractTokenChain(dr *model.TCDumpRequest) *model.TCDum
 	return ds
 }
 
+func (c *Core) DumpNFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
+	ds := &model.TCDumpReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	_, err := c.w.GetNFTToken(dr.Token)
+	if err != nil {
+		ds.Message = "Failed to get nft, token does not exist"
+		return ds
+	}
+	tokenTypeString := NFTString
+	blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, c.TokenType(tokenTypeString), dr.BlockID)
+	if err != nil {
+		ds.Message = "Failed to get nft token chain block"
+		return ds
+	}
+	ds.Status = true
+	ds.Message = "Successfully got nft token chain block"
+	ds.Blocks = blks
+	ds.NextBlockID = nextID
+	return ds
+}
 func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenChainDataReq) *model.SmartContractDataReply {
 	reply := &model.SmartContractDataReply{
 		BasicResponse: model.BasicResponse{
@@ -139,6 +162,93 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 	reply.SCTDataReply = sctDataArray
 	reply.Status = true
 	reply.Message = "Fetched Smart contract data"
+	return reply
+}
+
+func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq) *model.NFTDataReply {
+	reply := &model.NFTDataReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	_, err := c.w.GetNFTToken(getReq.Token)
+	if err != nil {
+		reply.Message = "Failed to get nft data, token does not exist"
+		return reply
+	}
+	nftDataArray := make([]model.NFTData, 0)
+	c.log.Debug("latest flag ", getReq.Latest)
+	if getReq.Latest {
+		latestBlock := c.w.GetLatestTokenBlock(getReq.Token, c.TokenType(NFTString))
+		if latestBlock == nil {
+			reply.Message = "Failed to get nft data, block is empty"
+			return reply
+		}
+		blockNo, err := latestBlock.GetBlockNumber(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get latest block number"
+			return reply
+		}
+		blockId, err := latestBlock.GetBlockID(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get latest block ID"
+			return reply
+		}
+		nftData := latestBlock.GetNFTData()
+		nftOwner := latestBlock.GetOwner()
+		nftValue := latestBlock.GetTokenValue()
+		nftDataStruct := model.NFTData{
+			BlockNo:  blockNo,
+			BlockId:  blockId,
+			NFTData:  nftData,
+			NFTOwner: nftOwner,
+			NFTValue: nftValue,
+		}
+		nftDataArray = append(nftDataArray, nftDataStruct)
+		reply.NFTDataReply = nftDataArray
+		reply.Status = true
+		reply.Message = "Fetched latest block details of nft"
+		return reply
+	}
+
+	blks, _, err := c.w.GetAllTokenBlocks(getReq.Token, c.TokenType(NFTString), "")
+	if err != nil {
+		reply.Message = "Failed to get nft token blocks"
+		return reply
+	}
+
+	for _, blk := range blks {
+		block := block.InitBlock(blk, nil)
+		if block == nil {
+			reply.Message = "Failed to initialize nft block"
+			return reply
+		}
+		blockNo, err := block.GetBlockNumber(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get latest block number"
+			return reply
+		}
+		blockId, err := block.GetBlockID(getReq.Token)
+		if err != nil {
+			reply.Message = "Failed to get latest block ID"
+			return reply
+		}
+		nftData := block.GetNFTData()
+		nftOwner := block.GetOwner()
+		nftValue := block.GetTokenValue()
+		nftDataStruct := model.NFTData{
+			BlockNo:  blockNo,
+			BlockId:  blockId,
+			NFTData:  nftData,
+			NFTOwner: nftOwner,
+			NFTValue: nftValue,
+		}
+
+		nftDataArray = append(nftDataArray, nftDataStruct)
+	}
+	reply.NFTDataReply = nftDataArray
+	reply.Status = true
+	reply.Message = "Fetched NFT data"
 	return reply
 }
 

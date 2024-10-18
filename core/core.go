@@ -417,6 +417,12 @@ func (c *Core) CreateSCTempFolder() (string, error) {
 	return folderName, err
 }
 
+func (c *Core) CreateNFTTempFolder() (string, error) {
+	folderName := c.cfg.DirPath + "NFT/" + uuid.New().String()
+	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
+	return folderName, err
+}
+
 func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
 
 	scFolderName := c.cfg.DirPath + "SmartContract/" + smartContractName
@@ -426,6 +432,17 @@ func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (
 		scFolderName = ""
 	}
 	return scFolderName, err
+}
+
+func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error) {
+
+	nftFolderName := c.cfg.DirPath + "NFT/" + nft
+	err := os.Rename(tempFolderPath, nftFolderName)
+	if err != nil {
+		c.log.Error("Unable to rename ", tempFolderPath, " to ", nftFolderName, "error ", err)
+		nftFolderName = ""
+	}
+	return nftFolderName, err
 }
 
 func (c *Core) HandleQuorum(conn net.Conn) {
