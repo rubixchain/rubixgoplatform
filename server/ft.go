@@ -105,8 +105,10 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 			Status:  true,
 			Message: "Got FT info successfully",
 		},
-		FTInfo: make([]model.FTInfo, 0),
+		FTInfo: info,
 	}
-	ac.FTInfo = append(ac.FTInfo, info...)
+	if len(info) == 0 {
+		ac.Message = "No FTs found"
+	}
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
