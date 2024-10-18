@@ -181,13 +181,13 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		SCTokenHash:   deployReq.SmartContractToken,
 		TransactionID: txnDetails.TransactionID,
 		Network:       conensusRequest.Type,
-		BlockHash:     txnDetails.BlockID,
+		BlockHash:     strings.Split(txnDetails.BlockID, "-")[1],
 		BlockNumber:   blockNoInt,
 		DeployerDID:   did,
 		Creator:       did,
 		PledgeAmount:  deployReq.RBTAmount,
 		QuorumList:    conensusRequest.QuorumList,
-		PledgeInfo:    pds,
+		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, TokenList: pds.TokenList},
 		Comments:      deployReq.Comment,
 	}
 	c.ec.ExplorerSCTransaction(eTrans)
@@ -300,7 +300,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		resp.Message = "failed to create consensus contract block"
 		return resp
 	}
-	conensusRequest := &ConensusRequest{
+	consensusRequest := &ConensusRequest{
 		ReqID:              uuid.New().String(),
 		Type:               executeReq.QuorumType,
 		ExecuterPeerID:     c.peerID,
@@ -310,7 +310,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		TransactionEpoch:   txEpoch,
 	}
 
-	txnDetails, _, pds, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)
+	txnDetails, _, pds, err := c.initiateConsensus(consensusRequest, consensusContract, didCryptoLib)
 
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
@@ -339,13 +339,13 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	eTrans := &ExplorerSCTrans{
 		SCTokenHash:   executeReq.SmartContractToken,
 		TransactionID: txnDetails.TransactionID,
-		Network:       conensusRequest.Type,
+		Network:       consensusRequest.Type,
 		BlockHash:     strings.Split(txnDetails.BlockID, "-")[1],
 		BlockNumber:   blockNoInt,
 		ExecutorDID:   did,
 		Creator:       smartContractInfo.OwnerDID,
-		QuorumList:    conensusRequest.QuorumList,
-		PledgeInfo:    pds,
+		QuorumList:    consensusRequest.QuorumList,
+		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, TokenList: pds.TokenList},
 		Comments:      executeReq.Comment,
 	}
 	c.ec.ExplorerSCTransaction(eTrans)

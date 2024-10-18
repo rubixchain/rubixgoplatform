@@ -93,6 +93,7 @@ const (
 	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
 	ValidateTokenCmd               string = "validatetoken"
+	AddUserAPIKeyCmd               string = "adduserapikey"
 )
 
 var commands = []string{VersionCmd,
@@ -285,6 +286,7 @@ type Command struct {
 	pinningAddress               string
 	blockCount                   int
 	smartContractChainValidation bool
+	apiKey                       string
 }
 
 func showVersion() {
@@ -485,6 +487,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
+	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -664,6 +667,8 @@ func Run(args []string) {
 		cmd.ValidateTokenchain()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
+	case AddUserAPIKeyCmd:
+		cmd.addUserAPIKey()
 	default:
 		cmd.log.Error("Invalid command")
 	}

@@ -85,7 +85,7 @@ type PledgeDetails struct {
 	NumPledgedTokens       int
 	PledgedTokens          map[string][]string
 	PledgedTokenChainBlock map[string]interface{}
-	TokenList              []string
+	TokenList              []Token
 }
 
 type PledgeRequest struct {
@@ -340,7 +340,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		NumPledgedTokens:       0,
 		PledgedTokens:          make(map[string][]string),
 		PledgedTokenChainBlock: make(map[string]interface{}),
-		TokenList:              make([]string, 0),
+		TokenList:              make([]Token, 0),
 	}
 	//getting last character from TID
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
@@ -1734,7 +1734,8 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, MaxDecimalPlaces)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
-						pd.TokenList = append(pd.TokenList, t)
+						pd.TokenList = append(pd.TokenList, Token{TokenID: prs.Tokens[i], TokenValue: prs.TokenValue[i]})
+
 					}
 				}
 				c.qlock.Lock()

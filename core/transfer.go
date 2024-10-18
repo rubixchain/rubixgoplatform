@@ -238,6 +238,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	tis := make([]contract.TokenInfo, 0)
+	tokenListForExplorer := []Token{}
 	for i := range tokensForTxn {
 		tts := "rbt"
 		if tokensForTxn[i].TokenValue != 1 {
@@ -265,6 +266,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			BlockID:    bid,
 		}
 		tis = append(tis, ti)
+		tokenListForExplorer = append(tokenListForExplorer, Token{TokenID: ti.Token, TokenValue: ti.TokenValue})
+
 	}
 
 	contractType := getContractType(reqID, req, tis, isSelfRBTTransfer)
@@ -308,25 +311,20 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = errMsg
 		return resp
 	}
-
-	/* blockHash, err := extractHash(td.BlockID)
-	if err != nil {
-		c.log.Error("Consensus failed", "err", err)
-		resp.Message = "Consensus failed" + err.Error()
-		return resp
-	} */
 	etrans := &ExplorerRBTTrans{
 		TokenHashes:   wta,
 		TransactionID: td.TransactionID,
-		// BlockNumber:   td.BlockID,
-		Network:     req.Type,
-		SenderDID:   senderDID,
-		ReceiverDID: receiverdid,
-		Amount:      req.TokenCount,
-		QuorumList:  cr.QuorumList,
-		PledgeInfo:  pds,
-		Comments:    req.Comment,
+		BlockHash:     strings.Split(td.BlockID, "-")[1],
+		Network:       req.Type,
+		SenderDID:     senderDID,
+		ReceiverDID:   receiverdid,
+		Amount:        req.TokenCount,
+		QuorumList:    cr.QuorumList,
+		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, TokenList: pds.TokenList},
+		TokenList:     tokenListForExplorer,
+		Comments:      req.Comment,
 	}
+	fmt.Printf("%+v", etrans)
 
 	c.ec.ExplorerRBTTransaction(etrans)
 	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
@@ -549,14 +547,14 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 	etrans := &ExplorerRBTTrans{
 		TokenHashes:   wta,
 		TransactionID: td.TransactionID,
-		// BlockNumber:   td.BlockID,
-		Network:     req.Type,
-		SenderDID:   did,
-		ReceiverDID: pinningNodeDID,
-		Amount:      req.TokenCount,
-		QuorumList:  cr.QuorumList,
-		PledgeInfo:  pds,
-		Comments:    req.Comment,
+		BlockHash:     strings.Split(td.BlockID, "-")[1],
+		Network:       req.Type,
+		SenderDID:     did,
+		ReceiverDID:   pinningNodeDID,
+		Amount:        req.TokenCount,
+		QuorumList:    cr.QuorumList,
+		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, TokenList: pds.TokenList},
+		Comments:      req.Comment,
 	}
 	c.ec.ExplorerRBTTransaction(etrans)
 	c.log.Info("Pinning finished successfully", "duration", dif, " trnxid", td.TransactionID)
@@ -564,12 +562,4 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 	msg := fmt.Sprintf("Pinning finished successfully in %v with trnxid %v", dif, td.TransactionID)
 	resp.Message = msg
 	return resp
-}
-
-func extractHash(input string) (string, error) {
-	values := strings.Split(input, "-")
-	if len(values) != 2 {
-		return "", fmt.Errorf("invalid format: %s", input)
-	}
-	return values[1], nil
 }
