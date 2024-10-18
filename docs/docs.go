@@ -657,9 +657,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/get-ft-info": {
+        "/api/get-ft-info-by-did": {
             "get": {
-                "description": "This API endpoint retrieves the names and count of FTs for a given DID.",
+                "description": "This API endpoint retrieves the names and count of FTs of a given DID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -669,7 +669,7 @@ const docTemplate = `{
                 "tags": [
                     "FT"
                 ],
-                "summary": "Get FT Info",
+                "summary": "Get FT balance information for a given DID",
                 "parameters": [
                     {
                         "type": "string",
@@ -769,7 +769,7 @@ const docTemplate = `{
         },
         "/api/initiate-ft-tranfer": {
             "post": {
-                "description": "This API endpoint will do transfer of FTs.",
+                "description": "This API endpoint will initiate transfer of FTs.",
                 "consumes": [
                     "application/json"
                 ],
@@ -779,7 +779,7 @@ const docTemplate = `{
                 "tags": [
                     "FT"
                 ],
-                "summary": "Initiate FT transfer",
+                "summary": "Initiate an FT transfer",
                 "parameters": [
                     {
                         "description": "Transfer FT",
@@ -1161,6 +1161,9 @@ const docTemplate = `{
         "model.FTInfo": {
             "type": "object",
             "properties": {
+                "creator_did": {
+                    "type": "string"
+                },
                 "ft_count": {
                     "type": "integer"
                 },
@@ -1481,6 +1484,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "comment": {
+                    "type": "string"
+                },
+                "creatorDID": {
                     "type": "string"
                 },
                 "password": {

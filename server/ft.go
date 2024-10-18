@@ -18,13 +18,14 @@ type CreateFTReqSwaggoInput struct {
 }
 
 type TransferFTReqSwaggoInput struct {
-	Receiver string `json:"receiver"`
-	Sender   string `json:"sender"`
-	FTName   string `json:"FTName"`
-	FTCount  int    `json:"FTCount"`
-	Comment  string `json:"comment"`
-	Type     int    `json:"type"`
-	Password string `json:"password"`
+	Receiver   string `json:"receiver"`
+	Sender     string `json:"sender"`
+	FTName     string `json:"FTName"`
+	FTCount    int    `json:"FTCount"`
+	Comment    string `json:"comment"`
+	Type       int    `json:"type"`
+	Password   string `json:"password"`
+	CreatorDID string `json:"creatorDID"`
 }
 
 // ShowAccount godoc
@@ -51,8 +52,8 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 }
 
 // ShowAccount godoc
-// @Summary      Initiate FT transfer
-// @Description  This API endpoint will do transfer of FTs.
+// @Summary      Initiate an FT transfer
+// @Description  This API endpoint will initiate transfer of FTs.
 // @Tags         FT
 // @Accept       json
 // @Produce      json
@@ -78,14 +79,14 @@ func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 }
 
 // ShowAccount godoc
-// @Summary      Get FT Info
+// @Summary      Get FT balance information for a given DID
 // @Description  This API endpoint retrieves the names and count of FTs of a given DID.
 // @Tags         FT
 // @Accept       json
 // @Produce      json
 // @Param        did      	   query      string  true  "User DID"
 // @Success      200  {object}  model.GetFTInfo
-// @Router       /api/get-ft-info [get]
+// @Router       /api/get-ft-info-by-did [get]
 func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
 	if !s.validateDIDAccess(req, did) {

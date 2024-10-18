@@ -27,6 +27,8 @@ definitions:
     type: object
   model.FTInfo:
     properties:
+      creator_did:
+        type: string
       ft_count:
         type: integer
       ft_name:
@@ -235,6 +237,8 @@ definitions:
       FTName:
         type: string
       comment:
+        type: string
+      creatorDID:
         type: string
       password:
         type: string
@@ -674,11 +678,11 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
-  /api/get-ft-info:
+  /api/get-ft-info-by-did:
     get:
       consumes:
       - application/json
-      description: This API endpoint retrieves the names and count of FTs for a given
+      description: This API endpoint retrieves the names and count of FTs of a given
         DID.
       parameters:
       - description: User DID
@@ -693,7 +697,7 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/model.GetFTInfo'
-      summary: Get FT Info
+      summary: Get FT balance information for a given DID
       tags:
       - FT
   /api/get-pledgedtoken-details:
@@ -752,7 +756,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: This API endpoint will do transfer of FTs.
+      description: This API endpoint will initiate transfer of FTs.
       parameters:
       - description: Transfer FT
         in: body
@@ -767,7 +771,7 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/model.BasicResponse'
-      summary: Initiate FT transfer
+      summary: Initiate an FT transfer
       tags:
       - FT
   /api/initiate-pin-token:
