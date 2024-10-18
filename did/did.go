@@ -97,7 +97,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			mnemonic = string(_mnemonic)
 		}
 
-		masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic, didCreate.PrivPWD)
+		masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic)
 		if err != nil {
 			d.log.Error("failed to create keypair", "err", err)
 		}

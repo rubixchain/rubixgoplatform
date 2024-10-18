@@ -90,9 +90,9 @@ func DecodeBIPKeyPair(pwd string, privKey []byte, pubKey []byte) ([]byte, []byte
 
 // Generate BIPMasterKey from Mnemonic and user provided password
 // Useful in key recovery / device migration through mnemonics
-func BIPGenerateMasterKeyFromMnemonic(mnemonic string, pwd string) ([]byte, error) {
+func BIPGenerateMasterKeyFromMnemonic(mnemonic string) ([]byte, error) {
 	var masterkeySeralise string
-	seed := bip39.NewSeed(mnemonic, pwd)
+	seed := bip39.NewSeed(mnemonic, "")
 	masterKey, _ := bip32.NewMasterKey(seed)
 	masterkeySeralise = masterKey.B58Serialize()
 	return []byte(masterkeySeralise), nil
@@ -112,7 +112,7 @@ func BIPGenerateMasterKey(cfg *CryptoConfig) ([]byte, error) {
 	var err error
 	if cfg.Alg == 0 {
 		mnemonic := BIPGenerateMnemonic()
-		pemEncPriv, err = BIPGenerateMasterKeyFromMnemonic(mnemonic, cfg.Pwd)
+		pemEncPriv, err = BIPGenerateMasterKeyFromMnemonic(mnemonic)
 		if err != nil {
 			return nil, err
 		}

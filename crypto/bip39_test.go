@@ -9,7 +9,7 @@ import (
 
 func BIPtest(t *testing.T, mnemonic string, pwd string) {
 
-	masterKey, err := BIPGenerateMasterKeyFromMnemonic(mnemonic, pwd)
+	masterKey, err := BIPGenerateMasterKeyFromMnemonic(mnemonic)
 	if err != nil {
 		t.Fatal("failed to generate key pair", "err", err)
 	}
@@ -44,6 +44,6 @@ func BIPtest(t *testing.T, mnemonic string, pwd string) {
 	}
 }
 func TestBIPKeyGeneration(t *testing.T) {
-	BIPtest(t, "cup symbol flee find decline market tube border artist clever make plastic unfold chaos float artwork sustain suspect risk process fox decrease west seven", "test")
-	BIPtest(t, "cub symbol flee find decline market tube border artist clever make plastic unfold chaos float artwork sustain suspect risk process fox decrease west seven", "test")
+	BIPtest(t, "cup symbol flee find decline market tube border artist clever make plastic unfold chaos float artwork sustain suspect risk process fox decrease west seven", "test1")
+	BIPtest(t, "cub symbol flee find decline market tube border artist clever make plastic unfold chaos float artwork sustain suspect risk process fox decrease west seven", "test2")
 }

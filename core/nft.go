@@ -3,7 +3,6 @@ package core
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -321,10 +320,10 @@ func (c *Core) addNFTSaleContract(reqID string, sr *NFTSaleReq) *model.BasicResp
 		SenderPeerID:  c.peerID,
 		ContractBlock: sc.GetBlock(),
 	}
-	_, _, err = c.initiateConsensus(cr, sc, dc)
+	_, _, _, err = c.initiateConsensus(cr, sc, dc)
 	c.log.Info("NFTs sale contract added successfully")
 	resp.Status = true
-	msg := fmt.Sprintf("NFTs sale contract added successfully")
+	msg := "NFTs sale contract added successfully"
 	resp.Message = msg
 	return resp
 }

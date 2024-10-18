@@ -33,8 +33,8 @@ func (c *Client) AddQuorum(quorumList string) (string, bool) {
 		return "Length of Quorum list should be atleast 5", false
 	}
 	for _, q := range ql {
-		is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(q.Address)
-		if !strings.HasPrefix(q.Address, "bafybmi") || len(q.Address) != 59 || !is_alphanumeric {
+		isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(q.Address)
+		if !strings.HasPrefix(q.Address, "bafybmi") || len(q.Address) != 59 || !isAlphanumeric {
 			c.log.Error(fmt.Sprintf("Invalid quorum DID : %s", q.Address))
 			return fmt.Sprintf("Invalid quorum DID : %s", q.Address), false
 		}

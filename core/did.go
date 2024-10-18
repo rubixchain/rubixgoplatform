@@ -138,8 +138,14 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	// if err != nil {
 	// 	return "", err
 	// }
+	newDID := &ExplorerDID{
+		PeerID:  c.peerID,
+		DID:     did,
+		Balance: 0,
+		DIDType: didCreate.Type,
+	}
 	if !c.testNet {
-		c.ec.ExplorerCreateDID(c.peerID, did)
+		c.ec.ExplorerCreateDID(newDID)
 	}
 	return did, nil
 }
@@ -178,7 +184,12 @@ func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
 		br.Message = err.Error()
 		return br
 	}
-	c.ec.ExplorerCreateDID(c.peerID, ds)
+	newDID := &ExplorerDID{
+		PeerID:  c.peerID,
+		DID:     ds,
+		DIDType: dc.Type,
+	}
+	c.ec.ExplorerCreateDID(newDID)
 	br.Status = true
 	br.Message = "DID added successfully"
 	br.Result = ds

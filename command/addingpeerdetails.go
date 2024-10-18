@@ -22,8 +22,8 @@ func (cmd *Command) AddPeerDetails() {
 	} else {
 		peerID = cmd.peerID
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.peerID)
-	if !strings.HasPrefix(cmd.peerID, "12D3KooW") || len(cmd.peerID) != 52 || !is_alphanumeric {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.peerID)
+	if !strings.HasPrefix(cmd.peerID, "12D3KooW") || len(cmd.peerID) != 52 || !isAlphanumeric {
 		cmd.log.Error("Invalid PeerID")
 		return
 	}
@@ -38,24 +38,24 @@ func (cmd *Command) AddPeerDetails() {
 	} else {
 		did = cmd.did
 	}
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+	isAlphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
 		cmd.log.Error("Invalid DID")
 		return
 	}
 
-	// did_type = cmd.didType
+	// didType = cmd.didType
 	if cmd.didType < 0 || cmd.didType > 4 {
 		cmd.log.Error("DID Type should be between 0 and 4")
 		return
 	}
 
-	peer_detail := wallet.DIDPeerMap{
+	peerDetail := wallet.DIDPeerMap{
 		PeerID:  peerID,
 		DID:     did,
 		DIDType: &cmd.didType,
 	}
-	msg, status := cmd.c.AddPeer(&peer_detail)
+	msg, status := cmd.c.AddPeer(&peerDetail)
 	if !status {
 		cmd.log.Error("Failed to add peer in DB", "message", msg)
 		return

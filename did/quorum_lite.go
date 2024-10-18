@@ -11,8 +11,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// DIDQuorum_Lt will handle lite DID
-type DIDQuorum_Lt struct {
+// DIDQuorumLite will handle lite DID
+type DIDQuorumLite struct {
 	did     string
 	dir     string
 	pwd     string
@@ -20,9 +20,9 @@ type DIDQuorum_Lt struct {
 	pubKey  crypto.PublicKey
 }
 
-// InitDIDQuorum_Lt will return the Quorum did handle in lite mode
-func InitDIDQuorum_Lt(did string, baseDir string, pwd string) *DIDQuorum_Lt {
-	d := &DIDQuorum_Lt{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
+// InitDIDQuorumLite will return the Quorum did handle in lite mode
+func InitDIDQuorumLite(did string, baseDir string, pwd string) *DIDQuorumLite {
+	d := &DIDQuorumLite{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 	if d.pwd != "" {
 		privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 		if err != nil {
@@ -45,16 +45,16 @@ func InitDIDQuorum_Lt(did string, baseDir string, pwd string) *DIDQuorum_Lt {
 	return d
 }
 
-func (d *DIDQuorum_Lt) GetDID() string {
+func (d *DIDQuorumLite) GetDID() string {
 	return d.did
 }
 
-func (d *DIDQuorum_Lt) GetSignType() int {
+func (d *DIDQuorumLite) GetSignType() int {
 	return BIPVersion
 }
 
 // Sign will return the singature of the DID
-func (d *DIDQuorum_Lt) Sign(hash string) ([]byte, []byte, error) {
+func (d *DIDQuorumLite) Sign(hash string) ([]byte, []byte, error) {
 	pvtKeySign, err := d.PvtSign([]byte(hash))
 	// byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
@@ -68,7 +68,7 @@ func (d *DIDQuorum_Lt) Sign(hash string) ([]byte, []byte, error) {
 }
 
 // verify the quorum's nlss based signature
-func (d *DIDQuorum_Lt) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+func (d *DIDQuorumLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
@@ -120,7 +120,7 @@ func (d *DIDQuorum_Lt) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []b
 	}
 	return true, nil
 }
-func (d *DIDQuorum_Lt) PvtSign(hash []byte) ([]byte, error) {
+func (d *DIDQuorumLite) PvtSign(hash []byte) ([]byte, error) {
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func (d *DIDQuorum_Lt) PvtSign(hash []byte) ([]byte, error) {
 	}
 	return pvtKeySign, nil
 }
-func (d *DIDQuorum_Lt) PvtVerify(hash []byte, sign []byte) (bool, error) {
+func (d *DIDQuorumLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
 		return false, err

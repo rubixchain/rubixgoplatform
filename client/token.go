@@ -3,6 +3,8 @@ package client
 import (
 	"time"
 
+	"strconv"
+
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
@@ -49,6 +51,33 @@ func (c *Client) GetPinnedInfo(TokenStateHash string) (*model.BasicResponse, err
 	err := c.sendJSONRequest("DELETE", setup.APICheckPinnedState, m, nil, &br, time.Minute*2)
 	if err != nil {
 		c.log.Error("Failed to get Pins", "err", err)
+		return nil, err
+	}
+	return &br, nil
+}
+
+func (c *Client) ValidateTokenchain(userDID string, smartContractChainValidation bool, token string, blockCount int) (*model.BasicResponse, error) {
+	q := make(map[string]string)
+	q["did"] = userDID
+	q["token"] = token
+	q["blockcount"] = strconv.Itoa(blockCount)
+	q["SCChainValidation"] = strconv.FormatBool(smartContractChainValidation)
+
+	var br model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIValidateTokenChain, q, nil, &br)
+	if err != nil {
+		return nil, err
+	}
+	return &br, nil
+}
+
+func (c *Client) ValidateToken(token string) (*model.BasicResponse, error) {
+	q := make(map[string]string)
+	q["token"] = token
+
+	var br model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIValidateToken, q, nil, &br)
+	if err != nil {
 		return nil, err
 	}
 	return &br, nil

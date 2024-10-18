@@ -11,8 +11,8 @@ func (cmd *Command) ping() {
 		cmd.log.Error("PeerID cannot be empty. Please use flag peerId")
 		return
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.peerID)
-	if !strings.HasPrefix(cmd.peerID, "12D3KooW") || len(cmd.peerID) != 52 || !is_alphanumeric {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.peerID)
+	if !strings.HasPrefix(cmd.peerID, "12D3KooW") || len(cmd.peerID) != 52 || !isAlphanumeric {
 		cmd.log.Error("Invalid PeerID")
 		return
 	}
@@ -34,8 +34,8 @@ func (cmd *Command) checkQuorumStatus() {
 			return
 		}
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.quorumAddr)
-	if !strings.HasPrefix(cmd.quorumAddr, "bafybmi") || len(cmd.quorumAddr) != 59 || !is_alphanumeric {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.quorumAddr)
+	if !strings.HasPrefix(cmd.quorumAddr, "bafybmi") || len(cmd.quorumAddr) != 59 || !isAlphanumeric {
 		cmd.log.Error("Invalid DID of the quorum")
 		return
 	}
