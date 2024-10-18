@@ -32,12 +32,11 @@ func (c *Client) DumpSmartContractTokenChain(token string, blockID string) (*mod
 }
 
 func (c *Client) DumpNFTTokenChain(token string, blockID string) (*model.TCDumpReply, error) {
-	dr := &model.TCDumpRequest{
-		Token:   token,
-		BlockID: blockID,
-	}
+	q := make(map[string]string)
+	q["nft"] = token
+	q["blockId"] = blockID
 	var drep model.TCDumpReply
-	err := c.sendJSONRequest("GET", setup.APIDumpNFTTokenChain, nil, dr, &drep)
+	err := c.sendJSONRequest("GET", setup.APIDumpNFTTokenChain, q, nil, &drep)
 	if err != nil {
 		return nil, err
 	}

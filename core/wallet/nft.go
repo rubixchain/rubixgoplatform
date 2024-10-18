@@ -79,13 +79,13 @@ func (w *Wallet) UpdateNFTStatus(nft string, tokenStatus int) error {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	var nftToken NFT
-	err := w.s.Read(NFTTokenStorage, &nft, "token_id=?", nftToken)
+	err := w.s.Read(NFTTokenStorage, &nftToken, "token_id=?", nft)
 	if err != nil {
 		w.log.Error("err", err)
 		return err
 	}
 	nftToken.TokenStatus = tokenStatus
-	err = w.s.Update(NFTTokenStorage, &nft, "token_id=?", nftToken)
+	err = w.s.Update(NFTTokenStorage, &nftToken, "token_id=?", nft)
 	if err != nil {
 		return err
 	}

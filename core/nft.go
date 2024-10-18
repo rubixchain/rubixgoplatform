@@ -308,7 +308,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		resp.Message = "Failed to setup Executor DID, " + err.Error()
 		return resp
 	}
-	//check the smartcontract token from the DB base
+	//check the nft token from the DB base
 	_, err = c.w.GetNFT(executeReq.Owner, executeReq.NFT, false)
 	if err != nil {
 		c.log.Error("Failed to retrieve NFT Token details from storage", err)
@@ -343,13 +343,18 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	// 	resp.Message = "NFT Value cannot be 0, "
 	// 	return resp
 	// }
-
+	var receiver string
+	if executeReq.Receiver == "" {
+		receiver = executeReq.Owner
+	} else {
+		receiver = executeReq.Receiver
+	}
 	nftInfoArray := make([]contract.TokenInfo, 0)
 	nftInfo := contract.TokenInfo{
 		Token:      executeReq.NFT,
 		TokenType:  c.TokenType(NFTString),
 		TokenValue: float64(currentNFTValue),
-		OwnerDID:   executeReq.Receiver,
+		OwnerDID:   receiver,
 	}
 	nftInfoArray = append(nftInfoArray, nftInfo)
 
@@ -360,7 +365,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		TotalRBTs:  float64(currentNFTValue),
 		TransInfo: &contract.TransInfo{
 			ExecutorDID: did,
-			ReceiverDID: executeReq.Receiver,
+			ReceiverDID: receiver,
 			Comment:     executeReq.Comment,
 			NFT:         executeReq.NFT,
 			TransTokens: nftInfoArray,
@@ -428,9 +433,9 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	}
 	c.ec.ExplorerTransaction(explorerTrans)
 
-	c.log.Info("NFT Transferred successfully", "duration", dif)
+	c.log.Info("NFT Executed successfully", "duration", dif)
 	resp.Status = true
-	msg := fmt.Sprintf("NFT Transferred successfully in %v", dif)
+	msg := fmt.Sprintf("NFT Executed successfully in %v", dif)
 	resp.Message = msg
 	return resp
 }

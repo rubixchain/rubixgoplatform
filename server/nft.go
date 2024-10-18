@@ -19,7 +19,7 @@ import (
 // @Accept       mpfd
 // @Produce      mpfd
 // @Param        did        	   formData      string  true   "DID"
-// @Param        metadata       formData      file  true  "NFTFileInfo is a metadata about the file being given. We are expecting a json file with a mandatory key filename"
+// @Param        metadata       formData      file  true  "Metadata about the file being given. We are expecting a json file with a mandatory key filename"
 // @Param        artifact       formData      file    true  "File to be committed"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/create-nft [post]
@@ -31,10 +31,10 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Creation of NFT failed, failed to create NFT folder", "err", err)
 		return s.BasicResponse(req, false, "Failed to create NFT, Failed to create NFT folder", nil)
 	}
-	nftInfoFile, nftInfoFileHeader, err := s.ParseMultiPartFormFile(req, "NFTFileInfo")
+	nftInfoFile, nftInfoFileHeader, err := s.ParseMultiPartFormFile(req, "metadata")
 	if err != nil {
-		s.log.Error("Creation of NFT failed, failed to retrieve NFT file Info", "err", err)
-		return s.BasicResponse(req, false, "Creation of NFT failed, failed to retrieve NFT file Info", nil)
+		s.log.Error("Creation of NFT failed, failed to retrieve metadata", "err", err)
+		return s.BasicResponse(req, false, "Creation of NFT failed, failed to retrieve metadata", nil)
 	}
 	nftFileInfoDest := filepath.Join(createNFT.NFTPath, nftInfoFileHeader.Filename)
 	nftFileInfoDestFile, err := os.Create(nftFileInfoDest)
@@ -54,10 +54,10 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Creation of NFT failed, failed to move NFTFile", nil)
 	}
 
-	nftFile, nftFileHeader, err := s.ParseMultiPartFormFile(req, "NFTFile")
+	nftFile, nftFileHeader, err := s.ParseMultiPartFormFile(req, "artifact")
 	if err != nil {
-		s.log.Error("Creation of NFT failed, failed to retrieve NFT file", "err", err)
-		return s.BasicResponse(req, false, "Creation of NFT failed, failed to retrieve NFT file", nil)
+		s.log.Error("Creation of NFT failed, failed to retrieve NFT artifact", "err", err)
+		return s.BasicResponse(req, false, "Creation of NFT failed, failed to retrieve NFT artifact", nil)
 	}
 	nftFileDest := filepath.Join(createNFT.NFTPath, nftFileHeader.Filename)
 	nftFileDestFile, err := os.Create(nftFileDest)
@@ -102,9 +102,9 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 }
 
 type DeployNFTSwaggoInput struct {
-	NFT        string `json:"NFT"`
-	DID        string `json:"DID"`
-	QuorumType int    `json:"QuorumType"`
+	NFT        string `json:"nft"`
+	DID        string `json:"did"`
+	QuorumType int    `json:"quorum_type"`
 }
 
 // NFT godoc

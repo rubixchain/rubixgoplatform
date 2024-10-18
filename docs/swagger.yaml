@@ -60,11 +60,11 @@ definitions:
     type: object
   server.DeployNFTSwaggoInput:
     properties:
-      DID:
+      did:
         type: string
-      NFT:
+      nft:
         type: string
-      QuorumType:
+      quorum_type:
         type: integer
     type: object
   server.DeploySmartContractSwaggoInput:
@@ -78,6 +78,23 @@ definitions:
       rbtAmount:
         type: number
       smartContractToken:
+        type: string
+    type: object
+  server.ExecuteNFTSwaggoInput:
+    properties:
+      comment:
+        type: string
+      nft:
+        type: string
+      nft_data:
+        type: string
+      nft_value:
+        type: number
+      owner:
+        type: string
+      quorum_type:
+        type: integer
+      receiver:
         type: string
     type: object
   server.ExecuteSmartContractSwaggoInput:
@@ -96,13 +113,6 @@ definitions:
   server.FetchSmartContractSwaggoInput:
     properties:
       smartContractToken:
-        type: string
-    type: object
-  server.GetNFTTokenChainDataSwaggoInput:
-    properties:
-      latest:
-        type: boolean
-      token:
         type: string
     type: object
   server.GetSmartContractTokenChainDataSwaggoInput:
@@ -180,23 +190,6 @@ definitions:
       mode:
         type: integer
       password:
-        type: string
-    type: object
-  server.TransferNFTSwaggoInput:
-    properties:
-      Comment:
-        type: string
-      NFT:
-        type: string
-      NFTData:
-        type: string
-      NFTValue:
-        type: number
-      Owner:
-        type: string
-      QuorumType:
-        type: integer
-      Receiver:
         type: string
     type: object
 info:
@@ -316,7 +309,7 @@ paths:
       summary: Create Data Token
       tags:
       - Data Tokens
-  /api/createnft:
+  /api/create-nft:
     post:
       consumes:
       - multipart/form-data
@@ -327,27 +320,17 @@ paths:
         name: did
         required: true
         type: string
-      - description: User/Entity Info
+      - description: Metadata about the file being given. We are expecting a json
+          file with a mandatory key filename
         in: formData
-        name: UserID
-        required: true
-        type: string
-      - description: NFTFileInfo is a metadata about the file being given. We are
-          expecting a json file with a mandatory key filename
-        in: formData
-        name: NFTFileInfo
+        name: metadata
         required: true
         type: file
       - description: File to be committed
         in: formData
-        name: NFTFile
+        name: artifact
         required: true
         type: file
-      - description: The data which the user wishes to be put in
-        in: formData
-        name: Data
-        required: true
-        type: string
       produces:
       - multipart/form-data
       responses:
@@ -404,6 +387,29 @@ paths:
       summary: Deploy Smart Contract
       tags:
       - Smart Contract
+  /api/execute-nft:
+    post:
+      consumes:
+      - application/json
+      description: This API will add a new block which indicates the transfer of ownership
+        of NFT
+      parameters:
+      - description: Transfer the ownership of particular NFT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.ExecuteNFTSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Execution of NFT
+      tags:
+      - NFT
   /api/execute-smart-contract:
     post:
       consumes:
@@ -622,18 +628,21 @@ paths:
       tags:
       - Data Tokens
   /api/get-nft-token-chain-data:
-    post:
+    get:
       consumes:
       - application/json
-      description: This API will return smart contract token chain data
+      description: This API will return nft token chain data
       operationId: get-nft-token-chain-data
       parameters:
-      - description: Returns nft token chain Data
-        in: body
-        name: input
+      - description: NFT token id
+        in: query
+        name: nft
         required: true
-        schema:
-          $ref: '#/definitions/server.GetNFTTokenChainDataSwaggoInput'
+        type: string
+      - description: Set to true if you only need the latest token block
+        in: query
+        name: latest
+        type: string
       produces:
       - application/json
       responses:
@@ -897,29 +906,6 @@ paths:
       summary: Subscribe to Smart Contract
       tags:
       - Smart Contract
-  /api/transfer-nft:
-    post:
-      consumes:
-      - application/json
-      description: This API will add a new block which indicates the transfer of ownership
-        of NFT
-      parameters:
-      - description: Transfer the ownership of particular NFT
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.TransferNFTSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Transfer of NFT ownership
-      tags:
-      - NFT
   /api/unpledge-pow-unpledge-tokens:
     post:
       consumes:

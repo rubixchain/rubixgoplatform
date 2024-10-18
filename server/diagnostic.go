@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -40,15 +41,20 @@ func (s *Server) APIDumpSmartContractTokenChainBlock(req *ensweb.Request) *enswe
 }
 
 func (s *Server) APIDumpNFTTokenChain(req *ensweb.Request) *ensweb.Result {
-	var dr model.TCDumpRequest
-	err := s.ParseJSON(req, &dr)
-	if err != nil {
-		return s.BasicResponse(req, false, "Invalid input", nil)
+	nft := s.GetQuerry(req, "nft")
+	if nft == "" {
+		s.log.Error("NFT token details not provided")
+		return s.BasicResponse(req, false, "NFT token details not provided", nil)
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(dr.Token)
-	if len(dr.Token) != 46 || !strings.HasPrefix(dr.Token, "Qm") || !is_alphanumeric {
+	blockId := s.GetQuerry(req, "blockId")
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(nft)
+	if len(nft) != 46 || !strings.HasPrefix(nft, "Qm") || !is_alphanumeric {
 		s.log.Error("Invalid NFT")
 		return s.BasicResponse(req, false, "Invalid NFT", nil)
+	}
+	dr := model.TCDumpRequest{
+		Token:   nft,
+		BlockID: blockId,
 	}
 	drep := s.c.DumpNFTTokenChain(&dr)
 	return s.RenderJSON(req, drep, http.StatusOK)
@@ -84,21 +90,38 @@ type GetNFTTokenChainDataSwaggoInput struct {
 	Latest bool   `json:"latest"`
 }
 
-// SmartContract godoc
+// NFT godoc
 // @Summary      Get NFT Token Chain Data
-// @Description  This API will return smart contract token chain data
+// @Description  This API will return nft token chain data
 // @Tags         NFT
-// @ID 			 get-nft-token-chain-data
+// @ID           get-nft-token-chain-data
 // @Accept       json
 // @Produce      json
-// @Param		 input body GetNFTTokenChainDataSwaggoInput true "Returns nft token chain Data"
+// @Param        nft     query string true  "NFT token id"
+// @Param        latest  query string false "Set to true if you only need the latest token block"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/get-nft-token-chain-data [get]
 func (s *Server) APIGetNFTTokenChainData(req *ensweb.Request) *ensweb.Result {
-	var getReq model.SmartContractTokenChainDataReq
-	err := s.ParseJSON(req, &getReq)
-	if err != nil {
-		return s.BasicResponse(req, false, "Invalid input", nil)
+	nft := s.GetQuerry(req, "nft")
+	if nft == "" {
+		s.log.Error("NFT token details not provided")
+		return s.BasicResponse(req, false, "NFT token details not provided", nil)
+	}
+	islatest := false
+	latestBlock := s.GetQuerry(req, "latest")
+	if latestBlock != "" {
+		var err error
+		islatest, err = strconv.ParseBool(latestBlock)
+		if err != nil {
+			// Handle the error if the query param is not a valid boolean
+			return s.BasicResponse(req, false, "Param is not a valid boolean", nil)
+		}
+
+	}
+	//var getReq model.SmartContractTokenChainDataReq
+	getReq := model.SmartContractTokenChainDataReq{
+		Token:  nft,
+		Latest: islatest,
 	}
 	nftDataReply := s.c.GetNFTTokenChainData(&getReq)
 	return s.RenderJSON(req, nftDataReply, http.StatusOK)

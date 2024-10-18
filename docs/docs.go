@@ -184,7 +184,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/createnft": {
+        "/api/create-nft": {
             "post": {
                 "description": "This API will create new NFT",
                 "consumes": [
@@ -206,30 +206,16 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "string",
-                        "description": "User/Entity Info",
-                        "name": "UserID",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
                         "type": "file",
-                        "description": "NFTFileInfo is a metadata about the file being given. We are expecting a json file with a mandatory key filename",
-                        "name": "NFTFileInfo",
+                        "description": "Metadata about the file being given. We are expecting a json file with a mandatory key filename",
+                        "name": "metadata",
                         "in": "formData",
                         "required": true
                     },
                     {
                         "type": "file",
                         "description": "File to be committed",
-                        "name": "NFTFile",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "The data which the user wishes to be put in",
-                        "name": "Data",
+                        "name": "artifact",
                         "in": "formData",
                         "required": true
                     }
@@ -301,6 +287,40 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/server.DeploySmartContractSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/execute-nft": {
+            "post": {
+                "description": "This API will add a new block which indicates the transfer of ownership of NFT",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Execution of NFT",
+                "parameters": [
+                    {
+                        "description": "Transfer the ownership of particular NFT",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.ExecuteNFTSwaggoInput"
                         }
                     }
                 ],
@@ -642,8 +662,8 @@ const docTemplate = `{
             }
         },
         "/api/get-nft-token-chain-data": {
-            "post": {
-                "description": "This API will return smart contract token chain data",
+            "get": {
+                "description": "This API will return nft token chain data",
                 "consumes": [
                     "application/json"
                 ],
@@ -657,13 +677,17 @@ const docTemplate = `{
                 "operationId": "get-nft-token-chain-data",
                 "parameters": [
                     {
-                        "description": "Returns nft token chain Data",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.GetNFTTokenChainDataSwaggoInput"
-                        }
+                        "type": "string",
+                        "description": "NFT token id",
+                        "name": "nft",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true if you only need the latest token block",
+                        "name": "latest",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1056,40 +1080,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/transfer-nft": {
-            "post": {
-                "description": "This API will add a new block which indicates the transfer of ownership of NFT",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "NFT"
-                ],
-                "summary": "Transfer of NFT ownership",
-                "parameters": [
-                    {
-                        "description": "Transfer the ownership of particular NFT",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.TransferNFTSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/unpledge-pow-unpledge-tokens": {
             "post": {
                 "description": "This API will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
@@ -1209,13 +1199,13 @@ const docTemplate = `{
         "server.DeployNFTSwaggoInput": {
             "type": "object",
             "properties": {
-                "DID": {
+                "did": {
                     "type": "string"
                 },
-                "NFT": {
+                "nft": {
                     "type": "string"
                 },
-                "QuorumType": {
+                "quorum_type": {
                     "type": "integer"
                 }
             }
@@ -1236,6 +1226,32 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "smartContractToken": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.ExecuteNFTSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "nft": {
+                    "type": "string"
+                },
+                "nft_data": {
+                    "type": "string"
+                },
+                "nft_value": {
+                    "type": "number"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "quorum_type": {
+                    "type": "integer"
+                },
+                "receiver": {
                     "type": "string"
                 }
             }
@@ -1264,17 +1280,6 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "smartContractToken": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.GetNFTTokenChainDataSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "latest": {
-                    "type": "boolean"
-                },
-                "token": {
                     "type": "string"
                 }
             }
@@ -1395,32 +1400,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.TransferNFTSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "Comment": {
-                    "type": "string"
-                },
-                "NFT": {
-                    "type": "string"
-                },
-                "NFTData": {
-                    "type": "string"
-                },
-                "NFTValue": {
-                    "type": "number"
-                },
-                "Owner": {
-                    "type": "string"
-                },
-                "QuorumType": {
-                    "type": "integer"
-                },
-                "Receiver": {
                     "type": "string"
                 }
             }

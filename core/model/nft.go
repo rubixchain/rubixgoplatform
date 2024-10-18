@@ -36,19 +36,19 @@ type NFTEvent struct {
 }
 
 type DeployNFTRequest struct {
-	NFT        string
-	DID        string
-	QuorumType int
+	NFT        string `json:"nft"`
+	DID        string `json:"did"`
+	QuorumType int    `json:"quorum_type"`
 }
 
 type ExecuteNFTRequest struct {
 	NFT        string  `json:"nft"`
 	Owner      string  `json:"owner"`
 	Receiver   string  `json:"receiver"`
-	QuorumType int     `json:"quorumType"`
+	QuorumType int     `json:"quorum_type"`
 	Comment    string  `json:"comment"`
-	NFTValue   float64 `json:"nftValue"`
-	NFTData    string  `json:"nftData"`
+	NFTValue   float64 `json:"nft_value"`
+	NFTData    string  `json:"nft_data"`
 }
 
 type NewNFTSubscription struct {
