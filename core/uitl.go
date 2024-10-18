@@ -13,6 +13,7 @@ const (
 	PartString          string = "part"
 	DataString          string = "data"
 	SmartContractString string = "sc"
+	FTString            string = "ft"
 )
 
 func (c *Core) getTotalAmountFromTokenHashes(tokenHashes []string) (float64, error) {
@@ -35,6 +36,12 @@ func (c *Core) RACPartTokenType() int {
 		return rac.RacTestPartTokenType
 	}
 	return rac.RacPartTokenType
+}
+func (c *Core) RACFTType() int {
+	if c.testNet {
+		return rac.RacTestFTType
+	}
+	return rac.RacFTType
 }
 
 func (c *Core) TokenType(tt string) int {
@@ -61,6 +68,8 @@ func (c *Core) TokenType(tt string) int {
 		return token.DataTokenType
 	case SmartContractString:
 		return token.SmartContractTokenType
+	case FTString:
+		return token.FTTokenType
 	}
 	return token.RBTTokenType
 }
