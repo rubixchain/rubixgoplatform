@@ -262,6 +262,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 
 func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	var tr TCBSyncRequest
+
 	err := c.l.ParseJSON(req, &tr)
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to parse request"}, http.StatusOK)
