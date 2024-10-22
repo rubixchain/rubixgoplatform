@@ -77,6 +77,7 @@ const (
 	APIRecoverRBT                       string = "/api/recover-token"
 	APIValidateTokenChain               string = "/api/validate-token-chain"
 	APIValidateToken                    string = "/api/validate-token"
+	APIAddUserAPIKey                    string = "/api/add-user-api-key"
 )
 
 // jwt.RegisteredClaims
