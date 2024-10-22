@@ -34,6 +34,16 @@ func (s *Server) APIDumpFTTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, drep, http.StatusOK)
 }
 
+func (s *Server) APIGetFTTokenchain(req *ensweb.Request) *ensweb.Result {
+	var getReq model.TCDumpRequest
+	err := s.ParseJSON(req, &getReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	getResp := s.c.GetFTTokenchain(&getReq)
+	return s.RenderJSON(req, getResp, http.StatusOK)
+}
+
 func (s *Server) APIDumpSmartContractTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	var dr model.TCDumpRequest
 	err := s.ParseJSON(req, &dr)

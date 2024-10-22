@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -57,6 +58,80 @@ func (c *Core) DumpFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	ds.Blocks = blks
 	ds.NextBlockID = nextID
 	return ds
+}
+
+func (c *Core) GetFTTokenchain(dr *model.TCDumpRequest) *model.GetFTTokenChainReply {
+	getReply := &model.GetFTTokenChainReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+		TokenChainData: "",
+	}
+
+	blocks := make([]map[string]interface{}, 0)
+	blockID := ""
+	tokenTypeString := FTString
+
+	// Initialize blockID for fetching token blocks
+
+	for {
+		// Fetch all token blocks using the provided method
+		blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, c.TokenType(tokenTypeString), blockID)
+		if err != nil {
+			getReply.Message = "Failed to get smart contract token chain block"
+			c.log.Error(getReply.Message, "err", err)
+			return getReply
+		}
+
+		// Process each block received
+		for _, blk := range blks {
+			b := block.InitBlock(blk, nil)
+			if b != nil {
+				blocks = append(blocks, b.GetBlockMap())
+			} else {
+				c.log.Error("Invalid block")
+			}
+		}
+
+		// Update blockID for the next iteration
+		blockID = nextID
+		if nextID == "" {
+			break // Exit loop if there are no more blocks to fetch
+		}
+	}
+
+	str, err := tcMarshal("", blocks)
+	if err != nil {
+		c.log.Error("Failed to dump smart contract token chain", "err", err)
+		return nil
+	}
+	byteArray := []byte(str)
+	var data []interface{}
+
+	err = json.Unmarshal(byteArray, &data)
+	if err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return nil
+	}
+
+	for i, item := range data {
+		flattenedItem := flattenKeys("", item)
+		mappedItem := applyKeyMapping(flattenedItem)
+		data[i] = mappedItem
+	}
+
+	output, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return nil
+	}
+	// need to remove after test
+	fmt.Println("output is : ", string(output))
+
+	getReply.Status = true
+	getReply.Message = "FT tokenchain data fetched successfully"
+	getReply.TokenChainData = string(output)
+	return getReply
 }
 
 func (c *Core) DumpSmartContractTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
