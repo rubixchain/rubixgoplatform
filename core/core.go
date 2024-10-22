@@ -534,7 +534,7 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
 	// and own did type from DIDTable using GetDID function
 	didtype, err := c.w.GetPeerDIDType(didStr)
-	if err != nil {
+	if err != nil || didtype == -1 {
 		dt, err1 := c.w.GetDID(didStr)
 		if err1 != nil || dt.Type == -1 {
 			peerId := c.w.GetPeerID(didStr)
