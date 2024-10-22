@@ -253,3 +253,32 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 	br := s.c.AddDID(&didCreate)
 	return s.RenderJSON(req, br, http.StatusOK)
 }
+
+// APICreateDIDFromPubKey creates a DID from the provided public key
+func (s *Server) APICreateDIDFromPubKey(req *ensweb.Request) *ensweb.Result {
+	var didReq model.DIDFromPubKeyRequest
+	err := s.ParseJSON(req, &didReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to parse input to create did from pub key", nil)
+	}
+
+	//provide required data to create a new lite mode did 
+	didCreate := did.DIDCreate{
+		Type: did.LiteDIDMode,
+		PubKeyFile: "",
+	}
+
+	//pass the public key and other required data to create a did
+	did, err := s.c.CreateDIDFromPubKey(&didCreate, didReq.PubKey)
+	if err != nil {
+		s.log.Error("failed to create did from given pub key", "err", err)
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+
+	// respond with the requested did along with the corr. public key
+	didResp := model.DIDFromPubKeyResponse {
+		DID: did,
+		PubKey: didReq.PubKey,
+	}
+	return s.RenderJSON(req, didResp, http.StatusOK)
+}

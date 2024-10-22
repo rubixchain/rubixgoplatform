@@ -545,3 +545,50 @@ func (d *DID) getDirHash(dir string) (string, error) {
 
 	return final, nil
 }
+
+// CreateDIDFromPubKey creates a DID from the provided public key for BIP wallet
+func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate, pubKey string) (string, error) {
+	t1 := time.Now()
+	temp := uuid.New()
+	dirName := d.dir + temp.String()
+
+	//create a temporary directory
+	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
+	if err != nil {
+		d.log.Error("failed to create directory", "err", err)
+		return "", err
+	}
+
+	//write public key into the temporary directory
+	err = util.FileWrite(dirName+"/public/"+PubKeyFileName, []byte(pubKey))
+		if err != nil {
+			return "", err
+		}
+
+	//passing the temp diroctory of public key file to add it to ipfs and exctract the hash
+	did, err := d.getDirHash(dirName + "/public/")
+	if err != nil {
+		return "", err
+	}
+
+	//create new directory with the name including newly created did, 
+	newDIrName := d.dir + did
+	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
+	if err != nil {
+		d.log.Error("failed to create directory", "err", err)
+		return "", err
+	}
+
+	// and store the public key in the new directory
+	err = util.DirCopy(dirName+"/public", newDIrName)
+	if err != nil {
+		d.log.Error("failed to copy directory", "err", err)
+		return "", err
+	}
+	//delete the temporary directory 
+	os.RemoveAll(dirName)
+	t2 := time.Now()
+	dif := t2.Sub(t1)
+	d.log.Info(fmt.Sprintf("DID : %s, Time to create DID & Keys : %v", did, dif))
+	return did, nil
+}

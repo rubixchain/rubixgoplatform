@@ -170,6 +170,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRecoverRBT, "POST", s.AuthHandle(s.APIRecoverRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateTokenChain, "GET", s.AuthHandle(s.APIValidateTokenChain, false, s.AuthError, false))
 	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
+	s.AddRoute(setup.APIRequestDIDForPubKey, "GET", s.APICreateDIDFromPubKey)
 }
 
 func (s *Server) ExitFunc() error {

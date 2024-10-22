@@ -233,3 +233,46 @@ func (c *Core) registerDID(reqID string, did string) error {
 	}
 	return nil
 }
+
+// CreateDIDFromPubKey creates a DID from the provided public key
+func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (string, error) {
+	if didCreate.RootDID && didCreate.Type != did.BasicDIDMode {
+		c.log.Error("only basic mode is allowed for root did")
+		return "", fmt.Errorf("only basic mode is allowed for root did")
+	}
+	if didCreate.RootDID && c.w.IsRootDIDExist() {
+		c.log.Error("root did is already exist")
+		return "", fmt.Errorf("root did is already exist")
+	}
+
+	// pass public key and other requirements (did type) to create did for the 
+	// BIP wallet with corresponding public key
+	did, err := c.d.CreateDIDFromPubKey(didCreate, pubKey)
+	if err != nil {
+		return "", err
+	}
+	if didCreate.Dir == "" {
+		didCreate.Dir = did
+	}
+	dt := wallet.DIDType{
+		DID:    did,
+		DIDDir: didCreate.Dir,
+		Type:   didCreate.Type,
+		Config: didCreate.Config,
+	}
+	if didCreate.RootDID {
+		dt.RootDID = 1
+	}
+
+	//store the created did in database
+	err = c.w.CreateDID(&dt)
+	if err != nil {
+		c.log.Error("Failed to create did in the wallet", "err", err)
+		return "", err
+	}
+	
+	// if !c.testNet {     TODO
+	// 	c.ec.ExplorerCreateDID(c.peerID, did)
+	// }
+	return did, nil
+}
