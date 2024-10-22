@@ -324,7 +324,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		TokenList:     tokenListForExplorer,
 		Comments:      req.Comment,
 	}
-	fmt.Printf("%+v", etrans)
 
 	c.ec.ExplorerRBTTransaction(etrans)
 	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)

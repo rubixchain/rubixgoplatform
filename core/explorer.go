@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/storage"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/helper/jsonutil"
@@ -14,20 +15,24 @@ import (
 )
 
 const (
-	ExplorerBasePath            string = "/api/v2/services/app/Rubix/"
-	ExplorerTokenCreateAPI      string = "/api/token/create"
-	ExplorerTokenCreatePartsAPI string = "/api/token/create/parts"
-	ExplorerTokenCreateSCAPI    string = "/api/token/create/sc"
-	ExplorerTokenCreateFTAPI    string = "/api/token/create/ft"
-	ExplorerTokenCreateNFTAPI   string = "/api/token/create/nft"
-	ExplorerCreateDIDAPI        string = "/api/user/create"
-	ExplorerRBTTransactionAPI   string = "/api/transactions/rbt"
-	ExplorerSCTransactionAPI    string = "/api/transactions/sc"
-	ExplorerTransactionAPI      string = "CreateOrUpdateRubixTransaction"
-	ExplorerCreateDataTransAPI  string = "create-datatokens"
-	ExplorerMapDIDAPI           string = "map-did"
-	ExplorerURLTable            string = "ExplorerURLTable"
-	ExplorerUserDetailsTable    string = "ExplorerUserDetails"
+	ExplorerBasePath              string = "/api/v2/services/app/Rubix/"
+	ExplorerTokenCreateAPI        string = "/api/token/create"
+	ExplorerTokenCreatePartsAPI   string = "/api/token/part/create"
+	ExplorerTokenCreateSCAPI      string = "/api/token/sc/create"
+	ExplorerTokenCreateFTAPI      string = "/api/token/ft/create"
+	ExplorerTokenCreateNFTAPI     string = "/api/token/nft/create"
+	ExplorerCreateUserAPI         string = "/api/user/create"
+	ExplorerUpdateUserInfoAPI     string = "/api/user/update-user-info"
+	ExplorerGetUserKeyAPI         string = "/api/user/get-api-key"
+	ExplorerGenerateUserKeyAPI    string = "/api/user/generate-api-key"
+	ExplorerExpireUserKeyAPI      string = "/api/user/set-expire-api-key"
+	ExplorerRBTTransactionAPI     string = "/api/transactions/rbt"
+	ExplorerSCTransactionAPI      string = "/api/transactions/sc"
+	ExplorerUpdatePledgeStatusAPI string = "/api/token/update-pledge-status"
+	ExplorerCreateDataTransAPI    string = "create-datatokens"
+	ExplorerMapDIDAPI             string = "map-did"
+	ExplorerURLTable              string = "ExplorerURLTable"
+	ExplorerUserDetailsTable      string = "ExplorerUserDetails"
 )
 
 type ExplorerClient struct {
@@ -37,11 +42,10 @@ type ExplorerClient struct {
 }
 
 type ExplorerDID struct {
-	PeerID    string `json:"peer_id"`
-	DID       string `json:"user_did"`
-	IPAddress string `json:"ip_addess"`
-	Balance   int    `json:"balance"`
-	DIDType   int    `json:"did_type"`
+	PeerID  string  `json:"peer_id"`
+	DID     string  `json:"user_did"`
+	Balance float64 `json:"balance"`
+	DIDType int     `json:"did_type"`
 }
 
 type ExplorerMapDID struct {
@@ -51,17 +55,21 @@ type ExplorerMapDID struct {
 }
 
 type Token struct {
-	TokenID    string  `json:"token_id"`
+	TokenID    string  `json:"token_hash"`
 	TokenValue float64 `json:"token_value"`
 }
 
+type UnpledgeToken struct {
+	TokenIDs []string `json:"token_hashes"`
+}
+
 type ChildToken struct {
-	TokenID    string  `json:"child_token_hash"`
-	TokenValue float64 `json:"child_token_value"`
+	ChildTokenID string  `json:"token_hash"`
+	TokenValue   float64 `json:"token_value"`
 }
 
 type ExplorerCreateToken struct {
-	TokenID     string     `json:"token_id"`
+	TokenID     string     `json:"token_hash"`
 	TokenValue  float64    `json:"token_value"`
 	Network     int        `json:"network"`
 	BlockNumber int        `json:"block_num"`
@@ -73,9 +81,8 @@ type ExplorerCreateToken struct {
 
 type ExplorerCreateTokenParts struct {
 	UserDID        string       `json:"user_did"`
-	TokenType      string       `json:"token_type"`
 	ParentToken    string       `json:"parent_token_hash"`
-	ChildTokenList []ChildToken `json:"child_token_list"`
+	ChildTokenList []ChildToken `json:"child_tokens"`
 }
 
 type ExplorerDataTrans struct {
@@ -120,6 +127,7 @@ type ExplorerSCTrans struct {
 	PledgeAmount  float64    `json:"pledge_amount"`
 	QuorumList    []string   `json:"quorum_list"`
 	PledgeInfo    PledgeInfo `json:"pledge_info"`
+	TokenList     []Token    `json:"token_list"`
 	Comments      string     `json:"comments"`
 }
 
@@ -140,7 +148,7 @@ type ExplorerURL struct {
 }
 
 type ExplorerUser struct {
-	DID    string `gorm:"column:did;primaryKey" json:"did"`
+	DID    string `gorm:"column:did;primaryKey" json:"user_did"`
 	APIKey string `gorm:"column:apiKey" json:"apiKey"`
 }
 
@@ -224,24 +232,101 @@ func (ec *ExplorerClient) SendExploerJSONRequest(method string, path string, inp
 			ec.log.Error("Invalid response from the node", "err", err)
 			continue
 		}
-		ec.log.Info("Details successfully stored in Explorer")
 	}
 	return nil
 }
 
-func (ec *ExplorerClient) ExplorerCreateDID(ed *ExplorerDID) error {
+func (c *Core) ExplorerUserCreate() []string {
+	didList := []wallet.DIDType{}
+	dids := []string{}
+
+	err := c.s.Read(wallet.DIDStorage, &didList, "did!=?", "")
+	if err != nil {
+		c.log.Error("Error reading the DID Storage or DID Storage empty")
+		return nil
+	}
+	for _, d := range didList {
+		eu := ExplorerUser{}
+		err := c.s.Read(ExplorerUserDetailsTable, &eu, "did=?", d.DID)
+		if err != nil {
+			ed := ExplorerDID{}
+			ed.DID = d.DID
+			ed.Balance = 0
+			ed.PeerID = c.peerID
+			ed.DIDType = d.Type
+			err = c.ec.ExplorerUserCreate(&ed)
+			if err != nil {
+				c.log.Error("Error creating user for did %v", d.DID)
+			}
+		}
+		dids = append(dids, d.DID)
+	}
+	return dids
+}
+
+func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 	var er ExplorerUserCreateResponse
-	ed.IPAddress = "0.0.0.0"
-	err := ec.SendExploerJSONRequest("POST", ExplorerCreateDIDAPI, &ed, &er)
+	err := ec.SendExploerJSONRequest("POST", ExplorerCreateUserAPI, &ed, &er)
 	if err != nil {
 		return err
 	}
 	if er.Message != "User created successfully!" {
-		ec.log.Error("Failed to update explorer", "msg", er.Message)
+		ec.log.Error("Failed to update explorer for %v with error message %v", ed.DID, er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
 	ec.AddDIDKey(ed.DID, er.APIKey)
+	ec.log.Info(er.Message + " for did " + ed.DID)
 	return nil
+}
+
+func (c *Core) UpdateUserInfo(dids []string) {
+	for _, did := range dids {
+		accInfo, err := c.GetAccountInfo(did)
+		if err != nil {
+			c.log.Error("Failed to get account info for DID %v", did)
+			continue
+		}
+		var er ExplorerResponse
+		ed := ExplorerDID{}
+		ed.PeerID = c.peerID
+		ed.Balance = accInfo.RBTAmount
+		ed.DIDType = 4
+		err = c.ec.SendExploerJSONRequest("PUT", ExplorerUpdateUserInfoAPI+"/"+did, &ed, &er)
+		if err != nil {
+			c.log.Error(err.Error())
+		}
+		if er.Message != "User balance updated successfully!" {
+			c.log.Error("Failed to update explorer", "msg", er.Message)
+		}
+		c.log.Info(er.Message + " for did " + ed.DID)
+	}
+}
+
+func (c *Core) GenerateUserAPIKey(dids []string) {
+	for _, did := range dids {
+		var er ExplorerUserCreateResponse
+		eu := ExplorerUser{}
+		//Read for api key in table, if empty, then regenerate, because before this, after creating the DID, we are generating the API Key
+		err := c.s.Read(ExplorerUserDetailsTable, &eu, "did=?", did)
+		if err != nil {
+			c.log.Error("Failed to read table")
+		}
+		if eu.APIKey != "" {
+			continue
+		}
+		err = c.ec.SendExploerJSONRequest("POST", ExplorerGenerateUserKeyAPI, &eu, &er)
+		if err != nil {
+			c.log.Error(err.Error())
+		}
+		if er.Message != "API key regenerated successfully!" {
+			c.log.Error("Failed to generate API Key for %v. The error msg is %v", did, er.Message)
+		}
+		c.ec.AddDIDKey(did, er.APIKey)
+		c.log.Info(er.Message + " for did " + did)
+
+		fmt.Println(er)
+
+	}
 }
 
 func (ec *ExplorerClient) ExplorerMapDID(oldDid string, newDID string, peerID string) error {
@@ -277,15 +362,15 @@ func (ec *ExplorerClient) ExplorerTokenCreate(et *ExplorerCreateToken) error {
 
 func (ec *ExplorerClient) ExplorerTokenCreateParts(et *ExplorerCreateTokenParts) error {
 	var er ExplorerResponse
-	fmt.Println("Calling API")
 	err := ec.SendExploerJSONRequest("POST", ExplorerTokenCreatePartsAPI, et, &er)
 	if err != nil {
 		return err
 	}
-	if !er.Status {
+	if er.Message != "Parts Tokens Create successfully!" {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
+	ec.log.Info("Parts created successfully for Parent TokenID %v", et.ParentToken)
 	return nil
 }
 
@@ -312,6 +397,7 @@ func (ec *ExplorerClient) ExplorerRBTTransaction(et *ExplorerRBTTrans) error {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
+	ec.log.Info("Transaction details for TransactionID %v is stored successfully", et.TransactionID)
 	return nil
 }
 
@@ -325,6 +411,7 @@ func (ec *ExplorerClient) ExplorerSCTransaction(et *ExplorerSCTrans) error {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
+	ec.log.Info("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID)
 	return nil
 }
 
@@ -418,9 +505,8 @@ func (ec *ExplorerClient) AddDIDKey(did string, apiKey string) error {
 }
 
 func (ec *ExplorerClient) getAPIKey(path string, input interface{}) string {
-	// var apiKey string
 	eu := ExplorerUser{}
-	if path != ExplorerCreateDIDAPI {
+	if path != ExplorerCreateUserAPI {
 		var did string
 		switch v := input.(type) {
 		case *ExplorerRBTTrans:
@@ -440,4 +526,31 @@ func (ec *ExplorerClient) getAPIKey(path string, input interface{}) string {
 		return eu.APIKey
 	}
 	return ""
+}
+
+func (c *Core) ExpireUserAPIKey() {
+	fmt.Println("Cleaning started...")
+	eus := []ExplorerUser{}
+	//Read for api key in table, if not empty, then expire the apiKey and set the field to empty
+	err := c.s.Read(ExplorerUserDetailsTable, &eus, "apiKey!=?", "")
+	if err != nil {
+		c.log.Error("Failed to read table for Expiring the user Key")
+	}
+	for _, eu := range eus {
+		var er ExplorerResponse
+		err = c.ec.SendExploerJSONRequest("POST", ExplorerExpireUserKeyAPI, &eu, &er)
+		if err != nil {
+			c.log.Error(err.Error())
+		}
+		if er.Message != "API key expired successfully!" {
+			c.log.Error("Failed to expire API Key for %v. The error msg is %v", eu.DID, er.Message)
+		}
+		eu.APIKey = ""
+		err = c.s.Update(ExplorerUserDetailsTable, &eu, "did=?", eu.DID)
+		if err != nil {
+			c.log.Error(err.Error())
+		}
+		c.log.Info("%v for DID %v", er.Message, eu.DID)
+		fmt.Println("Cleaning completed...")
+	}
 }

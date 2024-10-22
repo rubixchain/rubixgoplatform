@@ -370,6 +370,11 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
+	cmd.log.Info("Syncing Details...")
+	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
+	c.UpdateUserInfo(dids)         //Updating the balance
+	c.GenerateUserAPIKey(dids)     //Regenerating the API Key for DID
+	cmd.log.Info("Syncing Complete...")
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
@@ -380,6 +385,7 @@ func (cmd *Command) runApp() {
 	}
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
+	c.ExpireUserAPIKey()
 }
 
 func (cmd *Command) validateOptions() bool {

@@ -270,12 +270,11 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 			c.log.Error("Failed to create part token, failed to add token chan block", "err", err)
 			return nil, err
 		}
-		ChildTokenList = append(ChildTokenList, ChildToken{TokenID: pt, TokenValue: parts[i]})
+		ChildTokenList = append(ChildTokenList, ChildToken{ChildTokenID: pt, TokenValue: parts[i]})
 	}
 	newPartToken := &ExplorerCreateTokenParts{
 		ChildTokenList: ChildTokenList,
 		UserDID:        did,
-		TokenType:      "parts",
 		ParentToken:    tkn,
 	}
 	c.ec.ExplorerTokenCreateParts(newPartToken)
