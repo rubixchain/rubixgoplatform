@@ -427,6 +427,21 @@ func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (
 	}
 	return scFolderName, err
 }
+func (c *Core) Foldercheck(smartContractName string) interface{} {
+    folderName := c.cfg.DirPath + "SmartContract/" + smartContractName
+    info, err := os.Stat(folderName)
+    if err != nil {
+        c.log.Error("Unable to get the file info, error is: ", err)
+        return false
+    }
+
+    // Return the folder name if it's a directory, otherwise return false
+    if info.IsDir() {
+        return folderName
+    }
+
+    return false
+}
 
 func (c *Core) HandleQuorum(conn net.Conn) {
 

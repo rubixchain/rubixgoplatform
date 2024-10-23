@@ -63,13 +63,25 @@ func (c *Client) FetchSmartContract(fetchSmartContractRequest *FetchSmartContrac
 	}
 
 	var basicResponse model.BasicResponse
-	err := c.sendMutiFormRequest("POST", setup.APIFetchSmartContract, nil, fields, nil, &basicResponse)
+	// err := c.sendMutiFormRequest("POST", setup.APIFetchSmartContract, nil, fields, nil, &basicResponse)
+	err := c.sendJSONRequest("GET", setup.APIFetchSmartContract, fields, nil, &basicResponse)
 	if err != nil {
 		return nil, err
 	}
 	return &basicResponse, nil
 
 }
+
+// func (c *Client) GetAccountInfo(didStr string) (*model.GetAccountInfo, error) {
+// 	m := make(map[string]string)
+// 	m["did"] = didStr
+// 	var info model.GetAccountInfo
+// 	err := c.sendJSONRequest("GET", setup.APIGetAccountInfo, m, nil, &info)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return &info, nil
+// }
 
 func (c *Client) PublishNewEvent(smartContractToken string, did string, publishType int, block string) (*model.BasicResponse, error) {
 	var response model.BasicResponse

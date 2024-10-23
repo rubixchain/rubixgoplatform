@@ -279,24 +279,34 @@ func moveFile(src, dst string) error {
 // @ID   	     fetch-smart-contract
 // @Accept       json
 // @Produce      json
-// @Param        input body FetchSmartContractSwaggoInput true "Fetch smart contract"
+// @Param        input query FetchSmartContractSwaggoInput true "Fetch smart contract"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/fetch-smart-contract [post]
+// @Router       /api/fetch-smart-contract [get]
 func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
+	// fmt.Println("APIFetchSmartContract function called")
 	var fetchSC core.FetchSmartContractRequest
 	var err error
 	fetchSC.SmartContractTokenPath, err = s.c.CreateSCTempFolder()
+
 	if err != nil {
 		s.log.Error("Fetch smart contract failed, failed to create smartcontract folder", "err", err)
 		return s.BasicResponse(req, false, "Fetch smart contract failed, failed to create smartcontract folder", nil)
 	}
 
-	_, scToken, err := s.ParseMultiPartForm(req, "smartContractToken")
-	fetchSC.SmartContractToken = scToken["smartContractToken"][0]
-	if err != nil {
-		s.log.Error("Fetch smart contract failed, failed to fetch smartcontract token value", "err", err)
-		return s.BasicResponse(req, false, "Fetch smart contract failed, failed to fetch smartcontract token value", nil)
-	}
+	// _, scToken, err := s.ParseMultiPartForm(req, "smartContractToken")
+	// if err != nil {
+	// 	fmt.Println("error in parseMultipPartForm", err)
+	// }
+	// fmt.Println("scToken in APIFetchSmartContract is:", scToken)
+
+	// sctkn := s.GetQuerry(req, "smartContractToken")
+	// fmt.Println("scToken in APIFetchSmartContract is:", sctkn)
+	// fetchSC.SmartContractToken = scToken["smartContractToken"][0]
+	fetchSC.SmartContractToken = s.GetQuerry(req, "smartContractToken")
+	// if err != nil {
+	// 	s.log.Error("Fetch smart contract failed, failed to fetch smartcontract token value", "err", err)
+	// 	return s.BasicResponse(req, false, "Fetch smart contract failed, failed to fetch smartcontract token value", nil)
+	// }
 
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(fetchSC.SmartContractToken)
 	if len(fetchSC.SmartContractToken) != 46 || !strings.HasPrefix(fetchSC.SmartContractToken, "Qm") || !is_alphanumeric {
@@ -304,18 +314,22 @@ func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
 	}
 
-	fetchSC.SmartContractTokenPath, err = s.c.RenameSCFolder(fetchSC.SmartContractTokenPath, fetchSC.SmartContractToken)
-	if err != nil {
-		s.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
-		return s.BasicResponse(req, false, "Fetch smart contract failed, failed to create SC folder", nil)
+	if s.c.Foldercheck(fetchSC.SmartContractToken) == false {
+		fetchSC.SmartContractTokenPath, err = s.c.RenameSCFolder(fetchSC.SmartContractTokenPath, fetchSC.SmartContractToken)
+		if err != nil {
+			s.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
+			return s.BasicResponse(req, false, "Fetch smart contract failed, failed to create SC folder", nil)
+		}
+		fetchSC.SmartContractTokenPath = s.c.Foldercheck(fetchSC.SmartContractToken).(string)
+
 	}
 
-	fmt.Printf("fetchSC : %+v\n", fetchSC)
+	// fmt.Printf("fetchSC : %+v\n", fetchSC)
 
 	s.c.AddWebReq(req)
 	go func() {
 		basicResponse := s.c.FetchSmartContract(req.ID, &fetchSC)
-		fmt.Printf("Basic Response server:  %+v\n", *basicResponse)
+		fmt.Printf("Basic Response server:  %+v\n", *&basicResponse.Message)
 	}()
 	return s.BasicResponse(req, true, "Smart contract fetched successfully", nil)
 
