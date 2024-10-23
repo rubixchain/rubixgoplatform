@@ -1734,7 +1734,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, MaxDecimalPlaces)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
-						pd.TokenList = append(pd.TokenList, Token{TokenID: prs.Tokens[i], TokenValue: prs.TokenValue[i]})
+						pd.TokenList = append(pd.TokenList, Token{TokenHash: prs.Tokens[i], TokenValue: prs.TokenValue[i]})
 
 					}
 				}

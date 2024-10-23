@@ -266,7 +266,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			BlockID:    bid,
 		}
 		tis = append(tis, ti)
-		tokenListForExplorer = append(tokenListForExplorer, Token{TokenID: ti.Token, TokenValue: ti.TokenValue})
+		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: ti.Token, TokenValue: ti.TokenValue})
 
 	}
 

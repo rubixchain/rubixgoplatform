@@ -61,7 +61,6 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	}
 
 	rbtTokensToCommit := make([]string, 0)
-
 	defer c.w.ReleaseTokens(rbtTokensToCommitDetails)
 
 	for i := range rbtTokensToCommitDetails {
@@ -71,6 +70,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 
 	rbtTokenInfoArray := make([]contract.TokenInfo, 0)
 	smartContractInfoArray := make([]contract.TokenInfo, 0)
+	tokenListForExplorer := []Token{}
 	for i := range rbtTokensToCommitDetails {
 		tokenTypeString := "rbt"
 		if rbtTokensToCommitDetails[i].TokenValue != 1 {
@@ -97,6 +97,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 			BlockID:    blockId,
 		}
 		rbtTokenInfoArray = append(rbtTokenInfoArray, tokenInfo)
+		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: tokenInfo.Token, TokenValue: tokenInfo.TokenValue})
 	}
 
 	smartContractInfo := contract.TokenInfo{
@@ -178,16 +179,16 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 
 	eTrans := &ExplorerSCTrans{
-		SCTokenHash:   deployReq.SmartContractToken,
+		SCBlockHash:   []SCToken{{SCTokenHash: deployReq.SmartContractToken, SCBlockHash: strings.Split(txnDetails.BlockID, "-")[1], SCBlockNumber: blockNoInt}},
 		TransactionID: txnDetails.TransactionID,
 		Network:       conensusRequest.Type,
-		BlockHash:     strings.Split(txnDetails.BlockID, "-")[1],
-		BlockNumber:   blockNoInt,
+		ExecutorDID:   "",
 		DeployerDID:   did,
 		Creator:       did,
 		PledgeAmount:  deployReq.RBTAmount,
 		QuorumList:    conensusRequest.QuorumList,
 		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, TokenList: pds.TokenList},
+		TokenList:     tokenListForExplorer,
 		Comments:      deployReq.Comment,
 	}
 	c.ec.ExplorerSCTransaction(eTrans)
@@ -337,15 +338,16 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 
 	eTrans := &ExplorerSCTrans{
-		SCTokenHash:   executeReq.SmartContractToken,
+		SCBlockHash:   []SCToken{{SCTokenHash: executeReq.SmartContractToken, SCBlockHash: strings.Split(txnDetails.BlockID, "-")[1], SCBlockNumber: blockNoInt}},
 		TransactionID: txnDetails.TransactionID,
 		Network:       consensusRequest.Type,
-		BlockHash:     strings.Split(txnDetails.BlockID, "-")[1],
-		BlockNumber:   blockNoInt,
 		ExecutorDID:   did,
+		DeployerDID:   smartContractInfo.OwnerDID,
 		Creator:       smartContractInfo.OwnerDID,
 		QuorumList:    consensusRequest.QuorumList,
+		PledgeAmount:  0,
 		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, TokenList: pds.TokenList},
+		TokenList:     []Token{},
 		Comments:      executeReq.Comment,
 	}
 	c.ec.ExplorerSCTransaction(eTrans)

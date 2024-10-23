@@ -55,17 +55,23 @@ type ExplorerMapDID struct {
 }
 
 type Token struct {
-	TokenID    string  `json:"token_hash"`
+	TokenHash  string  `json:"token_hash"`
 	TokenValue float64 `json:"token_value"`
 }
 
 type UnpledgeToken struct {
-	TokenIDs []string `json:"token_hashes"`
+	TokenHashes []string `json:"token_hashes"`
 }
 
 type ChildToken struct {
 	ChildTokenID string  `json:"token_hash"`
 	TokenValue   float64 `json:"token_value"`
+}
+
+type SCToken struct {
+	SCTokenHash   string `json:"token_hash"`
+	SCBlockHash   string `json:"block_hash"`
+	SCBlockNumber int    `json:"block_number"`
 }
 
 type ExplorerCreateToken struct {
@@ -116,11 +122,9 @@ type ExplorerRBTTrans struct {
 	Comments      string     `json:"comments"`
 }
 type ExplorerSCTrans struct {
-	SCTokenHash   string     `json:"sc_token_hash"`
+	SCBlockHash   []SCToken  `json:"sc_block_hash"`
 	TransactionID string     `json:"transaction_id"`
 	Network       int        `json:"network"`
-	BlockNumber   int        `json:"block_number"`
-	BlockHash     string     `json:"block_hash"`
 	ExecutorDID   string     `json:"executor"`
 	DeployerDID   string     `json:"deployer"`
 	Creator       string     `json:"creator"`
@@ -247,7 +251,7 @@ func (c *Core) ExplorerUserCreate() []string {
 	}
 	for _, d := range didList {
 		eu := ExplorerUser{}
-		err := c.s.Read(ExplorerUserDetailsTable, &eu, "did=?", d.DID)
+		err = c.s.Read(ExplorerUserDetailsTable, &eu, "did=?", d.DID)
 		if err != nil {
 			ed := ExplorerDID{}
 			ed.DID = d.DID
@@ -271,8 +275,8 @@ func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 		return err
 	}
 	if er.Message != "User created successfully!" {
-		ec.log.Error("Failed to update explorer for %v with error message %v", ed.DID, er.Message)
-		return fmt.Errorf("failed to update explorer")
+		ec.log.Error("Failed to create user for %v with error message %v", ed.DID, er.Message)
+		return fmt.Errorf("failed to create user")
 	}
 	ec.AddDIDKey(ed.DID, er.APIKey)
 	ec.log.Info(er.Message + " for did " + ed.DID)
@@ -293,10 +297,10 @@ func (c *Core) UpdateUserInfo(dids []string) {
 		ed.DIDType = 4
 		err = c.ec.SendExploerJSONRequest("PUT", ExplorerUpdateUserInfoAPI+"/"+did, &ed, &er)
 		if err != nil {
-			c.log.Error(err.Error())
+			c.log.Error("Failed to update user info, " + err.Error())
 		}
 		if er.Message != "User balance updated successfully!" {
-			c.log.Error("Failed to update explorer", "msg", er.Message)
+			c.log.Error("Failed to update user info, ", "msg", er.Message)
 		}
 		c.log.Info(er.Message + " for did " + ed.DID)
 	}
@@ -550,7 +554,20 @@ func (c *Core) ExpireUserAPIKey() {
 		if err != nil {
 			c.log.Error(err.Error())
 		}
-		c.log.Info("%v for DID %v", er.Message, eu.DID)
+		c.log.Info(fmt.Sprintf("%v for DID %v", er.Message, eu.DID))
 		fmt.Println("Cleaning completed...")
 	}
+}
+
+func (c *Core) UpdatePledgeStatus(tokenHashes []string, did string) {
+	var er ExplorerResponse
+	ut := UnpledgeToken{TokenHashes: tokenHashes}
+	err := c.ec.SendExploerJSONRequest("PUT", ExplorerUpdatePledgeStatusAPI+"/"+did, &ut, &er)
+	if err != nil {
+		c.log.Error(err.Error())
+	}
+	if er.Message != "Updated Successfully!" {
+		c.log.Error("Failed to update explorer", "msg", er.Message)
+	}
+	c.log.Info(fmt.Sprintf("Pledge status updated successfully for did %v and token hashes %v", did, tokenHashes))
 }
