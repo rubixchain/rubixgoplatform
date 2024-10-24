@@ -330,7 +330,7 @@ const docTemplate = `{
             }
         },
         "/api/fetch-smart-contract": {
-            "post": {
+            "get": {
                 "description": "This API will Fetch smart contract",
                 "consumes": [
                     "application/json"
@@ -345,13 +345,9 @@ const docTemplate = `{
                 "operationId": "fetch-smart-contract",
                 "parameters": [
                     {
-                        "description": "Fetch smart contract",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.FetchSmartContractSwaggoInput"
-                        }
+                        "type": "string",
+                        "name": "smartContractToken",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1199,14 +1195,6 @@ const docTemplate = `{
                 "smartContractData": {
                     "type": "string"
                 },
-                "smartContractToken": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.FetchSmartContractSwaggoInput": {
-            "type": "object",
-            "properties": {
                 "smartContractToken": {
                     "type": "string"
                 }

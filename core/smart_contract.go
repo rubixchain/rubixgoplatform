@@ -298,7 +298,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	// Set the response values
 	basicResponse.Status = true
 	basicResponse.Message = "Successfully fetched smart contract"
-	basicResponse.Result = &smartContractToken
+	basicResponse.Result = smartContractToken
 
 	return basicResponse
 }
