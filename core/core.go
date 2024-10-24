@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -418,29 +419,22 @@ func (c *Core) CreateSCTempFolder() (string, error) {
 }
 
 func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
-
-	scFolderName := c.cfg.DirPath + "SmartContract/" + smartContractName
-	err := os.Rename(tempFolderPath, scFolderName)
-	if err != nil {
-		c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
-		scFolderName = ""
+	scFolderName := filepath.Join(c.cfg.DirPath, "SmartContract", smartContractName)
+	info, _ := os.Stat(scFolderName)
+	
+	// Check if the Smart Contract Folder exists
+	if info != nil {
+		return "", nil
+	} else {
+		// Directory not found, proceed to rename it
+		err := os.Rename(tempFolderPath, scFolderName)
+		if err != nil {
+			c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
+			return "", err
+		} else {
+			return scFolderName, nil
+		}
 	}
-	return scFolderName, err
-}
-func (c *Core) Foldercheck(smartContractName string) interface{} {
-    folderName := c.cfg.DirPath + "SmartContract/" + smartContractName
-    info, err := os.Stat(folderName)
-    if err != nil {
-        c.log.Error("Unable to get the file info, error is: ", err)
-        return false
-    }
-
-    // Return the folder name if it's a directory, otherwise return false
-    if info.IsDir() {
-        return folderName
-    }
-
-    return false
 }
 
 func (c *Core) HandleQuorum(conn net.Conn) {

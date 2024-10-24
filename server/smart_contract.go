@@ -285,29 +285,33 @@ func moveFile(src, dst string) error {
 func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 	var fetchSC core.FetchSmartContractRequest
 	var err error
-	fetchSC.SmartContractTokenPath, err = s.c.CreateSCTempFolder()
 
-	if err != nil {
-		s.log.Error("Fetch smart contract failed, failed to create smartcontract folder", "err", err)
-		return s.BasicResponse(req, false, "Fetch smart contract failed, failed to create smartcontract folder", nil)
-	}
 	fetchSC.SmartContractToken = s.GetQuerry(req, "smartContractToken")
+
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(fetchSC.SmartContractToken)
 	if len(fetchSC.SmartContractToken) != 46 || !strings.HasPrefix(fetchSC.SmartContractToken, "Qm") || !is_alphanumeric {
 		s.log.Error("Invalid smart contract token")
 		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
 	}
-	if s.c.Foldercheck(fetchSC.SmartContractToken) == false {
-		fetchSC.SmartContractTokenPath, err = s.c.RenameSCFolder(fetchSC.SmartContractTokenPath, fetchSC.SmartContractToken)
-		if err != nil {
-			s.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
-			return s.BasicResponse(req, false, "Fetch smart contract failed, failed to create SC folder", nil)
-		}
-		fetchSC.SmartContractTokenPath = s.c.Foldercheck(fetchSC.SmartContractToken).(string)
 
+	fetchSC.SmartContractTokenPath, err = s.c.CreateSCTempFolder()
+	if err != nil {
+		s.log.Error("Fetch smart contract failed, failed to create smartcontract folder", "err", err)
+		return s.BasicResponse(req, false, "Fetch smart contract failed, failed to create smartcontract folder", nil)
 	}
 
-	// fmt.Printf("fetchSC : %+v\n", fetchSC)
+	fetchSC.SmartContractTokenPath, err = s.c.RenameSCFolder(fetchSC.SmartContractTokenPath, fetchSC.SmartContractToken)
+	if err != nil {
+		s.log.Error("Fetch smart contract failed, failed to rename smart contract folder", "err", err)
+		return s.BasicResponse(req, false, "Fetch smart contract failed, failed to rename smart contract folder", nil)
+	} else {
+		// The following condition indicates that the Smart Contract directory
+		// already exists in the node directory
+		if fetchSC.SmartContractTokenPath == "" {
+			s.log.Debug("Smart contract directory already exists")
+			return s.BasicResponse(req, true, "Smart contract directory already exists", nil)
+		}
+	}
 
 	s.c.AddWebReq(req)
 	go func() {
