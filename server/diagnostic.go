@@ -34,13 +34,26 @@ func (s *Server) APIDumpFTTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, drep, http.StatusOK)
 }
 
+// SmartContract godoc
+// @Summary      Get FT Token Chain Data
+// @Description  This API returns FT token chain data for a given FT token ID.
+// @Tags         FT
+// @Accept       json
+// @Produce      json
+// @Param        tokenID	query	string	true	"FT Token ID"
+// @Success      200  {object}  model.GetFTTokenChainReply "Successful response with token chain data"
+// @Router       /api/get-ft-token-chain [get]
 func (s *Server) APIGetFTTokenchain(req *ensweb.Request) *ensweb.Result {
-	var getReq model.TCDumpRequest
-	err := s.ParseJSON(req, &getReq)
-	if err != nil {
+	TokenID := s.GetQuerry(req, "tokenID")
+	if TokenID == "" {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	getResp := s.c.GetFTTokenchain(&getReq)
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
+	if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid FT token")
+		return s.BasicResponse(req, false, "Invalid FT token ID", nil)
+	}
+	getResp := s.c.GetFTTokenchain(TokenID)
 	return s.RenderJSON(req, getResp, http.StatusOK)
 }
 

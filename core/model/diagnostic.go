@@ -13,7 +13,7 @@ type TCDumpReply struct {
 
 type GetFTTokenChainReply struct {
 	BasicResponse
-	TokenChainData string
+	TokenChainData []interface{}
 }
 
 type SmartContractTokenChainDataReq struct {

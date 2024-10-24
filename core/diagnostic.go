@@ -60,12 +60,13 @@ func (c *Core) DumpFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	return ds
 }
 
-func (c *Core) GetFTTokenchain(dr *model.TCDumpRequest) *model.GetFTTokenChainReply {
-	getReply := &model.GetFTTokenChainReply{
+func (c *Core) GetFTTokenchain(FTTokenID string) *model.GetFTTokenChainReply {
+	getFTReply := &model.GetFTTokenChainReply{
 		BasicResponse: model.BasicResponse{
 			Status: false,
+			Result: nil,
 		},
-		TokenChainData: "",
+		TokenChainData: nil,
 	}
 
 	blocks := make([]map[string]interface{}, 0)
@@ -73,14 +74,12 @@ func (c *Core) GetFTTokenchain(dr *model.TCDumpRequest) *model.GetFTTokenChainRe
 	tokenTypeString := FTString
 
 	// Initialize blockID for fetching token blocks
-
 	for {
-		// Fetch all token blocks using the provided method
-		blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, c.TokenType(tokenTypeString), blockID)
+		blks, nextID, err := c.w.GetAllTokenBlocks(FTTokenID, c.TokenType(tokenTypeString), blockID)
 		if err != nil {
-			getReply.Message = "Failed to get smart contract token chain block"
-			c.log.Error(getReply.Message, "err", err)
-			return getReply
+			getFTReply.Message = "Failed to get FT token chain blocks"
+			c.log.Error(getFTReply.Message, "err", err)
+			return getFTReply
 		}
 
 		// Process each block received
@@ -89,7 +88,7 @@ func (c *Core) GetFTTokenchain(dr *model.TCDumpRequest) *model.GetFTTokenChainRe
 			if b != nil {
 				blocks = append(blocks, b.GetBlockMap())
 			} else {
-				c.log.Error("Invalid block")
+				c.log.Error("Invalid FT block")
 			}
 		}
 
@@ -102,15 +101,16 @@ func (c *Core) GetFTTokenchain(dr *model.TCDumpRequest) *model.GetFTTokenChainRe
 
 	str, err := tcMarshal("", blocks)
 	if err != nil {
-		c.log.Error("Failed to dump smart contract token chain", "err", err)
+		c.log.Error("Failed to marshal FT token chain", "err", err)
 		return nil
 	}
+
 	byteArray := []byte(str)
 	var data []interface{}
 
 	err = json.Unmarshal(byteArray, &data)
 	if err != nil {
-		fmt.Println("Error parsing JSON:", err)
+		fmt.Println("Error unmarshal JSON for FT tokenchain :", err)
 		return nil
 	}
 
@@ -120,18 +120,17 @@ func (c *Core) GetFTTokenchain(dr *model.TCDumpRequest) *model.GetFTTokenChainRe
 		data[i] = mappedItem
 	}
 
-	output, err := json.MarshalIndent(data, "", "  ")
-	if err != nil {
-		fmt.Println("Error marshaling JSON:", err)
-		return nil
-	}
-	// need to remove after test
-	fmt.Println("output is : ", string(output))
+	getFTReply.Status = true
+	getFTReply.Message = "FT tokenchain data fetched successfully"
+	getFTReply.TokenChainData = data
 
-	getReply.Status = true
-	getReply.Message = "FT tokenchain data fetched successfully"
-	getReply.TokenChainData = string(output)
-	return getReply
+	if len(getFTReply.TokenChainData) == 0 {
+		getFTReply.Status = true
+		getFTReply.Message = "No FT tokenchain data available"
+		return getFTReply
+	}
+
+	return getFTReply
 }
 
 func (c *Core) DumpSmartContractTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
