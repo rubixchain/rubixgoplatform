@@ -46,6 +46,17 @@ definitions:
       status:
         type: boolean
     type: object
+  model.GetFTTokenChainReply:
+    properties:
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+      tokenChainData:
+        items: {}
+        type: array
+    type: object
   model.NFTStatus:
     properties:
       token:
@@ -698,6 +709,27 @@ paths:
           schema:
             $ref: '#/definitions/model.GetFTInfo'
       summary: Get FT balance information for a given DID
+      tags:
+      - FT
+  /api/get-ft-token-chain:
+    get:
+      consumes:
+      - application/json
+      description: This API returns FT token chain data for a given FT token ID.
+      parameters:
+      - description: FT Token ID
+        in: query
+        name: tokenID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successful response with token chain data
+          schema:
+            $ref: '#/definitions/model.GetFTTokenChainReply'
+      summary: Get FT Token Chain Data
       tags:
       - FT
   /api/get-pledgedtoken-details:
