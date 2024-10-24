@@ -76,7 +76,12 @@ const (
 	APIInitiatePinRBT                   string = "/api/initiate-pin-token"
 	APIRecoverRBT                       string = "/api/recover-token"
 	APIValidateTokenChain               string = "/api/validate-token-chain"
+	APICreateFT                         string = "/api/create-ft"
+	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
+	APIInitiateFTTransfer               string = "/api/initiate-ft-tranfer"
+	APIGetFTInfo                        string = "/api/get-ft-info-by-did"
 	APIValidateToken                    string = "/api/validate-token"
+	APIGetFTTokenchain                  string = "/api/get-ft-token-chain"
 )
 
 // jwt.RegisteredClaims
