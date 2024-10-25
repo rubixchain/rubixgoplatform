@@ -63,7 +63,7 @@ func (c *Client) FetchSmartContract(fetchSmartContractRequest *FetchSmartContrac
 	}
 
 	var basicResponse model.BasicResponse
-	err := c.sendMutiFormRequest("POST", setup.APIFetchSmartContract, nil, fields, nil, &basicResponse)
+	err := c.sendJSONRequest("GET", setup.APIFetchSmartContract, fields, nil, &basicResponse)
 	if err != nil {
 		return nil, err
 	}

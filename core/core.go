@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -418,14 +419,20 @@ func (c *Core) CreateSCTempFolder() (string, error) {
 }
 
 func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
+	scFolderName := filepath.Join(c.cfg.DirPath, "SmartContract", smartContractName)
+	info, _ := os.Stat(scFolderName)
 
-	scFolderName := c.cfg.DirPath + "SmartContract/" + smartContractName
-	err := os.Rename(tempFolderPath, scFolderName)
-	if err != nil {
-		c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
-		scFolderName = ""
+	// Check if the Smart Contract Folder exists
+	if info == nil {
+		// Directory not found, proceed to rename it
+		err := os.Rename(tempFolderPath, scFolderName)
+		if err != nil {
+			c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
+			return "", err
+		}
 	}
-	return scFolderName, err
+
+	return scFolderName, nil
 }
 
 func (c *Core) HandleQuorum(conn net.Conn) {
