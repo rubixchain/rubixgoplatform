@@ -54,6 +54,20 @@ type ExplorerMapDID struct {
 	PeerID string `json:"peer_id"`
 }
 
+// type TokenDetails struct {
+// 	TokenHash     string  `json:"token_hash"`
+// 	TokenValue    float64 `json:"token_value"`
+// 	CurrentOwner  string
+// 	PreviousOwner string
+// 	Miner         string
+// 	BlockIDs      []string
+// 	PledgeDetails PledgeInfo //from latest block if available
+// 	TokenType     int
+// 	TokenLevel    int
+// 	TokenNumber   int
+// 	TokenStatus   int
+// }
+
 type Token struct {
 	TokenHash  string  `json:"token_hash"`
 	TokenValue float64 `json:"token_value"`
@@ -104,35 +118,35 @@ type ExplorerDataTrans struct {
 }
 
 type PledgeInfo struct {
-	PledgeDetails map[string][]string `json:"pledge_details"`
-	TokenList     []Token             `json:"pledged_token_list"`
+	PledgeDetails    map[string][]string `json:"pledge_details"`
+	PledgedTokenList []Token             `json:"pledged_token_list"`
 }
 
 type ExplorerRBTTrans struct {
-	TokenHashes   []string   `json:"token_hash"`
-	TransactionID string     `json:"transaction_id"`
-	Network       int        `json:"network"`
-	BlockHash     string     `json:"block_hash"` //it will be different for each token
-	SenderDID     string     `json:"sender"`
-	ReceiverDID   string     `json:"receiver"`
-	Amount        float64    `json:"amount"`
-	QuorumList    []string   `json:"quorum_list"`
-	PledgeInfo    PledgeInfo `json:"pledge_info"`
-	TokenList     []Token    `json:"token_list"`
-	Comments      string     `json:"comments"`
+	TokenHashes    []string   `json:"token_hash"`
+	TransactionID  string     `json:"transaction_id"`
+	Network        int        `json:"network"`
+	BlockHash      string     `json:"block_hash"` //it will be different for each token
+	SenderDID      string     `json:"sender"`
+	ReceiverDID    string     `json:"receiver"`
+	Amount         float64    `json:"amount"`
+	QuorumList     []string   `json:"quorum_list"`
+	PledgeInfo     PledgeInfo `json:"pledge_info"`
+	TransTokenList []Token    `json:"token_list"`
+	Comments       string     `json:"comments"`
 }
 type ExplorerSCTrans struct {
-	SCBlockHash   []SCToken  `json:"sc_block_hash"`
-	TransactionID string     `json:"transaction_id"`
-	Network       int        `json:"network"`
-	ExecutorDID   string     `json:"executor"`
-	DeployerDID   string     `json:"deployer"`
-	Creator       string     `json:"creator"`
-	PledgeAmount  float64    `json:"pledge_amount"`
-	QuorumList    []string   `json:"quorum_list"`
-	PledgeInfo    PledgeInfo `json:"pledge_info"`
-	TokenList     []Token    `json:"token_list"`
-	Comments      string     `json:"comments"`
+	SCBlockHash        []SCToken  `json:"sc_block_hash"`
+	TransactionID      string     `json:"transaction_id"`
+	Network            int        `json:"network"`
+	ExecutorDID        string     `json:"executor"`
+	DeployerDID        string     `json:"deployer"`
+	Creator            string     `json:"creator"`
+	PledgeAmount       float64    `json:"pledge_amount"`
+	QuorumList         []string   `json:"quorum_list"`
+	PledgeInfo         PledgeInfo `json:"pledge_info"`
+	CommittedTokenList []Token    `json:"token_list"`
+	Comments           string     `json:"comments"`
 }
 
 type ExplorerResponse struct {
@@ -169,11 +183,7 @@ func (c *Core) InitRubixExplorer() error {
 		c.log.Error("Failed to initialise storage ExplorerUserDetails ", "err", err)
 		return err
 	}
-
-	url := "deamon-explorer.azurewebsites.net"
-	if c.testNet {
-		url = "rubix-deamon-api.ensurity.com"
-	}
+	url := "rexplorer.azurewebsites.net"
 
 	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", url)
 	if err != nil {
@@ -184,7 +194,7 @@ func (c *Core) InitRubixExplorer() error {
 		return err
 	}
 
-	cl, err := ensweb.NewClient(&config.Config{ServerAddress: url, ServerPort: "443", Production: "true"}, c.log)
+	cl, err := ensweb.NewClient(&config.Config{ServerAddress: url, ServerPort: "0", Production: "true"}, c.log)
 	if err != nil {
 		return err
 	}
@@ -302,7 +312,7 @@ func (c *Core) UpdateUserInfo(dids []string) {
 		if er.Message != "User balance updated successfully!" {
 			c.log.Error("Failed to update user info, ", "msg", er.Message)
 		}
-		c.log.Info(er.Message + " for did " + ed.DID)
+		c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
 	}
 }
 
@@ -327,8 +337,6 @@ func (c *Core) GenerateUserAPIKey(dids []string) {
 		}
 		c.ec.AddDIDKey(did, er.APIKey)
 		c.log.Info(er.Message + " for did " + did)
-
-		fmt.Println(er)
 
 	}
 }
@@ -374,7 +382,7 @@ func (ec *ExplorerClient) ExplorerTokenCreateParts(et *ExplorerCreateTokenParts)
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
-	ec.log.Info("Parts created successfully for Parent TokenID %v", et.ParentToken)
+	ec.log.Info(fmt.Sprintf("Parts created successfully for Parent TokenID %v", et.ParentToken))
 	return nil
 }
 
@@ -397,7 +405,7 @@ func (ec *ExplorerClient) ExplorerRBTTransaction(et *ExplorerRBTTrans) error {
 	if err != nil {
 		return err
 	}
-	if !er.Status {
+	if er.Message != "RBT transaction created successfully!" {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -411,7 +419,7 @@ func (ec *ExplorerClient) ExplorerSCTransaction(et *ExplorerSCTrans) error {
 	if err != nil {
 		return err
 	}
-	if !er.Status {
+	if er.Message != "SC transaction created successfully!" {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}

@@ -312,17 +312,17 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 	etrans := &ExplorerRBTTrans{
-		TokenHashes:   wta,
-		TransactionID: td.TransactionID,
-		BlockHash:     strings.Split(td.BlockID, "-")[1],
-		Network:       req.Type,
-		SenderDID:     senderDID,
-		ReceiverDID:   receiverdid,
-		Amount:        req.TokenCount,
-		QuorumList:    cr.QuorumList,
-		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, TokenList: pds.TokenList},
-		TokenList:     tokenListForExplorer,
-		Comments:      req.Comment,
+		TokenHashes:    wta,
+		TransactionID:  td.TransactionID,
+		BlockHash:      strings.Split(td.BlockID, "-")[1],
+		Network:        req.Type,
+		SenderDID:      senderDID,
+		ReceiverDID:    receiverdid,
+		Amount:         req.TokenCount,
+		QuorumList:     cr.QuorumList,
+		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		TransTokenList: tokenListForExplorer,
+		Comments:       req.Comment,
 	}
 
 	c.ec.ExplorerRBTTransaction(etrans)
@@ -552,7 +552,7 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 		ReceiverDID:   pinningNodeDID,
 		Amount:        req.TokenCount,
 		QuorumList:    cr.QuorumList,
-		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, TokenList: pds.TokenList},
+		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
 		Comments:      req.Comment,
 	}
 	c.ec.ExplorerRBTTransaction(etrans)
