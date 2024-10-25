@@ -421,20 +421,18 @@ func (c *Core) CreateSCTempFolder() (string, error) {
 func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
 	scFolderName := filepath.Join(c.cfg.DirPath, "SmartContract", smartContractName)
 	info, _ := os.Stat(scFolderName)
-	
+
 	// Check if the Smart Contract Folder exists
-	if info != nil {
-		return "", nil
-	} else {
+	if info == nil {
 		// Directory not found, proceed to rename it
 		err := os.Rename(tempFolderPath, scFolderName)
 		if err != nil {
 			c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
 			return "", err
-		} else {
-			return scFolderName, nil
 		}
 	}
+
+	return scFolderName, nil
 }
 
 func (c *Core) HandleQuorum(conn net.Conn) {
