@@ -567,6 +567,35 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError
 		}
+
+		//Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
+		for _, tokeninfo := range ti {
+			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
+			signers, _ := b.GetSigner()
+
+			//if signer is similar to sender did skip this token, as the block is the genesys block
+			if signers[0] == sc.GetSenderDID() {
+				continue
+			}
+			//concat tokenId and BlockID
+			bid, _ := b.GetBlockID(tokeninfo.Token)
+			prevtokenIDTokenStateData := tokeninfo.Token + bid
+			prevtokenIDTokenStateBuffer := bytes.NewBuffer([]byte(prevtokenIDTokenStateData))
+
+			//add to ipfs get only the hash of the token+tokenstate. This is the hash just before transferring i.e. the exhausted token state hash, and updating in Sender side
+			prevtokenIDTokenStateHash, _ := c.ipfs.Add(prevtokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+
+			//send this exhausted hash to old quorums to unpledge
+			for _, signer := range signers {
+				signer_peeerId := c.w.GetPeerID(signer)
+				signer_addr := signer_peeerId + "." + signer
+				p, _ := c.getPeer(signer_addr, "")
+				m := make(map[string]string)
+				m["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
+				_ = p.SendJSONRequest("POST", APIUpdateTokenHashDetails, m, nil, nil, true)
+			}
+		}
+
 		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
