@@ -3,18 +3,27 @@ package wallet
 import "fmt"
 
 type NFT struct {
-	TokenID     string  `gorm:"column:token_id;primaryKey" json:"token_id"`
+	TokenID     string  `gorm:"column:token_id" json:"token_id"`
 	DID         string  `gorm:"column:did" json:"did"`
 	TokenStatus int     `gorm:"column:token_status;" json:"token_status"`
 	TokenValue  float64 `gorm:"column:token_value;" json:"token_value"`
 }
 
 // CreateNFT write NFT into db
-func (w *Wallet) CreateNFT(nt *NFT) error {
-	err := w.s.Write(NFTTokenStorage, nt)
-	if err != nil {
-		w.log.Error("Failed to write NFT into db", "err", err)
-		return err
+func (w *Wallet) CreateNFT(nt *NFT, local bool) error {
+	var err error
+	if local {
+		err = w.s.Update(NFTTokenStorage, nt, "token_id=?", nt.TokenID)
+		if err != nil {
+			w.log.Error("Failed to update NFT into db", "err", err)
+			return err
+		}
+	} else {
+		err := w.s.Write(NFTTokenStorage, nt)
+		if err != nil {
+			w.log.Error("Failed to write NFT into db", "err", err)
+			return err
+		}
 	}
 	return nil
 }
@@ -75,7 +84,7 @@ func (w *Wallet) GetNFTToken(nft string) ([]NFT, error) {
 	return tokens, nil
 }
 
-func (w *Wallet) UpdateNFTStatus(nft string, tokenStatus int) error {
+func (w *Wallet) UpdateNFTStatus(nft string, did string, tokenStatus int, local bool, receiverDid string) error {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
 	var nftToken NFT
@@ -85,6 +94,11 @@ func (w *Wallet) UpdateNFTStatus(nft string, tokenStatus int) error {
 		return err
 	}
 	nftToken.TokenStatus = tokenStatus
+	if local {
+		fmt.Println("Is local in UpdateNFTStatus")
+		nftToken.TokenStatus = 0
+		nftToken.DID = receiverDid
+	}
 	err = w.s.Update(NFTTokenStorage, &nftToken, "token_id=?", nft)
 	if err != nil {
 		return err

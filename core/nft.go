@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/contract"
@@ -25,7 +24,6 @@ type NFTReq struct {
 
 type NFT struct {
 	DID          string
-	MetadataHash string
 	ArtifactHash string
 }
 
@@ -50,42 +48,15 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 	basicResponse := &model.BasicResponse{
 		Status: false,
 	}
-
-	nftFile, err := os.Open(createNFTRequest.Artifact)
-	if err != nil {
-		c.log.Error("Failed to open the file which should be converted to NFT", "err", err)
-		return basicResponse
-	}
-	defer nftFile.Close()
-
-	// Add the file which needs to be converted to NFT to IPFS
-	nftFileHash, err := c.ipfs.Add(nftFile)
+	nftFolderHash, err := c.ipfs.AddDir(createNFTRequest.NFTPath)
 	if err != nil {
 		c.log.Error("Failed to add nft file to IPFS", "err", err)
 		return basicResponse
 	}
-
-	nftFileInfo, err := os.Open(createNFTRequest.Metadata)
-	if err != nil {
-		c.log.Error("Failed to open the file which should be converted to NFT", "err", err)
-		return basicResponse
-	}
-	defer nftFile.Close()
-	defer nftFileInfo.Close()
-
-	// Add the file which needs to be converted to NFT to IPFS
-	nftFileInfoHash, err := c.ipfs.Add(nftFileInfo)
-	if err != nil {
-		c.log.Error("Failed to add nft file to IPFS", "err", err)
-		return basicResponse
-	}
-
 	nft := NFT{
 		DID:          createNFTRequest.DID,
-		MetadataHash: nftFileInfoHash,
-		ArtifactHash: nftFileHash,
+		ArtifactHash: nftFolderHash,
 	}
-
 	if err != nil {
 		c.log.Error("Failed to create NFT", "err", err)
 		return basicResponse
@@ -121,7 +92,7 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		TokenStatus: 0,
 		TokenValue:  0,
 	}
-	c.w.CreateNFT(&nftTokenDetails)
+	c.w.CreateNFT(&nftTokenDetails, false)
 	if err != nil {
 		c.log.Error("Failed to write nft to storage", err)
 		return basicResponse
@@ -338,11 +309,6 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		resp.Message = err.Error()
 		return resp
 	}
-	// if currentNFTValue == 0 {
-	// 	c.log.Error("NFT Value cannot be 0, ")
-	// 	resp.Message = "NFT Value cannot be 0, "
-	// 	return resp
-	// }
 	var receiver string
 	if executeReq.Receiver == "" {
 		receiver = executeReq.Owner
@@ -427,7 +393,12 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		TokenTime:   float64(dif.Milliseconds()),
 		//BlockHash:   txnDetails.BlockID,
 	}
-	err = c.w.UpdateNFTStatus(executeReq.NFT, 4)
+	receiverPeerId := c.w.GetPeerID(executeReq.Receiver)
+	local := false
+	if receiverPeerId == c.peerID || receiverPeerId == "" {
+		local = true
+	}
+	err = c.w.UpdateNFTStatus(executeReq.NFT, executeReq.Owner, 4, local, executeReq.Receiver)
 	if err != nil {
 		c.log.Error("Failed to update NFT status after transferring", err)
 	}
@@ -460,55 +431,9 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 		c.log.Error("Failed to get nft details", "err", err)
 	}
 	c.log.Info("Update on nft " + newEvent.NFT)
-	if newEvent.Type == 1 {
-		fetchNFT.NFT = newEvent.NFT
-		fetchNFT.NFTPath, err = c.CreateNFTTempFolder()
-		if err != nil {
-			c.log.Error("Fetch nft failed, failed to create nft folder", "err", err)
-			return
-		}
-		oldNFTFolder := c.cfg.DirPath + "NFT/" + fetchNFT.NFT
-		var isPathExist bool
-		info, err := os.Stat(oldNFTFolder)
-		//If directory doesn't exist, isPathExist is set to false
-		if os.IsNotExist(err) {
-			isPathExist = false
-		} else {
-			isPathExist = info.IsDir()
-
-		}
-
-		if isPathExist {
-			c.log.Debug("removing the existing folder:", oldNFTFolder, "to add the new folder")
-			os.RemoveAll(oldNFTFolder)
-		}
-		fetchNFT.NFTPath, err = c.RenameNFTFolder(fetchNFT.NFTPath, fetchNFT.NFT)
-		if err != nil {
-			c.log.Error("Fetch NFT failed, failed to create NFT folder", "err", err)
-			return
-		}
-		c.FetchNFT(requestID, &fetchNFT)
-		c.log.Info("NFT " + fetchNFT.NFT + " files fetching succesful")
-	}
 	nft := newEvent.NFT
-	nftFolderPath := c.cfg.DirPath + "NFT/" + nft
-	if _, err := os.Stat(nftFolderPath); os.IsNotExist(err) {
-		fetchNFT.NFT = nft
-		fetchNFT.NFTPath, err = c.CreateNFTTempFolder()
-		if err != nil {
-			c.log.Error("Fetch nft failed, failed to create nft folder", "err", err)
-			return
-		}
-		fetchNFT.NFTPath, err = c.RenameNFTFolder(fetchNFT.NFTPath, nft)
-		if err != nil {
-			c.log.Error("Fetch NFT failed, failed to create NFT folder", "err", err)
-			return
-		}
-		fetchNFT.ReceiverDID = newEvent.ReceiverDid
-
-		c.FetchNFT(requestID, &fetchNFT)
-		c.log.Info("NFT " + nft + " files fetching successful")
-	}
+	fetchNFT.NFT = nft
+	c.FetchNFT(requestID, &fetchNFT)
 	publisherPeerID := peerID
 	did := newEvent.Did
 	tokenType := c.TokenType(NFTString)
@@ -537,7 +462,6 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 		c.log.Error("Failed to get NFT from network", "err", err)
 		return basicResponse
 	}
-
 	nftJSONBytes, err := io.ReadAll(nftJSON)
 	if err != nil {
 		c.log.Error("Failed to read NFT from network", "err", err)
@@ -550,80 +474,14 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 		c.log.Error("Failed to parse nft", "err", err)
 		return basicResponse
 	}
-
-	nftFileInfo, err := c.ipfs.Cat(nft.MetadataHash)
-	if err != nil {
-		c.log.Error("Failed to fetch nftfileinfo from network", "err", err)
-		return basicResponse
-	}
-	defer nftFileInfo.Close()
-
-	nftFileInfoPath := fetchNFTRequest.NFTPath
-	err = os.MkdirAll(nftFileInfoPath, 0755)
-	if err != nil {
-		c.log.Error("Failed to create nft file info directory", "err", err)
-		return basicResponse
+	c.GetNFTFromIpfs(fetchNFTRequest.NFT, nft.ArtifactHash)
+	receiverPeerId := c.w.GetPeerID(fetchNFTRequest.ReceiverDID)
+	local := false
+	if receiverPeerId == c.peerID || receiverPeerId == "" {
+		local = true
 	}
 
-	nftFileInfoDestPath := filepath.Join(nftFileInfoPath, "nftFileInfo")
-	nftFileInfoContent, err := io.ReadAll(nftFileInfo)
-	if err != nil {
-		c.log.Error("Failed to read binary code file", "err", err)
-		return basicResponse
-	}
-
-	err = os.WriteFile(nftFileInfoDestPath+".json", nftFileInfoContent, 0644)
-	if err != nil {
-		c.log.Error("Failed to write nft file info ", "err", err)
-		return basicResponse
-	}
-
-	// Define a map to hold the parsed JSON data
-	var nftData map[string]interface{}
-
-	// Unmarshal (parse) the JSON into the map
-	err = json.Unmarshal(nftFileInfoContent, &nftData)
-	if err != nil {
-		c.log.Info("Error parsing nft meta data:", err)
-	}
-
-	// Extract the "filename" key value
-	filename, ok := nftData["filename"].(string)
-	if !ok {
-		c.log.Info("Key 'filename' not found or not a string")
-	}
-	c.log.Info("File Name :", filename)
-	// Fetch and store the raw code file
-	nftFile, err := c.ipfs.Cat(nft.ArtifactHash)
-	if err != nil {
-		c.log.Error("Failed to fetch nft file from IPFS", "err", err)
-		return basicResponse
-	}
-	defer nftFile.Close()
-
-	nftFilePath := fetchNFTRequest.NFTPath
-	err = os.MkdirAll(nftFilePath, 0755)
-	if err != nil {
-		c.log.Error("Failed to create raw code directory", "err", err)
-		return basicResponse
-	}
-
-	nftFileDestPath := filepath.Join(nftFilePath, filename)
-
-	nftFileContent, err := io.ReadAll(nftFile)
-	if err != nil {
-		c.log.Error("Failed to read nft file", "err", err)
-		return basicResponse
-	}
-
-	// Write the content to rawCodeFileDestPath
-	err = os.WriteFile(nftFileDestPath, nftFileContent, 0644)
-	if err != nil {
-		c.log.Error("Failed to write raw code file", "err", err)
-		return basicResponse
-	}
-
-	err = c.w.CreateNFT(&wallet.NFT{TokenID: fetchNFTRequest.NFT, DID: fetchNFTRequest.ReceiverDID, TokenStatus: 0, TokenValue: fetchNFTRequest.NFTValue})
+	err = c.w.CreateNFT(&wallet.NFT{TokenID: fetchNFTRequest.NFT, DID: fetchNFTRequest.ReceiverDID, TokenStatus: 0, TokenValue: fetchNFTRequest.NFTValue}, local)
 	if err != nil {
 		c.log.Error("Failed to create NFT", "err", err)
 		return basicResponse

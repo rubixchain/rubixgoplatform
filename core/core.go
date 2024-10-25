@@ -646,6 +646,23 @@ func (c *Core) FetchDID(did string) error {
 	return err
 }
 
+func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
+	_, err := os.Stat(c.cfg.DirPath + "NFT/" + nftTokenHash)
+	if err != nil {
+		err = os.MkdirAll(c.cfg.DirPath+"NFT/"+nftTokenHash, os.ModeDir|os.ModePerm)
+		if err != nil {
+			c.log.Error("failed to create directory", "err", err)
+			return err
+		}
+		err = c.ipfs.Get(nftFolderHash, c.cfg.DirPath+"NFT/"+nftTokenHash)
+		if err != nil {
+			c.log.Error("failed to get NFT from IPFS", "err", err)
+			return err
+		}
+	}
+	return err
+}
+
 func (c *Core) GetPeerID() string {
 	return c.peerID
 }
