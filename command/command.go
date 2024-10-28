@@ -92,10 +92,10 @@ const (
 	PinTokenCmd                    string = "pinToken"
 	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
-	CreateFTCmd                    string = "createft"
-	DumpFTTokenChainCmd            string = "dumpft"
-	TransferFTCmd                  string = "transferft"
-	GetFTInfoCmd                   string = "getftinfo"
+	CreateFTCmd                    string = "create-ft"
+	DumpFTTokenChainCmd            string = "dump-ft"
+	TransferFTCmd                  string = "transfer-ft"
+	GetFTInfoCmd                   string = "get-ft-info-by-did"
 	ValidateTokenCmd               string = "validatetoken"
 )
 
