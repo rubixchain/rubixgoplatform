@@ -198,14 +198,14 @@
                     },
                     {
                         "type": "file",
-                        "description": "Metadata about the file being given. We are expecting a json file with a mandatory key filename",
+                        "description": "JSON file which contains information about the NFT",
                         "name": "metadata",
                         "in": "formData",
                         "required": true
                     },
                     {
                         "type": "file",
-                        "description": "File to be committed",
+                        "description": "File which is meant to be an NFT",
                         "name": "artifact",
                         "in": "formData",
                         "required": true
@@ -306,7 +306,7 @@
                 "summary": "Execution of NFT",
                 "parameters": [
                     {
-                        "description": "Transfer the ownership of particular NFT",
+                        "description": "Transfer the ownership of particular NFT or self-execution with some data",
                         "name": "input",
                         "in": "body",
                         "required": true,

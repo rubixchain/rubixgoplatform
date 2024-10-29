@@ -19,8 +19,8 @@ import (
 // @Accept       mpfd
 // @Produce      mpfd
 // @Param        did        	   formData      string  true   "DID"
-// @Param        metadata       formData      file  true  "Metadata about the file being given. We are expecting a json file with a mandatory key filename"
-// @Param        artifact       formData      file    true  "File to be committed"
+// @Param        metadata       formData      file  true  "JSON file which contains information about the NFT"
+// @Param        artifact       formData      file    true  "File which is meant to be an NFT"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/create-nft [post]
 func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
@@ -192,11 +192,11 @@ type ExecuteNFTSwaggoInput struct {
 
 // NFT godoc
 // @Summary      Execution of NFT
-// @Description  This API will add a new block which indicates the transfer of ownership of NFT
+// @Description  This API will add a new block which indicates either transfer of ownership of NFT or internal state change through self-execution
 // @Tags         NFT
 // @Accept       json
 // @Produce      json
-// @Param		 input body ExecuteNFTSwaggoInput true "Transfer the ownership of particular NFT"
+// @Param		 input body ExecuteNFTSwaggoInput true "Transfer the ownership of particular NFT or self-execution with some data if 'receiver' is empty "
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/execute-nft [post]
 func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
@@ -258,6 +258,6 @@ func (s *Server) APISubscribeNFT(request *ensweb.Request) *ensweb.Result {
 	}
 	topic := newSubscription.NFT
 	s.c.AddWebReq(request)
-	go s.c.SubsribeNFTSetup(request.ID, topic)
+	go s.c.SubscribeNFTSetup(request.ID, topic)
 	return s.BasicResponse(request, true, "NFT subscribed successfully", nil)
 }

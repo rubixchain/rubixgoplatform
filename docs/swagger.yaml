@@ -320,13 +320,12 @@ paths:
         name: did
         required: true
         type: string
-      - description: Metadata about the file being given. We are expecting a json
-          file with a mandatory key filename
+      - description: JSON file which contains information about the NFT
         in: formData
         name: metadata
         required: true
         type: file
-      - description: File to be committed
+      - description: File which is meant to be an NFT
         in: formData
         name: artifact
         required: true
@@ -394,7 +393,8 @@ paths:
       description: This API will add a new block which indicates the transfer of ownership
         of NFT
       parameters:
-      - description: Transfer the ownership of particular NFT
+      - description: Transfer the ownership of particular NFT or self-execution with
+          some data
         in: body
         name: input
         required: true

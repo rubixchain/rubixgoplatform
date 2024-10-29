@@ -3,7 +3,7 @@ package wallet
 import "fmt"
 
 type NFT struct {
-	TokenID     string  `gorm:"column:token_id" json:"token_id"`
+	TokenID     string  `gorm:"column:token_id;primaryKey" json:"token_id"`
 	DID         string  `gorm:"column:did" json:"did"`
 	TokenStatus int     `gorm:"column:token_status;" json:"token_status"`
 	TokenValue  float64 `gorm:"column:token_value;" json:"token_value"`
@@ -84,24 +84,31 @@ func (w *Wallet) GetNFTToken(nft string) ([]NFT, error) {
 	return tokens, nil
 }
 
-func (w *Wallet) UpdateNFTStatus(nft string, did string, tokenStatus int, local bool, receiverDid string) error {
-	w.dtl.Lock()
-	defer w.dtl.Unlock()
-	var nftToken NFT
-	err := w.s.Read(NFTTokenStorage, &nftToken, "token_id=?", nft)
-	if err != nil {
-		w.log.Error("err", err)
-		return err
-	}
-	nftToken.TokenStatus = tokenStatus
-	if local {
-		fmt.Println("Is local in UpdateNFTStatus")
-		nftToken.TokenStatus = 0
+func (w *Wallet) UpdateNFTStatus(nft string, did string, tokenStatus int, local bool, receiverDid string, saleAmount float64) error {
+	// Empty receiver DID indicates self execution of NFT and hence
+	// any change in NFTToken table must be skipped 
+	if receiverDid != "" {
+		w.dtl.Lock()
+		defer w.dtl.Unlock()
+		var nftToken NFT
+		err := w.s.Read(NFTTokenStorage, &nftToken, "token_id=?", nft)
+		if err != nil {
+			w.log.Error("err", err)
+			return err
+		}
+		
+		nftToken.TokenValue = floatPrecision(saleAmount, 3)
 		nftToken.DID = receiverDid
-	}
-	err = w.s.Update(NFTTokenStorage, &nftToken, "token_id=?", nft)
-	if err != nil {
-		return err
+		if local {
+			nftToken.TokenStatus = TokenIsFree
+		} else {
+			nftToken.TokenStatus = tokenStatus
+		}
+
+		err = w.s.Update(NFTTokenStorage, &nftToken, "token_id=?", nft)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
