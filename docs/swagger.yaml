@@ -121,11 +121,6 @@ definitions:
       smartContractToken:
         type: string
     type: object
-  server.FetchSmartContractSwaggoInput:
-    properties:
-      smartContractToken:
-        type: string
-    type: object
   server.GetSmartContractTokenChainDataSwaggoInput:
     properties:
       latest:
@@ -184,9 +179,9 @@ definitions:
     type: object
   server.RegisterCallBackURLSwaggoInput:
     properties:
-      callbackurl:
+      CallBackURL:
         type: string
-      token:
+      SmartContractToken:
         type: string
     type: object
   server.SignatureResponseSwaggoInput:
@@ -411,18 +406,15 @@ paths:
       tags:
       - Smart Contract
   /api/fetch-smart-contract:
-    post:
+    get:
       consumes:
       - application/json
       description: This API will Fetch smart contract
       operationId: fetch-smart-contract
       parameters:
-      - description: Fetch smart contract
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.FetchSmartContractSwaggoInput'
+      - in: query
+        name: smartContractToken
+        type: string
       produces:
       - application/json
       responses:

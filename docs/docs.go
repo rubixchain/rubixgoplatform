@@ -330,7 +330,7 @@ const docTemplate = `{
             }
         },
         "/api/fetch-smart-contract": {
-            "post": {
+            "get": {
                 "description": "This API will Fetch smart contract",
                 "consumes": [
                     "application/json"
@@ -345,13 +345,9 @@ const docTemplate = `{
                 "operationId": "fetch-smart-contract",
                 "parameters": [
                     {
-                        "description": "Fetch smart contract",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.FetchSmartContractSwaggoInput"
-                        }
+                        "type": "string",
+                        "name": "smartContractToken",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1204,14 +1200,6 @@ const docTemplate = `{
                 }
             }
         },
-        "server.FetchSmartContractSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "smartContractToken": {
-                    "type": "string"
-                }
-            }
-        },
         "server.GetSmartContractTokenChainDataSwaggoInput": {
             "type": "object",
             "properties": {
@@ -1302,10 +1290,10 @@ const docTemplate = `{
         "server.RegisterCallBackURLSwaggoInput": {
             "type": "object",
             "properties": {
-                "callbackurl": {
+                "CallBackURL": {
                     "type": "string"
                 },
-                "token": {
+                "SmartContractToken": {
                     "type": "string"
                 }
             }
