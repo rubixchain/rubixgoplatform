@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
@@ -23,6 +24,7 @@ const (
 	ExplorerTokenCreateNFTAPI     string = "/api/token/nft/create"
 	ExplorerCreateUserAPI         string = "/api/user/create"
 	ExplorerUpdateUserInfoAPI     string = "/api/user/update-user-info"
+	ExplorerUpdateTokenInfoAPI    string = "/api/token/update-token-info"
 	ExplorerGetUserKeyAPI         string = "/api/user/get-api-key"
 	ExplorerGenerateUserKeyAPI    string = "/api/user/generate-api-key"
 	ExplorerExpireUserKeyAPI      string = "/api/user/set-expire-api-key"
@@ -54,19 +56,20 @@ type ExplorerMapDID struct {
 	PeerID string `json:"peer_id"`
 }
 
-// type TokenDetails struct {
-// 	TokenHash     string  `json:"token_hash"`
-// 	TokenValue    float64 `json:"token_value"`
-// 	CurrentOwner  string
-// 	PreviousOwner string
-// 	Miner         string
-// 	BlockIDs      []string
-// 	PledgeDetails PledgeInfo //from latest block if available
-// 	TokenType     int
-// 	TokenLevel    int
-// 	TokenNumber   int
-// 	TokenStatus   int
-// }
+// TODO
+type TokenDetails struct {
+	TokenHash     string  `json:"token_hash"`
+	TokenValue    float64 `json:"token_value"`
+	CurrentOwner  string
+	PreviousOwner string
+	Miner         string
+	BlockIDs      []string
+	PledgeDetails PledgeInfo //from latest block if available
+	TokenType     int
+	TokenLevel    int
+	TokenNumber   int
+	TokenStatus   int
+}
 
 type Token struct {
 	TokenHash  string  `json:"token_hash"`
@@ -314,6 +317,143 @@ func (c *Core) UpdateUserInfo(dids []string) {
 		}
 		c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
 	}
+}
+
+func (c *Core) UpdateTokenInfo() {
+	tokenList := []wallet.Token{}
+	// dids := []string{}
+
+	err := c.s.Read(wallet.TokenStorage, &tokenList, "token_id!=?", "")
+	if err != nil {
+		c.log.Error("Error reading the DID Storage or DID Storage empty")
+		return
+	}
+	tokensToSend := []TokenDetails{}
+	count := 0
+	l := len(tokenList)
+	for i, token := range tokenList {
+		if token.Added {
+			continue
+		}
+		td := c.populateTokenDetail(token)
+		//populate td
+		tokensToSend = append(tokensToSend, td)
+		count += 1
+
+		if count != 10 && i != (l-1) {
+			continue
+		}
+		var er ExplorerResponse
+		err = c.ec.SendExploerJSONRequest("POST", ExplorerUpdateTokenInfoAPI, &tokensToSend, &er)
+		if err != nil {
+			c.log.Error("Failed to update user info, " + err.Error())
+		}
+		if !er.Status {
+			c.log.Error("Failed to update user info, ", "msg", er.Message)
+			return
+		}
+
+		tokensUpdated := strings.Split(er.Message, ",")
+		for _, t := range tokensUpdated {
+			t1 := wallet.Token{}
+			err := c.s.Read(wallet.TokenStorage, &t1, "token_id=?", t)
+			if err != nil {
+				c.log.Error("Error reading the DID Storage or DID Storage empty")
+				return
+			}
+			t1.Added = true
+			err = c.s.Update(wallet.TokenStorage, &t1, "token_id=?", t)
+			if err != nil {
+				c.log.Error("Error reading the DID Storage or DID Storage empty")
+				return
+			}
+		}
+		count = 0
+		tokensToSend = []TokenDetails{}
+	}
+}
+
+func (c *Core) populateTokenDetail(token wallet.Token) TokenDetails {
+	td := TokenDetails{}
+	td.TokenHash = token.TokenID
+	td.TokenValue = token.TokenValue
+	td.TokenStatus = token.TokenStatus
+	td.CurrentOwner = ""
+	td.Miner = ""
+	td.PreviousOwner = ""
+	td.BlockIDs = []string{}
+	td.PledgeDetails = PledgeInfo{}
+	td.TokenLevel = -1
+	td.TokenNumber = -1
+	//Get token type
+	typeString := RBTString
+	if token.TokenValue < 1.0 {
+		typeString = PartString
+	}
+	td.TokenType = c.TokenType(typeString)
+	var blocks [][]byte
+	var nextBlockID string
+	blockId := ""
+	var err error
+	//This for loop ensures that we fetch all the blocks in the token chain
+	//starting from genesis block to latest block
+	for {
+		//GetAllTokenBlocks returns next 100 blocks and nextBlockID of the 100th block, starting from the given block Id, in the direction: genesis to latest block
+		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(token.TokenID, td.TokenType, blockId)
+		if err != nil {
+			return TokenDetails{}
+		}
+		//the nextBlockID of the latest block is empty string
+		blockId = nextBlockID
+		if nextBlockID == "" {
+			break
+		}
+	}
+
+	//Once we have all the blocks, we traverse each block and get the details from each block. If there is a next block after the current block
+	//which is of type transaction block, then we get the pledge details from next one. We update the details as we go forward in traversing the
+	//token chain blocks 0,1,2,3,4 - 4
+
+	for i := 0; i < len(blocks); i++ {
+		b := block.InitBlock(blocks[i], nil)
+		var nb *block.Block
+		nb = nil
+		if i < len(blocks)-1 {
+			nb = block.InitBlock(blocks[i+1], nil)
+		}
+
+		if b != nil {
+			txnType := b.GetTransType()
+			switch txnType {
+			case block.TokenGeneratedType:
+				td.Miner = b.GetOwner()
+				bid, _ := b.GetBlockID(token.TokenID)
+				td.BlockIDs = append(td.BlockIDs, bid)
+				td.TokenLevel, td.TokenNumber = b.GetTokenLevel(token.TokenID)
+				if nb != nil && nb.GetTransType() == block.TokenTransferredType {
+					continue
+				}
+				td.CurrentOwner = b.GetOwner()
+				fmt.Printf("TD Genesys %+v: ", td)
+				//TODO : add pledge details for mined tokens
+			case block.TokenTransferredType:
+				bid, _ := b.GetBlockID(token.TokenID)
+				td.BlockIDs = append(td.BlockIDs, bid)
+				if nb != nil && nb.GetTransType() == block.TokenTransferredType {
+					continue
+				}
+				td.CurrentOwner = b.GetOwner()
+				td.PreviousOwner = b.GetSenderDID()
+				b.GetPledgedTokens()
+				fmt.Printf("TD Else %+v: ", td)
+				// 	// td.PledgeDetails = b.
+			}
+
+		} else {
+			c.log.Error("Invalid block")
+		}
+	}
+	return td
 }
 
 func (c *Core) GenerateUserAPIKey(dids []string) {
