@@ -65,7 +65,7 @@ const (
 	CommitDataTokenCmd             string = "commitdatatoken"
 	SetupDBCmd                     string = "setupdb"
 	GetTxnDetailsCmd               string = "gettxndetails"
-	CreateNFTCmd                   string = "createnft"
+	CreateNFTCmd                   string = "create-nft"
 	GetAllNFTCmd                   string = "getallnft"
 	UpdateConfig                   string = "updateconfig"
 	GenerateSmartContractToken     string = "generatesct"
@@ -93,6 +93,10 @@ const (
 	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
 	ValidateTokenCmd               string = "validatetoken"
+	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
+	DeployNFTCmd                   string = "deploy-nft"
+	ExecuteNFTCmd                  string = "execute-nft"
+	SubscribeNFTCmd                string = "subscribe-nft"
 	AddUserAPIKeyCmd               string = "adduserapikey"
 )
 
@@ -149,6 +153,10 @@ var commands = []string{VersionCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
 	ValidateTokenCmd,
+	DumpNFTTokenChainCmd,
+	DeployNFTCmd,
+	ExecuteNFTCmd,
+	SubscribeNFTCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -286,6 +294,10 @@ type Command struct {
 	pinningAddress               string
 	blockCount                   int
 	smartContractChainValidation bool
+	metadata                     string
+	artifact                     string
+	nft                          string
+	nftData                      string
 	apiKey                       string
 }
 
@@ -494,6 +506,10 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
+	flag.StringVar(&cmd.nft, "nft", "", "NFT id")
+	flag.StringVar(&cmd.metadata, "metadata", "", "NFT metadata")
+	flag.StringVar(&cmd.artifact, "artifact", "", "NFT artifact")
+	flag.StringVar(&cmd.nftData, "nftData", "", "The nft data")
 	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 
 	if len(os.Args) < 2 {
@@ -626,8 +642,8 @@ func Run(args []string) {
 		cmd.SubscribeContract()
 	case CreateNFTCmd:
 		cmd.createNFT()
-	case GetAllNFTCmd:
-		cmd.getAllNFTs()
+	// case GetAllNFTCmd:
+	// 	cmd.getAllNFTs()
 	case DeploySmartContractCmd:
 		cmd.deploySmartcontract()
 	case GenerateSmartContractToken:
@@ -674,6 +690,14 @@ func Run(args []string) {
 		cmd.ValidateTokenchain()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
+	case ExecuteNFTCmd:
+		cmd.executeNFT()
+	case DeployNFTCmd:
+		cmd.deployNFT()
+	case DumpNFTTokenChainCmd:
+		cmd.dumpNFTTokenChain()
+	case SubscribeNFTCmd:
+		cmd.SubscribeNFT()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
 	default:
