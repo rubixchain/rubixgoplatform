@@ -171,10 +171,16 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIInitiatePinRBT, "POST", s.AuthHandle(s.APIInitiatePinRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIRecoverRBT, "POST", s.AuthHandle(s.APIRecoverRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateTokenChain, "GET", s.AuthHandle(s.APIValidateTokenChain, false, s.AuthError, false))
+	s.AddRoute(setup.APICreateFT, "POST", s.AuthHandle(s.APICreateFT, true, s.AuthError, false))
+	s.AddRoute(setup.APIDumpFTTokenChainBlock, "POST", s.AuthHandle(s.APIDumpFTTokenChainBlock, true, s.AuthError, false))
+	s.AddRoute(setup.APIInitiateFTTransfer, "POST", s.AuthHandle(s.APIInitiateFTTransfer, true, s.AuthError, true))
+	s.AddRoute(setup.APIGetFTInfo, "GET", s.AuthHandle(s.APIGetFTInfo, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
 	s.AddRoute(setup.APIDumpNFTTokenChain, "GET", s.AuthHandle(s.APIDumpNFTTokenChain, true, s.AuthError, false))
 	s.AddRoute(setup.APISubscribeNFT, "POST", s.AuthHandle(s.APISubscribeNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNFTTokenChainData, "GET", s.AuthHandle(s.APIGetNFTTokenChainData, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetFTTokenchain, "GET", s.AuthHandle(s.APIGetFTTokenchain, true, s.AuthError, false))
+
 }
 
 func (s *Server) ExitFunc() error {

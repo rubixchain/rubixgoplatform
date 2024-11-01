@@ -18,6 +18,8 @@ const (
 	RacTestNFTType
 	RacTestDataTokenType
 	RacTestPartTokenType
+	RacFTType
+	RacTestFTType
 )
 
 const (
@@ -63,12 +65,21 @@ type RacType struct {
 	ContentURL   map[string]string
 	TransInfo    map[string]string
 	PartInfo     *RacPartInfo
+	FTSymbol     string
+	FTInfo       *RacFTInfo
 }
 
 type RacPartInfo struct {
 	Parent  string
 	PartNum int
 	Value   float64
+}
+
+type RacFTInfo struct {
+	Parents string
+	FTNum   int
+	FTName  string
+	FTValue float64
 }
 
 type RacBlock struct {
@@ -100,7 +111,7 @@ func InitRacBlock(bb []byte, bm map[string]interface{}) (*RacBlock, error) {
 }
 
 func CreateRac(r *RacType) ([]*RacBlock, error) {
-	if r.Type == 1 || r.Type > RacTestPartTokenType {
+	if r.Type == 1 || r.Type > RacTestFTType {
 		return nil, fmt.Errorf("rac type is not supported")
 	}
 	rb := make([]*RacBlock, 0)

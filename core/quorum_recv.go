@@ -699,6 +699,9 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	case NFTExecuteMode:
 		c.log.Info("NFT execute consensus started")
 		return c.quorumNFTConsensus(req, did, qdc, &cr)
+	case FTTrasnferMode:
+		c.log.Debug("FT consensus started")
+		return c.quorumRBTConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
 		crep.Message = "Invalid consensus mode"
@@ -795,7 +798,8 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) updateReceiverToken(
 	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
-	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool,
+	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool, ftinfo *model.FTInfo,
+
 ) ([]string, error) {
 	var receiverPeerId string = ""
 	var receiverDID string = ""
@@ -908,10 +912,14 @@ func (c *Core) updateReceiverToken(
 		}
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
-
-	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs)
+	var FT wallet.FTToken
+	FT.FTName = ftinfo.FTName
+	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs, FT)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
+	}
+	if FT != (wallet.FTToken{}) {
+		c.updateFTTable(receiverDID)
 	}
 
 	sc := contract.InitContract(b.GetSmartContract(), nil)
@@ -974,6 +982,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 		sr.QuorumInfo,
 		sr.TransactionEpoch,
 		sr.PinningServiceMode,
+		&sr.FTInfo,
 	)
 	if err != nil {
 		c.log.Error(err.Error())
