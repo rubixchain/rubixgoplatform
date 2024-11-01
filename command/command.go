@@ -55,6 +55,7 @@ const (
 	GetAccountInfoCmd              string = "getaccountinfo"
 	SetupServiceCmd                string = "setupservice"
 	DumpTokenChainCmd              string = "dumptokenchain"
+	DecodeTokenChainCmd            string = "decodetokenchain"
 	RegsiterDIDCmd                 string = "registerdid"
 	SetupDIDCmd                    string = "setupdid"
 	ShutDownCmd                    string = "shutdown"
@@ -64,7 +65,7 @@ const (
 	CommitDataTokenCmd             string = "commitdatatoken"
 	SetupDBCmd                     string = "setupdb"
 	GetTxnDetailsCmd               string = "gettxndetails"
-	CreateNFTCmd                   string = "createnft"
+	CreateNFTCmd                   string = "create-nft"
 	GetAllNFTCmd                   string = "getallnft"
 	UpdateConfig                   string = "updateconfig"
 	GenerateSmartContractToken     string = "generatesct"
@@ -91,6 +92,11 @@ const (
 	PinTokenCmd                    string = "pinToken"
 	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
+	ValidateTokenCmd               string = "validatetoken"
+	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
+	DeployNFTCmd                   string = "deploy-nft"
+	ExecuteNFTCmd                  string = "execute-nft"
+	SubscribeNFTCmd                string = "subscribe-nft"
 )
 
 var commands = []string{VersionCmd,
@@ -112,6 +118,7 @@ var commands = []string{VersionCmd,
 	GetAccountInfoCmd,
 	SetupServiceCmd,
 	DumpTokenChainCmd,
+	DecodeTokenChainCmd,
 	RegsiterDIDCmd,
 	SetupDBCmd,
 	ShutDownCmd,
@@ -144,6 +151,11 @@ var commands = []string{VersionCmd,
 	RecoverTokensCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
+	ValidateTokenCmd,
+	DumpNFTTokenChainCmd,
+	DeployNFTCmd,
+	ExecuteNFTCmd,
+	SubscribeNFTCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -165,6 +177,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will help to get account information",
 	"This command enable explorer service on the node",
 	"This command will dump the token chain into file",
+	"This command will decode the token chain into file",
 	"This command will register DID peer map across the network",
 	"This command will setup the DID with peer",
 	"This command will shutdown the rubix node",
@@ -193,6 +206,11 @@ var commandsHelp = []string{"To get tool version",
 	"This command will initiate a self RBT transfer",
 	"This command will unpledge all the pledged tokens",
 	"This command will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
+	"This command will pin the token",
+	"This command will recover the token",
+	"This command will check the quorum status",
+	"This command will validate the token chain",
+	"This command will validate the token",
 }
 
 type Command struct {
@@ -275,6 +293,10 @@ type Command struct {
 	pinningAddress               string
 	blockCount                   int
 	smartContractChainValidation bool
+	metadata                     string
+	artifact                     string
+	nft                          string
+	nftData                      string
 }
 
 func showVersion() {
@@ -475,6 +497,10 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
+	flag.StringVar(&cmd.nft, "nft", "", "NFT id")
+	flag.StringVar(&cmd.metadata, "metadata", "", "NFT metadata")
+	flag.StringVar(&cmd.artifact, "artifact", "", "NFT artifact")
+	flag.StringVar(&cmd.nftData, "nftData", "", "The nft data")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -582,6 +608,8 @@ func Run(args []string) {
 		cmd.GetAccountInfo()
 	case DumpTokenChainCmd:
 		cmd.dumpTokenChain()
+	case DecodeTokenChainCmd:
+		cmd.decodeTokenChain()
 	case RegsiterDIDCmd:
 		cmd.RegsiterDIDCmd()
 	case SetupDIDCmd:
@@ -604,8 +632,8 @@ func Run(args []string) {
 		cmd.SubscribeContract()
 	case CreateNFTCmd:
 		cmd.createNFT()
-	case GetAllNFTCmd:
-		cmd.getAllNFTs()
+	// case GetAllNFTCmd:
+	// 	cmd.getAllNFTs()
 	case DeploySmartContractCmd:
 		cmd.deploySmartcontract()
 	case GenerateSmartContractToken:
@@ -650,6 +678,16 @@ func Run(args []string) {
 		cmd.RecoverTokens()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
+	case ValidateTokenCmd:
+		cmd.ValidateToken()
+	case ExecuteNFTCmd:
+		cmd.executeNFT()
+	case DeployNFTCmd:
+		cmd.deployNFT()
+	case DumpNFTTokenChainCmd:
+		cmd.dumpNFTTokenChain()
+	case SubscribeNFTCmd:
+		cmd.SubscribeNFT()
 	default:
 		cmd.log.Error("Invalid command")
 	}

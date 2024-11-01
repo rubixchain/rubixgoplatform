@@ -123,9 +123,9 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error
 // CheckQuorumStatusResponse is the handler for CheckQuorumStatus request
 func (c *Core) GetPeerdidTypeResponse(req *ensweb.Request) *ensweb.Result { //PingRecevied
 	did := c.l.GetQuerry(req, "did")
-	peer_peerid := c.l.GetQuerry(req, "self_peerid")
-	peer_did := c.l.GetQuerry(req, "self_did")
-	peer_did_type := c.l.GetQuerry(req, "self_did_type")
+	peerPeerID := c.l.GetQuerry(req, "self_peerid")
+	peerDID := c.l.GetQuerry(req, "selfDID")
+	peerDIDType := c.l.GetQuerry(req, "selfDID_type")
 
 	resp := &model.GetDIDTypeResponse{
 		BasicResponse: model.BasicResponse{
@@ -134,13 +134,13 @@ func (c *Core) GetPeerdidTypeResponse(req *ensweb.Request) *ensweb.Result { //Pi
 	}
 
 	//If the peer's DID type string is not empty, register the peer, if not already registered
-	if peer_did_type != "" {
-		peer_did_type_int, err1 := strconv.Atoi(peer_did_type)
+	if peerDIDType != "" {
+		peerDIDTypeInt, err1 := strconv.Atoi(peerDIDType)
 		if err1 != nil {
 			c.log.Debug("could not convert string to integer:", err1)
 		}
 
-		err2 := c.w.AddDIDPeerMap(peer_did, peer_peerid, peer_did_type_int)
+		err2 := c.w.AddDIDPeerMap(peerDID, peerPeerID, peerDIDTypeInt)
 		if err2 != nil {
 			c.log.Debug("could not add quorum details to DID peer table:", err2)
 		}
@@ -163,25 +163,25 @@ func (c *Core) GetPeerdidTypeResponse(req *ensweb.Request) *ensweb.Result { //Pi
 }
 
 // GetPeerdidType will ping the peer & get the did type
-func (c *Core) GetPeerdidType_fromPeer(peerID string, peer_did string, self_DID string) (int, string, error) {
+func (c *Core) GetPeerdidTypeFromPeer(peerID string, peerDID string, selfDID string) (int, string, error) {
 	q := make(map[string]string)
-	p, err := c.pm.OpenPeerConn(peerID, peer_did, c.getCoreAppName(peerID))
+	p, err := c.pm.OpenPeerConn(peerID, peerDID, c.getCoreAppName(peerID))
 	if err != nil {
 		return -1, "Quorum Connection Error", fmt.Errorf("quorum connection error")
 	}
 
 	// Close the p2p before exit
 	defer p.Close()
-	q["did"] = peer_did
+	q["did"] = peerDID
 
-	if self_DID != "" {
+	if selfDID != "" {
 		q["self_peerid"] = c.peerID
-		q["self_did"] = self_DID
-		self_dt, err := c.w.GetDID(self_DID)
+		q["selfDID"] = selfDID
+		selfDetails, err := c.w.GetDID(selfDID)
 		if err != nil {
-			c.log.Info("could not fetch did type of peer:", self_DID)
+			c.log.Info("could not fetch did type of peer:", selfDID)
 		} else {
-			q["self_did_type"] = strconv.Itoa(self_dt.Type)
+			q["selfDID_type"] = strconv.Itoa(selfDetails.Type)
 		}
 	}
 

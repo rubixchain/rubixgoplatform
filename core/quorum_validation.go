@@ -25,7 +25,7 @@ type TokenStateCheckResult struct {
 	tokenIDTokenStateHash string
 }
 
-func (c *Core) validateSigner(b *block.Block, self_did string, p *ipfsport.Peer) (bool, error) {
+func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) (bool, error) {
 	signers, err := b.GetSigner()
 	if err != nil {
 		c.log.Error("failed to get signers", "err", err)
@@ -36,23 +36,23 @@ func (c *Core) validateSigner(b *block.Block, self_did string, p *ipfsport.Peer)
 		var dc did.DIDCrypto
 		switch b.GetTransType() {
 		case block.TokenGeneratedType, block.TokenBurntType:
-			dc, err = c.SetupForienDID(signer, self_did)
+			dc, err = c.SetupForienDID(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
 		default:
-			signer_peeerId := c.w.GetPeerID(signer)
-			if signer_peeerId == "" {
-				signer_details, err := c.GetPeerInfo(p, signer)
-				if err != nil || signer_details.PeerInfo.PeerID == "" {
-					c.log.Error("failed to fetch details of the signer", signer, "msg", signer_details.Message)
-					return signer_details.Status, err
+			signerPeerID := c.w.GetPeerID(signer)
+			if signerPeerID == "" {
+				signerDetails, err := c.GetPeerInfo(p, signer)
+				if err != nil || signerDetails.PeerInfo.PeerID == "" {
+					c.log.Error("failed to fetch details of the signer", signer, "msg", signerDetails.Message)
+					return signerDetails.Status, err
 				}
-				signer_details.PeerInfo.DID = signer
-				c.AddPeerDetails(signer_details.PeerInfo)
+				signerDetails.PeerInfo.DID = signer
+				c.AddPeerDetails(signerDetails.PeerInfo)
 			}
-			dc, err = c.SetupForienDIDQuorum(signer, self_did)
+			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID quorum : ", signer, "err", err)
@@ -148,7 +148,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	var ti []contract.TokenInfo
 	var address string
 	var receiverAddress string
-	if cr.Mode == SmartContractDeployMode {
+	if cr.Mode == SmartContractDeployMode || cr.Mode == NFTDeployMode {
 		ti = sc.GetCommitedTokensInfo()
 		address = cr.DeployerPeerID + "." + sc.GetDeployerDID()
 	} else {

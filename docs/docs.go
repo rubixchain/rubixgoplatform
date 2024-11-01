@@ -52,40 +52,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/addnftsale": {
-            "post": {
-                "description": "This API will put NFTs for sale",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "NFT"
-                ],
-                "summary": "Add NFTs",
-                "parameters": [
-                    {
-                        "description": "NFT Detials",
-                        "name": "data",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/core.NFTSaleReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/check-pinned-state": {
             "delete": {
                 "description": "This API is used to check if the token state for which the token is pledged is exhausted or not.",
@@ -217,7 +183,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/createnft": {
+        "/api/create-nft": {
             "post": {
                 "description": "This API will create new NFT",
                 "consumes": [
@@ -233,21 +199,59 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "User/Entity Info",
-                        "name": "UserInfo",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "File Info is json string {",
-                        "name": "FileInfo",
-                        "in": "formData"
+                        "description": "DID",
+                        "name": "did",
+                        "in": "formData",
+                        "required": true
                     },
                     {
                         "type": "file",
-                        "description": "File to be committed",
-                        "name": "FileContent",
-                        "in": "formData"
+                        "description": "JSON file which contains information about the NFT",
+                        "name": "metadata",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "File which is meant to be an NFT",
+                        "name": "artifact",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/deploy-nft": {
+            "post": {
+                "description": "This API will deploy the NFT",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Deploy NFT",
+                "operationId": "deploy-nft",
+                "parameters": [
+                    {
+                        "description": "Deploy nft",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.DeployNFTSwaggoInput"
+                        }
                     }
                 ],
                 "responses": {
@@ -282,6 +286,40 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/server.DeploySmartContractSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/execute-nft": {
+            "post": {
+                "description": "This API will add a new block which indicates the transfer of ownership of NFT",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Execution of NFT",
+                "parameters": [
+                    {
+                        "description": "Transfer the ownership of particular NFT or self-execution with some data",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.ExecuteNFTSwaggoInput"
                         }
                     }
                 ],
@@ -330,7 +368,7 @@ const docTemplate = `{
             }
         },
         "/api/fetch-smart-contract": {
-            "post": {
+            "get": {
                 "description": "This API will Fetch smart contract",
                 "consumes": [
                     "application/json"
@@ -345,13 +383,9 @@ const docTemplate = `{
                 "operationId": "fetch-smart-contract",
                 "parameters": [
                     {
-                        "description": "Fetch smart contract",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.FetchSmartContractSwaggoInput"
-                        }
+                        "type": "string",
+                        "name": "smartContractToken",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -622,6 +656,45 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/get-nft-token-chain-data": {
+            "get": {
+                "description": "This API will return nft token chain data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Get NFT Token Chain Data",
+                "operationId": "get-nft-token-chain-data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "NFT token id",
+                        "name": "nft",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true if you only need the latest token block",
+                        "name": "latest",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/get-pledgedtoken-details": {
             "get": {
                 "description": "This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state",
@@ -672,29 +745,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/getallnft": {
-            "post": {
-                "description": "This API will get all NFTs of the DID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "NFT"
-                ],
-                "summary": "Get ALL NFTs",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.NFTTokens"
                         }
                     }
                 }
@@ -957,6 +1007,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/subscribe-nft": {
+            "post": {
+                "description": "This API endpoint allows subscribing to a NFT.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Subscribe to NFT",
+                "parameters": [
+                    {
+                        "description": "Subscribe to input nft",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.NewNFTSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/subscribe-smart-contract": {
             "post": {
                 "description": "This API endpoint allows subscribing to a smart contract.",
@@ -1017,34 +1101,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "core.NFTSale": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "number"
-                },
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
-        "core.NFTSaleReq": {
-            "type": "object",
-            "properties": {
-                "did": {
-                    "type": "string"
-                },
-                "tokens": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/core.NFTSale"
-                    }
-                },
-                "type": {
-                    "type": "integer"
-                }
-            }
-        },
         "model.BasicResponse": {
             "type": "object",
             "properties": {
@@ -1054,35 +1110,6 @@ const docTemplate = `{
                 "result": {},
                 "status": {
                     "type": "boolean"
-                }
-            }
-        },
-        "model.NFTStatus": {
-            "type": "object",
-            "properties": {
-                "token": {
-                    "type": "string"
-                },
-                "token_status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "model.NFTTokens": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                },
-                "result": {},
-                "status": {
-                    "type": "boolean"
-                },
-                "tokens": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.NFTStatus"
-                    }
                 }
             }
         },
@@ -1164,6 +1191,20 @@ const docTemplate = `{
                 }
             }
         },
+        "server.DeployNFTSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "nft": {
+                    "type": "string"
+                },
+                "quorum_type": {
+                    "type": "integer"
+                }
+            }
+        },
         "server.DeploySmartContractSwaggoInput": {
             "type": "object",
             "properties": {
@@ -1180,6 +1221,32 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "smartContractToken": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.ExecuteNFTSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "nft": {
+                    "type": "string"
+                },
+                "nft_data": {
+                    "type": "string"
+                },
+                "nft_value": {
+                    "type": "number"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "quorum_type": {
+                    "type": "integer"
+                },
+                "receiver": {
                     "type": "string"
                 }
             }
@@ -1204,14 +1271,6 @@ const docTemplate = `{
                 }
             }
         },
-        "server.FetchSmartContractSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "smartContractToken": {
-                    "type": "string"
-                }
-            }
-        },
         "server.GetSmartContractTokenChainDataSwaggoInput": {
             "type": "object",
             "properties": {
@@ -1219,6 +1278,14 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.NewNFTSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "nft": {
                     "type": "string"
                 }
             }
@@ -1302,10 +1369,10 @@ const docTemplate = `{
         "server.RegisterCallBackURLSwaggoInput": {
             "type": "object",
             "properties": {
-                "callbackurl": {
+                "CallBackURL": {
                     "type": "string"
                 },
-                "token": {
+                "SmartContractToken": {
                     "type": "string"
                 }
             }

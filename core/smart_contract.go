@@ -57,7 +57,7 @@ type SmartContractTokenResponse struct {
 	Result  string `json:"result"`
 }
 
-func (c *Core) GenerateSmartContractToken(requestID string, smartContractTokenRequest *GenerateSmartContractRequest) *model.BasicResponse {
+func (c *Core) GenerateSmartContractToken(requestID string, smartContractTokenRequest *GenerateSmartContractRequest) {
 
 	defer os.RemoveAll(smartContractTokenRequest.SCPath)
 
@@ -65,11 +65,9 @@ func (c *Core) GenerateSmartContractToken(requestID string, smartContractTokenRe
 	dc := c.GetWebReq(requestID)
 	if dc == nil {
 		c.log.Error("failed to get web request", "requestID", requestID)
-		return nil
 	}
 	dc.OutChan <- smartContractTokenResponse
 
-	return smartContractTokenResponse
 }
 
 func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRequest *GenerateSmartContractRequest) *model.BasicResponse {
@@ -159,11 +157,15 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		return basicResponse
 	}
 	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, SchemaCodeHash: schemaCodeHash, ContractStatus: 6})
+	if err != nil {
+		c.log.Error("Failed to create smart contract token", "err", err)
+		return basicResponse
+	}
 
 	// Set the response values
 	basicResponse.Status = true
 	basicResponse.Message = smartContractTokenResponse.Message
-	basicResponse.Result = smartContractTokenResponse
+	basicResponse.Result = smartContractTokenResponse.Result
 
 	return basicResponse
 }
@@ -296,7 +298,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	// Set the response values
 	basicResponse.Status = true
 	basicResponse.Message = "Successfully fetched smart contract"
-	basicResponse.Result = &smartContractToken
+	basicResponse.Result = smartContractToken
 
 	return basicResponse
 }

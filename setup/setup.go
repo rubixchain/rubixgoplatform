@@ -47,7 +47,7 @@ const (
 	APIGetTxnByTxnID                    string = "/api/get-by-txnId"
 	APIGetTxnByDID                      string = "/api/get-by-did"
 	APIGetTxnByComment                  string = "/api/get-by-comment"
-	APICreateNFT                        string = "/api/createnft"
+	APICreateNFT                        string = "/api/create-nft"
 	APIGetAllNFT                        string = "/api/getallnft"
 	APIAddNFTSale                       string = "/api/addnftsale"
 	APIDeploySmartContract              string = "/api/deploy-smart-contract"
@@ -76,6 +76,12 @@ const (
 	APIInitiatePinRBT                   string = "/api/initiate-pin-token"
 	APIRecoverRBT                       string = "/api/recover-token"
 	APIValidateTokenChain               string = "/api/validate-token-chain"
+	APIValidateToken                    string = "/api/validate-token"
+	APIDeployNFT                        string = "/api/deploy-nft"
+	APIExecuteNFT                       string = "/api/execute-nft"
+	APIDumpNFTTokenChain                string = "/api/dump-nft-token-chain"
+	APISubscribeNFT                     string = "/api/subscribe-nft"
+	APIGetNFTTokenChainData             string = "/api/get-nft-token-chain-data"
 )
 
 // jwt.RegisteredClaims
