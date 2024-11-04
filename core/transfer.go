@@ -319,7 +319,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		SenderDID:      senderDID,
 		ReceiverDID:    receiverdid,
 		Amount:         req.TokenCount,
-		QuorumList:     cr.QuorumList,
+		QuorumList:     extractQuorumDID(cr.QuorumList),
 		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
 		TransTokenList: tokenListForExplorer,
 		Comments:       req.Comment,
@@ -551,7 +551,7 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 		SenderDID:     did,
 		ReceiverDID:   pinningNodeDID,
 		Amount:        req.TokenCount,
-		QuorumList:    cr.QuorumList,
+		QuorumList:    extractQuorumDID(cr.QuorumList),
 		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
 		Comments:      req.Comment,
 	}
@@ -561,4 +561,17 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 	msg := fmt.Sprintf("Pinning finished successfully in %v with trnxid %v", dif, td.TransactionID)
 	resp.Message = msg
 	return resp
+}
+
+func extractQuorumDID(quorumList []string) []string {
+	var quorumListDID []string
+	for _, quorum := range quorumList {
+		parts := strings.Split(quorum, ".")
+		if len(parts) > 1 {
+			quorumListDID = append(quorumListDID, parts[1])
+		} else {
+			quorumListDID = append(quorumListDID, parts[0])
+		}
+	}
+	return quorumListDID
 }
