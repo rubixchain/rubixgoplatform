@@ -204,24 +204,26 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	//it will initiate DIDQuorumc
 	switch dt.Type {
 	case did.LiteDIDMode:
-		dc := did.InitDIDQuorumLite(didStr, c.didDir, pwd)
-		if dc == nil {
-			c.log.Error("Failed to setup quorum")
+		if pvtKeyPwd == "" {
+			c.log.Error("Failed to setup lite quorum as privPWD is not privided")
+			return fmt.Errorf("failed to setup lite quorum, as privPWD is not provided")
+		}
+		quorum_dc := did.InitDIDQuorumLite(didStr, c.didDir, pvtKeyPwd)
+		if quorum_dc == nil {
+			c.log.Error("Failed to setup lite mode quorum")
 			return fmt.Errorf("failed to setup quorum")
 		}
-		c.qc[didStr] = dc
-		if pvtKeyPwd != "" {
-			dc := did.InitDIDLiteWithPassword(didStr, c.didDir, pvtKeyPwd)
-			if dc == nil {
-				c.log.Error("Failed to setup quorum as dc is nil")
-				return fmt.Errorf("failed to setup quorum")
-			}
-			c.pqc[didStr] = dc
+		c.qc[didStr] = quorum_dc
+		dc := did.InitDIDLiteWithPassword(didStr, c.didDir, pvtKeyPwd)
+		if dc == nil {
+			c.log.Error("Failed to setup quorum as dc is nil")
+			return fmt.Errorf("failed to setup quorum")
 		}
+		c.pqc[didStr] = dc
 	case did.BasicDIDMode:
 		dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
 		if dc == nil {
-			c.log.Error("Failed to setup quorum")
+			c.log.Error("Failed to setup basic mode quorum")
 			return fmt.Errorf("failed to setup quorum")
 		}
 		c.qc[didStr] = dc
