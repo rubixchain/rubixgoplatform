@@ -145,7 +145,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					TokenType: c.TokenType(FTString),
 				},
 			},
-			Comment: "FT generated at : " + time.Now().String(),
+			Comment: "FT generated at : " + time.Now().String() + " for FT Name : " + FTName,
 		}
 		tcb := &block.TokenChainBlock{
 			TransactionType: block.TokenGeneratedType,
