@@ -2,7 +2,9 @@ package did
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"image"
@@ -559,11 +561,36 @@ func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate, pubKey string) (string, 
 		return "", err
 	}
 
+	// Convert hex string back to bytes
+	pubKeyBytes, err := hex.DecodeString(pubKey)
+	if err != nil {
+		d.log.Error("Failed to decode hex string, err", err)
+	}
+
+	// It is important to save the pem encrypted public key, so that the quorums can use
+	// the existing sign-verification function, which includes pem decoding of public key
+	pemEncPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubKeyBytes})
 	//write public key into the temporary directory
-	err = util.FileWrite(dirName+"/public/"+PubKeyFileName, []byte(pubKey))
-		if err != nil {
-			return "", err
-		}
+	err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pemEncPub)
+	if err != nil {
+		return "", err
+	}
+
+	pubKeyTest, err := os.ReadFile(dirName + "/public/" + PubKeyFileName)
+	if err != nil {
+		return "", err
+	}
+
+	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKeyTest)
+	if err != nil {
+		d.log.Error("failed to decode pub key bytes")
+		return "", err
+	}
+	_, err = secp256k1.ParsePubKey(pubKeyByte)
+	if err != nil {
+		d.log.Error("failed to parse public key, err:", err)
+		return "", err
+	}
 
 	//passing the temp diroctory of public key file to add it to ipfs and exctract the hash
 	did, err := d.getDirHash(dirName + "/public/")
@@ -571,7 +598,7 @@ func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate, pubKey string) (string, 
 		return "", err
 	}
 
-	//create new directory with the name including newly created did, 
+	//create new directory with the name including newly created did,
 	newDIrName := d.dir + did
 	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
 	if err != nil {
@@ -585,7 +612,7 @@ func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate, pubKey string) (string, 
 		d.log.Error("failed to copy directory", "err", err)
 		return "", err
 	}
-	//delete the temporary directory 
+	//delete the temporary directory
 	os.RemoveAll(dirName)
 	t2 := time.Now()
 	dif := t2.Sub(t1)

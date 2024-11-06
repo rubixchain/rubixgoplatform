@@ -262,9 +262,9 @@ func (s *Server) APICreateDIDFromPubKey(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to parse input to create did from pub key", nil)
 	}
 
-	//provide required data to create a new lite mode did 
+	//provide required data to create a new lite mode did
 	didCreate := did.DIDCreate{
-		Type: did.LiteDIDMode,
+		Type:       did.LiteDIDMode,
 		PubKeyFile: "",
 	}
 
@@ -276,8 +276,8 @@ func (s *Server) APICreateDIDFromPubKey(req *ensweb.Request) *ensweb.Result {
 	}
 
 	// respond with the requested did along with the corr. public key
-	didResp := model.DIDFromPubKeyResponse {
-		DID: did,
+	didResp := model.DIDFromPubKeyResponse{
+		DID:    did,
 		PubKey: didReq.PubKey,
 	}
 	return s.RenderJSON(req, didResp, http.StatusOK)

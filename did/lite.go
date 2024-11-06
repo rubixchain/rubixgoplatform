@@ -2,8 +2,13 @@ package did
 
 import (
 	"bytes"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
+	"os"
 	"time"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -136,9 +141,21 @@ func (d *DIDLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) 
 }
 
 func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
-	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
+	privKey, err := os.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
-		return nil, err
+		fmt.Println("requesting signature from BIP wallet")
+		walletSignature, err := d.signRequest(hash)
+		if err != nil {
+			fmt.Println("failed sign request, err:", err)
+			return nil, err
+		}
+		fmt.Println("received signature:", walletSignature)
+
+		isValidSig, err := d.PvtVerify(hash, walletSignature)
+		if err != nil || !isValidSig {
+			fmt.Println("invalid sign data:", util.HexToStr(hash), "err:", err)
+		}
+		return walletSignature, nil
 	}
 
 	pwd, err := d.getPassword()
@@ -178,4 +195,57 @@ func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
+}
+
+// send DID request to rubix node
+func (d *DIDLite) signRequest(hash []byte) ([]byte, error) {
+	data := map[string]interface{}{
+		"data": util.HexToStr(hash),
+		"did":  d.did,
+	}
+	bodyJSON, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return nil, err
+	}
+	// port := string(20009)
+	url := "http://localhost:8080/sign"
+	req, err := http.NewRequest("GET", url, bytes.NewBuffer(bodyJSON))
+	if err != nil {
+		fmt.Println("Error creating HTTP request:", err)
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error sending HTTP request:", err)
+		resp.Body.Close()
+		return nil, err
+	}
+	defer resp.Body.Close()
+	fmt.Println("Response Status:", resp.Status)
+	data2, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error reading response body: %s\n", err)
+		return nil, err
+	}
+	// Process the data as needed
+	fmt.Println("Response Body in did request :", string(data2))
+
+	var response map[string]interface{}
+	err = json.Unmarshal(data2, &response)
+	if err != nil {
+		fmt.Println("Error unmarshaling response:", err)
+	}
+
+	signaturestr := response["signature"].(string)
+	signature, err := hex.DecodeString(signaturestr)
+	if err != nil {
+		fmt.Printf("failed to decode signature string, err: %v", err)
+		return nil, err
+	}
+	return signature, nil
 }

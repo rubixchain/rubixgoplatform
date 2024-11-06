@@ -93,6 +93,7 @@ const (
 	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
 	ValidateTokenCmd               string = "validatetoken"
+	CreateDIDFromPubKeyCmd         string = "createdidfrompubkey"
 )
 
 var commands = []string{VersionCmd,
@@ -148,6 +149,7 @@ var commands = []string{VersionCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
 	ValidateTokenCmd,
+	CreateDIDFromPubKeyCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -664,6 +666,8 @@ func Run(args []string) {
 		cmd.ValidateTokenchain()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
+	case CreateDIDFromPubKeyCmd:
+		cmd.CreateDIDFromPubKey()
 	default:
 		cmd.log.Error("Invalid command")
 	}
