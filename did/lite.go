@@ -209,7 +209,7 @@ func (d *DIDLite) signRequest(hash []byte) ([]byte, error) {
 		return nil, err
 	}
 	// port := string(20009)
-	url := "http://localhost:8080/sign"
+	url := "http://localhost:8081/sign"
 	req, err := http.NewRequest("GET", url, bytes.NewBuffer(bodyJSON))
 	if err != nil {
 		fmt.Println("Error creating HTTP request:", err)
