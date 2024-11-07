@@ -1327,6 +1327,6 @@ func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
 	if err == nil {
 		fmt.Println("removed hash successfully")
 	}
-	return c.l.RenderJSON(req, nil, http.StatusOK)
+	return c.l.RenderJSON(req, struct{}{}, http.StatusOK)
 
 }
