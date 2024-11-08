@@ -140,9 +140,9 @@ def did_on_same_quorum_server_transfer(config):
     did_9_A = get_did_by_alias(node_9_info, "did_nonquorum_a1_node9")
 
     for _, val in quorum_config.items():
-        add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_4, grpc_port_4)
-        add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_5, grpc_port_5)
-        add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_9, grpc_port_9)
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"]["did"], 4, server_port_4, grpc_port_4)
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"]["did"], 4, server_port_5, grpc_port_5)
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"]["did"], 4, server_port_9, grpc_port_9)
     
     print("------ Test Case (PASS): Transfer between DID's where either the Sender or Receiver are on a Quorum node ------\n")
   
