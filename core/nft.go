@@ -298,23 +298,39 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	latestBlock := c.w.GetLatestTokenBlock(executeReq.NFT, tokenType)
 	currentOwner := latestBlock.GetOwner()
 	c.log.Info("The current owner of the NFT is :", currentOwner)
+	
 	if currentOwner != executeReq.Owner {
 		c.log.Error("NFT not owned by the executor")
 		resp.Message = "NFT not owned by the executor"
 		return resp
 	}
-	currentNFTValue := executeReq.NFTValue
+	
 	if err != nil {
 		c.log.Error("Failed to retrieve NFT Value , ", err)
 		resp.Message = err.Error()
 		return resp
 	}
 	var receiver string
+	var currentNFTValue float64
+
+	// Empty Receiver indicates Self-Execution. Set the receiver to owner
+	// and pledge value is set to current NFT value
 	if executeReq.Receiver == "" {
+		nftToken, err := c.w.GetNFTToken(executeReq.NFT)
+		if err != nil {
+			errMsg := fmt.Sprintf("unable to fetch NFT info for NFT ID: %v, err: %v", executeReq.NFT, err)
+			c.log.Error(errMsg)
+			resp.Message = errMsg
+			return resp
+		}
+		
+		currentNFTValue = nftToken.TokenValue
 		receiver = executeReq.Owner
 	} else {
+		currentNFTValue = executeReq.NFTValue
 		receiver = executeReq.Receiver
 	}
+
 	nftInfoArray := make([]contract.TokenInfo, 0)
 	nftInfo := contract.TokenInfo{
 		Token:      executeReq.NFT,
