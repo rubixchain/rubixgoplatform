@@ -149,7 +149,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	var ti []contract.TokenInfo
 	var address string
 	var receiverAddress string
-	if cr.Mode == SmartContractDeployMode {
+	if cr.Mode == SmartContractDeployMode || cr.Mode == NFTDeployMode {
 		ti = sc.GetCommitedTokensInfo()
 		address = cr.DeployerPeerID + "." + sc.GetDeployerDID()
 	} else {

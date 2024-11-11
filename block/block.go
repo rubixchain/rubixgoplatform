@@ -42,6 +42,7 @@ const (
 	TCChildTokensKey        string = "11"
 	TCInitiatorSignatureKey string = "12"
 	TCEpochKey              string = "epoch"
+	TCNFTDataKey            string = "13"
 )
 
 const (
@@ -87,6 +88,8 @@ type TokenChainBlock struct {
 	TokenValue         float64             `json:"tokenValue"`
 	ChildTokens        []string            `json:"childTokens"`
 	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
+	NFT                []byte              `json:"nft"`
+	NFTData            string              `json:"nftData"`
 	Epoch              int                 `json:"epoch"`
 }
 
@@ -187,6 +190,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	}
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
+	}
+	if tcb.NFTData != "" {
+		ntcb[TCNFTDataKey] = tcb.NFTData
 	}
 	if tcb.InitiatorSignature != nil {
 		ntcb[TCInitiatorSignatureKey] = tcb.InitiatorSignature
@@ -777,6 +783,10 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 
 func (b *Block) GetSmartContractData() string {
 	return b.getBlkString(TCSmartContractDataKey)
+}
+
+func (b *Block) GetNFTData() string {
+	return b.getBlkString(TCNFTDataKey)
 }
 
 func (b *Block) GetSmartContractValue(t string) (float64, error) {

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -417,15 +418,38 @@ func (c *Core) CreateSCTempFolder() (string, error) {
 	return folderName, err
 }
 
-func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
+func (c *Core) CreateNFTTempFolder() (string, error) {
+	folderName := c.cfg.DirPath + "NFT/" + uuid.New().String()
+	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
+	return folderName, err
+}
 
-	scFolderName := c.cfg.DirPath + "SmartContract/" + smartContractName
-	err := os.Rename(tempFolderPath, scFolderName)
-	if err != nil {
-		c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
-		scFolderName = ""
+func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
+	scFolderName := filepath.Join(c.cfg.DirPath, "SmartContract", smartContractName)
+	info, _ := os.Stat(scFolderName)
+
+	// Check if the Smart Contract Folder exists
+	if info == nil {
+		// Directory not found, proceed to rename it
+		err := os.Rename(tempFolderPath, scFolderName)
+		if err != nil {
+			c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
+			return "", err
+		}
 	}
-	return scFolderName, err
+
+	return scFolderName, nil
+}
+
+func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error) {
+
+	nftFolderName := c.cfg.DirPath + "NFT/" + nft
+	err := os.Rename(tempFolderPath, nftFolderName)
+	if err != nil {
+		c.log.Error("Unable to rename ", tempFolderPath, " to ", nftFolderName, "error ", err)
+		nftFolderName = ""
+	}
+	return nftFolderName, err
 }
 
 func (c *Core) HandleQuorum(conn net.Conn) {
@@ -625,6 +649,23 @@ func (c *Core) FetchDID(did string) error {
 					return c.FetchDID(string(rb))
 				}
 			}
+		}
+	}
+	return err
+}
+
+func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
+	_, err := os.Stat(c.cfg.DirPath + "NFT/" + nftTokenHash)
+	if err != nil {
+		err = os.MkdirAll(c.cfg.DirPath+"NFT/"+nftTokenHash, os.ModeDir|os.ModePerm)
+		if err != nil {
+			c.log.Error("failed to create directory", "err", err)
+			return err
+		}
+		err = c.ipfs.Get(nftFolderHash, c.cfg.DirPath+"NFT/"+nftTokenHash)
+		if err != nil {
+			c.log.Error("failed to get NFT from IPFS", "err", err)
+			return err
 		}
 	}
 	return err
