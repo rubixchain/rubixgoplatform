@@ -183,12 +183,6 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		resp.Message = "Failed to create Consensus contract while deploying nft"
 		return resp
 	}
-	err = consensusContract.UpdateSignature(didCryptoLib)
-	if err != nil {
-		c.log.Error(err.Error())
-		resp.Message = err.Error()
-		return resp
-	}
 
 	consensusContractBlock := consensusContract.GetBlock()
 	if consensusContractBlock == nil {
@@ -347,13 +341,6 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		resp.Message = "Failed to create Consensus contract"
 		return resp
 	}
-	err = consensusContract.UpdateSignature(didCryptoLib)
-	if err != nil {
-		c.log.Error(err.Error())
-		resp.Message = err.Error()
-		return resp
-	}
-
 	consensusContractBlock := consensusContract.GetBlock()
 	if consensusContractBlock == nil {
 		c.log.Error("failed to create consensus contract block")

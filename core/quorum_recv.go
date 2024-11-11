@@ -594,16 +594,18 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		c.log.Debug("Executor did ", verifyDID)
 	}
 
-	dc, err := c.SetupForienDID(verifyDID, did)
-	if err != nil {
-		c.log.Error("Failed to get DID for verification", "err", err)
-		consensusReply.Message = "Failed to get DID for verification"
+	//initiate trans token block
+	nftBlock := block.InitBlock(consensusRequest.TransTokenBlock, nil, block.NoSignature())
+	if nftBlock == nil {
+		c.log.Error("Failed to do signature, invalid token chain block")
+		consensusReply.Message = "Failed to do signature, invalid token chanin block"
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
-	err = consensusContract.VerifySignature(dc)
+	//validate deployer/executor
+	response, err := c.ValidateTxnInitiator(nftBlock)
 	if err != nil {
-		c.log.Error("Failed to verify signature", "err", err)
-		consensusReply.Message = "Failed to verify signature"
+		c.log.Error("Failed to verify signature", "err", err, "msg", response.Message)
+		consensusReply.Message = response.Message
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
 
@@ -709,8 +711,15 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	}
 	c.log.Debug("Finished Tokenstate check")
 
-	qHash := util.CalculateHash(consensusContract.GetBlock(), "SHA3-256")
-	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	//get trans token block hash
+	blockHash, err := nftBlock.GetHash()
+	if err != nil {
+		c.log.Error("failed to get trans-block-hash for credit; err", err)
+		consensusReply.Message = err.Error()
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	//quorum's signature on block hash
+	qsb, ppb, err := qdc.Sign(blockHash)
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		consensusReply.Message = "Failed to get quorum signature"
@@ -721,6 +730,7 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	consensusReply.Message = "Consensus finished successfully"
 	consensusReply.ShareSig = qsb
 	consensusReply.PrivSig = ppb
+	consensusReply.Hash = blockHash
 	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 }
 
