@@ -67,18 +67,15 @@ func (w *Wallet) GetNFT(did string, nft string, lock bool) (*NFT, error) {
 	return &tkns, nil
 }
 
-func (w *Wallet) GetNFTToken(nft string) ([]NFT, error) {
+func (w *Wallet) GetNFTToken(nftID string) (*NFT, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
-	var tokens []NFT
-	w.log.Debug("nft=?", nft)
-	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nft)
+	var tokens *NFT
+
+	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nftID)
 	if err != nil {
-		w.log.Error("err", err)
+		w.log.Error(fmt.Sprintf("unable to find NFT Token %v", nftID))
 		return nil, err
-	}
-	if len(tokens) == 0 {
-		return nil, fmt.Errorf("no smart contract token is available to commit")
 	}
 
 	return tokens, nil
