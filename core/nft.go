@@ -493,8 +493,11 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 	if receiverPeerId == c.peerID || receiverPeerId == "" {
 		local = true
 	}
-
-	err = c.w.CreateNFT(&wallet.NFT{TokenID: fetchNFTRequest.NFT, DID: fetchNFTRequest.ReceiverDID, TokenStatus: 0, TokenValue: fetchNFTRequest.NFTValue}, local)
+	did := fetchNFTRequest.ReceiverDID
+	if did == "" {
+		did = nft.DID
+	}
+	err = c.w.CreateNFT(&wallet.NFT{TokenID: fetchNFTRequest.NFT, DID: did, TokenStatus: 0, TokenValue: fetchNFTRequest.NFTValue}, local)
 	if err != nil {
 		c.log.Error("Failed to create NFT", "err", err)
 		return basicResponse
