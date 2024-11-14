@@ -311,11 +311,6 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		resp.Message = "Sender and receiver cannot be same"
 		return resp
 	}
-	//Remove peerID.DID format
-	// if !strings.Contains(req.Sender, ".") || !strings.Contains(req.Receiver, ".") {
-	// 	resp.Message = "Sender and receiver address should be of the format PeerID.DID"
-	// 	return resp
-	// }
 	_, did, ok := util.ParseAddress(req.Sender)
 	if !ok {
 		resp.Message = "Invalid sender DID"
