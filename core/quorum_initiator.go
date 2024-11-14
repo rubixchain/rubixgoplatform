@@ -125,6 +125,16 @@ type SendTokenRequest struct {
 	FTInfo             model.FTInfo         `json:"ft_info"`
 }
 
+type SendFTRequest struct {
+	Address          string               `json:"peer_id"`
+	TokenInfo        []contract.TokenInfo `json:"token_info"`
+	TokenChainBlock  []byte               `json:"token_chain_block"`
+	QuorumList       []string             `json:"quorum_list"`
+	QuorumInfo       []QuorumDIDPeerMap   `json:"quorum_info"`
+	TransactionEpoch int                  `json:"transaction_epoch"`
+	FTInfo           model.FTInfo         `json:"ft_info"`
+}
+
 type PledgeReply struct {
 	model.BasicResponse
 	Tokens          []string  `json:"tokens"`
@@ -179,6 +189,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIAddUnpledgeDetails, "POST", c.addUnpledgeDetails)
 	c.l.AddRoute(APIRecoverPinnedRBT, "POST", c.recoverPinnedToken)
 	c.l.AddRoute(APIRequestSigningHash, "GET", c.requestSigningHash)
+	c.l.AddRoute(APISendFTToken, "POST", c.updateReceiverFTHandle)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
@@ -645,25 +656,26 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		return &td, pl, nil
 	case FTTrasnferMode:
+		// Connect to the receiver's peer
 		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID(), "")
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
 			return nil, nil, err
 		}
 		defer rp.Close()
-		sr := SendTokenRequest{
-			Address:            cr.SenderPeerID + "." + sc.GetSenderDID(),
-			TokenInfo:          ti,
-			TokenChainBlock:    nb.GetBlock(),
-			QuorumList:         cr.QuorumList,
-			TransactionEpoch:   cr.TransactionEpoch,
-			PinningServiceMode: false,
-			FTInfo:             cr.FTinfo,
+
+		// Prepare the send request with the necessary information
+		sr := SendFTRequest{
+			Address:          cr.SenderPeerID + "." + sc.GetSenderDID(),
+			TokenInfo:        ti,
+			TokenChainBlock:  nb.GetBlock(),
+			QuorumList:       cr.QuorumList,
+			TransactionEpoch: cr.TransactionEpoch,
+			FTInfo:           cr.FTinfo,
 		}
 
-		//fetching quorums' info from PeerDIDTable to share with the receiver
+		// Populate quorum details for each quorum in the QuorumList
 		for _, qrm := range sr.QuorumList {
-			//fetch peer id & did of the quorum
 			qpid, qdid, ok := util.ParseAddress(qrm)
 			if !ok {
 				c.log.Error("could not parse quorum address:", qrm)
@@ -697,8 +709,9 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
 		}
 
+		// Send the FT transfer request to the receiver
 		var br model.BasicResponse
-		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
+		err = rp.SendJSONRequest("POST", APISendFTToken, nil, &sr, &br, true)
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
 			return nil, nil, err
@@ -732,34 +745,35 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
 			if issueTypeInt == TokenChainNotSynced {
 				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
-				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
+				c.log.Debug("Token sync issue details updated:", syncIssueTokenDetails)
 				c.w.UpdateToken(syncIssueTokenDetails)
 				return nil, nil, errors.New(br.Message)
 			}
 		}
 		if !br.Status {
-			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
-			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
+			c.log.Error("Unable to send FT tokens to receiver", "msg", br.Message)
+			return nil, nil, fmt.Errorf("unable to send FT tokens to receiver, " + br.Message)
 		}
 
-		// br.Result will contain the new token state after sending tokens to receiver as a response to APISendReceiverToken
-		newtokenhashresult, ok := br.Result.([]interface{})
+		// Extract new token state hashes from response
+		newTokenHashResult, ok := br.Result.([]interface{})
 		if !ok {
-			c.log.Error("Type assertion to string failed")
+			c.log.Error("Failed to assert type for new token hashes")
 			return nil, nil, fmt.Errorf("Type assertion to string failed")
 		}
-		var newtokenhashes []string
-		for i, newTokenHash := range newtokenhashresult {
-			statehash, ok := newTokenHash.(string)
+
+		var newTokenHashes []string
+		for i, newTokenHash := range newTokenHashResult {
+			stateHash, ok := newTokenHash.(string)
 			if !ok {
 				c.log.Error("Type assertion to string failed at index", i)
-				return nil, nil, fmt.Errorf("Type assertion to string failed at index", i)
+				return nil, nil, fmt.Errorf("Type assertion to string failed at index %d", i)
 			}
-			newtokenhashes = append(newtokenhashes, statehash)
+			newTokenHashes = append(newTokenHashes, stateHash)
 		}
 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newTokenHashes, tid)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, pledgeFinalityError

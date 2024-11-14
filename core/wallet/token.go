@@ -729,20 +729,103 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	return updatedtokenhashes, nil
 }
 
-// func (w *Wallet) TokenStateHashUpdate(tokenwithtokenhash []string) {
-// 	w.l.Lock()
-// 	defer w.l.Unlock()
-// 	var t Token
-// 	for _, val := range tokenwithtokenhash {
-// 		token := strings.Split(val, ".")[0]
-// 		tokenstatehash := strings.Split(val, ".")[1]
-// 		_ = w.s.Read(TokenStorage, &t, "token_id=?", token)
-// 		t.TokenStateHash = tokenstatehash
-// 		_ = w.s.Update(TokenStorage, &t, "token_id=?", token)
-// 	}
+// need to update in such a way that only for FTs
+func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell, ftInfo FTToken) ([]string, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	// TODO :: Needs to be address
+	err := w.CreateTokenBlock(b)
+	if err != nil {
+		return nil, err
+	}
 
-// }
+	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
+	//quorums using pledgefinality function, to be added to TokenStateHash Table
+	var updatedtokenhashes []string = make([]string, 0)
+	var tokenHashMap map[string]string = make(map[string]string)
 
+	for _, info := range ti {
+		t := info.Token
+		b := w.GetLatestTokenBlock(info.Token, info.TokenType)
+		blockId, _ := b.GetBlockID(t)
+		tokenIDTokenStateData := t + blockId
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
+		tokenIDTokenStateHash, _ := ipfsShell.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		updatedtokenhashes = append(updatedtokenhashes, tokenIDTokenStateHash)
+		tokenHashMap[t] = tokenIDTokenStateHash
+	}
+
+	// Handle each token
+	for _, tokenInfo := range ti {
+		var FTInfo FTToken
+		err := w.s.Read(FTTokenStorage, &FTInfo, "token_id=?", tokenInfo.Token)
+		if err != nil || FTInfo.TokenID == "" {
+			// Token doesn't exist, proceed to handle it
+			dir := util.GetRandString()
+			if err := util.CreateDir(dir); err != nil {
+				w.log.Error("Failed to create directory", "err", err)
+				return nil, err
+			}
+			defer os.RemoveAll(dir)
+
+			// Get the token
+			if err := w.Get(tokenInfo.Token, did, OwnerRole, dir); err != nil {
+				w.log.Error("Failed to get token", "err", err)
+				return nil, err
+			}
+			tt := tokenInfo.TokenType
+			blk := w.GetGenesisTokenBlock(tokenInfo.Token, tt)
+			if blk == nil {
+				w.log.Error("failed to get gensis block for Parent DID updation, invalid token chain")
+				return nil, err
+			}
+			FTOwner := blk.GetOwner()
+			// Create new token entry
+			FTInfo = FTToken{
+				TokenID:    tokenInfo.Token,
+				TokenValue: tokenInfo.TokenValue,
+				CreatorDID: FTOwner,
+			}
+
+			err = w.s.Write(FTTokenStorage, &FTInfo)
+			if err != nil {
+				return nil, err
+			}
+		}
+		// Update token status and pin tokens
+		tokenStatus := TokenIsFree
+		role := OwnerRole
+		ownerdid := did
+		if pinningServiceMode {
+			tokenStatus = TokenIsPinnedAsService
+			role = PinningRole
+			ownerdid = b.GetOwner()
+		}
+
+		// Update token status
+		FTInfo.FTName = ftInfo.FTName
+		FTInfo.DID = ownerdid
+		FTInfo.TokenStatus = tokenStatus
+		FTInfo.TransactionID = b.GetTid()
+		FTInfo.TokenStateHash = tokenHashMap[tokenInfo.Token]
+
+		err = w.s.Update(FTTokenStorage, &FTInfo, "token_id=?", tokenInfo.Token)
+		if err != nil {
+			return nil, err
+		}
+		senderAddress := senderPeerId + "." + b.GetSenderDID()
+		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
+		//Pinnig the whole tokens and pat tokens
+		ok, err := w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("failed to pin token")
+		}
+	}
+	return updatedtokenhashes, nil
+}
 func (w *Wallet) CommitTokens(did string, rbtTokens []string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
