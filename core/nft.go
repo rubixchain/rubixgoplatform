@@ -526,15 +526,18 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 	return basicResponse
 }
 
-func (c *Core) GetAllNFT(did string) model.NFTList {
+func (c *Core) GetAllNFT() model.NFTList {
 	response := model.NFTList{
 		BasicResponse: model.BasicResponse{
 			Status: false,
 		},
 	}
-	nftList := c.w.GetAllNFT(did)
-	if nftList == nil {
-		c.log.Error("Failed to get NFT list", "err", "No nft belongs to the owner", did)
+	nftList, err := c.w.GetAllNFT()
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to get NFT list", "err", err)
+		c.log.Error(errorMsg)
+		response.Message = errorMsg
+		return response
 	}
 	nftDetails := make([]model.NFTInfo, 0)
 	for _, nft := range nftList {

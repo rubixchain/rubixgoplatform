@@ -772,17 +772,11 @@ paths:
       summary: Initiate Self Transfer
       tags:
       - Account
-  /api/list-nfts-by-did:
+  /api/list-nfts:
     get:
       consumes:
       - application/json
-      description: This API will get all NFTs of the DID
-      parameters:
-      - description: User DID
-        in: query
-        name: did
-        required: true
-        type: string
+      description: This API will get all NFTs deployed on the node
       produces:
       - application/json
       responses:

@@ -856,9 +856,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/list-nfts-by-did": {
+        "/api/list-nfts": {
             "get": {
-                "description": "This API will get all NFTs of the DID",
+                "description": "This API will get all NFTs deployed on the node",
                 "consumes": [
                     "application/json"
                 ],
@@ -869,15 +869,6 @@ const docTemplate = `{
                     "NFT"
                 ],
                 "summary": "Get ALL NFTs",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User DID",
-                        "name": "did",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",

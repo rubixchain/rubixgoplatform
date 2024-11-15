@@ -154,16 +154,14 @@ func (s *Server) APIDeployNFT(req *ensweb.Request) *ensweb.Result {
 
 // ShowAccount godoc
 // @Summary      Get ALL NFTs
-// @Description  This API will get all NFTs of the DID
+// @Description  This API will get all NFTs deployed on the node
 // @Tags         NFT
 // @Accept       json
 // @Produce      json
-// @Param        did      	   query      string  true  "User DID"
 // @Success      200  {object}  model.NFTList
-// @Router       /api/list-nfts-by-did [get]
+// @Router       /api/list-nfts [get]
 func (s *Server) APIGetAllNFT(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuerry(req, "did")
-	resp := s.c.GetAllNFT(did)
+	resp := s.c.GetAllNFT()
 	return s.RenderJSON(req, resp, http.StatusOK)
 }
 
