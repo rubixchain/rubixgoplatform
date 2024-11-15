@@ -7,6 +7,22 @@ definitions:
       status:
         type: boolean
     type: object
+  model.DIDResponse:
+    properties:
+      message:
+        type: string
+      result:
+        $ref: '#/definitions/model.DIDResult'
+      status:
+        type: boolean
+    type: object
+  model.DIDResult:
+    properties:
+      did:
+        type: string
+      peer_id:
+        type: string
+    type: object
   model.PledgedTokenStateDetails:
     properties:
       did:
@@ -335,6 +351,28 @@ paths:
       summary: Create NFT
       tags:
       - NFT
+  /api/createdid:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 'This API creates a new DID of a specified type. Supported types
+        include: Type 4 (BIP39 DID) Example for did_config: {"type":4,"dir":"path/to/directory\","config":"configuration_string","root_did":true,"master_did":"master_did_example","secret":"secret_string","priv_pwd":"mypassword","quorum_pwd":"quorum_password","img_file":"image_file_path","did_img_file":"did_image_file_path","pub_img_file":"public_image_file_path","priv_img_file":"private_image_file_path","pub_key_file":"public_key_file_path","priv_key_file":"private_key_file_path","quorum_pub_key_file":"quorum_public_key_file_path","quorum_priv_key_file":"quorum_private_key_file_path","mnemonic_file":"mnemonic_file_path","childPath":1}"'
+      parameters:
+      - description: 'DID Configuration in JSON format. Example: {'
+        in: formData
+        name: did_config
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.DIDResponse'
+      summary: Create New DID
+      tags:
+      - Basic
   /api/deploy-nft:
     post:
       consumes:
@@ -385,11 +423,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: This API will add a new block which indicates the transfer of ownership
-        of NFT
+      description: This API will add a new block which indicates either transfer of
+        ownership of NFT or internal state change through self-execution
       parameters:
-      - description: Transfer the ownership of particular NFT or self-execution with
-          some data
+      - description: 'Transfer the ownership of particular NFT or self-execution with
+          some data if ''receiver'' is empty '
         in: body
         name: input
         required: true
