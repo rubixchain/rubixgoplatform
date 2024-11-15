@@ -62,3 +62,14 @@ type NewNFTEvent struct {
 	Type         int    `json:"type"`
 	NFTBlockHash string `json:"nftBlockHash"`
 }
+
+type NFTInfo struct {
+	NFTId string  `json:"nft"`
+	Owner string  `json:"owner_did"`
+	Value float64 `json:"nft_value"`
+}
+
+type NFTList struct {
+	BasicResponse
+	NFTs []NFTInfo `json:"nfts"`
+}

@@ -7,6 +7,27 @@ definitions:
       status:
         type: boolean
     type: object
+  model.NFTInfo:
+    properties:
+      nft:
+        type: string
+      nft_value:
+        type: number
+      owner_did:
+        type: string
+    type: object
+  model.NFTList:
+    properties:
+      message:
+        type: string
+      nfts:
+        items:
+          $ref: '#/definitions/model.NFTInfo'
+        type: array
+      result: {}
+      status:
+        type: boolean
+    type: object
   model.PledgedTokenStateDetails:
     properties:
       did:
@@ -385,11 +406,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: This API will add a new block which indicates the transfer of ownership
-        of NFT
+      description: This API will add a new block which indicates either transfer of
+        ownership of NFT or internal state change through self-execution
       parameters:
-      - description: Transfer the ownership of particular NFT or self-execution with
-          some data
+      - description: 'Transfer the ownership of particular NFT or self-execution with
+          some data if ''receiver'' is empty '
         in: body
         name: input
         required: true
@@ -751,6 +772,27 @@ paths:
       summary: Initiate Self Transfer
       tags:
       - Account
+  /api/list-nfts-by-did:
+    get:
+      consumes:
+      - application/json
+      description: This API will get all NFTs of the DID
+      parameters:
+      - description: User DID
+        in: query
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.NFTList'
+      summary: Get ALL NFTs
+      tags:
+      - NFT
   /api/recover-token:
     post:
       consumes:

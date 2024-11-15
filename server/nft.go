@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -157,13 +158,14 @@ func (s *Server) APIDeployNFT(req *ensweb.Request) *ensweb.Result {
 // @Tags         NFT
 // @Accept       json
 // @Produce      json
-// @Success      200  {object}  model.NFTTokens
-// @Router       /api/getallnft [post]
-// func (s *Server) APIGetAllNFT(req *ensweb.Request) *ensweb.Result {
-// 	did := s.GetQuerry(req, "did")
-// 	resp := s.c.GetAllNFT(did)
-// 	return s.RenderJSON(req, resp, http.StatusOK)
-// }
+// @Param        did      	   query      string  true  "User DID"
+// @Success      200  {object}  model.NFTList
+// @Router       /api/list-nfts-by-did [get]
+func (s *Server) APIGetAllNFT(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "did")
+	resp := s.c.GetAllNFT(did)
+	return s.RenderJSON(req, resp, http.StatusOK)
+}
 
 // ShowAccount godoc
 // @Summary      Add NFTs
