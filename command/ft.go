@@ -24,21 +24,18 @@ func (cmd *Command) createFT() {
 		return
 	}
 	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, cmd.rbtAmount)
-	if strings.Contains(fmt.Sprint(err), "no records found") || strings.Contains(br.Message, "no records found") {
-		cmd.log.Error("Failed to create FT, No RBT available to create FT")
-		return
-	}
 	if err != nil {
+		if strings.Contains(fmt.Sprint(err), "no records found") || strings.Contains(br.Message, "no records found") {
+			cmd.log.Error("Failed to create FT, No RBT available to create FT")
+			return
+		}
 		cmd.log.Error("Failed to create FT", "err", err)
 		return
 	}
-	if !br.Status {
-		cmd.log.Error("Failed to create FT", "msg", br.Message)
-		return
-	}
+
 	msg, status := cmd.SignatureResponse(br)
-	if !status {
-		cmd.log.Error("Failed to create FT, " + msg)
+	if !status || !br.Status {
+		cmd.log.Error("Failed to create FT, " + msg + ", Response message: " + br.Message)
 		return
 	}
 	cmd.log.Info("FT created successfully")
