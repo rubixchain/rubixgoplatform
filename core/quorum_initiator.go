@@ -34,7 +34,7 @@ const (
 	SelfTransferMode
 	PinningServiceMode
 	NFTExecuteMode
-	FTTrasnferMode
+	FTTransferMode
 )
 const (
 	AlphaQuorumType int = iota
@@ -346,7 +346,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		reqPledgeTokens = 1
 	case SmartContractExecuteMode, NFTExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
-	case FTTrasnferMode:
+	case FTTransferMode:
 		ti := sc.GetTransTokenInfo()
 		for i := range ti {
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
@@ -655,7 +655,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		return &td, pl, nil
-	case FTTrasnferMode:
+	case FTTransferMode:
 		// Connect to the receiver's peer
 		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID(), "")
 		if err != nil {

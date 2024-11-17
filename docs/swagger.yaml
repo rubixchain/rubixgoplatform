@@ -85,12 +85,12 @@ definitions:
     properties:
       did:
         type: string
-      ftcount:
+      ft_count:
         type: integer
-      ftname:
+      ft_name:
         type: string
-      tokencount:
-        type: number
+      token_count:
+        type: integer
     type: object
   server.DIDPeerMapTemp:
     properties:
@@ -232,22 +232,22 @@ definitions:
     type: object
   server.TransferFTReqSwaggoInput:
     properties:
-      FTCount:
-        type: integer
-      FTName:
-        type: string
       comment:
         type: string
       creatorDID:
         type: string
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
       password:
         type: string
+      quorum_type:
+        type: integer
       receiver:
         type: string
       sender:
         type: string
-      type:
-        type: integer
     type: object
 info:
   contact:
@@ -809,7 +809,7 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
-  /api/initiate-ft-tranfer:
+  /api/initiate-ft-transfer:
     post:
       consumes:
       - application/json

@@ -23,7 +23,7 @@ func (cmd *Command) createFT() {
 		cmd.log.Error("FT Name can't be empty")
 		return
 	}
-	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, cmd.rbtAmount)
+	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, int(cmd.rbtAmount))
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") || strings.Contains(br.Message, "no records found") {
 			cmd.log.Error("Failed to create FT, No RBT available to create FT")
@@ -76,7 +76,7 @@ func (cmd *Command) transferFT() {
 		Sender:     cmd.senderAddr,
 		FTName:     cmd.ftName,
 		FTCount:    cmd.ftCount,
-		Type:       cmd.transType,
+		QuorumType: cmd.transType,
 		Comment:    cmd.transComment,
 		CreatorDID: cmd.creatorDID,
 	}

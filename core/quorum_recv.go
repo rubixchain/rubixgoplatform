@@ -699,7 +699,7 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	case NFTExecuteMode:
 		c.log.Info("NFT execute consensus started")
 		return c.quorumNFTConsensus(req, did, qdc, &cr)
-	case FTTrasnferMode:
+	case FTTransferMode:
 		c.log.Debug("FT consensus started")
 		return c.quorumRBTConsensus(req, did, qdc, &cr)
 	default:

@@ -428,9 +428,9 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		return resp
 	}
 	cr := &ConensusRequest{
-		Mode:           FTTrasnferMode,
+		Mode:           FTTransferMode,
 		ReqID:          uuid.New().String(),
-		Type:           req.Type,
+		Type:           req.QuorumType,
 		SenderPeerID:   c.peerID,
 		ReceiverPeerID: rpeerid,
 		ContractBlock:  sc.GetBlock(),
@@ -454,7 +454,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		SenderDID:   did,
 		ReceiverDID: rdid,
 		Amount:      float64(req.FTCount),
-		TrasnType:   req.Type,
+		TrasnType:   req.QuorumType,
 		TokenIDs:    FTTokenIDs,
 		QuorumList:  cr.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),

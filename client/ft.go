@@ -7,7 +7,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
-func (c *Client) CreateFT(did string, ftName string, ftCount int, wholeToken float64) (*model.BasicResponse, error) {
+func (c *Client) CreateFT(did string, ftName string, ftCount int, wholeToken int) (*model.BasicResponse, error) {
 	createFTReq := model.CreateFTReq{
 		DID:        did,
 		FTName:     ftName,

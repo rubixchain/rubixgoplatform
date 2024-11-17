@@ -1,19 +1,19 @@
 package model
 
 type CreateFTReq struct {
-	DID        string  `json:"did"`
-	FTName     string  `json:"ftname"`
-	FTCount    int     `json:"ftcount"`
-	TokenCount float64 `json:"tokencount"`
+	DID        string `json:"did"`
+	FTName     string `json:"ft_name"`
+	FTCount    int    `json:"ft_count"`
+	TokenCount int    `json:"token_count"`
 }
 
 type TransferFTReq struct {
 	Receiver   string `json:"receiver"`
 	Sender     string `json:"sender"`
-	FTName     string `json:"FTName"`
-	FTCount    int    `json:"FTCount"`
+	FTName     string `json:"ft_name"`
+	FTCount    int    `json:"ft_count"`
 	Comment    string `json:"comment"`
-	Type       int    `json:"type"`
+	QuorumType int    `json:"quorum_type"`
 	Password   string `json:"password"`
 	CreatorDID string `json:"creatorDID"`
 }

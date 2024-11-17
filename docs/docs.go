@@ -849,7 +849,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/initiate-ft-tranfer": {
+        "/api/initiate-ft-transfer": {
             "post": {
                 "description": "This API endpoint will initiate transfer of FTs.",
                 "consumes": [
@@ -1364,14 +1364,14 @@ const docTemplate = `{
                 "did": {
                     "type": "string"
                 },
-                "ftcount": {
+                "ft_count": {
                     "type": "integer"
                 },
-                "ftname": {
+                "ft_name": {
                     "type": "string"
                 },
-                "tokencount": {
-                    "type": "number"
+                "token_count": {
+                    "type": "integer"
                 }
             }
         },
@@ -1592,29 +1592,29 @@ const docTemplate = `{
         "server.TransferFTReqSwaggoInput": {
             "type": "object",
             "properties": {
-                "FTCount": {
-                    "type": "integer"
-                },
-                "FTName": {
-                    "type": "string"
-                },
                 "comment": {
                     "type": "string"
                 },
                 "creatorDID": {
                     "type": "string"
                 },
+                "ft_count": {
+                    "type": "integer"
+                },
+                "ft_name": {
+                    "type": "string"
+                },
                 "password": {
                     "type": "string"
+                },
+                "quorum_type": {
+                    "type": "integer"
                 },
                 "receiver": {
                     "type": "string"
                 },
                 "sender": {
                     "type": "string"
-                },
-                "type": {
-                    "type": "integer"
                 }
             }
         }

@@ -11,19 +11,19 @@ import (
 )
 
 type CreateFTReqSwaggoInput struct {
-	DID        string  `json:"did"`
-	FTName     string  `json:"ftname"`
-	FTCount    int     `json:"ftcount"`
-	TokenCount float64 `json:"tokencount"`
+	DID        string `json:"did"`
+	FTName     string `json:"ft_name"`
+	FTCount    int    `json:"ft_count"`
+	TokenCount int    `json:"token_count"`
 }
 
 type TransferFTReqSwaggoInput struct {
 	Receiver   string `json:"receiver"`
 	Sender     string `json:"sender"`
-	FTName     string `json:"FTName"`
-	FTCount    int    `json:"FTCount"`
+	FTName     string `json:"ft_name"`
+	FTCount    int    `json:"ft_count"`
 	Comment    string `json:"comment"`
-	Type       int    `json:"type"`
+	QuorumType int    `json:"quorum_type"`
 	Password   string `json:"password"`
 	CreatorDID string `json:"creatorDID"`
 }
@@ -60,7 +60,7 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 // @Produce      json
 // @Param        input body TransferFTReqSwaggoInput true "Transfer FT"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/initiate-ft-tranfer [post]
+// @Router       /api/initiate-ft-transfer [post]
 func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.TransferFTReq
 	err := s.ParseJSON(req, &rbtReq)
