@@ -55,16 +55,12 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 
 	// Validate input parameters
-	if numFTs <= 0 {
+	switch {
+	case numFTs <= 0:
 		return fmt.Errorf("number of tokens to create must be greater than zero")
-	}
-	if numWholeTokens <= 0 {
+	case numWholeTokens <= 0:
 		return fmt.Errorf("number of whole tokens must be a positive integer")
-	}
-	if numWholeTokens <= 0 {
-		return fmt.Errorf("number of whole tokens must be greater than zero")
-	}
-	if numFTs > int(numWholeTokens*1000) {
+	case numFTs > int(numWholeTokens*1000):
 		return fmt.Errorf("max allowed FT count is 1000 for 1 RBT")
 	}
 
