@@ -544,7 +544,7 @@ func (w *Wallet) FTTokensTransffered(did string, ti []contract.TokenInfo, b *blo
 	}
 	return nil
 }
-func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell, ftInfo FTToken) ([]string, error) {
+func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell) ([]string, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
@@ -571,166 +571,80 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 
 	// Handle each token
 	for _, tokenInfo := range ti {
-		if tokenInfo.TokenType == 10 {
-			var FTInfo FTToken
-			err := w.s.Read(FTTokenStorage, &FTInfo, "token_id=?", tokenInfo.Token)
-			if err != nil || FTInfo.TokenID == "" {
-				// Token doesn't exist, proceed to handle it
-				dir := util.GetRandString()
-				if err := util.CreateDir(dir); err != nil {
-					w.log.Error("Failed to create directory", "err", err)
-					return nil, err
-				}
-				defer os.RemoveAll(dir)
-
-				// Get the token
-				if err := w.Get(tokenInfo.Token, did, OwnerRole, dir); err != nil {
-					w.log.Error("Failed to get token", "err", err)
-					return nil, err
-				}
-				tt := tokenInfo.TokenType
-				blk := w.GetGenesisTokenBlock(tokenInfo.Token, tt)
-				if blk == nil {
-					w.log.Error("failed to get gensis block for Parent DID updation, invalid token chain")
-					return nil, err
-				}
-				FTOwner := blk.GetOwner()
-				// Create new token entry
-				FTInfo = FTToken{
-					TokenID:    tokenInfo.Token,
-					TokenValue: tokenInfo.TokenValue,
-					CreatorDID: FTOwner,
-				}
-
-				err = w.s.Write(FTTokenStorage, &FTInfo)
-				if err != nil {
-					return nil, err
-				}
-			}
-			// Update token status and pin tokens
-			tokenStatus := TokenIsFree
-			role := OwnerRole
-			ownerdid := did
-			if pinningServiceMode {
-				tokenStatus = TokenIsPinnedAsService
-				role = PinningRole
-				ownerdid = b.GetOwner()
-			}
-
-			// Update token status
-			FTInfo.FTName = ftInfo.FTName
-			FTInfo.DID = ownerdid
-			FTInfo.TokenStatus = tokenStatus
-			FTInfo.TransactionID = b.GetTid()
-			FTInfo.TokenStateHash = tokenHashMap[tokenInfo.Token]
-
-			err = w.s.Update(FTTokenStorage, &FTInfo, "token_id=?", tokenInfo.Token)
-			if err != nil {
+		// Check if token already exists
+		var t Token
+		err := w.s.Read(TokenStorage, &t, "token_id=?", tokenInfo.Token)
+		if err != nil || t.TokenID == "" {
+			// Token doesn't exist, proceed to handle it
+			dir := util.GetRandString()
+			if err := util.CreateDir(dir); err != nil {
+				w.log.Error("Failed to create directory", "err", err)
 				return nil, err
 			}
-			senderAddress := senderPeerId + "." + b.GetSenderDID()
-			receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-			//Pinnig the whole tokens and pat tokens
-			ok, err := w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue)
-			if err != nil {
+			defer os.RemoveAll(dir)
+
+			// Get the token
+			if err := w.Get(tokenInfo.Token, did, OwnerRole, dir); err != nil {
+				w.log.Error("Failed to get token", "err", err)
 				return nil, err
 			}
-			if !ok {
-				return nil, fmt.Errorf("failed to pin token")
-			}
-		} else {
-			// Check if token already exists
-			var t Token
-			err := w.s.Read(TokenStorage, &t, "token_id=?", tokenInfo.Token)
-			if err != nil || t.TokenID == "" {
-				// Token doesn't exist, proceed to handle it
-				dir := util.GetRandString()
-				if err := util.CreateDir(dir); err != nil {
-					w.log.Error("Failed to create directory", "err", err)
-					return nil, err
-				}
-				defer os.RemoveAll(dir)
 
-				// Get the token
-				if err := w.Get(tokenInfo.Token, did, OwnerRole, dir); err != nil {
-					w.log.Error("Failed to get token", "err", err)
-					return nil, err
-				}
-
-				// Get parent token details
-				var parentTokenID string
-				gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
-				if gb != nil {
-					parentTokenID, _, _ = gb.GetParentDetials(tokenInfo.Token)
-				}
-
-				// Create new token entry
-				t = Token{
-					TokenID:       tokenInfo.Token,
-					TokenValue:    tokenInfo.TokenValue,
-					ParentTokenID: parentTokenID,
-					DID:           tokenInfo.OwnerDID,
-				}
-
-				err = w.s.Write(TokenStorage, &t)
-				if err != nil {
-					return nil, err
-				}
-			}
-			// Update token status and pin tokens
-			tokenStatus := TokenIsFree
-			role := OwnerRole
-			ownerdid := did
-			if pinningServiceMode {
-				tokenStatus = TokenIsPinnedAsService
-				role = PinningRole
-				ownerdid = b.GetOwner()
+			// Get parent token details
+			var parentTokenID string
+			gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
+			if gb != nil {
+				parentTokenID, _, _ = gb.GetParentDetials(tokenInfo.Token)
 			}
 
-			// Update token status
-			t.DID = ownerdid
-			t.TokenStatus = tokenStatus
-			t.TransactionID = b.GetTid()
-			t.TokenStateHash = tokenHashMap[tokenInfo.Token]
+			// Create new token entry
+			t = Token{
+				TokenID:       tokenInfo.Token,
+				TokenValue:    tokenInfo.TokenValue,
+				ParentTokenID: parentTokenID,
+				DID:           tokenInfo.OwnerDID,
+			}
 
-			err = w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token)
+			err = w.s.Write(TokenStorage, &t)
 			if err != nil {
 				return nil, err
-			}
-			senderAddress := senderPeerId + "." + b.GetSenderDID()
-			receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-			//Pinnig the whole tokens and pat tokens
-			ok, err := w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue)
-			if err != nil {
-				return nil, err
-			}
-			if !ok {
-				return nil, fmt.Errorf("failed to pin token")
 			}
 		}
+		// Update token status and pin tokens
+		tokenStatus := TokenIsFree
+		role := OwnerRole
+		ownerdid := did
+		if pinningServiceMode {
+			tokenStatus = TokenIsPinnedAsService
+			role = PinningRole
+			ownerdid = b.GetOwner()
+		}
+
+		// Update token status
+		t.DID = ownerdid
+		t.TokenStatus = tokenStatus
+		t.TransactionID = b.GetTid()
+		t.TokenStateHash = tokenHashMap[tokenInfo.Token]
+
+		err = w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token)
+		if err != nil {
+			return nil, err
+		}
+		senderAddress := senderPeerId + "." + b.GetSenderDID()
+		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
+		//Pinnig the whole tokens and pat tokens
+		ok, err := w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("failed to pin token")
+		}
 	}
-	// for i := range pt {
-	// 	var t Token
-	// 	err := w.s.Read(PartTokenStorage, &t, "did=? AND token_id=?", did, pt[i])
-	// 	if err != nil {
-	// 		t = Token{
-	// 			TokenID: wt[i],
-	// 			DID:     did,
-	// 		}
-	// 	}
-	// 	ha, ok := tcb[TCBlockHashKey]
-	// 	if !ok {
-	// 		return fmt.Errorf("invalid token chain block")
-	// 	}
-	// 	t.TokenChainID = ha.(string)
-	// 	t.TokenStatus = TokenIsTransferred
-	// 	w.AddTokenBlock(pt[i], tcb)
-	// }
 	return updatedtokenhashes, nil
 }
 
 // need to update in such a way that only for FTs
-func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell, ftInfo FTToken) ([]string, error) {
+func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, ipfsShell *ipfsnode.Shell, ftInfo FTToken) ([]string, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
@@ -796,11 +710,6 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 		tokenStatus := TokenIsFree
 		role := OwnerRole
 		ownerdid := did
-		if pinningServiceMode {
-			tokenStatus = TokenIsPinnedAsService
-			role = PinningRole
-			ownerdid = b.GetOwner()
-		}
 
 		// Update token status
 		FTInfo.FTName = ftInfo.FTName

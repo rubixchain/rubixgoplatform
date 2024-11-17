@@ -674,7 +674,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			FTInfo:           cr.FTinfo,
 		}
 
-		// Populate quorum details for each quorum in the QuorumList
+		// Populate quorum details for each quorum in the QuorumList to send to receiver
 		for _, qrm := range sr.QuorumList {
 			qpid, qdid, ok := util.ParseAddress(qrm)
 			if !ok {
@@ -1069,7 +1069,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		// Self update for self transfer tokens
-		updatedTokenHashes, err := c.updateReceiverToken(selfAddress, "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, cr.TransactionEpoch, false, nil)
+		updatedTokenHashes, err := c.updateReceiverToken(selfAddress, "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, cr.TransactionEpoch, false)
 		if err != nil {
 			errMsg := fmt.Errorf("failed while update of self transfer tokens, err: %v", err)
 			c.log.Error(errMsg.Error())

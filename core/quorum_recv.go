@@ -798,8 +798,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) updateReceiverToken(
 	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
-	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool, ftinfo *model.FTInfo,
-
+	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool,
 ) ([]string, error) {
 	var receiverPeerId string = ""
 	var receiverDID string = ""
@@ -912,16 +911,10 @@ func (c *Core) updateReceiverToken(
 		}
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
-	var FT wallet.FTToken
-	FT.FTName = ftinfo.FTName
-	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs, FT)
+	updatedTokenStateHashes, err := c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
-	if FT != (wallet.FTToken{}) {
-		c.updateFTTable(receiverDID)
-	}
-
 	sc := contract.InitContract(b.GetSmartContract(), nil)
 	if sc == nil {
 		return nil, fmt.Errorf("Failed to update token status, missing smart contract")
@@ -982,7 +975,6 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 		sr.QuorumInfo,
 		sr.TransactionEpoch,
 		sr.PinningServiceMode,
-		&sr.FTInfo,
 	)
 	if err != nil {
 		c.log.Error(err.Error())
@@ -1008,7 +1000,6 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		c.log.Error("Failed to initialize block from tokenChainBlock. Check tokenChainBlock structure.")
 		return nil, fmt.Errorf("invalid token chain block")
 	}
-	fmt.Println("Block initialized successfully:", b)
 	var senderPeer *ipfsport.Peer
 	var err error
 	senderPeer, err = c.getPeer(senderAddress, "")
@@ -1092,7 +1083,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	}
 	var FT wallet.FTToken
 	FT.FTName = ftinfo.FTName
-	updatedTokenStateHashes, err := c.w.FTTokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, false, c.ipfs, FT)
+	updatedTokenStateHashes, err := c.w.FTTokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, c.ipfs, FT)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
