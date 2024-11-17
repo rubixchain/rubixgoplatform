@@ -47,7 +47,8 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, createFTReq.TokenCount)
+	rbtAmount := int(createFTReq.TokenCount)
+	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, rbtAmount)
 	return s.didResponse(req, req.ID)
 }
 

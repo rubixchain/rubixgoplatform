@@ -18,7 +18,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken float64) {
+func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int) {
 	err := c.createFTs(reqID, ftname, ftcount, wholeToken, did)
 	br := model.BasicResponse{
 		Status:  true,
@@ -36,7 +36,7 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 	channel.OutChan <- &br
 }
 
-func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens float64, did string) error {
+func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens int, did string) error {
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		c.log.Error("Failed to setup DID")
@@ -58,7 +58,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	if numFTs <= 0 {
 		return fmt.Errorf("number of tokens to create must be greater than zero")
 	}
-	if numWholeTokens <= 0 || numWholeTokens != float64(int(numWholeTokens)) {
+	if numWholeTokens <= 0 {
 		return fmt.Errorf("number of whole tokens must be a positive integer")
 	}
 	if numWholeTokens <= 0 {
