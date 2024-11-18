@@ -28,14 +28,14 @@ func (w *Wallet) CreateNFT(nt *NFT, local bool) error {
 	return nil
 }
 
-// GetAllNFT get all NFTs from db
-func (w *Wallet) GetAllNFT(did string) []NFT {
+// GetNFTByDid get all NFTs from db
+func (w *Wallet) GetAllNFT() ([]NFT, error) {
 	var tkns []NFT
-	err := w.s.Read(NFTTokenStorage, &tkns, "did=?", did)
+	err := w.s.Read(NFTTokenStorage, &tkns, "token_id != ?", "")
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return tkns
+	return tkns, nil
 }
 
 // GetNFT get NFT from db
@@ -83,7 +83,7 @@ func (w *Wallet) GetNFTToken(nftID string) (*NFT, error) {
 
 func (w *Wallet) UpdateNFTStatus(nft string, did string, tokenStatus int, local bool, receiverDid string, saleAmount float64) error {
 	// Empty receiver DID indicates self execution of NFT and hence
-	// any change in NFTToken table must be skipped 
+	// any change in NFTToken table must be skipped
 	if receiverDid != "" {
 		w.dtl.Lock()
 		defer w.dtl.Unlock()
@@ -93,7 +93,7 @@ func (w *Wallet) UpdateNFTStatus(nft string, did string, tokenStatus int, local 
 			w.log.Error("err", err)
 			return err
 		}
-		
+
 		nftToken.TokenValue = floatPrecision(saleAmount, 3)
 		nftToken.DID = receiverDid
 		if local {

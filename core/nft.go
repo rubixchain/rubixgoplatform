@@ -298,13 +298,13 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	latestBlock := c.w.GetLatestTokenBlock(executeReq.NFT, tokenType)
 	currentOwner := latestBlock.GetOwner()
 	c.log.Info("The current owner of the NFT is :", currentOwner)
-	
+
 	if currentOwner != executeReq.Owner {
 		c.log.Error("NFT not owned by the executor")
 		resp.Message = "NFT not owned by the executor"
 		return resp
 	}
-	
+
 	if err != nil {
 		c.log.Error("Failed to retrieve NFT Value , ", err)
 		resp.Message = err.Error()
@@ -323,7 +323,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 			resp.Message = errMsg
 			return resp
 		}
-		
+
 		currentNFTValue = nftToken.TokenValue
 		receiver = executeReq.Owner
 	} else {
@@ -524,4 +524,29 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 	basicResponse.Result = &nft
 
 	return basicResponse
+}
+
+func (c *Core) GetAllNFT() model.NFTList {
+	response := model.NFTList{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	nftList, err := c.w.GetAllNFT()
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to get NFT list", "err", err)
+		c.log.Error(errorMsg)
+		response.Message = errorMsg
+		return response
+	}
+	nftDetails := make([]model.NFTInfo, 0)
+	for _, nft := range nftList {
+		nftDetails = append(nftDetails, model.NFTInfo{NFTId: nft.TokenID, Owner: nft.DID, Value: nft.TokenValue})
+	}
+	response.NFTs = nftDetails
+	response.Status = true
+	response.Message = "Got All NFTs"
+
+	return response
+
 }
