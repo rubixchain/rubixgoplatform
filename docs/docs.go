@@ -988,6 +988,29 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/list-nfts": {
+            "get": {
+                "description": "This API will get all NFTs deployed on the node",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Get ALL NFTs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.NFTList"
+                        }
+                    }
+                }
+            }
+        },
         "/api/recover-token": {
             "post": {
                 "description": "This API will recover token and tokenchain from the Pinning node to the node which has pinned the token",
@@ -1291,6 +1314,38 @@ const docTemplate = `{
                 "tokenChainData": {
                     "type": "array",
                     "items": {}
+                }
+            }
+        },
+        "model.NFTInfo": {
+            "type": "object",
+            "properties": {
+                "nft": {
+                    "type": "string"
+                },
+                "nft_value": {
+                    "type": "number"
+                },
+                "owner_did": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.NFTList": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "nfts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.NFTInfo"
+                    }
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
                 }
             }
         },

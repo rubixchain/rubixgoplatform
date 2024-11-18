@@ -39,6 +39,27 @@ definitions:
         items: {}
         type: array
     type: object
+  model.NFTInfo:
+    properties:
+      nft:
+        type: string
+      nft_value:
+        type: number
+      owner_did:
+        type: string
+    type: object
+  model.NFTList:
+    properties:
+      message:
+        type: string
+      nfts:
+        items:
+          $ref: '#/definitions/model.NFTInfo'
+        type: array
+      result: {}
+      status:
+        type: boolean
+    type: object
   model.PledgedTokenStateDetails:
     properties:
       did:
@@ -900,6 +921,21 @@ paths:
       summary: Initiate Self Transfer
       tags:
       - Account
+  /api/list-nfts:
+    get:
+      consumes:
+      - application/json
+      description: This API will get all NFTs deployed on the node
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.NFTList'
+      summary: Get ALL NFTs
+      tags:
+      - NFT
   /api/recover-token:
     post:
       consumes:

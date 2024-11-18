@@ -14,4 +14,4 @@ def get_base_ports():
     return base_ens_server, base_grpc_port
 
 def get_did_by_alias(node_config, alias):
-    return node_config["dids"][alias]
+    return node_config["dids"][alias]["did"]

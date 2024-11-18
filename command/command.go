@@ -466,7 +466,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.didImgFile, "didImgFile", did.DIDImgFileName, "DID image")
 	flag.StringVar(&cmd.privImgFile, "privImgFile", did.PvtShareFileName, "DID public share image")
 	flag.StringVar(&cmd.pubImgFile, "pubImgFile", did.PubShareFileName, "DID public share image")
-	flag.StringVar(&cmd.mnemonicFile, "mnemonicKeyFile", did.MnemonicFileName, "Mnemonic key file")
+	flag.StringVar(&cmd.mnemonicFile, "mnemonicKeyFile", "", "Mnemonic key file")
 	flag.StringVar(&cmd.privKeyFile, "privKeyFile", did.PvtKeyFileName, "Private key file")
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
 	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")

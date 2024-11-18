@@ -48,7 +48,7 @@ const (
 	APIGetTxnByDID                      string = "/api/get-by-did"
 	APIGetTxnByComment                  string = "/api/get-by-comment"
 	APICreateNFT                        string = "/api/create-nft"
-	APIGetAllNFT                        string = "/api/getallnft"
+	APIGetAllNFT                        string = "/api/list-nfts"
 	APIAddNFTSale                       string = "/api/addnftsale"
 	APIDeploySmartContract              string = "/api/deploy-smart-contract"
 	APIExecuteSmartContract             string = "/api/execute-smart-contract"
