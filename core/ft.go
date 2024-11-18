@@ -248,11 +248,15 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		ft.CreatorDID = FTOwner
 		err = c.w.CreateFT(ft)
 		if err != nil {
-			c.log.Error("Failed to create fractional token", "err", err)
+			c.log.Error("Failed to write FT details in FT tokens table", "err", err)
 			return err
 		}
 	}
-	c.updateFTTable(did)
+	updateFTTableErr := c.updateFTTable(did)
+	if updateFTTableErr != nil {
+		c.log.Error("Failed to update FT table after FT creation", "err", err)
+		return updateFTTableErr
+	}
 	return nil
 }
 
@@ -459,12 +463,21 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		QuorumList:  cr.QuorumList,
 		TokenTime:   float64(dif.Milliseconds()),
 	}
-	c.ec.ExplorerTransaction(etrans)
+	explorerErr := c.ec.ExplorerTransaction(etrans)
+	if explorerErr != nil {
+		c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
+	}
+
+	updateFTTableErr := c.updateFTTable(did)
+	if updateFTTableErr != nil {
+		c.log.Error("Failed to update FT table after transfer ", "err", updateFTTableErr)
+		resp.Message = "Failed to update FT table after transfer"
+		return resp
+	}
 	c.log.Info("FT Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
-	resp.Status = true
 	msg := fmt.Sprintf("FT Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
+	resp.Status = true
 	resp.Message = msg
-	c.updateFTTable(did)
 	return resp
 }
 
