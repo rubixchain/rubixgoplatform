@@ -1087,9 +1087,12 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
-	if FT != (wallet.FTToken{}) {
-		c.updateFTTable(receiverDID)
+
+	updateFTTableErr := c.updateFTTable(receiverDID)
+	if updateFTTableErr != nil {
+		return nil, fmt.Errorf("Failed to update FT table, error: %v", updateFTTableErr)
 	}
+
 	sc := contract.InitContract(b.GetSmartContract(), nil)
 	if sc == nil {
 		return nil, fmt.Errorf("Failed to update token status, missing smart contract")
