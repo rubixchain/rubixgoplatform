@@ -7,7 +7,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
-func (c *Client) CreateFT(did string, ftName string, ftCount int, wholeToken float64) (*model.BasicResponse, error) {
+func (c *Client) CreateFT(did string, ftName string, ftCount int, wholeToken int) (*model.BasicResponse, error) {
 	createFTReq := model.CreateFTReq{
 		DID:        did,
 		FTName:     ftName,
@@ -36,7 +36,7 @@ func (c *Client) GetFTInfo(didStr string) (*model.GetFTInfo, error) {
 	m := make(map[string]string)
 	m["did"] = didStr
 	var info model.GetFTInfo
-	err := c.sendJSONRequest("POST", setup.APIGetFTInfo, m, nil, &info)
+	err := c.sendJSONRequest("GET", setup.APIGetFTInfo, m, nil, &info)
 	if err != nil {
 		return nil, err
 	}

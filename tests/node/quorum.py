@@ -12,18 +12,24 @@ def run_quorum_nodes(only_run_nodes, skip_adding_quorums, node_registry_key = "q
     node_config = setup_rubix_nodes(node_registry_key)
     print("Rubix Quorum nodes are now running")
 
+    did_alias = "did_quorum"
+    did_type = 4
+    node_did_alias_map = {}
+    for node, config in node_config.items():
+        node_did_alias_map[node] = did_alias
+
     if not only_run_nodes:
-        did_alias = "did_quorum"
-        node_did_alias_map = {}
 
         print("Creating, Registering and Funding Quorum DIDs\n")
         for node, config in node_config.items():
-            did = create_and_register_did(config, did_alias, register_did=False)
-
-            fund_did_with_rbt(config, did)
-
-            # Selecting DIDs for quorum setup
-            node_did_alias_map[node] = did_alias
+            if node in {"node5", "node6"}:
+                did_type = 0
+            if node in {"node4", "node5"}:
+                did = create_and_register_did(config, did_alias, did_type, register_did=False, fp=True)
+                fund_did_with_rbt(config, did, priv_pwd="p123")
+            else :
+                did = create_and_register_did(config, did_alias, did_type, register_did=False)
+                fund_did_with_rbt(config, did)
 
         #Temporary adding details manually
 
@@ -37,6 +43,7 @@ def run_quorum_nodes(only_run_nodes, skip_adding_quorums, node_registry_key = "q
         pprint.pp(node_config)
         print("Quorums have been configured")
     else:
+        node_config = get_quorum_config()
         quorum_config(node_config, node_did_alias_map, True, quorum_list_file_name)
 
 def get_quorum_config():

@@ -10,23 +10,32 @@ type NFT struct {
 }
 
 // CreateNFT write NFT into db
-func (w *Wallet) CreateNFT(nt *NFT) error {
-	err := w.s.Write(NFTTokenStorage, nt)
-	if err != nil {
-		w.log.Error("Failed to write NFT into db", "err", err)
-		return err
+func (w *Wallet) CreateNFT(nt *NFT, local bool) error {
+	var err error
+	if local {
+		err = w.s.Update(NFTTokenStorage, nt, "token_id=?", nt.TokenID)
+		if err != nil {
+			w.log.Error("Failed to update NFT into db", "err", err)
+			return err
+		}
+	} else {
+		err := w.s.Write(NFTTokenStorage, nt)
+		if err != nil {
+			w.log.Error("Failed to write NFT into db", "err", err)
+			return err
+		}
 	}
 	return nil
 }
 
-// GetAllNFT get all NFTs from db
-func (w *Wallet) GetAllNFT(did string) []NFT {
+// GetNFTByDid get all NFTs from db
+func (w *Wallet) GetAllNFT() ([]NFT, error) {
 	var tkns []NFT
-	err := w.s.Read(NFTTokenStorage, &tkns, "did=?", did)
+	err := w.s.Read(NFTTokenStorage, &tkns, "token_id != ?", "")
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return tkns
+	return tkns, nil
 }
 
 // GetNFT get NFT from db
@@ -56,4 +65,47 @@ func (w *Wallet) GetNFT(did string, nft string, lock bool) (*NFT, error) {
 		}
 	}
 	return &tkns, nil
+}
+
+func (w *Wallet) GetNFTToken(nftID string) (*NFT, error) {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	var tokens *NFT
+
+	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nftID)
+	if err != nil {
+		w.log.Error(fmt.Sprintf("unable to find NFT Token %v", nftID))
+		return nil, err
+	}
+
+	return tokens, nil
+}
+
+func (w *Wallet) UpdateNFTStatus(nft string, did string, tokenStatus int, local bool, receiverDid string, saleAmount float64) error {
+	// Empty receiver DID indicates self execution of NFT and hence
+	// any change in NFTToken table must be skipped
+	if receiverDid != "" {
+		w.dtl.Lock()
+		defer w.dtl.Unlock()
+		var nftToken NFT
+		err := w.s.Read(NFTTokenStorage, &nftToken, "token_id=?", nft)
+		if err != nil {
+			w.log.Error("err", err)
+			return err
+		}
+
+		nftToken.TokenValue = floatPrecision(saleAmount, 3)
+		nftToken.DID = receiverDid
+		if local {
+			nftToken.TokenStatus = TokenIsFree
+		} else {
+			nftToken.TokenStatus = tokenStatus
+		}
+
+		err = w.s.Update(NFTTokenStorage, &nftToken, "token_id=?", nft)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

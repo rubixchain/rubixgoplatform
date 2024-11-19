@@ -84,19 +84,19 @@ func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error)
 			}
 			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
-	case model.NFTType:
-		tkns := c.w.GetAllNFT(did)
-		if tkns == nil {
-			return tr, nil
-		}
-		tr.TokenDetails = make([]model.TokenDetail, 0)
-		for _, t := range tkns {
-			td := model.TokenDetail{
-				Token:  t.TokenID,
-				Status: t.TokenStatus,
-			}
-			tr.TokenDetails = append(tr.TokenDetails, td)
-		}
+	// case model.NFTType:
+	// 	tkns, err := c.w.GetAllNFT()
+	// 	if err != nil {
+	// 		return tr, nil
+	// 	}
+	// 	tr.TokenDetails = make([]model.TokenDetail, 0)
+	// 	for _, t := range tkns {
+	// 		td := model.TokenDetail{
+	// 			Token:  t.TokenID,
+	// 			Status: t.TokenStatus,
+	// 		}
+	// 		tr.TokenDetails = append(tr.TokenDetails, td)
+	// 	}
 	default:
 		tr.BasicResponse.Status = false
 		tr.BasicResponse.Message = "Invalid token type"

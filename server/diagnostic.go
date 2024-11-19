@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -34,6 +35,29 @@ func (s *Server) APIDumpFTTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, drep, http.StatusOK)
 }
 
+// SmartContract godoc
+// @Summary      Get FT Token Chain Data
+// @Description  This API returns FT token chain data for a given FT token ID.
+// @Tags         FT
+// @Accept       json
+// @Produce      json
+// @Param        tokenID	query	string	true	"FT Token ID"
+// @Success      200  {object}  model.GetFTTokenChainReply "Successful response with token chain data"
+// @Router       /api/get-ft-token-chain [get]
+func (s *Server) APIGetFTTokenchain(req *ensweb.Request) *ensweb.Result {
+	TokenID := s.GetQuerry(req, "tokenID")
+	if TokenID == "" {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
+	if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid FT token")
+		return s.BasicResponse(req, false, "Invalid FT token ID", nil)
+	}
+	getResp := s.c.GetFTTokenchain(TokenID)
+	return s.RenderJSON(req, getResp, http.StatusOK)
+}
+
 func (s *Server) APIDumpSmartContractTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	var dr model.TCDumpRequest
 	err := s.ParseJSON(req, &dr)
@@ -46,6 +70,26 @@ func (s *Server) APIDumpSmartContractTokenChainBlock(req *ensweb.Request) *enswe
 		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
 	}
 	drep := s.c.DumpSmartContractTokenChain(&dr)
+	return s.RenderJSON(req, drep, http.StatusOK)
+}
+
+func (s *Server) APIDumpNFTTokenChain(req *ensweb.Request) *ensweb.Result {
+	nft := s.GetQuerry(req, "nft")
+	if nft == "" {
+		s.log.Error("NFT token details not provided")
+		return s.BasicResponse(req, false, "NFT token details not provided", nil)
+	}
+	blockId := s.GetQuerry(req, "blockId")
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(nft)
+	if len(nft) != 46 || !strings.HasPrefix(nft, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid NFT")
+		return s.BasicResponse(req, false, "Invalid NFT", nil)
+	}
+	dr := model.TCDumpRequest{
+		Token:   nft,
+		BlockID: blockId,
+	}
+	drep := s.c.DumpNFTTokenChain(&dr)
 	return s.RenderJSON(req, drep, http.StatusOK)
 }
 
@@ -74,9 +118,51 @@ func (s *Server) APIGetSmartContractTokenChainData(req *ensweb.Request) *ensweb.
 	return s.RenderJSON(req, sctdataReply, http.StatusOK)
 }
 
+type GetNFTTokenChainDataSwaggoInput struct {
+	Token  string `json:"token"`
+	Latest bool   `json:"latest"`
+}
+
+// NFT godoc
+// @Summary      Get NFT Token Chain Data
+// @Description  This API will return nft token chain data
+// @Tags         NFT
+// @ID           get-nft-token-chain-data
+// @Accept       json
+// @Produce      json
+// @Param        nft     query string true  "NFT token id"
+// @Param        latest  query string false "Set to true if you only need the latest token block"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/get-nft-token-chain-data [get]
+func (s *Server) APIGetNFTTokenChainData(req *ensweb.Request) *ensweb.Result {
+	nft := s.GetQuerry(req, "nft")
+	if nft == "" {
+		s.log.Error("NFT token details not provided")
+		return s.BasicResponse(req, false, "NFT token details not provided", nil)
+	}
+	islatest := false
+	latestBlock := s.GetQuerry(req, "latest")
+	if latestBlock != "" {
+		var err error
+		islatest, err = strconv.ParseBool(latestBlock)
+		if err != nil {
+			// Handle the error if the query param is not a valid boolean
+			return s.BasicResponse(req, false, "Param is not a valid boolean", nil)
+		}
+
+	}
+	//var getReq model.SmartContractTokenChainDataReq
+	getReq := model.SmartContractTokenChainDataReq{
+		Token:  nft,
+		Latest: islatest,
+	}
+	nftDataReply := s.c.GetNFTTokenChainData(&getReq)
+	return s.RenderJSON(req, nftDataReply, http.StatusOK)
+}
+
 type RegisterCallBackURLSwaggoInput struct {
-	Token       string `json:"token"`
-	CallBackURL string `json:"callbackurl"`
+	Token       string `json:"SmartContractToken"`
+	CallBackURL string `json:"CallBackURL"`
 }
 
 // SmartContract godoc
