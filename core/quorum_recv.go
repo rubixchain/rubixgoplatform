@@ -658,6 +658,123 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 }
 
+func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, cr *ConensusRequest) *ensweb.Result {
+	crep := ConensusReply{
+		ReqID:  cr.ReqID,
+		Status: false,
+	}
+	ok, sc := c.verifyContract(cr, did)
+	if !ok {
+		crep.Message = "Failed to verify sender signature"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	//check if token has multiple pins
+	ti := sc.GetTransTokenInfo()
+	results := make([]MultiPinCheckRes, len(ti))
+	var wg sync.WaitGroup
+	for i := range ti {
+		wg.Add(1)
+		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
+	}
+	wg.Wait()
+	for i := range results {
+		if results[i].Error != nil {
+			c.log.Error("Error occured", "error", results[i].Error)
+			crep.Message = "Error while cheking FT Token multiple Pins"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if results[i].Status {
+			c.log.Error("FT Token has multiple owners", "FT token", results[i].Token, "owners", results[i].Owners)
+			crep.Message = "FT Token has multiple owners"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
+
+	// check token ownership
+
+	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
+	if err != nil {
+		validateTokenOwnershipErrorString := fmt.Sprint(err)
+		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
+			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if strings.Contains(validateTokenOwnershipErrorString, "failed to sync tokenchain Token") {
+			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Error("Tokens ownership check failed")
+		crep.Message = "Token ownership check failed, err : " + err.Error()
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	if !validateTokenOwnershipVar {
+		c.log.Error("Tokens ownership check failed")
+		crep.Message = "Token ownership check failed"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	/* 	if !c.validateTokenOwnership(cr, sc) {
+		c.log.Error("Token ownership check failed")
+		crep.Message = "Token ownership check failed"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	} */
+
+	//Token state check and pinning
+	/*
+		1. get the latest block from token chain,
+		2. retrive the Block Id
+		3. concat token id and blockId
+		4. add to ipfs
+		5. check for pin and if none pin the content
+		6. if pin exist , exit with error token state exhauste
+	*/
+
+	tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
+	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
+	for i := range ti {
+		wg.Add(1)
+		go c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult, &wg, cr.QuorumList, ti[i].TokenType)
+	}
+	wg.Wait()
+
+	for i := range tokenStateCheckResult {
+		if tokenStateCheckResult[i].Error != nil {
+			c.log.Error("Error occured", "error", tokenStateCheckResult[i].Error)
+			crep.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if tokenStateCheckResult[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
+			crep.Message = tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
+	}
+	c.log.Debug("Proceeding to pin token state to prevent double spend")
+	sender := cr.SenderPeerID + "." + sc.GetSenderDID()
+	receiver := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
+	err1 := c.pinTokenState(tokenStateCheckResult, did, cr.TransactionID, sender, receiver, float64(0))
+	if err1 != nil {
+		crep.Message = "Error Pinning token state" + err.Error()
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	c.log.Debug("Finished FT Tokenstate check")
+
+	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
+	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	if err != nil {
+		c.log.Error("Failed to get quorum signature", "err", err)
+		crep.Message = "Failed to get quorum signature"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	crep.Status = true
+	crep.Message = "FT Conensus finished successfully"
+	crep.ShareSig = qsb
+	crep.PrivSig = ppb
+	return c.l.RenderJSON(req, &crep, http.StatusOK)
+}
+
 func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var cr ConensusRequest
@@ -701,7 +818,7 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 		return c.quorumNFTConsensus(req, did, qdc, &cr)
 	case FTTransferMode:
 		c.log.Debug("FT consensus started")
-		return c.quorumRBTConsensus(req, did, qdc, &cr)
+		return c.quorumFTConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
 		crep.Message = "Invalid consensus mode"
