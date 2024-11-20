@@ -223,6 +223,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will transfer FT",
 	"This command will give the balance of FTs",
 	"This command will validate the token",
+	// TODO: Add description for NFT commands
 	"",
 	"",
 	"",
