@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -29,72 +30,72 @@ func (c *Core) removeStrings(strings []string, targets []string) []string {
 	return result
 }
 
+func (c *Core) removePeerID(provList []string, peerID string) ([]string, bool) {
+	result := []string{}
+	peerIDexists := false
+	for _, s := range provList {
+		if s != peerID {
+			result = append(result, s)
+		} else {
+			peerIDexists = true
+		}
+	}
+	return result, peerIDexists
+}
+
 // Method checks for multiple Pins on token
 // if there are multiple owners the list of owners is returned back
-func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPeerId string, results []MultiPinCheckRes, wg *sync.WaitGroup) {
+func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPeerId string, results []MultiPinCheckRes, wg *sync.WaitGroup, pinnedCorrectly *bool) {
 
 	defer wg.Done()
 	var result MultiPinCheckRes
-	result.Token = token
-	var owners []string
+
 	provList, err := c.GetDHTddrs(token)
+
+	// fmt.Println("prov list for token t : ", token)
+	// fmt.Println("provList : ", provList)
 	if err != nil {
 		c.log.Error("Error triggered while fetching providers ", "error", err)
-		result.Status = false
-		result.Owners = nil
-		result.Error = err
-		results[index] = result
+		return
 	}
 
-	if len(provList) == 0 {
-		result.Status = false
-		result.Owners = provList
-		result.Error = nil
-		results[index] = result
-	}
+	var ownersProv []string
 
-	if len(provList) == 1 {
-		for _, peerId := range provList {
-			if peerId != senderPeerId {
-				c.log.Error("Sender peer not exist in provider list", "peerID", peerId)
-				result.Status = true
-				result.Owners = provList
-				result.Error = nil
-				results[index] = result
-			} else {
-				result.Status = false
-				result.Owners = nil
-				result.Error = nil
-				results[index] = result
-			}
+	result.Token = token
+	result.Status = false
+	result.Owners = nil
+	result.Error = nil
+
+	switch len(provList) {
+	case 0:
+		c.log.Error(fmt.Sprintf("there are no providers for token : %v", token))
+		result.Status = true
+	case 1:
+		if provList[0] != senderPeerId {
+			c.log.Error(fmt.Sprintf("sender peer does not exist in provider list : %v", provList[0]))
+			result.Status = true
+			result.Owners = provList
 		}
-	}
-
-	var knownPeer []string
-	knownPeer = append(knownPeer, senderPeerId)
-	if receiverPeerId != "" {
-		knownPeer = append(knownPeer, receiverPeerId)
-	}
-
-	if len(provList) >= 2 {
-		owners = provList
-		t := c.removeStrings(owners, knownPeer)
-		if len(t) == 0 {
-			c.log.Info("Pins help by current sender and receiver, pass")
-			result.Status = false
-			result.Owners = nil
-			result.Error = nil
-			results[index] = result
-		} else {
-			peerIdRolemap := make(map[string]int)
-			for _, peerId := range t {
+	default:
+		provList, peerIDexists := c.removePeerID(provList, senderPeerId)
+		if !peerIDexists {
+			*pinnedCorrectly = false
+			c.log.Error("Sender pin is not available")
+			return
+		}
+		// if receiverPeerId != "" {
+		// 	provList, peerIDexists = c.removePeerID(provList, receiverPeerId)
+		// 	if peerIDexists {
+		// 		*pinnedCorrectly = false
+		// 		c.log.Error("Receiver pin is already available")
+		// 		return
+		// 	}
+		// }
+		if len(provList) != 0 {
+			for _, peerId := range provList {
 				p, err := c.connectPeer(peerId)
 				if err != nil || p == nil {
 					c.log.Error("Error connecting to peer ", "peerId", peerId, "err", err)
-					result.Status = true
-					result.Owners = nil
-					result.Error = err
-					results[index] = result
 					continue
 				}
 				req := PinStatusReq{
@@ -104,30 +105,19 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 				err = p.SendJSONRequest("POST", APIDhtProviderCheck, nil, &req, &psr, true)
 				if err != nil {
 					c.log.Error("Failed to get response from Peer", "err", err)
-					result.Status = false
-					result.Owners = nil
-					result.Error = err
-					results[index] = result
+					continue
 				}
-				if psr.Status {
-					peerIdRolemap[peerId] = psr.Role
+				if psr.Role == wallet.OwnerRole || psr.Role == wallet.ParentTokenLockRole || psr.Role == wallet.ParentTokenPinByQuorumRole {
+					ownersProv = append(ownersProv, peerId)
+					continue
 				}
 			}
-
-			for peerId, _ := range peerIdRolemap {
-				if peerIdRolemap[peerId] == wallet.OwnerRole {
-					c.log.Error("Token has multiple Pins")
-					result.Status = true
-					result.Owners = provList
-					result.Error = nil
-					results[index] = result
-				}
+			if len(ownersProv) > 0 {
+				result.Status = true
+				result.Error = fmt.Errorf("token %v has multiple pins by %v", token, ownersProv)
 			}
+			result.Owners = ownersProv
 		}
 	}
-	c.log.Debug("Token does not have multiple pins")
-	result.Status = false
-	result.Owners = nil
-	result.Error = nil
 	results[index] = result
 }

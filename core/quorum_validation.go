@@ -29,7 +29,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 	signers, err := b.GetSigner()
 	if err != nil {
 		c.log.Error("failed to get signers", "err", err)
-		return false, fmt.Errorf("failed to get signers", "err", err)
+		return false, fmt.Errorf("failed to get signers with error : %v", err)
 	}
 	c.log.Debug("Signers", signers)
 	for _, signer := range signers {
@@ -39,7 +39,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 			dc, err = c.SetupForienDID(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID", "err", err)
-				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
+				return false, fmt.Errorf("failed to setup foreign DID : %v with error %v", signer, err)
 			}
 		default:
 			signerPeerID := c.w.GetPeerID(signer)
@@ -55,13 +55,13 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
-				return false, fmt.Errorf("failed to setup foreign DID quorum : ", signer, "err", err)
+				return false, fmt.Errorf("failed to setup foreign DID quorum : %v with error %v", signer, err)
 			}
 		}
 		err := b.VerifySignature(dc)
 		if err != nil {
 			c.log.Error("Failed to verify signature", "err", err)
-			return false, fmt.Errorf("Failed to verify signature", "err", err)
+			return false, fmt.Errorf("failed to verify signature with error : %v", err)
 		}
 	}
 	return true, nil
@@ -162,7 +162,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			continue
 		}
 	}
-	p, err := c.getPeer(address, quorumDID)
+	p, err := c.getPeer(address, "")
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return false, err
@@ -177,20 +177,17 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		fb := c.w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
 		if fb == nil {
 			c.log.Error("Failed to get first token chain block")
-			return false, fmt.Errorf("failed to get first token chain block", ti[i].Token)
+			return false, fmt.Errorf("failed to get first token chain block for token %v", ti[i].Token)
 		}
-		if c.TokenType(PartString) == ti[i].TokenType {
-			pt, _, err := fb.GetParentDetials(ti[i].Token)
-			if err != nil {
-				c.log.Error("failed to fetch parent token detials", "err", err, "token", ti[i].Token)
-				return false, err
-			}
-			err = c.syncParentToken(p, pt)
-			if err != nil {
-				c.log.Error("failed to sync parent token chain", "token", pt)
-				return false, err
-			}
-			_, err = c.w.Pin(pt, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
+		// Handle PartString token
+		parentTokenPart, err := c.handleToken(ti[i].Token, ti[i].TokenType, PartString, p)
+		if err != nil {
+			return false, err
+		}
+
+		//Pinning tokens by quorum
+		if parentTokenPart != "" {
+			_, err := c.w.Pin(parentTokenPart, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
 			if err != nil {
 				c.log.Error("Failed to Pin parent token in Quorum", "err", err)
 				return false, err
@@ -219,7 +216,12 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		if b == nil {
 			c.log.Error("Invalid token chain block")
-			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
+			return false, fmt.Errorf("invalid token chain block for yoken %v", ti[i].Token)
+		}
+		//Validating the latest block of the token ---------
+		err = c.validateLatestBlock(p, ti[i], quorumDID, sc.GetSenderDID(), parentTokenPart, b)
+		if err != nil {
+			return false, fmt.Errorf("invalid latest token block for token %v", ti[i].Token)
 		}
 		c.log.Info("Validating token ownership", "token", ti[i].Token, "owner", b.GetOwner(), "sender", sc.GetSenderDID())
 		pinningNodeDID := b.GetPinningNodeDID()
@@ -230,7 +232,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Info("The token is Pinned as a service on Node ", pinningNodeDID)
 			if ownerDID != senderDID {
 				c.log.Error("Invalid token owner: The token is Pinned as a service", "owner", ownerDID, "The node which is trying to transfer", senderDID)
-				return false, fmt.Errorf("Invalid token owner: The token is Pinned as a service")
+				return false, fmt.Errorf("invalid token owner: The token is Pinned as a service")
 			}
 		}
 		signatureValidation, err := c.validateSigner(b, quorumDID, p)
