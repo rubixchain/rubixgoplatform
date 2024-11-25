@@ -1310,54 +1310,78 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 		c.log.Error("Invalid pledge request")
 		return fmt.Errorf("invalid pledge request")
 	}
+
+	var waitGroup sync.WaitGroup
+	var mutex sync.Mutex
+	var errors []error
+
 	for k, v := range pd.PledgedTokens {
-		p, ok := cs.P[k]
-		if !ok {
-			c.log.Error("Invalid pledge request")
-			return fmt.Errorf("invalid pledge request")
-		}
-		if p == nil {
-			c.log.Error("Invalid pledge request")
-			return fmt.Errorf("invalid pledge request")
-		}
-		var qAddress string
-		for _, quorumValue := range cr.QuorumList {
-			// Check if the value of p.GetPeerDID() exists in the QuorumList as a substring
-			if strings.Contains(quorumValue, p.GetPeerDID()) {
-				qAddress = quorumValue
+		waitGroup.Add(1)
+		go func(k string, v []string) {
+			defer waitGroup.Done()
+			p, ok := cs.P[k]
+
+			if !ok || p == nil {
+				c.log.Error("Invalid pledge request")
+				mutex.Lock()
+				errors = append(errors, fmt.Errorf("invalid pledge request"))
+				mutex.Unlock()
+				return
 			}
-		}
-		qPeer, err := c.getPeer(qAddress, "")
-		if err != nil {
-			c.log.Error("Quorum not connected", "err", err)
-			return err
-		}
-		defer qPeer.Close()
-		var br model.BasicResponse
-		ur := UpdatePledgeRequest{
-			Mode:                        cr.Mode,
-			PledgedTokens:               v,
-			TokenChainBlock:             newBlock.GetBlock(),
-			TransactionID:               transactionId,
-			TransferredTokenStateHashes: nil,
-			TransactionEpoch:            cr.TransactionEpoch,
-		}
 
-		if newTokenStateHashes != nil {
-			// ur.TransferredTokenStateHashes = newTokenStateHashes[countofTokenStateHash : countofTokenStateHash+len(v)]
-			ur.TransferredTokenStateHashes = newTokenStateHashes
-		}
+			var qAddress string
+			for _, quorumValue := range cr.QuorumList {
+				if strings.Contains(quorumValue, p.GetPeerDID()) {
+					qAddress = quorumValue
+					break // Exit loop once the address is found
+				}
+			}
 
-		err = qPeer.SendJSONRequest("POST", APIUpdatePledgeToken, nil, &ur, &br, true)
-		if err != nil {
-			c.log.Error("Failed to update pledge token status", "err", err)
-			return fmt.Errorf("failed to update pledge token status")
-		}
-		if !br.Status {
-			c.log.Error("Failed to update pledge token status", "msg", br.Message)
-			return fmt.Errorf("failed to update pledge token status")
-		}
+			qPeer, err := c.getPeer(qAddress, "")
+			if err != nil {
+				c.log.Error("Quorum not connected", "err", err)
+				mutex.Lock()
+				errors = append(errors, err)
+				mutex.Unlock()
+				return
+			}
+			defer qPeer.Close()
+
+			var br model.BasicResponse
+			ur := UpdatePledgeRequest{
+				Mode:                        cr.Mode,
+				PledgedTokens:               v,
+				TokenChainBlock:             newBlock.GetBlock(),
+				TransactionID:               transactionId,
+				TransferredTokenStateHashes: newTokenStateHashes,
+				TransactionEpoch:            cr.TransactionEpoch,
+			}
+
+			err = qPeer.SendJSONRequest("POST", APIUpdatePledgeToken, nil, &ur, &br, true)
+			if err != nil {
+				c.log.Error("Failed to update pledge token status", "err", err)
+				mutex.Lock()
+				errors = append(errors, fmt.Errorf("failed to update pledge token status"))
+				mutex.Unlock()
+				return
+			}
+
+			if !br.Status {
+				c.log.Error("Failed to update pledge token status", "msg", br.Message)
+				mutex.Lock()
+				errors = append(errors, fmt.Errorf("failed to update pledge token status: %s", br.Message))
+				mutex.Unlock()
+				return
+			}
+		}(k, v)
 	}
+
+	waitGroup.Wait()
+
+	if len(errors) > 0 {
+		return fmt.Errorf("errors encountered: %v", errors)
+	}
+
 	return nil
 }
 
