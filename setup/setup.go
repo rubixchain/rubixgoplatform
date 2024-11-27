@@ -77,7 +77,8 @@ const (
 	APIRecoverRBT                       string = "/api/recover-token"
 	APIValidateTokenChain               string = "/api/validate-token-chain"
 	APIValidateToken                    string = "/api/validate-token"
-	APIRequestDIDForPubKey             string = "/api/request-did-for-pubkey"
+	APIRequestDIDForPubKey              string = "/api/request-did-for-pubkey"
+	APISendJWTFromWallet                string = "/api/send-jwt-from-wallet"
 )
 
 // jwt.RegisteredClaims

@@ -350,3 +350,31 @@ func (s *Server) APIValidateToken(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.RenderJSON(req, br, http.StatusOK)
 }
+
+// initiates transaction request from wallet server
+func (s *Server) TxnReqFromWallet(txnReq *model.RBTTransferRequest, req *ensweb.Request) *ensweb.Result {
+	is_alphanumeric_sender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(txnReq.Sender)
+	is_alphanumeric_receiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(txnReq.Receiver)
+	if !is_alphanumeric_sender || !is_alphanumeric_receiver {
+		s.log.Error("Invalid sender or receiver address. Please provide valid DID")
+		return s.BasicResponse(req, false, "Invalid sender or receiver address", nil)
+	}
+	if !strings.HasPrefix(txnReq.Sender, "bafybmi") || len(txnReq.Sender) != 59 || !strings.HasPrefix(txnReq.Receiver, "bafybmi") || len(txnReq.Receiver) != 59 {
+		s.log.Error("Invalid sender or receiver DID")
+		return s.BasicResponse(req, false, "Invalid sender or receiver DID", nil)
+	}
+	if txnReq.TokenCount < 0.001 {
+		s.log.Error("Invalid RBT amount. RBT amount should be atlease 0.001")
+		return s.BasicResponse(req, false, "Invalid RBT amount", nil)
+	}
+	if txnReq.Type < 1 || txnReq.Type > 2 {
+		s.log.Error("Invalid trans type. TransType should be 1 or 2")
+		return s.BasicResponse(req, false, "Invalid trans type", nil)
+	}
+	if !s.validateDIDAccess(req, txnReq.Sender) {
+		return s.BasicResponse(req, false, "invalid sender DID access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.InitiateRBTTransfer(req.ID, txnReq)
+	return s.didResponse(req, req.ID)
+}
