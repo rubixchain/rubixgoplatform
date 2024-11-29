@@ -280,7 +280,7 @@ func (c *Client) CreateDIDFromPubKey(pubKey string) (string, error) {
 		"public_key": pubKey,
 	}
 	var resp model.DIDFromPubKeyResponse
-	err := c.sendJSONRequest("POST", setup.APIRequestDIDForPubKey, nil, &data, &resp)
+	err := c.sendJSONRequest("GET", setup.APIRequestDIDForPubKey, nil, &data, &resp)
 	if err != nil {
 		return "", err
 	}
