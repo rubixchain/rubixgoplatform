@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -37,11 +38,21 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 }
 
 func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens int, did string) error {
-	dc, err := c.SetupDID(reqID, did)
-	if err != nil {
-		c.log.Error("Failed to setup DID")
-		return err
+	if did == "" {
+		c.log.Error("DID is empty")
+		return fmt.Errorf("DID is empty")
 	}
+	isAlphanumericDID := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !isAlphanumericDID || !strings.HasPrefix(did, "bafybmi") || len(did) != 59 {
+		c.log.Error("Invalid FT creator's DID. Please provide valid DID")
+		return fmt.Errorf("Invalid DID, Please provide valid DID")
+	}
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil || dc == nil {
+		c.log.Error("Failed to setup DID")
+		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
+	}
+
 	var FT []wallet.FT
 
 	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND  creator_did=?", FTName, did)
@@ -50,11 +61,9 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		c.log.Error("FT Name already exists")
 		return fmt.Errorf("FT Name already exists")
 	}
-	if dc == nil {
-		return fmt.Errorf("DID crypto is not initialized")
-	}
 
 	// Validate input parameters
+
 	switch {
 	case numFTs <= 0:
 		return fmt.Errorf("number of tokens to create must be greater than zero")
@@ -308,26 +317,53 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		Status: false,
 	}
 	if req.Sender == req.Receiver {
+		c.log.Error("Sender and receiver cannot same")
 		resp.Message = "Sender and receiver cannot be same"
+		return resp
+	}
+	if req.Sender == "" || req.Receiver == "" {
+		c.log.Error("Sender and receiver cannot be empty")
+		resp.Message = "Sender and receiver cannot be empty"
+		return resp
+	}
+	isAlphanumericSender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(req.Sender)
+	isAlphanumericReceiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(req.Receiver)
+	if !isAlphanumericSender || !isAlphanumericReceiver {
+		c.log.Error("Invalid sender or receiver address. Please provide valid DID")
+		resp.Message = "Invalid sender or receiver address. Please provide valid DID"
+		return resp
+	}
+	if !strings.HasPrefix(req.Sender, "bafybmi") || len(req.Sender) != 59 || !strings.HasPrefix(req.Receiver, "bafybmi") || len(req.Receiver) != 59 {
+		c.log.Error("Invalid sender or receiver DID")
+		resp.Message = "Invalid sender or receiver DID"
 		return resp
 	}
 	_, did, ok := util.ParseAddress(req.Sender)
 	if !ok {
+		c.log.Error("Failed to parse sender DID")
 		resp.Message = "Invalid sender DID"
 		return resp
 	}
 
 	rpeerid, rdid, ok := util.ParseAddress(req.Receiver)
 	if !ok {
+		c.log.Error("Failed to parse receiver DID")
 		resp.Message = "Invalid receiver DID"
 		return resp
 	}
-	if req.FTCount < 0 {
-		resp.Message = "Input transaction amount is less than minimum FT transaction amount"
+	if req.FTCount <= 0 {
+		c.log.Error("Input transaction amount is less than minimum FT transaction amount")
+		resp.Message = "Invalid FT count"
+		return resp
+	}
+	if req.FTName == "" {
+		c.log.Error("FT name cannot be empty")
+		resp.Message = "FT name is required"
 		return resp
 	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
+		c.log.Error("Failed to setup DID")
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
@@ -336,6 +372,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		info, err := c.GetFTInfo(did)
 		if err != nil || info == nil {
 			c.log.Error("Failed to get FT info for transfer", "err", err)
+			resp.Message = "Failed to get FT info for transfer"
 			return resp
 		}
 		ftNameToCreators := make(map[string][]string)
@@ -349,7 +386,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 					c.log.Error(fmt.Sprintf("Creator DID %d: %s", i+1, creator))
 				}
 				c.log.Info("Use -creatorDID flag to specify the creator DID and can proceed for transfer")
-				resp.Message = fmt.Sprint("There are same FTs with different creators, use -creatorDID flag to specify creatorDID")
+				resp.Message = "There are same FTs with different creators, use -creatorDID flag to specify creatorDID"
 				return resp
 			}
 		}

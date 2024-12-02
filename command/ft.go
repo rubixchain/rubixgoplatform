@@ -10,17 +10,31 @@ import (
 
 func (cmd *Command) createFT() {
 	if cmd.did == "" {
-		cmd.log.Error("Failed to create FT, DID is required to create FT")
-		return
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to DID")
+			return
+		}
 	}
-
-	if cmd.ftCount < 1 {
-		cmd.log.Error("Invalid FT count, minimum FT count is 1")
-		return
-	}
-
 	if strings.TrimSpace(cmd.ftName) == "" {
 		cmd.log.Error("FT Name can't be empty")
+		return
+	}
+	switch {
+	case cmd.ftCount <= 0:
+		cmd.log.Error("number of tokens to create must be greater than zero")
+		return
+	case cmd.rbtAmount <= 0:
+		cmd.log.Error("number of whole tokens must be a positive integer")
+		return
+	case cmd.ftCount > int(cmd.rbtAmount*1000):
+		cmd.log.Error("max allowed FT count is 1000 for 1 RBT")
+		return
+	}
+	if cmd.rbtAmount != float64(int(cmd.rbtAmount)) {
+		cmd.log.Error("rbtAmount must be a positive integer")
 		return
 	}
 	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, int(cmd.rbtAmount))
@@ -60,6 +74,7 @@ func (cmd *Command) transferFT() {
 			return
 		}
 	}
+	// Validating sender & receiver address
 	isAlphanumericSender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.senderAddr)
 	isAlphanumericReceiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.receiverAddr)
 	if !isAlphanumericSender || !isAlphanumericReceiver {
@@ -70,7 +85,25 @@ func (cmd *Command) transferFT() {
 		cmd.log.Error("Invalid sender or receiver DID")
 		return
 	}
-
+	// Validating creator DID
+	if cmd.creatorDID != "" {
+		isAlphanumericCreatorDID := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.creatorDID)
+		if !isAlphanumericCreatorDID || !strings.HasPrefix(cmd.senderAddr, "bafybmi") {
+			cmd.log.Error("Invalid creator DID. Please provide valid DID")
+			return
+		}
+	}
+	if cmd.ftCount < 1 {
+		cmd.log.Error("Input transaction amount is less than minimum FT transaction amount")
+		return
+	}
+	if cmd.ftName == "" {
+		cmd.log.Error("FT name cannot be empty")
+	}
+	if cmd.transType != 0 && cmd.transType != 1 && cmd.transType != 2 {
+		cmd.log.Error("Quorum type should be either 1 or 2")
+		return
+	}
 	transferFtReq := model.TransferFTReq{
 		Receiver:   cmd.receiverAddr,
 		Sender:     cmd.senderAddr,
