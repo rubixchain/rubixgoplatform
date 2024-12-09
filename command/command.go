@@ -97,6 +97,7 @@ const (
 	DeployNFTCmd                   string = "deploy-nft"
 	ExecuteNFTCmd                  string = "execute-nft"
 	SubscribeNFTCmd                string = "subscribe-nft"
+	FetchNft                       string = "fetch-nft"
 )
 
 var commands = []string{VersionCmd,
@@ -156,6 +157,7 @@ var commands = []string{VersionCmd,
 	DeployNFTCmd,
 	ExecuteNFTCmd,
 	SubscribeNFTCmd,
+	FetchNft,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -688,6 +690,8 @@ func Run(args []string) {
 		cmd.dumpNFTTokenChain()
 	case SubscribeNFTCmd:
 		cmd.SubscribeNFT()
+	case FetchNft:
+		cmd.fetchNFT()
 	default:
 		cmd.log.Error("Invalid command")
 	}

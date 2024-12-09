@@ -448,6 +448,26 @@ paths:
       summary: Execute Smart Contract
       tags:
       - Smart Contract
+  /api/fetch-nft:
+    get:
+      consumes:
+      - application/json
+      description: This API will Fetch NFT
+      operationId: fetch-nft
+      parameters:
+      - in: query
+        name: nft
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Fetch NFT
+      tags:
+      - NFT
   /api/fetch-smart-contract:
     get:
       consumes:

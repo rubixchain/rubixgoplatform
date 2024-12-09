@@ -13,6 +13,11 @@ type CreateNFTReq struct {
 	Artifact string
 }
 
+type FetchNFTRequest struct {
+	NFT     string
+	NFTPath string
+}
+
 func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*model.BasicResponse, error) {
 	fields := make(map[string]string)
 	files := make(map[string]string)
@@ -80,4 +85,19 @@ func (c *Client) GetAllNFTs(did string) (*model.NFTTokens, error) {
 		return nil, err
 	}
 	return &tkns, nil
+}
+
+func (c *Client) FetchNFT(fetchNft *FetchNFTRequest) (*model.BasicResponse, error) {
+	fields := make(map[string]string)
+	if fetchNft.NFT != "" {
+		fields["nft"] = fetchNft.NFT
+	}
+
+	var basicResponse model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIFetchNft, fields, nil, &basicResponse)
+	if err != nil {
+		return nil, err
+	}
+	return &basicResponse, nil
+
 }
