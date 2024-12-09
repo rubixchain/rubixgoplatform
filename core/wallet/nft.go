@@ -28,10 +28,20 @@ func (w *Wallet) CreateNFT(nt *NFT, local bool) error {
 	return nil
 }
 
-// GetNFTByDid get all NFTs from db
+// GetAllNFT get all NFTs from db
 func (w *Wallet) GetAllNFT() ([]NFT, error) {
 	var tkns []NFT
 	err := w.s.Read(NFTTokenStorage, &tkns, "token_id != ?", "")
+	if err != nil {
+		return nil, err
+	}
+	return tkns, nil
+}
+
+// GetNFTsByDid get all the NFTs of that did from db
+func (w *Wallet) GetNFTsByDid(did string) ([]NFT, error) {
+	var tkns []NFT
+	err := w.s.Read(NFTTokenStorage, &tkns, "did=?", did)
 	if err != nil {
 		return nil, err
 	}

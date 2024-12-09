@@ -97,6 +97,8 @@ const (
 	DeployNFTCmd                   string = "deploy-nft"
 	ExecuteNFTCmd                  string = "execute-nft"
 	SubscribeNFTCmd                string = "subscribe-nft"
+	FetchNftCmd                    string = "fetch-nft"
+	GetNftsByDidCmd                string = "get-nfts-by-did"
 )
 
 var commands = []string{VersionCmd,
@@ -156,6 +158,8 @@ var commands = []string{VersionCmd,
 	DeployNFTCmd,
 	ExecuteNFTCmd,
 	SubscribeNFTCmd,
+	FetchNftCmd,
+	GetNftsByDidCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -632,8 +636,8 @@ func Run(args []string) {
 		cmd.SubscribeContract()
 	case CreateNFTCmd:
 		cmd.createNFT()
-	// case GetAllNFTCmd:
-	// 	cmd.getAllNFTs()
+	case GetAllNFTCmd:
+		cmd.getAllNFTs()
 	case DeploySmartContractCmd:
 		cmd.deploySmartcontract()
 	case GenerateSmartContractToken:
@@ -688,6 +692,10 @@ func Run(args []string) {
 		cmd.dumpNFTTokenChain()
 	case SubscribeNFTCmd:
 		cmd.SubscribeNFT()
+	case FetchNftCmd:
+		cmd.fetchNFT()
+	case GetNftsByDidCmd:
+		cmd.getNFTsByDid()
 	default:
 		cmd.log.Error("Invalid command")
 	}

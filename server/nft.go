@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -165,6 +166,25 @@ func (s *Server) APIGetAllNFT(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, resp, http.StatusOK)
 }
 
+type GetNFTSwaggoInput struct {
+	Did string `json:"did"`
+}
+
+// ShowAccount godoc
+// @Summary      Get NFTs owned by the particular did
+// @Description  This API will get all NFTs owned by the particular did
+// @Tags         NFT
+// @Accept       json
+// @Produce      json
+// @Param        input query GetNFTSwaggoInput true "Get nfts by did"
+// @Success      200  {object}  model.NFTList
+// @Router       /api/get-nfts-by-did [get]
+func (s *Server) APIGetNFTsByDid(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "did")
+	resp := s.c.GetNFTsByDid(did)
+	return s.RenderJSON(req, resp, http.StatusOK)
+}
+
 // ShowAccount godoc
 // @Summary      Add NFTs
 // @Description  This API will put NFTs for sale
@@ -260,4 +280,54 @@ func (s *Server) APISubscribeNFT(request *ensweb.Request) *ensweb.Result {
 	s.c.AddWebReq(request)
 	go s.c.SubscribeNFTSetup(request.ID, topic)
 	return s.BasicResponse(request, true, "NFT subscribed successfully", nil)
+}
+
+// NFT godoc
+// @Summary      Fetch NFT
+// @Description  This API will Fetch NFT
+// @Tags         NFT
+// @ID   	     fetch-nft
+// @Accept       json
+// @Produce      json
+// @Param        input query NewNFTSwaggoInput true "Fetch nft"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/fetch-nft [get]
+func (s *Server) APIFetchNft(req *ensweb.Request) *ensweb.Result {
+	var fetchNft core.FetchNFTRequest
+	var err error
+
+	fetchNft.NFT = s.GetQuerry(req, "nft")
+
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(fetchNft.NFT)
+	if len(fetchNft.NFT) != 46 || !strings.HasPrefix(fetchNft.NFT, "Qm") || !is_alphanumeric {
+		s.log.Error("Invalid nft")
+		return s.BasicResponse(req, false, "Invalid nft", nil)
+	}
+
+	fetchNft.NFTPath, err = s.c.CreateSCTempFolder()
+	if err != nil {
+		s.log.Error("Fetch nft failed, failed to create nft folder", "err", err)
+		return s.BasicResponse(req, false, "Fetch nft failed, failed to create nft folder", nil)
+	}
+
+	fetchNft.NFTPath, err = s.c.RenameSCFolder(fetchNft.NFTPath, fetchNft.NFT)
+	if err != nil {
+		s.log.Error("Fetch nft failed, failed to rename nft folder", "err", err)
+		return s.BasicResponse(req, false, "Fetch nft failed, failed to rename nft folder", nil)
+	} else {
+		// The following condition indicates that the Smart Contract directory
+		// already exists in the node directory
+		if fetchNft.NFTPath == "" {
+			s.log.Debug("NFT directory already exists")
+			return s.BasicResponse(req, true, "NFT directory already exists", nil)
+		}
+	}
+
+	s.c.AddWebReq(req)
+	go func() {
+		basicResponse := s.c.FetchNFT(req.ID, &fetchNft)
+		fmt.Printf("Basic Response server:  %+v\n", basicResponse.Message)
+	}()
+	return s.BasicResponse(req, true, "NFT fetched successfully", nil)
+
 }

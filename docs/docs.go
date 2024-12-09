@@ -368,6 +368,37 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/fetch-nft": {
+            "get": {
+                "description": "This API will Fetch NFT",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Fetch NFT",
+                "operationId": "fetch-nft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "nft",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/fetch-smart-contract": {
             "get": {
                 "description": "This API will Fetch smart contract",
@@ -691,6 +722,36 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/get-nfts-by-did": {
+            "get": {
+                "description": "This API will get all NFTs owned by the particular did",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Get NFTs owned by the particular did",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "did",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.NFTList"
                         }
                     }
                 }
