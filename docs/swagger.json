@@ -718,6 +718,36 @@
                 }
             }
         },
+        "/api/get-nfts-by-did": {
+            "get": {
+                "description": "This API will get all NFTs owned by the particular did",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Get NFTs owned by the particular did",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "did",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.NFTList"
+                        }
+                    }
+                }
+            }
+        },
         "/api/get-pledgedtoken-details": {
             "get": {
                 "description": "This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state",

@@ -83,6 +83,7 @@ const (
 	APISubscribeNFT                     string = "/api/subscribe-nft"
 	APIGetNFTTokenChainData             string = "/api/get-nft-token-chain-data"
 	APIFetchNft                         string = "/api/fetch-nft"
+	APIGetNftsByDid                     string = "/api/get-nfts-by-did"
 )
 
 // jwt.RegisteredClaims

@@ -195,6 +195,22 @@ func (cmd *Command) getAllNFTs() {
 	cmd.log.Info("Got all NFTs successfully")
 }
 
+func (cmd *Command) getNFTsByDid() {
+	if cmd.did == "" {
+		cmd.log.Error("Failed to get NFTs, DID is required to get NFTs")
+		return
+	}
+	tkns, err := cmd.c.GetNFTsByDid(cmd.did)
+	if err != nil {
+		cmd.log.Error("Failed to get NFTs, " + err.Error())
+		return
+	}
+	for _, tkn := range tkns.Tokens {
+		fmt.Printf("NFT : %s, Status : %d\n", tkn.Token, tkn.TokenStatus)
+	}
+	cmd.log.Info("Got all NFTs successfully")
+}
+
 func (cmd *Command) fetchNFT() {
 	if cmd.nft == "" {
 		cmd.log.Info("nft id cannot be empty")

@@ -166,6 +166,25 @@ func (s *Server) APIGetAllNFT(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, resp, http.StatusOK)
 }
 
+type GetNFTSwaggoInput struct {
+	Did string `json:"did"`
+}
+
+// ShowAccount godoc
+// @Summary      Get NFTs owned by the particular did
+// @Description  This API will get all NFTs owned by the particular did
+// @Tags         NFT
+// @Accept       json
+// @Produce      json
+// @Param        input query GetNFTSwaggoInput true "Get nfts by did"
+// @Success      200  {object}  model.NFTList
+// @Router       /api/get-nfts-by-did [get]
+func (s *Server) APIGetNFTsByDid(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "did")
+	resp := s.c.GetNFTsByDid(did)
+	return s.RenderJSON(req, resp, http.StatusOK)
+}
+
 // ShowAccount godoc
 // @Summary      Add NFTs
 // @Description  This API will put NFTs for sale
@@ -263,10 +282,6 @@ func (s *Server) APISubscribeNFT(request *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(request, true, "NFT subscribed successfully", nil)
 }
 
-type FetchNFTSwaggoInput struct {
-	NFT string `json:"nft"`
-}
-
 // NFT godoc
 // @Summary      Fetch NFT
 // @Description  This API will Fetch NFT
@@ -274,7 +289,7 @@ type FetchNFTSwaggoInput struct {
 // @ID   	     fetch-nft
 // @Accept       json
 // @Produce      json
-// @Param        input query FetchNFTSwaggoInput true "Fetch nft"
+// @Param        input query NewNFTSwaggoInput true "Fetch nft"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/fetch-nft [get]
 func (s *Server) APIFetchNft(req *ensweb.Request) *ensweb.Result {

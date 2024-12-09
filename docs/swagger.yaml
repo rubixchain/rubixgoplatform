@@ -686,6 +686,25 @@ paths:
       summary: Get NFT Token Chain Data
       tags:
       - NFT
+  /api/get-nfts-by-did:
+    get:
+      consumes:
+      - application/json
+      description: This API will get all NFTs owned by the particular did
+      parameters:
+      - in: query
+        name: did
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.NFTList'
+      summary: Get NFTs owned by the particular did
+      tags:
+      - NFT
   /api/get-pledgedtoken-details:
     get:
       description: This API allows the user to get details about the tokens the quorums

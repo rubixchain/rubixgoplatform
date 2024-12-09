@@ -87,6 +87,17 @@ func (c *Client) GetAllNFTs(did string) (*model.NFTTokens, error) {
 	return &tkns, nil
 }
 
+func (c *Client) GetNFTsByDid(did string) (*model.NFTTokens, error) {
+	q := make(map[string]string)
+	q["did"] = did
+	var tkns model.NFTTokens
+	err := c.sendJSONRequest("GET", setup.APIGetNftsByDid, q, nil, &tkns)
+	if err != nil {
+		return nil, err
+	}
+	return &tkns, nil
+}
+
 func (c *Client) FetchNFT(fetchNft *FetchNFTRequest) (*model.BasicResponse, error) {
 	fields := make(map[string]string)
 	if fetchNft.NFT != "" {

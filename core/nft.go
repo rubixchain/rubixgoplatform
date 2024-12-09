@@ -550,3 +550,28 @@ func (c *Core) GetAllNFT() model.NFTList {
 	return response
 
 }
+
+func (c *Core) GetNFTsByDid(did string) model.NFTList {
+	response := model.NFTList{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	nftList, err := c.w.GetNFTsByDid(did)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to get NFT list of the did: ", did, "err", err)
+		c.log.Error(errorMsg)
+		response.Message = errorMsg
+		return response
+	}
+	nftDetails := make([]model.NFTInfo, 0)
+	for _, nft := range nftList {
+		nftDetails = append(nftDetails, model.NFTInfo{NFTId: nft.TokenID, Owner: nft.DID, Value: nft.TokenValue})
+	}
+	response.NFTs = nftDetails
+	response.Status = true
+	response.Message = "Got All NFTs"
+
+	return response
+
+}
