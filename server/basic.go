@@ -35,6 +35,7 @@ func (s *Server) APIStart(req *ensweb.Request) *ensweb.Result {
 // APIStart will setup the core
 func (s *Server) APIShutdown(req *ensweb.Request) *ensweb.Result {
 	go s.shutDown()
+	s.c.ExpireUserAPIKey()
 	return s.BasicResponse(req, true, "Shutting down...", nil)
 }
 

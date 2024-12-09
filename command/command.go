@@ -76,6 +76,10 @@ const (
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
+	AddExplorerCmd                 string = "addexplorer"
+	RemoveExplorerCmd              string = "removeexplorer"
+	GetAllExplorerCmd              string = "getallexplorer"
+	AddUserAPIKeyCmd               string = "adduserapikey"
 	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
 	CheckQuorumStatusCmd           string = "checkQuorumStatus"
 )
@@ -239,6 +243,8 @@ type Command struct {
 	smartContractData  string
 	executorAddr       string
 	latest             bool
+	links              []string
+	apiKey             string
 	quorumAddr         string
 }
 
@@ -323,7 +329,12 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
-
+	cmd.log.Info("Syncing Details...")
+	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
+	c.UpdateUserInfo(dids)         //Updating the balance
+	c.GenerateUserAPIKey(dids)     //Regenerating the API Key for DID
+	c.UpdateTokenInfo()
+	cmd.log.Info("Syncing Complete...")
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
 	signal.Notify(ch, syscall.SIGINT)
@@ -333,6 +344,7 @@ func (cmd *Command) runApp() {
 	}
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
+	c.ExpireUserAPIKey()
 }
 
 func (cmd *Command) validateOptions() bool {
@@ -364,6 +376,7 @@ func Run(args []string) {
 	cmd := &Command{}
 	var peers string
 	var timeout int
+	var links string
 
 	flag.StringVar(&cmd.runDir, "p", "./", "Working directory path")
 	flag.StringVar(&cmd.logFile, "logFile", "", "Log file name")
@@ -430,6 +443,8 @@ func Run(args []string) {
 	flag.IntVar(&cmd.publishType, "pubType", 0, "Smart contract event publishing type(Deploy & Execute)")
 	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
 	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
+	flag.StringVar(&links, "links", "", "Explorer url")
+	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 
@@ -448,6 +463,11 @@ func Run(args []string) {
 	if peers != "" {
 		peers = strings.ReplaceAll(peers, " ", "")
 		cmd.peers = strings.Split(peers, ",")
+	}
+
+	if links != "" {
+		links = strings.ReplaceAll(links, " ", "")
+		cmd.links = strings.Split(links, ",")
 	}
 
 	cmd.timeout = time.Duration(timeout) * time.Minute
@@ -572,6 +592,14 @@ func Run(args []string) {
 		cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
+	case AddExplorerCmd:
+		cmd.addExplorer()
+	case RemoveExplorerCmd:
+		cmd.removeExplorer()
+	case GetAllExplorerCmd:
+		cmd.getAllExplorer()
+	case AddUserAPIKeyCmd:
+		cmd.addUserAPIKey()
 	case ReleaseAllLockedTokensCmd:
 		cmd.releaseAllLockedTokens()
 	case CheckQuorumStatusCmd:

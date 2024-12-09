@@ -683,3 +683,15 @@ func (b *Block) GetTokenValue() float64 {
 func (b *Block) GetChildTokens() []string {
 	return util.GetStringSliceFromMap(b.bm, TCChildTokensKey)
 }
+func (b *Block) GetTokenLevel(token string) (int, int) {
+	gtm := b.getGenesisTokenMap(token)
+	tokenLevel := util.GetIntFromMap(gtm, GITokenLevelKey)
+	tokenNum := util.GetIntFromMap(gtm, GITokenNumberKey)
+	return tokenLevel, tokenNum
+}
+
+func (b *Block) GetPledgedTokens() {
+	pledgedInfo := util.GetFromMap(b.bm, TCPledgeDetailsKey)
+	fmt.Println(pledgedInfo)
+	// return
+}

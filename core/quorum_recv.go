@@ -771,7 +771,7 @@ func (c *Core) updateReceiverToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to update token status, failed to get block ID"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	td := &wallet.TransactionDetails{
+	td := &model.TransactionDetails{
 		TransactionID:   b.GetTid(),
 		TransactionType: b.GetTransType(),
 		BlockID:         bid,

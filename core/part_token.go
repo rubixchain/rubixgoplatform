@@ -193,6 +193,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		c.log.Error("failed to get parent detials", "err", err)
 		return nil, err
 	}
+	var ChildTokenList []ChildToken
 	for i := range parts {
 		rt := &rac.RacType{
 			Type:        c.RACPartTokenType(),
@@ -269,7 +270,15 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 			c.log.Error("Failed to create part token, failed to add token chan block", "err", err)
 			return nil, err
 		}
+		ChildTokenList = append(ChildTokenList, ChildToken{ChildTokenID: pt, TokenValue: parts[i]})
 	}
+	newPartToken := &ExplorerCreateTokenParts{
+		ChildTokenList: ChildTokenList,
+		UserDID:        did,
+		ParentToken:    tkn,
+	}
+	c.ec.ExplorerTokenCreateParts(newPartToken)
+
 	bti := &block.TransInfo{
 		Tokens: []block.TransTokens{
 			{

@@ -321,7 +321,7 @@ func (c *Core) addNFTSaleContract(reqID string, sr *NFTSaleReq) *model.BasicResp
 		SenderPeerID:  c.peerID,
 		ContractBlock: sc.GetBlock(),
 	}
-	_, _, err = c.initiateConsensus(cr, sc, dc)
+	_, _, _, err = c.initiateConsensus(cr, sc, dc)
 	c.log.Info("NFTs sale contract added successfully")
 	resp.Status = true
 	msg := fmt.Sprintf("NFTs sale contract added successfully")

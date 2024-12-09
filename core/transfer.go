@@ -143,6 +143,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	tis := make([]contract.TokenInfo, 0)
+	tokenListForExplorer := []Token{}
 	for i := range tokensForTxn {
 		tts := "rbt"
 		if tokensForTxn[i].TokenValue != 1 {
@@ -169,6 +170,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			BlockID:    bid,
 		}
 		tis = append(tis, ti)
+		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: ti.Token, TokenValue: ti.TokenValue})
 	}
 	sct := &contract.ContractType{
 		Type:       contract.SCRBTDirectType,
@@ -196,7 +198,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		ReceiverPeerID: rpeerid,
 		ContractBlock:  sc.GetBlock(),
 	}
-	td, _, err := c.initiateConsensus(cr, sc, dc)
+	td, _, pds, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed ", "err", err)
 		resp.Message = "Consensus failed " + err.Error()
@@ -207,24 +209,21 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	td.Amount = req.TokenCount
 	td.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(td)
-	/* blockHash, err := extractHash(td.BlockID)
-	if err != nil {
-		c.log.Error("Consensus failed", "err", err)
-		resp.Message = "Consensus failed" + err.Error()
-		return resp
-	} */
-	etrans := &ExplorerTrans{
-		TID:         td.TransactionID,
-		SenderDID:   did,
-		ReceiverDID: rdid,
-		Amount:      req.TokenCount,
-		TrasnType:   req.Type,
-		TokenIDs:    wta,
-		QuorumList:  cr.QuorumList,
-		TokenTime:   float64(dif.Milliseconds()),
-		//BlockHash:   blockHash,
+	etrans := &ExplorerRBTTrans{
+		TokenHashes:    wta,
+		TransactionID:  td.TransactionID,
+		BlockHash:      strings.Split(td.BlockID, "-")[1],
+		Network:        req.Type,
+		SenderDID:      did,
+		ReceiverDID:    rdid,
+		Amount:         req.TokenCount,
+		QuorumList:     extractQuorumDID(cr.QuorumList),
+		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		TransTokenList: tokenListForExplorer,
+		Comments:       req.Comment,
 	}
-	c.ec.ExplorerTransaction(etrans)
+
+	c.ec.ExplorerRBTTransaction(etrans)
 	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
 	resp.Status = true
 	msg := fmt.Sprintf("Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
@@ -232,10 +231,15 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	return resp
 }
 
-func extractHash(input string) (string, error) {
-	values := strings.Split(input, "-")
-	if len(values) != 2 {
-		return "", fmt.Errorf("invalid format: %s", input)
+func extractQuorumDID(quorumList []string) []string {
+	var quorumListDID []string
+	for _, quorum := range quorumList {
+		parts := strings.Split(quorum, ".")
+		if len(parts) > 1 {
+			quorumListDID = append(quorumListDID, parts[1])
+		} else {
+			quorumListDID = append(quorumListDID, parts[0])
+		}
 	}
-	return values[1], nil
+	return quorumListDID
 }

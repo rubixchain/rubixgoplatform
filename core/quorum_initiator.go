@@ -78,7 +78,7 @@ type PledgeDetails struct {
 	NumPledgedTokens       int
 	PledgedTokens          map[string][]string
 	PledgedTokenChainBlock map[string]interface{}
-	TokenList              []string
+	TokenList              []Token
 }
 
 type PledgeRequest struct {
@@ -227,7 +227,7 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 	// c.qlock.Unlock()
 }
 
-func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*wallet.TransactionDetails, map[string]map[string]float64, error) {
+func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
 	cs := ConsensusStatus{
 		Credit: CreditScore{
 			Credit: make([]CreditSignature, 0),
@@ -265,7 +265,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		NumPledgedTokens:       0,
 		PledgedTokens:          make(map[string][]string),
 		PledgedTokenChainBlock: make(map[string]interface{}),
-		TokenList:              make([]string, 0),
+		TokenList:              make([]Token, 0),
 	}
 	//getting last character from TID
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
@@ -275,7 +275,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	ql := c.qm.GetQuorum(cr.Type, lastCharTID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
 	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
-		return nil, nil, fmt.Errorf("failed to get required quorums")
+		return nil, nil, nil, fmt.Errorf("failed to get required quorums")
 	}
 	var finalQl []string
 	var errFQL error
@@ -283,12 +283,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		finalQl, errFQL = c.GetFinalQuorumList(ql)
 		if errFQL != nil {
 			c.log.Error("unable to get consensus from quorum(s). err: ", errFQL)
-			return nil, nil, errFQL
+			return nil, nil, nil, errFQL
 		}
 		cr.QuorumList = finalQl
 		if len(finalQl) != MinQuorumRequired {
 			c.log.Error("quorum(s) are unavailable for this trnx")
-			return nil, nil, fmt.Errorf("quorum(s) are unavailable for this trnx. retry trnx after some time")
+			return nil, nil, nil, fmt.Errorf("quorum(s) are unavailable for this trnx. retry trnx after some time")
 		}
 	} else {
 		cr.QuorumList = ql
@@ -337,13 +337,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
 	if err != nil {
 		c.log.Error("Failed to pledge token", "err", err)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	c.sendQuorumCredit(cr)
 	ti := sc.GetTransTokenInfo()
@@ -368,7 +368,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		defer rp.Close()
 		sr := SendTokenRequest{
@@ -381,7 +381,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if strings.Contains(br.Message, "failed to sync tokenchain") {
 			tokenPrefix := "Token: "
@@ -400,39 +400,39 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if err1 != nil {
 				errMsg := fmt.Sprintf("Consensus failed due to token chain sync issue, issueType string conversion, err %v", err1)
 				c.log.Error(errMsg)
-				return nil, nil, fmt.Errorf(errMsg)
+				return nil, nil, nil, fmt.Errorf(errMsg)
 			}
 			c.log.Debug("issue type in int is ", issueTypeInt)
 			syncIssueTokenDetails, err2 := c.w.ReadToken(token)
 			if err2 != nil {
 				errMsg := fmt.Sprintf("Consensus failed due to tokenchain sync issue, err %v", err2)
 				c.log.Error(errMsg)
-				return nil, nil, fmt.Errorf(errMsg)
+				return nil, nil, nil, fmt.Errorf(errMsg)
 			}
 			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
 			if issueTypeInt == TokenChainNotSynced {
 				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
 				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
 				c.w.UpdateToken(syncIssueTokenDetails)
-				return nil, nil, errors.New(br.Message)
+				return nil, nil, nil, errors.New(br.Message)
 			}
 		}
 		if !br.Status {
 			c.log.Error("Unable to send tokens to receiver", "msg", br.Message)
-			return nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
+			return nil, nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
 		}
 
 		//trigger pledge finality to the quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
-			return nil, nil, pledgeFinalityError
+			return nil, nil, nil, pledgeFinalityError
 		}
 
 		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal())
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for _, t := range ti {
 			c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
@@ -442,10 +442,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		nbid, err := nb.GetBlockID(ti[0].Token)
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
-		td := wallet.TransactionDetails{
+		td := model.TransactionDetails{
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
@@ -456,14 +456,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			DateTime:        time.Now(),
 			Status:          true,
 		}
-		return &td, pl, nil
+		return &td, pl, pds, nil
 	} else if cr.Mode == DTCommitMode {
 		err = c.w.CreateTokenBlock(nb)
 		if err != nil {
 			c.log.Error("Failed to create token block", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		td := wallet.TransactionDetails{
+		td := model.TransactionDetails{
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			DateTime:        time.Now(),
@@ -474,53 +474,53 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
-			return nil, nil, pledgeFinalityError
+			return nil, nil, nil, pledgeFinalityError
 		}
-		return &td, pl, nil
+		return &td, pl, pds, nil
 	} else if cr.Mode == SmartContractDeployMode {
 		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
 		if err != nil {
 			c.log.Error("smart contract token chain creation failed", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		//update smart contracttoken status to deployed in DB
 		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsDeployed)
 		if err != nil {
 			c.log.Error("Failed to update smart contract Token deploy detail in storage", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		c.log.Debug("creating commited token block")
 		//create new committed block to be updated to the commited RBT tokens
 		err = c.createCommitedTokensBlock(nb, cr.SmartContractToken, dc)
 		if err != nil {
 			c.log.Error("Failed to create commited RBT tokens block ", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		//update committed RBT token with the new block also and lock the RBT
 		//and change token status to commited, to prevent being used for txn or pledging
 		commitedRbtTokens, err := nb.GetCommitedTokenDetials(cr.SmartContractToken)
 		if err != nil {
 			c.log.Error("Failed to fetch commited rbt tokens", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		err = c.w.CommitTokens(sc.GetDeployerDID(), commitedRbtTokens)
 		if err != nil {
 			c.log.Error("Failed to update commited RBT tokens in DB ", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		newBlockId, err := nb.GetBlockID(cr.SmartContractToken)
 		if err != nil {
 			c.log.Error("failed to get new block id ", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		//trigger pledge finality to the quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
-			return nil, nil, pledgeFinalityError
+			return nil, nil, nil, pledgeFinalityError
 		}
 
 		//Todo pubsub - publish smart contract token details
@@ -536,7 +536,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Failed to publish smart contract deployed info")
 		}
 
-		txnDetails := wallet.TransactionDetails{
+		txnDetails := model.TransactionDetails{
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         newBlockId,
@@ -546,33 +546,34 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			DateTime:        time.Now(),
 			Status:          true,
 		}
-		return &txnDetails, pl, nil
+		return &txnDetails, pl, pds, nil
 	} else { //execute mode
 
 		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
 		if err != nil {
 			c.log.Error("smart contract token chain creation failed", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		//update smart contracttoken status to deployed in DB
 		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsExecuted)
 		if err != nil {
 			c.log.Error("Failed to update smart contract Token execute detail in storage", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		newBlockId, err := nb.GetBlockID(cr.SmartContractToken)
 		if err != nil {
 			c.log.Error("failed to get new block id ", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
+
 		}
 
 		//trigger pledge finality to the quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
-			return nil, nil, pledgeFinalityError
+			return nil, nil, nil, pledgeFinalityError
 		}
 
 		//Todo pubsub - publish smart contract token details
@@ -588,7 +589,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Failed to publish smart contract Executed info")
 		}
 
-		txnDetails := wallet.TransactionDetails{
+		txnDetails := model.TransactionDetails{
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         newBlockId,
@@ -598,7 +599,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			DateTime:        time.Now(),
 			Status:          true,
 		}
-		return &txnDetails, pl, nil
+		return &txnDetails, pl, pds, nil
 	}
 }
 
@@ -1101,7 +1102,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, 10)
 						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
 						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
-						pd.TokenList = append(pd.TokenList, t)
+						pd.TokenList = append(pd.TokenList, Token{TokenHash: prs.Tokens[i], TokenValue: prs.TokenValue[i]})
 					}
 				}
 				c.qlock.Lock()

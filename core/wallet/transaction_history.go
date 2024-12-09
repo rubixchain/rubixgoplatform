@@ -2,6 +2,8 @@ package wallet
 
 import (
 	"time"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 const (
@@ -32,7 +34,7 @@ type TransactionCount struct {
 	TxnReceived int
 }
 
-func (w *Wallet) AddTransactionHistory(td *TransactionDetails) error {
+func (w *Wallet) AddTransactionHistory(td *model.TransactionDetails) error {
 	err := w.s.Write(TransactionStorage, td)
 	if err != nil {
 		w.log.Error("Failed to store transaction history", "err", err)

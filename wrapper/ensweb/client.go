@@ -128,6 +128,34 @@ func (c *Client) JSONRequest(method string, requestPath string, model interface{
 	return req, err
 }
 
+func (c *Client) JSONRequestForExplorer(method string, requestPath string, model interface{}, explorerURL string, apiKeyForHeader string) (*http.Request, error) {
+	var body *bytes.Buffer
+	if model != nil {
+		j, err := json.Marshal(model)
+		if err != nil {
+			return nil, err
+		}
+		body = bytes.NewBuffer(j)
+	} else {
+		body = bytes.NewBuffer(make([]byte, 0))
+	}
+
+	url := explorerURL + requestPath
+
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	if apiKeyForHeader != "" {
+		req.Header.Set("X-API-Key", apiKeyForHeader)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	return req, err
+}
+
 func (c *Client) MultiFormRequest(method string, requestPath string, field map[string]string, files map[string]string) (*http.Request, error) {
 	var b bytes.Buffer
 	w := multipart.NewWriter(&b)

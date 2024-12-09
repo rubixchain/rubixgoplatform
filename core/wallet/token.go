@@ -42,6 +42,7 @@ type Token struct {
 	TokenValue    float64 `gorm:"column:token_value"`
 	DID           string  `gorm:"column:did"`
 	TokenStatus   int     `gorm:"column:token_status;"`
+	Added         bool    `gorm:"column:added"`
 }
 
 func (w *Wallet) CreateToken(t *Token) error {
