@@ -62,11 +62,21 @@ func (w *Wallet) GetDIDs(dir string) ([]DIDType, error) {
 
 func (w *Wallet) GetDIDDir(dir string, did string) (*DIDType, error) {
 	var dt DIDType
-	err := w.s.Read(DIDStorage, &dt, "did_dir=? AND did=?", dir, did)
-	if err != nil {
-		w.log.Error("Failed to get DID", "err", err)
-		return nil, err
+
+	if dir == "" {
+		err := w.s.Read(DIDStorage, &dt, "did=?", did)
+		if err != nil {
+			w.log.Error("DID does not exist", "did", did)
+			return nil, err // Added missing return for error
+		}
+	} else {
+		err := w.s.Read(DIDStorage, &dt, "did_dir=? AND did=?", dir, did)
+		if err != nil {
+			w.log.Error("Failed to get DID", "err", err)
+			return nil, err // Return error here as well
+		}
 	}
+
 	return &dt, nil
 }
 

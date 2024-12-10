@@ -1,7 +1,10 @@
-package command
+package core
 
 import (
+	"fmt"
 	"strconv"
+
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 // Define a map for key translation
@@ -18,7 +21,6 @@ var keyMapping = map[string]string{
 	"10":    "TCTokenValueKey",
 	"11":    "TCChildTokensKey",
 	"12":    "TCSenderSignatureKey",
-	"13":    "TCNFTDataKey",
 	"98":    "TCBlockHashKey",
 	"99":    "TCSignatureKey",
 	"epoch": "TCEpoch",
@@ -117,4 +119,128 @@ func applyKeyMapping(value interface{}) interface{} {
 func isInteger(s string) bool {
 	_, err := strconv.Atoi(s)
 	return err == nil
+}
+
+func tcMarshal(str string, m interface{}) (string, error) {
+	var err error
+	switch mt := m.(type) {
+	case []map[string]interface{}:
+		str = str + "["
+		c1 := false
+		for i := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			str, err = tcMarshal(str, mt[i])
+			if err != nil {
+				return "", err
+			}
+		}
+		str = str + "]"
+	case map[string]interface{}:
+		str = str + "{"
+		c1 := false
+		for k, v := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			str = str + "\"" + k + "\":"
+			s, ok := v.(string)
+			if ok {
+				str = str + "\"" + s + "\""
+			} else {
+				str, err = tcMarshal(str, v)
+				if err != nil {
+					return "", err
+				}
+			}
+		}
+		str = str + "}"
+	case map[string]string:
+		str = str + "{"
+		c1 := false
+		for k, v := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			str = str + "\"" + k + "\":"
+			str = str + "\"" + v + "\""
+		}
+
+		str = str + "}"
+	case map[interface{}]interface{}:
+		str = str + "{"
+		c1 := false
+		for k, v := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			str = str + "\"" + k.(string) + "\":"
+			str, err = tcMarshal(str, v)
+			if err != nil {
+				return "", err
+			}
+		}
+
+		str = str + "}"
+	case []string:
+		str = str + "["
+		c1 := false
+		for _, mf := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			str, err = tcMarshal(str, mf)
+			if err != nil {
+				return "", err
+			}
+		}
+		str = str + "]"
+	case []byte:
+		str = str + "\"" + util.HexToStr(mt) + "\""
+	case string:
+		str = str + "\"" + mt + "\""
+	case []interface{}:
+		str = str + "["
+		c1 := false
+		for _, mf := range mt {
+			if c1 {
+				str = str + ","
+			}
+			c1 = true
+			s, ok := mf.(string)
+			if ok {
+				str = str + "\"" + s + "\""
+			} else {
+				str, err = tcMarshal(str, mf)
+				if err != nil {
+					return "", err
+				}
+			}
+		}
+		str = str + "]"
+	case uint64:
+		str = str + fmt.Sprintf("%d", mt)
+	case int:
+		str = str + fmt.Sprintf("%d", mt)
+	case float64:
+		// TokenValue (key: "10") is a float value and needs to have a precision of 5
+		// in the output dump file
+		str = str + fmt.Sprintf("%.5f", mt)
+	case interface{}:
+		str, err = tcMarshal(str, mt)
+		if err != nil {
+			return "", err
+		}
+	case nil:
+		str = str + "\"" + "\""
+	default:
+		return "", fmt.Errorf("invalid type %T", mt)
+	}
+	return str, nil
 }

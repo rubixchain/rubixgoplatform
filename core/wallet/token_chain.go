@@ -30,6 +30,7 @@ const (
 	TestNFTType            string = "tn"
 	ReferenceType          string = "rf"
 	SmartContractTokenType string = "st"
+	FTTokenType            string = "ft"
 )
 
 const TCBlockCountLimit int = 100
@@ -60,6 +61,8 @@ func tcsType(tokenType int) string {
 		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
+	case tkn.FTTokenType:
+		tt = FTTokenType
 	}
 	return tt + "-"
 }
@@ -83,6 +86,8 @@ func tcsPrefix(tokenType int, t string) string {
 		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
+	case tkn.FTTokenType:
+		tt = FTTokenType
 	}
 	return tt + "-" + t + "-"
 }
@@ -106,6 +111,8 @@ func tcsKey(tokenType int, t string, blockID string) string {
 		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
+	case tkn.FTTokenType:
+		tt = FTTokenType
 	}
 	bs := strings.Split(blockID, "-")
 	if len(bs) == 2 {
@@ -149,6 +156,8 @@ func oldtcsKey(tokenType int, t string, blockID string) string {
 		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
+	case tkn.FTTokenType:
+		tt = FTTokenType
 	}
 	return tt + "-" + t + "-" + blockID
 }
@@ -182,6 +191,8 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 		db = w.ntcs
 	case tkn.SmartContractTokenType:
 		db = w.smartContractTokenChainStorage
+	case tkn.FTTokenType:
+		db = w.FTChainStorage
 	}
 	return db
 }
@@ -425,7 +436,7 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 		db.l.Lock()
 		err = db.Put([]byte(key), b.GetBlock(), opt)
 		if tt == tkn.TestTokenType {
-			w.log.Debug("Writtent", "key", key)
+			w.log.Debug("Written", "key", key)
 		}
 		db.l.Unlock()
 		return err
