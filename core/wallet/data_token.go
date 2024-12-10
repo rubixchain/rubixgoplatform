@@ -2,6 +2,8 @@ package wallet
 
 import (
 	"fmt"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 type DataToken struct {
@@ -54,10 +56,10 @@ func (w *Wallet) GetDataToken(batchID string) ([]DataToken, error) {
 	return dts, nil
 }
 
-func (w *Wallet) GetDataTokenByDID(did string) ([]DataToken, error) {
+func (w *Wallet) GetDataTokenByDID(did string) ([]model.DataToken, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
-	var dts []DataToken
+	var dts []model.DataToken
 	err := w.s.Read(DataTokenStorage, &dts, "did=?", did)
 	if err != nil {
 		return nil, err

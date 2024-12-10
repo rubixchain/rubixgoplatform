@@ -378,7 +378,7 @@ func (c *Core) CheckDataToken(dt string) bool {
 	return true
 }
 
-func (c *Core) GetDataTokens(did string) []wallet.DataToken {
+func (c *Core) GetDataTokens(did string) []model.DataToken {
 	dt, err := c.w.GetDataTokenByDID(did)
 	if err != nil {
 		c.log.Error("failed to get data tokens", "err", err)
