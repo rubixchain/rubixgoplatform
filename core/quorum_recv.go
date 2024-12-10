@@ -739,9 +739,19 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
-	ok, sc := c.verifyContract(cr, did)
-	if !ok {
-		crep.Message = "Failed to verify sender signature"
+	sc := contract.InitContract(cr.ContractBlock, nil)
+	//initiate trans token block
+	transTknBlock := block.InitBlock(cr.TransTokenBlock, nil, block.NoSignature())
+	if transTknBlock == nil {
+		c.log.Error("Failed to do signature, invalid token chain block")
+		crep.Message = "Failed to do signature, invalid token chanin block"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	//Validate sender signature
+	response, err := c.ValidateTxnInitiator(transTknBlock)
+	if err != nil {
+		c.log.Error("signature request failed, msg", response.Message, "err", err)
+		crep.Message = response.Message
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	//check if token has multiple pins
@@ -836,8 +846,15 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 
 	c.log.Debug("Finished FT Tokenstate check")
 
-	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	//get trans token block hash
+	blockHash, err := transTknBlock.GetHash()
+	if err != nil {
+		c.log.Error("failed to get trans-block-hash for credit; err", err)
+		crep.Message = err.Error()
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	//quorum's signature on block hash
+	qsb, ppb, err := qdc.Sign(blockHash)
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
@@ -848,6 +865,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	crep.Message = "FT Conensus finished successfully"
 	crep.ShareSig = qsb
 	crep.PrivSig = ppb
+	crep.Hash = blockHash
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
@@ -1025,11 +1043,13 @@ func (c *Core) updateReceiverToken(
 		}
 		defer senderPeer.Close()
 
+		//validate transaction initiator (sender)
 		_, err = c.ValidateTxnInitiator(b)
 		if err != nil {
 			c.log.Error("failed to validate sender", "err", err)
 			return nil, err
 		}
+		//validate quorums
 		_, err = c.ValidateQuorums(b, receiverDID)
 		if err != nil {
 			c.log.Error("failed to validate quorum", "err", err)
@@ -1211,6 +1231,20 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		return nil, fmt.Errorf("failed to get peer : %v", err.Error())
 	}
 	defer senderPeer.Close()
+
+	//validate sender
+	_, err = c.ValidateTxnInitiator(b)
+	if err != nil {
+		c.log.Error("failed to validate FT sender", "err", err)
+		return nil, err
+	}
+	//validate quorums
+	_, err = c.ValidateQuorums(b, receiverDID)
+	if err != nil {
+		c.log.Error("failed to validate quorums", "err", err)
+		return nil, err
+	}
+
 	for _, ti := range tokenInfo {
 		t := ti.Token
 		pblkID, err := b.GetPrevBlockID(t)
