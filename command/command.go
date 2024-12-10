@@ -335,7 +335,7 @@ func (cmd *Command) runApp() {
 	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
 	c.UpdateUserInfo(dids)         //Updating the balance
 	c.GenerateUserAPIKey(dids)     //Regenerating the API Key for DID
-	c.UpdateTokenInfo()
+	//c.UpdateTokenInfo()
 	cmd.log.Info("Syncing Complete...")
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)

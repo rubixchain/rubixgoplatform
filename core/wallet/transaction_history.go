@@ -26,6 +26,7 @@ type TransactionDetails struct {
 	DateTime        time.Time `gorm:"column:date_time"`
 	Status          bool      `gorm:"column:status"`
 	DeployerDID     string    `gorm:"column:deployer_did"`
+	Epoch           int64     `gorm:"column:epoch"`
 }
 
 type TransactionCount struct {
