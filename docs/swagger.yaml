@@ -7,6 +7,38 @@ definitions:
       status:
         type: boolean
     type: object
+  model.FTInfo:
+    properties:
+      creator_did:
+        type: string
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
+    type: object
+  model.GetFTInfo:
+    properties:
+      ft_info:
+        items:
+          $ref: '#/definitions/model.FTInfo'
+        type: array
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+    type: object
+  model.GetFTTokenChainReply:
+    properties:
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+      tokenChainData:
+        items: {}
+        type: array
+    type: object
   model.NFTInfo:
     properties:
       nft:
@@ -69,6 +101,17 @@ definitions:
         items:
           $ref: '#/definitions/model.TransactionCount'
         type: array
+    type: object
+  server.CreateFTReqSwaggoInput:
+    properties:
+      did:
+        type: string
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
+      token_count:
+        type: integer
     type: object
   server.DIDPeerMapTemp:
     properties:
@@ -208,6 +251,25 @@ definitions:
       password:
         type: string
     type: object
+  server.TransferFTReqSwaggoInput:
+    properties:
+      comment:
+        type: string
+      creatorDID:
+        type: string
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
+      password:
+        type: string
+      quorum_type:
+        type: integer
+      receiver:
+        type: string
+      sender:
+        type: string
+    type: object
 info:
   contact:
     email: murali.c@ensurity.com
@@ -325,6 +387,28 @@ paths:
       summary: Create Data Token
       tags:
       - Data Tokens
+  /api/create-ft:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint will create FTs.
+      parameters:
+      - description: Create FT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.CreateFTReqSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create FT
+      tags:
+      - FT
   /api/create-nft:
     post:
       consumes:
@@ -660,6 +744,49 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
+  /api/get-ft-info-by-did:
+    get:
+      consumes:
+      - application/json
+      description: This API endpoint retrieves the names and count of FTs of a given
+        DID.
+      parameters:
+      - description: User DID
+        in: query
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.GetFTInfo'
+      summary: Get FT balance information for a given DID
+      tags:
+      - FT
+  /api/get-ft-token-chain:
+    get:
+      consumes:
+      - application/json
+      description: This API returns FT token chain data for a given FT token ID.
+      parameters:
+      - description: FT Token ID
+        in: query
+        name: tokenID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successful response with token chain data
+          schema:
+            $ref: '#/definitions/model.GetFTTokenChainReply'
+      summary: Get FT Token Chain Data
+      tags:
+      - FT
   /api/get-nft-token-chain-data:
     get:
       consumes:
@@ -742,6 +869,28 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
+  /api/initiate-ft-transfer:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint will initiate transfer of FTs.
+      parameters:
+      - description: Transfer FT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.TransferFTReqSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiate an FT transfer
+      tags:
+      - FT
   /api/initiate-pin-token:
     post:
       consumes:

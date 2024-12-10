@@ -434,3 +434,91 @@ This following options are used for this command
       NOTE: Don't provide the flag -blockCount in case you want to validate all the blocks of the token chain
   
 ```
+Create FT Command
+: To create FTs
+
+```
+./rubixgoplatform createft
+
+The following flags are used for this command
+  -did string
+        DID address (default "")
+
+  -ftName string
+        Name of the FT to be created (default "")
+
+  -ftCount integer 
+        Number of FTs to be created (default "0")
+
+  -rbtAmount integer
+        Amount of RBT to be used for creating the FT (default "0")
+
+  -port string
+        Server/Host port (default "20000")
+
+```
+Transfer FT Command
+: To transfer FT
+
+```
+./rubixgoplatform transferft
+
+The following flags are used for this command
+  -ftName string
+        Name of the FT to be transferred (default "")
+
+  -ftCount integer
+        Number of FTs to be created (default "0")
+
+  -senderAddr string
+        Sender address (default "")
+
+  -receiverAddr string
+        Receiver address (default "")
+
+  -port string
+        Server/Host port (default "20000")
+
+  -transType int
+        Transaction type (default 2)
+
+  -fp string
+        Force password to authenticate transfer (default "")
+
+  -creatorDID string
+        FT Creator DID address (default "")
+
+      NOTE: -fp flag is used when there is a password already created during DID creation
+            -creatorDID flag is used when there are multiple FTs with same name
+
+```
+Get FT Info Command
+: To get info of all FTs with the DID.
+
+```
+./rubixgoplatform getftinfo
+
+The following flags are used for this command
+  -did string
+        DID address (default "")
+
+  -port string
+        Server/Host port (default "20000")
+
+```
+Dump FT command
+: To dump the token chain of an FT.
+
+```
+./rubixgoplatform dumpft 
+
+This following flags are used for this command
+  -port string
+        Server/Host port (default "20000")
+
+  -token string
+        FT token ID (default "")
+
+```
+
+

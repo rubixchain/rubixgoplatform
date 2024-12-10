@@ -27,8 +27,8 @@ func (cmd *Command) TransferRBT() {
 			return
 		}
 	}
-	isAlphanumericSender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
-	isAlphanumericReceiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	isAlphanumericSender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.senderAddr)
+	isAlphanumericReceiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.receiverAddr)
 	if !isAlphanumericSender || !isAlphanumericReceiver {
 		cmd.log.Error("Invalid sender or receiver address. Please provide valid DID")
 		return
