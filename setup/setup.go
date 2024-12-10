@@ -48,7 +48,7 @@ const (
 	APIGetTxnByDID                      string = "/api/get-by-did"
 	APIGetTxnByComment                  string = "/api/get-by-comment"
 	APICreateNFT                        string = "/api/create-nft"
-	APIGetAllNFT                        string = "/api/getallnft"
+	APIGetAllNFT                        string = "/api/list-nfts"
 	APIAddNFTSale                       string = "/api/addnftsale"
 	APIDeploySmartContract              string = "/api/deploy-smart-contract"
 	APIExecuteSmartContract             string = "/api/execute-smart-contract"
@@ -76,12 +76,19 @@ const (
 	APIInitiatePinRBT                   string = "/api/initiate-pin-token"
 	APIRecoverRBT                       string = "/api/recover-token"
 	APIValidateTokenChain               string = "/api/validate-token-chain"
+	APICreateFT                         string = "/api/create-ft"
+	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
+	APIInitiateFTTransfer               string = "/api/initiate-ft-transfer"
+	APIGetFTInfo                        string = "/api/get-ft-info-by-did"
 	APIValidateToken                    string = "/api/validate-token"
 	APIDeployNFT                        string = "/api/deploy-nft"
 	APIExecuteNFT                       string = "/api/execute-nft"
 	APIDumpNFTTokenChain                string = "/api/dump-nft-token-chain"
 	APISubscribeNFT                     string = "/api/subscribe-nft"
 	APIGetNFTTokenChainData             string = "/api/get-nft-token-chain-data"
+	APIFetchNft                         string = "/api/fetch-nft"
+	APIGetNftsByDid                     string = "/api/get-nfts-by-did"
+	APIGetFTTokenchain                  string = "/api/get-ft-token-chain"
 )
 
 // jwt.RegisteredClaims

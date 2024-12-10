@@ -18,6 +18,7 @@ const (
 	SmartContractDeployType
 	NFTDeployType
 	NFTExecuteType
+	SCFTType
 )
 
 // ----------SmartContract----------------------

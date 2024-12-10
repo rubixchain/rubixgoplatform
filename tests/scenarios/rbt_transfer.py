@@ -94,11 +94,11 @@ def shuttle_transfer(config):
     quorum_config = get_quorum_config()
     
     for _, val in quorum_config.items():
-        add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_A, grpc_port_A)
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"]["did"], val["dids"]["did_quorum"]["did_type"], server_port_A, grpc_port_A)
 
     quorum_config2 = load_from_config_file("./quorum_config2.json")
     for _, val in quorum_config2.items():
-        add_peer_details(val["peerId"], val["dids"]["did_quorum"], 4, server_port_B, grpc_port_B)
+        add_peer_details(val["peerId"], val["dids"]["did_quorum"]["did"], val["dids"]["did_quorum"]["did_type"], server_port_B, grpc_port_B)
 
     print("\n1. Generating 2 whole RBT for A")
     expect_success(fund_did_with_rbt)(node_A_info, did_A, 2)
