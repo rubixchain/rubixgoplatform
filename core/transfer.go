@@ -126,9 +126,11 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// release the locked tokens before exit
 	defer c.w.ReleaseTokens(tokensForTxn)
 
+	c.log.Info("*** Starting to pin tokens for transfer, token count :", len(tokensForTxn))
 	for i := range tokensForTxn {
 		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, did, "TID-Not Generated", req.Sender, req.Receiver, tokensForTxn[i].TokenValue)
 	}
+	c.log.Info("*** Sender token pinning completed")
 
 	// Get the receiver & do sanity check
 	p, err := c.getPeer(req.Receiver)
@@ -198,12 +200,14 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		ReceiverPeerID: rpeerid,
 		ContractBlock:  sc.GetBlock(),
 	}
+	c.log.Info("*** Initating consensus")
 	td, _, pds, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed ", "err", err)
 		resp.Message = "Consensus failed " + err.Error()
 		return resp
 	}
+	c.log.Info("*** Consensus completed")
 	et := time.Now()
 	dif := et.Sub(st)
 	td.Amount = req.TokenCount
@@ -223,7 +227,9 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		Comments:       req.Comment,
 	}
 
+	c.log.Info("*** Sending to explorer")
 	c.ec.ExplorerRBTTransaction(etrans)
+	c.log.Info("***  Sent to explorer")
 	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
 	resp.Status = true
 	msg := fmt.Sprintf("Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)

@@ -293,6 +293,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	} else {
 		cr.QuorumList = ql
 	}
+	c.log.Info("***Quorum list", "ql", ql, " connected successfully")
 
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
@@ -711,6 +712,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 }
 
 func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contract.Contract) {
+	c.log.Info("*** Connecting to quorum : ", addr)
 	defer c.w.ReleaseAllLockedTokens()
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
@@ -721,20 +723,28 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)
 		return
 	}
+	c.log.Info("*** Initating pledge request with ", addr)
 	err = c.initPledgeQuorumToken(cr, p, qt)
 	if err != nil {
 		c.log.Error("Failed to pledge token", "err", err)
+		c.log.Info("*** Initating pledge reques failed")
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
+	c.log.Info("*** Completed pledge request with ", addr)
+
+	c.log.Info("*** Initating consensus request with ", addr)
 	var cresp ConensusReply
 	err = p.SendJSONRequest("POST", APIQuorumConsensus, nil, cr, &cresp, true, 10*time.Minute)
 	if err != nil {
+		c.log.Info("*** Initating consensus request failed with ", addr)
 		c.log.Error("Failed to get consensus", "err", err)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
+	c.log.Info("*** Completed consensus request with ", addr)
 
+	c.log.Info("*** Checking consensus request status of ", addr)
 	if strings.Contains(cresp.Message, "parent token is not in burnt stage") {
 		ptPrefix := "pt: "
 		issueTypePrefix := "issueType: "
@@ -836,7 +846,11 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
+	c.log.Info("*** Checking consensus request status completed of ", addr)
+	c.log.Info("*** Finishing consensus request status of ", addr)
 	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
+	c.log.Info("*** Consensus completed ", addr)
+
 }
 
 func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid string, dc did.DIDCrypto) (*block.Block, error) {

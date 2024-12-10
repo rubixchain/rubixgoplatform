@@ -25,6 +25,7 @@ type TokenStateCheckResult struct {
 }
 
 func (c *Core) validateSigner(b *block.Block) (bool, error) {
+	c.log.Info("***Validating signature of sender in quorum")
 	signers, err := b.GetSigner()
 	if err != nil {
 		c.log.Error("failed to get signers", "err", err)
@@ -52,6 +53,7 @@ func (c *Core) validateSigner(b *block.Block) (bool, error) {
 			return false, fmt.Errorf("Failed to verify signature", "err", err)
 		}
 	}
+	c.log.Info("***Validating signature of sender in quorum completed")
 	return true, nil
 }
 

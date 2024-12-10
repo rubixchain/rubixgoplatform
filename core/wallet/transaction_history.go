@@ -35,11 +35,13 @@ type TransactionCount struct {
 }
 
 func (w *Wallet) AddTransactionHistory(td *model.TransactionDetails) error {
+	w.log.Info("*** Adding trnx record to db")
 	err := w.s.Write(TransactionStorage, td)
 	if err != nil {
 		w.log.Error("Failed to store transaction history", "err", err)
 		return err
 	}
+	w.log.Info("*** Added trnx record to db")
 	return nil
 }
 

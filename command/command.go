@@ -180,6 +180,7 @@ type Command struct {
 	node               uint
 	runDir             string
 	logFile            string
+	vlogFile           string
 	logLevel           string
 	cfgFile            string
 	testNet            bool
@@ -189,6 +190,7 @@ type Command struct {
 	peerID             string
 	peers              []string
 	log                logger.Logger
+	vlog               logger.Logger
 	didRoot            bool
 	didType            int
 	didSecret          string
@@ -481,9 +483,19 @@ func Run(args []string) {
 		cmd.logFile = cmd.runDir + "log.txt"
 	}
 
+	if cmd.vlogFile == "" {
+		cmd.vlogFile = cmd.runDir + "vlog.txt"
+	}
+
 	level := logger.Debug
 
 	fp, err := os.OpenFile(cmd.logFile,
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+
+	vfp, err := os.OpenFile(cmd.vlogFile,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
@@ -507,7 +519,15 @@ func Run(args []string) {
 		Output: []io.Writer{logger.DefaultOutput, fp},
 	}
 
+	vlogOptions := &logger.LoggerOptions{
+		Name:   "Main",
+		Level:  logger.Debug,
+		Color:  []logger.ColorOption{logger.AutoColor, logger.ColorOff},
+		Output: []io.Writer{logger.DefaultOutput, vfp},
+	}
+
 	cmd.log = logger.New(logOptions)
+	cmd.vlog = logger.New(vlogOptions)
 
 	cmd.c, err = client.NewClient(&srvcfg.Config{ServerAddress: cmd.addr, ServerPort: cmd.port}, cmd.log, cmd.timeout)
 	if err != nil {
