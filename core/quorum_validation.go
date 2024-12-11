@@ -235,6 +235,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		}
 		signatureValidation, err := c.validateSigner(b, quorumDID, p)
 		if !signatureValidation || err != nil {
+			c.log.Error("Failed to validate token ownership ", "token ID:", ti[i].Token)
 			return false, err
 		}
 	}
