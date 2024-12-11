@@ -227,11 +227,11 @@ var commandsHelp = []string{"To get tool version",
 	"This command will transfer FT",
 	"This command will give the balance of FTs",
 	"This command will validate the token",
-	// TODO: Add description for NFT commands
-	"",
-	"",
-	"",
-	"",
+	"This command will deploy NFT",
+	"This command will execute NFT",
+	"This command will subscribe NFT",
+	"This command will fetch NFT",
+	"This command will get all NFTs owned by the did",
 }
 
 type Command struct {
