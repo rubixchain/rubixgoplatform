@@ -92,11 +92,17 @@ const (
 	PinTokenCmd                    string = "pinToken"
 	RecoverTokensCmd               string = "recoverToken"
 	ValidateTokenchainCmd          string = "validatetokenchain"
+	CreateFTCmd                    string = "create-ft"
+	DumpFTTokenChainCmd            string = "dump-ft"
+	TransferFTCmd                  string = "transfer-ft"
+	GetFTInfoCmd                   string = "get-ft-info-by-did"
 	ValidateTokenCmd               string = "validatetoken"
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
 	DeployNFTCmd                   string = "deploy-nft"
 	ExecuteNFTCmd                  string = "execute-nft"
 	SubscribeNFTCmd                string = "subscribe-nft"
+	FetchNftCmd                    string = "fetch-nft"
+	GetNftsByDidCmd                string = "get-nfts-by-did"
 )
 
 var commands = []string{VersionCmd,
@@ -151,11 +157,17 @@ var commands = []string{VersionCmd,
 	RecoverTokensCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
+	CreateFTCmd,
+	DumpFTTokenChainCmd,
+	TransferFTCmd,
+	GetFTInfoCmd,
 	ValidateTokenCmd,
 	DumpNFTTokenChainCmd,
 	DeployNFTCmd,
 	ExecuteNFTCmd,
 	SubscribeNFTCmd,
+	FetchNftCmd,
+	GetNftsByDidCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -210,7 +222,16 @@ var commandsHelp = []string{"To get tool version",
 	"This command will recover the token",
 	"This command will check the quorum status",
 	"This command will validate the token chain",
+	"This command will create FT",
+	"This command will dump the token chain of FT",
+	"This command will transfer FT",
+	"This command will give the balance of FTs",
 	"This command will validate the token",
+	"This command will deploy NFT",
+	"This command will execute NFT",
+	"This command will subscribe NFT",
+	"This command will fetch NFT",
+	"This command will get all NFTs owned by the did",
 }
 
 type Command struct {
@@ -297,6 +318,9 @@ type Command struct {
 	artifact                     string
 	nft                          string
 	nftData                      string
+	ftName                       string
+	ftCount                      int
+	creatorDID                   string
 }
 
 func showVersion() {
@@ -501,6 +525,9 @@ func Run(args []string) {
 	flag.StringVar(&cmd.metadata, "metadata", "", "NFT metadata")
 	flag.StringVar(&cmd.artifact, "artifact", "", "NFT artifact")
 	flag.StringVar(&cmd.nftData, "nftData", "", "The nft data")
+	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
+	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
+	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -632,8 +659,8 @@ func Run(args []string) {
 		cmd.SubscribeContract()
 	case CreateNFTCmd:
 		cmd.createNFT()
-	// case GetAllNFTCmd:
-	// 	cmd.getAllNFTs()
+	case GetAllNFTCmd:
+		cmd.getAllNFTs()
 	case DeploySmartContractCmd:
 		cmd.deploySmartcontract()
 	case GenerateSmartContractToken:
@@ -678,6 +705,14 @@ func Run(args []string) {
 		cmd.RecoverTokens()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
+	case CreateFTCmd:
+		cmd.createFT()
+	case DumpFTTokenChainCmd:
+		cmd.dumpFTTokenchain()
+	case TransferFTCmd:
+		cmd.transferFT()
+	case GetFTInfoCmd:
+		cmd.getFTinfo()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
 	case ExecuteNFTCmd:
@@ -688,6 +723,10 @@ func Run(args []string) {
 		cmd.dumpNFTTokenChain()
 	case SubscribeNFTCmd:
 		cmd.SubscribeNFT()
+	case FetchNftCmd:
+		cmd.fetchNFT()
+	case GetNftsByDidCmd:
+		cmd.getNFTsByDid()
 	default:
 		cmd.log.Error("Invalid command")
 	}
