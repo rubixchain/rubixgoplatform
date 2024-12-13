@@ -197,7 +197,7 @@ func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
 	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
-		s.log.Error("Invalid DID")
+		s.log.Error("Invalid DID:", did)
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
 	info, err := s.c.GetAccountInfo(did)
