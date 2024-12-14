@@ -48,7 +48,7 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	}
 	s.c.AddWebReq(req)
 	rbtAmount := int(createFTReq.TokenCount)
-	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, rbtAmount)
+	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, createFTReq.FTSymbol, rbtAmount)
 	return s.didResponse(req, req.ID)
 }
 

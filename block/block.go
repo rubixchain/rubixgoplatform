@@ -92,6 +92,7 @@ type TokenChainBlock struct {
 	NFT                []byte              `json:"nft"`
 	NFTData            string              `json:"nftData"`
 	Epoch              int                 `json:"epoch"`
+	FTInfo             *FTInfo             `json:"ftInfo"`
 }
 
 type PledgeDetail struct {
@@ -122,6 +123,14 @@ type InitiatorSignature struct {
 	DID         string `json:"InitiatorDID"`
 	Hash        string `json:"hash"`
 	SignType    int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
+}
+
+type FTInfo struct {
+	Parents  string
+	FTNum    int
+	FTName   string
+	FTSymbol string
+	FTValue  float64
 }
 
 type BlockOption func(b *Block)
