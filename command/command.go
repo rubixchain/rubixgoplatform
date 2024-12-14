@@ -82,6 +82,7 @@ const (
 	AddExplorerCmd                 string = "addexplorer"
 	RemoveExplorerCmd              string = "removeexplorer"
 	GetAllExplorerCmd              string = "getallexplorer"
+	AddUserAPIKeyCmd               string = "adduserapikey"
 	AddPeerDetailsCmd              string = "addpeerdetails"
 	GetPledgedTokenDetailsCmd      string = "getpledgedtokendetails"
 	CheckPinnedState               string = "checkpinnedstate"
@@ -270,6 +271,9 @@ type Command struct {
 	ChildPath          int
 	TokenState         string
 	pinningAddress     string
+	vlogFile           string
+	vlog               logger.Logger
+	apiKey             string
 }
 
 func showVersion() {
@@ -353,7 +357,12 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
-
+	cmd.log.Info("Syncing Details...")
+	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
+	c.UpdateUserInfo(dids)         //Updating the balance
+	c.GenerateUserAPIKey(dids)     //Regenerating the API Key for DID
+	//c.UpdateTokenInfo()
+	cmd.log.Info("Syncing Complete...")
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
 	signal.Notify(ch, syscall.SIGINT)
@@ -363,6 +372,7 @@ func (cmd *Command) runApp() {
 	}
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
+	c.ExpireUserAPIKey()
 }
 
 func (cmd *Command) validateOptions() bool {
@@ -466,6 +476,7 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
 	flag.StringVar(&links, "links", "", "Explorer url")
+	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 	flag.StringVar(&cmd.TokenState, "tokenstatehash", "", "Give Token State Hash to check state")
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 
@@ -502,9 +513,18 @@ func Run(args []string) {
 		cmd.logFile = cmd.runDir + "log.txt"
 	}
 
+	if cmd.vlogFile == "" {
+		cmd.vlogFile = cmd.runDir + "vlog.txt"
+	}
+
 	level := logger.Debug
 
 	fp, err := os.OpenFile(cmd.logFile,
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	vfp, err := os.OpenFile(cmd.vlogFile,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
@@ -528,7 +548,15 @@ func Run(args []string) {
 		Output: []io.Writer{logger.DefaultOutput, fp},
 	}
 
+	vlogOptions := &logger.LoggerOptions{
+		Name:   "Main",
+		Level:  logger.Debug,
+		Color:  []logger.ColorOption{logger.AutoColor, logger.ColorOff},
+		Output: []io.Writer{logger.DefaultOutput, vfp},
+	}
+
 	cmd.log = logger.New(logOptions)
+	cmd.vlog = logger.New(vlogOptions)
 
 	cmd.c, err = client.NewClient(&srvcfg.Config{ServerAddress: cmd.addr, ServerPort: cmd.port}, cmd.log, cmd.timeout)
 	if err != nil {
@@ -625,6 +653,8 @@ func Run(args []string) {
 		cmd.removeExplorer()
 	case GetAllExplorerCmd:
 		cmd.getAllExplorer()
+	case AddUserAPIKeyCmd:
+		cmd.addUserAPIKey()
 	case AddPeerDetailsCmd:
 		cmd.AddPeerDetails()
 	case GetPledgedTokenDetailsCmd:

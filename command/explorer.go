@@ -1,10 +1,14 @@
 package command
 
-import "fmt"
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
 
 func (cmd *Command) addExplorer() {
 	if len(cmd.links) == 0 {
-		cmd.log.Error("provide explorer links required to add")
+		cmd.log.Error("links required for Explorer")
 		return
 	}
 	msg, status := cmd.c.AddExplorer(cmd.links)
@@ -18,7 +22,7 @@ func (cmd *Command) addExplorer() {
 
 func (cmd *Command) removeExplorer() {
 	if len(cmd.links) == 0 {
-		cmd.log.Error("provide explorer links required to remove")
+		cmd.log.Error("links required for Explorer")
 		return
 	}
 	msg, status := cmd.c.RemoveExplorer(cmd.links)
@@ -39,5 +43,28 @@ func (cmd *Command) getAllExplorer() {
 		for i, q := range links {
 			fmt.Printf("URL %d: %s\n", i, q)
 		}
+	}
+}
+
+func (cmd *Command) addUserAPIKey() {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !isAlphanumeric {
+		cmd.log.Error("Invalid DID. Please provide valid DID")
+		return
+	}
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+	if cmd.apiKey == "" {
+		cmd.log.Error("API Key cannot be empty")
+		return
+	}
+	msg, status := cmd.c.AddUserAPIKey(cmd.did, cmd.apiKey)
+
+	if !status {
+		cmd.log.Error("API Key could not be added, " + msg)
+	} else {
+		cmd.log.Info("API Key added successfully")
 	}
 }
