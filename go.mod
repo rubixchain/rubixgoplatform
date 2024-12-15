@@ -16,10 +16,9 @@ require (
 )
 
 require (
-	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e // indirect
+	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e
 	github.com/btcsuite/btcd v0.23.0 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1 v1.0.4
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.15.0
@@ -32,7 +31,7 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.0
-	github.com/ipfs/go-cid v0.2.0 // indirect
+	github.com/ipfs/go-cid v0.2.0
 	github.com/jackc/pgx/v5 v5.3.1 // indirect
 	github.com/jinzhu/gorm v1.9.16
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
