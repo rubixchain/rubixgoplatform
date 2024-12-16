@@ -76,6 +76,7 @@ const (
 	APIUnpledgePOWPledgeTokens          string = "/api/unpledge-pow-unpledge-tokens"
 	APIInitiatePinRBT                   string = "/api/initiate-pin-token"
 	APIRecoverRBT                       string = "/api/recover-token"
+	APIUpdateConfig                     string = "/api/update-config"
 )
 
 // jwt.RegisteredClaims

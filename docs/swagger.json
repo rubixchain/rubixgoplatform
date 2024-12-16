@@ -1006,6 +1006,35 @@
                     }
                 }
             }
+        },
+        "/api/update-config": {
+            "post": {
+                "description": "Update config port",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "config"
+                ],
+                "summary": "Update config port",
+                "responses": {
+                    "200": {
+                        "description": "Config updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/ensweb.Result"
+                        }
+                    },
+                    "400": {
+                        "description": "Failed to update config",
+                        "schema": {
+                            "$ref": "#/definitions/ensweb.Result"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1033,6 +1062,17 @@
                     }
                 },
                 "type": {
+                    "type": "integer"
+                }
+            }
+        },
+        "ensweb.Result": {
+            "type": "object",
+            "properties": {
+                "done": {
+                    "type": "boolean"
+                },
+                "status": {
                     "type": "integer"
                 }
             }

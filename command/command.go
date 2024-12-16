@@ -363,6 +363,11 @@ func (cmd *Command) runApp() {
 	c.GenerateUserAPIKey(dids)     //Regenerating the API Key for DID
 	//c.UpdateTokenInfo()
 	cmd.log.Info("Syncing Complete...")
+	cmd.log.Info(fmt.Sprintf("SendPort: %d", cmd.cfg.CfgData.Ports.SendPort))
+	cmd.log.Info(fmt.Sprintf("ReceiverPort: %d", cmd.cfg.CfgData.Ports.ReceiverPort))
+	cmd.log.Info(fmt.Sprintf("IPFSAPIPort: %d", cmd.cfg.CfgData.Ports.IPFSAPIPort))
+	cmd.log.Info(fmt.Sprintf("IPFSPort: %d", cmd.cfg.CfgData.Ports.IPFSPort))
+	cmd.log.Info(fmt.Sprintf("SwarmPort: %d", cmd.cfg.CfgData.Ports.SwarmPort))
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
 	signal.Notify(ch, syscall.SIGINT)

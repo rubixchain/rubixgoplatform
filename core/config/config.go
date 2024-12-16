@@ -51,3 +51,12 @@ type ServiceConfig struct {
 	DBPassword      string `json:"db_password"`      // DBPassword is the password  for the user
 
 }
+
+type UpdateConfigPort struct {
+	ServerPort   string `json:"server_port"`
+	IPFSAPIPort  uint16 `json:"ipfs_api_port"`
+	IPFSPort     uint16 `json:"ipfs_port"`
+	SwarmPort    uint16 `json:"swarm_port"`
+	SendPort     uint16 `json:"send_port"`
+	ReceiverPort uint16 `json:"receiver_port"`
+}

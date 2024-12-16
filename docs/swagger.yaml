@@ -17,6 +17,13 @@ definitions:
       type:
         type: integer
     type: object
+  ensweb.Result:
+    properties:
+      done:
+        type: boolean
+      status:
+        type: integer
+    type: object
   model.BasicResponse:
     properties:
       message:
@@ -868,6 +875,25 @@ paths:
       summary: Unpledge POW Based pledge Tokens
       tags:
       - Account
+  /api/update-config:
+    post:
+      consumes:
+      - application/json
+      description: Update config port
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Config updated successfully
+          schema:
+            $ref: '#/definitions/ensweb.Result'
+        "400":
+          description: Failed to update config
+          schema:
+            $ref: '#/definitions/ensweb.Result'
+      summary: Update config port
+      tags:
+      - config
 securityDefinitions:
   SessionToken:
     in: header

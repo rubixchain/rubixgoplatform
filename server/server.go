@@ -169,6 +169,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIUnpledgePOWPledgeTokens, "POST", s.AuthHandle(s.UnpledgePoWBasedPledgedTokens, false, s.AuthError, true))
 	s.AddRoute(setup.APIInitiatePinRBT, "POST", s.AuthHandle(s.APIInitiatePinRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIRecoverRBT, "POST", s.AuthHandle(s.APIRecoverRBT, true, s.AuthError, false))
+	s.AddRoute(setup.APIUpdateConfig, "POST", s.AuthHandle(s.APIUpdateConfigPort, true, s.AuthError, true))
 }
 
 func (s *Server) ExitFunc() error {
