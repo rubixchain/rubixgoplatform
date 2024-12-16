@@ -492,7 +492,7 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 				w.log.Error("Failed to get block number", "err", err)
 				return err
 			}
-			if lbn+1 != bn {
+			if bn <= lbn {
 				w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
 				return fmt.Errorf("invalid block number, sequence missing")
 			}
