@@ -776,6 +776,35 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/api/update-config": {
+            "post": {
+                "description": "Update config port",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "config"
+                ],
+                "summary": "Update config port",
+                "responses": {
+                    "200": {
+                        "description": "Config updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/ensweb.Result"
+                        }
+                    },
+                    "400": {
+                        "description": "Failed to update config",
+                        "schema": {
+                            "$ref": "#/definitions/ensweb.Result"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -803,6 +832,17 @@ const docTemplate = `{
                     }
                 },
                 "type": {
+                    "type": "integer"
+                }
+            }
+        },
+        "ensweb.Result": {
+            "type": "object",
+            "properties": {
+                "done": {
+                    "type": "boolean"
+                },
+                "status": {
                     "type": "integer"
                 }
             }
@@ -848,6 +888,20 @@ const docTemplate = `{
                 }
             }
         },
+        "model.TransactionCount": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "txnReceived": {
+                    "type": "integer"
+                },
+                "txnSend": {
+                    "type": "integer"
+                }
+            }
+        },
         "model.TxnCountForDID": {
             "type": "object",
             "properties": {
@@ -861,7 +915,7 @@ const docTemplate = `{
                 "txnCount": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/wallet.TransactionCount"
+                        "$ref": "#/definitions/model.TransactionCount"
                     }
                 }
             }
@@ -975,20 +1029,6 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string"
-                }
-            }
-        },
-        "wallet.TransactionCount": {
-            "type": "object",
-            "properties": {
-                "did": {
-                    "type": "string"
-                },
-                "txnReceived": {
-                    "type": "integer"
-                },
-                "txnSend": {
-                    "type": "integer"
                 }
             }
         }

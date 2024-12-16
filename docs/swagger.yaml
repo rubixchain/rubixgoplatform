@@ -17,6 +17,13 @@ definitions:
       type:
         type: integer
     type: object
+  ensweb.Result:
+    properties:
+      done:
+        type: boolean
+      status:
+        type: integer
+    type: object
   model.BasicResponse:
     properties:
       message:
@@ -44,6 +51,15 @@ definitions:
           $ref: '#/definitions/model.NFTStatus'
         type: array
     type: object
+  model.TransactionCount:
+    properties:
+      did:
+        type: string
+      txnReceived:
+        type: integer
+      txnSend:
+        type: integer
+    type: object
   model.TxnCountForDID:
     properties:
       message:
@@ -53,7 +69,7 @@ definitions:
         type: boolean
       txnCount:
         items:
-          $ref: '#/definitions/wallet.TransactionCount'
+          $ref: '#/definitions/model.TransactionCount'
         type: array
     type: object
   server.DeploySmartContractSwaggoInput:
@@ -127,15 +143,6 @@ definitions:
         type: integer
       password:
         type: string
-    type: object
-  wallet.TransactionCount:
-    properties:
-      did:
-        type: string
-      txnReceived:
-        type: integer
-      txnSend:
-        type: integer
     type: object
 info:
   contact:
@@ -646,6 +653,25 @@ paths:
       summary: Subscribe to Smart Contract
       tags:
       - Smart Contract
+  /api/update-config:
+    post:
+      consumes:
+      - application/json
+      description: Update config port
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Config updated successfully
+          schema:
+            $ref: '#/definitions/ensweb.Result'
+        "400":
+          description: Failed to update config
+          schema:
+            $ref: '#/definitions/ensweb.Result'
+      summary: Update config port
+      tags:
+      - config
 securityDefinitions:
   SessionToken:
     in: header

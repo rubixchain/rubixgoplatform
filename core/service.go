@@ -65,6 +65,39 @@ func (c *Core) ConfigureService(cfg *config.ServiceConfig) error {
 	return nil
 }
 
+func (c *Core) UpdateConfigPort(pcfg *config.UpdateConfigPort) error {
+
+	if pcfg.ServerPort != "" {
+		c.log.Info("Updating server port", "port", pcfg.ServerPort)
+		c.cfg.NodePort = pcfg.ServerPort
+	}
+	if pcfg.IPFSAPIPort != 0 {
+		c.log.Info("Updating ipfs api port", "port", pcfg.IPFSAPIPort)
+		c.cfg.CfgData.Ports.IPFSAPIPort = pcfg.IPFSAPIPort
+	}
+	if pcfg.IPFSPort != 0 {
+		c.log.Info("Updating ipfs port", "port", pcfg.IPFSPort)
+		c.cfg.CfgData.Ports.IPFSPort = pcfg.IPFSPort
+	}
+	if pcfg.SwarmPort != 0 {
+		c.log.Info("Updating swarm port", "port", pcfg.SwarmPort)
+		c.cfg.CfgData.Ports.SwarmPort = pcfg.SwarmPort
+	}
+	if pcfg.SendPort != 0 {
+		c.log.Info("Updating sender port", "port", pcfg.SendPort)
+		c.cfg.CfgData.Ports.SendPort = pcfg.SendPort
+	}
+	if pcfg.ReceiverPort != 0 {
+		c.log.Info("Updating receiver port", "port", pcfg.ReceiverPort)
+		c.cfg.CfgData.Ports.ReceiverPort = pcfg.ReceiverPort
+	}
+	err := c.updateConfig()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *Core) initServices() error {
 	if c.cfg.CfgData.Services == nil {
 		return nil
