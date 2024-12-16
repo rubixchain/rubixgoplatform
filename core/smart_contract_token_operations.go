@@ -2,6 +2,8 @@ package core
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/contract"
@@ -61,7 +63,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	rbtTokensToCommit := make([]string, 0)
 
 	defer c.w.ReleaseTokens(rbtTokensToCommitDetails)
-
+	tokenListForExplorer := []Token{}
 	for i := range rbtTokensToCommitDetails {
 		c.w.Pin(rbtTokensToCommitDetails[i].TokenID, wallet.OwnerRole, did, "NA", "NA", "NA", float64(0)) //TODO: Ensure whether trnxId should be added ?
 		rbtTokensToCommit = append(rbtTokensToCommit, rbtTokensToCommitDetails[i].TokenID)
@@ -95,6 +97,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 			BlockID:    blockId,
 		}
 		rbtTokenInfoArray = append(rbtTokenInfoArray, tokenInfo)
+		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: tokenInfo.Token, TokenValue: tokenInfo.TokenValue})
 	}
 
 	smartContractInfo := contract.TokenInfo{
@@ -147,7 +150,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		TransactionEpoch:   txEpoch,
 	}
 
-	txnDetails, _, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)
+	txnDetails, _, pds, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)
 
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
@@ -161,17 +164,34 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	c.w.AddTransactionHistory(txnDetails)
 	tokens := make([]string, 0)
 	tokens = append(tokens, deployReq.SmartContractToken)
-	explorerTrans := &ExplorerTrans{
-		TID:         txnDetails.TransactionID,
-		DeployerDID: did,
-		Amount:      deployReq.RBTAmount,
-		TrasnType:   conensusRequest.Type,
-		TokenIDs:    tokens,
-		QuorumList:  conensusRequest.QuorumList,
-		TokenTime:   float64(dif.Milliseconds()),
-		//BlockHash:   txnDetails.BlockID,
+	// _ = &ExplorerTrans{
+	// 	TID:         txnDetails.TransactionID,
+	// 	DeployerDID: did,
+	// 	Amount:      deployReq.RBTAmount,
+	// 	TrasnType:   conensusRequest.Type,
+	// 	TokenIDs:    tokens,
+	// 	QuorumList:  conensusRequest.QuorumList,
+	// 	TokenTime:   float64(dif.Milliseconds()),
+	// 	//BlockHash:   txnDetails.BlockID,
+	// }
+	blockNoPart := strings.Split(txnDetails.BlockID, "-")[0]
+	// Convert the string part to an int
+	blockNoInt, _ := strconv.Atoi(blockNoPart)
+
+	eTrans := &ExplorerSCTrans{
+		SCBlockHash:        []SCToken{{SCTokenHash: deployReq.SmartContractToken, SCBlockHash: strings.Split(txnDetails.BlockID, "-")[1], SCBlockNumber: blockNoInt}},
+		TransactionID:      txnDetails.TransactionID,
+		Network:            conensusRequest.Type,
+		ExecutorDID:        "",
+		DeployerDID:        did,
+		Creator:            did,
+		PledgeAmount:       deployReq.RBTAmount,
+		QuorumList:         extractQuorumDID(conensusRequest.QuorumList),
+		PledgeInfo:         PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		CommittedTokenList: tokenListForExplorer,
+		Comments:           deployReq.Comment,
 	}
-	c.ec.ExplorerTransaction(explorerTrans)
+	c.ec.ExplorerSCTransaction(eTrans)
 
 	c.log.Info("Smart Contract Token Deployed successfully", "duration", dif)
 	resp.Status = true
@@ -193,7 +213,7 @@ func (c *Core) ExecuteSmartContractToken(reqID string, executeReq *model.Execute
 func (c *Core) executeSmartContractToken(reqID string, executeReq *model.ExecuteSmartContractRequest) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
-	
+
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -281,7 +301,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		resp.Message = "failed to create consensus contract block"
 		return resp
 	}
-	conensusRequest := &ConensusRequest{
+	consensusRequest := &ConensusRequest{
 		ReqID:              uuid.New().String(),
 		Type:               executeReq.QuorumType,
 		ExecuterPeerID:     c.peerID,
@@ -291,7 +311,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		TransactionEpoch:   txEpoch,
 	}
 
-	txnDetails, _, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)
+	txnDetails, _, pds, err := c.initiateConsensus(consensusRequest, consensusContract, didCryptoLib)
 
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
@@ -303,18 +323,34 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 
 	txnDetails.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(txnDetails)
-	tokens := make([]string, 0)
-	tokens = append(tokens, executeReq.SmartContractToken)
-	explorerTrans := &ExplorerTrans{
-		TID:         txnDetails.TransactionID,
-		ExecutorDID: did,
-		TrasnType:   conensusRequest.Type,
-		TokenIDs:    tokens,
-		QuorumList:  conensusRequest.QuorumList,
-		TokenTime:   float64(dif.Milliseconds()),
-		//BlockHash:   txnDetails.BlockID,
+
+	// explorerTrans := &ExplorerTrans{
+	// 	TID:         txnDetails.TransactionID,
+	// 	ExecutorDID: did,
+	// 	TrasnType:   conensusRequest.Type,
+	// 	TokenIDs:    tokens,
+	// 	QuorumList:  conensusRequest.QuorumList,
+	// 	TokenTime:   float64(dif.Milliseconds()),
+	// 	//BlockHash:   txnDetails.BlockID,
+	// }
+	blockNoPart := strings.Split(txnDetails.BlockID, "-")[0]
+	// Convert the string part to an int
+	blockNoInt, _ := strconv.Atoi(blockNoPart)
+
+	eTrans := &ExplorerSCTrans{
+		SCBlockHash:        []SCToken{{SCTokenHash: executeReq.SmartContractToken, SCBlockHash: strings.Split(txnDetails.BlockID, "-")[1], SCBlockNumber: blockNoInt}},
+		TransactionID:      txnDetails.TransactionID,
+		Network:            consensusRequest.Type,
+		ExecutorDID:        did,
+		DeployerDID:        smartContractInfo.OwnerDID,
+		Creator:            smartContractInfo.OwnerDID,
+		QuorumList:         extractQuorumDID(consensusRequest.QuorumList),
+		PledgeAmount:       0,
+		PledgeInfo:         PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		CommittedTokenList: []Token{},
+		Comments:           executeReq.Comment,
 	}
-	c.ec.ExplorerTransaction(explorerTrans)
+	c.ec.ExplorerSCTransaction(eTrans)
 	/* newEvent := model.NewContractEvent{
 		Contract:          executeReq.SmartContractToken,
 		Did:               did,

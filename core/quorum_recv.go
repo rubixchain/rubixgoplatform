@@ -147,12 +147,14 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
+	c.log.Info("*** Received quorum consensus of ", qdc.GetDID())
 	ok, sc := c.verifyContract(cr, did)
 	if !ok {
 		crep.Message = "Failed to verify sender signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	//check if token has multiple pins
+	c.log.Info("*** Checking for multiple pins in token")
 	ti := sc.GetTransTokenInfo()
 	results := make([]MultiPinCheckRes, len(ti))
 	var wg sync.WaitGroup
@@ -179,9 +181,9 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
-
+	c.log.Info("*** Finished hecking for multiple pins in token")
 	// check token ownership
-
+	c.log.Info("*** Initating token ownership")
 	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
 	if err != nil {
 		validateTokenOwnershipErrorString := fmt.Sprint(err)
@@ -202,6 +204,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		crep.Message = "Token ownership check failed"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	c.log.Info("*** Completed token ownership check")
 	/* 	if !c.validateTokenOwnership(cr, sc) {
 		c.log.Error("Token ownership check failed")
 		crep.Message = "Token ownership check failed"
@@ -262,6 +265,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	crep.Message = "Conensus finished successfully"
 	crep.ShareSig = qsb
 	crep.PrivSig = ppb
+	c.log.Info("*** Consensus complted in receiver of ", qdc.GetDID())
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
@@ -635,6 +639,7 @@ func (c *Core) updateReceiverToken(
 	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
 	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool,
 ) ([]string, error) {
+	c.log.Info("*** Adding token details")
 	var receiverPeerId string = ""
 	var receiverDID string = ""
 
@@ -778,6 +783,7 @@ func (c *Core) updateReceiverToken(
 			Status:          true,
 			Epoch:           int64(transactionEpoch),
 		}
+		c.log.Info("*** Finished adding token details")
 		c.w.AddTransactionHistory(td)
 	}
 
