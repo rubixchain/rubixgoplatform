@@ -2,8 +2,12 @@ package did
 
 import (
 	"bytes"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/rubixchain/rubixgoplatform/crypto"
@@ -26,11 +30,12 @@ func InitDIDQuorumLite(did string, baseDir string, pwd string) *DIDQuorumLite {
 	if d.pwd != "" {
 		privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 		if err != nil {
-			return nil
-		}
-		d.privKey, _, err = crypto.DecodeBIPKeyPair(d.pwd, privKey, nil)
-		if err != nil {
-			return nil
+			fmt.Println("private key must be in wallet")
+		} else {
+			d.privKey, _, err = crypto.DecodeBIPKeyPair(d.pwd, privKey, nil)
+			if err != nil {
+				return nil
+			}
 		}
 	}
 
@@ -123,7 +128,19 @@ func (d *DIDQuorumLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []
 func (d *DIDQuorumLite) PvtSign(hash []byte) ([]byte, error) {
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
-		return nil, err
+		fmt.Println("requesting signature from BIP wallet")
+		walletSignature, err := d.signRequest(hash)
+		if err != nil {
+			fmt.Println("failed sign request, err:", err)
+			return nil, err
+		}
+		fmt.Println("received signature:", walletSignature)
+
+		isValidSig, err := d.PvtVerify(hash, walletSignature)
+		if err != nil || !isValidSig {
+			fmt.Println("invalid sign data:", util.HexToStr(hash), "err:", err)
+		}
+		return walletSignature, nil
 	}
 
 	Privatekey, _, err := crypto.DecodeBIPKeyPair(d.pwd, privKey, nil)
@@ -157,4 +174,57 @@ func (d *DIDQuorumLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
+}
+
+// send DID request to rubix node
+func (d *DIDQuorumLite) signRequest(hash []byte) ([]byte, error) {
+	data := map[string]interface{}{
+		"data": util.HexToStr(hash),
+		"did":  d.did,
+	}
+	bodyJSON, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return nil, err
+	}
+	// port := string(20009)
+	url := "http://localhost:8080/sign"
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyJSON))
+	if err != nil {
+		fmt.Println("Error creating HTTP request:", err)
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error sending HTTP request:", err)
+		resp.Body.Close()
+		return nil, err
+	}
+	defer resp.Body.Close()
+	fmt.Println("Response Status:", resp.Status)
+	data2, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error reading response body: %s\n", err)
+		return nil, err
+	}
+	// Process the data as needed
+	fmt.Println("Response Body in did request :", string(data2))
+
+	var response map[string]interface{}
+	err = json.Unmarshal(data2, &response)
+	if err != nil {
+		fmt.Println("Error unmarshaling response:", err)
+	}
+
+	signaturestr := response["signature"].(string)
+	signature, err := hex.DecodeString(signaturestr)
+	if err != nil {
+		fmt.Printf("failed to decode signature string, err: %v", err)
+		return nil, err
+	}
+	return signature, nil
 }
