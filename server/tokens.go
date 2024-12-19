@@ -372,3 +372,13 @@ func (s *Server) APIFaucetTokenCheck(req *ensweb.Request) *ensweb.Result {
 	br := s.c.FaucetTokenCheck(token, did)
 	return s.RenderJSON(req, br, http.StatusOK)
 }
+
+func (s *Server) APIValidateToken(req *ensweb.Request) *ensweb.Result {
+	token := s.GetQuerry(req, "token")
+	br, err := s.c.ValidateToken(token)
+	if err != nil {
+		s.log.Error("Failed to validate token ", err)
+		return s.BasicResponse(req, false, "Failed to validate token : "+err.Error(), nil)
+	}
+	return s.RenderJSON(req, br, http.StatusOK)
+}

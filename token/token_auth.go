@@ -18,6 +18,7 @@ const (
 	TestDataTokenType
 	SmartContractTokenType
 	TestSmartContractTokenType
+	FTTokenType
 )
 
 func GetWholeTokenValue(tokenDetails string) (int, string, bool, error) {

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -54,6 +55,8 @@ const (
 	APISelfTransfer           string = "/api/self-transfer"
 	APIRecoverPinnedRBT       string = "/api/recover-pinned-rbt"
 	APIRequestSigningHash     string = "/api/request-signing-hash"
+	TokenValidatorURL         string = "http://103.209.145.177:8000"
+	APISendFTToken            string = "/api/send-ft-token"
 )
 
 const (
@@ -416,15 +419,38 @@ func (c *Core) CreateSCTempFolder() (string, error) {
 	return folderName, err
 }
 
-func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
+func (c *Core) CreateNFTTempFolder() (string, error) {
+	folderName := c.cfg.DirPath + "NFT/" + uuid.New().String()
+	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
+	return folderName, err
+}
 
-	scFolderName := c.cfg.DirPath + "SmartContract/" + smartContractName
-	err := os.Rename(tempFolderPath, scFolderName)
-	if err != nil {
-		c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
-		scFolderName = ""
+func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
+	scFolderName := filepath.Join(c.cfg.DirPath, "SmartContract", smartContractName)
+	info, _ := os.Stat(scFolderName)
+
+	// Check if the Smart Contract Folder exists
+	if info == nil {
+		// Directory not found, proceed to rename it
+		err := os.Rename(tempFolderPath, scFolderName)
+		if err != nil {
+			c.log.Error("Unable to rename ", tempFolderPath, " to ", scFolderName, "error ", err)
+			return "", err
+		}
 	}
-	return scFolderName, err
+
+	return scFolderName, nil
+}
+
+func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error) {
+
+	nftFolderName := c.cfg.DirPath + "NFT/" + nft
+	err := os.Rename(tempFolderPath, nftFolderName)
+	if err != nil {
+		c.log.Error("Unable to rename ", tempFolderPath, " to ", nftFolderName, "error ", err)
+		nftFolderName = ""
+	}
+	return nftFolderName, err
 }
 
 func (c *Core) HandleQuorum(conn net.Conn) {
@@ -533,7 +559,7 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
 	// and own did type from DIDTable using GetDID function
 	didtype, err := c.w.GetPeerDIDType(didStr)
-	if err != nil {
+	if err != nil || didtype == -1 {
 		dt, err1 := c.w.GetDID(didStr)
 		if err1 != nil || dt.Type == -1 {
 			peerId := c.w.GetPeerID(didStr)
@@ -623,6 +649,23 @@ func (c *Core) FetchDID(did string) error {
 					return c.FetchDID(string(rb))
 				}
 			}
+		}
+	}
+	return err
+}
+
+func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
+	_, err := os.Stat(c.cfg.DirPath + "NFT/" + nftTokenHash)
+	if err != nil {
+		err = os.MkdirAll(c.cfg.DirPath+"NFT/"+nftTokenHash, os.ModeDir|os.ModePerm)
+		if err != nil {
+			c.log.Error("failed to create directory", "err", err)
+			return err
+		}
+		err = c.ipfs.Get(nftFolderHash, c.cfg.DirPath+"NFT/"+nftTokenHash)
+		if err != nil {
+			c.log.Error("failed to get NFT from IPFS", "err", err)
+			return err
 		}
 	}
 	return err

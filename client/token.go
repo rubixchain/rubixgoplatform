@@ -95,3 +95,14 @@ func (c *Client) FaucetTokenCheck(token string, did string) (*model.BasicRespons
 	}
 	return &rm, nil
 }
+func (c *Client) ValidateToken(token string) (*model.BasicResponse, error) {
+	q := make(map[string]string)
+	q["token"] = token
+
+	var br model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIValidateToken, q, nil, &br)
+	if err != nil {
+		return nil, err
+	}
+	return &br, nil
+}
