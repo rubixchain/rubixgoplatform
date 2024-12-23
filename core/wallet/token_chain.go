@@ -211,6 +211,7 @@ func (w *Wallet) getBlock(tt int, t string, blockID string) ([]byte, error) {
 
 // getAllBlocks get the chain blocks
 func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, string, error) {
+	w.log.Info("Getting all blocks for token", "token:", token, "| tt:", tt, "| blockID:", blockID)
 	db := w.getChainDB(tt)
 	if db == nil {
 		return nil, "", fmt.Errorf("failed get all blocks, invalid token type")
@@ -324,6 +325,7 @@ func (w *Wallet) getGenesisBlock(tt int, token string) *block.Block {
 
 // getLatestBlock get latest block from the storage
 func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
+	w.log.Info("Getting latest block for token", "token:", token, "| tt:", tt)
 	db := w.getChainDB(tt)
 	if db == nil {
 		w.log.Error("Failed to get latest block, invalid token type")
@@ -539,6 +541,7 @@ func (w *Wallet) GetTokenBlock(token string, tokenType int, blockID string) ([]b
 
 // GetAllTokenBlocks get the tokecn chain blocks
 func (w *Wallet) GetAllTokenBlocks(token string, tokenType int, blockID string) ([][]byte, string, error) {
+	w.log.Info("GetAllTokenBlocks for token", "token:", token, "| tt:", tokenType, "| blockID:", blockID)
 	return w.getAllBlocks(tokenType, token, blockID)
 }
 
