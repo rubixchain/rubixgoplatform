@@ -662,7 +662,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID(), "")
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		defer rp.Close()
 
@@ -716,7 +716,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = rp.SendJSONRequest("POST", APISendFTToken, nil, &sr, &br, true)
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if strings.Contains(br.Message, "failed to sync tokenchain") {
 			tokenPrefix := "Token: "
@@ -735,33 +735,33 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if err1 != nil {
 				errMsg := fmt.Sprintf("Consensus failed due to token chain sync issue, issueType string conversion, err %v", err1)
 				c.log.Error(errMsg)
-				return nil, nil, fmt.Errorf(errMsg)
+				return nil, nil, nil, fmt.Errorf(errMsg)
 			}
 			c.log.Debug("issue type in int is ", issueTypeInt)
 			syncIssueTokenDetails, err2 := c.w.ReadToken(token)
 			if err2 != nil {
 				errMsg := fmt.Sprintf("Consensus failed due to tokenchain sync issue, err %v", err2)
 				c.log.Error(errMsg)
-				return nil, nil, fmt.Errorf(errMsg)
+				return nil, nil, nil, fmt.Errorf(errMsg)
 			}
 			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
 			if issueTypeInt == TokenChainNotSynced {
 				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
 				c.log.Debug("Token sync issue details updated:", syncIssueTokenDetails)
 				c.w.UpdateToken(syncIssueTokenDetails)
-				return nil, nil, errors.New(br.Message)
+				return nil, nil, nil, errors.New(br.Message)
 			}
 		}
 		if !br.Status {
 			c.log.Error("Unable to send FT tokens to receiver", "msg", br.Message)
-			return nil, nil, fmt.Errorf("unable to send FT tokens to receiver, " + br.Message)
+			return nil, nil, nil, fmt.Errorf("unable to send FT tokens to receiver, " + br.Message)
 		}
 
 		// Extract new token state hashes from response
 		newTokenHashResult, ok := br.Result.([]interface{})
 		if !ok {
 			c.log.Error("Failed to assert type for new token hashes")
-			return nil, nil, fmt.Errorf("Type assertion to string failed")
+			return nil, nil, nil, fmt.Errorf("Type assertion to string failed")
 		}
 
 		var newTokenHashes []string
@@ -769,7 +769,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			stateHash, ok := newTokenHash.(string)
 			if !ok {
 				c.log.Error("Type assertion to string failed at index", i)
-				return nil, nil, fmt.Errorf("Type assertion to string failed at index %d", i)
+				return nil, nil, nil, fmt.Errorf("Type assertion to string failed at index %d", i)
 			}
 			newTokenHashes = append(newTokenHashes, stateHash)
 		}
@@ -778,14 +778,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newTokenHashes, tid)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
-			return nil, nil, pledgeFinalityError
+			return nil, nil, nil, pledgeFinalityError
 		}
 		//Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
 		for _, tokeninfo := range ti {
 			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 			previousQuorumDIDs, err := b.GetSigner()
 			if err != nil {
-				return nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
+				return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
 			}
 
 			//if signer is similar to sender did skip this token, as the block is the genesis block
@@ -796,7 +796,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			//concat tokenId and BlockID
 			bid, errBlockID := b.GetBlockID(tokeninfo.Token)
 			if errBlockID != nil {
-				return nil, nil, fmt.Errorf("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
+				return nil, nil, nil, fmt.Errorf("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
 			}
 			prevtokenIDTokenStateData := tokeninfo.Token + bid
 			prevtokenIDTokenStateBuffer := bytes.NewBuffer([]byte(prevtokenIDTokenStateData))
@@ -804,7 +804,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			//add to ipfs get only the hash of the token+tokenstate. This is the hash just before transferring i.e. the exhausted token state hash, and updating in Sender side
 			prevtokenIDTokenStateHash, errIpfsAdd := c.ipfs.Add(prevtokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			if errIpfsAdd != nil {
-				return nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
+				return nil, nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
 			}
 			//send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
@@ -816,7 +816,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				if previousQuorumPeerID == "" {
 					_, err := c.w.GetDID(previousQuorumDID)
 					if err != nil {
-						return nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+						return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 					} else {
 						previousQuorumPeerID = c.peerID
 					}
@@ -825,21 +825,21 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
 				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
 				if errGetPeer != nil {
-					return nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 				}
 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
 				err := previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
 				if err != nil {
-					return nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
+					return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
 				}
 			}
 		}
 		err = c.w.FTTokensTransffered(sc.GetSenderDID(), ti, nb)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for _, t := range ti {
 			c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
@@ -849,7 +849,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		nbid, err := nb.GetBlockID(ti[0].Token)
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		td := model.TransactionDetails{
@@ -868,11 +868,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = c.initiateUnpledgingProcess(cr, td.TransactionID, td.Epoch)
 		if err != nil {
 			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
-		return &td, pl, nil
-
+		return &td, pl, pds, nil
 	case PinningServiceMode:
 		c.log.Debug("Mode = PinningServiceMode ")
 		c.log.Debug("Pinning Node PeerId", cr.PinningNodePeerID)

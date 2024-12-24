@@ -477,7 +477,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		ContractBlock:  sc.GetBlock(),
 		FTinfo:         FTData,
 	}
-	td, _, err := c.initiateConsensus(cr, sc, dc)
+	td, _, _, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed ", "err", err)
 		resp.Message = "Consensus failed " + err.Error()
@@ -490,20 +490,20 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	c.w.AddTransactionHistory(td)
 
 	//TODO :  Extra details regarding the FT need to added in the explorer
-	etrans := &ExplorerTrans{
-		TID:         td.TransactionID,
-		SenderDID:   did,
-		ReceiverDID: rdid,
-		Amount:      float64(req.FTCount),
-		TrasnType:   req.QuorumType,
-		TokenIDs:    FTTokenIDs,
-		QuorumList:  cr.QuorumList,
-		TokenTime:   float64(dif.Milliseconds()),
-	}
-	explorerErr := c.ec.ExplorerTransaction(etrans)
-	if explorerErr != nil {
-		c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
-	}
+	// etrans := &ExplorerTrans{
+	// 	TID:         td.TransactionID,
+	// 	SenderDID:   did,
+	// 	ReceiverDID: rdid,
+	// 	Amount:      float64(req.FTCount),
+	// 	TrasnType:   req.QuorumType,
+	// 	TokenIDs:    FTTokenIDs,
+	// 	QuorumList:  cr.QuorumList,
+	// 	TokenTime:   float64(dif.Milliseconds()),
+	// }
+	// explorerErr := c.ec.ExplorerTransaction(etrans)
+	// if explorerErr != nil {
+	// 	c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
+	// }
 
 	updateFTTableErr := c.updateFTTable(did)
 	if updateFTTableErr != nil {
