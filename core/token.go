@@ -256,6 +256,7 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	}
 	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
 	if err != nil {
+		c.log.Error("Failed to get all token blocks", "err", err)
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: err.Error()}, http.StatusOK)
 	}
 	return c.l.RenderJSON(req, &TCBSyncReply{Status: true, Message: "Got all blocks", TCBlock: blks, NextBlockID: nextID}, http.StatusOK)

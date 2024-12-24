@@ -217,14 +217,17 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 	count := 0
 	if blockID != "" {
 		if !iter.Seek([]byte(tcsKey(tt, token, blockID))) {
+			w.log.Error("Token chain block does not exist")
 			return nil, "", fmt.Errorf("Token chain block does not exist")
 		}
 	}
 	nextBlkID := ""
 	var err error
+
 	for iter.Next() {
 		key := string(iter.Key())
 		if isOldKey(key) {
+			w.log.Info("Old key found for token", "token:", token, "| tt:", tt)
 			err = w.updateNewKey(tt, token)
 			if err != nil {
 				w.log.Error("Failed to update new key", "err", err)
@@ -252,6 +255,7 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 			nextBlkID = blkID
 		}
 	}
+	w.log.Debug("Got all blocks for token", "token:", token, "| tt:", tt, " next block id ", nextBlkID)
 	return blks, nextBlkID, nil
 }
 
