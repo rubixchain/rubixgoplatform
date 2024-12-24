@@ -157,6 +157,11 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		resp.Message = "Consensus failed" + err.Error()
 		return resp
 	}
+	err = c.SubsribeContractSetup("", deployReq.SmartContractToken)
+	if err != nil {
+		c.log.Error("Failed to subscribe to contract setup", "err", err)
+	}
+
 	et := time.Now()
 	dif := et.Sub(st)
 	txnDetails.Amount = deployReq.RBTAmount

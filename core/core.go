@@ -56,6 +56,7 @@ const (
 	APIRecoverPinnedRBT       string = "/api/recover-pinned-rbt"
 	APIRequestSigningHash     string = "/api/request-signing-hash"
 	TokenValidatorURL         string = "http://103.209.145.177:8000"
+	APISendFTToken            string = "/api/send-ft-token"
 )
 
 const (
@@ -137,7 +138,8 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 					SwarmPort:    (SwarmPort + node),
 					IPFSAPIPort:  (IPFSAPIPort + node),
 				},
-				BootStrap: []string{"/ip4/161.35.169.251/tcp/4001/p2p/12D3KooWPhZEYEw4jG3kSRuwgMEHcVt7KMkm1ui2ddu4fgSgwvDq", "/ip4/103.127.158.120/tcp/4001/p2p/12D3KooWSQ94HRDzFf6W2rp7P8gzP6efZQHTaSU8uaQjskVBHiWP", "/ip4/172.104.191.191/tcp/4001/p2p/12D3KooWFudnWZY1v1m4YXCzDWZSbNt7nvf5F42uzM6vErZ4NwqJ"},
+				BootStrap:     []string{"/ip4/161.35.169.251/tcp/4001/p2p/12D3KooWPhZEYEw4jG3kSRuwgMEHcVt7KMkm1ui2ddu4fgSgwvDq", "/ip4/103.127.158.120/tcp/4001/p2p/12D3KooWSQ94HRDzFf6W2rp7P8gzP6efZQHTaSU8uaQjskVBHiWP", "/ip4/172.104.191.191/tcp/4001/p2p/12D3KooWFudnWZY1v1m4YXCzDWZSbNt7nvf5F42uzM6vErZ4NwqJ"},
+				TestBootStrap: []string{"/ip4/103.209.145.177/tcp/4001/p2p/12D3KooWD8Rw7Fwo4n7QdXTCjbh6fua8dTqjXBvorNz3bu7d9xMc", "/ip4/98.70.52.158/tcp/4001/p2p/12D3KooWQyWFABF3CKFnzX85hf5ZwrT5zPsy4rWHdGPZ8bBpRVCK"},
 			},
 		}
 		cfgBytes, err := json.Marshal(cfg)
@@ -303,7 +305,7 @@ func (c *Core) SetupCore() error {
 	}
 	bs := c.cfg.CfgData.BootStrap
 	if c.testNet {
-		bs = nil
+		bs = c.cfg.CfgData.TestBootStrap
 	}
 	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, c.cfg.CfgData.Ports.ReceiverPort+10, 5000, c.ipfs, c.log, bs, c.peerID)
 	c.d = did.InitDID(c.didDir, c.log, c.ipfs)
@@ -558,7 +560,7 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
 	// and own did type from DIDTable using GetDID function
 	didtype, err := c.w.GetPeerDIDType(didStr)
-	if err != nil {
+	if err != nil || didtype == -1 {
 		dt, err1 := c.w.GetDID(didStr)
 		if err1 != nil || dt.Type == -1 {
 			peerId := c.w.GetPeerID(didStr)

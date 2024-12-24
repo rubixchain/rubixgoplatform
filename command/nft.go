@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/client"
+	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
@@ -192,4 +193,56 @@ func (cmd *Command) getAllNFTs() {
 		fmt.Printf("NFT : %s, Status : %d\n", tkn.Token, tkn.TokenStatus)
 	}
 	cmd.log.Info("Got all NFTs successfully")
+}
+
+func (cmd *Command) getNFTsByDid() {
+	if cmd.did == "" {
+		cmd.log.Error("Failed to get NFTs, DID is required to get NFTs")
+		return
+	}
+	tkns, err := cmd.c.GetNFTsByDid(cmd.did)
+	if err != nil {
+		cmd.log.Error("Failed to get NFTs, " + err.Error())
+		return
+	}
+	for _, tkn := range tkns.Tokens {
+		fmt.Printf("NFT : %s, Status : %d\n", tkn.Token, tkn.TokenStatus)
+	}
+	cmd.log.Info("Got all NFTs successfully")
+}
+
+func (cmd *Command) fetchNFT() {
+	if cmd.nft == "" {
+		cmd.log.Info("nft id cannot be empty")
+		fmt.Print("Enter NFT Token Id : ")
+		_, err := fmt.Scan(&cmd.nft)
+		if err != nil {
+			cmd.log.Error("Failed to get NFT Token ID")
+			return
+		}
+	}
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.nft)
+
+	if len(cmd.nft) != 46 || !strings.HasPrefix(cmd.nft, "Qm") || !isAlphanumeric {
+		cmd.log.Error("Invalid smart contract token")
+		return
+	}
+	nftRequest := core.FetchNFTRequest{
+		NFT: cmd.nft,
+	}
+
+	request := client.FetchNFTRequest{
+		NFT: nftRequest.NFT,
+	}
+
+	basicResponse, err := cmd.c.FetchNFT(&request)
+	if err != nil {
+		cmd.log.Error("Failed to fetch nft", "err", err)
+		return
+	}
+	if !basicResponse.Status {
+		cmd.log.Error("Failed to fetch nft", "err", err)
+		return
+	}
+	cmd.log.Info("NFT fetched successfully")
 }
