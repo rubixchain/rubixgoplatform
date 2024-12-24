@@ -359,6 +359,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	if reqPledgeTokens < minTotalPledgeAmount {
 		reqPledgeTokens = minTotalPledgeAmount
 	}
+	reqPledgeTokens = floatPrecision(reqPledgeTokens, MaxDecimalPlaces)
 	pd := PledgeDetails{
 		TransferAmount:         reqPledgeTokens,
 		RemPledgeTokens:        floatPrecision(reqPledgeTokens, MaxDecimalPlaces),
@@ -2185,7 +2186,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 		}
 		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
 		// Request pledage token
-		if pd.RemPledgeTokens > 0 {
+		if pd.RemPledgeTokens > 0 || c.quorumCount < QuorumRequired {
 			pr := PledgeRequest{
 				TokensRequired: CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPlaces), // Request the determined number of tokens per quorum,
 			}
