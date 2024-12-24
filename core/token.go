@@ -568,7 +568,7 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		br.Message = br.Message + ",  " + err.Error()
 		return
 	}
-	resp, err := http.Post("http://localhost:3001/api/update-token-value", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post("http://103.209.145.177:3999/api/update-token-value", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		c.log.Error("Failed to update latest token number in Faucet", "err", err)
 		br.Status = false
@@ -601,7 +601,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 	}
 
 	// Get the current value from Faucet
-	resp, err := http.Get("http://localhost:3001/api/current-token-value")
+	resp, err := http.Get("http://103.209.145.177:3999/api/current-token-value")
 	if err != nil {
 		fmt.Println("Error fetching value from React:", err)
 		return nil, err
@@ -635,7 +635,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			TotalSupply: 1,
 			TokenNumber: uint64(tokendetail.CurrentTokenNumber),
 			TokenLevel:  uint64(tokendetail.TokenLevel),
-			CreatorID:   token.FaucetName,
+			CreatorID:   tokendetail.FaucetID,
 		}
 
 		r, err := rac.CreateRacFaucet(rt)
@@ -752,10 +752,6 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		br.Message = "Invalid token level"
 		return br
 	}
-	if tokenLevel != 1 { //Need to change token level
-		br.Message = "Invalid token level"
-		return br
-	}
 
 	tokenNumber, err := strconv.Atoi(strings.TrimSpace(strings.Split(tokencontent[2], ":")[1]))
 	if err != nil {
@@ -764,6 +760,27 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 	}
 	if tokenNumber > token.TokenMap[tokenLevel] {
 		br.Message = "Invalid token number"
+		return br
+	}
+
+	// Get the current value from Faucet
+	resp, err := http.Get("http://103.209.145.177:3999/api/current-token-value")
+	if err != nil {
+		fmt.Println("Error fetching value from React:", err)
+		br.Status = false
+		br.Message = "Unable to fetch latest value"
+		return br
+	}
+	defer resp.Body.Close()
+
+	var tokendetail token.FaucetToken
+
+	body, err := io.ReadAll(resp.Body)
+	//Populating the tokendetail with current token number and current token level received from Faucet.
+	json.Unmarshal(body, &tokendetail)
+
+	if tokenLevel > tokendetail.TokenLevel {
+		br.Message = "Invalid token level"
 		return br
 	}
 
