@@ -246,9 +246,12 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 }
 
 func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
+	c.log.Debug("Syncing token chain block ensreq")
 	var tr TCBSyncRequest
+	c.log.Debug("TCBSyncRequest is %v", tr)
 	err := c.l.ParseJSON(req, &tr)
 	if err != nil {
+		c.log.Error("Failed to parse request", "err", err)
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to parse request"}, http.StatusOK)
 	}
 	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
@@ -259,6 +262,8 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
+	c.log.Debug("Syncing token chain block from Peer ", p.GetPeerDID(), "token:", token, "| blockID:", pblkID, "| tokenType", tokenType)
+	c.log.Debug("Peer info is ", p.GetAllPeerInfo())
 	// p, err := c.getPeer(address)
 	// if err != nil {
 	// 	c.log.Error("Failed to get peer", "err", err)
@@ -266,9 +271,14 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 	// }
 	// defer p.Close()
 	var err error
+	c.log.Info("Trying to get latest token block")
 	blk := c.w.GetLatestTokenBlock(token, tokenType)
+	if blk == nil {
+		c.log.Info("No token chain block found for token", "token", token, "| tokenType", tokenType)
+	}
 	blkID := ""
 	if blk != nil {
+		c.log.Info("Token chain block is not empty")
 		blkID, err = blk.GetBlockID(token)
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
@@ -283,12 +293,15 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		TokenType: tokenType,
 		BlockID:   blkID,
 	}
+	c.log.Debug("TCBSyncRequest is %v", tr)
 	for {
 		var trep TCBSyncReply
 		err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &tr, &trep, false)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return err
+		} else {
+			c.log.Debug("trep status is ", trep.Status, "message is ", trep.Message)
 		}
 		if !trep.Status {
 			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
