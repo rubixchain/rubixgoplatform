@@ -679,7 +679,7 @@ func (c *Core) updateReceiverToken(
 				return nil, fmt.Errorf("failed to sync token chain block, missing previous block id for token %v, error: %v", t, err)
 			}
 
-			c.log.Debug(" Going to Syncing token chain block", "token:", t, "| blockID:", pblkID, "| tokenType", ti.TokenType)
+			c.log.Debug(" Going to Syncing token chain block", "token:", t, "| blockID:", pblkID, "| tokenType", ti.TokenType, "| sender peer is ", senderPeer.GetAllPeerInfo())
 			err = c.syncTokenChainFrom(senderPeer, pblkID, t, ti.TokenType)
 			if err != nil {
 				return nil, fmt.Errorf("failed to sync tokenchain(syncTokenChainFrom) Token: %v, issueType: %v", t, TokenChainNotSynced)

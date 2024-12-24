@@ -253,3 +253,13 @@ func (p *Peer) Close() error {
 func (p *Peer) GetPeerDID() string {
 	return p.did
 }
+
+func (p *Peer) GetAllPeerInfo() string {
+	p.log.Debug("^^GetAllPeerInfo")
+	peerID := p.peerID
+	did := p.did
+
+	p.log.Info("^^PeerID GetAllPeerInfo", "peerID", peerID)
+	p.log.Info("^^DID GetAllPeerInfo", "did", did)
+	return fmt.Sprint("peerID:", peerID, "did:", did)
+}
