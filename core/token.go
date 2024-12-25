@@ -248,12 +248,12 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	c.log.Debug("Syncing token chain block ensreq")
 	var tr TCBSyncRequest
-	c.log.Debug("TCBSyncRequest is %v", tr)
 	err := c.l.ParseJSON(req, &tr)
 	if err != nil {
 		c.log.Error("Failed to parse request", "err", err)
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to parse request"}, http.StatusOK)
 	}
+	c.log.Debug("TCBSyncRequest is %v", tr)
 	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
 	if err != nil {
 		c.log.Error("Failed to get all token blocks", "err", err)
