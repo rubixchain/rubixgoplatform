@@ -1357,7 +1357,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		newEvent := model.NFTEvent{
 			NFT:          cr.NFT,
-			Did:          sc.GetDeployerDID(),
+			ExecutorDid:  sc.GetDeployerDID(),
 			NFTBlockHash: newnftIDTokenStateHash,
 			Type:         DeployType,
 		}
@@ -1417,7 +1417,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		newEvent := model.NFTEvent{
 			NFT:          cr.NFT,
-			Did:          sc.GetExecutorDID(),
+			ExecutorDid:  sc.GetExecutorDID(),
 			ReceiverDid:  sc.GetReceiverDID(),
 			Type:         ExecuteType,
 			NFTBlockHash: newBlockId,
