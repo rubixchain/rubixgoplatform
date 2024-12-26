@@ -28,7 +28,7 @@ type NFTTokens struct {
 
 type NFTEvent struct {
 	NFT          string  `json:"nft"`
-	Did          string  `json:"did"`
+	ExecutorDid  string  `json:"executorDid"`
 	ReceiverDid  string  `json:"receiverDid"`
 	Type         int     `json:"type"`
 	NFTBlockHash string  `json:"nftBlockHash"`
