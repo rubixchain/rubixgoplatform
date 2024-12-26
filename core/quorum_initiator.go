@@ -883,7 +883,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				}
 			}
 		}
-		err = c.w.FTTokensTransffered(sc.GetSenderDID(), ti, nb)
+		err = c.w.FTTokensTransffered(sc.GetSenderDID(), ti, nb, rp.IsLocal())
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, err
