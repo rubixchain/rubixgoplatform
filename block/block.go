@@ -709,7 +709,6 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 // 	if !ok {
 // 		return nil
 // 	}
-
 // 	result := make(map[string]interface{})
 // 	for k, v := range tokenPledgeMap {
 // 		kStr, kOk := k.(string)
@@ -718,7 +717,6 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 // 		}
 // 		result[kStr] = v
 // 	}
-
 // 	return result
 // }
 
@@ -825,4 +823,17 @@ func (b *Block) CalculateBlockHash() (string, error) {
 	blockHash := util.HexToStr(hb)
 
 	return blockHash, nil
+}
+
+func (b *Block) GetTokenLevel(token string) (int, int) {
+	gtm := b.getGenesisTokenMap(token)
+	tokenLevel := util.GetIntFromMap(gtm, GITokenLevelKey)
+	tokenNum := util.GetIntFromMap(gtm, GITokenNumberKey)
+	return tokenLevel, tokenNum
+}
+
+func (b *Block) GetPledgedTokens() {
+	pledgedInfo := util.GetFromMap(b.bm, TCPledgeDetailsKey)
+	fmt.Println(pledgedInfo)
+	// return
 }

@@ -33,7 +33,7 @@ func (c *Core) ForceUnpledgePOWBasedPledgedTokens() error {
 		if err != nil {
 			return fmt.Errorf("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
 		}
-		
+
 		_, _, err = unpledgeToken(c, pledgeToken, pledgeTokenType, pledgeTokenOwner)
 		if err != nil {
 			c.log.Error("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
@@ -99,7 +99,6 @@ func (c *Core) InititateUnpledgeProcess() (string, error) {
 				return "", err
 			}
 
-			
 			creditStorageErr := c.w.StoreCredit(info.TransactionID, info.QuorumDID, pledgeInformation)
 			if creditStorageErr != nil {
 				errMsg := fmt.Errorf("failed while storing credits, err: %v", creditStorageErr.Error())
@@ -111,8 +110,8 @@ func (c *Core) InititateUnpledgeProcess() (string, error) {
 			if removeUnpledgeSequenceInfoErr != nil {
 				errMsg := fmt.Errorf("failed to remove unpledgeSequenceInfo record for transaction: %v, error: %v", info.TransactionID, removeUnpledgeSequenceInfoErr)
 				c.log.Error(errMsg.Error())
-				
-				// Remove the corresponding stored credit 
+
+				// Remove the corresponding stored credit
 				creditRemovalErr := c.w.RemoveCredit(info.TransactionID)
 				if creditRemovalErr != nil {
 					errMsg := fmt.Errorf("failed to remove credit for transaction ID: %v", creditRemovalErr)
@@ -122,7 +121,7 @@ func (c *Core) InititateUnpledgeProcess() (string, error) {
 
 				return "", errMsg
 			}
-			
+			c.UpdatePledgeStatus(strings.Split(info.PledgeTokens, ","), info.QuorumDID)
 			unpledgeAmountForTransaction, err := c.getTotalAmountFromTokenHashes(strings.Split(info.PledgeTokens, ","))
 			if err != nil {
 				return "", fmt.Errorf("failed while getting total pledge amount for transaction id: %v, err: %v", info.TransactionID, err)
@@ -222,7 +221,7 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 
 func getTokenType(w *wallet.Wallet, tokenHash string, isTestnet bool) (int, error) {
 	var tokenType int = -1
-	
+
 	walletToken, err := w.ReadToken(tokenHash)
 	if err != nil {
 		return tokenType, err
@@ -245,7 +244,6 @@ func getTokenType(w *wallet.Wallet, tokenHash string, isTestnet bool) (int, erro
 	return tokenType, nil
 }
 
-
 func getTokenOwner(w *wallet.Wallet, tokenHash string) (string, error) {
 	walletToken, err := w.ReadToken(tokenHash)
 	if err != nil {
@@ -255,10 +253,9 @@ func getTokenOwner(w *wallet.Wallet, tokenHash string) (string, error) {
 	return walletToken.DID, nil
 }
 
-
 func unpledgeAllTokens(c *Core, transactionID string, pledgeTokens string, quorumDID string) ([]*wallet.PledgeInformation, error) {
 	c.log.Debug(fmt.Sprintf("Executing Callback for tx for unpledging: %v", transactionID))
-	
+
 	var pledgeInfoList []*wallet.PledgeInformation = make([]*wallet.PledgeInformation, 0)
 	pledgeTokensList := strings.Split(pledgeTokens, ",")
 
