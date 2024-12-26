@@ -367,6 +367,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
+	var creatorDID string
 	if req.CreatorDID == "" {
 		// Checking for same FTs with different creators
 		info, err := c.GetFTInfo(did)
@@ -390,10 +391,12 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				return resp
 			}
 		}
+		creatorDID = info[0].CreatorDID
 	}
 	var AllFTs []wallet.FTToken
 	if req.CreatorDID != "" {
 		AllFTs, err = c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, req.CreatorDID)
+		creatorDID = req.CreatorDID
 	} else {
 		AllFTs, err = c.w.GetFreeFTsByNameAndDID(req.FTName, did)
 	}
@@ -477,7 +480,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		ContractBlock:  sc.GetBlock(),
 		FTinfo:         FTData,
 	}
-	td, _, _, err := c.initiateConsensus(cr, sc, dc)
+	td, _, pds, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed ", "err", err)
 		resp.Message = "Consensus failed " + err.Error()
@@ -504,6 +507,22 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	// if explorerErr != nil {
 	// 	c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
 	// }
+
+	_ = &ExplorerFTTrans{
+		CreatorDID:      creatorDID,
+		SenderDID:       did,
+		ReceiverDID:     rdid,
+		FTName:          req.FTName,
+		FTTransferCount: req.FTCount,
+		Network:         req.QuorumType,
+		FTSymbol:        "TODO",
+		Comments:        req.Comment,
+		TransactionID:   td.TransactionID,
+		PledgeInfo:      PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		QuorumList:      extractQuorumDID(cr.QuorumList),
+		Amount:          FTsForTxn[0].TokenValue * float64(req.FTCount),
+		FTTokenList:     FTTokenIDs,
+	}
 
 	updateFTTableErr := c.updateFTTable(did)
 	if updateFTTableErr != nil {

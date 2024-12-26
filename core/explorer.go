@@ -85,10 +85,11 @@ type ChildToken struct {
 	TokenValue   float64 `json:"token_value"`
 }
 
-type SCToken struct {
-	SCTokenHash   string `json:"token_hash"`
-	SCBlockHash   string `json:"block_hash"`
-	SCBlockNumber int    `json:"block_number"`
+// Smart contract,
+type AllToken struct {
+	TokenHash   string `json:"token_hash"`
+	BlockHash   string `json:"block_hash"`
+	BlockNumber int    `json:"block_number"`
 }
 
 type ExplorerCreateToken struct {
@@ -139,7 +140,7 @@ type ExplorerRBTTrans struct {
 	Comments       string     `json:"comments"`
 }
 type ExplorerSCTrans struct {
-	SCBlockHash        []SCToken  `json:"sc_block_hash"`
+	SCBlockHash        []AllToken `json:"sc_block_hash"`
 	TransactionID      string     `json:"transaction_id"`
 	Network            int        `json:"network"`
 	ExecutorDID        string     `json:"executor"`
@@ -150,6 +151,51 @@ type ExplorerSCTrans struct {
 	PledgeInfo         PledgeInfo `json:"pledge_info"`
 	CommittedTokenList []Token    `json:"token_list"`
 	Comments           string     `json:"comments"`
+}
+
+type ExplorerNFTDeploy struct {
+	NFTBlockHash  []AllToken `json:"nft_block_hash"`
+	NFTValue      float64    `json:"nft_value"`
+	TransactionID string     `json:"transaction_id"`
+	Network       int        `json:"network"`
+	OwnerDID      string     `json:"owner"`
+	DeployerDID   string     `json:"deployer"`
+	PledgeAmount  float64    `json:"pledge_amount"`
+	QuorumList    []string   `json:"quorum_list"`
+	PledgeInfo    PledgeInfo `json:"pledge_info"`
+	Comments      string     `json:"comments"`
+}
+
+type ExplorerNFTExecute struct {
+	NFT           string     `json:"nft"`
+	ExecutorDID   string     `json:"owner"`
+	ReceiverDID   string     `json:"receiver"`
+	Network       int        `json:"network"`
+	Comments      string     `json:"comments"`
+	NFTValue      float64    `json:"nft_value"`
+	NFTData       string     `json:"nft_data"`
+	NFTBlockHash  []AllToken `json:"sc_block_hash"`
+	PledgeAmount  float64    `json:"pledge_amount"`
+	TransactionID string     `json:"transaction_id"`
+	Amount        float64    `json:"amount"`
+	QuorumList    []string   `json:"quorum_list"`
+	PledgeInfo    PledgeInfo `json:"pledge_info"`
+}
+
+type ExplorerFTTrans struct {
+	CreatorDID      string     `json:"creator"`
+	SenderDID       string     `json:"sender"`
+	ReceiverDID     string     `json:"receiver"`
+	FTName          string     `json:"ft_name"`
+	FTSymbol        string     `json:"ft_symbol"`
+	FTTransferCount int        `json:"ft_transfer_count"`
+	Network         int        `json:"network"`
+	Comments        string     `json:"comments"`
+	FTTokenList     []string   `json:"ft_token_list"`
+	TransactionID   string     `json:"transaction_id"`
+	Amount          float64    `json:"amount"`
+	QuorumList      []string   `json:"quorum_list"`
+	PledgeInfo      PledgeInfo `json:"pledge_info"`
 }
 
 type ExplorerResponse struct {

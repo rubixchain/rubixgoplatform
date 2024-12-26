@@ -184,7 +184,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 
 	eTrans := &ExplorerSCTrans{
-		SCBlockHash:        []SCToken{{SCTokenHash: deployReq.SmartContractToken, SCBlockHash: strings.Split(txnDetails.BlockID, "-")[1], SCBlockNumber: blockNoInt}},
+		SCBlockHash:        []AllToken{{TokenHash: deployReq.SmartContractToken, BlockHash: strings.Split(txnDetails.BlockID, "-")[1], BlockNumber: blockNoInt}},
 		TransactionID:      txnDetails.TransactionID,
 		Network:            conensusRequest.Type,
 		ExecutorDID:        "",
@@ -343,7 +343,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 
 	eTrans := &ExplorerSCTrans{
-		SCBlockHash:        []SCToken{{SCTokenHash: executeReq.SmartContractToken, SCBlockHash: strings.Split(txnDetails.BlockID, "-")[1], SCBlockNumber: blockNoInt}},
+		SCBlockHash:        []AllToken{{TokenHash: executeReq.SmartContractToken, BlockHash: strings.Split(txnDetails.BlockID, "-")[1], BlockNumber: blockNoInt}},
 		TransactionID:      txnDetails.TransactionID,
 		Network:            consensusRequest.Type,
 		ExecutorDID:        did,
