@@ -523,25 +523,32 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 func (w *Wallet) FTTokensTransffered(did string, ti []contract.TokenInfo, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	err := w.CreateTokenBlock(b)
-	if err != nil {
-		return err
-	}
-	tokenStatus := TokenIsTransferred
-	for i := range ti {
-		var t FTToken
-		err := w.s.Read(FTTokenStorage, &t, "token_id=?", ti[i].Token)
+
+	// Check if the Sender DID is local or not
+	// If so, then skip the following as its has been
+	// done by the previous Receive process
+	if !w.IsDIDExist(did) {
+		err := w.CreateTokenBlock(b)
 		if err != nil {
 			return err
 		}
-		t.TokenStatus = tokenStatus
-		//TODO: Check the need of transaction ID in FT Tokens table
-		//t.TransactionID = b.GetTid()
-		err = w.s.Update(FTTokenStorage, &t, "token_id=?", ti[i].Token)
-		if err != nil {
-			return err
+		tokenStatus := TokenIsTransferred
+		for i := range ti {
+			var t FTToken
+			err := w.s.Read(FTTokenStorage, &t, "token_id=?", ti[i].Token)
+			if err != nil {
+				return err
+			}
+			t.TokenStatus = tokenStatus
+			//TODO: Check the need of transaction ID in FT Tokens table
+			//t.TransactionID = b.GetTid()
+			err = w.s.Update(FTTokenStorage, &t, "token_id=?", ti[i].Token)
+			if err != nil {
+				return err
+			}
 		}
 	}
+
 	return nil
 }
 func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell) ([]string, error) {
