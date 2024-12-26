@@ -412,6 +412,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	FTsForTxn := AllFTs[:req.FTCount]
 	//TODO: Pinning of tokens
 	
+	rpeerid = c.w.GetPeerID(req.Receiver)
 	if rpeerid == "" {
 		// Check if DID is present in the DIDTable as the
 		// receiver might be part of the current node
