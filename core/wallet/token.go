@@ -520,14 +520,14 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 	// }
 	return nil
 }
-func (w *Wallet) FTTokensTransffered(did string, ti []contract.TokenInfo, b *block.Block) error {
+func (w *Wallet) FTTokensTransffered(did string, ti []contract.TokenInfo, b *block.Block, areReceiverAndSenderPeerSame bool) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 
-	// Check if the Sender DID is local or not
+	// Check if the Reciever DID is local or not
 	// If so, then skip the following as its has been
 	// done by the previous Receive process
-	if !w.IsDIDExist(did) {
+	if !areReceiverAndSenderPeerSame {
 		err := w.CreateTokenBlock(b)
 		if err != nil {
 			return err
