@@ -411,12 +411,33 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 	FTsForTxn := AllFTs[:req.FTCount]
 	//TODO: Pinning of tokens
-	p, err := c.getPeer(req.Receiver, "")
-	if err != nil {
-		resp.Message = "Failed to get receiver peer, " + err.Error()
-		return resp
+	
+	if rpeerid == "" {
+		// Check if DID is present in the DIDTable as the
+		// receiver might be part of the current node
+		_, err := c.w.GetDID(req.Receiver)
+		if err != nil {
+			if strings.Contains(err.Error(), "no records found") {
+				c.log.Error("Peer ID not found", "did", req.Receiver)
+				resp.Message = "invalid address, Peer ID not found"
+				return resp
+			} else {
+				c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", req.Receiver, err))
+				resp.Message = fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", req.Receiver, err)
+				return resp
+			}
+		} else {
+			// Set the receiverPeerID to self Peer ID
+			rpeerid = c.peerID
+		}
+	} else {
+		receiverPeerID, err := c.getPeer(req.Receiver, "")
+		if err != nil {
+			resp.Message = "Failed to get receiver peer, " + err.Error()
+			return resp
+		}
+		defer receiverPeerID.Close()
 	}
-	defer p.Close()
 
 	FTTokenIDs := make([]string, 0)
 	for i := range FTsForTxn {
