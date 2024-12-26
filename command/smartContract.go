@@ -20,8 +20,8 @@ func (cmd *Command) generateSmartContractToken() {
 			return
 		}
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
 		cmd.log.Error("Invalid DID")
 		return
 	}
@@ -57,10 +57,10 @@ func (cmd *Command) generateSmartContractToken() {
 		return
 	}
 	if !basicResponse.Status {
-		cmd.log.Error("Failed to generate smart contract token", "err", err)
+		cmd.log.Error("Failed to generate smart contract token", "err", basicResponse.Message)
 		return
 	}
-	cmd.log.Info("Smart contract token generated successfully")
+	cmd.log.Info(fmt.Sprintf("Smart contract token %v generated successfully", basicResponse.Result))
 
 }
 
@@ -74,9 +74,9 @@ func (cmd *Command) fetchSmartContract() {
 			return
 		}
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
 
-	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !isAlphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
@@ -109,13 +109,13 @@ func (cmd *Command) PublishContract() {
 			return
 		}
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
-	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !isAlphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+	isAlphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
 		cmd.log.Error("Invalid DID")
 		return
 	}
@@ -151,8 +151,8 @@ func (cmd *Command) SubscribeContract() {
 			return
 		}
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
-	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !isAlphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
@@ -186,13 +186,13 @@ func (cmd *Command) deploySmartcontract() {
 			return
 		}
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
-	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !isAlphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.deployerAddr)
-	if !strings.HasPrefix(cmd.deployerAddr, "bafybmi") || len(cmd.deployerAddr) != 59 || !is_alphanumeric {
+	isAlphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.deployerAddr)
+	if !strings.HasPrefix(cmd.deployerAddr, "bafybmi") || len(cmd.deployerAddr) != 59 || !isAlphanumeric {
 		cmd.log.Error("Invalid deployer DID")
 		return
 	}
@@ -236,14 +236,14 @@ func (cmd *Command) executeSmartcontract() {
 		}
 	}
 
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
-	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !isAlphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
 
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.executorAddr)
-	if !strings.HasPrefix(cmd.executorAddr, "bafybmi") || len(cmd.executorAddr) != 59 || !is_alphanumeric {
+	isAlphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.executorAddr)
+	if !strings.HasPrefix(cmd.executorAddr, "bafybmi") || len(cmd.executorAddr) != 59 || !isAlphanumeric {
 		cmd.log.Error("Invalid executer DID")
 		return
 	}

@@ -1,7 +1,9 @@
 package command
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
@@ -144,9 +146,9 @@ func (cmd *Command) dumpTokenChain() {
 			return
 		}
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.token)
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.token)
 
-	if len(cmd.token) != 46 || !strings.HasPrefix(cmd.token, "Qm") || !is_alphanumeric {
+	if len(cmd.token) != 46 || !strings.HasPrefix(cmd.token, "Qm") || !isAlphanumeric {
 		cmd.log.Error("Invalid token")
 		return
 	}
@@ -155,6 +157,47 @@ func (cmd *Command) dumpTokenChain() {
 	blockID := ""
 	for {
 		ds, err := cmd.c.DumpTokenChain(cmd.token, blockID)
+		if err != nil {
+			cmd.log.Error("Failed to dump token chain", "err", err)
+			return
+		}
+		if !ds.Status {
+			cmd.log.Error("Failed to dump token chain", "msg", ds.Message)
+			return
+		}
+		for _, blk := range ds.Blocks {
+			b := block.InitBlock(blk, nil)
+			if b != nil {
+				blocks = append(blocks, b.GetBlockMap())
+			} else {
+				cmd.log.Error("Invalid block")
+			}
+		}
+		blockID = ds.NextBlockID
+		if ds.NextBlockID == "" {
+			break
+		}
+	}
+	str, err := tcMarshal("", blocks)
+	if err != nil {
+		cmd.log.Error("Failed to dump token chain", "err", err)
+		return
+	}
+	f, err := os.Create("dump.json")
+	if err != nil {
+		cmd.log.Error("Failed to dump token chain", "err", err)
+		return
+	}
+	f.WriteString(str)
+	f.Close()
+	cmd.log.Info("Token chain dumped successfully!")
+}
+
+func (cmd *Command) dumpFTTokenchain() {
+	blocks := make([]map[string]interface{}, 0)
+	blockID := ""
+	for {
+		ds, err := cmd.c.DumpFTTokenChain(cmd.token, blockID)
 		if err != nil {
 			cmd.log.Error("Failed to dump token chain", "err", err)
 			return
@@ -201,9 +244,9 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 			return
 		}
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
 
-	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !isAlphanumeric {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
@@ -245,6 +288,111 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 	f.WriteString(str)
 	f.Close()
 	cmd.log.Info("smart contract Token chain dumped successfully!")
+}
+
+func (cmd *Command) dumpNFTTokenChain() {
+	if cmd.nft == "" {
+		cmd.log.Info("NFT id cannot be empty")
+		fmt.Print("Enter NFT Id : ")
+		_, err := fmt.Scan(&cmd.nft)
+		if err != nil {
+			cmd.log.Error("Failed to get NFT Token ID")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+
+	if len(cmd.nft) != 46 || !strings.HasPrefix(cmd.nft, "Qm") || !is_alphanumeric {
+		cmd.log.Error("Invalid nft")
+		return
+	}
+	blocks := make([]map[string]interface{}, 0)
+	blockID := ""
+	for {
+		ds, err := cmd.c.DumpNFTTokenChain(cmd.nft, blockID)
+		if err != nil {
+			cmd.log.Error("Failed to get nft token chain", "err", err)
+			return
+		}
+		if !ds.Status {
+			cmd.log.Error("Failed to get nft token chain", "msg", ds.Message)
+			return
+		}
+		for _, blk := range ds.Blocks {
+			b := block.InitBlock(blk, nil)
+			if b != nil {
+				blocks = append(blocks, b.GetBlockMap())
+			} else {
+				cmd.log.Error("Invalid block")
+			}
+		}
+		blockID = ds.NextBlockID
+		if ds.NextBlockID == "" {
+			break
+		}
+	}
+	str, err := tcMarshal("", blocks)
+	if err != nil {
+		cmd.log.Error("Failed to get nft token chain", "err", err)
+		return
+	}
+	f, err := os.Create("nft.json")
+	if err != nil {
+		cmd.log.Error("Failed to write nft token chain to file", "err", err)
+		return
+	}
+	f.WriteString(str)
+	f.Close()
+	cmd.log.Info("NFT Token chain dumped successfully!")
+}
+
+// decodeTokenChain decodes a JSON file, transforms its data, and writes the transformed data back to a file.
+func (cmd *Command) decodeTokenChain() {
+	// Open the input JSON file
+	file, err := os.Open("dump.json")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	// Read the JSON file
+	byteValue, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return
+	}
+
+	// Parse the JSON data
+	var data []interface{}
+	err = json.Unmarshal(byteValue, &data)
+	if err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return
+	}
+
+	// Transform the JSON data
+	for i, item := range data {
+		flattenedItem := flattenKeys("", item)
+		mappedItem := applyKeyMapping(flattenedItem)
+		data[i] = mappedItem
+	}
+
+	// Convert the transformed data back to JSON
+	output, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return
+	}
+
+	// Write the output to a file
+	err = ioutil.WriteFile("output.json", output, 0644)
+	if err != nil {
+		fmt.Println("Error writing file:", err)
+		return
+	}
+
+	fmt.Println("Transformation complete. Check output.json for results.")
 }
 
 func (cmd *Command) getTokenBlock() {

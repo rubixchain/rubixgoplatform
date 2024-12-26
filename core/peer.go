@@ -64,18 +64,18 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 
 func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
-	peer_peerid := c.l.GetQuerry(req, "self_peerId")
-	peer_did := c.l.GetQuerry(req, "self_did")
-	peer_did_type := c.l.GetQuerry(req, "self_did_type")
+	peerPeerID := c.l.GetQuerry(req, "self_peerId")
+	peerDID := c.l.GetQuerry(req, "selfDID")
+	peerDIDType := c.l.GetQuerry(req, "selfDID_type")
 
 	//If the peer's DID type string is not empty, register the peer, if not already registered
-	if peer_did_type != "" {
-		peer_did_type_int, err1 := strconv.Atoi(peer_did_type)
+	if peerDIDType != "" {
+		peerDIDTypeInt, err1 := strconv.Atoi(peerDIDType)
 		if err1 != nil {
 			c.log.Debug("could not convert string to integer:", err1)
 		}
 
-		err2 := c.w.AddDIDPeerMap(peer_did, peer_peerid, peer_did_type_int)
+		err2 := c.w.AddDIDPeerMap(peerDID, peerPeerID, peerDIDTypeInt)
 		if err2 != nil {
 			c.log.Debug("could not add quorum details to DID peer table:", err2)
 		}
@@ -89,7 +89,7 @@ func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &ps, http.StatusOK)
 }
 
-func (c *Core) getPeer(addr string, self_did string) (*ipfsport.Peer, error) {
+func (c *Core) getPeer(addr string, selfDID string) (*ipfsport.Peer, error) {
 	peerID, did, ok := util.ParseAddress(addr)
 	if !ok {
 		return nil, fmt.Errorf("invalid address: %v", addr)
@@ -110,14 +110,14 @@ func (c *Core) getPeer(addr string, self_did string) (*ipfsport.Peer, error) {
 	q["did"] = did
 
 	//share self information to the peer, if required
-	if self_did != "" {
+	if selfDID != "" {
 		q["self_peerId"] = c.peerID
-		q["self_did"] = self_did
-		self_dt, err := c.w.GetDID(self_did)
+		q["selfDID"] = selfDID
+		selfDetails, err := c.w.GetDID(selfDID)
 		if err != nil {
-			c.log.Info("could not fetch did type of peer:", self_did)
+			c.log.Info("could not fetch did type of peer:", selfDID)
 		} else {
-			q["self_did_type"] = strconv.Itoa(self_dt.Type)
+			q["selfDID_type"] = strconv.Itoa(selfDetails.Type)
 		}
 	}
 	var ps model.PeerStatusResponse
@@ -156,8 +156,8 @@ func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
 	return p, nil
 }
 
-func (c *Core) AddPeerDetails(peer_detail wallet.DIDPeerMap) error {
-	err := c.w.AddDIDPeerMap(peer_detail.DID, peer_detail.PeerID, *peer_detail.DIDType)
+func (c *Core) AddPeerDetails(peerDetail wallet.DIDPeerMap) error {
+	err := c.w.AddDIDPeerMap(peerDetail.DID, peerDetail.PeerID, *peerDetail.DIDType)
 	if err != nil {
 		c.log.Error("Failed to add PeerDetails to DIDPeerTable", "err", err)
 		return err

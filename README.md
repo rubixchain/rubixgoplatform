@@ -201,6 +201,9 @@ This following options are used for this command
         Server/Host port (default "20000")
   -quorumPWD string
         Quroum key password (default "mypassword")
+        Not required for lite mode (didType : 4) did
+  -privPWD string
+        Private key password (default "mypassword")
   -fp forcepassword
         Enter the  Quroum key password in terminal
 ```
@@ -307,6 +310,16 @@ This following options are used for this command
   -token string
         Token address (default "")
 ```
+To decode the dumped tokenchain
+: To decode the dump tokenchain on the node use this command.
+
+```
+./rubixgoplatform decodetokenchain
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+```
 To Migrate Existing Java Node to RubixGo
 : To dump token chain on the node use this command.
 ```
@@ -393,3 +406,119 @@ This following options are used for this command
   -tokenstatehash string
         TokenState Hash, for which the status needs to be checked
 ```
+Validate Token Chain Command
+: To validate RBT and smart contract token chain
+
+```
+./rubixgoplatform validatetokenchain
+
+This following options are used for this command
+  -port string
+        Server/Host port (default "20000")
+
+  -did string
+        DID address (default "")
+ 
+  -sctValidation bool
+        (default false) provide in case of smart contract token chain validation
+
+  -token string
+        token ID (default "")
+
+  -allmyTokens bool
+        (default false) provide to validate all tokens from tokens table
+
+  -blockCount int
+        number of blocks of the token chain to be validated (default 0)
+      
+      NOTE: Don't provide the flag -blockCount in case you want to validate all the blocks of the token chain
+  
+```
+Create FT Command
+: To create FTs
+
+```
+./rubixgoplatform createft
+
+The following flags are used for this command
+  -did string
+        DID address (default "")
+
+  -ftName string
+        Name of the FT to be created (default "")
+
+  -ftCount integer 
+        Number of FTs to be created (default "0")
+
+  -rbtAmount integer
+        Amount of RBT to be used for creating the FT (default "0")
+
+  -port string
+        Server/Host port (default "20000")
+
+```
+Transfer FT Command
+: To transfer FT
+
+```
+./rubixgoplatform transferft
+
+The following flags are used for this command
+  -ftName string
+        Name of the FT to be transferred (default "")
+
+  -ftCount integer
+        Number of FTs to be created (default "0")
+
+  -senderAddr string
+        Sender address (default "")
+
+  -receiverAddr string
+        Receiver address (default "")
+
+  -port string
+        Server/Host port (default "20000")
+
+  -transType int
+        Transaction type (default 2)
+
+  -fp string
+        Force password to authenticate transfer (default "")
+
+  -creatorDID string
+        FT Creator DID address (default "")
+
+      NOTE: -fp flag is used when there is a password already created during DID creation
+            -creatorDID flag is used when there are multiple FTs with same name
+
+```
+Get FT Info Command
+: To get info of all FTs with the DID.
+
+```
+./rubixgoplatform getftinfo
+
+The following flags are used for this command
+  -did string
+        DID address (default "")
+
+  -port string
+        Server/Host port (default "20000")
+
+```
+Dump FT command
+: To dump the token chain of an FT.
+
+```
+./rubixgoplatform dumpft 
+
+This following flags are used for this command
+  -port string
+        Server/Host port (default "20000")
+
+  -token string
+        FT token ID (default "")
+
+```
+
+

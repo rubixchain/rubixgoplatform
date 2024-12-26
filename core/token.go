@@ -2,7 +2,9 @@ package core
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -32,6 +34,16 @@ type TCBSyncReply struct {
 	Message     string   `json:"message"`
 	NextBlockID string   `json:"next_block_id"`
 	TCBlock     [][]byte `json:"tc_block"`
+}
+
+// TokenVerificationRequest struct
+type TokenVerificationRequest struct {
+	Tokens []string `json:"tokens"`
+}
+
+// TokenVerificationResponse struct
+type TokenVerificationResponse struct {
+	Results map[string]bool `json:"results"`
 }
 
 func (c *Core) SetupToken() {
@@ -72,19 +84,19 @@ func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error)
 			}
 			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
-	case model.NFTType:
-		tkns := c.w.GetAllNFT(did)
-		if tkns == nil {
-			return tr, nil
-		}
-		tr.TokenDetails = make([]model.TokenDetail, 0)
-		for _, t := range tkns {
-			td := model.TokenDetail{
-				Token:  t.TokenID,
-				Status: t.TokenStatus,
-			}
-			tr.TokenDetails = append(tr.TokenDetails, td)
-		}
+	// case model.NFTType:
+	// 	tkns, err := c.w.GetAllNFT()
+	// 	if err != nil {
+	// 		return tr, nil
+	// 	}
+	// 	tr.TokenDetails = make([]model.TokenDetail, 0)
+	// 	for _, t := range tkns {
+	// 		td := model.TokenDetail{
+	// 			Token:  t.TokenID,
+	// 			Status: t.TokenStatus,
+	// 		}
+	// 		tr.TokenDetails = append(tr.TokenDetails, td)
+	// 	}
 	default:
 		tr.BasicResponse.Status = false
 		tr.BasicResponse.Message = "Invalid token type"
@@ -250,6 +262,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 
 func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	var tr TCBSyncRequest
+
 	err := c.l.ParseJSON(req, &tr)
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to parse request"}, http.StatusOK)
@@ -527,4 +540,89 @@ func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
 		return nil, err
 	}
 	return requiredTokens, nil
+}
+
+func (c *Core) ValidateToken(token string) (*model.BasicResponse, error) {
+
+	response := &model.BasicResponse{
+		Status:  false,
+		Message: "Invalid token hash",
+	}
+
+	// commented out for now, #TODO
+	/* if c.testNet {
+		response.Message = "validate token is not available in test net"
+		response.Result = "invalid operation"
+		return response, fmt.Errorf("validate token is not available in test net")
+	} */
+	// Get token hash from IPFS
+	tokenHashReader, err := c.ipfs.Cat(token)
+	if err != nil {
+		return response, fmt.Errorf("error getting token hash from IPFS: %v", err)
+	}
+	defer tokenHashReader.Close()
+
+	// Read token hash from io.ReadCloser
+	var tokenHashBuf bytes.Buffer
+	if _, err := io.Copy(&tokenHashBuf, tokenHashReader); err != nil {
+		return response, fmt.Errorf("error reading token hash: %v", err)
+	}
+	tokenHash := tokenHashBuf.String()
+	// Trim any leading/trailing whitespace, including newlines
+	tokenHash = strings.TrimSpace(tokenHash)
+	/*
+		// Length check (should be 67 characters as per your requirements)
+		if len(tokenHash) != 67 {
+			return response, fmt.Errorf("invalid token length: %s, length is %v", tokenHash, len(tokenHash))
+		} */
+
+	// Call the VerifyTokens function from the tokenverifier package
+	verifyResponse, err := VerifyTokens(TokenValidatorURL, []string{tokenHash})
+	if err != nil {
+		return response, fmt.Errorf("token verification API call failed: %v", err)
+	}
+
+	// Check the result from the API response
+	isValid, tokenFound := verifyResponse.Results[tokenHash]
+	if !tokenFound {
+		return response, fmt.Errorf("token not found in verification response")
+	}
+
+	if isValid {
+		response.Status = true
+		response.Message = fmt.Sprintf("Token %s is valid", token)
+	} else {
+		response.Message = fmt.Sprintf("Token %s is invalid", token)
+	}
+
+	return response, nil
+}
+
+// VerifyTokens function sends the API request and handles the response
+func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse, error) {
+	url := fmt.Sprintf("%s/verify", serverURL)
+
+	requestBody := TokenVerificationRequest{Tokens: tokens}
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return TokenVerificationResponse{}, fmt.Errorf("error marshalling request: %v", err)
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return TokenVerificationResponse{}, fmt.Errorf("error sending request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return TokenVerificationResponse{}, fmt.Errorf("API request failed with status: %d", resp.StatusCode)
+	}
+
+	var responseBody TokenVerificationResponse
+	err = json.NewDecoder(resp.Body).Decode(&responseBody)
+	if err != nil {
+		return TokenVerificationResponse{}, fmt.Errorf("error decoding response: %v", err)
+	}
+
+	return responseBody, nil
 }
