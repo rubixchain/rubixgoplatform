@@ -220,17 +220,33 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	if !isSelfRBTTransfer {
 		rpeerid = c.w.GetPeerID(receiverdid)
 		if rpeerid == "" {
-			c.log.Error("Peer ID not found", "did", receiverdid)
-			resp.Message = "invalid address, Peer ID not found"
-			return resp
+			// Check if DID is present in the DIDTable as the
+			// receiver might be part of the current node
+			_, err := c.w.GetDID(receiverdid)
+			if err != nil {
+				if strings.Contains(err.Error(), "no records found") {
+					c.log.Error("Peer ID not found", "did", receiverdid)
+					resp.Message = "invalid address, Peer ID not found"
+					return resp
+				} else {
+					c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err))
+					resp.Message = fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err)
+					return resp
+				}
+			} else {
+				// Set the receiverPeerID to self Peer ID
+				rpeerid = c.peerID
+			}
+		} else {
+			p, err := c.getPeer(req.Receiver, senderDID)
+			if err != nil {
+				resp.Message = "Failed to get receiver peer, " + err.Error()
+				return resp
+			}
+			if p != nil {
+				p.Close()
+			}
 		}
-
-		p, err := c.getPeer(req.Receiver, senderDID)
-		if err != nil {
-			resp.Message = "Failed to get receiver peer, " + err.Error()
-			return resp
-		}
-		defer p.Close()
 	}
 
 	wta := make([]string, 0)

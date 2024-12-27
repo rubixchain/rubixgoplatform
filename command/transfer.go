@@ -64,7 +64,7 @@ func (cmd *Command) TransferRBT() {
 		return
 	}
 	cmd.log.Info(msg)
-	cmd.log.Info("RBT transfered successfully")
+	cmd.log.Info("RBT transferred successfully")
 }
 
 func (cmd *Command) PinRBT() {

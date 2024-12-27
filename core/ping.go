@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -105,7 +106,10 @@ func (c *Core) CheckQuorumStatusResponse(req *ensweb.Request) *ensweb.Result { /
 func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error) { //
 	q := make(map[string]string)
 	if peerID == "" {
-		peerID = c.qm.GetPeerID(did)
+		peerID = c.qm.GetPeerID(did, c.peerID)
+	}
+	if peerID == "" {
+		return "Quorum Connection Error", false, fmt.Errorf("unable to find Quorum DID info and peer for %v", did)
 	}
 	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
 	if err != nil {
@@ -207,23 +211,40 @@ func (c *Core) GetPeerInfoResponse(req *ensweb.Request) *ensweb.Result { //PingR
 	var pInfo wallet.DIDPeerMap
 
 	pInfo.PeerID = c.w.GetPeerID(peerDID)
+	if pInfo.PeerID == "" {
+		_, err := c.w.GetDID(peerDID)
+		if err != nil {
+			c.log.Error("sender does not have prev pledged quorum in DIDPeerTable", peerDID)
+			resp.Message = "Couldn't fetch peer id for did: " + peerDID
+			resp.Status = false
+			return c.l.RenderJSON(req, &resp, http.StatusOK)
+		} else {
+			pInfo.PeerID = c.peerID
+		}
+	}
 
 	qDidType, err := c.w.GetPeerDIDType(peerDID)
 	if err != nil || qDidType == -1 {
-		if pInfo.PeerID == "" {
-			c.log.Error("sender does not have did type or peerId of quorum:", peerDID, "error", err)
+		if strings.Contains(err.Error(), "no records found") {
+			didInfo, err := c.w.GetDID(peerDID)
+			if err != nil {
+				c.log.Error("unable to find DID in DIDTable, could not fetch did type for quorum:", peerDID, "error", err)
+				pInfo.DIDType = nil
+				resp.PeerInfo = pInfo
+				resp.Status = true
+				resp.Message = "could not fetch did type, only sharing peerId"
+				return c.l.RenderJSON(req, &resp, http.StatusOK)
+			} else {
+				pInfo.DIDType = &didInfo.Type
+			}
+		} else {
+			c.log.Error("could not fetch did type for quorum:", peerDID, "error", err)
 			pInfo.DIDType = nil
 			resp.PeerInfo = pInfo
-			resp.Status = false
-			resp.Message = "sender does not have did type or peerId"
+			resp.Status = true
+			resp.Message = "could not fetch did type, only sharing peerId"
 			return c.l.RenderJSON(req, &resp, http.StatusOK)
 		}
-		c.log.Error("could not fetch did type for quorum:", peerDID, "error", err)
-		pInfo.DIDType = nil
-		resp.PeerInfo = pInfo
-		resp.Status = true
-		resp.Message = "could not fetch did type, only sharing peerId"
-		return c.l.RenderJSON(req, &resp, http.StatusOK)
 	} else {
 		pInfo.DIDType = &qDidType
 	}
