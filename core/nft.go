@@ -28,10 +28,8 @@ type NFTIpfsInfo struct {
 }
 
 type FetchNFTRequest struct {
-	NFT         string
-	NFTPath     string
-	ReceiverDID string
-	NFTValue    float64
+	NFT      string
+	NFTPath  string
 }
 
 func (c *Core) CreateNFTRequest(requestID string, createNFTRequest NFTReq) {
@@ -201,12 +199,20 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	}
 
 	txnDetails, _, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)
-
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		resp.Message = "Consensus failed" + err.Error()
 		return resp
 	}
+
+	errNFTDeploy := c.SubscribeNFTSetup("", deployReq.NFT)
+	if errNFTDeploy != nil {
+		errMsg := fmt.Errorf("unable to subscribe to NFT %v while deployment, err: %v", deployReq.NFT, errNFTDeploy)
+		c.log.Error(errMsg.Error())
+		resp.Message = errMsg.Error()
+		return resp
+	}
+
 	et := time.Now()
 	dif := et.Sub(st)
 	//txnDetails.Amount = deployReq.RBTAmount
@@ -401,7 +407,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		local = true
 	}
 
-	err = c.w.UpdateNFTStatus(executeReq.NFT, executeReq.Owner, wallet.TokenIsTransferred, local, executeReq.Receiver, executeReq.NFTValue)
+	err = c.w.UpdateNFTStatus(executeReq.NFT, wallet.TokenIsTransferred, local, executeReq.Receiver, executeReq.NFTValue)
 	if err != nil {
 		c.log.Error("Failed to update NFT status after transferring", err)
 	}
@@ -428,15 +434,19 @@ func (c *Core) SubscribeNFTSetup(requestID string, topic string) error {
 
 func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	var newEvent model.NFTEvent
-	var fetchNFT FetchNFTRequest
 	requestID := reqID
 	err := json.Unmarshal(data, &newEvent)
 	if err != nil {
 		c.log.Error("Failed to get nft details", "err", err)
 		return
 	}
-	c.log.Info("Update on nft " + newEvent.NFT)
+	c.log.Info("Recieved Update on nft " + newEvent.NFT)
+
 	nft := newEvent.NFT
+	
+
+	// Fetch NFT files
+	var fetchNFT FetchNFTRequest
 	fetchNFT.NFT = nft
 
 	fetchNFTResponse := c.FetchNFT(requestID, &fetchNFT)
@@ -445,21 +455,64 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 
-	publisherPeerID := peerID
-	did := newEvent.Did
-	tokenType := c.TokenType(NFTString)
-	address := publisherPeerID + "." + did
-	p, err := c.getPeer(address, "")
+	// Sync Token Chain
+
+	executorDid := newEvent.ExecutorDid
+	receiverDid := newEvent.ReceiverDid
+
+	nftTokenType := c.TokenType(NFTString)
+	publisherAddress := peerID + "." + executorDid
+	publisherPeer, err := c.getPeer(publisherAddress, "")
 	if err != nil {
-		c.log.Error("Failed to get peer", "err", err)
+		c.log.Error(fmt.Sprintf("failed to get peer: %v, err: %v", peerID, err))
 		return
 	}
 
-	err = c.syncTokenChainFrom(p, "", nft, tokenType)
+	err = c.syncTokenChainFrom(publisherPeer, "", nft, nftTokenType)
 	if err != nil {
 		c.log.Error("Failed to sync token chain block", "err", err)
 		return
 	}
+
+	// Update NFTTable
+
+	latestNFTTokenBlock := c.w.GetLatestTokenBlock(nft, nftTokenType)
+	if latestNFTTokenBlock == nil {
+		c.log.Error(fmt.Sprintf("failed to get the latest block for NFT: %v", nft))
+		return
+	}
+
+	currentOwner := latestNFTTokenBlock.GetOwner()
+
+	// Sanity check
+	if receiverDid != "" {
+		// Sanity check: In case of transfer NFT, it is always expected that receiver DID
+		// will always be same as the onwer (extracted from the latest NFT block)
+		if currentOwner != receiverDid {
+			c.log.Error("nft callback: reciever DID is not same as the owner of NFT extract from its latest token block")
+			return
+		}
+	} else {
+		if currentOwner != executorDid {
+			c.log.Error("nft callback: executor DID is not same as the owner of NFT extract from its latest token block")
+			return
+		}
+	}
+
+	var tokenStatus int
+	// Add check for receiverDid . In case of self-execution, it will be empty
+	if !c.w.IsDIDExist(receiverDid) {
+		tokenStatus = wallet.TokenIsTransferred
+	} else {
+		tokenStatus = wallet.TokenIsFree
+	}
+
+	err = c.w.CreateNFT(&wallet.NFT{TokenID: nft, DID: currentOwner, TokenStatus: tokenStatus, TokenValue: newEvent.NFTValue}, c.w.IsNFTExists(nft))
+	if err != nil {
+		c.log.Error("Failed to create NFT", "err", err)
+		return
+	}
+
 	c.log.Info("Token chain of " + nft + " syncing successful")
 }
 
@@ -491,20 +544,6 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 		c.log.Error("failed to fetch NFT from IPFS", "err", err)
 	}
 
-	receiverPeerId := c.w.GetPeerID(fetchNFTRequest.ReceiverDID)
-	local := false
-	if receiverPeerId == c.peerID || receiverPeerId == "" {
-		local = true
-	}
-	did := fetchNFTRequest.ReceiverDID
-	if did == "" {
-		did = nft.DID
-	}
-	err = c.w.CreateNFT(&wallet.NFT{TokenID: fetchNFTRequest.NFT, DID: did, TokenStatus: 0, TokenValue: fetchNFTRequest.NFTValue}, local)
-	if err != nil {
-		c.log.Error("Failed to create NFT", "err", err)
-		return basicResponse
-	}
 	// Set the response values
 	basicResponse.Status = true
 	basicResponse.Message = "Successfully fetched NFT"
