@@ -120,6 +120,7 @@ type Core struct {
 	secret               []byte
 	quorumCount          int
 	noBalanceQuorumCount int
+	addFaucetQuorums     bool
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {
@@ -153,7 +154,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, faucetQuorums bool) (*Core, error) {
 	var err error
 	update := false
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
@@ -171,19 +172,20 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	}
 
 	c := &Core{
-		cfg:           cfg,
-		cfgFile:       cfgFile,
-		encKey:        encKey,
-		testNet:       testNet,
-		testNetKey:    testNetKey,
-		quorumRequest: make(map[string]*ConsensusStatus),
-		pd:            make(map[string]*PledgeDetails),
-		webReq:        make(map[string]*did.DIDChan),
-		qc:            make(map[string]did.DIDCrypto),
-		pqc:           make(map[string]did.DIDCrypto),
-		sd:            make(map[string]*ServiceDetials),
-		arbitaryMode:  am,
-		secret:        util.GetRandBytes(32),
+		cfg:              cfg,
+		cfgFile:          cfgFile,
+		encKey:           encKey,
+		testNet:          testNet,
+		testNetKey:       testNetKey,
+		quorumRequest:    make(map[string]*ConsensusStatus),
+		pd:               make(map[string]*PledgeDetails),
+		webReq:           make(map[string]*did.DIDChan),
+		qc:               make(map[string]did.DIDCrypto),
+		pqc:              make(map[string]did.DIDCrypto),
+		sd:               make(map[string]*ServiceDetials),
+		arbitaryMode:     am,
+		secret:           util.GetRandBytes(32),
+		addFaucetQuorums: faucetQuorums,
 	}
 	c.didDir = c.cfg.DirPath + RubixRootDir
 	if c.testNet {
@@ -285,6 +287,9 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if err != nil {
 		c.log.Error("Failed to init explorer", "err", err)
 		return nil, err
+	}
+	if c.testNet && c.addFaucetQuorums {
+		c.AddFaucetQuorums()
 	}
 	return c, nil
 }

@@ -1,11 +1,16 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -62,17 +67,17 @@ func NewQuorumManager(s storage.Storage, log logger.Logger) (*QuorumManager, err
 	if err == nil {
 		qm.ql = make([]string, 0)
 		for _, q := range qd {
-			// Node with version v0.0.17 or prior will have stored the addresses in 
+			// Node with version v0.0.17 or prior will have stored the addresses in
 			// <peer ID>.<did> format. To make it compatible the current implementation,
-			// we check if its in the prior format, and if its so, then we change it to 
+			// we check if its in the prior format, and if its so, then we change it to
 			// <did> format and update it in quorummanager table
 			if isOldAddressFormat(q.Address) {
 				quorumAddressElements := strings.Split(q.Address, ".")
 				quorumDID := quorumAddressElements[1]
 
-				// Replace the old address format with new format in quorummanager		
+				// Replace the old address format with new format in quorummanager
 				var updatedQuorumDetails QuorumData = QuorumData{
-					Type: q.Type,
+					Type:    q.Type,
 					Address: quorumDID,
 				}
 				err = qm.s.Write(QuorumStorage, &updatedQuorumDetails)
@@ -172,4 +177,70 @@ func (qm *QuorumManager) GetPeerID(did string) string {
 		return ""
 	}
 	return dm.PeerID
+}
+
+func (c *Core) AddFaucetQuorums() {
+	resp, err := http.Get("http://103.209.145.177:3999/api/get-faucet-quorums")
+	if err != nil {
+		fmt.Println("Error fetching value from React:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var faucetQuorumList []string
+	// {"p1.d1", "p2.d2", "p3.d3", "p4.d4", "p5.d5"}
+
+	body, err := io.ReadAll(resp.Body)
+	// Populating the tokendetail with current token number and current token level received from Faucet.
+	json.Unmarshal(body, &faucetQuorumList)
+	if err != nil {
+		fmt.Println("Error parsing JSON response:", err)
+		return
+	}
+
+	if len(faucetQuorumList) < 5 {
+		c.log.Error("Length of Quorum List is less than Min Quorum Count(5)")
+		return
+	}
+	var qds []QuorumData
+	for _, quorum := range faucetQuorumList {
+		peerID, did, _ := util.ParseAddress(quorum)
+		c.w.AddDIDPeerMap(did, peerID, 2)
+		qd := QuorumData{
+			Type:    2,
+			Address: did,
+		}
+		qds = append(qds, qd)
+	}
+	c.RemoveAllQuorum()
+	c.qm.AddQuorum(qds)
+	// Save to local JSON file
+	err = saveQuorumsToFile(qds, "faucet_quorumlist.json")
+	if err != nil {
+		fmt.Println("Error saving quorums to file:", err)
+		return
+	}
+
+	fmt.Println("Faucet quorums saved successfully to faucet_quorumlist.json")
+
+}
+func saveQuorumsToFile(qds []QuorumData, fileName string) error {
+	// Get the current working directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %w", err)
+	}
+	file, err := os.Create(fileName)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "    ") // Pretty print JSON
+	if err := encoder.Encode(qds); err != nil {
+		return fmt.Errorf("failed to write JSON to file: %w", err)
+	}
+	fmt.Printf("Quorum file saved successfully at %s\n", currentDir)
+	return nil
 }
