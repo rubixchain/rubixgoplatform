@@ -173,6 +173,15 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 	return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "Invalid response"}, http.StatusOK)
 }
 
+// APIRegisterDID will register the DID
+// APIRegisterDID godoc
+// @Summary      Register DID
+// @Description  This API registers a DID of a specified type.
+// @Accept       json
+// @Produce      application/json
+// @Param        did  body  string  true  "DID string in JSON format."
+// @Success      200  {object}  model.DIDResponse
+// @Router       /api/register-did [post]
 func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 	var m map[string]interface{}
 	err := s.ParseJSON(req, &m)
