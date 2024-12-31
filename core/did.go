@@ -186,15 +186,16 @@ func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
 }
 
 func (c *Core) RegisterDID(reqID string, did string) {
-	err := c.registerDID(reqID, did)
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "DID registered successfully",
 	}
+	err := c.registerDID(reqID, did)
 	if err != nil {
 		br.Status = false
 		br.Message = err.Error()
 	}
+
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")

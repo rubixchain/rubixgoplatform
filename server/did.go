@@ -37,11 +37,11 @@ func (s *Server) APIGetDIDChallenge(req *ensweb.Request) *ensweb.Result {
 // APICreateDID will create new DID
 // APICreateDID godoc
 // @Summary      Create New DID
-// @Description  This API creates a new DID of a specified type. Supported types include: Type 4 (BIP39 DID) Example for did_config: {"type":4,"dir":"path/to/directory\","config":"configuration_string","root_did":true,"master_did":"master_did_example","secret":"secret_string","priv_pwd":"mypassword","quorum_pwd":"quorum_password","img_file":"image_file_path","did_img_file":"did_image_file_path","pub_img_file":"public_image_file_path","priv_img_file":"private_image_file_path","pub_key_file":"public_key_file_path","priv_key_file":"private_key_file_path","quorum_pub_key_file":"quorum_public_key_file_path","quorum_priv_key_file":"quorum_private_key_file_path","mnemonic_file":"mnemonic_file_path","childPath":1}"
+// @Description  This API creates a new DID of a specified type. Supported types include: Type 4 (BIP39 DID) Example for did_config: {"type":4,"priv_pwd":"mypassword","mnemonic_file":"mnemonic_file_path"}"
 // @Tags         Basic
 // @Accept       mpfd
 // @Produce      application/json
-// @Param        did_config formData string true "DID Configuration in JSON format. Example: {"type":4,"priv_pwd":"mypassword"}"
+// @Param        did_config formData string true "DID Configuration in JSON format."
 // @Success      200  {object}  model.DIDResponse
 // @Router       /api/createdid [post]
 func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
@@ -173,13 +173,18 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 	return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "Invalid response"}, http.StatusOK)
 }
 
+type DIDwaggoInput struct {
+	DID string `json:"did"`
+}
+
 // APIRegisterDID will register the DID
 // APIRegisterDID godoc
 // @Summary      Register DID
 // @Description  This API registers a DID of a specified type.
 // @Accept       json
 // @Produce      application/json
-// @Param        did  body  string  true  "DID string in JSON format."
+// @Tags         Basic
+// @Param        did  body  DIDwaggoInput  true  "DID string"
 // @Success      200  {object}  model.DIDResponse
 // @Router       /api/register-did [post]
 func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {

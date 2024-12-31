@@ -231,7 +231,7 @@ const docTemplate = `{
         },
         "/api/createdid": {
             "post": {
-                "description": "This API creates a new DID of a specified type. Supported types include: Type 4 (BIP39 DID) Example for did_config: {\"type\":4,\"dir\":\"path/to/directory\\\",\"config\":\"configuration_string\",\"root_did\":true,\"master_did\":\"master_did_example\",\"secret\":\"secret_string\",\"priv_pwd\":\"mypassword\",\"quorum_pwd\":\"quorum_password\",\"img_file\":\"image_file_path\",\"did_img_file\":\"did_image_file_path\",\"pub_img_file\":\"public_image_file_path\",\"priv_img_file\":\"private_image_file_path\",\"pub_key_file\":\"public_key_file_path\",\"priv_key_file\":\"private_key_file_path\",\"quorum_pub_key_file\":\"quorum_public_key_file_path\",\"quorum_priv_key_file\":\"quorum_private_key_file_path\",\"mnemonic_file\":\"mnemonic_file_path\",\"childPath\":1}\"",
+                "description": "This API creates a new DID of a specified type. Supported types include: Type 4 (BIP39 DID) Example for did_config: {\"type\":4,\"priv_pwd\":\"mypassword\",\"mnemonic_file\":\"mnemonic_file_path\"}\"",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -245,7 +245,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "DID Configuration in JSON format. Example: {",
+                        "description": "DID Configuration in JSON format.",
                         "name": "did_config",
                         "in": "formData",
                         "required": true
@@ -959,7 +959,7 @@ const docTemplate = `{
         },
         "/api/register-did": {
             "post": {
-                "description": "This API creates a new DID of a specified type. Supported types include: Type 4 (BIP39 DID) Example for did_config: {\"type\":4,\"dir\":\"path/to/directory\\\",\"config\":\"configuration_string\",\"root_did\":true,\"master_did\":\"master_did_example\",\"secret\":\"secret_string\",\"priv_pwd\":\"mypassword\",\"quorum_pwd\":\"quorum_password\",\"img_file\":\"image_file_path\",\"did_img_file\":\"did_image_file_path\",\"pub_img_file\":\"public_image_file_path\",\"priv_img_file\":\"private_image_file_path\",\"pub_key_file\":\"public_key_file_path\",\"priv_key_file\":\"private_key_file_path\",\"quorum_pub_key_file\":\"quorum_public_key_file_path\",\"quorum_priv_key_file\":\"quorum_private_key_file_path\",\"mnemonic_file\":\"mnemonic_file_path\",\"childPath\":1}\"",
+                "description": "This API registers a DID of a specified type.",
                 "consumes": [
                     "application/json"
                 ],
@@ -972,12 +972,12 @@ const docTemplate = `{
                 "summary": "Register DID",
                 "parameters": [
                     {
-                        "description": "DID string in JSON format.",
+                        "description": "DID string",
                         "name": "did",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/server.DIDwaggoInput"
                         }
                     }
                 ],
@@ -1278,6 +1278,14 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "peerID": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.DIDwaggoInput": {
+            "type": "object",
+            "properties": {
+                "did": {
                     "type": "string"
                 }
             }
