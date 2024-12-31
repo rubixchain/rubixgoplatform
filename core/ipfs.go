@@ -90,7 +90,12 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			c.log.Error("unable to remove bootstrap", "err", err)
 			return err
 		}
-		_, err = c.ipfs.BootstrapAdd(c.cfg.CfgData.BootStrap)
+		if c.testNet {
+			_, err = c.ipfs.BootstrapAdd(c.cfg.CfgData.TestBootStrap)
+		} else {
+			_, err = c.ipfs.BootstrapAdd(c.cfg.CfgData.BootStrap)
+		}
+
 		if err != nil {
 			c.log.Error("unable to add bootstrap", "err", err)
 			return err
@@ -245,7 +250,11 @@ func (c *Core) stopIPFS() {
 }
 
 func (c *Core) AddBootStrap(peers []string) error {
-	c.cfg.CfgData.BootStrap = append(c.cfg.CfgData.BootStrap, peers...)
+	if c.testNet {
+		c.cfg.CfgData.TestBootStrap = append(c.cfg.CfgData.TestBootStrap, peers...)
+	} else {
+		c.cfg.CfgData.BootStrap = append(c.cfg.CfgData.BootStrap, peers...)
+	}
 	err := c.updateConfig()
 	if err != nil {
 		return err
