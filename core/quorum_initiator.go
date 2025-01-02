@@ -2307,7 +2307,6 @@ func (c *Core) requestPledgeQuorumSignature(nb *block.Block, cr *ConensusRequest
 
 func (c *Core) requestPledgeTokenInfo(cr *ConensusRequest, p *ipfsport.Peer, qt int, wg *sync.WaitGroup) {
 	defer wg.Done()
-	defer c.w.ReleaseAllLockedTokens()
 	err := c.initPledgeQuorumToken(cr, p, qt)
 	if err != nil {
 		if strings.Contains(err.Error(), "don't have enough balance to pledge") {

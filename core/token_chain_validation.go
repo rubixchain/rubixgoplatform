@@ -116,6 +116,7 @@ func (c *Core) ValidateTokenChain(userDID string, tokenInfo *wallet.Token, token
 				//calculate block height
 				blockHeight, err := b.GetBlockNumber(tokenInfo.TokenID)
 				if err != nil {
+					c.log.Error("failed to fetch BlockNumber, error", err)
 					response.Message = "failed to fetch BlockNumber"
 					return response, fmt.Errorf("invalid token chain block")
 				}
