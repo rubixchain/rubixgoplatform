@@ -735,6 +735,7 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 	}
 
 	tokenval := string(b)
+	fmt.Println("Token value from IPFS: ", tokenval)
 	tokencontent := strings.Split(tokenval, ",")
 	if len(tokencontent) != 3 {
 		br.Message = "Non-faucet token"
@@ -776,9 +777,22 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 	var tokendetail token.FaucetToken
 
 	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		br.Status = false
+		br.Message = "Unable to fetch latest value"
+		return br
+	}
+	fmt.Println(body)
 	//Populating the tokendetail with current token number and current token level received from Faucet.
-	json.Unmarshal(body, &tokendetail)
-
+	err = json.Unmarshal(body, &tokendetail)
+	if err != nil {
+		fmt.Println("Error populating with the data:", err)
+		br.Status = false
+		br.Message = "Unable to fetch latest value"
+		return br
+	}
+	fmt.Println("tokenLevel Faucet: ", tokendetail)
 	if tokenLevel > tokendetail.TokenLevel {
 		br.Message = "Invalid token level"
 		return br
@@ -799,7 +813,7 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		return br
 	}
 	//The did will be hardcoded to match the faucet DID
-	if signers[0] != "bafybmif2cnmxooupsefy2rdy3vf3yt7xoojess4zedmoqvh3neezhi6uyq" {
+	if signers[0] != "bafybmibexoa7owxdkjzfcg3ff3elqthkxsbaeznqoqq65gx6t2xkvm52fe" {
 		br.Message = "Signer DID doesn't match faucet DID"
 		return br
 	}
