@@ -209,6 +209,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			reply.Message = "Failed to get smart contract token latest block number"
 			return reply
 		}
+		epoch := latestBlock.GetEpoch()
 		scData := latestBlock.GetSmartContractData()
 		if scData == "" && blockNo == 0 {
 			reply.Message = "Gensys Block, No Smart contract Data"
@@ -217,6 +218,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			BlockNo:           blockNo,
 			BlockId:           blockId,
 			SmartContractData: scData,
+			Epoch:             int(epoch),
 		}
 		sctDataArray = append(sctDataArray, sctData)
 		reply.SCTDataReply = sctDataArray
