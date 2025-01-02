@@ -6,8 +6,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (c *Core) SmartContractTokenChainValidation(userDID string, tokenId string, blockCount int) (*model.BasicResponse, error) {
@@ -214,75 +212,5 @@ func (c *Core) ValidateSmartContractBlock(b *block.Block, tokenId string, calcul
 		c.log.Debug("successfully validated smart contract executed block")
 		// return response, nil
 	}
-	return response, nil
-}
-
-// Deployer/Executor signature verification in a (non-genesis)block
-func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error) {
-	response := &model.BasicResponse{
-		Status: false,
-	}
-
-	var initiator string
-	txnType := b.GetTransType()
-	if txnType == block.TokenDeployedType {
-		initiator = b.GetDeployerDID()
-	} else if txnType == block.TokenExecutedType {
-		initiator = b.GetExecutorDID()
-	} else {
-		c.log.Info("Failed to identify transaction type, transaction initiated with old executable")
-		response.Message = "Failed to identify transaction type"
-		return response, nil
-	}
-
-	initiatorSign := b.GetInitiatorSignature()
-	//check if it is a block addded to chain before adding initiator signature to block structure
-	if initiatorSign == nil {
-		c.log.Info("old block, initiator signature not found")
-		response.Message = "old block, initiator signature not found"
-		return response, nil
-	} else if initiatorSign.DID != initiator {
-		c.log.Info("invalid initiator, initiator did does not match")
-		response.Message = "invalid initiator, initiator did does not match"
-		return response, fmt.Errorf("invalid initiator, initiator did does not match")
-	}
-
-	var initiatorDIDType int
-	//sign type = 0, means it is a BIP signature and the did was created in light mode
-	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
-	//and thus the did could be initialised in basic mode to fetch the public key
-	if initiatorSign.SignType == 0 {
-		initiatorDIDType = did.LiteDIDMode
-	} else {
-		initiatorDIDType = did.BasicDIDMode
-	}
-
-	//Initialise initiator did
-	didCrypto, err := c.InitialiseDID(initiator, initiatorDIDType)
-	if err != nil {
-		c.log.Error("failed to initialise initiator did:", initiator)
-		response.Message = "failed to initialise initiator did"
-		return response, err
-	}
-
-	//initiator signature verification
-	if initiatorDIDType == did.LiteDIDMode {
-		response.Status, err = didCrypto.PvtVerify([]byte(initiatorSign.Hash), util.StrToHex(initiatorSign.PrivateSign))
-		if err != nil {
-			c.log.Error("failed to verify initiator:", initiator, "err", err)
-			response.Message = "invalid initiator"
-			return response, err
-		}
-	} else {
-		response.Status, err = didCrypto.NlssVerify(initiatorSign.Hash, util.StrToHex(initiatorSign.NLSSShare), util.StrToHex(initiatorSign.PrivateSign))
-		if err != nil {
-			c.log.Error("failed to verify initiator:", initiator, "err", err)
-			response.Message = "invalid initiator"
-			return response, err
-		}
-	}
-
-	response.Message = "initiator validated successfully"
-	c.log.Debug("initiator (deployer/executor) validated successfully")
 	return response, nil
 }
