@@ -120,6 +120,7 @@ type Core struct {
 	secret               []byte
 	quorumCount          int
 	noBalanceQuorumCount int
+	defaultSetup         bool
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {
@@ -154,7 +155,7 @@ func InitConfig(configFile string, encKey string, node uint16) error {
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool) (*Core, error) {
 	var err error
 	update := false
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
@@ -185,6 +186,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		sd:            make(map[string]*ServiceDetials),
 		arbitaryMode:  am,
 		secret:        util.GetRandBytes(32),
+		defaultSetup:  defaultSetup,
 	}
 	c.didDir = c.cfg.DirPath + RubixRootDir
 	if c.testNet {
@@ -286,6 +288,9 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if err != nil {
 		c.log.Error("Failed to init explorer", "err", err)
 		return nil, err
+	}
+	if c.testNet && c.defaultSetup {
+		c.AddFaucetQuorums()
 	}
 	return c, nil
 }

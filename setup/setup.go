@@ -76,6 +76,8 @@ const (
 	APIInitiatePinRBT                   string = "/api/initiate-pin-token"
 	APIRecoverRBT                       string = "/api/recover-token"
 	APIValidateTokenChain               string = "/api/validate-token-chain"
+	APIGenerateFaucetTestToken          string = "/api/generate-faucettest-token"
+	APIFaucetTokenCheck                 string = "/api/faucet-token-check"
 	APICreateFT                         string = "/api/create-ft"
 	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
 	APIInitiateFTTransfer               string = "/api/initiate-ft-transfer"
