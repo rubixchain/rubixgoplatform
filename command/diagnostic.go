@@ -193,6 +193,47 @@ func (cmd *Command) dumpTokenChain() {
 	cmd.log.Info("Token chain dumped successfully!")
 }
 
+func (cmd *Command) dumpFTTokenchain() {
+	blocks := make([]map[string]interface{}, 0)
+	blockID := ""
+	for {
+		ds, err := cmd.c.DumpFTTokenChain(cmd.token, blockID)
+		if err != nil {
+			cmd.log.Error("Failed to dump token chain", "err", err)
+			return
+		}
+		if !ds.Status {
+			cmd.log.Error("Failed to dump token chain", "msg", ds.Message)
+			return
+		}
+		for _, blk := range ds.Blocks {
+			b := block.InitBlock(blk, nil)
+			if b != nil {
+				blocks = append(blocks, b.GetBlockMap())
+			} else {
+				cmd.log.Error("Invalid block")
+			}
+		}
+		blockID = ds.NextBlockID
+		if ds.NextBlockID == "" {
+			break
+		}
+	}
+	str, err := tcMarshal("", blocks)
+	if err != nil {
+		cmd.log.Error("Failed to dump token chain", "err", err)
+		return
+	}
+	f, err := os.Create("dump.json")
+	if err != nil {
+		cmd.log.Error("Failed to dump token chain", "err", err)
+		return
+	}
+	f.WriteString(str)
+	f.Close()
+	cmd.log.Info("Token chain dumped successfully!")
+}
+
 func (cmd *Command) dumpSmartContractTokenChain() {
 	if cmd.smartContractToken == "" {
 		cmd.log.Info("smart contract token id cannot be empty")
@@ -247,6 +288,62 @@ func (cmd *Command) dumpSmartContractTokenChain() {
 	f.WriteString(str)
 	f.Close()
 	cmd.log.Info("smart contract Token chain dumped successfully!")
+}
+
+func (cmd *Command) dumpNFTTokenChain() {
+	if cmd.nft == "" {
+		cmd.log.Info("NFT id cannot be empty")
+		fmt.Print("Enter NFT Id : ")
+		_, err := fmt.Scan(&cmd.nft)
+		if err != nil {
+			cmd.log.Error("Failed to get NFT Token ID")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+
+	if len(cmd.nft) != 46 || !strings.HasPrefix(cmd.nft, "Qm") || !is_alphanumeric {
+		cmd.log.Error("Invalid nft")
+		return
+	}
+	blocks := make([]map[string]interface{}, 0)
+	blockID := ""
+	for {
+		ds, err := cmd.c.DumpNFTTokenChain(cmd.nft, blockID)
+		if err != nil {
+			cmd.log.Error("Failed to get nft token chain", "err", err)
+			return
+		}
+		if !ds.Status {
+			cmd.log.Error("Failed to get nft token chain", "msg", ds.Message)
+			return
+		}
+		for _, blk := range ds.Blocks {
+			b := block.InitBlock(blk, nil)
+			if b != nil {
+				blocks = append(blocks, b.GetBlockMap())
+			} else {
+				cmd.log.Error("Invalid block")
+			}
+		}
+		blockID = ds.NextBlockID
+		if ds.NextBlockID == "" {
+			break
+		}
+	}
+	str, err := tcMarshal("", blocks)
+	if err != nil {
+		cmd.log.Error("Failed to get nft token chain", "err", err)
+		return
+	}
+	f, err := os.Create("nft.json")
+	if err != nil {
+		cmd.log.Error("Failed to write nft token chain to file", "err", err)
+		return
+	}
+	f.WriteString(str)
+	f.Close()
+	cmd.log.Info("NFT Token chain dumped successfully!")
 }
 
 // decodeTokenChain decodes a JSON file, transforms its data, and writes the transformed data back to a file.

@@ -1,22 +1,4 @@
 definitions:
-  core.NFTSale:
-    properties:
-      amount:
-        type: number
-      token:
-        type: string
-    type: object
-  core.NFTSaleReq:
-    properties:
-      did:
-        type: string
-      tokens:
-        items:
-          $ref: '#/definitions/core.NFTSale'
-        type: array
-      type:
-        type: integer
-    type: object
   model.BasicResponse:
     properties:
       message:
@@ -25,24 +7,58 @@ definitions:
       status:
         type: boolean
     type: object
-  model.NFTStatus:
+  model.FTInfo:
     properties:
-      token:
+      creator_did:
         type: string
-      token_status:
+      ft_count:
         type: integer
+      ft_name:
+        type: string
     type: object
-  model.NFTTokens:
+  model.GetFTInfo:
+    properties:
+      ft_info:
+        items:
+          $ref: '#/definitions/model.FTInfo'
+        type: array
+      message:
+        type: string
+      result: {}
+      status:
+        type: boolean
+    type: object
+  model.GetFTTokenChainReply:
     properties:
       message:
         type: string
       result: {}
       status:
         type: boolean
-      tokens:
-        items:
-          $ref: '#/definitions/model.NFTStatus'
+      tokenChainData:
+        items: {}
         type: array
+    type: object
+  model.NFTInfo:
+    properties:
+      nft:
+        type: string
+      nft_value:
+        type: number
+      owner_did:
+        type: string
+    type: object
+  model.NFTList:
+    properties:
+      message:
+        type: string
+      nfts:
+        items:
+          $ref: '#/definitions/model.NFTInfo'
+        type: array
+      result: {}
+      status:
+        type: boolean
     type: object
   model.PledgedTokenStateDetails:
     properties:
@@ -86,6 +102,17 @@ definitions:
           $ref: '#/definitions/model.TransactionCount'
         type: array
     type: object
+  server.CreateFTReqSwaggoInput:
+    properties:
+      did:
+        type: string
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
+      token_count:
+        type: integer
+    type: object
   server.DIDPeerMapTemp:
     properties:
       did:
@@ -94,6 +121,15 @@ definitions:
         type: integer
       peerID:
         type: string
+    type: object
+  server.DeployNFTSwaggoInput:
+    properties:
+      did:
+        type: string
+      nft:
+        type: string
+      quorum_type:
+        type: integer
     type: object
   server.DeploySmartContractSwaggoInput:
     properties:
@@ -106,6 +142,23 @@ definitions:
       rbtAmount:
         type: number
       smartContractToken:
+        type: string
+    type: object
+  server.ExecuteNFTSwaggoInput:
+    properties:
+      comment:
+        type: string
+      nft:
+        type: string
+      nft_data:
+        type: string
+      nft_value:
+        type: number
+      owner:
+        type: string
+      quorum_type:
+        type: integer
+      receiver:
         type: string
     type: object
   server.ExecuteSmartContractSwaggoInput:
@@ -121,16 +174,16 @@ definitions:
       smartContractToken:
         type: string
     type: object
-  server.FetchSmartContractSwaggoInput:
-    properties:
-      smartContractToken:
-        type: string
-    type: object
   server.GetSmartContractTokenChainDataSwaggoInput:
     properties:
       latest:
         type: boolean
       token:
+        type: string
+    type: object
+  server.NewNFTSwaggoInput:
+    properties:
+      nft:
         type: string
     type: object
   server.NewSubscriptionSwaggoInput:
@@ -184,9 +237,9 @@ definitions:
     type: object
   server.RegisterCallBackURLSwaggoInput:
     properties:
-      callbackurl:
+      CallBackURL:
         type: string
-      token:
+      SmartContractToken:
         type: string
     type: object
   server.SignatureResponseSwaggoInput:
@@ -196,6 +249,25 @@ definitions:
       mode:
         type: integer
       password:
+        type: string
+    type: object
+  server.TransferFTReqSwaggoInput:
+    properties:
+      comment:
+        type: string
+      creatorDID:
+        type: string
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
+      password:
+        type: string
+      quorum_type:
+        type: integer
+      receiver:
+        type: string
+      sender:
         type: string
     type: object
 info:
@@ -228,28 +300,6 @@ paths:
       summary: Add Peer
       tags:
       - Account
-  /api/addnftsale:
-    post:
-      consumes:
-      - application/json
-      description: This API will put NFTs for sale
-      parameters:
-      - description: NFT Detials
-        in: body
-        name: data
-        required: true
-        schema:
-          $ref: '#/definitions/core.NFTSaleReq'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Add NFTs
-      tags:
-      - NFT
   /api/check-pinned-state:
     delete:
       consumes:
@@ -337,23 +387,48 @@ paths:
       summary: Create Data Token
       tags:
       - Data Tokens
-  /api/createnft:
+  /api/create-ft:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint will create FTs.
+      parameters:
+      - description: Create FT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.CreateFTReqSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create FT
+      tags:
+      - FT
+  /api/create-nft:
     post:
       consumes:
       - multipart/form-data
       description: This API will create new NFT
       parameters:
-      - description: User/Entity Info
+      - description: DID
         in: formData
-        name: UserInfo
+        name: did
+        required: true
         type: string
-      - description: File Info is json string {
+      - description: JSON file which contains information about the NFT
         in: formData
-        name: FileInfo
-        type: string
-      - description: File to be committed
+        name: metadata
+        required: true
+        type: file
+      - description: File which is meant to be an NFT
         in: formData
-        name: FileContent
+        name: artifact
+        required: true
         type: file
       produces:
       - multipart/form-data
@@ -363,6 +438,29 @@ paths:
           schema:
             $ref: '#/definitions/model.BasicResponse'
       summary: Create NFT
+      tags:
+      - NFT
+  /api/deploy-nft:
+    post:
+      consumes:
+      - application/json
+      description: This API will deploy the NFT
+      operationId: deploy-nft
+      parameters:
+      - description: Deploy nft
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.DeployNFTSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Deploy NFT
       tags:
       - NFT
   /api/deploy-smart-contract:
@@ -388,6 +486,30 @@ paths:
       summary: Deploy Smart Contract
       tags:
       - Smart Contract
+  /api/execute-nft:
+    post:
+      consumes:
+      - application/json
+      description: This API will add a new block which indicates either transfer of
+        ownership of NFT or internal state change through self-execution
+      parameters:
+      - description: 'Transfer the ownership of particular NFT or self-execution with
+          some data if ''receiver'' is empty '
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.ExecuteNFTSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Execution of NFT
+      tags:
+      - NFT
   /api/execute-smart-contract:
     post:
       consumes:
@@ -410,19 +532,36 @@ paths:
       summary: Execute Smart Contract
       tags:
       - Smart Contract
+  /api/fetch-nft:
+    get:
+      consumes:
+      - application/json
+      description: This API will Fetch NFT
+      operationId: fetch-nft
+      parameters:
+      - in: query
+        name: nft
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Fetch NFT
+      tags:
+      - NFT
   /api/fetch-smart-contract:
-    post:
+    get:
       consumes:
       - application/json
       description: This API will Fetch smart contract
       operationId: fetch-smart-contract
       parameters:
-      - description: Fetch smart contract
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.FetchSmartContractSwaggoInput'
+      - in: query
+        name: smartContractToken
+        type: string
       produces:
       - application/json
       responses:
@@ -605,6 +744,94 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
+  /api/get-ft-info-by-did:
+    get:
+      consumes:
+      - application/json
+      description: This API endpoint retrieves the names and count of FTs of a given
+        DID.
+      parameters:
+      - description: User DID
+        in: query
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.GetFTInfo'
+      summary: Get FT balance information for a given DID
+      tags:
+      - FT
+  /api/get-ft-token-chain:
+    get:
+      consumes:
+      - application/json
+      description: This API returns FT token chain data for a given FT token ID.
+      parameters:
+      - description: FT Token ID
+        in: query
+        name: tokenID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successful response with token chain data
+          schema:
+            $ref: '#/definitions/model.GetFTTokenChainReply'
+      summary: Get FT Token Chain Data
+      tags:
+      - FT
+  /api/get-nft-token-chain-data:
+    get:
+      consumes:
+      - application/json
+      description: This API will return nft token chain data
+      operationId: get-nft-token-chain-data
+      parameters:
+      - description: NFT token id
+        in: query
+        name: nft
+        required: true
+        type: string
+      - description: Set to true if you only need the latest token block
+        in: query
+        name: latest
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get NFT Token Chain Data
+      tags:
+      - NFT
+  /api/get-nfts-by-did:
+    get:
+      consumes:
+      - application/json
+      description: This API will get all NFTs owned by the particular did
+      parameters:
+      - in: query
+        name: did
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.NFTList'
+      summary: Get NFTs owned by the particular did
+      tags:
+      - NFT
   /api/get-pledgedtoken-details:
     get:
       description: This API allows the user to get details about the tokens the quorums
@@ -642,21 +869,28 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
-  /api/getallnft:
+  /api/initiate-ft-transfer:
     post:
       consumes:
       - application/json
-      description: This API will get all NFTs of the DID
+      description: This API endpoint will initiate transfer of FTs.
+      parameters:
+      - description: Transfer FT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.TransferFTReqSwaggoInput'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.NFTTokens'
-      summary: Get ALL NFTs
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiate an FT transfer
       tags:
-      - NFT
+      - FT
   /api/initiate-pin-token:
     post:
       consumes:
@@ -726,6 +960,21 @@ paths:
       summary: Initiate Self Transfer
       tags:
       - Account
+  /api/list-nfts:
+    get:
+      consumes:
+      - application/json
+      description: This API will get all NFTs deployed on the node
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.NFTList'
+      summary: Get ALL NFTs
+      tags:
+      - NFT
   /api/recover-token:
     post:
       consumes:
@@ -829,6 +1078,28 @@ paths:
       summary: Start Core
       tags:
       - Basic
+  /api/subscribe-nft:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint allows subscribing to a NFT.
+      parameters:
+      - description: Subscribe to input nft
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.NewNFTSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Subscribe to NFT
+      tags:
+      - NFT
   /api/subscribe-smart-contract:
     post:
       consumes:
