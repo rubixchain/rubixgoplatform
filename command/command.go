@@ -325,7 +325,7 @@ type Command struct {
 	ftName                       string
 	ftCount                      int
 	creatorDID                   string
-	addFaucetQuorums             bool
+	defaultQuorums               bool
 }
 
 func showVersion() {
@@ -376,7 +376,7 @@ func (cmd *Command) runApp() {
 	// Override directory path
 	cmd.cfg.DirPath = cmd.runDir
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.addFaucetQuorums)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultQuorums)
 	if err != nil {
 		cmd.log.Error("failed to create core")
 		return
@@ -534,7 +534,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
-	flag.BoolVar(&cmd.addFaucetQuorums, "addFaucetQuorums", false, "Add Faucet Quorums")
+	flag.BoolVar(&cmd.defaultQuorums, "defaultQuorums", false, "Add Faucet Quorums")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
