@@ -218,7 +218,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			BlockNo:           blockNo,
 			BlockId:           blockId,
 			SmartContractData: scData,
-			Epoch:             int(epoch),
+			Epoch:             uint64(epoch),
 		}
 		sctDataArray = append(sctDataArray, sctData)
 		reply.SCTDataReply = sctDataArray
