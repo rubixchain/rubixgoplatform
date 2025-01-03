@@ -282,7 +282,7 @@ func (c *Core) GetPrevQuorumsFromPrevBlockSenderResponse(req *ensweb.Request) *e
 		qrmDIDList = append(qrmDIDList, qrmDID)
 	}
 
-	if len(qrmDIDList) == 0 {
+	if len(qrmDIDList) != 5 {
 		c.log.Error("Quorum list is empty")
 		resp.Message = "Quorum list is empty"
 		resp.Status = false

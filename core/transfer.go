@@ -225,8 +225,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			_, err := c.w.GetDID(receiverdid)
 			if err != nil {
 				if strings.Contains(err.Error(), "no records found") {
-					c.log.Error("Peer ID not found", "did", receiverdid)
-					resp.Message = "invalid address, Peer ID not found"
+					c.log.Error("receiver Peer ID not found", "did", receiverdid)
+					resp.Message = "invalid address, receiver Peer ID not found"
 					return resp
 				} else {
 					c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err))
@@ -301,25 +301,28 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			//fetch the sender in the transaction
 			previousBlockSenderDID := b.GetSenderDID()
 			for _, prevQuorum := range prevQuorums {
-				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender 
+				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender
 				prevQuorumDIDType, err := c.w.GetPeerDIDType(prevQuorum)
 				if prevQuorumDIDType == -1 || err != nil {
-					c.log.Debug("sender does not have previous block quorums details, fetching from previous block sender")
-					prevSenderIPFSObj, err := c.getPeer(previousBlockSenderDID, senderDID)
+					_, err := c.w.GetDID(prevQuorum)
 					if err != nil {
-						c.log.Error("failed to get prev sender peer", previousBlockSenderDID, "err", err)
-						resp.Message = "failed to get prev sender peer; err: " + err.Error()
-						return resp
+						c.log.Debug("sender does not have previous block quorums details, fetching from previous block sender")
+						prevSenderIPFSObj, err := c.getPeer(previousBlockSenderDID, senderDID)
+						if err != nil {
+							c.log.Error("failed to get prev sender peer", previousBlockSenderDID, "err", err)
+							resp.Message = "failed to get prev sender peer; err: " + err.Error()
+							return resp
+						}
+						prevQuorumsDetails, err := c.GetPrevQuorumsFromPrevBlockSender(prevSenderIPFSObj, prevQuorums)
+						if err != nil {
+							c.log.Error("failed to fetch details of the previous block quorums", prevQuorum, "err", err)
+							resp.Message = "failed to fetch details of the previous block quorums; msg: " + prevQuorumsDetails.Message
+							return resp
+						}
+						//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
+						//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
+						break
 					}
-					prevQuorumsDetails, err := c.GetPrevQuorumsFromPrevBlockSender(prevSenderIPFSObj, prevQuorums)
-					if err != nil {
-						c.log.Error("failed to fetch details of the previous block quorums", prevQuorum, "err", err)
-						resp.Message = "failed to fetch details of the previous block quorums; msg: " + prevQuorumsDetails.Message
-						return resp
-					}
-					//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
-					//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
-					break
 				}
 			}
 		}
