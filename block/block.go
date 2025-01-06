@@ -43,6 +43,7 @@ const (
 	TCInitiatorSignatureKey string = "12"
 	TCEpochKey              string = "epoch"
 	TCNFTDataKey            string = "13"
+	TCFTDataKey             string = "14"
 )
 
 const (
@@ -206,6 +207,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	}
 	if tcb.InitiatorSignature != nil {
 		ntcb[TCInitiatorSignatureKey] = tcb.InitiatorSignature
+	}
+	if tcb.FTInfo != nil {
+		ntcb[TCFTDataKey] = tcb.FTInfo
 	}
 
 	if floatPrecisionToMaxDecimalPlaces(tcb.TokenValue) > floatPrecisionToMaxDecimalPlaces(0) {
@@ -737,6 +741,10 @@ func (b *Block) GetSmartContractData() string {
 
 func (b *Block) GetNFTData() string {
 	return b.getBlkString(TCNFTDataKey)
+}
+
+func (b *Block) GetFTData() string {
+	return b.getBlkString(TCFTDataKey)
 }
 
 func (b *Block) GetSmartContractValue(t string) (float64, error) {

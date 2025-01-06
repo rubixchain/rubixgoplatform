@@ -13,6 +13,7 @@ import (
 type CreateFTReqSwaggoInput struct {
 	DID        string `json:"did"`
 	FTName     string `json:"ft_name"`
+	FTSymbol   string `json:"ft_symbol"`
 	FTCount    int    `json:"ft_count"`
 	TokenCount int    `json:"token_count"`
 }
