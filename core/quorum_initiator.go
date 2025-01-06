@@ -503,10 +503,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if qpid == "" {
 				_, err := c.w.GetDID(qdid)
 				if err != nil {
-					return nil, nil, fmt.Errorf("unable to fetch peerID for quorum DID: %v which fetching quorum information", qdid)
+					return nil, nil, nil, fmt.Errorf("unable to fetch peerID for quorum DID: %v which fetching quorum information", qdid)
 				} else {
 					qpid = c.peerID
-				}		
+				}
 			}
 
 			var qrmInfo QuorumDIDPeerMap
@@ -516,7 +516,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				if strings.Contains(err.Error(), "no records found") {
 					didInfo, err := c.w.GetDID(qdid)
 					if err != nil {
-						return nil, nil, err
+						return nil, nil, nil, err
 					} else {
 						qDidType = didInfo.Type
 					}
@@ -616,7 +616,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 			previousQuorumDIDs, err := b.GetSigner()
 			if err != nil {
-				return nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
+				return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
 			}
 
 			//if signer is similar to sender did skip this token, as the block is the genesis block
@@ -627,7 +627,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			//concat tokenId and BlockID
 			bid, errBlockID := b.GetBlockID(tokeninfo.Token)
 			if errBlockID != nil {
-				return nil, nil, fmt.Errorf("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
+				return nil, nil, nil, fmt.Errorf("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
 			}
 			prevtokenIDTokenStateData := tokeninfo.Token + bid
 			prevtokenIDTokenStateBuffer := bytes.NewBuffer([]byte(prevtokenIDTokenStateData))
@@ -635,7 +635,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			//add to ipfs get only the hash of the token+tokenstate. This is the hash just before transferring i.e. the exhausted token state hash, and updating in Sender side
 			prevtokenIDTokenStateHash, errIpfsAdd := c.ipfs.Add(prevtokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			if errIpfsAdd != nil {
-				return nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
+				return nil, nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
 			}
 			//send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
@@ -647,7 +647,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				if previousQuorumPeerID == "" {
 					_, err := c.w.GetDID(previousQuorumDID)
 					if err != nil {
-						return nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+						return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 					} else {
 						previousQuorumPeerID = c.peerID
 					}
@@ -656,14 +656,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
 				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
 				if errGetPeer != nil {
-					return nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 				}
 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
 				err := previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
 				if err != nil {
-					return nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
+					return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
 				}
 			}
 		}
@@ -1046,7 +1046,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 			previousQuorumDIDs, err := b.GetSigner()
 			if err != nil {
-				return nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
+				return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
 			}
 
 			//if signer is similar to sender did skip this token, as the block is the genesis block
@@ -1057,7 +1057,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			//concat tokenId and BlockID
 			bid, errBlockID := b.GetBlockID(tokeninfo.Token)
 			if errBlockID != nil {
-				return nil, nil, fmt.Errorf("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
+				return nil, nil, nil, fmt.Errorf("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
 			}
 			prevtokenIDTokenStateData := tokeninfo.Token + bid
 			prevtokenIDTokenStateBuffer := bytes.NewBuffer([]byte(prevtokenIDTokenStateData))
@@ -1065,7 +1065,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			//add to ipfs get only the hash of the token+tokenstate. This is the hash just before transferring i.e. the exhausted token state hash, and updating in Sender side
 			prevtokenIDTokenStateHash, errIpfsAdd := c.ipfs.Add(prevtokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			if errIpfsAdd != nil {
-				return nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
+				return nil, nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
 			}
 			//send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
@@ -1077,7 +1077,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				if previousQuorumPeerID == "" {
 					_, err := c.w.GetDID(previousQuorumDID)
 					if err != nil {
-						return nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+						return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 					} else {
 						previousQuorumPeerID = c.peerID
 					}
@@ -1086,14 +1086,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
 				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
 				if errGetPeer != nil {
-					return nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 				}
 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
 				err := previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
 				if err != nil {
-					return nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
+					return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
 				}
 			}
 		}
@@ -1194,7 +1194,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 			previousQuorumDIDs, err := b.GetSigner()
 			if err != nil {
-				return nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
+				return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
 			}
 
 			//if signer is similar to sender did skip this token, as the block is the genesys block
@@ -1206,7 +1206,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			// the previous block ID
 			bid, errBlockID := b.GetPrevBlockID(tokeninfo.Token)
 			if errBlockID != nil {
-				return nil, nil, fmt.Errorf("unable to fetch previous block id for Token %v, err: %v", tokeninfo.Token, err)
+				return nil, nil, nil, fmt.Errorf("unable to fetch previous block id for Token %v, err: %v", tokeninfo.Token, err)
 			}
 
 			prevtokenIDTokenStateData := tokeninfo.Token + bid
@@ -1215,9 +1215,9 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			//add to ipfs get only the hash of the token+tokenstate. This is the hash just before transferring i.e. the exhausted token state hash, and updating in Sender side
 			prevtokenIDTokenStateHash, errIpfsAdd := c.ipfs.Add(prevtokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			if errIpfsAdd != nil {
-				return nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
+				return nil, nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
 			}
-			
+
 			//send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
 				previousQuorumPeerID := c.w.GetPeerID(previousQuorumDID)
@@ -1228,23 +1228,23 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				if previousQuorumPeerID == "" {
 					_, err := c.w.GetDID(previousQuorumDID)
 					if err != nil {
-						return nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+						return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 					} else {
 						previousQuorumPeerID = c.peerID
 					}
 				}
-				
+
 				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
 				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
 				if errGetPeer != nil {
-					return nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 				}
 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
 				err := previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
 				if err != nil {
-					return nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
+					return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
 				}
 			}
 		}
@@ -1385,7 +1385,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		previousQuorumDIDs, err := b.GetSigner()
 		if err != nil {
-			return nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.SmartContractToken, err)
+			return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.SmartContractToken, err)
 		}
 
 		//Create tokechain for the smart contract token and add genesys block
@@ -1436,14 +1436,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//inform old quorums about exhausted smart contract token hash
 		prevBlockId, errBlockID := nb.GetPrevBlockID((cr.SmartContractToken))
 		if errBlockID != nil {
-			return nil, nil, fmt.Errorf("unable to fetch previous block id for Token %v, err: %v", cr.SmartContractToken, err)
+			return nil, nil, nil, fmt.Errorf("unable to fetch previous block id for Token %v, err: %v", cr.SmartContractToken, err)
 		}
 
 		scTokenStateDataOld := cr.SmartContractToken + prevBlockId
 		scTokenStateDataOldBuffer := bytes.NewBuffer([]byte(scTokenStateDataOld))
 		oldsctokenIDTokenStateHash, errIpfsAdd := c.ipfs.Add(scTokenStateDataOldBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 		if errIpfsAdd != nil {
-			return nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", cr.SmartContractToken, errIpfsAdd)
+			return nil, nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", cr.SmartContractToken, errIpfsAdd)
 		}
 
 		for _, previousQuorumDID := range previousQuorumDIDs {
@@ -1455,7 +1455,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if previousQuorumPeerID == "" {
 				_, err := c.w.GetDID(previousQuorumDID)
 				if err != nil {
-					return nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 				} else {
 					previousQuorumPeerID = c.peerID
 				}
@@ -1464,14 +1464,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
 			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
 			if errGetPeer != nil {
-				return nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 			}
 
 			updateTokenHashDetailsQuery := make(map[string]string)
 			updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = oldsctokenIDTokenStateHash
 			err := previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
 			if err != nil {
-				return nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", oldsctokenIDTokenStateHash, previousQuorumPeerID, err)
+				return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", oldsctokenIDTokenStateHash, previousQuorumPeerID, err)
 			}
 		}
 
@@ -1556,7 +1556,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		b := c.w.GetLatestTokenBlock(cr.NFT, nb.GetTokenType(cr.NFT))
 		previousQuorumDIDs, err := b.GetSigner()
 		if err != nil {
-			return nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.NFT, err)
+			return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.NFT, err)
 		}
 
 		err = c.w.AddTokenBlock(cr.NFT, nb)
@@ -1602,7 +1602,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		nftTokenStateDataOldBuffer := bytes.NewBuffer([]byte(nftTokenStateDataOld))
 		oldnfttokenIDTokenStateHash, errIpfsAdd := c.ipfs.Add(nftTokenStateDataOldBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 		if errIpfsAdd != nil {
-			return nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", nftTokenStateDataOldBuffer, errIpfsAdd)
+			return nil, nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", nftTokenStateDataOldBuffer, errIpfsAdd)
 		}
 
 		for _, previousQuorumDID := range previousQuorumDIDs {
@@ -1614,7 +1614,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if previousQuorumPeerID == "" {
 				_, err := c.w.GetDID(previousQuorumDID)
 				if err != nil {
-					return nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 				} else {
 					previousQuorumPeerID = c.peerID
 				}
@@ -1623,14 +1623,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
 			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
 			if errGetPeer != nil {
-				return nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 			}
 
 			updateTokenHashDetailsQuery := make(map[string]string)
 			updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = oldnfttokenIDTokenStateHash
 			err := previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
 			if err != nil {
-				return nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", oldnfttokenIDTokenStateHash, previousQuorumPeerID, err)
+				return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", oldnfttokenIDTokenStateHash, previousQuorumPeerID, err)
 			}
 		}
 
