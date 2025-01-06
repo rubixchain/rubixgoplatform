@@ -210,8 +210,9 @@ type ExplorerUserCreateResponse struct {
 }
 
 type ExplorerURL struct {
-	URL  string `gorm:"column:url;primaryKey" json:"ExplorerURL"`
-	Port int    `gorm:"column:port" json:"Explorerport"`
+	URL      string `gorm:"column:url;primaryKey" json:"ExplorerURL"`
+	Port     int    `gorm:"column:port" json:"Explorerport"`
+	Protocol string `gorm:"column:protocol" json:"explorer_protocol"`
 }
 
 type ExplorerUser struct {
@@ -236,7 +237,7 @@ func (c *Core) InitRubixExplorer() error {
 
 	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", url)
 	if err != nil {
-		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: url, Port: 443})
+		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: url, Port: 443, Protocol: "https"})
 	}
 
 	if err != nil {
@@ -618,14 +619,20 @@ func (c *Core) AddExplorer(links []string) error {
 	var eurl []ExplorerURL
 
 	for _, url := range links {
+		var protocol string
 		if strings.HasPrefix(url, "https") {
+			protocol = "https"
 			url = strings.TrimPrefix(url, "https://")
 		} else if strings.HasPrefix(url, "http") {
+			protocol = "http"
 			url = strings.TrimPrefix(url, "http://")
+		} else {
+			protocol = "https"
 		}
 		eur := ExplorerURL{
-			URL:  url,
-			Port: 0,
+			URL:      url,
+			Port:     0,
+			Protocol: protocol,
 		}
 		eurl = append(eurl, eur)
 	}
@@ -671,7 +678,7 @@ func (ec *ExplorerClient) GetAllExplorer() ([]string, error) {
 		return nil, err
 	}
 	for _, url := range eurl {
-		urls = append(urls, fmt.Sprintf("https://%s", url.URL))
+		urls = append(urls, fmt.Sprintf("%s://%s", url.Protocol, url.URL))
 	}
 	return urls, nil
 }
