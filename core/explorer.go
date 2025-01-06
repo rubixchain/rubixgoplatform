@@ -19,8 +19,6 @@ const (
 	ExplorerBasePath              string = "/api/v2/services/app/Rubix/"
 	ExplorerTokenCreateAPI        string = "/api/token/create"
 	ExplorerTokenCreatePartsAPI   string = "/api/token/part/create"
-	ExplorerTokenCreateSCAPI      string = "/api/token/sc/create"
-	ExplorerTokenCreateFTAPI      string = "/api/token/ft/create"
 	ExplorerTokenCreateNFTAPI     string = "/api/token/nft/create"
 	ExplorerCreateUserAPI         string = "/api/user/create"
 	ExplorerUpdateUserInfoAPI     string = "/api/user/update-user-info"
@@ -30,6 +28,8 @@ const (
 	ExplorerExpireUserKeyAPI      string = "/api/user/set-expire-api-key"
 	ExplorerRBTTransactionAPI     string = "/api/transactions/rbt"
 	ExplorerSCTransactionAPI      string = "/api/transactions/sc"
+	ExplorerFTTransactionAPI      string = "/api/transactions/ft"
+	ExplorerNFTTransactionAPI     string = "/api/transactions/nft"
 	ExplorerUpdatePledgeStatusAPI string = "/api/token/update-pledge-status"
 	ExplorerCreateDataTransAPI    string = "create-datatokens"
 	ExplorerMapDIDAPI             string = "map-did"
@@ -85,11 +85,11 @@ type ChildToken struct {
 	TokenValue   float64 `json:"token_value"`
 }
 
-// Smart contract,
+// NFT and FT
 type AllToken struct {
-	TokenHash   string `json:"token_hash"`
-	BlockHash   string `json:"block_hash"`
-	BlockNumber int    `json:"block_number"`
+	TokenHash   string `json:"tokenHash"`
+	BlockHash   string `json:"blockHash"`
+	BlockNumber int    `json:"blockNumber"`
 }
 
 type ExplorerCreateToken struct {
@@ -140,7 +140,9 @@ type ExplorerRBTTrans struct {
 	Comments       string     `json:"comments"`
 }
 type ExplorerSCTrans struct {
-	SCBlockHash        []AllToken `json:"sc_block_hash"`
+	SCTokenHash        string     `json:"sc_token_hash"`
+	SCBlockHash        string     `json:"block_hash"`
+	SCBlockNumber      int        `json:"block_number"`
 	TransactionID      string     `json:"transaction_id"`
 	Network            int        `json:"network"`
 	ExecutorDID        string     `json:"executor"`
@@ -154,47 +156,48 @@ type ExplorerSCTrans struct {
 }
 
 type ExplorerNFTDeploy struct {
-	NFTBlockHash  []AllToken `json:"nft_block_hash"`
-	NFTValue      float64    `json:"nft_value"`
-	TransactionID string     `json:"transaction_id"`
+	NFTBlockHash  []AllToken `json:"nftBlockHash"`
+	NFTValue      float64    `json:"nftValue"`
+	TransactionID string     `json:"transactionID"`
 	Network       int        `json:"network"`
-	OwnerDID      string     `json:"owner"`
-	DeployerDID   string     `json:"deployer"`
-	PledgeAmount  float64    `json:"pledge_amount"`
-	QuorumList    []string   `json:"quorum_list"`
-	PledgeInfo    PledgeInfo `json:"pledge_info"`
+	OwnerDID      string     `json:"ownerDID"`
+	DeployerDID   string     `json:"deployerDID"`
+	PledgeAmount  float64    `json:"pledgeAmount"`
+	QuorumList    []string   `json:"quorumList"`
+	PledgeInfo    PledgeInfo `json:"pledgeInfo"`
 	Comments      string     `json:"comments"`
 }
 
 type ExplorerNFTExecute struct {
+	NFTBlockHash  []AllToken `json:"nftBlockHash"`
 	NFT           string     `json:"nft"`
-	ExecutorDID   string     `json:"owner"`
-	ReceiverDID   string     `json:"receiver"`
+	ExecutorDID   string     `json:"executorDID"`
+	ReceiverDID   string     `json:"receiverDID"`
 	Network       int        `json:"network"`
 	Comments      string     `json:"comments"`
-	NFTValue      float64    `json:"nft_value"`
-	NFTData       string     `json:"nft_data"`
-	NFTBlockHash  []AllToken `json:"sc_block_hash"`
-	PledgeAmount  float64    `json:"pledge_amount"`
-	TransactionID string     `json:"transaction_id"`
+	NFTValue      float64    `json:"nftValue"`
+	NFTData       string     `json:"nftData"`
+	PledgeAmount  float64    `json:"pledgeAmount"`
+	TransactionID string     `json:"transactionID"`
 	Amount        float64    `json:"amount"`
-	QuorumList    []string   `json:"quorum_list"`
-	PledgeInfo    PledgeInfo `json:"pledge_info"`
+	QuorumList    []string   `json:"quorumList"`
+	PledgeInfo    PledgeInfo `json:"pledgeInfo"`
 }
 
 type ExplorerFTTrans struct {
+	FTBlockHash     []AllToken `json:"ftBlockHash"`
 	CreatorDID      string     `json:"creator"`
-	SenderDID       string     `json:"sender"`
-	ReceiverDID     string     `json:"receiver"`
-	FTName          string     `json:"ft_name"`
-	FTSymbol        string     `json:"ft_symbol"`
-	FTTransferCount int        `json:"ft_transfer_count"`
+	SenderDID       string     `json:"senderDID"`
+	ReceiverDID     string     `json:"receiverDID"`
+	FTName          string     `json:"ftName"`
+	FTSymbol        string     `json:"ftSymbol"`
+	FTTransferCount int        `json:"ftTransferCount"`
 	Network         int        `json:"network"`
 	Comments        string     `json:"comments"`
-	FTTokenList     []string   `json:"ft_token_list"`
-	TransactionID   string     `json:"transaction_id"`
+	FTTokenList     []string   `json:"ftTokenList"`
+	TransactionID   string     `json:"transactionID"`
 	Amount          float64    `json:"amount"`
-	QuorumList      []string   `json:"quorum_list"`
+	QuorumList      []string   `json:"quorumList"`
 	PledgeInfo      PledgeInfo `json:"pledge_info"`
 }
 
@@ -234,17 +237,21 @@ func (c *Core) InitRubixExplorer() error {
 		return err
 	}
 	url := "rexplorer.azurewebsites.net"
+	protocol := "https"
+	if c.testNet {
+		url = "98.70.52.158:8080"
+		protocol = "http"
+	}
 
 	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", url)
 	if err != nil {
-		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: url, Port: 443, Protocol: "https"})
+		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: url, Port: 443, Protocol: protocol})
 	}
-
 	if err != nil {
 		return err
 	}
 
-	cl, err := ensweb.NewClient(&config.Config{ServerAddress: url, ServerPort: "0", Production: "true"}, c.log)
+	cl, err := ensweb.NewClient(&config.Config{ServerAddress: url, ServerPort: "0", Production: fmt.Sprintf("%t", !c.testNet)}, c.log)
 	if err != nil {
 		return err
 	}
@@ -266,7 +273,7 @@ func (ec *ExplorerClient) SendExploerJSONRequest(method string, path string, inp
 
 	for _, url := range urls {
 		apiKeyForHeader := ""
-		if url == "https://rexplorer.azurewebsites.net" {
+		if url == "https://rexplorer.azurewebsites.net" || url == "http://98.70.52.158:8080" {
 			apiKeyForHeader = ec.getAPIKey(path, input)
 		} else {
 			apiKeyForHeader = ""
@@ -393,10 +400,10 @@ func (c *Core) UpdateTokenInfo() {
 		var er ExplorerResponse
 		err = c.ec.SendExploerJSONRequest("POST", ExplorerUpdateTokenInfoAPI, &tokensToSend, &er)
 		if err != nil {
-			c.log.Error("Failed to update user info, " + err.Error())
+			c.log.Error("Failed to update token info, " + err.Error())
 		}
 		if !er.Status {
-			c.log.Error("Failed to update user info, ", "msg", er.Message)
+			c.log.Error("Failed to update token info, ", "msg", er.Message)
 			return
 		}
 
@@ -596,7 +603,7 @@ func (ec *ExplorerClient) ExplorerRBTTransaction(et *ExplorerRBTTrans) error {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
-	ec.log.Info("Transaction details for TransactionID %v is stored successfully", et.TransactionID)
+	ec.log.Info(fmt.Sprintf("Transaction details for TransactionID %v is stored successfully", et.TransactionID))
 	return nil
 }
 
@@ -610,7 +617,49 @@ func (ec *ExplorerClient) ExplorerSCTransaction(et *ExplorerSCTrans) error {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
-	ec.log.Info("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID)
+	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID))
+	return nil
+}
+
+func (ec *ExplorerClient) ExplorerNFTDeploy(et *ExplorerNFTDeploy) error {
+	var er ExplorerResponse
+	err := ec.SendExploerJSONRequest("POST", ExplorerNFTTransactionAPI, et, &er)
+	if err != nil {
+		return err
+	}
+	if er.Message != "NFT transaction created successfully!" {
+		ec.log.Error("Failed to update explorer", "msg", er.Message)
+		return fmt.Errorf("failed to update explorer")
+	}
+	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID))
+	return nil
+}
+
+func (ec *ExplorerClient) ExplorerNFTTransaction(et *ExplorerNFTExecute) error {
+	var er ExplorerResponse
+	err := ec.SendExploerJSONRequest("POST", ExplorerNFTTransactionAPI, et, &er)
+	if err != nil {
+		return err
+	}
+	if er.Message != "NFT transaction created successfully!" {
+		ec.log.Error("Failed to update explorer", "msg", er.Message)
+		return fmt.Errorf("failed to update explorer")
+	}
+	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID))
+	return nil
+}
+
+func (ec *ExplorerClient) ExplorerFTTransaction(et *ExplorerFTTrans) error {
+	var er ExplorerResponse
+	err := ec.SendExploerJSONRequest("POST", ExplorerFTTransactionAPI, et, &er)
+	if err != nil {
+		return err
+	}
+	if er.Message != "FT transaction created successfully!" {
+		ec.log.Error("Failed to update explorer", "msg", er.Message)
+		return fmt.Errorf("failed to update explorer")
+	}
+	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID))
 	return nil
 }
 

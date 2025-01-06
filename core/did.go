@@ -134,9 +134,7 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		Balance: 0,
 		DIDType: didCreate.Type,
 	}
-	if !c.testNet {
-		c.ec.ExplorerUserCreate(newDID)
-	}
+	c.ec.ExplorerUserCreate(newDID)
 	return did, nil
 }
 

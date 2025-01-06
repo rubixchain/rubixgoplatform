@@ -228,25 +228,11 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	txnDetails.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(txnDetails)
 
-	//TODO : Explorer NFT update
-	// tokens := make([]string, 0)
-	// //tokens = append(tokens, deployReq.SmartContractToken)
-	// explorerTrans := &ExplorerTrans{
-	// 	TID:         txnDetails.TransactionID,
-	// 	DeployerDID: did,
-	// 	//Amount:      deployReq.RBTAmount,
-	// 	TrasnType:  conensusRequest.Type,
-	// 	TokenIDs:   tokens,
-	// 	QuorumList: conensusRequest.QuorumList,
-	// 	TokenTime:  float64(dif.Milliseconds()),
-	// 	//BlockHash:   txnDetails.BlockID,
-	// }
-	// c.ec.ExplorerTransaction(explorerTrans)
 	blockNoPart := strings.Split(txnDetails.BlockID, "-")[0]
 	// Convert the string part to an int
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 	//Rename : TODO
-	_ = &ExplorerNFTDeploy{
+	eTrans := &ExplorerNFTDeploy{
 		NFTBlockHash:  []AllToken{{TokenHash: deployReq.NFT, BlockHash: strings.Split(txnDetails.BlockID, "-")[1], BlockNumber: blockNoInt}},
 		TransactionID: txnDetails.TransactionID,
 		Network:       conensusRequest.Type,
@@ -258,7 +244,10 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
 		Comments:      txnDetails.Comment,
 	}
-	// c.ec.ExplorerSCTransaction(eTrans)
+	explorerErr := c.ec.ExplorerNFTDeploy(eTrans)
+	if explorerErr != nil {
+		c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
+	}
 
 	c.log.Info("NFT Deployed successfully", "duration", dif)
 	resp.Status = true
@@ -425,23 +414,11 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 
 	txnDetails.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(txnDetails)
-	//TODO : Explorer NFT Update
-	// tokens := make([]string, 0)
-	// tokens = append(tokens, executeReq.NFT)
-	// explorerTrans := &ExplorerTrans{
-	// 	TID:         txnDetails.TransactionID,
-	// 	ExecutorDID: did,
-	// 	TrasnType:   conensusRequest.Type,
-	// 	TokenIDs:    tokens,
-	// 	QuorumList:  conensusRequest.QuorumList,
-	// 	TokenTime:   float64(dif.Milliseconds()),
-	// 	//BlockHash:   txnDetails.BlockID,
-	// }
 	blockNoPart := strings.Split(txnDetails.BlockID, "-")[0]
 	// Convert the string part to an int
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 	//Rename : TODO
-	_ = &ExplorerNFTExecute{
+	eTrans := &ExplorerNFTExecute{
 		NFT:           NFTString,
 		ExecutorDID:   currentOwner,
 		ReceiverDID:   receiver,
@@ -467,7 +444,10 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		c.log.Error("Failed to update NFT status after transferring", err)
 	}
 
-	// c.ec.ExplorerTransaction(explorerTrans)
+	explorerErr := c.ec.ExplorerNFTTransaction(eTrans)
+	if explorerErr != nil {
+		c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
+	}
 
 	c.log.Info("NFT Executed successfully", "duration", dif)
 	resp.Status = true

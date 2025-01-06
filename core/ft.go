@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"regexp"
 	"strconv"
@@ -414,7 +415,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 	FTsForTxn := AllFTs[:req.FTCount]
 	//TODO: Pinning of tokens
-	
+
 	rpeerid = c.w.GetPeerID(req.Receiver)
 	if rpeerid == "" {
 		// Check if DID is present in the DIDTable as the
@@ -529,8 +530,29 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	// if explorerErr != nil {
 	// 	c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
 	// }
+	AllTokens := make([]AllToken, len(FTsForTxn))
+	for i := range FTsForTxn {
+		tokenDetail := AllToken{}
+		tokenDetail.TokenHash = FTsForTxn[i].TokenID
+		tt := c.TokenType(FTString)
+		blk := c.w.GetLatestTokenBlock(FTsForTxn[i].TokenID, tt)
+		bid, _ := blk.GetBlockID(FTsForTxn[i].TokenID)
 
-	_ = &ExplorerFTTrans{
+		blockNoPart := strings.Split(bid, "-")[0]
+		// Convert the string part to an int
+		blockNoInt, err := strconv.Atoi(blockNoPart)
+		if err != nil {
+			log.Printf("Error getting BlockID: %v", err)
+			continue
+		}
+		tokenDetail.BlockNumber = blockNoInt
+		tokenDetail.BlockHash = strings.Split(bid, "-")[1]
+
+		AllTokens[i] = tokenDetail
+	}
+
+	eTrans := &ExplorerFTTrans{
+		FTBlockHash:     AllTokens,
 		CreatorDID:      creatorDID,
 		SenderDID:       did,
 		ReceiverDID:     rdid,
@@ -551,6 +573,10 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		c.log.Error("Failed to update FT table after transfer ", "err", updateFTTableErr)
 		resp.Message = "Failed to update FT table after transfer"
 		return resp
+	}
+	explorerErr := c.ec.ExplorerFTTransaction(eTrans)
+	if explorerErr != nil {
+		c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
 	}
 	c.log.Info("FT Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
 	msg := fmt.Sprintf("FT Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
