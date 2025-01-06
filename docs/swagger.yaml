@@ -7,6 +7,13 @@ definitions:
       status:
         type: boolean
     type: object
+  model.DIDFromPubKeyResponse:
+    properties:
+      did:
+        type: string
+      public_key:
+        type: string
+    type: object
   model.FTInfo:
     properties:
       creator_did:
@@ -112,6 +119,11 @@ definitions:
         type: string
       token_count:
         type: integer
+    type: object
+  server.DIDFromPubKeySwaggoRequest:
+    properties:
+      public_key:
+        type: string
     type: object
   server.DIDPeerMapTemp:
     properties:
@@ -1023,6 +1035,29 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
+  /api/request-did-for-pubkey:
+    post:
+      consumes:
+      - application/json
+      description: This API will returns DID for corresponding public key
+      operationId: request-did-for-pubkey
+      parameters:
+      - description: Get DID from Public Key
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.DIDFromPubKeySwaggoRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.DIDFromPubKeyResponse'
+      summary: Returns DID for corresponding public key
+      tags:
+      - Account
   /api/run-unpledge:
     post:
       consumes:

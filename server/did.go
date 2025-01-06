@@ -254,7 +254,21 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, br, http.StatusOK)
 }
 
+type DIDFromPubKeySwaggoRequest struct {
+	PubKey string `json:"public_key"`
+}
+
 // APICreateDIDFromPubKey creates a DID from the provided public key
+
+// @Summary     Returns DID for corresponding public key
+// @Description This API will returns DID for corresponding public key
+// @Tags        Account
+// @ID 			request-did-for-pubkey
+// @Accept      json
+// @Produce     json
+// @Param 		input body DIDFromPubKeySwaggoRequest true "Get DID from Public Key"
+// @Success 200 {object} model.DIDFromPubKeyResponse
+// @Router /api/request-did-for-pubkey [post]
 func (s *Server) APICreateDIDFromPubKey(req *ensweb.Request) *ensweb.Result {
 	var didReq model.DIDFromPubKeyRequest
 	err := s.ParseJSON(req, &didReq)
