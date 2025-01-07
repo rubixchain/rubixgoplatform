@@ -167,18 +167,6 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	txnDetails.Amount = deployReq.RBTAmount
 	txnDetails.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(txnDetails)
-	tokens := make([]string, 0)
-	tokens = append(tokens, deployReq.SmartContractToken)
-	// _ = &ExplorerTrans{
-	// 	TID:         txnDetails.TransactionID,
-	// 	DeployerDID: did,
-	// 	Amount:      deployReq.RBTAmount,
-	// 	TrasnType:   conensusRequest.Type,
-	// 	TokenIDs:    tokens,
-	// 	QuorumList:  conensusRequest.QuorumList,
-	// 	TokenTime:   float64(dif.Milliseconds()),
-	// 	//BlockHash:   txnDetails.BlockID,
-	// }
 	blockNoPart := strings.Split(txnDetails.BlockID, "-")[0]
 	// Convert the string part to an int
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
