@@ -104,6 +104,7 @@ const (
 	FetchNftCmd                    string = "fetch-nft"
 	GetNftsByDidCmd                string = "get-nfts-by-did"
 	CreateDIDFromPubKeyCmd         string = "createdidfrompubkey"
+	AddUserAPIKeyCmd               string = "adduserapikey"
 )
 
 var commands = []string{VersionCmd,
@@ -323,6 +324,7 @@ type Command struct {
 	ftName                       string
 	ftCount                      int
 	creatorDID                   string
+	apiKey                       string
 }
 
 func showVersion() {
@@ -406,6 +408,14 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
+	cmd.log.Info("Syncing Details...")
+	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
+	if len(dids) != 0 {
+		c.UpdateUserInfo(dids)     //Updating the balance
+		c.GenerateUserAPIKey(dids) //Regenerating the API Key for DID
+	}
+	// c.UpdateTokenInfo()
+	cmd.log.Info("Syncing Complete...")
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
@@ -416,6 +426,7 @@ func (cmd *Command) runApp() {
 	}
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
+	c.ExpireUserAPIKey()
 }
 
 func (cmd *Command) validateOptions() bool {
@@ -530,6 +541,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
+	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -731,6 +743,8 @@ func Run(args []string) {
 		cmd.getNFTsByDid()
 	case CreateDIDFromPubKeyCmd:
 		cmd.CreateDIDFromPubKey()
+	case AddUserAPIKeyCmd:
+		cmd.addUserAPIKey()
 	default:
 		cmd.log.Error("Invalid command")
 	}
