@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -542,6 +543,293 @@ func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
 	return requiredTokens, nil
 }
 
+func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string) {
+	tokenDetails, err := c.generateTestTokensFaucet(reqID, tokenCount, did)
+
+	br := model.BasicResponse{
+		Status:  true,
+		Message: "",
+	}
+
+	//If an error occurs at any given time, and the tokens have been created for that, reduce the latest token number by 1
+	if err != nil {
+		br.Status = false
+		br.Message = err.Error()
+		tokenDetails.CurrentTokenNumber = tokenDetails.CurrentTokenNumber - 1
+		if tokenDetails.CurrentTokenNumber == 0 && tokenDetails.TokenLevel != 1 {
+			tokenDetails.TokenLevel = tokenDetails.TokenLevel - 1
+		}
+	}
+	// Send a POST request to update the token details to the faucet server
+	jsonData, err := json.Marshal(tokenDetails)
+	if err != nil {
+		c.log.Error("Error marshaling JSON:", "err", err)
+		br.Status = false
+		br.Message = br.Message + ",  " + err.Error()
+		return
+	}
+	resp, err := http.Post("http://103.209.145.177:3999/api/update-token-value", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		c.log.Error("Failed to update latest token number in Faucet", "err", err)
+		br.Status = false
+		br.Message = br.Message + ",  " + err.Error()
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		br.Message = br.Message + ",  " + "Successfully updated token details."
+	} else {
+		br.Status = false
+		br.Message = br.Message + ",  " + "Failed to update token details. Status code:" + string(resp.StatusCode)
+	}
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- &br
+}
+
+func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
+	if !c.testNet {
+		return nil, fmt.Errorf("generate test token is available in test net")
+	}
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		return nil, fmt.Errorf("DID is not exist")
+	}
+
+	// Get the current value from Faucet
+	resp, err := http.Get("http://103.209.145.177:3999/api/current-token-value")
+	if err != nil {
+		fmt.Println("Error fetching value from React:", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var tokendetail token.FaucetToken
+
+	body, err := io.ReadAll(resp.Body)
+	//Populating the tokendetail with current token number and current token level received from Faucet.
+	json.Unmarshal(body, &tokendetail)
+	if err != nil {
+		fmt.Println("Error parsing JSON response:", err)
+		return nil, err
+	}
+	//Updating the Faucet token details with each new token
+	for i := 0; i < numTokens; i++ {
+		tokendetail.CurrentTokenNumber += 1
+
+		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
+		maxTokens := token.TokenMap[tokendetail.TokenLevel]
+		if tokendetail.CurrentTokenNumber == maxTokens+1 {
+			tokendetail.TokenLevel += 1
+			tokendetail.CurrentTokenNumber = 1
+		}
+
+		// Creating tokens at that level
+		rt := &rac.RacType{
+			Type:        rac.RacTestTokenType,
+			DID:         did,
+			TotalSupply: 1,
+			TokenNumber: uint64(tokendetail.CurrentTokenNumber),
+			TokenLevel:  uint64(tokendetail.TokenLevel),
+			CreatorID:   tokendetail.FaucetID,
+		}
+
+		r, err := rac.CreateRacFaucet(rt)
+		if err != nil {
+			c.log.Error("Failed to create rac block", "err", err)
+			return &tokendetail, fmt.Errorf("failed to create rac block")
+		}
+		err = r.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to update rac signature", "err", err)
+			return &tokendetail, err
+		}
+
+		tokenstr := fmt.Sprintf("Faucet Name : %s, Token Level : %d, Token Number : %d", rt.CreatorID, rt.TokenLevel, rt.TokenNumber)
+
+		nb := bytes.NewBuffer([]byte(tokenstr))
+		id, err := c.w.Add(nb, did, wallet.OwnerRole)
+		if err != nil {
+			c.w.UnPin(id, wallet.OwnerRole, did)
+			c.log.Error("Failed to add token to network", "err", err)
+			return &tokendetail, err
+		}
+		gb := &block.GenesisBlock{
+			Type: block.TokenGeneratedType,
+			Info: []block.GenesisTokenInfo{
+				{Token: id},
+			},
+		}
+		ti := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     id,
+					TokenType: token.TestTokenType,
+				},
+			},
+		}
+
+		tcb := &block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner:      did,
+			GenesisBlock:    gb,
+			TransInfo:       ti,
+			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+		}
+
+		ctcb := make(map[string]*block.Block)
+		ctcb[id] = nil
+
+		blk := block.CreateNewBlock(ctcb, tcb)
+		//If error comes after adding in IPFS, removing the pin from that token.
+		if blk == nil {
+			c.log.Error("Failed to create new token chain block")
+			c.w.UnPin(id, wallet.OwnerRole, did)
+			return &tokendetail, fmt.Errorf("failed to create new token chain block")
+		}
+
+		err = blk.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to update did signature", "err", err)
+			c.w.UnPin(id, wallet.OwnerRole, did)
+			return &tokendetail, fmt.Errorf("failed to update did signature")
+		}
+		t := &wallet.Token{
+			TokenID:     id,
+			DID:         did,
+			TokenValue:  1,
+			TokenStatus: wallet.TokenIsFree,
+		}
+		err = c.w.CreateTokenBlock(blk)
+		if err != nil {
+			c.log.Error("Failed to add token chain", "err", err)
+			c.w.UnPin(id, wallet.OwnerRole, did)
+			return &tokendetail, err
+		}
+		err = c.w.CreateToken(t)
+		if err != nil {
+			c.log.Error("Failed to create token", "err", err)
+			c.w.RemoveTokenChainBlocklatest(t.TokenID, token.TestTokenType)
+			c.w.UnPin(id, wallet.OwnerRole, did)
+			return &tokendetail, err
+		}
+		tokendetail.TotalCount += 1
+	}
+	return &tokendetail, nil
+}
+
+func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse {
+	br := model.BasicResponse{
+		Status: false,
+	}
+	//Cheking if token is valid
+	b, err := c.getFromIPFS(tokenID)
+	if err != nil {
+		c.log.Error("failed to get token details from ipfs", "err", err, "token", tokenID)
+		br.Message = "Cannot find token details"
+		return br
+	}
+
+	tokenval := string(b)
+	fmt.Println("Token value from IPFS: ", tokenval)
+	tokencontent := strings.Split(tokenval, ",")
+	if len(tokencontent) != 3 {
+		br.Message = "Non-faucet token"
+		return br
+	}
+
+	faucetName := strings.TrimSpace(strings.Split(tokencontent[0], ":")[1])
+	if faucetName != token.FaucetName {
+		br.Message = "Invalid faucet name"
+		return br
+	}
+
+	tokenLevel, err := strconv.Atoi(strings.TrimSpace(strings.Split(tokencontent[1], ":")[1]))
+	if err != nil {
+		br.Message = "Invalid token level"
+		return br
+	}
+
+	tokenNumber, err := strconv.Atoi(strings.TrimSpace(strings.Split(tokencontent[2], ":")[1]))
+	if err != nil {
+		br.Message = "Invalid token number"
+		return br
+	}
+	if tokenNumber > token.TokenMap[tokenLevel] {
+		br.Message = "Invalid token number"
+		return br
+	}
+
+	// Get the current value from Faucet
+	resp, err := http.Get("http://103.209.145.177:3999/api/current-token-value")
+	if err != nil {
+		fmt.Println("Error fetching value from React:", err)
+		br.Status = false
+		br.Message = "Unable to fetch latest value"
+		return br
+	}
+	defer resp.Body.Close()
+
+	var tokendetail token.FaucetToken
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		br.Status = false
+		br.Message = "Unable to fetch latest value"
+		return br
+	}
+	fmt.Println(body)
+	//Populating the tokendetail with current token number and current token level received from Faucet.
+	err = json.Unmarshal(body, &tokendetail)
+	if err != nil {
+		fmt.Println("Error populating with the data:", err)
+		br.Status = false
+		br.Message = "Unable to fetch latest value"
+		return br
+	}
+	fmt.Println("tokenLevel Faucet: ", tokendetail)
+	if tokenLevel > tokendetail.TokenLevel {
+		br.Message = "Invalid token level"
+		return br
+	}
+
+	//Validating token chain
+	tokenType := c.TokenType(RBTString)
+	genBlock := c.w.GetGenesisTokenBlock(tokenID, tokenType)
+
+	signers, err := genBlock.GetSigner()
+	if err != nil {
+		br.Message = "Couldn't get signer details"
+		return br
+	}
+
+	if len(signers) != 1 {
+		br.Message = "Invalid signer details"
+		return br
+	}
+	//The did will be hardcoded to match the faucet DID
+	if signers[0] != "bafybmibexoa7owxdkjzfcg3ff3elqthkxsbaeznqoqq65gx6t2xkvm52fe" {
+		br.Message = "Signer DID doesn't match faucet DID"
+		return br
+	}
+
+	response, err := c.ValidateTokenOwner(genBlock, did)
+	if err != nil {
+		c.log.Error("msg", response.Message, "err", err)
+		br.Message = "Token Details : " + tokenval + " Couldn't validate token chain"
+		return br
+	}
+
+	br.Status = true
+	br.Message = "Token owner validated successfully. Token details = " + tokenval
+
+	return br
+}
 func (c *Core) ValidateToken(token string) (*model.BasicResponse, error) {
 
 	response := &model.BasicResponse{
@@ -625,4 +913,5 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 	}
 
 	return responseBody, nil
+
 }
