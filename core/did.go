@@ -244,7 +244,7 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 		return "", fmt.Errorf("root did is already exist")
 	}
 
-	// pass public key and other requirements (did type) to create did for the 
+	// pass public key and other requirements (did type) to create did for the
 	// BIP wallet with corresponding public key
 	did, err := c.d.CreateDIDFromPubKey(didCreate, pubKey)
 	if err != nil {
@@ -269,9 +269,13 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 		c.log.Error("Failed to create did in the wallet", "err", err)
 		return "", err
 	}
-	
-	// if !c.testNet {     TODO
-	// 	c.ec.ExplorerCreateDID(c.peerID, did)
-	// }
+
+	newDID := &ExplorerDID{
+		PeerID:  c.peerID,
+		DID:     did,
+		Balance: 0,
+		DIDType: didCreate.Type,
+	}
+	c.ec.ExplorerUserCreate(newDID)
 	return did, nil
 }
