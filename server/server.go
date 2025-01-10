@@ -185,6 +185,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetNftsByDid, "GET", s.AuthHandle(s.APIGetNFTsByDid, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetFTTokenchain, "GET", s.AuthHandle(s.APIGetFTTokenchain, true, s.AuthError, false))
 
+	s.AddRoute(setup.APIAddUserAPIKey, "POST", s.AuthHandle(s.APIAddUserAPIKey, false, s.AuthError, true))
 }
 
 func (s *Server) ExitFunc() error {
