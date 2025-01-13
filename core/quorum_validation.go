@@ -178,7 +178,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		fb := c.w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
 		if fb == nil {
 			c.log.Error("Failed to get first token chain block")
-			return false, fmt.Errorf("failed to get first token chain block", ti[i].Token)
+			return false, fmt.Errorf("failed to get first token chain block %v", ti[i].Token)
 		}
 		if c.TokenType(PartString) == ti[i].TokenType {
 			pt, _, err := fb.GetParentDetials(ti[i].Token)
