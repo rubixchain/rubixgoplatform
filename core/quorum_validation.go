@@ -71,10 +71,11 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 	var issueType int
 	b, err := c.getFromIPFS(pt)
 	if err != nil {
-		c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", pt)
+		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
 		return err
 	}
-	_, iswholeToken, err := token.CheckWholeToken(string(b))
+	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+
 	tt := token.RBTTokenType
 	tv := float64(1)
 	if !iswholeToken {
@@ -230,7 +231,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Info("The token is Pinned as a service on Node ", pinningNodeDID)
 			if ownerDID != senderDID {
 				c.log.Error("Invalid token owner: The token is Pinned as a service", "owner", ownerDID, "The node which is trying to transfer", senderDID)
-				return false, fmt.Errorf("Invalid token owner: The token is Pinned as a service")
+				return false, fmt.Errorf("invalid token owner: The token is Pinned as a service")
 			}
 		}
 		signatureValidation, err := c.validateSigner(b, quorumDID, p)

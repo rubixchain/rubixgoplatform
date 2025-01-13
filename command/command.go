@@ -91,7 +91,10 @@ const (
 	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
 	PinTokenCmd                    string = "pinToken"
 	RecoverTokensCmd               string = "recoverToken"
+	GenerateFaucetTestRBTCmd       string = "generatefaucetrbt"
+	FaucetTokenCheck               string = "faucettokencheck"
 	ValidateTokenchainCmd          string = "validatetokenchain"
+	FaucetTokenChainValidate       string = "faucettokenchainvalidate"
 	CreateFTCmd                    string = "create-ft"
 	DumpFTTokenChainCmd            string = "dump-ft"
 	TransferFTCmd                  string = "transfer-ft"
@@ -314,6 +317,7 @@ type Command struct {
 	pinningAddress               string
 	blockCount                   int
 	smartContractChainValidation bool
+	levelofToken                 int
 	metadata                     string
 	artifact                     string
 	nft                          string
@@ -321,6 +325,7 @@ type Command struct {
 	ftName                       string
 	ftCount                      int
 	creatorDID                   string
+	defaultSetup                 bool
 }
 
 func showVersion() {
@@ -371,7 +376,7 @@ func (cmd *Command) runApp() {
 	// Override directory path
 	cmd.cfg.DirPath = cmd.runDir
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup)
 	if err != nil {
 		cmd.log.Error("failed to create core")
 		return
@@ -521,6 +526,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
+	flag.IntVar(&cmd.levelofToken, "level", 0, "Level for which tokens need to be generated")
 	flag.StringVar(&cmd.nft, "nft", "", "NFT id")
 	flag.StringVar(&cmd.metadata, "metadata", "", "NFT metadata")
 	flag.StringVar(&cmd.artifact, "artifact", "", "NFT artifact")
@@ -528,6 +534,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
+	flag.BoolVar(&cmd.defaultSetup, "defaultSetup", false, "Add Faucet Quorums")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -705,6 +712,10 @@ func Run(args []string) {
 		cmd.RecoverTokens()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
+	case GenerateFaucetTestRBTCmd:
+		cmd.GenerateFaucetTestRBT()
+	case FaucetTokenCheck:
+		cmd.FaucetTokenCheck()
 	case CreateFTCmd:
 		cmd.createFT()
 	case DumpFTTokenChainCmd:
