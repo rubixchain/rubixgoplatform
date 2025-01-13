@@ -251,7 +251,7 @@ func (c *Core) InitRubixExplorer() error {
 	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", oldURL)
 	if err == nil {
 		// Old URL exists, delete it
-		err = c.s.Delete(ExplorerURLTable, "url=?", oldURL)
+		err = c.s.Delete(ExplorerURLTable, &ExplorerURL{}, "url=?", oldURL)
 		if err != nil {
 			c.log.Error("Failed to delete old ExplorerURL", "err", err)
 			// return err
