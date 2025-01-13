@@ -371,7 +371,8 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 			response.Message = "failed to get parent token detials from ipfs"
 			return response, err
 		}
-		_, iswholeToken, _ := token.CheckWholeToken(string(b))
+
+		_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
 		tokenType := token.RBTTokenType
 		tokenValue := float64(1)
 		tokenOwner := ""
