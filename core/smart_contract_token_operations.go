@@ -342,7 +342,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		DeployerDID:        smartContractInfo.OwnerDID,
 		Creator:            smartContractInfo.OwnerDID,
 		QuorumList:         extractQuorumDID(consensusRequest.QuorumList),
-		PledgeAmount:       0,
+		PledgeAmount:       smartContractValue,
 		PledgeInfo:         PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
 		CommittedTokenList: []Token{},
 		Comments:           executeReq.Comment,

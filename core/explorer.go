@@ -238,20 +238,35 @@ func (c *Core) InitRubixExplorer() error {
 		return err
 	}
 	//This is to add the URL when the node starts for the first time.
-	url := "rexplorer.azurewebsites.net"
+	// Define the new and old URLs
+	newURL := "rexplorer.azurewebsites.net"
+	oldURL := "deamon-explorer.azurewebsites.net"
 	if c.testNet {
-		url = "testnet-core-api.rubixexplorer.com"
+		newURL = "testnet-core-api.rubixexplorer.com"
+		oldURL = "rubix-deamon-api.ensurity.com"
 	}
 
-	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", url)
+	// Remove old URLs if they exist
+	// var oldExplorer ExplorerURL
+	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", oldURL)
+	if err == nil {
+		// Old URL exists, delete it
+		err = c.s.Delete(ExplorerURLTable, "url=?", oldURL)
+		if err != nil {
+			c.log.Error("Failed to delete old ExplorerURL", "err", err)
+			// return err
+		}
+	}
+
+	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", newURL)
 	if err != nil {
-		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: url, Port: 443, Protocol: "https"})
+		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: newURL, Port: 443, Protocol: "https"})
 	}
 	if err != nil {
 		return err
 	}
 
-	cl, err := ensweb.NewClient(&config.Config{ServerAddress: url, ServerPort: "0", Production: "true"}, c.log)
+	cl, err := ensweb.NewClient(&config.Config{ServerAddress: newURL, ServerPort: "0", Production: "true"}, c.log)
 	if err != nil {
 		return err
 	}
