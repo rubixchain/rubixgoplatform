@@ -70,6 +70,7 @@ func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
+	c.log.Debug("connecting to peer", "addr", addr)
 	peerID, did, ok := util.ParseAddress(addr)
 	if !ok {
 		return nil, fmt.Errorf("invalid address")
@@ -82,6 +83,7 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 			return nil, fmt.Errorf("invalid address, Peer ID not found")
 		}
 	}
+	c.log.Debug("opening peer connection")
 	p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
 	if err != nil {
 		return nil, err
@@ -89,6 +91,7 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 	q := make(map[string]string)
 	q["did"] = did
 	var ps model.PeerStatusResponse
+	c.log.Debug("getting peer status")
 	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps, false)
 	if err != nil {
 		return nil, err
