@@ -91,13 +91,19 @@ func (pm *PeerManager) SwarmConnect(peerID string) bool {
 	for _, bs := range pm.bootStrap {
 		_, bsID := path.Split(bs)
 		pm.log.Debug(bsID)
+		pm.log.Debug("Initating swarm connection")
 		err := pm.ipfs.SwarmConnect(context.Background(), "/ipfs/"+bsID)
+		if err == nil {
+			pm.log.Debug("initated direct swarm connection")
+		}
 		if err != nil {
 			pm.log.Error("failed to connect bootstrap peer", "BootStrap", bsID, "err", err)
 			continue
 		}
+		pm.log.Debug("Initating p2p circuit swarm connection")
 		err = pm.ipfs.SwarmConnect(context.Background(), "/ipfs/"+bsID+"/p2p-circuit/ipfs/"+peerID)
 		if err == nil {
+			pm.log.Debug("initated p2p circuit swarm connection")
 			return true
 		} else {
 			pm.log.Error("failed to connect peer", "BootStrap", bsID, "err", err)
@@ -108,6 +114,7 @@ func (pm *PeerManager) SwarmConnect(peerID string) bool {
 
 func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (*Peer, error) {
 	// local peer
+	pm.log.Debug("^^OpenPeerConn")
 	if peerID == pm.peerID {
 		var err error
 		p := &Peer{
@@ -121,6 +128,7 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 			ServerAddress: "localhost",
 			ServerPort:    fmt.Sprintf("%d", pm.lport),
 		}
+		pm.log.Debug("Starting new client")
 		p.Client, err = ensweb.NewClient(scfg, p.log)
 		if err != nil {
 			pm.log.Error("failed to create ensweb clent", "err", err)
@@ -128,11 +136,13 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 		}
 		return p, nil
 	} else {
+		pm.log.Debug("^^OpenPeerConn peerID", "peerID", peerID)
 		if !pm.SwarmConnect(peerID) {
 			pm.log.Error("Failed to connect swarm peer", "peerID", peerID)
 			return nil, fmt.Errorf("failed to connect swarm peer")
 		}
 		portNum := pm.getPeerPort()
+		pm.log.Debug("pm port number ", "portNum", portNum)
 		if portNum == 0 {
 			return nil, fmt.Errorf("all ports are busy")
 		}
