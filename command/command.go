@@ -333,8 +333,10 @@ func (cmd *Command) runApp() {
 	go s.Start()
 	cmd.log.Info("Syncing Details...")
 	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
-	c.UpdateUserInfo(dids)         //Updating the balance
-	c.GenerateUserAPIKey(dids)     //Regenerating the API Key for DID
+	if len(dids) != 0 {
+		c.UpdateUserInfo(dids)     //Updating the balance
+		c.GenerateUserAPIKey(dids) //Regenerating the API Key for DID
+	}
 	//c.UpdateTokenInfo()
 	cmd.log.Info("Syncing Complete...")
 
