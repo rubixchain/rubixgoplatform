@@ -220,7 +220,7 @@ func (ec *ExplorerClient) SendExplorerJSONRequest(method string, path string, in
 	}
 	for _, url := range urls {
 		apiKeyForHeader := ""
-		if url == "https://rexplorer.azurewebsites.net" {
+		if url == "https://rexplorer.azurewebsites.net" || url == "https://testnet-core-api.rubixexplorer.com" {
 			apiKeyForHeader = ec.getAPIKey(path, input)
 		} else {
 			apiKeyForHeader = ""
