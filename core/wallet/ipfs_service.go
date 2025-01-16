@@ -29,12 +29,14 @@ const (
 
 // modified pin method that pins token and update in DB with role of the machine pinning
 func (w *Wallet) Pin(hash string, role int, did string, transactionId string, sender string, receiver string, tokenValue float64) (bool, error) {
+	w.log.Debug("Starting to pin ", hash)
 	w.ipfs.Pin(hash)
 	err := w.AddProviderDetails(TokenProviderMap{Token: hash, Role: role, DID: did, FuncID: PinFunc, TransactionID: transactionId, Sender: sender, Receiver: receiver, TokenValue: tokenValue})
 	if err != nil {
 		w.log.Info("Error addding provider details to DB", "error", err)
 		return false, err
 	}
+	w.log.Debug("Pinned ", hash)
 	return true, nil
 }
 

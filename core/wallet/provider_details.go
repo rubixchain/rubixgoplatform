@@ -33,12 +33,14 @@ func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
 
 func (w *Wallet) AddProviderDetails(tokenProviderMap TokenProviderMap) error {
 	var tpm TokenProviderMap
+	w.log.Debug("Adding providerMap for ", tokenProviderMap.Token)
 	err := w.s.Read(TokenProvider, &tpm, "token=?", tokenProviderMap.Token)
 	if err != nil || tpm.Token == "" {
 		w.log.Info("Token Details not found: Creating new Record")
 		// create new entry
 		return w.s.Write(TokenProvider, tokenProviderMap)
 	}
+	w.log.Debug("Updating providerMap for ", tokenProviderMap.Token)
 	return w.s.Update(TokenProvider, tokenProviderMap, "token=?", tokenProviderMap.Token)
 }
 
