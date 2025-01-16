@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
@@ -186,6 +187,9 @@ func (c *Core) InitRubixExplorer() error {
 		return err
 	}
 	url := "rexplorer.azurewebsites.net"
+	if c.testNet {
+		url = "testnet-core-api.rubixexplorer.com"
+	}
 	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", url)
 	if err != nil {
 		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: url, Port: 443})
@@ -207,7 +211,7 @@ func (c *Core) InitRubixExplorer() error {
 	return nil
 }
 
-func (ec *ExplorerClient) SendExploerJSONRequest(method string, path string, input interface{}, output interface{}) error {
+func (ec *ExplorerClient) SendExplorerJSONRequest(method string, path string, input interface{}, output interface{}) error {
 
 	var urls []string
 	urls, err := ec.GetAllExplorer()
@@ -216,7 +220,7 @@ func (ec *ExplorerClient) SendExploerJSONRequest(method string, path string, inp
 	}
 	for _, url := range urls {
 		apiKeyForHeader := ""
-		if url == "https://rexplorer.azurewebsites.net" {
+		if url == "https://rexplorer.azurewebsites.net" || url == "https://testnet-core-api.rubixexplorer.com" {
 			apiKeyForHeader = ec.getAPIKey(path, input)
 		} else {
 			apiKeyForHeader = ""
@@ -259,28 +263,68 @@ func (c *Core) ExplorerUserCreate() []string {
 		c.log.Error("Error reading the DID Storage or DID Storage empty")
 		return nil
 	}
-	for _, d := range didList {
-		eu := ExplorerUser{}
-		err = c.s.Read(ExplorerUserDetailsTable, &eu, "did=?", d.DID)
-		if err != nil {
-			ed := ExplorerDID{}
-			ed.DID = d.DID
-			ed.Balance = 0
-			ed.PeerID = c.peerID
-			ed.DIDType = d.Type
-			err = c.ec.ExplorerUserCreate(&ed)
-			if err != nil {
-				c.log.Error("Error creating user for did %v", d.DID)
-			}
+	var overallWG sync.WaitGroup
+	var mu sync.Mutex
+	batchSize := 10 //Number of DIDs per batch
+
+	for i := 0; i < len(didList); i += batchSize {
+		end := i + batchSize
+		if end > len(didList) {
+			end = len(didList) // Handle remaining DIDs in the last batch
 		}
-		dids = append(dids, d.DID)
+		// Increment the overall WaitGroup for each batch
+		overallWG.Add(1)
+		go func(batch []wallet.DIDType) {
+			defer overallWG.Done()
+
+			var batchWG sync.WaitGroup
+			startSignal := make(chan struct{}) // Signal for goroutines in the batch
+
+			// Launch goroutines for the batch
+			for _, d := range batch {
+				batchWG.Add(1)
+				go func(d wallet.DIDType) {
+					defer batchWG.Done()
+					<-startSignal // Wait for the signal to start
+
+					eu := ExplorerUser{}
+					err = c.s.Read(ExplorerUserDetailsTable, &eu, "did=?", d.DID)
+					if err != nil {
+						ed := ExplorerDID{
+							DID:     d.DID,
+							Balance: 0,
+							PeerID:  c.peerID,
+							DIDType: d.Type,
+						}
+						err := c.ec.ExplorerUserCreate(&ed)
+						if err != nil {
+							c.log.Error(fmt.Sprintf("Error creating user for DID %v: %v", d.DID, err))
+							return
+						}
+					}
+
+					// Append to the result slice
+					mu.Lock()
+					dids = append(dids, d.DID)
+					mu.Unlock()
+				}(d)
+			}
+			// Signal all goroutines in the batch to start
+			close(startSignal) // Unblock all goroutines waiting on the channel
+
+			// Wait for all goroutines in this batch to complete
+			batchWG.Wait()
+
+		}(didList[i:end])
+
 	}
+	overallWG.Wait()
 	return dids
 }
 
 func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 	var er ExplorerUserCreateResponse
-	err := ec.SendExploerJSONRequest("POST", ExplorerCreateUserAPI, &ed, &er)
+	err := ec.SendExplorerJSONRequest("POST", ExplorerCreateUserAPI, &ed, &er)
 	if err != nil {
 		return err
 	}
@@ -295,24 +339,32 @@ func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 
 func (c *Core) UpdateUserInfo(dids []string) {
 	for _, did := range dids {
-		accInfo, err := c.GetAccountInfo(did)
-		if err != nil {
-			c.log.Error("Failed to get account info for DID %v", did)
-			continue
-		}
-		var er ExplorerResponse
-		ed := ExplorerDID{}
-		ed.PeerID = c.peerID
-		ed.Balance = accInfo.RBTAmount
-		ed.DIDType = 4
-		err = c.ec.SendExploerJSONRequest("PUT", ExplorerUpdateUserInfoAPI+"/"+did, &ed, &er)
-		if err != nil {
-			c.log.Error("Failed to update user info, " + err.Error())
-		}
-		if er.Message != "User balance updated successfully!" {
-			c.log.Error("Failed to update user info, ", "msg", er.Message)
-		}
-		c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
+		go func(did string) {
+			didList := wallet.DIDType{}
+
+			accInfo, err := c.GetAccountInfo(did)
+			if err != nil {
+				c.log.Error("Failed to get account info for DID %v", did)
+				return
+			}
+			_ = c.s.Read(wallet.DIDStorage, &didList, "did=?", did)
+			var er ExplorerResponse
+			ed := ExplorerDID{
+				PeerID:  c.peerID,
+				Balance: accInfo.RBTAmount,
+				DIDType: didList.Type,
+			}
+			err = c.ec.SendExplorerJSONRequest("PUT", ExplorerUpdateUserInfoAPI+"/"+did, &ed, &er)
+			if err != nil {
+				c.log.Error("Failed to send request for user DID, " + did + " Error : " + err.Error())
+				return
+			}
+			if er.Message != "User balance updated successfully!" {
+				c.log.Error("Failed to update user info for ", "DID", did, "msg", er.Message)
+			} else {
+				c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
+			}
+		}(did)
 	}
 }
 
@@ -341,7 +393,7 @@ func (c *Core) UpdateTokenInfo() {
 			continue
 		}
 		var er ExplorerResponse
-		err = c.ec.SendExploerJSONRequest("POST", ExplorerUpdateTokenInfoAPI, &tokensToSend, &er)
+		err = c.ec.SendExplorerJSONRequest("POST", ExplorerUpdateTokenInfoAPI, &tokensToSend, &er)
 		if err != nil {
 			c.log.Error("Failed to update user info, " + err.Error())
 		}
@@ -455,25 +507,32 @@ func (c *Core) populateTokenDetail(token wallet.Token) TokenDetails {
 
 func (c *Core) GenerateUserAPIKey(dids []string) {
 	for _, did := range dids {
-		var er ExplorerUserCreateResponse
-		eu := ExplorerUser{}
-		//Read for api key in table, if empty, then regenerate, because before this, after creating the DID, we are generating the API Key
-		err := c.s.Read(ExplorerUserDetailsTable, &eu, "did=?", did)
-		if err != nil {
-			c.log.Error("Failed to read table")
-		}
-		if eu.APIKey != "" {
-			continue
-		}
-		err = c.ec.SendExploerJSONRequest("POST", ExplorerGenerateUserKeyAPI, &eu, &er)
-		if err != nil {
-			c.log.Error(err.Error())
-		}
-		if er.Message != "API key regenerated successfully!" {
-			c.log.Error("Failed to generate API Key for %v. The error msg is %v", did, er.Message)
-		}
-		c.ec.AddDIDKey(did, er.APIKey)
-		c.log.Info(er.Message + " for did " + did)
+		go func(did string) {
+			var er ExplorerUserCreateResponse
+			eu := ExplorerUser{}
+			//Read for api key in table, if empty, then regenerate, because before this, after creating the DID, we are generating the API Key
+			err := c.s.Read(ExplorerUserDetailsTable, &eu, "did=?", did)
+			if err != nil {
+				c.log.Error(fmt.Sprintf("Failed to read table for DID %v", did))
+				return
+
+			}
+			if eu.APIKey != "" {
+				return
+			}
+			err = c.ec.SendExplorerJSONRequest("POST", ExplorerGenerateUserKeyAPI, &eu, &er)
+			if err != nil {
+				c.log.Error(fmt.Sprintf("Failed to send request for DID %v: %v", did, err.Error()))
+				return
+			}
+			if er.Message != "API key regenerated successfully!" {
+				c.log.Error(fmt.Sprintf("Failed to generate API Key for %v. The error msg is %v", did, er.Message))
+				return
+			}
+			c.ec.AddDIDKey(did, er.APIKey)
+			c.log.Info(er.Message + " for DID " + did)
+
+		}(did)
 
 	}
 }
@@ -485,7 +544,7 @@ func (ec *ExplorerClient) ExplorerMapDID(oldDid string, newDID string, peerID st
 		PeerID: peerID,
 	}
 	var er ExplorerResponse
-	err := ec.SendExploerJSONRequest("POST", ExplorerMapDIDAPI, &ed, &er)
+	err := ec.SendExplorerJSONRequest("POST", ExplorerMapDIDAPI, &ed, &er)
 	if err != nil {
 		return err
 	}
@@ -498,7 +557,7 @@ func (ec *ExplorerClient) ExplorerMapDID(oldDid string, newDID string, peerID st
 
 func (ec *ExplorerClient) ExplorerTokenCreate(et *ExplorerCreateToken) error {
 	var er ExplorerResponse
-	err := ec.SendExploerJSONRequest("POST", ExplorerTokenCreateAPI, et, &er)
+	err := ec.SendExplorerJSONRequest("POST", ExplorerTokenCreateAPI, et, &er)
 	if err != nil {
 		return err
 	}
@@ -511,7 +570,7 @@ func (ec *ExplorerClient) ExplorerTokenCreate(et *ExplorerCreateToken) error {
 
 func (ec *ExplorerClient) ExplorerTokenCreateParts(et *ExplorerCreateTokenParts) error {
 	var er ExplorerResponse
-	err := ec.SendExploerJSONRequest("POST", ExplorerTokenCreatePartsAPI, et, &er)
+	err := ec.SendExplorerJSONRequest("POST", ExplorerTokenCreatePartsAPI, et, &er)
 	if err != nil {
 		return err
 	}
@@ -525,7 +584,7 @@ func (ec *ExplorerClient) ExplorerTokenCreateParts(et *ExplorerCreateTokenParts)
 
 func (ec *ExplorerClient) ExplorerDataTransaction(et *ExplorerDataTrans) error {
 	var er ExplorerResponse
-	err := ec.SendExploerJSONRequest("POST", ExplorerCreateDataTransAPI, et, &er)
+	err := ec.SendExplorerJSONRequest("POST", ExplorerCreateDataTransAPI, et, &er)
 	if err != nil {
 		return err
 	}
@@ -538,7 +597,7 @@ func (ec *ExplorerClient) ExplorerDataTransaction(et *ExplorerDataTrans) error {
 
 func (ec *ExplorerClient) ExplorerRBTTransaction(et *ExplorerRBTTrans) error {
 	var er ExplorerResponse
-	err := ec.SendExploerJSONRequest("POST", ExplorerRBTTransactionAPI, et, &er)
+	err := ec.SendExplorerJSONRequest("POST", ExplorerRBTTransactionAPI, et, &er)
 	if err != nil {
 		return err
 	}
@@ -552,7 +611,7 @@ func (ec *ExplorerClient) ExplorerRBTTransaction(et *ExplorerRBTTrans) error {
 
 func (ec *ExplorerClient) ExplorerSCTransaction(et *ExplorerSCTrans) error {
 	var er ExplorerResponse
-	err := ec.SendExploerJSONRequest("POST", ExplorerSCTransactionAPI, et, &er)
+	err := ec.SendExplorerJSONRequest("POST", ExplorerSCTransactionAPI, et, &er)
 	if err != nil {
 		return err
 	}
@@ -684,21 +743,31 @@ func (c *Core) ExpireUserAPIKey() {
 	if err != nil {
 		c.log.Error("Failed to read table for Expiring the user Key")
 	}
+	var wg sync.WaitGroup
 	for _, eu := range eus {
-		var er ExplorerResponse
-		err = c.ec.SendExploerJSONRequest("POST", ExplorerExpireUserKeyAPI, &eu, &er)
-		if err != nil {
-			c.log.Error(err.Error())
-		}
-		if er.Message != "API key expired successfully!" {
-			c.log.Error("Failed to expire API Key for %v. The error msg is %v", eu.DID, er.Message)
-		}
-		eu.APIKey = ""
-		err = c.s.Update(ExplorerUserDetailsTable, &eu, "did=?", eu.DID)
-		if err != nil {
-			c.log.Error(err.Error())
-		}
-		c.log.Info(fmt.Sprintf("%v for DID %v", er.Message, eu.DID))
+		wg.Add(1)
+		go func(eu ExplorerUser) {
+			defer wg.Done()
+			var er ExplorerResponse
+			err = c.ec.SendExplorerJSONRequest("POST", ExplorerExpireUserKeyAPI, &eu, &er)
+			if err != nil {
+				c.log.Error(fmt.Sprintf("Failed to send request for DID %v: %v", eu.DID, err.Error()))
+				return
+			}
+			if er.Message != "API key expired successfully!" {
+				c.log.Error(fmt.Sprintf("Failed to expire API Key for %v. The error msg is %v", eu.DID, er.Message))
+				return
+			}
+			eu.APIKey = ""
+			err = c.s.Update(ExplorerUserDetailsTable, &eu, "did=?", eu.DID)
+			if err != nil {
+				c.log.Error("Failed to update database for DID %v: %v", eu.DID, err.Error())
+				return
+			}
+			c.log.Info(fmt.Sprintf("%v for DID %v", er.Message, eu.DID))
+		}(eu)
+		// Wait for all goroutines to complete
+		wg.Wait()
 		fmt.Println("Cleaning completed...")
 	}
 }
@@ -706,7 +775,7 @@ func (c *Core) ExpireUserAPIKey() {
 func (c *Core) UpdatePledgeStatus(tokenHashes []string, did string) {
 	var er ExplorerResponse
 	ut := UnpledgeToken{TokenHashes: tokenHashes}
-	err := c.ec.SendExploerJSONRequest("PUT", ExplorerUpdatePledgeStatusAPI+"/"+did, &ut, &er)
+	err := c.ec.SendExplorerJSONRequest("PUT", ExplorerUpdatePledgeStatusAPI+"/"+did, &ut, &er)
 	if err != nil {
 		c.log.Error(err.Error())
 	}
