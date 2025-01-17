@@ -250,6 +250,9 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 	if err != nil {
 		return "", err
 	}
+	if c.w.IsDIDExist(did) {
+		return did, nil
+	}
 	if didCreate.Dir == "" {
 		didCreate.Dir = did
 	}
