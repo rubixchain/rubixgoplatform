@@ -41,5 +41,4 @@ type DIDFromPubKeyRequest struct {
 // DIDFromPubKeyResponse to receive request to create did for provided pub key
 type DIDFromPubKeyResponse struct {
 	DID    string `json:"did"`
-	PubKey string `json:"public_key"`
 }

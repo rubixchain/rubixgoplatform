@@ -291,8 +291,7 @@ func (s *Server) APICreateDIDFromPubKey(req *ensweb.Request) *ensweb.Result {
 
 	// respond with the requested did along with the corr. public key
 	didResp := model.DIDFromPubKeyResponse{
-		DID:    did,
-		PubKey: didReq.PubKey,
+		DID: did,
 	}
 	return s.RenderJSON(req, didResp, http.StatusOK)
 }
