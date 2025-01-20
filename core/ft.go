@@ -488,12 +488,6 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		FTCount: req.FTCount,
 	}
 	sc := contract.CreateNewContract(sct)
-	err = sc.UpdateSignature(dc)
-	if err != nil {
-		c.log.Error(err.Error())
-		resp.Message = err.Error()
-		return resp
-	}
 	cr := &ConensusRequest{
 		Mode:           FTTransferMode,
 		ReqID:          uuid.New().String(),

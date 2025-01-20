@@ -288,13 +288,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	contractType := getContractType(reqID, req, tis, isSelfRBTTransfer)
 	sc := contract.CreateNewContract(contractType)
 
-	err = sc.UpdateSignature(dc)
-	if err != nil {
-		c.log.Error(err.Error())
-		resp.Message = err.Error()
-		return resp
-	}
-
 	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
 
 	td, _, pds, err := c.initiateConsensus(cr, sc, dc)

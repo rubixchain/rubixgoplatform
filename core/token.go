@@ -26,7 +26,7 @@ type TokenPublish struct {
 
 type TCBSyncRequest struct {
 	Token     string `json:"token"`
-	TokenType int    `json:"token_type"`
+	TokenType int    `json:"tokenType"`
 	BlockID   string `json:"block_id"`
 }
 
@@ -914,4 +914,90 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 
 	return responseBody, nil
 
+}
+
+// get all pledge details, verify each pledge token chain
+func (c *Core) ValidatePledgedTokens(pledgedTokensArray []interface{}, quorumDID string, selfDID string) error {
+	for _, pledgedToken := range pledgedTokensArray {
+		pledgedTokenMap := pledgedToken.(map[interface{}]interface{})
+		pledgedTokenIDMap := pledgedTokenMap[block.PDTokenKey]
+		pledgedTokenTypeMap := pledgedTokenMap[block.PDTokenTypeKey]
+		pledgedTokenID := pledgedTokenIDMap.(string)
+		pledgedTokenType := pledgedTokenTypeMap.(uint64)
+
+		quorumPeerID := c.w.GetPeerID(quorumDID)
+		p, err := c.getPeer(quorumPeerID+"."+quorumDID, "")
+		if err != nil {
+			c.log.Error("Failed to get peer", "err", err)
+			return err
+		}
+		err = c.syncTokenChainFrom(p, "", pledgedTokenID, int(pledgedTokenType))
+		if err != nil {
+			c.log.Error("failed to sync pledged token chain", pledgedTokenID, "from peer", quorumDID)
+			return err
+		}
+		//GetGenesisTokenBlock returns genesis block
+		genesisBlock := c.w.GetGenesisTokenBlock(pledgedTokenID, int(pledgedTokenType))
+		pledgedTokenInfo := &wallet.Token{
+			TokenID:       pledgedTokenID,
+			ParentTokenID: "",
+		}
+		//get token value of the pledged token
+		pledgedTokenInfo.TokenValue = genesisBlock.GetTokenValue()
+		//get parent and grand parent tokens of the pledged token
+		if int(pledgedTokenType) == token.TestPartTokenType {
+			parentToken, _, err := genesisBlock.GetParentDetials(pledgedTokenID) //TODO: get parent tokens from genesis block
+			if err != nil {
+				c.log.Error("failed to get parent and grand parents")
+			}
+			err = c.SyncAncestralTokens(p, parentToken)
+			if err != nil {
+				c.log.Error("failed to sync parent token", parentToken, "err", err)
+				return err
+			}
+			pledgedTokenInfo.ParentTokenID = parentToken
+		}
+		response, err := c.ValidateTokenChain(selfDID, pledgedTokenInfo, int(pledgedTokenType), 0)
+		if err != nil || !response.Status {
+			return fmt.Errorf("err: %v; msg: %v", err, response.Message)
+		}
+	}
+	return nil
+}
+
+func (c *Core) SyncAncestralTokens(p *ipfsport.Peer, parentToken string) error {
+	b, err := c.getFromIPFS(parentToken)
+	if err != nil {
+		c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parentToken)
+		return err
+	}
+	_, iswholeToken, _ := token.CheckWholeToken(string(b))
+	tokenType := token.RBTTokenType
+	if !iswholeToken {
+		blk := util.StrToHex(string(b))
+		rb, err := rac.InitRacBlock(blk, nil)
+		if err != nil {
+			c.log.Error("invalid token, invalid rac block", "err", err)
+			return err
+		}
+		tokenType = rac.RacType2TokenType(rb.GetRacType())
+	}
+	err = c.syncTokenChainFrom(p, "", parentToken, tokenType)
+	if err != nil {
+		c.log.Error("failed to sync token chain block", "err", err)
+		return fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v", parentToken, TokenChainNotSynced)
+	}
+	if tokenType == c.TokenType(PartString) {
+		genesisBlock := c.w.GetGenesisTokenBlock(parentToken, tokenType)
+		grandParentToken, _, err := genesisBlock.GetParentDetials(parentToken)
+		if err != nil {
+			c.log.Error("failed to get grand-parents")
+		}
+		err = c.SyncAncestralTokens(p, grandParentToken)
+		if err != nil {
+			c.log.Error("failed to sync grand-parent token", grandParentToken, "err", err)
+			return err
+		}
+	}
+	return nil
 }

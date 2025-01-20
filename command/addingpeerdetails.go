@@ -9,18 +9,14 @@ import (
 )
 
 func (cmd *Command) AddPeerDetails() {
-	var peerID string
-	var did string
 	var err error
 	if cmd.peerID == "" {
 		fmt.Print("Enter PeerID : ")
-		_, err = fmt.Scan(&peerID)
+		_, err = fmt.Scan(&cmd.peerID)
 		if err != nil {
 			cmd.log.Error("Failed to get PeerID")
 			return
 		}
-	} else {
-		peerID = cmd.peerID
 	}
 	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.peerID)
 	if !strings.HasPrefix(cmd.peerID, "12D3KooW") || len(cmd.peerID) != 52 || !isAlphanumeric {
@@ -30,13 +26,11 @@ func (cmd *Command) AddPeerDetails() {
 
 	if cmd.did == "" {
 		fmt.Print("Enter DID : ")
-		_, err = fmt.Scan(&did)
+		_, err = fmt.Scan(&cmd.did)
 		if err != nil {
 			cmd.log.Error("Failed to get DID")
 			return
 		}
-	} else {
-		did = cmd.did
 	}
 	isAlphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
 	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
@@ -51,8 +45,8 @@ func (cmd *Command) AddPeerDetails() {
 	}
 
 	peerDetail := wallet.DIDPeerMap{
-		PeerID:  peerID,
-		DID:     did,
+		PeerID:  cmd.peerID,
+		DID:     cmd.did,
 		DIDType: &cmd.didType,
 	}
 	msg, status := cmd.c.AddPeer(&peerDetail)

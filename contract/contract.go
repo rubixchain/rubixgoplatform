@@ -88,13 +88,7 @@ func (c *Contract) blkDecode() error {
 		return nil
 	}
 	ssi, sok := m[SCBlockContentSSigKey]
-	if !sok {
-		return fmt.Errorf("invalid block, missing share signature")
-	}
 	ksi, kok := m[SCBlockContentPSigKey]
-	if !kok {
-		return fmt.Errorf("invalid block, missing key signature")
-	}
 	bc, ok := m[SCBlockContentKey]
 	if !ok {
 		return fmt.Errorf("invalid block, missing block content")
