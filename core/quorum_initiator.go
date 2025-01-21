@@ -361,7 +361,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}
 	pd := PledgeDetails{
 		TransferAmount:         reqPledgeTokens,
-		RemPledgeTokens:        floatPrecision(reqPledgeTokens, MaxDecimalPlaces),
+		RemPledgeTokens:        floatPrecision(reqPledgeTokens/2, MaxDecimalPlaces),
 		NumPledgedTokens:       0,
 		PledgedTokens:          make(map[string][]string),
 		PledgedTokenChainBlock: make(map[string]interface{}),
@@ -2374,7 +2374,8 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 			err := fmt.Errorf("invalid pledge request")
 			return err
 		}
-		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
+		halfOfTransferAmount := CeilfloatPrecision(pd.TransferAmount/2, MaxDecimalPlaces)
+		pledgeTokensPerQuorum := halfOfTransferAmount / float64(MinQuorumRequired)
 		// Request pledage token
 		if pd.RemPledgeTokens > 0 {
 			pr := PledgeRequest{
