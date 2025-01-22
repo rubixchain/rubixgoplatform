@@ -3,6 +3,7 @@ package wallet
 type FTToken struct {
 	TokenID        string  `gorm:"column:token_id;primaryKey"`
 	FTName         string  `gorm:"column:ft_name"`
+	FTSymbol       string  `gorm:"column:ft_symbol"`
 	DID            string  `gorm:"column:owner_did"`
 	CreatorDID     string  `gorm:"column:creator_did"`
 	TokenStatus    int     `gorm:"column:token_status"`
@@ -14,6 +15,7 @@ type FTToken struct {
 type FT struct {
 	ID         string `gorm:"column:id;primaryKey;autoIncrement"`
 	FTName     string `gorm:"column:ft_name"`
+	FTSymbol   string `gorm:"column:ft_symbol"`
 	FTCount    int    `gorm:"column:ft_count"`
 	CreatorDID string `gorm:"column:creator_did"`
 }

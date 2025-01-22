@@ -321,6 +321,7 @@ type Command struct {
 	ftName                       string
 	ftCount                      int
 	creatorDID                   string
+	ftSymbol                     string
 }
 
 func showVersion() {
@@ -528,6 +529,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
+	flag.StringVar(&cmd.ftSymbol, "ftSymbol", "", "Symbol of FT to be created")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

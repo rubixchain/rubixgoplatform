@@ -19,8 +19,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int) {
-	err := c.createFTs(reqID, ftname, ftcount, wholeToken, did)
+func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, ftsymbol string, wholeToken int) {
+	err := c.createFTs(reqID, ftname, ftsymbol, ftcount, wholeToken, did)
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "FT created successfully",
@@ -37,7 +37,8 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 	channel.OutChan <- &br
 }
 
-func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens int, did string) error {
+func (c *Core) createFTs(reqID string, FTName string, FTSymbol string, numFTs int, numWholeTokens int, did string) error {
+	// Validate input parameters
 	if did == "" {
 		c.log.Error("DID is empty")
 		return fmt.Errorf("DID is empty")
@@ -47,23 +48,11 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		c.log.Error("Invalid FT creator's DID. Please provide valid DID")
 		return fmt.Errorf("Invalid DID, Please provide valid DID")
 	}
-	dc, err := c.SetupDID(reqID, did)
-	if err != nil || dc == nil {
-		c.log.Error("Failed to setup DID")
-		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
+	isUpperCaseFTSymbol := regexp.MustCompile(`^[A-Z]+$`).MatchString(FTSymbol)
+	if !isUpperCaseFTSymbol {
+		c.log.Error("FT symbol must consist of only uppercase alphabetic characters")
+		return fmt.Errorf("FT symbol must consist of only uppercase alphabetic characters")
 	}
-
-	var FT []wallet.FT
-
-	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND  creator_did=?", FTName, did)
-
-	if len(FT) != 0 {
-		c.log.Error("FT Name already exists")
-		return fmt.Errorf("FT Name already exists")
-	}
-
-	// Validate input parameters
-
 	switch {
 	case numFTs <= 0:
 		return fmt.Errorf("number of tokens to create must be greater than zero")
@@ -71,6 +60,23 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return fmt.Errorf("number of whole tokens must be a positive integer")
 	case numFTs > int(numWholeTokens*1000):
 		return fmt.Errorf("max allowed FT count is 1000 for 1 RBT")
+	case len(FTSymbol) < 3 || len(FTSymbol) > 10:
+		return fmt.Errorf("FT symbol length must be between 3 and 10 characters")
+	}
+
+	//Checking if the FT Name already exits.
+	var FT []wallet.FT
+	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND  creator_did=?", FTName, did)
+	if len(FT) != 0 {
+		c.log.Error("FT Name already exists")
+		return fmt.Errorf("FT Name already exists")
+	}
+
+	//DID initializing
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil || dc == nil {
+		c.log.Error("Failed to setup DID")
+		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
 
 	// Fetch whole tokens using GetToken
@@ -79,6 +85,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
 	}
+
 	//TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
 	defer c.w.ReleaseTokens(wholeTokens)
 	fractionalValue, err := c.GetPresiceFractionalValue(int(numWholeTokens), numFTs)
@@ -88,14 +95,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 
 	newFTs := make([]wallet.FTToken, 0, numFTs)
-	newFTTokenIDs := make([]string, numFTs)
+	newFTTokenIDs := make([]string, numFTs+1)
 
 	var parentTokenIDsArray []string
 	for _, token := range wholeTokens {
 		parentTokenIDsArray = append(parentTokenIDsArray, token.TokenID)
 	}
 	parentTokenIDs := strings.Join(parentTokenIDsArray, ",")
-	for i := 0; i < numFTs; i++ {
+	for i := 1; i <= numFTs; i++ {
 		racType := &rac.RacType{
 			Type:        c.RACFTType(),
 			DID:         did,
@@ -103,10 +110,11 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			TotalSupply: 1,
 			TimeStamp:   time.Now().String(),
 			FTInfo: &rac.RacFTInfo{
-				Parents: parentTokenIDs,
-				FTNum:   i,
-				FTName:  FTName,
-				FTValue: fractionalValue,
+				Parents:  parentTokenIDs,
+				FTNum:    i,
+				FTName:   FTName,
+				FTSymbol: FTSymbol,
+				FTValue:  fractionalValue,
 			},
 		}
 
@@ -128,9 +136,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			return err
 		}
 
-		// racBlockData := racBlocks[0].GetBlock()
-		// fr := bytes.NewBuffer(racBlockData)
-		//TODO : Adding timestamp to creaet FT to prevent sequence error. Need to check if DID can be used instead.
 		ftnumString := strconv.Itoa(i)
 		parts := []string{FTName, ftnumString, did}
 		result := strings.Join(parts, " ")
@@ -159,13 +164,17 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			GenesisBlock: &block.GenesisBlock{
 				Info: []block.GenesisTokenInfo{
 					{
-						Token:       ftID,
-						ParentID:    parentTokenIDs,
-						TokenNumber: i,
+						ParentID: parentTokenIDs,
 					},
 				},
 			},
 			TokenValue: fractionalValue,
+			FTData: &block.FTData{
+				FTName:   FTName,
+				FTSymbol: FTSymbol,
+				FTCount:  numFTs,
+				FTNum:    i,
+			},
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[ftID] = nil
@@ -187,6 +196,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		ft := &wallet.FTToken{
 			TokenID:     ftID,
 			FTName:      FTName,
+			FTSymbol:    FTSymbol,
 			TokenStatus: wallet.TokenIsFree,
 			TokenValue:  fractionalValue,
 			DID:         did,
@@ -255,6 +265,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		FTOwner := blk.GetOwner()
 		ft := &newFTs[i]
 		ft.CreatorDID = FTOwner
+		ft.FTSymbol = FTSymbol
 		err = c.w.CreateFT(ft)
 		if err != nil {
 			c.log.Error("Failed to write FT details in FT tokens table", "err", err)
@@ -411,7 +422,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 	FTsForTxn := AllFTs[:req.FTCount]
 	//TODO: Pinning of tokens
-	
+
 	rpeerid = c.w.GetPeerID(req.Receiver)
 	if rpeerid == "" {
 		// Check if DID is present in the DIDTable as the

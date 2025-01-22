@@ -13,6 +13,7 @@ import (
 type CreateFTReqSwaggoInput struct {
 	DID        string `json:"did"`
 	FTName     string `json:"ft_name"`
+	FTSymbol   string `json:"ft_symbol"`
 	FTCount    int    `json:"ft_count"`
 	TokenCount int    `json:"token_count"`
 }
@@ -48,7 +49,7 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	}
 	s.c.AddWebReq(req)
 	rbtAmount := int(createFTReq.TokenCount)
-	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, rbtAmount)
+	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, createFTReq.FTSymbol, rbtAmount)
 	return s.didResponse(req, req.ID)
 }
 

@@ -1486,6 +1486,9 @@ const docTemplate = `{
                 "ft_name": {
                     "type": "string"
                 },
+                "ft_symbol": {
+                    "type": "string"
+                },
                 "token_count": {
                     "type": "integer"
                 }

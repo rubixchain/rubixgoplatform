@@ -32,12 +32,20 @@ func (cmd *Command) createFT() {
 	case cmd.ftCount > int(cmd.rbtAmount*1000):
 		cmd.log.Error("max allowed FT count is 1000 for 1 RBT")
 		return
+	case len(cmd.ftSymbol) < 3 || len(cmd.ftSymbol) > 10:
+		cmd.log.Error("FT symbol length must be between 3 and 10 characters")
+		return
 	}
 	if cmd.rbtAmount != float64(int(cmd.rbtAmount)) {
 		cmd.log.Error("rbtAmount must be a positive integer")
 		return
 	}
-	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, int(cmd.rbtAmount))
+	isUpperCaseFTSymbol := regexp.MustCompile(`^[A-Z]+$`).MatchString(cmd.ftSymbol)
+	if !isUpperCaseFTSymbol {
+		cmd.log.Error("FT symbol must consist of only uppercase alphabetic characters")
+		return
+	}
+	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftSymbol, cmd.ftCount, int(cmd.rbtAmount))
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") || strings.Contains(br.Message, "no records found") {
 			cmd.log.Error("Failed to create FT, No RBT available to create FT")

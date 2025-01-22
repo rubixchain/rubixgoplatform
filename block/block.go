@@ -43,6 +43,7 @@ const (
 	TCInitiatorSignatureKey string = "12"
 	TCEpochKey              string = "epoch"
 	TCNFTDataKey            string = "13"
+	TCFTDataKey             string = "14"
 )
 
 const (
@@ -92,6 +93,7 @@ type TokenChainBlock struct {
 	NFT                []byte              `json:"nft"`
 	NFTData            string              `json:"nftData"`
 	Epoch              int                 `json:"epoch"`
+	FTData             *FTData             `json:"ftData"`
 }
 
 type PledgeDetail struct {
@@ -122,6 +124,13 @@ type InitiatorSignature struct {
 	DID         string `json:"InitiatorDID"`
 	Hash        string `json:"hash"`
 	SignType    int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
+}
+
+type FTData struct {
+	FTName   string `json:"ft_name"`
+	FTSymbol string `json:"ft_symbol"`
+	FTCount  int    `json:"ft_count"`
+	FTNum    int    `json:"ft_num"`
 }
 
 type BlockOption func(b *Block)
@@ -194,6 +203,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	}
 	if tcb.NFTData != "" {
 		ntcb[TCNFTDataKey] = tcb.NFTData
+	}
+	if tcb.FTData != nil {
+		ntcb[TCFTDataKey] = newFTData(tcb.FTData)
 	}
 	if tcb.InitiatorSignature != nil {
 		ntcb[TCInitiatorSignatureKey] = tcb.InitiatorSignature
