@@ -607,7 +607,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved", "err", err)
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
 			return nil, nil, nil, pledgeFinalityError
 		}
 
