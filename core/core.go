@@ -57,6 +57,7 @@ const (
 	APIRequestSigningHash     string = "/api/request-signing-hash"
 	TokenValidatorURL         string = "http://103.209.145.177:8000"
 	APISendFTToken            string = "/api/send-ft-token"
+	APIGetPrevQrmFromPrevSenderPath string = "/api/get-prev-qrms-info-from-sender"
 )
 
 const (
