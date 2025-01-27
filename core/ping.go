@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -111,16 +111,16 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error
 	}
 	// Close the p2p before exit
 	defer p.Close()
-	q["did"] = did
+	q["quorumAddress"] = did
 	var checkQuorumStatusResponse PingResponse
 	err = p.SendJSONRequest("GET", APICheckQuorumStatusPath, q, nil, &checkQuorumStatusResponse, false, 2*time.Minute)
 	if err != nil {
 		return "Send Json Request error ", false, err
 	}
+	// CheckQuorumStatusResponse is the handler for CheckQuorumStatus request
 	return checkQuorumStatusResponse.Message, checkQuorumStatusResponse.Status, nil
 }
 
-// CheckQuorumStatusResponse is the handler for CheckQuorumStatus request
 func (c *Core) GetPeerdidTypeResponse(req *ensweb.Request) *ensweb.Result { //PingRecevied
 	did := c.l.GetQuerry(req, "did")
 	peerPeerID := c.l.GetQuerry(req, "self_peerid")
