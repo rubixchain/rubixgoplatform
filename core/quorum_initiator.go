@@ -112,6 +112,7 @@ type UpdatePledgeRequest struct {
 	TransferredTokenStateHashes []string `json:"token_state_hash_info"`
 	TransactionID               string   `json:"transaction_id"`
 	TransactionEpoch            int      `json:"transaction_epoch"`
+	WeekCount                   int      `json:"week_count"`
 }
 
 type SendTokenRequest struct {
@@ -314,6 +315,7 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 }
 
 func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
+	weekCount := util.GetWeeksPassed()
 	cs := ConsensusStatus{
 		Credit: CreditScore{
 			Credit: make([]CreditSignature, 0),
@@ -454,6 +456,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}
 
 	ti := sc.GetTransTokenInfo()
+	fmt.Println("nft get trans tokens : ", ti) //TODO
 	c.qlock.Lock()
 	pds := c.pd[cr.ReqID]
 	c.qlock.Unlock()
@@ -603,9 +606,9 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			newtokenhashes = append(newtokenhashes, statehash)
 		}
-
+		fmt.Println("trans token initiate consensus : ", ti[0].Token) //TODO
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid, weekCount)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, nil, pledgeFinalityError
@@ -822,7 +825,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newTokenHashes, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newTokenHashes, tid, weekCount)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, nil, pledgeFinalityError
@@ -1035,7 +1038,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid, weekCount)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, nil, pledgeFinalityError
@@ -1183,7 +1186,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, updatedTokenHashes, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, updatedTokenHashes, tid, weekCount)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, nil, pledgeFinalityError
@@ -1289,7 +1292,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		//trigger pledge finality to the quorum
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, nil, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, nil, tid, weekCount)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, nil, pledgeFinalityError
@@ -1341,7 +1344,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Info(fmt.Sprintf("New smart contract token hash after being deployed : %s", newtokenIDTokenStateHash))
 
 		//trigger pledge finality to the quorum and adding the details in token hash table
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid, weekCount)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, nil, pledgeFinalityError
@@ -1414,7 +1417,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Info(fmt.Sprintf("New smart contract token hash after being executed : %s", newtokenIDTokenStateHash))
 
 		//trigger pledge finality to the quorum and adding the details in token hash table
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid, weekCount)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, nil, pledgeFinalityError
@@ -1512,9 +1515,9 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		nftIDTokenStateBuffer := bytes.NewBuffer([]byte(nftStateData))
 		newnftIDTokenStateHash, err := c.ipfs.Add(nftIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 		c.log.Info(fmt.Sprintf("New nft state hash after being deployed : %s", newnftIDTokenStateHash))
-
+		fmt.Println("trans token initiate consensus : ", ti[0].Token) //TODO
 		//trigger pledge finality to the quorum and adding the details in token hash table
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newnftIDTokenStateHash}, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newnftIDTokenStateHash}, tid, weekCount)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved while deploying nft", "err", err)
 			return nil, nil, nil, pledgeFinalityError
@@ -1577,7 +1580,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Info(fmt.Sprintf("New NFT state hash after being executed : %s", newtokenIDTokenStateHash))
 
 		//trigger pledge finality to the quorum and adding the details in token hash table
-		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid, weekCount)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, nil, pledgeFinalityError
@@ -1653,7 +1656,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		return &txnDetails, pl, pds, nil
-
 	default:
 		err := fmt.Errorf("invalid consensus request mode: %v", cr.Mode)
 		c.log.Error(err.Error())
@@ -1726,7 +1728,10 @@ func (c *Core) initiateUnpledgingProcess(cr *ConensusRequest, transactionHash st
 	return nil
 }
 
-func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, newTokenStateHashes []string, transactionId string) error {
+// trigger pledge finality to the quorum,
+// adding the new tokenstate hash details for transferred tokens to quorum,
+// pinning token.weekEpoch
+func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, newTokenStateHashes []string, transactionId string, weekCount int) error {
 	c.log.Debug("Proceeding for pledge finality")
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
@@ -1736,6 +1741,8 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 		c.log.Error("Invalid pledge request")
 		return fmt.Errorf("invalid pledge request")
 	}
+
+	//pd.PledgedTokens contains details as map with quorumDID as the key and tokens pledged by the quorum as value
 	for k, v := range pd.PledgedTokens {
 		p, ok := cs.P[k]
 		if !ok {
@@ -1767,7 +1774,10 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			TransactionID:               transactionId,
 			TransferredTokenStateHashes: nil,
 			TransactionEpoch:            cr.TransactionEpoch,
+			WeekCount:                   weekCount,
 		}
+
+		fmt.Println("Trans Tokens pledge finality : ", newBlock.GetTransTokens())
 
 		if newTokenStateHashes != nil {
 			// ur.TransferredTokenStateHashes = newTokenStateHashes[countofTokenStateHash : countofTokenStateHash+len(v)]

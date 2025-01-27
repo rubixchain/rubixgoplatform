@@ -300,7 +300,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		ReqID:              uuid.New().String(),
 		Type:               executeReq.QuorumType,
 		ExecuterPeerID:     c.peerID,
-		ContractBlock:      consensusContract.GetBlock(),
+		ContractBlock:      consensusContractBlock,
 		SmartContractToken: executeReq.SmartContractToken,
 		Mode:               SmartContractExecuteMode,
 		TransactionEpoch:   txEpoch,

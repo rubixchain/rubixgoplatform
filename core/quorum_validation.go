@@ -99,6 +99,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 	// 	}
 	// }
 	err = c.syncTokenChainFrom(p, lbID, pt, tt)
+	fmt.Println("sync 7") //TODO
 	if err != nil {
 		c.log.Error("failed to sync token chain block", "err", err)
 		return fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v", pt, TokenChainNotSynced)
@@ -144,6 +145,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 	return nil
 }
 
+// For RBT Transfer, Self transfer, Pinning, the quorums will sync the RBT token chain, TODO : they are syncing for all.
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error) {
 
 	var ti []contract.TokenInfo
@@ -151,6 +153,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	var receiverAddress string
 	if cr.Mode == SmartContractDeployMode || cr.Mode == NFTDeployMode {
 		ti = sc.GetCommitedTokensInfo()
+		fmt.Println("commited tokens validate : ", ti) //TODO : comments
 		address = cr.DeployerPeerID + "." + sc.GetDeployerDID()
 	} else {
 		ti = sc.GetTransTokenInfo()
@@ -171,6 +174,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	defer p.Close()
 	for i := range ti {
 		err := c.syncTokenChainFrom(p, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
+		fmt.Println("sync 8") //TODO
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", ti[i].Token, TokenChainNotSynced)

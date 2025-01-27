@@ -118,6 +118,7 @@ func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	defer p.Close()
 	for k := range dt {
 		err := c.syncTokenChainFrom(p, dt[k].BlockID, dt[k].Token, dt[k].TokenType)
+		fmt.Println("sync 2") //TODO
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			crep.Message = "Failed to sync token chain block"
@@ -455,6 +456,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		for i, ti := range smartContractTokenInfo {
 			t := ti.Token
 			err = c.syncTokenChainFrom(peerConn, "", ti.Token, ti.TokenType)
+			fmt.Println("sync 3") //TODO
 			if err != nil {
 				c.log.Error("Failed to sync smart contract token chain block fro execution validation", "err", err)
 				consensusReply.Message = "Failed to sync smart contract token chain block fro execution validation"
@@ -548,6 +550,7 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	if consensusRequest.Mode == NFTDeployMode {
 		//if deployment
 		commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
+		fmt.Println("commited tokens nft : ", commitedTokenInfo) //TODO
 		//1. check commited token authenticity
 		c.log.Debug("validation 1 - Authenticity of commited RBT tokens")
 		validateTokenOwnershipVar, err := c.validateTokenOwnership(consensusRequest, consensusContract, did)
@@ -610,7 +613,9 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		nftInfo := consensusContract.GetTransTokenInfo()
 		for i, ti := range nftInfo {
 			t := ti.Token
+			fmt.Println("execute nft consensus: ", t) //TODO
 			err = c.syncTokenChainFrom(peerConn, "", ti.Token, ti.TokenType)
+			fmt.Println("sync 4") //TODO
 			if err != nil {
 				c.log.Error("Failed to sync nft chain block from execution validation", "err", err)
 				consensusReply.Message = "Failed to sync nft chain block from execution validation"
@@ -957,6 +962,7 @@ func (c *Core) updateReceiverToken(
 			}
 
 			err = c.syncTokenChainFrom(senderPeer, pblkID, t, ti.TokenType)
+			fmt.Println("sync 5") //TODO
 			if err != nil {
 				return nil, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
 			}
@@ -1133,6 +1139,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		}
 
 		err = c.syncTokenChainFrom(senderPeer, pblkID, t, ti.TokenType)
+		fmt.Println("sync 6") //TODO
 		if err != nil {
 			return nil, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
 		}
@@ -1370,7 +1377,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	// is avoided
 	//
 	// However in case either sender or receiver happen to be a Quorum server, even though the above
-	// scenario is covered , but since the token block is also added on Quorum's end, we end up in a 
+	// scenario is covered , but since the token block is also added on Quorum's end, we end up in a
 	// situation where update of same block happens twice. Hence the following check ensures that we
 	// skip the addition of block here, if either sender or receiver happen to be on a Quorum node.
 	if !c.w.IsDIDExist(b.GetReceiverDID()) && !c.w.IsDIDExist(b.GetSenderDID()) {
@@ -1452,6 +1459,12 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	if err != nil {
 		c.log.Error("Failed to add token state hash", "err", err)
+	}
+	//TODO
+	//Even if there is any error, the token chain is already getting synced. The quorums pin the hash of (TokenID + epoch), the epoch being the week
+	//count of when the transaction happened calculated from 1st Jan 2025.
+	for _, j := range tks {
+		c.pinTokenEpoch(j, ur.WeekCount)
 	}
 
 	crep.Status = true
@@ -1789,5 +1802,32 @@ func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
 		fmt.Println("removed hash successfully")
 	}
 	return c.l.RenderJSON(req, struct{}{}, http.StatusOK)
+
+}
+
+func (c *Core) pinTokenEpoch(tokenId string, weekCount int) {
+	fmt.Println("Week count : ", weekCount)
+	toPin := fmt.Sprintf("%s-%d", tokenId, weekCount)
+	reader := bytes.NewReader([]byte(toPin))
+	newCid, err := c.ipfs.Add(reader)
+	if err != nil {
+		c.log.Error("Failed to add token epoch", "err", err, "tokenID", tokenId)
+	}
+	err = c.ipfs.Pin(string(newCid))
+	if err != nil {
+		c.log.Error("Failed to pin token epoch", "err", err, "tokenID", tokenId)
+	}
+
+	pinned := fmt.Sprintf("%s-%d", tokenId, weekCount)
+	reader = bytes.NewReader([]byte(pinned))
+	newCid, _ = c.ipfs.Add(reader)
+	list, err1 := c.GetDHTddrs(newCid)
+	if err1 != nil {
+		c.log.Error("Failed to get pins for token epoch", "err", err, "tokenID", tokenId)
+	} else {
+		fmt.Println("token : ", tokenId)
+		fmt.Println("list of providers for token : ", list)
+	}
+	//TODO - remove pin check from here.
 
 }

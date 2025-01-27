@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/sha3"
 )
@@ -785,4 +787,22 @@ func BytesToString(b []byte) []string {
 		lines = append(lines, scanner.Text())
 	}
 	return lines
+}
+
+// To calculate the week number that's going on since reference date for a transaction
+func GetWeeksPassed() int {
+	// Define the reference date (1st Jan 2025)
+	referenceDate := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	// Get the current time
+	currentTime := time.Now()
+
+	// Calculate the difference in seconds
+	duration := currentTime.Sub(referenceDate)
+
+	// Convert the duration to weeks
+	weeksCount := int(math.Ceil(duration.Hours() / (24 * 7)))
+
+	fmt.Printf("week number since 1st Jan 2025: %d weeks\n", weeksCount)
+	return weeksCount
 }

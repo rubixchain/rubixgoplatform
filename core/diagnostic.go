@@ -163,11 +163,11 @@ func (c *Core) DumpNFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 			Status: false,
 		},
 	}
-	_, err := c.w.GetNFTToken(dr.Token)
-	if err != nil {
-		ds.Message = "Failed to get nft, token does not exist"
-		return ds
-	}
+	// _, err := c.w.GetNFTToken(dr.Token)
+	// if err != nil {
+	// 	ds.Message = "Failed to get nft, token does not exist"
+	// 	return ds
+	// } TODO : temp, to check if quorums sync tc or not.
 	tokenTypeString := NFTString
 	blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, c.TokenType(tokenTypeString), dr.BlockID)
 	if err != nil {
