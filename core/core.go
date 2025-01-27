@@ -123,12 +123,12 @@ type Core struct {
 	defaultSetup         bool
 }
 
-func InitConfig(configFile string, encKey string, node uint16) error {
+func InitConfig(configFile string, encKey string, node uint16, addr string) error {
 	if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
 		nodePort := NodePort + node
 		portOffset := MaxPeerConn * node
 		cfg := config.Config{
-			NodeAddress: "localhost",
+			NodeAddress: addr,
 			NodePort:    fmt.Sprintf("%d", nodePort),
 			DirPath:     "./",
 			CfgData: config.ConfigData{
