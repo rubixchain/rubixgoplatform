@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -922,7 +923,7 @@ func ConvertToNFTTokens(tokenList []Token) []NFTToken {
 	nftTokens := make([]NFTToken, len(tokenList))
 	for i, token := range tokenList {
 		nftTokens[i].TokenHash = token.TokenHash
-		nftTokens[i].TokenValue = token.TokenValue
+		nftTokens[i].TokenValue = math.Round(token.TokenValue*1000) / 1000 //Rounding token value to 3 decimal places.
 	}
 	return nftTokens
 }
