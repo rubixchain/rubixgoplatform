@@ -107,6 +107,7 @@ const (
 	FetchNftCmd                    string = "fetch-nft"
 	GetNftsByDidCmd                string = "get-nfts-by-did"
 	AddUserAPIKeyCmd               string = "adduserapikey"
+	SyncTokenChaindataCmd          string = "synctokenchaindata"
 )
 
 var commands = []string{VersionCmd,
@@ -328,6 +329,7 @@ type Command struct {
 	creatorDID                   string
 	defaultSetup                 bool
 	apiKey                       string
+	peerDid                      string
 }
 
 func showVersion() {
@@ -752,6 +754,8 @@ func Run(args []string) {
 		cmd.getNFTsByDid()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
+	case SyncTokenChaindataCmd:
+		cmd.syncTokenchaindata()
 	default:
 		cmd.log.Error("Invalid command")
 	}

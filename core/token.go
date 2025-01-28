@@ -276,12 +276,6 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
-	// p, err := c.getPeer(address)
-	// if err != nil {
-	// 	c.log.Error("Failed to get peer", "err", err)
-	// 	return err
-	// }
-	// defer p.Close()
 	var err error
 	blk := c.w.GetLatestTokenBlock(token, tokenType)
 	blkID := ""
@@ -301,28 +295,28 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		BlockID:   blkID,
 	}
 	for {
-		var trep TCBSyncReply
-		err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &tr, &trep, false)
+	var trep TCBSyncReply
+	err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &tr, &trep, false)
+	if err != nil {
+		c.log.Error("Failed to sync token chain block", "err", err)
+		return err
+	}
+	if !trep.Status {
+		c.log.Error("Failed to sync token chain block", "msg", trep.Message)
+		return fmt.Errorf(trep.Message)
+	}
+	for _, bb := range trep.TCBlock {
+		blk := block.InitBlock(bb, nil)
+		if blk == nil {
+			c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
+			return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
+		}
+		err = c.w.AddTokenBlock(token, blk)
 		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
+			c.log.Error("Failed to add token chain block, syncing failed", "err", err)
 			return err
 		}
-		if !trep.Status {
-			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
-			return fmt.Errorf(trep.Message)
-		}
-		for _, bb := range trep.TCBlock {
-			blk := block.InitBlock(bb, nil)
-			if blk == nil {
-				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
-				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
-			}
-			err = c.w.AddTokenBlock(token, blk)
-			if err != nil {
-				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
-				return err
-			}
-		}
+	}
 		if trep.NextBlockID == "" {
 			break
 		}
@@ -915,3 +909,24 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 	return responseBody, nil
 
 }
+func (c *Core) SyncTokenChainFromPeer(peerDid string,token string,tokenType int)error{
+	peerIDFromPeerDid := c.w.GetPeerID(peerDid)
+	if peerIDFromPeerDid == ""{
+		fmt.Errorf("Peer's details are not there in the PeerDidTable")	
+	}
+    
+	peerAddress:= peerIDFromPeerDid+"."+peerDid
+	var err error
+	peer, err := c.getPeer(peerAddress, "")
+	if err != nil {
+		return fmt.Errorf("failed to get peer : %v", err.Error())
+	}
+	err = c.syncTokenChainFrom(peer, "", token, tokenType)
+	if err != nil {
+		c.log.Error("Failed to sync token chain from the peer", "err", err)
+		return err
+	}
+	return nil
+
+}
+

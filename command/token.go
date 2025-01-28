@@ -144,3 +144,38 @@ func (cmd *Command) FaucetTokenCheck() {
 
 	cmd.log.Info("Validated token details successfully")
 }
+
+func (cmd *Command) syncTokenchaindata() {
+	//TODO for SAI!!
+	if cmd.token == "" {
+		cmd.log.Info("token id cannot be empty")
+		fmt.Print("Enter Token Id : ")
+		_, err := fmt.Scan(&cmd.token)
+		if err != nil {
+			cmd.log.Error("Failed to get Token ID")
+			return
+		}
+	}
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.token)
+
+	if len(cmd.token) != 46 || !strings.HasPrefix(cmd.token, "Qm") || !isAlphanumeric {
+		cmd.log.Error("Invalid token")
+		return
+	}
+
+	if cmd.peerDid == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.peerDid)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
+	isAlphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.peerDid)
+	if !strings.HasPrefix(cmd.peerDid, "bafybmi") || len(cmd.peerDid) != 59 || !isAlphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+	
+}
