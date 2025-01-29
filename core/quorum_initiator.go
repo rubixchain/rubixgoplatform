@@ -456,7 +456,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}
 
 	ti := sc.GetTransTokenInfo()
-	fmt.Println("nft get trans tokens : ", ti) //TODO
+	//TODO:REMOVE fmt.Println("nft get trans tokens : ", ti) //TODO
 	c.qlock.Lock()
 	pds := c.pd[cr.ReqID]
 	c.qlock.Unlock()
@@ -1777,7 +1777,7 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			WeekCount:                   weekCount,
 		}
 
-		fmt.Println("Trans Tokens pledge finality : ", newBlock.GetTransTokens())
+		//TODO:REMOVE fmt.Println("Trans Tokens pledge finality : ", newBlock.GetTransTokens())
 
 		if newTokenStateHashes != nil {
 			// ur.TransferredTokenStateHashes = newTokenStateHashes[countofTokenStateHash : countofTokenStateHash+len(v)]
