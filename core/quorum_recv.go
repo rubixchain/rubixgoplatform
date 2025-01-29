@@ -1868,11 +1868,11 @@ func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) pinTokenEpoch(tokenId string, weekCount int) {
-	fmt.Println("Week count : ", weekCount)
+	fmt.Println("Week count : ", weekCount) //TODO:REMOVE
 	toPin := fmt.Sprintf("%s-%d", tokenId, weekCount)
 	reader := bytes.NewReader([]byte(toPin))
 	newCid, err := c.ipfs.Add(reader)
-	fmt.Println("CID when pinning is :", newCid)
+	fmt.Println("CID when pinning is :", newCid) // TODO:REMOVE
 	if err != nil {
 		c.log.Error("Failed to add token epoch", "err", err, "tokenID", tokenId)
 	}
@@ -1888,8 +1888,8 @@ func (c *Core) pinTokenEpoch(tokenId string, weekCount int) {
 	if err1 != nil {
 		c.log.Error("Failed to get pins for token epoch", "err", err, "tokenID", tokenId)
 	} else {
-		fmt.Println("token : ", tokenId)
-		fmt.Println("list of providers for token : ", list)
+		fmt.Println("token : ", tokenId)                    // TODO:REMOVE
+		fmt.Println("list of providers for token : ", list) // TODO:REMOVE
 	}
 	//TODO - remove pin check from here.
 
@@ -1901,7 +1901,7 @@ func (c *Core) pinTokenEpoch(tokenId string, weekCount int) {
 // 	pinCheck := fmt.Sprintf("%s-%d", tokenID, weekCount)
 // 	pinCheckStr := bytes.NewReader([]byte(pinCheck))
 // 	newCID, _ := c.ipfs.Add(pinCheckStr)
-// 	fmt.Println("CID when getting is : ", newCID)
+// 	fmt.Println("CID when getting is : ", newCID) // TODO:REMOVE
 // 	list, err1 := c.GetDHTddrs(newCID)
 // 	if err1 != nil {
 // 		c.log.Error("Failed to get pins for token epoch", "err", err1, "tokenID", tokenID)
