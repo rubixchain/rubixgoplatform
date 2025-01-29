@@ -1390,7 +1390,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			}
 		}
 	}
-	var totalPledgeAmount float64
 	for _, t := range ur.PledgedTokens {
 		tk, err := c.w.ReadToken(t)
 		if err != nil {
@@ -1414,7 +1413,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		ctcb[t] = lb
-		totalPledgeAmount += tk.TokenValue
 	}
 
 	tcb := block.TokenChainBlock{
