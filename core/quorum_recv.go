@@ -1328,7 +1328,7 @@ func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
-	c.log.Debug("incoming request for pledge finlaity")
+	c.log.Debug("incoming request for pledge finality")
 	did := c.l.GetQuerry(req, "did")
 	c.log.Debug("DID from query", did)
 	var ur UpdatePledgeRequest
@@ -1343,7 +1343,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	dc, ok := c.qc[did]
 	if !ok {
-		c.log.Debug("did crypto initilisation failed")
+		c.log.Debug("did crypto initialization failed")
 		c.log.Error("Failed to setup quorum crypto")
 		crep.Message = "Failed to setup quorum crypto"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -1390,6 +1390,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			}
 		}
 	}
+	var totalPledgeAmount float64
 	for _, t := range ur.PledgedTokens {
 		tk, err := c.w.ReadToken(t)
 		if err != nil {
@@ -1413,6 +1414,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		ctcb[t] = lb
+		totalPledgeAmount += tk.TokenValue
 	}
 
 	tcb := block.TokenChainBlock{
@@ -1465,6 +1467,68 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	//count of when the transaction happened calculated from 1st Jan 2025.
 	for _, j := range tks {
 		c.pinTokenEpoch(j, ur.WeekCount)
+	}
+
+	TransTokenIDs := strings.Join(b.GetTransTokens(), ",")
+
+	// Split the TransferTokenIDs and add each tokenID as a separate row in PledgeHistory
+	tokenIDs := strings.Split(TransTokenIDs, ",")
+	for _, tokenID := range tokenIDs {
+		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, tokenID)
+		if err != nil {
+			readErr := fmt.Sprint(err)
+			if strings.Contains(readErr, "no records found") {
+				c.log.Info("No pledge history")
+			}
+			c.log.Error("Failed to check token exist", "err", err)
+		}
+		if exist {
+			continue
+		}
+		tokenID = strings.TrimSpace(tokenID)
+		tokenType := b.GetTokenType(tokenID)
+
+		blockID, err := b.GetBlockID(tokenID)
+		if err != nil {
+			c.log.Error("Failed to get block ID for token: ", tokenID)
+			crep.Message = "Failed to get block ID PledgeHistory"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+
+		blockNumber, err := b.GetBlockNumber(tokenID)
+		if err != nil {
+			c.log.Error("Failed to get block number for token: ", tokenID)
+			crep.Message = "Failed to get block number for PledgeHistory"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+
+		//TODO: Fix the function to get peer who pinned epoch for a token
+		// weekPassed := util.GetWeeksPassed()
+		//list, pinCheckErr := c.getPeerWhoPinTokenEpoch(tokenID, weekPassed)
+		// if pinCheckErr != nil {
+		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
+		// }
+
+		pledgeHistory := wallet.PledgeHistory{
+			QuorumDID:           did,
+			TransactionID:       ur.TransactionID,
+			SenderDID:           b.GetSenderDID(),
+			ReceiverDID:         b.GetReceiverDID(),
+			TransferTokenID:     tokenID,
+			TransferTokenType:   tokenType,
+			TransferBlockID:     blockID,
+			TransferBlockNumber: blockNumber,
+			CurrentBlockNumber:  0,
+			TokenCredit:         0,
+			Epoch:               ur.TransactionEpoch,
+		}
+
+		errAddingPledgeHistory := c.w.AddPledgeHistory(&pledgeHistory)
+		if errAddingPledgeHistory != nil {
+			c.log.Error("Failed to add pledge history", "err", errAddingPledgeHistory)
+			crep.Message = "Failed to add pledge history"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
 	}
 
 	crep.Status = true
@@ -1810,6 +1874,7 @@ func (c *Core) pinTokenEpoch(tokenId string, weekCount int) {
 	toPin := fmt.Sprintf("%s-%d", tokenId, weekCount)
 	reader := bytes.NewReader([]byte(toPin))
 	newCid, err := c.ipfs.Add(reader)
+	fmt.Println("CID when pinning is :", newCid)
 	if err != nil {
 		c.log.Error("Failed to add token epoch", "err", err, "tokenID", tokenId)
 	}
@@ -1831,3 +1896,19 @@ func (c *Core) pinTokenEpoch(tokenId string, weekCount int) {
 	//TODO - remove pin check from here.
 
 }
+
+//TODO: Add a function to get peer who pinned epoch for a token
+
+// func (c *Core) getPeerWhoPinTokenEpoch(tokenID string, weekCount int) ([]string, error) {
+// 	pinCheck := fmt.Sprintf("%s-%d", tokenID, weekCount)
+// 	pinCheckStr := bytes.NewReader([]byte(pinCheck))
+// 	newCID, _ := c.ipfs.Add(pinCheckStr)
+// 	fmt.Println("CID when getting is : ", newCID)
+// 	list, err1 := c.GetDHTddrs(newCID)
+// 	if err1 != nil {
+// 		c.log.Error("Failed to get pins for token epoch", "err", err1, "tokenID", tokenID)
+// 		return nil, err1
+// 	} else {
+// 		return list, nil
+// 	}
+// }
