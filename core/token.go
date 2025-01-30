@@ -961,33 +961,47 @@ func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tok
     return lastErr
 }
 
-// func (c *Core)FindReadytoMineCredits(tokendetails map[string]TokenInfo)string{
-// 	//This is an incomplete function.Need to complete
-// 	//TODO SAI!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// 	err:= c.SyncLatestTokenChains(tokenTokenTypeMap)
-// 	if err!=nil{
+func (c *Core) FindReadyToMineCredits(tokenDetails map[string]TokenInfo) []string {
+	// Convert tokenDetails to a map of token -> tokenType
+	tokenTypeMap := make(map[string]int)
+	for token, details := range tokenDetails {
+		tokenTypeMap[token] = details.TokenType
+	}
 
-// 	}
-// 	for token, tokenType := range tokenTokenTypeMap {
-// 		latestBlock := c.w.GetLatestTokenBlock(token, tokenType)
-// 	if latestBlock == nil {
-// 		c.log.Error("latest block is nil")
-// 	}
+	// Sync latest token chains
+	err := c.SyncLatestTokenChains(tokenTypeMap)
+	if err != nil {
+		c.log.Error("Failed to sync latest token chains", "err", err)
+	}
 
-// 	// Get the block number of the latest block
-// 	latestBlockNum, err := latestBlock.GetBlockNumber(token)
-// 	if err != nil {
-// 		c.log.Error("Failed to get block number", "err", err)
-// 	}
-//     creditEarnBlockNum:= 
-// 	// Check if the condition is met
-// 	if latestBlockNum >= creditEarnBlockNum+5 {
-// 		return 
-// 	}
+	//Iterate through tokens and check readiness for mining
+	var readyToMineTokens []string
+	for token, tokenType := range tokenTypeMap {
+		latestBlock := c.w.GetLatestTokenBlock(token, tokenType)
+		if latestBlock == nil {
+			c.log.Error("Latest block is nil", "token", token)
+			continue // Skip this token and move to the next
+		}
 
-// 	}
-	
-// }
+		// Get the block number of the latest block
+		latestBlockNum, err := latestBlock.GetBlockNumber(token)
+		if err != nil {
+			c.log.Error("Failed to get block number", "token", token, "err", err)
+			continue
+		}
+
+		// Get the credit earn block number for this token
+		creditEarnBlockNum := tokenDetails[token].BlockNumber 
+
+		// Check if the token is ready for mining
+		if latestBlockNum >= creditEarnBlockNum+5 {
+			readyToMineTokens = append(readyToMineTokens, token)
+		}
+	}
+
+	return readyToMineTokens 
+}
+
 func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {
     var lastErr error
 
