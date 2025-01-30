@@ -46,6 +46,10 @@ type TokenVerificationRequest struct {
 type TokenVerificationResponse struct {
 	Results map[string]bool `json:"results"`
 }
+type TokenInfo struct {
+    TokenType   int
+    BlockNumber uint64
+}
 
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
@@ -909,24 +913,113 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 	return responseBody, nil
 
 }
-func (c *Core) SyncTokenChainFromPeer(peerDid string,token string,tokenType int)error{
-	peerIDFromPeerDid := c.w.GetPeerID(peerDid)
-	if peerIDFromPeerDid == ""{
-		fmt.Errorf("Peer's details are not there in the PeerDidTable")	
+func(c *Core) FindingLatestTokenChainHolders(token string)[]string{
+	weekNumber:= util.GetWeeksPassed()
+	pinned := fmt.Sprintf("%s-%d", token, weekNumber)
+	reader := bytes.NewReader([]byte(pinned))
+	newCid, _ := c.ipfs.Add(reader)
+	list, err1 := c.GetDHTddrs(newCid)
+	if err1 != nil {
+		c.log.Error("Failed to get pins for token epoch", "err", err1, "tokenID", token)
+	} else {
+		fmt.Println("token : ", token)
+		fmt.Println("list of providers for token : ", list)
 	}
-    
-	peerAddress:= peerIDFromPeerDid+"."+peerDid
-	var err error
-	peer, err := c.getPeer(peerAddress, "")
-	if err != nil {
-		return fmt.Errorf("failed to get peer : %v", err.Error())
-	}
-	err = c.syncTokenChainFrom(peer, "", token, tokenType)
-	if err != nil {
-		c.log.Error("Failed to sync token chain from the peer", "err", err)
-		return err
-	}
-	return nil
-
+	return list
 }
+
+func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tokenType int) error {
+    var lastErr error
+
+    for _, peerID := range peerIDs {
+        c.log.Info("Attempting to sync token chain from peer", "peerID", peerID)
+
+        // Try to open a connection with the peer
+        peer, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
+        if err != nil {
+            c.log.Warn("Failed to open peer connection, trying next peer", "peerID", peerID, "err", err)
+            lastErr = err
+            continue // Move to the next peer
+        }
+
+        // Try to sync the token chain from the connected peer
+        err = c.syncTokenChainFrom(peer, "", token, tokenType)
+        if err != nil {
+            c.log.Warn("Failed to sync token chain, trying next peer", "peerID", peerID, "err", err)
+            lastErr = err
+            continue // Move to the next peer
+        }
+
+        c.log.Info("Successfully synced token chain from peer", "peerID", peerID)
+        return nil // Successful sync, exit the function
+    }
+
+    // If we reach here, all peers failed. Return the last encountered error.
+    if lastErr != nil {
+        c.log.Error("Failed to sync token chain from all peers", "err", lastErr)
+    }
+    return lastErr
+}
+
+// func (c *Core)FindReadytoMineCredits(tokendetails map[string]TokenInfo)string{
+// 	//This is an incomplete function.Need to complete
+// 	//TODO SAI!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// 	err:= c.SyncLatestTokenChains(tokenTokenTypeMap)
+// 	if err!=nil{
+
+// 	}
+// 	for token, tokenType := range tokenTokenTypeMap {
+// 		latestBlock := c.w.GetLatestTokenBlock(token, tokenType)
+// 	if latestBlock == nil {
+// 		c.log.Error("latest block is nil")
+// 	}
+
+// 	// Get the block number of the latest block
+// 	latestBlockNum, err := latestBlock.GetBlockNumber(token)
+// 	if err != nil {
+// 		c.log.Error("Failed to get block number", "err", err)
+// 	}
+//     creditEarnBlockNum:= 
+// 	// Check if the condition is met
+// 	if latestBlockNum >= creditEarnBlockNum+5 {
+// 		return 
+// 	}
+
+// 	}
+	
+// }
+func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {
+    var lastErr error
+
+    for token, tokenType := range tokenTokenTypeMap {
+        c.log.Info("Fetching latest token chain holders", "token", token)
+
+        // Get the latest holders for the token
+        peerIDs := c.FindingLatestTokenChainHolders(token)
+        if len(peerIDs) == 0 {
+            c.log.Warn("No token chain holders found for token", "token", token)
+            lastErr = fmt.Errorf("no holders found for token: %s", token)
+            continue // Move to the next token
+        }
+
+        c.log.Info("Attempting to sync latest token chain", "token", token, "holders", peerIDs)
+
+        // Try syncing the token chain from one of the holders
+        err := c.SyncTokenChainFromListOfPeers(peerIDs, token, tokenType)
+        if err != nil {
+            c.log.Warn("Failed to sync token chain", "token", token, "err", err)
+            lastErr = err
+            continue // Move to the next token
+        }
+
+        c.log.Info("Successfully synced latest token chain", "token", token)
+    }
+
+    // If all tokens failed, return the last encountered error
+    if lastErr != nil {
+        c.log.Error("Failed to sync some or all token chains", "err", lastErr)
+    }
+    return lastErr
+}
+
 
