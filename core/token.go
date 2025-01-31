@@ -13,6 +13,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	// "github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
@@ -961,7 +962,11 @@ func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tok
     return lastErr
 }
 
-func (c *Core) FindReadyToMineCredits(tokenDetails map[string]TokenInfo) []string {
+func (c *Core) ReadyToMineCredits(did string) []string {
+	tokenDetails,err:=c.w.GetTokenDetailsByQuorumDID(did)
+	if err != nil {
+		c.log.Error("Failed to sync latest token chains", "err", err)
+	}
 	// Convert tokenDetails to a map of token -> tokenType
 	tokenTypeMap := make(map[string]int)
 	for token, details := range tokenDetails {
@@ -969,7 +974,7 @@ func (c *Core) FindReadyToMineCredits(tokenDetails map[string]TokenInfo) []strin
 	}
 
 	// Sync latest token chains
-	err := c.SyncLatestTokenChains(tokenTypeMap)
+	err = c.SyncLatestTokenChains(tokenTypeMap)
 	if err != nil {
 		c.log.Error("Failed to sync latest token chains", "err", err)
 	}
@@ -982,25 +987,60 @@ func (c *Core) FindReadyToMineCredits(tokenDetails map[string]TokenInfo) []strin
 			c.log.Error("Latest block is nil", "token", token)
 			continue // Skip this token and move to the next
 		}
-
+    
 		// Get the block number of the latest block
 		latestBlockNum, err := latestBlock.GetBlockNumber(token)
 		if err != nil {
 			c.log.Error("Failed to get block number", "token", token, "err", err)
 			continue
 		}
+		var tokenPledgeInfo []wallet.PledgeHistory
+		err = c.s.Read(wallet.PledgeHistoryTable, &tokenPledgeInfo, "transfer_tokens_id=?", token)
+		if err!=nil{
+			c.log.Error("Failed to read the pledge history table")
+		}
+
+
 
 		// Get the credit earn block number for this token
 		creditEarnBlockNum := tokenDetails[token].BlockNumber 
 
 		// Check if the token is ready for mining
-		if latestBlockNum >= creditEarnBlockNum+5 {
+		if latestBlockNum >= uint64(creditEarnBlockNum)+5 {
 			readyToMineTokens = append(readyToMineTokens, token)
 		}
 	}
 
 	return readyToMineTokens 
 }
+func (c *Core) UpdateReadyToMineCredits(readyToMineTokens []string) error {
+    if len(readyToMineTokens) == 0 {
+        c.log.Info("No tokens to update for mining readiness")
+        return nil // No updates needed
+    }
+
+    for _, token := range readyToMineTokens {
+        // Update token_credit_status to 1 (assuming 1 means "ready to mine")
+        err := c.w.UpdateTokenCreditStatus(token, 1)
+        if err != nil {
+            c.log.Error("Failed to update token credit status", "token", token, "err", err)
+            continue // Move to the next token
+        }
+        c.log.Info("Updated token_credit_status to 1 for token", "token", token)
+    }
+
+    return nil // Return nil if function completes without critical errors
+}
+func (c *Core)FindReadyToMineCredits(did string)error{
+	readyToMineCredits := c.ReadyToMineCredits(did)
+	err:= c.UpdateReadyToMineCredits(readyToMineCredits)
+	if err != nil {
+		c.log.Error("Failed to update ready to Mine credits", "err", err)
+		return err
+	}
+	return nil
+}
+
 
 func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {
     var lastErr error

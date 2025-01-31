@@ -13,6 +13,10 @@ type Credit struct {
 	Credit string `gorm:"column:credit;size:4000"`
 	Tx     string `gorm:"column:tx"`
 }
+type TokenInfo struct {
+	TokenType   int
+	BlockNumber int
+}
 
 // TODO: Credit structure needs to be worked upon
 type PledgeInformation struct {
@@ -36,10 +40,12 @@ type PledgeHistory struct {
 	CurrentBlockNumber  int    `gorm:"column:current_block_number"`
 	TokenCredit         int    `gorm:"column:token_credit"`
 	Epoch               int    `gorm:"column:epoch"`
+	TokenCreditStatus   int    `gorm:"column:token_credit_status"`
 }
 
 func (w *Wallet) AddPledgeHistory(pledgeDetails *PledgeHistory) error {
-	err := w.s.Write(PledgeHistoryTable, pledgeDetails)
+	fmt.Println("************AAAAAaa***88")
+	err := w.s.Write(PledgeHistoryTable, &pledgeDetails)
 	if err != nil {
 		w.log.Error("Failed to add pledge details to pledge history table", "err", err)
 		return err
@@ -49,7 +55,7 @@ func (w *Wallet) AddPledgeHistory(pledgeDetails *PledgeHistory) error {
 
 func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) (bool, error) {
 	var existingPledgeHistory PledgeHistory
-	pledgeHistoryReadErr := w.s.Read(PledgeHistoryTable, &existingPledgeHistory, "transfer_token_id=? AND transaction_id=?", tokenID, transID)
+	pledgeHistoryReadErr := w.s.Read(PledgeHistoryTable, &existingPledgeHistory, "transfer_tokens_id=? AND transaction_id=?", tokenID, transID)
 	if pledgeHistoryReadErr != nil {
 		readErr := fmt.Sprint(pledgeHistoryReadErr)
 		if strings.Contains(readErr, "no records found") {
@@ -61,6 +67,34 @@ func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) 
 	} else {
 		return true, nil
 	}
+}
+func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string) (map[string]TokenInfo, error) {
+	var pledges []PledgeHistory
+	tokenDetails := make(map[string]TokenInfo)
+
+	// Query the database for records matching the given QuorumDID
+	err := w.s.Read(PledgeHistoryTable, &pledges, "quorum_did=? and token_credit_status=?", quorumDID, 0)
+	if err != nil {
+		if strings.Contains(fmt.Sprint(err), "no records found") {
+			w.log.Info("No pledge history found for given QuorumDID", "quorumDID", quorumDID)
+			return nil, nil // Return nil if no records are found
+		}
+		w.log.Error("Failed to read pledge history", "quorumDID", quorumDID, "err", err)
+		return nil, err
+	}
+
+	// Iterate over the results and collect token details
+	for _, pledge := range pledges {
+		tokenDetails[pledge.TransferTokenID] = TokenInfo{
+			TokenType:   pledge.TransferTokenType,
+			BlockNumber: pledge.CurrentBlockNumber,
+		}
+	}
+
+	return tokenDetails, nil
+}
+func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int) error {
+	return w.s.Update(PledgeHistoryTable, map[string]interface{}{"token_credit_status": status}, "transfer_tokens_id = ?", tokenID)
 }
 
 func (w *Wallet) StoreCredit(transactionID string, quorumDID string, pledgeInfo []*PledgeInformation) error {

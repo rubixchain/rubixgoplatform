@@ -382,3 +382,20 @@ func (s *Server) APIValidateToken(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.RenderJSON(req, br, http.StatusOK)
 }
+
+func (s *Server) APIFindReadyToMineCredits(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "did")
+	s.log.Debug("did from the querry is:", did)
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+
+	err := s.c.FindReadyToMineCredits(did)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "successfully updated the token credit status in the DB for all ready to mine tokens", nil)
+
+}
