@@ -1510,8 +1510,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		pledgeHistory := wallet.PledgeHistory{
 			QuorumDID:           did,
 			TransactionID:       ur.TransactionID,
-			SenderDID:           b.GetSenderDID(),
-			ReceiverDID:         b.GetReceiverDID(),
 			TransferTokenID:     tokenID,
 			TransferTokenType:   tokenType,
 			TransferBlockID:     blockID,

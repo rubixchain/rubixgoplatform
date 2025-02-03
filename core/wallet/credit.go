@@ -31,8 +31,6 @@ type PledgeInformation struct {
 type PledgeHistory struct {
 	QuorumDID           string `gorm:"column:quorum_did"`
 	TransactionID       string `gorm:"column:transaction_id"`
-	SenderDID           string `gorm:"column:sender_did"`
-	ReceiverDID         string `gorm:"column:receiver_did"`
 	TransferTokenID     string `gorm:"column:transfer_tokens_id"`
 	TransferTokenType   int    `gorm:"column:transfer_tokens_type"`
 	TransferBlockID     string `gorm:"column:transfer_block_id"`
