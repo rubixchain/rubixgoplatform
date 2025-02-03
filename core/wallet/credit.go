@@ -93,8 +93,60 @@ func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string) (map[string]TokenI
 
 	return tokenDetails, nil
 }
+
+//	func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int) error {
+//		fmt.Println("Updating token_credit_status for token:", tokenID)
+//		var tokenPledgeInfo PledgeHistory
+//		tokenPledgeInfo.TokenCreditStatus= status
+//		err := w.s.Update(
+//			PledgeHistoryTable,
+//			tokenPledgeInfo,
+//			"transfer_tokens_id = ?",
+//			tokenID,
+//		)
+//		if err != nil {
+//			fmt.Println("Update failed:", err)
+//		}
+//		return err
+//	}
 func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int) error {
-	return w.s.Update(PledgeHistoryTable, map[string]interface{}{"token_credit_status": status}, "transfer_tokens_id = ?", tokenID)
+	var pledgeHistoryRecords []PledgeHistory
+
+	err := w.s.Read(
+		PledgeHistoryTable,
+		&pledgeHistoryRecords,
+		"transfer_tokens_id = ?",
+		tokenID,
+	)
+	if err != nil {
+		fmt.Println("Error reading pledge history records:", err)
+		return err
+	}
+
+	// Step 2: Check if records exist
+	if len(pledgeHistoryRecords) == 0 {
+		fmt.Println("No records found for tokenID:", tokenID)
+		return fmt.Errorf("no records found for tokenID: %s", tokenID)
+	}
+
+	// Step 3: Update token_credit_status for each row
+	for _, record := range pledgeHistoryRecords {
+		record.TokenCreditStatus = status
+		updateErr := w.s.Update(
+			PledgeHistoryTable,
+			record,
+			"transfer_tokens_id = ?",
+			tokenID,
+		)
+		if updateErr != nil {
+			fmt.Println("Update failed for transaction:", record.TransactionID, "Error:", updateErr)
+			continue // Continue updating other rows even if one fails
+		}
+
+		fmt.Println("Updated token_credit_status for transaction:", record.TransactionID)
+	}
+
+	return nil // Return nil if function completes successfully
 }
 
 func (w *Wallet) StoreCredit(transactionID string, quorumDID string, pledgeInfo []*PledgeInformation) error {
