@@ -350,3 +350,19 @@ func (s *Server) APIValidateToken(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.RenderJSON(req, br, http.StatusOK)
 }
+
+func (s *Server) APITokensSanityCheck(req *ensweb.Request) *ensweb.Result {
+	s.log.Info("initiating tokens sanity check")
+	var didp *string
+	err := s.ParseJSON(req, &didp)
+	if err != nil {
+		s.log.Error("failed to parse req")
+		return s.BasicResponse(req, false, "failed to parse token verification request: "+err.Error(), nil)
+	}
+	response, err := s.c.TokensSanityCheck(*didp)
+	if err != nil {
+		s.log.Error("Failed to verify tokens, err ", err)
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	return s.RenderJSON(req, response, http.StatusOK)
+}

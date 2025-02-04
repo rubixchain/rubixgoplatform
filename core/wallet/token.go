@@ -340,6 +340,7 @@ func (w *Wallet) GetToken(token string, token_Status int) (*Token, error) {
 	return &t, nil
 }
 
+// Get all the free tokens and lock them
 func (w *Wallet) GetAllFreeToken(did string) ([]Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()

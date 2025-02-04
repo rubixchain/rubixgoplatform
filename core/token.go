@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -17,6 +18,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
 type TokenPublish struct {
@@ -46,8 +48,31 @@ type TokenVerificationResponse struct {
 	Results map[string]bool `json:"results"`
 }
 
+type TokenSanityCheckRequest struct {
+	TokensMap map[string]TokenInfo `json:"tokens_map"`
+	ReqID     string               `json:"req_id"`
+}
+
+type TokenInfo struct {
+	TokenType   int    `json:"token_type"`
+	LatestBlock []byte `json:"latest_block"`
+}
+
+type TokenSanityCheckResult struct {
+	PinCheckStatus   bool     `json:"pinning_status"`
+	StateCheckStatus bool     `json:"state_check_status"`
+	Owners           []string `json:"owners"`
+}
+
+type TokenSanityCheckResponse struct {
+	Results map[string]TokenSanityCheckResult `json:"results"`
+	Status  bool                              `json:"status"`
+	Message string                            `json:"message"`
+}
+
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
+	c.l.AddRoute(APITokenSanityCheck, "POST", c.APITokenSanityCheck)
 }
 
 func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {
@@ -625,4 +650,197 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 	}
 
 	return responseBody, nil
+}
+
+// tokens sanity check
+func (c *Core) TokensSanityCheck(did string) (model.BasicResponse, error) {
+	basicResp := model.BasicResponse{
+		Status: false,
+	}
+	sanityCheckReq := TokenSanityCheckRequest{
+		TokensMap: make(map[string]TokenInfo),
+		ReqID:     uuid.New().String(),
+	}
+
+	// fetch all free tokens from db and lock them
+	tokens, err := c.w.GetAllFreeToken(did)
+	if err != nil {
+		c.log.Error("no free tokens found", "err", err)
+		basicResp.Message = "no free tokens found"
+		basicResp.Status = false
+		return basicResp, fmt.Errorf("no free tokens found")
+	}
+	//prepare request
+	for _, tokenDetails := range tokens {
+		//Get token type
+		typeString := RBTString
+		if tokenDetails.TokenValue < 1.0 {
+			typeString = PartString
+		}
+		tokenType := c.TokenType(typeString)
+
+		// fetch latest block
+		latestBlock := c.w.GetLatestTokenBlock(tokenDetails.TokenID, tokenType)
+		tokenInfo := TokenInfo{
+			TokenType:   tokenType,
+			LatestBlock: latestBlock.GetBlock(),
+		}
+
+		// add required details of tokens to the request
+		sanityCheckReq.TokensMap[tokenDetails.TokenID] = tokenInfo
+	}
+
+	//send API req to quorums by running go routines in for loop
+	results := make(chan TokenSanityCheckResponse, len(c.qm.ql)) // Buffer to prevent blocking
+	var wg sync.WaitGroup
+	wg.Add(5)
+	for _, quorum := range c.qm.ql {
+
+		go func(quorum string) {
+			defer wg.Done()
+			result := c.TokenSanityCheckByQuorum(sanityCheckReq, quorum)
+			results <- result
+		}(quorum)
+	}
+	wg.Wait()
+
+	// Close channel after all goroutines finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	invalidTokens := make(map[string]TokenSanityCheckResult)
+
+	// Process results
+	for res := range results {
+		for token, tokenResult := range res.Results {
+			// update token status if invalid token
+			if !tokenResult.StateCheckStatus || !tokenResult.PinCheckStatus {
+				// in case different quorums get different reasons of invalidity, collect all
+				invalidTokens[token] = TokenSanityCheckResult{
+					PinCheckStatus:   tokenResult.PinCheckStatus && invalidTokens[token].PinCheckStatus,
+					StateCheckStatus: tokenResult.StateCheckStatus && invalidTokens[token].StateCheckStatus,
+					Owners:           append(invalidTokens[token].Owners, tokenResult.Owners...),
+				}
+				// read the invalid token info from table
+				doubleSpendTokenDetails, err := c.w.ReadToken(token)
+				if err != nil {
+					c.log.Error("failed to read invalid token info from table ", "err", err)
+				}
+				// if the status is not '14', update it to '14'
+				if doubleSpendTokenDetails.TokenStatus != wallet.TokenIsBeingDoubleSpent {
+					c.log.Debug("Double spend token details ", doubleSpendTokenDetails)
+					doubleSpendTokenDetails.TokenStatus = wallet.TokenIsBeingDoubleSpent
+					c.log.Debug("Double spend token details status updated", doubleSpendTokenDetails)
+					c.w.UpdateToken(doubleSpendTokenDetails)
+				}
+			}
+		}
+	}
+
+	// release all the locked tokens which are valid
+	for _, token := range tokens {
+		err := c.w.ReleaseToken(token.TokenID)
+		if err != nil {
+			c.log.Error("failed to release token")
+		}
+	}
+
+	basicResp.Status = true
+	basicResp.Message = "tokens sanity check completed"
+	basicResp.Result = invalidTokens
+	return basicResp, nil
+}
+
+// send tokens info to quorums to validate
+func (c *Core) TokenSanityCheckByQuorum(sanityCheckReq TokenSanityCheckRequest, quorumDID string) TokenSanityCheckResponse {
+	response := TokenSanityCheckResponse{
+		Status: false,
+	}
+
+	peerObj, err := c.getPeer(quorumDID, "")
+	if err != nil {
+		c.log.Error(fmt.Sprintf("Failed to connect quorum %v, err: %v", quorumDID, err))
+		response.Message = "failed to connect quorum: " + quorumDID + ", err: " + err.Error()
+		return response
+	}
+
+	err = peerObj.SendJSONRequest("POST", APITokenSanityCheck, nil, &sanityCheckReq, &response, true)
+	if err != nil {
+		c.log.Error("failed to send sanity check request to quorum", quorumDID, "error", err)
+		response.Message = fmt.Sprintf("failed to send sanity check request to quorum: %v, error: %v", quorumDID, err)
+		return response
+	}
+
+	invalidTokens := make(map[string]TokenSanityCheckResult)
+
+	for token := range response.Results {
+		tokenResult := response.Results[token]
+		if !tokenResult.PinCheckStatus || !tokenResult.StateCheckStatus {
+			invalidTokens[token] = tokenResult
+		}
+	}
+
+	response.Status = true
+	response.Results = invalidTokens
+	response.Message = "tokens verification completed by quorum:" + quorumDID
+	return response
+}
+
+// API to connect to quorums and request token sanity check
+func (c *Core) APITokenSanityCheck(req *ensweb.Request) *ensweb.Result {
+	sanityCheckResp := TokenSanityCheckResponse{
+		Status:  false,
+		Results: make(map[string]TokenSanityCheckResult),
+	}
+
+	var sanityCheckReq TokenSanityCheckRequest
+	err := c.l.ParseJSON(req, &sanityCheckReq)
+	if err != nil {
+		c.log.Error("failed to parse sanity check request", "err", err)
+		c.l.RenderJSON(req, &TokenSanityCheckResponse{Status: false, Message: "failed to parse request", Results: nil}, http.StatusOK)
+	}
+
+	did := c.l.GetQuerry(req, "did")
+
+	for token, tokenInfo := range sanityCheckReq.TokensMap {
+		// 1. token pin check : if multiple pins, return all the current owners
+		// define pinn check result
+		result := TokenSanityCheckResult{
+			PinCheckStatus:   false,
+			StateCheckStatus: false,
+		}
+
+		latestBlock := block.InitBlock(tokenInfo.LatestBlock, nil)
+		response, err := c.CurrentOwnerPinCheck(latestBlock, token, did)
+		if err != nil || !response.Status {
+			c.log.Error(response.Message, "for token : "+token+", owners list", response.Result.([]string))
+			result.Owners = response.Result.([]string)
+		} else {
+			c.log.Debug("msg", response.Message)
+			result.PinCheckStatus = true
+		}
+		// append the result of the token to response
+		sanityCheckResp.Results[token] = result
+
+		// 2. check available token state
+		response, err = c.CurrentQuorumStatePinCheck(latestBlock, token, tokenInfo.TokenType, did)
+		if err != nil || !response.Status {
+			c.log.Error(response.Message, "token", token)
+		} else {
+			c.log.Debug("msg", response.Message)
+			result.StateCheckStatus = true
+		}
+
+		sanityCheckResp.Results[token] = result
+
+		// TODO :
+		// 3. verify if the stored token state hash is exhausted
+
+	}
+
+	sanityCheckResp.Status = true
+	sanityCheckResp.Message = "sanity check for all tokens completed"
+	return c.l.RenderJSON(req, &sanityCheckResp, http.StatusOK)
 }

@@ -661,6 +661,7 @@ func (c *Core) CurrentOwnerPinCheck(b *block.Block, tokenId string, userDID stri
 		if results[i].Status {
 			c.log.Error("Token has multiple owners", "token", results[i].Token, "owners", results[i].Owners)
 			response.Message = "Token has multiple owners"
+			response.Result = results[i].Owners
 			return response, fmt.Errorf("token has multiple owners")
 		}
 	}
@@ -681,7 +682,7 @@ func (c *Core) CurrentQuorumStatePinCheck(b *block.Block, tokenId string, tokenT
 	var quorumList []string
 	quorumSignList, err := b.GetQuorumSignatureList()
 	if err != nil || quorumSignList == nil {
-		c.log.Error("failed to get quorum signature list from latest block")
+		c.log.Error("failed to get quorum signature list from latest block", "Err", err)
 		response.Message = "state pincheck failed"
 		return response, err
 	}

@@ -82,3 +82,13 @@ func (c *Client) ValidateToken(token string) (*model.BasicResponse, error) {
 	}
 	return &br, nil
 }
+
+func (c *Client) TokensSanityCheck(did string) (*model.BasicResponse, error) {
+	var br model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APITokenSanityCheck, nil, &did, &br)
+	if err != nil {
+		c.log.Error("failed to send API request to verify tokens", "err", err)
+		return nil, err
+	}
+	return &br, nil
+}

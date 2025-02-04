@@ -182,7 +182,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIFetchNft, "GET", s.AuthHandle(s.APIFetchNft, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNftsByDid, "GET", s.AuthHandle(s.APIGetNFTsByDid, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetFTTokenchain, "GET", s.AuthHandle(s.APIGetFTTokenchain, true, s.AuthError, false))
-
+	s.AddRoute(setup.APITokenSanityCheck, "POST", s.AuthHandle(s.APITokensSanityCheck, false, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {
