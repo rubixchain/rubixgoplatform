@@ -607,7 +607,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved", "err", err)
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
 			return nil, nil, nil, pledgeFinalityError
 		}
 
@@ -824,7 +824,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newTokenHashes, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved", "err", err)
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
 			return nil, nil, nil, pledgeFinalityError
 		}
 		//Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
@@ -1037,7 +1037,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved", "err", err)
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
 			return nil, nil, nil, pledgeFinalityError
 		}
 
@@ -1185,7 +1185,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, updatedTokenHashes, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved", "err", err)
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
 			return nil, nil, nil, pledgeFinalityError
 		}
 
@@ -1242,10 +1242,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
-				err := previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
-				if err != nil {
-					return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
-				}
+				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+
 			}
 		}
 
@@ -1291,7 +1289,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, nil, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved", "err", err)
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
 			return nil, nil, nil, pledgeFinalityError
 		}
 		return &td, pl, pds, nil
@@ -1343,7 +1341,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum and adding the details in token hash table
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved", "err", err)
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
 			return nil, nil, nil, pledgeFinalityError
 		}
 
@@ -1416,7 +1414,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum and adding the details in token hash table
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved", "err", err)
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
 			return nil, nil, nil, pledgeFinalityError
 		}
 
@@ -1516,7 +1514,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum and adding the details in token hash table
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newnftIDTokenStateHash}, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved while deploying nft", "err", err)
+			c.log.Error("Pledge finality not achieved while deploying nft", "err", pledgeFinalityError)
 			return nil, nil, nil, pledgeFinalityError
 		}
 
@@ -1579,7 +1577,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//trigger pledge finality to the quorum and adding the details in token hash table
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid)
 		if pledgeFinalityError != nil {
-			c.log.Error("Pledge finlaity not achieved", "err", err)
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
 			return nil, nil, nil, pledgeFinalityError
 		}
 
