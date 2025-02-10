@@ -76,12 +76,22 @@ const (
 	APIInitiatePinRBT                   string = "/api/initiate-pin-token"
 	APIRecoverRBT                       string = "/api/recover-token"
 	APIValidateTokenChain               string = "/api/validate-token-chain"
+	APIGenerateFaucetTestToken          string = "/api/generate-faucettest-token"
+	APIFaucetTokenCheck                 string = "/api/faucet-token-check"
+	APICreateFT                         string = "/api/create-ft"
+	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
+	APIInitiateFTTransfer               string = "/api/initiate-ft-transfer"
+	APIGetFTInfo                        string = "/api/get-ft-info-by-did"
 	APIValidateToken                    string = "/api/validate-token"
+	APIAddUserAPIKey                    string = "/api/add-user-api-key"
 	APIDeployNFT                        string = "/api/deploy-nft"
 	APIExecuteNFT                       string = "/api/execute-nft"
 	APIDumpNFTTokenChain                string = "/api/dump-nft-token-chain"
 	APISubscribeNFT                     string = "/api/subscribe-nft"
 	APIGetNFTTokenChainData             string = "/api/get-nft-token-chain-data"
+	APIFetchNft                         string = "/api/fetch-nft"
+	APIGetNftsByDid                     string = "/api/get-nfts-by-did"
+	APIGetFTTokenchain                  string = "/api/get-ft-token-chain"
 )
 
 // jwt.RegisteredClaims

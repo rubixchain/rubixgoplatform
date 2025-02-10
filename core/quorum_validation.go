@@ -71,10 +71,11 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 	var issueType int
 	b, err := c.getFromIPFS(pt)
 	if err != nil {
-		c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", pt)
+		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
 		return err
 	}
-	_, iswholeToken, err := token.CheckWholeToken(string(b))
+	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+
 	tt := token.RBTTokenType
 	tv := float64(1)
 	if !iswholeToken {
@@ -237,6 +238,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		}
 		signatureValidation, err := c.validateSigner(b, quorumDID, p)
 		if !signatureValidation || err != nil {
+			c.log.Error("Failed to validate token ownership ", "token ID:", ti[i].Token)
 			return false, err
 		}
 	}

@@ -193,6 +193,47 @@ func (cmd *Command) dumpTokenChain() {
 	cmd.log.Info("Token chain dumped successfully!")
 }
 
+func (cmd *Command) dumpFTTokenchain() {
+	blocks := make([]map[string]interface{}, 0)
+	blockID := ""
+	for {
+		ds, err := cmd.c.DumpFTTokenChain(cmd.token, blockID)
+		if err != nil {
+			cmd.log.Error("Failed to dump token chain", "err", err)
+			return
+		}
+		if !ds.Status {
+			cmd.log.Error("Failed to dump token chain", "msg", ds.Message)
+			return
+		}
+		for _, blk := range ds.Blocks {
+			b := block.InitBlock(blk, nil)
+			if b != nil {
+				blocks = append(blocks, b.GetBlockMap())
+			} else {
+				cmd.log.Error("Invalid block")
+			}
+		}
+		blockID = ds.NextBlockID
+		if ds.NextBlockID == "" {
+			break
+		}
+	}
+	str, err := tcMarshal("", blocks)
+	if err != nil {
+		cmd.log.Error("Failed to dump token chain", "err", err)
+		return
+	}
+	f, err := os.Create("dump.json")
+	if err != nil {
+		cmd.log.Error("Failed to dump token chain", "err", err)
+		return
+	}
+	f.WriteString(str)
+	f.Close()
+	cmd.log.Info("Token chain dumped successfully!")
+}
+
 func (cmd *Command) dumpSmartContractTokenChain() {
 	if cmd.smartContractToken == "" {
 		cmd.log.Info("smart contract token id cannot be empty")

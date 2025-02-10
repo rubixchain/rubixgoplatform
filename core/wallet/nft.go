@@ -11,6 +11,7 @@ type NFT struct {
 
 // CreateNFT write NFT into db
 func (w *Wallet) CreateNFT(nt *NFT, local bool) error {
+	// TODO: Update should only occur in UpdateNFT status function
 	var err error
 	if local {
 		err = w.s.Update(NFTTokenStorage, nt, "token_id=?", nt.TokenID)
@@ -28,10 +29,20 @@ func (w *Wallet) CreateNFT(nt *NFT, local bool) error {
 	return nil
 }
 
-// GetNFTByDid get all NFTs from db
+// GetAllNFT get all NFTs from db
 func (w *Wallet) GetAllNFT() ([]NFT, error) {
 	var tkns []NFT
 	err := w.s.Read(NFTTokenStorage, &tkns, "token_id != ?", "")
+	if err != nil {
+		return nil, err
+	}
+	return tkns, nil
+}
+
+// GetNFTsByDid get all the NFTs of that did from db
+func (w *Wallet) GetNFTsByDid(did string) ([]NFT, error) {
+	var tkns []NFT
+	err := w.s.Read(NFTTokenStorage, &tkns, "did=?", did)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +92,20 @@ func (w *Wallet) GetNFTToken(nftID string) (*NFT, error) {
 	return tokens, nil
 }
 
-func (w *Wallet) UpdateNFTStatus(nft string, did string, tokenStatus int, local bool, receiverDid string, saleAmount float64) error {
+func (w *Wallet) IsNFTExists(nftID string) bool {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	var tokens *NFT
+
+	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nftID)
+	if err != nil {
+		return false
+	} else {
+		return true
+	}
+}
+
+func (w *Wallet) UpdateNFTStatus(nft string, tokenStatus int, local bool, receiverDid string, saleAmount float64) error {
 	// Empty receiver DID indicates self execution of NFT and hence
 	// any change in NFTToken table must be skipped
 	if receiverDid != "" {

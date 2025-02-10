@@ -184,6 +184,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/create-ft": {
+            "post": {
+                "description": "This API endpoint will create FTs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Create FT",
+                "parameters": [
+                    {
+                        "description": "Create FT",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.CreateFTReqSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/create-nft": {
             "post": {
                 "description": "This API will create new NFT",
@@ -356,6 +390,37 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/server.ExecuteSmartContractSwaggoInput"
                         }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/fetch-nft": {
+            "get": {
+                "description": "This API will Fetch NFT",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Fetch NFT",
+                "operationId": "fetch-nft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "nft",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -657,6 +722,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/get-ft-info-by-did": {
+            "get": {
+                "description": "This API endpoint retrieves the names and count of FTs of a given DID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Get FT balance information for a given DID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User DID",
+                        "name": "did",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.GetFTInfo"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/get-ft-token-chain": {
+            "get": {
+                "description": "This API returns FT token chain data for a given FT token ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Get FT Token Chain Data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "FT Token ID",
+                        "name": "tokenID",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response with token chain data",
+                        "schema": {
+                            "$ref": "#/definitions/model.GetFTTokenChainReply"
+                        }
+                    }
+                }
+            }
+        },
         "/api/get-nft-token-chain-data": {
             "get": {
                 "description": "This API will return nft token chain data",
@@ -691,6 +820,36 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/get-nfts-by-did": {
+            "get": {
+                "description": "This API will get all NFTs owned by the particular did",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Get NFTs owned by the particular did",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "did",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.NFTList"
                         }
                     }
                 }
@@ -738,6 +897,40 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/server.GetSmartContractTokenChainDataSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/initiate-ft-transfer": {
+            "post": {
+                "description": "This API endpoint will initiate transfer of FTs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Initiate an FT transfer",
+                "parameters": [
+                    {
+                        "description": "Transfer FT",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.TransferFTReqSwaggoInput"
                         }
                     }
                 ],
@@ -1137,6 +1330,54 @@ const docTemplate = `{
                 }
             }
         },
+        "model.FTInfo": {
+            "type": "object",
+            "properties": {
+                "creator_did": {
+                    "type": "string"
+                },
+                "ft_count": {
+                    "type": "integer"
+                },
+                "ft_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.GetFTInfo": {
+            "type": "object",
+            "properties": {
+                "ft_info": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.FTInfo"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "model.GetFTTokenChainReply": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {},
+                "status": {
+                    "type": "boolean"
+                },
+                "tokenChainData": {
+                    "type": "array",
+                    "items": {}
+                }
+            }
+        },
         "model.NFTInfo": {
             "type": "object",
             "properties": {
@@ -1230,6 +1471,23 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/model.TransactionCount"
                     }
+                }
+            }
+        },
+        "server.CreateFTReqSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "ft_count": {
+                    "type": "integer"
+                },
+                "ft_name": {
+                    "type": "string"
+                },
+                "token_count": {
+                    "type": "integer"
                 }
             }
         },
@@ -1443,6 +1701,35 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.TransferFTReqSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "creatorDID": {
+                    "type": "string"
+                },
+                "ft_count": {
+                    "type": "integer"
+                },
+                "ft_name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "quorum_type": {
+                    "type": "integer"
+                },
+                "receiver": {
+                    "type": "string"
+                },
+                "sender": {
                     "type": "string"
                 }
             }

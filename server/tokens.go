@@ -341,6 +341,38 @@ func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, br, http.StatusOK)
 }
 
+func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result {
+	var tr model.FaucetRBTGenerateRequest
+	err := s.ParseJSON(req, &tr)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(tr.DID)
+	if !strings.HasPrefix(tr.DID, "bafybmi") || len(tr.DID) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+	if tr.TokenCount <= 0 {
+		s.log.Error("Invalid level number, level should be greater than 0")
+		return s.BasicResponse(req, false, "Invalid level number, level should be greater than 0", nil)
+	}
+
+	if !s.validateDIDAccess(req, tr.DID) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.GenerateFaucetTestTokens(req.ID, tr.TokenCount, tr.DID)
+	return s.didResponse(req, req.ID)
+}
+
+func (s *Server) APIFaucetTokenCheck(req *ensweb.Request) *ensweb.Result {
+	token := s.GetQuerry(req, "token")
+	did := s.GetQuerry(req, "did")
+
+	br := s.c.FaucetTokenCheck(token, did)
+	return s.RenderJSON(req, br, http.StatusOK)
+}
+
 func (s *Server) APIValidateToken(req *ensweb.Request) *ensweb.Result {
 	token := s.GetQuerry(req, "token")
 	br, err := s.c.ValidateToken(token)

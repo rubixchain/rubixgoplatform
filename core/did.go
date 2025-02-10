@@ -128,19 +128,13 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		c.log.Error("Failed to create did in the wallet", "err", err)
 		return "", err
 	}
-	// exp := model.ExploreModel{
-	// 	Cmd:     ExpDIDPeerMapCmd,
-	// 	DIDList: []string{did},
-	// 	PeerID:  c.peerID,
-	// 	Message: "DID Created Successfully",
-	// }
-	// err = c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	return "", err
-	// }
-	if !c.testNet {
-		c.ec.ExplorerCreateDID(c.peerID, did)
+	newDID := &ExplorerDID{
+		PeerID:  c.peerID,
+		DID:     did,
+		Balance: 0,
+		DIDType: didCreate.Type,
 	}
+	c.ec.ExplorerUserCreate(newDID)
 	return did, nil
 }
 
@@ -178,7 +172,12 @@ func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
 		br.Message = err.Error()
 		return br
 	}
-	c.ec.ExplorerCreateDID(c.peerID, ds)
+	newDID := &ExplorerDID{
+		PeerID:  c.peerID,
+		DID:     ds,
+		DIDType: dc.Type,
+	}
+	c.ec.ExplorerUserCreate(newDID)
 	br.Status = true
 	br.Message = "DID added successfully"
 	br.Result = ds

@@ -143,6 +143,7 @@ def bip39_to_nlss(node_config):
     print("\n ----------Txn from BIP39 DID (without fp) to NLSS DID (without fp)---------")
 
     print("\n4. Transferring 0.5 RBT from BIP39 DID to NLSS DID....")
+    add_peer_details(node_nlss["peerId"], did_nlss, 0, server_port_bip39, grpc_port_bip39) #adding peer details of nlsss did
     expect_success(rbt_transfer)(did_bip39, did_nlss, 0.5, server_port_bip39, grpc_port_bip39)
     print("Transferred 0.5 RBT from BIP39 DID to NLSS DID")
 

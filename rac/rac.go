@@ -18,6 +18,8 @@ const (
 	RacTestNFTType
 	RacTestDataTokenType
 	RacTestPartTokenType
+	RacFTType
+	RacTestFTType
 )
 
 const (
@@ -42,6 +44,7 @@ const (
 	RacSignKey         string = "99"
 	RacBlockCotent     string = "1"
 	RacBlockSig        string = "2"
+	RacTokenLevelKey   string = "14"
 )
 
 const (
@@ -55,6 +58,7 @@ type RacType struct {
 	DID          string
 	TokenNumber  uint64
 	TotalSupply  uint64
+	TokenLevel   uint64
 	TimeStamp    string
 	CreatorID    string
 	CreatorInput string
@@ -63,12 +67,21 @@ type RacType struct {
 	ContentURL   map[string]string
 	TransInfo    map[string]string
 	PartInfo     *RacPartInfo
+	FTSymbol     string
+	FTInfo       *RacFTInfo
 }
 
 type RacPartInfo struct {
 	Parent  string
 	PartNum int
 	Value   float64
+}
+
+type RacFTInfo struct {
+	Parents string
+	FTNum   int
+	FTName  string
+	FTValue float64
 }
 
 type RacBlock struct {
@@ -100,7 +113,7 @@ func InitRacBlock(bb []byte, bm map[string]interface{}) (*RacBlock, error) {
 }
 
 func CreateRac(r *RacType) ([]*RacBlock, error) {
-	if r.Type == 1 || r.Type > RacTestPartTokenType {
+	if r.Type == 1 || r.Type > RacTestFTType {
 		return nil, fmt.Errorf("rac type is not supported")
 	}
 	rb := make([]*RacBlock, 0)
@@ -306,4 +319,30 @@ func RacType2TokenType(rt int) int {
 		return token.TestDataTokenType
 	}
 	return token.RBTTokenType
+}
+
+func CreateRacFaucet(r *RacType) (*RacBlock, error) {
+	if r.Type == 1 || r.Type > RacTestPartTokenType {
+		return nil, fmt.Errorf("rac type is not supported")
+	}
+	var rb *RacBlock
+	m := make(map[string]interface{})
+	m[RacTypeKey] = r.Type
+	m[RacVersionKey] = RacVersion
+	m[RacDidKey] = r.DID
+	m[RacTokenNumberKey] = r.TokenNumber
+	m[RacTotalSupplyKey] = r.TotalSupply
+	if r.CreatorInput != "" {
+		m[RacCreatorInputKey] = r.CreatorInput
+	}
+	if r.CreatorID != "" && r.TokenLevel > 0 {
+		m[RacCreatorIDKey] = r.CreatorID
+		m[RacTokenLevelKey] = r.TokenLevel
+		m[RacTokenNumberKey] = r.TokenNumber
+	}
+	rb, err := InitRacBlock(nil, m)
+	if err != nil {
+		return nil, err
+	}
+	return rb, nil
 }
