@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.18"
+	version string = "0.0.19"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -91,12 +91,22 @@ const (
 	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
 	PinTokenCmd                    string = "pinToken"
 	RecoverTokensCmd               string = "recoverToken"
+	GenerateFaucetTestRBTCmd       string = "generatefaucetrbt"
+	FaucetTokenCheck               string = "faucettokencheck"
 	ValidateTokenchainCmd          string = "validatetokenchain"
+	FaucetTokenChainValidate       string = "faucettokenchainvalidate"
+	CreateFTCmd                    string = "create-ft"
+	DumpFTTokenChainCmd            string = "dump-ft"
+	TransferFTCmd                  string = "transfer-ft"
+	GetFTInfoCmd                   string = "get-ft-info-by-did"
 	ValidateTokenCmd               string = "validatetoken"
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
 	DeployNFTCmd                   string = "deploy-nft"
 	ExecuteNFTCmd                  string = "execute-nft"
 	SubscribeNFTCmd                string = "subscribe-nft"
+	FetchNftCmd                    string = "fetch-nft"
+	GetNftsByDidCmd                string = "get-nfts-by-did"
+	AddUserAPIKeyCmd               string = "adduserapikey"
 )
 
 var commands = []string{VersionCmd,
@@ -151,11 +161,17 @@ var commands = []string{VersionCmd,
 	RecoverTokensCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
+	CreateFTCmd,
+	DumpFTTokenChainCmd,
+	TransferFTCmd,
+	GetFTInfoCmd,
 	ValidateTokenCmd,
 	DumpNFTTokenChainCmd,
 	DeployNFTCmd,
 	ExecuteNFTCmd,
 	SubscribeNFTCmd,
+	FetchNftCmd,
+	GetNftsByDidCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -210,7 +226,16 @@ var commandsHelp = []string{"To get tool version",
 	"This command will recover the token",
 	"This command will check the quorum status",
 	"This command will validate the token chain",
+	"This command will create FT",
+	"This command will dump the token chain of FT",
+	"This command will transfer FT",
+	"This command will give the balance of FTs",
 	"This command will validate the token",
+	"This command will deploy NFT",
+	"This command will execute NFT",
+	"This command will subscribe NFT",
+	"This command will fetch NFT",
+	"This command will get all NFTs owned by the did",
 }
 
 type Command struct {
@@ -293,10 +318,16 @@ type Command struct {
 	pinningAddress               string
 	blockCount                   int
 	smartContractChainValidation bool
+	levelofToken                 int
 	metadata                     string
 	artifact                     string
 	nft                          string
 	nftData                      string
+	ftName                       string
+	ftCount                      int
+	creatorDID                   string
+	defaultSetup                 bool
+	apiKey                       string
 }
 
 func showVersion() {
@@ -347,7 +378,7 @@ func (cmd *Command) runApp() {
 	// Override directory path
 	cmd.cfg.DirPath = cmd.runDir
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup)
 	if err != nil {
 		cmd.log.Error("failed to create core")
 		return
@@ -380,6 +411,14 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
+	cmd.log.Info("Syncing Details...")
+	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
+	if len(dids) != 0 {
+		c.UpdateUserInfo(dids)     //Updating the balance
+		c.GenerateUserAPIKey(dids) //Regenerating the API Key for DID
+	}
+	// c.UpdateTokenInfo()
+	cmd.log.Info("Syncing Complete...")
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
@@ -390,6 +429,7 @@ func (cmd *Command) runApp() {
 	}
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
+	c.ExpireUserAPIKey()
 }
 
 func (cmd *Command) validateOptions() bool {
@@ -447,7 +487,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.didImgFile, "didImgFile", did.DIDImgFileName, "DID image")
 	flag.StringVar(&cmd.privImgFile, "privImgFile", did.PvtShareFileName, "DID public share image")
 	flag.StringVar(&cmd.pubImgFile, "pubImgFile", did.PubShareFileName, "DID public share image")
-	flag.StringVar(&cmd.mnemonicFile, "mnemonicKeyFile", did.MnemonicFileName, "Mnemonic key file")
+	flag.StringVar(&cmd.mnemonicFile, "mnemonicKeyFile", "", "Mnemonic key file")
 	flag.StringVar(&cmd.privKeyFile, "privKeyFile", did.PvtKeyFileName, "Private key file")
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
 	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
@@ -497,10 +537,16 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pinningAddress, "pinningAddress", "", "Pinning address")
 	flag.IntVar(&cmd.blockCount, "blockCount", 0, "Number of blocks of the tokenchain to validate")
 	flag.BoolVar(&cmd.smartContractChainValidation, "sctValidation", false, "Validate smart contract token chain")
+	flag.IntVar(&cmd.levelofToken, "level", 0, "Level for which tokens need to be generated")
 	flag.StringVar(&cmd.nft, "nft", "", "NFT id")
 	flag.StringVar(&cmd.metadata, "metadata", "", "NFT metadata")
 	flag.StringVar(&cmd.artifact, "artifact", "", "NFT artifact")
 	flag.StringVar(&cmd.nftData, "nftData", "", "The nft data")
+	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
+	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
+	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
+	flag.BoolVar(&cmd.defaultSetup, "defaultSetup", false, "Add Faucet Quorums")
+	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -632,8 +678,8 @@ func Run(args []string) {
 		cmd.SubscribeContract()
 	case CreateNFTCmd:
 		cmd.createNFT()
-	// case GetAllNFTCmd:
-	// 	cmd.getAllNFTs()
+	case GetAllNFTCmd:
+		cmd.getAllNFTs()
 	case DeploySmartContractCmd:
 		cmd.deploySmartcontract()
 	case GenerateSmartContractToken:
@@ -678,6 +724,18 @@ func Run(args []string) {
 		cmd.RecoverTokens()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
+	case GenerateFaucetTestRBTCmd:
+		cmd.GenerateFaucetTestRBT()
+	case FaucetTokenCheck:
+		cmd.FaucetTokenCheck()
+	case CreateFTCmd:
+		cmd.createFT()
+	case DumpFTTokenChainCmd:
+		cmd.dumpFTTokenchain()
+	case TransferFTCmd:
+		cmd.transferFT()
+	case GetFTInfoCmd:
+		cmd.getFTinfo()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
 	case ExecuteNFTCmd:
@@ -688,6 +746,12 @@ func Run(args []string) {
 		cmd.dumpNFTTokenChain()
 	case SubscribeNFTCmd:
 		cmd.SubscribeNFT()
+	case FetchNftCmd:
+		cmd.fetchNFT()
+	case GetNftsByDidCmd:
+		cmd.getNFTsByDid()
+	case AddUserAPIKeyCmd:
+		cmd.addUserAPIKey()
 	default:
 		cmd.log.Error("Invalid command")
 	}

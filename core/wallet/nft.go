@@ -11,6 +11,7 @@ type NFT struct {
 
 // CreateNFT write NFT into db
 func (w *Wallet) CreateNFT(nt *NFT, local bool) error {
+	// TODO: Update should only occur in UpdateNFT status function
 	var err error
 	if local {
 		err = w.s.Update(NFTTokenStorage, nt, "token_id=?", nt.TokenID)
@@ -29,13 +30,23 @@ func (w *Wallet) CreateNFT(nt *NFT, local bool) error {
 }
 
 // GetAllNFT get all NFTs from db
-func (w *Wallet) GetAllNFT(did string) []NFT {
+func (w *Wallet) GetAllNFT() ([]NFT, error) {
+	var tkns []NFT
+	err := w.s.Read(NFTTokenStorage, &tkns, "token_id != ?", "")
+	if err != nil {
+		return nil, err
+	}
+	return tkns, nil
+}
+
+// GetNFTsByDid get all the NFTs of that did from db
+func (w *Wallet) GetNFTsByDid(did string) ([]NFT, error) {
 	var tkns []NFT
 	err := w.s.Read(NFTTokenStorage, &tkns, "did=?", did)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return tkns
+	return tkns, nil
 }
 
 // GetNFT get NFT from db
@@ -67,26 +78,36 @@ func (w *Wallet) GetNFT(did string, nft string, lock bool) (*NFT, error) {
 	return &tkns, nil
 }
 
-func (w *Wallet) GetNFTToken(nft string) ([]NFT, error) {
+func (w *Wallet) GetNFTToken(nftID string) (*NFT, error) {
 	w.dtl.Lock()
 	defer w.dtl.Unlock()
-	var tokens []NFT
-	w.log.Debug("nft=?", nft)
-	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nft)
+	var tokens *NFT
+
+	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nftID)
 	if err != nil {
-		w.log.Error("err", err)
+		w.log.Error(fmt.Sprintf("unable to find NFT Token %v", nftID))
 		return nil, err
-	}
-	if len(tokens) == 0 {
-		return nil, fmt.Errorf("no smart contract token is available to commit")
 	}
 
 	return tokens, nil
 }
 
-func (w *Wallet) UpdateNFTStatus(nft string, did string, tokenStatus int, local bool, receiverDid string, saleAmount float64) error {
+func (w *Wallet) IsNFTExists(nftID string) bool {
+	w.dtl.Lock()
+	defer w.dtl.Unlock()
+	var tokens *NFT
+
+	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nftID)
+	if err != nil {
+		return false
+	} else {
+		return true
+	}
+}
+
+func (w *Wallet) UpdateNFTStatus(nft string, tokenStatus int, local bool, receiverDid string, saleAmount float64) error {
 	// Empty receiver DID indicates self execution of NFT and hence
-	// any change in NFTToken table must be skipped 
+	// any change in NFTToken table must be skipped
 	if receiverDid != "" {
 		w.dtl.Lock()
 		defer w.dtl.Unlock()
@@ -96,7 +117,7 @@ func (w *Wallet) UpdateNFTStatus(nft string, did string, tokenStatus int, local 
 			w.log.Error("err", err)
 			return err
 		}
-		
+
 		nftToken.TokenValue = floatPrecision(saleAmount, 3)
 		nftToken.DID = receiverDid
 		if local {

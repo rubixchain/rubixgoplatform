@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -36,6 +37,100 @@ func (c *Core) DumpTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	ds.Blocks = blks
 	ds.NextBlockID = nextID
 	return ds
+}
+
+func (c *Core) DumpFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
+	ds := &model.TCDumpReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+
+	ts := FTString
+
+	blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, c.TokenType(ts), dr.BlockID)
+	if err != nil {
+		ds.Message = "Failed to get token chain block"
+		return ds
+	}
+	ds.Status = true
+	ds.Message = "Successfully got the token chain block"
+	ds.Blocks = blks
+	ds.NextBlockID = nextID
+	return ds
+}
+
+func (c *Core) GetFTTokenchain(FTTokenID string) *model.GetFTTokenChainReply {
+	getFTReply := &model.GetFTTokenChainReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+			Result: nil,
+		},
+		TokenChainData: nil,
+	}
+
+	blocks := make([]map[string]interface{}, 0)
+	blockID := ""
+	tokenTypeString := FTString
+
+	// Initialize blockID for fetching token blocks
+	for {
+		blks, nextID, err := c.w.GetAllTokenBlocks(FTTokenID, c.TokenType(tokenTypeString), blockID)
+		if err != nil {
+			getFTReply.Message = "Failed to get FT token chain blocks"
+			c.log.Error(getFTReply.Message, "err", err)
+			return getFTReply
+		}
+
+		// Process each block received
+		for _, blk := range blks {
+			b := block.InitBlock(blk, nil)
+			if b != nil {
+				blocks = append(blocks, b.GetBlockMap())
+			} else {
+				c.log.Error("Invalid FT block")
+			}
+		}
+
+		// Update blockID for the next iteration
+		blockID = nextID
+		if nextID == "" {
+			break // Exit loop if there are no more blocks to fetch
+		}
+	}
+
+	str, err := tcMarshal("", blocks)
+	if err != nil {
+		c.log.Error("Failed to marshal FT token chain", "err", err)
+		return nil
+	}
+
+	byteArray := []byte(str)
+	var data []interface{}
+
+	err = json.Unmarshal(byteArray, &data)
+	if err != nil {
+		fmt.Println("Error unmarshal JSON for FT tokenchain :", err)
+		return nil
+	}
+
+	for i, item := range data {
+		flattenedItem := flattenKeys("", item)
+		mappedItem := applyKeyMapping(flattenedItem)
+		data[i] = mappedItem
+	}
+
+	getFTReply.Status = true
+	getFTReply.Message = "FT tokenchain data fetched successfully"
+	getFTReply.TokenChainData = data
+
+	if len(getFTReply.TokenChainData) == 0 {
+		getFTReply.Status = true
+		getFTReply.Message = "No FT tokenchain data available"
+		return getFTReply
+	}
+
+	return getFTReply
 }
 
 func (c *Core) DumpSmartContractTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
@@ -114,6 +209,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			reply.Message = "Failed to get smart contract token latest block number"
 			return reply
 		}
+		epoch := latestBlock.GetEpoch()
 		scData := latestBlock.GetSmartContractData()
 		if scData == "" && blockNo == 0 {
 			reply.Message = "Gensys Block, No Smart contract Data"
@@ -122,6 +218,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			BlockNo:           blockNo,
 			BlockId:           blockId,
 			SmartContractData: scData,
+			Epoch:             uint64(epoch),
 		}
 		sctDataArray = append(sctDataArray, sctData)
 		reply.SCTDataReply = sctDataArray
