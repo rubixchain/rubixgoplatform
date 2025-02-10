@@ -15,6 +15,7 @@ type CreateFTReqSwaggoInput struct {
 	FTName     string `json:"ft_name"`
 	FTCount    int    `json:"ft_count"`
 	TokenCount int    `json:"token_count"`
+	FTBatch    uint   `json:"ft_batch_mint"`
 }
 
 type TransferFTReqSwaggoInput struct {
@@ -48,7 +49,7 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	}
 	s.c.AddWebReq(req)
 	rbtAmount := int(createFTReq.TokenCount)
-	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, rbtAmount)
+	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, rbtAmount, createFTReq.FtBatchMint)
 	return s.didResponse(req, req.ID)
 }
 

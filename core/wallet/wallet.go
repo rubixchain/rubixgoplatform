@@ -78,7 +78,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	w.smartContractTokenChainStorage = &ChainDB{}
 	w.FTChainStorage = &ChainDB{}
 	op := &opt.Options{
-		WriteBuffer: 64 * 1024 * 1024,
+		WriteBuffer: 256 * 1024 * 1024,
 	}
 
 	tdb, err := leveldb.OpenFile(dir+TokenChainStorage, op)

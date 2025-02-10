@@ -1471,6 +1471,9 @@
                 "did": {
                     "type": "string"
                 },
+                "ft_batch_mint": {
+                    "type": "integer"
+                },
                 "ft_count": {
                     "type": "integer"
                 },

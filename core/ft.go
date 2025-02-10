@@ -20,8 +20,13 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int) {
-	err := c.createFTs(reqID, ftname, ftcount, wholeToken, did)
+const FtBatchDelay time.Duration = 90 * time.Second 
+
+func (c *Core) CreateFTs(
+	reqID string, did string, ftcount int, 
+	ftname string, wholeToken int, batchMint uint,
+) {
+	err := c.createFTs(reqID, ftname, ftcount, wholeToken, did, batchMint)
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "FT created successfully",
@@ -38,7 +43,7 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 	channel.OutChan <- &br
 }
 
-func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens int, did string) error {
+func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens int, did string, batchMint uint) error {
 	if did == "" {
 		c.log.Error("DID is empty")
 		return fmt.Errorf("DID is empty")
@@ -53,11 +58,10 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		c.log.Error("Failed to setup DID")
 		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
-
+	
 	var FT []wallet.FT
 
 	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND  creator_did=?", FTName, did)
-
 	if len(FT) != 0 {
 		c.log.Error("FT Name already exists")
 		return fmt.Errorf("FT Name already exists")
@@ -74,14 +78,17 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return fmt.Errorf("max allowed FT count is 1000 for 1 RBT")
 	}
 
+	var wholeTokens []wallet.Token
+
 	// Fetch whole tokens using GetToken
-	wholeTokens, err := c.GetTokens(dc, did, float64(numWholeTokens), 0)
+	wholeTokens, err = c.GetTokens(dc, did, float64(numWholeTokens), 0)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
 	}
-	//TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
 	defer c.w.ReleaseTokens(wholeTokens)
+
+	//TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
 	fractionalValue, err := c.GetPresiceFractionalValue(int(numWholeTokens), numFTs)
 	if err != nil {
 		c.log.Error("Failed to calculate FT token value", err)
@@ -95,8 +102,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	for _, token := range wholeTokens {
 		parentTokenIDsArray = append(parentTokenIDsArray, token.TokenID)
 	}
+	
 	parentTokenIDs := strings.Join(parentTokenIDsArray, ",")
 	for i := 0; i < numFTs; i++ {
+		if ((i % int(batchMint) == 0) && (i != 0) && (batchMint != 0) ) {
+			c.log.Info(fmt.Sprintf("Sleeping before executing the next batch of %v transactions\n", batchMint))
+			time.Sleep(FtBatchDelay)
+		}
+
 		racType := &rac.RacType{
 			Type:        c.RACFTType(),
 			DID:         did,
@@ -195,8 +208,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		newFTs = append(newFTs, *ft)
 	}
 
-	for i := range wholeTokens {
 
+	for i := range wholeTokens {
 		release := true
 		defer c.relaseToken(&release, wholeTokens[i].TokenID)
 		ptts := RBTString

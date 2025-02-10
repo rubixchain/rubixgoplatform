@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "net/http/pprof" // Import for side effects
+
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core"
@@ -366,6 +368,16 @@ func (cmd *Command) getURL(url string) string {
 	return url
 }
 
+func runProfiler(l logger.Logger) {
+	go func(l logger.Logger) {
+		l.Info("Starting pprof server on 43000")
+		err := http.ListenAndServe("localhost:43000", nil)
+		if err != nil {
+			l.Error("unable to start the Pprof server, err: ", err)
+		}
+	}(l)
+}
+
 func (cmd *Command) runApp() {
 	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node))
 	err := apiconfig.LoadAPIConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, &cmd.cfg)
@@ -374,6 +386,8 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("Configfile is either currupted or cipher is wrong", "err", err)
 		return
 	}
+
+	runProfiler(cmd.log)
 
 	// Override directory path
 	cmd.cfg.DirPath = cmd.runDir
