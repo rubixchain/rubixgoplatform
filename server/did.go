@@ -35,6 +35,15 @@ func (s *Server) APIGetDIDChallenge(req *ensweb.Request) *ensweb.Result {
 }
 
 // APICreateDID will create new DID
+// APICreateDID godoc
+// @Summary      Create New DID
+// @Description  This API creates a new DID of a specified type. Supported types include: Type 4 (BIP39 DID) Example for did_config: {"type":4,"priv_pwd":"mypassword","mnemonic_file":"mnemonic_file_path"}"
+// @Tags         Basic
+// @Accept       mpfd
+// @Produce      application/json
+// @Param        did_config formData string true "DID Configuration in JSON format."
+// @Success      200  {object}  model.DIDResponse
+// @Router       /api/createdid [post]
 func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 
 	folderName, err := s.c.CreateTempFolder()
@@ -164,6 +173,20 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 	return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "Invalid response"}, http.StatusOK)
 }
 
+type DIDwaggoInput struct {
+	DID string `json:"did"`
+}
+
+// APIRegisterDID will register the DID
+// APIRegisterDID godoc
+// @Summary      Register DID
+// @Description  This API registers a DID of a specified type.
+// @Accept       json
+// @Produce      application/json
+// @Tags         Basic
+// @Param        did  body  DIDwaggoInput  true  "DID string"
+// @Success      200  {object}  model.DIDResponse
+// @Router       /api/register-did [post]
 func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 	var m map[string]interface{}
 	err := s.ParseJSON(req, &m)

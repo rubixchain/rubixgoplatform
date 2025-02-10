@@ -264,6 +264,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/createdid": {
+            "post": {
+                "description": "This API creates a new DID of a specified type. Supported types include: Type 4 (BIP39 DID) Example for did_config: {\"type\":4,\"priv_pwd\":\"mypassword\",\"mnemonic_file\":\"mnemonic_file_path\"}\"",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Basic"
+                ],
+                "summary": "Create New DID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID Configuration in JSON format.",
+                        "name": "did_config",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.DIDResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/deploy-nft": {
             "post": {
                 "description": "This API will deploy the NFT",
@@ -1142,6 +1174,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/register-did": {
+            "post": {
+                "description": "This API registers a DID of a specified type.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Basic"
+                ],
+                "summary": "Register DID",
+                "parameters": [
+                    {
+                        "description": "DID string",
+                        "name": "did",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.DIDwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.DIDResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/run-unpledge": {
             "post": {
                 "description": "This API will unpledge all Pledged RBT tokens",
@@ -1410,6 +1476,31 @@ const docTemplate = `{
                 }
             }
         },
+        "model.DIDResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {
+                    "$ref": "#/definitions/model.DIDResult"
+                },
+                "status": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "model.DIDResult": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "peer_id": {
+                    "type": "string"
+                }
+            }
+        },
         "model.PledgedTokenStateDetails": {
             "type": "object",
             "properties": {
@@ -1501,6 +1592,14 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "peerID": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.DIDwaggoInput": {
+            "type": "object",
+            "properties": {
+                "did": {
                     "type": "string"
                 }
             }
