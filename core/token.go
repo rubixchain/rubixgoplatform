@@ -13,6 +13,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	tkpackage "github.com/rubixchain/rubixgoplatform/token"
 
 	// "github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -49,8 +50,11 @@ type TokenVerificationResponse struct {
 	Results map[string]bool `json:"results"`
 }
 type TokenInfo struct {
-	TokenType   int
-	BlockNumber uint64
+	TokenType           int
+	TransferBlockNumber uint64
+	TransactionID       string
+	TransactionEpoch    int
+	TransferBlockID     string
 }
 
 func (c *Core) SetupToken() {
@@ -963,25 +967,137 @@ func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tok
 	return lastErr
 }
 
-func (c *Core) ReadyToMineCredits(did string) []string {
+// func (c *Core) ReadyToMineCredits(did string) map[string]TokenInfo {
+// 	// Step 1: Fetch token details by QuorumDID
+// 	tokenDetails, err := c.w.GetTokenDetailsByQuorumDID(did)
+// 	if err != nil {
+// 		c.log.Error("Failed to fetch token details", "err", err)
+// 		return nil // Return nil if fetching fails
+// 	}
+
+// 	// Step 2: Convert tokenDetails to a map[token] -> tokenType
+// 	tokenTypeMap := make(map[string]int)
+// 	for token, details := range tokenDetails {
+// 		tokenTypeMap[token] = details[0].TokenType
+// 	}
+
+// 	// Step 3: Sync latest token chains
+// 	err = c.SyncLatestTokenChains(tokenTypeMap)
+// 	if err != nil {
+// 		c.log.Error("Failed to sync latest token chains", "err", err)
+// 	}
+
+// 	// Step 4: Initialize readyToMineTokens map
+// 	readyToMineTokens := make(map[string]TokenInfo)
+
+// 	// Step 5: Iterate through tokens and check readiness for mining
+// 	for token, tokenType := range tokenTypeMap {
+// 		latestBlock := c.w.GetLatestTokenBlock(token, tokenType)
+// 		if latestBlock == nil {
+// 			c.log.Error("Latest block is nil", "token", token)
+// 			continue // Skip this token and move to the next
+// 		}
+// 		// transferedtokenBlock,err:= c.w.GetTokenBlock(token,tokenType,tokenDetails[token].TransferBlockID)
+//         if err != nil {
+// 			c.log.Error("Failed to get transaction blockID ", "token", token, "err", err)
+// 			continue
+// 		}
+// 		// Get the block number of the latest block
+// 		latestBlockNum, err := latestBlock.GetBlockNumber(token)
+// 		c.log.Debug("latest block number",latestBlockNum)
+// 		if err != nil {
+// 			c.log.Error("Failed to get block number", "token", token, "err", err)
+// 			continue
+// 		}
+// 		latestBlockEpoch:=latestBlock.GetEpoch()
+// 		c.log.Debug("latest block epoch",latestBlockEpoch)
+// 		c.log.Debug("trans block epoch ",tokenDetails[token].TransactionEpoch)
+// 		differenceInEpoch:= int(latestBlockEpoch)-(tokenDetails[token].TransactionEpoch)
+// 		fmt.Println("difference in Epoch",differenceInEpoch)
+// 		// transferredTokenValue:= latestBlock.GetTokenValue()
+// 		// fmt.Println("transferred token value",transferredTokenValue)
+// 		transferType := latestBlock.GetTransType()
+// 		c.log.Debug("transfer type is*********!!!!",transferType)
+// 		b, err := c.getFromIPFS(token)
+// 		if err != nil {
+// 			c.log.Error("failed to get parent token details from ipfs", "err", err, "token", token)
+
+// 		}
+// 		_, iswholeToken, _ := tkpackage.CheckWholeToken(string(b), c.testNet)
+
+// 		tt := tkpackage.RBTTokenType
+// 		transTokenValue := float64(1)
+// 		if !iswholeToken {
+// 			blk := util.StrToHex(string(b))
+// 			rb, err := rac.InitRacBlock(blk, nil)
+// 			if err != nil {
+// 				c.log.Error("invalid token, invalid rac block", "err", err)
+
+// 			}
+// 			tt = rac.RacType2TokenType(rb.GetRacType())
+// 			if c.TokenType(PartString) == tt {
+// 				transTokenValue = rb.GetRacValue()
+// 			}
+// 		}
+// 		c.log.Debug("transtoken value",transTokenValue)
+// 		creditValue := differenceInEpoch*(int(transTokenValue))
+// 		c.log.Debug("credit value is",creditValue)
+
+// 		err = c.w.UpdateLatestBlockNumber(token,int(latestBlockNum),tokenDetails[token].TransactionID)
+// 		if err != nil {
+// 			c.log.Error("Failed to update latest block number", "token", token, "err", err)
+// 			continue // Move to the next token
+// 		}
+// 		// Get the credit earn block number for this token
+// 		creditEarnBlockNum := tokenDetails[token].TransferBlockNumber
+//         transType := latestBlock.GetTransType()
+// 		c.log.Debug("transaction type is",transType)
+// 		// Check if the token is ready for mining
+// 		if latestBlockNum >= uint64(creditEarnBlockNum)+5 {
+// 			// Step 8: Get the transaction ID from tokenDetails
+// 			transactionID := ""
+// 			if details, exists := tokenDetails[token]; exists {
+// 				transactionID = details.TransactionID // Take first transaction ID if available
+// 			}
+
+// 			// Store in the map
+// 			readyToMineTokens[token] = TokenInfo{
+// 				TokenType:          tokenType,
+// 				TransferBlockNumber: creditEarnBlockNum,
+// 				TransactionID:       transactionID,
+// 			}
+// 		}
+// 	}
+
+// 	return readyToMineTokens
+// }
+
+func (c *Core) ReadyToMineCredits(did string) map[string][]TokenInfo {
+	//  Fetch token details by QuorumDID
 	tokenDetails, err := c.w.GetTokenDetailsByQuorumDID(did)
 	if err != nil {
-		c.log.Error("Failed to sync latest token chains", "err", err)
-	}
-	// Convert tokenDetails to a map of token -> tokenType
-	tokenTypeMap := make(map[string]int)
-	for token, details := range tokenDetails {
-		tokenTypeMap[token] = details.TokenType
+		c.log.Error("Failed to fetch token details", "err", err)
+		return nil // Return nil if fetching fails
 	}
 
-	// Sync latest token chains
+	// Convert tokenDetails to a map[token] -> tokenType
+	tokenTypeMap := make(map[string]int)
+	for token, details := range tokenDetails {
+		if len(details) > 0 {
+			tokenTypeMap[token] = details[0].TokenType // Take first entry's type (assumption)
+		}
+	}
+
+	//  Sync latest token chains
 	err = c.SyncLatestTokenChains(tokenTypeMap)
 	if err != nil {
 		c.log.Error("Failed to sync latest token chains", "err", err)
 	}
 
-	//Iterate through tokens and check readiness for mining
-	var readyToMineTokens []string
+	//  Initialize readyToMineTokens map
+	readyToMineTokens := make(map[string][]TokenInfo)
+
+	//  Iterate through tokens and check readiness for mining
 	for token, tokenType := range tokenTypeMap {
 		latestBlock := c.w.GetLatestTokenBlock(token, tokenType)
 		if latestBlock == nil {
@@ -995,41 +1111,92 @@ func (c *Core) ReadyToMineCredits(did string) []string {
 			c.log.Error("Failed to get block number", "token", token, "err", err)
 			continue
 		}
-		var tokenPledgeInfo []wallet.PledgeHistory
-		err = c.s.Read(wallet.PledgeHistoryTable, &tokenPledgeInfo, "transfer_tokens_id=?", token)
-		if err != nil {
-			c.log.Error("Failed to read the pledge history table")
-		}
+		latestBlockEpoch := latestBlock.GetEpoch()
 
-		// Get the credit earn block number for this token
-		creditEarnBlockNum := tokenDetails[token].BlockNumber
+		c.log.Debug("Latest block number", "token", token, "blockNum", latestBlockNum)
 
-		// Check if the token is ready for mining
-		if latestBlockNum >= uint64(creditEarnBlockNum)+5 {
-			readyToMineTokens = append(readyToMineTokens, token)
+		// Iterate over all token details for this token
+		for _, detail := range tokenDetails[token] {
+			transactionBlockEpoch := detail.TransactionEpoch
+			differenceInEpoch := latestBlockEpoch - int64(transactionBlockEpoch)
+			transferBlockBytes, err := c.w.GetTokenBlock(token, tokenType, detail.TransferBlockID)
+			if err != nil {
+				c.log.Error("not able to get the transferedBlock for the token", "token", token, "err", err)
+			}
+			transferBlock := block.InitBlock(transferBlockBytes, nil)
+			transferBlockNum, err := transferBlock.GetBlockNumber(token)
+
+			transactionType := transferBlock.GetTransType()
+			c.log.Debug("transaction type is", transactionType)
+			b, err := c.getFromIPFS(token)
+			if err != nil {
+				c.log.Error("failed to get parent token details from ipfs", "err", err, "token", token)
+
+			}
+			_, iswholeToken, _ := tkpackage.CheckWholeToken(string(b), c.testNet)
+
+			tt := tkpackage.RBTTokenType
+			transTokenValue := float64(1)
+			if !iswholeToken {
+				blk := util.StrToHex(string(b))
+				rb, err := rac.InitRacBlock(blk, nil)
+				if err != nil {
+					c.log.Error("invalid token, invalid rac block", "err", err)
+
+				}
+				tt = rac.RacType2TokenType(rb.GetRacType())
+				if c.TokenType(PartString) == tt {
+					transTokenValue = rb.GetRacValue()
+				}
+			}
+			c.log.Debug("transtoken value", transTokenValue)
+
+			creditValue := float64(differenceInEpoch) * (transTokenValue)
+			c.log.Debug("credit value is", creditValue)
+
+			creditEarnBlockNum := transferBlockNum
+			c.log.Debug("transaction block number", creditEarnBlockNum)
+
+			// Check if the token is ready for mining
+			if latestBlockNum >= uint64(creditEarnBlockNum)+5 {
+				// Append the TokenInfo to the slice in the map
+				readyToMineTokens[token] = append(readyToMineTokens[token], TokenInfo{
+					TokenType:           tokenType,
+					TransferBlockNumber: creditEarnBlockNum,
+					TransactionID:       detail.TransactionID,
+					TransactionEpoch:    detail.TransactionEpoch,
+					TransferBlockID:     detail.TransferBlockID,
+				})
+			}
 		}
 	}
 
 	return readyToMineTokens
 }
-func (c *Core) UpdateReadyToMineCredits(readyToMineTokens []string) error {
+
+// func (c *Core) CalculateCreditValue()
+
+func (c *Core) UpdateReadyToMineCredits(readyToMineTokens map[string][]TokenInfo) error {
 	if len(readyToMineTokens) == 0 {
 		c.log.Info("No tokens to update for mining readiness")
 		return nil // No updates needed
 	}
 
-	for _, token := range readyToMineTokens {
-		// Update token_credit_status to 1 (assuming 1 means "ready to mine")
-		err := c.w.UpdateTokenCreditStatus(token, 1)
-		if err != nil {
-			c.log.Error("Failed to update token credit status", "token", token, "err", err)
-			continue // Move to the next token
+	for token, tokenInfos := range readyToMineTokens { // Iterate over tokens
+		for _, tokenInfo := range tokenInfos { // Iterate over all associated TokenInfo entries
+			// Update token_credit_status to 1 (assuming 1 means "ready to mine")
+			err := c.w.UpdateTokenCreditStatus(token, 1, tokenInfo.TransactionID)
+			if err != nil {
+				c.log.Error("Failed to update token credit status", "token", token, "transactionID", tokenInfo.TransactionID, "err", err)
+				continue // Move to the next TokenInfo entry
+			}
+			c.log.Info("Updated token_credit_status to 1 for token", "token", token, "transactionID", tokenInfo.TransactionID)
 		}
-		c.log.Info("Updated token_credit_status to 1 for token", "token", token)
 	}
 
 	return nil // Return nil if function completes without critical errors
 }
+
 func (c *Core) FindReadyToMineCredits(did string) error {
 	readyToMineCredits := c.ReadyToMineCredits(did)
 	c.log.Debug("ready to mine credits are", readyToMineCredits)

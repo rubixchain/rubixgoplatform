@@ -315,6 +315,7 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 }
 
 func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
+	c.log.Debug("initiateConsensus function from the Core package has been called.")
 	weekCount := util.GetWeeksPassed()
 	cs := ConsensusStatus{
 		Credit: CreditScore{
@@ -415,6 +416,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
 		//as well. Each quorums should pledge equal amount of tokens and hence, it should have a total of (Transacting RBTs/5) tokens
 		//available for pledging.
+		c.log.Debug("Did of the caller",dc.GetDID())
 		go c.connectQuorum(cr, a, AlphaQuorumType, sc)
 	}
 	loop := true
@@ -595,7 +597,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		newtokenhashresult, ok := br.Result.([]interface{})
 		if !ok {
 			c.log.Error("Type assertion to string failed")
-			return nil, nil, nil, fmt.Errorf("Type assertion to string failed")
+			return nil, nil, nil, fmt.Errorf("type assertion to string failed")
 		}
 		var newtokenhashes []string
 		for i, newTokenHash := range newtokenhashresult {
@@ -701,6 +703,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		err = c.initiateUnpledgingProcess(cr, td.TransactionID, td.Epoch)
+		c.log.Debug("initiateUnpledgingProcess function called in core package quorum_initiator.go file")
 		if err != nil {
 			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
 			return nil, nil, nil, err
@@ -1869,6 +1872,7 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 }
 
 func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contract.Contract) {
+	c.log.Debug("connectQuorum function is called")
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
 	var err error
@@ -1878,6 +1882,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)
 		return
 	}
+	c.log.Debug("Below initPledgeQuorumToken function is getting called in connect Quorum function")
 	err = c.initPledgeQuorumToken(cr, p, qt)
 	if err != nil {
 		if strings.Contains(err.Error(), "don't have enough balance to pledge") {
@@ -1890,6 +1895,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		return
 	}
 	var cresp ConensusReply
+	c.log.Debug("APIQuorumConsensus is getting called")
 	err = p.SendJSONRequest("POST", APIQuorumConsensus, nil, cr, &cresp, true, 10*time.Minute)
 	if err != nil {
 		c.log.Error("Failed to get consensus", "err", err)

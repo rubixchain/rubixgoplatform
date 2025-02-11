@@ -176,6 +176,7 @@ func getConsensusRequest(consensusRequestType int, senderPeerID string, receiver
 func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
+	c.log.Debug("printing the time in initiateRBTTransfer in core package",txEpoch)
 
 	resp := &model.BasicResponse{
 		Status: false,

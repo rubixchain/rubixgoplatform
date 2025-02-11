@@ -14,8 +14,11 @@ type Credit struct {
 	Tx     string `gorm:"column:tx"`
 }
 type TokenInfo struct {
-	TokenType   int
-	BlockNumber int
+	TokenType           int
+	TransferBlockNumber uint64
+	TransactionID       string
+	TransactionEpoch     int
+	TransferBlockID     string
 }
 
 // TODO: Credit structure needs to be worked upon
@@ -39,6 +42,7 @@ type PledgeHistory struct {
 	TokenCredit         int    `gorm:"column:token_credit"`
 	Epoch               int    `gorm:"column:epoch"`
 	TokenCreditStatus   int    `gorm:"column:token_credit_status"`
+	TransferTokenValue  float64 
 }
 
 func (w *Wallet) AddPledgeHistory(pledgeDetails *PledgeHistory) error {
@@ -66,9 +70,37 @@ func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) 
 		return true, nil
 	}
 }
-func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string) (map[string]TokenInfo, error) {
+// func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string) (map[string]TokenInfo, error) {
+// 	var pledges []PledgeHistory
+// 	tokenDetails := make(map[string]TokenInfo)
+
+// 	// Query the database for records matching the given QuorumDID
+// 	err := w.s.Read(PledgeHistoryTable, &pledges, "quorum_did=? and token_credit_status=?", quorumDID, 0)
+// 	if err != nil {
+// 		if strings.Contains(fmt.Sprint(err), "no records found") {
+// 			w.log.Info("No pledge history found for given QuorumDID", "quorumDID", quorumDID)
+// 			return nil, nil // Return nil if no records are found
+// 		}
+// 		w.log.Error("Failed to read pledge history", "quorumDID", quorumDID, "err", err)
+// 		return nil, err
+// 	}
+
+// 	// Iterate over the results and collect token details
+// 	for _, pledge := range pledges {
+// 		tokenDetails[pledge.TransferTokenID] = TokenInfo{
+// 			TokenType:           pledge.TransferTokenType,
+// 			TransferBlockNumber: uint64(pledge.CurrentBlockNumber),
+// 			TransactionID:       pledge.TransactionID,
+// 			TransactionEpoch:    pledge.Epoch,
+// 			TransferBlockID:     pledge.TransferBlockID,
+// 		}
+// 	}
+
+// 	return tokenDetails, nil
+// }
+func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string) (map[string][]TokenInfo, error) {
 	var pledges []PledgeHistory
-	tokenDetails := make(map[string]TokenInfo)
+	tokenDetails := make(map[string][]TokenInfo) // Map with slice of TokenInfo
 
 	// Query the database for records matching the given QuorumDID
 	err := w.s.Read(PledgeHistoryTable, &pledges, "quorum_did=? and token_credit_status=?", quorumDID, 0)
@@ -81,33 +113,26 @@ func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string) (map[string]TokenI
 		return nil, err
 	}
 
-	// Iterate over the results and collect token details
+	// Iterate over the results and group TokenInfo by TransferTokenID
 	for _, pledge := range pledges {
-		tokenDetails[pledge.TransferTokenID] = TokenInfo{
-			TokenType:   pledge.TransferTokenType,
-			BlockNumber: pledge.CurrentBlockNumber,
+		tokenInfo := TokenInfo{
+			TokenType:           pledge.TransferTokenType,
+			TransferBlockNumber: uint64(pledge.CurrentBlockNumber),
+			TransactionID:       pledge.TransactionID,
+			TransactionEpoch:    pledge.Epoch,
+			TransferBlockID:     pledge.TransferBlockID,
 		}
+
+		// Append to the slice of TokenInfo for this TransferTokenID
+		tokenDetails[pledge.TransferTokenID] = append(tokenDetails[pledge.TransferTokenID], tokenInfo)
 	}
 
 	return tokenDetails, nil
 }
 
-//	func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int) error {
-//		fmt.Println("Updating token_credit_status for token:", tokenID)
-//		var tokenPledgeInfo PledgeHistory
-//		tokenPledgeInfo.TokenCreditStatus= status
-//		err := w.s.Update(
-//			PledgeHistoryTable,
-//			tokenPledgeInfo,
-//			"transfer_tokens_id = ?",
-//			tokenID,
-//		)
-//		if err != nil {
-//			fmt.Println("Update failed:", err)
-//		}
-//		return err
-//	}
-func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int) error {
+
+
+func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transactionID string) error {
 	var pledgeHistoryRecords []PledgeHistory
 
 	err := w.s.Read(
@@ -120,21 +145,20 @@ func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int) error {
 		fmt.Println("Error reading pledge history records:", err)
 		return err
 	}
-
-	// Step 2: Check if records exist
+    // Check if records exist
 	if len(pledgeHistoryRecords) == 0 {
 		fmt.Println("No records found for tokenID:", tokenID)
 		return fmt.Errorf("no records found for tokenID: %s", tokenID)
 	}
 
-	// Step 3: Update token_credit_status for each row
+	// Update token_credit_status for each row
 	for _, record := range pledgeHistoryRecords {
 		record.TokenCreditStatus = status
 		updateErr := w.s.Update(
 			PledgeHistoryTable,
 			record,
-			"transfer_tokens_id = ?",
-			tokenID,
+			"transfer_tokens_id = ? and transaction_id=?",
+			tokenID, record.TransactionID,
 		)
 		if updateErr != nil {
 			fmt.Println("Update failed for transaction:", record.TransactionID, "Error:", updateErr)
@@ -142,6 +166,39 @@ func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int) error {
 		}
 
 		fmt.Println("Updated token_credit_status for transaction:", record.TransactionID)
+	}
+
+	return nil // Return nil if function completes successfully
+}
+
+func (w *Wallet) UpdateLatestBlockNumber(tokenID string, blockNumber int, transactionID string) error {
+	var pledgeHistoryRecords []PledgeHistory
+
+	err := w.s.Read(
+		PledgeHistoryTable,
+		&pledgeHistoryRecords,
+		"transfer_tokens_id = ?",
+		tokenID,
+	)
+	if err != nil {
+		fmt.Println("Error reading pledge history records:", err)
+		return err
+	}
+	// Update current_block_number for each row
+	for _, record := range pledgeHistoryRecords {
+		record.CurrentBlockNumber = blockNumber
+		updateErr := w.s.Update(
+			PledgeHistoryTable,
+			record,
+			"transfer_tokens_id = ? and transaction_id=?",
+			tokenID, record.TransactionID,
+		)
+		if updateErr != nil {
+			fmt.Println("Latest block number Update failed for the token :", record.TransferTokenID, "Error:", updateErr)
+			continue // Continue updating other rows even if one fails
+		}
+
+		fmt.Println("Updated current block number for the token:", record.TransferTokenID)
 	}
 
 	return nil // Return nil if function completes successfully
