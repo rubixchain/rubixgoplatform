@@ -22,6 +22,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/rac"
 )
 
 func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
@@ -1500,6 +1501,30 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 
+		b, err := c.getFromIPFS(tokenID)
+		if err != nil {
+			c.log.Error("failed to get parent token details from ipfs", "err", err, "token", tokenID)
+
+		}
+		_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+
+		tt := token.RBTTokenType
+		transTokenValue := float64(1)
+		if !iswholeToken {
+			blk := util.StrToHex(string(b))
+			rb, err := rac.InitRacBlock(blk, nil)
+			if err != nil {
+				c.log.Error("invalid token, invalid rac block", "err", err)
+
+			}
+			tt = rac.RacType2TokenType(rb.GetRacType())
+			if c.TokenType(PartString) == tt {
+				transTokenValue = rb.GetRacValue()
+			}
+		}
+		c.log.Debug("transtoken value", transTokenValue)
+
+
 		//TODO: Fix the function to get peer who pinned epoch for a token
 		// weekPassed := util.GetWeeksPassed()
 		//list, pinCheckErr := c.getPeerWhoPinTokenEpoch(tokenID, weekPassed)
@@ -1514,9 +1539,10 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			TransferTokenType:   tokenType,
 			TransferBlockID:     blockID,
 			TransferBlockNumber: blockNumber,
-			CurrentBlockNumber:  0,
+		
 			TokenCredit:         0,
 			Epoch:               ur.TransactionEpoch,
+			TransferTokenValue: transTokenValue,
 		}
 
 		errAddingPledgeHistory := c.w.AddPledgeHistory(&pledgeHistory)
