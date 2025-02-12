@@ -3,6 +3,7 @@ package contract
 import (
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -45,6 +46,19 @@ const (
 	TITokenValueKey string = "4"
 )
 
+const (
+	CITokenTypeKey     string = "1"
+	CIBlockIDKey       string = "2"
+	CITransactionIDKey string = "3"
+	CICreditsUsed      string = "4"
+)
+
+const (
+	TSMinerDIDKey      string = "1"
+	TSCreditInfoKey    string = "2"
+	TSCreditsNeededKey string = "3"
+)
+
 type TokenInfo struct {
 	Token      string  `json:"token"`
 	TokenType  int     `json:"tokenType"`
@@ -76,6 +90,13 @@ type TransInfo struct {
 	NFT                  string      `json:"nft"`
 	NFTValue             float64     `json:"nftValue"`
 	NFTData              string      `json:"nftData"`
+}
+
+type MiningInfo struct {
+	RequestingDID string         `json:"senderDID"`
+	Comment       string         `json:"comment"`
+	CreditsInfo   []model.ToSend `json:"credits_info"`
+	CreditsNeeded int            `json:"credits_needed"`
 }
 
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {

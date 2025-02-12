@@ -177,5 +177,33 @@ func (cmd *Command) syncTokenchaindata() {
 		cmd.log.Error("Invalid DID")
 		return
 	}
-	
+
+}
+
+func (cmd *Command) MineRBT() {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+
+	br, err := cmd.c.MineRBT(cmd.did)
+
+	if err != nil {
+		cmd.log.Error("Failed to mine RBT", "err", err)
+		return
+	}
+
+	if !br.Status {
+		cmd.log.Error("Failed to mine RBT", "msg", br.Message)
+		return
+	}
+
+	msg, status := cmd.SignatureResponse(br)
+
+	if !status {
+		cmd.log.Error("Failed to mine RBT, " + msg)
+		return
+	}
+	cmd.log.Info("RBT mined successfully")
 }

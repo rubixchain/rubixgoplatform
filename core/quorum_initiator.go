@@ -35,6 +35,7 @@ const (
 	PinningServiceMode
 	NFTExecuteMode
 	FTTransferMode
+	MiningMode
 )
 const (
 	AlphaQuorumType int = iota
@@ -81,6 +82,19 @@ type ConsensusStatus struct {
 	PledgeLock sync.Mutex
 	P          map[string]*ipfsport.Peer
 	Result     ConsensusResult
+}
+
+type MiningConensusRequest struct {
+	ReqID               string   `json:"req_id"`
+	Type                int      `json:"type"`
+	Mode                int      `json:"mode"`
+	MinerPeerID         string   `json:"sender_peerd_id"`
+	QuorumList          []string `json:"quorum_list"`
+	MiningTransactionID string   `json:"transaction_id"`
+	MiningEpoch         int      `json:"transaction_epoch"`
+	Tokens              []model.ToSend
+	MinerDID            string
+	Comment             string
 }
 
 type PledgeDetails struct {
@@ -703,7 +717,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = c.initiateUnpledgingProcess(cr, td.TransactionID, td.Epoch)
 		if err != nil {
 			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
-			return nil, nil, nil, err
+			return nil, nil, nil, err //Arnab - do we need to return? because the token did get transferred successfully. What happens if it fails?
 		}
 
 		return &td, pl, pds, nil

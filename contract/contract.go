@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -19,6 +20,7 @@ const (
 	NFTDeployType
 	NFTExecuteType
 	SCFTType
+	SCMiningType
 )
 
 // ----------SmartContract----------------------
@@ -49,6 +51,13 @@ type ContractType struct {
 	TotalRBTs  float64    `json:"totalRBTs"`
 	ReqID      string     `json:"req_id"`
 	log        logger.Logger
+}
+
+type MiningContractType struct {
+	Type       int         `json:"type"`
+	PledgeMode int         `json:"pledge_mode"`
+	MiningInfo *MiningInfo `json:"mining_info"`
+	ReqID      string      `json:"req_id"`
 }
 
 type Contract struct {
@@ -478,4 +487,59 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	}
 
 	return nil
+}
+
+func CreateNewMiningContract(st *MiningContractType) *Contract {
+	if st.MiningInfo == nil {
+		return nil
+	}
+	//	st.log.Debug("Creating new contract")
+	//	st.log.Debug("input st is %v", st)
+	//	st.log.Debug("st.TransInfo is %v", st.TransInfo)
+
+	nm := make(map[string]interface{})
+	nm[SCTypeKey] = st.Type
+	// ::TODO:: Need to support other pledge mode
+	if st.PledgeMode > NoPledgeMode {
+		return nil
+	}
+	nm[SCPledgeModeKey] = st.PledgeMode
+	nm[SCTransInfoKey] = newMiningInfoBlock(st.MiningInfo) //Info about the credits being used
+	if nm[SCTransInfoKey] == nil {
+		return nil
+	}
+	fmt.Println("nm mining contract : ", nm)
+	return InitContract(nil, nm)
+}
+
+func newMiningInfoBlock(ts *MiningInfo) map[string]interface{} {
+	ntsb := make(map[string]interface{})
+	if ts.RequestingDID != "" {
+		ntsb[TSMinerDIDKey] = ts.RequestingDID
+	}
+
+	if ts.CreditsInfo != nil && len(ts.CreditsInfo) > 0 {
+		ntibs := make(map[string]interface{})
+		for _, ti := range ts.CreditsInfo {
+			ntib := newCreditInfoBlock(&ti)
+			if ntib == nil {
+				return nil
+			}
+			ntibs[ti.TokenID] = ntib
+		}
+		ntsb[TSCreditInfoKey] = ntibs
+	}
+	ntsb[TSCreditsNeededKey] = ts.CreditsNeeded
+	return ntsb
+}
+
+func newCreditInfoBlock(ti *model.ToSend) map[string]interface{} {
+	ntib := make(map[string]interface{})
+	ntib[TITokenTypeKey] = ti.TokenType
+	// ntib[TI] = ti.TokenValue
+	// if ti.OwnerDID != "" {
+	// 	ntib[TIOwnerDIDKey] = ti.OwnerDID
+	// }
+	ntib[TIBlockIDKey] = ti.BlockID
+	return ntib
 }

@@ -47,8 +47,8 @@ type TokenVerificationResponse struct {
 	Results map[string]bool `json:"results"`
 }
 type TokenInfo struct {
-    TokenType   int
-    BlockNumber uint64
+	TokenType   int
+	BlockNumber uint64
 }
 
 func (c *Core) SetupToken() {
@@ -141,7 +141,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
 	err := c.generateTestTokens(reqID, num, did)
 	br := model.BasicResponse{
 		Status:  true,
-		Message: "DID registered successfully",
+		Message: "Test Tokens generated successfully",
 	}
 	if err != nil {
 		br.Status = false
@@ -299,28 +299,28 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		BlockID:   blkID,
 	}
 	for {
-	var trep TCBSyncReply
-	err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &tr, &trep, false)
-	if err != nil {
-		c.log.Error("Failed to sync token chain block", "err", err)
-		return err
-	}
-	if !trep.Status {
-		c.log.Error("Failed to sync token chain block", "msg", trep.Message)
-		return fmt.Errorf(trep.Message)
-	}
-	for _, bb := range trep.TCBlock {
-		blk := block.InitBlock(bb, nil)
-		if blk == nil {
-			c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
-			return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
-		}
-		err = c.w.AddTokenBlock(token, blk)
+		var trep TCBSyncReply
+		err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &tr, &trep, false)
 		if err != nil {
-			c.log.Error("Failed to add token chain block, syncing failed", "err", err)
+			c.log.Error("Failed to sync token chain block", "err", err)
 			return err
 		}
-	}
+		if !trep.Status {
+			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
+			return fmt.Errorf(trep.Message)
+		}
+		for _, bb := range trep.TCBlock {
+			blk := block.InitBlock(bb, nil)
+			if blk == nil {
+				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
+				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
+			}
+			err = c.w.AddTokenBlock(token, blk)
+			if err != nil {
+				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
+				return err
+			}
+		}
 		if trep.NextBlockID == "" {
 			break
 		}
@@ -913,8 +913,8 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 	return responseBody, nil
 
 }
-func(c *Core) FindingLatestTokenChainHolders(token string)[]string{
-	weekNumber:= util.GetWeeksPassed()
+func (c *Core) FindingLatestTokenChainHolders(token string) []string {
+	weekNumber := util.GetWeeksPassed()
 	pinned := fmt.Sprintf("%s-%d", token, weekNumber)
 	reader := bytes.NewReader([]byte(pinned))
 	newCid, _ := c.ipfs.Add(reader)
@@ -929,36 +929,36 @@ func(c *Core) FindingLatestTokenChainHolders(token string)[]string{
 }
 
 func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tokenType int) error {
-    var lastErr error
+	var lastErr error
 
-    for _, peerID := range peerIDs {
-        c.log.Info("Attempting to sync token chain from peer", "peerID", peerID)
+	for _, peerID := range peerIDs {
+		c.log.Info("Attempting to sync token chain from peer", "peerID", peerID)
 
-        // Try to open a connection with the peer
-        peer, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
-        if err != nil {
-            c.log.Warn("Failed to open peer connection, trying next peer", "peerID", peerID, "err", err)
-            lastErr = err
-            continue // Move to the next peer
-        }
+		// Try to open a connection with the peer
+		peer, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
+		if err != nil {
+			c.log.Warn("Failed to open peer connection, trying next peer", "peerID", peerID, "err", err)
+			lastErr = err
+			continue // Move to the next peer
+		}
 
-        // Try to sync the token chain from the connected peer
-        err = c.syncTokenChainFrom(peer, "", token, tokenType)
-        if err != nil {
-            c.log.Warn("Failed to sync token chain, trying next peer", "peerID", peerID, "err", err)
-            lastErr = err
-            continue // Move to the next peer
-        }
+		// Try to sync the token chain from the connected peer
+		err = c.syncTokenChainFrom(peer, "", token, tokenType)
+		if err != nil {
+			c.log.Warn("Failed to sync token chain, trying next peer", "peerID", peerID, "err", err)
+			lastErr = err
+			continue // Move to the next peer
+		}
 
-        c.log.Info("Successfully synced token chain from peer", "peerID", peerID)
-        return nil // Successful sync, exit the function
-    }
+		c.log.Info("Successfully synced token chain from peer", "peerID", peerID)
+		return nil // Successful sync, exit the function
+	}
 
-    // If we reach here, all peers failed. Return the last encountered error.
-    if lastErr != nil {
-        c.log.Error("Failed to sync token chain from all peers", "err", lastErr)
-    }
-    return lastErr
+	// If we reach here, all peers failed. Return the last encountered error.
+	if lastErr != nil {
+		c.log.Error("Failed to sync token chain from all peers", "err", lastErr)
+	}
+	return lastErr
 }
 
 // func (c *Core)FindReadytoMineCredits(tokendetails map[string]TokenInfo)string{
@@ -979,47 +979,66 @@ func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tok
 // 	if err != nil {
 // 		c.log.Error("Failed to get block number", "err", err)
 // 	}
-//     creditEarnBlockNum:= 
+//     creditEarnBlockNum:=
 // 	// Check if the condition is met
 // 	if latestBlockNum >= creditEarnBlockNum+5 {
-// 		return 
+// 		return
 // 	}
 
 // 	}
-	
+
 // }
 func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {
-    var lastErr error
+	var lastErr error
 
-    for token, tokenType := range tokenTokenTypeMap {
-        c.log.Info("Fetching latest token chain holders", "token", token)
+	for token, tokenType := range tokenTokenTypeMap {
+		c.log.Info("Fetching latest token chain holders", "token", token)
 
-        // Get the latest holders for the token
-        peerIDs := c.FindingLatestTokenChainHolders(token)
-        if len(peerIDs) == 0 {
-            c.log.Warn("No token chain holders found for token", "token", token)
-            lastErr = fmt.Errorf("no holders found for token: %s", token)
-            continue // Move to the next token
-        }
+		// Get the latest holders for the token
+		peerIDs := c.FindingLatestTokenChainHolders(token)
+		if len(peerIDs) == 0 {
+			c.log.Warn("No token chain holders found for token", "token", token)
+			lastErr = fmt.Errorf("no holders found for token: %s", token)
+			continue // Move to the next token
+		}
 
-        c.log.Info("Attempting to sync latest token chain", "token", token, "holders", peerIDs)
+		c.log.Info("Attempting to sync latest token chain", "token", token, "holders", peerIDs)
 
-        // Try syncing the token chain from one of the holders
-        err := c.SyncTokenChainFromListOfPeers(peerIDs, token, tokenType)
-        if err != nil {
-            c.log.Warn("Failed to sync token chain", "token", token, "err", err)
-            lastErr = err
-            continue // Move to the next token
-        }
+		// Try syncing the token chain from one of the holders
+		err := c.SyncTokenChainFromListOfPeers(peerIDs, token, tokenType)
+		if err != nil {
+			c.log.Warn("Failed to sync token chain", "token", token, "err", err)
+			lastErr = err
+			continue // Move to the next token
+		}
 
-        c.log.Info("Successfully synced latest token chain", "token", token)
-    }
+		c.log.Info("Successfully synced latest token chain", "token", token)
+	}
 
-    // If all tokens failed, return the last encountered error
-    if lastErr != nil {
-        c.log.Error("Failed to sync some or all token chains", "err", lastErr)
-    }
-    return lastErr
+	// If all tokens failed, return the last encountered error
+	if lastErr != nil {
+		c.log.Error("Failed to sync some or all token chains", "err", lastErr)
+	}
+	return lastErr
 }
 
-
+func (c *Core) MineRBT(reqID string, did string) {
+	//Verify DID
+	//Read table, where block created is >=5
+	//For selected token, make array of vals,
+	// br := model.BasicResponse{
+	// 	Status:  true,
+	// 	Message: "New RBT created successfully",
+	// }
+	br := c.mineRBT(reqID, did)
+	// if err != nil {
+	// 	br.Status = false
+	// 	br.Message = err.Error()
+	// }
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- &br
+}

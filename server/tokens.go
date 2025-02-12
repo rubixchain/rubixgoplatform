@@ -382,3 +382,23 @@ func (s *Server) APIValidateToken(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.RenderJSON(req, br, http.StatusOK)
 }
+
+func (s *Server) APIMineRBT(req *ensweb.Request) *ensweb.Result {
+	var mr model.DidInfo
+	err := s.ParseJSON(req, &mr)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(mr.DID)
+	if !strings.HasPrefix(mr.DID, "bafybmi") || len(mr.DID) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+
+	if !s.validateDIDAccess(req, mr.DID) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.MineRBT(req.ID, mr.DID)
+	return s.didResponse(req, req.ID)
+}

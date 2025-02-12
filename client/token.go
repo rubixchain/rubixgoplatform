@@ -106,3 +106,15 @@ func (c *Client) ValidateToken(token string) (*model.BasicResponse, error) {
 	}
 	return &br, nil
 }
+
+func (c *Client) MineRBT(didStr string) (*model.BasicResponse, error) {
+	m := model.DidInfo{
+		DID: didStr,
+	}
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIMineRBT, nil, &m, &rm)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}

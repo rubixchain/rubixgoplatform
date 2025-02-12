@@ -84,3 +84,15 @@ type FaucetRBTGenerateRequest struct {
 	TokenCount int    `json:"token_count"`
 	DID        string `json:"did"`
 }
+
+type ToSend struct {
+	TokenID     string
+	TxnID       string
+	TokenType   int
+	BlockID     string
+	CreditsUsed int
+}
+
+type DidInfo struct {
+	DID string
+}

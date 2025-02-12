@@ -108,6 +108,7 @@ const (
 	GetNftsByDidCmd                string = "get-nfts-by-did"
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	SyncTokenChaindataCmd          string = "synctokenchaindata"
+	MiningCmd                      string = "mine"
 )
 
 var commands = []string{VersionCmd,
@@ -756,6 +757,8 @@ func Run(args []string) {
 		cmd.addUserAPIKey()
 	case SyncTokenChaindataCmd:
 		cmd.syncTokenchaindata()
+	case MiningCmd:
+		cmd.MineRBT()
 	default:
 		cmd.log.Error("Invalid command")
 	}
