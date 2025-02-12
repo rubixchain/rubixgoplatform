@@ -111,6 +111,7 @@ type UpdatePledgeRequest struct {
 	TokenChainBlock             []byte   `json:"token_chain_block"`
 	TransferredTokenStateHashes []string `json:"token_state_hash_info"`
 	TransactionID               string   `json:"transaction_id"`
+	TransactionType             int      `json:"transaction_type"`
 	TransactionEpoch            int      `json:"transaction_epoch"`
 	WeekCount                   int      `json:"week_count"`
 }
@@ -152,6 +153,13 @@ type CreditScore struct {
 	Credit []CreditSignature
 }
 
+type UpdatePreviousQuorums struct {
+	TransactionID   string
+	TransactionType int
+	TokenID         string
+	CurrentEpoch    int64
+}
+
 type CreditSignature struct {
 	Signature     string `json:"signature"`
 	PrivSignature string `json:"priv_signature"`
@@ -191,6 +199,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIRecoverPinnedRBT, "POST", c.recoverPinnedToken)
 	c.l.AddRoute(APIRequestSigningHash, "GET", c.requestSigningHash)
 	c.l.AddRoute(APISendFTToken, "POST", c.updateReceiverFTHandle)
+	c.l.AddRoute(APIUpdateEpochOnPrevQuorums, "POST", c.updateNextBlockEpoch)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
@@ -416,7 +425,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
 		//as well. Each quorums should pledge equal amount of tokens and hence, it should have a total of (Transacting RBTs/5) tokens
 		//available for pledging.
-		c.log.Debug("Did of the caller",dc.GetDID())
+		c.log.Debug("Did of the caller", dc.GetDID())
 		go c.connectQuorum(cr, a, AlphaQuorumType, sc)
 	}
 	loop := true
@@ -669,6 +678,17 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				err := previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
+				}
+
+				var updatePrevQuorums UpdatePreviousQuorums
+				updatePrevQuorums.CurrentEpoch = int64(cr.TransactionEpoch)
+				updatePrevQuorums.TokenID = tokeninfo.Token
+				updatePrevQuorums.TransactionID = b.GetTid()
+				updatePrevQuorums.TransactionType = cr.Type
+
+				PrevQuormEpochUpdateErr := previousQuorumPeer.SendJSONRequest("POST", APIUpdateEpochOnPrevQuorums, nil, updatePrevQuorums, nil, true)
+				if PrevQuormEpochUpdateErr != nil {
+					c.log.Error("Unable to update epoch on previous quorum for credits, err: ", PrevQuormEpochUpdateErr)
 				}
 			}
 		}
@@ -1775,6 +1795,7 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			PledgedTokens:               v,
 			TokenChainBlock:             newBlock.GetBlock(),
 			TransactionID:               transactionId,
+			TransactionType:             cr.Type,
 			TransferredTokenStateHashes: nil,
 			TransactionEpoch:            cr.TransactionEpoch,
 			WeekCount:                   weekCount,

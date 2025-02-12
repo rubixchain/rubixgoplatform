@@ -1535,6 +1535,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		pledgeHistory := wallet.PledgeHistory{
 			QuorumDID:           did,
 			TransactionID:       ur.TransactionID,
+			TransactionType:     ur.TransactionType,
 			TransferTokenID:     tokenID,
 			TransferTokenType:   tokenType,
 			TransferBlockID:     blockID,
@@ -1934,3 +1935,23 @@ func (c *Core) pinTokenEpoch(tokenId string, weekCount int) {
 // 		return list, nil
 // 	}
 // }
+
+func (c *Core) updateNextBlockEpoch(req *ensweb.Request) *ensweb.Result {
+	c.log.Debug("Updating next block Epoch for credits in DB")
+	response := model.BasicResponse{
+		Status: false,
+	}
+	var UpdateEpochDetails UpdatePreviousQuorums
+	err := c.l.ParseJSON(req, &UpdateEpochDetails)
+	if err != nil {
+		c.log.Error("Failed to parse json request", "err", err)
+		response.Message = "Failed to parse json request"
+		return c.l.RenderJSON(req, &response, http.StatusOK)
+	}
+	c.log.Debug("Next block Epoch updating for token: ", UpdateEpochDetails.TokenID)
+	UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateEpochDetails.TokenID, UpdateEpochDetails.TransactionID, UpdateEpochDetails.TransactionType, UpdateEpochDetails.CurrentEpoch)
+	if UpdateEpochErr != nil {
+		c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)
+	}
+	return c.l.RenderJSON(req, struct{}{}, http.StatusOK)
+}
