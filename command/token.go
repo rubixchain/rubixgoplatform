@@ -144,3 +144,26 @@ func (cmd *Command) FaucetTokenCheck() {
 
 	cmd.log.Info("Validated token details successfully")
 }
+
+func (cmd *Command) TokensSanityCheck() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter did : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get did")
+			return
+		}
+	}
+	br, err := cmd.c.TokensSanityCheck(cmd.did)
+	if err != nil {
+		cmd.log.Error("failed to verify tokens of given did", "err", err)
+		return
+	}
+
+	if !br.Status {
+		cmd.log.Error("failed to verify tokens ", "msg ", br.Message, ", result ", br.Result)
+		return
+	}
+	cmd.log.Info("Tokens verified successfully ", "msg ", br.Message, ", invalid tokens ", br.Result)
+}

@@ -92,6 +92,7 @@ const (
 	APIFetchNft                         string = "/api/fetch-nft"
 	APIGetNftsByDid                     string = "/api/get-nfts-by-did"
 	APIGetFTTokenchain                  string = "/api/get-ft-token-chain"
+	APITokenSanityCheck                 string = "/api/tokens-sanity-check"
 )
 
 // jwt.RegisteredClaims

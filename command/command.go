@@ -107,6 +107,7 @@ const (
 	FetchNftCmd                    string = "fetch-nft"
 	GetNftsByDidCmd                string = "get-nfts-by-did"
 	AddUserAPIKeyCmd               string = "adduserapikey"
+	TokensSanityCheckCmd           string = "tokens-sanity-check"
 )
 
 var commands = []string{VersionCmd,
@@ -172,6 +173,7 @@ var commands = []string{VersionCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
 	GetNftsByDidCmd,
+	TokensSanityCheckCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -752,6 +754,8 @@ func Run(args []string) {
 		cmd.getNFTsByDid()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
+	case TokensSanityCheckCmd:
+		cmd.TokensSanityCheck()
 	default:
 		cmd.log.Error("Invalid command")
 	}
