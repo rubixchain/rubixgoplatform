@@ -442,7 +442,7 @@ func (c *Core) UpdateUserInfo(dids []string) {
 				c.log.Error("Failed to send request for user DID, " + did + " Error : " + err.Error())
 				return
 			}
-			if er.Message != "User balance updated successfully!" {
+			if !strings.Contains(er.Message, "successfully") {
 				c.log.Error("Failed to update user info for ", "DID", did, "msg", er.Message)
 			} else {
 				c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
@@ -614,7 +614,7 @@ func (c *Core) GenerateUserAPIKey(dids []string) {
 				return
 			}
 			c.ec.AddDIDKey(did, er.APIKey)
-			c.log.Info(er.Message + " for DID " + did)
+			c.log.Info("API key regenerated successfully" + " for DID " + did)
 
 		}(did)
 
@@ -658,7 +658,7 @@ func (ec *ExplorerClient) ExplorerTokenCreateParts(et *ExplorerCreateTokenParts)
 	if err != nil {
 		return err
 	}
-	if er.Message != "Parts Tokens Create successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -685,7 +685,7 @@ func (ec *ExplorerClient) ExplorerRBTTransaction(et *ExplorerRBTTrans) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "RBT transaction created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -699,7 +699,7 @@ func (ec *ExplorerClient) ExplorerSCTransaction(et *ExplorerSCTrans) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "SC transaction created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -713,7 +713,7 @@ func (ec *ExplorerClient) ExplorerNFTDeploy(et *ExplorerNFTDeploy) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "NFT transaction created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -727,7 +727,7 @@ func (ec *ExplorerClient) ExplorerNFTTransaction(et *ExplorerNFTExecute) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "NFT transaction created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -741,7 +741,7 @@ func (ec *ExplorerClient) ExplorerFTTransaction(et *ExplorerFTTrans) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "FT transaction created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
