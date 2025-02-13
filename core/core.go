@@ -122,6 +122,7 @@ type Core struct {
 	quorumCount          int
 	noBalanceQuorumCount int
 	defaultSetup         bool
+	pledgeHistory        wallet.PledgeHistory
 }
 
 func InitConfig(configFile string, encKey string, node uint16) error {

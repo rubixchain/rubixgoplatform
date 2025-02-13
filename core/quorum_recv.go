@@ -19,10 +19,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
-	"github.com/rubixchain/rubixgoplatform/rac"
 )
 
 func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
@@ -61,6 +61,10 @@ func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
 	}
 
 	resp.Status = true
+	errAddingPledgeHistory := c.w.AddPledgeHistory(&c.pledgeHistory)
+	if errAddingPledgeHistory != nil {
+		c.log.Error("Failed to add pledge history", "err", errAddingPledgeHistory)
+	}
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
@@ -1494,7 +1498,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 
-		blockNumber, err := b.GetBlockNumber(tokenID)
 		if err != nil {
 			c.log.Error("Failed to get block number for token: ", tokenID)
 			crep.Message = "Failed to get block number for PledgeHistory"
@@ -1524,7 +1527,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		c.log.Debug("transtoken value", transTokenValue)
 
-
 		//TODO: Fix the function to get peer who pinned epoch for a token
 		// weekPassed := util.GetWeeksPassed()
 		//list, pinCheckErr := c.getPeerWhoPinTokenEpoch(tokenID, weekPassed)
@@ -1532,25 +1534,16 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
 		// }
 
-		pledgeHistory := wallet.PledgeHistory{
-			QuorumDID:           did,
-			TransactionID:       ur.TransactionID,
-			TransactionType:     ur.TransactionType,
-			TransferTokenID:     tokenID,
-			TransferTokenType:   tokenType,
-			TransferBlockID:     blockID,
-			TransferBlockNumber: blockNumber,
-		
-			TokenCredit:         0,
-			Epoch:               ur.TransactionEpoch,
+		c.pledgeHistory = wallet.PledgeHistory{
+			QuorumDID:          did,
+			TransactionID:      ur.TransactionID,
+			TransactionType:    ur.TransactionType,
+			TransferTokenID:    tokenID,
+			TransferTokenType:  tokenType,
 			TransferTokenValue: transTokenValue,
-		}
-
-		errAddingPledgeHistory := c.w.AddPledgeHistory(&pledgeHistory)
-		if errAddingPledgeHistory != nil {
-			c.log.Error("Failed to add pledge history", "err", errAddingPledgeHistory)
-			crep.Message = "Failed to add pledge history"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
+			TransferBlockID:    blockID,
+			Epoch:              ur.TransactionEpoch,
+			TokenCredit:        0,
 		}
 	}
 
