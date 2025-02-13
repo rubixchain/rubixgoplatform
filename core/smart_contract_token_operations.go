@@ -177,7 +177,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		SCBlockNumber:      blockNoInt,
 		TransactionID:      txnDetails.TransactionID,
 		Network:            conensusRequest.Type,
-		ExecutorDID:        "",
+		ExecutorDID:        "''",
 		DeployerDID:        did,
 		Creator:            did,
 		PledgeAmount:       deployReq.RBTAmount,

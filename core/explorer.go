@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -77,6 +78,11 @@ type Token struct {
 	TokenValue float64 `json:"token_value"`
 }
 
+type NFTToken struct {
+	TokenHash  string  `json:"tokenId"`
+	TokenValue float64 `json:"tokenValue"`
+}
+
 type UnpledgeToken struct {
 	TokenHashes []string `json:"token_hashes"`
 }
@@ -127,6 +133,11 @@ type PledgeInfo struct {
 	PledgedTokenList []Token             `json:"pledged_token_list"`
 }
 
+type PledgeInfoNFT struct {
+	PledgeDetails    map[string][]string `json:"pledgeDetails"`
+	PledgedTokenList []NFTToken          `json:"tokenList"`
+}
+
 type ExplorerRBTTrans struct {
 	TokenHashes    []string   `json:"token_hash"`
 	TransactionID  string     `json:"transaction_id"`
@@ -157,49 +168,49 @@ type ExplorerSCTrans struct {
 }
 
 type ExplorerNFTDeploy struct {
-	NFTBlockHash  []AllToken `json:"nftBlockHash"`
-	NFTValue      float64    `json:"nftValue"`
-	TransactionID string     `json:"transactionID"`
-	Network       int        `json:"network"`
-	OwnerDID      string     `json:"ownerDID"`
-	DeployerDID   string     `json:"deployerDID"`
-	PledgeAmount  float64    `json:"pledgeAmount"`
-	QuorumList    []string   `json:"quorumList"`
-	PledgeInfo    PledgeInfo `json:"pledgeInfo"`
-	Comments      string     `json:"comments"`
+	NFTBlockHash  []AllToken    `json:"nftBlockHash"`
+	NFTValue      float64       `json:"nftValue"`
+	TransactionID string        `json:"transactionID"`
+	Network       int           `json:"network"`
+	OwnerDID      string        `json:"ownerDID"`
+	DeployerDID   string        `json:"deployerDID"`
+	PledgeAmount  float64       `json:"pledgeAmount"`
+	QuorumList    []string      `json:"quorumList"`
+	PledgeInfo    PledgeInfoNFT `json:"pledgeInfo"`
+	Comments      string        `json:"comments"`
 }
 
 type ExplorerNFTExecute struct {
-	NFTBlockHash  []AllToken `json:"nftBlockHash"`
-	NFT           string     `json:"nft"`
-	ExecutorDID   string     `json:"executorDID"`
-	ReceiverDID   string     `json:"receiverDID"`
-	Network       int        `json:"network"`
-	Comments      string     `json:"comments"`
-	NFTValue      float64    `json:"nftValue"`
-	NFTData       string     `json:"nftData"`
-	PledgeAmount  float64    `json:"pledgeAmount"`
-	TransactionID string     `json:"transactionID"`
-	Amount        float64    `json:"amount"`
-	QuorumList    []string   `json:"quorumList"`
-	PledgeInfo    PledgeInfo `json:"pledgeInfo"`
+	NFTBlockHash  []AllToken    `json:"nftBlockHash"`
+	NFT           string        `json:"nft"`
+	ExecutorDID   string        `json:"executorDID"`
+	ReceiverDID   string        `json:"receiverDID"`
+	Network       int           `json:"network"`
+	Comments      string        `json:"comments"`
+	NFTValue      float64       `json:"nftValue"`
+	NFTData       string        `json:"nftData"`
+	PledgeAmount  float64       `json:"pledgeAmount"`
+	TransactionID string        `json:"transactionID"`
+	Amount        float64       `json:"amount"`
+	QuorumList    []string      `json:"quorumList"`
+	PledgeInfo    PledgeInfoNFT `json:"pledgeInfo"`
 }
 
 type ExplorerFTTrans struct {
-	FTBlockHash     []AllToken `json:"ftBlockHash"`
-	CreatorDID      string     `json:"creator"`
-	SenderDID       string     `json:"senderDID"`
-	ReceiverDID     string     `json:"receiverDID"`
-	FTName          string     `json:"ftName"`
-	FTSymbol        string     `json:"ftSymbol"`
-	FTTransferCount int        `json:"ftTransferCount"`
-	Network         int        `json:"network"`
-	Comments        string     `json:"comments"`
-	FTTokenList     []string   `json:"ftTokenList"`
-	TransactionID   string     `json:"transactionID"`
-	Amount          float64    `json:"amount"`
-	QuorumList      []string   `json:"quorumList"`
-	PledgeInfo      PledgeInfo `json:"pledge_info"`
+	FTBlockHash     []AllToken    `json:"ftBlockHash"`
+	CreatorDID      []string      `json:"creatorDID"`
+	SenderDID       string        `json:"senderDID"`
+	ReceiverDID     string        `json:"receiverDID"`
+	FTName          string        `json:"ftName"`
+	FTSymbol        string        `json:"ftSymbol"`
+	FTTransferCount int           `json:"ftTransferCount"`
+	Network         int           `json:"network"`
+	Comments        string        `json:"comments"`
+	FTTokenList     []string      `json:"ftTokenList"`
+	TransactionID   string        `json:"transactionID"`
+	Amount          float64       `json:"amount"`
+	QuorumList      []string      `json:"quorumList"`
+	PledgeInfo      PledgeInfoNFT `json:"pledgeInfo"`
 }
 
 type ExplorerResponse struct {
@@ -431,7 +442,7 @@ func (c *Core) UpdateUserInfo(dids []string) {
 				c.log.Error("Failed to send request for user DID, " + did + " Error : " + err.Error())
 				return
 			}
-			if er.Message != "User balance updated successfully!" {
+			if !strings.Contains(er.Message, "successfully") {
 				c.log.Error("Failed to update user info for ", "DID", did, "msg", er.Message)
 			} else {
 				c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
@@ -603,7 +614,7 @@ func (c *Core) GenerateUserAPIKey(dids []string) {
 				return
 			}
 			c.ec.AddDIDKey(did, er.APIKey)
-			c.log.Info(er.Message + " for DID " + did)
+			c.log.Info("API key regenerated successfully" + " for DID " + did)
 
 		}(did)
 
@@ -647,7 +658,7 @@ func (ec *ExplorerClient) ExplorerTokenCreateParts(et *ExplorerCreateTokenParts)
 	if err != nil {
 		return err
 	}
-	if er.Message != "Parts Tokens Create successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -674,7 +685,7 @@ func (ec *ExplorerClient) ExplorerRBTTransaction(et *ExplorerRBTTrans) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "RBT transaction created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -688,7 +699,7 @@ func (ec *ExplorerClient) ExplorerSCTransaction(et *ExplorerSCTrans) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "SC transaction created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -698,11 +709,11 @@ func (ec *ExplorerClient) ExplorerSCTransaction(et *ExplorerSCTrans) error {
 
 func (ec *ExplorerClient) ExplorerNFTDeploy(et *ExplorerNFTDeploy) error {
 	var er ExplorerResponse
-	err := ec.SendExplorerJSONRequest("POST", ExplorerNFTTransactionAPI, et, &er)
+	err := ec.SendExplorerJSONRequest("POST", ExplorerTokenCreateNFTAPI, et, &er)
 	if err != nil {
 		return err
 	}
-	if er.Message != "NFT transaction created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -716,7 +727,7 @@ func (ec *ExplorerClient) ExplorerNFTTransaction(et *ExplorerNFTExecute) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "NFT transaction created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -730,7 +741,7 @@ func (ec *ExplorerClient) ExplorerFTTransaction(et *ExplorerFTTrans) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "FT transaction created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
@@ -905,4 +916,14 @@ func (c *Core) UpdatePledgeStatus(tokenHashes []string, did string) {
 		c.log.Error("Failed to update explorer", "msg", er.Message)
 	}
 	c.log.Info(fmt.Sprintf("Pledge status updated successfully for did %v and token hashes %v", did, tokenHashes))
+}
+
+// Function to convert []Token to []NFTToken
+func ConvertToNFTTokens(tokenList []Token) []NFTToken {
+	nftTokens := make([]NFTToken, len(tokenList))
+	for i, token := range tokenList {
+		nftTokens[i].TokenHash = token.TokenHash
+		nftTokens[i].TokenValue = math.Round(token.TokenValue*1000) / 1000 //Rounding token value to 3 decimal places.
+	}
+	return nftTokens
 }
