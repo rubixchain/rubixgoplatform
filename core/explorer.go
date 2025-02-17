@@ -168,32 +168,35 @@ type ExplorerSCTrans struct {
 }
 
 type ExplorerNFTDeploy struct {
-	NFTBlockHash  []AllToken    `json:"nftBlockHash"`
-	NFTValue      float64       `json:"nftValue"`
-	TransactionID string        `json:"transactionID"`
-	Network       int           `json:"network"`
-	OwnerDID      string        `json:"ownerDID"`
-	DeployerDID   string        `json:"deployerDID"`
-	PledgeAmount  float64       `json:"pledgeAmount"`
-	QuorumList    []string      `json:"quorumList"`
-	PledgeInfo    PledgeInfoNFT `json:"pledgeInfo"`
-	Comments      string        `json:"comments"`
+	NFT            string        `json:"nft"`
+	NFTBlockHash   string        `json:"nft_block_hash"`
+	NFTBlockNumber int           `json:"nft_block_number"`
+	NFTValue       float64       `json:"nft_value"`
+	TransactionID  string        `json:"transaction_id"`
+	Network        int           `json:"network"`
+	OwnerDID       string        `json:"owner"`
+	DeployerDID    string        `json:"deployer"`
+	PledgeAmount   float64       `json:"pledge_amount"`
+	QuorumList     []string      `json:"quorum_list"`
+	PledgeInfo     PledgeInfoNFT `json:"pledge_info"`
+	Comments       string        `json:"comments"`
 }
 
 type ExplorerNFTExecute struct {
-	NFTBlockHash  []AllToken    `json:"nftBlockHash"`
-	NFT           string        `json:"nft"`
-	ExecutorDID   string        `json:"executorDID"`
-	ReceiverDID   string        `json:"receiverDID"`
-	Network       int           `json:"network"`
-	Comments      string        `json:"comments"`
-	NFTValue      float64       `json:"nftValue"`
-	NFTData       string        `json:"nftData"`
-	PledgeAmount  float64       `json:"pledgeAmount"`
-	TransactionID string        `json:"transactionID"`
-	Amount        float64       `json:"amount"`
-	QuorumList    []string      `json:"quorumList"`
-	PledgeInfo    PledgeInfoNFT `json:"pledgeInfo"`
+	NFT            string        `json:"nft"`
+	ExecutorDID    string        `json:"executorDID"`
+	ReceiverDID    string        `json:"receiverDID"`
+	Network        int           `json:"network"`
+	Comments       string        `json:"comments"`
+	NFTValue       float64       `json:"nftValue"`
+	NFTData        string        `json:"nftData"`
+	NFTBlockHash   string        `json:"blockHash"`
+	NFTBlockNumber int           `json:"blockNumber"`
+	PledgeAmount   float64       `json:"pledgeAmount"`
+	TransactionID  string        `json:"transactionID"`
+	Amount         float64       `json:"amount"`
+	QuorumList     []string      `json:"quorumList"`
+	PledgeInfo     PledgeInfoNFT `json:"pledgeInfo"`
 }
 
 type ExplorerFTTrans struct {

@@ -233,16 +233,18 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 	//Rename : TODO
 	eTrans := &ExplorerNFTDeploy{
-		NFTBlockHash:  []AllToken{{TokenHash: deployReq.NFT, BlockHash: strings.Split(txnDetails.BlockID, "-")[1], BlockNumber: blockNoInt}},
-		TransactionID: txnDetails.TransactionID,
-		Network:       conensusRequest.Type,
-		NFTValue:      nftInfo.TokenValue,
-		DeployerDID:   did,
-		OwnerDID:      nftInfo.OwnerDID,
-		PledgeAmount:  consensusContractDetails.TotalRBTs,
-		QuorumList:    extractQuorumDID(conensusRequest.QuorumList),
-		PledgeInfo:    PledgeInfoNFT{PledgeDetails: pds.PledgedTokens, PledgedTokenList: ConvertToNFTTokens(pds.TokenList)},
-		Comments:      txnDetails.Comment,
+		NFT:            deployReq.NFT,
+		NFTBlockNumber: blockNoInt,
+		NFTBlockHash:   strings.Split(txnDetails.BlockID, "-")[1],
+		TransactionID:  txnDetails.TransactionID,
+		Network:        conensusRequest.Type,
+		NFTValue:       nftInfo.TokenValue,
+		DeployerDID:    did,
+		OwnerDID:       nftInfo.OwnerDID,
+		PledgeAmount:   consensusContractDetails.TotalRBTs,
+		QuorumList:     extractQuorumDID(conensusRequest.QuorumList),
+		PledgeInfo:     PledgeInfoNFT{PledgeDetails: pds.PledgedTokens, PledgedTokenList: ConvertToNFTTokens(pds.TokenList)},
+		Comments:       txnDetails.Comment,
 	}
 	explorerErr := c.ec.ExplorerNFTDeploy(eTrans)
 	if explorerErr != nil {
@@ -419,18 +421,19 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 	//Rename : TODO
 	eTrans := &ExplorerNFTExecute{
-		NFT:           NFTString,
-		ExecutorDID:   currentOwner,
-		ReceiverDID:   receiver,
-		Network:       executeReq.QuorumType,
-		Comments:      executeReq.Comment,
-		NFTValue:      executeReq.NFTValue,
-		NFTData:       executeReq.NFTData,
-		NFTBlockHash:  []AllToken{{TokenHash: executeReq.NFT, BlockHash: strings.Split(txnDetails.BlockID, "-")[1], BlockNumber: blockNoInt}},
-		PledgeAmount:  consensusContractDetails.TotalRBTs,
-		TransactionID: txnDetails.TransactionID,
-		QuorumList:    extractQuorumDID(conensusRequest.QuorumList),
-		PledgeInfo:    PledgeInfoNFT{PledgeDetails: pds.PledgedTokens, PledgedTokenList: ConvertToNFTTokens(pds.TokenList)},
+		NFT:            NFTString,
+		ExecutorDID:    currentOwner,
+		ReceiverDID:    receiver,
+		Network:        executeReq.QuorumType,
+		Comments:       executeReq.Comment,
+		NFTValue:       executeReq.NFTValue,
+		NFTData:        executeReq.NFTData,
+		NFTBlockNumber: blockNoInt,
+		NFTBlockHash:   strings.Split(txnDetails.BlockID, "-")[1],
+		PledgeAmount:   consensusContractDetails.TotalRBTs,
+		TransactionID:  txnDetails.TransactionID,
+		QuorumList:     extractQuorumDID(conensusRequest.QuorumList),
+		PledgeInfo:     PledgeInfoNFT{PledgeDetails: pds.PledgedTokens, PledgedTokenList: ConvertToNFTTokens(pds.TokenList)},
 	}
 
 	receiverPeerId := c.w.GetPeerID(executeReq.Receiver)
