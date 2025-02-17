@@ -100,7 +100,20 @@ func (s *Server) APIAuthenticateWalletJWT(req *ensweb.Request) *ensweb.Result {
 		Receiver:   token.Claims.(jwt.MapClaims)["receiver_did"].(string),
 		Sender:     token.Claims.(jwt.MapClaims)["did"].(string),
 		TokenCount: token.Claims.(jwt.MapClaims)["rbt_amount"].(float64),
-		Type:       2,
+	}
+
+	if token.Claims.(jwt.MapClaims)["comment"] != nil {
+		txnRequest.Comment = token.Claims.(jwt.MapClaims)["comment"].(string)
+	}
+	if token.Claims.(jwt.MapClaims)["quorum_type"] != nil {
+		txnRequest.Type = int(token.Claims.(jwt.MapClaims)["quorum_type"].(float64))
+	} else {
+		txnRequest.Type = 2
+	}
+	if token.Claims.(jwt.MapClaims)["password"] != nil {
+		txnRequest.Password = token.Claims.(jwt.MapClaims)["password"].(string)
+	} else {
+		txnRequest.Password = "mypassword"
 	}
 
 	return s.TxnReqFromWallet(&txnRequest, req)
