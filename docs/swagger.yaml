@@ -110,6 +110,8 @@ definitions:
         type: integer
       ft_name:
         type: string
+      ft_price:
+        type: number
       token_count:
         type: integer
     type: object

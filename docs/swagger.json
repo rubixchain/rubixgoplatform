@@ -1477,6 +1477,9 @@
                 "ft_name": {
                     "type": "string"
                 },
+                "ft_price": {
+                    "type": "number"
+                },
                 "token_count": {
                     "type": "integer"
                 }

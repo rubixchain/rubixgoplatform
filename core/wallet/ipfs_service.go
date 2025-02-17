@@ -1,8 +1,15 @@
 package wallet
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
+
+	// ipfsnode "github.com/ipfs/go-ipfs-api"
+
+	cid "github.com/ipfs/go-cid"
+	mc "github.com/multiformats/go-multicodec"
+	mh "github.com/multiformats/go-multihash"
 )
 
 const (
@@ -77,6 +84,38 @@ func (w *Wallet) Get(hash string, did string, role int, path string) error {
 	}
 	err = w.AddProviderDetails(TokenProviderMap{Token: hash, Role: role, DID: did, FuncID: GetFunc})
 	return err
+}
+
+func (w *Wallet) IpfsHash(inp string) (string, error) {
+	ipfsIDCore := cid.Prefix{
+		Version:  0,
+		Codec:    uint64(mc.Raw),
+		MhType:   mh.SHA2_256,
+		MhLength: -1,
+	}
+
+	ipfsID, err := ipfsIDCore.Sum([]byte(inp))
+	if err != nil {
+		panic(err)
+	}
+
+	return ipfsID.String(), nil
+}
+
+func (w *Wallet) AddV2(txtInput string) (string, error) {
+	ipfsIDCore := &cid.Prefix{
+		Version:  0,
+		Codec:    uint64(mc.Raw),
+		MhType:   mh.SHA2_256,
+		MhLength: -1,
+	}
+
+	ipfsID, err := ipfsIDCore.Sum([]byte(txtInput))
+	if err != nil {
+		return "", fmt.Errorf("AddV2: failed while generating IPFS hash, err: %v", err)
+	}
+
+	return ipfsID.String(), err
 }
 
 func (w *Wallet) Add(r io.Reader, did string, role int) (string, error) {

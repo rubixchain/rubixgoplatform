@@ -20,8 +20,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int) {
-	err := c.createFTs(reqID, ftname, ftcount, wholeToken, did)
+func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int, ftPrice float64) {
+	err := c.createFTs_v2(reqID, ftname, ftcount, ftPrice, did)
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "FT created successfully",
@@ -36,6 +36,233 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 		return
 	}
 	channel.OutChan <- &br
+}
+
+
+func (c *Core) createFTs_v2(reqID string, FTName string, numFTs int, ftPrice float64, did string) error {
+	if did == "" {
+		c.log.Error("DID is empty")
+		return fmt.Errorf("DID is empty")
+	}
+	
+	isAlphanumericDID := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !isAlphanumericDID || !strings.HasPrefix(did, "bafybmi") || len(did) != 59 {
+		c.log.Error("Invalid FT creator's DID. Please provide valid DID")
+		return fmt.Errorf("Invalid DID, Please provide valid DID")
+	}
+
+	ftPrice = floatPrecision(ftPrice, MaxDecimalPlaces)
+
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil || dc == nil {
+		c.log.Error("Failed to setup DID")
+		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
+	}
+
+	var ftTokens []wallet.FT
+	c.s.Read(wallet.FTStorage, &ftTokens, "ft_name=? AND creator_did=?", FTName, did)
+	if len(ftTokens) != 0 {
+		c.log.Error("FT Name already exists")
+		return fmt.Errorf("FT Name already exists") 	
+	}
+
+	// Find the metrics for whole and parts
+	requiredwholeRBTCount := int(floatPrecision(float64(numFTs), MaxDecimalPlaces) * ftPrice)
+	requiredPartTokensCount := int(float64(requiredwholeRBTCount) / ftPrice)
+	c.log.Info(fmt.Sprintf("We require %v RBT Tokens", requiredwholeRBTCount))
+	// Fetch a list of whole tokens
+	wholeTokens, _, err := c.w.GetWholeTokens(did, requiredwholeRBTCount, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get required whole tokens, err: %v", err)
+	}
+
+	// Look through all collected whole tokens and create and collect part tokens
+	var finalPartTokensForFtList []*wallet.Token = make([]*wallet.Token, 0)
+	for _, wholeToken := range wholeTokens {
+		wholeTokenID := wholeToken.TokenID
+		partsPerWholeRBT := requiredPartTokensCount / requiredwholeRBTCount
+
+		c.log.Info("Parts per RBT : ", partsPerWholeRBT)
+
+		partTokens, err := c.createMultiplePartTokens(dc, did, wholeToken, partsPerWholeRBT, ftPrice)
+		if err != nil {
+			return fmt.Errorf("failed to create multiple part tokens for %v, err: %v", wholeTokenID, err)
+		}
+
+		finalPartTokensForFtList = append(finalPartTokensForFtList, partTokens...)
+	}
+
+	if len(finalPartTokensForFtList) != numFTs {
+		return fmt.Errorf("unexpected error: finalPartTokensForFtList: %v , numFTs: %v", len(finalPartTokensForFtList), numFTs)
+	}
+
+	newFTs := make([]wallet.FTToken, 0, numFTs)
+	newFTTokenIDs := make([]string, numFTs)
+
+	for i := 0; i < numFTs; i++ {
+		racType := &rac.RacType{
+			Type:        c.RACFTType(),
+			DID:         did,
+			TokenNumber: uint64(i),
+			TotalSupply: 1,
+			TimeStamp:   time.Now().String(),
+			FTInfo: &rac.RacFTInfo{
+				Parents: finalPartTokensForFtList[i].TokenID,
+				FTNum:   i,
+				FTName:  FTName,
+				FTValue: finalPartTokensForFtList[i].TokenValue,
+			},
+		}
+
+		// Create the RAC block
+		racBlocks, err := rac.CreateRac(racType)
+		if err != nil {
+			c.log.Error("Failed to create RAC block", "err", err)
+			return err
+		}
+
+		if len(racBlocks) != 1 {
+			return fmt.Errorf("failed to create RAC block")
+		}
+
+		err = racBlocks[0].UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to update DID signature", "err", err)
+			return err
+		}
+
+
+		ftnumString := strconv.Itoa(i)
+		parts := []string{FTName, ftnumString, did}
+		result := strings.Join(parts, " ")
+		ftID, err := c.w.AddV2(result)
+		if err != nil {
+			c.log.Error("Failed to create FT, Failed to add token to IPFS", "err", err)
+			return err
+		}
+		c.log.Info(fmt.Sprintf("FT created %v: %v", i+1, ftID))
+		newFTTokenIDs[i] = ftID
+		bti := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     ftID,
+					TokenType: c.TokenType(FTString),
+				},
+			},
+		}
+
+
+		tcb := &block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner:      did,
+			TransInfo:       bti,
+			GenesisBlock: &block.GenesisBlock{
+				Info: []block.GenesisTokenInfo{
+					{
+						Token:       ftID,
+						ParentID:    finalPartTokensForFtList[i].TokenID,
+						TokenNumber: i,
+					},
+				},
+			},
+			TokenValue: finalPartTokensForFtList[i].TokenValue,
+		}
+		ctcb := make(map[string]*block.Block)
+		ctcb[ftID] = nil
+		block := block.CreateNewBlock(ctcb, tcb)
+		if block == nil {
+			return fmt.Errorf("failed to create new block")
+		}
+
+		if (i == 2) {
+			c.log.Warn(fmt.Sprintf("Size of FT: %v", len(block.GetBlock())))
+		}
+
+		err = block.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("FT creation failed, failed to update signature", "err", err)
+			return err
+		}
+
+		err = c.w.CreateTokenBlock(block)
+		if err != nil {
+			c.log.Error("Failed to create FT, failed to add token chain block", "err", err)
+			return err
+		}
+
+		if (i % 100 == 0) {
+			stats, _ := c.w.FTChainStorage.GetProperty("leveldb.stats")
+			c.log.Warn("devstat")
+			c.log.Warn(stats)
+		}
+
+		// Create the new token
+		ft := &wallet.FTToken{
+			TokenID:     ftID,
+			FTName:      FTName,
+			TokenStatus: wallet.TokenIsFree,
+			TokenValue:  finalPartTokensForFtList[i].TokenValue,
+			DID:         did,
+		}
+		newFTs = append(newFTs, *ft)
+	}
+
+	// Burn the tokens
+	for _, partToken := range finalPartTokensForFtList {
+		defer c.w.ReleaseToken(partToken.TokenID)
+
+		ptts := RBTString
+		if partToken.ParentTokenID != "" && partToken.TokenValue < 1 {
+			ptts = PartString
+		}
+
+		ptt := c.TokenType(ptts)
+
+		bti := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     partToken.TokenID,
+					TokenType: ptt,
+				},
+			},
+			Comment: "Token burnt at : " + time.Now().String(),
+		}
+
+		tcb := &block.TokenChainBlock{
+			TransactionType: block.TokenIsBurntForFT,
+			TokenOwner:      did,
+			TransInfo:       bti,
+			TokenValue:      partToken.TokenValue,
+			ChildTokens:     newFTTokenIDs,
+		}
+		ctcb := make(map[string]*block.Block)
+		ctcb[partToken.TokenID] = c.w.GetLatestTokenBlock(partToken.TokenID, ptt)
+		block := block.CreateNewBlock(ctcb, tcb)
+		if block == nil {
+			return fmt.Errorf("failed to create new block")
+		}
+		err = block.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("FT creation failed, failed to update signature", "err", err)
+			return err
+		}
+		err = c.w.AddTokenBlock(partToken.TokenID, block)
+		if err != nil {
+			c.log.Error("FT creation failed, failed to add token block", "err", err)
+			return err
+		}
+		partToken.TokenStatus = wallet.TokenIsBurntForFT
+		err = c.w.UpdateToken(partToken)
+		if err != nil {
+			c.log.Error("FT token creation failed, failed to update token status", "err", err)
+			return err
+		}
+
+		c.log.Info(fmt.Sprintf("Part token %v burnt\n", partToken.TokenID))
+	} 
+
+
+	return nil
 }
 
 func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens int, did string) error {
@@ -179,11 +406,15 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			c.log.Error("FT creation failed, failed to update signature", "err", err)
 			return err
 		}
+
 		err = c.w.AddTokenBlock(ftID, block)
 		if err != nil {
 			c.log.Error("Failed to create FT, failed to add token chain block", "err", err)
 			return err
 		}
+
+		
+
 		// Create the new token
 		ft := &wallet.FTToken{
 			TokenID:     ftID,

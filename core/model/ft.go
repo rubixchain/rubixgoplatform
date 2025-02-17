@@ -1,10 +1,11 @@
 package model
 
 type CreateFTReq struct {
-	DID        string `json:"did"`
-	FTName     string `json:"ft_name"`
-	FTCount    int    `json:"ft_count"`
-	TokenCount int    `json:"token_count"`
+	DID        string  `json:"did"`
+	FTName     string  `json:"ft_name"`
+	FTCount    int     `json:"ft_count"`
+	TokenCount int     `json:"token_count"`
+	FTPrice    float64 `json:"ft_price"`
 }
 
 type TransferFTReq struct {

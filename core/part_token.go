@@ -38,6 +38,7 @@ func CeilfloatPrecision(num float64, precision int) float64 {
 }
 
 func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode int) ([]wallet.Token, error) {
+	// Get all possible whole tokens
 	wholeValue := int(value)
 	var err error
 	fv := float64(wholeValue)
@@ -56,6 +57,9 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	if rem == 0 {
 		return wt, nil
 	}
+
+	// After getting the whole tokens, if there is some required RBT value is left in decimals
+	// get the tokens with value less than or equal to or equal to the remainder value
 	pt, err := c.w.GetTokensByLimit(did, rem)
 	if err != nil || len(pt) == 0 {
 		if rem >= 1 {
@@ -149,6 +153,191 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	c.w.UpdateToken(&npt[0])
 	wt = append(wt, npt[0])
 	return wt, nil
+}
+
+func (c *Core) createMultiplePartTokens(dc did.DIDCrypto, did string, wholeTokenn wallet.Token, partTokensCount int, partTokenValue float64) ([]*wallet.Token, error) {
+	defer c.w.ReleaseToken(wholeTokenn.TokenID)
+	
+	var partTokens []*wallet.Token = make([]*wallet.Token, 0)
+	var partTokenIDs []string = make([]string, 0)
+
+	if dc == nil {
+		return nil, fmt.Errorf("did crypto is not initialised")
+	}
+
+	if wholeTokenn.TokenValue != 1.0 {
+		return nil, fmt.Errorf("token %v is not a whole token, as its fetched value is %v", wholeTokenn, wholeTokenn.TokenValue)
+	}
+
+	wholeTokenTypeVal := c.TokenType(RBTString)
+
+	wholeTokenGenesisBlock := c.w.GetGenesisTokenBlock(wholeTokenn.TokenID, wholeTokenTypeVal)
+	if wholeTokenGenesisBlock == nil {
+		return nil, fmt.Errorf("unable to fetch genesis block for whole token %v", wholeTokenn)
+	}
+	
+	parentBlockID, grandParentBlockID, err := wholeTokenGenesisBlock.GetParentDetials(wholeTokenn.TokenID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get parent token details of %v, err: %v", wholeTokenn, err)
+	}
+	if grandParentBlockID == nil {
+		grandParentBlockID = make([]string, 0)
+	}
+	if parentBlockID != "" {
+		grandParentBlockID = append(grandParentBlockID, parentBlockID)
+	}
+
+
+	// Generate Part Tokens
+	for i := 0; i < partTokensCount; i++ {
+		racToken := &rac.RacType{
+			Type:        c.RACPartTokenType(),
+			DID:         did,
+			TotalSupply: 1,
+			TimeStamp:   time.Now().String(),
+			PartInfo: &rac.RacPartInfo{
+				Parent:  wholeTokenn.TokenID,
+				PartNum: i,
+				Value:   floatPrecision(partTokenValue, MaxDecimalPlaces),
+			},
+		}
+
+		racTokenBlocks, err := rac.CreateRac(racToken)
+		if err != nil {
+			c.log.Error("failed to create rac block", "err", err)
+			return nil, fmt.Errorf("failed to create rac block, err: %v", err)
+		}
+
+		if len(racTokenBlocks) != 1 {
+			return nil, fmt.Errorf("failed to create rac block, RAC Block array to be 1, error occured for whole token %v", wholeTokenn)
+		}
+		racTokenBlock := racTokenBlocks[0]
+
+		err = racTokenBlock.UpdateSignature(dc)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update signature for whole token %v rac block, err: %v", wholeTokenn, err)
+		}
+
+		racTokenBlockBytes := racTokenBlock.GetBlock()
+		racTokenBlockStr := util.HexToStr(racTokenBlockBytes)
+		//racTokenBlockBuffer := bytes.NewBuffer([]byte(racTokenBlockStr))
+
+		//partTokenID, err := c.w.Add(racTokenBlockBuffer, did, wallet.AddFunc)
+		partTokenID, err := c.w.AddV2(racTokenBlockStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create part token while adding RAC block to IPFS, err: %v", err)
+		}
+		partTokenIDs = append(partTokenIDs, partTokenID)
+
+		partTokenTransactionInfo := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token: partTokenID,
+					TokenType: c.TokenType(PartString),
+				},
+			},
+		}
+
+		partTokenChainBlock := &block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner: did,
+			TransInfo: partTokenTransactionInfo,
+			GenesisBlock: &block.GenesisBlock{
+				Info: []block.GenesisTokenInfo{
+					{
+						Token: partTokenID,
+						ParentID: wholeTokenn.TokenID,
+						GrandParentID: grandParentBlockID,
+					},
+				},
+			},
+		}
+
+		ctcb := make(map[string]*block.Block)
+		ctcb[partTokenID] = nil 
+		
+		partTokenBlock := block.CreateNewBlock(ctcb, partTokenChainBlock)
+		if partTokenBlock == nil {
+			return nil, fmt.Errorf("failed to create new block, whole token: %v", wholeTokenn)
+		}
+		
+		errSig := partTokenBlock.UpdateSignature(dc)
+		if errSig != nil {
+			return nil, fmt.Errorf("error while updating signature for part token, err: %v", errSig)
+		}
+
+		// TODO: remove the following WARN logger
+		if (len(partTokenBlock.GetBlock()) > 1024) {
+			c.log.Warn(fmt.Sprintf("Size of part token %v exceeds 1 Kb, its size is %v", partTokenID, len(partTokenBlock.GetBlock())))
+		}
+
+		errAddBlock := c.w.AddTokenBlock(partTokenID, partTokenBlock)
+		if errAddBlock != nil {
+			return nil, fmt.Errorf("Failed to add part token %v block, err: %v", partTokenID, errAddBlock)
+		}
+	}
+
+	// Burn the whole token
+	wholeTokenTransactionInfo := &block.TransInfo{
+		Tokens: []block.TransTokens{
+			{
+				Token: wholeTokenn.TokenID,
+				TokenType: wholeTokenTypeVal,
+			},
+		},
+	}
+
+	wholeTokenChainBlock := &block.TokenChainBlock{
+		TransactionType: block.TokenBurntType,
+		TokenOwner: did,
+		TransInfo: wholeTokenTransactionInfo,
+		TokenValue: floatPrecision(1.0, MaxDecimalPlaces),
+		ChildTokens: partTokenIDs,
+	}
+
+	ctcb := make(map[string]*block.Block)
+	ctcb[wholeTokenn.TokenID] = c.w.GetLatestTokenBlock(wholeTokenn.TokenID, wholeTokenTypeVal)
+	updatedParentTokenBlock := block.CreateNewBlock(ctcb, wholeTokenChainBlock)
+	if updatedParentTokenBlock == nil {
+		return nil, fmt.Errorf("failed to update the whole token %v with new token block, err: %v", wholeTokenn, err)
+	}
+
+	errSig := updatedParentTokenBlock.UpdateSignature(dc)
+	if errSig != nil {
+		return nil, fmt.Errorf("error while singing updated token chain for whole token %v, err: %v", wholeTokenn, errSig)
+	}
+
+	errAddBlock := c.w.AddTokenBlock(wholeTokenn.TokenID, updatedParentTokenBlock)
+	if errAddBlock != nil {
+		return nil, fmt.Errorf("error while adding updated token block for whole token %v, err: %v", wholeTokenn, errAddBlock)
+	}
+
+	// Update SQL DB for part tokens
+	for i := 0; i < partTokensCount; i++ {
+		partToken := &wallet.Token{
+			TokenID:       partTokenIDs[i],
+			ParentTokenID: wholeTokenn.TokenID,
+			TokenValue:    floatPrecision(partTokenValue, MaxDecimalPlaces),
+			DID:           did,
+			TokenStatus:   wallet.TokenIsFree,
+		}
+
+		err := c.w.CreateToken(partToken)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add part token record, err: %v", err)
+		}
+
+		partTokens = append(partTokens, partToken)
+	}
+
+	// Update whole token in SQL DB to Burnt
+	wholeTokenn.TokenStatus = wallet.TokenIsBurnt
+	err = c.w.UpdateToken(&wholeTokenn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update whole token status to Burnt (%v), err: %v", wallet.TokenIsBurnt, err)
+	}
+
+	return partTokens, nil
 }
 
 func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts []float64, num int) ([]wallet.Token, error) {

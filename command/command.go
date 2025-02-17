@@ -395,7 +395,7 @@ func (cmd *Command) runApp() {
 	}
 	scfg.EnableAuth = cmd.enableAuth
 	if cmd.enableAuth {
-		scfg.DBType = "Sqlite3"
+		scfg.DBType = cmd.dbType
 		scfg.DBAddress = cmd.cfg.DirPath + "rubix.db"
 	}
 	// scfg := &srvcfg.Config{

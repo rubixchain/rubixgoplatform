@@ -168,7 +168,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if cfg.CfgData.TestStorageConfig.StorageType == 0 {
 		cfg.CfgData.TestStorageConfig.StorageType = storage.StorageDBType
 		cfg.CfgData.TestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + DefaultTestNetDB
-		cfg.CfgData.TestStorageConfig.DBType = "Sqlite3"
+		cfg.CfgData.TestStorageConfig.DBType = "PostgressSQL"
 		update = true
 	}
 
@@ -241,12 +241,12 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 
 	case storage.StorageDBType:
 		scfg := &econfig.Config{
-			DBName:     sc.DBName,
-			DBAddress:  sc.DBAddress,
-			DBPort:     sc.DBPort,
-			DBType:     sc.DBType,
-			DBUserName: sc.DBUserName,
-			DBPassword: sc.DBPassword,
+			DBName:     "rubixtest",
+			DBAddress:  "20.197.13.218",
+			DBPort:     "5435",
+			DBType:     "PostgressSQL",
+			DBUserName: "rubix",
+			DBPassword: "mypassword",
 		}
 		c.s, err = storage.NewStorageDB(scfg)
 		if err != nil {

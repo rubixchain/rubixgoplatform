@@ -421,24 +421,24 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 		_, err = w.getRawBlock(db, refkey)
 		// Write only if reference block not exist
 		if err != nil {
-			db.l.Lock()
+	
 			err = db.Put(refkey, b.GetBlock(), opt)
-			db.l.Unlock()
+
 			if err != nil {
 				return err
 			}
 		}
-		db.l.Lock()
+
 		err = db.Put([]byte(key), refkey, opt)
-		db.l.Unlock()
+
 		return err
 	} else {
-		db.l.Lock()
+
 		err = db.Put([]byte(key), b.GetBlock(), opt)
 		if tt == tkn.TestTokenType {
 			w.log.Debug("Written", "key", key)
 		}
-		db.l.Unlock()
+
 		return err
 	}
 }

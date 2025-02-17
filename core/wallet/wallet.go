@@ -48,7 +48,7 @@ type WalletConfig struct {
 }
 
 type ChainDB struct {
-	leveldb.DB
+	*leveldb.DB
 	l sync.Mutex
 }
 
@@ -81,24 +81,41 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		WriteBuffer: 64 * 1024 * 1024,
 	}
 
+	FTtokenStorageDB, err := leveldb.OpenFile(dir+FTChainStorage, op)
+	if err != nil {
+		w.log.Error("failed to configure token chain block storage", "err", err)
+		return nil, fmt.Errorf("failed to configure token chain block storage")
+	}
+	w.FTChainStorage.DB = FTtokenStorageDB
+
 	tdb, err := leveldb.OpenFile(dir+TokenChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure token chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure token chain block storage")
 	}
-	w.tcs.DB = *tdb
+	w.tcs.DB = 	tdb
+
 	ntdb, err := leveldb.OpenFile(dir+NFTChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure NFT chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure NFT chain block storage")
 	}
-	w.ntcs.DB = *ntdb
+	w.ntcs.DB = ntdb
+
 	dtdb, err := leveldb.OpenFile(dir+DataChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure data chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure data chain block storage")
 	}
-	w.dtcs.DB = *dtdb
+	w.dtcs.DB = dtdb
+
+	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
+	if err != nil {
+		w.log.Error("failed to configure token chain block storage", "err", err)
+		return nil, fmt.Errorf("failed to configure token chain block storage")
+	}
+	w.smartContractTokenChainStorage.DB = smartcontracTokenchainstorageDB
+
 	err = w.s.Init(DIDStorage, &DIDType{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID storage", "err", err)
@@ -158,19 +175,6 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize FT storage", "err", err)
 	}
 
-	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
-	if err != nil {
-		w.log.Error("failed to configure token chain block storage", "err", err)
-		return nil, fmt.Errorf("failed to configure token chain block storage")
-	}
-	w.smartContractTokenChainStorage.DB = *smartcontracTokenchainstorageDB
-
-	FTtokenStorageDB, err := leveldb.OpenFile(dir+FTChainStorage, op)
-	if err != nil {
-		w.log.Error("failed to configure token chain block storage", "err", err)
-		return nil, fmt.Errorf("failed to configure token chain block storage")
-	}
-	w.FTChainStorage.DB = *FTtokenStorageDB
 	err = w.s.Init(CallBackUrlStorage, &CallBackUrl{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Smart Contract Callback Url storage", "err", err)
