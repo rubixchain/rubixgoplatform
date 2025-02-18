@@ -46,12 +46,13 @@ type PledgeHistory struct {
 	TokenCreditStatus  int     `gorm:"column:token_credit_status"`
 }
 
-func (w *Wallet) AddPledgeHistory(pledgeDetails *PledgeHistory) error {
-	fmt.Println("************AAAAAaa***88")
-	err := w.s.Write(PledgeHistoryTable, &pledgeDetails)
-	if err != nil {
-		w.log.Error("Failed to add pledge details to pledge history table", "err", err)
-		return err
+func (w *Wallet) AddPledgeHistory(pledgeDetails []PledgeHistory) error {
+	for _, detail := range pledgeDetails {
+		err := w.s.Write(PledgeHistoryTable, &detail)
+		if err != nil {
+			w.log.Error("Failed to add pledge details to pledge history table", "err", err)
+			return err
+		}
 	}
 	return nil
 }

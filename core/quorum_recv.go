@@ -61,7 +61,7 @@ func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
 	}
 
 	resp.Status = true
-	errAddingPledgeHistory := c.w.AddPledgeHistory(&c.pledgeHistory)
+	errAddingPledgeHistory := c.w.AddPledgeHistory(c.pledgeHistory)
 	if errAddingPledgeHistory != nil {
 		c.log.Error("Failed to add pledge history", "err", errAddingPledgeHistory)
 	}
@@ -1534,7 +1534,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
 		// }
 
-		c.pledgeHistory = wallet.PledgeHistory{
+		newPledge := wallet.PledgeHistory{
 			QuorumDID:          did,
 			TransactionID:      ur.TransactionID,
 			TransactionType:    ur.TransactionType,
@@ -1545,6 +1545,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			Epoch:              ur.TransactionEpoch,
 			TokenCredit:        0,
 		}
+		c.pledgeHistory = append(c.pledgeHistory, newPledge)
 	}
 
 	crep.Status = true
