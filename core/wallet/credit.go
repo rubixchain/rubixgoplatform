@@ -33,17 +33,18 @@ type PledgeInformation struct {
 }
 
 type PledgeHistory struct {
-	QuorumDID          string  `gorm:"column:quorum_did"`
-	TransactionID      string  `gorm:"column:transaction_id"`
-	TransactionType    int     `gorm:"column:transaction_type"`
-	TransferTokenID    string  `gorm:"column:transfer_tokens_id"`
-	TransferTokenType  int     `gorm:"column:transfer_tokens_type"`
-	TransferTokenValue float64 `gorm:"column:transfer_token_value"`
-	TransferBlockID    string  `gorm:"column:transfer_block_number_and_id"`
-	Epoch              int     `gorm:"column:epoch"`
-	NextBlockEpoch     int64   `gorm:"column:next_epoch"`
-	TokenCredit        int     `gorm:"column:token_credit"`
-	TokenCreditStatus  int     `gorm:"column:token_credit_status"`
+	QuorumDID            string  `gorm:"column:quorum_did"`
+	TransactionID        string  `gorm:"column:transaction_id"`
+	TransactionType      int     `gorm:"column:transaction_type"`
+	TransferTokenID      string  `gorm:"column:transfer_tokens_id"`
+	TransferTokenType    int     `gorm:"column:transfer_tokens_type"`
+	TransferTokenValue   float64 `gorm:"column:transfer_token_value"`
+	TransferBlockID      string  `gorm:"column:transfer_block_number_and_id"`
+	LatestTokenStateHash string  `gorm:"column:latest_tokenstate_hash"`
+	Epoch                int     `gorm:"column:epoch"`
+	NextBlockEpoch       int64   `gorm:"column:next_epoch"`
+	TokenCredit          int     `gorm:"column:token_credit"`
+	TokenCreditStatus    int     `gorm:"column:token_credit_status"`
 }
 
 func (w *Wallet) AddPledgeHistory(pledgeDetails []PledgeHistory) error {
@@ -205,7 +206,7 @@ func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transaction
 // 	return nil // Return nil if function completes successfully
 // }
 
-func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch int64) error {
+func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch int64, tokenStateHash string) error {
 	var pledgeHistoryRecords []PledgeHistory
 	err := w.s.Read(PledgeHistoryTable, &pledgeHistoryRecords, "transfer_tokens_id = ? and transaction_id=?", tokenID, transactionID)
 	if err != nil {
@@ -217,6 +218,7 @@ func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transa
 		return fmt.Errorf("No records found in Pledge history table for the token")
 	}
 	for _, record := range pledgeHistoryRecords {
+		record.LatestTokenStateHash = tokenStateHash
 		record.NextBlockEpoch = epoch
 		if record.TransactionType == 1 {
 			record.TokenCredit = ((int(record.NextBlockEpoch) - record.Epoch) * int(record.TransferTokenValue)) * 15

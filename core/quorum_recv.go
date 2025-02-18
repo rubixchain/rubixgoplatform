@@ -1943,7 +1943,7 @@ func (c *Core) updateNextBlockEpoch(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &response, http.StatusOK)
 	}
 	c.log.Debug("Next block Epoch updating for token: ", UpdateEpochDetails.TokenID)
-	UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateEpochDetails.TokenID, UpdateEpochDetails.TransactionID, UpdateEpochDetails.TransactionType, UpdateEpochDetails.CurrentEpoch)
+	UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateEpochDetails.TokenID, UpdateEpochDetails.TransactionID, UpdateEpochDetails.TransactionType, UpdateEpochDetails.CurrentEpoch, UpdateEpochDetails.LatestTokenStateHash)
 	if UpdateEpochErr != nil {
 		c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)
 	}

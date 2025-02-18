@@ -154,10 +154,11 @@ type CreditScore struct {
 }
 
 type UpdatePreviousQuorums struct {
-	TransactionID   string
-	TransactionType int
-	TokenID         string
-	CurrentEpoch    int64
+	TransactionID        string
+	TransactionType      int
+	TokenID              string
+	LatestTokenStateHash string
+	CurrentEpoch         int64
 }
 
 type CreditSignature struct {
@@ -680,12 +681,20 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 					return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
 				}
 
+				//Getting new block token state hash
+				newBlockID, err := nb.GetBlockID(tokeninfo.Token)
+				newTokenStateHash := tokeninfo.Token + newBlockID
+				tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(newTokenStateHash))
+				tokenIDTokenStateHash, _ := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+
 				var updatePrevQuorums UpdatePreviousQuorums
 				updatePrevQuorums.CurrentEpoch = int64(cr.TransactionEpoch)
 				updatePrevQuorums.TokenID = tokeninfo.Token
 				updatePrevQuorums.TransactionID = b.GetTid()
 				updatePrevQuorums.TransactionType = cr.Type
+				updatePrevQuorums.LatestTokenStateHash = tokenIDTokenStateHash
 
+				//Sending next block epoch & new block token state hash to previous quorums to calculate credits
 				PrevQuormEpochUpdateErr := previousQuorumPeer.SendJSONRequest("POST", APIUpdateEpochOnPrevQuorums, nil, updatePrevQuorums, nil, true)
 				if PrevQuormEpochUpdateErr != nil {
 					c.log.Error("Unable to update epoch on previous quorum for credits, err: ", PrevQuormEpochUpdateErr)
