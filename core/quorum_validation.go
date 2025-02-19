@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
@@ -238,6 +239,42 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		if !signatureValidation || err != nil {
 			c.log.Error("Failed to validate token ownership ", "token ID:", ti[i].Token)
 			return false, err
+		}
+	}
+
+	//Add other peer-quorums to DIDPeerTable
+	for _, qrm_addr := range cr.QuorumList {
+		//skip adding self-details to DIDPeerTable
+		if !strings.Contains(qrm_addr, quorumDID) {
+			peerID, peer_did, ok := util.ParseAddress(qrm_addr)
+			if !ok {
+				c.log.Error("Invalid quorum address", "addr", qrm_addr)
+				return false, fmt.Errorf("invalid quorum address")
+			}
+
+			var peer_details wallet.DIDPeerMap
+			// check if addr contains the peer ID
+			if peerID == "" {
+				peer_info_resp, err := c.GetPeerInfo(p, peer_did)
+				if err != nil || peer_info_resp.PeerInfo.PeerID == "" {
+					c.log.Error("failed to fetch details of the peer", peer_did, "msg", peer_info_resp.Message)
+					return peer_info_resp.Status, err
+				}
+				// peer_info_resp.PeerInfo.DID = peer_did
+				peer_details = peer_info_resp.PeerInfo
+
+			} else {
+				peer_details.PeerID = peerID
+				peer_didType := -1
+				peer_details.DIDType = &peer_didType
+			}
+			//add peer to peer did table
+			peer_details.DID = peer_did
+			err = c.AddPeerDetails(peer_details)
+			if err != nil {
+				c.log.Error("failed to add peer-quorum to DIDPeerTable", "quorum did", peer_did)
+				return false, err
+			}
 		}
 	}
 	// for i := range wt {

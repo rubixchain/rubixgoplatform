@@ -92,120 +92,116 @@ func (c *Core) ValidateTokenChain(userDID string, tokenInfo *wallet.Token, token
 	//This for loop ensures that we fetch all the blocks in the token chain
 	//starting from genesis block to latest block
 	for {
-		//GetAllTokenBlocks returns next 100 blocks and nextBlockID of the 100th block,
+		//GetAllTokenBlocks returns all blocks and nextBlockID of the last block,
 		//starting from the given block Id, in the direction: genesis to latest block
 		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(tokenInfo.TokenID, tokenType, blockId)
 		if err != nil {
 			response.Message = "Failed to get token chain block"
 			return response, err
 		}
+		// //the nextBlockID of the latest block is empty string
+		// blockId = nextBlockID
+		// if nextBlockID == "" {
+		// 	break
+		// }
+		// }
+
+		c.log.Info("token chain length", len(blocks))
+		for i := len(blocks) - 1; i >= 0; i-- {
+			b := block.InitBlock(blocks[i], nil)
+			//validatedBlockCount keeps count of the number of blocks validated, including failed blocks
+			validatedBlockCount++
+
+			if b != nil {
+				//calculate block height
+				blockHeight, err := b.GetBlockNumber(tokenInfo.TokenID)
+				if err != nil {
+					c.log.Error("failed to fetch BlockNumber, error", err)
+					response.Message = "failed to fetch BlockNumber"
+					return response, fmt.Errorf("invalid token chain block")
+				}
+
+				c.log.Info("validating at block height:", blockHeight)
+
+				//calculate previous block Id
+				if i != 0 {
+					prevBlock := block.InitBlock(blocks[i-1], nil)
+					prevBlockId, err = prevBlock.GetBlockID(tokenInfo.TokenID)
+					if err != nil {
+						c.log.Error("invalid previous block")
+						continue
+					}
+				}
+				//fetch transaction type to validate the block accordingly
+				txnType := b.GetTransType()
+				switch txnType {
+				case block.TokenTransferredType:
+
+					//validate rbt transfer block
+					response, err = c.ValidateRBTTransferBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
+					if err != nil {
+						c.log.Error("msg", response.Message, "err", err)
+						return response, err
+					}
+				case block.TokenGeneratedType:
+					//validate genesis block
+					response, err = c.ValidateGenesisBlock(b, *tokenInfo, tokenType, userDID)
+					if err != nil {
+						c.log.Error("msg", response.Message, "err", err)
+						return response, err
+					}
+				case block.TokenBurntType:
+					//validate RBT burnt block
+					response, err = c.ValidateRBTBurntBlock(b, *tokenInfo, prevBlockId, userDID)
+					if err != nil {
+						c.log.Error("msg", response.Message, "err", err)
+						return response, err
+					}
+				case block.TokenPledgedType:
+					//validate Pledged block
+					response, err = c.ValidatePledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
+					if err != nil {
+						c.log.Error("msg", response.Message, "err", err)
+						return response, err
+					}
+				case block.TokenUnpledgedType:
+					//validate Pledged block
+					response, err = c.ValidateUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
+					if err != nil {
+						c.log.Error("msg", response.Message, "err", err)
+						return response, err
+					}
+				case block.TokenContractCommited:
+					// //calculate previous block Id
+					// prevBlock := block.InitBlock(blocks[i-1], nil)
+					// prevBlockId, err = prevBlock.GetBlockID(tokenInfo.TokenID)
+					// if err != nil {
+					// 	c.log.Error("invalid previous block")
+					// 	continue
+					// }
+					//validate Pledged block
+					response, err = c.ValidateUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
+					if err != nil {
+						c.log.Error("msg", response.Message, "err", err)
+						return response, err
+					}
+				}
+
+			} else {
+				c.log.Error("Invalid block")
+			}
+
+			c.log.Info("validated block count", validatedBlockCount)
+			// //If blockCount is provided, then we will stop validating when we reach the blockCount
+			// //If blockCount is not provided,i.e., is 0, then it will never be equal to validated_block_count
+			// //and thus will be continued till genesis block
+			if validatedBlockCount == blockCount {
+				break
+			}
+		}
 		//the nextBlockID of the latest block is empty string
 		blockId = nextBlockID
 		if nextBlockID == "" {
-			break
-		}
-	}
-
-	c.log.Info("token chain length", len(blocks))
-	for i := len(blocks) - 1; i >= 0; i-- {
-		b := block.InitBlock(blocks[i], nil)
-		//validatedBlockCount keeps count of the number of blocks validated, including failed blocks
-		validatedBlockCount++
-
-		if b != nil {
-			//calculate block height
-			blockHeight, err := b.GetBlockNumber(tokenInfo.TokenID)
-			if err != nil {
-				response.Message = "failed to fetch BlockNumber"
-				return response, fmt.Errorf("invalid token chain block")
-			}
-
-			c.log.Info("validating at block height:", blockHeight)
-
-			//fetch transaction type to validate the block accordingly
-			txnType := b.GetTransType()
-			switch txnType {
-			case block.TokenTransferredType:
-				//calculate previous block Id
-				prevBlock := block.InitBlock(blocks[i-1], nil)
-				prevBlockId, err = prevBlock.GetBlockID(tokenInfo.TokenID)
-				if err != nil {
-					c.log.Error("invalid previous block")
-					continue
-				}
-				//validate rbt transfer block
-				response, err = c.ValidateRBTTransferBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			case block.TokenGeneratedType:
-				//validate genesis block
-				response, err = c.ValidateGenesisBlock(b, *tokenInfo, tokenType, userDID)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			case block.TokenBurntType:
-				//validate RBT burnt block
-				response, err = c.ValidateRBTBurntBlock(b, *tokenInfo, prevBlockId, userDID)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			case block.TokenPledgedType:
-				//calculate previous block Id
-				prevBlock := block.InitBlock(blocks[i-1], nil)
-				prevBlockId, err = prevBlock.GetBlockID(tokenInfo.TokenID)
-				if err != nil {
-					c.log.Error("invalid previous block")
-					continue
-				}
-				//validate Pledged block
-				response, err = c.ValidatePledgedUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			case block.TokenUnpledgedType:
-				//calculate previous block Id
-				prevBlock := block.InitBlock(blocks[i-1], nil)
-				prevBlockId, err = prevBlock.GetBlockID(tokenInfo.TokenID)
-				if err != nil {
-					c.log.Error("invalid previous block")
-					continue
-				}
-				//validate Pledged block
-				response, err = c.ValidatePledgedUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			case block.TokenContractCommited:
-				//calculate previous block Id
-				prevBlock := block.InitBlock(blocks[i-1], nil)
-				prevBlockId, err = prevBlock.GetBlockID(tokenInfo.TokenID)
-				if err != nil {
-					c.log.Error("invalid previous block")
-					continue
-				}
-				//validate Pledged block
-				response, err = c.ValidatePledgedUnpledgedBlock(b, tokenInfo.TokenID, prevBlockId, userDID)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			}
-
-		} else {
-			c.log.Error("Invalid block")
-		}
-
-		c.log.Info("validatedBlockCount", validatedBlockCount)
-		// //If blockCount is provided, then we will stop validating when we reach the blockCount
-		// //If blockCount is not provided,i.e., is 0, then it will never be equal to validatedBlockCount
-		// //and thus will be continued till genesis block
-		if validatedBlockCount == blockCount {
 			break
 		}
 	}
@@ -253,7 +249,7 @@ func (c *Core) ValidateRBTTransferBlock(b *block.Block, tokenId string, calculat
 		return response, err
 	}
 	//Validate sender signature
-	response, err = c.ValidateSender(b)
+	response, err = c.ValidateTxnInitiator(b)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
@@ -297,8 +293,8 @@ func (c *Core) ValidateRBTBurntBlock(b *block.Block, tokenInfo wallet.Token, cal
 	return response, nil
 }
 
-// validate block of type : TokenPledgedType = "04" / TokenUnpledgedType = "06" / TokenContractCommited = "11"
-func (c *Core) ValidatePledgedUnpledgedBlock(b *block.Block, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
+// validate block of type : TokenPledgedType = "04"
+func (c *Core) ValidatePledgedBlock(b *block.Block, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{}
 
 	//Validate block hash
@@ -308,7 +304,104 @@ func (c *Core) ValidatePledgedUnpledgedBlock(b *block.Block, tokenId string, cal
 		return response, err
 	}
 
-	//validate burnt-token owner signature
+	//validate initiator signature in pledge block
+	initiatorSig := b.GetInitiatorSignature()
+	//check if it is a block addded to chain before adding initiator signature to block structure
+	if initiatorSig == nil {
+		c.log.Info("old block, initiator signature not found")
+		response.Message = "old block, initiator signature not found"
+		return response, nil
+	}
+
+	var initiatorDIDType int
+	//sign type = 0, means it is a BIP signature and the did was created in light mode
+	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
+	//and thus the did could be initialised in basic mode to fetch the public key
+	if initiatorSig.SignType == 0 {
+		initiatorDIDType = did.LiteDIDMode
+	} else {
+		initiatorDIDType = did.BasicDIDMode
+	}
+
+	//Initialise initiator did
+	didCrypto, err := c.InitialiseDID(initiatorSig.DID, initiatorDIDType)
+	if err != nil {
+		c.log.Error("failed to initialise initiator did:", initiatorSig.DID)
+		response.Message = "failed to initialise initiator did"
+		return response, err
+	}
+
+	//initiator signature verification
+	if initiatorDIDType == did.LiteDIDMode {
+		response.Status, err = didCrypto.PvtVerify([]byte(initiatorSig.Hash), util.StrToHex(initiatorSig.PrivateSign))
+		if err != nil {
+			c.log.Error("failed to verify initiator:", initiatorSig.DID, "err", err)
+			response.Message = "invalid initiator"
+			return response, err
+		}
+	} else {
+		response.Status, err = didCrypto.NlssVerify(initiatorSig.Hash, util.StrToHex(initiatorSig.NLSSShare), util.StrToHex(initiatorSig.PrivateSign))
+		if err != nil {
+			c.log.Error("failed to verify initiator:", initiatorSig.DID, "err", err)
+			response.Message = "invalid initiator"
+			return response, err
+		}
+	}
+
+	//validate all quorums' signatures in pledge block
+	quorumSignList, err := b.GetQuorumSignatureList()
+	if err != nil || quorumSignList == nil {
+		c.log.Error("failed to get quorum signature list")
+	}
+
+	response.Status = true
+	for _, qrm := range quorumSignList {
+		qrmDIDCrypto, err := c.SetupForienDIDQuorum(qrm.DID, userDID)
+		if err != nil {
+			c.log.Error("failed to initialise quorum:", qrm.DID, "err", err)
+			continue
+		}
+		var verificationStatus bool
+		if qrm.SignType == "0" { //qrm sign type = 0, means qrm signature is BIP sign and DID is created in Lite mode
+			verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(qrm.Hash), util.StrToHex(qrm.PrivSignature))
+			if err != nil {
+				c.log.Error("failed signature verification for lite-quorum:", qrm.DID, "err", err)
+			}
+		} else {
+			verificationStatus, err = qrmDIDCrypto.NlssVerify((qrm.Hash), util.StrToHex(qrm.Signature), util.StrToHex(qrm.PrivSignature))
+			if err != nil {
+				c.log.Error("failed signature verification for basic-quorum:", qrm.DID, "err", err)
+			}
+		}
+		response.Status = response.Status && verificationStatus
+	}
+
+	//validate pledged-token owner signature
+	response, err = c.ValidateTokenOwner(b, userDID)
+	if err != nil {
+		response.Message = "invalid token owner in RBT burnt block"
+		c.log.Error("invalid token owner in RBT burnt block")
+		return response, fmt.Errorf("failed to validate token owner in RBT burnt block")
+	}
+
+	response.Status = true
+	response.Message = "RBT pledged/unpledged/committed block validated successfully"
+	c.log.Debug("successfully validated RBT pledged/unpledged/committed block")
+	return response, nil
+}
+
+// validate block of type : TokenUnpledgedType = "06" / TokenContractCommited = "11"
+func (c *Core) ValidateUnpledgedBlock(b *block.Block, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
+	response := &model.BasicResponse{}
+
+	//Validate block hash
+	response, err := c.ValidateBlockHash(b, tokenId, calculatedPrevBlockId)
+	if err != nil {
+		c.log.Error("msg", response.Message)
+		return response, err
+	}
+
+	//validate token owner signature
 	response, err = c.ValidateTokenOwner(b, userDID)
 	if err != nil {
 		response.Message = "invalid token owner in RBT burnt block"
@@ -493,63 +586,88 @@ func (c *Core) ValidateBlockHash(b *block.Block, tokenId string, calculatedPrevB
 	return response, nil
 }
 
-// sender signature verification in a (non-genesis)block
-func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
+// Sender/Deployer/Executor signature verification in a block
+func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status: false,
 	}
 
-	sender := b.GetSenderDID()
-
-	senderSign := b.GetInitiatorSignature()
-	//check if it is a block addded to chain before adding sender signature to block structure
-	if senderSign == nil {
-		c.log.Info("old block, sender signature not found")
-		response.Message = "old block, sender signature not found"
-		return response, nil
-	} else if senderSign.DID != sender {
-		c.log.Info("invalid sender, sender did does not match")
-		response.Message = "invalid sender, sender did does not match"
-		return response, fmt.Errorf("invalid sender, sender did does not match")
-	}
-
-	var senderDIDType int
-	//sign type = 0, means it is a BIP signature and the did was created in light mode
-	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
-	//and thus the did could be initialised in basic mode to fetch the public key
-	if senderSign.SignType == 0 {
-		senderDIDType = did.LiteDIDMode
+	var initiator string
+	txnType := b.GetTransType()
+	if txnType == block.TokenTransferredType {
+		initiator = b.GetSenderDID()
+	} else if txnType == block.TokenDeployedType {
+		initiator = b.GetDeployerDID()
+	} else if txnType == block.TokenExecutedType {
+		initiator = b.GetExecutorDID()
 	} else {
-		senderDIDType = did.BasicDIDMode
+		c.log.Info("Failed to identify transaction type, transaction initiated with old executable")
+		response.Message = "Failed to identify transaction type"
+		return response, nil
 	}
 
-	//Initialise sender did
-	didCrypto, err := c.InitialiseDID(sender, senderDIDType)
+	//signed data i.e., transaction block hash
+	signedData, err := b.GetHash()
 	if err != nil {
-		c.log.Error("failed to initialise sender did:", sender)
-		response.Message = "failed to initialise sender did"
+		c.log.Error("failed to get block hash; error", err)
+		response.Message = "failed to get block hash"
 		return response, err
 	}
 
-	//sender signature verification
-	if senderDIDType == did.LiteDIDMode {
-		response.Status, err = didCrypto.PvtVerify([]byte(senderSign.Hash), util.StrToHex(senderSign.PrivateSign))
+	initiatorSign := b.GetInitiatorSignature()
+	//check if it is a block addded to chain before adding initiator signature to block structure
+	if initiatorSign == nil {
+		c.log.Info("old block, initiator signature not found")
+		response.Message = "old block, initiator signature not found"
+		return response, nil
+	} else if initiatorSign.DID != initiator {
+		c.log.Info("invalid initiator, initiator did does not match")
+		response.Message = "invalid initiator, initiator did does not match"
+		return response, fmt.Errorf("invalid initiator, initiator did does not match")
+	}
+	if initiatorSign.Hash != signedData {
+		c.log.Info("invalid initiator signature, signed msg is not block hash; initiator", initiator)
+		response.Message = "invalid initiator signature, signed msg is not block hash"
+		return response, fmt.Errorf(response.Message)
+	}
+
+	var initiatorDIDType int
+	//sign type = 0, means it is a BIP signature and the did was created in light mode
+	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
+	//and thus the did could be initialised in basic mode to fetch the public key
+	if initiatorSign.SignType == 0 {
+		initiatorDIDType = did.LiteDIDMode
+	} else {
+		initiatorDIDType = did.BasicDIDMode
+	}
+
+	//Initialise initiator did
+	didCrypto, err := c.InitialiseDID(initiator, initiatorDIDType)
+	if err != nil {
+		c.log.Error("failed to initialise initiator did:", initiator)
+		response.Message = "failed to initialise initiator did"
+		return response, err
+	}
+
+	//initiator signature verification
+	if initiatorDIDType == did.LiteDIDMode {
+		response.Status, err = didCrypto.PvtVerify([]byte(initiatorSign.Hash), util.StrToHex(initiatorSign.PrivateSign))
 		if err != nil {
-			c.log.Error("failed to verify sender:", sender, "err", err)
-			response.Message = "invalid sender"
+			c.log.Error("failed to verify initiator:", initiator, "err", err)
+			response.Message = "invalid initiator"
 			return response, err
 		}
 	} else {
-		response.Status, err = didCrypto.NlssVerify(senderSign.Hash, util.StrToHex(senderSign.NLSSShare), util.StrToHex(senderSign.PrivateSign))
+		response.Status, err = didCrypto.NlssVerify(initiatorSign.Hash, util.StrToHex(initiatorSign.NLSSShare), util.StrToHex(initiatorSign.PrivateSign))
 		if err != nil {
-			c.log.Error("failed to verify sender:", sender, "err", err)
-			response.Message = "invalid sender"
+			c.log.Error("failed to verify initiator:", initiator, "err", err)
+			response.Message = "invalid initiator"
 			return response, err
 		}
 	}
 
-	response.Message = "sender validated successfully"
-	c.log.Debug("sender validated successfully")
+	response.Message = "initiator validated successfully"
+	c.log.Debug("initiator (deployer/executor) validated successfully")
 	return response, nil
 }
 
@@ -599,8 +717,13 @@ func (c *Core) ValidateQuorums(b *block.Block, userDID string) (*model.BasicResp
 		Status: false,
 	}
 
-	//signed data aka transaction Id
-	signedData := b.GetTid()
+	//signed data i.e., block hash
+	signedData, err := b.GetHash()
+	if err != nil {
+		c.log.Error("failed to get block hash; error", err)
+		response.Message = "failed to get block hash"
+		return response, err
+	}
 	quorumSignList, err := b.GetQuorumSignatureList()
 	if err != nil || quorumSignList == nil {
 		c.log.Error("failed to get quorum signature list")
@@ -608,6 +731,11 @@ func (c *Core) ValidateQuorums(b *block.Block, userDID string) (*model.BasicResp
 
 	response.Status = true
 	for _, qrm := range quorumSignList {
+		if qrm.Hash != signedData {
+			c.log.Error("signed data is not block hash for quorum", qrm.DID)
+			response.Message = "invalid quorum signature, signed msg is not block hash"
+			return response, fmt.Errorf(response.Message)
+		}
 		qrmDIDCrypto, err := c.SetupForienDIDQuorum(qrm.DID, userDID)
 		if err != nil {
 			c.log.Error("failed to initialise quorum:", qrm.DID, "err", err)
@@ -617,17 +745,21 @@ func (c *Core) ValidateQuorums(b *block.Block, userDID string) (*model.BasicResp
 		if qrm.SignType == "0" { //qrm sign type = 0, means qrm signature is BIP sign and DID is created in Lite mode
 			verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(signedData), util.StrToHex(qrm.PrivSignature))
 			if err != nil {
-				c.log.Error("failed signature verification for quorum:", qrm.DID)
+				c.log.Error("failed signature verification for lite-quorum:", qrm.DID, "err", err)
 			}
 		} else {
 			verificationStatus, err = qrmDIDCrypto.NlssVerify((signedData), util.StrToHex(qrm.Signature), util.StrToHex(qrm.PrivSignature))
 			if err != nil {
-				c.log.Error("failed signature verification for quorum:", qrm.DID)
+				c.log.Error("failed signature verification for basic-quorum:", qrm.DID, "err", err)
 			}
 		}
 		response.Status = response.Status && verificationStatus
 	}
-
+	if !response.Status {
+		response.Message = "failed quorum validation"
+		c.log.Debug("failed quorum validation")
+		return response, fmt.Errorf(response.Message)
+	}
 	response.Message = "quorums validated successfully"
 	c.log.Debug("validated all quorums successfully")
 	return response, nil
