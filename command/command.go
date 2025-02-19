@@ -369,7 +369,7 @@ func (cmd *Command) getURL(url string) string {
 }
 
 func (cmd *Command) runApp() {
-	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node))
+	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node), cmd.addr)
 	err := apiconfig.LoadAPIConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, &cmd.cfg)
 
 	if err != nil {
