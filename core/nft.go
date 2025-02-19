@@ -160,7 +160,7 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	nftInfo := contract.TokenInfo{
 		Token:      deployReq.NFT,
 		TokenType:  c.TokenType(NFTString),
-		TokenValue: 0,
+		TokenValue: deployReq.NFTValue,
 		OwnerDID:   did,
 	}
 	nftInfoArray = append(nftInfoArray, nftInfo)
@@ -168,12 +168,13 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	consensusContractDetails := &contract.ContractType{
 		Type:       contract.NFTDeployType,
 		PledgeMode: contract.PeriodicPledgeMode,
-		TotalRBTs:  1,
+		TotalRBTs:  float64(deployReq.NFTValue),
 		TransInfo: &contract.TransInfo{
 			DeployerDID: did,
 			NFT:         deployReq.NFT,
-			NFTData:     "",
+			NFTData:     deployReq.NFTData,
 			TransTokens: nftInfoArray,
+			NFTValue:    deployReq.NFTValue,
 		},
 		ReqID: reqID,
 	}

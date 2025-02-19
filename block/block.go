@@ -747,8 +747,8 @@ func (b *Block) GetChildTokens() []string {
 	return util.GetStringSliceFromMap(b.bm, TCChildTokensKey)
 }
 
-func (b *Block) GetEpoch() int64 {
-	return int64(util.GetIntFromMap(b.bm, TCEpochKey))
+func (b *Block) GetEpoch() int {
+	return util.GetIntFromMap(b.bm, TCEpochKey)
 }
 
 // Fetch initiator signature details from the given block
