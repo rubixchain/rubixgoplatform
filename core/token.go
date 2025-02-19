@@ -48,13 +48,6 @@ type TokenVerificationRequest struct {
 type TokenVerificationResponse struct {
 	Results map[string]bool `json:"results"`
 }
-type TokenInfo struct {
-	TokenType           int
-	TransferBlockNumber uint64
-	TransactionID       string
-	TransactionEpoch    int
-	TransferBlockID     string
-}
 
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
@@ -966,203 +959,38 @@ func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tok
 	return lastErr
 }
 
-// func (c *Core) ReadyToMineCredits(did string) map[string]TokenInfo {
-// 	// Step 1: Fetch token details by QuorumDID
-// 	tokenDetails, err := c.w.GetTokenDetailsByQuorumDID(did)
-// 	if err != nil {
-// 		c.log.Error("Failed to fetch token details", "err", err)
-// 		return nil // Return nil if fetching fails
-// 	}
 
-// 	// Step 2: Convert tokenDetails to a map[token] -> tokenType
-// 	tokenTypeMap := make(map[string]int)
-// 	for token, details := range tokenDetails {
-// 		tokenTypeMap[token] = details[0].TokenType
-// 	}
-
-// 	// Step 3: Sync latest token chains
-// 	err = c.SyncLatestTokenChains(tokenTypeMap)
-// 	if err != nil {
-// 		c.log.Error("Failed to sync latest token chains", "err", err)
-// 	}
-
-// 	// Step 4: Initialize readyToMineTokens map
-// 	readyToMineTokens := make(map[string]TokenInfo)
-
-// 	// Step 5: Iterate through tokens and check readiness for mining
-// 	for token, tokenType := range tokenTypeMap {
-// 		latestBlock := c.w.GetLatestTokenBlock(token, tokenType)
-// 		if latestBlock == nil {
-// 			c.log.Error("Latest block is nil", "token", token)
-// 			continue // Skip this token and move to the next
-// 		}
-// 		// transferedtokenBlock,err:= c.w.GetTokenBlock(token,tokenType,tokenDetails[token].TransferBlockID)
-//         if err != nil {
-// 			c.log.Error("Failed to get transaction blockID ", "token", token, "err", err)
-// 			continue
-// 		}
-// 		// Get the block number of the latest block
-// 		latestBlockNum, err := latestBlock.GetBlockNumber(token)
-// 		c.log.Debug("latest block number",latestBlockNum)
-// 		if err != nil {
-// 			c.log.Error("Failed to get block number", "token", token, "err", err)
-// 			continue
-// 		}
-// 		latestBlockEpoch:=latestBlock.GetEpoch()
-// 		c.log.Debug("latest block epoch",latestBlockEpoch)
-// 		c.log.Debug("trans block epoch ",tokenDetails[token].TransactionEpoch)
-// 		differenceInEpoch:= int(latestBlockEpoch)-(tokenDetails[token].TransactionEpoch)
-// 		fmt.Println("difference in Epoch",differenceInEpoch)
-// 		// transferredTokenValue:= latestBlock.GetTokenValue()
-// 		// fmt.Println("transferred token value",transferredTokenValue)
-// 		transferType := latestBlock.GetTransType()
-// 		c.log.Debug("transfer type is*********!!!!",transferType)
-// 		b, err := c.getFromIPFS(token)
-// 		if err != nil {
-// 			c.log.Error("failed to get parent token details from ipfs", "err", err, "token", token)
-
-// 		}
-// 		_, iswholeToken, _ := tkpackage.CheckWholeToken(string(b), c.testNet)
-
-// 		tt := tkpackage.RBTTokenType
-// 		transTokenValue := float64(1)
-// 		if !iswholeToken {
-// 			blk := util.StrToHex(string(b))
-// 			rb, err := rac.InitRacBlock(blk, nil)
-// 			if err != nil {
-// 				c.log.Error("invalid token, invalid rac block", "err", err)
-
-// 			}
-// 			tt = rac.RacType2TokenType(rb.GetRacType())
-// 			if c.TokenType(PartString) == tt {
-// 				transTokenValue = rb.GetRacValue()
-// 			}
-// 		}
-// 		c.log.Debug("transtoken value",transTokenValue)
-// 		creditValue := differenceInEpoch*(int(transTokenValue))
-// 		c.log.Debug("credit value is",creditValue)
-
-// 		err = c.w.UpdateLatestBlockNumber(token,int(latestBlockNum),tokenDetails[token].TransactionID)
-// 		if err != nil {
-// 			c.log.Error("Failed to update latest block number", "token", token, "err", err)
-// 			continue // Move to the next token
-// 		}
-// 		// Get the credit earn block number for this token
-// 		creditEarnBlockNum := tokenDetails[token].TransferBlockNumber
-//         transType := latestBlock.GetTransType()
-// 		c.log.Debug("transaction type is",transType)
-// 		// Check if the token is ready for mining
-// 		if latestBlockNum >= uint64(creditEarnBlockNum)+5 {
-// 			// Step 8: Get the transaction ID from tokenDetails
-// 			transactionID := ""
-// 			if details, exists := tokenDetails[token]; exists {
-// 				transactionID = details.TransactionID // Take first transaction ID if available
-// 			}
-
-// 			// Store in the map
-// 			readyToMineTokens[token] = TokenInfo{
-// 				TokenType:          tokenType,
-// 				TransferBlockNumber: creditEarnBlockNum,
-// 				TransactionID:       transactionID,
-// 			}
-// 		}
-// 	}
-
-// 	return readyToMineTokens
-// }
-
-// func (c *Core) ReadyToMineCredits(did string) map[string][]TokenInfo {
-// 	//  Fetch token details by QuorumDID
-// 	tokenDetails, err := c.w.GetTokenDetailsByQuorumDID(did)
-// 	if err != nil {
-// 		c.log.Error("Failed to fetch token details", "err", err)
-// 		return nil // Return nil if fetching fails
-// 	}
-
-// 	// // Convert tokenDetails to a map[token] -> tokenType
-// 	// tokenTypeMap := make(map[string]int)
-// 	// for token, details := range tokenDetails {
-// 	// 	if len(details) > 0 {
-// 	// 		tokenTypeMap[token] = details[0].TokenType // Take first entry's type (assumption)
-// 	// 	}
-// 	// }
-
-// 	// //  Sync latest token chains
-// 	// err = c.SyncLatestTokenChains(tokenTypeMap)
-// 	// if err != nil {
-// 	// 	c.log.Error("Failed to sync latest token chains", "err", err)
-// 	// }
-
-// 	//  Initialize readyToMineTokens map
-// 	readyToMineTokens := make(map[string][]TokenInfo)
-
-// 	// //  Iterate through tokens and check readiness for mining
-// 	// for token, tokenType := range tokenTypeMap {
-// 	// 	latestBlock := c.w.GetLatestTokenBlock(token, tokenType)
-// 	// 	if latestBlock == nil {
-// 	// 		c.log.Error("Latest block is nil", "token", token)
-// 	// 		continue // Skip this token and move to the next
-// 	// 	}
-
-// 	// 	// Get the block number of the latest block
-// 	// 	latestBlockNum, err := latestBlock.GetBlockNumber(token)
-// 	// 	if err != nil {
-// 	// 		c.log.Error("Failed to get block number", "token", token, "err", err)
-// 	// 		continue
-// 	// 	}
-// 	// 	latestBlockEpoch := latestBlock.GetEpoch()
-
-// 	// 	c.log.Debug("Latest block number", "token", token, "blockNum", latestBlockNum)
-
-// 		// Iterate over all token details for this token
-// 		for _, detail := range tokenDetails[token] {
-// 			transactionBlockEpoch := detail.TransactionEpoch
-
-// 			st := time.Now()
-// 	        currentEpoch := int(st.Unix())
-
-// 			// Check if the token is ready for mining
-// 			if uint64(currentEpoch) >= uint64(transactionBlockEpoch)+100 {
-// 				// Append the TokenInfo to the slice in the map
-// 				readyToMineTokens[token] = append(readyToMineTokens[token], TokenInfo{
-// 					TokenType:           detail.TokenType,
-// 					TransferBlockNumber: detail.TransferBlockNumber,
-// 					TransactionID:       detail.TransactionID,
-// 					TransactionEpoch:    detail.TransactionEpoch,
-// 					TransferBlockID:     detail.TransferBlockID,
-// 				})
-// 			}
-// 		}
-// 	}
-
-//		return readyToMineTokens
-//	}
-func (c *Core) ReadyToMineCredits(did string) map[string][]TokenInfo {
+func (c *Core) ReadyToMineCredits(did string) map[string][]wallet.TokenInfo {
 	// Fetch token details by QuorumDID
-	tokenDetails, err := c.w.GetTokenDetailsByQuorumDID(did)
+	tokenDetails, err := c.w.GetTokenDetailsByQuorumDID(did, 0)
 	if err != nil {
 		c.log.Error("Failed to fetch token details", "err", err)
 		return nil // Return nil if fetching fails
 	}
 
-	readyToMineTokens := make(map[string][]TokenInfo)
+	readyToMineTokens := make(map[string][]wallet.TokenInfo)
 
 	currentEpoch := int(time.Now().Unix())
 
 	for token, details := range tokenDetails {
 		for _, detail := range details {
 			transactionBlockEpoch := detail.TransactionEpoch
-			secondsInFiveweeks:= 7 * 24 * 60 * 60*5
+			secondsInFiveweeks := 7 * 24 * 60 * 60 * 5
 
 			// Check if the token is ready for mining
 			if transactionBlockEpoch <= currentEpoch-secondsInFiveweeks {
 				// Append the TokenInfo to the slice in the map
-				readyToMineTokens[token] = append(readyToMineTokens[token], TokenInfo{
-					TokenType:           detail.TokenType,
-					TransferBlockNumber: detail.TransferBlockNumber,
-					TransactionID:       detail.TransactionID,
-					TransactionEpoch:    detail.TransactionEpoch,
-					TransferBlockID:     detail.TransferBlockID,
+				readyToMineTokens[token] = append(readyToMineTokens[token], wallet.TokenInfo{
+					TokenType:            detail.TokenType,
+					TransTokenValue:      detail.TransTokenValue,
+					TransferBlockNumber:  detail.TransferBlockNumber,
+					TransactionID:        detail.TransactionID,
+					TransactionEpoch:     detail.TransactionEpoch,
+					TransferBlockID:      detail.TransferBlockID,
+					TransactionType:      detail.TransactionType,
+					NextBlockEpoch:       detail.NextBlockEpoch,
+					TokenCredit:          detail.TokenCredit,
+					LatestTokenStateHash: detail.LatestTokenStateHash,
 				})
 			}
 		}
@@ -1171,9 +999,7 @@ func (c *Core) ReadyToMineCredits(did string) map[string][]TokenInfo {
 	return readyToMineTokens
 }
 
-// func (c *Core) CalculateCreditValue()
-
-func (c *Core) UpdateReadyToMineCredits(readyToMineTokens map[string][]TokenInfo) error {
+func (c *Core) UpdateReadyToMineCredits(readyToMineTokens map[string][]wallet.TokenInfo) error {
 	if len(readyToMineTokens) == 0 {
 		c.log.Info("No tokens to update for mining readiness")
 		return nil // No updates needed

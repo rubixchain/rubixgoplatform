@@ -146,7 +146,7 @@ func (cmd *Command) FaucetTokenCheck() {
 }
 
 func (cmd *Command) FindReadyToMineCredits() {
-	//TODO for SAI!!
+
 	if cmd.did == "" {
 		cmd.log.Info("DID cannot be empty")
 		fmt.Print("Enter DID : ")

@@ -21,6 +21,7 @@ const (
 
 const (
 	QuorumStorage string = "quorummanager"
+	MiningQuorumStorage string ="mining_quorummangager"
 )
 
 const (

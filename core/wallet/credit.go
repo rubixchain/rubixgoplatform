@@ -14,12 +14,17 @@ type Credit struct {
 	Tx     string `gorm:"column:tx"`
 }
 type TokenInfo struct {
-	TokenType           int
-	TransferBlockNumber uint64
-	TransactionID       string
-	TransactionEpoch    int
-	TransferBlockID     string
-	TransTokenValue     float64
+	TokenType            int
+	TransTokenValue      float64
+	TransferBlockNumber  uint64
+	TransactionID        string
+	TransactionEpoch     int
+	TransferBlockID      string
+	TransactionType      int
+	NextBlockEpoch       int
+	TokenCredit          int
+	TokenCreditStatus    int
+	LatestTokenStateHash string
 }
 
 // TODO: Credit structure needs to be worked upon
@@ -102,12 +107,12 @@ func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) 
 
 //		return tokenDetails, nil
 //	}
-func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string) (map[string][]TokenInfo, error) {
+func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus int) (map[string][]TokenInfo, error) {
 	var pledges []PledgeHistory
 	tokenDetails := make(map[string][]TokenInfo) // Map with slice of TokenInfo
 
 	// Query the database for records matching the given QuorumDID
-	err := w.s.Read(PledgeHistoryTable, &pledges, "quorum_did=? and token_credit_status=?", quorumDID, 0)
+	err := w.s.Read(PledgeHistoryTable, &pledges, "quorum_did=? and token_credit_status=?", quorumDID, tokenCreditStatus)
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") {
 			w.log.Info("No pledge history found for given QuorumDID", "quorumDID", quorumDID)
@@ -120,11 +125,14 @@ func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string) (map[string][]Toke
 	// Iterate over the results and group TokenInfo by TransferTokenID
 	for _, pledge := range pledges {
 		tokenInfo := TokenInfo{
-			TokenType:        pledge.TransferTokenType,
-			TransactionID:    pledge.TransactionID,
-			TransactionEpoch: pledge.Epoch,
-			TransferBlockID:  pledge.TransferBlockID,
-			TransTokenValue:  pledge.TransferTokenValue,
+			TokenType:            pledge.TransferTokenType,
+			TransactionID:        pledge.TransactionID,
+			TransactionEpoch:     pledge.Epoch,
+			TransferBlockID:      pledge.TransferBlockID,
+			TransTokenValue:      pledge.TransferTokenValue,
+			TokenCredit:          pledge.TokenCredit,
+			TokenCreditStatus:    pledge.TokenCreditStatus,
+			LatestTokenStateHash: pledge.LatestTokenStateHash,
 		}
 
 		// Append to the slice of TokenInfo for this TransferTokenID

@@ -108,6 +108,7 @@ const (
 	GetNftsByDidCmd                string = "get-nfts-by-did"
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	FindReadyToMineCreditsCmd      string = "findreadytominecredits"
+	MineRBTsCmd                    string = "minerbts"   
 )
 
 var commands = []string{VersionCmd,
@@ -755,6 +756,8 @@ func Run(args []string) {
 		cmd.addUserAPIKey()
 	case FindReadyToMineCreditsCmd:
 		cmd.FindReadyToMineCredits()
+	case MineRBTsCmd:
+		cmd.MineRBTs()
 	default:
 		cmd.log.Error("Invalid command")
 	}

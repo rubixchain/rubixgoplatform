@@ -93,6 +93,7 @@ const (
 	APIGetNftsByDid                     string = "/api/get-nfts-by-did"
 	APIGetFTTokenchain                  string = "/api/get-ft-token-chain"
 	APIFindReadyToMineCredits           string = "/api/find-ready-to-mine-credits"
+	APIMineRBTs                         string = "/api/mine-rbts"
 )
 
 // jwt.RegisteredClaims

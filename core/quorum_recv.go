@@ -19,10 +19,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/rac"
 )
 
 func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
@@ -1498,11 +1498,12 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 
-		if err != nil {
-			c.log.Error("Failed to get block number for token: ", tokenID)
-			crep.Message = "Failed to get block number for PledgeHistory"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
+		// blockNumber, err := b.GetBlockNumber(tokenID)
+		// if err != nil {
+		// 	c.log.Error("Failed to get block number for token: ", tokenID)
+		// 	crep.Message = "Failed to get block number for PledgeHistory"
+		// 	return c.l.RenderJSON(req, &crep, http.StatusOK)
+		// }
 
 		b, err := c.getFromIPFS(tokenID)
 		if err != nil {
@@ -1526,6 +1527,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			}
 		}
 		c.log.Debug("transtoken value", transTokenValue)
+
 
 		//TODO: Fix the function to get peer who pinned epoch for a token
 		// weekPassed := util.GetWeeksPassed()
