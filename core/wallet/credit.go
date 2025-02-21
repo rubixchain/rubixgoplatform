@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 // TODO: Credit structure needs to be worked upon
@@ -37,22 +39,7 @@ type PledgeInformation struct {
 	TransactionID   string `json:"transaction_id"`
 }
 
-type PledgeHistory struct {
-	QuorumDID            string  `gorm:"column:quorum_did"`
-	TransactionID        string  `gorm:"column:transaction_id"`
-	TransactionType      int     `gorm:"column:transaction_type"`
-	TransferTokenID      string  `gorm:"column:transfer_tokens_id"`
-	TransferTokenType    int     `gorm:"column:transfer_tokens_type"`
-	TransferTokenValue   float64 `gorm:"column:transfer_token_value"`
-	TransferBlockID      string  `gorm:"column:transfer_block_number_and_id"`
-	LatestTokenStateHash string  `gorm:"column:latest_tokenstate_hash"`
-	Epoch                int     `gorm:"column:epoch"`
-	NextBlockEpoch       int64   `gorm:"column:next_epoch"`
-	TokenCredit          int     `gorm:"column:token_credit"`
-	TokenCreditStatus    int     `gorm:"column:token_credit_status"`
-}
-
-func (w *Wallet) AddPledgeHistory(pledgeDetails []PledgeHistory) error {
+func (w *Wallet) AddPledgeHistory(pledgeDetails []model.PledgeHistory) error {
 	for _, detail := range pledgeDetails {
 		err := w.s.Write(PledgeHistoryTable, &detail)
 		if err != nil {
@@ -64,7 +51,7 @@ func (w *Wallet) AddPledgeHistory(pledgeDetails []PledgeHistory) error {
 }
 
 func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) (bool, error) {
-	var existingPledgeHistory PledgeHistory
+	var existingPledgeHistory model.PledgeHistory
 	pledgeHistoryReadErr := w.s.Read(PledgeHistoryTable, &existingPledgeHistory, "transfer_tokens_id=? AND transaction_id=?", tokenID, transID)
 	if pledgeHistoryReadErr != nil {
 		readErr := fmt.Sprint(pledgeHistoryReadErr)
@@ -108,7 +95,7 @@ func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) 
 //		return tokenDetails, nil
 //	}
 func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus int) (map[string][]TokenInfo, error) {
-	var pledges []PledgeHistory
+	var pledges []model.PledgeHistory
 	tokenDetails := make(map[string][]TokenInfo) // Map with slice of TokenInfo
 
 	// Query the database for records matching the given QuorumDID
@@ -143,7 +130,7 @@ func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus 
 }
 
 func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transactionID string) error {
-	var pledgeHistoryRecords []PledgeHistory
+	var pledgeHistoryRecords []model.PledgeHistory
 
 	err := w.s.Read(
 		PledgeHistoryTable,
@@ -215,7 +202,7 @@ func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transaction
 // }
 
 func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch int64, tokenStateHash string) error {
-	var pledgeHistoryRecords []PledgeHistory
+	var pledgeHistoryRecords []model.PledgeHistory
 	err := w.s.Read(PledgeHistoryTable, &pledgeHistoryRecords, "transfer_tokens_id = ? and transaction_id=?", tokenID, transactionID)
 	if err != nil {
 		fmt.Println("Error reading pledge history records:", err)

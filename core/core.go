@@ -14,6 +14,7 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
@@ -122,7 +123,7 @@ type Core struct {
 	quorumCount          int
 	noBalanceQuorumCount int
 	defaultSetup         bool
-	pledgeHistory        []wallet.PledgeHistory
+	pledgeHistory        []model.PledgeHistory
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {

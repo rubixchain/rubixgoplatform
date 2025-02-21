@@ -19,10 +19,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
-	"github.com/rubixchain/rubixgoplatform/rac"
 )
 
 func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
@@ -1528,7 +1528,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		c.log.Debug("transtoken value", transTokenValue)
 
-
 		//TODO: Fix the function to get peer who pinned epoch for a token
 		// weekPassed := util.GetWeeksPassed()
 		//list, pinCheckErr := c.getPeerWhoPinTokenEpoch(tokenID, weekPassed)
@@ -1536,7 +1535,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
 		// }
 
-		newPledge := wallet.PledgeHistory{
+		newPledge := model.PledgeHistory{
 			QuorumDID:          did,
 			TransactionID:      ur.TransactionID,
 			TransactionType:    ur.TransactionType,
