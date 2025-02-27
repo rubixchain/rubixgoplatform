@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -19,6 +20,7 @@ const (
 	NFTDeployType
 	NFTExecuteType
 	SCFTType
+	MineRBTType
 )
 
 // ----------SmartContract----------------------
@@ -43,12 +45,14 @@ const (
 )
 
 type ContractType struct {
-	Type       int        `json:"type"`
-	PledgeMode int        `json:"pledge_mode"`
-	TransInfo  *TransInfo `json:"transInfo"`
-	TotalRBTs  float64    `json:"totalRBTs"`
-	ReqID      string     `json:"req_id"`
-	log        logger.Logger
+	Type               int                   `json:"type"`
+	PledgeMode         int                   `json:"pledge_mode"`
+	TransInfo          *TransInfo            `json:"transInfo"`
+	TotalRBTs          float64               `json:"totalRBTs"`
+	TokenCreditDetails []model.PledgeHistory `json:"token_credit_details"`
+	ReqTokenCredits    int                   `json:"req_token_credits"`
+	ReqID              string                `json:"req_id"`
+	log                logger.Logger
 }
 
 type Contract struct {

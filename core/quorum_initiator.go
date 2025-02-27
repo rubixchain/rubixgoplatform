@@ -43,21 +43,22 @@ const (
 )
 
 type ConensusRequest struct {
-	ReqID              string       `json:"req_id"`
-	Type               int          `json:"type"`
-	Mode               int          `json:"mode"`
-	SenderPeerID       string       `json:"sender_peerd_id"`
-	ReceiverPeerID     string       `json:"receiver_peerd_id"`
-	ContractBlock      []byte       `json:"contract_block"`
-	QuorumList         []string     `json:"quorum_list"`
-	DeployerPeerID     string       `json:"deployer_peerd_id"`
-	SmartContractToken string       `json:"smart_contract_token"`
-	ExecuterPeerID     string       `json:"executor_peer_id"`
-	TransactionID      string       `json:"transaction_id"`
-	TransactionEpoch   int          `json:"transaction_epoch"`
-	PinningNodePeerID  string       `json:"pinning_node_peer_id"`
-	NFT                string       `json:"nft"`
-	FTinfo             model.FTInfo `json:"ft_info"`
+	ReqID              string              `json:"req_id"`
+	Type               int                 `json:"type"`
+	Mode               int                 `json:"mode"`
+	SenderPeerID       string              `json:"sender_peerd_id"`
+	ReceiverPeerID     string              `json:"receiver_peerd_id"`
+	ContractBlock      []byte              `json:"contract_block"`
+	QuorumList         []string            `json:"quorum_list"`
+	DeployerPeerID     string              `json:"deployer_peerd_id"`
+	SmartContractToken string              `json:"smart_contract_token"`
+	ExecuterPeerID     string              `json:"executor_peer_id"`
+	TransactionID      string              `json:"transaction_id"`
+	TransactionEpoch   int                 `json:"transaction_epoch"`
+	PinningNodePeerID  string              `json:"pinning_node_peer_id"`
+	NFT                string              `json:"nft"`
+	FTinfo             model.FTInfo        `json:"ft_info"`
+	MiningInfo         model.MiningRequest `json:"mining_info"`
 }
 
 type ConensusReply struct {
@@ -325,7 +326,6 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 }
 
 func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
-	c.log.Debug("initiateConsensus function from the Core package has been called.")
 	weekCount := util.GetWeeksPassed()
 	cs := ConsensusStatus{
 		Credit: CreditScore{

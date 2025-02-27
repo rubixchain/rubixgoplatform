@@ -3,6 +3,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 func (cmd *Command) MineRBTs() {
 	if cmd.did == "" {
@@ -19,7 +21,9 @@ func (cmd *Command) MineRBTs() {
 		cmd.log.Error("Invalid DID")
 		return
 	}
-	br, err := cmd.c.MineRBTs(cmd.did)
+	var miningReq *model.MiningRequest
+	miningReq.MinerDid = cmd.did
+	br, err := cmd.c.MineRBTs(miningReq)
 	if err != nil {
 		cmd.log.Info("Cannot mine RBTs")
 		return

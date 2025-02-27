@@ -1,7 +1,7 @@
 package model
 
 type MiningRequest struct {
-	MinerDid     string `json:"Minor"`
+	MinerDid     string `json:"miner"`
 	TokenCredits int    `json:"credits"`
 	Password     string `json:"password"`
 }

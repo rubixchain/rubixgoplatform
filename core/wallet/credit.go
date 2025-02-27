@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
@@ -38,6 +37,8 @@ type PledgeInformation struct {
 	QuorumDID       string `json:"quorum_did"`
 	TransactionID   string `json:"transaction_id"`
 }
+
+
 
 func (w *Wallet) AddPledgeHistory(pledgeDetails []model.PledgeHistory) error {
 	for _, detail := range pledgeDetails {
@@ -94,11 +95,46 @@ func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) 
 
 //		return tokenDetails, nil
 //	}
-func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus int) (map[string][]TokenInfo, error) {
-	var pledges []model.PledgeHistory
-	tokenDetails := make(map[string][]TokenInfo) // Map with slice of TokenInfo
+// func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus int) (map[string][]TokenInfo, error) {
+// 	var pledges []PledgeHistory
+// 	tokenDetails := make(map[string][]TokenInfo) // Map with slice of TokenInfo
 
-	// Query the database for records matching the given QuorumDID
+// 	// Query the database for records matching the given QuorumDID
+// 	err := w.s.Read(PledgeHistoryTable, &pledges, "quorum_did=? and token_credit_status=?", quorumDID, tokenCreditStatus)
+// 	if err != nil {
+// 		if strings.Contains(fmt.Sprint(err), "no records found") {
+// 			w.log.Info("No pledge history found for given QuorumDID", "quorumDID", quorumDID)
+// 			return nil, nil // Return nil if no records are found
+// 		}
+// 		w.log.Error("Failed to read pledge history", "quorumDID", quorumDID, "err", err)
+// 		return nil, err
+// 	}
+
+// 	// Iterate over the results and group TokenInfo by TransferTokenID
+// 	for _, pledge := range pledges {
+// 		tokenInfo := TokenInfo{
+// 			TokenType:            pledge.TransferTokenType,
+// 			TransactionID:        pledge.TransactionID,
+// 			TransactionEpoch:     pledge.Epoch,
+// 			TransferBlockID:      pledge.TransferBlockID,
+// 			TransTokenValue:      pledge.TransferTokenValue,
+// 			TokenCredit:          pledge.TokenCredit,
+// 			TokenCreditStatus:    pledge.TokenCreditStatus,
+// 			LatestTokenStateHash: pledge.LatestTokenStateHash,
+// 		}
+
+// 		// Append to the slice of TokenInfo for this TransferTokenID
+// 		tokenDetails[pledge.TransferTokenID] = append(tokenDetails[pledge.TransferTokenID], tokenInfo)
+// 	}
+
+// 	return tokenDetails, nil
+// }
+
+//New GetTokenDetailsByQuorumDid function below
+func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus int) ([]model.PledgeHistory, error) {
+	var pledges []model.PledgeHistory
+
+	// Query the database for records matching the given QuorumDID and TokenCreditStatus
 	err := w.s.Read(PledgeHistoryTable, &pledges, "quorum_did=? and token_credit_status=?", quorumDID, tokenCreditStatus)
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") {
@@ -109,25 +145,10 @@ func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus 
 		return nil, err
 	}
 
-	// Iterate over the results and group TokenInfo by TransferTokenID
-	for _, pledge := range pledges {
-		tokenInfo := TokenInfo{
-			TokenType:            pledge.TransferTokenType,
-			TransactionID:        pledge.TransactionID,
-			TransactionEpoch:     pledge.Epoch,
-			TransferBlockID:      pledge.TransferBlockID,
-			TransTokenValue:      pledge.TransferTokenValue,
-			TokenCredit:          pledge.TokenCredit,
-			TokenCreditStatus:    pledge.TokenCreditStatus,
-			LatestTokenStateHash: pledge.LatestTokenStateHash,
-		}
-
-		// Append to the slice of TokenInfo for this TransferTokenID
-		tokenDetails[pledge.TransferTokenID] = append(tokenDetails[pledge.TransferTokenID], tokenInfo)
-	}
-
-	return tokenDetails, nil
+	// Return the filtered pledge history records
+	return pledges, nil
 }
+
 
 func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transactionID string) error {
 	var pledgeHistoryRecords []model.PledgeHistory
@@ -220,7 +241,7 @@ func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transa
 		} else if record.TransactionType == 2 {
 			record.TokenCredit = ((int(record.NextBlockEpoch) - record.Epoch) * int(record.TransferTokenValue))
 		}
-		updateErr := w.s.Update(PledgeHistoryTable, record, "transfer_tokens_id = ? and transaction_id=?", tokenID, record.TransactionID)
+		updateErr := w.s.Update(PledgeHistoryTable, record, "transfer_tokens_id = ? and transaction_id=?", record.TransferTokenID, record.TransactionID)
 		if updateErr != nil {
 			fmt.Println("Epoch updation failed for token: ", record.TransferTokenID, "Error:", updateErr)
 			continue // Continue updating other rows even if one fails

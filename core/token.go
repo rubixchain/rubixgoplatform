@@ -959,76 +959,106 @@ func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tok
 	return lastErr
 }
 
+// func (c *Core) ReadyToMineCredits(did string) map[string][]wallet.TokenInfo {
+// 	// Fetch token details by QuorumDID
+// 	tokenDetails, err := c.w.GetTokenDetailsByQuorumDID(did, 0)
+// 	if err != nil {
+// 		c.log.Error("Failed to fetch token details", "err", err)
+// 		return nil // Return nil if fetching fails
+// 	}
 
-func (c *Core) ReadyToMineCredits(did string) map[string][]wallet.TokenInfo {
-	// Fetch token details by QuorumDID
-	tokenDetails, err := c.w.GetTokenDetailsByQuorumDID(did, 0)
-	if err != nil {
-		c.log.Error("Failed to fetch token details", "err", err)
-		return nil // Return nil if fetching fails
-	}
+// 	readyToMineTokens := make(map[string][]wallet.TokenInfo)
 
-	readyToMineTokens := make(map[string][]wallet.TokenInfo)
+// 	currentEpoch := int(time.Now().Unix())
 
-	currentEpoch := int(time.Now().Unix())
+// 	for token, details := range tokenDetails {
+// 		for _, detail := range details {
+// 			transactionBlockEpoch := detail.TransactionEpoch
+// 			secondsInFiveweeks := 7 * 24 * 60 * 60 * 5
 
-	for token, details := range tokenDetails {
-		for _, detail := range details {
-			transactionBlockEpoch := detail.TransactionEpoch
-			secondsInFiveweeks := 7 * 24 * 60 * 60 * 5
+// 			// Check if the token is ready for mining
+// 			if transactionBlockEpoch <= currentEpoch-secondsInFiveweeks {
+// 				// Append the TokenInfo to the slice in the map
+// 				readyToMineTokens[token] = append(readyToMineTokens[token], wallet.TokenInfo{
+// 					TokenType:            detail.TokenType,
+// 					TransTokenValue:      detail.TransTokenValue,
+// 					TransferBlockNumber:  detail.TransferBlockNumber,
+// 					TransactionID:        detail.TransactionID,
+// 					TransactionEpoch:     detail.TransactionEpoch,
+// 					TransferBlockID:      detail.TransferBlockID,
+// 					TransactionType:      detail.TransactionType,
+// 					NextBlockEpoch:       detail.NextBlockEpoch,
+// 					TokenCredit:          detail.TokenCredit,
+// 					LatestTokenStateHash: detail.LatestTokenStateHash,
+// 				})
+// 			}
+// 		}
+// 	}
 
-			// Check if the token is ready for mining
-			if transactionBlockEpoch <= currentEpoch-secondsInFiveweeks {
-				// Append the TokenInfo to the slice in the map
-				readyToMineTokens[token] = append(readyToMineTokens[token], wallet.TokenInfo{
-					TokenType:            detail.TokenType,
-					TransTokenValue:      detail.TransTokenValue,
-					TransferBlockNumber:  detail.TransferBlockNumber,
-					TransactionID:        detail.TransactionID,
-					TransactionEpoch:     detail.TransactionEpoch,
-					TransferBlockID:      detail.TransferBlockID,
-					TransactionType:      detail.TransactionType,
-					NextBlockEpoch:       detail.NextBlockEpoch,
-					TokenCredit:          detail.TokenCredit,
-					LatestTokenStateHash: detail.LatestTokenStateHash,
-				})
-			}
-		}
-	}
+// 	return readyToMineTokens
+// }
 
-	return readyToMineTokens
-}
+// func (c *Core) UpdateReadyToMineCredits(readyToMineTokens map[string][]wallet.TokenInfo) error {
+// 	if len(readyToMineTokens) == 0 {
+// 		c.log.Info("No tokens to update for mining readiness")
+// 		return nil // No updates needed
+// 	}
 
-func (c *Core) UpdateReadyToMineCredits(readyToMineTokens map[string][]wallet.TokenInfo) error {
-	if len(readyToMineTokens) == 0 {
-		c.log.Info("No tokens to update for mining readiness")
-		return nil // No updates needed
-	}
+// 	for token, tokenInfos := range readyToMineTokens { // Iterate over tokens
+// 		for _, tokenInfo := range tokenInfos { // Iterate over all associated TokenInfo entries
+// 			// Update token_credit_status to 1 (assuming 1 means "ready to mine")
+// 			err := c.w.UpdateTokenCreditStatus(token, 1, tokenInfo.TransactionID)
+// 			if err != nil {
+// 				c.log.Error("Failed to update token credit status", "token", token, "transactionID", tokenInfo.TransactionID, "err", err)
+// 				continue // Move to the next TokenInfo entry
+// 			}
+// 			c.log.Info("Updated token_credit_status to 1 for token", "token", token, "transactionID", tokenInfo.TransactionID)
+// 		}
+// 	}
 
-	for token, tokenInfos := range readyToMineTokens { // Iterate over tokens
-		for _, tokenInfo := range tokenInfos { // Iterate over all associated TokenInfo entries
-			// Update token_credit_status to 1 (assuming 1 means "ready to mine")
-			err := c.w.UpdateTokenCreditStatus(token, 1, tokenInfo.TransactionID)
-			if err != nil {
-				c.log.Error("Failed to update token credit status", "token", token, "transactionID", tokenInfo.TransactionID, "err", err)
-				continue // Move to the next TokenInfo entry
-			}
-			c.log.Info("Updated token_credit_status to 1 for token", "token", token, "transactionID", tokenInfo.TransactionID)
-		}
-	}
-
-	return nil // Return nil if function completes without critical errors
-}
+// 	return nil // Return nil if function completes without critical errors
+// }
 
 func (c *Core) FindReadyToMineCredits(did string) error {
-	readyToMineCredits := c.ReadyToMineCredits(did)
+	readyToMineCredits, err := c.ReadyToMineCredits(did)
 	c.log.Debug("ready to mine credits are", readyToMineCredits)
-	err := c.UpdateReadyToMineCredits(readyToMineCredits)
 	if err != nil {
 		c.log.Error("Failed to update ready to Mine credits", "err", err)
 		return err
 	}
 	return nil
+}
+
+// //////////Modified ReadytoMine() function below
+func (c *Core) ReadyToMineCredits(did string) ([]model.PledgeHistory, error) {
+	// Fetch pledge history by QuorumDID with tokenCreditStatus = 0
+	pledges, err := c.w.GetTokenDetailsByQuorumDID(did, 0)
+	if err != nil {
+		c.log.Error("Failed to fetch pledge history", "err", err)
+		return nil, err // Return error if fetching fails
+	}
+
+	var readyToMinePledges []model.PledgeHistory
+
+	currentEpoch := int(time.Now().Unix())
+	// secondsInFiveWeeks := 7 * 24 * 60 * 60 * 5 // 5 weeks in seconds
+
+	// Filter pledges based on transaction block epoch
+	for _, pledge := range pledges {
+		if pledge.Epoch <= currentEpoch-120 {
+			// Update token credit status to indicate it's now ready for mining
+			updateErr := c.w.UpdateTokenCreditStatus(pledge.TransferTokenID, 1, pledge.TransactionID)
+			if updateErr != nil {
+				c.log.Error("Failed to update token credit status", "tokenID", pledge.TransferTokenID, "transactionID", pledge.TransactionID, "err", updateErr)
+				continue // Continue processing other records even if one fails
+			}
+
+			// Append the pledge to the ready-to-mine list
+			readyToMinePledges = append(readyToMinePledges, pledge)
+		}
+	}
+
+	return readyToMinePledges, nil
 }
 
 func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {

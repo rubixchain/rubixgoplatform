@@ -10,12 +10,12 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
-func (c *Client) MineRBTs(didStr string) (*model.BasicResponse, error) {
-	m := make(map[string]string)
-	m["did"] = didStr
+func (c *Client) MineRBTs(miningReq *model.MiningRequest) (*model.BasicResponse, error) {
+	// m := make(map[string]string)
+	// m["did"] = miningReq.MinerDid
 	var br model.BasicResponse
-	fmt.Println("clinet side API is calling below")
-	err := c.sendJSONRequest("POST", setup.APIMineRBTs, nil, &m, &br)
+	fmt.Println("client side API is calling below")
+	err := c.sendJSONRequest("POST", setup.APIMineRBTs, nil, &miningReq, &br)
 	if err != nil {
 		return nil, err
 	}

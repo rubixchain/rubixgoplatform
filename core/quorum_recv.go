@@ -1534,7 +1534,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// if pinCheckErr != nil {
 		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
 		// }
-
+		fmt.Println("pledgeHistory in updatePledgeToken function",c.pledgeHistory)
 		newPledge := model.PledgeHistory{
 			QuorumDID:          did,
 			TransactionID:      ur.TransactionID,
@@ -1548,6 +1548,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		c.pledgeHistory = append(c.pledgeHistory, newPledge)
 	}
+	fmt.Println("pledgeHistory list in updatePledgeToken function",c.pledgeHistory)
 
 	crep.Status = true
 	crep.Message = "Token pledge status updated"
@@ -1944,6 +1945,7 @@ func (c *Core) updateNextBlockEpoch(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &response, http.StatusOK)
 	}
 	c.log.Debug("Next block Epoch updating for token: ", UpdateEpochDetails.TokenID)
+	c.log.Debug("Next block Epoch updating for transactionID: ", UpdateEpochDetails.TransactionID)
 	UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateEpochDetails.TokenID, UpdateEpochDetails.TransactionID, UpdateEpochDetails.TransactionType, UpdateEpochDetails.CurrentEpoch, UpdateEpochDetails.LatestTokenStateHash)
 	if UpdateEpochErr != nil {
 		c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)

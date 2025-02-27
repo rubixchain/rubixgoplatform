@@ -5,19 +5,22 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 func (s *Server) APIMineRBTs(req *ensweb.Request) *ensweb.Result {
 	fmt.Println("APIMineRBTs function called in server module")
-	var payload map[string]string
-	err := s.ParseJSON(req, &payload)
+	var miningReq model.MiningRequest
+	// var payload map[string]string
+	err := s.ParseJSON(req, &miningReq)
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	did, exists := payload["did"]
-	if !exists {
-		return s.BasicResponse(req, false, "DID is missing in request", nil)
+	_, did, ok := util.ParseAddress(miningReq.MinerDid)
+	if !ok {
+		return s.BasicResponse(req, false, "Miner Did is missing in request", nil)
 	}
 	s.log.Debug("did from the querry is:", did)
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
