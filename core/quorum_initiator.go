@@ -2219,7 +2219,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		nftGenesisBlock := &block.GenesisBlock{
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
-				{Token: cr.NFT, NFTValue: nftValue},
+				{Token: cr.NFT, NFTValue: nftValue, NFTData: sc.GetNFTData()},
 			},
 		}
 		tcb = block.TokenChainBlock{

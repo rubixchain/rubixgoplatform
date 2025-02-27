@@ -47,6 +47,7 @@ type GenesisTokenInfo struct {
 	CommitedTokens     []TransTokens `json:"commitedTokens"`
 	SmartContractValue float64       `json:"smartContractValue"`
 	NFTValue           float64       `json:"nftValue"`
+	NFTData            string        `json:"nftData"`
 }
 
 type GenesisBlock struct {
