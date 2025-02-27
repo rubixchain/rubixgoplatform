@@ -57,14 +57,14 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 }
 
 // @Summary Get transaction details by dID
-// @Description Retrieves the details of a transaction based on dID and date range.
+// @Description Retrieves the details of a transaction based on DID and date range (on and after start date and before end date).
 // @ID get-by-did
 // @Tags Account
 // @Accept json
 // @Produce json
 // @Param DID query string true "DID of sender/receiver"
 // @Param Role query string false "Filter by role as sender or receiver"
-// @Param StartDate query string false "Start date of the date range (format: YYYY-MM-DD"
+// @Param StartDate query string false "Start date of the date range (format: YYYY-MM-DD)"
 // @Param EndDate query string false "End date of the date range (format: YYYY-MM-DD)"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-by-did [get]
@@ -79,33 +79,9 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 	startDate := s.GetQuerry(req, "StartDate")
 	endDate := s.GetQuerry(req, "EndDate")
 
-	if (startDate != "" || endDate != "") && role != "" {
-		td := model.TxnDetails{
-			BasicResponse: model.BasicResponse{
-				Status:  false,
-				Message: "Either use Date range or Role for filter",
-				Result:  "",
-			},
-			TxnDetails: make([]model.TransactionDetails, 0),
-		}
-		return s.RenderJSON(req, &td, http.StatusOK)
-	}
-
 	res, err := s.c.GetTxnDetailsByDID(did, role, startDate, endDate)
 	if err != nil {
-		if err.Error() == "no records found" {
-			s.log.Info("There are no records present for this DID " + did)
-			td := model.TxnDetails{
-				BasicResponse: model.BasicResponse{
-					Status:  true,
-					Message: "no records present for this DID : " + did,
-					Result:  "No data found",
-				},
-				TxnDetails: make([]model.TransactionDetails, 0),
-			}
-			return s.RenderJSON(req, &td, http.StatusOK)
-		}
-		//s.log.Error("err", err)
+		s.log.Info("Error fetching transaction details. " + err.Error())
 		td := model.TxnDetails{
 			BasicResponse: model.BasicResponse{
 				Status:  false,
