@@ -1476,6 +1476,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 
 	// Split the TransferTokenIDs and add each tokenID as a separate row in PledgeHistory
 	tokenIDs := strings.Split(TransTokenIDs, ",")
+	c.pledgeHistory = []model.PledgeHistory{}
 	for _, tokenID := range tokenIDs {
 		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, tokenID)
 		if err != nil {
@@ -1534,7 +1535,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// if pinCheckErr != nil {
 		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
 		// }
-		fmt.Println("pledgeHistory in updatePledgeToken function",c.pledgeHistory)
+		
 		newPledge := model.PledgeHistory{
 			QuorumDID:          did,
 			TransactionID:      ur.TransactionID,
