@@ -966,7 +966,7 @@ func (c *Core) TokensSanityCheck(did string) (model.BasicResponse, error) {
 	// make batches of 20 tokens
 	batchSize := 20
 	for batch := 0; batch < len(tokens); batch += batchSize {
-		c.log.Debug("batch no:", (batch/20)+1)
+		c.log.Debug("batch no", (batch/batchSize)+1)
 		// Get the end index for the current batch
 		end := batch + batchSize
 		if end > len(tokens) {
