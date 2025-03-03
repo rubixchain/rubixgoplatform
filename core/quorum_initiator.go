@@ -329,7 +329,7 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
 	weekCount := util.GetWeeksPassed()
 	cs := ConsensusStatus{
-		Credit: CreditScore{
+		Credit: CreditScore{ // TODO: Remove credit score from ConsensusStatus
 			Credit: make([]CreditSignature, 0),
 		},
 		P: make(map[string]*ipfsport.Peer),
@@ -367,6 +367,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		for i := range ti {
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
+	case MiningMode:
+		reqPledgeTokens = float64(cr.MiningInfo.TokenCredits) // TODO: From the total credits in the request, determine the number of mineable RBTs. That is the pledge amount
 	}
 	minValue := MinDecimalValue(MaxDecimalPlaces)
 	minTotalPledgeAmount := minValue * float64(MinQuorumRequired)
@@ -381,6 +383,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		PledgedTokenChainBlock: make(map[string]interface{}),
 		TokenList:              make([]Token, 0),
 	}
+
+	// Transfer AMount is 0 in Mining mode
+	if cr.Mode == MiningMode {
+		pd.TransferAmount = 0
+	}
+
 	//getting last character from TID
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
@@ -407,6 +415,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	} else {
 		cr.QuorumList = ql
+	}
+
+	if cr.Mode == MiningMode {
+		cr.QuorumList = c.GetMiningQuorums()
 	}
 
 	c.qlock.Lock()

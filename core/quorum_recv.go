@@ -785,6 +785,42 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
+func (c *Core) quorumMiningConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, miningRequest *ConensusRequest) *ensweb.Result {
+	crep := ConensusReply{
+		ReqID:  miningRequest.ReqID,
+		Status: false,
+	}
+
+	ok, miningContract := c.verifyContract(miningRequest, did)
+	if !ok {
+		crep.Message = "Failed to verify sender signature"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	// Validating the credits
+	tokenCreditsDetails := miningContract.GetTokenCreditsDetails()
+	err := c.ValidateCredits(miningRequest.MiningInfo.MinerDid, int(miningRequest.MiningInfo.TokenCredits), tokenCreditsDetails)
+	if err != nil {
+		crep.Message = "Failed to validate credits"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	//Mining quorums will sign on the block
+	qHash := util.CalculateHash(miningContract.GetBlock(), "SHA3-256")
+	miningQuorumSignBlock, privateSignBlock, err := qdc.Sign(util.HexToStr(qHash))
+	if err != nil {
+		c.log.Error("Failed to get quorum signature", "err", err)
+		crep.Message = "Failed to get quorum signature"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	crep.Status = true
+	crep.Message = "Mining Conensus finished successfully"
+	crep.ShareSig = miningQuorumSignBlock
+	crep.PrivSig = privateSignBlock
+	return c.l.RenderJSON(req, &crep, http.StatusOK)
+}
+
 func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var cr ConensusRequest
@@ -829,6 +865,9 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	case FTTransferMode:
 		c.log.Debug("FT consensus started")
 		return c.quorumFTConsensus(req, did, qdc, &cr)
+	case MiningMode:
+		c.log.Debug("Mining consensus started")
+		return c.quorumMiningConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
 		crep.Message = "Invalid consensus mode"
@@ -1535,7 +1574,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// if pinCheckErr != nil {
 		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
 		// }
-		
+
 		newPledge := model.PledgeHistory{
 			QuorumDID:          did,
 			TransactionID:      ur.TransactionID,
@@ -1549,7 +1588,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		c.pledgeHistory = append(c.pledgeHistory, newPledge)
 	}
-	fmt.Println("pledgeHistory list in updatePledgeToken function",c.pledgeHistory)
+	fmt.Println("pledgeHistory list in updatePledgeToken function", c.pledgeHistory)
 
 	crep.Status = true
 	crep.Message = "Token pledge status updated"

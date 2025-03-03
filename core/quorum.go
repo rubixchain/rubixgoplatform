@@ -20,8 +20,8 @@ const (
 )
 
 const (
-	QuorumStorage string = "quorummanager"
-	MiningQuorumStorage string ="mining_quorummangager"
+	QuorumStorage       string = "quorummanager"
+	MiningQuorumStorage string = "mining_quorummangager"
 )
 
 const (
@@ -252,4 +252,13 @@ func saveQuorumsToFile(qds []QuorumData, fileName string) error {
 	}
 	fmt.Printf("Quorum file saved successfully at %s\n", currentDir)
 	return nil
+}
+
+// TODO: Modify this function, REMOVE hard coded values
+func (c *Core) GetMiningQuorums() []string {
+
+	//Hardcoding the miningQuorumlist for testing
+	miningQuorumlist := []string{"sai1", "sai2", "sai3", "sai4", "sai5"}
+	return miningQuorumlist
+
 }

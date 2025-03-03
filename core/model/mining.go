@@ -2,7 +2,7 @@ package model
 
 type MiningRequest struct {
 	MinerDid     string `json:"miner"`
-	TokenCredits int    `json:"credits"`
+	TokenCredits uint64 `json:"credits"`
 	Password     string `json:"password"`
 }
 

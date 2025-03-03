@@ -740,6 +740,36 @@ func GetIntFromMap(m interface{}, key string) int {
 	}
 	return tl
 }
+func GetInt64FromMap(m interface{}, key string) int64 {
+	var tli interface{}
+	var ok bool
+	switch mm := m.(type) {
+	case map[string]interface{}:
+		tli, ok = mm[key]
+		if !ok {
+			return 0
+		}
+	case map[interface{}]interface{}:
+		tli, ok = mm[key]
+		if !ok {
+			return 0
+		}
+	default:
+		return 0
+	}
+	var tl int64
+	switch mt := tli.(type) {
+	case int:
+		tl = int64(mt)
+	case int64:
+		tl = mt
+	case uint64:
+		tl = int64(mt)
+	default:
+		tl = 0
+	}
+	return tl
+}
 
 func GetFloatFromMap(m interface{}, key string) float64 {
 	var tli interface{}
