@@ -5,6 +5,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/token"
 
 	// "github.com/rubixchain/rubixgoplatform/did"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest, tokenCreditDetails []model.PledgeHistory) *model.BasicResponse {
+func (c *Core) InitiateMineRBTs(reqID string, MiningReq *model.MiningRequest, tokenCreditDetails []model.PledgeHistory) *model.BasicResponse {
 	fmt.Println("Executing MineRBTs function")
 
 	resp := &model.BasicResponse{
@@ -20,7 +21,7 @@ func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest, tokenCre
 	}
 
 	// 1. Fetch pledge history records where tokenCreditStatus = 1 (ready to mine)
-	pledges, err := c.w.GetTokenDetailsByQuorumDID(req.MinerDid, 1)
+	pledges, err := c.w.GetTokenDetailsByQuorumDID(MiningReq.MinerDid, 1)
 	if err != nil {
 		resp.Message = "Failed to fetch pledge history, " + err.Error()
 		return resp // Return error if fetching fails
@@ -41,7 +42,7 @@ func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest, tokenCre
 		return resp // Return an error
 	}
 
-	didCryptoLib, err := c.SetupDID(reqID, req.MinerDid)
+	didCryptoLib, err := c.SetupDID(reqID, MiningReq.MinerDid)
 	if err != nil {
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
@@ -50,7 +51,7 @@ func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest, tokenCre
 	MiningContractDetails := &contract.ContractType{
 		Type:               contract.MineRBTType,
 		PledgeMode:         contract.PeriodicPledgeMode,
-		ReqTokenCredits:    req.TokenCredits,
+		ReqTokenCredits:    MiningReq.TokenCredits,
 		TokenCreditDetails: tokenCreditDetails,
 		ReqID:              reqID,
 	}
@@ -62,11 +63,10 @@ func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest, tokenCre
 		resp.Message = err.Error()
 		return resp
 	}
-	// miningConsensusReq := c.getMiningConsensusReq(req.MinerDid, miningContract.GetBlock(), *req)
 
-	// //for now manually hardcoding the miningQuorumlist
-	// var miningQuorumlist []string
-	// miningQuorumlist = []string{"sai1", "sai2", "sai3", "sai4", "sai5"}
+	miningConsensusReq := c.getMiningConsensusReq(miningContract.GetBlock(), *MiningReq)
+
+	_, _, _, _ = c.initiateConsensus(miningConsensusReq, miningContract, didCryptoLib)
 
 	//4.Refer Initiate RBT flow for collecting and sending the token details.
 	resp.Status = true
@@ -77,27 +77,99 @@ func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest, tokenCre
 
 }
 
-func (c *Core) getMiningConsensusReq(minerPeerID string, contractBlock []byte, miningReq model.MiningRequest) *ConensusRequest {
+func (c *Core) getMiningConsensusReq(contractBlock []byte, miningReq model.MiningRequest) *ConensusRequest {
 	var consensusRequest *ConensusRequest = &ConensusRequest{
+		Mode:          MiningMode,
 		ReqID:         uuid.New().String(),
-		SenderPeerID:  miningReq.MinerDid,
 		ContractBlock: contractBlock,
 		MiningInfo:    miningReq,
 	}
 	return consensusRequest
 }
 
-// func (c *Core) initiateMiningConsensus(miningContractDetails *contract.ContractType, consensusReq *ConsensusRequest, didCrypto did.DIDCrypto) {
-// 	//get pledge amount depending on the credit details,
-// 	//fetch requird number of credits to mine next RBT
-// 	//for a given number of credits, we should check next mining token level, token number,
-// 	//for that particular level, how many tokens still we are yet to mine.
-// 	//get how many number of tokens we can mine of this particular level with the given number of credits.
-// 	//If that number is >number of tokens yet to mine in current level
-//     //Inputs: number of total req token credits
-// 	//
+// TokensCanbeMinedFromCreditsInGivenLevel calculates how many whole tokens can be mined from the requested tokenCredits
+// and returns the remaining credits.
+func TokensCanbeMinedFromCreditsInGivenLevel(reqTokenCredits uint64, tokenLevel int) (uint64, uint64, error) {
+	creditsPerToken := token.CreditsRequiredforLevel(tokenLevel)
+	// Calculate whole tokens that can be mined
+	tokensCanbeMined := reqTokenCredits / creditsPerToken
+	remainingCredits := reqTokenCredits % creditsPerToken
 
-//     consensusReq.MiningInfo.TokenCredits
-// 	//
+	return tokensCanbeMined, remainingCredits, nil
+}
 
-// }
+// This function, For a given requested token credits, tokenLevel and tokenNumber it outputs number of tokens can be mined
+func TokensCanbeMinedFromCredits(reqTokenCredits uint64, tokenLevel int, tokenNumber int) (map[int]uint64, uint64, error) {
+	result := make(map[int]uint64)
+	remainingCredits := reqTokenCredits
+
+	// Base case: if we've exceeded max level or have no credits left
+	if tokenLevel > 78 || remainingCredits == 0 {
+		return result, remainingCredits, nil
+	}
+
+	// Get current level's requirements
+	creditsPerToken, ok := token.CreditLevelMap[tokenLevel]
+	if !ok {
+		return nil, 0, fmt.Errorf("credit level %d not found in the credit level map", tokenLevel)
+	}
+
+	maxTokensForLevel, ok := token.TokenMap[tokenLevel]
+	if !ok {
+		return nil, 0, fmt.Errorf("token level %d not found in token level map", tokenLevel)
+	}
+
+	// Calculate how many we could potentially mine in this level
+	availableTokens := maxTokensForLevel - tokenNumber
+	if availableTokens <= 0 {
+		// Move to next level if current level is full
+		return TokensCanbeMinedFromCredits(remainingCredits, tokenLevel+1, 1)
+	}
+
+	// Calculate possible tokens to mine
+	tokensCanBeMined := remainingCredits / creditsPerToken
+	actualTokens := uint64(availableTokens)
+	if tokensCanBeMined < actualTokens {
+		actualTokens = tokensCanBeMined
+	}
+
+	if actualTokens > 0 {
+		// Calculate used credits
+		usedCredits := actualTokens * creditsPerToken
+		remainingCredits -= usedCredits
+
+		// Add to result
+		result[tokenLevel] = actualTokens
+
+		// Check if we filled this level
+		newTokenNumber := tokenNumber + int(actualTokens)
+		if newTokenNumber >= maxTokensForLevel {
+			// Move to next level with remaining credits
+			nextLevelResult, remaining, err := TokensCanbeMinedFromCredits(remainingCredits, tokenLevel+1, 1)
+			if err != nil {
+				return nil, 0, err
+			}
+			mergeResults(result, nextLevelResult)
+			return result, remaining, nil
+		}
+
+		// Still capacity in current level, return remaining credits
+		return result, remainingCredits, nil
+	}
+
+	// Not enough credits for this level, try next level
+	nextLevelResult, remaining, err := TokensCanbeMinedFromCredits(remainingCredits, tokenLevel+1, 1)
+	if err != nil {
+		return nil, 0, err
+	}
+	mergeResults(result, nextLevelResult)
+	return result, remaining, nil
+}
+
+func mergeResults(target, source map[int]uint64) {
+	for level, count := range source {
+		target[level] += count
+	}
+}
+
+//////////

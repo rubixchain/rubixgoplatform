@@ -35,6 +35,7 @@ const (
 	PinningServiceMode
 	NFTExecuteMode
 	FTTransferMode
+	MiningMode
 )
 const (
 	AlphaQuorumType int = iota

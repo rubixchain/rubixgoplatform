@@ -78,6 +78,10 @@ func MaxTokenFromLevel(level int) int {
 	val := TokenMap[level]
 	return val
 }
+func CreditsRequiredforLevel(level int) uint64 {
+	credits := CreditLevelMap[level]
+	return credits
+}
 
 func ValidateTokenDetials(tl int, tn int) bool {
 	if tn < 0 {
