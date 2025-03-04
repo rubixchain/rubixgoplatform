@@ -17,6 +17,7 @@ import (
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/wasmbridge"
 )
 
 const (
@@ -1382,12 +1383,23 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	case SmartContractExecuteMode:
 		//Get the latest block details before being executed to get the old signers
 		b := c.w.GetLatestTokenBlock(cr.SmartContractToken, nb.GetTokenType(cr.SmartContractToken))
-
+		fmt.Println("The latest block in Smart Contract Execution : ", b)
+		fmt.Println("Block something", b.GetBlock())
+		fmt.Println("The smart contract data in the block :", b.GetSmartContractData())
 		previousQuorumDIDs, err := b.GetSigner()
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.SmartContractToken, err)
 		}
+		// Create Import function registry
+	hostFnRegistry := wasmbridge.NewHostFunctionRegistry()
 
+	// Initialize the WASM module
+	wasmModule, err := wasmbridge.NewWasmModule(
+		FT_CONTRACT_WASM,
+		hostFnRegistry,
+		wasmbridge.WithRubixNodeAddress(nodeAddress),
+		wasmbridge.WithQuorumType(quorumType),
+	)
 		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
 		if err != nil {
