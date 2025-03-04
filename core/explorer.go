@@ -22,6 +22,7 @@ const (
 	ExplorerTokenCreateAPI        string = "/api/token/create"
 	ExplorerTokenCreatePartsAPI   string = "/api/token/part/create"
 	ExplorerTokenCreateNFTAPI     string = "/api/token/nft/create"
+	ExplorerTokenCreateSCAPI      string = "/api/token/sc/create"
 	ExplorerCreateUserAPI         string = "/api/user/create"
 	ExplorerUpdateUserInfoAPI     string = "/api/user/update-user-info"
 	ExplorerUpdateTokenInfoAPI    string = "/api/token/update-token-info"
@@ -151,20 +152,36 @@ type ExplorerRBTTrans struct {
 	TransTokenList []Token    `json:"token_list"`
 	Comments       string     `json:"comments"`
 }
-type ExplorerSCTrans struct {
+
+type ExplorerSCDeploy struct {
 	SCTokenHash        string     `json:"sc_token_hash"`
-	SCBlockHash        string     `json:"block_hash"`
+	SCTokenValue       float64    `json:"sc_token_value"`
+	Network            int        `json:"network"`
 	SCBlockNumber      int        `json:"block_number"`
 	TransactionID      string     `json:"transaction_id"`
-	Network            int        `json:"network"`
-	ExecutorDID        string     `json:"executor"`
-	DeployerDID        string     `json:"deployer"`
-	Creator            string     `json:"creator"`
+	SCBlockHash        string     `json:"block_hash"`
+	DeployerDID        string     `json:"deployer_did"`
+	Creator            string     `json:"creator_did"`
 	PledgeAmount       float64    `json:"pledge_amount"`
 	QuorumList         []string   `json:"quorum_list"`
 	PledgeInfo         PledgeInfo `json:"pledge_info"`
 	CommittedTokenList []Token    `json:"token_list"`
 	Comments           string     `json:"comments"`
+}
+
+type ExplorerSCTrans struct {
+	SCTokenHash   string     `json:"sc_token_hash"`
+	SCBlockHash   string     `json:"block_hash"`
+	SCBlockNumber int        `json:"block_number"`
+	TransactionID string     `json:"transaction_id"`
+	Network       int        `json:"network"`
+	ExecutorDID   string     `json:"executor_did"`
+	DeployerDID   string     `json:"deployer_did"`
+	Creator       string     `json:"creator_did"`
+	PledgeAmount  float64    `json:"pledge_amount"`
+	QuorumList    []string   `json:"quorum_list"`
+	PledgeInfo    PledgeInfo `json:"pledge_info"`
+	Comments      string     `json:"comments"`
 }
 
 type ExplorerNFTDeploy struct {
@@ -174,8 +191,8 @@ type ExplorerNFTDeploy struct {
 	NFTValue       float64       `json:"nft_value"`
 	TransactionID  string        `json:"transaction_id"`
 	Network        int           `json:"network"`
-	OwnerDID       string        `json:"owner"`
-	DeployerDID    string        `json:"deployer"`
+	OwnerDID       string        `json:"owner_did"`
+	DeployerDID    string        `json:"deployer_did"`
 	PledgeAmount   float64       `json:"pledge_amount"`
 	QuorumList     []string      `json:"quorum_list"`
 	PledgeInfo     PledgeInfoNFT `json:"pledge_info"`
@@ -184,16 +201,16 @@ type ExplorerNFTDeploy struct {
 
 type ExplorerNFTExecute struct {
 	NFT            string        `json:"nft"`
-	ExecutorDID    string        `json:"executorDID"`
-	ReceiverDID    string        `json:"receiverDID"`
+	ExecutorDID    string        `json:"executor_did"`
+	ReceiverDID    string        `json:"receiver_did"`
 	Network        int           `json:"network"`
 	Comments       string        `json:"comments"`
-	NFTValue       float64       `json:"nftValue"`
-	NFTData        string        `json:"nftData"`
-	NFTBlockHash   string        `json:"blockHash"`
-	NFTBlockNumber int           `json:"blockNumber"`
-	PledgeAmount   float64       `json:"pledgeAmount"`
-	TransactionID  string        `json:"transactionID"`
+	NFTValue       float64       `json:"nft_value"`
+	NFTData        string        `json:"nft_data"`
+	NFTBlockHash   string        `json:"block_hash"`
+	NFTBlockNumber int           `json:"block_number"`
+	PledgeAmount   float64       `json:"pledge_amount"`
+	TransactionID  string        `json:"transaction_id"`
 	Amount         float64       `json:"amount"`
 	QuorumList     []string      `json:"quorumList"`
 	PledgeInfo     PledgeInfoNFT `json:"pledgeInfo"`
@@ -693,6 +710,20 @@ func (ec *ExplorerClient) ExplorerRBTTransaction(et *ExplorerRBTTrans) error {
 		return fmt.Errorf("failed to update explorer")
 	}
 	ec.log.Info(fmt.Sprintf("Transaction details for TransactionID %v is stored successfully", et.TransactionID))
+	return nil
+}
+
+func (ec *ExplorerClient) ExplorerSCDeploy(et *ExplorerSCDeploy) error {
+	var er ExplorerResponse
+	err := ec.SendExplorerJSONRequest("POST", ExplorerTokenCreateSCAPI, et, &er)
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(er.Message, "successfully") {
+		ec.log.Error("Failed to update explorer", "msg", er.Message)
+		return fmt.Errorf("failed to update explorer")
+	}
+	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID))
 	return nil
 }
 
