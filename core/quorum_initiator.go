@@ -368,7 +368,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
 	case MiningMode:
-		reqPledgeTokens = float64(cr.MiningInfo.TokenCredits) // TODO: From the total credits in the request, determine the number of mineable RBTs. That is the pledge amount
+		reqPledgeTokensInt,_,_:=  (TotalTokensCanBeMinedFromCredits(cr.MiningInfo.TokenCredits))// TODO: From the total credits in the request, determine the number of mineable RBTs. That is the pledge amount
+		reqPledgeTokens = float64(reqPledgeTokensInt)
 	}
 	minValue := MinDecimalValue(MaxDecimalPlaces)
 	minTotalPledgeAmount := minValue * float64(MinQuorumRequired)
@@ -384,7 +385,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		TokenList:              make([]Token, 0),
 	}
 
-	// Transfer AMount is 0 in Mining mode
+	// Transfer Amount is 0 in Mining mode
 	if cr.Mode == MiningMode {
 		pd.TransferAmount = 0
 	}

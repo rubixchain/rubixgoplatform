@@ -13,6 +13,12 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
+const (
+    tokenLevel = 4
+    tokenNumber = 1
+)
+
+
 func (c *Core) InitiateMineRBTs(reqID string, MiningReq *model.MiningRequest, tokenCreditDetails []model.PledgeHistory) *model.BasicResponse {
 	fmt.Println("Executing MineRBTs function")
 
@@ -171,5 +177,21 @@ func mergeResults(target, source map[int]uint64) {
 		target[level] += count
 	}
 }
+//From the given requested token credits,it outputs total number of tokens that can be mined, remaining 
+func TotalTokensCanBeMinedFromCredits(reqTokenCredits uint64) (uint64,uint64,error){
+	//Todo:Fetch Latest tokenLevel and token number from the Mining chain
+	tokensCanBeMined,remainingCredits,err:=TokensCanbeMinedFromCredits(reqTokenCredits,tokenLevel,tokenNumber)
+	if err!=nil{
+		return 0,0,err
+	}
+	var totalTokens uint64
+    // Sum up the total tokens from all levels
+	for _,numberOfTokens := range tokensCanBeMined{
+		totalTokens += numberOfTokens
 
-//////////
+	}
+	return totalTokens,remainingCredits,nil
+
+}
+
+
