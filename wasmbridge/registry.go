@@ -1,11 +1,18 @@
 package wasmbridge
 
 import (
-	"github.com/rubixchain/rubix-wasm/go-wasm-bridge/host"
-	"github.com/rubixchain/rubix-wasm/go-wasm-bridge/host/ft"
-	"github.com/rubixchain/rubix-wasm/go-wasm-bridge/host/generic"
-	"github.com/rubixchain/rubix-wasm/go-wasm-bridge/host/nft"
+	// "github.com/rubixchain/rubixgoplatform/client"
+	"github.com/rubixchain/rubixgoplatform/wasmbridge/host"
+	"github.com/rubixchain/rubixgoplatform/wasmbridge/host/ft"
+	"github.com/rubixchain/rubixgoplatform/wasmbridge/host/generic"
 )
+
+type MintFTData struct {
+	Did        string `json:"did"`
+	FtCount    int32  `json:"ft_count"`
+	FtName     string `json:"ft_name"`
+	TokenCount int32  `json:"token_count"`
+}
 
 // HostFunctionRegistry manages the registration of host functions.
 type HostFunctionRegistry struct {
@@ -13,17 +20,15 @@ type HostFunctionRegistry struct {
 }
 
 // NewHostFunctionRegistry creates a new registry with predefined host functions.
-func NewHostFunctionRegistry() *HostFunctionRegistry {
+func NewHostFunctionRegistry(clientInstance ft.ClientInterface, ftData ft.MintFTData) *HostFunctionRegistry {
 	registry := &HostFunctionRegistry{
 		hostFunctions: []host.HostFunction{},
 	}
 
 	// Register predefined host functions
 	registry.Register(generic.NewDoApiCall())
-	registry.Register(nft.NewDoMintNFTApiCall())
-	registry.Register(nft.NewDoTransferNFTApiCall())
-	registry.Register(ft.NewDoMintFTApiCall())
-	registry.Register(ft.NewDoTransferFTApiCall())
+	registry.Register(ft.NewDoMintFTApiCall(clientInstance, ftData))
+	// registry.Register(ft.NewDoTransferFTApiCall(clientInstance))
 
 	return registry
 }

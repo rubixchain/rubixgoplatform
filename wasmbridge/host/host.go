@@ -15,5 +15,5 @@ type HostFunction interface {
 	Callback() HostFunctionCallBack
 
 	// Initialize inits with necessary Wasmtime elements such as allocation, deallocation functions and memory
-	Initialize(allocFunc, deallocFunc *wasmtime.Func, memory *wasmtime.Memory, nodeAddress string, quorumType int)
+	Initialize(allocFunc, deallocFunc *wasmtime.Func, memory *wasmtime.Memory)
 }

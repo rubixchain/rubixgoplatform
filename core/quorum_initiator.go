@@ -11,6 +11,7 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -18,6 +19,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wasmbridge"
+	"github.com/rubixchain/rubixgoplatform/wasmbridge/host/ft"
 )
 
 const (
@@ -1391,15 +1393,24 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.SmartContractToken, err)
 		}
 		// Create Import function registry
-	hostFnRegistry := wasmbridge.NewHostFunctionRegistry()
-
-	// Initialize the WASM module
-	wasmModule, err := wasmbridge.NewWasmModule(
-		FT_CONTRACT_WASM,
-		hostFnRegistry,
-		wasmbridge.WithRubixNodeAddress(nodeAddress),
-		wasmbridge.WithQuorumType(quorumType),
-	)
+		clientInstance := &client.Client{}
+		hostFnRegistry := wasmbridge.NewHostFunctionRegistry(clientInstance)
+		wasmPath := c.cfg.DirPath + "SmartContract/" + cr.SmartContractToken + "/binaryCodeFile.wasm"
+		// Here this can be pointed to any existing contract and can be used to execute.
+		fmt.Println("The wasm path is :", wasmPath)
+		// Initialize the WASM module
+		wasmModule, err5 := wasmbridge.NewWasmModule(
+			wasmPath,
+			hostFnRegistry,
+		)
+		if err5 != nil {
+			fmt.Println("The error5 is :", err5)
+		}
+		contractResult, err6 := wasmModule.CallFunction(b.GetSmartContractData())
+		fmt.Println("The contractResult is :", contractResult)
+		if err6 != nil {
+			fmt.Println("The error6 is :", err6)
+		}
 		//Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
 		if err != nil {

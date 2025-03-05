@@ -5,22 +5,36 @@ import (
 	"fmt"
 
 	"github.com/bytecodealliance/wasmtime-go"
-	// "github.com/rubixchain/rubix-wasm/go-wasm-bridge/utils"
-	client "github.com/rubixchain/rubixgoplatform/client"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/wasmbridge/host"
 	utils "github.com/rubixchain/rubixgoplatform/wasmbridge/wasmutil"
-	// "github.com/rubixchain/rubix-wasm/go-wasm-bridge/host"
-	// "github.com/rubixchain/rubix-wasm/go-wasm-bridge/utils"
 )
 
-type DoMintFTApiCall struct {
-	allocFunc *wasmtime.Func
-	memory    *wasmtime.Memory
-	c         *client.Client
-	// nodeAddress string
-	// quorumType  int
+// ClientInterface defines the methods required by a client
+type ClientInterface interface {
+	CreateFT(did string, ftName string, ftCount int, tokenCount int) (*model.BasicResponse, error)
 }
 
+// CreateFTFunc calls the CreateFT method from the client
+func CreateFTFunc(c ClientInterface, did string, ftName string, ftCount int, tokenCount int) (*model.BasicResponse, error) {
+	return c.CreateFT(did, ftName, ftCount, tokenCount)
+}
+
+// CallFunctionInsideFT calls a function inside the FT module
+func CallFunctionInsideFT(c ClientInterface, ftData MintFTData) string {
+	CreateFTFunc(c, ftData.Did, ftData.FtName, int(ftData.FtCount), int(ftData.TokenCount))
+	return "FT Function called"
+}
+
+// DoMintFTApiCall struct holds necessary fields for execution
+type DoMintFTApiCall struct {
+	allocFunc    *wasmtime.Func
+	memory       *wasmtime.Memory
+	client       ClientInterface                                                                          // ✅ Store client instance
+	callbackfunc func(*wasmtime.Caller, []wasmtime.Val, ClientInterface) ([]wasmtime.Val, *wasmtime.Trap) // ✅ Store callback function
+}
+
+// MintFTData represents the JSON structure for minting FT
 type MintFTData struct {
 	Did        string `json:"did"`
 	FtCount    int32  `json:"ft_count"`
@@ -28,14 +42,25 @@ type MintFTData struct {
 	TokenCount int32  `json:"token_count"`
 }
 
-func NewDoMintFTApiCall() *DoMintFTApiCall {
-	return &DoMintFTApiCall{}
+// NewDoMintFTApiCall creates a new instance of DoMintFTApiCall
+func NewDoMintFTApiCall(client ClientInterface, ftData MintFTData) *DoMintFTApiCall {
+	return &DoMintFTApiCall{
+		client: client, // ✅ Inject client
+		callbackfunc: func(caller *wasmtime.Caller, args []wasmtime.Val, c ClientInterface) ([]wasmtime.Val, *wasmtime.Trap) {
+			// ✅ Use injected client to call function
+			response := CallFunctionInsideFT(c, ftData)
+			fmt.Println("The response received:", response)
+			return utils.HandleOk()
+		},
+	}
 }
 
+// Name returns the function name
 func (h *DoMintFTApiCall) Name() string {
 	return "do_mint_ft"
 }
 
+// FuncType returns the Wasm function signature
 func (h *DoMintFTApiCall) FuncType() *wasmtime.FuncType {
 	return wasmtime.NewFuncType(
 		[]*wasmtime.ValType{
@@ -48,112 +73,50 @@ func (h *DoMintFTApiCall) FuncType() *wasmtime.FuncType {
 	)
 }
 
-func (h *DoMintFTApiCall) Initialize(allocFunc, deallocFunc *wasmtime.Func, memory *wasmtime.Memory, nodeAddress string, quorumType int) {
+// Initialize sets up the function and memory references
+func (h *DoMintFTApiCall) Initialize(allocFunc, deallocFunc *wasmtime.Func, memory *wasmtime.Memory) {
 	h.allocFunc = allocFunc
 	h.memory = memory
-	h.c = &client.Client{}
-	// h.nodeAddress = nodeAddress
-	// h.quorumType = quorumType
 }
 
+// Callback returns the function callback for execution
 func (h *DoMintFTApiCall) Callback() host.HostFunctionCallBack {
-	return h.callback
+	return func(caller *wasmtime.Caller, args []wasmtime.Val) ([]wasmtime.Val, *wasmtime.Trap) {
+		return h.callback(caller, args, h.client) // ✅ Use injected client
+	}
 }
 
-// func callCreateFTAPI(nodeAddress string, mintFTdata MintFTData) (string, error) {
-// 	fmt.Println("The body in create-ft api :", mintFTdata)
-// 	requestBody, err := json.Marshal(mintFTdata)
-// 	if err != nil {
-// 		fmt.Println("Error marshalling mintFTdata :", err)
-// 		return "", err
-// 	}
-
-// 	// Create the request URL
-// 	requestURL, err := url.JoinPath(nodeAddress, "/api/create-ft")
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(requestBody))
-// 	if err != nil {
-// 		fmt.Println("Error creating HTTP request:", err)
-// 		return "", err
-// 	}
-// 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-// 	// Send the request
-// 	client := &http.Client{}
-// 	resp, err := client.Do(req)
-// 	if err != nil {
-// 		fmt.Println("Error sending HTTP request in mintft function:", err)
-// 		// return []wasmtime.Val{wasmtime.ValI32(1)}, wasmtime.NewTrap(fmt.Sprintf("Error sending http request: %v\n", err))
-// 		return "", err
-// 	}
-
-// 	defer resp.Body.Close()
-// 	fmt.Println("The response after calling the api :", resp)
-
-// 	fmt.Println("Response Status:", resp.Status)
-
-// 	createFtResponse, err := io.ReadAll(resp.Body)
-// 	if err != nil {
-// 		fmt.Printf("Error reading response body: %s\n", err)
-// 		return "", err
-// 	}
-// 	// Process the data as needed
-// 	fmt.Println("Response Body in callTransferFTAPI :", string(createFtResponse))
-// 	var response map[string]interface{}
-// 	err3 := json.Unmarshal(createFtResponse, &response)
-// 	if err3 != nil {
-// 		fmt.Println("Error unmarshaling response:", err3)
-// 		return "", err3
-// 	}
-
-// 	result := response["result"].(map[string]interface{})
-// 	id := result["id"].(string)
-
-// 	return utils.SignatureResponse(id, nodeAddress)
-// }
-
+// callback function for executing the mint FT operation
 func (h *DoMintFTApiCall) callback(
 	caller *wasmtime.Caller,
 	args []wasmtime.Val,
-) ([]wasmtime.Val, *wasmtime.Trap) {
-	// Validate the number of arguments
+	c ClientInterface) ([]wasmtime.Val, *wasmtime.Trap) {
+
 	inputArgs, outputArgs := utils.HostFunctionParamExtraction(args, true, true)
 
-	// Extract input bytes and convert to string
 	inputBytes, memory, err := utils.ExtractDataFromWASM(caller, inputArgs)
 	if err != nil {
 		fmt.Println("Failed to extract data from WASM", err)
 		return utils.HandleError(err.Error())
 	}
-	h.memory = memory // Assign memory to Host struct for future use
+	h.memory = memory
 
 	var mintFTData MintFTData
-	//Unmarshaling the data which has been read from the wasm memory
 	err3 := json.Unmarshal(inputBytes, &mintFTData)
 	if err3 != nil {
-		fmt.Println("Error unmarshaling mintftdata in callback function:", err3)
+		fmt.Println("Error unmarshaling mintftdata:", err3)
 		return utils.HandleError(err3.Error())
 	}
-	response, err4 := h.c.CreateFT(mintFTData.Did, mintFTData.FtName, int(mintFTData.FtCount), int(mintFTData.TokenCount))
-	if err4 != nil {
-		fmt.Println("ft creation failed", err4)
-	}
-	fmt.Println("the response received :", response)
-	// callCreateFTAPIResp, err := callCreateFTAPI("", mintFTData)
-	// client.NewClient(cfg)
-	// if err != nil {
-	// 	fmt.Println("Error calling CreateFTAPI in callback function:", err)
-	// 	return utils.HandleError(err.Error())
-	// }
-	// fmt.Println("The api response from create ft api :", callCreateFTAPIResp)
 
-	err = utils.UpdateDataToWASM(caller, h.allocFunc, response.Message, outputArgs)
+	// ✅ Use h.client instead of passing it around
+	response := CallFunctionInsideFT(h.client, mintFTData)
+	fmt.Println("The response received:", response)
+
+	err = utils.UpdateDataToWASM(caller, h.allocFunc, response, outputArgs)
 	if err != nil {
 		fmt.Println("Failed to update data to WASM", err)
 		return utils.HandleError(err.Error())
 	}
 
-	return utils.HandleOk() // Success
+	return utils.HandleOk()
 }
