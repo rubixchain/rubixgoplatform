@@ -328,6 +328,7 @@ type Command struct {
 	creatorDID                   string
 	defaultSetup                 bool
 	apiKey                       string
+	nftValue                     float64
 }
 
 func showVersion() {
@@ -547,6 +548,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
 	flag.BoolVar(&cmd.defaultSetup, "defaultSetup", false, "Add Faucet Quorums")
 	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
+	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
