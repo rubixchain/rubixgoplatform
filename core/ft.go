@@ -2,19 +2,24 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"math"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -46,25 +51,26 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	isAlphanumericDID := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
 	if !isAlphanumericDID || !strings.HasPrefix(did, "bafybmi") || len(did) != 59 {
 		c.log.Error("Invalid FT creator's DID. Please provide valid DID")
-		return fmt.Errorf("Invalid DID, Please provide valid DID")
+		return fmt.Errorf("invalid DID, Please provide valid DID")
 	}
+
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil || dc == nil {
 		c.log.Error("Failed to setup DID")
 		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
 
-	var FT []wallet.FT
-
+	var FT wallet.FT
 	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND  creator_did=?", FTName, did)
 
-	if len(FT) != 0 {
+	//If any one value exists in the table, stop reading
+	// fmt.Println("Existing FT check : ", FT)
+	if FT != (wallet.FT{}) {
 		c.log.Error("FT Name already exists")
 		return fmt.Errorf("FT Name already exists")
 	}
 
 	// Validate input parameters
-
 	switch {
 	case numFTs <= 0:
 		return fmt.Errorf("number of tokens to create must be greater than zero")
@@ -74,136 +80,126 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return fmt.Errorf("max allowed FT count is 1000 for 1 RBT")
 	}
 
-	// Fetch whole tokens using GetToken
+	// Fetch whole tokens (RBT Tokens) using GetToken
+	//Locking the RBT Tokens to prevent any transactions on it
 	wholeTokens, err := c.GetTokens(dc, did, float64(numWholeTokens), 0)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
 	}
-	//TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
-	defer c.w.ReleaseTokens(wholeTokens)
-	fractionalValue, err := c.GetPresiceFractionalValue(int(numWholeTokens), numFTs)
+
+	//TODO: Need to test and verify whether tokens are getting unlocked if there is an error in creating FT.
+	defer c.w.ReleaseTokens(wholeTokens) // Will this be called after function?
+
+	//Calculate the value of each FT
+	fractionalValue, err := c.GetPreciseFractionalValue(int(numWholeTokens), numFTs)
 	if err != nil {
 		c.log.Error("Failed to calculate FT token value", err)
 		return err
 	}
 
-	newFTs := make([]wallet.FTToken, 0, numFTs)
-	newFTTokenIDs := make([]string, numFTs)
-
-	var parentTokenIDsArray []string
-	for _, token := range wholeTokens {
-		parentTokenIDsArray = append(parentTokenIDsArray, token.TokenID)
+	//RBT Tokens used to create FTs
+	parentTokenIDsArray := make([]string, len(wholeTokens))
+	for i, token := range wholeTokens {
+		parentTokenIDsArray[i] = token.TokenID
 	}
 	parentTokenIDs := strings.Join(parentTokenIDsArray, ",")
-	for i := 0; i < numFTs; i++ {
-		racType := &rac.RacType{
-			Type:        c.RACFTType(),
-			DID:         did,
-			TokenNumber: uint64(i),
-			TotalSupply: 1,
-			TimeStamp:   time.Now().String(),
-			FTInfo: &rac.RacFTInfo{
-				Parents: parentTokenIDs,
-				FTNum:   i,
-				FTName:  FTName,
-				FTValue: fractionalValue,
-			},
-		}
 
-		// Create the RAC block
-		racBlocks, err := rac.CreateRac(racType)
-		if err != nil {
-			c.log.Error("Failed to create RAC block", "err", err)
-			return err
-		}
+	newFTs := make([]wallet.FTToken, numFTs)
+	newFTTokenIDs := make([]string, numFTs)
 
-		if len(racBlocks) != 1 {
-			return fmt.Errorf("failed to create RAC block")
-		}
+	numWorkers := runtime.NumCPU() * 4
 
-		// Update the signature of the RAC block
-		err = racBlocks[0].UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update DID signature", "err", err)
-			return err
-		}
+	ftJobs := make(chan int, numFTs) // Channel to distribute tasks
 
-		// racBlockData := racBlocks[0].GetBlock()
-		// fr := bytes.NewBuffer(racBlockData)
-		//TODO : Adding timestamp to creaet FT to prevent sequence error. Need to check if DID can be used instead.
-		ftnumString := strconv.Itoa(i)
-		parts := []string{FTName, ftnumString, did}
-		result := strings.Join(parts, " ")
-		byteArray := []byte(result)
-		ftBuffer := bytes.NewBuffer(byteArray)
-		ftID, err := c.w.Add(ftBuffer, did, wallet.AddFunc)
-		if err != nil {
-			c.log.Error("Failed to create FT, Failed to add token to IPFS", "err", err)
-			return err
-		}
-		c.log.Info("FT created: " + ftID)
-		newFTTokenIDs[i] = ftID
-		bti := &block.TransInfo{
-			Tokens: []block.TransTokens{
-				{
-					Token:     ftID,
-					TokenType: c.TokenType(FTString),
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // Ensure cancellation on return
+	errChan := make(chan error, numWorkers)
+	var tokenCounter uint64 // Ensures sequential FT numbering
+	var once sync.Once
+
+	//Worker Function
+	worker := func(workerID int) {
+		defer wg.Done()
+		for i := range ftJobs {
+			if ctx.Err() != nil {
+				return
+			}
+			ftNum := int(atomic.AddUint64(&tokenCounter, 1)) - 1
+			fmt.Println("FT count : ", ftNum)
+			// racType := racTypePool.Get().(*rac.RacType)
+			// defer racTypePool.Put(racType)
+
+			// racType.Type = c.RACFTType()
+			// racType.DID = did
+			// racType.TokenNumber = uint64(i)
+			// racType.TotalSupply = 1
+			// racType.TimeStamp = time.Now().Format(time.RFC3339)
+			// racType.FTInfo = &rac.RacFTInfo{
+			// 	Parents: parentTokenIDs,
+			// 	FTNum:   i,
+			// 	FTName:  FTName,
+			// 	FTValue: fractionalValue,
+			// }
+			fmt.Println("Worker", workerID, "processing FT", ftNum)
+			racType := &rac.RacType{
+				Type:        c.RACFTType(),
+				DID:         did,
+				TokenNumber: uint64(i),
+				TotalSupply: 1,
+				TimeStamp:   time.Now().String(), //Do we need timestamp? If we create with worker pool? time.Now().Format(time.RFC3339)??
+				FTInfo: &rac.RacFTInfo{
+					Parents: parentTokenIDs,
+					FTNum:   ftNum,
+					FTName:  FTName,
+					FTValue: fractionalValue,
 				},
-			},
-			Comment: "FT generated at : " + time.Now().String() + " for FT Name : " + FTName,
+			}
+
+			if err := processFT(c, dc, racType, ftNum, newFTs, newFTTokenIDs, did, FTName, fractionalValue, parentTokenIDs); err != nil {
+				c.log.Error("FT processing failed", "err", err)
+				once.Do(func() { cancel() })
+				errChan <- err
+				return
+
+			}
 		}
-		tcb := &block.TokenChainBlock{
-			TransactionType: block.TokenGeneratedType,
-			TokenOwner:      did,
-			TransInfo:       bti,
-			GenesisBlock: &block.GenesisBlock{
-				Info: []block.GenesisTokenInfo{
-					{
-						Token:       ftID,
-						ParentID:    parentTokenIDs,
-						TokenNumber: i,
-					},
-				},
-			},
-			TokenValue: fractionalValue,
-		}
-		ctcb := make(map[string]*block.Block)
-		ctcb[ftID] = nil
-		block := block.CreateNewBlock(ctcb, tcb)
-		if block == nil {
-			return fmt.Errorf("failed to create new block")
-		}
-		err = block.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("FT creation failed, failed to update signature", "err", err)
-			return err
-		}
-		err = c.w.AddTokenBlock(ftID, block)
-		if err != nil {
-			c.log.Error("Failed to create FT, failed to add token chain block", "err", err)
-			return err
-		}
-		// Create the new token
-		ft := &wallet.FTToken{
-			TokenID:     ftID,
-			FTName:      FTName,
-			TokenStatus: wallet.TokenIsFree,
-			TokenValue:  fractionalValue,
-			DID:         did,
-		}
-		newFTs = append(newFTs, *ft)
 	}
 
-	for i := range wholeTokens {
+	wg.Add(numWorkers)
+	for w := 0; w < numWorkers; w++ {
+		go worker(w)
+	}
+	// Distribute FT jobs
+	go func() {
+		defer close(ftJobs)
+		for i := 0; i < numFTs; i++ {
+			if ctx.Err() != nil {
+				return
+			}
+			ftJobs <- i
+		} // Close earlier so workers don't block
+	}()
 
+	// **Wait for all workers to finish**
+	wg.Wait()
+	close(errChan)
+
+	if err := <-errChan; err != nil {
+		return err
+	}
+
+	//Adding levelDB blocks for RBT Tokens as well
+	for i := range wholeTokens {
+		fmt.Println("Is this getting called?")
 		release := true
 		defer c.relaseToken(&release, wholeTokens[i].TokenID)
-		ptts := RBTString
+		ptt := c.TokenType(RBTString)
 		if wholeTokens[i].ParentTokenID != "" && wholeTokens[i].TokenValue < 1 {
-			ptts = PartString
+			ptt = c.TokenType(RBTString)
 		}
-		ptt := c.TokenType(ptts)
+		// ptt := c.TokenType(ptts)
 
 		bti := &block.TransInfo{
 			Tokens: []block.TransTokens{
@@ -246,27 +242,82 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		release = false
 	}
 
+	//Updating the SQLite3 table
 	for i := range newFTs {
-		tt := c.TokenType(FTString)
-		blk := c.w.GetGenesisTokenBlock(newFTs[i].TokenID, tt)
-		if blk == nil {
-			c.log.Error("failed to get gensis block for Parent DID updation, invalid token chain")
-			return err
-		}
-		FTOwner := blk.GetOwner()
-		ft := &newFTs[i]
-		ft.CreatorDID = FTOwner
-		err = c.w.CreateFT(ft)
-		if err != nil {
-			c.log.Error("Failed to write FT details in FT tokens table", "err", err)
-			return err
-		}
+		newFTs[i].CreatorDID = did
 	}
-	updateFTTableErr := c.updateFTTable(did)
-	if updateFTTableErr != nil {
-		c.log.Error("Failed to update FT table after FT creation", "err", err)
-		return updateFTTableErr
+	err = c.w.CreateFT(newFTs, numFTs)
+	if err != nil {
+		c.log.Error("Failed to write FT details in FT tokens table", "err", err)
+		return err
 	}
+	Ft := wallet.FT{FTName: FTName, FTCount: numFTs, CreatorDID: did}
+	addErr := c.s.Write(wallet.FTStorage, &Ft)
+	if addErr != nil {
+		c.log.Error("Failed to add new FT:", Ft.FTName, "Error:", addErr)
+		return addErr
+	}
+	return nil
+}
+
+func processFT(c *Core, dc did.DIDCrypto, racType *rac.RacType, ftNum int, newFTs []wallet.FTToken, newFTTokenIDs []string, did, FTName string, fractionalValue float64, parentTokenIDs string) error {
+	racBlocks, err := rac.CreateRac(racType)
+	if err != nil || len(racBlocks) != 1 {
+		c.log.Error("Failed to create RAC block", "err", err)
+		return fmt.Errorf("failed to create RAC block: %v", err)
+	}
+
+	// **Update Signature**
+	if err := racBlocks[0].UpdateSignature(dc); err != nil {
+		c.log.Error("Failed to update RAC signature", "err", err)
+		return fmt.Errorf("failed to update RAC signature: %v", err)
+	}
+
+	ftID, err := c.w.Add(bytes.NewBufferString(FTName+" "+strconv.Itoa(ftNum)+" "+did), did, wallet.AddFunc)
+	if err != nil {
+		c.log.Error("Failed to create FT, Failed to add token to IPFS", "err", err)
+		return fmt.Errorf("failed to add token to IPFS: %v", err)
+	}
+
+	c.log.Info("FT created: " + ftID)
+	newFTTokenIDs[ftNum] = ftID
+
+	bti := &block.TransInfo{
+		Tokens: []block.TransTokens{
+			{
+				Token:     ftID,
+				TokenType: c.TokenType(FTString),
+			},
+		},
+		Comment: "FT generated at : " + time.Now().String() + " for FT Name : " + FTName, //Do we need timestamp?
+	}
+	tcb := &block.TokenChainBlock{
+		TransactionType: block.TokenGeneratedType,
+		TokenOwner:      did,
+		TransInfo:       bti,
+		GenesisBlock: &block.GenesisBlock{
+			Info: []block.GenesisTokenInfo{
+				{
+					Token:       ftID,
+					ParentID:    parentTokenIDs,
+					TokenNumber: ftNum,
+				},
+			},
+		},
+		TokenValue: fractionalValue,
+	}
+	ctcb := map[string]*block.Block{ftID: nil}
+	block := block.CreateNewBlock(ctcb, tcb)
+	if block == nil {
+		return fmt.Errorf("failed to create new block")
+	}
+	if err := block.UpdateSignature(dc); err != nil {
+		return fmt.Errorf("failed to update signature: %v", err)
+	}
+	if err := c.w.AddTokenBlock(ftID, block); err != nil {
+		return fmt.Errorf("failed to add token chain block: %v", err)
+	}
+	newFTs[ftNum] = wallet.FTToken{TokenID: ftID, FTName: FTName, TokenStatus: wallet.TokenIsFree, TokenValue: fractionalValue, DID: did}
 	return nil
 }
 
@@ -585,7 +636,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	return resp
 }
 
-func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
+func (c *Core) GetPreciseFractionalValue(a, b int) (float64, error) {
 	if b == 0 || a == 0 {
 		return 0, errors.New("RBT value or FT count should not be zero")
 	}

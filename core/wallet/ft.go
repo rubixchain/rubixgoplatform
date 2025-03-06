@@ -12,7 +12,7 @@ type FTToken struct {
 }
 
 type FT struct {
-	ID         string `gorm:"column:id;primaryKey;autoIncrement"`
+	ID         int    `gorm:"column:id;primaryKey;autoIncrement"`
 	FTName     string `gorm:"column:ft_name"`
 	FTCount    int    `gorm:"column:ft_count"`
 	CreatorDID string `gorm:"column:creator_did"`

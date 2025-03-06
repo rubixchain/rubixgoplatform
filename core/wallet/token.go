@@ -56,9 +56,11 @@ type Token struct {
 func (w *Wallet) CreateToken(t *Token) error {
 	return w.s.Write(TokenStorage, t)
 }
-func (w *Wallet) CreateFT(ft *FTToken) error {
-	return w.s.Write(FTTokenStorage, ft)
+
+func (w *Wallet) CreateFT(fts []FTToken, numFTs int) error {
+	return w.s.WriteBatch(FTTokenStorage, fts, 1000) //Optimise, and use smaller number
 }
+
 func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -161,7 +163,7 @@ func (w *Wallet) GetFTsAndCount(did string) ([]FT, error) {
 	for ftName, creatorCounts := range ftNameCreatorCounts {
 		for creatorDID, count := range creatorCounts {
 			info = append(info, FT{
-				ID:         fmt.Sprintf("%d", idCounter),
+				ID:         idCounter,
 				FTName:     ftName,
 				FTCount:    count,
 				CreatorDID: creatorDID,
