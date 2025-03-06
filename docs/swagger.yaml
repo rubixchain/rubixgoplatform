@@ -60,6 +60,22 @@ definitions:
       status:
         type: boolean
     type: object
+  model.DIDResponse:
+    properties:
+      message:
+        type: string
+      result:
+        $ref: '#/definitions/model.DIDResult'
+      status:
+        type: boolean
+    type: object
+  model.DIDResult:
+    properties:
+      did:
+        type: string
+      peer_id:
+        type: string
+    type: object
   model.PledgedTokenStateDetails:
     properties:
       did:
@@ -120,6 +136,11 @@ definitions:
       didtype:
         type: integer
       peerID:
+        type: string
+    type: object
+  server.DIDwaggoInput:
+    properties:
+      did:
         type: string
     type: object
   server.DeployNFTSwaggoInput:
@@ -444,6 +465,28 @@ paths:
       summary: Create NFT
       tags:
       - NFT
+  /api/createdid:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 'This API creates a new DID of a specified type. Supported types
+        include: Type 4 (BIP39 DID) Example for did_config: {"type":4,"priv_pwd":"mypassword","mnemonic_file":"mnemonic_file_path"}"'
+      parameters:
+      - description: DID Configuration in JSON format.
+        in: formData
+        name: did_config
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.DIDResponse'
+      summary: Create New DID
+      tags:
+      - Basic
   /api/deploy-nft:
     post:
       consumes:
@@ -1027,6 +1070,28 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
+  /api/register-did:
+    post:
+      consumes:
+      - application/json
+      description: This API registers a DID of a specified type.
+      parameters:
+      - description: DID string
+        in: body
+        name: did
+        required: true
+        schema:
+          $ref: '#/definitions/server.DIDwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.DIDResponse'
+      summary: Register DID
+      tags:
+      - Basic
   /api/run-unpledge:
     post:
       consumes:
