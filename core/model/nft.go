@@ -28,7 +28,7 @@ type NFTTokens struct {
 
 type NFTEvent struct {
 	NFT          string  `json:"nft"`
-	Did          string  `json:"did"`
+	ExecutorDid  string  `json:"executorDid"`
 	ReceiverDid  string  `json:"receiverDid"`
 	Type         int     `json:"type"`
 	NFTBlockHash string  `json:"nftBlockHash"`
@@ -36,9 +36,11 @@ type NFTEvent struct {
 }
 
 type DeployNFTRequest struct {
-	NFT        string `json:"nft"`
-	DID        string `json:"did"`
-	QuorumType int    `json:"quorum_type"`
+	NFT        string  `json:"nft"`
+	DID        string  `json:"did"`
+	QuorumType int     `json:"quorum_type"`
+	NFTValue   float64 `json:"nft_value"`
+	NFTData    string  `json:"nft_data"`
 }
 
 type ExecuteNFTRequest struct {

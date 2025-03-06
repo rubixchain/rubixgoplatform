@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"regexp"
 	"strconv"
@@ -367,6 +368,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
+	var creatorDID string
 	if req.CreatorDID == "" {
 		// Checking for same FTs with different creators
 		info, err := c.GetFTInfo(did)
@@ -390,10 +392,12 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				return resp
 			}
 		}
+		creatorDID = info[0].CreatorDID
 	}
 	var AllFTs []wallet.FTToken
 	if req.CreatorDID != "" {
 		AllFTs, err = c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, req.CreatorDID)
+		creatorDID = req.CreatorDID
 	} else {
 		AllFTs, err = c.w.GetFreeFTsByNameAndDID(req.FTName, did)
 	}
@@ -411,12 +415,34 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 	FTsForTxn := AllFTs[:req.FTCount]
 	//TODO: Pinning of tokens
-	p, err := c.getPeer(req.Receiver, "")
-	if err != nil {
-		resp.Message = "Failed to get receiver peer, " + err.Error()
-		return resp
+
+	rpeerid = c.w.GetPeerID(req.Receiver)
+	if rpeerid == "" {
+		// Check if DID is present in the DIDTable as the
+		// receiver might be part of the current node
+		_, err := c.w.GetDID(req.Receiver)
+		if err != nil {
+			if strings.Contains(err.Error(), "no records found") {
+				c.log.Error("Peer ID not found", "did", req.Receiver)
+				resp.Message = "invalid address, Peer ID not found"
+				return resp
+			} else {
+				c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", req.Receiver, err))
+				resp.Message = fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", req.Receiver, err)
+				return resp
+			}
+		} else {
+			// Set the receiverPeerID to self Peer ID
+			rpeerid = c.peerID
+		}
+	} else {
+		receiverPeerID, err := c.getPeer(req.Receiver, "")
+		if err != nil {
+			resp.Message = "Failed to get receiver peer, " + err.Error()
+			return resp
+		}
+		defer receiverPeerID.Close()
 	}
-	defer p.Close()
 
 	FTTokenIDs := make([]string, 0)
 	for i := range FTsForTxn {
@@ -477,7 +503,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		ContractBlock:  sc.GetBlock(),
 		FTinfo:         FTData,
 	}
-	td, _, err := c.initiateConsensus(cr, sc, dc)
+	td, _, pds, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed ", "err", err)
 		resp.Message = "Consensus failed " + err.Error()
@@ -490,19 +516,56 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	c.w.AddTransactionHistory(td)
 
 	//TODO :  Extra details regarding the FT need to added in the explorer
-	etrans := &ExplorerTrans{
-		TID:         td.TransactionID,
-		SenderDID:   did,
-		ReceiverDID: rdid,
-		Amount:      float64(req.FTCount),
-		TrasnType:   req.QuorumType,
-		TokenIDs:    FTTokenIDs,
-		QuorumList:  cr.QuorumList,
-		TokenTime:   float64(dif.Milliseconds()),
+	// etrans := &ExplorerTrans{
+	// 	TID:         td.TransactionID,
+	// 	SenderDID:   did,
+	// 	ReceiverDID: rdid,
+	// 	Amount:      float64(req.FTCount),
+	// 	TrasnType:   req.QuorumType,
+	// 	TokenIDs:    FTTokenIDs,
+	// 	QuorumList:  cr.QuorumList,
+	// 	TokenTime:   float64(dif.Milliseconds()),
+	// }
+	// explorerErr := c.ec.ExplorerTransaction(etrans)
+	// if explorerErr != nil {
+	// 	c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
+	// }
+	AllTokens := make([]AllToken, len(FTsForTxn))
+	for i := range FTsForTxn {
+		tokenDetail := AllToken{}
+		tokenDetail.TokenHash = FTsForTxn[i].TokenID
+		tt := c.TokenType(FTString)
+		blk := c.w.GetLatestTokenBlock(FTsForTxn[i].TokenID, tt)
+		bid, _ := blk.GetBlockID(FTsForTxn[i].TokenID)
+
+		blockNoPart := strings.Split(bid, "-")[0]
+		// Convert the string part to an int
+		blockNoInt, err := strconv.Atoi(blockNoPart)
+		if err != nil {
+			log.Printf("Error getting BlockID: %v", err)
+			continue
+		}
+		tokenDetail.BlockNumber = blockNoInt
+		tokenDetail.BlockHash = strings.Split(bid, "-")[1]
+
+		AllTokens[i] = tokenDetail
 	}
-	explorerErr := c.ec.ExplorerTransaction(etrans)
-	if explorerErr != nil {
-		c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
+
+	eTrans := &ExplorerFTTrans{
+		FTBlockHash:     AllTokens,
+		CreatorDID:      creatorDID,
+		SenderDID:       did,
+		ReceiverDID:     rdid,
+		FTName:          req.FTName,
+		FTTransferCount: req.FTCount,
+		Network:         req.QuorumType,
+		FTSymbol:        "TODO",
+		Comments:        req.Comment,
+		TransactionID:   td.TransactionID,
+		PledgeInfo:      PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		QuorumList:      extractQuorumDID(cr.QuorumList),
+		Amount:          FTsForTxn[0].TokenValue * float64(req.FTCount),
+		FTTokenList:     FTTokenIDs,
 	}
 
 	updateFTTableErr := c.updateFTTable(did)
@@ -510,6 +573,10 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		c.log.Error("Failed to update FT table after transfer ", "err", updateFTTableErr)
 		resp.Message = "Failed to update FT table after transfer"
 		return resp
+	}
+	explorerErr := c.ec.ExplorerFTTransaction(eTrans)
+	if explorerErr != nil {
+		c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
 	}
 	c.log.Info("FT Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
 	msg := fmt.Sprintf("FT Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
