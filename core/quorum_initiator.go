@@ -2367,7 +2367,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 		}
 		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
 		// Request pledage token
-		if pd.RemPledgeTokens > 0 || c.quorumCount < QuorumRequired {
+		if pd.RemPledgeTokens > 0 || (c.quorumCount-c.noBalanceQuorumCount) < MinConsensusRequired {
 			pr := PledgeRequest{
 				TokensRequired: CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPlaces), // Request the determined number of tokens per quorum,
 			}
