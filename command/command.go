@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "CustWall19"
+	version string = "0.0.20"
 )
 const (
 	VersionCmd                     string = "-v"
