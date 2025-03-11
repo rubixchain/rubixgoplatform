@@ -1455,9 +1455,9 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	//Adding to the Token State Hash Table
 	if ur.TransferredTokenStateHashes != nil {
 		err = c.w.AddTokenStateHash(did, ur.TransferredTokenStateHashes, ur.PledgedTokens, ur.TransactionID)
-	}
-	if err != nil {
-		c.log.Error("Failed to add token state hash", "err", err)
+		if err != nil {
+			c.log.Error("Failed to add token state hash", "err", err)
+		}
 	}
 
 	crep.Status = true

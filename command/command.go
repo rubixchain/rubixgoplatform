@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.19"
+	version string = "CustWall19"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -106,6 +106,7 @@ const (
 	SubscribeNFTCmd                string = "subscribe-nft"
 	FetchNftCmd                    string = "fetch-nft"
 	GetNftsByDidCmd                string = "get-nfts-by-did"
+	CreateDIDFromPubKeyCmd         string = "createdidfrompubkey"
 	AddUserAPIKeyCmd               string = "adduserapikey"
 )
 
@@ -172,6 +173,7 @@ var commands = []string{VersionCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
 	GetNftsByDidCmd,
+	CreateDIDFromPubKeyCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -752,6 +754,8 @@ func Run(args []string) {
 		cmd.fetchNFT()
 	case GetNftsByDidCmd:
 		cmd.getNFTsByDid()
+	case CreateDIDFromPubKeyCmd:
+		cmd.CreateDIDFromPubKey()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
 	default:

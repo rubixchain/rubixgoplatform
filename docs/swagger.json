@@ -1133,6 +1133,41 @@
                 }
             }
         },
+        "/api/request-did-for-pubkey": {
+            "post": {
+                "description": "This API will returns DID for corresponding public key",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account"
+                ],
+                "summary": "Returns DID for corresponding public key",
+                "operationId": "request-did-for-pubkey",
+                "parameters": [
+                    {
+                        "description": "Get DID from Public Key",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.DIDFromPubKeySwaggoRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.DIDFromPubKeyResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/run-unpledge": {
             "post": {
                 "description": "This API will unpledge all Pledged RBT tokens",
@@ -1321,6 +1356,17 @@
                 }
             }
         },
+        "model.DIDFromPubKeyResponse": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "public_key": {
+                    "type": "string"
+                }
+            }
+        },
         "model.FTInfo": {
             "type": "object",
             "properties": {
@@ -1479,6 +1525,14 @@
                 },
                 "token_count": {
                     "type": "integer"
+                }
+            }
+        },
+        "server.DIDFromPubKeySwaggoRequest": {
+            "type": "object",
+            "properties": {
+                "public_key": {
+                    "type": "string"
                 }
             }
         },
