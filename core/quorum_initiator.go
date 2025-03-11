@@ -345,7 +345,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			reqPledgeTokens = reqPledgeTokens + tokenInfo[i].TokenValue
 		}
 	case NFTDeployMode:
-		reqPledgeTokens = 1
+		reqPledgeTokens := sc.GetTotalRBTs()
+		if reqPledgeTokens == 0 {
+			reqPledgeTokens = 1
+		}
 	case SmartContractExecuteMode, NFTExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
 	case FTTransferMode:
@@ -2198,28 +2201,14 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SignType:    deployerSignType,
 		}
 
-		var nftValue float64
-
-		commitedTokens := sc.GetCommitedTokensInfo()
-		commitedTokenInfoArray := make([]block.TransTokens, 0)
-		for i := range commitedTokens {
-			commitedTokenInfo := block.TransTokens{
-				Token:       commitedTokens[i].Token,
-				TokenType:   commitedTokens[i].TokenType,
-				CommitedDID: commitedTokens[i].OwnerDID,
-			}
-			commitedTokenInfoArray = append(commitedTokenInfoArray, commitedTokenInfo)
-			nftValue = nftValue + commitedTokens[i].TokenValue
-		}
+		nftValue := sc.GetTotalRBTs()
 
 		nftGenesisBlock := &block.GenesisBlock{
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
-				{Token: cr.NFT,
-					CommitedTokens: commitedTokenInfoArray},
+				{Token: cr.NFT, NFTValue: nftValue, NFTData: sc.GetNFTData()},
 			},
 		}
-
 		tcb = block.TokenChainBlock{
 			TransactionType:    block.TokenDeployedType,
 			TokenOwner:         sc.GetDeployerDID(),
@@ -2227,6 +2216,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			QuorumSignature:    credit,
 			NFT:                sc.GetBlock(),
 			NFTData:            sc.GetNFTData(),
+			TokenValue:         sc.GetTotalRBTs(),
 			GenesisBlock:       nftGenesisBlock,
 			PledgeDetails:      ptds,
 			InitiatorSignature: deployer_sign,

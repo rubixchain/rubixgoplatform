@@ -1567,6 +1567,12 @@ const docTemplate = `{
                 "nft": {
                     "type": "string"
                 },
+                "nft_data": {
+                    "type": "string"
+                },
+                "nft_value": {
+                    "type": "number"
+                },
                 "quorum_type": {
                     "type": "integer"
                 }

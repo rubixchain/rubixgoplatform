@@ -328,8 +328,9 @@ type Command struct {
 	ftName                       string
 	ftCount                      int
 	creatorDID                   string
-	apiKey                       string
 	defaultSetup                 bool
+	apiKey                       string
+	nftValue                     float64
 }
 
 func showVersion() {
@@ -369,7 +370,7 @@ func (cmd *Command) getURL(url string) string {
 }
 
 func (cmd *Command) runApp() {
-	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node))
+	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node), cmd.addr)
 	err := apiconfig.LoadAPIConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, &cmd.cfg)
 
 	if err != nil {
@@ -547,8 +548,9 @@ func Run(args []string) {
 	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
-	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 	flag.BoolVar(&cmd.defaultSetup, "defaultSetup", false, "Add Faucet Quorums")
+	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
+	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
