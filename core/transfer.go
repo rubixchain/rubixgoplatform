@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -224,8 +225,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			_, err := c.w.GetDID(receiverdid)
 			if err != nil {
 				if strings.Contains(err.Error(), "no records found") {
-					c.log.Error("Peer ID not found", "did", receiverdid)
-					resp.Message = "invalid address, Peer ID not found"
+					c.log.Error("receiver Peer ID not found", "did", receiverdid)
+					resp.Message = "invalid address, receiver Peer ID not found"
 					return resp
 				} else {
 					c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err))
@@ -283,6 +284,50 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		tis = append(tis, ti)
 		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: ti.Token, TokenValue: ti.TokenValue})
 
+	}
+
+	//check if sender has previous block pledged quorums' details
+	for _, tokeninfo := range tis {
+		b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
+		//check if the transaction in prev block involved any quorums
+		switch b.GetTransType() {
+		case block.TokenGeneratedType:
+			continue
+		case block.TokenBurntType:
+			c.log.Error("token is burnt, can't transfer anymore; token:", tokeninfo.Token)
+			resp.Message = "token is burnt, can't transfer anymore"
+			return resp
+		case block.TokenTransferredType:
+			//fetch all the pledged quorums, if the transaction involved quorums
+			prevQuorums, _ := b.GetSigner()
+			//fetch the sender in the transaction
+			previousBlockSenderDID := b.GetSenderDID()
+			for _, prevQuorum := range prevQuorums {
+				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender
+				prevQuorumDIDType, err := c.w.GetPeerDIDType(prevQuorum)
+				if prevQuorumDIDType == -1 || err != nil {
+					_, err := c.w.GetDID(prevQuorum)
+					if err != nil {
+						c.log.Debug("sender does not have previous block quorums details, fetching from previous block sender")
+						prevSenderIPFSObj, err := c.getPeer(previousBlockSenderDID, senderDID)
+						if err != nil {
+							c.log.Error("failed to get prev sender peer", previousBlockSenderDID, "err", err)
+							resp.Message = "failed to get prev sender peer; err: " + err.Error()
+							return resp
+						}
+						prevQuorumsDetails, err := c.GetPrevQuorumsFromPrevBlockSender(prevSenderIPFSObj, prevQuorums)
+						if err != nil {
+							c.log.Error("failed to fetch details of the previous block quorums", prevQuorum, "err", err)
+							resp.Message = "failed to fetch details of the previous block quorums; msg: " + prevQuorumsDetails.Message
+							return resp
+						}
+						//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
+						//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
+						break
+					}
+				}
+			}
+		}
 	}
 
 	contractType := getContractType(reqID, req, tis, isSelfRBTTransfer)
