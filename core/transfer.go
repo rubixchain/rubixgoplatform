@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -224,8 +225,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			_, err := c.w.GetDID(receiverdid)
 			if err != nil {
 				if strings.Contains(err.Error(), "no records found") {
-					c.log.Error("Peer ID not found", "did", receiverdid)
-					resp.Message = "invalid address, Peer ID not found"
+					c.log.Error("receiver Peer ID not found", "did", receiverdid)
+					resp.Message = "invalid address, receiver Peer ID not found"
 					return resp
 				} else {
 					c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err))
@@ -247,13 +248,13 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			}
 		}
 	}
-
 	wta := make([]string, 0)
 	for i := range tokensForTxn {
 		wta = append(wta, tokensForTxn[i].TokenID)
 	}
 
 	tis := make([]contract.TokenInfo, 0)
+	tokenListForExplorer := []Token{}
 	for i := range tokensForTxn {
 		tts := "rbt"
 		if tokensForTxn[i].TokenValue != 1 {
@@ -281,6 +282,52 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			BlockID:    bid,
 		}
 		tis = append(tis, ti)
+		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: ti.Token, TokenValue: ti.TokenValue})
+
+	}
+
+	//check if sender has previous block pledged quorums' details
+	for _, tokeninfo := range tis {
+		b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
+		//check if the transaction in prev block involved any quorums
+		switch b.GetTransType() {
+		case block.TokenGeneratedType:
+			continue
+		case block.TokenBurntType:
+			c.log.Error("token is burnt, can't transfer anymore; token:", tokeninfo.Token)
+			resp.Message = "token is burnt, can't transfer anymore"
+			return resp
+		case block.TokenTransferredType:
+			//fetch all the pledged quorums, if the transaction involved quorums
+			prevQuorums, _ := b.GetSigner()
+			//fetch the sender in the transaction
+			previousBlockSenderDID := b.GetSenderDID()
+			for _, prevQuorum := range prevQuorums {
+				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender
+				prevQuorumDIDType, err := c.w.GetPeerDIDType(prevQuorum)
+				if prevQuorumDIDType == -1 || err != nil {
+					_, err := c.w.GetDID(prevQuorum)
+					if err != nil {
+						c.log.Debug("sender does not have previous block quorums details, fetching from previous block sender")
+						prevSenderIPFSObj, err := c.getPeer(previousBlockSenderDID, senderDID)
+						if err != nil {
+							c.log.Error("failed to get prev sender peer", previousBlockSenderDID, "err", err)
+							resp.Message = "failed to get prev sender peer; err: " + err.Error()
+							return resp
+						}
+						prevQuorumsDetails, err := c.GetPrevQuorumsFromPrevBlockSender(prevSenderIPFSObj, prevQuorums)
+						if err != nil {
+							c.log.Error("failed to fetch details of the previous block quorums", prevQuorum, "err", err)
+							resp.Message = "failed to fetch details of the previous block quorums; msg: " + prevQuorumsDetails.Message
+							return resp
+						}
+						//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
+						//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
+						break
+					}
+				}
+			}
+		}
 	}
 
 	contractType := getContractType(reqID, req, tis, isSelfRBTTransfer)
@@ -295,12 +342,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
 
-	td, _, err := c.initiateConsensus(cr, sc, dc)
+	td, _, pds, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
-		if c.noBalanceQuorumCount > 2 {
-			resp.Message = "Consensus failed due to insufficient balance in Quorum(s), Retry transaction after sometime"
-			return resp
-		}
 		c.log.Error("Consensus failed ", "err", err)
 		resp.Message = "Consensus failed " + err.Error()
 		return resp
@@ -324,25 +367,21 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		resp.Message = errMsg
 		return resp
 	}
-
-	/* blockHash, err := extractHash(td.BlockID)
-	if err != nil {
-		c.log.Error("Consensus failed", "err", err)
-		resp.Message = "Consensus failed" + err.Error()
-		return resp
-	} */
-	etrans := &ExplorerTrans{
-		TID:         td.TransactionID,
-		SenderDID:   senderDID,
-		ReceiverDID: receiverdid,
-		Amount:      req.TokenCount,
-		TrasnType:   req.Type,
-		TokenIDs:    wta,
-		QuorumList:  cr.QuorumList,
-		TokenTime:   float64(dif.Milliseconds()),
-		//BlockHash:   blockHash,
+	etrans := &ExplorerRBTTrans{
+		TokenHashes:    wta,
+		TransactionID:  td.TransactionID,
+		BlockHash:      strings.Split(td.BlockID, "-")[1],
+		Network:        req.Type,
+		SenderDID:      senderDID,
+		ReceiverDID:    receiverdid,
+		Amount:         req.TokenCount,
+		QuorumList:     extractQuorumDID(cr.QuorumList),
+		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		TransTokenList: tokenListForExplorer,
+		Comments:       req.Comment,
 	}
-	c.ec.ExplorerTransaction(etrans)
+
+	c.ec.ExplorerRBTTransaction(etrans)
 	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
 	resp.Status = true
 	msg := fmt.Sprintf("Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
@@ -539,7 +578,7 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 		ContractBlock:     sc.GetBlock(),
 		Mode:              PinningServiceMode,
 	}
-	td, _, err := c.initiateConsensus(cr, sc, dc)
+	td, _, pds, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		resp.Message = "Consensus failed" + err.Error()
@@ -550,17 +589,29 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 	td.Amount = req.TokenCount
 	td.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(td)
-	etrans := &ExplorerTrans{
-		TID:         td.TransactionID,
-		SenderDID:   did,
-		ReceiverDID: pinningNodeDID,
-		Amount:      req.TokenCount,
-		TrasnType:   req.Type,
-		TokenIDs:    wta,
-		QuorumList:  cr.QuorumList,
-		TokenTime:   float64(dif.Milliseconds()),
+	// etrans := &ExplorerTrans{
+	// 	TID:         td.TransactionID,
+	// 	SenderDID:   did,
+	// 	ReceiverDID: pinningNodeDID,
+	// 	Amount:      req.TokenCount,
+	// 	TrasnType:   req.Type,
+	// 	TokenIDs:    wta,
+	// 	QuorumList:  cr.QuorumList,
+	// 	TokenTime:   float64(dif.Milliseconds()),
+	// } Remove comments
+	etrans := &ExplorerRBTTrans{
+		TokenHashes:   wta,
+		TransactionID: td.TransactionID,
+		BlockHash:     strings.Split(td.BlockID, "-")[1],
+		Network:       req.Type,
+		SenderDID:     did,
+		ReceiverDID:   pinningNodeDID,
+		Amount:        req.TokenCount,
+		QuorumList:    extractQuorumDID(cr.QuorumList),
+		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		Comments:      req.Comment,
 	}
-	c.ec.ExplorerTransaction(etrans)
+	c.ec.ExplorerRBTTransaction(etrans)
 	c.log.Info("Pinning finished successfully", "duration", dif, " trnxid", td.TransactionID)
 	resp.Status = true
 	msg := fmt.Sprintf("Pinning finished successfully in %v with trnxid %v", dif, td.TransactionID)
@@ -568,10 +619,15 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 	return resp
 }
 
-func extractHash(input string) (string, error) {
-	values := strings.Split(input, "-")
-	if len(values) != 2 {
-		return "", fmt.Errorf("invalid format: %s", input)
+func extractQuorumDID(quorumList []string) []string {
+	var quorumListDID []string
+	for _, quorum := range quorumList {
+		parts := strings.Split(quorum, ".")
+		if len(parts) > 1 {
+			quorumListDID = append(quorumListDID, parts[1])
+		} else {
+			quorumListDID = append(quorumListDID, parts[0])
+		}
 	}
-	return values[1], nil
+	return quorumListDID
 }

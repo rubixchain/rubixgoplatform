@@ -1,6 +1,7 @@
 package block
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -709,7 +710,6 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 // 	if !ok {
 // 		return nil
 // 	}
-
 // 	result := make(map[string]interface{})
 // 	for k, v := range tokenPledgeMap {
 // 		kStr, kOk := k.(string)
@@ -718,7 +718,6 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 // 		}
 // 		result[kStr] = v
 // 	}
-
 // 	return result
 // }
 
@@ -749,8 +748,8 @@ func (b *Block) GetChildTokens() []string {
 	return util.GetStringSliceFromMap(b.bm, TCChildTokensKey)
 }
 
-func (b *Block) GetEpoch() int64 {
-	return int64(util.GetIntFromMap(b.bm, TCEpochKey))
+func (b *Block) GetEpoch() int {
+	return util.GetIntFromMap(b.bm, TCEpochKey)
 }
 
 // Fetch initiator signature details from the given block
@@ -789,20 +788,32 @@ func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
 		fmt.Println("not of type []interface{}")
 		return nil, fmt.Errorf("failed to fetch quorums' signature information from block map")
 	}
-	for _, qrmSignListMap := range qrmSignListMap {
+	for _, qrmSignMap := range qrmSignListMap {
 		var quorumSig CreditSignature
-		//fetch quorum did
-		qrmDID := util.GetFromMap(qrmSignListMap, CreditSigDID)
-		quorumSig.DID = qrmDID.(string)
-		// 	//fetch quorum sign type
-		signType := util.GetFromMap(qrmSignListMap, CreditSigSignType)
-		quorumSig.SignType = signType.(string)
-		// 	//fetch quorum nlss share sign
-		nlssShare := util.GetFromMap(qrmSignListMap, CreditSigSignature)
-		quorumSig.Signature = nlssShare.(string)
-		// 	//fetch quorum private sign
-		privSign := util.GetFromMap(qrmSignListMap, CreditSigPrivSignature)
-		quorumSig.PrivSignature = privSign.(string)
+		// When qrmSignMap is a string (in older versions), qrmSign holds the value as a string
+		if qrmSign, ok := qrmSignMap.(string); ok {
+			// Unmarshal the JSON string into the struct
+			err := json.Unmarshal([]byte(qrmSign), &quorumSig)
+			if err != nil {
+				fmt.Println(err)
+			}
+			if quorumSig.SignType == "" {
+				quorumSig.SignType = "0"
+			}
+		} else {
+			//fetch quorum did
+			qrmDID := util.GetFromMap(qrmSignMap, CreditSigDID)
+			quorumSig.DID = qrmDID.(string)
+			// 	//fetch quorum sign type
+			signType := util.GetFromMap(qrmSignMap, CreditSigSignType)
+			quorumSig.SignType = signType.(string)
+			// 	//fetch quorum nlss share sign
+			nlssShare := util.GetFromMap(qrmSignMap, CreditSigSignature)
+			quorumSig.Signature = nlssShare.(string)
+			// 	//fetch quorum private sign
+			privSign := util.GetFromMap(qrmSignMap, CreditSigPrivSignature)
+			quorumSig.PrivSignature = privSign.(string)
+		}
 		quorumSignList = append(quorumSignList, quorumSig)
 	}
 
@@ -825,4 +836,17 @@ func (b *Block) CalculateBlockHash() (string, error) {
 	blockHash := util.HexToStr(hb)
 
 	return blockHash, nil
+}
+
+func (b *Block) GetTokenLevel(token string) (int, int) {
+	gtm := b.getGenesisTokenMap(token)
+	tokenLevel := util.GetIntFromMap(gtm, GITokenLevelKey)
+	tokenNum := util.GetIntFromMap(gtm, GITokenNumberKey)
+	return tokenLevel, tokenNum
+}
+
+func (b *Block) GetPledgedTokens() {
+	pledgedInfo := util.GetFromMap(b.bm, TCPledgeDetailsKey)
+	fmt.Println(pledgedInfo)
+	// return
 }

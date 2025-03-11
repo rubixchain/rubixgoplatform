@@ -273,3 +273,16 @@ func (c *Client) GetAccountInfo(didStr string) (*model.GetAccountInfo, error) {
 	}
 	return &info, nil
 }
+
+// CreateDIDFromPubKey request to create did from provided public key
+func (c *Client) CreateDIDFromPubKey(pubKey string) (string, error) {
+	data := map[string]interface{}{
+		"public_key": pubKey,
+	}
+	var resp model.DIDFromPubKeyResponse
+	err := c.sendJSONRequest("POST", setup.APIRequestDIDForPubKey, nil, &data, &resp)
+	if err != nil {
+		return "", err
+	}
+	return resp.DID, nil
+}

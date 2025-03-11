@@ -128,19 +128,13 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		c.log.Error("Failed to create did in the wallet", "err", err)
 		return "", err
 	}
-	// exp := model.ExploreModel{
-	// 	Cmd:     ExpDIDPeerMapCmd,
-	// 	DIDList: []string{did},
-	// 	PeerID:  c.peerID,
-	// 	Message: "DID Created Successfully",
-	// }
-	// err = c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	return "", err
-	// }
-	if !c.testNet {
-		c.ec.ExplorerCreateDID(c.peerID, did)
+	newDID := &ExplorerDID{
+		PeerID:  c.peerID,
+		DID:     did,
+		Balance: 0,
+		DIDType: didCreate.Type,
 	}
+	c.ec.ExplorerUserCreate(newDID)
 	return did, nil
 }
 
@@ -178,7 +172,12 @@ func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
 		br.Message = err.Error()
 		return br
 	}
-	c.ec.ExplorerCreateDID(c.peerID, ds)
+	newDID := &ExplorerDID{
+		PeerID:  c.peerID,
+		DID:     ds,
+		DIDType: dc.Type,
+	}
+	c.ec.ExplorerUserCreate(newDID)
 	br.Status = true
 	br.Message = "DID added successfully"
 	br.Result = ds
@@ -232,4 +231,54 @@ func (c *Core) registerDID(reqID string, did string) error {
 		return err
 	}
 	return nil
+}
+
+// CreateDIDFromPubKey creates a DID from the provided public key
+func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (string, error) {
+	if didCreate.RootDID && didCreate.Type != did.BasicDIDMode {
+		c.log.Error("only basic mode is allowed for root did")
+		return "", fmt.Errorf("only basic mode is allowed for root did")
+	}
+	if didCreate.RootDID && c.w.IsRootDIDExist() {
+		c.log.Error("root did is already exist")
+		return "", fmt.Errorf("root did is already exist")
+	}
+
+	// pass public key and other requirements (did type) to create did for the
+	// BIP wallet with corresponding public key
+	did, err := c.d.CreateDIDFromPubKey(didCreate, pubKey)
+	if err != nil {
+		return "", err
+	}
+	if c.w.IsDIDExist(did) {
+		return did, nil
+	}
+	if didCreate.Dir == "" {
+		didCreate.Dir = did
+	}
+	dt := wallet.DIDType{
+		DID:    did,
+		DIDDir: didCreate.Dir,
+		Type:   didCreate.Type,
+		Config: didCreate.Config,
+	}
+	if didCreate.RootDID {
+		dt.RootDID = 1
+	}
+
+	//store the created did in database
+	err = c.w.CreateDID(&dt)
+	if err != nil {
+		c.log.Error("Failed to create did in the wallet", "err", err)
+		return "", err
+	}
+
+	newDID := &ExplorerDID{
+		PeerID:  c.peerID,
+		DID:     did,
+		Balance: 0,
+		DIDType: didCreate.Type,
+	}
+	c.ec.ExplorerUserCreate(newDID)
+	return did, nil
 }
