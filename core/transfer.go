@@ -174,6 +174,7 @@ func getConsensusRequest(consensusRequestType int, senderPeerID string, receiver
 }
 
 func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
+	c.registerDID(reqID, req.Sender) // TODO: Added for FEXR, Need to remove
 	st := time.Now()
 	txEpoch := int(st.Unix())
 
