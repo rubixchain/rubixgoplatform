@@ -324,7 +324,6 @@ func (c *Core) GetPrevQuorumsFromPrevBlockSender(prevSenderIPFSObj *ipfsport.Pee
 
 	for i := range prevQuorumDIDList {
 		key := "did" + strconv.Itoa(i+1)
-		fmt.Println("key is", key)
 		q[key] = prevQuorumDIDList[i]
 	}
 
