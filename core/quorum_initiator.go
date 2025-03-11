@@ -362,6 +362,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	if reqPledgeTokens < minTotalPledgeAmount {
 		reqPledgeTokens = minTotalPledgeAmount
 	}
+	reqPledgeTokens = floatPrecision(reqPledgeTokens, MaxDecimalPlaces)
 	pd := PledgeDetails{
 		TransferAmount:         reqPledgeTokens,
 		RemPledgeTokens:        floatPrecision(reqPledgeTokens, MaxDecimalPlaces),
@@ -448,6 +449,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error(unlockErr.Error() + "Locked tokens could not be unlocked")
 		}
 		return nil, nil, nil, err
+	}
+
+	if c.noBalanceQuorumCount > (QuorumRequired - MinConsensusRequired) {
+		c.log.Error("Consensus failed due to insufficient balance in Quorum(s), Retry transaction after sometime")
+		return nil, nil, nil, fmt.Errorf("Consensus failed due to insufficient balance in Quorum(s)")
 	}
 
 	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
@@ -2333,81 +2339,81 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 }
 
 func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt int) error {
-	if qt == AlphaQuorumType {
-		c.qlock.Lock()
-		cs, ok := c.quorumRequest[cr.ReqID]
+	c.qlock.Lock()
+	cs, ok := c.quorumRequest[cr.ReqID]
+	c.qlock.Unlock()
+	if !ok {
 		c.qlock.Unlock()
-		if !ok {
-			c.qlock.Unlock()
-			err := fmt.Errorf("invalid request")
-			return err
-		}
-		cs.PledgeLock.Lock()
-		c.qlock.Lock()
-		pd, ok := c.pd[cr.ReqID]
-		c.qlock.Unlock()
-		if !ok {
-			cs.PledgeLock.Unlock()
-			err := fmt.Errorf("invalid pledge request")
-			return err
-		}
-		pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
-		// Request pledage token
-		if pd.RemPledgeTokens > 0 {
-			pr := PledgeRequest{
-				TokensRequired: CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPlaces), // Request the determined number of tokens per quorum,
-			}
-			var prs PledgeReply
-			err := p.SendJSONRequest("POST", APIReqPledgeToken, nil, &pr, &prs, true)
-			if err != nil {
-				c.log.Error("Invalid response for pledge request", "err", err)
-				err := fmt.Errorf("invalid pledge request")
-				cs.PledgeLock.Unlock()
-				return err
-			}
-			if strings.Contains(prs.Message, "Quorum don't have enough balance to pledge") {
-				c.quorumCount++
-				c.noBalanceQuorumCount++
-				cs.PledgeLock.Unlock()
-				did := p.GetPeerDID()
-				c.log.Error("Quorum (DID:" + did + ") don't have enough balance to pledge")
-				return fmt.Errorf("Quorum (DID:" + did + ") don't have enough balance to pledge")
-			}
-			if prs.Status {
-				c.quorumCount++
-				did := p.GetPeerDID()
-				pd.PledgedTokens[did] = make([]string, 0)
-				for i, t := range prs.Tokens {
-					ptcb := block.InitBlock(prs.TokenChainBlock[i], nil)
-					if !c.checkIsPledged(ptcb) {
-						pd.NumPledgedTokens++
-						pd.RemPledgeTokens = pd.RemPledgeTokens - prs.TokenValue[i]
-						pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, MaxDecimalPlaces)
-						pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
-						pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
-						pd.TokenList = append(pd.TokenList, Token{TokenHash: prs.Tokens[i], TokenValue: prs.TokenValue[i]})
-
-					}
-				}
-				c.qlock.Lock()
-				c.pd[cr.ReqID] = pd
-				c.qlock.Unlock()
-			}
-		}
-		cs.PledgeLock.Unlock()
+		err := fmt.Errorf("invalid request")
+		return err
 	}
+	cs.PledgeLock.Lock()
+	c.qlock.Lock()
+	pd, ok := c.pd[cr.ReqID]
+	c.qlock.Unlock()
+	if !ok {
+		cs.PledgeLock.Unlock()
+		err := fmt.Errorf("invalid pledge request")
+		return err
+	}
+	pledgeTokensPerQuorum := pd.TransferAmount / float64(MinQuorumRequired)
+
+	// Request pledge token
+	if (c.quorumCount - c.noBalanceQuorumCount) < MinConsensusRequired {
+		pr := PledgeRequest{
+			TokensRequired: CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPlaces), // Request the determined number of tokens per quorum,
+		}
+		var prs PledgeReply
+		err := p.SendJSONRequest("POST", APIReqPledgeToken, nil, &pr, &prs, true)
+		if err != nil {
+			c.log.Error("Invalid response for pledge request", "err", err)
+			err := fmt.Errorf("invalid pledge request")
+			cs.PledgeLock.Unlock()
+			return err
+		}
+		if strings.Contains(prs.Message, "Quorum don't have enough balance to pledge") {
+			c.quorumCount++
+			c.noBalanceQuorumCount++
+			cs.PledgeLock.Unlock()
+			did := p.GetPeerDID()
+			c.log.Error("Quorum (DID:" + did + ") don't have enough balance to pledge")
+			return fmt.Errorf("Quorum (DID:" + did + ") don't have enough balance to pledge")
+		}
+		if prs.Status {
+			c.quorumCount++
+			did := p.GetPeerDID()
+			pd.PledgedTokens[did] = make([]string, 0)
+			for i, t := range prs.Tokens {
+				ptcb := block.InitBlock(prs.TokenChainBlock[i], nil)
+				if !c.checkIsPledged(ptcb) {
+					pd.NumPledgedTokens++
+					pd.RemPledgeTokens = pd.RemPledgeTokens - prs.TokenValue[i]
+					pd.RemPledgeTokens = floatPrecision(pd.RemPledgeTokens, MaxDecimalPlaces)
+					pd.PledgedTokenChainBlock[t] = prs.TokenChainBlock[i]
+					pd.PledgedTokens[did] = append(pd.PledgedTokens[did], t)
+					pd.TokenList = append(pd.TokenList, Token{TokenHash: prs.Tokens[i], TokenValue: prs.TokenValue[i]})
+
+				}
+			}
+			c.qlock.Lock()
+			c.pd[cr.ReqID] = pd
+			c.qlock.Unlock()
+		}
+	}
+	cs.PledgeLock.Unlock()
 	count := 0
 	for {
 		time.Sleep(time.Second)
 		count++
 		c.qlock.Lock()
-		pd, ok := c.pd[cr.ReqID]
 		c.qlock.Unlock()
 		if !ok {
 			err := fmt.Errorf("invalid pledge request")
 			return err
 		}
-		if pd.RemPledgeTokens > 0 {
+
+		// check if total connected quorums, with balance, has reached the minimum consensus threshold
+		if (c.quorumCount - c.noBalanceQuorumCount) < MinConsensusRequired {
 			if c.quorumCount < QuorumRequired {
 				if count == 300 {
 					err := fmt.Errorf("Unable to pledge after wait")
@@ -2417,7 +2423,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer, qt i
 				err := fmt.Errorf("Unable to pledge")
 				return err
 			}
-		} else if pd.RemPledgeTokens <= 0 {
+		} else {
 			return nil
 		}
 	}
