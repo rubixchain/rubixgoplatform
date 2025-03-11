@@ -77,17 +77,24 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	_, did, ok := util.ParseAddress(rbtReq.Sender)
+	_, senderDID, ok := util.ParseAddress(rbtReq.Sender)
 	if !ok {
 		return s.BasicResponse(req, false, "Invalid sender address", nil)
 	}
+	rbtReq.Sender = senderDID
+	_, reciverDID, ok := util.ParseAddress(rbtReq.Receiver)
+	if !ok {
+		return s.BasicResponse(req, false, "Invalid sender address", nil)
+	}
+	rbtReq.Receiver = reciverDID
+
 	is_alphanumeric_sender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(rbtReq.Sender)
 	is_alphanumeric_receiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(rbtReq.Receiver)
 	if !is_alphanumeric_sender || !is_alphanumeric_receiver {
 		s.log.Error("Invalid sender or receiver address. Please provide valid DID")
 		return s.BasicResponse(req, false, "Invalid sender or receiver address", nil)
 	}
-	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !strings.HasPrefix(rbtReq.Receiver, "bafybmi") || len(rbtReq.Receiver) != 59 {
+	if !strings.HasPrefix(rbtReq.Sender, "bafybmi") || len(rbtReq.Sender) != 59 || !strings.HasPrefix(rbtReq.Receiver, "bafybmi") || len(rbtReq.Receiver) != 59 {
 		s.log.Error("Invalid sender or receiver DID")
 		return s.BasicResponse(req, false, "Invalid sender or receiver DID", nil)
 	}
@@ -99,7 +106,7 @@ func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Invalid trans type. TransType should be 1 or 2")
 		return s.BasicResponse(req, false, "Invalid trans type. TransType should be 1 or 2", nil)
 	}
-	if !s.validateDIDAccess(req, did) {
+	if !s.validateDIDAccess(req, rbtReq.Sender) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
