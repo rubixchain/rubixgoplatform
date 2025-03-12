@@ -306,7 +306,11 @@ func (ec *ExplorerClient) SendExplorerJSONRequest(method string, path string, in
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			str := fmt.Sprintf("Http Request failed with status %d for %s. Response: %s", resp.StatusCode, url, string(bodyBytes))
+			bodyString := string(bodyBytes)
+			str := fmt.Sprintf("Http Request failed with status %d for %s. Response: %s", resp.StatusCode, url, bodyString)
+			if strings.Contains(bodyString, "DuplicateKey") {
+				return fmt.Errorf("user already exists, duplicate key error")
+			}
 			ec.log.Error(str)
 			continue
 		}
@@ -369,7 +373,16 @@ func (c *Core) ExplorerUserCreate() []string {
 							DIDType: d.Type,
 						}
 						err := c.ec.ExplorerUserCreate(&ed)
-						if err != nil {
+						if err != nil && strings.Contains(err.Error(), "duplicate") {
+							eu.DID = d.DID
+							err = c.s.Write(ExplorerUserDetailsTable, eu)
+							if err != nil {
+								c.log.Error(fmt.Sprintf("Error adding user DID %v: in the DB with error %v", d.DID, err))
+								return
+							}
+							c.UpdateUserInfo([]string{ed.DID})
+							c.GenerateUserAPIKey([]string{ed.DID})
+						} else if err != nil {
 							c.log.Error(fmt.Sprintf("Error creating user for DID %v: %v", d.DID, err))
 							return
 						}
@@ -401,7 +414,7 @@ func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 		return err
 	}
 	if er.Message != "User created successfully!" {
-		ec.log.Error("Failed to create user for %v with error message %v", ed.DID, er.Message)
+		ec.log.Error(fmt.Sprintf("Failed to create user for %v with error message %v", ed.DID, er.Message))
 		return fmt.Errorf("failed to create user")
 	}
 	ec.AddDIDKey(ed.DID, er.APIKey)
@@ -431,7 +444,7 @@ func (c *Core) UpdateUserInfo(dids []string) {
 				c.log.Error("Failed to send request for user DID, " + did + " Error : " + err.Error())
 				return
 			}
-			if er.Message != "User balance updated successfully!" {
+			if !strings.Contains(er.Message, "successfully") {
 				c.log.Error("Failed to update user info for ", "DID", did, "msg", er.Message)
 			} else {
 				c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
