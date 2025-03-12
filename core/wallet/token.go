@@ -210,6 +210,28 @@ func (w *Wallet) GetFreeFTsByNameAndCreatorDID(ftName string, did string, creato
 	return FT, nil
 }
 
+func (w *Wallet) GetFTDetailsByTokenId(tokenId string) (FTToken, error) {
+	var FT FTToken
+	err := w.s.Read(FTTokenStorage, &FT, "token_id=?", tokenId)
+	if err != nil {
+		w.log.Error("Failed to get FT details of the token %s", tokenId, "err", err)
+		return FT, err
+	}
+	return FT, nil
+}
+
+func (w *Wallet) GetFTDetailsByTokenIds(tokenIds []string) ([]FTToken, error) {
+	var tokens []FTToken
+	for _, tokenId := range tokenIds {
+		FT, err := w.GetFTDetailsByTokenId(tokenId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch token %s: %w", tokenId, err)
+		}
+		tokens = append(tokens, FT)
+	}
+	return tokens, nil
+}
+
 func (w *Wallet) GetAllPledgedTokens() ([]Token, error) {
 	var t []Token
 	err := w.s.Read(TokenStorage, &t, "token_status=?", TokenIsPledged)

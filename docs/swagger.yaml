@@ -97,6 +97,17 @@ definitions:
       txnSend:
         type: integer
     type: object
+  model.TransferToDidReq:
+    properties:
+      contractHash:
+        type: string
+      creatorDID:
+        type: string
+      did:
+        type: string
+      ftname:
+        type: string
+    type: object
   model.TxnCountForDID:
     properties:
       message:
@@ -1178,6 +1189,28 @@ paths:
       summary: Unpledge POW Based pledge Tokens
       tags:
       - Account
+  /rubix-core/v1/smart-contract/contract-to-did:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint will  Initiate transfer from contract to DID.
+      parameters:
+      - description: Transfer from contract to did
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/model.TransferToDidReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiate transfer from contract to DID
+      tags:
+      - FT
 securityDefinitions:
   SessionToken:
     in: header

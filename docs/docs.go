@@ -1349,6 +1349,40 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/rubix-core/v1/smart-contract/contract-to-did": {
+            "post": {
+                "description": "This API endpoint will  Initiate transfer from contract to DID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Initiate transfer from contract to DID",
+                "parameters": [
+                    {
+                        "description": "Transfer from contract to did",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.TransferToDidReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1498,6 +1532,23 @@ const docTemplate = `{
                 },
                 "txnSend": {
                     "type": "integer"
+                }
+            }
+        },
+        "model.TransferToDidReq": {
+            "type": "object",
+            "properties": {
+                "contractHash": {
+                    "type": "string"
+                },
+                "creatorDID": {
+                    "type": "string"
+                },
+                "did": {
+                    "type": "string"
+                },
+                "ftname": {
+                    "type": "string"
                 }
             }
         },

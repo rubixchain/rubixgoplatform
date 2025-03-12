@@ -76,6 +76,7 @@ type TransInfo struct {
 	NFT                  string      `json:"nft"`
 	NFTValue             float64     `json:"nftValue"`
 	NFTData              string      `json:"nftData"`
+	ContractHash         string      `json:"contract_hash"`
 }
 
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {

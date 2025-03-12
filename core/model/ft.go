@@ -28,3 +28,10 @@ type FTInfo struct {
 	FTCount    int    `json:"ft_count"`
 	CreatorDID string `json:"creator_did"`
 }
+
+type TransferToDidReq struct {
+	Did          string
+	ContractHash string
+	CreatorDID   string
+	FTName       string
+}

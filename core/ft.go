@@ -262,7 +262,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			return err
 		}
 	}
-	updateFTTableErr := c.updateFTTable(did)
+	updateFTTableErr := c.UpdateFTTable(did)
 	if updateFTTableErr != nil {
 		c.log.Error("Failed to update FT table after FT creation", "err", err)
 		return updateFTTableErr
@@ -568,7 +568,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		FTTokenList:     FTTokenIDs,
 	}
 
-	updateFTTableErr := c.updateFTTable(did)
+	updateFTTableErr := c.UpdateFTTable(did)
 	if updateFTTableErr != nil {
 		c.log.Error("Failed to update FT table after transfer ", "err", updateFTTableErr)
 		resp.Message = "Failed to update FT table after transfer"
@@ -624,7 +624,7 @@ func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
 	return result, nil
 }
 
-func (c *Core) updateFTTable(did string) error {
+func (c *Core) UpdateFTTable(did string) error {
 	AllFTs, err := c.w.GetFTsAndCount(did)
 	// If no records are found, remove all entries from the FT table
 	if err != nil {

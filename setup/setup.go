@@ -94,6 +94,7 @@ const (
 	APIGetFTTokenchain                  string = "/api/get-ft-token-chain"
 	APIRequestDIDForPubKey              string = "/api/request-did-for-pubkey"
 	APISendJWTFromWallet                string = "/api/send-jwt-from-wallet"
+	APITransferToDid                    string = "/rubix-core/v1/smart-contract/contract-to-did"
 )
 
 // jwt.RegisteredClaims

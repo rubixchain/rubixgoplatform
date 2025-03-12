@@ -658,6 +658,212 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 }
 
+func (c *Core) quorumContracttoDidConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, consensusRequest *ConensusRequest) *ensweb.Result {
+	consensusReply := ConensusReply{
+		ReqID:  consensusRequest.ReqID,
+		Status: false,
+	}
+
+	if consensusRequest.ContractBlock == nil {
+		c.log.Error("contract block in consensus req is nil")
+		consensusReply.Message = "contract block in consensus req is nil"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	consensusContract := contract.InitContract(consensusRequest.ContractBlock, nil)
+	// setup the did to verify the signature
+	c.log.Debug("VEryfying the deployer signature")
+
+	verifyDID := consensusContract.GetExecutorDID()
+	fmt.Println("verifyDID", verifyDID)
+	dc, err := c.SetupForienDID(verifyDID, did)
+	if err != nil {
+		c.log.Error("Failed to get DID for verification", "err", err)
+		consensusReply.Message = "Failed to get DID for verification"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	err = consensusContract.VerifySignature(dc)
+	if err != nil {
+		c.log.Error("Failed to verify signature", "err", err)
+		consensusReply.Message = "Failed to verify signature"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	var tokenStateCheckResult []TokenStateCheckResult
+	var wg sync.WaitGroup
+	//sync the smartcontract tokenchain
+	address := consensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
+	peerConn, err := c.getPeer(address, did)
+	if err != nil {
+		c.log.Error("Failed to get executor peer to sync smart contract token chain", "err", err)
+		consensusReply.Message = "Failed to get executor peer to sync smart contract token chain : "
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+
+	//3. check token state -- execute mode - pin tokenstate of the smart token chain
+	tokenStateCheckResult = make([]TokenStateCheckResult, len(consensusContract.GetTransTokenInfo()))
+	smartContractTokenInfo := consensusContract.GetTransTokenInfo()
+	for i, ti := range smartContractTokenInfo {
+		t := ti.Token
+		err = c.syncTokenChainFrom(peerConn, "", ti.Token, ti.TokenType)
+		if err != nil {
+			c.log.Error("Failed to sync smart contract token chain block fro execution validation", "err", err)
+			consensusReply.Message = "Failed to sync smart contract token chain block fro execution validation"
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		wg.Add(1)
+		go c.checkTokenState(t, did, i, tokenStateCheckResult, &wg, consensusRequest.QuorumList, ti.TokenType)
+	}
+	wg.Wait()
+	for i := range tokenStateCheckResult {
+		if tokenStateCheckResult[i].Error != nil {
+			c.log.Error("Error occured", "error", err)
+			consensusReply.Message = "Error while cheking Token State Message : " + tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		if tokenStateCheckResult[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
+			consensusReply.Message = tokenStateCheckResult[i].Message
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
+	}
+
+	c.log.Debug("Proceeding to pin token state to prevent double spend")
+	err = c.pinTokenState(tokenStateCheckResult, did, consensusRequest.TransactionID, "NA", "NA", float64(0)) // TODO: Ensure that smart contract trnx id and things are proper
+	if err != nil {
+		consensusReply.Message = "Error Pinning token state" + err.Error()
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	c.log.Debug("Finished Tokenstate check")
+
+	qHash := util.CalculateHash(consensusContract.GetBlock(), "SHA3-256")
+	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	if err != nil {
+		c.log.Error("Failed to get quorum signature", "err", err)
+		consensusReply.Message = "Failed to get quorum signature"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	fmt.Println("The smart contract consensus Finished succesfully: Tokenchain Sync Done")
+
+	ok, sc := c.verifyContract(consensusRequest, did)
+	if !ok {
+		consensusReply.Message = "Failed to verify sender signature"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	//check if token has multiple pins
+	ti := sc.GetTransTokenInfo()
+	results := make([]MultiPinCheckRes, len(ti))
+	var wg2 sync.WaitGroup
+	for i := range ti {
+		wg.Add(1)
+		go c.pinCheck(ti[i].Token, i, consensusRequest.SenderPeerID, consensusRequest.ReceiverPeerID, results, &wg)
+	}
+	wg2.Wait()
+	for i := range results {
+		if results[i].Error != nil {
+			c.log.Error("Error occured", "error", results[i].Error)
+			consensusReply.Message = "Error while cheking FT Token multiple Pins"
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		if results[i].Status {
+			c.log.Error("FT Token has multiple owners", "FT token", results[i].Token, "owners", results[i].Owners)
+			consensusReply.Message = "FT Token has multiple owners"
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+	}
+
+	// check token ownership
+
+	validateTokenOwnershipVar, err := c.validateTokenOwnership(consensusRequest, sc, did)
+	if err != nil {
+		validateTokenOwnershipErrorString := fmt.Sprint(err)
+		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
+			consensusReply.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		if strings.Contains(validateTokenOwnershipErrorString, "failed to sync tokenchain Token") {
+			consensusReply.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		c.log.Error("Tokens ownership check failed")
+		consensusReply.Message = "Token ownership check failed, err : " + err.Error()
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	if !validateTokenOwnershipVar {
+		c.log.Error("Tokens ownership check failed")
+		consensusReply.Message = "Token ownership check failed"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	/* 	if !c.validateTokenOwnership(cr, sc) {
+		c.log.Error("Token ownership check failed")
+		crep.Message = "Token ownership check failed"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	} */
+
+	//Token state check and pinning
+	/*
+		1. get the latest block from token chain,
+		2. retrive the Block Id
+		3. concat token id and blockId
+		4. add to ipfs
+		5. check for pin and if none pin the content
+		6. if pin exist , exit with error token state exhauste
+	*/
+
+	tokenStateCheckResult2 := make([]TokenStateCheckResult, len(ti))
+	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
+	for i := range ti {
+		wg.Add(1)
+		go c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult2, &wg2, consensusRequest.QuorumList, ti[i].TokenType)
+	}
+	wg.Wait()
+
+	for i := range tokenStateCheckResult2 {
+		if tokenStateCheckResult2[i].Error != nil {
+			c.log.Error("Error occured", "error", tokenStateCheckResult2[i].Error)
+			consensusReply.Message = "Error while cheking Token State Message : " + tokenStateCheckResult2[i].Message
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		if tokenStateCheckResult2[i].Exhausted {
+			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult2[i].Token)
+			consensusReply.Message = tokenStateCheckResult2[i].Message
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+		c.log.Debug("Token", tokenStateCheckResult2[i].Token, "Message", tokenStateCheckResult2[i].Message)
+	}
+	c.log.Debug("Proceeding to pin token state to prevent double spend")
+	sender := consensusRequest.SenderPeerID + "." + sc.GetSenderDID()
+	receiver := consensusRequest.ReceiverPeerID + "." + sc.GetReceiverDID()
+	err1 := c.pinTokenState(tokenStateCheckResult2, did, consensusRequest.TransactionID, sender, receiver, float64(0))
+	if err1 != nil {
+		consensusReply.Message = "Error Pinning token state" + err.Error()
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+
+	c.log.Debug("Finished FT Tokenstate check")
+
+	qHash1 := util.CalculateHash(sc.GetBlock(), "SHA3-256")
+	qsb1, ppb1, err := qdc.Sign(util.HexToStr(qHash1))
+	if err != nil {
+		c.log.Error("Failed to get quorum signature", "err", err)
+		consensusReply.Message = "Failed to get quorum signature"
+		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+	}
+	fmt.Println("The FT  consensus Finished succesfully: Tokenchain Sync Done")
+
+	consensusReply.Status = true
+	consensusReply.Message = "FT Conensus finished successfully"
+	consensusReply.ShareSig = qsb1
+	consensusReply.PrivSig = ppb1
+	// return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+
+	consensusReply.Status = true
+	consensusReply.Message = "Smart Contract Consensus finished successfully"
+	consensusReply.ShareSig = qsb
+	consensusReply.PrivSig = ppb
+	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+
+}
+
 func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, cr *ConensusRequest) *ensweb.Result {
 	crep := ConensusReply{
 		ReqID:  cr.ReqID,
@@ -819,6 +1025,11 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	case FTTransferMode:
 		c.log.Debug("FT consensus started")
 		return c.quorumFTConsensus(req, did, qdc, &cr)
+	case FTContractToDidTransferMode:
+		c.log.Debug("FT contract to did transfer consensus started")
+		// c.quorumFTConsensus(req, did, qdc, &cr)
+		return c.quorumContracttoDidConsensus(req, did, qdc, &cr)
+
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
 		crep.Message = "Invalid consensus mode"
@@ -1209,7 +1420,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
 
-	updateFTTableErr := c.updateFTTable(receiverDID)
+	updateFTTableErr := c.UpdateFTTable(receiverDID)
 	if updateFTTableErr != nil {
 		return nil, fmt.Errorf("Failed to update FT table, error: %v", updateFTTableErr)
 	}

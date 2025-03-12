@@ -35,6 +35,7 @@ const (
 	PinningServiceMode
 	NFTExecuteMode
 	FTTransferMode
+	FTContractToDidTransferMode
 )
 const (
 	AlphaQuorumType int = iota
@@ -356,6 +357,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		for i := range ti {
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
+	case FTContractToDidTransferMode:
+		ti := sc.GetTransTokenInfo()
+		for i := range ti {
+			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue //This must be changed such that the smart contract value should also be included
+		}
+		scTransValue := sc.GetTotalRBTs() // This must be added such that the smartcontract tokenblock addition also happens properly
+		reqPledgeTokens = reqPledgeTokens + scTransValue
 	}
 	minValue := MinDecimalValue(MaxDecimalPlaces)
 	minTotalPledgeAmount := minValue * float64(MinQuorumRequired)
@@ -709,6 +717,332 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 
+		return &td, pl, pds, nil
+	case FTContractToDidTransferMode:
+		p, err := c.getPeer(cr.SenderPeerID+"."+sc.GetSenderDID(), "")
+		if err != nil {
+			c.log.Error("Receiver not connected", "err", err)
+			return nil, nil, nil, err
+		}
+		defer p.Close()
+		//This part is commented because we are not calling the api, s need to pass this information in other way
+
+		// sr := SendFTRequest{
+		// 	Address:          cr.SenderPeerID + "." + sc.GetSenderDID(),
+		// 	TokenInfo:        ti,
+		// 	TokenChainBlock:  nb.GetBlock(),
+		// 	QuorumList:       cr.QuorumList,
+		// 	TransactionEpoch: cr.TransactionEpoch,
+		// 	FTInfo:           cr.FTinfo,
+		// }
+
+		// Populate quorum details for each quorum in the QuorumList to send to receiver
+		// for _, qrm := range cr.QuorumList {
+		// 	qpid, qdid, ok := util.ParseAddress(qrm)
+		// 	if !ok {
+		// 		c.log.Error("could not parse quorum address:", qrm)
+		// 	}
+		// 	if qpid == "" {
+		// 		qpid = c.w.GetPeerID(qdid)
+		// 	}
+
+		// 	var qrmInfo QuorumDIDPeerMap
+		// 	//fetch did type of the quorum
+		// 	qDidType, err := c.w.GetPeerDIDType(qdid)
+		// 	if err != nil {
+		// 		c.log.Error("could not fetch did type for quorum:", qdid, "error", err)
+		// 	}
+		// 	if qDidType == -1 {
+		// 		c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
+		// 		didtype_, msg, err := c.GetPeerdidTypeFromPeer(qpid, qdid, dc.GetDID())
+		// 		if err != nil {
+		// 			c.log.Error("error", err, "msg", msg)
+		// 			qrmInfo.DIDType = nil
+		// 		} else {
+		// 			qDidType = didtype_
+		// 			qrmInfo.DIDType = &qDidType
+		// 		}
+		// 	} else {
+		// 		qrmInfo.DIDType = &qDidType
+		// 	}
+		// 	//add quorum details to the data to be shared
+		// 	qrmInfo.DID = qdid
+		// 	qrmInfo.PeerID = qpid
+		// 	sr.QuorumInfo = append(cr.QuorumInfo, qrmInfo)
+		// }
+		var b *block.Block
+		for _, tokenInfo := range ti {
+			b = c.w.GetLatestTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
+			tokenId := tokenInfo.Token
+			pblkID, err := b.GetPrevBlockID(tokenId)
+			if err != nil {
+				c.log.Error("Failed to get previous block id", "err", err)
+				return nil, nil, nil, err
+			}
+			fmt.Println("Previous block id is ", pblkID)
+			blkId, err2 := b.GetBlockID(tokenId)
+			if err2 != nil {
+				c.log.Error("Failed to get block id", "err", err)
+				return nil, nil, nil, err
+			}
+			fmt.Println("The block Id is ", blkId)
+			err = c.syncTokenChainFrom(p, pblkID, tokenId, tokenInfo.TokenType)
+			if err != nil {
+				fmt.Println("Failed to sync the ft tokenchain block")
+			}
+		}
+		// senderPeerId, _, ok := util.ParseAddress(senderAddress)
+		// if !ok {
+		// 	return nil, fmt.Errorf("Unable to parse sender address: %v", senderAddress)
+		// }
+
+		// results := make([]MultiPinCheckRes, len(ti))
+		var wg sync.WaitGroup
+		// for i, tokenInfo := range ti {
+		// 	t := tokenInfo.Token
+		// 	wg.Add(1)
+		// 	go c.pinCheck(t, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
+		// }
+		// wg.Wait()
+		// for i := range results {
+		// 	if results[i].Error != nil {
+		// 		return nil, fmt.Errorf("Error while checking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
+		// 	}
+		// 	if results[i].Status {
+		// 		return nil, fmt.Errorf("Token %v has multiple owners: %v", results[i].Token, results[i].Owners)
+		// 	}
+		// }
+
+		tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
+		for i, tokenInfo := range ti {
+			t := tokenInfo.Token
+			wg.Add(1)
+			go c.checkTokenState(t, sc.GetReceiverDID(), i, tokenStateCheckResult, &wg, cr.QuorumList, tokenInfo.TokenType)
+		}
+		wg.Wait()
+		for i := range tokenStateCheckResult {
+			if tokenStateCheckResult[i].Error != nil {
+				fmt.Println("Error while checking token state message ", tokenStateCheckResult[i].Message)
+				// return nil, fmt.Errorf("Error while checking Token State Message : %v", tokenStateCheckResult[i].Message)
+			}
+			if tokenStateCheckResult[i].Exhausted {
+				c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token, tokenStateCheckResult[i].Message)
+				// return nil, fmt.Errorf("Token state has been exhausted, Token being Double spent: %v, msg: %v", tokenStateCheckResult[i].Token, tokenStateCheckResult[i].Message)
+			}
+			c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
+		}
+		var FT wallet.FTToken
+		FT.FTName = cr.FTinfo.FTName
+		updatedTokenStateHashes, err := c.w.FTTokensReceived(sc.GetReceiverDID(), ti, b, cr.SenderPeerID, cr.ReceiverPeerID, c.ipfs, FT)
+		if err != nil {
+			fmt.Println("Failed to update the tokenstate hashes", err)
+			// return nil, fmt.Errorf("Failed to update token status, error: %v", err)
+		}
+		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, updatedTokenStateHashes, tid)
+		if pledgeFinalityError != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", err)
+			return nil, nil, nil, pledgeFinalityError
+		}
+		//Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
+		for _, tokeninfo := range ti {
+			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
+			previousQuorumDIDs, err := b.GetSigner()
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
+			}
+
+			//if signer is similar to sender did skip this token, as the block is the genesis block
+			if previousQuorumDIDs[0] == sc.GetSenderDID() {
+				continue
+			}
+
+			//concat tokenId and BlockID
+			bid, errBlockID := b.GetBlockID(tokeninfo.Token)
+			if errBlockID != nil {
+				return nil, nil, nil, fmt.Errorf("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
+			}
+			prevtokenIDTokenStateData := tokeninfo.Token + bid
+			prevtokenIDTokenStateBuffer := bytes.NewBuffer([]byte(prevtokenIDTokenStateData))
+
+			//add to ipfs get only the hash of the token+tokenstate. This is the hash just before transferring i.e. the exhausted token state hash, and updating in Sender side
+			prevtokenIDTokenStateHash, errIpfsAdd := c.ipfs.Add(prevtokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			if errIpfsAdd != nil {
+				return nil, nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
+			}
+			//send this exhausted hash to old quorums to unpledge
+			for _, previousQuorumDID := range previousQuorumDIDs {
+				previousQuorumPeerID := c.w.GetPeerID(previousQuorumDID)
+				// If peer ID information of a previous quorum DID is not found in the DIDPeerTable, it is likely that the
+				// signer DID belongs to the local peer. To verify that, we check if the record
+				// for the signer DID is present in DIDTable or not. If so, we can be sure that the signer
+				// DID is part of the local peer, and we take local peerID.
+				if previousQuorumPeerID == "" {
+					_, err := c.w.GetDID(previousQuorumDID)
+					if err != nil {
+						return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+					} else {
+						previousQuorumPeerID = c.peerID
+					}
+				}
+
+				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
+				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
+				if errGetPeer != nil {
+					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+				}
+
+				updateTokenHashDetailsQuery := make(map[string]string)
+				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
+				err := previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", prevtokenIDTokenStateHash, previousQuorumPeerID, err)
+				}
+			}
+		}
+		err = c.w.FTTokensTransffered(sc.GetSenderDID(), ti, nb, p.IsLocal())
+		if err != nil {
+			c.log.Error("Failed to transfer tokens", "err", err)
+			return nil, nil, nil, err
+		}
+		for _, t := range ti {
+			c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+		}
+		//call ipfs repo gc after unpinnning
+		c.ipfsRepoGc()
+		nbid, err := nb.GetBlockID(ti[0].Token)
+		if err != nil {
+			c.log.Error("Failed to get block id", "err", err)
+			return nil, nil, nil, err
+		}
+		fmt.Println("The new block id nbid :", nbid)
+
+		//Smart Contract sync logic starts here
+
+		b = c.w.GetLatestTokenBlock(cr.SmartContractToken, nb.GetTokenType(cr.SmartContractToken))
+
+		previousQuorumDIDs, err := b.GetSigner()
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.SmartContractToken, err)
+		}
+
+		//Create tokechain for the smart contract token and add genesys block
+		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
+		if err != nil {
+			c.log.Error("smart contract token chain creation failed", "err", err)
+			return nil, nil, nil, err
+		}
+		//update smart contracttoken status to deployed in DB
+		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsExecuted)
+		if err != nil {
+			c.log.Error("Failed to update smart contract Token execute detail in storage", err)
+			return nil, nil, nil, err
+		}
+
+		newBlockId, err := nb.GetBlockID(cr.SmartContractToken)
+		if err != nil {
+			c.log.Error("failed to get new block id ", "err", err)
+			return nil, nil, nil, err
+		}
+
+		//Latest Smart contract token hash after being executed.
+		scTokenStateData := cr.SmartContractToken + newBlockId
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(scTokenStateData))
+		newtokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		c.log.Info(fmt.Sprintf("New smart contract token hash after being executed : %s", newtokenIDTokenStateHash))
+
+		//trigger pledge finality to the quorum and adding the details in token hash table
+		pledgeFinalityErrorContract := c.quorumPledgeFinality(cr, nb, []string{newtokenIDTokenStateHash}, tid)
+		if pledgeFinalityErrorContract != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", err)
+			return nil, nil, nil, pledgeFinalityErrorContract
+		}
+
+		//Todo pubsub - publish smart contract token details
+		newEvent := model.NewContractEvent{
+			SmartContractToken:     cr.SmartContractToken,
+			Did:                    sc.GetExecutorDID(),
+			Type:                   ExecuteType,
+			SmartContractBlockHash: newBlockId,
+		}
+
+		err = c.publishNewEvent(&newEvent)
+		if err != nil {
+			c.log.Error("Failed to publish smart contract Executed info")
+		}
+
+		//inform old quorums about exhausted smart contract token hash
+		prevBlockId, errBlockID := nb.GetPrevBlockID((cr.SmartContractToken))
+		if errBlockID != nil {
+			return nil, nil, nil, fmt.Errorf("unable to fetch previous block id for Token %v, err: %v", cr.SmartContractToken, err)
+		}
+
+		scTokenStateDataOld := cr.SmartContractToken + prevBlockId
+		scTokenStateDataOldBuffer := bytes.NewBuffer([]byte(scTokenStateDataOld))
+		oldsctokenIDTokenStateHash, errIpfsAdd := c.ipfs.Add(scTokenStateDataOldBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		if errIpfsAdd != nil {
+			return nil, nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", cr.SmartContractToken, errIpfsAdd)
+		}
+
+		for _, previousQuorumDID := range previousQuorumDIDs {
+			previousQuorumPeerID := c.w.GetPeerID(previousQuorumDID)
+			// If peer ID information of a previous quorum DID is not found in the DIDPeerTable, it is likely that the
+			// signer DID belongs to the local peer. To verify that, we check if the record
+			// for the signer DID is present in DIDTable or not. If so, we can be sure that the signer
+			// DID is part of the local peer, and we take local peerID.
+			if previousQuorumPeerID == "" {
+				_, err := c.w.GetDID(previousQuorumDID)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+				} else {
+					previousQuorumPeerID = c.peerID
+				}
+			}
+
+			previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
+			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
+			if errGetPeer != nil {
+				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+			}
+
+			updateTokenHashDetailsQuery := make(map[string]string)
+			updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = oldsctokenIDTokenStateHash
+			err := previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("unable to send request to remove token hash details for state hash: %v to peer: %v, err: %v", oldsctokenIDTokenStateHash, previousQuorumPeerID, err)
+			}
+		}
+
+		txnDetails := model.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			BlockID:         newBlockId,
+			Mode:            wallet.ExecuteMode,
+			DeployerDID:     sc.GetExecutorDID(),
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+			Epoch:           int64(cr.TransactionEpoch),
+		}
+		fmt.Println("Transaction details are ", txnDetails)
+		err = c.initiateUnpledgingProcess(cr, txnDetails.TransactionID, txnDetails.Epoch)
+		if err != nil {
+			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
+			return nil, nil, nil, err
+		}
+		//Smart contract flow ends here
+		td := model.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			BlockID:         nbid,
+			Mode:            wallet.SendMode,
+			SenderDID:       sc.GetSenderDID(),
+			ReceiverDID:     sc.GetReceiverDID(),
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+			Epoch:           int64(cr.TransactionEpoch),
+		}
 		return &td, pl, pds, nil
 	case FTTransferMode:
 		// Connect to the receiver's peer
