@@ -258,12 +258,22 @@ func (c *Core) InitRubixExplorer() error {
 		}
 	}
 
-	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", newURL)
+	var explorerURL ExplorerURL
+	err = c.s.Read(ExplorerURLTable, &explorerURL, "url=?", newURL)
 	if err != nil {
 		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: newURL, Port: 443, Protocol: "https"})
+		if err != nil {
+			c.log.Error("URL could not be added to DB ", "url", newURL)
+			return err
+		}
 	}
-	if err != nil {
-		return err
+	if explorerURL.Protocol == "" {
+		explorerURL.Protocol = "https"
+		err = c.s.Update(ExplorerURLTable, &explorerURL, "url=?", newURL)
+		if err != nil {
+			c.log.Error("Protocol could not be updated for ", "url", newURL)
+			return err
+		}
 	}
 
 	cl, err := ensweb.NewClient(&config.Config{ServerAddress: newURL, ServerPort: "0", Production: "true"}, c.log)
