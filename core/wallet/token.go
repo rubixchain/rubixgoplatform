@@ -582,6 +582,11 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		// Check if token already exists
 		var t Token
 		err := w.s.Read(TokenStorage, &t, "token_id=?", tokenInfo.Token)
+		if err == nil || t.TokenID != "" {
+			if t.TokenStatus == 0 {
+				return nil, fmt.Errorf("Token %v already with the receiver with token status %v", t.TokenID, t.TokenStatus)
+			}
+		}
 		if err != nil || t.TokenID == "" {
 			// Token doesn't exist, proceed to handle it
 			dir := util.GetRandString()
@@ -639,7 +644,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-		//Pinnig the whole tokens and pat tokens
+		//Pinnig the whole tokens and part tokens
 		ok, err := w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue)
 		if err != nil {
 			return nil, err
