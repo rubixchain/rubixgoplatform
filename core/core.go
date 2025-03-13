@@ -613,8 +613,9 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 			}
 			didtype_, msg, err2 := c.GetPeerdidTypeFromPeer(peerId, didStr, selfDID)
 			if err2 != nil {
-				c.log.Error(msg)
-				return nil, err2
+				c.log.Error("error ", err2, "msg", msg)
+				// return nil, err2
+				didtype_ = did.BasicDIDMode
 			}
 			didtype = didtype_
 			peerUpdateResult, err3 := c.w.UpdatePeerDIDType(didStr, didtype)

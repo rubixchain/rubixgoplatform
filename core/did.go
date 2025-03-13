@@ -1,8 +1,10 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -12,6 +14,18 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
+
+// Struct to match the API response
+type APIResponse struct {
+	Message string  `json:"message"`
+	Data    DIDInfo `json:"data"`
+}
+
+type DIDInfo struct {
+	UserDID string `json:"user_did"`
+	DIDType string `json:"did_type"`
+	PeerID  string `json:"peer_id"`
+}
 
 func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
 	resp := &model.DIDAccessResponse{
@@ -281,4 +295,35 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 	}
 	c.ec.ExplorerUserCreate(newDID)
 	return did, nil
+}
+
+func (c *Core) GetPeerFromExplorer(did string) (*DIDInfo, error) {
+	// Construct the API URL
+	url := "https://rexplorer.azurewebsites.net/api/user/get-did-info/" + did
+
+	// Make the HTTP GET request
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check if the request was successful
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned non-200 status: %d", resp.StatusCode)
+	}
+
+	// Read the response body
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Parse the JSON response
+	var apiResp APIResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	return &apiResp.Data, nil
 }

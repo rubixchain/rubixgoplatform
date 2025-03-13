@@ -28,16 +28,11 @@ type GetPeerInfoResponse struct {
 	model.BasicResponse
 }
 
-type GetPrevQuorumsResponse struct {
-	PrevQuorumList []wallet.DIDPeerMap
-	model.BasicResponse
-}
 
 // PingSetup will setup the ping route
 func (c *Core) PingSetup() {
 	c.l.AddRoute(APIPingPath, "GET", c.PingRecevied)
 	c.l.AddRoute(APIGetPeerInfoPath, "GET", c.GetPeerInfoResponse)
-	c.l.AddRoute(APIGetPrevQrmFromPrevSenderPath, "GET", c.GetPrevQuorumsFromPrevBlockSenderResponse)
 }
 
 // CheckQuorumStatusSetup will setup the ping route
@@ -265,73 +260,5 @@ func (c *Core) GetPeerInfo(p *ipfsport.Peer, peerDID string) (GetPeerInfoRespons
 	return response, err
 }
 
-//prev block sender's response to the function call GetPrevQuorumsFromPrevBlockSender
-func (c *Core) GetPrevQuorumsFromPrevBlockSenderResponse(req *ensweb.Request) *ensweb.Result { //PingRecevied
-	resp := &GetPrevQuorumsResponse{
-		BasicResponse: model.BasicResponse{
-			Status: false,
-		},
-	}
-	var qrmDIDList []string
-	for i := 0; i < 5; i++ {
-		key := "did" + strconv.Itoa(i+1)
-		qrmDID := c.l.GetQuerry(req, key)
-		if qrmDID == "" {
-			continue
-		}
-		qrmDIDList = append(qrmDIDList, qrmDID)
-	}
 
-	if len(qrmDIDList) != 5 {
-		c.log.Error("Quorum list is empty")
-		resp.Message = "Quorum list is empty"
-		resp.Status = false
-		return c.l.RenderJSON(req, &resp, http.StatusOK)
-	}
 
-	var pInfo wallet.DIDPeerMap
-	zero := 0
-
-	for _, qrmDID := range qrmDIDList {
-		qrmPeerID := c.w.GetPeerID(qrmDID)
-		//if prev sender does not have peerID of it's quorum in DIDPeerTable,
-		//that means the prev sender is older than v0.0.17 and thus we can assume
-		//the quorums to be NLSS
-		//else, if the prev sender has the peerID then even when the DIDType is -1 (unknown)
-		//we still have the prev quorum's peerID to connect and request it's DID type
-		if qrmPeerID == "" {
-			c.log.Debug("could not fetch peerID for quorum:", qrmDID)
-			pInfo.DIDType = &zero
-		} else {
-			qDidType, _ := c.w.GetPeerDIDType(qrmDID)
-			pInfo.DIDType = &qDidType
-		}
-		pInfo.DID = qrmDID
-		pInfo.PeerID = qrmPeerID
-
-		resp.PrevQuorumList = append(resp.PrevQuorumList, pInfo)
-	}
-
-	resp.Status = true
-	resp.Message = "successfully fetched peer details"
-	return c.l.RenderJSON(req, &resp, http.StatusOK)
-
-}
-
-//sender uses this function to connect to previous block sender of a token and request the prev block pledged quorums' info
-func (c *Core) GetPrevQuorumsFromPrevBlockSender(prevSenderIPFSObj *ipfsport.Peer, prevQuorumDIDList []string) (GetPrevQuorumsResponse, error) {
-	q := make(map[string]string)
-
-	for i := range prevQuorumDIDList {
-		key := "did" + strconv.Itoa(i+1)
-		q[key] = prevQuorumDIDList[i]
-	}
-
-	var response GetPrevQuorumsResponse
-	err := prevSenderIPFSObj.SendJSONRequest("GET", APIGetPrevQrmFromPrevSenderPath, q, nil, &response, false)
-	c.log.Debug("prev quorums info", response.PrevQuorumList)
-	for _, prevQrm := range response.PrevQuorumList {
-		c.AddPeerDetails(prevQrm)
-	}
-	return response, err
-}

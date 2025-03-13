@@ -287,6 +287,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	//check if sender has previous block pledged quorums' details
+	unknownDIDType := -1
+	liteDIDType := did.LiteDIDMode
 	for _, tokeninfo := range tis {
 		b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 		//check if the transaction in prev block involved any quorums
@@ -300,27 +302,32 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		case block.TokenTransferredType:
 			//fetch all the pledged quorums, if the transaction involved quorums
 			prevQuorums, _ := b.GetSigner()
-			//fetch the sender in the transaction
-			previousBlockSenderDID := b.GetSenderDID()
+
 			for _, prevQuorum := range prevQuorums {
 				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender
 				prevQuorumDIDType, err := c.w.GetPeerDIDType(prevQuorum)
 				if prevQuorumDIDType == -1 || err != nil {
 					_, err := c.w.GetDID(prevQuorum)
 					if err != nil {
-						c.log.Debug("sender does not have previous block quorums details, fetching from previous block sender")
-						prevSenderIPFSObj, err := c.getPeer(previousBlockSenderDID, senderDID)
+						c.log.Debug("sender does not have previous block quorums details, fetching from explorer")
+						prevQuorumInfo, err := c.GetPeerFromExplorer(prevQuorum)
 						if err != nil {
-							c.log.Error("failed to get prev sender peer", previousBlockSenderDID, "err", err)
-							resp.Message = "failed to get prev sender peer; err: " + err.Error()
-							return resp
+							c.log.Error("failed to fetch prev-quorum details from explorer, prev-quorum ", prevQuorum)
 						}
-						prevQuorumsDetails, err := c.GetPrevQuorumsFromPrevBlockSender(prevSenderIPFSObj, prevQuorums)
-						if err != nil {
-							c.log.Error("failed to fetch details of the previous block quorums", prevQuorum, "err", err)
-							resp.Message = "failed to fetch details of the previous block quorums; msg: " + prevQuorumsDetails.Message
-							return resp
+
+						prevQuorumDIDInfo := wallet.DIDPeerMap{
+							DID:    prevQuorum,
+							PeerID: prevQuorumInfo.PeerID,
 						}
+
+						if prevQuorumInfo.DIDType == "BIP39" {
+							prevQuorumDIDInfo.DIDType = &liteDIDType
+						} else {
+							prevQuorumDIDInfo.DIDType = &unknownDIDType
+						}
+
+						c.AddPeerDetails(prevQuorumDIDInfo)
+
 						//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
 						//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
 						break

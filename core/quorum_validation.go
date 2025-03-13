@@ -44,12 +44,19 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 		default:
 			signerDIDType, err := c.w.GetPeerDIDType(signer)
 			if signerDIDType == -1 || err != nil {
-				c.log.Debug("quorum does not have prev quorum did type", signerDIDType)
+				c.log.Debug("quorum does not have prev-block signer did type", signerDIDType)
 				signerDetails, err := c.GetPeerInfo(p, signer)
-				if err != nil || signerDetails.PeerInfo.DIDType == nil {
-					c.log.Error("failed to fetch details of the signer", signer, "msg", signerDetails.Message)
-					return signerDetails.Status, err
+				if err != nil || signerDetails.PeerInfo.PeerID == "" {
+					c.log.Error("failed to fetch signer info form sender, signer ", signer, "err", err)
+					// return signerDetails.Status, err
+					basicDID := did.BasicDIDMode
+					signerDetails.PeerInfo.DIDType = &basicDID
 				}
+				if signerDetails.PeerInfo.DIDType == nil {
+					unknownDIDType := -1
+					signerDetails.PeerInfo.DIDType = &unknownDIDType
+				}
+
 				signerDetails.PeerInfo.DID = signer
 				c.AddPeerDetails(signerDetails.PeerInfo)
 			}
@@ -61,8 +68,30 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 		}
 		err := b.VerifySignature(dc)
 		if err != nil {
-			c.log.Error("Failed to verify signature", "err", err)
-			return false, fmt.Errorf("Failed to verify signature", "err", err)
+			if dc.GetSignType() == did.NlssVersion {
+				peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
+				if !peerUpdateResult || err != nil {
+					liteDID := did.LiteDIDMode
+					signerInfo := wallet.DIDPeerMap{
+						DID:     signer,
+						DIDType: &liteDID,
+					}
+					c.AddPeerDetails(signerInfo)
+				}
+				dc, err = c.SetupForienDIDQuorum(signer, selfDID)
+				if err != nil {
+					c.log.Error("failed to setup foreign DID quorum", "err", err)
+					return false, fmt.Errorf("failed to setup foreign DID quorum : %v err: %v", signer, err)
+				}
+				err = b.VerifySignature(dc)
+				if err != nil {
+					c.log.Error("Failed to verify signature", "err", err)
+					return false, fmt.Errorf("failed to verify signature, err: %v", err)
+				}
+			} else {
+				c.log.Error("Failed to verify signature", "err", err)
+				return false, fmt.Errorf("failed to verify signature, err: %v", err)
+			}
 		}
 	}
 	return true, nil
