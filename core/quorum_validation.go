@@ -99,6 +99,8 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 	// 		lbID = ""
 	// 	}
 	// }
+	fmt.Println("Parent Token ID: ", pt)
+	fmt.Println("The syncTokenchainFrom function is called: This call happens inside the function syncParentToken")
 	err = c.syncTokenChainFrom(p, lbID, pt, tt)
 	if err != nil {
 		c.log.Error("failed to sync token chain block", "err", err)

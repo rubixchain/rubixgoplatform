@@ -269,6 +269,7 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to parse request"}, http.StatusOK)
 	}
 	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
+	fmt.Println("The blks which we got after calling the functioln GetAllTokenBlock", blks)
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: err.Error()}, http.StatusOK)
 	}

@@ -332,6 +332,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	switch cr.Mode {
 	case RBTTransferMode, NFTSaleContractMode, SelfTransferMode, PinningServiceMode:
 		ti := sc.GetTransTokenInfo()
+		c.log.Info("Token Info inside the initiate consensus", "ti", ti)
 		for i := range ti {
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
@@ -551,7 +552,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			qrmInfo.PeerID = qpid
 			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
 		}
-
+		fmt.Println("The send request is ", sr)
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
 		if err != nil {

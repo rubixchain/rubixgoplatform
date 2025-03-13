@@ -939,6 +939,7 @@ func (c *Core) updateReceiverToken(
 		return nil, fmt.Errorf("invalid token chain block")
 	}
 
+	fmt.Println("The block which is being updated is :", b)
 	var senderPeer *ipfsport.Peer
 
 	if receiverAddress != "" {
@@ -950,7 +951,10 @@ func (c *Core) updateReceiverToken(
 		defer senderPeer.Close()
 
 		for _, ti := range tokenInfo {
+
 			t := ti.Token
+			blockId, _ := b.GetBlockID(t)
+			fmt.Println("The blockId is :", blockId)
 			pblkID, err := b.GetPrevBlockID(t)
 			if err != nil {
 				return nil, fmt.Errorf("failed to sync token chain block, missing previous block id for token %v, error: %v", t, err)
@@ -970,9 +974,19 @@ func (c *Core) updateReceiverToken(
 				if err != nil {
 					return nil, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
 				}
-				err = c.syncParentToken(senderPeer, pt)
-				if err != nil {
-					return nil, fmt.Errorf("failed to sync parent token %v childtoken %v err : ", pt, t, err)
+
+				// Retry logic for syncParentToken
+				maxRetries := 3
+				for attempt := 1; attempt <= maxRetries; attempt++ {
+					err = c.syncParentToken(senderPeer, pt)
+					if err == nil {
+						break // Successfully synced, exit loop
+					}
+					if attempt < maxRetries {
+						fmt.Printf("Retrying syncParentToken (Attempt %d/%d) for token %v\n", attempt, maxRetries, t)
+					} else {
+						return nil, fmt.Errorf("failed to sync parent token %v child token %v after %d attempts, err: %v", pt, t, maxRetries, err)
+					}
 				}
 			}
 			ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
@@ -1097,6 +1111,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 		sr.TransactionEpoch,
 		sr.PinningServiceMode,
 	)
+	fmt.Println("The sr.TokenchainBlock is ", sr.TokenChainBlock)
 	if err != nil {
 		c.log.Error(err.Error())
 		crep.Message = err.Error()
