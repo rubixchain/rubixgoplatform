@@ -559,7 +559,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		FTName:          req.FTName,
 		FTTransferCount: req.FTCount,
 		Network:         req.QuorumType,
-		FTSymbol:        "TODO",
+		FTSymbol:        "N/A",
 		Comments:        req.Comment,
 		TransactionID:   td.TransactionID,
 		PledgeInfo:      PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
