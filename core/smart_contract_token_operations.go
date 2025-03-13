@@ -319,15 +319,6 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	txnDetails.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(txnDetails)
 
-	// explorerTrans := &ExplorerTrans{
-	// 	TID:         txnDetails.TransactionID,
-	// 	ExecutorDID: did,
-	// 	TrasnType:   conensusRequest.Type,
-	// 	TokenIDs:    tokens,
-	// 	QuorumList:  conensusRequest.QuorumList,
-	// 	TokenTime:   float64(dif.Milliseconds()),
-	// 	//BlockHash:   txnDetails.BlockID,
-	// }
 	blockNoPart := strings.Split(txnDetails.BlockID, "-")[0]
 	// Convert the string part to an int
 	blockNoInt, _ := strconv.Atoi(blockNoPart)

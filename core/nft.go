@@ -244,7 +244,7 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		OwnerDID:       nftInfo.OwnerDID,
 		PledgeAmount:   consensusContractDetails.TotalRBTs,
 		QuorumList:     extractQuorumDID(conensusRequest.QuorumList),
-		PledgeInfo:     PledgeInfoNFT{PledgeDetails: pds.PledgedTokens, PledgedTokenList: ConvertToNFTTokens(pds.TokenList)},
+		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
 		Comments:       txnDetails.Comment,
 	}
 	explorerErr := c.ec.ExplorerNFTDeploy(eTrans)
@@ -434,7 +434,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		PledgeAmount:   consensusContractDetails.TotalRBTs,
 		TransactionID:  txnDetails.TransactionID,
 		QuorumList:     extractQuorumDID(conensusRequest.QuorumList),
-		PledgeInfo:     PledgeInfoNFT{PledgeDetails: pds.PledgedTokens, PledgedTokenList: ConvertToNFTTokens(pds.TokenList)},
+		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
 	}
 
 	receiverPeerId := c.w.GetPeerID(executeReq.Receiver)
@@ -450,7 +450,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 
 	explorerErr := c.ec.ExplorerNFTTransaction(eTrans)
 	if explorerErr != nil {
-		c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
+		c.log.Error("Failed to send NFT transaction to explorer ", "err", explorerErr)
 	}
 
 	c.log.Info("NFT Executed successfully", "duration", dif)

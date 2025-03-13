@@ -553,7 +553,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 
 	eTrans := &ExplorerFTTrans{
 		FTBlockHash:     AllTokens,
-		CreatorDID:      []string{creatorDID},
+		CreatorDID:      creatorDID,
 		SenderDID:       did,
 		ReceiverDID:     rdid,
 		FTName:          req.FTName,
@@ -562,7 +562,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		FTSymbol:        "N/A",
 		Comments:        req.Comment,
 		TransactionID:   td.TransactionID,
-		PledgeInfo:      PledgeInfoNFT{PledgeDetails: pds.PledgedTokens, PledgedTokenList: ConvertToNFTTokens(pds.TokenList)},
+		PledgeInfo:      PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
 		QuorumList:      extractQuorumDID(cr.QuorumList),
 		Amount:          FTsForTxn[0].TokenValue * float64(req.FTCount),
 		FTTokenList:     FTTokenIDs,

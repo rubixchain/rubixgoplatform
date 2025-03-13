@@ -1,9 +1,9 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -21,8 +21,8 @@ const (
 	ExplorerBasePath              string = "/api/v2/services/app/Rubix/"
 	ExplorerTokenCreateAPI        string = "/api/token/create"
 	ExplorerTokenCreatePartsAPI   string = "/api/token/part/create"
-	ExplorerTokenCreateNFTAPI     string = "/api/token/nft/create"
-	ExplorerTokenCreateSCAPI      string = "/api/token/sc/create"
+	ExplorerTokenCreateNFTAPI     string = "/api/v2/token/nft/create"
+	ExplorerTokenCreateSCAPI      string = "/api/v2/token/sc/create"
 	ExplorerCreateUserAPI         string = "/api/user/create"
 	ExplorerUpdateUserInfoAPI     string = "/api/user/update-user-info"
 	ExplorerUpdateTokenInfoAPI    string = "/api/token/update-token-info"
@@ -30,7 +30,7 @@ const (
 	ExplorerGenerateUserKeyAPI    string = "/api/user/generate-api-key"
 	ExplorerExpireUserKeyAPI      string = "/api/user/set-expire-api-key"
 	ExplorerRBTTransactionAPI     string = "/api/transactions/rbt"
-	ExplorerSCTransactionAPI      string = "/api/transactions/sc"
+	ExplorerSCTransactionAPI      string = "/api/v2/transactions/sc"
 	ExplorerFTTransactionAPI      string = "/api/transactions/ft"
 	ExplorerNFTTransactionAPI     string = "/api/transactions/nft"
 	ExplorerUpdatePledgeStatusAPI string = "/api/token/update-pledge-status"
@@ -157,7 +157,7 @@ type ExplorerSCDeploy struct {
 	SCTokenHash        string     `json:"sc_token_hash"`
 	SCTokenValue       float64    `json:"sc_token_value"`
 	Network            int        `json:"network"`
-	SCBlockNumber      int        `json:"block_number"`
+	SCBlockNumber      int        `json:"block_num"`
 	TransactionID      string     `json:"transaction_id"`
 	SCBlockHash        string     `json:"block_hash"`
 	DeployerDID        string     `json:"deployer_did"`
@@ -185,52 +185,52 @@ type ExplorerSCTrans struct {
 }
 
 type ExplorerNFTDeploy struct {
-	NFT            string        `json:"nft"`
-	NFTBlockHash   string        `json:"nft_block_hash"`
-	NFTBlockNumber int           `json:"nft_block_number"`
-	NFTValue       float64       `json:"nft_value"`
-	TransactionID  string        `json:"transaction_id"`
-	Network        int           `json:"network"`
-	OwnerDID       string        `json:"owner_did"`
-	DeployerDID    string        `json:"deployer_did"`
-	PledgeAmount   float64       `json:"pledge_amount"`
-	QuorumList     []string      `json:"quorum_list"`
-	PledgeInfo     PledgeInfoNFT `json:"pledge_info"`
-	Comments       string        `json:"comments"`
+	NFT            string     `json:"nft"`
+	NFTBlockHash   string     `json:"nft_block_hash"`
+	NFTBlockNumber int        `json:"nft_block_number"`
+	NFTValue       float64    `json:"nft_value"`
+	TransactionID  string     `json:"transaction_id"`
+	Network        int        `json:"network"`
+	OwnerDID       string     `json:"owner_did"`
+	DeployerDID    string     `json:"deployer_did"`
+	PledgeAmount   float64    `json:"pledge_amount"`
+	QuorumList     []string   `json:"quorum_list"`
+	PledgeInfo     PledgeInfo `json:"pledge_info"`
+	Comments       string     `json:"comments"`
 }
 
 type ExplorerNFTExecute struct {
-	NFT            string        `json:"nft"`
-	ExecutorDID    string        `json:"executor_did"`
-	ReceiverDID    string        `json:"receiver_did"`
-	Network        int           `json:"network"`
-	Comments       string        `json:"comments"`
-	NFTValue       float64       `json:"nft_value"`
-	NFTData        string        `json:"nft_data"`
-	NFTBlockHash   string        `json:"block_hash"`
-	NFTBlockNumber int           `json:"block_number"`
-	PledgeAmount   float64       `json:"pledge_amount"`
-	TransactionID  string        `json:"transaction_id"`
-	Amount         float64       `json:"amount"`
-	QuorumList     []string      `json:"quorumList"`
-	PledgeInfo     PledgeInfoNFT `json:"pledgeInfo"`
+	NFT            string     `json:"nft"`
+	ExecutorDID    string     `json:"executor_did"`
+	ReceiverDID    string     `json:"receiver_did"`
+	Network        int        `json:"network"`
+	Comments       string     `json:"comments"`
+	NFTValue       float64    `json:"nft_value"`
+	NFTData        string     `json:"nft_data"`
+	NFTBlockHash   string     `json:"block_hash"`
+	NFTBlockNumber int        `json:"block_number"`
+	PledgeAmount   float64    `json:"pledge_amount"`
+	TransactionID  string     `json:"transaction_id"`
+	Amount         float64    `json:"amount"`
+	QuorumList     []string   `json:"quorum_list"`
+	PledgeInfo     PledgeInfo `json:"pledge_info"`
 }
 
 type ExplorerFTTrans struct {
-	FTBlockHash     []AllToken    `json:"ftBlockHash"`
-	CreatorDID      []string      `json:"creatorDID"`
-	SenderDID       string        `json:"senderDID"`
-	ReceiverDID     string        `json:"receiverDID"`
-	FTName          string        `json:"ftName"`
-	FTSymbol        string        `json:"ftSymbol"`
-	FTTransferCount int           `json:"ftTransferCount"`
-	Network         int           `json:"network"`
-	Comments        string        `json:"comments"`
-	FTTokenList     []string      `json:"ftTokenList"`
-	TransactionID   string        `json:"transactionID"`
-	Amount          float64       `json:"amount"`
-	QuorumList      []string      `json:"quorumList"`
-	PledgeInfo      PledgeInfoNFT `json:"pledgeInfo"`
+	FTBlockHash     []AllToken `json:"ft_block_hash"`
+	CreatorDID      string     `json:"creator_did"`
+	SenderDID       string     `json:"sender_did"`
+	ReceiverDID     string     `json:"receiver_did"`
+	FTName          string     `json:"ft_name"`
+	FTSymbol        string     `json:"ft_symbol"`
+	FTTransferCount int        `json:"ft_transfer_count"`
+	Network         int        `json:"network"`
+	Comments        string     `json:"comments"`
+	FTTokenList     []string   `json:"ft_token_list"`
+	TransactionID   string     `json:"transaction_id"`
+	Amount          float64    `json:"amount"`
+	QuorumList      []string   `json:"quorum_list"`
+	PledgeInfo      PledgeInfo `json:"pledge_info"`
 }
 
 type ExplorerResponse struct {
@@ -327,44 +327,113 @@ func (ec *ExplorerClient) SendExplorerJSONRequest(method string, path string, in
 		return err
 	}
 
+	const maxRetries = 3
 	for _, url := range urls {
 		apiKeyForHeader := ""
 		if url == "https://rexplorer.azurewebsites.net" || url == "https://testnet-core-api.rubixexplorer.com" {
-			apiKeyForHeader = ec.getAPIKey(path, input)
-		} else {
-			apiKeyForHeader = ""
+			apiKeyForHeader = ec.getAPIKey(path, input, false)
 		}
-		req, err := ec.JSONRequestForExplorer(method, path, input, url, apiKeyForHeader)
-		if err != nil {
-			ec.log.Error("Request could not be sent to : "+url, "err", err)
-			continue
-		}
-		resp, err := ec.Do(req)
-		if err != nil {
-			ec.log.Error("Failed to get response from explorer : "+url, "err", err)
-			continue
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			bodyString := string(bodyBytes)
-			str := fmt.Sprintf("Http Request failed with status %d for %s. Response: %s", resp.StatusCode, url, bodyString)
-			if strings.Contains(bodyString, "DuplicateKey") {
-				return fmt.Errorf("user already exists, duplicate key error")
+
+		attempts := 0
+
+		for attempts < maxRetries {
+			req, err := ec.JSONRequestForExplorer(method, path, input, url, apiKeyForHeader)
+			if err != nil {
+				ec.log.Error("Request could not be sent to : "+url, "err", err)
+				break
 			}
-			ec.log.Error(str)
-			continue
-		}
-		if output == nil {
-			continue
-		}
-		err = jsonutil.DecodeJSONFromReader(resp.Body, output)
-		if err != nil {
-			ec.log.Error("Invalid response from the node", "err", err)
-			continue
+			resp, err := ec.Do(req)
+			if err != nil {
+				ec.log.Error("Failed to get response from explorer : "+url, "err", err)
+				break
+			}
+			// defer resp.Body.Close()
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				bodyString := string(bodyBytes)
+				str := fmt.Sprintf("Http Request failed with status %d for %s. Response: %s", resp.StatusCode, url, bodyString)
+				if strings.Contains(bodyString, "DuplicateKey") {
+					return fmt.Errorf("user already exists, duplicate key error")
+				}
+				if strings.Contains(bodyString, "Invalid API Key") {
+					//Fetch the API Key from explorer.
+					//Add or Update the new API Key in the DB
+					//Run from req, err := ec.JSONRequestForExplorer(method, path, input, url, apiKeyForHeader) line again.
+					//Put a count of 3, after 3 trials, it should stop.
+					attempts++
+					ec.log.Info("Invalid API Key. Retrying request with new API Key...", "Attempt", attempts)
+					didReq := ec.getAPIKey(path, input, true)
+					if didReq != "" {
+						apiKeyForHeader, err = ec.GetAPIKeyFromExplorer(url, didReq)
+						if err != nil {
+							break
+						}
+						ec.AddDIDKey(didReq, apiKeyForHeader)
+						// time.Sleep(2 * time.Second)
+						// apiKeyForHeader = ec.getAPIKey(path, input, false) // Fetch new key after regeneration
+					}
+					continue
+				}
+				ec.log.Error(str)
+				break
+			}
+			if output == nil {
+				break
+			}
+			err = jsonutil.DecodeJSONFromReader(bytes.NewReader(bodyBytes), output)
+			if err != nil {
+				ec.log.Error("Invalid response from the node", "err", err)
+				break
+			}
+			return nil
 		}
 	}
 	return nil
+}
+
+func (ec *ExplorerClient) GetAPIKeyFromExplorer(url string, didReq string) (string, error) {
+	var er ExplorerUserCreateResponse
+	eu := ExplorerUser{DID: didReq}
+
+	// Create request to fetch API key
+	req, err := ec.JSONRequestForExplorer("POST", ExplorerGenerateUserKeyAPI, &eu, url, "")
+	if err != nil {
+		ec.log.Error(fmt.Sprintf("Failed to create request for DID %v: %v", didReq, err.Error()))
+		return "", err
+	}
+
+	// Send request
+	resp, err := ec.Do(req)
+	if err != nil {
+		ec.log.Error(fmt.Sprintf("Failed to send request for DID %v: %v", didReq, err.Error()))
+		return "", err
+	}
+
+	// Read response
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		ec.log.Error(fmt.Sprintf("Failed to generate API Key for %v. Response: %s", didReq, string(bodyBytes)))
+		return "", fmt.Errorf("failed to generate API key, response: %s", string(bodyBytes))
+	}
+
+	// Decode JSON response
+	err = jsonutil.DecodeJSONFromReader(bytes.NewReader(bodyBytes), &er)
+	if err != nil {
+		ec.log.Error(fmt.Sprintf("Invalid response for DID %v: %v", didReq, err.Error()))
+		return "", err
+	}
+
+	// Check response message
+	if !strings.Contains(er.Message, "successfully") {
+		errMsg := fmt.Sprintf("Failed to generate API Key for %v. Error: %v", didReq, er.Message)
+		ec.log.Error(errMsg)
+		return "", fmt.Errorf(errMsg)
+	}
+
+	ec.log.Info(fmt.Sprintf("API key generated successfully for DID %v: %s", didReq, er.APIKey))
+	return er.APIKey, nil
 }
 
 func (c *Core) ExplorerUserCreate() []string {
@@ -454,7 +523,7 @@ func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "User created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error(fmt.Sprintf("Failed to create user for %v with error message %v", ed.DID, er.Message))
 		return fmt.Errorf("failed to create user")
 	}
@@ -652,7 +721,7 @@ func (c *Core) GenerateUserAPIKey(dids []string) {
 				c.log.Error(fmt.Sprintf("Failed to send request for DID %v: %v", did, err.Error()))
 				return
 			}
-			if er.Message != "API key regenerated successfully!" {
+			if !strings.Contains(er.Message, "successfully") {
 				c.log.Error(fmt.Sprintf("Failed to generate API Key for %v. The error msg is %v", did, er.Message))
 				return
 			}
@@ -746,7 +815,7 @@ func (ec *ExplorerClient) ExplorerSCDeploy(et *ExplorerSCDeploy) error {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
-	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID))
+	ec.log.Info(fmt.Sprintf("Smart contract deployment details for TransactionID %v is stored successfully with msg=%v", et.TransactionID, er.Message))
 	return nil
 }
 
@@ -760,7 +829,7 @@ func (ec *ExplorerClient) ExplorerSCTransaction(et *ExplorerSCTrans) error {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
-	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID))
+	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully with msg=%v", et.TransactionID, er.Message))
 	return nil
 }
 
@@ -774,7 +843,7 @@ func (ec *ExplorerClient) ExplorerNFTDeploy(et *ExplorerNFTDeploy) error {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
-	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID))
+	ec.log.Info(fmt.Sprintf("NFT deployment details for TransactionID %v is stored successfully with message=%v", et.TransactionID, er.Message))
 	return nil
 }
 
@@ -788,7 +857,7 @@ func (ec *ExplorerClient) ExplorerNFTTransaction(et *ExplorerNFTExecute) error {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
-	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID))
+	ec.log.Info(fmt.Sprintf("NFT transaction details for TransactionID %v is stored successfully with message=%v", et.TransactionID, er.Message))
 	return nil
 }
 
@@ -802,7 +871,7 @@ func (ec *ExplorerClient) ExplorerFTTransaction(et *ExplorerFTTrans) error {
 		ec.log.Error("Failed to update explorer", "msg", er.Message)
 		return fmt.Errorf("failed to update explorer")
 	}
-	ec.log.Info(fmt.Sprintf("Smart contract transaction details for TransactionID %v is stored successfully", et.TransactionID))
+	ec.log.Info(fmt.Sprintf("FT transaction details for TransactionID %v is stored successfully with message = %v", et.TransactionID, er.Message))
 	return nil
 }
 
@@ -884,24 +953,30 @@ func (c *Core) AddDIDKey(did string, apiKey string) error {
 }
 
 func (ec *ExplorerClient) AddDIDKey(did string, apiKey string) error {
+	var mu sync.Mutex
 	eu := ExplorerUser{}
 	err := ec.es.Read(ExplorerUserDetailsTable, &eu, "did=?", did)
+	mu.Lock()
 	if err != nil {
 		eu.DID = did
 		eu.APIKey = apiKey
 		err = ec.es.Write(ExplorerUserDetailsTable, eu)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to insert new API key for DID %s: %w", did, err)
 		}
 	} else {
 		eu.APIKey = apiKey
-		ec.es.Update(ExplorerUserDetailsTable, &eu, "did=?", did)
+		err = ec.es.Update(ExplorerUserDetailsTable, &eu, "did=?", did)
+		if err != nil {
+			return fmt.Errorf("failed to update API key for DID %s: %w", did, err)
+		}
 	}
+	mu.Unlock()
 
 	return nil
 }
 
-func (ec *ExplorerClient) getAPIKey(path string, input interface{}) string {
+func (ec *ExplorerClient) getAPIKey(path string, input interface{}, getDID bool) string {
 	eu := ExplorerUser{}
 	if path != ExplorerCreateUserAPI {
 		var did string
@@ -910,8 +985,23 @@ func (ec *ExplorerClient) getAPIKey(path string, input interface{}) string {
 			did = v.SenderDID
 		case *ExplorerCreateToken:
 			did = v.UserDID
+		case *ExplorerCreateTokenParts:
+			did = v.UserDID
+		case *ExplorerFTTrans:
+			did = v.SenderDID
+		case *ExplorerSCTrans:
+			did = v.ExecutorDID
+		case *ExplorerSCDeploy:
+			did = v.DeployerDID
+		case *ExplorerNFTDeploy:
+			did = v.DeployerDID
+		case *ExplorerNFTExecute:
+			did = v.ExecutorDID
 		default:
-			return "unsupported input type"
+			return ""
+		}
+		if getDID {
+			return did
 		}
 		err := ec.es.Read(ExplorerUserDetailsTable, &eu, "did=?", did) //Include explorer URL? TODO
 		if err != nil {
@@ -973,14 +1063,4 @@ func (c *Core) UpdatePledgeStatus(tokenHashes []string, did string) {
 		c.log.Error("Failed to update explorer", "msg", er.Message)
 	}
 	c.log.Info(fmt.Sprintf("Pledge status updated successfully for did %v and token hashes %v", did, tokenHashes))
-}
-
-// Function to convert []Token to []NFTToken
-func ConvertToNFTTokens(tokenList []Token) []NFTToken {
-	nftTokens := make([]NFTToken, len(tokenList))
-	for i, token := range tokenList {
-		nftTokens[i].TokenHash = token.TokenHash
-		nftTokens[i].TokenValue = math.Round(token.TokenValue*1000) / 1000 //Rounding token value to 3 decimal places.
-	}
-	return nftTokens
 }
