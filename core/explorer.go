@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -140,6 +141,7 @@ type ExplorerRBTTrans struct {
 	TransTokenList []Token    `json:"token_list"`
 	Comments       string     `json:"comments"`
 }
+
 type ExplorerSCTrans struct {
 	SCTokenHash        string     `json:"sc_token_hash"`
 	SCBlockHash        string     `json:"block_hash"`
@@ -258,12 +260,23 @@ func (c *Core) InitRubixExplorer() error {
 		}
 	}
 
-	err = c.s.Read(ExplorerURLTable, &ExplorerURL{}, "url=?", newURL)
+	var explorerURL ExplorerURL
+	err = c.s.Read(ExplorerURLTable, &explorerURL, "url=?", newURL)
 	if err != nil {
 		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: newURL, Port: 443, Protocol: "https"})
+		if err != nil {
+			c.log.Error("URL could not be added to DB ", "url", newURL)
+			return err
+		}
 	}
-	if err != nil {
-		return err
+
+	if explorerURL.Protocol == "" {
+		explorerURL.Protocol = "https"
+		err = c.s.Update(ExplorerURLTable, &explorerURL, "url=?", newURL)
+		if err != nil {
+			c.log.Error("Protocol could not be updated for ", "url", newURL)
+			return err
+		}
 	}
 
 	cl, err := ensweb.NewClient(&config.Config{ServerAddress: newURL, ServerPort: "0", Production: "true"}, c.log)
@@ -286,40 +299,109 @@ func (ec *ExplorerClient) SendExplorerJSONRequest(method string, path string, in
 		return err
 	}
 
+	const maxRetries = 3
 	for _, url := range urls {
 		apiKeyForHeader := ""
 		if url == "https://rexplorer.azurewebsites.net" || url == "https://testnet-core-api.rubixexplorer.com" {
-			apiKeyForHeader = ec.getAPIKey(path, input)
-		} else {
-			apiKeyForHeader = ""
+			apiKeyForHeader = ec.getAPIKey(path, input, false)
 		}
-		req, err := ec.JSONRequestForExplorer(method, path, input, url, apiKeyForHeader)
-		if err != nil {
-			ec.log.Error("Request could not be sent to : "+url, "err", err)
-			continue
-		}
-		resp, err := ec.Do(req)
-		if err != nil {
-			ec.log.Error("Failed to get response from explorer : "+url, "err", err)
-			continue
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
+
+		attempts := 0
+
+		for attempts < maxRetries {
+			req, err := ec.JSONRequestForExplorer(method, path, input, url, apiKeyForHeader)
+			if err != nil {
+				ec.log.Error("Request could not be sent to : "+url, "err", err)
+				continue
+			}
+			resp, err := ec.Do(req)
+			if err != nil {
+				ec.log.Error("Failed to get response from explorer : "+url, "err", err)
+				continue
+			}
+
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			str := fmt.Sprintf("Http Request failed with status %d for %s. Response: %s", resp.StatusCode, url, string(bodyBytes))
-			ec.log.Error(str)
-			continue
-		}
-		if output == nil {
-			continue
-		}
-		err = jsonutil.DecodeJSONFromReader(resp.Body, output)
-		if err != nil {
-			ec.log.Error("Invalid response from the node", "err", err)
-			continue
+			resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				bodyString := string(bodyBytes)
+				str := fmt.Sprintf("Http Request failed with status %d for %s. Response: %s", resp.StatusCode, url, string(bodyBytes))
+				if strings.Contains(bodyString, "DuplicateKey") {
+					return fmt.Errorf("user already exists, duplicate key error")
+				}
+
+				if strings.Contains(bodyString, "Invalid API Key") {
+					attempts++
+					ec.log.Info("Invalid API Key. Retrying request with new API Key...", "Attempt", attempts)
+					didReq := ec.getAPIKey(path, input, true)
+					if didReq != "" {
+						apiKeyForHeader, err = ec.GetAPIKeyFromExplorer(url, didReq)
+						if err != nil {
+							break
+						}
+						ec.AddDIDKey(didReq, apiKeyForHeader)
+					}
+					continue
+				}
+				ec.log.Error(str)
+				break
+			}
+			if output == nil {
+				break
+			}
+			err = jsonutil.DecodeJSONFromReader(bytes.NewReader(bodyBytes), output)
+			if err != nil {
+				ec.log.Error("Invalid response from the node", "err", err)
+				break
+			}
+			break
 		}
 	}
 	return nil
+}
+
+func (ec *ExplorerClient) GetAPIKeyFromExplorer(url string, didReq string) (string, error) {
+	var er ExplorerUserCreateResponse
+	eu := ExplorerUser{DID: didReq}
+
+	// Create request to fetch API key
+	req, err := ec.JSONRequestForExplorer("POST", ExplorerGenerateUserKeyAPI, &eu, url, "")
+	if err != nil {
+		ec.log.Error(fmt.Sprintf("Failed to create request for DID %v: %v", didReq, err.Error()))
+		return "", err
+	}
+
+	// Send request
+	resp, err := ec.Do(req)
+	if err != nil {
+		ec.log.Error(fmt.Sprintf("Failed to send request for DID %v: %v", didReq, err.Error()))
+		return "", err
+	}
+
+	// Read response
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		ec.log.Error(fmt.Sprintf("Failed to generate API Key for %v. Response: %s", didReq, string(bodyBytes)))
+		return "", fmt.Errorf("failed to generate API key, response: %s", string(bodyBytes))
+	}
+
+	// Decode JSON response
+	err = jsonutil.DecodeJSONFromReader(bytes.NewReader(bodyBytes), &er)
+	if err != nil {
+		ec.log.Error(fmt.Sprintf("Invalid response for DID %v: %v", didReq, err.Error()))
+		return "", err
+	}
+
+	// Check response message
+	if !strings.Contains(er.Message, "successfully") {
+		errMsg := fmt.Sprintf("Failed to generate API Key for %v. Error: %v", didReq, er.Message)
+		ec.log.Error(errMsg)
+		return "", fmt.Errorf(errMsg)
+	}
+
+	ec.log.Info(fmt.Sprintf("API key generated successfully for DID %v: %s", didReq, er.APIKey))
+	return er.APIKey, nil
 }
 
 func (c *Core) ExplorerUserCreate() []string {
@@ -369,7 +451,16 @@ func (c *Core) ExplorerUserCreate() []string {
 							DIDType: d.Type,
 						}
 						err := c.ec.ExplorerUserCreate(&ed)
-						if err != nil {
+						if err != nil && strings.Contains(err.Error(), "duplicate") {
+							eu.DID = d.DID
+							err = c.s.Write(ExplorerUserDetailsTable, eu)
+							if err != nil {
+								c.log.Error(fmt.Sprintf("Error adding user DID %v: in the DB with error %v", d.DID, err))
+								return
+							}
+							c.UpdateUserInfo([]string{ed.DID})
+							c.GenerateUserAPIKey([]string{ed.DID})
+						} else if err != nil {
 							c.log.Error(fmt.Sprintf("Error creating user for DID %v: %v", d.DID, err))
 							return
 						}
@@ -400,7 +491,7 @@ func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 	if err != nil {
 		return err
 	}
-	if er.Message != "User created successfully!" {
+	if !strings.Contains(er.Message, "successfully") {
 		ec.log.Error("Failed to create user for %v with error message %v", ed.DID, er.Message)
 		return fmt.Errorf("failed to create user")
 	}
@@ -431,7 +522,7 @@ func (c *Core) UpdateUserInfo(dids []string) {
 				c.log.Error("Failed to send request for user DID, " + did + " Error : " + err.Error())
 				return
 			}
-			if er.Message != "User balance updated successfully!" {
+			if !strings.Contains(er.Message, "successfully") {
 				c.log.Error("Failed to update user info for ", "DID", did, "msg", er.Message)
 			} else {
 				c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
@@ -816,24 +907,30 @@ func (c *Core) AddDIDKey(did string, apiKey string) error {
 }
 
 func (ec *ExplorerClient) AddDIDKey(did string, apiKey string) error {
+	var mu sync.Mutex
 	eu := ExplorerUser{}
 	err := ec.es.Read(ExplorerUserDetailsTable, &eu, "did=?", did)
+	mu.Lock()
 	if err != nil {
 		eu.DID = did
 		eu.APIKey = apiKey
 		err = ec.es.Write(ExplorerUserDetailsTable, eu)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to insert new API key for DID %s: %w", did, err)
 		}
 	} else {
 		eu.APIKey = apiKey
-		ec.es.Update(ExplorerUserDetailsTable, &eu, "did=?", did)
+		err = ec.es.Update(ExplorerUserDetailsTable, &eu, "did=?", did)
+		if err != nil {
+			return fmt.Errorf("failed to update API key for DID %s: %w", did, err)
+		}
 	}
+	mu.Unlock()
 
 	return nil
 }
 
-func (ec *ExplorerClient) getAPIKey(path string, input interface{}) string {
+func (ec *ExplorerClient) getAPIKey(path string, input interface{}, getDID bool) string {
 	eu := ExplorerUser{}
 	if path != ExplorerCreateUserAPI {
 		var did string
@@ -844,6 +941,9 @@ func (ec *ExplorerClient) getAPIKey(path string, input interface{}) string {
 			did = v.UserDID
 		default:
 			return "unsupported input type"
+		}
+		if getDID {
+			return did
 		}
 		err := ec.es.Read(ExplorerUserDetailsTable, &eu, "did=?", did) //Include explorer URL? TODO
 		if err != nil {
