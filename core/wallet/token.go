@@ -116,7 +116,6 @@ func (w *Wallet) GetAllTokens(did string) ([]Token, error) {
 	var t []Token
 	err := w.s.Read(TokenStorage, &t, "did=?", did)
 	if err != nil {
-		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
 	}
 	return t, nil

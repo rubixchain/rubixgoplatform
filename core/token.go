@@ -107,9 +107,14 @@ func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error)
 
 func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	wt, err := c.w.GetAllTokens(did)
-	if err != nil && err.Error() != "no records found" {
-		c.log.Error("Failed to get tokens", "err", err)
-		return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
+	if err != nil {
+		if err.Error() == "no records found" {
+			c.log.Warn("Failed to get tokens, Account balance is 0 for", "did", did)
+			return model.DIDAccountInfo{}, nil
+		} else {
+			c.log.Error("Failed to get tokens", "err", err)
+			return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
+		}
 	}
 	info := model.DIDAccountInfo{
 		DID: did,
