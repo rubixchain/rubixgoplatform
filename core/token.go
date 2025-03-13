@@ -60,9 +60,10 @@ type TokenInfo struct {
 }
 
 type TokenSanityCheckResult struct {
-	PinCheckStatus   bool     `json:"pinning_status"`
-	StateCheckStatus bool     `json:"state_check_status"`
-	Owners           []string `json:"owners"`
+	PinCheckStatus     bool     `json:"pinning_status"`
+	StateCheckStatus   bool     `json:"state_check_status"`
+	SanitizationStatus bool     `json:"sanitization_status"`
+	Owners             []string `json:"owners"`
 }
 
 type TokenSanityCheckResponse struct {
@@ -952,9 +953,13 @@ func (c *Core) TokensSanityCheck(did string) (model.BasicResponse, error) {
 	}
 
 	invalidTokens := make(map[string]TokenSanityCheckResult)
+	const (
+		TokenSanityConnectionIssue1 string = "failed to connect quorum"
+		TokenSanityConnectionIssue2 string = "failed to send sanity check request to quorum"
+	)
 
 	// fetch all free tokens from db and lock them
-	tokens, err := c.w.GetAllFreeToken(did)
+	tokens, err := c.w.GetFreeTokens(did)
 	if err != nil {
 		c.log.Error("no free tokens found", "err", err)
 		basicResp.Message = "no free tokens found"
@@ -977,6 +982,10 @@ func (c *Core) TokensSanityCheck(did string) (model.BasicResponse, error) {
 
 		//prepare request
 		for _, tokenDetails := range tokens20 {
+			err = c.w.LockToken(&tokenDetails)
+			if err != nil {
+				c.log.Error("failed to lock token ", tokenDetails.TokenID)
+			}
 			//Get token type
 			typeString := RBTString
 			if tokenDetails.TokenValue < 1.0 {
@@ -1018,6 +1027,24 @@ func (c *Core) TokensSanityCheck(did string) (model.BasicResponse, error) {
 		// Process results
 		for res := range results {
 			for token, tokenResult := range res.Results {
+				// read the invalid token info from table
+				currentTokenDetails, err := c.w.ReadToken(token)
+				if err != nil {
+					c.log.Error("failed to read token info from table ", "err", err)
+					invalidTokens[token] = TokenSanityCheckResult{
+						StateCheckStatus: tokenResult.SanitizationStatus && invalidTokens[token].SanitizationStatus,
+					}
+					continue
+				}
+
+				// if quorum connection error occurred, then update token status to 17
+				if strings.Contains(res.Message, TokenSanityConnectionIssue1) || strings.Contains(res.Message, TokenSanityConnectionIssue2) {
+					invalidTokens[token] = TokenSanityCheckResult{
+						StateCheckStatus: tokenResult.SanitizationStatus && invalidTokens[token].SanitizationStatus,
+					}
+					continue
+				}
+
 				// update token status if invalid token
 				if !tokenResult.StateCheckStatus || !tokenResult.PinCheckStatus {
 					// in case different quorums get different reasons of invalidity, collect all
@@ -1026,17 +1053,11 @@ func (c *Core) TokensSanityCheck(did string) (model.BasicResponse, error) {
 						StateCheckStatus: tokenResult.StateCheckStatus && invalidTokens[token].StateCheckStatus,
 						Owners:           append(invalidTokens[token].Owners, tokenResult.Owners...),
 					}
-					// read the invalid token info from table
-					doubleSpendTokenDetails, err := c.w.ReadToken(token)
-					if err != nil {
-						c.log.Error("failed to read invalid token info from table ", "err", err)
-					}
 					// if the status is not '14', update it to '14'
-					if doubleSpendTokenDetails.TokenStatus != wallet.TokenIsBeingDoubleSpent {
-						c.log.Debug("Double spend token details ", doubleSpendTokenDetails)
-						doubleSpendTokenDetails.TokenStatus = wallet.TokenIsBeingDoubleSpent
-						c.log.Debug("Double spend token details status updated", doubleSpendTokenDetails)
-						c.w.UpdateToken(doubleSpendTokenDetails)
+					if currentTokenDetails.TokenStatus != wallet.TokenIsBeingDoubleSpent {
+						currentTokenDetails.TokenStatus = wallet.TokenIsBeingDoubleSpent
+						c.log.Debug("Double spend token details status updated", currentTokenDetails)
+						c.w.UpdateToken(currentTokenDetails)
 					}
 				}
 			}
@@ -1122,7 +1143,7 @@ func (c *Core) APITokenSanityCheck(req *ensweb.Request) *ensweb.Result {
 			c.log.Error(response.Message, "for token : "+token+", owners list", response.Result.([]string))
 			result.Owners = response.Result.([]string)
 			result.PinCheckStatus = false
-		} 
+		}
 		// append the result of the token to response
 		sanityCheckResp.Results[token] = result
 
@@ -1132,13 +1153,36 @@ func (c *Core) APITokenSanityCheck(req *ensweb.Request) *ensweb.Result {
 			if err != nil || !response.Status {
 				c.log.Error(response.Message, "token", token)
 				result.StateCheckStatus = false
-			} 
+			}
 		}
 
 		sanityCheckResp.Results[token] = result
 
 		// TODO :
-		// 3. verify if the stored token state hash is exhausted
+
+		// // 3. verify if the stored token state hash is exhausted
+		// blockId, err := latestBlock.GetBlockID(token)
+		// if err != nil {
+		// 	c.log.Error("Error fetching block Id", err)
+		// 	result.Error = err
+		// 	result.Message = "Error fetching block Id"
+		// 	resultArray[index] = result
+		// 	return
+		// }
+		// //concat tokenId and BlockID
+		// tokenIDTokenStateData := token + blockId
+		// tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
+
+		// //add to ipfs get only the hash of the token+tokenstate
+		// tokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		// result.tokenIDTokenStateHash = tokenIDTokenStateHash
+		// if err != nil {
+		// 	c.log.Error("Error adding data to ipfs", err)
+		// 	result.Error = err
+		// 	result.Message = "Error adding data to ipfs"
+		// 	resultArray[index] = result
+		// 	return
+		// }
 
 	}
 
