@@ -276,6 +276,8 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
+	c.log.Debug("Syncing token chain block from Peer ", p.GetPeerDID(), "token:", token, "| blockID:", pblkID, "| tokenType", tokenType)
+	c.log.Debug("Peer info is ", p.GetAllPeerInfo())
 	// p, err := c.getPeer(address)
 	// if err != nil {
 	// 	c.log.Error("Failed to get peer", "err", err)
@@ -300,6 +302,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		TokenType: tokenType,
 		BlockID:   blkID,
 	}
+	c.log.Debug("TCBSyncRequest is %v", tr)
 	for {
 		var trep TCBSyncReply
 		err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &tr, &trep, false)

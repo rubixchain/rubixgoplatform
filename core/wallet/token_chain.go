@@ -198,8 +198,10 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 }
 
 func (w *Wallet) getRawBlock(db *ChainDB, key []byte) ([]byte, error) {
+	w.log.Info("Getting raw block for key", "key:", string(key))
 	v, err := db.Get(key, nil)
 	if err != nil {
+		w.log.Error("Failed to get raw block", "err", err)
 		return nil, err
 	}
 	blk := make([]byte, len(v))
@@ -271,6 +273,7 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 }
 
 func (w *Wallet) updateNewKey(tt int, token string) error {
+	w.log.Info("Updating new key for token", "token:", token, "| tt:", tt)
 	db := w.getChainDB(tt)
 	if db == nil {
 		w.log.Error("Failed to get latest block, invalid token type")
@@ -340,12 +343,15 @@ func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 		w.log.Error("Failed to get latest block, invalid token type")
 		return nil
 	}
+	w.log.Info("Initating iterator for token", "token:", token, "| tt:", tt)
 	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
 	defer iter.Release()
 	var err error
 	if iter.Last() {
+		w.log.Info("Last iterator for token", "token:", token, "| tt:", tt)
 		key := string(iter.Key())
 		if isOldKey(key) {
+			w.log.Info("Old key found for token", "token:", token, "| tt:", tt)
 			err = w.updateNewKey(tt, token)
 			if err != nil {
 				w.log.Error("Failed to update new key", "err", err)
@@ -550,11 +556,13 @@ func (w *Wallet) GetTokenBlock(token string, tokenType int, blockID string) ([]b
 
 // GetAllTokenBlocks get the tokecn chain blocks
 func (w *Wallet) GetAllTokenBlocks(token string, tokenType int, blockID string) ([][]byte, string, error) {
+	w.log.Info("GetAllTokenBlocks for token", "token:", token, "| tt:", tokenType, "| blockID:", blockID)
 	return w.getAllBlocks(tokenType, token, blockID)
 }
 
 // GetLatestTokenBlock get latest token block from the storage
 func (w *Wallet) GetLatestTokenBlock(token string, tokenType int) *block.Block {
+	w.log.Debug("GetLatestTokenBlock for token", "token:", token, "| tt:", tokenType)
 	return w.getLatestBlock(tokenType, token)
 }
 

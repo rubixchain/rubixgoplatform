@@ -128,6 +128,16 @@ func (pm *PeerManager) SwarmConnect(peerID string) bool {
 	return false
 }
 
+func (p *Peer) GetAllPeerInfo() string {
+	p.log.Debug("^^GetAllPeerInfo")
+	peerID := p.peerID
+	did := p.did
+
+	p.log.Info("^^PeerID GetAllPeerInfo", "peerID", peerID)
+	p.log.Info("^^DID GetAllPeerInfo", "did", did)
+	return fmt.Sprint("peerID:", peerID, "did:", did)
+}
+
 func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (*Peer, error) {
 	// local peer
 	if peerID == pm.peerID {
