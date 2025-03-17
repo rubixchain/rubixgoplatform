@@ -294,6 +294,9 @@ func (c *Contract) GetDeployerDID() string {
 func (c *Contract) GetExecutorDID() string {
 	return c.getTransInfoString(TSExecutorDIDKey)
 }
+func (c *Contract) GetMinerDID() string {
+	return c.getTransInfoString(TSMinderDIDKey)
+}
 
 func (c *Contract) GetSmartContractData() string {
 	return c.getTransInfoString(TSSmartContractDataKey)

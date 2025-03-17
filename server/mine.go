@@ -28,12 +28,12 @@ func (s *Server) APIMineRBTs(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Invalid DID")
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
-
-	err = s.c.FindReadyToMineCredits(did)
-	if err != nil {
-		return s.BasicResponse(req, false, err.Error(), nil)
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
-	return s.BasicResponse(req, true, "successfully mined RBT's for the provided token credits", nil)
+    s.c.AddWebReq(req)
+	go s.c.InitiateMineRBTs(req.ID,&miningReq)
+	return s.didResponse(req, req.ID)
 
 }
 

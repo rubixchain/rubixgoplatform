@@ -258,7 +258,7 @@ func saveQuorumsToFile(qds []QuorumData, fileName string) error {
 func (c *Core) GetMiningQuorums() []string {
 
 	//Hardcoding the miningQuorumlist for testing
-	miningQuorumlist := []string{"sai1", "sai2", "sai3", "sai4", "sai5"}
+	miningQuorumlist := []string{"bafybmie2gdo2npjtyjccfinybjccvnbmy4pzfaxcmcd4kb6v3g6aovldm4", "bafybmib6gtwq7kqlvfqzi4sbv7fpxuwp3smjro5bujtbckaajkbdkls3b4", "bafybmicl5xicpet42lgimc724jimp4vfks7s5byo5ek43a6kwmeox5d3xm", "bafybmifo746vj2iafbpbkyf2tbdtwvttj3axtdhxh7zqqmrtlpur3nyezi", "bafybmicjlae7tjqk6iijexmvdc5aqo3i5ukfeyhw3mdpw5jgmhxav5ty24"}
 	return miningQuorumlist
 
 }

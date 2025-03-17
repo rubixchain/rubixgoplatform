@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/fxamacker/cbor"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -43,6 +44,7 @@ const (
 	TCInitiatorSignatureKey string = "12"
 	TCEpochKey              string = "epoch"
 	TCNFTDataKey            string = "13"
+	TCCreditDetailsKey      string = "14"
 )
 
 const (
@@ -59,6 +61,7 @@ const (
 	TokenContractCommited string = "11"
 	TokenPinnedAsService  string = "12"
 	TokenIsBurntForFT     string = "13"
+	TokenMinedType        string = "14"
 )
 
 const (
@@ -78,20 +81,22 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType    string              `json:"transactionType"`
-	TokenOwner         string              `json:"owner"`
-	GenesisBlock       *GenesisBlock       `json:"genesisBlock"`
-	TransInfo          *TransInfo          `json:"transInfo"`
-	PledgeDetails      []PledgeDetail      `json:"pledgeDetails"`
-	QuorumSignature    []CreditSignature   `json:"quorumSignature"`
-	SmartContract      []byte              `json:"smartContract"`
-	SmartContractData  string              `json:"smartContractData"`
-	TokenValue         float64             `json:"tokenValue"`
-	ChildTokens        []string            `json:"childTokens"`
-	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
-	NFT                []byte              `json:"nft"`
-	NFTData            string              `json:"nftData"`
-	Epoch              int                 `json:"epoch"`
+	TransactionType    string                `json:"transactionType"`
+	TokenOwner         string                `json:"owner"`
+	GenesisBlock       *GenesisBlock         `json:"genesisBlock"`
+	TransInfo          *TransInfo            `json:"transInfo"`
+	PledgeDetails      []PledgeDetail        `json:"pledgeDetails"`
+	QuorumSignature    []CreditSignature     `json:"quorumSignature"`
+	SmartContract      []byte                `json:"smartContract"`
+	SmartContractData  string                `json:"smartContractData"`
+	TokenValue         float64               `json:"tokenValue"`
+	ChildTokens        []string              `json:"childTokens"`
+	InitiatorSignature *InitiatorSignature   `json:"initiatorSignature"`
+	NFT                []byte                `json:"nft"`
+	NFTData            string                `json:"nftData"`
+	Epoch              int                   `json:"epoch"`
+	CreditDetails      []model.PledgeHistory `json:"creditdetails"`
+
 }
 
 type PledgeDetail struct {
@@ -211,6 +216,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 
 	if tcb.Epoch != 0 {
 		ntcb[TCEpochKey] = tcb.Epoch
+	}
+	if tcb.CreditDetails != nil {
+		ntcb[TCCreditDetailsKey] = tcb.CreditDetails
 	}
 
 	blk := InitBlock(nil, ntcb)

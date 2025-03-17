@@ -1,5 +1,7 @@
 package block
 
+import "github.com/rubixchain/rubixgoplatform/core/model"
+
 // ----------GennesisBlock--------------------
 // {
 //   "1" : Type       : int
@@ -46,6 +48,7 @@ type GenesisTokenInfo struct {
 	GrandParentID      []string      `json:"grandParentID"`
 	CommitedTokens     []TransTokens `json:"commitedTokens"`
 	SmartContractValue float64       `json:"smartContractValue"`
+	CreditDetails      []model.PledgeHistory `json:"creditdetails"`
 }
 
 type GenesisBlock struct {
