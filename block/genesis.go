@@ -48,6 +48,8 @@ type GenesisTokenInfo struct {
 	GrandParentID      []string      `json:"grandParentID"`
 	CommitedTokens     []TransTokens `json:"commitedTokens"`
 	SmartContractValue float64       `json:"smartContractValue"`
+	NFTValue           float64       `json:"nftValue"`
+	NFTData            string        `json:"nftData"`
 	CreditDetails      []model.PledgeHistory `json:"creditdetails"`
 }
 

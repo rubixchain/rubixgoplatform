@@ -61,7 +61,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 
 		// Check whether the 5 weeks is passed
 		currentEpoch := time.Now().Unix()
-		if (currentEpoch - transferBlock.GetEpoch()) < fiveWeeksInSeconds {
+		if (currentEpoch - int64(transferBlock.GetEpoch())) < fiveWeeksInSeconds {
 			c.log.Error("Failed to validate credits; 5 weeks not passed after transaction")
 			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
 			continue
@@ -196,9 +196,9 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		nextBlockofTransferEpoch := nextBlockofTransfer.GetEpoch()
 		epochDiffWithNextBlock := nextBlockofTransferEpoch - transferBlock.GetEpoch()
 		if int(tokenInfo.TransactionType) == 2 {
-			credits = epochDiffWithNextBlock * int64(tokenInfo.TransferTokenValue)
+			credits = int64(epochDiffWithNextBlock) * int64(tokenInfo.TransferTokenValue)
 		} else if int(tokenInfo.TransactionType) == 1 {
-			credits = epochDiffWithNextBlock * int64(tokenInfo.TransferTokenValue) * 15
+			credits = int64(epochDiffWithNextBlock) * int64(tokenInfo.TransferTokenValue) * 15
 		}
 
 		if credits != int64(tokenInfo.TokenCredit) {
