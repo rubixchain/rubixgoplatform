@@ -1094,3 +1094,44 @@ func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {
 	}
 	return lastErr
 }
+
+func (c *Core) SyncAncestralTokens(p *ipfsport.Peer, parentToken string) error {
+	b, err := c.getFromIPFS(parentToken)
+	if err != nil {
+		c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parentToken)
+		return err
+	}
+	_, iswholeToken, _ := token.CheckWholeToken(string(b), true)
+	tokenType := token.RBTTokenType
+	if !iswholeToken {
+		blk := util.StrToHex(string(b))
+		rb, err := rac.InitRacBlock(blk, nil)
+		if err != nil {
+			c.log.Error("invalid token, invalid rac block", "err", err)
+			return err
+		}
+		tokenType = rac.RacType2TokenType(rb.GetRacType())
+	}
+	err = c.syncTokenChainFrom(p, "", parentToken, tokenType)
+	if err != nil {
+		c.log.Error("failed to sync token chain block", "err", err)
+		return fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v", parentToken, TokenChainNotSynced)
+	}
+	if tokenType == c.TokenType(PartString) {
+		genesisBlock := c.w.GetGenesisTokenBlock(parentToken, tokenType)
+		grandParentToken, _, err := genesisBlock.GetParentDetials(parentToken)
+		if err != nil {
+			c.log.Error("failed to get grand-parents")
+		}
+		err = c.SyncAncestralTokens(p, grandParentToken)
+		if err != nil {
+			c.log.Error("failed to sync grand-parent token", grandParentToken, "err", err)
+			return err
+		}
+		if grandParentToken == "" {
+			c.log.Error("Empty grandparent token")
+			return fmt.Errorf("Empty grandparent token")
+		}
+	}
+	return nil
+}
