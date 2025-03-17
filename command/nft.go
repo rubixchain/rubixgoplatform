@@ -79,6 +79,8 @@ func (cmd *Command) deployNFT() {
 		NFT:        cmd.nft,
 		DID:        cmd.deployerAddr,
 		QuorumType: cmd.transType,
+		NFTValue:   cmd.nftValue,
+		NFTData:    cmd.nftData,
 	}
 	response, err := cmd.c.DeployNFT(&deployRequest)
 	if err != nil {

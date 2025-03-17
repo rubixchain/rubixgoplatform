@@ -375,3 +375,12 @@ func (cmd *Command) GetAccountInfo() {
 		fmt.Printf("RBT : %10.*f, Locked RBT : %10.*f, Pledged RBT : %10.*f, Pinned RBT : %10.*f\n", core.MaxDecimalPlaces, info.AccountInfo[0].RBTAmount, core.MaxDecimalPlaces, info.AccountInfo[0].LockedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].PledgedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].PinnedRBT)
 	}
 }
+
+// CreateDIDFromPubKey request to create did from provided public key
+func (cmd *Command) CreateDIDFromPubKey() {
+	did, err := cmd.c.CreateDIDFromPubKey(cmd.pubKeyFile)
+	if err != nil {
+		cmd.log.Error("err", err)
+	}
+	cmd.log.Debug("received did", did)
+}

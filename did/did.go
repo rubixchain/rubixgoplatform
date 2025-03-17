@@ -2,7 +2,9 @@ package did
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"image"
@@ -550,4 +552,76 @@ func (d *DID) getDirHash(dir string) (string, error) {
 	}
 
 	return final, nil
+}
+
+// CreateDIDFromPubKey creates a DID from the provided public key for BIP wallet
+func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate, pubKey string) (string, error) {
+	t1 := time.Now()
+	temp := uuid.New()
+	dirName := d.dir + temp.String()
+
+	//create a temporary directory
+	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
+	if err != nil {
+		d.log.Error("failed to create directory", "err", err)
+		return "", err
+	}
+
+	// Convert hex string back to bytes
+	pubKeyBytes, err := hex.DecodeString(pubKey)
+	if err != nil {
+		d.log.Error("Failed to decode hex string, err", err)
+	}
+
+	// It is important to save the pem encrypted public key, so that the quorums can use
+	// the existing sign-verification function, which includes pem decoding of public key
+	pemEncPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubKeyBytes})
+	//write public key into the temporary directory
+	err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pemEncPub)
+	if err != nil {
+		return "", err
+	}
+
+	pubKeyTest, err := os.ReadFile(dirName + "/public/" + PubKeyFileName)
+	if err != nil {
+		return "", err
+	}
+
+	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKeyTest)
+	if err != nil {
+		d.log.Error("failed to decode pub key bytes")
+		return "", err
+	}
+	_, err = secp256k1.ParsePubKey(pubKeyByte)
+	if err != nil {
+		d.log.Error("failed to parse public key, err:", err)
+		return "", err
+	}
+
+	//passing the temp diroctory of public key file to add it to ipfs and exctract the hash
+	did, err := d.getDirHash(dirName + "/public/")
+	if err != nil {
+		return "", err
+	}
+
+	//create new directory with the name including newly created did,
+	newDIrName := d.dir + did
+	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
+	if err != nil {
+		d.log.Error("failed to create directory", "err", err)
+		return "", err
+	}
+
+	// and store the public key in the new directory
+	err = util.DirCopy(dirName+"/public", newDIrName)
+	if err != nil {
+		d.log.Error("failed to copy directory", "err", err)
+		return "", err
+	}
+	//delete the temporary directory
+	os.RemoveAll(dirName)
+	t2 := time.Now()
+	dif := t2.Sub(t1)
+	d.log.Info(fmt.Sprintf("DID : %s, Time to create DID & Keys : %v", did, dif))
+	return did, nil
 }
