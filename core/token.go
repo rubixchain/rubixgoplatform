@@ -200,8 +200,11 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			return err
 		}
 		tk := util.HexToStr(tb)
+		fmt.Println("token in generateTestTokens functions",tk)
 		nb := bytes.NewBuffer([]byte(tk))
+		fmt.Println("new buffer in generateTestTokens functions",nb)
 		id, err := c.w.Add(nb, did, wallet.OwnerRole)
+		fmt.Println("id is:",id)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
@@ -212,6 +215,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 				{Token: id},
 			},
 		}
+		fmt.Println("gb is:",gb)
 		ti := &block.TransInfo{
 			Tokens: []block.TransTokens{
 				{
@@ -220,6 +224,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 				},
 			},
 		}
+		fmt.Println("ti is",ti)
 
 		tcb := &block.TokenChainBlock{
 			TransactionType: block.TokenGeneratedType,
@@ -228,12 +233,13 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
 		}
+		fmt.Println("tcb is",tcb)
 
 		ctcb := make(map[string]*block.Block)
 		ctcb[id] = nil
-
+        fmt.Println("ctcb is:",ctcb)
 		blk := block.CreateNewBlock(ctcb, tcb)
-
+        fmt.Println("blk is:",blk)
 		if blk == nil {
 			c.log.Error("Failed to create new token chain block")
 			return fmt.Errorf("failed to create new token chain block")
@@ -249,6 +255,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TokenValue:  1,
 			TokenStatus: wallet.TokenIsFree,
 		}
+		fmt.Println("t is:",t)
 		err = c.w.CreateTokenBlock(blk)
 		if err != nil {
 			c.log.Error("Failed to add token chain", "err", err)

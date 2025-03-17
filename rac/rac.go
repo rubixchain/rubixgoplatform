@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -20,6 +21,8 @@ const (
 	RacTestPartTokenType
 	RacFTType
 	RacTestFTType
+	RacMiningTokenType
+	RacTestMiningTokenType
 )
 
 const (
@@ -69,6 +72,7 @@ type RacType struct {
 	PartInfo     *RacPartInfo
 	FTSymbol     string
 	FTInfo       *RacFTInfo
+	MiningInfo   *[]model.PledgeHistory
 }
 
 type RacPartInfo struct {
@@ -113,7 +117,7 @@ func InitRacBlock(bb []byte, bm map[string]interface{}) (*RacBlock, error) {
 }
 
 func CreateRac(r *RacType) ([]*RacBlock, error) {
-	if r.Type == 1 || r.Type > RacTestFTType {
+	if r.Type == 1 || r.Type > RacTestMiningTokenType {
 		return nil, fmt.Errorf("rac type is not supported")
 	}
 	rb := make([]*RacBlock, 0)

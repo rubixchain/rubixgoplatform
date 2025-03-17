@@ -16,6 +16,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -371,8 +372,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
 	case MiningMode:
-		reqPledgeTokensInt, _, _ := (TotalTokensCanBeMinedFromCredits(cr.MiningInfo.TokenCredits)) // TODO: From the total credits in the request, determine the number of mineable RBTs. That is the pledge amount
-		reqPledgeTokens = float64(reqPledgeTokensInt)
+		// reqPledgeTokensInt, _, _ := (TotalTokensCanBeMinedFromCredits(cr.MiningInfo.TokenCredits)) // TODO: From the total credits in the request, determine the number of mineable RBTs. That is the pledge amount
+		reqPledgeTokens = 1
 	}
 	minValue := MinDecimalValue(MaxDecimalPlaces)
 	minTotalPledgeAmount := minValue * float64(MinQuorumRequired)
@@ -387,11 +388,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		PledgedTokens:          make(map[string][]string),
 		PledgedTokenChainBlock: make(map[string]interface{}),
 		TokenList:              make([]Token, 0),
-	}
-
-	// Transfer Amount is 0 in Mining mode
-	if cr.Mode == MiningMode {
-		pd.TransferAmount = 0
 	}
 
 	//getting last character from TID
@@ -2118,6 +2114,52 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		tks = append(tks, tt)
 		b := c.w.GetLatestTokenBlock(ti[0].Token, ti[0].TokenType)
 		ctcb[ti[0].Token] = b
+	} else if sc.GetMinerDID() != "" {
+
+		// Generate new token for mining
+		// totalTokens,_,_:= TotalTokensCanBeMinedFromCredits(cr.MiningInfo.TokenCredits)
+
+		racType := &rac.RacType{
+			Type:        c.RACMiningTokenType(),
+			DID:         sc.GetMinerDID(),
+			TokenNumber: tokenNumber, //TODO: Fetch next mining token number from mining chain
+			TokenLevel:  tokenLevel,  //TODO: Fetch next mining token level from mining chain
+			TimeStamp:   time.Now().String(),
+			MiningInfo:  &c.pledgeHistory,
+		}
+		racBlocks, err := rac.CreateRac(racType)
+		if err != nil {
+			c.log.Error("Failed to create RAC block for mining", "err", err)
+			return nil, fmt.Errorf("failed to create RAC block for mining")
+		}
+		// Process the newly created RAC block
+		if len(racBlocks) == 0 {
+			c.log.Error("No RAC blocks generated")
+			return nil, fmt.Errorf("no RAC blocks generated")
+		}
+		if len(racBlocks) != 1 {
+			return nil, fmt.Errorf("failed to create  only one RAC block")
+		}
+		racBlock := racBlocks[0]
+		// Update signature with miner's DID crypto
+		if err := racBlock.UpdateSignature(dc); err != nil {
+			c.log.Error("Failed to update RAC signature", "err", err)
+			return nil, fmt.Errorf("failed to update RAC signature")
+		}
+		miningTokenNumberString := strconv.FormatUint(racType.TokenNumber, 10)
+		MiningTokenLevelString := strconv.FormatUint(racType.TokenLevel, 10)
+		parts := []string{MiningTokenLevelString, miningTokenNumberString}
+		result := strings.Join(parts, " ")
+		byteArray := []byte(result)
+		NewTokenBuffer := bytes.NewBuffer(byteArray)
+		newTokenID, err := c.w.Add(NewTokenBuffer, racType.DID, wallet.MinerRole)
+		if err != nil {
+			c.log.Error("Failed to create a new tokenID, Failed to add token to IPFS", "err", err)
+			return nil, err
+		}
+		c.log.Info("New mining RBT ID got created: " + newTokenID)
+		ctcb[newTokenID] = nil
+
 	} else {
 		for i := range ti {
 			tt := block.TransTokens{
@@ -2303,6 +2345,30 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SmartContract:   sc.GetBlock(),
 			PledgeDetails:   ptds,
 		}
+	} else if cr.Mode == MiningMode {
+		signData, minerNLSSShare, minerPrivSign, err := sc.GetHashSig(sc.GetMinerDID())
+		if err != nil {
+			c.log.Error("failed to fetch miner sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch miner sign")
+		}
+		minerSignType := dc.GetSignType()
+		minerSign := &block.InitiatorSignature{
+			NLSSShare:   minerNLSSShare,
+			PrivateSign: minerPrivSign,
+			DID:         sc.GetMinerDID(),
+			Hash:        signData,
+			SignType:    minerSignType,
+		}
+		tcb = block.TokenChainBlock{
+			TransactionType:    block.TokenMintedType,
+			TokenOwner:         sc.GetMinerDID(),
+			QuorumSignature:    credit,
+			CreditDetails:      sc.GetTokenCreditsDetails(),
+			PledgeDetails:      ptds,
+			InitiatorSignature: minerSign,
+			Epoch:              cr.TransactionEpoch,
+		}
+
 	} else {
 		//Fetching sender signature to add it to transaction details
 		senderdid := sc.GetSenderDID()
@@ -2366,6 +2432,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			c.log.Error("Failed to get signature from the quorum", "msg", srep.Message)
 			return nil, fmt.Errorf("failed to get signature from the quorum, " + srep.Message)
 		}
+		//figure out what ReplaceSignature() is doing?
 		err = nb.ReplaceSignature(k, srep.Signature)
 		if err != nil {
 			c.log.Error("Failed to update signature to block", "err", err)

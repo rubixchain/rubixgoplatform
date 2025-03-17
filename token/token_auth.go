@@ -19,6 +19,8 @@ const (
 	SmartContractTokenType
 	TestSmartContractTokenType
 	FTTokenType
+	MiningTokenType
+    TestMiningTokenType
 )
 
 func GetWholeTokenValue(tokenDetails string) (int, string, bool, error) {

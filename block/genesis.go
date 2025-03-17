@@ -1,5 +1,7 @@
 package block
 
+import "github.com/rubixchain/rubixgoplatform/core/model"
+
 // ----------GennesisBlock--------------------
 // {
 //   "1" : Type       : int
@@ -48,6 +50,7 @@ type GenesisTokenInfo struct {
 	SmartContractValue float64       `json:"smartContractValue"`
 	NFTValue           float64       `json:"nftValue"`
 	NFTData            string        `json:"nftData"`
+	CreditDetails      []model.PledgeHistory `json:"creditdetails"`
 }
 
 type GenesisBlock struct {

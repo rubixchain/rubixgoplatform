@@ -14,12 +14,20 @@ import (
 )
 
 const (
-    tokenLevel = 4
-    tokenNumber = 1
+	tokenLevel  = 4
+	tokenNumber = 1000000
 )
 
-
-func (c *Core) InitiateMineRBTs(reqID string, MiningReq *model.MiningRequest, tokenCreditDetails []model.PledgeHistory) *model.BasicResponse {
+func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest) {
+	br := c.initiateMineRBTs(reqID, req)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
+func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *model.BasicResponse {
 	fmt.Println("Executing MineRBTs function")
 
 	resp := &model.BasicResponse{
@@ -27,7 +35,7 @@ func (c *Core) InitiateMineRBTs(reqID string, MiningReq *model.MiningRequest, to
 	}
 
 	// 1. Fetch pledge history records where tokenCreditStatus = 1 (ready to mine)
-	pledges, err := c.w.GetTokenDetailsByQuorumDID(MiningReq.MinerDid, 1)
+	tokenDetails, err := c.w.GetTokenDetailsByQuorumDID(MiningReq.MinerDid, 1)
 	if err != nil {
 		resp.Message = "Failed to fetch pledge history, " + err.Error()
 		return resp // Return error if fetching fails
@@ -35,8 +43,8 @@ func (c *Core) InitiateMineRBTs(reqID string, MiningReq *model.MiningRequest, to
 
 	// 2. Calculate total token credit
 	totalCredits := 0
-	for _, pledge := range pledges {
-		totalCredits += pledge.TokenCredit
+	for _, tokenDetail := range tokenDetails {
+		totalCredits += tokenDetail.TokenCredit
 	}
 
 	// 3. Check how many credits are needed for mining the next token
@@ -58,8 +66,11 @@ func (c *Core) InitiateMineRBTs(reqID string, MiningReq *model.MiningRequest, to
 		Type:               contract.MineRBTType,
 		PledgeMode:         contract.PeriodicPledgeMode,
 		ReqTokenCredits:    MiningReq.TokenCredits,
-		TokenCreditDetails: tokenCreditDetails,
+		TokenCreditDetails: tokenDetails,
 		ReqID:              reqID,
+		TransInfo: &contract.TransInfo{
+			MinerDID: MiningReq.MinerDid,
+		},
 	}
 	miningContract := contract.CreateNewContract(MiningContractDetails)
 
@@ -82,7 +93,9 @@ func (c *Core) InitiateMineRBTs(reqID string, MiningReq *model.MiningRequest, to
 	return resp
 
 }
+// func (c *Core) MineRBTTokens(reqID string,num int,did string){
 
+// }
 func (c *Core) getMiningConsensusReq(contractBlock []byte, miningReq model.MiningRequest) *ConensusRequest {
 	var consensusRequest *ConensusRequest = &ConensusRequest{
 		Mode:          MiningMode,
@@ -177,21 +190,20 @@ func mergeResults(target, source map[int]uint64) {
 		target[level] += count
 	}
 }
-//From the given requested token credits,it outputs total number of tokens that can be mined, remaining 
-func TotalTokensCanBeMinedFromCredits(reqTokenCredits uint64) (uint64,uint64,error){
+
+// From the given requested token credits,it outputs total number of tokens that can be mined, remaining
+func TotalTokensCanBeMinedFromCredits(reqTokenCredits uint64) (uint64, uint64, error) {
 	//Todo:Fetch Latest tokenLevel and token number from the Mining chain
-	tokensCanBeMined,remainingCredits,err:=TokensCanbeMinedFromCredits(reqTokenCredits,tokenLevel,tokenNumber)
-	if err!=nil{
-		return 0,0,err
+	tokensCanBeMined, remainingCredits, err := TokensCanbeMinedFromCredits(reqTokenCredits, tokenLevel, tokenNumber)
+	if err != nil {
+		return 0, 0, err
 	}
 	var totalTokens uint64
-    // Sum up the total tokens from all levels
-	for _,numberOfTokens := range tokensCanBeMined{
+	// Sum up the total tokens from all levels
+	for _, numberOfTokens := range tokensCanBeMined {
 		totalTokens += numberOfTokens
 
 	}
-	return totalTokens,remainingCredits,nil
+	return totalTokens, remainingCredits, nil
 
 }
-
-
