@@ -443,13 +443,25 @@ func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
 	return c.blkEncode()
 }
 
-// This function is used by the quorums to verify sender's signature
 func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
+	if dc == nil {
+		return fmt.Errorf("nil DIDCrypto reference")
+	}
+
 	fmt.Println("verifySignature function called")
-	//fetch sender's did
+
+	// Fetch sender's DID
 	didstr := dc.GetDID()
+	if didstr == "" {
+		return fmt.Errorf("empty DID string")
+	}
 	fmt.Println("didstr is ", didstr)
-	//fetch sender's signature
+
+	// Fetch sender's signature
+	if c == nil {
+		return fmt.Errorf("contract instance is nil")
+	}
+
 	hs, ss, ps, err := c.GetHashSig(didstr)
 	if err != nil {
 		c.log.Error("err", err)
@@ -459,10 +471,14 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	fmt.Println("ss is ", ss)
 	fmt.Println("ps is ", ps)
 
-	//If the ss i.e., share signature is empty, then its a Pki sign, so call PvtVerify
-	//Else it is NLSS based sign, so call NlssVerify
+	// Determine DID type
 	didType := dc.GetSignType()
+	fmt.Println("The didType is ", didType)
+
 	if didType == did.BIPVersion {
+		if ps == "" {
+			return fmt.Errorf("empty public key string for signature verification")
+		}
 		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
 		fmt.Println("ok is ", ok)
 		if err != nil {
@@ -473,8 +489,13 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 			return fmt.Errorf("did Pki signature verification failed")
 		}
 	} else {
+		if ss == "" || ps == "" {
+			return fmt.Errorf("invalid signature or public key for NLSS verification")
+		}
 		ok, err := dc.NlssVerify(hs, util.StrToHex(ss), util.StrToHex(ps))
+		fmt.Println("NLSS Verify ok is ", ok)
 		if err != nil {
+			fmt.Println("Failed to verify sign NlssVerify err is ", err)
 			return err
 		}
 		if !ok {

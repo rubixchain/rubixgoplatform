@@ -176,21 +176,47 @@ func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
 
 // Verify PKI based signature
 func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
+	fmt.Println("PvtVerify called")
+
+	// Read Public Key
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
+		fmt.Println("Failed to read public key file:", err)
 		return false, err
 	}
-
+	fmt.Println("Public key file read successfully")
+	fmt.Println("The public key path is ", d.dir+PubKeyFileName)
+	// Decode the public key
 	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKey)
 	if err != nil {
+		fmt.Println("Failed to decode BIP key pair:", err)
 		return false, err
 	}
+	fmt.Println("Decoded BIP key pair:", pubKeyByte)
 
-	pubkeyback, _ := secp256k1.ParsePubKey(pubKeyByte)
-	pubKeySer := pubkeyback.ToECDSA()
-	if !crypto.BIPVerify(pubKeySer, hash, sign) {
-		return false, fmt.Errorf("failed to verify private key singature")
+	// Parse the public key
+	pubkeyback, err := secp256k1.ParsePubKey(pubKeyByte)
+	if err != nil || pubkeyback == nil {
+		fmt.Println("Failed to parse secp256k1 public key:", err)
+		return false, fmt.Errorf("failed to parse secp256k1 public key")
 	}
+	fmt.Println("Parsed secp256k1 public key successfully")
+
+	// Convert to ECDSA
+	pubKeySer := pubkeyback.ToECDSA()
+	if pubKeySer == nil {
+		fmt.Println("Conversion to ECDSA failed, public key is nil")
+		return false, fmt.Errorf("failed to convert public key to ECDSA")
+	}
+	fmt.Println("Converted to ECDSA successfully")
+
+	// Verify the signature
+	if !crypto.BIPVerify(pubKeySer, hash, sign) {
+		fmt.Println("Signature verification failed")
+		return false, fmt.Errorf("failed to verify private key signature")
+	}
+	fmt.Println("Signature verified successfully")
+
 	return true, nil
 }
 
