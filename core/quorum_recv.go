@@ -143,6 +143,7 @@ func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 }
 
 func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, cr *ConensusRequest) *ensweb.Result {
+	fmt.Println("The quorumRBTConsensus function is called")
 	crep := ConensusReply{
 		ReqID:  cr.ReqID,
 		Status: false,
