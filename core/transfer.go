@@ -287,6 +287,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	//check if sender has previous block pledged quorums' details
+	unknownDIDType := -1
+	liteDIDType := did.LiteDIDMode
 	for _, tokeninfo := range tis {
 		b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 		//check if the transaction in prev block involved any quorums
@@ -300,27 +302,32 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		case block.TokenTransferredType:
 			//fetch all the pledged quorums, if the transaction involved quorums
 			prevQuorums, _ := b.GetSigner()
-			//fetch the sender in the transaction
-			previousBlockSenderDID := b.GetSenderDID()
+
 			for _, prevQuorum := range prevQuorums {
 				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender
 				prevQuorumDIDType, err := c.w.GetPeerDIDType(prevQuorum)
 				if prevQuorumDIDType == -1 || err != nil {
 					_, err := c.w.GetDID(prevQuorum)
 					if err != nil {
-						c.log.Debug("sender does not have previous block quorums details, fetching from previous block sender")
-						prevSenderIPFSObj, err := c.getPeer(previousBlockSenderDID, senderDID)
+						c.log.Debug("sender does not have previous block quorums details, fetching from explorer")
+						prevQuorumInfo, err := c.GetPeerFromExplorer(prevQuorum)
 						if err != nil {
-							c.log.Error("failed to get prev sender peer", previousBlockSenderDID, "err", err)
-							resp.Message = "failed to get prev sender peer; err: " + err.Error()
-							return resp
+							c.log.Error("failed to fetch prev-quorum details from explorer, prev-quorum ", prevQuorum)
 						}
-						prevQuorumsDetails, err := c.GetPrevQuorumsFromPrevBlockSender(prevSenderIPFSObj, prevQuorums)
-						if err != nil {
-							c.log.Error("failed to fetch details of the previous block quorums", prevQuorum, "err", err)
-							resp.Message = "failed to fetch details of the previous block quorums; msg: " + prevQuorumsDetails.Message
-							return resp
+
+						prevQuorumDIDInfo := wallet.DIDPeerMap{
+							DID:    prevQuorum,
+							PeerID: prevQuorumInfo.PeerID,
 						}
+
+						if prevQuorumInfo.DIDType == "BIP39" {
+							prevQuorumDIDInfo.DIDType = &liteDIDType
+						} else {
+							prevQuorumDIDInfo.DIDType = &unknownDIDType
+						}
+
+						c.AddPeerDetails(prevQuorumDIDInfo)
+
 						//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
 						//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
 						break
@@ -388,6 +395,221 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	resp.Message = msg
 	return resp
 }
+
+// func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
+// 	st := time.Now()
+// 	txEpoch := int(st.Unix())
+
+// 	resp := &model.BasicResponse{
+// 		Status: false,
+// 	}
+
+// 	senderDID := req.Sender
+// 	receiverdid := req.Receiver
+
+// 	// This flag indicates if the call is made for Self Transfer or general token transfer
+// 	isSelfRBTTransfer := senderDID == receiverdid
+
+// 	dc, err := c.SetupDID(reqID, senderDID)
+// 	if err != nil {
+// 		resp.Message = "Failed to setup DID, " + err.Error()
+// 		return resp
+// 	}
+
+// 	tokensForTxn, err := gatherTokensForTransaction(c, req, dc, isSelfRBTTransfer)
+// 	if err != nil {
+// 		c.log.Error(err.Error())
+// 		resp.Message = err.Error()
+// 		return resp
+// 	}
+
+// 	// In case of self transfer
+// 	if len(tokensForTxn) == 0 && isSelfRBTTransfer {
+// 		resp.Status = true
+// 		resp.Message = "No tokens present for self transfer"
+// 		return resp
+// 	}
+
+// 	// release the locked tokens before exit
+// 	defer c.w.ReleaseTokens(tokensForTxn)
+
+// 	for i := range tokensForTxn {
+// 		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, senderDID, "TID-Not Generated", req.Sender, req.Receiver, tokensForTxn[i].TokenValue)
+// 	}
+
+// 	// Get the receiver & do sanity check
+// 	var rpeerid string = ""
+// 	if !isSelfRBTTransfer {
+// 		rpeerid = c.w.GetPeerID(receiverdid)
+// 		if rpeerid == "" {
+// 			// Check if DID is present in the DIDTable as the
+// 			// receiver might be part of the current node
+// 			_, err := c.w.GetDID(receiverdid)
+// 			if err != nil {
+// 				if strings.Contains(err.Error(), "no records found") {
+// 					c.log.Error("receiver Peer ID not found", "did", receiverdid)
+// 					resp.Message = "invalid address, receiver Peer ID not found"
+// 					return resp
+// 				} else {
+// 					c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err))
+// 					resp.Message = fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err)
+// 					return resp
+// 				}
+// 			} else {
+// 				// Set the receiverPeerID to self Peer ID
+// 				rpeerid = c.peerID
+// 			}
+// 		} else {
+// 			p, err := c.getPeer(req.Receiver, senderDID)
+// 			if err != nil {
+// 				resp.Message = "Failed to get receiver peer, " + err.Error()
+// 				return resp
+// 			}
+// 			if p != nil {
+// 				p.Close()
+// 			}
+// 		}
+// 	}
+// 	wta := make([]string, 0)
+// 	for i := range tokensForTxn {
+// 		wta = append(wta, tokensForTxn[i].TokenID)
+// 	}
+
+// 	tis := make([]contract.TokenInfo, 0)
+// 	tokenListForExplorer := []Token{}
+// 	for i := range tokensForTxn {
+// 		tts := "rbt"
+// 		if tokensForTxn[i].TokenValue != 1 {
+// 			tts = "part"
+// 		}
+// 		tt := c.TokenType(tts)
+// 		blk := c.w.GetLatestTokenBlock(tokensForTxn[i].TokenID, tt)
+// 		if blk == nil {
+// 			c.log.Error("failed to get latest block, invalid token chain")
+// 			resp.Message = "failed to get latest block, invalid token chain"
+// 			return resp
+// 		}
+
+// 		bid, err := blk.GetBlockID(tokensForTxn[i].TokenID)
+// 		if err != nil {
+// 			c.log.Error("failed to get block id", "err", err)
+// 			resp.Message = "failed to get block id, " + err.Error()
+// 			return resp
+// 		}
+// 		ti := contract.TokenInfo{
+// 			Token:      tokensForTxn[i].TokenID,
+// 			TokenType:  tt,
+// 			TokenValue: floatPrecision(tokensForTxn[i].TokenValue, MaxDecimalPlaces),
+// 			OwnerDID:   tokensForTxn[i].DID,
+// 			BlockID:    bid,
+// 		}
+// 		tis = append(tis, ti)
+// 		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: ti.Token, TokenValue: ti.TokenValue})
+
+// 	}
+
+// 	//check if sender has previous block pledged quorums' details
+// 	for _, tokeninfo := range tis {
+// 		b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
+// 		//check if the transaction in prev block involved any quorums
+// 		switch b.GetTransType() {
+// 		case block.TokenGeneratedType:
+// 			continue
+// 		case block.TokenBurntType:
+// 			c.log.Error("token is burnt, can't transfer anymore; token:", tokeninfo.Token)
+// 			resp.Message = "token is burnt, can't transfer anymore"
+// 			return resp
+// 		case block.TokenTransferredType:
+// 			//fetch all the pledged quorums, if the transaction involved quorums
+// 			prevQuorums, _ := b.GetSigner()
+// 			//fetch the sender in the transaction
+// 			previousBlockSenderDID := b.GetSenderDID()
+// 			for _, prevQuorum := range prevQuorums {
+// 				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender
+// 				prevQuorumDIDType, err := c.w.GetPeerDIDType(prevQuorum)
+// 				if prevQuorumDIDType == -1 || err != nil {
+// 					_, err := c.w.GetDID(prevQuorum)
+// 					if err != nil {
+// 						c.log.Debug("sender does not have previous block quorums details, fetching from previous block sender")
+// 						prevSenderIPFSObj, err := c.getPeer(previousBlockSenderDID, senderDID)
+// 						if err != nil {
+// 							c.log.Error("failed to get prev sender peer", previousBlockSenderDID, "err", err)
+// 							resp.Message = "failed to get prev sender peer; err: " + err.Error()
+// 							return resp
+// 						}
+// 						prevQuorumsDetails, err := c.GetPrevQuorumsFromPrevBlockSender(prevSenderIPFSObj, prevQuorums)
+// 						if err != nil {
+// 							c.log.Error("failed to fetch details of the previous block quorums", prevQuorum, "err", err)
+// 							resp.Message = "failed to fetch details of the previous block quorums; msg: " + prevQuorumsDetails.Message
+// 							return resp
+// 						}
+// 						//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
+// 						//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
+// 						break
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	contractType := getContractType(reqID, req, tis, isSelfRBTTransfer)
+// 	sc := contract.CreateNewContract(contractType)
+
+// 	err = sc.UpdateSignature(dc)
+// 	if err != nil {
+// 		c.log.Error(err.Error())
+// 		resp.Message = err.Error()
+// 		return resp
+// 	}
+
+// 	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
+
+// 	td, _, pds, err := c.initiateConsensus(cr, sc, dc)
+// 	if err != nil {
+// 		c.log.Error("Consensus failed ", "err", err)
+// 		resp.Message = "Consensus failed " + err.Error()
+// 		return resp
+// 	}
+// 	et := time.Now()
+// 	dif := et.Sub(st)
+// 	if isSelfRBTTransfer {
+// 		var amt float64 = 0
+// 		for _, tknInfo := range tis {
+// 			amt += tknInfo.TokenValue
+// 		}
+// 		td.Amount = amt
+// 	} else {
+// 		td.Amount = req.TokenCount
+// 	}
+// 	td.TotalTime = float64(dif.Milliseconds())
+
+// 	if err := c.w.AddTransactionHistory(td); err != nil {
+// 		errMsg := fmt.Sprintf("Error occured while adding transaction details: %v", err)
+// 		c.log.Error(errMsg)
+// 		resp.Message = errMsg
+// 		return resp
+// 	}
+// 	etrans := &ExplorerRBTTrans{
+// 		TokenHashes:    wta,
+// 		TransactionID:  td.TransactionID,
+// 		BlockHash:      strings.Split(td.BlockID, "-")[1],
+// 		Network:        req.Type,
+// 		SenderDID:      senderDID,
+// 		ReceiverDID:    receiverdid,
+// 		Amount:         req.TokenCount,
+// 		QuorumList:     extractQuorumDID(cr.QuorumList),
+// 		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+// 		TransTokenList: tokenListForExplorer,
+// 		Comments:       req.Comment,
+// 	}
+
+// 	c.ec.ExplorerRBTTransaction(etrans)
+// 	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
+// 	resp.Status = true
+// 	msg := fmt.Sprintf("Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
+// 	resp.Message = msg
+// 	return resp
+// }
 
 //Functions to initiate PinRBT
 
