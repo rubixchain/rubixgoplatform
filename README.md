@@ -1,4 +1,39 @@
-# rubixgoplatform
+# Rubix Blockchain Network
+
+## 1. Introduction to Rubix Blockchain
+
+Rubix is a Layer-1 blockchain protocol focusing on decentralized identity (DID), security, and energy-efficient consensus mechanisms**. It employs the Proof of Pledge (PoP) consensus model, eliminating traditional mining and ensuring sustainability.
+
+## Key Features:
+- Decentralized Identity (DID): Provides self-sovereign identity for users.
+- Proof of Pledge (PoP) Consensus: Secure and eco-friendly alternative to mining.
+- Interoperability: Supports smart contracts using Rust and WASM.
+- Privacy & Security: Uses cryptographic proofs, including Zero-Knowledge Proofs (ZKP).
+- Scalability: High-throughput transactions with low fees.
+
+---
+
+## 2. Prerequisites Installation
+
+### macOS
+
+brew install git cmake make clang pkg-config openssl@1.1
+
+### Linux
+
+sudo apt update && sudo apt install -y git cmake make clang pkg-config libssl-dev
+
+### Windows 
+
+choco install git cmake make llvm openssl
+
+---
+
+## 3. Join Rubix Testnet
+
+The Rubix Testnet provides a sandbox environment for exploring blockchain features, testing transactions, and deploying smart contracts. Follow the guide here: [Join Rubix Testnet](https://learn.rubix.net/testnet/)
+
+## 4. Commands
 
 The new Rubixgoplatform support command line options to run/configure the Rubix node. To run the application use the follwing format.
 
@@ -521,4 +556,11 @@ This following flags are used for this command
 
 ```
 
+---
+
+## 5. Connect with Rubix Blockchain
+- Website: https://rubix.net
+- GitHub: https://github.com/rubixchain
+- X: https://x.com/RubixChain
+- Discord: https://discord.com/invite/6WjtAAn2Gv
 
