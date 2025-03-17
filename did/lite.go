@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"time"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -137,22 +136,9 @@ func (d *DIDLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) 
 }
 
 func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
-	privKey, err := os.ReadFile(d.dir + PvtKeyFileName)
+	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
-		fmt.Println("requesting signature from BIP wallet")
-		walletSignature, err := d.getSignature(hash)
-		if err != nil {
-			fmt.Println("failed sign request, err:", err)
-			return nil, err
-		}
-		fmt.Println("received signature:", walletSignature)
-
-		isValidSig, err := d.PvtVerify(hash, walletSignature)
-		if err != nil || !isValidSig {
-			fmt.Println("invalid sign data:", util.HexToStr(hash), "err:", err)
-			return nil, err
-		}
-		return walletSignature, nil
+		return nil, err
 	}
 
 	pwd, err := d.getPassword()
@@ -192,33 +178,4 @@ func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
-}
-
-func (d *DIDLite) getSignature(hash []byte) ([]byte, error) {
-	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
-		return nil, fmt.Errorf("invalid configuration")
-	}
-	sr := &SignResponse{
-		Status:  true,
-		Message: "Signature needed",
-		Result: SignReqData{
-			ID:          d.ch.ID,
-			Mode:        LiteDIDMode,
-			Hash:        hash,
-			OnlyPrivKey: true,
-		},
-	}
-	d.ch.OutChan <- sr
-	var ch interface{}
-	select {
-	case ch = <-d.ch.InChan:
-	case <-time.After(d.ch.Timeout):
-		return nil, fmt.Errorf("timeout, failed to get signature")
-	}
-
-	srd, ok := ch.(SignRespData)
-	if !ok {
-		return nil, fmt.Errorf("invalid data received on the channel")
-	}
-	return srd.Signature.Signature, nil
 }

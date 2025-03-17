@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "CustWall19"
+	version string = "0.0.19"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -106,7 +106,6 @@ const (
 	SubscribeNFTCmd                string = "subscribe-nft"
 	FetchNftCmd                    string = "fetch-nft"
 	GetNftsByDidCmd                string = "get-nfts-by-did"
-	CreateDIDFromPubKeyCmd         string = "createdidfrompubkey"
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	FindReadyToMineCreditsCmd      string = "findreadytominecredits"
 	MineRBTsCmd                    string = "minerbts"   
@@ -175,7 +174,6 @@ var commands = []string{VersionCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
 	GetNftsByDidCmd,
-	CreateDIDFromPubKeyCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -332,7 +330,6 @@ type Command struct {
 	creatorDID                   string
 	defaultSetup                 bool
 	apiKey                       string
-	nftValue                     float64
 }
 
 func showVersion() {
@@ -552,7 +549,6 @@ func Run(args []string) {
 	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
 	flag.BoolVar(&cmd.defaultSetup, "defaultSetup", false, "Add Faucet Quorums")
 	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
-	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -756,8 +752,6 @@ func Run(args []string) {
 		cmd.fetchNFT()
 	case GetNftsByDidCmd:
 		cmd.getNFTsByDid()
-	case CreateDIDFromPubKeyCmd:
-		cmd.CreateDIDFromPubKey()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
 	case FindReadyToMineCreditsCmd:

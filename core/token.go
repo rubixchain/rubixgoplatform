@@ -139,7 +139,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
 	err := c.generateTestTokens(reqID, num, did)
 	br := model.BasicResponse{
 		Status:  true,
-		Message: "Test tokens generated successfully",
+		Message: "DID registered successfully",
 	}
 	if err != nil {
 		br.Status = false

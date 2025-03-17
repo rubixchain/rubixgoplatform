@@ -42,11 +42,10 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
 		default:
-			signerDIDType, err := c.w.GetPeerDIDType(signer)
-			if signerDIDType == -1 || err != nil {
-				c.log.Debug("quorum does not have prev quorum did type", signerDIDType)
+			signerPeerID := c.w.GetPeerID(signer)
+			if signerPeerID == "" {
 				signerDetails, err := c.GetPeerInfo(p, signer)
-				if err != nil || signerDetails.PeerInfo.DIDType == nil {
+				if err != nil || signerDetails.PeerInfo.PeerID == "" {
 					c.log.Error("failed to fetch details of the signer", signer, "msg", signerDetails.Message)
 					return signerDetails.Status, err
 				}

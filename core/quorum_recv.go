@@ -1109,9 +1109,6 @@ func (c *Core) updateReceiverToken(
 			Status:          true,
 			Epoch:           int64(transactionEpoch),
 		}
-		if td.Epoch == 0 {
-			td.Epoch = time.Now().Unix()
-		}
 		c.w.AddTransactionHistory(td)
 	}
 
@@ -1288,9 +1285,6 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 			DateTime:        time.Now(),
 			Status:          true,
 			Epoch:           int64(transactionEpoch),
-		}
-		if td.Epoch == 0 {
-			td.Epoch = time.Now().Unix()
 		}
 		c.w.AddTransactionHistory(td)
 	}
@@ -1506,9 +1500,9 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	//Adding to the Token State Hash Table
 	if ur.TransferredTokenStateHashes != nil {
 		err = c.w.AddTokenStateHash(did, ur.TransferredTokenStateHashes, ur.PledgedTokens, ur.TransactionID)
-		if err != nil {
-			c.log.Error("Failed to add token state hash", "err", err)
-		}
+	}
+	if err != nil {
+		c.log.Error("Failed to add token state hash", "err", err)
 	}
 	//TODO
 	//Even if there is any error, the token chain is already getting synced. The quorums pin the hash of (TokenID + epoch), the epoch being the week

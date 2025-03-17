@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (cmd *Command) TransferRBT() {
@@ -19,12 +18,6 @@ func (cmd *Command) TransferRBT() {
 			return
 		}
 	}
-	_, senderDID, ok := util.ParseAddress(cmd.senderAddr)
-	if !ok {
-		cmd.log.Error("Invalid sender address")
-	}
-	cmd.senderAddr = senderDID
-
 	if cmd.receiverAddr == "" {
 		cmd.log.Info("Receiver address cannot be empty")
 		fmt.Print("Enter Receiver DID : ")
@@ -34,13 +27,6 @@ func (cmd *Command) TransferRBT() {
 			return
 		}
 	}
-
-	_, reciverDID, ok := util.ParseAddress(cmd.receiverAddr)
-	if !ok {
-		cmd.log.Error("Invalid reciver address")
-	}
-	cmd.receiverAddr = reciverDID
-
 	isAlphanumericSender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.senderAddr)
 	isAlphanumericReceiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.receiverAddr)
 	if !isAlphanumericSender || !isAlphanumericReceiver {

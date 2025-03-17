@@ -104,11 +104,9 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 }
 
 type DeployNFTSwaggoInput struct {
-	NFT        string  `json:"nft"`
-	DID        string  `json:"did"`
-	QuorumType int     `json:"quorum_type"`
-	NFTValue   float64 `json:"nft_value"`
-	NFTData    string  `json:"nft_data"`
+	NFT        string `json:"nft"`
+	DID        string `json:"did"`
+	QuorumType int    `json:"quorum_type"`
 }
 
 // NFT godoc
