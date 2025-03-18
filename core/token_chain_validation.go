@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -362,7 +363,7 @@ func (c *Core) ValidatePledgedBlock(b *block.Block, tokenId string, calculatedPr
 			continue
 		}
 		var verificationStatus bool
-		if qrm.SignType == "0" { //qrm sign type = 0, means qrm signature is BIP sign and DID is created in Lite mode
+		if qrm.SignType == strconv.Itoa(did.BIPVersion) { //qrm sign type = 0(BIPVersion), means qrm signature is BIP sign and DID is created in Lite mode
 			verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(qrm.Hash), util.StrToHex(qrm.PrivSignature))
 			if err != nil {
 				c.log.Error("failed signature verification for lite-quorum:", qrm.DID, "err", err)
@@ -732,9 +733,14 @@ func (c *Core) ValidateQuorums(b *block.Block, userDID string) (*model.BasicResp
 	response.Status = true
 	for _, qrm := range quorumSignList {
 		if qrm.Hash != signedData {
-			c.log.Error("signed data is not block hash for quorum", qrm.DID)
-			response.Message = "invalid quorum signature, signed msg is not block hash"
-			return response, fmt.Errorf(response.Message)
+			// backward compatible to old signed data (TxnID)
+			signedData = b.GetTid()
+
+			// if qrm.Hash != b.GetTid() {
+			// 	c.log.Error("signed data is not block hash or Txn ID for quorum ", qrm.DID)
+			// 	response.Message = "invalid quorum signature, signed msg is not block hash"
+			// 	return response, fmt.Errorf(response.Message)
+			// }
 		}
 		qrmDIDCrypto, err := c.SetupForienDIDQuorum(qrm.DID, userDID)
 		if err != nil {
@@ -742,7 +748,7 @@ func (c *Core) ValidateQuorums(b *block.Block, userDID string) (*model.BasicResp
 			continue
 		}
 		var verificationStatus bool
-		if qrm.SignType == "0" { //qrm sign type = 0, means qrm signature is BIP sign and DID is created in Lite mode
+		if qrm.SignType == strconv.Itoa(did.BIPVersion) { //qrm sign type = 0(BIPVersion), means qrm signature is BIP sign and DID is created in Lite mode
 			verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(signedData), util.StrToHex(qrm.PrivSignature))
 			if err != nil {
 				c.log.Error("failed signature verification for lite-quorum:", qrm.DID, "err", err)

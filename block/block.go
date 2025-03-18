@@ -859,21 +859,24 @@ func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
 				fmt.Println(err)
 			}
 			if quorumSig.SignType == "" {
-				quorumSig.SignType = "0"
+				quorumSig.SignType = strconv.Itoa(didmodule.NlssVersion)
 			}
 		} else {
 			//fetch quorum did
 			qrmDID := util.GetFromMap(qrmSignMap, CreditSigDID)
 			quorumSig.DID = qrmDID.(string)
-			// 	//fetch quorum sign type
+			//fetch quorum sign type
 			signType := util.GetFromMap(qrmSignMap, CreditSigSignType)
 			quorumSig.SignType = signType.(string)
-			// 	//fetch quorum nlss share sign
+			//fetch quorum nlss share sign
 			nlssShare := util.GetFromMap(qrmSignMap, CreditSigSignature)
 			quorumSig.Signature = nlssShare.(string)
-			// 	//fetch quorum private sign
+			//fetch quorum private sign
 			privSign := util.GetFromMap(qrmSignMap, CreditSigPrivSignature)
 			quorumSig.PrivSignature = privSign.(string)
+			// fetch quorum signed hash
+			hash := util.GetFromMap(qrmSignMap, CreditSigHash)
+			quorumSig.Hash = hash.(string)
 		}
 		quorumSigList = append(quorumSigList, quorumSig)
 	}
