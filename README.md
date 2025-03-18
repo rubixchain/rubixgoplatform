@@ -5,7 +5,7 @@ Rubix is a Layer-1 blockchain protocol focusing on decentralized identity (DID),
 ## Key Features:
 - Decentralized Identity (DID): Provides self-sovereign identity for users.
 - Proof of Pledge (PoP) Consensus: Secure and eco-friendly alternative to mining.
-- Interoperability: Supports smart contracts using Rust and WASM.
+- Smart Contracts: Supports smart contracts using Rust and WASM.
 - Privacy & Security: Uses cryptographic proofs, including Zero-Knowledge Proofs (ZKP).
 - Scalability: High-throughput transactions with low fees.
 
@@ -13,17 +13,41 @@ Rubix is a Layer-1 blockchain protocol focusing on decentralized identity (DID),
 
 ## Installation
 
-### macOS
+### MacOS
 
-brew install git cmake make clang pkg-config openssl@1.1
+```
+brew install go make git
+git clone https://github.com/RubixChain/rubixgoplatform.git
+cd rubixgoplatform
+brew install make
+make build
+./rubixgoplatform run -p node1 -n 0 -s -testNet -grpcPort 10500
+./rubixgoplatform version
+```
 
 ### Linux
 
-sudo apt update && sudo apt install -y git cmake make clang pkg-config libssl-dev
+```
+sudo apt update && sudo apt install golang-go make git -y
+git clone https://github.com/RubixChain/rubixgoplatform.git
+cd rubixgoplatform
+sudo apt install make
+make build
+./rubixgoplatform run -p node1 -n 0 -s -testNet -grpcPort 10500
+./rubixgoplatform version
+```
 
 ### Windows 
 
-choco install git cmake make llvm openssl
+```
+sudo apt update && sudo apt install golang-go make git -y
+git clone https://github.com/RubixChain/rubixgoplatform.git
+cd rubixgoplatform
+sudo apt install make
+make build
+./rubixgoplatform run -p node1 -n 0 -s -testNet -grpcPort 10500
+./rubixgoplatform version
+```
 
 ---
 
