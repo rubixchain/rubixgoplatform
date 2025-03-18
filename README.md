@@ -1,6 +1,6 @@
 # Rubix Blockchain Network
 
-Rubix is a Layer-1 blockchain protocol focusing on decentralized identity (DID), security, and energy-efficient consensus mechanisms**. It employs the Proof of Pledge (PoP) consensus model, eliminating traditional mining and ensuring sustainability.
+Rubix is a Layer-1 blockchain protocol focusing on decentralized identity (DID), security, and energy-efficient consensus mechanisms. It employs the Proof of Pledge (PoP) consensus model, eliminating traditional mining and ensuring sustainability.
 
 ## Key Features:
 - Decentralized Identity (DID): Provides self-sovereign identity for users.
@@ -10,43 +10,116 @@ Rubix is a Layer-1 blockchain protocol focusing on decentralized identity (DID),
 - Scalability: High-throughput transactions with low fees.
 
 ---
+## Getting Started
 
-## Installation
+### Pre-requisites
+
+- To install Go:
+
+[Install it from here](https://go.dev/doc/install)
+
+- To install GCC compiler:
+  ### MacOS
+
+  Install Homebrew-
+  ```
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  ```
+  Install GCC-
+  ```
+      brew install gcc
+  ```
+  OR
+  ```
+      xcode-select --install
+  ```
+  
+  ### Linux
+  ```
+  sudo apt update && sudo apt install gcc -y
+  ```
+  ### Windows
+  
+  Download MinGW - w64:
+  
+  [Download from here](https://www.mingw-w64.org/downloads/)
+  
+- To install make:
+  
+  ### MacOS
+  ```
+  brew install make
+  ```
+  ### Linux
+  ```
+  sudo apt install make
+  ```
+  ### Windows
+  
+1. Using Chocolatey-
+   
+Install Chocolatey
+```
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+```
+Install make
+```
+choco install make
+```
+2. Using Scoop-
+
+Install Scoop
+```
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+iwr -useb get.scoop.sh | iex
+```
+Install make
+```
+scoop install make
+```
+3. Via Git for Windows (MinGW)
+   
+Install MinGW
+```
+pacman -S mingw-w64-x86_64-make
+```
+
+### Installation
 
 ### MacOS
 
+Clone respository
 ```
-brew install go make git
 git clone https://github.com/RubixChain/rubixgoplatform.git
 cd rubixgoplatform
-brew install make
-make build
-./rubixgoplatform run -p node1 -n 0 -s -testNet -grpcPort 10500
-./rubixgoplatform version
+```
+Build Rubix
+```
+make compile-mac
 ```
 
 ### Linux
 
+Clone respository
 ```
-sudo apt update && sudo apt install golang-go make git -y
 git clone https://github.com/RubixChain/rubixgoplatform.git
 cd rubixgoplatform
-sudo apt install make
-make build
-./rubixgoplatform run -p node1 -n 0 -s -testNet -grpcPort 10500
-./rubixgoplatform version
+```
+Build Rubix
+```
+make compile-linux
 ```
 
 ### Windows 
 
+Clone repository
 ```
-sudo apt update && sudo apt install golang-go make git -y
 git clone https://github.com/RubixChain/rubixgoplatform.git
 cd rubixgoplatform
-sudo apt install make
-make build
-./rubixgoplatform run -p node1 -n 0 -s -testNet -grpcPort 10500
-./rubixgoplatform version
+```
+Build Rubix
+```
+make compile-windows
 ```
 
 ---
@@ -584,5 +657,5 @@ This following flags are used for this command
 - Website: https://rubix.net
 - GitHub: https://github.com/rubixchain
 - X: https://x.com/RubixChain
-- Discord: https://discord.com/invite/6WjtAAn2Gv
+- Discord: https://discord.com/invite/MjcVSATh
 
