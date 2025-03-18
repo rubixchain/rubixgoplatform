@@ -37,3 +37,15 @@ func (c *Client) GetAllExplorer() ([]string, string, bool) {
 	}
 	return rm.Result.Links, rm.Message, rm.Status
 }
+
+func (c *Client) AddUserAPIKey(did string, apiKey string) (string, bool) {
+	q := make(map[string]string)
+	q["did"] = did
+	q["apiKey"] = apiKey
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIAddUserAPIKey, q, nil, &rm)
+	if err != nil {
+		return err.Error(), false
+	}
+	return rm.Message, rm.Status
+}

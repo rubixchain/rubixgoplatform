@@ -195,3 +195,14 @@ func (s *Server) APIRemoveExplorer(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.BasicResponse(req, true, "explorer removed successfully", nil)
 }
+
+func (s *Server) APIAddUserAPIKey(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "did")
+	apiKey := s.GetQuerry(req, "apiKey")
+
+	err := s.c.AddDIDKey(did, apiKey)
+	if err != nil {
+		return s.BasicResponse(req, false, "failed to add to table, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "Api Key added successfully", nil)
+}

@@ -1166,6 +1166,9 @@ func (c *Core) updateReceiverToken(
 			Status:          true,
 			Epoch:           int64(transactionEpoch),
 		}
+		if td.Epoch == 0 {
+			td.Epoch = time.Now().Unix()
+		}
 		c.w.AddTransactionHistory(td)
 	}
 
@@ -1356,6 +1359,9 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 			Status:          true,
 			Epoch:           int64(transactionEpoch),
 		}
+		if td.Epoch == 0 {
+			td.Epoch = time.Now().Unix()
+		}
 		c.w.AddTransactionHistory(td)
 	}
 	//Adding quorums to DIDPeerTable of receiver
@@ -1526,7 +1532,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	// is avoided
 	//
 	// However in case either sender or receiver happen to be a Quorum server, even though the above
-	// scenario is covered , but since the token block is also added on Quorum's end, we end up in a 
+	// scenario is covered , but since the token block is also added on Quorum's end, we end up in a
 	// situation where update of same block happens twice. Hence the following check ensures that we
 	// skip the addition of block here, if either sender or receiver happen to be on a Quorum node.
 	if !c.w.IsDIDExist(b.GetReceiverDID()) && !c.w.IsDIDExist(b.GetSenderDID()) {
@@ -1607,9 +1613,9 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	//Adding to the Token State Hash Table
 	if ur.TransferredTokenStateHashes != nil {
 		err = c.w.AddTokenStateHash(did, ur.TransferredTokenStateHashes, ur.PledgedTokens, ur.TransactionID)
-	}
-	if err != nil {
-		c.log.Error("Failed to add token state hash", "err", err)
+		if err != nil {
+			c.log.Error("Failed to add token state hash", "err", err)
+		}
 	}
 
 	crep.Status = true

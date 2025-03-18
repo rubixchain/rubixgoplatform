@@ -79,3 +79,8 @@ type TokenStateResponse struct {
 	BasicResponse
 	PledgedTokenStateDetails []PledgedTokenStateDetails `json:"token_state_details"`
 }
+
+type FaucetRBTGenerateRequest struct {
+	TokenCount int    `json:"token_count"`
+	DID        string `json:"did"`
+}

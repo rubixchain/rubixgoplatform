@@ -44,6 +44,7 @@ const (
 	RacSignKey         string = "99"
 	RacBlockCotent     string = "1"
 	RacBlockSig        string = "2"
+	RacTokenLevelKey   string = "14"
 )
 
 const (
@@ -57,6 +58,7 @@ type RacType struct {
 	DID          string
 	TokenNumber  uint64
 	TotalSupply  uint64
+	TokenLevel   uint64
 	TimeStamp    string
 	CreatorID    string
 	CreatorInput string
@@ -317,4 +319,30 @@ func RacType2TokenType(rt int) int {
 		return token.TestDataTokenType
 	}
 	return token.RBTTokenType
+}
+
+func CreateRacFaucet(r *RacType) (*RacBlock, error) {
+	if r.Type == 1 || r.Type > RacTestPartTokenType {
+		return nil, fmt.Errorf("rac type is not supported")
+	}
+	var rb *RacBlock
+	m := make(map[string]interface{})
+	m[RacTypeKey] = r.Type
+	m[RacVersionKey] = RacVersion
+	m[RacDidKey] = r.DID
+	m[RacTokenNumberKey] = r.TokenNumber
+	m[RacTotalSupplyKey] = r.TotalSupply
+	if r.CreatorInput != "" {
+		m[RacCreatorInputKey] = r.CreatorInput
+	}
+	if r.CreatorID != "" && r.TokenLevel > 0 {
+		m[RacCreatorIDKey] = r.CreatorID
+		m[RacTokenLevelKey] = r.TokenLevel
+		m[RacTokenNumberKey] = r.TokenNumber
+	}
+	rb, err := InitRacBlock(nil, m)
+	if err != nil {
+		return nil, err
+	}
+	return rb, nil
 }
