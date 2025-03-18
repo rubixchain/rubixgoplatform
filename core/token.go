@@ -971,7 +971,7 @@ func (c *Core) SyncAncestralTokens(p *ipfsport.Peer, parentToken string) error {
 		c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parentToken)
 		return err
 	}
-	_, iswholeToken, _ := token.CheckWholeToken(string(b))
+	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
 	tokenType := token.RBTTokenType
 	if !iswholeToken {
 		blk := util.StrToHex(string(b))
