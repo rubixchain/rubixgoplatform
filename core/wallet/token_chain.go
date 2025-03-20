@@ -89,6 +89,8 @@ func tcsPrefix(tokenType int, t string) string {
 	case tkn.FTTokenType:
 		tt = FTTokenType
 	}
+	fmt.Println("TokenType:", tokenType, "Mapped:", tt)
+	fmt.Println("Final Prefix:", tt+"-"+t+"-")
 	return tt + "-" + t + "-"
 }
 
@@ -122,6 +124,9 @@ func tcsKey(tokenType int, t string, blockID string) string {
 		}
 		return tt + "-" + t + "-" + fmt.Sprintf("%016x", bn) + "-" + bs[1]
 	}
+	fmt.Println("TokenType:", tokenType, "Mapped:", tt)
+	fmt.Println("BlockID:", blockID, "Split:", bs)
+	fmt.Println("Final Key:", tt+"-"+t+"-"+blockID)
 	return tt + "-" + t + "-" + blockID
 }
 
@@ -234,6 +239,7 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 	count := 0
 	if blockID != "" {
 		if !iter.Seek([]byte(tcsKey(tt, token, blockID))) {
+			fmt.Println("BlockId in side the getAllBlocks function", blockID)
 			return nil, "", fmt.Errorf("Token chain block does not exist")
 		}
 	}

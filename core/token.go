@@ -263,13 +263,17 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 
 func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	var tr TCBSyncRequest
-
+	fmt.Println("The syncTokenChain function which is linked to APISyncTokenChain is called")
 	err := c.l.ParseJSON(req, &tr)
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to parse request"}, http.StatusOK)
 	}
 	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
-	fmt.Println("The blks which we got after calling the functioln GetAllTokenBlock", blks)
+	if blks == nil {
+		fmt.Println("The blks variable is nil : Basically GetAllTokenBlocks is returning nil")
+	}
+	fmt.Println("The nextID which we got after calling the functioln GetAllTokenBlock", nextID)
+	fmt.Println("The error which we got after calling the functioln GetAllTokenBlock", err)
 	if err != nil {
 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: err.Error()}, http.StatusOK)
 	}
@@ -298,6 +302,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 			return nil
 		}
 	}
+	fmt.Println("The block ID which we get in syncTokenChainFrom", blkID)
 	tr := TCBSyncRequest{
 		Token:     token,
 		TokenType: tokenType,
@@ -328,9 +333,12 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 			}
 		}
 		if trep.NextBlockID == "" {
+			fmt.Println("The value of trep.NextBlockID is empty")
 			break
 		}
 		tr.BlockID = trep.NextBlockID
+		fmt.Println("The value tr.BlockID", tr.BlockID)
+		fmt.Println("The value trep.NextBlockID", trep.NextBlockID)
 	}
 	return nil
 }
