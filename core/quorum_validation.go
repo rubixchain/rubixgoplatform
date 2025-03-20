@@ -67,6 +67,8 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 			}
 		}
 		err := b.VerifySignature(dc)
+		fmt.Println("The error value is: ", err)
+		fmt.Println("The dc.GetSignType() value is: ", dc.GetSignType())
 		if err != nil {
 			if dc.GetSignType() == did.NlssVersion {
 				peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)

@@ -427,12 +427,14 @@ func (b *Block) GetSignature(dc didmodule.DIDCrypto) (string, error) {
 
 func (b *Block) VerifySignature(dc didmodule.DIDCrypto) error {
 	did := dc.GetDID()
+	fmt.Println("The did inside VerifySignature is: ", did)
 	h, s, err := b.GetHashSig(did)
 	if err != nil {
 		return fmt.Errorf("failed to read did signature & hash")
 	}
 	ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
 	if err != nil || !ok {
+		fmt.Println("The error inside VerifySignature is: ", err)
 		return fmt.Errorf("failed to verify did signature")
 	}
 	return nil

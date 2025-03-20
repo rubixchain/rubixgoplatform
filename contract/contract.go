@@ -475,20 +475,20 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	didType := dc.GetSignType()
 	fmt.Println("The didType is ", didType)
 
-	// if didType == did.BIPVersion {
-	// 	if ps == "" {
-	// 		return fmt.Errorf("empty public key string for signature verification")
-	// 	}
-	// 	ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
-	// 	fmt.Println("ok is ", ok)
-	// 	if err != nil {
-	// 		fmt.Println("Failed to verify sign pvtVerify err is ", err)
-	// 		return err
-	// 	}
-	// 	if !ok {
-	// 		return fmt.Errorf("did Pki signature verification failed")
-	// 	}
-	// } else {
+	if didType == did.BIPVersion {
+		if ps == "" {
+			return fmt.Errorf("empty public key string for signature verification")
+		}
+		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
+		fmt.Println("ok is ", ok)
+		if err != nil {
+			fmt.Println("Failed to verify sign pvtVerify err is ", err)
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("did Pki signature verification failed")
+		}
+	} else {
 		if ss == "" || ps == "" {
 			return fmt.Errorf("invalid signature or public key for NLSS verification")
 		}
@@ -501,7 +501,7 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 		if !ok {
 			return fmt.Errorf("did Nlss signature verification failed")
 		}
-	// }
+	}
 
 	return nil
 }
