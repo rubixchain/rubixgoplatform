@@ -157,11 +157,10 @@ type CreditScore struct {
 }
 
 type UpdatePreviousQuorums struct {
-	TransactionID        string
-	TransactionType      int
-	TokenID              string
-	LatestTokenStateHash string
-	CurrentEpoch         int64
+	TransactionID   string
+	TransactionType int
+	TokenID         string
+	CurrentEpoch    int64
 }
 
 type CreditSignature struct {
@@ -203,7 +202,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIRecoverPinnedRBT, "POST", c.recoverPinnedToken)
 	c.l.AddRoute(APIRequestSigningHash, "GET", c.requestSigningHash)
 	c.l.AddRoute(APISendFTToken, "POST", c.updateReceiverFTHandle)
-	c.l.AddRoute(APIUpdateEpochOnPrevQuorums, "POST", c.updateNextBlockEpoch)
+	c.l.AddRoute(APIUpdateCreditsAndWeekEpoch, "POST", c.updateCreditsAndEpochPin)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
@@ -697,24 +696,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
 				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
 
-				//Getting new block token state hash
-				newBlockID, err := nb.GetBlockID(tokeninfo.Token)
-				if err != nil {
-					c.log.Error("Failed to get new block ID for token state hash")
-				}
-				newTokenStateHash := tokeninfo.Token + newBlockID
-				tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(newTokenStateHash))
-				tokenIDTokenStateHash, _ := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-
+				//Sending next block epoch & new block token state hash to previous quorums to calculate credits
 				var updatePrevQuorums UpdatePreviousQuorums
 				updatePrevQuorums.CurrentEpoch = int64(cr.TransactionEpoch)
 				updatePrevQuorums.TokenID = tokeninfo.Token
 				updatePrevQuorums.TransactionID = b.GetTid()
 				updatePrevQuorums.TransactionType = cr.Type
-				updatePrevQuorums.LatestTokenStateHash = tokenIDTokenStateHash
-
-				//Sending next block epoch & new block token state hash to previous quorums to calculate credits
-				PrevQuormEpochUpdateErr := previousQuorumPeer.SendJSONRequest("POST", APIUpdateEpochOnPrevQuorums, nil, updatePrevQuorums, nil, true)
+				PrevQuormEpochUpdateErr := previousQuorumPeer.SendJSONRequest("POST", APIUpdateCreditsAndWeekEpoch, nil, updatePrevQuorums, nil, true)
 				if PrevQuormEpochUpdateErr != nil {
 					c.log.Error("Unable to update epoch on previous quorum for credits, err: ", PrevQuormEpochUpdateErr)
 				}
@@ -2056,6 +2044,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		return nil, fmt.Errorf("invalid pledge request")
 	}
 	ti := sc.GetTransTokenInfo()
+	// TODO: Change the below credit struct name to quorum signatures
 	credit := make([]block.CreditSignature, 0)
 	for _, csig := range cs.Credit.Credit {
 		credit_ := block.CreditSignature{

@@ -368,18 +368,17 @@ func (c *Contract) GetTokenCreditsDetails() []model.PledgeHistory {
 		tcdDetails := make([]model.PledgeHistory, 0)
 		for _, v := range tokenCreditDetailsMapInterface {
 			ph := model.PledgeHistory{
-				QuorumDID:            util.GetStringFromMap(v, "quorum_did"),
-				TransactionID:        util.GetStringFromMap(v, "transaction_id"),
-				TransactionType:      util.GetIntFromMap(v, "transaction_type"),
-				TransferTokenID:      util.GetStringFromMap(v, "transfer_tokens_id"),
-				TransferTokenType:    util.GetIntFromMap(v, "transfer_tokens_type"),
-				TransferTokenValue:   util.GetFloatFromMap(v, "transfer_token_value"),
-				TransferBlockID:      util.GetStringFromMap(v, "transfer_block_number_and_id"),
-				LatestTokenStateHash: util.GetStringFromMap(v, "latest_tokenstate_hash"),
-				Epoch:                util.GetIntFromMap(v, "epoch"),
-				NextBlockEpoch:       util.GetInt64FromMap(v, "next_epoch"),
-				TokenCredit:          util.GetIntFromMap(v, "token_credit"),
-				TokenCreditStatus:    util.GetIntFromMap(v, "token_credit_status"),
+				QuorumDID:          util.GetStringFromMap(v, "quorum_did"),
+				TransactionID:      util.GetStringFromMap(v, "transaction_id"),
+				TransactionType:    util.GetIntFromMap(v, "transaction_type"),
+				TransferTokenID:    util.GetStringFromMap(v, "transfer_tokens_id"),
+				TransferTokenType:  util.GetIntFromMap(v, "transfer_tokens_type"),
+				TransferTokenValue: util.GetFloatFromMap(v, "transfer_token_value"),
+				TransferBlockID:    util.GetStringFromMap(v, "transfer_block_number_and_id"),
+				Epoch:              util.GetIntFromMap(v, "epoch"),
+				NextBlockEpoch:     util.GetInt64FromMap(v, "next_epoch"),
+				TokenCredit:        util.GetIntFromMap(v, "token_credit"),
+				TokenCreditStatus:  util.GetIntFromMap(v, "token_credit_status"),
 			}
 			tcdDetails = append(tcdDetails, ph)
 		}
@@ -390,18 +389,17 @@ func (c *Contract) GetTokenCreditsDetails() []model.PledgeHistory {
 			tcdDetails := make([]model.PledgeHistory, 0)
 			for _, v := range tokenCreditDetailsMapInterface {
 				ph := model.PledgeHistory{
-					QuorumDID:            util.GetStringFromMap(v, "quorum_did"),
-					TransactionID:        util.GetStringFromMap(v, "transaction_id"),
-					TransactionType:      util.GetIntFromMap(v, "transaction_type"),
-					TransferTokenID:      util.GetStringFromMap(v, "transfer_tokens_id"),
-					TransferTokenType:    util.GetIntFromMap(v, "transfer_tokens_type"),
-					TransferTokenValue:   util.GetFloatFromMap(v, "transfer_token_value"),
-					TransferBlockID:      util.GetStringFromMap(v, "transfer_block_number_and_id"),
-					LatestTokenStateHash: util.GetStringFromMap(v, "latest_tokenstate_hash"),
-					Epoch:                util.GetIntFromMap(v, "epoch"),
-					NextBlockEpoch:       util.GetInt64FromMap(v, "next_epoch"),
-					TokenCredit:          util.GetIntFromMap(v, "token_credit"),
-					TokenCreditStatus:    util.GetIntFromMap(v, "token_credit_status"),
+					QuorumDID:          util.GetStringFromMap(v, "quorum_did"),
+					TransactionID:      util.GetStringFromMap(v, "transaction_id"),
+					TransactionType:    util.GetIntFromMap(v, "transaction_type"),
+					TransferTokenID:    util.GetStringFromMap(v, "transfer_tokens_id"),
+					TransferTokenType:  util.GetIntFromMap(v, "transfer_tokens_type"),
+					TransferTokenValue: util.GetFloatFromMap(v, "transfer_token_value"),
+					TransferBlockID:    util.GetStringFromMap(v, "transfer_block_number_and_id"),
+					Epoch:              util.GetIntFromMap(v, "epoch"),
+					NextBlockEpoch:     util.GetInt64FromMap(v, "next_epoch"),
+					TokenCredit:        util.GetIntFromMap(v, "token_credit"),
+					TokenCreditStatus:  util.GetIntFromMap(v, "token_credit_status"),
 				}
 				tcdDetails = append(tcdDetails, ph)
 			}
