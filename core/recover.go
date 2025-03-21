@@ -159,7 +159,7 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 					pt = "" // Ensure pt is reset to empty string if an error occurs
 				}
 			}
-			err = c.syncParentToken(p, pt)
+			_, err = c.SyncAncestralTokens(p, pt)
 			if err != nil {
 				c.log.Error("Failed to sync parent token chain while recovering token", err)
 

@@ -200,11 +200,11 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			return err
 		}
 		tk := util.HexToStr(tb)
-		fmt.Println("token in generateTestTokens functions",tk)
+		fmt.Println("token in generateTestTokens functions", tk)
 		nb := bytes.NewBuffer([]byte(tk))
-		fmt.Println("new buffer in generateTestTokens functions",nb)
+		fmt.Println("new buffer in generateTestTokens functions", nb)
 		id, err := c.w.Add(nb, did, wallet.OwnerRole)
-		fmt.Println("id is:",id)
+		fmt.Println("id is:", id)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
@@ -215,7 +215,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 				{Token: id},
 			},
 		}
-		fmt.Println("gb is:",gb)
+		fmt.Println("gb is:", gb)
 		ti := &block.TransInfo{
 			Tokens: []block.TransTokens{
 				{
@@ -224,7 +224,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 				},
 			},
 		}
-		fmt.Println("ti is",ti)
+		fmt.Println("ti is", ti)
 
 		tcb := &block.TokenChainBlock{
 			TransactionType: block.TokenGeneratedType,
@@ -233,13 +233,13 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
 		}
-		fmt.Println("tcb is",tcb)
+		fmt.Println("tcb is", tcb)
 
 		ctcb := make(map[string]*block.Block)
 		ctcb[id] = nil
-        fmt.Println("ctcb is:",ctcb)
+		fmt.Println("ctcb is:", ctcb)
 		blk := block.CreateNewBlock(ctcb, tcb)
-        fmt.Println("blk is:",blk)
+		fmt.Println("blk is:", blk)
 		if blk == nil {
 			c.log.Error("Failed to create new token chain block")
 			return fmt.Errorf("failed to create new token chain block")
@@ -255,7 +255,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TokenValue:  1,
 			TokenStatus: wallet.TokenIsFree,
 		}
-		fmt.Println("t is:",t)
+		fmt.Println("t is:", t)
 		err = c.w.CreateTokenBlock(blk)
 		if err != nil {
 			c.log.Error("Failed to add token chain", "err", err)
@@ -1102,43 +1102,54 @@ func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {
 	return lastErr
 }
 
-func (c *Core) SyncAncestralTokens(p *ipfsport.Peer, parentToken string) error {
+func (c *Core) SyncAncestralTokens(p *ipfsport.Peer, parentToken string) ([]string, error) {
+	syncedTokens := make([]string, 0)
+
 	b, err := c.getFromIPFS(parentToken)
 	if err != nil {
-		c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parentToken)
-		return err
+		c.log.Error("failed to get parent token details from IPFS", "err", err, "token", parentToken)
+		return syncedTokens, err
 	}
-	_, iswholeToken, _ := token.CheckWholeToken(string(b), true)
+
+	_, isWholeToken, _ := token.CheckWholeToken(string(b), true)
 	tokenType := token.RBTTokenType
-	if !iswholeToken {
+
+	if !isWholeToken {
 		blk := util.StrToHex(string(b))
 		rb, err := rac.InitRacBlock(blk, nil)
 		if err != nil {
 			c.log.Error("invalid token, invalid rac block", "err", err)
-			return err
+			return syncedTokens, err
 		}
 		tokenType = rac.RacType2TokenType(rb.GetRacType())
 	}
-	err = c.syncTokenChainFrom(p, "", parentToken, tokenType)
-	if err != nil {
+
+	if err := c.syncTokenChainFrom(p, "", parentToken, tokenType); err != nil {
 		c.log.Error("failed to sync token chain block", "err", err)
-		return fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v", parentToken, TokenChainNotSynced)
+		return syncedTokens, fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v",
+			parentToken, TokenChainNotSynced)
 	}
+	syncedTokens = append(syncedTokens, parentToken)
+
 	if tokenType == c.TokenType(PartString) {
 		genesisBlock := c.w.GetGenesisTokenBlock(parentToken, tokenType)
 		grandParentToken, _, err := genesisBlock.GetParentDetials(parentToken)
 		if err != nil {
-			c.log.Error("failed to get grand-parents")
+			c.log.Error("failed to get grand-parent details", "err", err)
 		}
-		err = c.SyncAncestralTokens(p, grandParentToken)
-		if err != nil {
-			c.log.Error("failed to sync grand-parent token", grandParentToken, "err", err)
-			return err
-		}
+
 		if grandParentToken == "" {
-			c.log.Error("Empty grandparent token")
-			return fmt.Errorf("Empty grandparent token")
+			c.log.Error("empty grandparent token")
+			return syncedTokens, fmt.Errorf("empty grandparent token")
 		}
+		grandparentSynced, err := c.SyncAncestralTokens(p, grandParentToken)
+		if err != nil {
+			// Combine current synced tokens with those from recursive call
+			syncedTokens = append(syncedTokens, grandparentSynced...)
+			return syncedTokens, err
+		}
+		syncedTokens = append(syncedTokens, grandparentSynced...)
 	}
-	return nil
+
+	return syncedTokens, nil
 }

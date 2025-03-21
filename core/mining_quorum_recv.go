@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"time"
@@ -33,15 +34,12 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 			continue
 		}
 
-		// Check the pins on the tokenstatehash when next block is created.
-		peers, err := c.GetDHTddrs(tokenInfo.LatestTokenStateHash)
-		if err != nil {
-			c.log.Error("Error fetching pinned peers for credit validation", "tokenStateHash", tokenInfo.LatestTokenStateHash, "err", err)
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
-		}
+		//Get the peers from week epoch
+		var peers []string
+		currentWeek := util.GetWeeksPassed()
+		peers, err = c.getPeerWhoPinTokenEpoch(tokenInfo.TransferTokenID, currentWeek)
 
-		// Connect with the nodes who pinned the tokenstatehash and get the latest tokenchain.
+		// Connect with the nodes who pinned the current week epoch and get the latest tokenchain.
 		err = c.SyncTokenChainFromListOfPeers(peers, tokenInfo.TransferTokenID, tokenInfo.TransferTokenType)
 		if err != nil {
 			c.log.Error("Error syncing tokenchain from peers for credit validation", "tokenID", tokenInfo.TransferTokenID, "err", err)
@@ -140,7 +138,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		}
 
 		// Check if the requesting miner is signed in the respective transfer block of the TC.
-		// Validate sender signature
+		// Validate sender signature: TODO: Remove
 		response, err := c.ValidateSender(transferBlock)
 		if err != nil {
 			c.log.Error("Failed to verify sender for credit validation,", response.Message, "err:", err)
@@ -221,4 +219,33 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 	}
 	c.log.Debug("Total credit value matched.")
 	return nil
+}
+
+func (c *Core) pinTokenEpoch(tokenId string, weekCount int) {
+	fmt.Println("Week count : ", weekCount) //TODO:REMOVE
+	toPin := fmt.Sprintf("%s-%d", tokenId, weekCount)
+	reader := bytes.NewReader([]byte(toPin))
+	newCid, err := c.ipfs.Add(reader)
+	fmt.Println("CID when pinning is :", newCid) // TODO:REMOVE
+	if err != nil {
+		c.log.Error("Failed to add token epoch", "err", err, "tokenID", tokenId)
+	}
+	err = c.ipfs.Pin(string(newCid))
+	if err != nil {
+		c.log.Error("Failed to pin token epoch", "err", err, "tokenID", tokenId)
+	}
+}
+
+func (c *Core) getPeerWhoPinTokenEpoch(tokenID string, weekCount int) ([]string, error) {
+	pinCheck := fmt.Sprintf("%s-%d", tokenID, weekCount)
+	pinCheckStr := bytes.NewReader([]byte(pinCheck))
+	newCID, _ := c.ipfs.Add(pinCheckStr)
+	fmt.Println("CID when getting token epoch pin : ", newCID) // TODO:REMOVE
+	list, err1 := c.GetDHTddrs(newCID)
+	if err1 != nil {
+		c.log.Error("Failed to get pins for token epoch", "err", err1, "tokenID", tokenID)
+		return nil, err1
+	} else {
+		return list, nil
+	}
 }

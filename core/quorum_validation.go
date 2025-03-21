@@ -173,6 +173,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		return false, err
 	}
 	defer p.Close()
+	currentWeek := util.GetWeeksPassed()
 	for i := range ti {
 		err := c.syncTokenChainFrom(p, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
 		fmt.Println("sync 8") //TODO
@@ -191,10 +192,14 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				c.log.Error("failed to fetch parent token detials", "err", err, "token", ti[i].Token)
 				return false, err
 			}
-			err = c.syncParentToken(p, pt)
+			parentTokens, err := c.SyncAncestralTokens(p, pt)
 			if err != nil {
 				c.log.Error("failed to sync parent token chain", "token", pt)
 				return false, err
+			}
+
+			for _, token := range parentTokens {
+				c.pinTokenEpoch(token, currentWeek)
 			}
 			_, err = c.w.Pin(pt, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
 			if err != nil {

@@ -1020,7 +1020,7 @@ func (c *Core) updateReceiverToken(
 				if err != nil {
 					return nil, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
 				}
-				err = c.syncParentToken(senderPeer, pt)
+				_, err = c.SyncAncestralTokens(senderPeer, pt)
 				if err != nil {
 					return nil, fmt.Errorf("failed to sync parent token %v childtoken %v err : ", pt, t, err)
 				}
@@ -1200,7 +1200,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 			if err != nil {
 				return nil, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
 			}
-			err = c.syncParentToken(senderPeer, pt)
+			_, err = c.SyncAncestralTokens(senderPeer, pt)
 			if err != nil {
 				return nil, fmt.Errorf("failed to sync parent token %v childtoken %v err %v : ", pt, t, err)
 			}
@@ -1510,12 +1510,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			c.log.Error("Failed to add token state hash", "err", err)
 		}
 	}
-	//TODO
-	//Even if there is any error, the token chain is already getting synced. The quorums pin the hash of (TokenID + epoch), the epoch being the week
-	//count of when the transaction happened calculated from 1st Jan 2025.
-	for _, j := range tks {
-		c.pinTokenEpoch(j, ur.WeekCount)
-	}
 
 	TransTokenIDs := strings.Join(b.GetTransTokens(), ",")
 
@@ -1595,6 +1589,13 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		c.pledgeHistory = append(c.pledgeHistory, newPledge)
 	}
 	fmt.Println("pledgeHistory list in updatePledgeToken function", c.pledgeHistory)
+
+	//TODO
+	//Even if there is any error, the token chain is already getting synced. The quorums pin the hash of (TokenID + epoch), the epoch being the week
+	//count of when the transaction happened calculated from 1st Jan 2025.
+	for _, j := range tks {
+		c.pinTokenEpoch(j, ur.WeekCount)
+	}
 
 	crep.Status = true
 	crep.Message = "Token pledge status updated"
@@ -1934,67 +1935,37 @@ func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
 
 }
 
-func (c *Core) pinTokenEpoch(tokenId string, weekCount int) {
-	fmt.Println("Week count : ", weekCount) //TODO:REMOVE
-	toPin := fmt.Sprintf("%s-%d", tokenId, weekCount)
-	reader := bytes.NewReader([]byte(toPin))
-	newCid, err := c.ipfs.Add(reader)
-	fmt.Println("CID when pinning is :", newCid) // TODO:REMOVE
-	if err != nil {
-		c.log.Error("Failed to add token epoch", "err", err, "tokenID", tokenId)
-	}
-	err = c.ipfs.Pin(string(newCid))
-	if err != nil {
-		c.log.Error("Failed to pin token epoch", "err", err, "tokenID", tokenId)
-	}
-
-	pinned := fmt.Sprintf("%s-%d", tokenId, weekCount)
-	reader = bytes.NewReader([]byte(pinned))
-	newCid, _ = c.ipfs.Add(reader)
-	list, err1 := c.GetDHTddrs(newCid)
-	if err1 != nil {
-		c.log.Error("Failed to get pins for token epoch", "err", err, "tokenID", tokenId)
-	} else {
-		fmt.Println("token : ", tokenId)                    // TODO:REMOVE
-		fmt.Println("list of providers for token : ", list) // TODO:REMOVE
-	}
-	//TODO - remove pin check from here.
-
-}
-
-//TODO: Add a function to get peer who pinned epoch for a token
-
-// func (c *Core) getPeerWhoPinTokenEpoch(tokenID string, weekCount int) ([]string, error) {
-// 	pinCheck := fmt.Sprintf("%s-%d", tokenID, weekCount)
-// 	pinCheckStr := bytes.NewReader([]byte(pinCheck))
-// 	newCID, _ := c.ipfs.Add(pinCheckStr)
-// 	fmt.Println("CID when getting is : ", newCID) // TODO:REMOVE
-// 	list, err1 := c.GetDHTddrs(newCID)
-// 	if err1 != nil {
-// 		c.log.Error("Failed to get pins for token epoch", "err", err1, "tokenID", tokenID)
-// 		return nil, err1
-// 	} else {
-// 		return list, nil
-// 	}
-// }
-
-func (c *Core) updateNextBlockEpoch(req *ensweb.Request) *ensweb.Result {
+func (c *Core) updateCreditsAndEpochPin(req *ensweb.Request) *ensweb.Result {
 	c.log.Debug("Updating next block Epoch for credits in DB")
 	response := model.BasicResponse{
 		Status: false,
 	}
-	var UpdateEpochDetails UpdatePreviousQuorums
-	err := c.l.ParseJSON(req, &UpdateEpochDetails)
+	var UpdateCreditsAndEpochPin UpdatePreviousQuorums
+	err := c.l.ParseJSON(req, &UpdateCreditsAndEpochPin)
 	if err != nil {
 		c.log.Error("Failed to parse json request", "err", err)
 		response.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &response, http.StatusOK)
 	}
-	c.log.Debug("Next block Epoch updating for token: ", UpdateEpochDetails.TokenID)
-	c.log.Debug("Next block Epoch updating for transactionID: ", UpdateEpochDetails.TransactionID)
-	UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateEpochDetails.TokenID, UpdateEpochDetails.TransactionID, UpdateEpochDetails.TransactionType, UpdateEpochDetails.CurrentEpoch, UpdateEpochDetails.LatestTokenStateHash)
+	c.log.Debug("Next block Epoch updating for token: ", UpdateCreditsAndEpochPin.TokenID)
+	c.log.Debug("Next block Epoch updating for transactionID: ", UpdateCreditsAndEpochPin.TransactionID)
+	UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateCreditsAndEpochPin.TokenID, UpdateCreditsAndEpochPin.TransactionID, UpdateCreditsAndEpochPin.TransactionType, UpdateCreditsAndEpochPin.CurrentEpoch)
 	if UpdateEpochErr != nil {
 		c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)
+	}
+	//Update week epoch pins
+	currentWeek := util.GetWeeksPassed()
+	peers, err := c.getPeerWhoPinTokenEpoch(UpdateCreditsAndEpochPin.TokenID, currentWeek)
+	tokenIsPinned := false
+	for _, peer := range peers {
+		if peer == c.peerID {
+			tokenIsPinned = true
+			break
+		}
+	}
+	if tokenIsPinned {
+		c.ipfs.Unpin(UpdateCreditsAndEpochPin.TokenID)
+		fmt.Println("Epoch Pin removed for tokenID: ", UpdateCreditsAndEpochPin.TokenID)
 	}
 	return c.l.RenderJSON(req, struct{}{}, http.StatusOK)
 }

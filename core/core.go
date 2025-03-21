@@ -59,7 +59,7 @@ const (
 	TokenValidatorURL               string = "http://103.209.145.177:8000"
 	APISendFTToken                  string = "/api/send-ft-token"
 	APIGetPrevQrmFromPrevSenderPath string = "/api/get-prev-qrms-info-from-sender"
-	APIUpdateEpochOnPrevQuorums     string = "/api/update-epoch-on-prev-quorums"
+	APIUpdateCreditsAndWeekEpoch    string = "/api/update-credits-and-week-epoch"
 )
 
 const (

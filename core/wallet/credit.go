@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
@@ -37,8 +38,6 @@ type PledgeInformation struct {
 	QuorumDID       string `json:"quorum_did"`
 	TransactionID   string `json:"transaction_id"`
 }
-
-
 
 func (w *Wallet) AddPledgeHistory(pledgeDetails []model.PledgeHistory) error {
 	for _, detail := range pledgeDetails {
@@ -130,7 +129,7 @@ func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) 
 // 	return tokenDetails, nil
 // }
 
-//New GetTokenDetailsByQuorumDid function below
+// New GetTokenDetailsByQuorumDid function below
 func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus int) ([]model.PledgeHistory, error) {
 	var pledges []model.PledgeHistory
 
@@ -148,7 +147,6 @@ func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus 
 	// Return the filtered pledge history records
 	return pledges, nil
 }
-
 
 func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transactionID string) error {
 	var pledgeHistoryRecords []model.PledgeHistory
@@ -222,7 +220,7 @@ func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transaction
 // 	return nil // Return nil if function completes successfully
 // }
 
-func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch int64, tokenStateHash string) error {
+func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch int64) error {
 	var pledgeHistoryRecords []model.PledgeHistory
 	err := w.s.Read(PledgeHistoryTable, &pledgeHistoryRecords, "transfer_tokens_id = ? and transaction_id=?", tokenID, transactionID)
 	if err != nil {
@@ -234,7 +232,6 @@ func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transa
 		return fmt.Errorf("No records found in Pledge history table for the token")
 	}
 	for _, record := range pledgeHistoryRecords {
-		record.LatestTokenStateHash = tokenStateHash
 		record.NextBlockEpoch = epoch
 		if record.TransactionType == 1 {
 			record.TokenCredit = ((int(record.NextBlockEpoch) - record.Epoch) * int(record.TransferTokenValue)) * 15
