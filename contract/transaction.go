@@ -125,6 +125,9 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 	if ts.NFTData != "" {
 		ntsb[TSNFTDataKey] = ts.NFTData
 	}
+	if ts.MinerDID != ""{
+		ntsb[TSMinderDIDKey] = ts.MinerDID
+	}
 
 	if ts.CommitedTokens != nil && len(ts.CommitedTokens) > 0 {
 		ntibs := make(map[string]interface{})

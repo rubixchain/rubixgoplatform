@@ -83,12 +83,15 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 
 	miningConsensusReq := c.getMiningConsensusReq(miningContract.GetBlock(), *MiningReq)
 
-	_, _, _, _ = c.initiateConsensus(miningConsensusReq, miningContract, didCryptoLib)
-
+	_, _, _, err = c.initiateConsensus(miningConsensusReq, miningContract, didCryptoLib)
+	if err != nil {
+		c.log.Error("Consensus failed ", "err", err)
+		resp.Message = "Consensus failed " + err.Error()
+		return resp
+	}
 	//4.Refer Initiate RBT flow for collecting and sending the token details.
 	resp.Status = true
 	resp.Message = "Mining contract successfully initiated"
-	resp.Result = miningContract
 
 	return resp
 
@@ -102,6 +105,7 @@ func (c *Core) getMiningConsensusReq(contractBlock []byte, miningReq model.Minin
 		ReqID:         uuid.New().String(),
 		ContractBlock: contractBlock,
 		MiningInfo:    miningReq,
+		Type:          miningReq.Type,
 	}
 	return consensusRequest
 }

@@ -7,9 +7,21 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 func (cmd *Command) MineRBTs() {
+	// Ensure logger is initialized
+	if cmd.log == nil {
+		fmt.Println("Error: Logger is not initialized")
+		return
+	}
+
+	// Ensure Client instance is initialized
+	if cmd.c == nil {
+		cmd.log.Error("Core instance is not initialized")
+		return
+	}
+
 	if cmd.did == "" {
 		cmd.log.Info("DID cannot be empty")
-		fmt.Print("Enter DID : ")
+		fmt.Print("Enter DID: ")
 		_, err := fmt.Scan(&cmd.did)
 		if err != nil {
 			cmd.log.Error("Failed to get DID")
@@ -21,13 +33,29 @@ func (cmd *Command) MineRBTs() {
 		cmd.log.Error("Invalid DID")
 		return
 	}
-	var miningReq *model.MiningRequest
-	miningReq.MinerDid = cmd.did
-	br, err := cmd.c.MineRBTs(miningReq)
-	if err != nil {
-		cmd.log.Info("Cannot mine RBTs")
+
+	if cmd.transType < 1 || cmd.transType > 2 {
+		cmd.log.Error("Invalid trans type. TransType should be 1 or 2")
 		return
 	}
-	fmt.Println(br.Message)
-	cmd.log.Info("RBT's mined successfully for the given token credits.")
+
+	// Creating mining request
+	miningReq := &model.MiningRequest{
+	MinerDid : cmd.did,
+	Type : cmd.transType,
+	}
+	// Ensure MineRBTs method is valid
+	br, err := cmd.c.MineRBTs(miningReq)
+	if err != nil {
+		cmd.log.Info("Cannot mine RBTs: ", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to Mine RBTs", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
+	
+	// cmd.log.Info("RBTs mined successfully for the given token credits.")
 }

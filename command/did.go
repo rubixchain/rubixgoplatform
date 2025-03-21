@@ -341,7 +341,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 		}
 		br, err = cmd.c.SignatureResponse(&sresp, timeout...)
 		if err != nil {
-			cmd.log.Error("Failed to generate RBT", "err", err)
+			cmd.log.Error("Failed in signature response", "err", err)
 			return "Failed in signature response, " + err.Error(), false
 		}
 	}

@@ -4,6 +4,7 @@ type MiningRequest struct {
 	MinerDid     string `json:"miner"`
 	TokenCredits uint64 `json:"credits"`
 	Password     string `json:"password"`
+	Type         int    `json:"type"`
 }
 
 type PledgeHistory struct {

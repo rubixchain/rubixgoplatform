@@ -790,16 +790,23 @@ func (c *Core) quorumMiningConsensus(req *ensweb.Request, did string, qdc didcry
 		ReqID:  miningRequest.ReqID,
 		Status: false,
 	}
-
-	ok, miningContract := c.verifyContract(miningRequest, did)
-	if !ok {
-		crep.Message = "Failed to verify sender signature"
+	fmt.Println("QuorumDid in quorumMiningConsensus function is:", did)
+	miningContract := contract.InitContract(miningRequest.ContractBlock, nil)
+	dc, err := c.SetupForienDID(miningContract.GetMinerDID(), did)
+	if err != nil {
+		c.log.Error("Failed to get DID", "err", err)
+		crep.Message = "Failed to get DID"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	err = miningContract.VerifySignature(dc)
+	if err != nil {
+		crep.Message = "Failed to verify sender signature in quorumMiningConsensus function"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
 	// Validating the credits
 	tokenCreditsDetails := miningContract.GetTokenCreditsDetails()
-	err := c.ValidateCredits(miningRequest.MiningInfo.MinerDid, int(miningRequest.MiningInfo.TokenCredits), tokenCreditsDetails)
+	err = c.ValidateCredits(miningRequest.MiningInfo.MinerDid, int(miningRequest.MiningInfo.TokenCredits), tokenCreditsDetails)
 	if err != nil {
 		crep.Message = "Failed to validate credits"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)

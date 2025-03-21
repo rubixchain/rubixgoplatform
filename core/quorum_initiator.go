@@ -393,7 +393,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
 	cr.TransactionID = tid
-
+	fmt.Println("quorum manager is:", c.qm)
+	if cr.Mode == MiningMode {
+		cr.QuorumList = c.GetMiningQuorums()
+	}
+	fmt.Println("consenses request type", cr.Type)
 	ql := c.qm.GetQuorum(cr.Type, lastCharTID, c.peerID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
 	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
@@ -417,10 +421,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		cr.QuorumList = ql
 	}
 
-	if cr.Mode == MiningMode {
-		cr.QuorumList = c.GetMiningQuorums()
-	}
-
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
 	c.pd[cr.ReqID] = &pd
@@ -439,7 +439,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//checks the consensus. For type 1 quorums, along with connecting to the quorums, we are checking the balance of the quorum DID
 		//as well. Each quorums should pledge equal amount of tokens and hence, it should have a total of (Transacting RBTs/5) tokens
 		//available for pledging.
-		c.log.Debug("Did of the caller", dc.GetDID())
 		go c.connectQuorum(cr, a, AlphaQuorumType, sc)
 	}
 	loop := true
@@ -2115,12 +2114,14 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TokenLevel:  tokenLevel,  //TODO: Fetch next mining token level from mining chain
 			TimeStamp:   time.Now().String(),
 			MiningInfo:  &c.pledgeHistory,
+			TotalSupply: 1,
 		}
 		racBlocks, err := rac.CreateRac(racType)
 		if err != nil {
 			c.log.Error("Failed to create RAC block for mining", "err", err)
 			return nil, fmt.Errorf("failed to create RAC block for mining")
 		}
+		fmt.Println("RAC Blocks", racBlocks)
 		// Process the newly created RAC block
 		if len(racBlocks) == 0 {
 			c.log.Error("No RAC blocks generated")
