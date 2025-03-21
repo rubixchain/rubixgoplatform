@@ -16,11 +16,11 @@ import (
 const fiveWeeksInSeconds = 5 * 7 * 24 * 60 * 60 // 5 weeks = 5 * 7 days * 24 hours * 60 minutes * 60 seconds
 
 func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails []model.PledgeHistory) error {
-	ok := c.w.IsDIDExist(did)
-	if !ok {
-		c.log.Error("Invalid did of mining quorum")
-		return fmt.Errorf("invalid did of mining quorum: %v", did)
-	}
+	// ok := c.w.IsDIDExist(did)
+	// if !ok {
+	// 	c.log.Error("Invalid did of mining quorum")
+	// 	return fmt.Errorf("invalid did of mining quorum: %v", did)
+	// }
 
 	totalCredits := 0
 
