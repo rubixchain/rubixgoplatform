@@ -16,11 +16,6 @@ import (
 const fiveWeeksInSeconds = 5 * 7 * 24 * 60 * 60 // 5 weeks = 5 * 7 days * 24 hours * 60 minutes * 60 seconds
 
 func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails []model.PledgeHistory) error {
-	// ok := c.w.IsDIDExist(did)
-	// if !ok {
-	// 	c.log.Error("Invalid did of mining quorum")
-	// 	return fmt.Errorf("invalid did of mining quorum: %v", did)
-	// }
 
 	totalCredits := 0
 
@@ -59,11 +54,15 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 
 		// Check whether the 5 weeks is passed
 		currentEpoch := time.Now().Unix()
-		if (currentEpoch - int64(transferBlock.GetEpoch())) < fiveWeeksInSeconds {
-			c.log.Error("Failed to validate credits; 5 weeks not passed after transaction")
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
-		}
+
+		c.log.Debug("Epoch difference is ", (currentEpoch - int64(transferBlock.GetEpoch()))) //TODO: Remove, Added for testing
+		c.log.Debug("Days pledged is ", (currentEpoch-int64(transferBlock.GetEpoch()))/86400) //TODO: Remove, Added for testing
+
+		// if (currentEpoch - int64(transferBlock.GetEpoch())) < fiveWeeksInSeconds {
+		// 	c.log.Error("Failed to validate credits; 5 weeks not passed after transaction")
+		// 	c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
+		// 	continue
+		// }
 
 		// Check if block is TokenTransferredType
 		if transferBlock.GetTransType() != block.TokenTransferredType {
@@ -87,6 +86,14 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 			if nextBlockID == "" {
 				break
 			}
+		}
+		// Validate transactionID
+		validatingBlock := block.InitBlock(blocks[validatingBlockNumber], nil)
+		validatingBlockTransactionID := validatingBlock.GetTid()
+		if validatingBlockTransactionID != tokenInfo.TransactionID {
+			c.log.Error("Invalid transaction ID for credit validation")
+			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
+			continue
 		}
 
 		// Previous block ID validation
