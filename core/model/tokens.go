@@ -84,3 +84,20 @@ type FaucetRBTGenerateRequest struct {
 	TokenCount int    `json:"token_count"`
 	DID        string `json:"did"`
 }
+
+type TokenProviderMap struct {
+	Token         string  `gorm:"column:token;primaryKey"`
+	DID           string  `gorm:"column:did"`
+	FuncID        int     `gorm:"column:func_id"`
+	Role          int     `gorm:"column:role"`
+	TransactionID string  `gorm:"column:transaction_id"`
+	Sender        string  `gorm:"column:sender"`
+	Receiver      string  `gorm:"column:receiver"`
+	TokenValue    float64 `gorm:"column:token_value"`
+}
+
+type PinCheckReply struct {
+	Status     bool              `json:"status"`
+	Message    string            `json:"message"`
+	PinDetails *TokenProviderMap `json:"pin_details"`
+}

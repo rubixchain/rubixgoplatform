@@ -405,6 +405,7 @@ func (c *Core) getUnpledgeId(wt string, tokenType int) string {
  * Input tokenId, index, resultArray, waitgroup,quorumList
  */
 func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []TokenStateCheckResult, wg *sync.WaitGroup, quorumList []string, tokenType int) {
+	fmt.Println("The check tokenstate function is called: This call happens inside the function checkTokenState")
 	defer wg.Done()
 	var result TokenStateCheckResult
 	result.Token = tokenId
@@ -419,6 +420,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		return
 	}
 	blockId, err := block.GetBlockID(tokenId)
+	fmt.Println("The blockId inside the checktokenstate function is : ", blockId)
 	if err != nil {
 		c.log.Error("Error fetching block Id", err)
 		result.Error = err
@@ -461,6 +463,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 
 	//check dht to see if any pin exist
 	list, err1 := c.GetDHTddrs(tokenIDTokenStateHash)
+	fmt.Println("The list variable inside the checktokenstate function is : ", list)
 	//try to call ipfs cat to check if any one has pinned the state i.e \
 	if err1 != nil {
 		c.log.Error("Error fetching content for the tokenstate ipfs hash :", tokenIDTokenStateHash, "Error", err)

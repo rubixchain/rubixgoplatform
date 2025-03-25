@@ -267,8 +267,9 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			resp.Message = "failed to get latest block, invalid token chain"
 			return resp
 		}
-
+		fmt.Println("The latest token block info is fetched while initiating the transfer from the sender.")
 		bid, err := blk.GetBlockID(tokensForTxn[i].TokenID)
+		fmt.Println("The latest block id in the sender side is ", bid)
 		if err != nil {
 			c.log.Error("failed to get block id", "err", err)
 			resp.Message = "failed to get block id, " + err.Error()

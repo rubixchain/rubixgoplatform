@@ -190,6 +190,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIRecoverPinnedRBT, "POST", c.recoverPinnedToken)
 	c.l.AddRoute(APIRequestSigningHash, "GET", c.requestSigningHash)
 	c.l.AddRoute(APISendFTToken, "POST", c.updateReceiverFTHandle)
+	c.l.AddRoute(APICheckPinRole, "GET", c.checkPinRole)
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
@@ -1893,7 +1894,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
-
+	fmt.Println("The response from APIQuorumconsensus is ", cresp)
 	if strings.Contains(cresp.Message, "parent token is not in burnt stage") {
 		ptPrefix := "pt: "
 		issueTypePrefix := "issueType: "

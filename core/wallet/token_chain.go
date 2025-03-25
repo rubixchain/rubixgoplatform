@@ -1,7 +1,10 @@
 package wallet
 
 import (
+	"bufio"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -10,6 +13,7 @@ import (
 	ut "github.com/rubixchain/rubixgoplatform/util"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	// ipfsport"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 )
 
 const (
@@ -240,6 +244,78 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 	if blockID != "" {
 		if !iter.Seek([]byte(tcsKey(tt, token, blockID))) {
 			fmt.Println("BlockId in side the getAllBlocks function", blockID)
+			// list, err := w.GetDHTddrs(token)
+			// if err != nil {
+			// 	w.log.Error("Failed to get DHT addresses", "err", err)
+			// 	return nil, "", err
+			// }
+			// for range list {
+			// 	peerConn := ipfsport.
+			// 	details, err := w.GetProviderDetails(token)
+			// 	if err != nil {
+			// 		w.log.Error("Failed to get provider details", "err", err)
+			// 		return nil, "", err
+			// 	}
+
+			// 	switch details.Role {
+			// 	case OwnerRole:
+			// 		fmt.Println("Role is Owner")
+			// 		// Add specific logic for OwnerRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt")
+
+			// 	case QuorumRole:
+			// 		fmt.Println("Role is QuorumRole")
+			// 		// Add specific logic for QuorumRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is QuorumRole")
+
+			// 	case PrevSenderRole:
+			// 		fmt.Println("Role is PrevSenderRole")
+			// 		// Add specific logic for PrevSenderRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is PrevSenderRole")
+
+			// 	case ReceiverRole:
+			// 		fmt.Println("Role is ReceiverRole")
+			// 		// Add specific logic for ReceiverRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is ReceiverRole")
+			// 	case ParentTokenLockRole:
+			// 		fmt.Println("Role is ParentTokenLockRole")
+			// 		// Add specific logic for ParentTokenLockRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is ParentTokenLockRole")
+			// 	case DIDRole:
+			// 		fmt.Println("Role is DIDRole")
+			// 		// Add specific logic for DIDRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is DIDRole")
+			// 	case StakingRole:
+			// 		fmt.Println("Role is StakingRole")
+			// 		// Add specific logic for StakingRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is StakingRole")
+			// 	case PledgingRole:
+			// 		fmt.Println("Role is PledgingRole")
+			// 		// Add specific logic for PledgingRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is PledgingRole")
+			// 	case QuorumPinRole:
+			// 		fmt.Println("Role is QuorumPinRole")
+			// 		// Add specific logic for QuorumPinRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is QuorumPinRole")
+			// 	case QuorumUnpinRole:
+			// 		fmt.Println("Role is QuorumUnpinRole")
+			// 		// Add specific logic for QuorumUnpinRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is QuorumUnpinRole")
+			// 	case ParentTokenPinByQuorumRole:
+			// 		fmt.Println("Role is ParentTokenPinByQuorumRole")
+			// 		// Add specific logic for ParentTokenPinByQuorumRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole")
+			// 	case PinningRole:
+			// 		fmt.Println("Role is PinningRole")
+			// 		// Add specific logic for PinningRole
+			// 		return nil, "", fmt.Errorf("Token chain block does not exist, the pinned role is PinningRole")
+
+			// 	// Add more cases here...
+
+			// 	default:
+			// 		w.log.Warn("Unhandled role", "role", details.Role)
+			// 	}
+			// }
 			return nil, "", fmt.Errorf("Token chain block does not exist")
 		}
 	}
@@ -276,6 +352,38 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 		}
 	}
 	return blks, nextBlkID, nil
+}
+
+func (w *Wallet) GetDHTddrs(cid string) ([]string, error) {
+	var ipfsApp string
+	ipfsApp = "./ipfs"
+	if runtime.GOOS == "windows" {
+		ipfsApp = "./ipfs.exe"
+	}
+	fmt.Println("ipfsApp :", ipfsApp)
+	cmd := exec.Command(ipfsApp, "dht", "findprovs", cid)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		w.log.Error("failed to open command stdout", "err", err)
+		return nil, err
+	}
+	err = cmd.Start()
+	if err != nil {
+		w.log.Error("failed to start command", "err", err)
+		return nil, err
+	}
+	ids := make([]string, 0)
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		m := scanner.Text()
+		if strings.Contains(m, "Error") {
+			return nil, fmt.Errorf(m)
+		}
+		if !strings.HasPrefix(m, "Qm") {
+			ids = append(ids, m)
+		}
+	}
+	return ids, nil
 }
 
 func (w *Wallet) updateNewKey(tt int, token string) error {
