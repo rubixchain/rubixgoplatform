@@ -20,7 +20,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
@@ -108,7 +107,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	newFTs := make([]wallet.FTToken, numFTs)
 	newFTTokenIDs := make([]string, numFTs)
 
-	numWorkers := runtime.NumCPU() * 4
+	numWorkers := runtime.NumCPU() * 2
 
 	ftJobs := make(chan int, numFTs) // Channel to distribute tasks
 
@@ -122,42 +121,16 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	//Worker Function
 	worker := func(workerID int) {
 		defer wg.Done()
-		for i := range ftJobs {
+		for range ftJobs {
 			if ctx.Err() != nil {
 				return
 			}
 			ftNum := int(atomic.AddUint64(&tokenCounter, 1)) - 1
 			fmt.Println("FT count : ", ftNum)
-			// racType := racTypePool.Get().(*rac.RacType)
-			// defer racTypePool.Put(racType)
 
-			// racType.Type = c.RACFTType()
-			// racType.DID = did
-			// racType.TokenNumber = uint64(i)
-			// racType.TotalSupply = 1
-			// racType.TimeStamp = time.Now().Format(time.RFC3339)
-			// racType.FTInfo = &rac.RacFTInfo{
-			// 	Parents: parentTokenIDs,
-			// 	FTNum:   i,
-			// 	FTName:  FTName,
-			// 	FTValue: fractionalValue,
-			// }
 			fmt.Println("Worker", workerID, "processing FT", ftNum)
-			racType := &rac.RacType{
-				Type:        c.RACFTType(),
-				DID:         did,
-				TokenNumber: uint64(i),
-				TotalSupply: 1,
-				TimeStamp:   time.Now().String(), //Do we need timestamp? If we create with worker pool? time.Now().Format(time.RFC3339)??
-				FTInfo: &rac.RacFTInfo{
-					Parents: parentTokenIDs,
-					FTNum:   ftNum,
-					FTName:  FTName,
-					FTValue: fractionalValue,
-				},
-			}
 
-			if err := processFT(c, dc, racType, ftNum, newFTs, newFTTokenIDs, did, FTName, fractionalValue, parentTokenIDs); err != nil {
+			if err := processFT(c, dc, ftNum, newFTs, newFTTokenIDs, did, FTName, fractionalValue, parentTokenIDs); err != nil {
 				c.log.Error("FT processing failed", "err", err)
 				once.Do(func() { cancel() })
 				errChan <- err
@@ -260,20 +233,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	return nil
 }
 
-func processFT(c *Core, dc did.DIDCrypto, racType *rac.RacType, ftNum int, newFTs []wallet.FTToken, newFTTokenIDs []string, did, FTName string, fractionalValue float64, parentTokenIDs string) error {
-	racBlocks, err := rac.CreateRac(racType)
-	if err != nil || len(racBlocks) != 1 {
-		c.log.Error("Failed to create RAC block", "err", err)
-		return fmt.Errorf("failed to create RAC block: %v", err)
-	}
-
-	// **Update Signature**
-	if err := racBlocks[0].UpdateSignature(dc); err != nil {
-		c.log.Error("Failed to update RAC signature", "err", err)
-		return fmt.Errorf("failed to update RAC signature: %v", err)
-	}
-
-	ftID, err := c.w.Add(bytes.NewBufferString(FTName+" "+strconv.Itoa(ftNum)+" "+did), did, wallet.AddFunc)
+func processFT(c *Core, dc did.DIDCrypto, ftNum int, newFTs []wallet.FTToken, newFTTokenIDs []string, did, FTName string, fractionalValue float64, parentTokenIDs string) error {
+	ftID, err := c.w.Add(bytes.NewBufferString(FTName+" "+strconv.Itoa(ftNum)+" "+did), did, wallet.OwnerRole)
 	if err != nil {
 		c.log.Error("Failed to create FT, Failed to add token to IPFS", "err", err)
 		return fmt.Errorf("failed to add token to IPFS: %v", err)
@@ -397,80 +358,78 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		return resp
 	}
 
-	rpeerid, rdid, ok := util.ParseAddress(req.Receiver)
+	_, rdid, ok := util.ParseAddress(req.Receiver)
 	if !ok {
 		c.log.Error("Failed to parse receiver DID")
 		resp.Message = "Invalid receiver DID"
 		return resp
 	}
+
 	if req.FTCount <= 0 {
 		c.log.Error("Input transaction amount is less than minimum FT transaction amount")
 		resp.Message = "Invalid FT count"
 		return resp
 	}
+
 	if req.FTName == "" {
 		c.log.Error("FT name cannot be empty")
 		resp.Message = "FT name is required"
 		return resp
 	}
+
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		c.log.Error("Failed to setup DID")
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
+
 	var creatorDID string
+	var AllFTs []wallet.FTToken
 	if req.CreatorDID == "" {
 		// Checking for same FTs with different creators
-		info, err := c.GetFTInfo(did)
-		if err != nil || info == nil {
+		AllFTs, err = c.w.GetFreeFTsByNameAndDID(req.FTName, did)
+
+		if err != nil || AllFTs == nil {
 			c.log.Error("Failed to get FT info for transfer", "err", err)
 			resp.Message = "Failed to get FT info for transfer"
 			return resp
 		}
-		ftNameToCreators := make(map[string][]string)
-		for _, ft := range info {
-			ftNameToCreators[ft.FTName] = append(ftNameToCreators[ft.FTName], ft.CreatorDID)
-		}
-		for ftName, creators := range ftNameToCreators {
-			if len(creators) > 1 {
-				c.log.Error(fmt.Sprintf("There are same FTs '%s' with different creators.", ftName))
-				for i, creator := range creators {
-					c.log.Error(fmt.Sprintf("Creator DID %d: %s", i+1, creator))
-				}
-				c.log.Info("Use -creatorDID flag to specify the creator DID and can proceed for transfer")
-				resp.Message = "There are same FTs with different creators, use -creatorDID flag to specify creatorDID"
+		var firstCreator string
+
+		for _, ft := range AllFTs {
+			if firstCreator == "" {
+				firstCreator = ft.CreatorDID
+			} else if firstCreator != ft.CreatorDID {
+				c.log.Error(fmt.Sprintf("Multiple creators found: There are same FTs with name %s created by different creators, use -creatorDID flag to specify creatorDID", req.FTName))
+				resp.Message = "There are same FTs with name" + req.FTName + " created by different creators, use -creatorDID flag to specify creatorDID"
 				return resp
 			}
 		}
-		creatorDID = info[0].CreatorDID
-	}
-	var AllFTs []wallet.FTToken
-	if req.CreatorDID != "" {
+		creatorDID = firstCreator
+	} else {
+		c.log.Info("getting FT Tokens")
 		AllFTs, err = c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, req.CreatorDID)
-		creatorDID = req.CreatorDID
-	} else {
-		AllFTs, err = c.w.GetFreeFTsByNameAndDID(req.FTName, did)
-	}
-	AvailableFTCount := len(AllFTs)
-	if err != nil {
-		c.log.Error("Failed to get FTs", "err", err)
-		resp.Message = "Insufficient FTs or FTs are locked or " + err.Error()
-		return resp
-	} else {
-		if req.FTCount > AvailableFTCount {
-			c.log.Error(fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount))
-			resp.Message = fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount)
+		if err != nil {
+			c.log.Error("Failed to get FTs", "err", err)
+			resp.Message = "Insufficient FTs or FTs are locked or " + err.Error()
 			return resp
 		}
+		creatorDID = req.CreatorDID
 	}
-	FTsForTxn := AllFTs[:req.FTCount]
+	AvailableFTCount := len(AllFTs)
+
+	if req.FTCount > AvailableFTCount {
+		errMsg := fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount)
+		c.log.Error(errMsg)
+		resp.Message = errMsg
+		return resp
+	}
 	//TODO: Pinning of tokens
 
-	rpeerid = c.w.GetPeerID(req.Receiver)
+	rpeerid := c.w.GetPeerID(req.Receiver)
 	if rpeerid == "" {
-		// Check if DID is present in the DIDTable as the
-		// receiver might be part of the current node
+		// Check if DID is present in the DIDTable as the receiver might be part of the current node
 		_, err := c.w.GetDID(req.Receiver)
 		if err != nil {
 			if strings.Contains(err.Error(), "no records found") {
@@ -478,14 +437,14 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				resp.Message = "invalid address, Peer ID not found"
 				return resp
 			} else {
-				c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", req.Receiver, err))
-				resp.Message = fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", req.Receiver, err)
+				errMsg := fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", req.Receiver, err)
+				c.log.Error(errMsg)
+				resp.Message = errMsg
 				return resp
 			}
-		} else {
-			// Set the receiverPeerID to self Peer ID
-			rpeerid = c.peerID
 		}
+		// Set the receiverPeerID to self Peer ID
+		rpeerid = c.peerID
 	} else {
 		receiverPeerID, err := c.getPeer(req.Receiver, "")
 		if err != nil {
@@ -495,33 +454,35 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		defer receiverPeerID.Close()
 	}
 
-	FTTokenIDs := make([]string, 0)
+	FTsForTxn := AllFTs[:req.FTCount]
+	FTTokenIDs := make([]string, req.FTCount)
+	TokenInfo := make([]contract.TokenInfo, req.FTCount)
+
+	tt := c.TokenType(FTString)
+
 	for i := range FTsForTxn {
-		FTTokenIDs = append(FTTokenIDs, FTsForTxn[i].TokenID)
-	}
-	TokenInfo := make([]contract.TokenInfo, 0)
-	for i := range FTsForTxn {
-		tt := c.TokenType(FTString)
-		blk := c.w.GetLatestTokenBlock(FTsForTxn[i].TokenID, tt)
+		tokenID := FTsForTxn[i].TokenID
+		blk := c.w.GetLatestTokenBlock(tokenID, tt)
 		if blk == nil {
-			c.log.Error("failed to get latest block, invalid token chain")
-			resp.Message = "failed to get latest block, invalid token chain"
+			errMsg := fmt.Sprintf("failed to get latest block for token %v, invalid token chain", tokenID)
+			c.log.Error(errMsg)
+			resp.Message = errMsg
 			return resp
 		}
-		bid, err := blk.GetBlockID(FTsForTxn[i].TokenID)
+		bid, err := blk.GetBlockID(tokenID)
 		if err != nil {
 			c.log.Error("failed to get block id", "err", err)
 			resp.Message = "failed to get block id, " + err.Error()
 			return resp
 		}
-		ti := contract.TokenInfo{
-			Token:      FTsForTxn[i].TokenID,
+		TokenInfo[i] = contract.TokenInfo{
+			Token:      tokenID,
 			TokenType:  tt,
 			TokenValue: FTsForTxn[i].TokenValue,
 			OwnerDID:   did,
 			BlockID:    bid,
 		}
-		TokenInfo = append(TokenInfo, ti)
+		FTTokenIDs[i] = tokenID
 	}
 	sct := &contract.ContractType{
 		Type:       contract.SCFTType,
@@ -560,27 +521,12 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		resp.Message = "Consensus failed " + err.Error()
 		return resp
 	}
-	et := time.Now()
-	dif := et.Sub(st)
+
+	dif := time.Since(st).Milliseconds()
 	td.Amount = float64(req.FTCount)
-	td.TotalTime = float64(dif.Milliseconds())
+	td.TotalTime = float64(dif)
 	c.w.AddTransactionHistory(td)
 
-	//TODO :  Extra details regarding the FT need to added in the explorer
-	// etrans := &ExplorerTrans{
-	// 	TID:         td.TransactionID,
-	// 	SenderDID:   did,
-	// 	ReceiverDID: rdid,
-	// 	Amount:      float64(req.FTCount),
-	// 	TrasnType:   req.QuorumType,
-	// 	TokenIDs:    FTTokenIDs,
-	// 	QuorumList:  cr.QuorumList,
-	// 	TokenTime:   float64(dif.Milliseconds()),
-	// }
-	// explorerErr := c.ec.ExplorerTransaction(etrans)
-	// if explorerErr != nil {
-	// 	c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
-	// }
 	AllTokens := make([]AllToken, len(FTsForTxn))
 	for i := range FTsForTxn {
 		tokenDetail := AllToken{}

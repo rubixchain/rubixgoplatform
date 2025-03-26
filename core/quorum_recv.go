@@ -972,12 +972,12 @@ func (c *Core) updateReceiverToken(
 				}
 				err = c.syncParentToken(senderPeer, pt)
 				if err != nil {
-					return nil, fmt.Errorf("failed to sync parent token %v childtoken %v err : ", pt, t, err)
+					return nil, fmt.Errorf("failed to sync parent token %v childtoken %v err %v: ", pt, t, err)
 				}
 			}
 			ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to fetch previous block for token: % err : %v", t, err)
+				return nil, fmt.Errorf("failed to fetch previous block for token: %v err : %v", t, err)
 			}
 			ptcb := block.InitBlock(ptcbArray, nil)
 			if c.checkIsPledged(ptcb) {

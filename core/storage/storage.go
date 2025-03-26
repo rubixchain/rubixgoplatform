@@ -5,14 +5,14 @@ const (
 )
 
 type Storage interface {
-	Init(storageName string, vaule interface{}, force bool) error
-	Write(storageName string, vaule interface{}) error
-	Update(stroageName string, vaule interface{}, querryString string, querryVaule ...interface{}) error
-	Delete(storageName string, vaule interface{}, querryString string, querryVaule ...interface{}) error
-	Read(storageName string, vaule interface{}, querryString string, querryVaule ...interface{}) error
-	WriteBatch(storageName string, vaule interface{}, batchSize int) error
-	ReadWithOffset(storageName string, offset int, limit int, vaule interface{}, querryString string, querryVaule ...interface{}) error
-	GetDataCount(stroageName string, querryString string, querryVaule ...interface{}) int64
+	Init(storageName string, value interface{}, force bool) error
+	Write(storageName string, value interface{}) error
+	Update(stroageName string, value interface{}, querryString string, querryValue ...interface{}) error
+	Delete(storageName string, value interface{}, querryString string, querryValue ...interface{}) error
+	Read(storageName string, value interface{}, querryString string, querryValue ...interface{}) error
+	WriteBatch(storageName string, value interface{}, batchSize int) error
+	ReadWithOffset(storageName string, offset int, limit int, value interface{}, querryString string, querryValue ...interface{}) error
+	GetDataCount(stroageName string, querryString string, querryValue ...interface{}) int64
 	Drop(storageName string, value interface{}) error
 	Close() error
 }
