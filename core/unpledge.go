@@ -148,7 +148,7 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 
 	if b.GetTransType() != block.TokenPledgedType {
 		c.log.Error(fmt.Sprintf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken))
-		err := c.w.UnpledgeWholeToken(quorumDID, pledgeToken, pledgeTokenType)
+		err := c.w.UpdateUnpledgedTokenStatus(quorumDID, pledgeToken, pledgeTokenType)
 		if err != nil {
 			c.log.Error("Failed to update un pledge token", "err", err)
 			return "", "", err
