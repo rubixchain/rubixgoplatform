@@ -34,7 +34,7 @@ func (c *Core) ForceUnpledgePOWBasedPledgedTokens() error {
 			return fmt.Errorf("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
 		}
 
-		_, _, err = unpledgeToken(c, pledgeToken, pledgeTokenType, pledgeTokenOwner)
+		_, _, err = unpledgeToken(c, pledgeToken, pledgeTokenType, pledgeTokenOwner, "")
 		if err != nil {
 			c.log.Error("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
 			return fmt.Errorf("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
@@ -139,7 +139,7 @@ func (c *Core) InititateUnpledgeProcess() (string, error) {
 	}
 }
 
-func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID string) (pledgeID string, unpledgeId string, err error) {
+func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID string, transactionId string) (pledgeID string, unpledgeId string, err error) {
 	b := c.w.GetLatestTokenBlock(pledgeToken, pledgeTokenType)
 	if b == nil {
 		c.log.Error("Failed to unpledge invalid tokne chain block for token ", pledgeToken, " having token type as ", pledgeTokenType)
@@ -148,6 +148,18 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 
 	if b.GetTransType() != block.TokenPledgedType {
 		c.log.Error(fmt.Sprintf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken))
+		err := c.w.UnpledgeWholeToken(quorumDID, pledgeToken, pledgeTokenType)
+		if err != nil {
+			c.log.Error("Failed to update un pledge token", "err", err)
+			return "", "", err
+		}
+		if transactionId != "" {
+			err := c.w.RemoveUnpledgeSequenceInfo(transactionId)
+			if err != nil {
+				c.log.Error("Failed to remove unpledge sequence info", "err", err)
+				return "", "", err
+			}
+		}
 		return "", "", fmt.Errorf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken)
 	}
 
@@ -269,7 +281,7 @@ func unpledgeAllTokens(c *Core, transactionID string, pledgeTokens string, quoru
 			return nil, fmt.Errorf("failed while unpledging token %v, err: %v", pledgeToken, err)
 		}
 
-		pledgeTokenBlockID, unpledgeTokenBlockID, err := unpledgeToken(c, pledgeToken, pledgeTokenType, quorumDID)
+		pledgeTokenBlockID, unpledgeTokenBlockID, err := unpledgeToken(c, pledgeToken, pledgeTokenType, quorumDID, transactionID)
 		if err != nil {
 			return nil, err
 		}
