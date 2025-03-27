@@ -160,7 +160,7 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 				return "", "", err
 			}
 		}
-		return "", "", fmt.Errorf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken)
+		// return "", "", fmt.Errorf("failed while unpledging token %v, token must be in pledged state before unpledging", pledgeToken)
 	}
 
 	pledgeID, err = b.GetBlockID(pledgeToken)
