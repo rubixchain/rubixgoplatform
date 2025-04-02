@@ -370,52 +370,44 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		resp.Message = "Invalid FT count"
 		return resp
 	}
-
 	if req.FTName == "" {
 		c.log.Error("FT name cannot be empty")
 		resp.Message = "FT name is required"
 		return resp
 	}
-
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		c.log.Error("Failed to setup DID")
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
-
 	var creatorDID string
-	var AllFTs []wallet.FTToken
 	if req.CreatorDID == "" {
-		// Checking for same FTs with different creators
-		AllFTs, err = c.w.GetFreeFTsByNameAndDID(req.FTName, did)
-
-		if err != nil || AllFTs == nil {
+		// Checking for same FTs with different creators, can be checked in the FTTable
+		var FT []wallet.FT
+		err = c.s.Read(wallet.FTStorage, &FT, "ft_name=?", req.FTName)
+		if err != nil || FT == nil {
 			c.log.Error("Failed to get FT info for transfer", "err", err)
 			resp.Message = "Failed to get FT info for transfer"
 			return resp
 		}
-		var firstCreator string
 
-		for _, ft := range AllFTs {
-			if firstCreator == "" {
-				firstCreator = ft.CreatorDID
-			} else if firstCreator != ft.CreatorDID {
-				c.log.Error(fmt.Sprintf("Multiple creators found: There are same FTs with name %s created by different creators, use -creatorDID flag to specify creatorDID", req.FTName))
-				resp.Message = "There are same FTs with name" + req.FTName + " created by different creators, use -creatorDID flag to specify creatorDID"
-				return resp
-			}
-		}
-		creatorDID = firstCreator
-	} else {
-		c.log.Info("getting FT Tokens")
-		AllFTs, err = c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, req.CreatorDID)
-		if err != nil {
-			c.log.Error("Failed to get FTs", "err", err)
-			resp.Message = "Insufficient FTs or FTs are locked or " + err.Error()
+		if len(FT) > 1 {
+			c.log.Error(fmt.Sprintf("Multiple creators found: There are same FTs with name %s created by different creators, use -creatorDID flag to specify creatorDID", req.FTName))
+			resp.Message = "There are same FTs with name" + req.FTName + " created by different creators, use -creatorDID flag to specify creatorDID"
 			return resp
 		}
+
+		creatorDID = FT[0].CreatorDID
+	} else {
 		creatorDID = req.CreatorDID
+	}
+	c.log.Info("getting FT Tokens")
+	AllFTs, err := c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, creatorDID)
+	if err != nil {
+		c.log.Error("Failed to get FTs", "err", err)
+		resp.Message = "Insufficient FTs or FTs are locked or " + err.Error()
+		return resp
 	}
 	AvailableFTCount := len(AllFTs)
 
