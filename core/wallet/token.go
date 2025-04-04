@@ -30,6 +30,7 @@ const (
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
 	TokenIsBurntForFT
+	TokenIsMined
 )
 const (
 	Zero int = iota
@@ -649,6 +650,13 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		}
 	}
 	return updatedtokenhashes, nil
+}
+func (w *Wallet) TokenStore(token Token)error{
+	err := w.s.Write(TokenStorage, &token)
+			if err != nil {
+				return  err
+			}
+			return nil
 }
 
 // need to update in such a way that only for FTs

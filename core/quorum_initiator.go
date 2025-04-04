@@ -16,7 +16,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -61,6 +60,7 @@ type ConensusRequest struct {
 	NFT                string              `json:"nft"`
 	FTinfo             model.FTInfo        `json:"ft_info"`
 	MiningInfo         model.MiningRequest `json:"mining_info"`
+	MiningTokenID      string              `json:"mining_token_ID"`
 }
 
 type ConensusReply struct {
@@ -1684,6 +1684,42 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		return &txnDetails, pl, pds, nil
+	case MiningMode:
+		//Miner pins the newly created token
+		role := wallet.MinerRole
+		_, err := c.w.Pin(cr.MiningTokenID, role, cr.MiningInfo.MinerDid, cr.TransactionID, "", "", 1)
+		if err != nil {
+			c.log.Error("Failed to pin the newly mined token", "err", err)
+			return nil, nil, nil, err
+		}
+		//Miner computes the new token state hash
+		blockID, err := nb.GetBlockID(cr.MiningTokenID)
+		tokenIDTokenStateData := cr.MiningTokenID + blockID
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
+		tokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		//TODO: send this token state hash to mining quorums
+		fmt.Println("tokenstateHash of a newly mined token is:", tokenIDTokenStateHash)
+		if err != nil {
+			c.log.Error("Miner not able to compute new token state hash", "err", err)
+			return nil, nil, nil, err
+
+		}
+		// Create new token entry
+		t := wallet.Token{
+			TokenID:        cr.MiningTokenID,
+			TokenValue:     1,
+			DID:            cr.MiningInfo.MinerDid,
+			TokenStatus:    wallet.TokenIsMined,
+			TokenStateHash: tokenIDTokenStateHash,
+			TransactionID:  tid,
+		}
+
+		err = c.w.TokenStore(t)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		return nil, nil, nil, err
 	default:
 		err := fmt.Errorf("invalid consensus request mode: %v", cr.Mode)
 		c.log.Error(err.Error())
@@ -1760,7 +1796,7 @@ func (c *Core) initiateUnpledgingProcess(cr *ConensusRequest, transactionHash st
 // adding the new tokenstate hash details for transferred tokens to quorum,
 // pinning token.weekEpoch
 func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, newTokenStateHashes []string, transactionId string, weekCount int) error {
-	c.log.Debug("Proceeding for pledge finality")
+	
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
 	cs, ok2 := c.quorumRequest[cr.ReqID]
@@ -1896,7 +1932,6 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 }
 
 func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contract.Contract) {
-	c.log.Debug("connectQuorum function is called")
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
 	var err error
@@ -1906,7 +1941,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)
 		return
 	}
-	c.log.Debug("Below initPledgeQuorumToken function is getting called in connect Quorum function")
+
 	err = c.initPledgeQuorumToken(cr, p, qt)
 	if err != nil {
 		if strings.Contains(err.Error(), "don't have enough balance to pledge") {
@@ -2102,50 +2137,19 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		ctcb[ti[0].Token] = b
 	} else if sc.GetMinerDID() != "" {
 
-		// Generate new token for mining
-		// totalTokens,_,_:= TotalTokensCanBeMinedFromCredits(cr.MiningInfo.TokenCredits)
-
-		racType := &rac.RacType{
-			Type:        c.RACMiningTokenType(),
-			DID:         sc.GetMinerDID(),
-			TokenNumber: tokenNumber, //TODO: Fetch next mining token number from mining chain
-			TokenLevel:  tokenLevel,  //TODO: Fetch next mining token level from mining chain
-			TimeStamp:   time.Now().String(),
-			MiningInfo:  &c.pledgeHistory,
-			TotalSupply: 1,
-		}
-		racBlocks, err := rac.CreateRac(racType)
-		if err != nil {
-			c.log.Error("Failed to create RAC block for mining", "err", err)
-			return nil, fmt.Errorf("failed to create RAC block for mining")
-		}
-		fmt.Println("RAC Blocks", racBlocks)
-		// Process the newly created RAC block
-		if len(racBlocks) == 0 {
-			c.log.Error("No RAC blocks generated")
-			return nil, fmt.Errorf("no RAC blocks generated")
-		}
-		if len(racBlocks) != 1 {
-			return nil, fmt.Errorf("failed to create  only one RAC block")
-		}
-		racBlock := racBlocks[0]
-		// Update signature with miner's DID crypto
-		if err := racBlock.UpdateSignature(dc); err != nil {
-			c.log.Error("Failed to update RAC signature", "err", err)
-			return nil, fmt.Errorf("failed to update RAC signature")
-		}
-		miningTokenNumberString := strconv.FormatUint(racType.TokenNumber, 10)
-		MiningTokenLevelString := strconv.FormatUint(racType.TokenLevel, 10)
+		miningTokenNumberString := strconv.FormatUint(tokenNumber, 10)
+		MiningTokenLevelString := strconv.FormatUint(tokenLevel, 10)
 		parts := []string{MiningTokenLevelString, miningTokenNumberString}
 		result := strings.Join(parts, " ")
 		byteArray := []byte(result)
 		NewTokenBuffer := bytes.NewBuffer(byteArray)
-		newTokenID, err := c.w.Add(NewTokenBuffer, racType.DID, wallet.MinerRole)
+		newTokenID, err := c.w.Add(NewTokenBuffer, sc.GetMinerDID(), wallet.MinerRole)
 		if err != nil {
 			c.log.Error("Failed to create a new tokenID, Failed to add token to IPFS", "err", err)
 			return nil, err
 		}
 		c.log.Info("New mining RBT ID got created: " + newTokenID)
+		cr.MiningTokenID = newTokenID
 		ctcb[newTokenID] = nil
 
 	} else {
@@ -2347,6 +2351,17 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			Hash:        signData,
 			SignType:    minerSignType,
 		}
+		fmt.Println("token credit details", sc.GetTokenCreditsDetails())
+		miningGensisBlock := &block.GenesisBlock{
+			Type: block.TokenMinedType,
+			Info: []block.GenesisTokenInfo{
+				{Token: cr.MiningTokenID,
+					TokenLevel:    tokenLevel,
+					TokenNumber:   tokenNumber,
+					CreditDetails: sc.GetTokenCreditsDetails()},
+			},
+		}
+
 		tcb = block.TokenChainBlock{
 			TransactionType:    block.TokenMintedType,
 			TokenOwner:         sc.GetMinerDID(),
@@ -2355,6 +2370,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgeDetails:      ptds,
 			InitiatorSignature: minerSign,
 			Epoch:              cr.TransactionEpoch,
+			GenesisBlock:       miningGensisBlock,
 		}
 
 	} else {
@@ -2376,6 +2392,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 
 		bti.SenderDID = sc.GetSenderDID()
 		bti.ReceiverDID = sc.GetReceiverDID()
+
 		tcb = block.TokenChainBlock{
 			TransactionType:    block.TokenTransferredType,
 			TokenOwner:         sc.GetReceiverDID(),
