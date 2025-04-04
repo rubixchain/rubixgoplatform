@@ -831,18 +831,18 @@ func GetWeeksPassed() int {
 		return 0 // If the current time is before the start date, return 0 intervals
 	}
 
-	// Calculate full weeks passed since ReferenceDate
-	weeksPassed := int(duration.Hours() / (24 * 7))
+	// // Calculate full weeks passed since ReferenceDate
+	// weeksPassed := int(duration.Hours() / (24 * 7))
 
-	// Add +1 to ensure the first week starts as week 1
-	return weeksPassed + 1
+	// // Add +1 to ensure the first week starts as week 1
+	// return weeksPassed + 1
 
-	// // Calculate total minutes passed since ReferenceDate
-	// totalMinutesPassed := int(duration.Minutes())
+	// Calculate total minutes passed since ReferenceDate
+	totalMinutesPassed := int(duration.Minutes())
 
-	// // Divide by 10 to get the number of 10-minute intervals
-	// intervalsPassed := totalMinutesPassed / 10
+	// Divide by 10 to get the number of 10-minute intervals
+	intervalsPassed := totalMinutesPassed / 10
 
-	// // Return the count of 10-minute intervals
-	// return intervalsPassed
+	// Return the count of 10-minute intervals
+	return intervalsPassed
 }
