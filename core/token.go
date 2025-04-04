@@ -1105,51 +1105,67 @@ func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {
 func (c *Core) SyncAncestralTokens(p *ipfsport.Peer, parentToken string) ([]string, error) {
 	syncedTokens := make([]string, 0)
 
+	// Get parent token details from IPFS
 	b, err := c.getFromIPFS(parentToken)
 	if err != nil {
 		c.log.Error("failed to get parent token details from IPFS", "err", err, "token", parentToken)
+		// Return the error immediately if fetching from IPFS fails
 		return syncedTokens, err
 	}
 
 	_, isWholeToken, _ := token.CheckWholeToken(string(b), true)
 	tokenType := token.RBTTokenType
 
+	// Check if the token is not a whole token and handle it accordingly
 	if !isWholeToken {
 		blk := util.StrToHex(string(b))
 		rb, err := rac.InitRacBlock(blk, nil)
 		if err != nil {
 			c.log.Error("invalid token, invalid rac block", "err", err)
+			// Return the error immediately if the RAC block is invalid
 			return syncedTokens, err
+		} else {
+			tokenType = rac.RacType2TokenType(rb.GetRacType())
 		}
-		tokenType = rac.RacType2TokenType(rb.GetRacType())
 	}
 
+	// Attempt to sync the token chain. If it fails, log the error but don't return an error
 	if err := c.syncTokenChainFrom(p, "", parentToken, tokenType); err != nil {
 		c.log.Error("failed to sync token chain block", "err", err)
-		return syncedTokens, fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v",
-			parentToken, TokenChainNotSynced)
+		// Continue to add parent token even if sync fails
+		syncedTokens = append(syncedTokens, parentToken)
 	}
+
+	// Add parent token to the list of synced tokens
 	syncedTokens = append(syncedTokens, parentToken)
 
+	// If the token is a part (not the whole token), attempt to sync its grandparent
 	if tokenType == c.TokenType(PartString) {
+		// Get the genesis block for this token
 		genesisBlock := c.w.GetGenesisTokenBlock(parentToken, tokenType)
 		grandParentToken, _, err := genesisBlock.GetParentDetials(parentToken)
 		if err != nil {
 			c.log.Error("failed to get grand-parent details", "err", err)
+			// Return the error immediately if fetching grandparent details fails
+			return syncedTokens, err
 		}
 
 		if grandParentToken == "" {
 			c.log.Error("empty grandparent token")
+			// Return the error immediately if the grandparent token is empty
 			return syncedTokens, fmt.Errorf("empty grandparent token")
 		}
+
+		// Recursively sync the grandparent token
 		grandparentSynced, err := c.SyncAncestralTokens(p, grandParentToken)
 		if err != nil {
-			// Combine current synced tokens with those from recursive call
-			syncedTokens = append(syncedTokens, grandparentSynced...)
-			return syncedTokens, err
+			// Log the error but continue syncing
+			c.log.Error("failed to sync grandparent token", "err", err)
 		}
+		// Append the grandparent tokens to the synced tokens list
 		syncedTokens = append(syncedTokens, grandparentSynced...)
 	}
 
+	// Return the list of synced tokens
 	return syncedTokens, nil
 }

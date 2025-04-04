@@ -278,7 +278,10 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 			c.pqc[didStr] = dc
 		}
 	}
-
+	//Ticker will trigger in every 8 hours and check for any week updation
+	// c.epochPinningTicker = time.NewTicker(8 * time.Hour)
+	c.epochPinningTicker = time.NewTicker(5 * time.Minute)
+	go c.UpdateEpochPin()
 	return nil
 }
 
@@ -393,11 +396,9 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
 	cr.TransactionID = tid
-	fmt.Println("quorum manager is:", c.qm)
 	if cr.Mode == MiningMode {
 		cr.QuorumList = c.GetMiningQuorums()
 	}
-	fmt.Println("consenses request type", cr.Type)
 	ql := c.qm.GetQuorum(cr.Type, lastCharTID, c.peerID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
 	if ql == nil || len(ql) < MinQuorumRequired {
 		c.log.Error("Failed to get required quorums")
@@ -485,7 +486,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}
 
 	ti := sc.GetTransTokenInfo()
-	//TODO:REMOVE fmt.Println("nft get trans tokens : ", ti) //TODO
 	c.qlock.Lock()
 	pds := c.pd[cr.ReqID]
 	c.qlock.Unlock()
@@ -1805,8 +1805,6 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			TransactionEpoch:            cr.TransactionEpoch,
 			WeekCount:                   weekCount,
 		}
-
-		//TODO:REMOVE fmt.Println("Trans Tokens pledge finality : ", newBlock.GetTransTokens())
 
 		if newTokenStateHashes != nil {
 			// ur.TransferredTokenStateHashes = newTokenStateHashes[countofTokenStateHash : countofTokenStateHash+len(v)]

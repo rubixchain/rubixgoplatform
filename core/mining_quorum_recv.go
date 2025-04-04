@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/rac"
@@ -58,6 +60,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		c.log.Debug("Epoch difference is ", (currentEpoch - int64(transferBlock.GetEpoch()))) //TODO: Remove, Added for testing
 		c.log.Debug("Days pledged is ", (currentEpoch-int64(transferBlock.GetEpoch()))/86400) //TODO: Remove, Added for testing
 
+		// TODO: Revert below after testing
 		// if (currentEpoch - int64(transferBlock.GetEpoch())) < fiveWeeksInSeconds {
 		// 	c.log.Error("Failed to validate credits; 5 weeks not passed after transaction")
 		// 	c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
@@ -229,30 +232,128 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 }
 
 func (c *Core) pinTokenEpoch(tokenId string, weekCount int) {
-	fmt.Println("Week count : ", weekCount) //TODO:REMOVE
 	toPin := fmt.Sprintf("%s-%d", tokenId, weekCount)
 	reader := bytes.NewReader([]byte(toPin))
-	newCid, err := c.ipfs.Add(reader)
-	fmt.Println("CID when pinning is :", newCid) // TODO:REMOVE
+	newCID, err := c.ipfs.Add(reader)
+	fmt.Println("PIN Week count : ", weekCount)  //TODO:REMOVE
+	fmt.Println("CID when PINNING is :", newCID) // TODO:REMOVE
 	if err != nil {
-		c.log.Error("Failed to add token epoch", "err", err, "tokenID", tokenId)
+		c.log.Error("Failed to get CID for epoch pinning", "err", err, "tokenID", tokenId)
 	}
-	err = c.ipfs.Pin(string(newCid))
+	err = c.ipfs.Pin(string(newCID))
 	if err != nil {
 		c.log.Error("Failed to pin token epoch", "err", err, "tokenID", tokenId)
+	} else {
+		c.log.Info("Token successfully PINNED", "CID", newCID)
 	}
+}
+
+func (c *Core) UnpinTokenEpoch(tokenId string, weekCount int) {
+
+	toPin := fmt.Sprintf("%s-%d", tokenId, weekCount)
+	reader := bytes.NewReader([]byte(toPin))
+	newCid, err := c.ipfs.Add(reader, ipfsnode.Pin(false))
+	fmt.Println("UNPIN Week count : ", weekCount)  //TODO:REMOVE
+	fmt.Println("CID when UNPINNING is :", newCid) // TODO:REMOVE
+	if err != nil {
+		c.log.Error("Failed to get CID for epoch unpinning", "err", err, "tokenID", tokenId)
+	}
+	err = c.ipfs.Unpin(string(newCid))
+	if err != nil {
+		c.log.Error("Failed to Unpin token epoch", "err", err, "tokenID", tokenId)
+	} else {
+		c.log.Info("Token successfully UN-PINNED", "CID", newCid)
+	}
+	/////
+	peer, err := c.GetRoutingAddrs(newCid)
+	if err != nil {
+		c.log.Error("Routing findprovs failed", "CID:", newCid, "err:", err)
+	}
+	fmt.Println("Peers after unpinning are ", peer)
+
 }
 
 func (c *Core) getPeerWhoPinTokenEpoch(tokenID string, weekCount int) ([]string, error) {
 	pinCheck := fmt.Sprintf("%s-%d", tokenID, weekCount)
 	pinCheckStr := bytes.NewReader([]byte(pinCheck))
-	newCID, _ := c.ipfs.Add(pinCheckStr)
-	fmt.Println("CID when getting token epoch pin : ", newCID) // TODO:REMOVE
-	list, err1 := c.GetDHTddrs(newCID)
-	if err1 != nil {
-		c.log.Error("Failed to get pins for token epoch", "err", err1, "tokenID", tokenID)
-		return nil, err1
-	} else {
-		return list, nil
+	newCID, _ := c.ipfs.Add(pinCheckStr, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	list, err := c.GetDHTddrs(newCID)
+	if err != nil {
+		c.log.Warn("DHT findprovs failed", "CID:", newCID, "err:", err)
+	}
+	if len(list) == 0 {
+		list, err = c.GetRoutingAddrs(newCID)
+		if err != nil {
+			c.log.Error("Routing findprovs failed", "CID:", newCID, "err:", err)
+			return nil, err
+		}
+	}
+	if len(list) == 0 {
+		return nil, fmt.Errorf("No peers found for CID: %s", newCID)
+	}
+	return list, nil
+}
+
+// This function updates the week epoch pin when the week changes
+func (c *Core) UpdateEpochPin() {
+	const maxLookBackWeeks = 20 // adjust as needed to limit how far back it searches
+
+	for {
+		select {
+		case <-c.epochPinningTicker.C:
+
+			c.log.Info("Processing for token-weekEpoch pin updation")
+
+			currentWeek := util.GetWeeksPassed()
+			tokenIDs, err := c.w.GetTokenIDsWithoutNextBlockFromPledgeHistory()
+			if err != nil {
+				c.log.Error("Failed to get tokenIDs for update week epoch pin", "err", err)
+				continue
+			}
+
+			for _, tokenID := range tokenIDs {
+				peerIDs, err := c.getPeerWhoPinTokenEpoch(tokenID, currentWeek)
+				if err != nil {
+					c.log.Warn("Failed to find pins on token-weekEpoch for tokenID: " + tokenID + ", week:" + strconv.Itoa(currentWeek))
+				}
+				if len(peerIDs) == 0 {
+					found := false
+					lookBackLimit := currentWeek - maxLookBackWeeks
+					if lookBackLimit < 0 {
+						lookBackLimit = 0
+					}
+
+					for week := currentWeek - 1; week >= lookBackLimit; week-- {
+						lastWeekPeers, err := c.getPeerWhoPinTokenEpoch(tokenID, week)
+						if err != nil {
+							if len(lastWeekPeers) == 0 || strings.Contains(err.Error(), "no peers found") {
+								continue
+							}
+						}
+						for _, pinnedPeerID := range lastWeekPeers {
+							if pinnedPeerID == c.peerID {
+								c.log.Info("Found pin by this node for", " week:", week, "and tokenID:", tokenID)
+
+								c.UnpinTokenEpoch(tokenID, week)
+								c.log.Info("Week Epoch UNPINNED for", " week:", week, " and tokenID:", tokenID)
+
+								c.pinTokenEpoch(tokenID, currentWeek)
+								c.log.Info("Week Epoch PINNED for", " week:", currentWeek, " and tokenID:", tokenID)
+
+								found = true
+								break
+							}
+						}
+						if found {
+							break
+						}
+					}
+
+					if !found {
+						c.log.Warn("No pins found on token-weekEpoch for tokenID:" + tokenID + " after searching past " + strconv.Itoa(maxLookBackWeeks) + " weeks")
+					}
+				}
+			}
+		}
 	}
 }

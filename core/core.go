@@ -125,6 +125,7 @@ type Core struct {
 	noBalanceQuorumCount int
 	defaultSetup         bool
 	pledgeHistory        []model.PledgeHistory
+	epochPinningTicker   *time.Ticker
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -414,6 +415,9 @@ func (c *Core) StopCore() {
 	c.stopIPFS()
 	if c.l != nil {
 		c.l.Shutdown()
+	}
+	if c.epochPinningTicker != nil {
+		c.epochPinningTicker.Stop()
 	}
 }
 

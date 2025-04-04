@@ -1518,12 +1518,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
-	TransTokenIDs := strings.Join(b.GetTransTokens(), ",")
-
-	// Split the TransferTokenIDs and add each tokenID as a separate row in PledgeHistory
-	tokenIDs := strings.Split(TransTokenIDs, ",")
 	c.pledgeHistory = []model.PledgeHistory{}
-	for _, tokenID := range tokenIDs {
+	for _, tokenID := range b.GetTransTokens() {
 		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, tokenID)
 		if err != nil {
 			readErr := fmt.Sprint(err)
@@ -1544,14 +1540,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			crep.Message = "Failed to get block ID PledgeHistory"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-
-		// blockNumber, err := b.GetBlockNumber(tokenID)
-		// if err != nil {
-		// 	c.log.Error("Failed to get block number for token: ", tokenID)
-		// 	crep.Message = "Failed to get block number for PledgeHistory"
-		// 	return c.l.RenderJSON(req, &crep, http.StatusOK)
-		// }
-
 		b, err := c.getFromIPFS(tokenID)
 		if err != nil {
 			c.log.Error("failed to get parent token details from ipfs", "err", err, "token", tokenID)
@@ -1595,13 +1583,13 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		c.pledgeHistory = append(c.pledgeHistory, newPledge)
 	}
-	fmt.Println("pledgeHistory list in updatePledgeToken function", c.pledgeHistory)
-
 	//TODO
 	//Even if there is any error, the token chain is already getting synced. The quorums pin the hash of (TokenID + epoch), the epoch being the week
 	//count of when the transaction happened calculated from 1st Jan 2025.
-	for _, j := range tks {
-		c.pinTokenEpoch(j, ur.WeekCount)
+	for _, tokenID := range tks {
+		c.pinTokenEpoch(tokenID, ur.WeekCount)
+		// week number is not getting printed
+		c.log.Debug("Week epoch PINNED for tokenID " + tokenID + " for week number " + strconv.Itoa(ur.WeekCount))
 	}
 
 	crep.Status = true
@@ -1971,8 +1959,8 @@ func (c *Core) updateCreditsAndEpochPin(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 	if tokenIsPinned {
-		c.ipfs.Unpin(UpdateCreditsAndEpochPin.TokenID)
-		fmt.Println("Epoch Pin removed for tokenID: ", UpdateCreditsAndEpochPin.TokenID)
+		c.UnpinTokenEpoch(UpdateCreditsAndEpochPin.TokenID, currentWeek)
+		c.log.Debug("Week Epoch UNPINNED for tokenID %s for week %d", UpdateCreditsAndEpochPin.TokenID, currentWeek)
 	}
 	return c.l.RenderJSON(req, struct{}{}, http.StatusOK)
 }

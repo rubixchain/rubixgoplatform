@@ -31,6 +31,7 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.0
+	github.com/ipfs/fs-repo-migrations v1.7.1
 	github.com/ipfs/go-cid v0.2.0
 	github.com/jackc/pgx/v5 v5.3.1 // indirect
 	github.com/jinzhu/gorm v1.9.16

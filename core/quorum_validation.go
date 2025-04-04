@@ -166,6 +166,12 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		if err != nil || len(ids) == 0 {
 			continue
 		}
+		if len(ids) == 0 {
+			ids, err = c.GetRoutingAddrs(ti[i].Token)
+			if err != nil || len(ids) == 0 {
+				continue
+			}
+		}
 	}
 	p, err := c.getPeer(address, quorumDID)
 	if err != nil {

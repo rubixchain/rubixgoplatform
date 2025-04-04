@@ -187,38 +187,23 @@ func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transaction
 	return nil // Return nil if function completes successfully
 }
 
-// func (w *Wallet) UpdateLatestBlockNumber(tokenID string, blockNumber int, transactionID string) error {
-// 	var pledgeHistoryRecords []PledgeHistory
+// This function will return the list of tokensIDs from `PledgeHistoryTable` whose next block is not added
+func (w *Wallet) GetTokenIDsWithoutNextBlockFromPledgeHistory() ([]string, error) {
+	var pledgeDetails []model.PledgeHistory
 
-// 	err := w.s.Read(
-// 		PledgeHistoryTable,
-// 		&pledgeHistoryRecords,
-// 		"transfer_tokens_id = ?",
-// 		tokenID,
-// 	)
-// 	if err != nil {
-// 		fmt.Println("Error reading pledge history records:", err)
-// 		return err
-// 	}
-// 	// Update current_block_number for each row
-// 	for _, record := range pledgeHistoryRecords {
-// 		record.CurrentBlockNumber = blockNumber
-// 		updateErr := w.s.Update(
-// 			PledgeHistoryTable,
-// 			record,
-// 			"transfer_tokens_id = ? and transaction_id=?",
-// 			tokenID, record.TransactionID,
-// 		)
-// 		if updateErr != nil {
-// 			fmt.Println("Latest block number Update failed for the token :", record.TransferTokenID, "Error:", updateErr)
-// 			continue // Continue updating other rows even if one fails
-// 		}
+	err := w.s.Read(PledgeHistoryTable, &pledgeDetails, "next_epoch = ? AND token_credit = ?", 0, 0)
+	if err != nil {
+		return nil, err
+	}
 
-// 		fmt.Println("Updated current block number for the token:", record.TransferTokenID)
-// 	}
-
-// 	return nil // Return nil if function completes successfully
-// }
+	tokenIDs := make([]string, 0)
+	for _, pledge := range pledgeDetails {
+		if pledge.TransferTokenID != "" {
+			tokenIDs = append(tokenIDs, pledge.TransferTokenID)
+		}
+	}
+	return tokenIDs, nil
+}
 
 func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch int64) error {
 	var pledgeHistoryRecords []model.PledgeHistory
