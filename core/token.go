@@ -936,9 +936,59 @@ func (c *Core) ValidatePledgedTokens(pledgedTokensArray []interface{}, quorumDID
 			c.log.Error("failed to sync pledged token chain", pledgedTokenID, "from peer", quorumDID)
 			return err
 		}
-		//GetGenesisTokenBlock returns genesis block
-		genesisBlock := c.w.GetGenesisTokenBlock(pledgedTokenID, int(pledgedTokenType))
-		pledgedTokenInfo := &wallet.Token{
+
+		// get latest block of the pledged token
+		latestBlock := c.w.GetLatestTokenBlock(pledgedTokenID, int(pledgedTokenType))
+		latestTxnType := latestBlock.GetTransType()
+		switch latestTxnType {
+		case block.TokenTransferredType:
+			//validate rbt transfer block
+			response, err := c.ValidateRBTTransferBlock(latestBlock, pledgedTokenID, "", selfDID)
+			if err != nil {
+				c.log.Error("msg", response.Message, "err", err)
+				return err
+			}
+		// case block.TokenGeneratedType:
+		// 	//validate genesis block
+		// 	response, err = c.ValidateGenesisBlock(b, *tokenInfo, tokenType, userDID)
+		// 	if err != nil {
+		// 		c.log.Error("msg", response.Message, "err", err)
+		// 		return response, err
+		// 	}
+		case block.TokenBurntType:
+			// RBT is burnt, can't be used further
+			c.log.Error("RBT is burnt, cannot be used to pledge, token ID ", pledgedTokenID)
+			return fmt.Errorf("invalid RBT, RBT is burnt, cannot be used to pledge, token ID : %s", pledgedTokenID)
+		case block.TokenPledgedType:
+			// RBT is not unpledged yet
+			c.log.Error("RBT is pledged, cannot be used to pledge again, token ID ", pledgedTokenID)
+			return fmt.Errorf("invalid RBT, RBT is pledged, cannot be used to pledge again, token ID : %s", pledgedTokenID)
+		case block.TokenUnpledgedType:
+			//validate Pledged block
+			response, err := c.ValidateUnpledgedBlock(latestBlock, pledgedTokenID, "", selfDID)
+			if err != nil {
+				c.log.Error("msg", response.Message, "err", err)
+				return err
+			}
+		case block.TokenContractCommited:
+			// token is committed, can't use further
+			c.log.Error("RBT is committed, cannot be used to pledge again, token ID ", pledgedTokenID)
+			return fmt.Errorf("invalid RBT, RBT is committed, cannot be used to pledge again, token ID : %s", pledgedTokenID)
+		}
+
+		latestBlockHeight, err := latestBlock.GetBlockNumber(pledgedTokenID)
+		if err != nil {
+			c.log.Error("failed to get latest block height")
+		}
+		var genesisBlock *block.Block
+		if latestBlockHeight != 0 {
+			//GetGenesisTokenBlock returns genesis block of the token chain
+			genesisBlock = c.w.GetGenesisTokenBlock(pledgedTokenID, int(pledgedTokenType))
+		} else {
+			genesisBlock = latestBlock
+		}
+
+		pledgedTokenInfo := wallet.Token{
 			TokenID:       pledgedTokenID,
 			ParentTokenID: "",
 		}
@@ -950,14 +1000,14 @@ func (c *Core) ValidatePledgedTokens(pledgedTokensArray []interface{}, quorumDID
 			if err != nil {
 				c.log.Error("failed to get parent and grand parents")
 			}
-			err = c.SyncAncestralTokens(p, parentToken)
+			err = c.syncParentToken(p, parentToken)
 			if err != nil {
 				c.log.Error("failed to sync parent token", parentToken, "err", err)
 				return err
 			}
 			pledgedTokenInfo.ParentTokenID = parentToken
 		}
-		response, err := c.ValidateTokenChain(selfDID, pledgedTokenInfo, int(pledgedTokenType), 0)
+		response, err := c.ValidateGenesisBlock(genesisBlock, pledgedTokenInfo, int(pledgedTokenType), selfDID)
 		if err != nil || !response.Status {
 			return fmt.Errorf("err: %v; msg: %v", err, response.Message)
 		}
