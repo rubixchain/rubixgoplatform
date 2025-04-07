@@ -1718,8 +1718,20 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		miningDetails := model.TransactionDetails{
+			TransactionID:   tid,
+			TransactionType: nb.GetTransType(),
+			BlockID:         blockID,
+			Mode:            wallet.MiningMode,
+			SenderDID:       cr.MiningInfo.MinerDid,
+			ReceiverDID:     "",
+			Comment:         sc.GetComment(),
+			DateTime:        time.Now(),
+			Status:          true,
+			Epoch:           int64(cr.TransactionEpoch),
+		}
 
-		return nil, nil, nil, err
+		return &miningDetails, nil, nil, err
 	default:
 		err := fmt.Errorf("invalid consensus request mode: %v", cr.Mode)
 		c.log.Error(err.Error())
@@ -1796,7 +1808,7 @@ func (c *Core) initiateUnpledgingProcess(cr *ConensusRequest, transactionHash st
 // adding the new tokenstate hash details for transferred tokens to quorum,
 // pinning token.weekEpoch
 func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, newTokenStateHashes []string, transactionId string, weekCount int) error {
-	
+
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
 	cs, ok2 := c.quorumRequest[cr.ReqID]

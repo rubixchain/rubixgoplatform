@@ -12,9 +12,8 @@ const (
 	DeployMode
 	ExecuteMode
 	PinningServiceMode
+	MiningMode
 )
-
-
 
 func (w *Wallet) AddTransactionHistory(td *model.TransactionDetails) error {
 	err := w.s.Write(TransactionStorage, td)
