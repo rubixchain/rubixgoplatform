@@ -282,6 +282,8 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	// c.epochPinningTicker = time.NewTicker(8 * time.Hour)
 	c.epochPinningTicker = time.NewTicker(5 * time.Minute)
 	go c.UpdateEpochPin()
+	// Subscribe to the mining pubsub
+	go c.miningSubscription()
 	return nil
 }
 
@@ -1729,6 +1731,28 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			DateTime:        time.Now(),
 			Status:          true,
 			Epoch:           int64(cr.TransactionEpoch),
+		}
+
+		quorumSignatures, err := nb.GetQuorumSignatureList()
+		quorumDIDSignaturesArray := make([]model.QuorumDIDSignatures, 0, len(quorumSignatures))
+		for _, cs := range quorumSignatures {
+			quorumDIDSignaturesArray = append(quorumDIDSignaturesArray, model.QuorumDIDSignatures{
+				DID:       cs.DID,
+				Signature: cs.Signature,
+			})
+		}
+
+		miningRecord := &model.MiningRecordPubSub{
+			MiningID:                 tid,
+			MinedTokenID:             cr.MiningTokenID,
+			TokenLevelAndTokenNumber: 0, // Fetch latest token level and number from the pubsub itself before publishing
+			QuorumList:               quorumDIDSignaturesArray,
+			PledgeHistory:            sc.GetTokenCreditsDetails(),
+		}
+		err = c.publishMiningdetails(miningRecord)
+		if err != nil {
+			c.log.Error(("Unable to publish mining details"))
+			return nil, nil, nil, err
 		}
 
 		return &miningDetails, nil, nil, err

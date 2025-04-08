@@ -35,6 +35,8 @@ const (
 	FTChainStorage                 string = "FTchainstorage"
 	FTStorage                      string = "FTTable"
 	PledgeHistoryTable             string = "PledgeHistoryTable"
+	MiningRecordsTable             string = "MiningRecordsTable"
+	MiningRecordsChainStorage      string = "MiningRecordsChainStorage"
 )
 
 type WalletConfig struct {
@@ -65,6 +67,7 @@ type Wallet struct {
 	ntcs                           *ChainDB
 	smartContractTokenChainStorage *ChainDB
 	FTChainStorage                 *ChainDB
+	MiningRecordsChainStorage      *ChainDB
 }
 
 func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, error) {
@@ -162,6 +165,10 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	if err != nil {
 		w.log.Error("Failed to initialize Pledge history storage", "err", err)
 	}
+	err = w.s.Init(MiningRecordsTable, &MiningRecord{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize Mining record table", "err", err)
+	}
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {
@@ -176,6 +183,14 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		return nil, fmt.Errorf("failed to configure token chain block storage")
 	}
 	w.FTChainStorage.DB = *FTtokenStorageDB
+
+	MiningRecordsDB, err := leveldb.OpenFile(dir+MiningRecordsChainStorage, op)
+	if err != nil {
+		w.log.Error("failed to mining records levelDB", "err", err)
+		return nil, fmt.Errorf("failed to mining records levelDB")
+	}
+	w.MiningRecordsChainStorage.DB = *MiningRecordsDB
+
 	err = w.s.Init(CallBackUrlStorage, &CallBackUrl{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Smart Contract Callback Url storage", "err", err)

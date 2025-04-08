@@ -39,17 +39,17 @@ const (
 )
 
 type GenesisTokenInfo struct {
-	Token              string        `json:"token"`
-	TokenLevel         int           `json:"tokenLevel"`
-	TokenNumber        int           `json:"tokenNumber"`
-	MigratedBlockID    string        `json:"migratedBlockID"`
-	PreviousID         string        `json:"previosuID"`
-	ParentID           string        `json:"parentID"`
-	GrandParentID      []string      `json:"grandParentID"`
-	CommitedTokens     []TransTokens `json:"commitedTokens"`
-	SmartContractValue float64       `json:"smartContractValue"`
-	NFTValue           float64       `json:"nftValue"`
-	NFTData            string        `json:"nftData"`
+	Token              string                `json:"token"`
+	TokenLevel         int                   `json:"tokenLevel"`
+	TokenNumber        int                   `json:"tokenNumber"`
+	MigratedBlockID    string                `json:"migratedBlockID"`
+	PreviousID         string                `json:"previosuID"`
+	ParentID           string                `json:"parentID"`
+	GrandParentID      []string              `json:"grandParentID"`
+	CommitedTokens     []TransTokens         `json:"commitedTokens"`
+	SmartContractValue float64               `json:"smartContractValue"`
+	NFTValue           float64               `json:"nftValue"`
+	NFTData            string                `json:"nftData"`
 	CreditDetails      []model.PledgeHistory `json:"creditdetails"`
 }
 

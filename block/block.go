@@ -97,7 +97,6 @@ type TokenChainBlock struct {
 	NFTData            string                `json:"nftData"`
 	Epoch              int                   `json:"epoch"`
 	CreditDetails      []model.PledgeHistory `json:"creditdetails"`
-
 }
 
 type PledgeDetail struct {
