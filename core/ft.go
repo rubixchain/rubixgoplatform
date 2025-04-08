@@ -436,7 +436,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			rpeerid = c.peerID
 		}
 	} else {
-		receiverPeerID, err := c.getPeer(req.Receiver, "")
+		receiverPeerID, err := c.getPeer(req.Receiver)
 		if err != nil {
 			resp.Message = "Failed to get receiver peer, " + err.Error()
 			return resp

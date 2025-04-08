@@ -56,7 +56,7 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
-	p, err := c.getPeer(req.PinningNode, did)
+	p, err := c.getPeer(req.PinningNode)
 	if err != nil {
 		resp.Message = "Failed to get pinning peer, " + err.Error()
 		return resp
@@ -195,7 +195,7 @@ func (c *Core) recoverPinnedToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	p, err := c.getPeer(sr.Address, "")
+	p, err := c.getPeer(sr.Address)
 	if err != nil {
 		c.log.Error("failed to get peer", "err", err)
 		crep.Message = "failed to get peer"

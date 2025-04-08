@@ -485,7 +485,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 	switch cr.Mode {
 	case RBTTransferMode:
-		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID(), "")
+		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID())
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
 			return nil, nil, nil, err
@@ -675,7 +675,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				}
 
 				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
+				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 				if errGetPeer != nil {
 					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 				}
@@ -724,7 +724,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		return &td, pl, pds, nil
 	case FTTransferMode:
 		// Connect to the receiver's peer
-		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID(), "")
+		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID())
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
 			return nil, nil, nil, err
@@ -888,7 +888,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				}
 
 				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
+				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 				if errGetPeer != nil {
 					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 				}
@@ -939,7 +939,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Debug("Mode = PinningServiceMode ")
 		c.log.Debug("Pinning Node PeerId", cr.PinningNodePeerID)
 		c.log.Debug("Pinning Service DID", sc.GetPinningServiceDID())
-		rp, err := c.getPeer(cr.PinningNodePeerID+"."+sc.GetPinningServiceDID(), "")
+		rp, err := c.getPeer(cr.PinningNodePeerID+"."+sc.GetPinningServiceDID())
 		if err != nil {
 			c.log.Error("Pinning Node not connected", "err", err)
 			return nil, nil, nil, err
@@ -1100,7 +1100,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				}
 
 				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
+				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 				if errGetPeer != nil {
 					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 				}
@@ -1249,7 +1249,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				}
 
 				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
+				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 				if errGetPeer != nil {
 					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 				}
@@ -1474,7 +1474,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 
 			previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
-			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
+			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 			if errGetPeer != nil {
 				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 			}
@@ -1631,7 +1631,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 
 			previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
-			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress, "")
+			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 			if errGetPeer != nil {
 				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
 			}
@@ -1705,7 +1705,7 @@ func (c *Core) initiateUnpledgingProcess(cr *ConensusRequest, transactionHash st
 			}
 		}
 
-		qPeer, err := c.getPeer(qAddress, "")
+		qPeer, err := c.getPeer(qAddress)
 		if err != nil {
 			c.log.Error("Quorum not connected (storing tx info)", "err", err)
 			return err
@@ -1761,7 +1761,7 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 				qAddress = quorumValue
 			}
 		}
-		qPeer, err := c.getPeer(qAddress, "")
+		qPeer, err := c.getPeer(qAddress)
 		if err != nil {
 			c.log.Error("Quorum not connected", "err", err)
 			return err
@@ -1870,7 +1870,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	c.startConsensus(cr.ReqID, qt)
 	var p *ipfsport.Peer
 	var err error
-	p, err = c.getPeer(addr, sc.GetSenderDID())
+	p, err = c.getPeer(addr)
 	if err != nil {
 		c.log.Error(fmt.Sprintf("Failed to get peer connection while connecting to quorum address %v, err: %v", addr, err))
 		c.finishConsensus(cr.ReqID, qt, nil, false, "", nil, nil)

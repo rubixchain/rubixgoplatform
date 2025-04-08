@@ -221,7 +221,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	ha := h.Sum(nil)
 	addr := int(ha[0]) % len(c.arbitaryAddr)
 	c.log.Info("Conneting to node : " + c.arbitaryAddr[addr])
-	p, err := c.getPeer(c.arbitaryAddr[addr], "")
+	p, err := c.getPeer(c.arbitaryAddr[addr])
 	if err != nil {
 		c.log.Error("Failed to migrate, failed to connect arbitary peer", "err", err, "peer", c.arbitaryAddr[addr])
 		return fmt.Errorf("failed to migrate, failed to connect arbitary peer")

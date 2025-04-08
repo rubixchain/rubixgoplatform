@@ -240,7 +240,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			continue
 		}
 	}
-	p, err := c.getPeer(address, quorumDID)
+	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return false, err

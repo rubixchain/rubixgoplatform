@@ -109,7 +109,7 @@ func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	address := cr.SenderPeerID + "." + sc.GetSenderDID()
-	p, err := c.getPeer(address, "")
+	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		crep.Message = "Failed to get peer"
@@ -443,7 +443,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	} else {
 		//sync the smartcontract tokenchain
 		address := consensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
-		peerConn, err := c.getPeer(address, did)
+		peerConn, err := c.getPeer(address)
 		if err != nil {
 			c.log.Error("Failed to get executor peer to sync smart contract token chain", "err", err)
 			consensusReply.Message = "Failed to get executor peer to sync smart contract token chain : "
@@ -599,7 +599,7 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	} else {
 		//sync the nft tokenchain
 		address := consensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
-		peerConn, err := c.getPeer(address, did)
+		peerConn, err := c.getPeer(address)
 		if err != nil {
 			c.log.Error("Failed to get executor peer to sync NFT chain", "err", err)
 			consensusReply.Message = "Failed to get executor peer to sync NFT token chain : "
@@ -945,7 +945,7 @@ func (c *Core) updateReceiverToken(
 
 	if receiverAddress != "" {
 		var err error
-		senderPeer, err = c.getPeer(senderAddress, "")
+		senderPeer, err = c.getPeer(senderAddress)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get peer : %v", err.Error())
 		}
@@ -1139,7 +1139,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	}
 	var senderPeer *ipfsport.Peer
 	var err error
-	senderPeer, err = c.getPeer(senderAddress, "")
+	senderPeer, err = c.getPeer(senderAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get peer : %v", err.Error())
 	}

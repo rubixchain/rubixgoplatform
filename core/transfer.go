@@ -238,7 +238,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 				rpeerid = c.peerID
 			}
 		} else {
-			p, err := c.getPeer(req.Receiver, senderDID)
+			p, err := c.getPeer(req.Receiver)
 			if err != nil {
 				resp.Message = "Failed to get receiver peer, " + err.Error()
 				return resp
@@ -731,7 +731,7 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 	for i := range tokensForTxn {
 		c.w.Pin(tokensForTxn[i].TokenID, wallet.PinningRole, did, "TID-Not Generated", req.Sender, req.PinningNode, tokensForTxn[i].TokenValue)
 	}
-	p, err := c.getPeer(req.PinningNode, did)
+	p, err := c.getPeer(req.PinningNode)
 	if err != nil {
 		resp.Message = "Failed to get pinning peer, " + err.Error()
 		return resp
