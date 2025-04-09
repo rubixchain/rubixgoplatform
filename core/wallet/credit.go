@@ -143,9 +143,47 @@ func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus 
 		w.log.Error("Failed to read pledge history", "quorumDID", quorumDID, "err", err)
 		return nil, err
 	}
-
+	// fmt.Println("pledges in GetTokenDetailsByQuorumDID function", pledges)
 	// Return the filtered pledge history records
 	return pledges, nil
+}
+func CollectRequiredCredits(pledges []model.PledgeHistory, requiredCredits uint64) (selectedCredits []model.PledgeHistory, remainingCredits map[string]uint64, totalSelected uint64) {
+	selectedCredits = []model.PledgeHistory{}
+	remainingCredits = make(map[string]uint64) // Track leftover credits per transaction
+	totalSelected = 0
+
+	for _, pledge := range pledges {
+		if totalSelected >= requiredCredits {
+			break // Stop once we've collected enough credits
+		}
+
+		if totalSelected+pledge.TokenCredit <= requiredCredits {
+			// Fully use this transaction's credits
+			selectedCredits = append(selectedCredits, pledge)
+			totalSelected += pledge.TokenCredit
+		} else {
+			// Partially use this transaction's credits
+			remaining := (totalSelected + pledge.TokenCredit) - requiredCredits
+			selectedCredits = append(selectedCredits, model.PledgeHistory{
+				QuorumDID:          pledge.QuorumDID,
+				TransactionID:      pledge.TransactionID,
+				TransactionType:    pledge.TransactionType,
+				TransferTokenID:    pledge.TransferTokenID,
+				TransferTokenType:  pledge.TransferTokenType,
+				TransferTokenValue: pledge.TransferTokenValue,
+				TransferBlockID:    pledge.TransferBlockID,
+				Epoch:              pledge.Epoch,
+				NextBlockEpoch:     pledge.NextBlockEpoch,
+				TokenCredit:        pledge.TokenCredit - remaining, // Use only the required part
+				TokenCreditStatus:  pledge.TokenCreditStatus,
+			})
+			key := pledge.TransactionID + "." + pledge.TransferTokenID
+            remainingCredits[key] = remaining
+			totalSelected += (pledge.TokenCredit - remaining)
+		}
+	}
+
+	return selectedCredits, remainingCredits, totalSelected
 }
 
 func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transactionID string) error {
@@ -205,7 +243,7 @@ func (w *Wallet) GetTokenIDsWithoutNextBlockFromPledgeHistory() ([]string, error
 	return tokenIDs, nil
 }
 
-func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch int64) error {
+func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch uint64) error {
 	var pledgeHistoryRecords []model.PledgeHistory
 	err := w.s.Read(PledgeHistoryTable, &pledgeHistoryRecords, "transfer_tokens_id = ? and transaction_id=?", tokenID, transactionID)
 	if err != nil {
@@ -213,15 +251,18 @@ func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transa
 		return err
 	}
 	if len(pledgeHistoryRecords) == 0 {
-		w.log.Error("No records found in Pledge history table for the token:", tokenID)
-		return fmt.Errorf("No records found in Pledge history table for the token")
+		w.log.Error("no records found in Pledge history table for the token:", tokenID)
+		return fmt.Errorf("no records found in Pledge history table for the token")
 	}
 	for _, record := range pledgeHistoryRecords {
 		record.NextBlockEpoch = epoch
 		if record.TransactionType == 1 {
-			record.TokenCredit = ((int(record.NextBlockEpoch) - record.Epoch) * int(record.TransferTokenValue)) * 15
+			tokenCreditFloat := float64(epoch-record.Epoch) * (record.TransferTokenValue) * 15
+			record.TokenCredit = uint64(tokenCreditFloat)
+
 		} else if record.TransactionType == 2 {
-			record.TokenCredit = ((int(record.NextBlockEpoch) - record.Epoch) * int(record.TransferTokenValue))
+			tokenCreditsFloat := (float64(record.NextBlockEpoch-record.Epoch) * (record.TransferTokenValue))
+			record.TokenCredit = uint64(tokenCreditsFloat)
 		}
 		updateErr := w.s.Update(PledgeHistoryTable, record, "transfer_tokens_id = ? and transaction_id=?", record.TransferTokenID, record.TransactionID)
 		if updateErr != nil {

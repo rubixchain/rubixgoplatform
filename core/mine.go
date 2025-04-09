@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	tokenLevel   = 4
+	tokenLevel   = 004
 	tokenNumber  = 1000000
 	miningPubSub = "mining-service"
 )
@@ -46,20 +46,25 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 	}
 
 	// 2. Calculate total token credit
-	totalCredits := 0
+	var totalCredits uint64
+	totalCredits = 0
 	for _, tokenDetail := range tokenDetails {
 		totalCredits += tokenDetail.TokenCredit
 	}
 
 	// TODO: Sync the mining pubsub get the latest entry, get the next token level and number
 	// 3. Check how many credits are needed for mining the next token according to token level
-	creditsForNextToken := 100 // TODO: Fetch from mining chain if dynamic
+	var creditsForNextToken uint64
+	creditsForNextToken = 100 // TODO: Fetch from mining chain if dynamic
 
 	// 4. Validate if total credits are sufficient
 	if totalCredits < creditsForNextToken {
 		resp.Message = fmt.Sprintf("Total credits (%d) are less than the required credits (%d) to mine the next token", totalCredits, creditsForNextToken)
 		return resp // Return an error
 	}
+    
+	selectedTokenCredits,remainingCredits,totalSelectedCredits:= wallet.CollectRequiredCredits(tokenDetails,creditsForNextToken)
+	
 
 	didCryptoLib, err := c.SetupDID(reqID, MiningReq.MinerDid)
 	if err != nil {
@@ -70,8 +75,9 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 	MiningContractDetails := &contract.ContractType{
 		Type:               contract.MineRBTType,
 		PledgeMode:         contract.PeriodicPledgeMode,
-		ReqTokenCredits:    MiningReq.TokenCredits,
-		TokenCreditDetails: tokenDetails,
+		ReqTokenCredits:    totalSelectedCredits,
+		TokenCreditDetails: selectedTokenCredits,
+		RemainingCredits: remainingCredits,
 		ReqID:              reqID,
 		TransInfo: &contract.TransInfo{
 			MinerDID: MiningReq.MinerDid,

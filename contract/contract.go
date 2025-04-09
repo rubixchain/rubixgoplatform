@@ -37,6 +37,7 @@ const (
 	SCTransInfoKey          string = "3"
 	SCTotalRBTsKey          string = "4"
 	SCTokenCreditDetailsKey string = "5"
+	SCRemainingCreditsKey   string = "6"
 	SCShareSignatureKey     string = "97"
 	SCKeySignatureKey       string = "98"
 	SCBlockHashKey          string = "99"
@@ -52,6 +53,7 @@ type ContractType struct {
 	TotalRBTs          float64               `json:"totalRBTs"`
 	TokenCreditDetails []model.PledgeHistory `json:"token_credit_details"`
 	ReqTokenCredits    uint64                `json:"req_token_credits"`
+	RemainingCredits   map[string]uint64     `json:"remaining_credits"`
 	ReqID              string                `json:"req_id"`
 	log                logger.Logger
 }
@@ -64,7 +66,7 @@ type Contract struct {
 }
 
 func CreateNewContract(st *ContractType) *Contract {
-	if st.TransInfo == nil {
+	if st.TransInfo == nil && st.TokenCreditDetails == nil {
 		return nil
 	}
 	//	st.log.Debug("Creating new contract")
@@ -77,13 +79,16 @@ func CreateNewContract(st *ContractType) *Contract {
 	if st.PledgeMode > NoPledgeMode {
 		return nil
 	}
+
 	nm[SCPledgeModeKey] = st.PledgeMode
+	nm[SCTokenCreditDetailsKey] = st.TokenCreditDetails
 	nm[SCTransInfoKey] = newTransInfoBlock(st.TransInfo)
-	if nm[SCTransInfoKey] == nil {
+	nm[SCRemainingCreditsKey] = st.RemainingCredits
+	if nm[SCTransInfoKey] == nil && nm[SCTokenCreditDetailsKey] == nil {
 		return nil
 	}
 	nm[SCTotalRBTsKey] = st.TotalRBTs
-	nm[SCTokenCreditDetailsKey] = st.TokenCreditDetails
+	// fmt.Println("new contract before returning", InitContract(nil, nm))
 	return InitContract(nil, nm)
 }
 
@@ -359,55 +364,19 @@ func (c *Contract) GetTransTokenInfo() []TokenInfo {
 
 func (c *Contract) GetTokenCreditsDetails() []model.PledgeHistory {
 	tokenCreditDetails := util.GetFromMap(c.sm, SCTokenCreditDetailsKey)
-	if tokenCreditDetails == nil {
-		return nil
-	}
-
-	tokenCreditDetailsMapInterface, ok := tokenCreditDetails.(map[string]interface{})
+	tokenCreditDetailsArray, ok := tokenCreditDetails.([]model.PledgeHistory)
 	if ok {
-		tcdDetails := make([]model.PledgeHistory, 0)
-		for _, v := range tokenCreditDetailsMapInterface {
-			ph := model.PledgeHistory{
-				QuorumDID:          util.GetStringFromMap(v, "quorum_did"),
-				TransactionID:      util.GetStringFromMap(v, "transaction_id"),
-				TransactionType:    util.GetIntFromMap(v, "transaction_type"),
-				TransferTokenID:    util.GetStringFromMap(v, "transfer_tokens_id"),
-				TransferTokenType:  util.GetIntFromMap(v, "transfer_tokens_type"),
-				TransferTokenValue: util.GetFloatFromMap(v, "transfer_token_value"),
-				TransferBlockID:    util.GetStringFromMap(v, "transfer_block_number_and_id"),
-				Epoch:              util.GetIntFromMap(v, "epoch"),
-				NextBlockEpoch:     util.GetInt64FromMap(v, "next_epoch"),
-				TokenCredit:        util.GetIntFromMap(v, "token_credit"),
-				TokenCreditStatus:  util.GetIntFromMap(v, "token_credit_status"),
-			}
-			tcdDetails = append(tcdDetails, ph)
-		}
-		return tcdDetails
-	} else {
-		tokenCreditDetailsMapInterface, ok := tokenCreditDetails.(map[interface{}]interface{})
-		if ok {
-			tcdDetails := make([]model.PledgeHistory, 0)
-			for _, v := range tokenCreditDetailsMapInterface {
-				ph := model.PledgeHistory{
-					QuorumDID:          util.GetStringFromMap(v, "quorum_did"),
-					TransactionID:      util.GetStringFromMap(v, "transaction_id"),
-					TransactionType:    util.GetIntFromMap(v, "transaction_type"),
-					TransferTokenID:    util.GetStringFromMap(v, "transfer_tokens_id"),
-					TransferTokenType:  util.GetIntFromMap(v, "transfer_tokens_type"),
-					TransferTokenValue: util.GetFloatFromMap(v, "transfer_token_value"),
-					TransferBlockID:    util.GetStringFromMap(v, "transfer_block_number_and_id"),
-					Epoch:              util.GetIntFromMap(v, "epoch"),
-					NextBlockEpoch:     util.GetInt64FromMap(v, "next_epoch"),
-					TokenCredit:        util.GetIntFromMap(v, "token_credit"),
-					TokenCreditStatus:  util.GetIntFromMap(v, "token_credit_status"),
-				}
-				tcdDetails = append(tcdDetails, ph)
-			}
-			return tcdDetails
-		} else {
-			return nil
-		}
+		return tokenCreditDetailsArray
 	}
+	return nil
+}
+func  (c *Contract) GetRemainingCredits() map[string]uint64 {
+      remainingCreditsDetails := util.GetFromMap(c.sm, SCRemainingCreditsKey)
+      remainingCredits,ok := remainingCreditsDetails.(map[string]uint64)
+	  if ok {
+		return remainingCredits
+	  }
+	  return nil
 }
 
 func (c *Contract) GetCommitedTokensInfo() []TokenInfo {

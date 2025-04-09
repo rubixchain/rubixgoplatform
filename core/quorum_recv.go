@@ -1509,7 +1509,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
-
 	//Adding to the Token State Hash Table
 	if ur.TransferredTokenStateHashes != nil {
 		err = c.w.AddTokenStateHash(did, ur.TransferredTokenStateHashes, ur.PledgedTokens, ur.TransactionID)
@@ -1517,8 +1516,16 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			c.log.Error("Failed to add token state hash", "err", err)
 		}
 	}
+	if ur.NewlyMinedTokenStateHash != "" {
+		tokenStateHashes := make([]string, 0)
+		tokenStateHashes = append(tokenStateHashes, ur.NewlyMinedTokenStateHash)
+		err = c.w.AddTokenStateHash(did,tokenStateHashes,ur.PledgedTokens,ur.TransactionID)
+		if err != nil {
+			c.log.Error("Failed to add token state hash", "err", err)
+		}
+	}
 
-	c.pledgeHistory = []model.PledgeHistory{}
+	
 	for _, tokenID := range b.GetTransTokens() {
 		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, tokenID)
 		if err != nil {
@@ -1569,7 +1576,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// if pinCheckErr != nil {
 		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
 		// }
-
+        c.pledgeHistory = []model.PledgeHistory{}
 		newPledge := model.PledgeHistory{
 			QuorumDID:          did,
 			TransactionID:      ur.TransactionID,
@@ -1578,7 +1585,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			TransferTokenType:  tokenType,
 			TransferTokenValue: transTokenValue,
 			TransferBlockID:    blockID,
-			Epoch:              ur.TransactionEpoch,
+			Epoch:              uint64(ur.TransactionEpoch),
 			TokenCredit:        0,
 		}
 		c.pledgeHistory = append(c.pledgeHistory, newPledge)

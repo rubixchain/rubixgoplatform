@@ -167,7 +167,7 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 }
 
 func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
-	if tcb.TransInfo == nil || ctcb == nil {
+	if (tcb.TransInfo == nil && tcb.CreditDetails == nil) || ctcb == nil {
 		return nil
 	}
 	ntcb := make(map[string]interface{})
@@ -179,11 +179,13 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 			return nil
 		}
 	}
-	ntib := newTransInfo(ctcb, tcb.TransInfo)
-	if ntib == nil {
-		return nil
+	if tcb.TransInfo != nil {
+		ntib := newTransInfo(ctcb, tcb.TransInfo)
+		if ntib == nil {
+			return nil
+		}
+		ntcb[TCTransInfoKey] = ntib
 	}
-	ntcb[TCTransInfoKey] = ntib
 	pdib := newPledgeDetails(tcb.PledgeDetails)
 	if pdib != nil {
 		ntcb[TCPledgeDetailsKey] = pdib

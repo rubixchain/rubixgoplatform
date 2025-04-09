@@ -113,6 +113,7 @@ type UpdatePledgeRequest struct {
 	PledgedTokens               []string `json:"pledged_tokens"`
 	TokenChainBlock             []byte   `json:"token_chain_block"`
 	TransferredTokenStateHashes []string `json:"token_state_hash_info"`
+	NewlyMinedTokenStateHash    string   `json:"mined_token_state_hash"`
 	TransactionID               string   `json:"transaction_id"`
 	TransactionType             int      `json:"transaction_type"`
 	TransactionEpoch            int      `json:"transaction_epoch"`
@@ -160,7 +161,7 @@ type UpdatePreviousQuorums struct {
 	TransactionID   string
 	TransactionType int
 	TokenID         string
-	CurrentEpoch    int64
+	CurrentEpoch    uint64
 }
 
 type CreditSignature struct {
@@ -699,7 +700,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 				//Sending next block epoch & new block token state hash to previous quorums to calculate credits
 				var updatePrevQuorums UpdatePreviousQuorums
-				updatePrevQuorums.CurrentEpoch = int64(cr.TransactionEpoch)
+				updatePrevQuorums.CurrentEpoch = uint64(cr.TransactionEpoch)
 				updatePrevQuorums.TokenID = tokeninfo.Token
 				updatePrevQuorums.TransactionID = b.GetTid()
 				updatePrevQuorums.TransactionType = cr.Type
@@ -1696,6 +1697,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		//Miner computes the new token state hash
 		blockID, err := nb.GetBlockID(cr.MiningTokenID)
+		if err != nil {
+			c.log.Error("not able to get blockID", "err", err)
+			return nil, nil, nil, err
+		}
 		tokenIDTokenStateData := cr.MiningTokenID + blockID
 		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
 		tokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
@@ -1720,6 +1725,20 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		var newtokenhashes []string
+		newtokenhashes = append(newtokenhashes, tokenIDTokenStateHash)
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid, weekCount)
+		if pledgeFinalityError != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
+			return nil, nil, nil, pledgeFinalityError
+		}
+		err = c.initiateUnpledgingProcess(cr, tid, int64(cr.TransactionEpoch))
+		if err != nil {
+			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
+			return nil, nil, nil, err
+		}
+
+	
 		miningDetails := model.TransactionDetails{
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
@@ -1850,8 +1869,8 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			return fmt.Errorf("invalid pledge request")
 		}
 		if p == nil {
-			c.log.Error("Invalid pledge request")
-			return fmt.Errorf("invalid pledge request")
+			c.log.Error("invalid peerID")
+			return fmt.Errorf("invalid peerID")
 		}
 		var qAddress string
 		for _, quorumValue := range cr.QuorumList {
@@ -1874,8 +1893,12 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 			TransactionID:               transactionId,
 			TransactionType:             cr.Type,
 			TransferredTokenStateHashes: nil,
+			NewlyMinedTokenStateHash:    "",
 			TransactionEpoch:            cr.TransactionEpoch,
 			WeekCount:                   weekCount,
+		}
+		if cr.Mode == MiningMode {
+			ur.NewlyMinedTokenStateHash = newTokenStateHashes[0]
 		}
 
 		if newTokenStateHashes != nil {
@@ -2394,7 +2417,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 				{Token: cr.MiningTokenID,
 					TokenLevel:    tokenLevel,
 					TokenNumber:   tokenNumber,
-					CreditDetails: sc.GetTokenCreditsDetails()},
+					CreditDetails: sc.GetTokenCreditsDetails()}, //TODO:Remove Credit details in Genesis block
 			},
 		}
 
@@ -2402,7 +2425,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TransactionType:    block.TokenMintedType,
 			TokenOwner:         sc.GetMinerDID(),
 			QuorumSignature:    credit,
-			CreditDetails:      sc.GetTokenCreditsDetails(),
+			CreditDetails:      sc.GetTokenCreditsDetails(), //TODO:Remove Credit details in Genesis block
 			PledgeDetails:      ptds,
 			InitiatorSignature: minerSign,
 			Epoch:              cr.TransactionEpoch,
