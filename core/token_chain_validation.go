@@ -642,10 +642,11 @@ func (c *Core) CurrentOwnerPinCheck(b *block.Block, tokenId string, userDID stri
 	//current owner should be the receiver in the latest block
 	currentOwner := b.GetOwner()
 	var currentOwnerPeerID string
-	if currentOwner == userDID {
-		currentOwnerPeerID = c.peerID
-	} else {
-		currentOwnerPeerID = c.w.GetPeerID(currentOwner)
+	currentOwnerInfo, err := c.GetPeerDIDInfo(currentOwner)
+	if currentOwnerInfo == nil || currentOwnerInfo.PeerID == "" {
+		c.log.Error("failed to fetchh current owner peer id for pincheck, current owner ", currentOwner)
+		response.Message = fmt.Sprintf("failed to fetchh current owner peer id for pincheck, current owner : %v", currentOwner)
+		return response, fmt.Errorf(response.Message+"err : %v", err)
 	}
 
 	results := make([]MultiPinCheckRes, 1)
@@ -687,8 +688,13 @@ func (c *Core) CurrentQuorumStatePinCheck(b *block.Block, tokenId string, tokenT
 		return response, err
 	}
 	for _, qrm := range quorumSignList {
-		qrmPeerID := c.w.GetPeerID(qrm.DID)
-		quorumList = append(quorumList, qrmPeerID+"."+qrm.DID)
+		qrmInfo, err := c.GetPeerDIDInfo(qrm.DID)
+		if qrmInfo == nil || qrmInfo.PeerID == "" {
+			c.log.Error("failed to fetchh qrm peer id, qrm ", qrm.DID)
+			response.Message = fmt.Sprintf("failed to fetchh qrm peer id for pincheck, qrm : %v", qrm.DID)
+			return response, fmt.Errorf("failed to fetch qrm peer id, err %v ", err)
+		}
+		quorumList = append(quorumList, qrmInfo.PeerID+"."+qrm.DID)
 	}
 
 	tokenStateCheckResult := make([]TokenStateCheckResult, 1)

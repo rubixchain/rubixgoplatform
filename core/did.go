@@ -26,9 +26,9 @@ type DIDInfo struct {
 	PeerID  string `json:"peer_id"`
 }
 
-func (c *Core) GetPeerFromExplorer(did string) (*DIDInfo, error) {
+func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 	// Construct the API URL
-	url := "https://rexplorer.azurewebsites.net/api/user/get-did-info/" + did
+	url := "https://rexplorer.azurewebsites.net/api/user/get-did-info/" + didStr
 
 	// Make the HTTP GET request
 	resp, err := http.Get(url)
@@ -54,7 +54,18 @@ func (c *Core) GetPeerFromExplorer(did string) (*DIDInfo, error) {
 		return nil, fmt.Errorf("failed to parse JSON: %v", err)
 	}
 
-	return &apiResp.Data, nil
+	peerInfo := &wallet.DIDPeerMap{
+		DID:    apiResp.Data.UserDID,
+		PeerID: apiResp.Data.PeerID,
+	}
+
+	if apiResp.Data.DIDType == "BIP39" {
+		*peerInfo.DIDType = did.LiteDIDMode
+	} else {
+		*peerInfo.DIDType = -1
+	}
+
+	return peerInfo, nil
 }
 
 func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
@@ -325,4 +336,75 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 	}
 	c.ec.ExplorerUserCreate(newDID)
 	return did, nil
+}
+
+// GetPeerDIDInfo fetched peer info either from DIDTable (if in the same node), or DIDPeerTable, or explorer
+// If did type is still not found then it connects the peer and fetches did type 
+// And it adds peer to DIDPeerTable, in case peer is not in the same node
+// This function throws error in 3 cases :
+// case-1 : if peer details not found anywhere, returns nil, and error;
+// case-2 : if peerId not found anywhere but did type is in DB, retrns did type and error;
+// case-3 : if failed to add peer info to DB, returns DIDPeerMap and error containing 'retry' msg
+func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
+	peerDIDInfo := &wallet.DIDPeerMap{
+		DID: didStr,
+	}
+	// check if peer is in same node
+	didInfo, err := c.w.GetDID(didStr)
+	if err == nil {
+		*peerDIDInfo.DIDType = didInfo.Type
+		peerDIDInfo.PeerID = c.peerID
+		return peerDIDInfo, nil
+	}
+	// if peer is in different node, fetch peer id from DIDPeerTable
+	peerID := c.w.GetPeerID(didStr)
+	if peerID == "" {
+		// if peer id not found in table, try to fetch from explorer
+		peerDIDInfo, err = c.GetPeerFromExplorer(didStr)
+		if err != nil {
+			c.log.Error("failed to fetch peer Id from explorer for ", didStr, "err", err)
+
+			// if peer id not found in explorer too, then return only did type, if it is in table
+			didType, _ := c.w.GetPeerDIDType(didStr)
+			if didType == -1 {
+				return nil, err
+			}
+			peerDIDInfo.DIDType = &didType
+			return peerDIDInfo, fmt.Errorf("failed find peer ID, err : " + err.Error())
+		}
+	} else {
+		peerDIDInfo.PeerID = peerID
+	}
+
+	//if did type is not fetched yet or is incorrect, then try to fetch it from db or from the peer itself
+	if *peerDIDInfo.DIDType == -1 || peerDIDInfo.DIDType == nil {
+		didType, _ := c.w.GetPeerDIDType(didStr)
+		if didType == -1 {
+			c.log.Debug("Connecting with peer to get DID type of peer did", didStr)
+			p, err := c.getPeer(didStr + "." + peerDIDInfo.PeerID)
+			if err != nil {
+				c.log.Error("could not connect with peer to fetch did type, error ", err)
+				return peerDIDInfo, nil
+			}
+			defer p.Close()
+			peerDetails, err := c.GetPeerInfo(p, didStr)
+			if err != nil {
+				c.log.Error("failed to fetch did type from peer ", didStr, "err", err)
+				return peerDIDInfo, nil
+			}
+			peerDIDInfo.DIDType = peerDetails.PeerInfo.DIDType
+		} else {
+			peerDIDInfo.DIDType = &didType
+		}
+	}
+
+	// add peer to DIDPeerTable, if peer is in different node
+	if peerDIDInfo.PeerID != c.peerID {
+		err = c.AddPeerDetails(*peerDIDInfo)
+		if err != nil {
+			c.log.Error("failed to add peer to DIDPeerTable, err ", err)
+			return peerDIDInfo, fmt.Errorf("failed to add peer info to table, please retry adding")
+		}
+	}
+	return peerDIDInfo, nil
 }

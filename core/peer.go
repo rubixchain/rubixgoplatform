@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -66,7 +67,7 @@ func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	// peerPeerID := c.l.GetQuerry(req, "self_peerId")
 	// peerDID := c.l.GetQuerry(req, "selfDID")
 	// peerDIDType := c.l.GetQuerry(req, "selfDID_type")
-	
+
 	// //If the peer's DID type string is not empty, register the peer, if not already registered
 	// if peerDIDType != "" {
 	// 	peerDIDTypeInt, err1 := strconv.Atoi(peerDIDType)
@@ -93,11 +94,21 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 	}
 	// check if addr contains the peer ID
 	if peerID == "" {
-		peerID = c.w.GetPeerID(did)
-		if peerID == "" {
-			c.log.Error("Peer ID not found", "did", did)
-			return nil, fmt.Errorf("invalid address, Peer ID not found")
+		peerInfo, err := c.GetPeerDIDInfo(did)
+		if err != nil {
+			if peerInfo == nil {
+				c.log.Error("could not get peerId of peer ", did, "error", err)
+				return nil, fmt.Errorf("could not get peerId of peer %v, error : %v", did, err)
+			}
+			if strings.Contains(err.Error(), "retry") {
+				c.AddPeerDetails(*peerInfo)
+			}
 		}
+		if peerInfo.PeerID == "" {
+			c.log.Error("failed to get peerId of peer ", did, "error", err)
+			return nil, fmt.Errorf("failed to get peerId of receiver : %v, error: %v", did, err)
+		}
+		peerID = peerInfo.PeerID
 	}
 	p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
 	if err != nil {

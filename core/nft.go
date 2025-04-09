@@ -434,9 +434,9 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
 	}
 
-	receiverPeerId := c.w.GetPeerID(executeReq.Receiver)
+	receiverInfo, _ := c.GetPeerDIDInfo(executeReq.Receiver)
 	local := false
-	if receiverPeerId == c.peerID || receiverPeerId == "" {
+	if receiverInfo.PeerID == c.peerID {
 		local = true
 	}
 

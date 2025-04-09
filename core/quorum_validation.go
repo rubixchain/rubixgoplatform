@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
@@ -42,28 +43,33 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
 		default:
-			signerDIDType, err := c.w.GetPeerDIDType(signer)
-			if signerDIDType == -1 || err != nil {
-				c.log.Debug("quorum does not have prev-block signer did type", signerDIDType)
-				signerDetails, err := c.GetPeerInfo(p, signer)
-				if err != nil || signerDetails.PeerInfo.PeerID == "" {
-					c.log.Error("failed to fetch signer info form sender, signer ", signer, "err", err)
-					// return signerDetails.Status, err
-					basicDID := did.BasicDIDMode
-					signerDetails.PeerInfo.DIDType = &basicDID
+			signerInfo, err := c.GetPeerDIDInfo(signer)
+			if err != nil {
+				if strings.Contains(err.Error(), "retry") {
+					c.AddPeerDetails(*signerInfo)
 				}
-				if signerDetails.PeerInfo.DIDType == nil {
-					unknownDIDType := -1
-					signerDetails.PeerInfo.DIDType = &unknownDIDType
+			}
+			if signerInfo == nil || *signerInfo.DIDType == -1 {
+				peerDetails, err := c.GetPeerInfo(p, signer)
+				if err != nil || peerDetails.PeerInfo.DIDType == nil {
+					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
+					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
+					if !peerUpdateResult || err != nil {
+						*signerInfo.DIDType = did.BasicDIDMode
+						c.AddPeerDetails(*signerInfo)
+					}
+				} else {
+					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
+					if !peerUpdateResult || err != nil {
+						*signerInfo.DIDType = did.BasicDIDMode
+						c.AddPeerDetails(*signerInfo)
+					}
 				}
-
-				signerDetails.PeerInfo.DID = signer
-				c.AddPeerDetails(signerDetails.PeerInfo)
 			}
 			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
-				return false, fmt.Errorf("failed to setup foreign DID quorum : ", signer, "err", err)
+				return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
 			}
 		}
 		err := b.VerifySignature(dc)

@@ -485,7 +485,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 	switch cr.Mode {
 	case RBTTransferMode:
-		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID())
+		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
 			return nil, nil, nil, err
@@ -507,50 +507,27 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if !ok {
 				c.log.Error("could not parse quorum address:", qrm)
 			}
-			if qpid == "" {
-				qpid = c.w.GetPeerID(qdid)
-			}
-			// Initiatitor is part of Quorum Node
-			if qpid == "" {
-				_, err := c.w.GetDID(qdid)
-				if err != nil {
-					return nil, nil, nil, fmt.Errorf("unable to fetch peerID for quorum DID: %v which fetching quorum information", qdid)
-				} else {
-					qpid = c.peerID
-				}
-			}
 
 			var qrmInfo QuorumDIDPeerMap
-			//fetch did type of the quorum
-			qDidType, err := c.w.GetPeerDIDType(qdid)
+			//fetch did info of the quorum
+			qDidInfo, err := c.GetPeerDIDInfo(qdid)
 			if err != nil {
-				if strings.Contains(err.Error(), "no records found") {
-					didInfo, err := c.w.GetDID(qdid)
-					if err != nil {
-						return nil, nil, nil, err
-					} else {
-						qDidType = didInfo.Type
-					}
-				} else {
-					c.log.Error(fmt.Sprintf("could not fetch did type for quorum: %v while gathering quorum information, err: %v", qdid, err))
+				if strings.Contains(err.Error(), "retry") {
+					c.AddPeerDetails(*qDidInfo)
 				}
 			}
-			if qDidType == -1 {
-				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
-				didtype_, msg, err := c.GetPeerdidTypeFromPeer(qpid, qdid, dc.GetDID())
-				if err != nil {
-					c.log.Error("error", err, "msg", msg)
-					qrmInfo.DIDType = nil
-				} else {
-					qDidType = didtype_
-					qrmInfo.DIDType = &qDidType
-				}
+			if qDidInfo == nil || *qDidInfo.DIDType == -1 {
+				c.log.Error("could not fetch did type of quorum", qdid, "err", err)
+				qrmInfo.DIDType = nil
 			} else {
-				qrmInfo.DIDType = &qDidType
+				qrmInfo.DIDType = qDidInfo.DIDType
 			}
-			//add quorum details to the data to be shared
+			if qpid == "" {
+				qpid = qDidInfo.PeerID
+			}
 			qrmInfo.DID = qdid
 			qrmInfo.PeerID = qpid
+			//add quorum details to the data to be shared
 			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
 		}
 		fmt.Println("The send request is ", sr)
@@ -660,24 +637,16 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			//send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
-				previousQuorumPeerID := c.w.GetPeerID(previousQuorumDID)
-				// If peer ID information of a previous quorum DID is not found in the DIDPeerTable, it is likely that the
-				// signer DID belongs to the local peer. To verify that, we check if the record
-				// for the signer DID is present in DIDTable or not. If so, we can be sure that the signer
-				// DID is part of the local peer, and we take local peerID.
-				if previousQuorumPeerID == "" {
-					_, err := c.w.GetDID(previousQuorumDID)
-					if err != nil {
-						return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
-					} else {
-						previousQuorumPeerID = c.peerID
-					}
+				// fetch previous quorum's peer Id
+				previousQuorumInfo, _ := c.GetPeerDIDInfo(previousQuorumDID)
+				if previousQuorumInfo.PeerID == "" {
+					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 				}
 
-				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
+				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
 				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
 				}
 
 				updateTokenHashDetailsQuery := make(map[string]string)
@@ -724,7 +693,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		return &td, pl, pds, nil
 	case FTTransferMode:
 		// Connect to the receiver's peer
-		rp, err := c.getPeer(cr.ReceiverPeerID+"."+sc.GetReceiverDID())
+		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
 		if err != nil {
 			c.log.Error("Receiver not connected", "err", err)
 			return nil, nil, nil, err
@@ -747,32 +716,27 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if !ok {
 				c.log.Error("could not parse quorum address:", qrm)
 			}
-			if qpid == "" {
-				qpid = c.w.GetPeerID(qdid)
-			}
 
 			var qrmInfo QuorumDIDPeerMap
-			//fetch did type of the quorum
-			qDidType, err := c.w.GetPeerDIDType(qdid)
+			//fetch did info of the quorum
+			qDidInfo, err := c.GetPeerDIDInfo(qdid)
 			if err != nil {
-				c.log.Error("could not fetch did type for quorum:", qdid, "error", err)
-			}
-			if qDidType == -1 {
-				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
-				didtype_, msg, err := c.GetPeerdidTypeFromPeer(qpid, qdid, dc.GetDID())
-				if err != nil {
-					c.log.Error("error", err, "msg", msg)
-					qrmInfo.DIDType = nil
-				} else {
-					qDidType = didtype_
-					qrmInfo.DIDType = &qDidType
+				if strings.Contains(err.Error(), "retry") {
+					c.AddPeerDetails(*qDidInfo)
 				}
-			} else {
-				qrmInfo.DIDType = &qDidType
 			}
-			//add quorum details to the data to be shared
+			if qDidInfo == nil || *qDidInfo.DIDType == -1 {
+				c.log.Error("could not fetch did type of quorum", qdid, "err", err)
+				qrmInfo.DIDType = nil
+			} else {
+				qrmInfo.DIDType = qDidInfo.DIDType
+			}
+			if qpid == "" {
+				qpid = qDidInfo.PeerID
+			}
 			qrmInfo.DID = qdid
 			qrmInfo.PeerID = qpid
+			//add quorum details to the data to be shared
 			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
 		}
 
@@ -873,26 +837,17 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			//send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
-				previousQuorumPeerID := c.w.GetPeerID(previousQuorumDID)
-				// If peer ID information of a previous quorum DID is not found in the DIDPeerTable, it is likely that the
-				// signer DID belongs to the local peer. To verify that, we check if the record
-				// for the signer DID is present in DIDTable or not. If so, we can be sure that the signer
-				// DID is part of the local peer, and we take local peerID.
-				if previousQuorumPeerID == "" {
-					_, err := c.w.GetDID(previousQuorumDID)
-					if err != nil {
-						return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
-					} else {
-						previousQuorumPeerID = c.peerID
-					}
+				// fetch previous quorum's peer Id
+				previousQuorumInfo, _ := c.GetPeerDIDInfo(previousQuorumDID)
+				if previousQuorumInfo.PeerID == "" {
+					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 				}
 
-				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
+				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
 				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
 				}
-
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
 				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
@@ -939,7 +894,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Debug("Mode = PinningServiceMode ")
 		c.log.Debug("Pinning Node PeerId", cr.PinningNodePeerID)
 		c.log.Debug("Pinning Service DID", sc.GetPinningServiceDID())
-		rp, err := c.getPeer(cr.PinningNodePeerID+"."+sc.GetPinningServiceDID())
+		rp, err := c.getPeer(cr.PinningNodePeerID + "." + sc.GetPinningServiceDID())
 		if err != nil {
 			c.log.Error("Pinning Node not connected", "err", err)
 			return nil, nil, nil, err
@@ -959,32 +914,27 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if !ok {
 				c.log.Error("could not parse quorum address:", qrm)
 			}
-			if qpid == "" {
-				qpid = c.w.GetPeerID(qdid)
-			}
 
 			var qrmInfo QuorumDIDPeerMap
-			//fetch did type of the quorum
-			qDidType, err := c.w.GetPeerDIDType(qdid)
+			//fetch did info of the quorum
+			qDidInfo, err := c.GetPeerDIDInfo(qdid)
 			if err != nil {
-				c.log.Error("could not fetch did type for quorum:", qdid, "error", err)
-			}
-			if qDidType == -1 {
-				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
-				didtype_, msg, err := c.GetPeerdidTypeFromPeer(qpid, qdid, dc.GetDID())
-				if err != nil {
-					c.log.Error("error", err, "msg", msg)
-					qrmInfo.DIDType = nil
-				} else {
-					qDidType = didtype_
-					qrmInfo.DIDType = &qDidType
+				if strings.Contains(err.Error(), "retry") {
+					c.AddPeerDetails(*qDidInfo)
 				}
-			} else {
-				qrmInfo.DIDType = &qDidType
 			}
-			//add quorum details to the data to be shared
+			if qDidInfo == nil || *qDidInfo.DIDType == -1 {
+				c.log.Error("could not fetch did type of quorum", qdid, "err", err)
+				qrmInfo.DIDType = nil
+			} else {
+				qrmInfo.DIDType = qDidInfo.DIDType
+			}
+			if qpid == "" {
+				qpid = qDidInfo.PeerID
+			}
 			qrmInfo.DID = qdid
 			qrmInfo.PeerID = qpid
+			//add quorum details to the data to be shared
 			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
 		}
 		var br model.BasicResponse
@@ -1085,24 +1035,16 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			//send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
-				previousQuorumPeerID := c.w.GetPeerID(previousQuorumDID)
-				// If peer ID information of a previous quorum DID is not found in the DIDPeerTable, it is likely that the
-				// signer DID belongs to the local peer. To verify that, we check if the record
-				// for the signer DID is present in DIDTable or not. If so, we can be sure that the signer
-				// DID is part of the local peer, and we take local peerID.
-				if previousQuorumPeerID == "" {
-					_, err := c.w.GetDID(previousQuorumDID)
-					if err != nil {
-						return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
-					} else {
-						previousQuorumPeerID = c.peerID
-					}
+				// fetch previous quorum's peer Id
+				previousQuorumInfo, _ := c.GetPeerDIDInfo(previousQuorumDID)
+				if previousQuorumInfo.PeerID == "" {
+					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 				}
 
-				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
+				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
 				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
 				}
 
 				updateTokenHashDetailsQuery := make(map[string]string)
@@ -1158,32 +1100,31 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if !ok {
 				c.log.Error("could not parse quorum address:", qrm)
 			}
-			if qpid == "" {
-				qpid = c.w.GetPeerID(qdid)
-			}
 
 			var qrmInfo QuorumDIDPeerMap
-			//fetch did type of the quorum
-			qDidType, err := c.w.GetPeerDIDType(qdid)
+			//fetch did info of the quorum
+			qDidInfo, err := c.GetPeerDIDInfo(qdid)
 			if err != nil {
-				c.log.Error("could not fetch did type for quorum:", qdid, "error", err)
-			}
-			if qDidType == -1 {
-				c.log.Info("did type is empty for quorum:", qdid, "connecting & fetching from quorum")
-				didtype_, msg, err := c.GetPeerdidTypeFromPeer(qpid, qdid, dc.GetDID())
-				if err != nil {
-					c.log.Error("error", err, "msg", msg)
+				if qDidInfo == nil {
+					c.log.Error("could not fetch did info of quorum", qdid, "err", err)
 					qrmInfo.DIDType = nil
-				} else {
-					qDidType = didtype_
-					qrmInfo.DIDType = &qDidType
 				}
-			} else {
-				qrmInfo.DIDType = &qDidType
+				if strings.Contains(err.Error(), "retry") {
+					c.AddPeerDetails(*qDidInfo)
+				}
 			}
-			//add quorum details to the data to be shared
+			if *qDidInfo.DIDType == -1 {
+				c.log.Error("could not fetch did type of quorum", qdid, "err", err)
+				qrmInfo.DIDType = nil
+			} else {
+				qrmInfo.DIDType = qDidInfo.DIDType
+			}
+			if qpid == "" {
+				qpid = qDidInfo.PeerID
+			}
 			qrmInfo.DID = qdid
 			qrmInfo.PeerID = qpid
+			//add quorum details to the data to be shared
 			quorumInfo = append(quorumInfo, qrmInfo)
 		}
 
@@ -1234,24 +1175,16 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 			//send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
-				previousQuorumPeerID := c.w.GetPeerID(previousQuorumDID)
-				// If peer ID information of a previous quorum DID is not found in the DIDPeerTable, it is likely that the
-				// signer DID belongs to the local peer. To verify that, we check if the record
-				// for the signer DID is present in DIDTable or not. If so, we can be sure that the signer
-				// DID is part of the local peer, and we take local peerID.
-				if previousQuorumPeerID == "" {
-					_, err := c.w.GetDID(previousQuorumDID)
-					if err != nil {
-						return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
-					} else {
-						previousQuorumPeerID = c.peerID
-					}
+				// fetch previous quorum's peer Id
+				previousQuorumInfo, _ := c.GetPeerDIDInfo(previousQuorumDID)
+				if previousQuorumInfo.PeerID == "" {
+					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 				}
 
-				previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
+				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
 				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
 				}
 
 				updateTokenHashDetailsQuery := make(map[string]string)
@@ -1459,24 +1392,16 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		for _, previousQuorumDID := range previousQuorumDIDs {
-			previousQuorumPeerID := c.w.GetPeerID(previousQuorumDID)
-			// If peer ID information of a previous quorum DID is not found in the DIDPeerTable, it is likely that the
-			// signer DID belongs to the local peer. To verify that, we check if the record
-			// for the signer DID is present in DIDTable or not. If so, we can be sure that the signer
-			// DID is part of the local peer, and we take local peerID.
-			if previousQuorumPeerID == "" {
-				_, err := c.w.GetDID(previousQuorumDID)
-				if err != nil {
-					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
-				} else {
-					previousQuorumPeerID = c.peerID
-				}
+			// fetch previous quorum's peer Id
+			previousQuorumInfo, _ := c.GetPeerDIDInfo(previousQuorumDID)
+			if previousQuorumInfo.PeerID == "" {
+				return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 			}
 
-			previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
+			previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
 			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 			if errGetPeer != nil {
-				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
 			}
 
 			updateTokenHashDetailsQuery := make(map[string]string)
@@ -1616,24 +1541,16 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		for _, previousQuorumDID := range previousQuorumDIDs {
-			previousQuorumPeerID := c.w.GetPeerID(previousQuorumDID)
-			// If peer ID information of a previous quorum DID is not found in the DIDPeerTable, it is likely that the
-			// signer DID belongs to the local peer. To verify that, we check if the record
-			// for the signer DID is present in DIDTable or not. If so, we can be sure that the signer
-			// DID is part of the local peer, and we take local peerID.
-			if previousQuorumPeerID == "" {
-				_, err := c.w.GetDID(previousQuorumDID)
-				if err != nil {
-					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
-				} else {
-					previousQuorumPeerID = c.peerID
-				}
+			// fetch previous quorum's peer Id
+			previousQuorumInfo, _ := c.GetPeerDIDInfo(previousQuorumDID)
+			if previousQuorumInfo.PeerID == "" {
+				return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
 			}
 
-			previousQuorumAddress := previousQuorumPeerID + "." + previousQuorumDID
+			previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
 			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
 			if errGetPeer != nil {
-				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumPeerID, errGetPeer)
+				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
 			}
 
 			updateTokenHashDetailsQuery := make(map[string]string)
