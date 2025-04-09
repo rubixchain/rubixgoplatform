@@ -83,6 +83,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 
 	tdb, err := leveldb.OpenFile(dir+TokenChainStorage, op)
 	if err != nil {
+		// tdb, err := leveldb.RecoverFile(dir+TokenChainStorage, op) //This needs to be made proper
 		w.log.Error("failed to configure token chain block storage", "err", err)
 		return nil, fmt.Errorf("failed to configure token chain block storage")
 	}

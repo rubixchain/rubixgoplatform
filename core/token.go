@@ -403,6 +403,7 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 
 	// Handle case where token blocks are missing
 	if err != nil || blks == nil {
+		fmt.Println("****************Token blocks not found, checking DHT addresses*****************")
 		return c.handleRoleBasedLogic(tr.Token, req)
 	}
 
@@ -416,6 +417,7 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.Result {
+	fmt.Println("Handling role-based logic for token:", token)
 	list, err := c.w.GetDHTddrs(token)
 	if err != nil {
 		c.log.Error("Failed to get DHT addresses", "err", err)
@@ -436,7 +438,7 @@ func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.R
 			c.log.Warn("Failed to send JSON request", "peer", peerID, "err", err)
 			continue
 		}
-
+		fmt.Println("Response from peer:", response)
 		var result model.PinCheckReply
 		resultBytes, ok := response.Result.([]byte)
 		if !ok {
