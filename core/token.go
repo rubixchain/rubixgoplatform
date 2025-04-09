@@ -1052,7 +1052,7 @@ func (c *Core) ReadyToMineCredits(did string) ([]model.PledgeHistory, error) {
 
 	// Filter pledges based on transaction block epoch
 	for _, pledge := range pledges {
-		if pledge.Epoch <= currentEpoch-120 {
+		if pledge.Epoch <= uint64(currentEpoch-120) {
 			// Update token credit status to indicate it's now ready for mining
 			updateErr := c.w.UpdateTokenCreditStatus(pledge.TransferTokenID, 1, pledge.TransactionID)
 			if updateErr != nil {
