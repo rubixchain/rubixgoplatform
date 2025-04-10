@@ -204,37 +204,51 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 }
 
 func (p *Peer) SendJSONRequest(method string, path string, querry map[string]string, req interface{}, resp interface{}, did bool, timeout ...time.Duration) error {
-	httpReq, err := p.JSONRequest(method, path, req)
-	httpReq.Close = true
-	if err != nil {
-		return err
-	}
-	if did {
-		q := httpReq.URL.Query()
-		q.Add("did", p.did)
-		httpReq.URL.RawQuery = q.Encode()
-	}
-	for k, v := range querry {
-		q := httpReq.URL.Query()
-		q.Add(k, v)
-		httpReq.URL.RawQuery = q.Encode()
-	}
-	httpResp, err := p.Do(httpReq, timeout...)
-	if err != nil {
-		p.log.Error("failed to receive reply", "err", err)
-		return err
-	}
-	defer httpResp.Body.Close()
-	if httpResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed with status code %d", httpResp.StatusCode)
-	}
-	if resp != nil {
-		err = jsonutil.DecodeJSONFromReader(httpResp.Body, resp)
+	var err error
+	maxRetries := 3
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		httpReq, err := p.JSONRequest(method, path, req)
 		if err != nil {
-			return fmt.Errorf("invalid response")
+			p.log.Error("failed to create request", "attempt", attempt, "err", err)
+			continue
 		}
+		httpReq.Close = true
+		if did {
+			q := httpReq.URL.Query()
+			q.Add("did", p.did)
+			httpReq.URL.RawQuery = q.Encode()
+		}
+		for k, v := range querry {
+			q := httpReq.URL.Query()
+			q.Add(k, v)
+			httpReq.URL.RawQuery = q.Encode()
+		}
+		httpResp, err := p.Do(httpReq, timeout...)
+		if err != nil {
+			p.log.Error("failed to receive reply", "attempt", attempt, "err", err)
+			time.Sleep(time.Second * time.Duration(attempt)) // Exponential backoff
+			continue
+		}
+		defer httpResp.Body.Close()
+		if httpResp.StatusCode != http.StatusOK {
+			err = fmt.Errorf("failed with status code %d", httpResp.StatusCode)
+			p.log.Error("request failed", "attempt", attempt, "status", httpResp.StatusCode)
+			time.Sleep(time.Second * time.Duration(attempt)) // Exponential backoff
+			continue
+		}
+		if resp != nil {
+			err = jsonutil.DecodeJSONFromReader(httpResp.Body, resp)
+			if err != nil {
+				p.log.Error("invalid response", "attempt", attempt, "err", err)
+				time.Sleep(time.Second * time.Duration(attempt)) // Exponential backoff
+				continue
+			}
+		}
+		// If we reach here, the request was successful
+		return nil
 	}
-	return nil
+	// Return the last error encountered
+	return err
 }
 
 func (p *Peer) IsLocal() bool {

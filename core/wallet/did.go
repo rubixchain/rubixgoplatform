@@ -175,7 +175,7 @@ func (w *Wallet) GetPeerID(did string) string {
 	var dm DIDPeerMap
 	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
-		return ""
+		return "returned error in GetPeerID " + err.Error()
 	}
 	return dm.PeerID
 }
