@@ -431,7 +431,8 @@ func (c *Core) UpdateUserInfo(dids []string) {
 				c.log.Error("Failed to send request for user DID, " + did + " Error : " + err.Error())
 				return
 			}
-			if er.Message != "User balance updated successfully!" {
+
+			if strings.Contains(er.Message, "User updated successfully") {
 				c.log.Error("Failed to update user info for ", "DID", did, "msg", er.Message)
 			} else {
 				c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
