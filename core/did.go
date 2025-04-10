@@ -339,7 +339,7 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 }
 
 // GetPeerDIDInfo fetched peer info either from DIDTable (if in the same node), or DIDPeerTable, or explorer
-// If did type is still not found then it connects the peer and fetches did type 
+// If did type is still not found then it connects the peer and fetches did type
 // And it adds peer to DIDPeerTable, in case peer is not in the same node
 // This function throws error in 3 cases :
 // case-1 : if peer details not found anywhere, returns nil, and error;
@@ -352,7 +352,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 	// check if peer is in same node
 	didInfo, err := c.w.GetDID(didStr)
 	if err == nil {
-		*peerDIDInfo.DIDType = didInfo.Type
+		peerDIDInfo.DIDType = &didInfo.Type
 		peerDIDInfo.PeerID = c.peerID
 		return peerDIDInfo, nil
 	}
@@ -377,7 +377,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 	}
 
 	//if did type is not fetched yet or is incorrect, then try to fetch it from db or from the peer itself
-	if *peerDIDInfo.DIDType == -1 || peerDIDInfo.DIDType == nil {
+	if peerDIDInfo.DIDType == nil || *peerDIDInfo.DIDType == -1 {
 		didType, _ := c.w.GetPeerDIDType(didStr)
 		if didType == -1 {
 			c.log.Debug("Connecting with peer to get DID type of peer did", didStr)
