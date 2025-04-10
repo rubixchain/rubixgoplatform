@@ -93,8 +93,6 @@ func tcsPrefix(tokenType int, t string) string {
 	case tkn.FTTokenType:
 		tt = FTTokenType
 	}
-	fmt.Println("TokenType:", tokenType, "Mapped:", tt)
-	fmt.Println("Final Prefix:", tt+"-"+t+"-")
 	return tt + "-" + t + "-"
 }
 
@@ -207,10 +205,8 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 }
 
 func (w *Wallet) getRawBlock(db *ChainDB, key []byte) ([]byte, error) {
-	w.log.Info("Getting raw block for key", "key:", string(key))
 	v, err := db.Get(key, nil)
 	if err != nil {
-		w.log.Error("Failed to get raw block", "err", err)
 		return nil, err
 	}
 	blk := make([]byte, len(v))

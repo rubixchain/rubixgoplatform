@@ -432,7 +432,7 @@ func (c *Core) UpdateUserInfo(dids []string) {
 				return
 			}
 
-			if strings.Contains(er.Message, "User updated successfully") {
+			if !strings.Contains(er.Message, "User updated successfully") {
 				c.log.Error("Failed to update user info for ", "DID", did, "msg", er.Message)
 			} else {
 				c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
