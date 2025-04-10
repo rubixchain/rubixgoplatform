@@ -184,13 +184,13 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 		peer := "/p2p/" + peerID
 		resp, err := pm.ipfs.Request("p2p/forward", proto, addr, peer).Send(context.Background())
 		if err != nil {
-			pm.log.Error("failed make forward request")
+			pm.log.Error("failed make forward request", "err", resp.Error)
 			pm.releasePeerPort(portNum)
 			return nil, err
 		}
 		defer resp.Close()
 		if resp.Error != nil {
-			pm.log.Error("error in forward request")
+			pm.log.Error("error in forward request", "err", resp.Error)
 			return nil, resp.Error
 		}
 		p.Client, err = ensweb.NewClient(scfg, p.log)

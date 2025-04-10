@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -54,15 +55,43 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		return nil, fmt.Errorf("failed to parse JSON: %v", err)
 	}
 
-	peerInfo := &wallet.DIDPeerMap{
-		DID:    apiResp.Data.UserDID,
-		PeerID: apiResp.Data.PeerID,
+	userDID := apiResp.Data.UserDID
+
+	// Fetch the DID
+	if err := c.FetchDID(userDID); err != nil {
+		return nil, fmt.Errorf("failed to fetch DID: %v", err)
 	}
 
+	// Check for .png files in the folder
+	didDirPath := filepath.Join(c.didDir, userDID)
+	hasPNG := false
+
+	files, err := ioutil.ReadDir(didDirPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read DID directory: %v", err)
+	}
+
+	for _, file := range files {
+		if !file.IsDir() && filepath.Ext(file.Name()) == ".png" {
+			hasPNG = true
+			break
+		}
+	}
+
+	// Initialize DIDType with a pointer
+	didType := -1
+	peerInfo := &wallet.DIDPeerMap{
+		DID:     apiResp.Data.UserDID,
+		PeerID:  apiResp.Data.PeerID,
+		DIDType: &didType,
+	}
+
+	// Determine DIDType based on conditions
 	if apiResp.Data.DIDType == "BIP39" {
 		*peerInfo.DIDType = did.LiteDIDMode
-	} else {
-		*peerInfo.DIDType = -1
+	} else if hasPNG {
+		mode := did.BasicDIDMode
+		peerInfo.DIDType = &mode
 	}
 
 	return peerInfo, nil
