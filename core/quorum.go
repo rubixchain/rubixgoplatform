@@ -258,7 +258,13 @@ func saveQuorumsToFile(qds []QuorumData, fileName string) error {
 func (c *Core) GetMiningQuorums() []string {
 
 	//Hardcoding the miningQuorumlist for testing
-	miningQuorumlist := []string{"bafybmie2gdo2npjtyjccfinybjccvnbmy4pzfaxcmcd4kb6v3g6aovldm4", "bafybmib6gtwq7kqlvfqzi4sbv7fpxuwp3smjro5bujtbckaajkbdkls3b4", "bafybmicl5xicpet42lgimc724jimp4vfks7s5byo5ek43a6kwmeox5d3xm", "bafybmifo746vj2iafbpbkyf2tbdtwvttj3axtdhxh7zqqmrtlpur3nyezi", "bafybmicjlae7tjqk6iijexmvdc5aqo3i5ukfeyhw3mdpw5jgmhxav5ty24"}
+	miningQuorumlist := []string{
+		"bafybmie4jgvtn5feqmcj7tpog36ihvmystlsbxatuazjc4ybkptdgr7gte",
+		"bafybmicxvuw7gzq3ccdd2muxdejn6ogopo22wxm3l6okjjvrfur657egum",
+		"bafybmihac2lqnszpctmj2wzmynb3wjik5rvyfugrtzwdu2lv3n465v6rhi",
+		"bafybmihqx2sdzl3fkcg6fuc6dctigselvuzp5rtymf733ekiiq6jadscxu",
+		"bafybmiguquq4t6tmr4lvpfukir5epjpadx44hafsdqqe2xeh4xoiszveua",
+	}
 	return miningQuorumlist
 
 }

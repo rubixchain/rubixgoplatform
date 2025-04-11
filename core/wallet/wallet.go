@@ -81,6 +81,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	w.ntcs = &ChainDB{}
 	w.smartContractTokenChainStorage = &ChainDB{}
 	w.FTChainStorage = &ChainDB{}
+	w.MiningRecordsChainStorage = &ChainDB{}
 	op := &opt.Options{
 		WriteBuffer: 64 * 1024 * 1024,
 	}

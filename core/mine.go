@@ -51,7 +51,7 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 	for _, tokenDetail := range tokenDetails {
 		totalCredits += tokenDetail.TokenCredit
 	}
-
+	fmt.Println("Credits available for mining:", totalCredits)
 	// TODO: Sync the mining pubsub get the latest entry, get the next token level and number
 	// 3. Check how many credits are needed for mining the next token according to token level
 	var creditsForNextToken uint64
@@ -62,9 +62,8 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 		resp.Message = fmt.Sprintf("Total credits (%d) are less than the required credits (%d) to mine the next token", totalCredits, creditsForNextToken)
 		return resp // Return an error
 	}
-    
-	selectedTokenCredits,remainingCredits,totalSelectedCredits:= wallet.CollectRequiredCredits(tokenDetails,creditsForNextToken)
-	
+
+	selectedTokenCredits, remainingCredits, totalSelectedCredits := wallet.CollectRequiredCredits(tokenDetails, creditsForNextToken)
 
 	didCryptoLib, err := c.SetupDID(reqID, MiningReq.MinerDid)
 	if err != nil {
@@ -77,7 +76,7 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 		PledgeMode:         contract.PeriodicPledgeMode,
 		ReqTokenCredits:    totalSelectedCredits,
 		TokenCreditDetails: selectedTokenCredits,
-		RemainingCredits: remainingCredits,
+		RemainingCredits:   remainingCredits,
 		ReqID:              reqID,
 		TransInfo: &contract.TransInfo{
 			MinerDID: MiningReq.MinerDid,
@@ -102,8 +101,10 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 	}
 
 	// TODO: Add sending mining details to explorer
+	c.log.Info("Mining successfully completed. Mined TokenID: %s", miningConsensusReq.MiningTokenID)
+	c.log.Info("Mining ID: %s", miningConsensusReq.TransactionID)
 	resp.Status = true
-	resp.Message = "Mining contract successfully initiated"
+	resp.Message = "Mining successfully completed"
 	return resp
 
 }
@@ -251,7 +252,7 @@ func (c *Core) miningCallback(peerID string, topic string, data []byte) {
 	miningRecord.MiningID = miningData.MiningID
 	miningRecord.MinedTokenID = miningData.MinedTokenID
 	miningRecord.TokenLevelAndTokenNumber = miningData.TokenLevelAndTokenNumber
-
+	fmt.Println("Mining record at the subscriber is ", miningRecord)
 	// Add mining record to the database or wallet
 	err = c.w.AddMiningRecords(miningRecord)
 	if err != nil {
@@ -272,6 +273,9 @@ func (c *Core) miningCallback(peerID string, topic string, data []byte) {
 	if err != nil {
 		c.log.Error("Failed to batch write key-value pairs to LevelDB", "err", err)
 	}
+	// TODO: Remove below part after testing
+	miningID, err := c.QueryMiningRecord(miningData.PledgeHistory[0].TransactionID, miningData.PledgeHistory[0].TransferTokenID)
+	fmt.Println("Mining ID from mining record query is ", miningID)
 }
 
 func (c *Core) QueryMiningRecord(transactionID string, transferTokenID string) (string, error) {

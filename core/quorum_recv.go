@@ -1519,13 +1519,12 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	if ur.NewlyMinedTokenStateHash != "" {
 		tokenStateHashes := make([]string, 0)
 		tokenStateHashes = append(tokenStateHashes, ur.NewlyMinedTokenStateHash)
-		err = c.w.AddTokenStateHash(did,tokenStateHashes,ur.PledgedTokens,ur.TransactionID)
+		err = c.w.AddTokenStateHash(did, tokenStateHashes, ur.PledgedTokens, ur.TransactionID)
 		if err != nil {
 			c.log.Error("Failed to add token state hash", "err", err)
 		}
 	}
 
-	
 	for _, tokenID := range b.GetTransTokens() {
 		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, tokenID)
 		if err != nil {
@@ -1576,7 +1575,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// if pinCheckErr != nil {
 		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
 		// }
-        c.pledgeHistory = []model.PledgeHistory{}
+		c.pledgeHistory = []model.PledgeHistory{}
 		newPledge := model.PledgeHistory{
 			QuorumDID:          did,
 			TransactionID:      ur.TransactionID,
@@ -1949,8 +1948,9 @@ func (c *Core) updateCreditsAndEpochPin(req *ensweb.Request) *ensweb.Result {
 		response.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &response, http.StatusOK)
 	}
-	c.log.Debug("Next block Epoch updating for token: ", UpdateCreditsAndEpochPin.TokenID)
-	c.log.Debug("Next block Epoch updating for transactionID: ", UpdateCreditsAndEpochPin.TransactionID)
+	c.log.Warn("Next block Epoch updating for token: ", UpdateCreditsAndEpochPin.TokenID)               // TODO: Change log WARN to DEBUG/INFO
+	c.log.Warn("Next block Epoch updating for transactionID: ", UpdateCreditsAndEpochPin.TransactionID) // TODO: Change log WARN to DEBUG/INFO
+	fmt.Println("Update Epoch struct is ", UpdateCreditsAndEpochPin)
 	UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateCreditsAndEpochPin.TokenID, UpdateCreditsAndEpochPin.TransactionID, UpdateCreditsAndEpochPin.TransactionType, UpdateCreditsAndEpochPin.CurrentEpoch)
 	if UpdateEpochErr != nil {
 		c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)

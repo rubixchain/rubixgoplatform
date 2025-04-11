@@ -431,6 +431,6 @@ func (s *Server) APIFindReadyToMineCredits(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	return s.BasicResponse(req, true, "successfully updated the token credit status in the DB for all ready to mine tokens", nil)
+	return s.BasicResponse(req, true, "Token credit status updated for ready to mine tokens", nil)
 
 }

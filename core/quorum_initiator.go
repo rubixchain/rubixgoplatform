@@ -280,8 +280,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 		}
 	}
 	//Ticker will trigger in every 8 hours and check for any week updation
-	// c.epochPinningTicker = time.NewTicker(8 * time.Hour)
-	c.epochPinningTicker = time.NewTicker(5 * time.Minute)
+	c.epochPinningTicker = time.NewTicker(8 * time.Hour)
 	go c.UpdateEpochPin()
 	// Subscribe to the mining pubsub
 	go c.miningSubscription()
@@ -377,7 +376,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
 	case MiningMode:
-		// reqPledgeTokensInt, _, _ := (TotalTokensCanBeMinedFromCredits(cr.MiningInfo.TokenCredits)) // TODO: From the total credits in the request, determine the number of mineable RBTs. That is the pledge amount
 		reqPledgeTokens = 1
 	}
 	minValue := MinDecimalValue(MaxDecimalPlaces)
@@ -399,31 +397,34 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
 	cr.TransactionID = tid
+	var ql []string
 	if cr.Mode == MiningMode {
 		cr.QuorumList = c.GetMiningQuorums()
-	}
-	ql := c.qm.GetQuorum(cr.Type, lastCharTID, c.peerID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
-	if ql == nil || len(ql) < MinQuorumRequired {
-		c.log.Error("Failed to get required quorums")
-		return nil, nil, nil, fmt.Errorf("failed to get required quorums")
-	}
-
-	var finalQl []string
-	var errFQL error
-	if cr.Type == 2 {
-		finalQl, errFQL = c.GetFinalQuorumList(ql)
-		if errFQL != nil {
-			c.log.Error("unable to get consensus from quorum(s). err: ", errFQL)
-			return nil, nil, nil, errFQL
-		}
-		cr.QuorumList = finalQl
-		if len(finalQl) < MinQuorumRequired {
-			c.log.Error("quorum(s) are unavailable for this trnx")
-			return nil, nil, nil, fmt.Errorf("quorum(s) are unavailable for this trnx. retry trnx after some time")
-		}
 	} else {
-		cr.QuorumList = ql
+		ql = c.qm.GetQuorum(cr.Type, lastCharTID, c.peerID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
+		if ql == nil || len(ql) < MinQuorumRequired {
+			c.log.Error("Failed to get required quorums")
+			return nil, nil, nil, fmt.Errorf("failed to get required quorums")
+		}
 	}
+	fmt.Println("QuorumList is ", cr.QuorumList)
+	// TODO: Handle below
+	// var finalQl []string
+	// var errFQL error
+	// if cr.Type == 2 {
+	// 	finalQl, errFQL = c.GetFinalQuorumList(ql)
+	// 	if errFQL != nil {
+	// 		c.log.Error("unable to get consensus from quorum(s). err: ", errFQL)
+	// 		return nil, nil, nil, errFQL
+	// 	}
+	// 	cr.QuorumList = finalQl
+	// 	if len(finalQl) < MinQuorumRequired {
+	// 		c.log.Error("quorum(s) are unavailable for this trnx")
+	// 		return nil, nil, nil, fmt.Errorf("quorum(s) are unavailable for this trnx. retry trnx after some time")
+	// 	}
+	// } else {
+	// 	cr.QuorumList = ql
+	// }
 
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
@@ -1696,7 +1697,9 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 		//Miner computes the new token state hash
-		blockID, err := nb.GetBlockID(cr.MiningTokenID)
+		fmt.Println("Mining tokenID is", cr.MiningTokenID)
+
+		blockID, err := nb.GetMinedTokenBlockID(cr.MiningTokenID)
 		if err != nil {
 			c.log.Error("not able to get blockID", "err", err)
 			return nil, nil, nil, err
@@ -1720,11 +1723,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TokenStateHash: tokenIDTokenStateHash,
 			TransactionID:  tid,
 		}
-
-		err = c.w.TokenStore(t)
-		if err != nil {
-			return nil, nil, nil, err
-		}
+		// TODO: Un-comment below after testing
+		// err = c.w.TokenStore(t)
+		// if err != nil {
+		// 	return nil, nil, nil, err
+		// }
+		fmt.Println("Mining ID is ", t.TransactionID)
+		fmt.Println("New tokenID is ", t.TokenID)
 		var newtokenhashes []string
 		newtokenhashes = append(newtokenhashes, tokenIDTokenStateHash)
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid, weekCount)
@@ -1738,7 +1743,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 
-	
 		miningDetails := model.TransactionDetails{
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
@@ -1752,20 +1756,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Epoch:           int64(cr.TransactionEpoch),
 		}
 
-		quorumSignatures, err := nb.GetQuorumSignatureList()
-		quorumDIDSignaturesArray := make([]model.QuorumDIDSignatures, 0, len(quorumSignatures))
-		for _, cs := range quorumSignatures {
-			quorumDIDSignaturesArray = append(quorumDIDSignaturesArray, model.QuorumDIDSignatures{
-				DID:       cs.DID,
-				Signature: cs.Signature,
-			})
-		}
-
 		miningRecord := &model.MiningRecordPubSub{
 			MiningID:                 tid,
 			MinedTokenID:             cr.MiningTokenID,
 			TokenLevelAndTokenNumber: 0, // Fetch latest token level and number from the pubsub itself before publishing
-			QuorumList:               quorumDIDSignaturesArray,
 			PledgeHistory:            sc.GetTokenCreditsDetails(),
 		}
 		err = c.publishMiningdetails(miningRecord)
@@ -1773,6 +1767,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error(("Unable to publish mining details"))
 			return nil, nil, nil, err
 		}
+		fmt.Println("Mining record published successfully")
 
 		return &miningDetails, nil, nil, err
 	default:
@@ -2414,10 +2409,12 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		miningGensisBlock := &block.GenesisBlock{
 			Type: block.TokenMinedType,
 			Info: []block.GenesisTokenInfo{
-				{Token: cr.MiningTokenID,
+				{
+					Token:         cr.MiningTokenID,
 					TokenLevel:    tokenLevel,
 					TokenNumber:   tokenNumber,
-					CreditDetails: sc.GetTokenCreditsDetails()}, //TODO:Remove Credit details in Genesis block
+					CreditDetails: sc.GetTokenCreditsDetails(),
+				},
 			},
 		}
 

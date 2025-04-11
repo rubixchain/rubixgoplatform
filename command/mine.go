@@ -1,4 +1,5 @@
 package command
+
 import (
 	"fmt"
 	"regexp"
@@ -6,6 +7,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
+
 func (cmd *Command) MineRBTs() {
 	// Ensure logger is initialized
 	if cmd.log == nil {
@@ -41,8 +43,8 @@ func (cmd *Command) MineRBTs() {
 
 	// Creating mining request
 	miningReq := &model.MiningRequest{
-	MinerDid : cmd.did,
-	Type : cmd.transType,
+		MinerDid: cmd.did,
+		Type:     cmd.transType,
 	}
 	// Ensure MineRBTs method is valid
 	br, err := cmd.c.MineRBTs(miningReq)
@@ -56,6 +58,4 @@ func (cmd *Command) MineRBTs() {
 		return
 	}
 	cmd.log.Info(msg)
-	
-	// cmd.log.Info("RBTs mined successfully for the given token credits.")
 }

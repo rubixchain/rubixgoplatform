@@ -264,6 +264,8 @@ func (c *Core) UnpinTokenEpoch(tokenId string, weekCount int) {
 	} else {
 		c.log.Info("Token successfully UN-PINNED", "CID", newCid)
 	}
+	c.ipfsRepoGc()
+
 	/////
 	peer, err := c.GetRoutingAddrs(newCid)
 	if err != nil {
@@ -307,6 +309,9 @@ func (c *Core) UpdateEpochPin() {
 			currentWeek := util.GetWeeksPassed()
 			tokenIDs, err := c.w.GetTokenIDsWithoutNextBlockFromPledgeHistory()
 			if err != nil {
+				if strings.Contains(err.Error(), "no records found") {
+					continue
+				}
 				c.log.Error("Failed to get tokenIDs for update week epoch pin", "err", err)
 				continue
 			}
@@ -314,7 +319,7 @@ func (c *Core) UpdateEpochPin() {
 			for _, tokenID := range tokenIDs {
 				peerIDs, err := c.getPeerWhoPinTokenEpoch(tokenID, currentWeek)
 				if err != nil {
-					c.log.Warn("Failed to find pins on token-weekEpoch for tokenID: " + tokenID + ", week:" + strconv.Itoa(currentWeek))
+					//c.log.Warn("Failed to find pins on token-weekEpoch for tokenID: " + tokenID + ", week:" + strconv.Itoa(currentWeek))
 				}
 				if len(peerIDs) == 0 {
 					found := false
@@ -350,7 +355,7 @@ func (c *Core) UpdateEpochPin() {
 					}
 
 					if !found {
-						c.log.Warn("No pins found on token-weekEpoch for tokenID:" + tokenID + " after searching past " + strconv.Itoa(maxLookBackWeeks) + " weeks")
+						// c.log.Warn("No pins found on token-weekEpoch for tokenID:" + tokenID + " after searching past " + strconv.Itoa(maxLookBackWeeks) + " weeks")
 					}
 				}
 			}

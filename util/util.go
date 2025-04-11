@@ -20,7 +20,7 @@ import (
 )
 
 // Rubix Week Epoch starting reference date is Jan 01 2025.
-var RubixWeekEpochStartDate = time.Date(2025, time.April, 2, 0, 0, 0, 0, time.UTC)
+var RubixWeekEpochStartDate = time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 type RandPos struct {
 	OriginalPos []int `json:"originalPos"`
@@ -825,24 +825,20 @@ func BytesToString(b []byte) []string {
 func GetWeeksPassed() int {
 	now := time.Now().UTC()
 	duration := now.Sub(RubixWeekEpochStartDate)
-
 	// Handle case where current time is before ReferenceDate
 	if duration < 0 {
 		return 0 // If the current time is before the start date, return 0 intervals
 	}
+	weeksPassed := int(duration.Hours() / (24 * 7))
+	// Add +1 to ensure the first week starts as week 1
+	return weeksPassed + 1
 
-	// // Calculate full weeks passed since ReferenceDate
-	// weeksPassed := int(duration.Hours() / (24 * 7))
+	// // Calculate total minutes passed since ReferenceDate
+	// totalMinutesPassed := int(duration.Minutes())
 
-	// // Add +1 to ensure the first week starts as week 1
-	// return weeksPassed + 1
-
-	// Calculate total minutes passed since ReferenceDate
-	totalMinutesPassed := int(duration.Minutes())
-
-	// Divide by 10 to get the number of 10-minute intervals
-	intervalsPassed := totalMinutesPassed / 10
+	// // Divide by 10 to get the number of 10-minute intervals
+	// intervalsPassed := totalMinutesPassed / 10
 
 	// Return the count of 10-minute intervals
-	return intervalsPassed
+	// return intervalsPassed
 }

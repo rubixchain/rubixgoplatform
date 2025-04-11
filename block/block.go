@@ -315,10 +315,12 @@ func (b *Block) getTokensMap(t string) interface{} {
 
 func (b *Block) getGenesisTokenMap(t string) interface{} {
 	gbm := util.GetFromMap(b.bm, TCGenesisBlockKey)
+	fmt.Println("Genesis blk map is ", gbm)
 	if gbm == nil {
 		return nil
 	}
 	im := util.GetFromMap(gbm, GBInfoKey)
+	fmt.Println("Genesis info map is ", im)
 	if im == nil {
 		return nil
 	}
@@ -360,6 +362,16 @@ func (b *Block) GetBlockID(t string) (string, error) {
 		return "", fmt.Errorf("invalid token chain block, missing block number")
 	}
 	return bns + "-" + ha.(string), nil
+}
+
+func (b *Block) GetMinedTokenBlockID(t string) (string, error) {
+	ha, ok := b.bm[TCBlockHashKey]
+	if !ok {
+		return "", fmt.Errorf("invalid token chain block, missing block hash")
+	}
+	blockNumber := 0
+	fmt.Printf("Mined block ID is: %d-%s", blockNumber, ha.(string))
+	return fmt.Sprintf("%d-%s", blockNumber, ha.(string)), nil
 }
 
 func (b *Block) GetPrevBlockID(t string) (string, error) {

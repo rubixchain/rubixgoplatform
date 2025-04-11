@@ -164,9 +164,8 @@ func (cmd *Command) FindReadyToMineCredits() {
 
 	br, err := cmd.c.FindReadyToMineCredits(cmd.did)
 	if err != nil {
-		cmd.log.Info("Cannot get ready to mine credits details")
+		cmd.log.Info("Failed to update token credit status for ready to mine tokens")
 		return
 	}
-	fmt.Println(br.Message)
-	cmd.log.Info("Ready to mine token credit satatus updated successfully in the DB.")
+	cmd.log.Info(br.Message)
 }
