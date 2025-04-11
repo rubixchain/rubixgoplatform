@@ -402,7 +402,16 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 	// if peer is in different node, fetch peer id from DIDPeerTable
 	peerID := c.w.GetPeerID(didStr)
 	if peerID == "" {
-		// if peer id not found in table, try to fetch from explorer
+		if c.testNet {
+			didType, _ := c.w.GetPeerDIDType(didStr)
+			if didType == -1 {
+				c.log.Error("missing peer details of peer ", didStr)
+				return nil, err
+			}
+			peerDIDInfo.DIDType = &didType
+			return peerDIDInfo, fmt.Errorf("failed to find peer ID, err : " + err.Error())
+		}
+		// if peer id not found in table, try to fetch from explorer for mainnet RBTs
 		peerDIDInfo, err = c.GetPeerFromExplorer(didStr)
 		if err != nil {
 			c.log.Error("failed to fetch peer Id from explorer for ", didStr, "err", err)
