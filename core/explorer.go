@@ -873,6 +873,7 @@ func (c *Core) ExpireUserAPIKey() {
 	//Read for api key in table, if not empty, then expire the apiKey and set the field to empty
 	err := c.s.Read(ExplorerUserDetailsTable, &eus, "apiKey!=?", "")
 	if err != nil {
+		fmt.Println("err in ExpireUserAPIKey", err)
 		c.log.Error("Failed to read table for Expiring the user Key")
 	}
 	var wg sync.WaitGroup
