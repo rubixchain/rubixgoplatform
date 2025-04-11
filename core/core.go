@@ -29,34 +29,34 @@ import (
 )
 
 const (
-	APIPingPath               string = "/api/ping"
-	APIPeerStatus             string = "/api/peerstatus"
-	APICreditStatus           string = "/api/creditstatus"
-	APIQuorumConsensus        string = "/api/quorum-conensus"
-	APIQuorumCredit           string = "/api/quorum-credit"
-	APIReqPledgeToken         string = "/api/req-pledge-token"
-	APIUpdatePledgeToken      string = "/api/update-pledge-token"
-	APISignatureRequest       string = "/api/signature-request"
-	APISendReceiverToken      string = "/api/send-receiver-token"
-	APISyncTokenChain         string = "/api/sync-token-chain"
-	APIDhtProviderCheck       string = "/api/dht-provider-check"
-	APIMapDIDArbitration      string = "/api/map-did-arbitration"
-	APICheckDIDArbitration    string = "/api/check-did-arbitration"
-	APITokenArbitration       string = "/api/token-arbitration"
-	APIGetTokenNumber         string = "/api/get-token-number"
-	APIGetMigratedTokenStatus string = "/api/get-Migrated-token-status"
-	APISyncDIDArbitration     string = "/api/sync-did-arbitration"
-	APIUnlockTokens           string = "/api/unlock-tokens"
-	APICheckQuorumStatusPath  string = "/api/check-quorum-status"
-	APIGetPeerDIDTypePath     string = "/api/get-peer-didType"
-	APIGetPeerInfoPath        string = "/api/get-peer-info"
-	APIUpdateTokenHashDetails string = "/api/update-tokenhash-details"
-	APIAddUnpledgeDetails     string = "/api/initiate-unpledge"
-	APISelfTransfer           string = "/api/self-transfer"
-	APIRecoverPinnedRBT       string = "/api/recover-pinned-rbt"
-	APIRequestSigningHash     string = "/api/request-signing-hash"
-	TokenValidatorURL         string = "http://103.209.145.177:8000"
-	APISendFTToken            string = "/api/send-ft-token"
+	APIPingPath                     string = "/api/ping"
+	APIPeerStatus                   string = "/api/peerstatus"
+	APICreditStatus                 string = "/api/creditstatus"
+	APIQuorumConsensus              string = "/api/quorum-conensus"
+	APIQuorumCredit                 string = "/api/quorum-credit"
+	APIReqPledgeToken               string = "/api/req-pledge-token"
+	APIUpdatePledgeToken            string = "/api/update-pledge-token"
+	APISignatureRequest             string = "/api/signature-request"
+	APISendReceiverToken            string = "/api/send-receiver-token"
+	APISyncTokenChain               string = "/api/sync-token-chain"
+	APIDhtProviderCheck             string = "/api/dht-provider-check"
+	APIMapDIDArbitration            string = "/api/map-did-arbitration"
+	APICheckDIDArbitration          string = "/api/check-did-arbitration"
+	APITokenArbitration             string = "/api/token-arbitration"
+	APIGetTokenNumber               string = "/api/get-token-number"
+	APIGetMigratedTokenStatus       string = "/api/get-Migrated-token-status"
+	APISyncDIDArbitration           string = "/api/sync-did-arbitration"
+	APIUnlockTokens                 string = "/api/unlock-tokens"
+	APICheckQuorumStatusPath        string = "/api/check-quorum-status"
+	APIGetPeerDIDTypePath           string = "/api/get-peer-didType"
+	APIGetPeerInfoPath              string = "/api/get-peer-info"
+	APIUpdateTokenHashDetails       string = "/api/update-tokenhash-details"
+	APIAddUnpledgeDetails           string = "/api/initiate-unpledge"
+	APISelfTransfer                 string = "/api/self-transfer"
+	APIRecoverPinnedRBT             string = "/api/recover-pinned-rbt"
+	APIRequestSigningHash           string = "/api/request-signing-hash"
+	TokenValidatorURL               string = "http://103.209.145.177:8000"
+	APISendFTToken                  string = "/api/send-ft-token"
 	APIGetPrevQrmFromPrevSenderPath string = "/api/get-prev-qrms-info-from-sender"
 )
 
@@ -697,4 +697,8 @@ func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) 
 	default:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	}
+}
+
+func (c *Core) GetDirPath() string {
+	return c.cfg.DirPath
 }
