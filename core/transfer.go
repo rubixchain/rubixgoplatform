@@ -220,9 +220,20 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	if !isSelfRBTTransfer {
 		rpeerid = c.w.GetPeerID(receiverdid)
 		if rpeerid == "" {
-			// Check if DID is present in the DIDTable as the
-			// receiver might be part of the current node
+			// Check if DID is present in the DIDTable as the receiver might be part of the current node
 			didDetails, err := c.w.GetDID(receiverdid)
+			if err != nil {
+				if strings.Contains(err.Error(), "no records found") {
+					c.log.Error("receiver Peer ID not found", "did", receiverdid)
+					resp.Message = "invalid address, receiver Peer ID not found"
+					return resp
+				} else {
+					c.log.Error(fmt.Sprintf("Error occurred while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err))
+					resp.Message = fmt.Sprintf("Error occurred while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err)
+					return resp
+				}
+			}
+
 			if didDetails == nil {
 				receiverPeerInfo, err := c.GetPeerDIDInfo(receiverdid)
 				if err != nil {
@@ -231,17 +242,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 					return resp
 				}
 				rpeerid = receiverPeerInfo.PeerID
-			}
-			if err != nil && rpeerid == "" {
-				if strings.Contains(err.Error(), "no records found") {
-					c.log.Error("receiver Peer ID not found", "did", receiverdid)
-					resp.Message = "invalid address, receiver Peer ID not found"
-					return resp
-				} else {
-					c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err))
-					resp.Message = fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err)
-					return resp
-				}
 			} else {
 				// Set the receiverPeerID to self Peer ID
 				rpeerid = c.peerID
