@@ -313,6 +313,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 			for _, prevQuorum := range prevQuorums {
 				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender
+				fmt.Println("Checking if the sender has previous block pledged quorum's did type")
 				prevQuorumInfo, err := c.GetPeerDIDInfo(prevQuorum)
 				if err != nil {
 					if strings.Contains(err.Error(), "retry") {

@@ -116,6 +116,10 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 
 	fmt.Println("PeerInfo:", peerInfo)
 
+	if peerInfo.DIDType == &didType {
+		c.log.Error("DID type not found for ", didStr)
+	}
+
 	return peerInfo, nil
 }
 
@@ -421,6 +425,10 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 		}
 		// if peer id not found in table, try to fetch from explorer for mainnet RBTs
 		peerDIDInfo, err = c.GetPeerFromExplorer(didStr)
+		if peerDIDInfo != nil {
+			fmt.Println("PeerDIDInfo from explorer:", peerDIDInfo)
+			c.AddPeerDetails(*peerDIDInfo)
+		}
 		if err != nil {
 			c.log.Error("failed to fetch peer Id from explorer for ", didStr, "err", err)
 
