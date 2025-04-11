@@ -398,8 +398,10 @@ func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 	var er ExplorerUserCreateResponse
 	err := ec.SendExplorerJSONRequest("POST", ExplorerCreateUserAPI, &ed, &er)
 	if err != nil {
+		fmt.Println("err in ExplorerUserCreate", err)
 		return err
 	}
+	fmt.Println("er in ExplorerUserCreate", er)
 	if er.Message != "User created successfully!" {
 		ec.log.Error("Failed to create user for %v with error message %v", ed.DID, er.Message)
 		return fmt.Errorf("failed to create user")
