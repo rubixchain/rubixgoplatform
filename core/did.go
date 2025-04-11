@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -47,6 +48,19 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Check for known error message
+	var genericResp struct {
+		Message string          `json:"message"`
+		Data    json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &genericResp); err != nil {
+		return nil, fmt.Errorf("failed to parse generic JSON: %v", err)
+	}
+
+	if strings.Contains(genericResp.Message, "Deployer not found") {
+		return nil, fmt.Errorf("PeerID not found for DID: %s", didStr)
 	}
 
 	// Parse the JSON response
