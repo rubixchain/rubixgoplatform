@@ -362,13 +362,19 @@ func (c *Core) ExplorerUserCreate() []string {
 					eu := ExplorerUser{}
 					err = c.s.Read(ExplorerUserDetailsTable, &eu, "did=?", d.DID)
 					if err != nil {
+						accInfo, err := c.GetAccountInfo(d.DID)
+						if err != nil {
+							c.log.Error(fmt.Sprintf("Error getting account info for DID %v: %v", d.DID, err))
+							return
+						}
+						balance := float64(accInfo.RBTAmount) // Convert to float64 if necessary
 						ed := ExplorerDID{
 							DID:     d.DID,
-							Balance: 0,
+							Balance: balance,
 							PeerID:  c.peerID,
 							DIDType: d.Type,
 						}
-						err := c.ec.ExplorerUserCreate(&ed)
+						err = c.ec.ExplorerUserCreate(&ed)
 						if err != nil {
 							c.log.Error(fmt.Sprintf("Error creating user for DID %v: %v", d.DID, err))
 							return
@@ -402,9 +408,10 @@ func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 		return err
 	}
 	fmt.Println("er in ExplorerUserCreate", er)
-	if er.Message != "User created successfully!" {
-		ec.log.Error("Failed to create user for %v with error message %v", ed.DID, er.Message)
-		return fmt.Errorf("failed to create user")
+
+	if er.Message != "User created successfully!" && er.Message != "User updated successfully!" {
+		ec.log.Error("Failed to create or update user for %v with error message %v", ed.DID, er.Message)
+		return fmt.Errorf("failed to create or update user")
 	}
 	ec.AddDIDKey(ed.DID, er.APIKey)
 	ec.log.Info(er.Message + " for did " + ed.DID)
