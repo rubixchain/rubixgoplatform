@@ -432,7 +432,7 @@ func (cmd *Command) runApp() {
 	}
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
-	c.ExpireUserAPIKey()
+	//c.ExpireUserAPIKey()
 }
 
 func (cmd *Command) validateOptions() bool {
