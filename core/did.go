@@ -69,6 +69,7 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		return nil, fmt.Errorf("failed to parse JSON: %v", err)
 	}
 
+	fmt.Println("API Response:", apiResp)
 	userDID := apiResp.Data.UserDID
 
 	// Fetch the DID
@@ -107,6 +108,8 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		mode := did.BasicDIDMode
 		peerInfo.DIDType = &mode
 	}
+
+	fmt.Println("PeerInfo:", peerInfo)
 
 	return peerInfo, nil
 }
@@ -430,6 +433,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 
 	//if did type is not fetched yet or is incorrect, then try to fetch it from db or from the peer itself
 	if peerDIDInfo.DIDType == nil || *peerDIDInfo.DIDType == -1 {
+
 		didType, _ := c.w.GetPeerDIDType(didStr)
 		if didType == -1 {
 			c.log.Debug("Connecting with peer to get DID type of peer did", didStr)

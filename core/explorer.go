@@ -868,7 +868,7 @@ func (ec *ExplorerClient) getAPIKey(path string, input interface{}) string {
 }
 
 func (c *Core) ExpireUserAPIKey() {
-	fmt.Println("Cleaning started...")
+	c.log.Info("Cleaning started...")
 	eus := []ExplorerUser{}
 	//Read for api key in table, if not empty, then expire the apiKey and set the field to empty
 	err := c.s.Read(ExplorerUserDetailsTable, &eus, "apiKey!=?", "")
@@ -901,7 +901,7 @@ func (c *Core) ExpireUserAPIKey() {
 		}(eu)
 		// Wait for all goroutines to complete
 		wg.Wait()
-		fmt.Println("Cleaning completed...")
+		c.log.Info("Cleaning completed...")
 	}
 }
 

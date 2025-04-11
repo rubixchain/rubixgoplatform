@@ -129,7 +129,6 @@ func (c *Client) JSONRequest(method string, requestPath string, model interface{
 }
 
 func (c *Client) JSONRequestForExplorer(method string, requestPath string, model interface{}, explorerURL string, apiKeyForHeader string) (*http.Request, error) {
-	fmt.Println("requestPath", requestPath)
 	var body *bytes.Buffer
 	if model != nil {
 		j, err := json.Marshal(model)
