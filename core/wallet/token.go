@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
+
+const fourWeeksInSeconds = 4 * 7 * 24 * 60 * 60 // 4 weeks = 4 * 7 days * 24 hours * 60 minutes * 60 seconds
 
 const (
 	TokenIsFree int = iota
@@ -240,17 +243,17 @@ func (w *Wallet) GetCloserToken(did string, rem float64) (*Token, error) {
 	return &tks[0], nil
 }
 
-func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int) ([]Token, int, error) {
+func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int, tokenType int) ([]Token, int, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
 	if trnxMode == 0 {
-		err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=?) AND token_value=?", did, TokenIsFree, TokenIsPinnedAsService, 1.0)
+		err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=? OR token_status=?) AND token_value=?", did, TokenIsFree, TokenIsPinnedAsService, TokenIsMined, 1.0)
 		if err != nil {
 			return nil, num, err
 		}
 	} else {
-		err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
+		err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=?) AND token_value=?", did, TokenIsFree, TokenIsMined, 1.0)
 		if err != nil {
 			return nil, num, err
 		}
@@ -262,6 +265,18 @@ func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int) ([]Token, int
 	}
 	wt := make([]Token, 0)
 	for i := 0; i < tl; i++ {
+		//TODO:check each tokens latest token block, if it is a newly mined token, check epoch whether 4 weeks passed or not
+		if trnxMode == 0 {
+			genesisBlock := w.GetGenesisTokenBlock(t[i].TokenID, tokenType)
+			tokenTransType := genesisBlock.GetTransType()
+			if tokenTransType == block.TokenMinedType {
+				genesisBlockEpoch := genesisBlock.GetEpoch()
+				currentEpoch := time.Now().Unix()
+				if (currentEpoch - int64(genesisBlockEpoch)) < fourWeeksInSeconds {
+					continue
+				}
+			}
+		}
 		wt = append(wt, t[i])
 	}
 	for i := range wt {
@@ -651,12 +666,12 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	}
 	return updatedtokenhashes, nil
 }
-func (w *Wallet) TokenStore(token Token)error{
+func (w *Wallet) TokenStore(token Token) error {
 	err := w.s.Write(TokenStorage, &token)
-			if err != nil {
-				return  err
-			}
-			return nil
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // need to update in such a way that only for FTs

@@ -368,7 +368,8 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 	if wholeValue != 0 {
 		//extract the whole amount part that is the integer value of txn amount
 		//serach for the required whole amount
-		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode)
+		tokenType := c.TokenType(RBTString)
+		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode,tokenType)
 		if err != nil && err.Error() != "no records found" {
 			c.w.ReleaseTokens(wholeTokens)
 			c.log.Error("failed to search for whole tokens", "err", err)
