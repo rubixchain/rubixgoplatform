@@ -28,3 +28,13 @@ type MiningRecordPubSub struct {
 	TokenLevelAndTokenNumber int             `json:"token_level_and_token_number"`
 	PledgeHistory            []PledgeHistory `json:"pledge_history"`
 }
+
+type GetTotalCredits struct {
+	BasicResponse
+	CreditDetails CredDetails
+}
+
+type CredDetails struct {
+	Did          string
+	TotalCredits uint64
+}

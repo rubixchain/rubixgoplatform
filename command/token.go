@@ -162,10 +162,16 @@ func (cmd *Command) FindReadyToMineCredits() {
 		return
 	}
 
-	br, err := cmd.c.FindReadyToMineCredits(cmd.did)
+	availableCreds, err := cmd.c.FindReadyToMineCredits(cmd.did)
 	if err != nil {
 		cmd.log.Info("Failed to update token credit status for ready to mine tokens")
 		return
 	}
-	cmd.log.Info(br.Message)
+	fmt.Printf("Response : %v\n", availableCreds)
+	if !availableCreds.Status {
+		cmd.log.Error("Failed to get total ready to mine credits and update status in the DB", "message", availableCreds.Message)
+	} else {
+		cmd.log.Info("Successfully got the total ready to mine credits and update their status in the DB")
+		fmt.Printf("Did:%s,Total ready to mine credits:%d\n  ", availableCreds.CreditDetails.Did, availableCreds.CreditDetails.TotalCredits)
+	}
 }

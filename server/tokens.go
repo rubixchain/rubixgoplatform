@@ -420,6 +420,9 @@ func (s *Server) TxnReqFromWallet(txnReq *model.RBTTransferRequest, req *ensweb.
 
 func (s *Server) APIFindReadyToMineCredits(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
 	s.log.Debug("did from the querry is:", did)
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
 	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
@@ -427,10 +430,17 @@ func (s *Server) APIFindReadyToMineCredits(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
 
-	err := s.c.FindReadyToMineCredits(did)
+	totalReadytoMineCredits, err := s.c.FindReadyToMineCredits(did)
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	return s.BasicResponse(req, true, "Token credit status updated for ready to mine tokens", nil)
+	cred := model.GetTotalCredits{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "Got total ready to mine credits successfully",
+		},
+		CreditDetails: totalReadytoMineCredits,
+	}
 
+	return s.RenderJSON(req, cred, http.StatusOK)
 }

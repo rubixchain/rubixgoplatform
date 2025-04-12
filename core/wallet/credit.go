@@ -15,19 +15,6 @@ type Credit struct {
 	Credit string `gorm:"column:credit;size:4000"`
 	Tx     string `gorm:"column:tx"`
 }
-type TokenInfo struct {
-	TokenType            int
-	TransTokenValue      float64
-	TransferBlockNumber  uint64
-	TransactionID        string
-	TransactionEpoch     int
-	TransferBlockID      string
-	TransactionType      int
-	NextBlockEpoch       int
-	TokenCredit          int
-	TokenCreditStatus    int
-	LatestTokenStateHash string
-}
 
 // TODO: Credit structure needs to be worked upon
 type PledgeInformation struct {
@@ -257,8 +244,9 @@ func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transa
 	for _, record := range pledgeHistoryRecords {
 		record.NextBlockEpoch = epoch
 		if record.TransactionType == 1 {
-			tokenCreditFloat := float64(epoch-record.Epoch) * (record.TransferTokenValue) * 15
-			record.TokenCredit = uint64(tokenCreditFloat)
+			tokenCreditFloat := float64(epoch-record.Epoch) * (record.TransferTokenValue) * 15 //This is credits for all quorums together
+			tokenCreditsForEachQuorum := tokenCreditFloat/5
+			record.TokenCredit = uint64(tokenCreditsForEachQuorum)
 
 		} else if record.TransactionType == 2 {
 			tokenCreditsFloat := (float64(record.NextBlockEpoch-record.Epoch) * (record.TransferTokenValue))

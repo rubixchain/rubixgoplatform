@@ -363,7 +363,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 		//extract the whole amount part that is the integer value of txn amount
 		//serach for the required whole amount
 		tokenType := c.TokenType(RBTString)
-		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode,tokenType)
+		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode, tokenType)
 		if err != nil && err.Error() != "no records found" {
 			c.w.ReleaseTokens(wholeTokens)
 			c.log.Error("failed to search for whole tokens", "err", err)
@@ -960,14 +960,38 @@ func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tok
 	}
 	return lastErr
 }
+//This function will update credit status of token credits in pledge history table as well as 
+//this will output total credits which are ready to mine.
+func (c *Core) FindReadyToMineCredits(did string) (model.CredDetails, error) {
+	readyToMineCredits, err := c.ReadyToMineCredits(did)
+	if err != nil {
+		c.log.Error("Failed to update ready to Mine credits", "err", err)
+		return model.CredDetails{}, err
+	}
+	pledges, err := c.w.GetTokenDetailsByQuorumDID(did, 1)
+	if err != nil {
+		c.log.Error("Failed to fetch pledge history", "err", err)
+		return model.CredDetails{}, err // Return error if fetching fails
+	}
 
-// This function will update the token credit status of ready to mine credits
-func (c *Core) FindReadyToMineCredits(did string) error {
+	totalReadytoMineCredits := model.CredDetails{
+		Did: did,
+	}
+	for _, pledge := range pledges {
+		totalReadytoMineCredits.TotalCredits += pledge.TokenCredit
+	}
+	c.log.Debug("ready to mine credits are", readyToMineCredits)
+
+	return totalReadytoMineCredits, nil
+}
+
+
+func (c *Core) ReadyToMineCredits(did string) ([]model.PledgeHistory, error) {
 	// Fetch pledge history by QuorumDID with tokenCreditStatus = 0
 	pledges, err := c.w.GetTokenDetailsByQuorumDID(did, 0)
 	if err != nil {
 		c.log.Error("Failed to fetch pledge history", "err", err)
-		return err // Return error if fetching fails
+		return []model.PledgeHistory{},err // Return error if fetching fails
 	}
 
 	var readyToMinePledges []model.PledgeHistory
@@ -989,7 +1013,7 @@ func (c *Core) FindReadyToMineCredits(did string) error {
 			readyToMinePledges = append(readyToMinePledges, pledge)
 		}
 	}
-	return nil
+	return readyToMinePledges,nil
 }
 
 func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {

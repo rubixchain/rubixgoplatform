@@ -72,6 +72,9 @@ type Wallet struct {
 
 func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, error) {
 	var err error
+	if log == nil {
+		return nil, fmt.Errorf("logger is nil in InitWallet")
+	}
 	w := &Wallet{
 		log: log.Named("wallet"),
 		s:   s,
