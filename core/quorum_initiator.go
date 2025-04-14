@@ -519,9 +519,15 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			fmt.Println("qDidInfo", qDidInfo)
 
 			if qDidInfo.DIDType == nil {
-				//TODO: Handle this case
-			} else {
-				//TODO: Handle this case
+				c.log.Debug("DID type of quorum is nil, fetching from explorer", qdid)
+				qdidPeerMap, err := c.GetPeerDIDInfo(qdid)
+				if err != nil {
+					c.log.Error("could not fetch did type of quorum", qdid, "err", err)
+					qrmInfo.DIDType = nil
+				} else {
+					qrmInfo.DIDType = qdidPeerMap.DIDType
+					c.log.Debug("DID type of quorum is fetched from explorer", qdid, "DID type", qrmInfo.DIDType)
+				}
 			}
 
 			if qDidInfo == nil || *qDidInfo.DIDType == -1 {

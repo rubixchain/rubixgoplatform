@@ -114,7 +114,7 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		peerInfo.DIDType = &mode
 	}
 
-	fmt.Println("PeerInfo:", peerInfo)
+	fmt.Println("PeerInfo:", peerInfo, "DIDType:", *peerInfo.DIDType)
 
 	if peerInfo.DIDType == &didType {
 		c.log.Error("DID type not found for ", didStr)
