@@ -106,16 +106,20 @@ func (c *Core) CheckQuorumStatusResponse(req *ensweb.Request) *ensweb.Result { /
 func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error) { //
 	q := make(map[string]string)
 	if peerID == "" {
+		fmt.Println("peerID is empty in CheckQuorumStatus")
 		peerID = c.qm.GetPeerID(did, c.peerID)
 		if peerID == "" {
-			_, err := c.GetPeerDIDInfo(did)
+			qPeerDIDInfo, err := c.GetPeerDIDInfo(did)
 			if err != nil {
-				return "Quorum Connection Error 1", false, fmt.Errorf("unable to find Quorum DID info and peer for %v", did)
+				return "Quorum Connection Error 1", false, fmt.Errorf("1 unable to find Quorum DID info and peer for %v", did)
+			} else {
+				fmt.Println("peerID did type in CheckQuorumStatus ", qPeerDIDInfo.DIDType)
 			}
+			peerID = qPeerDIDInfo.PeerID
 		}
 	}
 	if peerID == "" {
-		return "Quorum Connection Error", false, fmt.Errorf("unable to find Quorum DID info and peer for %v", did)
+		return "Quorum Connection Error", false, fmt.Errorf("2 unable to find Quorum DID info and peer for %v", did)
 	}
 	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
 	if err != nil {
