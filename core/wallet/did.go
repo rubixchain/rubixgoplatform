@@ -172,7 +172,6 @@ func (w *Wallet) GetLastChar(did string) (string, error) {
 }
 
 func (w *Wallet) GetPeerID(did string) string {
-	fmt.Println("GetPeerID", did)
 	var dm DIDPeerMap
 	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
