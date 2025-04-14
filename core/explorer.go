@@ -262,12 +262,6 @@ func (c *Core) InitRubixExplorer() error {
 	err = c.s.Read(ExplorerURLTable, &explorerURL, "url=?", newURL)
 	if err != nil {
 		err = c.s.Write(ExplorerURLTable, &ExplorerURL{URL: newURL, Port: 443, Protocol: "https"})
-	} else if explorerURL.Protocol == "" {
-		explorerURL.Protocol = "https"
-		err = c.s.Update(ExplorerURLTable, &ExplorerURL{}, "url=?", newURL)
-		if err != nil {
-			return err
-		}
 	}
 	if err != nil {
 		return err
