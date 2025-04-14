@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.0.20_sync1"
+	version string = "0.0.20_sync2"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -760,7 +760,7 @@ func Run(args []string) {
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
 	case AddPeerDetailsFromExplorer:
-		cmd.AddPeerDetailsFromExplorer()
+		cmd.addPeerDetailsFromExplorer()
 	default:
 		cmd.log.Error("Invalid command")
 	}
