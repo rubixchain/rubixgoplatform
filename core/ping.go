@@ -107,6 +107,12 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error
 	q := make(map[string]string)
 	if peerID == "" {
 		peerID = c.qm.GetPeerID(did, c.peerID)
+		if peerID == "" {
+			_, err := c.GetPeerDIDInfo(did)
+			if err != nil {
+				return "Quorum Connection Error 1", false, fmt.Errorf("unable to find Quorum DID info and peer for %v", did)
+			}
+		}
 	}
 	if peerID == "" {
 		return "Quorum Connection Error", false, fmt.Errorf("unable to find Quorum DID info and peer for %v", did)

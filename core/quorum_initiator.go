@@ -518,6 +518,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			fmt.Println("qDidInfo", qDidInfo)
 
+			if qDidInfo.DIDType == nil {
+				//TODO: Handle this case
+			} else {
+				//TODO: Handle this case
+			}
+
 			if qDidInfo == nil || *qDidInfo.DIDType == -1 {
 				c.log.Error("could not fetch did type of quorum", qdid, "err", err)
 				qrmInfo.DIDType = nil
