@@ -108,6 +108,7 @@ const (
 	GetNftsByDidCmd                string = "get-nfts-by-did"
 	CreateDIDFromPubKeyCmd         string = "createdidfrompubkey"
 	AddUserAPIKeyCmd               string = "adduserapikey"
+	AddPeerDetailsFromExplorer     string = "exppeerdetails"
 )
 
 var commands = []string{VersionCmd,
@@ -758,6 +759,8 @@ func Run(args []string) {
 		cmd.CreateDIDFromPubKey()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
+	case AddPeerDetailsFromExplorer:
+		cmd.AddPeerDetailsFromExplorer()
 	default:
 		cmd.log.Error("Invalid command")
 	}

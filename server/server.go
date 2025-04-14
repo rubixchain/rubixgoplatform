@@ -188,6 +188,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRequestDIDForPubKey, "POST", s.APICreateDIDFromPubKey)
 	s.AddRoute(setup.APISendJWTFromWallet, "POST", s.APIAuthenticateWalletJWT)
 	s.AddRoute(setup.APIAddUserAPIKey, "POST", s.AuthHandle(s.APIAddUserAPIKey, false, s.AuthError, true))
+	s.AddRoute(setup.APIAddPeerDetailsFromExplorer, "POST", s.AuthHandle(s.APIAddPeerDetailsFromExplorer, false, s.AuthError, true))
 }
 
 func (s *Server) ExitFunc() error {
