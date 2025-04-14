@@ -265,7 +265,8 @@ func (c *Core) InitRubixExplorer() error {
 	}
 	if err != nil {
 		return err
-	} else if explorerURL.Protocol == "" {
+	}
+	if explorerURL.Protocol == "" {
 		explorerURL.Protocol = "https"
 		err = c.s.Update(ExplorerURLTable, &ExplorerURL{}, "url=?", newURL)
 		if err != nil {
