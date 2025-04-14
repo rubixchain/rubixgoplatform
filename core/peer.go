@@ -165,6 +165,7 @@ func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
 }
 
 func (c *Core) AddPeerDetails(peerDetail wallet.DIDPeerMap) error {
+	c.log.Debug("Adding peer details to DIDPeerTable", "peerDetail", *peerDetail.DIDType)
 	err := c.w.AddDIDPeerMap(peerDetail.DID, peerDetail.PeerID, *peerDetail.DIDType)
 	if err != nil {
 		c.log.Error("Failed to add PeerDetails to DIDPeerTable", "err", err)

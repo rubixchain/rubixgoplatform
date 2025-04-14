@@ -1,12 +1,3 @@
 {
-    "makefile.extensionOutputFolder": "./.vscode",
-    "spellright.language": [
-        "en"
-    ],
-    "spellright.documentTypes": [
-        "markdown",
-        "latex",
-        "plaintext",
-        "go"
-    ]
+    "makefile.extensionOutputFolder": "./.vscode"
 }

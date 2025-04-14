@@ -30,6 +30,7 @@ type DIDInfo struct {
 
 func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 	// Construct the API URL
+	fmt.Println("Fetching peer info from explorer for DID:", didStr)
 	url := "https://rexplorer.azurewebsites.net/api/user/get-did-info/" + didStr
 
 	// Make the HTTP GET request
@@ -70,11 +71,12 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		return nil, fmt.Errorf("failed to parse JSON: %v", err)
 	}
 
+	fmt.Println("API Response:", apiResp)
 	userDID := apiResp.Data.UserDID
 
 	// Fetch the DID
 	if err := c.FetchDID(userDID); err != nil {
-		c.log.Error("Failed to fetch DID:", err)
+		fmt.Println("Failed to fetch DID:", err)
 		return nil, fmt.Errorf("failed to fetch DID: %v", err)
 	}
 
@@ -84,12 +86,13 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 
 	files, err := ioutil.ReadDir(didDirPath)
 	if err != nil {
-		c.log.Error("Failed to read DID directory:", err)
+		fmt.Println("Failed to read DID directory:", err)
 		return nil, fmt.Errorf("failed to read DID directory: %v", err)
 	}
 
 	for _, file := range files {
 		if !file.IsDir() && filepath.Ext(file.Name()) == ".png" {
+			fmt.Println("Found PNG file:", file.Name())
 			hasPNG = true
 			break
 		}
@@ -110,6 +113,8 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		mode := did.BasicDIDMode
 		peerInfo.DIDType = &mode
 	}
+
+	fmt.Println("PeerInfo:", peerInfo, "DIDType:", *peerInfo.DIDType)
 
 	if peerInfo.DIDType == &didType {
 		c.log.Error("DID type not found for ", didStr)
@@ -421,6 +426,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 		// if peer id not found in table, try to fetch from explorer for mainnet RBTs
 		peerDIDInfo, err = c.GetPeerFromExplorer(didStr)
 		if peerDIDInfo != nil {
+			c.log.Debug("PeerDIDInfo from explorer:", peerDIDInfo)
 			c.AddPeerDetails(*peerDIDInfo)
 		}
 		if err != nil {
