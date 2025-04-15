@@ -138,7 +138,7 @@ func (r *RexeModule) Call(args string) ContractResult {
 		return contractResult
 	}
 	if len(inputMap) != 1 {
-		contractResult.FailureMsg = fmt.Sprintf("input JSON must contain exactly one function")
+		contractResult.FailureMsg = "input JSON must contain exactly one function"
 		return contractResult
 	}
 
@@ -206,14 +206,15 @@ func (r *RexeModule) Call(args string) ContractResult {
 	// Check return code
 	retCode, ok := ret.(int32)
 	if !ok {
-		contractResult.FailureMsg = fmt.Sprintf("unexpected return type from WASM function")
+		contractResult.FailureMsg = "unexpected return type from WASM function"
 		return contractResult
 	}
 
 	// Read output_ptr_ptr and output_len_ptr
 	memoryData := r.memory.UnsafeData(r.store)
 	if len(memoryData) < int(outputPtrPtr)+4 || len(memoryData) < int(outputLenPtr)+8 {
-		//return "", errors.New("invalid memory access for output pointers")
+		contractResult.FailureMsg = "invalid memory access for output pointers"
+		return contractResult
 	}
 
 	outputPtr := int32(binary.LittleEndian.Uint32(memoryData[outputPtrPtr:]))
@@ -221,7 +222,8 @@ func (r *RexeModule) Call(args string) ContractResult {
 
 	// Validate memory bounds
 	if outputPtr < 0 || outputPtr+outputLen > int32(len(memoryData)) {
-		// return "", errors.New("output data exceeds memory bounds")
+		contractResult.FailureMsg = "output data exceeds memory bounds"
+		return contractResult
 	}
 
 	// Read output data
@@ -232,23 +234,28 @@ func (r *RexeModule) Call(args string) ContractResult {
 	var output interface{}
 	err = json.Unmarshal(outputData, &output)
 	if err != nil {
-		// return "", fmt.Errorf("failed to deserialize output data: %v", err)
+		contractResult.FailureMsg = fmt.Sprintf("failed to deserialize output data: %v", err)
+		return contractResult
 	}
 
 	// Deallocate output data
 	err = r.deallocate(outputPtr, outputLen)
 	if err != nil {
-		// return "", fmt.Errorf("failed to deallocate output data: %v", err)
+		contractResult.FailureMsg = fmt.Sprintf("failed to deallocate output data: %v", err)
+		return contractResult
 	}
 
 	// Type assert output to string
-	// contractOutputStr, ok := output.(string)
+	contractOutputStr, ok := output.(string)
 	if !ok {
+		contractResult.FailureMsg = "expected output of contract to be string type"
+		return contractResult
 		//return "", fmt.Errorf("expected output of contract to be string type")
 	}
 
 	if retCode != 0 {
-		// return "", fmt.Errorf("contract execution failed: %v", contractOutputStr)
+		contractResult.FailureMsg = fmt.Sprintf("contract execution failed with code %d: %s", retCode, contractOutputStr)
+		return contractResult
 	}
 
 	return contractResult
