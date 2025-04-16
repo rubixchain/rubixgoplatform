@@ -80,6 +80,7 @@ type TransInfo struct {
 	DeployerDID    string        `json:"deployerDID"`
 	ExecutorDID    string        `json:"executorDID"`
 	PinningNodeDID string        `json:"pinningNodeDID"`
+	MinerDID       string        `json:"minerDID"`
 }
 
 func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
@@ -116,9 +117,12 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 
 func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} {
 	ntib := make(map[string]interface{})
-	if ti.Tokens == nil || len(ti.Tokens) == 0 {
-		return nil
+	if ti.MinerDID == "" {
+		if ti.Tokens == nil || len(ti.Tokens) == 0 {
+			return nil
+		}
 	}
+
 	if ti.SenderDID != "" {
 		ntib[TISenderDIDKey] = ti.SenderDID
 	}
@@ -147,15 +151,18 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 		ntib[TIRefIDKey] = ti.RefID
 	}
 	nttbs := make(map[string]interface{})
-	for _, tt := range ti.Tokens {
-		b := ctcb[tt.Token]
-		nttb := newTransToken(b, &tt)
-		if nttb == nil {
-			return nil
+	if ti.MinerDID == "" {
+		for _, tt := range ti.Tokens {
+			b := ctcb[tt.Token]
+			nttb := newTransToken(b, &tt)
+			if nttb == nil {
+				return nil
+			}
+			nttbs[tt.Token] = nttb
 		}
-		nttbs[tt.Token] = nttb
+		ntib[TITokensKey] = nttbs
+
 	}
-	ntib[TITokensKey] = nttbs
 
 	return ntib
 }

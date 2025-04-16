@@ -112,6 +112,7 @@ type UpdatePledgeRequest struct {
 	Mode                        int      `json:"mode"`
 	PledgedTokens               []string `json:"pledged_tokens"`
 	TokenChainBlock             []byte   `json:"token_chain_block"`
+	NewlyMinedTokenID           string   `json:"mined_token_id"`
 	TransferredTokenStateHashes []string `json:"token_state_hash_info"`
 	NewlyMinedTokenStateHash    string   `json:"mined_token_state_hash"`
 	TransactionID               string   `json:"transaction_id"`
@@ -407,7 +408,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, fmt.Errorf("failed to get required quorums")
 		}
 	}
-	fmt.Println("QuorumList is ", cr.QuorumList)
+	fmt.Println("Quorum list is:", cr.QuorumList)
+	fmt.Println("ql from GetQuorum function is", ql)
 	// TODO: Handle below
 	// var finalQl []string
 	// var errFQL error
@@ -417,6 +419,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	// 		c.log.Error("unable to get consensus from quorum(s). err: ", errFQL)
 	// 		return nil, nil, nil, errFQL
 	// 	}
+	// 	fmt.Println("finalQl is:", finalQl)
 	// 	cr.QuorumList = finalQl
 	// 	if len(finalQl) < MinQuorumRequired {
 	// 		c.log.Error("quorum(s) are unavailable for this trnx")
@@ -1715,21 +1718,24 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		}
 		// Create new token entry
-		t := wallet.Token{
-			TokenID:        cr.MiningTokenID,
-			TokenValue:     1,
-			DID:            cr.MiningInfo.MinerDid,
-			TokenStatus:    wallet.TokenIsMined,
-			TokenStateHash: tokenIDTokenStateHash,
-			TransactionID:  tid,
+
+		tokendetails := &wallet.Token{
+			TokenID:       cr.MiningTokenID,
+			DID:           cr.MiningInfo.MinerDid,
+			TokenValue:    1.0,
+			TokenStatus:   wallet.TokenIsMined,
+			TransactionID: tid,
 		}
-		// TODO: Un-comment below after testing
-		// err = c.w.TokenStore(t)
-		// if err != nil {
-		// 	return nil, nil, nil, err
-		// }
-		fmt.Println("Mining ID is ", t.TransactionID)
-		fmt.Println("New tokenID is ", t.TokenID)
+
+		fmt.Println("Mining ID is ", tokendetails.TransactionID)
+		fmt.Println("New tokenID is ", tokendetails.TokenID)
+		
+
+		err = c.w.AddMiningTokenBlock(tokendetails.TokenID, nb)
+		if err != nil {
+			c.log.Error("Failed to add token block", "token", tokendetails.TokenID)
+			return nil, nil, nil, err
+		}
 		var newtokenhashes []string
 		newtokenhashes = append(newtokenhashes, tokenIDTokenStateHash)
 		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid, weekCount)
@@ -1740,6 +1746,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = c.initiateUnpledgingProcess(cr, tid, int64(cr.TransactionEpoch))
 		if err != nil {
 			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
+			return nil, nil, nil, err
+		}
+
+		err = c.w.CreateToken(tokendetails)
+		if err != nil {
+			c.log.Error("Failed to create token", "err", err)
 			return nil, nil, nil, err
 		}
 
@@ -1894,6 +1906,7 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 		}
 		if cr.Mode == MiningMode {
 			ur.NewlyMinedTokenStateHash = newTokenStateHashes[0]
+			ur.NewlyMinedTokenID = cr.MiningTokenID
 		}
 
 		if newTokenStateHashes != nil {
@@ -2418,8 +2431,13 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			},
 		}
 
+		transInfo := &block.TransInfo{
+			MinerDID: cr.MiningInfo.MinerDid,
+			TID:      tid,
+		}
+
 		tcb = block.TokenChainBlock{
-			TransactionType:    block.TokenMintedType,
+			TransactionType:    block.TokenMinedType,
 			TokenOwner:         sc.GetMinerDID(),
 			QuorumSignature:    credit,
 			CreditDetails:      sc.GetTokenCreditsDetails(), //TODO:Remove Credit details in Genesis block
@@ -2427,6 +2445,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: minerSign,
 			Epoch:              cr.TransactionEpoch,
 			GenesisBlock:       miningGensisBlock,
+			TransInfo:          transInfo,
 		}
 
 	} else {

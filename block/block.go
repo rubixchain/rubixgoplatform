@@ -168,6 +168,7 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 
 func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if (tcb.TransInfo == nil && tcb.CreditDetails == nil) || ctcb == nil {
+		fmt.Println("tcb.TransInfo and tcb.CreditDetails both are nil OR ctcb is nil")
 		return nil
 	}
 	ntcb := make(map[string]interface{})
@@ -182,6 +183,7 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.TransInfo != nil {
 		ntib := newTransInfo(ctcb, tcb.TransInfo)
 		if ntib == nil {
+			fmt.Println("ntib is nil in CreateNewBlock function")
 			return nil
 		}
 		ntcb[TCTransInfoKey] = ntib
@@ -303,13 +305,19 @@ func (b *Block) blkEncode() error {
 func (b *Block) getTokensMap(t string) interface{} {
 	tim := util.GetFromMap(b.bm, TCTransInfoKey)
 	if tim == nil {
+		fmt.Println("tim is nil getTokenMap function")
 		return nil
 	}
+	fmt.Println("time in getTokensMap function is:", tim)
 	tm := util.GetFromMap(tim, TITokensKey)
 	if tm == nil {
+		fmt.Println("tm is nil in getTokenMap function")
 		return nil
 	}
 	ttm := util.GetFromMap(tm, t)
+	if ttm == nil {
+		fmt.Println("ttm is nil in getTokenMap function")
+	}
 	return ttm
 }
 
@@ -517,6 +525,7 @@ func (b *Block) getBlkString(key string) string {
 	if !ok {
 		return ""
 	}
+	fmt.Println("value corresponding to TCTransTypekey", h.(string))
 	return h.(string)
 }
 
@@ -598,6 +607,7 @@ func (b *Block) GetTransTokens() []string {
 func (b *Block) GetTokenType(t string) int {
 	tim := util.GetFromMap(b.bm, TCTransInfoKey)
 	if tim == nil {
+		fmt.Println("tim is nil in GetTokenType function")
 		return 0
 	}
 	tm := util.GetFromMap(tim, TITokensKey)

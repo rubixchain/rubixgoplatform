@@ -185,7 +185,22 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
-
+	/*check whether any of the transtoken is a newly mined token, If any of them is mined token, if it is, quorums make sure
+	it is getting transferred only after 4 weeks after the mining.  */
+	resultOutput := make([]string, len(ti))
+	var wg2 sync.WaitGroup
+	for i := range ti {
+		wg2.Add(1)
+		go c.fourweeksPassCheck(ti[i].Token, ti[i].TokenType, i, resultOutput, &wg2)
+	}
+	wg2.Wait()
+	for i := range resultOutput {
+		if resultOutput[i] != "" {
+			c.log.Error("not allowed to transfer %s token", ti[i].Token)
+			crep.Message = fmt.Sprintf("not allowed to transfer %s token, because 4 weeks didn't pass since mining of this token", ti[i].Token)
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
 	// check token ownership
 
 	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
@@ -1408,6 +1423,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	b := block.InitBlock(ur.TokenChainBlock, nil)
 	tks := b.GetTransTokens()
 
+	// miningBlockID,err := b.GetMinedTokenBlockID()
+
 	refID := ""
 	var refIDArr []string = make([]string, 0)
 	if len(tks) > 0 {
@@ -1447,6 +1464,16 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			}
 		}
 	}
+	if ur.Mode == MiningMode {
+		err = c.w.AddMiningTokenBlock(ur.NewlyMinedTokenID, b)
+		if err != nil {
+			c.log.Error("Failed to add token block", "token", ur.NewlyMinedTokenID)
+			crep.Message = "Failed to add token block"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+
+	}
+
 	for _, t := range ur.PledgedTokens {
 		tk, err := c.w.ReadToken(t)
 		if err != nil {

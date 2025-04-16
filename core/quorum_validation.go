@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
+	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -15,6 +16,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
+
+const fourWeeksInSeconds = 4 * 7 * 24 * 60 * 60 // 4 weeks = 4 * 7 days * 24 hours * 60 minutes * 60 seconds
 
 type TokenStateCheckResult struct {
 	Token                 string
@@ -466,4 +469,21 @@ func (c *Core) unPinTokenState(ids []string, did string) {
 	for i := range ids {
 		c.w.UnPin(ids[i], wallet.QuorumRole, did)
 	}
+}
+
+func (c *Core) fourweeksPassCheck(token string, tokenType int, index int, resultArray []string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	genesisBlock := c.w.GetGenesisTokenBlock(token, tokenType)
+	if genesisBlock != nil {
+		fmt.Println("Genesis block in four weeks pass check function is:", genesisBlock)
+		tokenTransType := genesisBlock.GetTransType()
+		if tokenTransType == block.TokenMinedType {
+			genesisBlockEpoch := genesisBlock.GetEpoch()
+			currentEpoch := time.Now().Unix()
+			if (currentEpoch - int64(genesisBlockEpoch)) < fourWeeksInSeconds {
+				resultArray[index] = token
+			}
+		}
+	}
+
 }

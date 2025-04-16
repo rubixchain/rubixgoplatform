@@ -130,6 +130,10 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 		case wallet.TokenIsPinnedAsService:
 			info.PinnedRBT = info.PinnedRBT + t.TokenValue
 			info.PinnedRBT = floatPrecision(info.PinnedRBT, MaxDecimalPlaces)
+		case wallet.TokenIsMined:
+			info.RBTAmount = info.RBTAmount + t.TokenValue
+			info.RBTAmount = floatPrecision(info.RBTAmount, MaxDecimalPlaces)
+
 		}
 	}
 	return info, nil
@@ -960,8 +964,9 @@ func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tok
 	}
 	return lastErr
 }
-//This function will update credit status of token credits in pledge history table as well as 
-//this will output total credits which are ready to mine.
+
+// This function will update credit status of token credits in pledge history table as well as
+// this will output total credits which are ready to mine.
 func (c *Core) FindReadyToMineCredits(did string) (model.CredDetails, error) {
 	readyToMineCredits, err := c.ReadyToMineCredits(did)
 	if err != nil {
@@ -985,13 +990,12 @@ func (c *Core) FindReadyToMineCredits(did string) (model.CredDetails, error) {
 	return totalReadytoMineCredits, nil
 }
 
-
 func (c *Core) ReadyToMineCredits(did string) ([]model.PledgeHistory, error) {
 	// Fetch pledge history by QuorumDID with tokenCreditStatus = 0
 	pledges, err := c.w.GetTokenDetailsByQuorumDID(did, 0)
 	if err != nil {
 		c.log.Error("Failed to fetch pledge history", "err", err)
-		return []model.PledgeHistory{},err // Return error if fetching fails
+		return []model.PledgeHistory{}, err // Return error if fetching fails
 	}
 
 	var readyToMinePledges []model.PledgeHistory
@@ -1013,7 +1017,7 @@ func (c *Core) ReadyToMineCredits(did string) ([]model.PledgeHistory, error) {
 			readyToMinePledges = append(readyToMinePledges, pledge)
 		}
 	}
-	return readyToMinePledges,nil
+	return readyToMinePledges, nil
 }
 
 func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {

@@ -268,14 +268,21 @@ func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int, tokenType int
 		//TODO:check each tokens latest token block, if it is a newly mined token, check epoch whether 4 weeks passed or not
 		if trnxMode == 0 {
 			genesisBlock := w.GetGenesisTokenBlock(t[i].TokenID, tokenType)
-			tokenTransType := genesisBlock.GetTransType()
-			if tokenTransType == block.TokenMinedType {
-				genesisBlockEpoch := genesisBlock.GetEpoch()
-				currentEpoch := time.Now().Unix()
-				if (currentEpoch - int64(genesisBlockEpoch)) < fourWeeksInSeconds {
-					continue
-				}
+			if genesisBlock == nil {
+				fmt.Printf("genesis block corresponding to %s tokenID is nil\n", t[i].TokenID)
 			}
+			if genesisBlock != nil {
+				tokenTransType := genesisBlock.GetTransType()
+				if tokenTransType == block.TokenMinedType {
+					genesisBlockEpoch := genesisBlock.GetEpoch()
+					currentEpoch := time.Now().Unix()
+					if (currentEpoch - int64(genesisBlockEpoch)) < fourWeeksInSeconds {
+						continue
+					}
+				}
+
+			}
+
 		}
 		wt = append(wt, t[i])
 	}
