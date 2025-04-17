@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/bytecodealliance/wasmtime-go"
 )
@@ -33,13 +34,19 @@ type ContractResult struct {
 	FailureMsg string `json:"failure_msg"`
 }
 
-func (r *RexeModule) NewRexe(contractHash string) (*RexeModule, error) {
+func (r *RexeModule) NewRexe(contractHash string, nodeDir string) (*RexeModule, error) {
 	// Define Wasm Module with default params
 	rexeModule := &RexeModule{
 		nodeAddress: "http://localhost:20000",
 		quorumType:  2,
 	}
-	wasmFilePath := fmt.Sprintf("%s/%s.wasm", "rubix-folder", contractHash)
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Println("Error getting working directory:", err)
+	}
+	fmt.Println("Current working directory:", cwd)
+	// wasmFilePath := fmt.Sprintf("%s/%s.wasm", "rubix-folder", contractHash)
+	wasmFilePath := filepath.Join(nodeDir, "SmartContract", contractHash, "binaryCodeFile.wasm")
 	// Read the WASM file
 	wasmBytes, err := os.ReadFile(wasmFilePath)
 	if err != nil {
@@ -108,21 +115,21 @@ func (r *RexeModule) NewRexe(contractHash string) (*RexeModule, error) {
 }
 
 // allocate allocates memory in WASM and copies the data.
-func (w *RexeModule) allocate(data []byte) (int32, error) {
+func (r *RexeModule) allocate(data []byte) (int32, error) {
 	size := len(data)
-	result, err := w.allocFunc.Call(w.store, size)
+	result, err := r.allocFunc.Call(r.store, size)
 	if err != nil {
 		return 0, err
 	}
 	ptr := result.(int32)
-	memoryData := w.memory.UnsafeData(w.store)
+	memoryData := r.memory.UnsafeData(r.store)
 	copy(memoryData[ptr:ptr+int32(size)], data)
 	return ptr, nil
 }
 
 // deallocate frees memory in WASM.
-func (w *RexeModule) deallocate(ptr int32, size int32) error {
-	_, err := w.deallocFunc.Call(w.store, ptr, size)
+func (r *RexeModule) deallocate(ptr int32, size int32) error {
+	_, err := r.deallocFunc.Call(r.store, ptr, size)
 	return err
 }
 
