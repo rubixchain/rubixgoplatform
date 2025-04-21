@@ -37,7 +37,19 @@ func (cmd *Command) createFT() {
 		cmd.log.Error("rbtAmount must be a positive integer")
 		return
 	}
-	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, int(cmd.rbtAmount))
+
+	if cmd.continueCreation {
+		cmd.log.Info("FT creation will continue from last FT number. Press yes to continue or no to start from 0")
+		var input string
+		fmt.Scanln(&input)
+		if strings.ToLower(input) == "yes" {
+			cmd.continueCreation = true
+		} else {
+			cmd.continueCreation = false
+		}
+	}
+
+	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, int(cmd.rbtAmount), cmd.continueCreation)
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") || strings.Contains(br.Message, "no records found") {
 			cmd.log.Error("Failed to create FT, No RBT available to create FT")

@@ -326,6 +326,7 @@ type Command struct {
 	nft                          string
 	nftData                      string
 	ftName                       string
+	continueCreation             bool
 	ftCount                      int
 	creatorDID                   string
 	defaultSetup                 bool
@@ -546,6 +547,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.artifact, "artifact", "", "NFT artifact")
 	flag.StringVar(&cmd.nftData, "nftData", "", "The nft data")
 	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
+	flag.BoolVar(&cmd.continueCreation, "continue", false, "Create Ft from last FT number")
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
 	flag.BoolVar(&cmd.defaultSetup, "defaultSetup", false, "Add Faucet Quorums")

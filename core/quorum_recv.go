@@ -1165,7 +1165,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	}
 	senderPeerId, _, ok := util.ParseAddress(senderAddress)
 	if !ok {
-		return nil, fmt.Errorf("Unable to parse sender address: %v", senderAddress)
+		return nil, fmt.Errorf("unable to parse sender address: %v", senderAddress)
 	}
 
 	results := make([]MultiPinCheckRes, len(tokenInfo))
@@ -1178,7 +1178,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	wg.Wait()
 	for i := range results {
 		if results[i].Error != nil {
-			return nil, fmt.Errorf("Error while checking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
+			return nil, fmt.Errorf("error while checking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
 		}
 		if results[i].Status {
 			return nil, fmt.Errorf("Token %v has multiple owners: %v", results[i].Token, results[i].Owners)
@@ -1194,7 +1194,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	wg.Wait()
 	for i := range tokenStateCheckResult {
 		if tokenStateCheckResult[i].Error != nil {
-			return nil, fmt.Errorf("Error while checking Token State Message : %v", tokenStateCheckResult[i].Message)
+			return nil, fmt.Errorf("error while checking Token State Message : %v", tokenStateCheckResult[i].Message)
 		}
 		if tokenStateCheckResult[i].Exhausted {
 			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
@@ -1206,21 +1206,21 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	FT.FTName = ftinfo.FTName
 	updatedTokenStateHashes, err := c.w.FTTokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, c.ipfs, FT)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
+		return nil, fmt.Errorf("failed to update token status, error: %v", err)
 	}
 
-	updateFTTableErr := c.updateFTTable(receiverDID)
+	updateFTTableErr := c.updateFTTable(receiverDID, ftinfo.FTName, ftinfo.CreatorDID)
 	if updateFTTableErr != nil {
-		return nil, fmt.Errorf("Failed to update FT table, error: %v", updateFTTableErr)
+		return nil, fmt.Errorf("failed to update FT table, error: %v", updateFTTableErr)
 	}
 
 	sc := contract.InitContract(b.GetSmartContract(), nil)
 	if sc == nil {
-		return nil, fmt.Errorf("Failed to update token status, missing smart contract")
+		return nil, fmt.Errorf("failed to update token status, missing smart contract")
 	}
 	bid, err := b.GetBlockID(tokenInfo[0].Token)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
+		return nil, fmt.Errorf("failed to update token status, failed to get block ID, err: %v", err)
 	}
 	// Only save the transaction details in Transaction history table whenever
 	// its a general RBT transfer

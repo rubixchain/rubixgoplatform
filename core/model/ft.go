@@ -5,6 +5,7 @@ type CreateFTReq struct {
 	FTName     string `json:"ft_name"`
 	FTCount    int    `json:"ft_count"`
 	TokenCount int    `json:"token_count"`
+	Continue   bool   `json:"continue"`
 }
 
 type TransferFTReq struct {
