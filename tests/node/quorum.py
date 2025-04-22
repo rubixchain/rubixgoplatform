@@ -25,10 +25,10 @@ def run_quorum_nodes(only_run_nodes, skip_adding_quorums, node_registry_key = "q
             if node in {"node5", "node6"}:
                 did_type = 0
             if node in {"node4", "node5"}:
-                did = create_and_register_did(config, did_alias, did_type, register_did=False, fp=True)
+                did = create_and_register_did(config, did_alias, did_type, register_did=True, fp=True)
                 fund_did_with_rbt(config, did, priv_pwd="p123")
             else :
-                did = create_and_register_did(config, did_alias, did_type, register_did=False)
+                did = create_and_register_did(config, did_alias, did_type, register_did=True)
                 fund_did_with_rbt(config, did)
 
         #Temporary adding details manually

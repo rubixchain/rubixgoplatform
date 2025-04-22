@@ -583,7 +583,7 @@ const docTemplate = `{
         },
         "/api/get-by-did": {
             "get": {
-                "description": "Retrieves the details of a transaction based on dID and date range.",
+                "description": "Retrieves the details of a transaction based on DID and date range (on and after start date and before end date).",
                 "consumes": [
                     "application/json"
                 ],
@@ -611,7 +611,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Start date of the date range (format: YYYY-MM-DD",
+                        "description": "Start date of the date range (format: YYYY-MM-DD)",
                         "name": "StartDate",
                         "in": "query"
                     },

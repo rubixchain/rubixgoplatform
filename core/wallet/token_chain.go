@@ -444,6 +444,79 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 }
 
 // addBlock will write block into storage
+func (w *Wallet) addMissingBlock(token string, b *block.Block) error {
+	opt := &opt.WriteOptions{
+		Sync: true,
+	}
+	tt := b.GetTokenType(token)
+	db := w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to add block, invalid token type")
+		return fmt.Errorf("failed to get db")
+	}
+
+	bid, err := b.GetBlockID(token)
+	if err != nil {
+		return err
+	}
+	key := tcsKey(tt, token, bid)
+	lb := w.getLatestBlock(tt, token)
+	bn, err := b.GetBlockNumber(token)
+	if err != nil {
+		w.log.Error("Failed to get block number", "err", err)
+		return err
+	}
+
+	// First block check block number start with zero
+	if lb == nil {
+		if bn != 0 {
+			w.log.Error("Invalid block number, expect 0", "bn", bn)
+			return fmt.Errorf("invalid block number")
+		}
+	} else {
+		lbn, err := lb.GetBlockNumber(token)
+		if err != nil {
+			w.log.Error("Failed to get block number", "err", err)
+			return err
+		}
+		if bn > lbn {
+			w.log.Error("Invalid block number, not from missing blocks sequence", "lbn", lbn, "bn", bn)
+			return fmt.Errorf("invalid block number, not from missing blocks sequence")
+		}
+	}
+	if b.CheckMultiTokenBlock() {
+		bs, err := b.GetHash()
+		if err != nil {
+			return err
+		}
+		hs := ut.HexToStr(ut.CalculateHash(b.GetBlock(), "SHA3-256"))
+		refkey := []byte(ReferenceType + "-" + hs + "-" + bs)
+		_, err = w.getRawBlock(db, refkey)
+		// Write only if reference block not exist
+		if err != nil {
+			db.l.Lock()
+			err = db.Put(refkey, b.GetBlock(), opt)
+			db.l.Unlock()
+			if err != nil {
+				return err
+			}
+		}
+		db.l.Lock()
+		err = db.Put([]byte(key), refkey, opt)
+		db.l.Unlock()
+		return err
+	} else {
+		db.l.Lock()
+		err = db.Put([]byte(key), b.GetBlock(), opt)
+		if tt == tkn.TestTokenType {
+			w.log.Debug("Written", "key", key)
+		}
+		db.l.Unlock()
+		return err
+	}
+}
+
+// addBlock will write block into storage
 func (w *Wallet) clearBlocks(tt int) error {
 	db := w.getChainDB(tt)
 	if db == nil {
@@ -566,6 +639,11 @@ func (w *Wallet) GetGenesisTokenBlock(token string, tokenType int) *block.Block 
 // AddTokenBlock will write token block into storage
 func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
 	return w.addBlock(token, b)
+}
+
+// AddMissingTokenBlock will write token block into existing token chain in storage
+func (w *Wallet) AddMissingTokenBlock(token string, b *block.Block) error {
+	return w.addMissingBlock(token, b)
 }
 
 // AddTokenBlock will write token block into storage

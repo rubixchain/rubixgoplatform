@@ -134,7 +134,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize Transaction storage", "err", err)
 		return nil, err
 	}
-	err = w.s.Init(TokenProvider, &TokenProviderMap{}, true)
+	err = w.s.Init(TokenProvider, &model.TokenProviderMap{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Token Provider Table", "err", err)
 		return nil, err
@@ -157,6 +157,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	if err != nil {
 		w.log.Error("Failed to initialize FT storage", "err", err)
 	}
+
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {

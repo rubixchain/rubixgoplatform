@@ -3,6 +3,8 @@ package wallet
 import (
 	"fmt"
 	"time"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 type SmartContract struct {
@@ -84,8 +86,8 @@ func (w *Wallet) UpdateSmartContractStatus(smartContractToken string, tokenStatu
 }
 
 // retrive state pin info if it exists
-func (w *Wallet) GetStatePinnedInfo(token string) (*TokenProviderMap, error) {
-	var tokenMap TokenProviderMap
+func (w *Wallet) GetStatePinnedInfo(token string) (*model.TokenProviderMap, error) {
+	var tokenMap model.TokenProviderMap
 	err := w.s.Read(TokenProvider, &tokenMap, "token=?", token)
 	if err != nil {
 		if err.Error() == "no records found" {

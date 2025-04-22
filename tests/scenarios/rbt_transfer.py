@@ -20,19 +20,19 @@ def setup():
     config_quorum_node4 = config_quorum["node4"]
     config_quorum_node5 = config_quorum["node5"]
 
-    create_and_register_did(config_A, "did_a", register_did=False)
+    create_and_register_did(config_A, "did_a", register_did=True)
     
     # Sender and Receiver on same Non-Quorum server Scenario
-    create_and_register_did(config_A, "did_a1", register_did=False)
-    create_and_register_did(config_A, "did_a2", register_did=False)
+    create_and_register_did(config_A, "did_a1", register_did=True)
+    create_and_register_did(config_A, "did_a2", register_did=True)
 
     # Sender and Receiver on same Quorum server Scenario
-    create_and_register_did(config_quorum_node4, "did_quorum_a1_node4", register_did=False)
-    create_and_register_did(config_quorum_node4, "did_quorum_a2_node4", register_did=False)
-    create_and_register_did(config_quorum_node5, "did_quorum_a1_node5", register_did=False)
-    create_and_register_did(config_A, "did_nonquorum_a1_node9", register_did=False)
+    create_and_register_did(config_quorum_node4, "did_quorum_a1_node4", register_did=True)
+    create_and_register_did(config_quorum_node4, "did_quorum_a2_node4", register_did=True)
+    create_and_register_did(config_quorum_node5, "did_quorum_a1_node5", register_did=True)
+    create_and_register_did(config_A, "did_nonquorum_a1_node9", register_did=True)
 
-    create_and_register_did(config_B, "did_b", register_did=False)
+    create_and_register_did(config_B, "did_b", register_did=True)
 
     save_to_config_file(__node_config_path, node_config)
     save_to_config_file("./quorum_config.json", config_quorum)

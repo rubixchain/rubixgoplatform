@@ -1,20 +1,12 @@
 package wallet
 
+import "github.com/rubixchain/rubixgoplatform/core/model"
+
 // struct definition for Mapping token and reason the did is a provider
-type TokenProviderMap struct {
-	Token         string  `gorm:"column:token;primaryKey"`
-	DID           string  `gorm:"column:did"`
-	FuncID        int     `gorm:"column:func_id"`
-	Role          int     `gorm:"column:role"`
-	TransactionID string  `gorm:"column:transaction_id"`
-	Sender        string  `gorm:"column:sender"`
-	Receiver      string  `gorm:"column:receiver"`
-	TokenValue    float64 `gorm:"column:token_value"`
-}
 
 // Method takes token hash as input and returns the Provider details
-func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
-	var tokenMap TokenProviderMap
+func (w *Wallet) GetProviderDetails(token string) (*model.TokenProviderMap, error) {
+	var tokenMap model.TokenProviderMap
 	err := w.s.Read(TokenProvider, &tokenMap, "token=?", token)
 	if err != nil {
 		if err.Error() == "no records found" {
@@ -31,8 +23,8 @@ func (w *Wallet) GetProviderDetails(token string) (*TokenProviderMap, error) {
 // Method to add provider details to DB during ipfs ops
 // checks if entry exist for token,did either write or updates
 
-func (w *Wallet) AddProviderDetails(tokenProviderMap TokenProviderMap) error {
-	var tpm TokenProviderMap
+func (w *Wallet) AddProviderDetails(tokenProviderMap model.TokenProviderMap) error {
+	var tpm model.TokenProviderMap
 	err := w.s.Read(TokenProvider, &tpm, "token=?", tokenProviderMap.Token)
 	if err != nil || tpm.Token == "" {
 		w.log.Info("Token Details not found: Creating new Record")

@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "CustWall19"
+	version string = "0.1_rc1"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -108,6 +108,7 @@ const (
 	GetNftsByDidCmd                string = "get-nfts-by-did"
 	CreateDIDFromPubKeyCmd         string = "createdidfrompubkey"
 	AddUserAPIKeyCmd               string = "adduserapikey"
+	AddPeerDetailsFromExplorer     string = "exppeerdetails"
 )
 
 var commands = []string{VersionCmd,
@@ -433,7 +434,7 @@ func (cmd *Command) runApp() {
 	}
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
-	c.ExpireUserAPIKey()
+	//c.ExpireUserAPIKey()
 }
 
 func (cmd *Command) validateOptions() bool {
@@ -760,6 +761,8 @@ func Run(args []string) {
 		cmd.CreateDIDFromPubKey()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
+	case AddPeerDetailsFromExplorer:
+		cmd.addPeerDetailsFromExplorer()
 	default:
 		cmd.log.Error("Invalid command")
 	}

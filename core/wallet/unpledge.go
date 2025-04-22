@@ -18,6 +18,16 @@ type UnpledgeSequenceInfo struct {
 	QuorumDID     string `gorm:"column:quorum_did"`
 }
 
+// Token sync info associated with Background Syncing of tokens
+type TokenSyncInfo struct {
+	TokenID      string `gorm:"column:token_id;primaryKey"`
+	TokenType    int64  `gorm:"column:token_type"`
+	SyncFromPeer string `gorm:"column:sync_from_peer"`
+	BlockNumber  int64  `gorm:"column:block_number"`
+	BlockID      string `gorm:"column:block_id"`
+	Status       string `gorm:"column:status"`
+}
+
 // Methods specific to Periodic Pledging
 func (w *Wallet) GetUnpledgeSequenceDetails() ([]*UnpledgeSequenceInfo, error) {
 	var unpledgeSequenceDetails []*UnpledgeSequenceInfo
@@ -75,7 +85,7 @@ func (w *Wallet) Migration_GetUnpledgeQueueInfo() ([]migration_UnpledgeQueueInfo
 				w.log.Info("no PoW based pledged tokens left to unpledge")
 				return nil, nil
 			} else {
-				errMsg := fmt.Errorf("unable to read to pledge tokens from unpledgequeue table: %v", err) 
+				errMsg := fmt.Errorf("unable to read to pledge tokens from unpledgequeue table: %v", err)
 				w.log.Error(errMsg.Error())
 				return nil, errMsg
 			}

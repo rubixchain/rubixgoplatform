@@ -160,6 +160,25 @@ func (s *Server) APIGetAllExplorer(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "Got all the explorer URLs successfully", m)
 }
 
+// APIAddPeerDetailsFromExplorer will add peer details from explorer
+func (s *Server) APIAddPeerDetailsFromExplorer(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "did")
+	if did == "" {
+		s.log.Error("DID cannot be empty")
+		return s.BasicResponse(req, false, "DID cannot be empty", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+	_, err := s.c.GetPeerDIDInfo(did)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to add peer details from explorer, "+err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "Peer details added successfully", nil)
+}
+
 // APIAddExplorer will add bootstrap peers to the configuration
 func (s *Server) APIAddExplorer(req *ensweb.Request) *ensweb.Result {
 	var m model.ExplorerLinks

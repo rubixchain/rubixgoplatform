@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,35 +30,37 @@ import (
 )
 
 const (
-	APIPingPath               string = "/api/ping"
-	APIPeerStatus             string = "/api/peerstatus"
-	APICreditStatus           string = "/api/creditstatus"
-	APIQuorumConsensus        string = "/api/quorum-conensus"
-	APIQuorumCredit           string = "/api/quorum-credit"
-	APIReqPledgeToken         string = "/api/req-pledge-token"
-	APIUpdatePledgeToken      string = "/api/update-pledge-token"
-	APISignatureRequest       string = "/api/signature-request"
-	APISendReceiverToken      string = "/api/send-receiver-token"
-	APISyncTokenChain         string = "/api/sync-token-chain"
-	APIDhtProviderCheck       string = "/api/dht-provider-check"
-	APIMapDIDArbitration      string = "/api/map-did-arbitration"
-	APICheckDIDArbitration    string = "/api/check-did-arbitration"
-	APITokenArbitration       string = "/api/token-arbitration"
-	APIGetTokenNumber         string = "/api/get-token-number"
-	APIGetMigratedTokenStatus string = "/api/get-Migrated-token-status"
-	APISyncDIDArbitration     string = "/api/sync-did-arbitration"
-	APIUnlockTokens           string = "/api/unlock-tokens"
-	APICheckQuorumStatusPath  string = "/api/check-quorum-status"
-	APIGetPeerDIDTypePath     string = "/api/get-peer-didType"
-	APIGetPeerInfoPath        string = "/api/get-peer-info"
-	APIUpdateTokenHashDetails string = "/api/update-tokenhash-details"
-	APIAddUnpledgeDetails     string = "/api/initiate-unpledge"
-	APISelfTransfer           string = "/api/self-transfer"
-	APIRecoverPinnedRBT       string = "/api/recover-pinned-rbt"
-	APIRequestSigningHash     string = "/api/request-signing-hash"
-	TokenValidatorURL         string = "http://103.209.145.177:8000"
-	APISendFTToken            string = "/api/send-ft-token"
+	APIPingPath                     string = "/api/ping"
+	APIPeerStatus                   string = "/api/peerstatus"
+	APICreditStatus                 string = "/api/creditstatus"
+	APIQuorumConsensus              string = "/api/quorum-conensus"
+	APIQuorumCredit                 string = "/api/quorum-credit"
+	APIReqPledgeToken               string = "/api/req-pledge-token"
+	APIUpdatePledgeToken            string = "/api/update-pledge-token"
+	APISignatureRequest             string = "/api/signature-request"
+	APISendReceiverToken            string = "/api/send-receiver-token"
+	APISyncTokenChain               string = "/api/sync-token-chain"
+	APIDhtProviderCheck             string = "/api/dht-provider-check"
+	APIMapDIDArbitration            string = "/api/map-did-arbitration"
+	APICheckDIDArbitration          string = "/api/check-did-arbitration"
+	APITokenArbitration             string = "/api/token-arbitration"
+	APIGetTokenNumber               string = "/api/get-token-number"
+	APIGetMigratedTokenStatus       string = "/api/get-Migrated-token-status"
+	APISyncDIDArbitration           string = "/api/sync-did-arbitration"
+	APIUnlockTokens                 string = "/api/unlock-tokens"
+	APICheckQuorumStatusPath        string = "/api/check-quorum-status"
+	APIGetPeerDIDTypePath           string = "/api/get-peer-didType"
+	APIGetPeerInfoPath              string = "/api/get-peer-info"
+	APIUpdateTokenHashDetails       string = "/api/update-tokenhash-details"
+	APIAddUnpledgeDetails           string = "/api/initiate-unpledge"
+	APISelfTransfer                 string = "/api/self-transfer"
+	APIRecoverPinnedRBT             string = "/api/recover-pinned-rbt"
+	APIRequestSigningHash           string = "/api/request-signing-hash"
+	TokenValidatorURL               string = "http://103.209.145.177:8000"
+	APISendFTToken                  string = "/api/send-ft-token"
 	APIGetPrevQrmFromPrevSenderPath string = "/api/get-prev-qrms-info-from-sender"
+	APICheckPinRole                 string = "/api/check-pin-role"
+	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 )
 
 const (
@@ -333,6 +336,7 @@ func (c *Core) SetupCore() error {
 	c.SetupToken()
 	c.QuroumSetup()
 	c.PinService()
+	c.RestartIncompleteTokenChainSyncs()
 	// c.selfTransferService()
 	return nil
 }
@@ -563,33 +567,23 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 		return nil, err
 	}
 
-	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
-	// and own did type from DIDTable using GetDID function
-	didtype, err := c.w.GetPeerDIDType(didStr)
-	if err != nil || didtype == -1 {
-		dt, err1 := c.w.GetDID(didStr)
-		if err1 != nil || dt.Type == -1 {
-			peerId := c.w.GetPeerID(didStr)
-
-			if peerId == "" {
-				return nil, err
-			}
-			if selfDID != "" {
-				didtype, msg, err2 := c.GetPeerdidTypeFromPeer(peerId, didStr, selfDID)
-				if err2 != nil {
-					c.log.Error(msg)
-					return nil, err2
-				}
-				peerUpdateResult, err3 := c.w.UpdatePeerDIDType(didStr, didtype)
-				if !peerUpdateResult {
-					c.log.Error("couldn't update did type in peer did table", err3)
-				}
-			}
-		} else {
-			didtype = dt.Type
+	// Fetching peer's did type
+	peerInfo, err := c.GetPeerDIDInfo(didStr)
+	if err != nil {
+		if peerInfo == nil {
+			c.log.Error("failed to get did type of peer did ", didStr, "error", err)
+			return nil, err
+		}
+		if strings.Contains(err.Error(), "retry") {
+			c.AddPeerDetails(*peerInfo)
 		}
 	}
-	return c.InitialiseDID(didStr, didtype)
+	if *peerInfo.DIDType == -1 {
+		c.log.Error("failed to get did type of peer did ", didStr, "error", err)
+		return nil, err
+	}
+
+	return c.InitialiseDID(didStr, *peerInfo.DIDType)
 }
 
 // Initializes the quorum in it's corresponding did mode (basic/ lite)
@@ -599,35 +593,23 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 		return nil, err
 	}
 
-	// Fetching peer's did type from PeerDIDTable using GetPeerDIDType function
-	// and own did type from DIDTable using GetDID function
-	didtype, err := c.w.GetPeerDIDType(didStr)
-	if err != nil || didtype == -1 {
-		dt, err1 := c.w.GetDID(didStr)
-
-		if err1 != nil || dt.Type == -1 {
-			peerId := c.w.GetPeerID(didStr)
-
-			if peerId == "" {
-				return nil, err
-			}
-			didtype_, msg, err2 := c.GetPeerdidTypeFromPeer(peerId, didStr, selfDID)
-			if err2 != nil {
-				c.log.Error(msg)
-				return nil, err2
-			}
-			didtype = didtype_
-			peerUpdateResult, err3 := c.w.UpdatePeerDIDType(didStr, didtype)
-			if !peerUpdateResult {
-				c.log.Error("couldn't update did type in peer did table", err3)
-			}
-		} else {
-			didtype = dt.Type
+	// Fetching peer's did type
+	peerInfo, err := c.GetPeerDIDInfo(didStr)
+	if err != nil {
+		if peerInfo == nil {
+			c.log.Error("failed to get did type of peer did ", didStr, "error", err)
+			return nil, err
 		}
-
+		if strings.Contains(err.Error(), "retry") {
+			c.AddPeerDetails(*peerInfo)
+		}
+	}
+	if *peerInfo.DIDType == -1 {
+		c.log.Error("failed to get did type of peer did ", didStr, "error", err)
+		return nil, err
 	}
 
-	switch didtype {
+	switch *peerInfo.DIDType {
 	case did.BasicDIDMode:
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.LiteDIDMode:

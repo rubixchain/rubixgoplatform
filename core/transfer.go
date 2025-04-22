@@ -220,25 +220,34 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	if !isSelfRBTTransfer {
 		rpeerid = c.w.GetPeerID(receiverdid)
 		if rpeerid == "" {
-			// Check if DID is present in the DIDTable as the
-			// receiver might be part of the current node
-			_, err := c.w.GetDID(receiverdid)
+			// Check if DID is present in the DIDTable as the receiver might be part of the current node
+			didDetails, err := c.w.GetDID(receiverdid)
 			if err != nil {
 				if strings.Contains(err.Error(), "no records found") {
 					c.log.Error("receiver Peer ID not found", "did", receiverdid)
 					resp.Message = "invalid address, receiver Peer ID not found"
-					return resp
+					//return resp
 				} else {
-					c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err))
-					resp.Message = fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err)
+					c.log.Error(fmt.Sprintf("Error occurred while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err))
+					resp.Message = fmt.Sprintf("Error occurred while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err)
 					return resp
 				}
+			}
+
+			if didDetails == nil {
+				receiverPeerInfo, err := c.GetPeerDIDInfo(receiverdid)
+				if err != nil {
+					c.log.Error("receiver Peer ID not found in network", "did", receiverdid)
+					resp.Message = "invalid address, receiver Peer ID not found"
+					return resp
+				}
+				rpeerid = receiverPeerInfo.PeerID
 			} else {
 				// Set the receiverPeerID to self Peer ID
 				rpeerid = c.peerID
 			}
 		} else {
-			p, err := c.getPeer(req.Receiver, senderDID)
+			p, err := c.getPeer(req.Receiver)
 			if err != nil {
 				resp.Message = "Failed to get receiver peer, " + err.Error()
 				return resp
@@ -255,6 +264,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 	tis := make([]contract.TokenInfo, 0)
 	tokenListForExplorer := []Token{}
+	// transTokensSyncInfo := make(map[string]GenesisAndLatestBlocks, len(tokensForTxn))
+
 	for i := range tokensForTxn {
 		tts := "rbt"
 		if tokensForTxn[i].TokenValue != 1 {
@@ -284,6 +295,49 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		tis = append(tis, ti)
 		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: ti.Token, TokenValue: ti.TokenValue})
 
+		// genesis := c.w.GetGenesisTokenBlock(ti.Token, ti.TokenType)
+		// genesisNLatestBlocks := GenesisAndLatestBlocks{
+		// 	GenesisBlock: genesis.GetBlock(),
+		// }
+		// if c.TokenType(PartString) == ti.TokenType {
+		// 	// get parent token id
+		// 	parentToken, _, err := genesis.GetParentDetials(ti.Token)
+		// 	if err != nil {
+		// 		c.log.Error("failed to fetch parent token detials", "err", err, "token", ti.Token)
+		// 		resp.Message = fmt.Sprintf("failed to fetch parent token detials, err : %v, token : %v", err, ti.Token)
+		// 		return resp
+		// 	}
+		// 	// get parent token type
+		// 	b, err := c.getFromIPFS(parentToken)
+		// 	if err != nil {
+		// 		c.log.Error("failed to get parent token details from ipfs", "err", err, "parent token", parentToken)
+		// 		resp.Message = fmt.Sprintf("failed to get parent token details from ipfs", "err", err, "parent token", parentToken)
+		// 		return resp
+		// 	}
+		// 	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+
+		// 	parentTokenType := token.RBTTokenType
+		// 	if !iswholeToken {
+		// 		blk := util.StrToHex(string(b))
+		// 		rb, err := rac.InitRacBlock(blk, nil)
+		// 		if err != nil {
+		// 			c.log.Error("invalid token, invalid rac block of parent token", "err", err)
+		// 			resp.Message = "failed to get parent token info for token " + ti.Token
+		// 			return resp
+		// 		}
+		// 		parentTokenType = rac.RacType2TokenType(rb.GetRacType())
+		// 	}
+
+		// 	// get parent genesis and latest blocks
+		// 	parentGenesis := c.w.GetGenesisTokenBlock(parentToken, parentTokenType)
+		// 	parentLatest := c.w.GetLatestTokenBlock(parentToken, parentTokenType)
+		// 	genesisNLatestBlocks.ParentGenesisBlock = parentGenesis.GetBlock()
+		// 	genesisNLatestBlocks.ParentLatestBlock = parentLatest.GetBlock()
+		// } else {
+		// 	if genesis != blk { // TODO : try using block id or number to compare
+		// 		genesisNLatestBlocks.LatestBlock = blk.GetBlock()
+		// 	}
+		// }
 	}
 
 	//check if sender has previous block pledged quorums' details
@@ -300,32 +354,22 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		case block.TokenTransferredType:
 			//fetch all the pledged quorums, if the transaction involved quorums
 			prevQuorums, _ := b.GetSigner()
-			//fetch the sender in the transaction
-			previousBlockSenderDID := b.GetSenderDID()
+
 			for _, prevQuorum := range prevQuorums {
 				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender
-				prevQuorumDIDType, err := c.w.GetPeerDIDType(prevQuorum)
-				if prevQuorumDIDType == -1 || err != nil {
-					_, err := c.w.GetDID(prevQuorum)
-					if err != nil {
-						c.log.Debug("sender does not have previous block quorums details, fetching from previous block sender")
-						prevSenderIPFSObj, err := c.getPeer(previousBlockSenderDID, senderDID)
-						if err != nil {
-							c.log.Error("failed to get prev sender peer", previousBlockSenderDID, "err", err)
-							resp.Message = "failed to get prev sender peer; err: " + err.Error()
-							return resp
-						}
-						prevQuorumsDetails, err := c.GetPrevQuorumsFromPrevBlockSender(prevSenderIPFSObj, prevQuorums)
-						if err != nil {
-							c.log.Error("failed to fetch details of the previous block quorums", prevQuorum, "err", err)
-							resp.Message = "failed to fetch details of the previous block quorums; msg: " + prevQuorumsDetails.Message
-							return resp
-						}
-						//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
-						//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
-						break
+				fmt.Println("Checking if the sender has previous block pledged quorum's did type")
+				prevQuorumInfo, err := c.GetPeerDIDInfo(prevQuorum)
+				if err != nil {
+					if strings.Contains(err.Error(), "retry") {
+						c.AddPeerDetails(*prevQuorumInfo)
 					}
 				}
+				if prevQuorumInfo == nil || *prevQuorumInfo.DIDType == -1 {
+					//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
+					//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
+					break
+				}
+
 			}
 		}
 	}
@@ -341,6 +385,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
+	// cr.TransTokenSyncInfo = transTokensSyncInfo
 
 	td, _, pds, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
@@ -508,7 +553,7 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 	for i := range tokensForTxn {
 		c.w.Pin(tokensForTxn[i].TokenID, wallet.PinningRole, did, "TID-Not Generated", req.Sender, req.PinningNode, tokensForTxn[i].TokenValue)
 	}
-	p, err := c.getPeer(req.PinningNode, did)
+	p, err := c.getPeer(req.PinningNode)
 	if err != nil {
 		resp.Message = "Failed to get pinning peer, " + err.Error()
 		return resp

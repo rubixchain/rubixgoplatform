@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -16,68 +17,66 @@ func (c *Core) GetTxnDetailsByID(txnID string) (model.TransactionDetails, error)
 	return res, nil
 }
 
+// GetTxnDetailsByDID retrieves transaction details based on a given DID and an optional date range.
+// - If `role` is provided, it filters transactions where the DID is a sender or receiver.
+// - If `startDateStr` is provided, only transactions **on or after** this date are returned.
+// - If `endDateStr` is provided, only transactions **before** this date are returned.
+// - If neither date is specified, all transactions related to the DID are returned.
+// - Date format should be "YYYY-MM-DD".
 func (c *Core) GetTxnDetailsByDID(did string, role string, startDateStr string, endDateStr string) ([]model.TransactionDetails, error) {
-	var startDate time.Time
-	var endDate time.Time
+	var startDate, endDate time.Time
 	var err error
 
+	// Parse startDate if provided
+	if startDateStr != "" {
+		startDate, err = time.Parse("2006-01-02", startDateStr)
+		if err != nil {
+			// Handle invalid date format
+			c.log.Error("Invalid StartDate format", err)
+			return nil, err
+		}
+	}
+	// Parse endDate if provided
+	if endDateStr != "" {
+		endDate, err = time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			// Handle invalid date format
+			c.log.Error("Invalid EndDate format", err)
+			return nil, err
+		}
+	}
+
+	// Fetch transactions based on the role (if provided)
 	var result []model.TransactionDetails
 
-	if role == "" {
+	switch strings.ToLower(role) {
+	case "":
 		result, err = c.w.GetTransactionByDID(did)
-		if startDateStr == "" && endDateStr == "" {
-			if err != nil {
-				return nil, err
-			}
-			return result, nil
-		} else {
-			if startDateStr != "" {
-				startDate, err = time.Parse("2006-01-02", startDateStr)
-				if err != nil {
-					// Handle invalid date format
-					c.log.Error("Invalid StartDate format", err)
-					// Return an error response or handle it accordingly
-					return nil, err
-				}
-			}
-
-			if endDateStr != "" {
-				endDate, err = time.Parse("2006-01-02", endDateStr)
-				if err != nil {
-					// Handle invalid date format
-					c.log.Error("Invalid EndDate format", err)
-					// Return an error response or handle it accordingly
-					return nil, err
-				}
-			}
-
-			filteredTxnDetails, err := c.FilterTxnDetailsByDateRange(result, startDate, endDate)
-			if err != nil {
-				c.log.Error("failed to filter by date range", err)
-				return nil, err
-			}
-			return filteredTxnDetails, nil
-		}
+	case "sender":
+		result, err = c.w.GetTransactionBySender(did)
+	case "receiver":
+		result, err = c.w.GetTransactionByReceiver(did)
+	default:
+		c.log.Error("invalid role : " + role)
+		return nil, fmt.Errorf("invalid role: %s", role)
 	}
 
-	lower := strings.ToLower(role)
-	if lower == "sender" {
-		txnAsSender, err := c.w.GetTransactionBySender(did)
-		if err != nil {
-			return nil, err
-		}
-		return txnAsSender, nil
+	if err != nil {
+		return nil, err
 	}
 
-	if lower == "receiver" {
-		txnAsReceiver, err := c.w.GetTransactionByReceiver(did)
-		if err != nil {
-			return nil, err
-		}
-		return txnAsReceiver, nil
+	// If no date filtering is needed, return the results directly
+	if startDateStr == "" && endDateStr == "" {
+		return result, nil
 	}
 
-	return nil, nil
+	// Apply date range filtering
+	filteredTxnDetails, err := c.FilterTxnDetailsByDateRange(result, startDate, endDate)
+	if err != nil {
+		c.log.Error("failed to filter by date range", err)
+		return nil, err
+	}
+	return filteredTxnDetails, nil
 }
 
 func (c *Core) GetTxnDetailsByComment(comment string) ([]model.TransactionDetails, error) {
@@ -88,18 +87,28 @@ func (c *Core) GetTxnDetailsByComment(comment string) ([]model.TransactionDetail
 	return res, nil
 }
 
-// FilterTxnDetailsByDateRange filters TransactionDetails by a date range.
+// FilterTxnDetailsByDateRange filters transactions based on a given date range.
+// - Only transactions **on or after** `startDate` are included.
+// - Only transactions **before** `endDate` are included.
+// - If `startDate` or `endDate` is not provided, filtering is skipped for that condition.
 func (c *Core) FilterTxnDetailsByDateRange(transactions []model.TransactionDetails, startDate time.Time, endDate time.Time) ([]model.TransactionDetails, error) {
 	var filteredTransactions []model.TransactionDetails
+
 	for _, txn := range transactions {
+		// Extract only the date part from txn.DateTime (ignoring the time component)
 		txnDateTimeStr := txn.DateTime.Format("2006-01-02")
-		txnDateTimeParsed, err := time.Parse("2006-01-02", txnDateTimeStr)
-		if err != nil {
-			return nil, err
+		txnDateTime, _ := time.Parse("2006-01-02", txnDateTimeStr)
+
+		// Skip transactions before the start date (if specified)
+		if !startDate.IsZero() && txnDateTime.Before(startDate) {
+			continue
 		}
-		if (txnDateTimeParsed.Equal(startDate) || txnDateTimeParsed.After(startDate)) && txnDateTimeParsed.Before(endDate) {
-			filteredTransactions = append(filteredTransactions, txn)
+
+		// Skip transactions on or after the end date (end date is exclusive)
+		if !endDate.IsZero() && txnDateTime.After(endDate) {
+			continue
 		}
+		filteredTransactions = append(filteredTransactions, txn)
 	}
 
 	return filteredTransactions, nil
