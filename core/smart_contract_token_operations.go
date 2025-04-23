@@ -314,44 +314,36 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		resp.Message = "Consensus failed" + err.Error()
 		return resp
 	}
+	contractResult := rexe.ContractResult{SuccessMsg: "", FailureMsg: ""}
 	tokenChainData := c.GetSmartContractTokenChainData(&model.SmartContractTokenChainDataReq{Token: executeReq.SmartContractToken, Latest: false})
 	if tokenChainData == nil {
 		c.log.Error("Failed to get smart contract token chain data")
 		resp.Message = "Failed to get smart contract token chain data"
-	}
-	// rexeModule := &rexe.RexeModule{}
-	// module, err := rexeModule.NewRexe(executeReq.SmartContractToken)
-	// dataReply := tokenChainData.SCTDataReply
-	// for i, blockData := range dataReply {
-	// 	fmt.Printf("Index: %d, SmartContractData: %s\n", i, blockData.SmartContractData)
-	// 	contractResult := module.Call(blockData.SmartContractData)
-	// 	if contractResult.FailureMsg != "" {
-	// 		c.log.Error("Failed to execute smart contract", "err", contractResult.FailureMsg)
-	// 		resp.Message = "Failed to execute smart contract" + contractResult.FailureMsg
-	// 	} else {
-	// 		c.log.Info("Smart contract executed successfully", "result", contractResult.SuccessMsg)
-	// 	}
+	} else {
+		// Initialize RexeModule
+		rexeModule := &rexe.RexeModule{}
 
-	// }
-
-	// The error case should be handled gracefully, beacuse here it panics
-	rexeModule := &rexe.RexeModule{}
-	module, err := rexeModule.NewRexe(executeReq.SmartContractToken, c.cfg.DirPath)
-	if err != nil {
-		c.log.Error("Failed to initialize Rexe module", "token", executeReq.SmartContractToken, "error", err)
-		resp.Message = fmt.Sprintf("Failed to initialize Rexe module: %v", err)
-	}
-
-	for i, blockData := range tokenChainData.SCTDataReply {
-		c.log.Info("Processing smart contract", "index", i, "contractData", blockData.SmartContractData)
-		contractResult := module.Call(blockData.SmartContractData)
-		if contractResult.FailureMsg != "" {
-			failureMsg := fmt.Sprintf("Block %d: %s", i, contractResult.FailureMsg)
-			c.log.Error("Failed to execute smart contract", "index", i, "error", failureMsg)
+		module, err := rexeModule.NewRexe(executeReq.SmartContractToken, c.cfg.DirPath)
+		if err != nil {
+			c.log.Error("Failed to initialize Rexe module", "token", executeReq.SmartContractToken, "error", err)
+			resp.Message = fmt.Sprintf("Failed to initialize Rexe module: %v", err)
 		} else {
-			c.log.Info("Wasm executed successfully", "index", i, "result", contractResult.SuccessMsg)
+			// Process smart contract data
+			for i, blockData := range tokenChainData.SCTDataReply {
+				c.log.Info("Processing smart contract", "index", i, "contractData", blockData.SmartContractData)
+				contractResult = module.Call(blockData.SmartContractData)
+				if contractResult.FailureMsg != "" {
+					failureMsg := fmt.Sprintf("Block %d: %s", i, contractResult.FailureMsg)
+					c.log.Error("Failed to execute smart contract", "index", i, "error", failureMsg)
+				} else {
+					c.log.Info("Wasm executed successfully", "index", i, "result", contractResult.SuccessMsg)
+				}
+			}
 		}
 	}
+
+	// Perform additional operations here
+	c.log.Info("Continuing with additional operations")
 
 	et := time.Now()
 	dif := et.Sub(st)
@@ -404,5 +396,6 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	resp.Status = true
 	msg := fmt.Sprintf("Smart Contract Token Executed successfully in %v", dif)
 	resp.Message = msg
+	resp.Result = contractResult
 	return resp
 }
