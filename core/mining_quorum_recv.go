@@ -20,6 +20,11 @@ const fiveWeeksInSeconds = 5 * 7 * 24 * 60 * 60 // 5 weeks = 5 * 7 days * 24 hou
 func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails []model.PledgeHistory) error {
 
 	totalCredits := 0
+	record, err := c.w.FindLatestTokenLevelAndNumber()
+	if err != nil {
+		c.log.Error("Failed to get latest token level and number from mining records. err:", err)
+	}
+	fmt.Printf("Highest Token: Level %d, Number %d", record.TokenLevel, record.TokenNumber)
 
 	for _, tokenInfo := range pledgeDetails {
 		c.log.Debug("Validating credits for token: ", tokenInfo.TransferTokenID)

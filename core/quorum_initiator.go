@@ -1773,10 +1773,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		miningRecord := &model.MiningRecordPubSub{
-			MiningID:                 tid,
-			MinedTokenID:             cr.MiningTokenID,
-			TokenLevelAndTokenNumber: 0, // Fetch latest token level and number from the pubsub itself before publishing
-			PledgeHistory:            sc.GetTokenCreditsDetails(),
+			MiningID:      tid,
+			MinedTokenID:  cr.MiningTokenID,
+			MinerDID:      cr.MiningInfo.MinerDid,
+			TokenLevel:    0,
+			TokenNumber:   0,
+			PledgeHistory: sc.GetTokenCreditsDetails(),
 		}
 		err = c.publishMiningdetails(miningRecord)
 		if err != nil {

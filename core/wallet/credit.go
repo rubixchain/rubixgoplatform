@@ -134,43 +134,57 @@ func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus 
 	// Return the filtered pledge history records
 	return pledges, nil
 }
-func CollectRequiredCredits(pledges []model.PledgeHistory, requiredCredits uint64) (selectedCredits []model.PledgeHistory, remainingCredits map[string]uint64, totalSelected uint64) {
-	selectedCredits = []model.PledgeHistory{}
-	remainingCredits = make(map[string]uint64) // Track leftover credits per transaction
-	totalSelected = 0
 
-	for _, pledge := range pledges {
+// This function will collect the required credit details for mining from the entire pledge history and add the remaining credits if any pledge history credit is not completly used.
+func CollectRequiredCredits(pledges []model.PledgeHistory, requiredCredits uint64) ([]model.PledgeHistory, []model.PledgeHistory, error) {
+	// Preallocate slices based on expected size
+	usedCredits := make([]model.PledgeHistory, 0, len(pledges))
+	unusedCredits := make([]model.PledgeHistory, 0, len(pledges))
+	var totalSelected uint64 = 0
+
+	// Use index-based loop for better performance [4]
+	for i := 0; i < len(pledges); i++ {
 		if totalSelected >= requiredCredits {
-			break // Stop once we've collected enough credits
+			// Add remaining pledges and exit early
+			unusedCredits = append(unusedCredits, pledges[i:]...)
+			break
 		}
 
-		if totalSelected+pledge.TokenCredit <= requiredCredits {
-			// Fully use this transaction's credits
-			selectedCredits = append(selectedCredits, pledge)
-			totalSelected += pledge.TokenCredit
+		pledge := pledges[i]
+		available := pledge.TokenCredit
+		needed := requiredCredits - totalSelected
+		var usedAmount uint64
+		if available < needed {
+			usedAmount = available
 		} else {
-			// Partially use this transaction's credits
-			remaining := (totalSelected + pledge.TokenCredit) - requiredCredits
-			selectedCredits = append(selectedCredits, model.PledgeHistory{
-				QuorumDID:          pledge.QuorumDID,
-				TransactionID:      pledge.TransactionID,
-				TransactionType:    pledge.TransactionType,
-				TransferTokenID:    pledge.TransferTokenID,
-				TransferTokenType:  pledge.TransferTokenType,
-				TransferTokenValue: pledge.TransferTokenValue,
-				TransferBlockID:    pledge.TransferBlockID,
-				Epoch:              pledge.Epoch,
-				NextBlockEpoch:     pledge.NextBlockEpoch,
-				TokenCredit:        pledge.TokenCredit - remaining, // Use only the required part
-				TokenCreditStatus:  pledge.TokenCreditStatus,
-			})
-			key := pledge.TransactionID + "." + pledge.TransferTokenID
-            remainingCredits[key] = remaining
-			totalSelected += (pledge.TokenCredit - remaining)
+			usedAmount = needed
+		}
+		// Create modified copy with remaining credits
+		modifiedPledge := pledge
+		modifiedPledge.TokenCredit = usedAmount
+		modifiedPledge.TokenCreditStatus = 2
+		modifiedPledge.RemainingCredits = available - usedAmount
+
+		if usedAmount > 0 {
+			usedCredits = append(usedCredits, modifiedPledge)
+			totalSelected += usedAmount
+		}
+
+		// Handle partial usage
+		if usedAmount < available {
+			// Add remaining pledges and exit
+			if i+1 < len(pledges) {
+				unusedCredits = append(unusedCredits, pledges[i+1:]...)
+			}
+			break
 		}
 	}
 
-	return selectedCredits, remainingCredits, totalSelected
+	if totalSelected < requiredCredits {
+		return nil, nil, fmt.Errorf("insufficient credits: available %d, required %d", totalSelected, requiredCredits)
+	}
+
+	return usedCredits, unusedCredits, nil
 }
 
 func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transactionID string) error {
@@ -245,7 +259,7 @@ func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transa
 		record.NextBlockEpoch = epoch
 		if record.TransactionType == 1 {
 			tokenCreditFloat := float64(epoch-record.Epoch) * (record.TransferTokenValue) * 15 //This is credits for all quorums together
-			tokenCreditsForEachQuorum := tokenCreditFloat/5
+			tokenCreditsForEachQuorum := tokenCreditFloat / 5
 			record.TokenCredit = uint64(tokenCreditsForEachQuorum)
 
 		} else if record.TransactionType == 2 {

@@ -37,7 +37,6 @@ const (
 	SCTransInfoKey          string = "3"
 	SCTotalRBTsKey          string = "4"
 	SCTokenCreditDetailsKey string = "5"
-	SCRemainingCreditsKey   string = "6"
 	SCShareSignatureKey     string = "97"
 	SCKeySignatureKey       string = "98"
 	SCBlockHashKey          string = "99"
@@ -53,7 +52,6 @@ type ContractType struct {
 	TotalRBTs          float64               `json:"totalRBTs"`
 	TokenCreditDetails []model.PledgeHistory `json:"token_credit_details"`
 	ReqTokenCredits    uint64                `json:"req_token_credits"`
-	RemainingCredits   map[string]uint64     `json:"remaining_credits"`
 	ReqID              string                `json:"req_id"`
 	log                logger.Logger
 }
@@ -83,7 +81,6 @@ func CreateNewContract(st *ContractType) *Contract {
 	nm[SCPledgeModeKey] = st.PledgeMode
 	nm[SCTokenCreditDetailsKey] = st.TokenCreditDetails
 	nm[SCTransInfoKey] = newTransInfoBlock(st.TransInfo)
-	nm[SCRemainingCreditsKey] = st.RemainingCredits
 	if nm[SCTransInfoKey] == nil && nm[SCTokenCreditDetailsKey] == nil {
 		return nil
 	}
@@ -369,14 +366,6 @@ func (c *Contract) GetTokenCreditsDetails() []model.PledgeHistory {
 		return tokenCreditDetailsArray
 	}
 	return nil
-}
-func  (c *Contract) GetRemainingCredits() map[string]uint64 {
-      remainingCreditsDetails := util.GetFromMap(c.sm, SCRemainingCreditsKey)
-      remainingCredits,ok := remainingCreditsDetails.(map[string]uint64)
-	  if ok {
-		return remainingCredits
-	  }
-	  return nil
 }
 
 func (c *Contract) GetCommitedTokensInfo() []TokenInfo {

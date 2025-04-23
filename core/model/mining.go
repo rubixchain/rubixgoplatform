@@ -19,14 +19,17 @@ type PledgeHistory struct {
 	NextBlockEpoch     uint64  `gorm:"column:next_epoch"`
 	TokenCredit        uint64  `gorm:"column:token_credit"`
 	TokenCreditStatus  int     `gorm:"column:token_credit_status"`
+	RemainingCredits   uint64  `gorm:"column:remaining_credits"`
 }
 
 type MiningRecordPubSub struct {
-	MiningID                 string          `json:"mining_id"`
-	MinedTokenID             string          `json:"miner_token_id"`
-	MinerDID                 string          `json:"miner_did"`
-	TokenLevelAndTokenNumber int             `json:"token_level_and_token_number"`
-	PledgeHistory            []PledgeHistory `json:"pledge_history"`
+	MiningID         string          `json:"mining_id"`
+	MinedTokenID     string          `json:"miner_token_id"`
+	MinerDID         string          `json:"miner_did"`
+	TokenLevel       int             `json:"token_level"`
+	TokenNumber      int             `json:"token_number"`
+	RemainingCredits uint64          `json:"remaining_credits"`
+	PledgeHistory    []PledgeHistory `json:"pledge_history"`
 }
 
 type GetTotalCredits struct {

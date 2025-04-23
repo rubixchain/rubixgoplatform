@@ -821,7 +821,7 @@ func (c *Core) quorumMiningConsensus(req *ensweb.Request, did string, qdc didcry
 
 	// Validating the credits
 	tokenCreditsDetails := miningContract.GetTokenCreditsDetails()
-	err = c.ValidateCredits(miningRequest.MiningInfo.MinerDid, int(miningRequest.MiningInfo.TokenCredits), tokenCreditsDetails)
+	err = c.ValidateCredits(did, int(miningRequest.MiningInfo.TokenCredits), tokenCreditsDetails)
 	if err != nil {
 		crep.Message = "Failed to validate credits"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
