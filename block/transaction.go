@@ -44,6 +44,7 @@ const (
 	TIExecutorDIDKey    string = "9"
 	TICommitedTokensKey string = "10"
 	TIPinningDIDKey     string = "11"
+	TIMinerDIDKey       string = "12"
 )
 
 const (
@@ -137,6 +138,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	}
 	if ti.ExecutorDID != "" {
 		ntib[TIExecutorDIDKey] = ti.ExecutorDID
+	}
+	if ti.MinerDID != "" {
+		ntib[TIMinerDIDKey] = ti.MinerDID
 	}
 	if ti.Comment != "" {
 		ntib[TICommentKey] = ti.Comment

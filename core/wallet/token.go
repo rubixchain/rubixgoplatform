@@ -11,6 +11,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/token"
 )
 
 const fourWeeksInSeconds = 4 * 7 * 24 * 60 * 60 // 4 weeks = 4 * 7 days * 24 hours * 60 minutes * 60 seconds
@@ -243,7 +244,7 @@ func (w *Wallet) GetCloserToken(did string, rem float64) (*Token, error) {
 	return &tks[0], nil
 }
 
-func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int, tokenType int) ([]Token, int, error) {
+func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int, testNet bool) ([]Token, int, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
@@ -266,12 +267,18 @@ func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int, tokenType int
 	wt := make([]Token, 0)
 	for i := 0; i < tl; i++ {
 		//TODO:check each tokens latest token block, if it is a newly mined token, check epoch whether 4 weeks passed or not
-		if trnxMode == 0 {
+		if trnxMode == 0 ||trnxMode == 6 || trnxMode == 7  {
+			var tokenType int
+			if testNet {
+				tokenType = token.TestTokenType
+			} else {
+				tokenType = token.RBTTokenType
+			}
 			genesisBlock := w.GetGenesisTokenBlock(t[i].TokenID, tokenType)
 			if genesisBlock == nil {
-				fmt.Printf("genesis block corresponding to %s tokenID is nil\n", t[i].TokenID)
-			}
-			if genesisBlock != nil {
+				w.log.Info("genesis block corresponding to %s tokenID is nil\n", t[i].TokenID)
+				return nil, 0, fmt.Errorf("not able to get the genesis block for the token %s", t[i].TokenID)
+			}else {
 				tokenTransType := genesisBlock.GetTransType()
 				if tokenTransType == block.TokenMinedType {
 					genesisBlockEpoch := genesisBlock.GetEpoch()

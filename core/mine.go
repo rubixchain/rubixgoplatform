@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -18,7 +19,7 @@ import (
 
 const (
 	tokenLevel   = 004
-	tokenNumber  = 1000000
+	tokenNumber  = 1000003
 	miningPubSub = "mining-service"
 )
 
@@ -33,6 +34,8 @@ func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest) {
 }
 func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *model.BasicResponse {
 	fmt.Println("Executing MineRBTs function")
+	st := time.Now()
+	txEpoch := int(st.Unix())
 
 	resp := &model.BasicResponse{
 		Status: false,
@@ -91,7 +94,7 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 		return resp
 	}
 
-	miningConsensusReq := c.getMiningConsensusReq(miningContract.GetBlock(), *MiningReq)
+	miningConsensusReq := c.getMiningConsensusReq(miningContract.GetBlock(), *MiningReq, txEpoch)
 
 	_, _, _, err = c.initiateConsensus(miningConsensusReq, miningContract, didCryptoLib)
 	if err != nil {
@@ -109,13 +112,14 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 
 }
 
-func (c *Core) getMiningConsensusReq(contractBlock []byte, miningReq model.MiningRequest) *ConensusRequest {
+func (c *Core) getMiningConsensusReq(contractBlock []byte, miningReq model.MiningRequest, txnEpoch int) *ConensusRequest {
 	var consensusRequest *ConensusRequest = &ConensusRequest{
-		Mode:          MiningMode,
-		ReqID:         uuid.New().String(),
-		ContractBlock: contractBlock,
-		MiningInfo:    miningReq,
-		Type:          miningReq.Type,
+		Mode:             MiningMode,
+		ReqID:            uuid.New().String(),
+		ContractBlock:    contractBlock,
+		MiningInfo:       miningReq,
+		Type:             miningReq.Type,
+		TransactionEpoch: txnEpoch,
 	}
 	return consensusRequest
 }

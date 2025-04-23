@@ -45,6 +45,7 @@ var keyMapping = map[string]string{
 	"5-8":    "TIDeployerDIDKey",
 	"5-9":    "TIExecutorDIDKey",
 	"5-10":   "TICommitedTokensKey",
+	"5-12":   "TIMinerDIDKey",
 	"5-6-1":  "TTTokenTypeKey",
 	"5-6-2":  "TTPledgedTokenKey",
 	"5-6-3":  "TTPledgedDIDKey",

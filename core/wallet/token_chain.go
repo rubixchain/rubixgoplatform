@@ -88,6 +88,10 @@ func tcsPrefix(tokenType int, t string) string {
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
 		tt = FTTokenType
+	case tkn.MiningTokenType:
+		tt = WholeTokenType
+	case tkn.TestMiningTokenType:
+		tt = TestTokenType
 	}
 	return tt + "-" + t + "-"
 }
@@ -113,6 +117,10 @@ func tcsKey(tokenType int, t string, blockID string) string {
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
 		tt = FTTokenType
+	case tkn.MiningTokenType:
+		tt = WholeTokenType
+	case tkn.TestMiningTokenType:
+		tt = TestTokenType
 	}
 	bs := strings.Split(blockID, "-")
 	if len(bs) == 2 {
@@ -194,6 +202,8 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 	case tkn.FTTokenType:
 		db = w.FTChainStorage
 	case tkn.MiningTokenType:
+		db = w.tcs
+	case tkn.TestMiningTokenType:
 		db = w.tcs
 	}
 	return db
@@ -444,29 +454,28 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 		return err
 	}
 }
-func (w *Wallet) addMiningBlock(token string, b *block.Block) error {
+func (w *Wallet) addMiningBlock(token string, b *block.Block, tt int) error {
 	opt := &opt.WriteOptions{
 		Sync: true,
 	}
-	tt := tkn.MiningTokenType
-	// fmt.Println(" token type in addMiningBlock function", tt)
+
 	db := w.getChainDB(tt)
 	if db == nil {
 		w.log.Error("Failed to add block, invalid token type")
 		return fmt.Errorf("failed to get db")
 	}
-	fmt.Println("db in dMiningBlock function", db)
+
 	bid, err := b.GetMinedTokenBlockID(token)
 	if err != nil {
 		return err
 	}
-	fmt.Println("blkID in addMiningBlock function", bid)
 	key := tcsKey(tt, token, bid)
 	// fmt.Println("block", b.GetBlock())
 	db.l.Lock()
 	err = db.Put([]byte(key), b.GetBlock(), opt)
-	if tt == tkn.TestTokenType {
-		w.log.Debug("Written", "key", key)
+	if err != nil {
+		fmt.Println("Error writing in db:", err)
+		return err
 	}
 	db.l.Unlock()
 	return err
@@ -597,8 +606,8 @@ func (w *Wallet) GetGenesisTokenBlock(token string, tokenType int) *block.Block 
 func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
 	return w.addBlock(token, b)
 }
-func (w *Wallet) AddMiningTokenBlock(token string, b *block.Block) error {
-	return w.addMiningBlock(token, b)
+func (w *Wallet) AddMiningTokenBlock(token string, b *block.Block, tt int) error {
+	return w.addMiningBlock(token, b, tt)
 }
 
 // CreateTokenBlock will write token block into storage

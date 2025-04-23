@@ -1465,7 +1465,11 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 	if ur.Mode == MiningMode {
-		err = c.w.AddMiningTokenBlock(ur.NewlyMinedTokenID, b)
+		tt := token.MiningTokenType
+		if c.testNet {
+			tt = token.TestMiningTokenType
+		}
+		err = c.w.AddMiningTokenBlock(ur.NewlyMinedTokenID, b, tt)
 		if err != nil {
 			c.log.Error("Failed to add token block", "token", ur.NewlyMinedTokenID)
 			crep.Message = "Failed to add token block"

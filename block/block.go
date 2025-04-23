@@ -652,6 +652,9 @@ func (b *Block) GetOwner() string {
 func (b *Block) GetSenderDID() string {
 	return b.getTrasnInfoString(TISenderDIDKey)
 }
+func (b *Block) GetMinerDID() string{
+	return b.getTrasnInfoString(TIMinerDIDKey)
+}
 
 func (b *Block) GetReceiverDID() string {
 	return b.getTrasnInfoString(TIReceiverDIDKey)

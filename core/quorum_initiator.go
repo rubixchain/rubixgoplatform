@@ -16,6 +16,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -411,23 +412,23 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	fmt.Println("Quorum list is:", cr.QuorumList)
 	fmt.Println("ql from GetQuorum function is", ql)
 	// TODO: Handle below
-	// var finalQl []string
-	// var errFQL error
-	// if cr.Type == 2 {
-	// 	finalQl, errFQL = c.GetFinalQuorumList(ql)
-	// 	if errFQL != nil {
-	// 		c.log.Error("unable to get consensus from quorum(s). err: ", errFQL)
-	// 		return nil, nil, nil, errFQL
-	// 	}
-	// 	fmt.Println("finalQl is:", finalQl)
-	// 	cr.QuorumList = finalQl
-	// 	if len(finalQl) < MinQuorumRequired {
-	// 		c.log.Error("quorum(s) are unavailable for this trnx")
-	// 		return nil, nil, nil, fmt.Errorf("quorum(s) are unavailable for this trnx. retry trnx after some time")
-	// 	}
-	// } else {
-	// 	cr.QuorumList = ql
-	// }
+	var finalQl []string
+	var errFQL error
+	if cr.Type == 2 {
+		finalQl, errFQL = c.GetFinalQuorumList(ql)
+		if errFQL != nil {
+			c.log.Error("unable to get consensus from quorum(s). err: ", errFQL)
+			return nil, nil, nil, errFQL
+		}
+		fmt.Println("finalQl is:", finalQl)
+		cr.QuorumList = finalQl
+		if len(finalQl) < MinQuorumRequired {
+			c.log.Error("quorum(s) are unavailable for this trnx")
+			return nil, nil, nil, fmt.Errorf("quorum(s) are unavailable for this trnx. retry trnx after some time")
+		}
+	} else {
+		cr.QuorumList = ql
+	}
 
 	c.qlock.Lock()
 	c.quorumRequest[cr.ReqID] = &cs
@@ -1729,9 +1730,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		fmt.Println("Mining ID is ", tokendetails.TransactionID)
 		fmt.Println("New tokenID is ", tokendetails.TokenID)
-		
+		tt := token.MiningTokenType
+		if c.testNet {
+			tt = token.TestMiningTokenType
+		}
 
-		err = c.w.AddMiningTokenBlock(tokendetails.TokenID, nb)
+		err = c.w.AddMiningTokenBlock(tokendetails.TokenID, nb, tt)
 		if err != nil {
 			c.log.Error("Failed to add token block", "token", tokendetails.TokenID)
 			return nil, nil, nil, err

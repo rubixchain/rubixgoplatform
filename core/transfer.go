@@ -268,8 +268,13 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			resp.Message = "failed to get latest block, invalid token chain"
 			return resp
 		}
-
-		bid, err := blk.GetBlockID(tokensForTxn[i].TokenID)
+		var bid string
+		var err error
+		if blk.GetMinerDID() != "" {
+			bid, err = blk.GetMinedTokenBlockID(tokensForTxn[i].TokenID)
+		} else {
+			bid, err = blk.GetBlockID(tokensForTxn[i].TokenID)
+		}
 		if err != nil {
 			c.log.Error("failed to get block id", "err", err)
 			resp.Message = "failed to get block id, " + err.Error()
