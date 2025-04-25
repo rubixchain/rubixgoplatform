@@ -399,16 +399,16 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	tid := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 	lastCharTID := string(tid[len(tid)-1])
 	cr.TransactionID = tid
-	var ql []string
-	if cr.Mode == MiningMode {
-		cr.QuorumList = c.GetMiningQuorums()
-	} else {
-		ql = c.qm.GetQuorum(cr.Type, lastCharTID, c.peerID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
-		if ql == nil || len(ql) < MinQuorumRequired {
-			c.log.Error("Failed to get required quorums")
-			return nil, nil, nil, fmt.Errorf("failed to get required quorums")
-		}
+	// var ql []string
+	// if cr.Mode == MiningMode {
+	// 	cr.QuorumList = c.GetMiningQuorums()
+	// } else {
+	ql := c.qm.GetQuorum(cr.Type, lastCharTID, c.peerID) //passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
+	if ql == nil || len(ql) < MinQuorumRequired {
+		c.log.Error("Failed to get required quorums")
+		return nil, nil, nil, fmt.Errorf("failed to get required quorums")
 	}
+	// }
 	fmt.Println("Quorum list is:", cr.QuorumList)
 	fmt.Println("ql from GetQuorum function is", ql)
 	// TODO: Handle below

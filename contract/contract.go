@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/fxamacker/cbor"
@@ -79,7 +80,17 @@ func CreateNewContract(st *ContractType) *Contract {
 	}
 
 	nm[SCPledgeModeKey] = st.PledgeMode
-	nm[SCTokenCreditDetailsKey] = st.TokenCreditDetails
+	// Marshal st.TokenCreditDetails to []byte
+	if st.TokenCreditDetails != nil {
+		tokenCreditDetailsBytes, err := json.Marshal(st.TokenCreditDetails)
+		if err != nil {
+			fmt.Println("Failed to marshal TokenCreditDetails:", err)
+			return nil
+		}
+		nm[SCTokenCreditDetailsKey] = tokenCreditDetailsBytes
+	} else {
+		nm[SCTokenCreditDetailsKey] = nil
+	}
 	nm[SCTransInfoKey] = newTransInfoBlock(st.TransInfo)
 	if nm[SCTransInfoKey] == nil && nm[SCTokenCreditDetailsKey] == nil {
 		return nil
@@ -361,11 +372,19 @@ func (c *Contract) GetTransTokenInfo() []TokenInfo {
 
 func (c *Contract) GetTokenCreditsDetails() []model.PledgeHistory {
 	tokenCreditDetails := util.GetFromMap(c.sm, SCTokenCreditDetailsKey)
-	tokenCreditDetailsArray, ok := tokenCreditDetails.([]model.PledgeHistory)
-	if ok {
-		return tokenCreditDetailsArray
+	tokenCreditDetailsBytes, ok := tokenCreditDetails.([]byte)
+	if !ok {
+		c.log.Debug("not able to typecast into bytes")
+		return nil
 	}
-	return nil
+	var tokenCreditDetailsUnMarshalled []model.PledgeHistory
+	err := json.Unmarshal(tokenCreditDetailsBytes, &tokenCreditDetailsUnMarshalled)
+	if err != nil {
+		fmt.Println("Failed to unmarshal API response into []model.PledgeHistory:", err)
+		return nil
+	}
+
+	return tokenCreditDetailsUnMarshalled
 }
 
 func (c *Contract) GetCommitedTokensInfo() []TokenInfo {
