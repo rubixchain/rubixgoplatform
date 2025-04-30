@@ -332,6 +332,9 @@ type Command struct {
 	defaultSetup                 bool
 	apiKey                       string
 	nftValue                     float64
+	accountType uint
+	changeAddr                   uint
+	addrIndex                    uint
 }
 
 func showVersion() {
@@ -552,6 +555,9 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.defaultSetup, "defaultSetup", false, "Add Faucet Quorums")
 	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
+	flag.UintVar(&cmd.accountType, "accountType", 0, "to organise addreses of different wallets")
+	flag.UintVar(&cmd.changeAddr, "changeAddr", 0, "to create new address(did) for each transaction to maintain privacy")
+	flag.UintVar(&cmd.addrIndex, "addrIndex", 0, "to create a new child address(did) by changing the index")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

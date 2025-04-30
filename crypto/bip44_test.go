@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/tyler-smith/go-bip32"
 )
 
 func TestHDKeyGeneration(t *testing.T) {
@@ -18,7 +19,14 @@ func GenerateHDKeysTest(t *testing.T, mnemonic string, pwd string, coinType, acc
 		t.Fatal("failed to generate HD key pair", "err", err)
 	}
 
-	privateKey, err := hdWallet.DerivePrivateKey(coinType, accountType, change, index)
+	path := []uint32{
+		bip32.FirstHardenedChild + Purpose,     // e.g., 44'
+		bip32.FirstHardenedChild + coinType,    // e.g., 1001
+		bip32.FirstHardenedChild + accountType, // e.g., 0'
+		change,                                 // 0 (external) or 1 (change)
+		index,                                  // 0, 1, 2, ...
+	}
+	privateKey, err := hdWallet.DerivePrivateKey(path)
 	if err != nil {
 		t.Fatal("failed to derive HD priv key", "err", err)
 	}

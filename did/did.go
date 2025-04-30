@@ -105,15 +105,33 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			mnemonic = string(_mnemonic)
 		}
 
-		masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic)
+		// masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic)
+		// if err != nil {
+		// 	d.log.Error("failed to create keypair", "err", err)
+		// }
+
+		// //generating private and public key pair
+		// pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKey), didCreate.ChildPath, didCreate.PrivPWD)
+		// if err != nil {
+		// 	d.log.Error("failed to create child", "err", err)
+		// }
+
+		//bip-44
+		hdWallet, err := crypto.NewHDWallet(mnemonic)
 		if err != nil {
-			d.log.Error("failed to create keypair", "err", err)
+			d.log.Error("failed to create keypair from mnemonic", "err", err)
+			return "", err
+		}
+		privateKey, err := hdWallet.DerivePrivateKey(didCreate.HDPath[:])
+		if err != nil {
+			d.log.Error("failed to create hd keypair", "err", err)
+			return "", err
 		}
 
-		//generating private and public key pair
-		pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKey), didCreate.ChildPath, didCreate.PrivPWD)
+		pvtKey, pubKey, err := crypto.DeriveKeyPair(privateKey, didCreate.PrivPWD)
 		if err != nil {
-			d.log.Error("failed to create child", "err", err)
+			d.log.Error("failed to derive keypair", "err", err)
+			return "", err
 		}
 
 		err = util.FileWrite(dirName+"/private/"+MnemonicFileName, []byte(mnemonic))

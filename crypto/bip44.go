@@ -69,13 +69,16 @@ func NewHDWallet(mnemonic string) (*HDWallet, error) {
 }
 
 // DeriveKey derives a key for a given BIP-44 path (m/purpose'/coin_type'/account'/change/index)
-func (w *HDWallet) DerivePrivateKey(coinType, accountType, change, index uint32) (*bip32.Key, error) {
-	path := []uint32{
-		bip32.FirstHardenedChild + Purpose,     // e.g., 44'
-		bip32.FirstHardenedChild + coinType,    // e.g., 1001
-		bip32.FirstHardenedChild + accountType, // e.g., 0'
-		change,                                 // 0 (external) or 1 (change)
-		index,                                  // 0, 1, 2, ...
+func (w *HDWallet) DerivePrivateKey(path []uint32) (*bip32.Key, error) {
+	// path := []uint32{
+	// 	bip32.FirstHardenedChild + Purpose,     // e.g., 44'
+	// 	bip32.FirstHardenedChild + coinType,    // e.g., 1001
+	// 	bip32.FirstHardenedChild + accountType, // e.g., 0'
+	// 	change,                                 // 0 (external) or 1 (change)
+	// 	index,                                  // 0, 1, 2, ...
+	// }
+	if len(path) != 5 {
+		return nil, fmt.Errorf("failed to derive key, invalid HD path length: %v", len(path), "should be precisely 5")
 	}
 
 	currentKey := w.MasterKey
@@ -117,3 +120,29 @@ func DeriveKeyPair(privateKey *bip32.Key, pwd string) ([]byte, []byte, error) {
 
 	return pemEncPriv, pemEncPub, nil
 }
+
+// func GenerateHDChildKeys(coinType, accountType, change, index uint32, mnemonic, pwd string) ([]byte, []byte, error) {
+
+// 	hdWallet, err := NewHDWallet(mnemonic)
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
+
+// 	path := []uint32{
+// 		bip32.FirstHardenedChild + Purpose,     // e.g., 44'
+// 		bip32.FirstHardenedChild + coinType,    // e.g., 1001
+// 		bip32.FirstHardenedChild + accountType, // e.g., 0'
+// 		change,                                 // 0 (external) or 1 (change)
+// 		index,                                  // 0, 1, 2, ...
+// 	}
+// 	privateKey, err := hdWallet.DerivePrivateKey(path)
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
+
+// 	privKey, pubKey, err := DeriveKeyPair(privateKey, pwd)
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
+// 	return privKey, pubKey, nil
+// }

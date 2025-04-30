@@ -17,6 +17,18 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
+const (
+	HDPurpose         uint32 = 44   // 44 for BIP-44
+	RBTcoinType     uint32 = 1001 // for RBT tokens in Rubix mainnet
+	TestRbtcoinType uint32 = 1002 // for test RBTs in Rubix testnet
+)
+
+const (
+	NonWalletAccount uint32 = iota
+	XellAcount
+	SafePassAccount
+)
+
 // Struct to match the API response
 type APIResponse struct {
 	Message string  `json:"message"`
@@ -234,6 +246,15 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	if didCreate.RootDID {
 		dt.RootDID = 1
 	}
+
+	// HDPath defines the required path to create a new child address/did
+	didCreate.HDPath[0] = HDPurpose
+	if c.testNet {
+		didCreate.HDPath[1] = TestRbtcoinType
+	} else {
+		didCreate.HDPath[1] = RBTcoinType
+	}
+
 	err = c.w.CreateDID(&dt)
 	if err != nil {
 		c.log.Error("Failed to create did in the wallet", "err", err)
