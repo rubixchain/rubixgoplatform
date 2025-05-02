@@ -62,8 +62,6 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
 	}
 
-	s.log.Debug("***** hd paths passed via api call : ", didCreate.HDPath)
-
 	if didCreate.Type < 0 || didCreate.Type > 4 {
 		s.log.Error("DID Type should be between 0 and 4")
 		return s.BasicResponse(req, false, "DID Type should be between 0 and 4", nil)

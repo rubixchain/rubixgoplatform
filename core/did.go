@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	HDPurpose         uint32 = 44   // 44 for BIP-44
+	HDPurpose       uint32 = 44   // 44 for BIP-44
 	RBTcoinType     uint32 = 1001 // for RBT tokens in Rubix mainnet
 	TestRbtcoinType uint32 = 1002 // for test RBTs in Rubix testnet
 )
@@ -230,6 +230,14 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		c.log.Error("root did is already exist")
 		return "", fmt.Errorf("root did is already exist")
 	}
+	// HDPath defines the required path to create a new child address/did
+	didCreate.HDPath[0] = HDPurpose
+	if c.testNet {
+		didCreate.HDPath[1] = TestRbtcoinType
+	} else {
+		didCreate.HDPath[1] = RBTcoinType
+	}
+
 	did, err := c.d.CreateDID(didCreate)
 	if err != nil {
 		return "", err
@@ -245,14 +253,6 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	}
 	if didCreate.RootDID {
 		dt.RootDID = 1
-	}
-
-	// HDPath defines the required path to create a new child address/did
-	didCreate.HDPath[0] = HDPurpose
-	if c.testNet {
-		didCreate.HDPath[1] = TestRbtcoinType
-	} else {
-		didCreate.HDPath[1] = RBTcoinType
 	}
 
 	err = c.w.CreateDID(&dt)

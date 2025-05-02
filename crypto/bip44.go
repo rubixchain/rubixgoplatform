@@ -78,7 +78,7 @@ func (w *HDWallet) DerivePrivateKey(path []uint32) (*bip32.Key, error) {
 	// 	index,                                  // 0, 1, 2, ...
 	// }
 	if len(path) != 5 {
-		return nil, fmt.Errorf("failed to derive key, invalid HD path length: %v", len(path), "should be precisely 5")
+		return nil, fmt.Errorf("failed to derive key, invalid HD path length: %v, should be precisely 5", len(path))
 	}
 
 	currentKey := w.MasterKey
