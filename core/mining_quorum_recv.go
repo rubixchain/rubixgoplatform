@@ -20,44 +20,44 @@ const fiveWeeksInSeconds = 5 * 7 * 24 * 60 * 60 // 5 weeks = 5 * 7 days * 24 hou
 func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails []model.PledgeHistory) error {
 
 	totalCredits := 0
-	record, err := c.w.FindLatestTokenLevelAndNumber()
-	if err != nil {
-		c.log.Error("Failed to get latest token level and number from mining records. err:", err)
-	}
-	fmt.Printf("Highest Token: Level %d, Number %d", record.TokenLevel, record.TokenNumber)
-
+	// record, err := c.w.FindLatestTokenLevelAndNumber()
+	// if err != nil {
+	// 	c.log.Error("Failed to get latest token level and number from mining records. err:", err)
+	// }
+	// fmt.Printf("Highest Token: Level %d, Number %d", record.TokenLevel, record.TokenNumber)
+	// fmt.Println("PledgeHistory details in ValidateCredits", pledgeDetails)
 	for _, tokenInfo := range pledgeDetails {
 		c.log.Debug("Validating credits for token: ", tokenInfo.TransferTokenID)
 		validatingBlockNumberStr := (tokenInfo.TransferBlockID[0:1])
 		validatingBlockNumber, err := strconv.Atoi(validatingBlockNumberStr)
 		if err != nil {
 			c.log.Error("Error converting block number to integer for credit validation:", err)
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("failed to convert block number for token %s: %v", tokenInfo.TransferTokenID, err)
 		}
 
 		//Get the peers from week epoch
 		var peers []string
 		currentWeek := util.GetWeeksPassed()
 		peers, err = c.getPeerWhoPinTokenEpoch(tokenInfo.TransferTokenID, currentWeek)
-
+		if err != nil {
+			c.log.Error("Error getting peers for token: ", tokenInfo.TransferTokenID, "err", err)
+			return fmt.Errorf("failed to get peers for token %s: %v", tokenInfo.TransferTokenID, err)
+		}
 		// Connect with the nodes who pinned the current week epoch and get the latest tokenchain.
 		err = c.SyncTokenChainFromListOfPeers(peers, tokenInfo.TransferTokenID, tokenInfo.TransferTokenType)
 		if err != nil {
 			c.log.Error("Error syncing tokenchain from peers for credit validation", "tokenID", tokenInfo.TransferTokenID, "err", err)
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("failed to sync tokenchain for token %s: %v", tokenInfo.TransferTokenID, err)
 		}
 
 		// Get the transfer block which credits need to be validated
-		transferBlockArray, err := c.w.GetTokenBlock(tokenInfo.TransferTokenID, tokenInfo.TransferTokenType, tokenInfo.TransferBlockID)
+		transferBlockBytes, err := c.w.GetTokenBlock(tokenInfo.TransferTokenID, tokenInfo.TransferTokenType, tokenInfo.TransferBlockID)
 		if err != nil {
 			c.log.Error("Error getting token block for credit validation", "tokenID", tokenInfo.TransferTokenID, "blockID", tokenInfo.TransferBlockID, "err", err)
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("failed to get token block for token %s: %v", tokenInfo.TransferTokenID, err)
 		}
 
-		transferBlock := block.InitBlock(transferBlockArray, nil)
+		transferBlock := block.InitBlock(transferBlockBytes, nil)
 
 		// Check whether the 5 weeks is passed
 		currentEpoch := time.Now().Unix()
@@ -65,7 +65,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		c.log.Debug("Epoch difference is ", (currentEpoch - int64(transferBlock.GetEpoch()))) //TODO: Remove, Added for testing
 		c.log.Debug("Days pledged is ", (currentEpoch-int64(transferBlock.GetEpoch()))/86400) //TODO: Remove, Added for testing
 
-		// TODO: Revert below after testing
+		// TODO: Revert below after testing, fiveweeks pass check
 		// if (currentEpoch - int64(transferBlock.GetEpoch())) < fiveWeeksInSeconds {
 		// 	c.log.Error("Failed to validate credits; 5 weeks not passed after transaction")
 		// 	c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
@@ -75,8 +75,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		// Check if block is TokenTransferredType
 		if transferBlock.GetTransType() != block.TokenTransferredType {
 			c.log.Error("Failed to verify credits; given block is not Token Transfer Block")
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("invalid block type for token %s: not a token transfer block", tokenInfo.TransferTokenID)
 		}
 
 		// Get all the blocks
@@ -86,8 +85,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 			allBlocks, nextBlockID, err := c.w.GetAllTokenBlocks(tokenInfo.TransferTokenID, tokenInfo.TransferTokenType, blockId)
 			if err != nil {
 				c.log.Error("Failed to get token chain block for credit validation")
-				c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-				continue
+				return fmt.Errorf("failed to get token chain blocks for token %s: %v", tokenInfo.TransferTokenID, err)
 			}
 			blocks = append(blocks, allBlocks...)
 			blockId = nextBlockID
@@ -100,83 +98,69 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		validatingBlockTransactionID := validatingBlock.GetTid()
 		if validatingBlockTransactionID != tokenInfo.TransactionID {
 			c.log.Error("Invalid transaction ID for credit validation")
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("invalid transaction ID for token %s", tokenInfo.TransferTokenID)
 		}
 
 		// Previous block ID validation
 		if validatingBlockNumber <= 0 || validatingBlockNumber > len(blocks) {
 			c.log.Error("Invalid block number for credit validation: %d", validatingBlockNumber)
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("invalid block number %d for token %s", validatingBlockNumber, tokenInfo.TransferTokenID)
 		}
 		prevBlock := block.InitBlock(blocks[validatingBlockNumber-1], nil)
-		prevBlockIDfromTC, err := prevBlock.GetBlockID(tokenInfo.TransferTokenID)
+		var prevBlockIDfromTC string
+		if prevBlock.GetMinerDID() != "" {
+			prevBlockIDfromTC, err = prevBlock.GetMinedTokenBlockID(tokenInfo.TransferTokenID)
+		} else {
+			prevBlockIDfromTC, err = prevBlock.GetBlockID(tokenInfo.TransferTokenID)
+		}
 		if err != nil {
 			c.log.Error("Invalid previous block for credit validation")
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("failed to get previous block ID for token %s: %v", tokenInfo.TransferTokenID, err)
 		}
 		storedPrevBlockID, err := transferBlock.GetPrevBlockID(tokenInfo.TransferTokenID)
 		if err != nil {
 			c.log.Error("Failed to fetch previous-block-ID; could not validate block hash for credit validation")
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("failed to fetch previous block ID for token %s: %v", tokenInfo.TransferTokenID, err)
 		}
 
 		if prevBlockIDfromTC != storedPrevBlockID {
 			c.log.Error("Previous-block-ID does not match; block hash validation failed in credit validation")
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("previous block ID mismatch for token %s", tokenInfo.TransferTokenID)
 		}
 
 		// Block hash validation
 		storedBlockHash, err := transferBlock.GetHash()
 		if err != nil {
 			c.log.Error("Failed to fetch block hash; could not validate block hash in credit validation")
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("failed to fetch block hash for token %s: %v", tokenInfo.TransferTokenID, err)
 		}
 		calculatedBlockHash, err := transferBlock.CalculateBlockHash()
 		if err != nil {
 			c.log.Error("Error calculating block hash:", err)
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("failed to calculate block hash for token %s: %v", tokenInfo.TransferTokenID, err)
 		}
 
 		if storedBlockHash != calculatedBlockHash {
-			c.log.Debug("Stored block hash:", storedBlockHash)
-			c.log.Debug("Calculated block hash:", calculatedBlockHash)
+			// c.log.Debug("Stored block hash:", storedBlockHash)
+			// c.log.Debug("Calculated block hash:", calculatedBlockHash)
 			c.log.Error("Block hash does not match; block hash validation failed in credit validation")
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
-		}
-
-		// Check if the requesting miner is signed in the respective transfer block of the TC.
-		// Validate sender signature: TODO: Remove
-		response, err := c.ValidateSender(transferBlock)
-		if err != nil {
-			c.log.Error("Failed to verify sender for credit validation,", response.Message, "err:", err)
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("block hash mismatch for token %s", tokenInfo.TransferTokenID)
 		}
 
 		// Validate all quorums' signatures
-		response, err = c.ValidateQuorums(transferBlock, did)
+		response, err := c.ValidateQuorums(transferBlock, did)
 		if err != nil {
 			c.log.Error("Failed to verify quorum signature for credit validation", response.Message, "err:", err)
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("failed to verify quorum signature for token %s: %v", tokenInfo.TransferTokenID, err)
 		}
 
 		// Check for the transfer token values and credit values.
 		b, err := c.getFromIPFS(tokenInfo.TransferTokenID)
 		if err != nil {
 			c.log.Error("Failed to get token details from IPFS for credit validation", "err", err, "token", tokenInfo.TransferTokenID)
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("failed to get token details from IPFS for token %s: %v", tokenInfo.TransferTokenID, err)
 		}
-		_, isWholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+		isWholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
 		tt := token.RBTTokenType
 		fetchedTransferTokenValue := float64(1)
 		if !isWholeToken {
@@ -184,8 +168,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 			rb, err := rac.InitRacBlock(blk, nil)
 			if err != nil {
 				c.log.Error("Invalid token; invalid RAC block", "err", err)
-				c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-				continue
+				return fmt.Errorf("invalid RAC block for token %s: %v", tokenInfo.TransferTokenID, err)
 			}
 
 			tt = rac.RacType2TokenType(rb.GetRacType())
@@ -197,30 +180,33 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 
 		if fetchedTransferTokenValue != float64(tokenInfo.TransferTokenValue) {
 			c.log.Error("Failed to verify transfer value check in credit validation")
-			c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-			continue
-		} else {
-			c.log.Debug("Transfer value check passed")
+			return fmt.Errorf("transfer value mismatch for token %s", tokenInfo.TransferTokenID)
 		}
+		// c.log.Debug("Transfer value check passed")
 
 		// Check for the credit value
-		var credits int64
+		var cumulativeCredits int64
+		var creditsForEachQuorum int64
 		nextBlockofTransfer := block.InitBlock(blocks[validatingBlockNumber+1], nil)
 		nextBlockofTransferEpoch := nextBlockofTransfer.GetEpoch()
 		epochDiffWithNextBlock := nextBlockofTransferEpoch - transferBlock.GetEpoch()
 		if int(tokenInfo.TransactionType) == 2 {
-			credits = int64(epochDiffWithNextBlock) * int64(tokenInfo.TransferTokenValue)
+			cumulativeCredits = int64(epochDiffWithNextBlock) * int64(tokenInfo.TransferTokenValue)
+			creditsForEachQuorum = cumulativeCredits / 5
 		} else if int(tokenInfo.TransactionType) == 1 {
-			credits = int64(epochDiffWithNextBlock) * int64(tokenInfo.TransferTokenValue) * 15
+			cumulativeCredits = int64(epochDiffWithNextBlock) * int64(tokenInfo.TransferTokenValue) * 15
+			creditsForEachQuorum = cumulativeCredits / 5
 		}
+		fmt.Println("creditsForEachQuorum", creditsForEachQuorum)
+		fmt.Println("tokenInfo.TokenCredit", tokenInfo.TokenCredit)
 
-		if credits != int64(tokenInfo.TokenCredit) {
+		if creditsForEachQuorum < int64(tokenInfo.TokenCredit) {
 			c.log.Error("Failed to verify credit value check in credit validation")
-			c.log.Error("Validation failed for token:", tokenInfo.TransferTokenID)
-			continue
+			return fmt.Errorf("credit value mismatch for token %s", tokenInfo.TransferTokenID)
 		} else {
 			c.log.Debug("Credit value check passed")
 		}
+		//Add a check for double mining.
 
 		// If all checks pass, add the tokens credit value to totalCredits.
 		totalCredits += int(tokenInfo.TokenCredit)
@@ -228,9 +214,9 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 	}
 
 	// After processing all tokens, check if totalCredits matches creditRequestValue.
-	if totalCredits != creditRequestValue {
+	if totalCredits < creditRequestValue {
 		c.log.Error("Total credits from tokens do not match requested value")
-		return fmt.Errorf("Total credits from tokens do not match requested value. Expected %d but got %d.", creditRequestValue, totalCredits)
+		return fmt.Errorf("total credits from tokens do not match requested value. Expected %d but got %d", creditRequestValue, totalCredits)
 	}
 	c.log.Debug("Total credit value matched.")
 	return nil
@@ -296,7 +282,7 @@ func (c *Core) getPeerWhoPinTokenEpoch(tokenID string, weekCount int) ([]string,
 		}
 	}
 	if len(list) == 0 {
-		return nil, fmt.Errorf("No peers found for CID: %s", newCID)
+		return nil, fmt.Errorf("no peers found for CID: %s", newCID)
 	}
 	return list, nil
 }

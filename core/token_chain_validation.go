@@ -114,7 +114,15 @@ func (c *Core) ValidateTokenChain(userDID string, tokenInfo *wallet.Token, token
 
 		if b != nil {
 			//calculate block height
-			blockHeight, err := b.GetBlockNumber(tokenInfo.TokenID)
+			var blockHeight uint64
+			var err error
+			if b.GetMinerDID() != "" {
+				blockHeight = uint64(0)
+
+			} else {
+				blockHeight, err = b.GetBlockNumber(tokenInfo.TokenID)
+			}
+
 			if err != nil {
 				response.Message = "failed to fetch BlockNumber"
 				return response, fmt.Errorf("invalid token chain block")
@@ -372,7 +380,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 			return response, err
 		}
 
-		_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+		iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
 		tokenType := token.RBTTokenType
 		tokenValue := float64(1)
 		tokenOwner := ""

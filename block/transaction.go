@@ -1,8 +1,10 @@
 package block
 
 import (
+	"fmt"
 	"strconv"
 
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -101,14 +103,32 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 		nttb[TTBlockNumberKey] = "0"
 		nttb[TTPreviousBlockIDKey] = ""
 	} else {
-		bn, err := b.GetBlockNumber(tt.Token)
-		if err != nil {
-			return nil
+		var bn uint64
+		var err error
+		if b.GetMinerDID() != "" {
+			bn = uint64(0)
+		} else {
+			bn, err = b.GetBlockNumber(tt.Token)
+			if err != nil {
+				return nil
+			}
 		}
+
 		bn++
-		bid, err := b.GetBlockID(tt.Token)
-		if err != nil {
-			return nil
+		var bid string
+		// var err error
+		if b.GetMinerDID() != "" || tt.TokenType == token.TestMiningTokenType || tt.TokenType == token.MiningTokenType {
+			bid, err = b.GetMinedTokenBlockID(tt.Token)
+			if err != nil {
+				fmt.Println("failed to get mined token block ID for token %s: %w", tt.Token, err)
+				return nil
+			}
+		} else {
+			bid, err = b.GetBlockID(tt.Token)
+			fmt.Println("failed to get block ID for token %s: %w", tt.Token, err)
+			if err != nil {
+				return nil
+			}
 		}
 		nttb[TTBlockNumberKey] = strconv.FormatUint(bn, 10)
 		nttb[TTPreviousBlockIDKey] = bid

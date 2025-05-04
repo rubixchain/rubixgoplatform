@@ -164,6 +164,7 @@ type UpdatePreviousQuorums struct {
 	TransactionType int
 	TokenID         string
 	CurrentEpoch    uint64
+	TokenType       int
 }
 
 type CreditSignature struct {
@@ -665,8 +666,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 
 			//concat tokenId and BlockID
-			bid, errBlockID := b.GetBlockID(tokeninfo.Token)
-			if errBlockID != nil {
+			var bid string
+			if b.GetMinerDID() != "" {
+				bid, err = b.GetMinedTokenBlockID(tokeninfo.Token)
+			} else {
+				bid, err = b.GetBlockID(tokeninfo.Token)
+			}
+			if err != nil {
 				return nil, nil, nil, fmt.Errorf("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
 			}
 			prevtokenIDTokenStateData := tokeninfo.Token + bid
@@ -709,6 +715,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				updatePrevQuorums.TokenID = tokeninfo.Token
 				updatePrevQuorums.TransactionID = b.GetTid()
 				updatePrevQuorums.TransactionType = cr.Type
+				updatePrevQuorums.TokenType = tokeninfo.TokenType
 				PrevQuormEpochUpdateErr := previousQuorumPeer.SendJSONRequest("POST", APIUpdateCreditsAndWeekEpoch, nil, updatePrevQuorums, nil, true)
 				if PrevQuormEpochUpdateErr != nil {
 					c.log.Error("Unable to update epoch on previous quorum for credits, err: ", PrevQuormEpochUpdateErr)
@@ -726,7 +733,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		//call ipfs repo gc after unpinnning
 		c.ipfsRepoGc()
-		nbid, err := nb.GetBlockID(ti[0].Token)
+		var nbid string
+		if nb.GetMinerDID() != "" {
+			nbid, err = nb.GetMinedTokenBlockID(ti[0].Token)
+		} else {
+			nbid, err = nb.GetBlockID(ti[0].Token)
+		}
 		if err != nil {
 			c.log.Error("Failed to get block id", "err", err)
 			return nil, nil, nil, err

@@ -995,13 +995,13 @@ func (c *Core) updateReceiverToken(
 		var ok bool
 		receiverPeerId, receiverDID, ok = util.ParseAddress(receiverAddress)
 		if !ok {
-			return nil, fmt.Errorf("Unable to parse receiver address: %v", receiverAddress)
+			return nil, fmt.Errorf("unable to parse receiver address: %v", receiverAddress)
 		}
 	} else {
 		var ok bool
 		receiverPeerId, receiverDID, ok = util.ParseAddress(senderAddress)
 		if !ok {
-			return nil, fmt.Errorf("Unable to parse receiver address: %v", senderAddress)
+			return nil, fmt.Errorf("unable to parse receiver address: %v", senderAddress)
 		}
 	}
 
@@ -1019,6 +1019,19 @@ func (c *Core) updateReceiverToken(
 			return nil, fmt.Errorf("failed to get peer : %v", err.Error())
 		}
 		defer senderPeer.Close()
+
+		_, err = c.ValidateSender(b)
+		if err != nil {
+			c.log.Error("failed to validate sender", "err", err)
+			return nil, fmt.Errorf("failed to validate sender")
+		}
+		//Check here How can we use ValidateQuorums function
+
+		_, err = c.ValidateQuorums(b, receiverDID)
+		if err != nil {
+			c.log.Error("failed to validate quorum", "err", err)
+			return nil, fmt.Errorf("failed to validate quorum")
+		}
 
 		for _, ti := range tokenInfo {
 			t := ti.Token
@@ -1047,9 +1060,25 @@ func (c *Core) updateReceiverToken(
 					return nil, fmt.Errorf("failed to sync parent token %v childtoken %v err : ", pt, t, err)
 				}
 			}
+			//check if token is mined token, If it is a mined token, then check whether 4 weeks have passed or not after the minining of the token
+			genesisBlock := c.w.GetGenesisTokenBlock(t, ti.TokenType)
+			if genesisBlock.GetMinerDID() != "" {
+				//Check here How can we use ValidateQuorums function
+				_, err = c.ValidateQuorums(genesisBlock, receiverDID)
+				if err != nil {
+					c.log.Error("failed to validate quorum", "err", err)
+					return nil, fmt.Errorf("failed to validate quorum")
+				}
+				genesisBlockEpoch := genesisBlock.GetEpoch()
+				currentEpoch := time.Now().Unix()
+				if currentEpoch-int64(genesisBlockEpoch) < fourWeeksInSeconds {
+					return nil, fmt.Errorf("Token " + t + " is a mined token and it is not 4 weeks old")
+				}
+			}
+
 			ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to fetch previous block for token: % err : %v", t, err)
+				return nil, fmt.Errorf("failed to fetch previous block for token: %v err : %v", t, err)
 			}
 			ptcb := block.InitBlock(ptcbArray, nil)
 			if c.checkIsPledged(ptcb) {
@@ -1060,7 +1089,7 @@ func (c *Core) updateReceiverToken(
 
 	senderPeerId, _, ok := util.ParseAddress(senderAddress)
 	if !ok {
-		return nil, fmt.Errorf("Unable to parse sender address: %v", senderAddress)
+		return nil, fmt.Errorf("unable to parse sender address: %v", senderAddress)
 	}
 
 	results := make([]MultiPinCheckRes, len(tokenInfo))
@@ -1075,7 +1104,7 @@ func (c *Core) updateReceiverToken(
 
 	for i := range results {
 		if results[i].Error != nil {
-			return nil, fmt.Errorf("Error while cheking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
+			return nil, fmt.Errorf("error while cheking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
 		}
 		if results[i].Status {
 			return nil, fmt.Errorf("Token %v has multiple owners: %v", results[i].Token, results[i].Owners)
@@ -1108,8 +1137,13 @@ func (c *Core) updateReceiverToken(
 	if sc == nil {
 		return nil, fmt.Errorf("Failed to update token status, missing smart contract")
 	}
-
-	bid, err := b.GetBlockID(tokenInfo[0].Token)
+	var bid string
+	// var err error
+	if b.GetMinerDID() != "" {
+		bid, err = b.GetMinedTokenBlockID(tokenInfo[0].Token)
+	} else {
+		bid, err = b.GetBlockID(tokenInfo[0].Token)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
 	}
@@ -1555,7 +1589,44 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			c.log.Error("Failed to add token state hash", "err", err)
 		}
 	}
+	// if b.GetMinerDID is not an empty string, which means that it is in mining mode so add pledge history details accordingly.
+	if b.GetMinerDID() != "" {
+		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, ur.NewlyMinedTokenID)
+		if err != nil {
+			readErr := fmt.Sprint(err)
+			if strings.Contains(readErr, "no records found") {
+				c.log.Info("No pledge history")
+			}
+			c.log.Error("Failed to check token exist", "err", err)
+		}
+		if !exist {
+			tokenID := strings.TrimSpace(ur.NewlyMinedTokenID)
+			tokenType := c.TokenType(MinedRBTString)
+			blockID, err := b.GetMinedTokenBlockID(tokenID)
+			if err != nil {
+				c.log.Error("Failed to get block ID for token: ", tokenID)
+				crep.Message = "Failed to get block ID PledgeHistory"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			transTokenValue := float64(1)
 
+			c.pledgeHistory = []model.PledgeHistory{}
+			newPledge := model.PledgeHistory{
+				QuorumDID:          did,
+				TransactionID:      ur.TransactionID,
+				TransactionType:    ur.TransactionType,
+				TransferTokenID:    tokenID,
+				TransferTokenType:  tokenType,
+				TransferTokenValue: transTokenValue,
+				TransferBlockID:    blockID,
+				Epoch:              uint64(ur.TransactionEpoch),
+				TokenCredit:        0,
+			}
+			c.pledgeHistory = append(c.pledgeHistory, newPledge)
+
+		}
+
+	}
 	for _, tokenID := range b.GetTransTokens() {
 		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, tokenID)
 		if err != nil {
@@ -1582,7 +1653,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			c.log.Error("failed to get parent token details from ipfs", "err", err, "token", tokenID)
 
 		}
-		_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+		iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
 
 		tt := token.RBTTokenType
 		transTokenValue := float64(1)
@@ -1982,7 +2053,7 @@ func (c *Core) updateCreditsAndEpochPin(req *ensweb.Request) *ensweb.Result {
 	c.log.Warn("Next block Epoch updating for token: ", UpdateCreditsAndEpochPin.TokenID)               // TODO: Change log WARN to DEBUG/INFO
 	c.log.Warn("Next block Epoch updating for transactionID: ", UpdateCreditsAndEpochPin.TransactionID) // TODO: Change log WARN to DEBUG/INFO
 	fmt.Println("Update Epoch struct is ", UpdateCreditsAndEpochPin)
-	UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateCreditsAndEpochPin.TokenID, UpdateCreditsAndEpochPin.TransactionID, UpdateCreditsAndEpochPin.TransactionType, UpdateCreditsAndEpochPin.CurrentEpoch)
+	UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateCreditsAndEpochPin.TokenID, UpdateCreditsAndEpochPin.TransactionID, UpdateCreditsAndEpochPin.TransactionType, UpdateCreditsAndEpochPin.CurrentEpoch, UpdateCreditsAndEpochPin.TokenType)
 	if UpdateEpochErr != nil {
 		c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)
 	}

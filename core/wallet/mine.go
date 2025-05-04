@@ -32,7 +32,7 @@ func (w *Wallet) FindLatestTokenLevelAndNumber() (MiningRecord, error) {
 	if len(records) > 0 {
 		result = records[0]
 	} else {
-		return result, fmt.Errorf("No mining records found")
+		return result, fmt.Errorf("no mining records found")
 	}
 	return result, nil
 }

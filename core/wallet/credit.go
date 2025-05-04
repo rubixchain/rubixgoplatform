@@ -244,7 +244,7 @@ func (w *Wallet) GetTokenIDsWithoutNextBlockFromPledgeHistory() ([]string, error
 	return tokenIDs, nil
 }
 
-func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch uint64) error {
+func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch uint64, tokenType int) error {
 	var pledgeHistoryRecords []model.PledgeHistory
 	err := w.s.Read(PledgeHistoryTable, &pledgeHistoryRecords, "transfer_tokens_id = ? and transaction_id=?", tokenID, transactionID)
 	if err != nil {
@@ -257,14 +257,33 @@ func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transa
 	}
 	for _, record := range pledgeHistoryRecords {
 		record.NextBlockEpoch = epoch
+
+		// Fetch the latest block for the token
+		latestBlock := w.GetLatestTokenBlock(record.TransferTokenID, tokenType)
+
 		if record.TransactionType == 1 {
-			tokenCreditFloat := float64(epoch-record.Epoch) * (record.TransferTokenValue) * 15 //This is credits for all quorums together
+			var tokenCreditFloat float64
+			if latestBlock != nil && latestBlock.GetMinerDID() != "" {
+				// Mining quorum: 4x credits
+				tokenCreditFloat = float64(epoch-record.Epoch) * float64(record.TransferTokenValue) * 15 * 4
+			} else {
+				// Normal quorum
+				tokenCreditFloat = float64(epoch-record.Epoch) * float64(record.TransferTokenValue) * 15
+			}
 			tokenCreditsForEachQuorum := tokenCreditFloat / 5
 			record.TokenCredit = uint64(tokenCreditsForEachQuorum)
 
 		} else if record.TransactionType == 2 {
-			tokenCreditsFloat := (float64(record.NextBlockEpoch-record.Epoch) * (record.TransferTokenValue))
-			record.TokenCredit = uint64(tokenCreditsFloat)
+			var tokenCreditFloat float64
+			if latestBlock != nil && latestBlock.GetMinerDID() != "" {
+				// Mining quorum: 4x credits
+				tokenCreditFloat = float64(epoch-record.Epoch) * float64(record.TransferTokenValue) * 4
+			} else {
+				// Normal quorum
+				tokenCreditFloat = float64(epoch-record.Epoch) * float64(record.TransferTokenValue)
+			}
+			tokenCreditsForEachQuorum := tokenCreditFloat / 5
+			record.TokenCredit = uint64(tokenCreditsForEachQuorum)
 		}
 		updateErr := w.s.Update(PledgeHistoryTable, record, "transfer_tokens_id = ? and transaction_id=?", record.TransferTokenID, record.TransactionID)
 		if updateErr != nil {

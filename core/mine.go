@@ -19,7 +19,7 @@ import (
 
 const (
 	tokenLevel   = 004
-	tokenNumber  = 1000003
+	tokenNumber  = 1000023
 	miningPubSub = "mining-service"
 )
 
@@ -66,13 +66,16 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 	if err != nil {
 		c.log.Error("Unable to find last mined token")
 	}
+	//if last mining token number is maxtokennumber in a level, Then it need to go to next level  with 1 as token number
 	nextMiningTokenLevel := latestMined.TokenLevel
 	nextMiningTokenNumber := latestMined.TokenNumber + 1
 	maxTokenNumberfromLevel := token.MaxTokenFromLevel(nextMiningTokenLevel)
-	if maxTokenNumberfromLevel >= nextMiningTokenNumber {
+	if maxTokenNumberfromLevel < nextMiningTokenNumber {
 		nextMiningTokenLevel += 1
+		nextMiningTokenNumber = 1
 	}
-	creditsRequired := token.CreditsRequiredforLevel(nextMiningTokenLevel)
+	//Need to add a function to get the credits required for the next token
+	creditsRequired := uint64(100) //Right now I am manually adding as 100 but in actual senario we should fetch using the above function.
 
 	// 4. Validate if total credits are sufficient
 	if totalCredits < creditsRequired {
@@ -142,14 +145,14 @@ func (c *Core) getMiningConsensusReq(contractBlock []byte, miningReq model.Minin
 
 // TokensCanbeMinedFromCreditsInGivenLevel calculates how many whole tokens can be mined from the requested tokenCredits
 // and returns the remaining credits.
-func TokensCanbeMinedFromCreditsInGivenLevel(reqTokenCredits uint64, tokenLevel int) (uint64, uint64, error) {
-	creditsPerToken := token.CreditsRequiredforLevel(tokenLevel)
-	// Calculate whole tokens that can be mined
-	tokensCanbeMined := reqTokenCredits / creditsPerToken
-	remainingCredits := reqTokenCredits % creditsPerToken
+// func TokensCanbeMinedFromCreditsInGivenLevel(reqTokenCredits uint64, tokenLevel int) (uint64, uint64, error) {
+// 	creditsPerToken := token.CreditsRequiredforLevel(tokenLevel)
+// 	// Calculate whole tokens that can be mined
+// 	tokensCanbeMined := reqTokenCredits / creditsPerToken
+// 	remainingCredits := reqTokenCredits % creditsPerToken
 
-	return tokensCanbeMined, remainingCredits, nil
-}
+// 	return tokensCanbeMined, remainingCredits, nil
+// }
 
 // This function, For a given requested token credits, tokenLevel and tokenNumber it outputs number of tokens can be mined
 // func TokensCanbeMinedFromCredits(reqTokenCredits uint64, tokenLevel int, tokenNumber int) (map[int]uint64, uint64, error) {
@@ -172,75 +175,7 @@ func TokensCanbeMinedFromCreditsInGivenLevel(reqTokenCredits uint64, tokenLevel 
 // 		return nil, 0, fmt.Errorf("token level %d not found in token level map", tokenLevel)
 // 	}
 
-// 	// Calculate how many we could potentially mine in this level
-// 	availableTokens := maxTokensForLevel - tokenNumber
-// 	if availableTokens <= 0 {
-// 		// Move to next level if current level is full
-// 		return TokensCanbeMinedFromCredits(remainingCredits, tokenLevel+1, 1)
-// 	}
 
-// 	// Calculate possible tokens to mine
-// 	tokensCanBeMined := remainingCredits / creditsPerToken
-// 	actualTokens := uint64(availableTokens)
-// 	if tokensCanBeMined < actualTokens {
-// 		actualTokens = tokensCanBeMined
-// 	}
-
-// 	if actualTokens > 0 {
-// 		// Calculate used credits
-// 		usedCredits := actualTokens * creditsPerToken
-// 		remainingCredits -= usedCredits
-
-// 		// Add to result
-// 		result[tokenLevel] = actualTokens
-
-// 		// Check if we filled this level
-// 		newTokenNumber := tokenNumber + int(actualTokens)
-// 		if newTokenNumber >= maxTokensForLevel {
-// 			// Move to next level with remaining credits
-// 			nextLevelResult, remaining, err := TokensCanbeMinedFromCredits(remainingCredits, tokenLevel+1, 1)
-// 			if err != nil {
-// 				return nil, 0, err
-// 			}
-// 			mergeResults(result, nextLevelResult)
-// 			return result, remaining, nil
-// 		}
-
-// 		// Still capacity in current level, return remaining credits
-// 		return result, remainingCredits, nil
-// 	}
-
-// 	// Not enough credits for this level, try next level
-// 	nextLevelResult, remaining, err := TokensCanbeMinedFromCredits(remainingCredits, tokenLevel+1, 1)
-// 	if err != nil {
-// 		return nil, 0, err
-// 	}
-// 	mergeResults(result, nextLevelResult)
-// 	return result, remaining, nil
-// }
-
-func mergeResults(target, source map[int]uint64) {
-	for level, count := range source {
-		target[level] += count
-	}
-}
-
-// From the given requested token credits,it outputs total number of tokens that can be mined, remaining
-// func TotalTokensCanBeMinedFromCredits(reqTokenCredits uint64) (uint64, uint64, error) {
-// 	//Todo:Fetch Latest tokenLevel and token number from the Mining chain
-// 	tokensCanBeMined, remainingCredits, err := TokensCanbeMinedFromCredits(reqTokenCredits, tokenLevel, tokenNumber)
-// 	if err != nil {
-// 		return 0, 0, err
-// 	}
-// 	var totalTokens uint64
-// 	// Sum up the total tokens from all levels
-// 	for _, numberOfTokens := range tokensCanBeMined {
-// 		totalTokens += numberOfTokens
-
-// 	}
-// 	return totalTokens, remainingCredits, nil
-
-// }
 
 func (c *Core) publishMiningdetails(miningRecord *model.MiningRecordPubSub) error {
 	if c.ps != nil {

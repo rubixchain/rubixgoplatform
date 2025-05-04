@@ -285,22 +285,35 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
 	var err error
 	blk := c.w.GetLatestTokenBlock(token, tokenType)
-	blkID := ""
+	var blkId string
 	if blk != nil {
-		blkID, err = blk.GetBlockID(token)
-		if err != nil {
-			c.log.Error("Failed to get block id", "err", err)
-			return err
+		var err error
+		if blk.GetMinerDID() != "" {
+			blkId, err = blk.GetMinedTokenBlockID(token)
+		} else {
+			blkId, err = blk.GetBlockID(token)
 		}
-		if blkID == pblkID {
+
+		if err != nil {
+			c.log.Error("Failed to get block ID", "token", token, "tokenType", tokenType, "err", err)
+			return fmt.Errorf("failed to get block ID for token %s: %w", token, err)
+		}
+
+		if blkId == pblkID {
 			return nil
 		}
+	} else {
+		c.log.Debug("No block found, requesting full chain")
+
+		// If blk is nil, set blkId to empty string to request full chain
+		blkId = ""
 	}
 	tr := TCBSyncRequest{
 		Token:     token,
 		TokenType: tokenType,
-		BlockID:   blkID,
+		BlockID:   blkId,
 	}
+	fmt.Println("blockID which is sent through API", blkId)
 	for {
 		var trep TCBSyncReply
 		err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &tr, &trep, false)
@@ -318,7 +331,11 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
 				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
 			}
-			err = c.w.AddTokenBlock(token, blk)
+			if blk.GetMinerDID() != "" {
+				err = c.w.AddMiningTokenBlock(token, blk, tokenType)
+			} else {
+				err = c.w.AddTokenBlock(token, blk)
+			}
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
 				return err
@@ -1064,7 +1081,7 @@ func (c *Core) SyncAncestralTokens(p *ipfsport.Peer, parentToken string) ([]stri
 		return syncedTokens, err
 	}
 
-	_, isWholeToken, _ := token.CheckWholeToken(string(b), true)
+	isWholeToken, _ := token.CheckWholeToken(string(b), true)
 	tokenType := token.RBTTokenType
 
 	// Check if the token is not a whole token and handle it accordingly

@@ -78,7 +78,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
 		return err
 	}
-	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+	iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
 
 	tt := token.RBTTokenType
 	tv := float64(1)
@@ -360,7 +360,13 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		resultArray[index] = result
 		return
 	}
-	blockId, err := block.GetBlockID(tokenId)
+	var blockId string
+	var err error
+	if block.GetMinerDID() != "" {
+		blockId, err = block.GetMinedTokenBlockID(tokenId)
+	} else {
+		blockId, err = block.GetBlockID(tokenId)
+	}
 	if err != nil {
 		c.log.Error("Error fetching block Id", err)
 		result.Error = err
@@ -475,7 +481,6 @@ func (c *Core) fourweeksPassCheck(token string, tokenType int, index int, result
 	defer wg.Done()
 	genesisBlock := c.w.GetGenesisTokenBlock(token, tokenType)
 	if genesisBlock != nil {
-		fmt.Println("Genesis block in four weeks pass check function is:", genesisBlock)
 		tokenTransType := genesisBlock.GetTransType()
 		if tokenTransType == block.TokenMinedType {
 			genesisBlockEpoch := genesisBlock.GetEpoch()

@@ -266,7 +266,7 @@ func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int, testNet bool)
 	}
 	wt := make([]Token, 0)
 	for i := 0; i < tl; i++ {
-		//TODO:check each tokens latest token block, if it is a newly mined token, check epoch whether 4 weeks passed or not
+		// check each tokens genesis token block, if it is a newly mined token, check epoch whether 4 weeks passed or not
 		if trnxMode == 0 ||trnxMode == 6 || trnxMode == 7  {
 			var tokenType int
 			if testNet {
@@ -599,7 +599,16 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	for _, info := range ti {
 		t := info.Token
 		b := w.GetLatestTokenBlock(info.Token, info.TokenType)
-		blockId, _ := b.GetBlockID(t)
+		var blockId string
+		if b.GetMinerDID() != "" {
+			blockId, err = b.GetMinedTokenBlockID(t)
+		} else {
+			blockId, err = b.GetBlockID(t)
+
+		}
+		if err != nil {
+			return nil, err
+		}
 		tokenIDTokenStateData := t + blockId
 		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
 		tokenIDTokenStateHash, _ := ipfsShell.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))

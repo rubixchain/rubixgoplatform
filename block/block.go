@@ -308,7 +308,6 @@ func (b *Block) getTokensMap(t string) interface{} {
 		fmt.Println("tim is nil getTokenMap function")
 		return nil
 	}
-	fmt.Println("time in getTokensMap function is:", tim)
 	tm := util.GetFromMap(tim, TITokensKey)
 	if tm == nil {
 		fmt.Println("tm is nil in getTokenMap function")
@@ -339,7 +338,7 @@ func (b *Block) getGenesisTokenMap(t string) interface{} {
 func (b *Block) GetBlockNumber(t string) (uint64, error) {
 	ttm := b.getTokensMap(t)
 	if ttm == nil {
-		return 0, fmt.Errorf("invalid token chain block, missing transaction token block")
+		return 0, fmt.Errorf("invalid token chain block, missing transaction token block in GetBlockNumber")
 	}
 	bni := util.GetFromMap(ttm, TTBlockNumberKey)
 	if bni == nil {
@@ -359,7 +358,7 @@ func (b *Block) GetBlockID(t string) (string, error) {
 	}
 	ttm := b.getTokensMap(t)
 	if ttm == nil {
-		return "", fmt.Errorf("invalid token chain block, missing transaction token block")
+		return "", fmt.Errorf("invalid token chain block, missing transaction token block in GetBlockID")
 	}
 	bni := util.GetFromMap(ttm, TTBlockNumberKey)
 	if bni == nil {
@@ -385,7 +384,7 @@ func (b *Block) GetMinedTokenBlockID(t string) (string, error) {
 func (b *Block) GetPrevBlockID(t string) (string, error) {
 	ttm := b.getTokensMap(t)
 	if ttm == nil {
-		return "", fmt.Errorf("invalid token chain block, missing transaction token block")
+		return "", fmt.Errorf("invalid token chain block, missing transaction token block in GetPrevBlockID")
 	}
 	pbi := util.GetFromMap(ttm, TTPreviousBlockIDKey)
 	if pbi == nil {
@@ -525,7 +524,6 @@ func (b *Block) getBlkString(key string) string {
 	if !ok {
 		return ""
 	}
-	fmt.Println("value corresponding to TCTransTypekey", h.(string))
 	return h.(string)
 }
 
@@ -607,7 +605,6 @@ func (b *Block) GetTransTokens() []string {
 func (b *Block) GetTokenType(t string) int {
 	tim := util.GetFromMap(b.bm, TCTransInfoKey)
 	if tim == nil {
-		fmt.Println("tim is nil in GetTokenType function")
 		return 0
 	}
 	tm := util.GetFromMap(tim, TITokensKey)
@@ -652,7 +649,7 @@ func (b *Block) GetOwner() string {
 func (b *Block) GetSenderDID() string {
 	return b.getTrasnInfoString(TISenderDIDKey)
 }
-func (b *Block) GetMinerDID() string{
+func (b *Block) GetMinerDID() string {
 	return b.getTrasnInfoString(TIMinerDIDKey)
 }
 
