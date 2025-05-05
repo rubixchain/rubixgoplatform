@@ -19,7 +19,7 @@ import (
 
 const (
 	tokenLevel   = 004
-	tokenNumber  = 1000023
+	tokenNumber  = 1000025
 	miningPubSub = "mining-service"
 )
 
@@ -75,7 +75,12 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 		nextMiningTokenNumber = 1
 	}
 	//Need to add a function to get the credits required for the next token
-	creditsRequired := uint64(100) //Right now I am manually adding as 100 but in actual senario we should fetch using the above function.
+	// creditsRequired := uint64(100)
+	creditsRequired, err := GetCreditsRequired(nextMiningTokenLevel)
+	if err != nil {
+		c.log.Error("Unable to get the credits required for the next token")
+	}
+	// creditsRequired := uint64(100) //Right now I am manually adding as 100 but in actual senario we should fetch using the above function.
 
 	// 4. Validate if total credits are sufficient
 	if totalCredits < creditsRequired {
@@ -122,6 +127,11 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 	}
 
 	// TODO: Update used credits in the pledge history table after mining is completed
+	updateErr := c.w.UpdateCredits(usedCredits)
+	if updateErr != nil {
+		c.log.Error("Unable to update used credits", "err", updateErr)
+	}
+
 	// TODO: Add sending mining details to explorer
 	c.log.Info("Mining successfully completed. Mined TokenID: %s", miningConsensusReq.MiningTokenID)
 	c.log.Info("Mining ID: %s", miningConsensusReq.TransactionID)
@@ -174,8 +184,6 @@ func (c *Core) getMiningConsensusReq(contractBlock []byte, miningReq model.Minin
 // 	if !ok {
 // 		return nil, 0, fmt.Errorf("token level %d not found in token level map", tokenLevel)
 // 	}
-
-
 
 func (c *Core) publishMiningdetails(miningRecord *model.MiningRecordPubSub) error {
 	if c.ps != nil {
@@ -264,4 +272,12 @@ func (c *Core) QueryMiningRecord(transactionID string, transferTokenID string, m
 		"remainingCredits", miningValue.RemainingCredits)
 
 	return &miningValue, nil
+}
+
+func GetCreditsRequired(tokenLevel int) (uint64, error) {
+	creditsPerToken, ok := token.CreditLevelMap[tokenLevel]
+	if !ok {
+		return 0, fmt.Errorf("credit level %d not found in the credit level map", tokenLevel)
+	}
+	return creditsPerToken, nil
 }

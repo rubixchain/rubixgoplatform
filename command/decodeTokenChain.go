@@ -19,6 +19,7 @@ var keyMapping = map[string]string{
 	"11":    "TCChildTokensKey",
 	"12":    "TCSenderSignatureKey",
 	"13":    "TCNFTDataKey",
+	"14":    "TCCreditDetailsKey",
 	"98":    "TCBlockHashKey",
 	"99":    "TCSignatureKey",
 	"epoch": "TCEpoch",

@@ -333,3 +333,20 @@ func (w *Wallet) RemoveCredit(transactionID string) error {
 
 	return nil
 }
+func (w *Wallet) UpdateCredits(Credits []model.PledgeHistory) error {
+	for _, credit := range Credits {
+		//If any of the credits are partially used, update the credit status to 1 and remaining credits to 0 before updating it into the DB.
+		if credit.RemainingCredits > 0 {
+			credit.TokenCreditStatus = 1
+			credit.TokenCredit = credit.RemainingCredits
+			credit.RemainingCredits = 0
+		}
+		err := w.s.Update(PledgeHistoryTable, credit, "transfer_tokens_id = ? and transaction_id=?", credit.TransferTokenID, credit.TransactionID)
+		if err != nil {
+			w.log.Error("Update failed for transaction:", credit.TransactionID, "Error:", err)
+			return err
+		}
+	}
+	return nil
+
+}

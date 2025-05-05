@@ -2458,7 +2458,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TransactionType:    block.TokenMinedType,
 			TokenOwner:         sc.GetMinerDID(),
 			QuorumSignature:    credit,
-			CreditDetails:      sc.GetTokenCreditsDetails(), //TODO:Remove Credit details in Genesis block
+			RefToCreditDetails: cr.TransactionID,
 			PledgeDetails:      ptds,
 			InitiatorSignature: minerSign,
 			Epoch:              cr.TransactionEpoch,
