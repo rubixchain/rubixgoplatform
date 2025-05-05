@@ -1609,8 +1609,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 			transTokenValue := float64(1)
-
-			c.pledgeHistory = []model.PledgeHistory{}
 			newPledge := model.PledgeHistory{
 				QuorumDID:          did,
 				TransactionID:      ur.TransactionID,
@@ -1677,7 +1675,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// if pinCheckErr != nil {
 		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
 		// }
-		c.pledgeHistory = []model.PledgeHistory{}
 		newPledge := model.PledgeHistory{
 			QuorumDID:          did,
 			TransactionID:      ur.TransactionID,
