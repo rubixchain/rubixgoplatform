@@ -1589,6 +1589,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			c.log.Error("Failed to add token state hash", "err", err)
 		}
 	}
+	c.pledgeHistory = []model.PledgeHistory{}
 	// if b.GetMinerDID is not an empty string, which means that it is in mining mode so add pledge history details accordingly.
 	if b.GetMinerDID() != "" {
 		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, ur.NewlyMinedTokenID)
@@ -1609,6 +1610,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 			transTokenValue := float64(1)
+			// c.pledgeHistory = []model.PledgeHistory{}
 			newPledge := model.PledgeHistory{
 				QuorumDID:          did,
 				TransactionID:      ur.TransactionID,
@@ -1625,6 +1627,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 
 	}
+	// c.pledgeHistory = []model.PledgeHistory{}
 	for _, tokenID := range b.GetTransTokens() {
 		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, tokenID)
 		if err != nil {

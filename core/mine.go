@@ -19,7 +19,7 @@ import (
 
 const (
 	tokenLevel   = 004
-	tokenNumber  = 1000025
+	tokenNumber  = 1000027
 	miningPubSub = "mining-service"
 )
 
@@ -41,7 +41,7 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 	fmt.Println("Executing MineRBTs function")
 	st := time.Now()
 	txEpoch := int(st.Unix())
-	var latestMined wallet.MiningRecord
+	// var latestMined wallet.MiningRecord
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -62,24 +62,24 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 	fmt.Println("Credits available for mining:", totalCredits)
 	// TODO: Sync the mining pubsub get the latest entry, get the next token level and number
 	// 3. Check how many credits are needed for mining the next token according to token level
-	latestMined, err = c.w.FindLatestTokenLevelAndNumber()
-	if err != nil {
-		c.log.Error("Unable to find last mined token")
-	}
+	// latestMined, err = c.w.FindLatestTokenLevelAndNumber()
+	// if err != nil {
+	// 	c.log.Error("Unable to find last mined token")
+	// }
 	//if last mining token number is maxtokennumber in a level, Then it need to go to next level  with 1 as token number
-	nextMiningTokenLevel := latestMined.TokenLevel
-	nextMiningTokenNumber := latestMined.TokenNumber + 1
-	maxTokenNumberfromLevel := token.MaxTokenFromLevel(nextMiningTokenLevel)
-	if maxTokenNumberfromLevel < nextMiningTokenNumber {
-		nextMiningTokenLevel += 1
-		nextMiningTokenNumber = 1
-	}
+	// nextMiningTokenLevel := latestMined.TokenLevel
+	// nextMiningTokenNumber := latestMined.TokenNumber + 1
+	// maxTokenNumberfromLevel := token.MaxTokenFromLevel(nextMiningTokenLevel)
+	// if maxTokenNumberfromLevel < nextMiningTokenNumber {
+	// 	nextMiningTokenLevel += 1
+	// 	nextMiningTokenNumber = 1
+	// }
 	//Need to add a function to get the credits required for the next token
-	// creditsRequired := uint64(100)
-	creditsRequired, err := GetCreditsRequired(nextMiningTokenLevel)
-	if err != nil {
-		c.log.Error("Unable to get the credits required for the next token")
-	}
+	creditsRequired := uint64(100)
+	// creditsRequired, err := GetCreditsRequired(nextMiningTokenLevel)
+	// if err != nil {
+	// 	c.log.Error("Unable to get the credits required for the next token")
+	// }
 	// creditsRequired := uint64(100) //Right now I am manually adding as 100 but in actual senario we should fetch using the above function.
 
 	// 4. Validate if total credits are sufficient

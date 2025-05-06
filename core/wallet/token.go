@@ -10,8 +10,8 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
-	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 const fourWeeksInSeconds = 4 * 7 * 24 * 60 * 60 // 4 weeks = 4 * 7 days * 24 hours * 60 minutes * 60 seconds
@@ -267,7 +267,7 @@ func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int, testNet bool)
 	wt := make([]Token, 0)
 	for i := 0; i < tl; i++ {
 		// check each tokens genesis token block, if it is a newly mined token, check epoch whether 4 weeks passed or not
-		if trnxMode == 0 ||trnxMode == 6 || trnxMode == 7  {
+		if trnxMode == 0 || trnxMode == 6 || trnxMode == 7 {
 			var tokenType int
 			if testNet {
 				tokenType = token.TestTokenType
@@ -278,12 +278,13 @@ func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int, testNet bool)
 			if genesisBlock == nil {
 				w.log.Info("genesis block corresponding to %s tokenID is nil\n", t[i].TokenID)
 				return nil, 0, fmt.Errorf("not able to get the genesis block for the token %s", t[i].TokenID)
-			}else {
+			} else {
 				tokenTransType := genesisBlock.GetTransType()
 				if tokenTransType == block.TokenMinedType {
 					genesisBlockEpoch := genesisBlock.GetEpoch()
 					currentEpoch := time.Now().Unix()
 					if (currentEpoch - int64(genesisBlockEpoch)) < fourWeeksInSeconds {
+						fmt.Println("4 weeks have not passed yet, for the token\n", t[i].TokenID)
 						continue
 					}
 				}
