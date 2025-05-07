@@ -10,8 +10,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-func (s *Server) APIMineRBTs(req *ensweb.Request) *ensweb.Result {
-	fmt.Println("APIMineRBTs function called in server module")
+func (s *Server) APIMineRBT(req *ensweb.Request) *ensweb.Result {
+	fmt.Println("APIMineRBT function called in server module")
 	var miningReq model.MiningRequest
 	// var payload map[string]string
 	err := s.ParseJSON(req, &miningReq)
@@ -31,10 +31,8 @@ func (s *Server) APIMineRBTs(req *ensweb.Request) *ensweb.Result {
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
-    s.c.AddWebReq(req)
-	go s.c.InitiateMineRBTs(req.ID,&miningReq)
+	s.c.AddWebReq(req)
+	go s.c.InitiateMineRBT(req.ID, &miningReq)
 	return s.didResponse(req, req.ID)
 
 }
-
-

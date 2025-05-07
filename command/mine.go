@@ -8,7 +8,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
-func (cmd *Command) MineRBTs() {
+func (cmd *Command) MineRBT() {
 	// Ensure logger is initialized
 	if cmd.log == nil {
 		fmt.Println("Error: Logger is not initialized")
@@ -46,8 +46,8 @@ func (cmd *Command) MineRBTs() {
 		MinerDid: cmd.did,
 		Type:     cmd.transType,
 	}
-	// Ensure MineRBTs method is valid
-	br, err := cmd.c.MineRBTs(miningReq)
+	// Ensure MineRBT method is valid
+	br, err := cmd.c.MineRBT(miningReq)
 	if err != nil {
 		cmd.log.Info("Cannot mine RBTs: ", err)
 		return

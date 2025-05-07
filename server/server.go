@@ -188,7 +188,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APISendJWTFromWallet, "POST", s.APIAuthenticateWalletJWT)
 	s.AddRoute(setup.APIAddUserAPIKey, "POST", s.AuthHandle(s.APIAddUserAPIKey, false, s.AuthError, true))
 	s.AddRoute(setup.APIFindReadyToMineCredits, "POST", s.AuthHandle(s.APIFindReadyToMineCredits, false, s.AuthError, true))
-	s.AddRoute(setup.APIMineRBTs, "POST", s.AuthHandle(s.APIMineRBTs, false, s.AuthError, true))
+	s.AddRoute(setup.APIMineRBT, "POST", s.AuthHandle(s.APIMineRBT, false, s.AuthError, true))
 
 }
 

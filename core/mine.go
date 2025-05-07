@@ -19,7 +19,7 @@ import (
 
 const (
 	tokenLevel   = 004
-	tokenNumber  = 1000033
+	tokenNumber  = 1000034
 	miningPubSub = "mining-service"
 )
 
@@ -28,8 +28,8 @@ type MiningLevelDBValue struct {
 	RemainingCredits uint64 `json:"remainingCredits"`
 }
 
-func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest) {
-	br := c.initiateMineRBTs(reqID, req)
+func (c *Core) InitiateMineRBT(reqID string, req *model.MiningRequest) {
+	br := c.initiateMineRBT(reqID, req)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")
@@ -37,7 +37,7 @@ func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest) {
 	}
 	dc.OutChan <- br
 }
-func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *model.BasicResponse {
+func (c *Core) initiateMineRBT(reqID string, MiningReq *model.MiningRequest) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
 	// var latestMined wallet.MiningRecord

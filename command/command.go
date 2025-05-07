@@ -109,7 +109,7 @@ const (
 	CreateDIDFromPubKeyCmd         string = "createdidfrompubkey"
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	FindReadyToMineCreditsCmd      string = "findreadytominecredits"
-	MineRBTsCmd                    string = "minerbts"   
+	MineRBTCmd                    string = "mine-rbt"   
 )
 
 var commands = []string{VersionCmd,
@@ -762,8 +762,8 @@ func Run(args []string) {
 		cmd.addUserAPIKey()
 	case FindReadyToMineCreditsCmd:
 		cmd.FindReadyToMineCredits()
-	case MineRBTsCmd:
-		cmd.MineRBTs()
+	case MineRBTCmd:
+		cmd.MineRBT()
 	default:
 		cmd.log.Error("Invalid command")
 	}

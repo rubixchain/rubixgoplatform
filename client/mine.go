@@ -5,9 +5,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
-func (c *Client) MineRBTs(miningReq *model.MiningRequest) (*model.BasicResponse, error) {
+func (c *Client) MineRBT(miningReq *model.MiningRequest) (*model.BasicResponse, error) {
 	var br model.BasicResponse
-	err := c.sendJSONRequest("POST", setup.APIMineRBTs, nil, &miningReq, &br)
+	err := c.sendJSONRequest("POST", setup.APIMineRBT, nil, &miningReq, &br)
 	if err != nil {
 		return nil, err
 	}
