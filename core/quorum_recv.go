@@ -821,9 +821,10 @@ func (c *Core) quorumMiningConsensus(req *ensweb.Request, did string, qdc didcry
 
 	// Validating the credits
 	tokenCreditsDetails := miningContract.GetTokenCreditsDetails()
-	err = c.ValidateCredits(did, int(miningRequest.MiningInfo.TokenCredits), tokenCreditsDetails)
+	err = c.ValidateCredits(did, int(miningRequest.MiningInfo.TokenCredits), tokenCreditsDetails, miningRequest.MiningInfo.MiningTokenDetails)
 	if err != nil {
-		crep.Message = "Failed to validate credits"
+		c.log.Debug("Failed to validate credits", "err", err)
+		crep.Message = fmt.Sprintf("Failed to validate credits: %v", err)
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
@@ -1625,6 +1626,12 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			c.pledgeHistory = append(c.pledgeHistory, newPledge)
 
 		}
+		//when a new token is mined, the tokenID and weekEpoch are pinned at quorum side.
+		tokenID := strings.TrimSpace(ur.NewlyMinedTokenID)
+		fmt.Println("pinning token epoch at quorum side")
+		c.pinTokenEpoch(tokenID, ur.WeekCount)
+		// week number is not getting printed
+		c.log.Debug("Week epoch PINNED for tokenID " + tokenID + " for week number " + strconv.Itoa(ur.WeekCount))
 
 	}
 	// c.pledgeHistory = []model.PledgeHistory{}

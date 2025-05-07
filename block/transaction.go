@@ -120,12 +120,12 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 		if b.GetMinerDID() != "" || tt.TokenType == token.TestMiningTokenType || tt.TokenType == token.MiningTokenType {
 			bid, err = b.GetMinedTokenBlockID(tt.Token)
 			if err != nil {
-				fmt.Println("failed to get mined token block ID for token %s: %w", tt.Token, err)
+				fmt.Printf("failed to get mined token block ID for token %s: %v\n ", tt.Token, err)
 				return nil
 			}
 		} else {
 			bid, err = b.GetBlockID(tt.Token)
-			fmt.Println("failed to get block ID for token %s: %w", tt.Token, err)
+			fmt.Printf("failed to get block ID for token %s: %v\n", tt.Token, err)
 			if err != nil {
 				return nil
 			}

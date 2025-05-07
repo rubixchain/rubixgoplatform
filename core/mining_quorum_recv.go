@@ -17,7 +17,7 @@ import (
 
 const fiveWeeksInSeconds = 5 * 7 * 24 * 60 * 60 // 5 weeks = 5 * 7 days * 24 hours * 60 minutes * 60 seconds
 
-func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails []model.PledgeHistory) error {
+func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails []model.PledgeHistory, miningToken model.NewTokenDetails) error {
 
 	totalCredits := 0
 	// record, err := c.w.FindLatestTokenLevelAndNumber()
@@ -38,7 +38,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		//Get the peers from week epoch
 		var peers []string
 		currentWeek := util.GetWeeksPassed()
-		peers, err = c.getPeerWhoPinTokenEpoch(tokenInfo.TransferTokenID, currentWeek)
+		peers, err = c.getPeerWhoPinTokenEpoch(tokenInfo.TransferTokenID, currentWeek-1)
 		if err != nil {
 			c.log.Error("Error getting peers for token: ", tokenInfo.TransferTokenID, "err", err)
 			return fmt.Errorf("failed to get peers for token %s: %v", tokenInfo.TransferTokenID, err)
@@ -58,19 +58,6 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		}
 
 		transferBlock := block.InitBlock(transferBlockBytes, nil)
-
-		// Check whether the 5 weeks is passed
-		currentEpoch := time.Now().Unix()
-
-		c.log.Debug("Epoch difference is ", (currentEpoch - int64(transferBlock.GetEpoch()))) //TODO: Remove, Added for testing
-		c.log.Debug("Days pledged is ", (currentEpoch-int64(transferBlock.GetEpoch()))/86400) //TODO: Remove, Added for testing
-
-		// TODO: Revert below after testing, fiveweeks pass check
-		// if (currentEpoch - int64(transferBlock.GetEpoch())) < fiveWeeksInSeconds {
-		// 	c.log.Error("Failed to validate credits; 5 weeks not passed after transaction")
-		// 	c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
-		// 	continue
-		// }
 
 		// Check if block is TokenTransferredType
 		if transferBlock.GetTransType() != block.TokenTransferredType {
@@ -93,6 +80,20 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 				break
 			}
 		}
+		// Check whether the 5 weeks is passed
+		currentEpoch := time.Now().Unix()
+
+		c.log.Debug("Epoch difference is ", (currentEpoch - int64(transferBlock.GetEpoch()))) //TODO: Remove, Added for testing
+		c.log.Debug("Days pledged is ", (currentEpoch-int64(transferBlock.GetEpoch()))/86400) //TODO: Remove, Added for testing
+
+		// TODO:Revert below after testing, fiveweeks pass check
+		nextBlockofTransfer := block.InitBlock(blocks[validatingBlockNumber+1], nil)
+		// if (currentEpoch - int64(nextBlockofTransfer.GetEpoch())) < fiveWeeksInSeconds {
+		// 	c.log.Error("Failed to validate credits; 5 weeks not passed after transaction")
+		// 	c.log.Error("Validation failed for token: ", tokenInfo.TransferTokenID)
+		// 	return fmt.Errorf("failed to validate credits for token %s: 5 weeks not passed after next block transaction", tokenInfo.TransferTokenID)
+		// }
+
 		// Validate transactionID
 		validatingBlock := block.InitBlock(blocks[validatingBlockNumber], nil)
 		validatingBlockTransactionID := validatingBlock.GetTid()
@@ -187,7 +188,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		// Check for the credit value
 		var cumulativeCredits int64
 		var creditsForEachQuorum int64
-		nextBlockofTransfer := block.InitBlock(blocks[validatingBlockNumber+1], nil)
+		// nextBlockofTransfer := block.InitBlock(blocks[validatingBlockNumber+1], nil)
 		nextBlockofTransferEpoch := nextBlockofTransfer.GetEpoch()
 		epochDiffWithNextBlock := nextBlockofTransferEpoch - transferBlock.GetEpoch()
 		if int(tokenInfo.TransactionType) == 2 {
@@ -206,8 +207,22 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		} else {
 			c.log.Debug("Credit value check passed")
 		}
-		//Add a check for double mining.
+		//TODO:Add a check whether with the given tokenLevel and tokenNumber, alredy a token is created or not(check pin on the token with rubix epoch)
+		tokenID, err := c.w.CreateTokenID(miningToken)
+		if err != nil {
+			c.log.Error("Failed to create token ID for credit validation", "err", err)
+			return fmt.Errorf("failed to create token ID for credit validation: %v", err)
+		}
 
+		peers, err = c.getPeerWhoPinTokenEpoch(tokenID, currentWeek)
+		if err != nil {
+			c.log.Error("Error getting peers for token: ", tokenInfo.TransferTokenID, "err", err)
+			return fmt.Errorf("failed to get peers for token %s: %v", tokenInfo.TransferTokenID, err)
+		}
+		if peers != nil {
+			return fmt.Errorf("cannot mine token ID %s: token already exists in the system; use a different token number and token level", tokenID)
+
+		}
 		// If all checks pass, add the tokens credit value to totalCredits.
 		totalCredits += int(tokenInfo.TokenCredit)
 		c.log.Debug("Credit validation passed. Adding credits:", tokenInfo.TokenCredit)
@@ -282,7 +297,8 @@ func (c *Core) getPeerWhoPinTokenEpoch(tokenID string, weekCount int) ([]string,
 		}
 	}
 	if len(list) == 0 {
-		return nil, fmt.Errorf("no peers found for CID: %s", newCID)
+		c.log.Info("no peers found for CID:", newCID)
+		return nil, err
 	}
 	return list, nil
 }

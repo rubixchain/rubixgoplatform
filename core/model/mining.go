@@ -1,10 +1,16 @@
 package model
 
 type MiningRequest struct {
-	MinerDid     string `json:"miner"`
-	TokenCredits uint64 `json:"credits"`
-	Password     string `json:"password"`
-	Type         int    `json:"type"`
+	MinerDid           string          `json:"miner"`
+	TokenCredits       uint64          `json:"credits"`
+	MiningTokenDetails NewTokenDetails `json:"token_details"`
+	Password           string          `json:"password"`
+	Type               int             `json:"type"`
+}
+
+type NewTokenDetails struct {
+	TokenLevel  int    `json:"token_level"`
+	TokenNumber uint64 `json:"token_number"`
 }
 
 type PledgeHistory struct {

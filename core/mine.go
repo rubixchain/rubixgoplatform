@@ -19,7 +19,7 @@ import (
 
 const (
 	tokenLevel   = 004
-	tokenNumber  = 1000027
+	tokenNumber  = 1000033
 	miningPubSub = "mining-service"
 )
 
@@ -38,7 +38,6 @@ func (c *Core) InitiateMineRBTs(reqID string, req *model.MiningRequest) {
 	dc.OutChan <- br
 }
 func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *model.BasicResponse {
-	fmt.Println("Executing MineRBTs function")
 	st := time.Now()
 	txEpoch := int(st.Unix())
 	// var latestMined wallet.MiningRecord
@@ -74,12 +73,19 @@ func (c *Core) initiateMineRBTs(reqID string, MiningReq *model.MiningRequest) *m
 	// 	nextMiningTokenLevel += 1
 	// 	nextMiningTokenNumber = 1
 	// }
+	// nextMiningTokenLevel := tokenLevel
+	var nextMiningTokenDetails model.NewTokenDetails
+	nextMiningTokenDetails.TokenLevel = tokenLevel
+	nextMiningTokenDetails.TokenNumber = tokenNumber
+
+	MiningReq.MiningTokenDetails = nextMiningTokenDetails
+
 	//Need to add a function to get the credits required for the next token
-	creditsRequired := uint64(100)
-	// creditsRequired, err := GetCreditsRequired(nextMiningTokenLevel)
-	// if err != nil {
-	// 	c.log.Error("Unable to get the credits required for the next token")
-	// }
+	// creditsRequired := uint64(500)
+	creditsRequired, err := GetCreditsRequired(nextMiningTokenDetails.TokenLevel)
+	if err != nil {
+		c.log.Error("Unable to get the credits required for the next token")
+	}
 	// creditsRequired := uint64(100) //Right now I am manually adding as 100 but in actual senario we should fetch using the above function.
 
 	// 4. Validate if total credits are sufficient

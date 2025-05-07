@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -1048,3 +1052,27 @@ func (w *Wallet) GetAllPinnedTokens(did string) ([]Token, error) {
 	return t, nil
 
 }
+
+func (w *Wallet) CreateTokenID(details model.NewTokenDetails) (string, error) {
+	// Convert token level and number to strings
+	miningTokenLevelString := strconv.FormatInt(int64(details.TokenLevel), 10)
+	miningTokenNumberString := strconv.FormatUint(details.TokenNumber, 10)
+
+	// Combine the strings
+	parts := []string{miningTokenLevelString, miningTokenNumberString}
+	result := strings.Join(parts, " ")
+
+	// Convert to byte array and create buffer
+	byteArray := []byte(result)
+	newTokenBuffer := bytes.NewBuffer(byteArray)
+
+	// Add to IPFS and get tokenID
+	newTokenID, err := w.ipfs.Add(newTokenBuffer)
+	if err != nil {
+		// fmt.Errorf("Failed to create a new tokenID, Failed to add token to IPFS", "err", err)
+		return "", fmt.Errorf("failed to add token to IPFS: %w", err)
+	}
+
+	return newTokenID, nil
+}
+
