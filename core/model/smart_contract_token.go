@@ -15,3 +15,8 @@ type ExecuteSmartContractRequest struct {
 	Comment            string `json:"comment"`
 	SmartContractData  string `json:"smartContractData"`
 }
+
+type InvokeSmartContractRequest struct {
+	SmartContractToken string `json:"smartContractToken"`
+	InvokerAddress     string `json:"invokerAddr"`
+}

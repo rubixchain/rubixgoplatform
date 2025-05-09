@@ -425,3 +425,13 @@ func (s *Server) APIExecuteSmartContract(req *ensweb.Request) *ensweb.Result {
 	go s.c.ExecuteSmartContractToken(req.ID, &executeReq)
 	return s.didResponse(req, req.ID)
 }
+
+func (s *Server) APIInvokeSmartContract(req *ensweb.Request) *ensweb.Result {
+	var invokeReq model.InvokeSmartContractRequest
+	err := s.ParseJSON(req, &invokeReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	s.c.InvokeSmartContract)(&invokeReq)
+	return s.didResponse(req, req.ID)
+}
