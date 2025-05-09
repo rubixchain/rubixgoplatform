@@ -148,7 +148,8 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Generate smart contract failed, failed to retrieve Raw Code file", "err", err)
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve Raw Code file", nil)
 	}
-
+	s.c.AnalyseCode(rawCodeFile)
+	//Need to add the condition check and fine tuning
 	rawCodeDest := filepath.Join(deploySC.SCPath, rawHeader.Filename)
 	rawCodeDestFile, err := os.Create(rawCodeDest)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	// "context"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -18,16 +19,15 @@ type FunctionInfo struct {
 	CallNodes []*sitter.Node
 }
 
-func analyseCode() {
-	if len(os.Args) < 2 {
-		fmt.Println("Please provide a Rust file path")
+func (c *Core) AnalyseCode(file *os.File) {
+	// Ensure the file is not nil
+	if file == nil {
+		fmt.Println("Invalid file provided")
 		os.Exit(1)
 	}
 
-	// Read Rust file
-	filePath := os.Args[1]
-	fmt.Println("Analyzing file:", filePath)
-	code, err := os.ReadFile(filePath)
+	// Read file content
+	code, err := io.ReadAll(file)
 	if err != nil {
 		fmt.Printf("Error reading file: %v\n", err)
 		os.Exit(1)
