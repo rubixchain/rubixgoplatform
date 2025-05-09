@@ -392,7 +392,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	did := newEvent.Did
 	tokenType := token.SmartContractTokenType
 	address := publisherPeerID + "." + did
-	p, err := c.getPeer(address, "")
+	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return

@@ -17,12 +17,12 @@ def setup():
     config_nlss = node_config["node12"]
 
     # lite and basic dids without fp flag
-    create_and_register_did(config_bip39, "bip39_1", register_did=False)
-    create_and_register_did(config_nlss, "nlss_1", 0,register_did=False)
+    create_and_register_did(config_bip39, "bip39_1", register_did=True)
+    create_and_register_did(config_nlss, "nlss_1", 0,register_did=True)
 
     # lite and basic dids with fp flag
-    create_and_register_did(config_bip39, "bip39_fp", register_did=False, fp=True)
-    create_and_register_did(config_nlss, "nlss_fp", 0, register_did=False, fp=True)
+    create_and_register_did(config_bip39, "bip39_fp", register_did=True, fp=True)
+    create_and_register_did(config_nlss, "nlss_fp", 0, register_did=True, fp=True)
 
     save_to_config_file(__node_config_path, node_config)
 

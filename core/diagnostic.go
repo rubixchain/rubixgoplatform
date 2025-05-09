@@ -427,6 +427,7 @@ func (c *Core) GetFinalQuorumList(ql []string) ([]string, error) {
 			}
 			peerID := parts[0]
 			did := parts[1]
+
 			msg, _, err := c.CheckQuorumStatus(peerID, did)
 			if err != nil || strings.Contains(msg, "Quorum Connection Error") {
 				c.log.Error("Failed to check quorum status:", err)

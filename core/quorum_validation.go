@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,38 +46,72 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
 		default:
-			signerDIDType, err := c.w.GetPeerDIDType(signer)
-			if signerDIDType == -1 || err != nil {
-				c.log.Debug("quorum does not have prev quorum did type", signerDIDType)
-				signerDetails, err := c.GetPeerInfo(p, signer)
-				if err != nil || signerDetails.PeerInfo.DIDType == nil {
-					c.log.Error("failed to fetch details of the signer", signer, "msg", signerDetails.Message)
-					return signerDetails.Status, err
+			signerInfo, err := c.GetPeerDIDInfo(signer)
+			if err != nil {
+				if strings.Contains(err.Error(), "retry") {
+					c.AddPeerDetails(*signerInfo)
 				}
-				signerDetails.PeerInfo.DID = signer
-				c.AddPeerDetails(signerDetails.PeerInfo)
+			}
+			if signerInfo == nil || *signerInfo.DIDType == -1 {
+				peerDetails, err := c.GetPeerInfo(p, signer)
+				if err != nil || peerDetails.PeerInfo.DIDType == nil {
+					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
+					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
+					if !peerUpdateResult || err != nil {
+						*signerInfo.DIDType = did.BasicDIDMode
+						c.AddPeerDetails(*signerInfo)
+					}
+				} else {
+					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
+					if !peerUpdateResult || err != nil {
+						*signerInfo.DIDType = did.BasicDIDMode
+						c.AddPeerDetails(*signerInfo)
+					}
+				}
 			}
 			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
-				return false, fmt.Errorf("failed to setup foreign DID quorum : ", signer, "err", err)
+				return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
 			}
 		}
 		err := b.VerifySignature(dc)
 		if err != nil {
-			c.log.Error("Failed to verify signature", "err", err)
-			return false, fmt.Errorf("Failed to verify signature", "err", err)
+			if dc.GetSignType() == did.NlssVersion {
+				peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
+				if !peerUpdateResult || err != nil {
+					liteDID := did.LiteDIDMode
+					signerInfo := wallet.DIDPeerMap{
+						DID:     signer,
+						DIDType: &liteDID,
+					}
+					c.AddPeerDetails(signerInfo)
+				}
+				dc, err = c.SetupForienDIDQuorum(signer, selfDID)
+				if err != nil {
+					c.log.Error("failed to setup foreign DID quorum", "err", err)
+					return false, fmt.Errorf("failed to setup foreign DID quorum : %v err: %v", signer, err)
+				}
+				err = b.VerifySignature(dc)
+				if err != nil {
+					c.log.Error("Failed to verify signature", "err", err)
+					return false, fmt.Errorf("failed to verify signature, err: %v", err)
+				}
+			} else {
+				c.log.Error("Failed to verify signature", "err", err)
+				return false, fmt.Errorf("failed to verify signature, err: %v", err)
+			}
 		}
 	}
 	return true, nil
 }
 
-func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
+func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	var issueType int
 	b, err := c.getFromIPFS(pt)
 	if err != nil {
 		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
-		return err
+		return -1, err
 	}
 	iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
 
@@ -87,7 +122,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 		rb, err := rac.InitRacBlock(blk, nil)
 		if err != nil {
 			c.log.Error("invalid token, invalid rac block", "err", err)
-			return err
+			return -1, err
 		}
 		tt = rac.RacType2TokenType(rb.GetRacType())
 		if c.TokenType(PartString) == tt {
@@ -106,12 +141,12 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 	fmt.Println("sync 7") //TODO
 	if err != nil {
 		c.log.Error("failed to sync token chain block", "err", err)
-		return fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v", pt, TokenChainNotSynced)
+		return -1, fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v", pt, TokenChainNotSynced)
 	}
 	ptb := c.w.GetLatestTokenBlock(pt, tt)
 	if ptb == nil {
 		c.log.Error("Failed to get latest token chain block", "token", pt)
-		return fmt.Errorf("failed to get latest block")
+		return -1, fmt.Errorf("failed to get latest block")
 	}
 	td, err := c.w.ReadToken(pt)
 	if err != nil {
@@ -125,12 +160,12 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 			gb := c.w.GetGenesisTokenBlock(pt, tt)
 			if gb == nil {
 				c.log.Error("failed to get genesis token chain block", "token", pt)
-				return fmt.Errorf("failed to get genesis token chain block")
+				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
 			ppt, _, err := gb.GetParentDetials(pt)
 			if err != nil {
 				c.log.Error("failed to get genesis token chain block", "token", pt, "err", err)
-				return fmt.Errorf("failed to get genesis token chain block")
+				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
 			td.ParentTokenID = ppt
 		}
@@ -139,14 +174,24 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) error {
 		td.TokenStatus = wallet.TokenIsBurnt
 		c.w.UpdateToken(td)
 	}
+	// update sync status to incomplete
+	if td.SyncStatus == wallet.SyncUnrequired {
+		err = c.w.UpdateTokenSyncStatus(pt, wallet.SyncIncomplete)
+		if err != nil {
+			if !strings.Contains(err.Error(), "no records found") {
+				c.log.Error("failed to update parent token sync status as incomplete, token ", pt)
+			}
+		}
+
+	}
 	if ptb.GetTransType() != block.TokenBurntType {
 		issueType = ParentTokenNotBurned // parent token is not in burnt stage
 		//Commenting gps
 		//fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
 		c.log.Error("parent token is not in burnt stage", "token", pt)
-		return fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", pt, issueType)
+		return -1, fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", pt, issueType)
 	}
-	return nil
+	return tt, nil
 }
 
 // For RBT Transfer, Self transfer, Pinning, the quorums will sync the RBT token chain, TODO : they are syncing for all.
@@ -176,13 +221,14 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			}
 		}
 	}
-	p, err := c.getPeer(address, quorumDID)
+	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return false, err
 	}
 	defer p.Close()
-	currentWeek := util.GetWeeksPassed()
+	tokensSyncInfo := make([]TokenSyncInfo, 0)
+	// currentWeek := util.GetWeeksPassed()
 	for i := range ti {
 		err := c.syncTokenChainFrom(p, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
 		fmt.Println("sync 8") //TODO
@@ -190,28 +236,76 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", ti[i].Token, TokenChainNotSynced)
 		}
-		fb := c.w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
-		if fb == nil {
+		// blocksToSync := cr.TransTokenSyncInfo[ti[i].Token]
+		// genesisBlock := block.InitBlock(blocksToSync.GenesisBlock, nil)
+		// if genesisBlock == nil {
+		// 	c.log.Error("Failed to add genesis block, invalid block of token", ti[i].Token)
+		// 	return false, fmt.Errorf("Failed to add genesis block, invalid block of token : %v", ti[i].Token)
+		// }
+		// err := c.w.AddTokenBlock(ti[i].Token, genesisBlock)
+		// if err != nil {
+		// 	c.log.Error("Failed to add genesis block of token", ti[i].Token, "err", err)
+		// 	return false, err
+		// }
+
+		// if blocksToSync.LatestBlock != nil {
+		// 	latestBlock := block.InitBlock(blocksToSync.LatestBlock, nil)
+		// 	err := c.w.AddTokenBlock(ti[i].Token, latestBlock)
+		// 	if err != nil {
+		// 		c.log.Error("Failed to add last token chain block of token", ti[i].Token, "err", err)
+		// 		return false, err
+		// 	}
+		// }
+
+		genesisBlock := c.w.GetGenesisTokenBlock(ti[i].Token, ti[i].TokenType)
+		if genesisBlock == nil {
+			// p.Close()
 			c.log.Error("Failed to get first token chain block")
 			return false, fmt.Errorf("failed to get first token chain block %v", ti[i].Token)
 		}
+		var parentToken string
 		if c.TokenType(PartString) == ti[i].TokenType {
-			pt, _, err := fb.GetParentDetials(ti[i].Token)
+			parentToken, _, err := genesisBlock.GetParentDetials(ti[i].Token)
 			if err != nil {
+				// p.Close()
 				c.log.Error("failed to fetch parent token detials", "err", err, "token", ti[i].Token)
 				return false, err
 			}
-			parentTokens, err := c.SyncAncestralTokens(p, pt)
+			parentTokenType, err := c.syncParentToken(p, parentToken)
 			if err != nil {
-				c.log.Error("failed to sync parent token chain", "token", pt)
+				// p.Close()
+				c.log.Error("failed to sync parent token chain", "token", parentToken)
 				return false, err
 			}
+			tokensSyncInfo = append(tokensSyncInfo, TokenSyncInfo{TokenID: parentToken, TokenType: parentTokenType})
 
-			for _, token := range parentTokens {
-				c.pinTokenEpoch(token, currentWeek)
-			}
-			_, err = c.w.Pin(pt, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
+			// // add parent blocks
+			// parentGenesisBlock := block.InitBlock(blocksToSync.ParentGenesisBlock, nil)
+			// if parentGenesisBlock == nil {
+			// 	c.log.Error("Failed to add genesis block, invalid block of parent token", pt, "token", ti[i].Token)
+			// 	return false, fmt.Errorf("failed to add parent genesis block, invalid parent genesis block of token : %v", ti[i].Token)
+			// }
+			// err = c.w.AddTokenBlock(pt, parentGenesisBlock)
+			// if err != nil {
+			// 	c.log.Error("Failed to add parent's genesis block of token", ti[i].Token, "err", err)
+			// 	return false, err
+			// }
+
+			// parentLatestBlock := block.InitBlock(blocksToSync.ParentLatestBlock, nil)
+			// err = c.w.AddTokenBlock(pt, parentLatestBlock)
+			// if err != nil {
+			// 	c.log.Error("Failed to add parent's latest token chain block of token", ti[i].Token, "err", err)
+			// 	return false, err
+			// }
+
+			//TODO: Add Epoch pinning of parent token
+			// for _, token := range parentTokens {
+			// 	c.pinTokenEpoch(token, currentWeek)
+			// }
+
+			_, err = c.w.Pin(parentToken, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
 			if err != nil {
+				// p.Close()
 				c.log.Error("Failed to Pin parent token in Quorum", "err", err)
 				return false, err
 			}
@@ -219,8 +313,9 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 
 		// Check the token validation
 		if ti[i].TokenType == token.RBTTokenType {
-			tl, tn, err := fb.GetTokenDetials(ti[i].Token)
+			tl, tn, err := genesisBlock.GetTokenDetials(ti[i].Token)
 			if err != nil {
+				// p.Close()
 				c.log.Error("Failed to get token detials", "err", err)
 				return false, err
 			}
@@ -228,16 +323,19 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			tb := bytes.NewBuffer([]byte(ct))
 			tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			if err != nil {
+				// p.Close()
 				c.log.Error("Failed to validate, failed to get token hash", "err", err)
 				return false, err
 			}
 			if tid != ti[i].Token {
+				// p.Close()
 				c.log.Error("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn)
 				return false, fmt.Errorf("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn)
 			}
 		}
 		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		if b == nil {
+			// p.Close()
 			c.log.Error("Invalid token chain block")
 			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
 		}
@@ -249,16 +347,74 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		if pinningNodeDID != "" {
 			c.log.Info("The token is Pinned as a service on Node ", pinningNodeDID)
 			if ownerDID != senderDID {
+				// p.Close()
 				c.log.Error("Invalid token owner: The token is Pinned as a service", "owner", ownerDID, "The node which is trying to transfer", senderDID)
 				return false, fmt.Errorf("invalid token owner: The token is Pinned as a service")
 			}
 		}
 		signatureValidation, err := c.validateSigner(b, quorumDID, p)
 		if !signatureValidation || err != nil {
+			// p.Close()
 			c.log.Error("Failed to validate token ownership ", "token ID:", ti[i].Token)
 			return false, err
 		}
+
+		// add trans tokens to TokensTable with token status = 17
+		// Check if token already exists
+		tokenInfo, err := c.w.ReadToken(ti[i].Token)
+		if err != nil || tokenInfo.TokenID == "" {
+			// // Token doesn't exist, proceed to handle it
+			// dir := util.GetRandString()
+			// if err := util.CreateDir(dir); err != nil {
+			// 	c.log.Error("Failed to create directory", "err", err)
+			// 	return false, err
+			// }
+			// defer os.RemoveAll(dir)
+
+			// // Get the token
+			// if err := w.Get(tokenInfo.Token, did, OwnerRole, dir); err != nil {
+			// 	w.log.Error("Failed to get token", "err", err)
+			// 	return nil, err
+			// }
+
+			// Create new token entry
+			tokenInfo = &wallet.Token{
+				TokenID:       ti[i].Token,
+				TokenValue:    ti[i].TokenValue,
+				ParentTokenID: parentToken,
+				DID:           ti[i].OwnerDID,
+			}
+
+			err = c.w.CreateToken(tokenInfo)
+			if err != nil {
+				c.log.Error("failed to write to db, token ", ti[i].Token, "err", err)
+				return false, err
+			}
+		}
+
+		// Update token status
+		tokenInfo.DID = senderDID
+		tokenInfo.TokenStatus = wallet.QuorumPledgedForThisToken
+		tokenInfo.TransactionID = b.GetTid()
+
+		// t.TokenStateHash = tokenHashMap[ti[i].Token]
+		tokenInfo.SyncStatus = wallet.SyncIncomplete
+
+		err = c.w.UpdateToken(tokenInfo)
+		if err != nil {
+			c.log.Error("failed to update to db, token ", ti[i].Token, "err", err)
+			return false, err
+		}
+
+		// quorum fetches tokens to be synced
+		tokensSyncInfo = append(tokensSyncInfo, TokenSyncInfo{TokenID: ti[i].Token, TokenType: ti[i].TokenType})
 	}
+
+	// sync full token chain of all the tokens in syncing Queue
+	tokenSyncMap := make(map[string][]TokenSyncInfo)
+	tokenSyncMap[p.GetPeerID()+"."+p.GetPeerDID()] = tokensSyncInfo
+	go c.syncFullTokenChains(tokenSyncMap)
+
 	// for i := range wt {
 	// 	c.log.Debug("Requesting Token status")
 	// 	ts := TokenPublish{

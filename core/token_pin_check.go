@@ -1,9 +1,12 @@
 package core
 
 import (
+	"net/http"
 	"sync"
 
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 type MultiPinCheckRes struct {
@@ -130,4 +133,14 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 	result.Owners = nil
 	result.Error = nil
 	results[index] = result
+}
+
+func (c *Core) checkPinRole(req *ensweb.Request) *ensweb.Result {
+	token := c.l.GetQuerry(req, "token")
+	details, err := c.w.GetProviderDetails(token)
+	if err != nil {
+		c.log.Error("Failed to get provider details", "err", err)
+		c.l.RenderJSON(req, &model.PinCheckReply{Status: false, Message: "Failed to get provider details", PinDetails: nil}, http.StatusNoContent)
+	}
+	return c.l.RenderJSON(req, &model.PinCheckReply{Status: true, Message: "Got all blocks", PinDetails: details}, http.StatusOK)
 }

@@ -170,6 +170,7 @@ func (w *Wallet) GetPeerID(did string) string {
 	var dm DIDPeerMap
 	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
+		w.log.Error("couldn't read from peer did table", "err", err)
 		return ""
 	}
 	return dm.PeerID
@@ -193,7 +194,7 @@ func (w *Wallet) UpdatePeerDIDType(did string, didtype int) (bool, error) {
 	var dm DIDPeerMap
 	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
-		w.log.Error("couldn't read from peer did table")
+		w.log.Error("couldn't read from peer did table UpdatePeerDIDType", "err", err)
 		return false, err
 	}
 

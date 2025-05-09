@@ -416,33 +416,30 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	FTsForTxn := AllFTs[:req.FTCount]
 	//TODO: Pinning of tokens
 
-	rpeerid = c.w.GetPeerID(req.Receiver)
-	if rpeerid == "" {
-		// Check if DID is present in the DIDTable as the
-		// receiver might be part of the current node
-		_, err := c.w.GetDID(req.Receiver)
-		if err != nil {
-			if strings.Contains(err.Error(), "no records found") {
-				c.log.Error("Peer ID not found", "did", req.Receiver)
-				resp.Message = "invalid address, Peer ID not found"
-				return resp
-			} else {
-				c.log.Error(fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", req.Receiver, err))
-				resp.Message = fmt.Sprintf("Error occured while fetching DID info from DIDTable for DID: %v, err: %v", req.Receiver, err)
-				return resp
-			}
-		} else {
-			// Set the receiverPeerID to self Peer ID
-			rpeerid = c.peerID
-		}
-	} else {
-		receiverPeerID, err := c.getPeer(req.Receiver, "")
-		if err != nil {
-			resp.Message = "Failed to get receiver peer, " + err.Error()
+	// Fetching peer's peer id
+	peerInfo, err := c.GetPeerDIDInfo(req.Receiver)
+	if err != nil {
+		if peerInfo == nil {
+			c.log.Error("could not get peerId of receiver ", req.Receiver, "error", err)
+			resp.Message = fmt.Sprintf("could not get peerId of receiver : %v, error: %v", req.Receiver, err)
 			return resp
 		}
-		defer receiverPeerID.Close()
+		if strings.Contains(err.Error(), "retry") {
+			c.AddPeerDetails(*peerInfo)
+		}
 	}
+	if peerInfo.PeerID == "" {
+		c.log.Error("failed to get peerId of receiver ", req.Receiver, "error", err)
+		resp.Message = fmt.Sprintf("failed to get peerId of receiver : %v, error: %v", req.Receiver, err)
+		return resp
+	}
+
+	receiverPeerID, err := c.getPeer(req.Receiver)
+	if err != nil {
+		resp.Message = "Failed to get receiver peer, " + err.Error()
+		return resp
+	}
+	defer receiverPeerID.Close()
 
 	FTTokenIDs := make([]string, 0)
 	for i := range FTsForTxn {

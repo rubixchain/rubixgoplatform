@@ -671,7 +671,8 @@ paths:
     get:
       consumes:
       - application/json
-      description: Retrieves the details of a transaction based on dID and date range.
+      description: Retrieves the details of a transaction based on DID and date range
+        (on and after start date and before end date).
       operationId: get-by-did
       parameters:
       - description: DID of sender/receiver
@@ -683,7 +684,7 @@ paths:
         in: query
         name: Role
         type: string
-      - description: 'Start date of the date range (format: YYYY-MM-DD'
+      - description: 'Start date of the date range (format: YYYY-MM-DD)'
         in: query
         name: StartDate
         type: string
