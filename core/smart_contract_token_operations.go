@@ -8,6 +8,8 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/rexe"
+
 	// "github.com/rubixchain/rubixgoplatform/core/rexe"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -398,4 +400,52 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	resp.Message = msg
 	// resp.Result = contractResult
 	return resp
+}
+
+// func (c *Core) InvokeSmartContract(invokeReq *model.InvokeSmartContractRequest) {
+// 	br := c.invokeSmartContractToken(invokeReq)
+// 	// dc := c.GetWebReq(reqID)
+// 	// if dc == nil {
+// 	// 	c.log.Error("Failed to get did channels")
+// 	// 	return
+// 	// }
+// 	// dc.OutChan <- br
+// }
+
+func (c *Core) InvokeSmartContract(invokeReq *model.InvokeSmartContractRequest) *model.BasicResponse {
+	contractResult := rexe.ContractResult{SuccessMsg: "", FailureMsg: ""}
+	resp := &model.BasicResponse{
+		Status: false,
+	}
+	tokenChainData := c.GetSmartContractTokenChainData(&model.SmartContractTokenChainDataReq{Token: invokeReq.SmartContractToken, Latest: false})
+	if tokenChainData == nil {
+		c.log.Error("Failed to get smart contract token chain data")
+		resp.Message = "Failed to get smart contract token chain data"
+	} else {
+		// Initialize RexeModule
+		rexeModule := &rexe.RexeModule{}
+
+		module, err := rexeModule.NewRexe(invokeReq.SmartContractToken, c.cfg.DirPath)
+		if err != nil {
+			c.log.Error("Failed to initialize Rexe module", "token", invokeReq.SmartContractToken, "error", err)
+			resp.Message = fmt.Sprintf("Failed to initialize Rexe module: %v", err)
+		} else {
+			// Process smart contract data
+			for i, blockData := range tokenChainData.SCTDataReply {
+				c.log.Info("Processing smart contract", "index", i, "contractData", blockData.SmartContractData)
+				contractResult = module.Call(blockData.SmartContractData)
+				if contractResult.FailureMsg != "" {
+					failureMsg := fmt.Sprintf("Block %d: %s", i, contractResult.FailureMsg)
+					c.log.Error("Failed to execute smart contract", "index", i, "error", failureMsg)
+				} else {
+					c.log.Info("Wasm executed successfully", "index", i, "result", contractResult.SuccessMsg)
+				}
+			}
+		}
+	}
+	return &model.BasicResponse{
+		Status:  true,
+		Message: "Smart Contract Invoked successfully",
+		Result:  contractResult,
+	}
 }

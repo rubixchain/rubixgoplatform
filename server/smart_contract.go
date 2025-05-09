@@ -432,6 +432,6 @@ func (s *Server) APIInvokeSmartContract(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	s.c.InvokeSmartContract)(&invokeReq)
+	s.c.InvokeSmartContract(&invokeReq)
 	return s.didResponse(req, req.ID)
 }
