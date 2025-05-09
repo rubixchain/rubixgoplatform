@@ -21,6 +21,7 @@ const (
 	FTTokenType
 	MiningTokenType
 	TestMiningTokenType
+	MiningChainType
 )
 
 func GetWholeTokenValue(tokenDetails string) (int, string, bool, error) {
@@ -68,53 +69,53 @@ func GetWholeTokenValue(tokenDetails string) (int, string, bool, error) {
 // }
 
 func CheckWholeToken(tokenDetails string, testNet bool) (bool, error) {
-    isWholeToken := true
-    trimmedResult := strings.Split(strings.TrimSpace(tokenDetails), ",")
-    
-    // Handle testNet case where 3 parts are expected
-    if testNet && len(trimmedResult) == 3 {
-        return !isWholeToken, nil
-    }
+	isWholeToken := true
+	trimmedResult := strings.Split(strings.TrimSpace(tokenDetails), ",")
 
-    // Ensure at least one part exists
-    if len(trimmedResult) < 1 {
-        return !isWholeToken, fmt.Errorf("invalid token details: empty or malformed")
-    }
+	// Handle testNet case where 3 parts are expected
+	if testNet && len(trimmedResult) == 3 {
+		return !isWholeToken, nil
+	}
 
-    trimmedResultVal := trimmedResult[0]
+	// Ensure at least one part exists
+	if len(trimmedResult) < 1 {
+		return !isWholeToken, fmt.Errorf("invalid token details: empty or malformed")
+	}
 
-    var tokenLevel string
-    // Check for new format (contains a space)
-    if strings.Contains(trimmedResultVal, " ") {
-        // New format: tokenLevel tokenNumber
-        parts := strings.Split(trimmedResultVal, " ")
-        if len(parts) != 2 {
-            return !isWholeToken, fmt.Errorf("invalid new token format: expected 'tokenLevel tokenNumber'")
-        }
-        tokenLevel = parts[0] // e.g., "004"
-    } else {
-        // Old format: tokenLevel + 64-char hash
-        if len(trimmedResultVal) < 64 {
-            return !isWholeToken, fmt.Errorf("invalid old token format: too short for tokenLevel + hash")
-        }
-        tokenLevel = trimmedResultVal[:len(trimmedResultVal)-64] // Extract tokenLevel by removing last 64 chars
-    }
+	trimmedResultVal := trimmedResult[0]
 
-    // Convert and validate tokenLevel
-    tokenLevelInt, err := strconv.Atoi(tokenLevel)
-    if err != nil {
-        return !isWholeToken, fmt.Errorf("invalid token level: %v", err)
-    }
+	var tokenLevel string
+	// Check for new format (contains a space)
+	if strings.Contains(trimmedResultVal, " ") {
+		// New format: tokenLevel tokenNumber
+		parts := strings.Split(trimmedResultVal, " ")
+		if len(parts) != 2 {
+			return !isWholeToken, fmt.Errorf("invalid new token format: expected 'tokenLevel tokenNumber'")
+		}
+		tokenLevel = parts[0] // e.g., "004"
+	} else {
+		// Old format: tokenLevel + 64-char hash
+		if len(trimmedResultVal) < 64 {
+			return !isWholeToken, fmt.Errorf("invalid old token format: too short for tokenLevel + hash")
+		}
+		tokenLevel = trimmedResultVal[:len(trimmedResultVal)-64] // Extract tokenLevel by removing last 64 chars
+	}
 
-    fmt.Println("tokenLevelInt", tokenLevelInt)
-    // Apply validation logic
-    if len(tokenLevel) < 3 {
-        if tokenLevelInt != 1 {
-            return !isWholeToken, fmt.Errorf("invalid token level format")
-        }
-    }
+	// Convert and validate tokenLevel
+	tokenLevelInt, err := strconv.Atoi(tokenLevel)
+	if err != nil {
+		return !isWholeToken, fmt.Errorf("invalid token level: %v", err)
+	}
 
-    return isWholeToken, nil
+	fmt.Println("tokenLevelInt", tokenLevelInt)
+	// Apply validation logic
+	if len(tokenLevel) < 3 {
+		if tokenLevelInt != 1 {
+			return !isWholeToken, fmt.Errorf("invalid token level format")
+		}
+	}
+
+	return isWholeToken, nil
 }
 
 func calcSHA256(targetHash string, maxNumber int) int {

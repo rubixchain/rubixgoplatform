@@ -66,14 +66,16 @@ const (
 )
 
 const (
-	InvalidPasringErr string = "invalid json parsing"
-	RubixRootDir      string = "Rubix/"
-	DefaultMainNetDB  string = "rubix.db"
-	DefaultTestNetDB  string = "rubixtest.db"
-	MainNetDir        string = "MainNet"
-	TestNetDir        string = "TestNet"
-	TestNetDIDDir     string = "TestNetDID/"
-	MaxDecimalPlaces  int    = 3
+	InvalidPasringErr         string = "invalid json parsing"
+	RubixRootDir              string = "Rubix/"
+	DefaultMainNetDB          string = "rubix.db"
+	DefaultTestNetDB          string = "rubixtest.db"
+	MainNetDir                string = "MainNet"
+	TestNetDir                string = "TestNet"
+	TestNetDIDDir             string = "TestNetDID/"
+	MaxDecimalPlaces          int    = 3
+	RubixMiningChainIDString  string = "rubix_mining_chain_test"
+	AddressForMiningChainSync string = "12D3KooWGppoT2BwPddMG3uLdwAar2b5yuFG1KCviELYtoFuQPAs.bafybmib6gtwq7kqlvfqzi4sbv7fpxuwp3smjro5bujtbckaajkbdkls3b4"
 )
 
 const (

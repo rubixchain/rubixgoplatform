@@ -20,13 +20,19 @@ const fiveWeeksInSeconds = 5 * 7 * 24 * 60 * 60 // 5 weeks = 5 * 7 days * 24 hou
 func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails []model.PledgeHistory, miningToken model.NewTokenDetails) error {
 
 	totalCredits := 0
-	// record, err := c.w.FindLatestTokenLevelAndNumber()
-	// if err != nil {
-	// 	c.log.Error("Failed to get latest token level and number from mining records. err:", err)
-	// }
-	// fmt.Printf("Highest Token: Level %d, Number %d", record.TokenLevel, record.TokenNumber)
+	// // record, err := c.w.FindLatestTokenLevelAndNumber()
+	// // if err != nil {
+	// // 	c.log.Error("Failed to get latest token level and number from mining records. err:", err)
+	// // }
+	// // fmt.Printf("Highest Token: Level %d, Number %d", record.TokenLevel, record.TokenNumber)
 	// fmt.Println("PledgeHistory details in ValidateCredits", pledgeDetails)
 	for _, tokenInfo := range pledgeDetails {
+		// Query miningLevel DB to avoid double mining
+		// existingMining, err := c.QueryMiningRecord(tokenInfo.TransactionID, tokenInfo.TransferTokenID, tokenInfo.QuorumDID)
+		// if existingMining.MiningID != "" && existingMining.RemainingCredits == 0 {
+		// 	c.log.Error("Given record is already used for mining")
+		// 	return fmt.Errorf("Given record is already used for mining")
+		// }
 		c.log.Debug("Validating credits for token: ", tokenInfo.TransferTokenID)
 		validatingBlockNumberStr := (tokenInfo.TransferBlockID[0:1])
 		validatingBlockNumber, err := strconv.Atoi(validatingBlockNumberStr)
@@ -258,7 +264,7 @@ func (c *Core) UnpinTokenEpoch(tokenId string, weekCount int) {
 
 	toPin := fmt.Sprintf("%s-%d", tokenId, weekCount)
 	reader := bytes.NewReader([]byte(toPin))
-	newCid, err := c.ipfs.Add(reader, ipfsnode.Pin(false))
+	newCid, err := c.ipfs.Add(reader, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 	fmt.Println("UNPIN Week count : ", weekCount)  //TODO:REMOVE
 	fmt.Println("CID when UNPINNING is :", newCid) // TODO:REMOVE
 	if err != nil {

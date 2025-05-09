@@ -880,3 +880,42 @@ func (b *Block) GetPledgedTokens() {
 	fmt.Println(pledgedInfo)
 	// return
 }
+
+// This function retrieves the TokenLevel and TokenNumber from the Genesis Block
+func (b *Block) GetTokenLevelAndNumberFromGenesisBlock() (int, int, error) {
+	// Access the GenesisBlock map
+	gb, ok := b.bm[TCGenesisBlockKey]
+	if !ok {
+		return 0, 0, fmt.Errorf("genesis block missing")
+	}
+	gbMap, ok := gb.(map[string]interface{})
+	if !ok {
+		return 0, 0, fmt.Errorf("invalid genesis block format")
+	}
+
+	// Access the GenesisTokenInfo map
+	gti, ok := gbMap[GBInfoKey]
+	if !ok {
+		return 0, 0, fmt.Errorf("genesis token info missing")
+	}
+	gtiMap, ok := gti.(map[string]interface{})
+	if !ok {
+		return 0, 0, fmt.Errorf("invalid genesis token info format")
+	}
+
+	// Get the first GenesisTokenInfo entry
+	for _, info := range gtiMap {
+		infoMap, ok := info.(map[string]interface{})
+		if !ok {
+			return 0, 0, fmt.Errorf("invalid genesis token info entry")
+		}
+
+		// Extract TokenLevel and TokenNumber
+		tokenLevel := util.GetIntFromMap(infoMap, GITokenLevelKey)
+		tokenNumber := util.GetIntFromMap(infoMap, GITokenNumberKey)
+
+		return tokenLevel, tokenNumber, nil
+	}
+
+	return 0, 0, fmt.Errorf("no genesis token info entries found")
+}

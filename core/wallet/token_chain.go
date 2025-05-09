@@ -31,6 +31,7 @@ const (
 	ReferenceType          string = "rf"
 	SmartContractTokenType string = "st"
 	FTTokenType            string = "ft"
+	MiningChainType        string = "mt"
 )
 
 const TCBlockCountLimit int = 100
@@ -63,6 +64,8 @@ func tcsType(tokenType int) string {
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
 		tt = FTTokenType
+	case tkn.MiningChainType:
+		tt = MiningChainType
 	}
 	return tt + "-"
 }
@@ -92,6 +95,8 @@ func tcsPrefix(tokenType int, t string) string {
 		tt = WholeTokenType
 	case tkn.TestMiningTokenType:
 		tt = TestTokenType
+	case tkn.MiningChainType:
+		tt = MiningChainType
 	}
 	return tt + "-" + t + "-"
 }
@@ -121,6 +126,8 @@ func tcsKey(tokenType int, t string, blockID string) string {
 		tt = WholeTokenType
 	case tkn.TestMiningTokenType:
 		tt = TestTokenType
+	case tkn.MiningChainType:
+		tt = MiningChainType
 	}
 	bs := strings.Split(blockID, "-")
 	if len(bs) == 2 {
@@ -205,6 +212,8 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 		db = w.tcs
 	case tkn.TestMiningTokenType:
 		db = w.tcs
+	case tkn.MiningChainType:
+		db = w.MiningChainStorage
 	}
 	return db
 }

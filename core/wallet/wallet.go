@@ -67,7 +67,7 @@ type Wallet struct {
 	ntcs                           *ChainDB
 	smartContractTokenChainStorage *ChainDB
 	FTChainStorage                 *ChainDB
-	MiningRecordsChainStorage      *ChainDB
+	MiningChainStorage             *ChainDB
 }
 
 func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, error) {
@@ -84,7 +84,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	w.ntcs = &ChainDB{}
 	w.smartContractTokenChainStorage = &ChainDB{}
 	w.FTChainStorage = &ChainDB{}
-	w.MiningRecordsChainStorage = &ChainDB{}
+	w.MiningChainStorage = &ChainDB{}
 	op := &opt.Options{
 		WriteBuffer: 64 * 1024 * 1024,
 	}
@@ -189,12 +189,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	}
 	w.FTChainStorage.DB = *FTtokenStorageDB
 
-	MiningRecordsDB, err := leveldb.OpenFile(dir+MiningRecordsChainStorage, op)
+	MiningChainStorageDB, err := leveldb.OpenFile(dir+MiningRecordsChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to mining records levelDB", "err", err)
 		return nil, fmt.Errorf("failed to mining records levelDB")
 	}
-	w.MiningRecordsChainStorage.DB = *MiningRecordsDB
+	w.MiningChainStorage.DB = *MiningChainStorageDB
 
 	err = w.s.Init(CallBackUrlStorage, &CallBackUrl{}, true)
 	if err != nil {
