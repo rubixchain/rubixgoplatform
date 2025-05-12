@@ -105,18 +105,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 			mnemonic = string(_mnemonic)
 		}
 
-		// masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic)
-		// if err != nil {
-		// 	d.log.Error("failed to create keypair", "err", err)
-		// }
-
-		// //generating private and public key pair
-		// pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKey), didCreate.ChildPath, didCreate.PrivPWD)
-		// if err != nil {
-		// 	d.log.Error("failed to create child", "err", err)
-		// }
-
-		//bip-44
+		//integrating bip-44 to support HD wallets
 		hdWallet, err := crypto.NewHDWallet(mnemonic)
 		if err != nil {
 			d.log.Error("failed to create keypair from mnemonic", "err", err)
