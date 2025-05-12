@@ -121,6 +121,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	binaryCodeFile, binaryHeader, err := s.ParseMultiPartFormFile(req, "binaryCodePath")
 	if err != nil {
 		s.log.Error("Generate smart contract failed, failed to retrieve Binary File", "err", err)
+		err1 := removeTempFolder(deploySC.SCPath)
+		if err1 != nil {
+			s.log.Error("Failed to remove temp folder", "err", err1)
+		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve Binary File", nil)
 	}
 
@@ -129,6 +133,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		binaryCodeFile.Close()
 		s.log.Error("Generate smart contract failed, failed to create Binary Code file", "err", err)
+		err1 := removeTempFolder(deploySC.SCPath)
+		if err1 != nil {
+			s.log.Error("Failed to remove temp folder", "err", err1)
+		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create Binary Code file", nil)
 	}
 
@@ -139,6 +147,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		binaryCodeFile.Close()
 		s.log.Error("Generate smart contract failed, failed to move binary code file", "err", err)
+		err1 := removeTempFolder(deploySC.SCPath)
+		if err1 != nil {
+			s.log.Error("Failed to remove temp folder", "err", err1)
+		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move binary code file", nil)
 	}
 
@@ -146,6 +158,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		binaryCodeDestFile.Close()
 		s.log.Error("Generate smart contract failed, failed to retrieve Raw Code file", "err", err)
+		err1 := removeTempFolder(deploySC.SCPath)
+		if err1 != nil {
+			s.log.Error("Failed to remove temp folder", "err", err1)
+		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve Raw Code file", nil)
 	}
 	// loopExists, loopErr := s.c.AnalyseCode(rawCodeFile)
@@ -162,6 +178,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		binaryCodeDestFile.Close()
 		rawCodeFile.Close()
 		s.log.Error("Generate smart contract failed, failed to create Raw Code file", "err", err)
+		err1 := removeTempFolder(deploySC.SCPath)
+		if err1 != nil {
+			s.log.Error("Failed to remove temp folder", "err", err1)
+		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create Raw Code file", nil)
 	}
 
@@ -173,6 +193,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		binaryCodeDestFile.Close()
 		rawCodeDestFile.Close()
 		s.log.Error("Generate smart contract failed, failed to move raw code file", "err", err)
+		err1 := removeTempFolder(deploySC.SCPath)
+		if err1 != nil {
+			s.log.Error("Failed to remove temp folder", "err", err1)
+		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move raw code file", nil)
 	}
 	loopExists, loopErr := s.c.AnalyseCode(rawCodeDest)
@@ -180,6 +204,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	if loopExists {
 		binaryCodeDestFile.Close()
 		s.log.Error("Generate smart contract failed, Infinite loop exists in the given rust code", "err", loopErr)
+		err1 := removeTempFolder(deploySC.SCPath)
+		if err1 != nil {
+			s.log.Error("Failed to remove temp folder", "err", err1)
+		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, Infinite loop exists in the given rust code", nil)
 	}
 
@@ -188,6 +216,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		binaryCodeDestFile.Close()
 		rawCodeDestFile.Close()
 		s.log.Error("Generate smart contract failed, failed to retrieve Schema file", "err", err)
+		err1 := removeTempFolder(deploySC.SCPath)
+		if err1 != nil {
+			s.log.Error("Failed to remove temp folder", "err", err1)
+		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve Schema file", nil)
 	}
 
@@ -198,6 +230,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		rawCodeDestFile.Close()
 		schemaFile.Close()
 		s.log.Error("Generate smart contract failed, failed to create Schema file", "err", err)
+		err1 := removeTempFolder(deploySC.SCPath)
+		if err1 != nil {
+			s.log.Error("Failed to remove temp folder", "err", err1)
+		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create Schema file", nil)
 	}
 
@@ -210,6 +246,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		rawCodeDestFile.Close()
 		schemaDestFile.Close()
 		s.log.Error("Generate smart contract failed, failed to move Schema file", "err", err)
+		err1 := removeTempFolder(deploySC.SCPath)
+		if err1 != nil {
+			s.log.Error("Failed to remove temp folder", "err", err1)
+		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move Schema file", nil)
 	}
 
@@ -239,6 +279,15 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	go s.c.GenerateSmartContractToken(req.ID, &deploySC)
 
 	return s.didResponse(req, req.ID)
+}
+
+func removeTempFolder(filePath string) error {
+	err := os.RemoveAll(filePath)
+	if err != nil {
+		fmt.Printf("Error deleting folder: %v\n", err)
+		return err
+	}
+	return nil
 }
 
 // moveFile tries to rename the file first; if it fails, it falls back to copying
