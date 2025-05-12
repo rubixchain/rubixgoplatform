@@ -164,14 +164,6 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve Raw Code file", nil)
 	}
-	// loopExists, loopErr := s.c.AnalyseCode(rawCodeFile)
-	// fmt.Println("loopExists", loopExists)
-	// if loopExists {
-	// 	binaryCodeDestFile.Close()
-	// 	s.log.Error("Generate smart contract failed, Infinite loop exists in the given rust code", "err", loopErr)
-	// 	return s.BasicResponse(req, false, "Generate smart contract failed, Infinite loop exists in the given rust code", nil)
-	// }
-	//Need to add the condition check and fine tuning
 	rawCodeDest := filepath.Join(deploySC.SCPath, rawHeader.Filename)
 	rawCodeDestFile, err := os.Create(rawCodeDest)
 	if err != nil {
@@ -199,11 +191,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move raw code file", nil)
 	}
-	loopExists, loopErr := s.c.AnalyseCode(rawCodeDest)
-	fmt.Println("loopExists", loopExists)
+	loopExists := s.c.AnalyseCode(rawCodeDest)
 	if loopExists {
 		binaryCodeDestFile.Close()
-		s.log.Error("Generate smart contract failed, Infinite loop exists in the given rust code", "err", loopErr)
+		s.log.Error("Generate smart contract failed, Infinite loop exists in the given rust code")
 		err1 := removeTempFolder(deploySC.SCPath)
 		if err1 != nil {
 			s.log.Error("Failed to remove temp folder", "err", err1)
@@ -284,7 +275,6 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 func removeTempFolder(filePath string) error {
 	err := os.RemoveAll(filePath)
 	if err != nil {
-		fmt.Printf("Error deleting folder: %v\n", err)
 		return err
 	}
 	return nil

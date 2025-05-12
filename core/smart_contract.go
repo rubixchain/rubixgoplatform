@@ -230,7 +230,6 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		c.log.Error("Failed to write binary code file", "err", err)
 		return basicResponse
 	}
-
 	// Fetch and store the raw code file
 	rawCodeFile, err := c.ipfs.Cat(smartContractToken.RawCodeHash)
 	if err != nil {
