@@ -148,7 +148,13 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Generate smart contract failed, failed to retrieve Raw Code file", "err", err)
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve Raw Code file", nil)
 	}
-	s.c.AnalyseCode(rawCodeFile)
+	// loopExists, loopErr := s.c.AnalyseCode(rawCodeFile)
+	// fmt.Println("loopExists", loopExists)
+	// if loopExists {
+	// 	binaryCodeDestFile.Close()
+	// 	s.log.Error("Generate smart contract failed, Infinite loop exists in the given rust code", "err", loopErr)
+	// 	return s.BasicResponse(req, false, "Generate smart contract failed, Infinite loop exists in the given rust code", nil)
+	// }
 	//Need to add the condition check and fine tuning
 	rawCodeDest := filepath.Join(deploySC.SCPath, rawHeader.Filename)
 	rawCodeDestFile, err := os.Create(rawCodeDest)
@@ -168,6 +174,13 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		rawCodeDestFile.Close()
 		s.log.Error("Generate smart contract failed, failed to move raw code file", "err", err)
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move raw code file", nil)
+	}
+	loopExists, loopErr := s.c.AnalyseCode(rawCodeDest)
+	fmt.Println("loopExists", loopExists)
+	if loopExists {
+		binaryCodeDestFile.Close()
+		s.log.Error("Generate smart contract failed, Infinite loop exists in the given rust code", "err", loopErr)
+		return s.BasicResponse(req, false, "Generate smart contract failed, Infinite loop exists in the given rust code", nil)
 	}
 
 	schemaFile, schemaHeader, err := s.ParseMultiPartFormFile(req, "schemaFilePath")

@@ -19,15 +19,149 @@ type FunctionInfo struct {
 	CallNodes []*sitter.Node
 }
 
-func (c *Core) AnalyseCode(file *os.File) {
+// func (c *Core) AnalyseCode(file *os.File) (bool, error) {
+// 	fmt.Println("Analyzing code for potential infinite loops and recursion...")
+// 	// Ensure the file is not nil
+// 	if file == nil {
+// 		return false, fmt.Errorf("invalid file provided")
+// 	}
+
+// 	// Read file content
+// 	code, err := io.ReadAll(file)
+// 	if err != nil {
+// 		return false, fmt.Errorf("error reading file: %v", err)
+// 	}
+
+// 	// Initialize parser
+// 	parser := sitter.NewParser()
+// 	parser.SetLanguage(rust.GetLanguage())
+
+// 	// Parse the code
+// 	tree, err := parser.ParseCtx(context.Background(), nil, code)
+// 	if err != nil {
+// 		return false, fmt.Errorf("error parsing code: %v", err)
+// 	}
+// 	defer parser.Close()
+
+// 	// Track issues found
+// 	issuesFound := false
+
+// 	// Check for syntax errors
+// 	if tree.RootNode().HasError() {
+// 		fmt.Println("Syntax errors found in the code:")
+// 		checkSyntaxErrors(tree.RootNode(), string(code))
+// 		issuesFound = true
+// 	}
+
+// 	// Collect function information for recursion analysis
+// 	functions := collectFunctionInfo(tree.RootNode(), string(code))
+
+// 	// Analyze for potential infinite loops
+// 	fmt.Println("\nChecking for potential infinite loops:")
+// 	infiniteLoopFound := checkInfiniteLoops(tree.RootNode(), string(code), functions, &issuesFound)
+
+// 	// Check for recursive cycles
+// 	cycleFound := checkRecursiveCycles(functions, string(code), &issuesFound)
+
+// 	// Handle infinite loops or recursion
+// 	if infiniteLoopFound || cycleFound {
+// 		reason := "Infinite loop or recursion detected"
+// 		if infiniteLoopFound {
+// 			reason = "Infinite loop detected"
+// 		}
+// 		if cycleFound {
+// 			reason = "Recursive cycle detected"
+// 		}
+// 		return true, fmt.Errorf(reason)
+// 	}
+
+// 	// If no issues were found, print a confirmation
+// 	if !issuesFound {
+// 		fmt.Println("No infinite loops or syntax errors detected.")
+// 	}
+
+// 	return issuesFound, nil
+// }
+
+// func (c *Core) AnalyseCode(file *os.File) (bool, error) {
+// 	fmt.Println("Analyzing code for potential infinite loops and recursion...")
+
+// 	if file == nil {
+// 		return false, fmt.Errorf("invalid file provided")
+// 	}
+
+// 	// Read the file content
+// 	code, err := io.ReadAll(file)
+// 	if err != nil {
+// 		return false, fmt.Errorf("error reading file: %w", err)
+// 	}
+
+// 	// Reset the file pointer to allow further use of the file
+// 	_, err = file.Seek(0, io.SeekStart)
+// 	if err != nil {
+// 		return false, fmt.Errorf("error resetting file pointer: %w", err)
+// 	}
+
+// 	// Initialize parser
+// 	parser := sitter.NewParser()
+// 	defer parser.Close()
+
+// 	parser.SetLanguage(rust.GetLanguage())
+
+// 	// Parse the code
+// 	tree, err := parser.ParseCtx(context.Background(), nil, code)
+// 	if err != nil {
+// 		return false, fmt.Errorf("error parsing code: %w", err)
+// 	}
+
+// 	issuesFound := false
+
+// 	// Check for syntax errors
+// 	if tree.RootNode().HasError() {
+// 		fmt.Println("Syntax errors found in the code:")
+// 		checkSyntaxErrors(tree.RootNode(), string(code))
+// 		issuesFound = true
+// 	}
+
+// 	// Collect function information for recursion analysis
+// 	functions := collectFunctionInfo(tree.RootNode(), string(code))
+
+// 	// Analyze for potential infinite loops
+// 	fmt.Println("\nChecking for potential infinite loops:")
+// 	issuesFound = checkInfiniteLoops(tree.RootNode(), string(code), functions, &issuesFound)
+
+// 	// Check for recursive cycles
+// 	issuesFound = checkRecursiveCycles(functions, string(code), &issuesFound)
+
+// 	if !issuesFound {
+// 		fmt.Println("No infinite loops or syntax errors detected.")
+// 	}
+// 	fmt.Println("Analysis completed.")
+// 	fmt.Println("Issues found:", issuesFound)
+// 	return issuesFound, nil
+// }
+
+func (c *Core) AnalyseCode(codePath string) (bool, error) {
+	fmt.Println("Analyzing code for potential infinite loops and recursion...")
 	// Ensure the file is not nil
-	if file == nil {
-		fmt.Println("Invalid file provided")
+	// if file == nil {
+	// 	fmt.Println("Invalid file provided")
+	// 	os.Exit(1)
+	// }
+	// file, err := os.OpenFile(codePath, os.O_RDWR, 0644)
+	// if err != nil {
+	// 	fmt.Printf("Error opening file: %v\n", err)
+	// 	os.Exit(1)
+	// }
+	file, err := os.Open(codePath)
+	if err != nil {
+		fmt.Printf("Error opening file: %v\n", err)
 		os.Exit(1)
 	}
-
+	defer file.Close()
 	// Read file content
 	code, err := io.ReadAll(file)
+
 	if err != nil {
 		fmt.Printf("Error reading file: %v\n", err)
 		os.Exit(1)
@@ -69,6 +203,7 @@ func (c *Core) AnalyseCode(file *os.File) {
 	if !issuesFound {
 		fmt.Println("No infinite loops or syntax errors detected.")
 	}
+	return issuesFound, nil
 }
 
 // checkSyntaxErrors recursively checks for syntax errors in the parse tree
@@ -187,6 +322,7 @@ func checkInfiniteLoops(node *sitter.Node, code string, functions map[string]*Fu
 			found = true
 		}
 	}
+	fmt.Println("Found in checkInfiniteLoops :", found)
 	return found
 }
 
@@ -229,6 +365,7 @@ func checkRecursiveCycles(functions map[string]*FunctionInfo, code string, issue
 			dfs(funcName, []string{})
 		}
 	}
+	fmt.Println("Found in checkRecursiveCycles :", found)
 	return found
 }
 
