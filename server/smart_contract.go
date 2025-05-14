@@ -191,9 +191,21 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		}
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move raw code file", nil)
 	}
-	loopExists := s.c.AnalyseCode(rawCodeDest)
+	codeFile, err := os.Open(rawCodeDest)
+	if err != nil {
+		s.log.Error("Error opening file: %v\n", err)
+		os.Exit(1)
+	}
+	code, err := io.ReadAll(codeFile)
+
+	if err != nil {
+		s.log.Error("Error reading raw code file for analysing: %v\n", err)
+		return s.BasicResponse(req, false, "Generate smart contract failed, failed to read raw code file for analysing", nil)
+	}
+	loopExists := s.c.AnalyseCode(code)
 	if loopExists {
 		binaryCodeDestFile.Close()
+		codeFile.Close()
 		s.log.Error("Generate smart contract failed, Infinite loop exists in the given rust code")
 		err1 := removeTempFolder(deploySC.SCPath)
 		if err1 != nil {
@@ -206,6 +218,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		binaryCodeDestFile.Close()
 		rawCodeDestFile.Close()
+		codeFile.Close()
 		s.log.Error("Generate smart contract failed, failed to retrieve Schema file", "err", err)
 		err1 := removeTempFolder(deploySC.SCPath)
 		if err1 != nil {
@@ -220,6 +233,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		binaryCodeDestFile.Close()
 		rawCodeDestFile.Close()
 		schemaFile.Close()
+		codeFile.Close()
 		s.log.Error("Generate smart contract failed, failed to create Schema file", "err", err)
 		err1 := removeTempFolder(deploySC.SCPath)
 		if err1 != nil {
@@ -236,6 +250,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		binaryCodeDestFile.Close()
 		rawCodeDestFile.Close()
 		schemaDestFile.Close()
+		codeFile.Close()
 		s.log.Error("Generate smart contract failed, failed to move Schema file", "err", err)
 		err1 := removeTempFolder(deploySC.SCPath)
 		if err1 != nil {
@@ -251,6 +266,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	binaryCodeFile.Close()
 	rawCodeFile.Close()
 	schemaFile.Close()
+	codeFile.Close()
 
 	deploySC.BinaryCode = binaryCodeDest
 	deploySC.RawCode = rawCodeDest

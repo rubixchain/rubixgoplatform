@@ -4,8 +4,6 @@ import (
 	// "context"
 	"context"
 	"fmt"
-	"io"
-	"os"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -19,22 +17,8 @@ type FunctionInfo struct {
 	CallNodes []*sitter.Node
 }
 
-func (c *Core) AnalyseCode(codePath string) bool {
+func (c *Core) AnalyseCode(code []byte) bool {
 	c.log.Info("Analyzing code for potential infinite loops and recursion")
-	file, err := os.Open(codePath)
-	if err != nil {
-		c.log.Error("Error opening file: %v\n", err)
-		os.Exit(1)
-	}
-	defer file.Close()
-	// Read file content
-	code, err := io.ReadAll(file)
-
-	if err != nil {
-		c.log.Error("Error reading file: %v\n", err)
-		os.Exit(1)
-	}
-
 	// Initialize parser
 	parser := sitter.NewParser()
 	parser.SetLanguage(rust.GetLanguage())
@@ -42,8 +26,8 @@ func (c *Core) AnalyseCode(codePath string) bool {
 	// Parse the code
 	tree, err := parser.ParseCtx(context.Background(), nil, code)
 	if err != nil {
-		fmt.Printf("Error parsing code: %v\n", err)
-		os.Exit(1)
+		c.log.Error((fmt.Sprintf("Error parsing code: %v\n", err)))
+		return true
 	}
 	defer parser.Close()
 
@@ -53,18 +37,18 @@ func (c *Core) AnalyseCode(codePath string) bool {
 	// Check for syntax errors
 	if tree.RootNode().HasError() {
 		c.log.Error("Syntax errors found in the code:")
-		checkSyntaxErrors(tree.RootNode(), string(code))
+		c.checkSyntaxErrors(tree.RootNode(), string(code))
 		issuesFound = true
 	}
 
 	// Collect function information for recursion analysis
-	functions := collectFunctionInfo(tree.RootNode(), string(code))
+	functions := c.collectFunctionInfo(tree.RootNode(), string(code))
 
 	// Analyze for potential infinite loops
-	issuesFound = checkInfiniteLoops(tree.RootNode(), string(code), functions, &issuesFound)
+	issuesFound = c.checkInfiniteLoops(tree.RootNode(), string(code), functions, &issuesFound)
 
 	// Check for recursive cycles
-	issuesFound = checkRecursiveCycles(functions, string(code), &issuesFound)
+	issuesFound = c.checkRecursiveCycles(functions, string(code), &issuesFound)
 
 	// If no issues were found, print a confirmation
 	if !issuesFound {
@@ -76,19 +60,19 @@ func (c *Core) AnalyseCode(codePath string) bool {
 }
 
 // checkSyntaxErrors recursively checks for syntax errors in the parse tree
-func checkSyntaxErrors(node *sitter.Node, code string) {
+func (c *Core) checkSyntaxErrors(node *sitter.Node, code string) {
 	if node.Type() == "ERROR" {
 		start := node.StartPoint()
-		fmt.Printf("Syntax error at line %d, column %d\n", start.Row+1, start.Column+1)
+		c.log.Error(fmt.Sprintf("Syntax error at line %d, column %d\n", start.Row+1, start.Column+1))
 	}
 
 	for i := 0; i < int(node.NamedChildCount()); i++ {
-		checkSyntaxErrors(node.NamedChild(i), code)
+		c.checkSyntaxErrors(node.NamedChild(i), code)
 	}
 }
 
 // collectFunctionInfo gathers function names and their calls
-func collectFunctionInfo(node *sitter.Node, code string) map[string]*FunctionInfo {
+func (c *Core) collectFunctionInfo(node *sitter.Node, code string) map[string]*FunctionInfo {
 	functions := make(map[string]*FunctionInfo)
 	var collect func(*sitter.Node)
 	collect = func(n *sitter.Node) {
@@ -98,7 +82,7 @@ func collectFunctionInfo(node *sitter.Node, code string) map[string]*FunctionInf
 				info := &FunctionInfo{Name: name}
 				functions[name] = info
 				// Collect calls within this function
-				collectCalls(n, code, info)
+				c.collectCalls(n, code, info)
 			}
 		}
 		for i := 0; i < int(n.NamedChildCount()); i++ {
@@ -110,19 +94,19 @@ func collectFunctionInfo(node *sitter.Node, code string) map[string]*FunctionInf
 }
 
 // collectCalls gathers function calls within a function
-func collectCalls(node *sitter.Node, code string, info *FunctionInfo) {
+func (c *Core) collectCalls(node *sitter.Node, code string, info *FunctionInfo) {
 	if node.Type() == "call_expression" {
 		name := getNodeText(node.NamedChild(0), code)
 		info.Calls = append(info.Calls, name)
 		info.CallNodes = append(info.CallNodes, node)
 	}
 	for i := 0; i < int(node.NamedChildCount()); i++ {
-		collectCalls(node.NamedChild(i), code, info)
+		c.collectCalls(node.NamedChild(i), code, info)
 	}
 }
 
 // checkInfiniteLoops analyzes loops for potential infinite conditions
-func checkInfiniteLoops(node *sitter.Node, code string, functions map[string]*FunctionInfo, issuesFound *bool) bool {
+func (c *Core) checkInfiniteLoops(node *sitter.Node, code string, functions map[string]*FunctionInfo, issuesFound *bool) bool {
 	found := false
 	start := node.StartPoint()
 
@@ -132,8 +116,8 @@ func checkInfiniteLoops(node *sitter.Node, code string, functions map[string]*Fu
 		if conditionNode != nil {
 			conditionText := strings.TrimSpace(getNodeText(conditionNode, code))
 			if conditionText == "true" {
-				fmt.Printf("Potential infinite while loop at line %d, column %d: constant true condition\n",
-					start.Row+1, start.Column+1)
+				c.log.Error(fmt.Sprintf("Potential infinite while loop at line %d, column %d: constant true condition\n",
+					start.Row+1, start.Column+1))
 				found = true
 				*issuesFound = true
 			} else {
@@ -141,44 +125,44 @@ func checkInfiniteLoops(node *sitter.Node, code string, functions map[string]*Fu
 				vars := extractVariables(conditionNode, code)
 				bodyNode := node.NamedChild(1)
 				if bodyNode != nil && !varsModified(bodyNode, vars, code) {
-					fmt.Printf("Potential infinite while loop at line %d, column %d: condition variables not modified\n",
-						start.Row+1, start.Column+1)
+					c.log.Error(fmt.Sprintf("Potential infinite while loop at line %d, column %d: condition variables not modified\n",
+						start.Row+1, start.Column+1))
 					found = true
 					*issuesFound = true
 				}
 			}
 		}
-		checkBreakStatements(node, code, start)
+		c.checkBreakStatements(node, code, start)
 	}
 
 	if node.Type() == "loop_expression" {
-		fmt.Printf("Infinite loop detected at line %d, column %d: Rust loop {}\n",
-			start.Row+1, start.Column+1)
+		c.log.Error(fmt.Sprintf("Infinite loop detected at line %d, column %d: Rust loop {}\n",
+			start.Row+1, start.Column+1))
 		found = true
 		*issuesFound = true
-		checkBreakStatements(node, code, start)
+		c.checkBreakStatements(node, code, start)
 	}
 
 	if node.Type() == "for_expression" {
 		iteratorNode := node.NamedChild(1)
 		if iteratorNode != nil && strings.Contains(getNodeText(iteratorNode, code), "std::iter::repeat") {
-			fmt.Printf("Potential infinite for loop at line %d, column %d: uses non-terminating iterator (std::iter::repeat)\n",
-				start.Row+1, start.Column+1)
+			c.log.Error(fmt.Sprintf("Potential infinite for loop at line %d, column %d: uses non-terminating iterator (std::iter::repeat)\n",
+				start.Row+1, start.Column+1))
 			found = true
 			*issuesFound = true
 		}
-		checkBreakStatements(node, code, start)
+		c.checkBreakStatements(node, code, start)
 	}
 
 	// Check for recursive calls (direct)
 	if node.Type() == "call_expression" {
 		functionName := getNodeText(node.NamedChild(0), code)
-		parentFunction := findParentFunction(node)
+		parentFunction := c.findParentFunction(node)
 		if parentFunction != nil {
 			parentName := getFunctionName(parentFunction, code)
 			if parentName == functionName {
-				fmt.Printf("Potential infinite recursion at line %d, column %d: function %s calls itself\n",
-					start.Row+1, start.Column+1, functionName)
+				c.log.Error(fmt.Sprintf("Potential infinite recursion at line %d, column %d: function %s calls itself\n",
+					start.Row+1, start.Column+1, functionName))
 				found = true
 				*issuesFound = true
 			}
@@ -187,16 +171,15 @@ func checkInfiniteLoops(node *sitter.Node, code string, functions map[string]*Fu
 
 	// Recursively check child nodes
 	for i := 0; i < int(node.NamedChildCount()); i++ {
-		if checkInfiniteLoops(node.NamedChild(i), code, functions, issuesFound) {
+		if c.checkInfiniteLoops(node.NamedChild(i), code, functions, issuesFound) {
 			found = true
 		}
 	}
-	fmt.Println("Found in checkInfiniteLoops :", found)
 	return found
 }
 
 // checkRecursiveCycles checks for indirect recursion
-func checkRecursiveCycles(functions map[string]*FunctionInfo, code string, issuesFound *bool) bool {
+func (c *Core) checkRecursiveCycles(functions map[string]*FunctionInfo, code string, issuesFound *bool) bool {
 	found := false
 	visited := make(map[string]bool)
 	path := make(map[string]bool)
@@ -216,8 +199,8 @@ func checkRecursiveCycles(functions map[string]*FunctionInfo, code string, issue
 					for _, callNode := range info.CallNodes {
 						if getNodeText(callNode.NamedChild(0), code) == called {
 							start := callNode.StartPoint()
-							fmt.Printf("Potential infinite recursion at line %d, column %d: cycle detected (%s -> %s)\n",
-								start.Row+1, start.Column+1, strings.Join(stack, " -> "), called)
+							c.log.Error(fmt.Sprintf("Potential infinite recursion at line %d, column %d: cycle detected (%s -> %s)\n",
+								start.Row+1, start.Column+1, strings.Join(stack, " -> "), called))
 							found = true
 							*issuesFound = true
 						}
@@ -234,25 +217,24 @@ func checkRecursiveCycles(functions map[string]*FunctionInfo, code string, issue
 			dfs(funcName, []string{})
 		}
 	}
-	fmt.Println("Found in checkRecursiveCycles :", found)
 	return found
 }
 
 // checkBreakStatements checks if a loop has break statements
-func checkBreakStatements(node *sitter.Node, code string, loopStart sitter.Point) {
+func (c *Core) checkBreakStatements(node *sitter.Node, code string, loopStart sitter.Point) {
 	if node.Type() == "break_expression" {
-		fmt.Printf("Break statement found at line %d, column %d (mitigates infinite loop at line %d)\n",
-			node.StartPoint().Row+1, node.StartPoint().Column+1, loopStart.Row+1)
+		c.log.Info(fmt.Sprintf("Break statement found at line %d, column %d (mitigates infinite loop at line %d)\n",
+			node.StartPoint().Row+1, node.StartPoint().Column+1, loopStart.Row+1))
 		return
 	}
 
 	for i := 0; i < int(node.NamedChildCount()); i++ {
-		checkBreakStatements(node.NamedChild(i), code, loopStart)
+		c.checkBreakStatements(node.NamedChild(i), code, loopStart)
 	}
 }
 
 // findParentFunction finds the nearest parent function declaration
-func findParentFunction(node *sitter.Node) *sitter.Node {
+func (c *Core) findParentFunction(node *sitter.Node) *sitter.Node {
 	current := node
 	for current != nil {
 		if current.Type() == "function_item" {
