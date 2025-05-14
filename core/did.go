@@ -300,6 +300,7 @@ func (c *Core) RegisterDID(reqID string, did string) {
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "DID registered successfully",
+		Result:  map[string]string{"did": did},
 	}
 	if err != nil {
 		br.Status = false
