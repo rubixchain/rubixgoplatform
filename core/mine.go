@@ -7,6 +7,7 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -20,7 +21,7 @@ import (
 
 const (
 	tokenLevel   = 004
-	tokenNumber  = 1000034
+	tokenNumber  = 1500045
 	miningPubSub = "mining-service"
 )
 
@@ -228,7 +229,7 @@ func (c *Core) miningCallback(peerID string, topic string, data []byte) {
 		return
 	}
 
-	MiningIDreader := bytes.NewReader([]byte(RubixMiningChainIDString))
+	MiningIDreader := bytes.NewReader([]byte(block.GetMiningChainID()))
 	RubixMiningChainID, err := c.ipfs.Add(MiningIDreader, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 	if err != nil {
 		c.log.Error("Failed to get Rubix mining chain ID")

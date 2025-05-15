@@ -1664,6 +1664,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Failed to pin the newly mined token", "err", err)
 			return nil, nil, nil, err
 		}
+
 		//Miner computes the new token state hash
 		fmt.Println("Mining tokenID is", cr.MiningTokenID)
 
@@ -1736,20 +1737,176 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Epoch:           int64(cr.TransactionEpoch),
 		}
 
-		miningRecord := &model.MiningRecordPubSub{
-			MiningID:      tid,
-			MinedTokenID:  cr.MiningTokenID,
-			MinerDID:      cr.MiningInfo.MinerDid,
-			TokenLevel:    0,
-			TokenNumber:   0,
-			PledgeHistory: sc.GetTokenCreditsDetails(),
+		pledgeTokenDetails := make([]block.PledgeDetail, 0)
+		for k, v := range pd.PledgedTokens {
+			for _, t := range v {
+				blk, ok := pd.PledgedTokenChainBlock[t].([]byte)
+				if !ok {
+					c.log.Error("failed to get pledge token block", "token", t)
+					return nil, nil, nil, fmt.Errorf("failed to get pledge token block")
+				}
+				ptb := block.InitBlock(blk, nil)
+				if ptb == nil {
+					c.log.Error("invalid pledge token block", "token", t)
+					return nil, nil, nil, fmt.Errorf("invalid pledge token block")
+				}
+				tt := ptb.GetTokenType(t)
+				bid, err := ptb.GetBlockID(t)
+				if err != nil {
+					c.log.Error("Failed to get block id", "err", err, "token", t)
+					return nil, nil, nil, fmt.Errorf("failed to get block id")
+				}
+				ptd := block.PledgeDetail{
+					Token:        t,
+					TokenType:    tt,
+					DID:          k,
+					TokenBlockID: bid,
+				}
+				pledgeTokenDetails = append(pledgeTokenDetails, ptd)
+			}
 		}
-		err = c.publishMiningdetails(miningRecord)
+
+		// miningRecord := &model.MiningRecordPubSub{
+		// 	MiningID:      tid,
+		// 	MinedTokenID:  cr.MiningTokenID,
+		// 	MinerDID:      cr.MiningInfo.MinerDid,
+		// 	MinerPeerID:   c.peerID,
+		// 	TokenLevel:    0,
+		// 	TokenNumber:   0,
+		// 	PledgeHistory: sc.GetTokenCreditsDetails(),
+		// }
+
+		MiningIDreader := bytes.NewReader([]byte(block.GetMiningChainID()))
+		RubixMiningChainID, err := c.ipfs.Add(MiningIDreader, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+
+		// peerForMiningChainSync, err := c.getPeer(AddressForMiningChainSync, "")
+		// if err != nil {
+		// 	c.log.Error("Failed to get peer for syncing mining chain")
+		// }
+		// err = c.syncTokenChainFrom(peerForMiningChainSync, "", RubixMiningChainID, token.MiningChainType)
+		// latestMiningChainBlock := c.w.GetLatestTokenBlock(RubixMiningChainID, token.MiningTokenType)
+		// previousMiningID := latestMiningChainBlock.GetPreviousMiningID()
+
+		tokenLevel, tokenNumber, err := nb.GetTokenLevelAndNumberFromGenesisBlock()
+		epoch := nb.GetEpoch()
+		creditDetails, err := c.w.CreatePledgeHistoryMap(sc.GetTokenCreditsDetails(), cr.MiningTokenID, cr.MiningInfo.MinerDid)
+		fmt.Println("Credit details is ", creditDetails)
+		fmt.Println("RUBIX MINING CHAIN ID is", RubixMiningChainID)
+		fmt.Println("Epoch is ", epoch)
+		fmt.Println("Token level is ", tokenLevel)
+		fmt.Println("Token number is ", tokenNumber)
 		if err != nil {
-			c.log.Error(("Unable to publish mining details"))
+			c.log.Error("Failed to create pledge history map for mining chain", err)
 			return nil, nil, nil, err
 		}
-		fmt.Println("Mining record published successfully")
+		quorumSignatures, err := nb.GetQuorumSignatureList()
+		if err != nil {
+			c.log.Error("Failed to get the quorum signature list for mining chain")
+		}
+
+		latestBlock, err := c.w.GetLatestMiningChainBlock(RubixMiningChainID)
+		var blockNumber uint64
+		if latestBlock == nil {
+			blockNumber = 1 // First block
+		} else {
+			latestNumber, err := latestBlock.GetMiningChainBlockNumber()
+			if err != nil {
+				c.log.Error("Failed to get latest block number", "err", err)
+				return nil, nil, nil, err
+			}
+			blockNumber = latestNumber + 1
+		}
+
+		miningInfo := &block.MiningChainBlock{
+			MiningChainBlockNumber: blockNumber,
+			MiningChainInfo: &block.MiningChainBlockInfo{
+				MiningID:         tid,
+				MinerDID:         cr.MiningInfo.MinerDid,
+				TokenID:          cr.MiningTokenID,
+				TokenLevel:       tokenLevel,
+				TokenNumber:      0,
+				CreditDetails:    creditDetails,
+				PledgeDetails:    pledgeTokenDetails,
+				QuorumSignature:  quorumSignatures,
+				Epoch:            epoch,
+				PreviousMiningID: "",
+			},
+		}
+
+		//Add signing of new mining chain block
+		//Add Mining Chain Block to mining chain
+		// Create and add mining chain block
+		mb := block.MiningChain{}
+		var ctcb map[string]*block.MiningChain
+		miningBlock := mb.CreateMiningChainBlock(ctcb, miningInfo)
+		if miningBlock == nil {
+			c.log.Error("Failed to create mining chain block", "err", err)
+			return nil, nil, nil, err
+		}
+
+		fmt.Println("Mining block is created.........")
+
+		// Add signing of mining chain block
+		// DIDCrypto, err := c.SetupDID(cr.ReqID, cr.MiningInfo.MinerDid)
+		// if err != nil {
+		// 	c.log.Error("Failed to setup DID crypto", "err", err)
+		// 	return nil, nil, nil, err
+		// }
+
+		err = miningBlock.UpdateMiningChainBlockSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to mine, failed to update signature", "err", err)
+			return nil, nil, nil, err
+		}
+
+		fmt.Println("Mining block is signed.........")
+
+		// Add mining chain block to mining chain
+		err = c.w.AddMiningChainBlock(RubixMiningChainID, miningBlock)
+		if err != nil {
+			c.log.Error("Failed to add mining chain block", "err", err)
+			return nil, nil, nil, err
+		}
+
+		blocks := make([]map[string]interface{}, 0)
+		var MiningblockIDNumber uint64
+		for {
+			MiningChainBytes, nextBlock, err := c.w.GetAllMiningChainBlocks(RubixMiningChainID, 0)
+			fmt.Println("Mining chain bytes is ", MiningChainBytes)
+			fmt.Println("next block is ", nextBlock)
+			if MiningChainBytes == nil {
+				c.log.Error("Failed to get latest mining chain block")
+				return nil, nil, nil, err
+			}
+			for _, blk := range MiningChainBytes {
+				b := block.InitMiningBlock(blk, nil)
+				if b != nil {
+					MiningBlockMap, err := b.GetMiningChainBlockMap()
+					blocks = append(blocks, MiningBlockMap)
+					// Update MiningblockIDNumber with the block's number
+					blockNumber, err := b.GetMiningChainBlockNumber()
+					if err != nil {
+						c.log.Error("Failed to get block number", "err", err)
+						return nil, nil, nil, err
+					}
+					MiningblockIDNumber = blockNumber
+					blockID = strconv.FormatUint(MiningblockIDNumber, 10) // Set blockID for each block
+					fmt.Println("Next Block number in Mining chain is ", MiningblockIDNumber)
+				} else {
+					c.log.Error("Invalid block")
+				}
+			}
+			if nextBlock == 0 {
+				break
+			}
+		}
+
+		// err = c.publishMiningdetails(miningRecord)
+		// if err != nil {
+		// 	c.log.Error(("Unable to publish mining details"))
+		// 	return nil, nil, nil, err
+		// }
+		// fmt.Println("Mining record published successfully")
 
 		return &miningDetails, nil, nil, err
 	default:

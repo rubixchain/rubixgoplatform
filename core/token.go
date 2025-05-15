@@ -1402,7 +1402,7 @@ func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tok
 		}
 
 		// Try to sync the token chain from the connected peer
-		err = c.syncTokenChainFrom(peer, "", token, tokenType)
+		err = c.syncTokenChainFromPeer(peer, "", token, tokenType)
 		if err != nil {
 			c.log.Warn("Failed to sync token chain, trying next peer", "peerID", peerID, "err", err)
 			lastErr = err
@@ -1418,6 +1418,73 @@ func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tok
 		c.log.Error("Failed to sync token chain from all peers", "err", lastErr)
 	}
 	return lastErr
+}
+
+func (c *Core) syncTokenChainFromPeer(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
+	var err error
+	blk := c.w.GetLatestTokenBlock(token, tokenType)
+	var blkId string
+	if blk != nil {
+		var err error
+		if blk.GetMinerDID() != "" {
+			blkId, err = blk.GetMinedTokenBlockID(token)
+		} else {
+			blkId, err = blk.GetBlockID(token)
+		}
+
+		if err != nil {
+			c.log.Error("Failed to get block ID", "token", token, "tokenType", tokenType, "err", err)
+			return fmt.Errorf("failed to get block ID for token %s: %w", token, err)
+		}
+
+		if blkId == pblkID {
+			return nil
+		}
+	} else {
+		c.log.Debug("No block found, requesting full chain")
+
+		// If blk is nil, set blkId to empty string to request full chain
+		blkId = ""
+	}
+	tr := TCBSyncRequest{
+		Token:     token,
+		TokenType: tokenType,
+		BlockID:   blkId,
+	}
+	fmt.Println("blockID which is sent through API", blkId)
+	for {
+		var trep TCBSyncReply
+		err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &tr, &trep, false)
+		if err != nil {
+			c.log.Error("Failed to sync token chain block", "err", err)
+			return err
+		}
+		if !trep.Status {
+			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
+			return fmt.Errorf(trep.Message)
+		}
+		for _, bb := range trep.TCBlock {
+			blk := block.InitBlock(bb, nil)
+			if blk == nil {
+				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
+				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
+			}
+			if blk.GetMinerDID() != "" {
+				err = c.w.AddMiningTokenBlock(token, blk, tokenType)
+			} else {
+				err = c.w.AddTokenBlock(token, blk)
+			}
+			if err != nil {
+				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
+				return err
+			}
+		}
+		if trep.NextBlockID == "" {
+			break
+		}
+		tr.BlockID = trep.NextBlockID
+	}
+	return nil
 }
 
 // This function will update credit status of token credits in pledge history table as well as

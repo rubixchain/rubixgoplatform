@@ -4,13 +4,19 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor"
+	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-type MiningBlock struct {
+type MiningChain struct {
 	bb []byte
 	bm map[string]interface{}
 }
+
+const (
+	RubixMiningChainIDString string = "rubix_mining_chain_test_"
+	RubixMiningChainID       string = "QmT4HbZiQU6QXvVFvrKH6HSLP4PdxbVBDsseCr6jXq9AMM"
+)
 
 const (
 	MiningChainBlockNumberKey    string = "1"
@@ -46,13 +52,13 @@ type MiningChainBlockInfo struct {
 }
 
 type MiningChainBlock struct {
-	MiningChainBlockNumber    int                   `json:"miningBlockNumber"`
+	MiningChainBlockNumber    uint64                `json:"miningBlockNumber"`
 	MiningChainBlockHash      string                `json:"miningChainBlockHash"`
 	MiningChainBlockSignature string                `json:"miningChainBlockSignature"`
 	MiningChainInfo           *MiningChainBlockInfo `json:"miningChainInfo"`
 }
 
-func NewMiningInfo(ctcb map[string]*MiningBlock, mi *MiningChainBlockInfo) map[string]interface{} {
+func NewMiningInfo(ctcb map[string]*MiningChain, mi *MiningChainBlockInfo) map[string]interface{} {
 	nmcbi := make(map[string]interface{})
 
 	nmcbi[MIMiningIDKey] = mi.MiningID
@@ -77,7 +83,7 @@ func NewMiningInfo(ctcb map[string]*MiningBlock, mi *MiningChainBlockInfo) map[s
 	return nmcbi
 }
 
-func (mb *MiningBlock) CreateMiningChainBlock(ctcb map[string]*MiningBlock, mcb *MiningChainBlock) *MiningBlock {
+func (mb *MiningChain) CreateMiningChainBlock(ctcb map[string]*MiningChain, mcb *MiningChainBlock) *MiningChain {
 	nmcb := make(map[string]interface{})
 	nmcb[MiningChainBlockNumberKey] = mcb.MiningChainBlockNumber
 	nmcb[MiningChainBlockHashKey] = mcb.MiningChainBlockHash
@@ -92,8 +98,8 @@ func (mb *MiningBlock) CreateMiningChainBlock(ctcb map[string]*MiningBlock, mcb 
 }
 
 // InitMiningBlock initializes a MiningBlock with either serialized bytes or a map.
-func InitMiningBlock(bb []byte, bm map[string]interface{}) *MiningBlock {
-	b := &MiningBlock{
+func InitMiningBlock(bb []byte, bm map[string]interface{}) *MiningChain {
+	b := &MiningChain{
 		bb: bb,
 		bm: bm,
 	}
@@ -117,7 +123,7 @@ func InitMiningBlock(bb []byte, bm map[string]interface{}) *MiningBlock {
 }
 
 // miningBlkEncode serializes the mining block into CBOR bytes, computing the hash in the process.
-func (mb *MiningBlock) miningBlkEncode() error {
+func (mb *MiningChain) miningBlkEncode() error {
 	// Remove hash and signature before CBOR conversion
 	_, hok := mb.bm[MiningChainBlockHashKey]
 	if hok {
@@ -154,7 +160,7 @@ func (mb *MiningBlock) miningBlkEncode() error {
 }
 
 // miningBlkDecode deserializes the CBOR bytes into a map representation.
-func (mb *MiningBlock) miningBlkDecode() error {
+func (mb *MiningChain) miningBlkDecode() error {
 	var m map[string]interface{}
 	err := cbor.Unmarshal(mb.bb, &m)
 	if err != nil {
@@ -183,19 +189,116 @@ func (mb *MiningBlock) miningBlkDecode() error {
 	return nil
 }
 
-// // GetBlock returns the serialized block bytes.
-// func (mb *MiningBlock) GetMiningBlock() []byte {
-// 	return mb.bb
-// }
+func (mb *MiningChain) GetMiningChainBlockHash() (string, error) {
+	// Temporarily remove hash and signature to compute the hash of the content
+	hash, hasHash := mb.bm[MiningChainBlockHashKey]
+	sig, hasSig := mb.bm[MiningChainBlockSignatureKey]
+	if hasHash {
+		delete(mb.bm, MiningChainBlockHashKey)
+	}
+	if hasSig {
+		delete(mb.bm, MiningChainBlockSignatureKey)
+	}
 
-// // GetBlockNumber retrieves the block number.
-// func (mb *MiningBlock) GetMiningChainBlockNumber() (int, error) {
-// 	bn, ok := mb.bm[MiningChainBlockNumberKey].(float64)
-// 	if !ok {
-// 		return 0, fmt.Errorf("block number not found or invalid")
-// 	}
-// 	return int(bn), nil
-// }
+	// Serialize the remaining map to CBOR
+	bc, err := cbor.Marshal(mb.bm, cbor.CanonicalEncOptions())
+	if err != nil {
+		// Restore the removed fields if serialization fails
+		if hasHash {
+			mb.bm[MiningChainBlockHashKey] = hash
+		}
+		if hasSig {
+			mb.bm[MiningChainBlockSignatureKey] = sig
+		}
+		return "", fmt.Errorf("failed to marshal block for hash: %v", err)
+	}
+
+	// Compute the hash (SHA3-256, as used in miningBlkEncode)
+	hb := util.CalculateHash(bc, "SHA3-256")
+	hashStr := util.HexToStr(hb)
+
+	// Restore the removed fields
+	if hasHash {
+		mb.bm[MiningChainBlockHashKey] = hash
+	}
+	if hasSig {
+		mb.bm[MiningChainBlockSignatureKey] = sig
+	}
+
+	return hashStr, nil
+}
+
+func (mb *MiningChain) UpdateMiningChainBlockSignature(dc didmodule.DIDCrypto) error {
+	// Get the hash of the block
+	hashStr, err := mb.GetMiningChainBlockHash()
+	if err != nil {
+		return fmt.Errorf("failed to get hash: %v", err)
+	}
+
+	// Convert the hash string to bytes for signing
+	hashBytes := util.StrToHex(hashStr)
+	if hashBytes == nil {
+		return fmt.Errorf("failed to convert hash to bytes")
+	}
+	// Sign the hash using the DIDCrypto object
+	sb, err := dc.PvtSign(hashBytes)
+	if err != nil {
+		return fmt.Errorf("failed to sign hash: %v", err)
+	}
+
+	// Convert the signature bytes to a hexadecimal string
+	sig := util.HexToStr(sb)
+
+	// Store the signature in the map (single signature, not a map of signatures)
+	mb.bm[MiningChainBlockSignatureKey] = sig
+
+	// Encode the block with the new signature
+	err = mb.miningBlkEncode()
+	if err != nil {
+		return fmt.Errorf("failed to encode block with new signature: %v", err)
+	}
+
+	return nil
+}
+
+// GetBlock returns the serialized block bytes.
+func (mb *MiningChain) GetMiningBlock() []byte {
+	return mb.bb
+}
+
+// GetBlockMap retrieves the block map.
+func (mb *MiningChain) GetMiningChainBlockMap() (map[string]interface{}, error) {
+	return mb.bm, nil
+}
+
+// GetBlockNumber retrieves the block number.
+func (mb *MiningChain) GetMiningChainBlockNumber() (uint64, error) {
+	val, ok := mb.bm[MiningChainBlockNumberKey]
+	if !ok {
+		return 0, fmt.Errorf("block number key not found")
+	}
+
+	switch v := val.(type) {
+	case float64:
+		if v < 0 || v != float64(uint64(v)) {
+			return 0, fmt.Errorf("block number is not a valid uint64: %v", v)
+		}
+		return uint64(v), nil
+	case int64:
+		if v < 0 {
+			return 0, fmt.Errorf("block number is negative: %v", v)
+		}
+		return uint64(v), nil
+	case uint64:
+		return v, nil
+	default:
+		return 0, fmt.Errorf("block number is not a number: %T", v)
+	}
+}
+
+func GetMiningChainID() string {
+	return RubixMiningChainID
+}
 
 // // GetHash retrieves the block hash.
 // func (mb *MiningBlock) GetHash() (string, error) {

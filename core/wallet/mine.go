@@ -2,10 +2,17 @@ package wallet
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	tkn "github.com/rubixchain/rubixgoplatform/token"
+	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
+
+const MiningChainBlockCountLimit = 100
 
 type MiningRecord struct {
 	MiningID     string `gorm:"column:mining_id"`
@@ -47,7 +54,7 @@ func (w *Wallet) FindLatestTokenLevelAndNumber() (MiningRecord, error) {
 	return result, nil
 }
 
-func CreatePledgeHistoryMap(creditDetails []model.PledgeHistory, miningTokenID, minerDID string) (map[string]interface{}, error) {
+func (w *Wallet) CreatePledgeHistoryMap(creditDetails []model.PledgeHistory, miningTokenID, minerDID string) (map[string]interface{}, error) {
 	if miningTokenID == "" || minerDID == "" {
 		return nil, fmt.Errorf("miningTokenID and minerDID must not be empty")
 	}
@@ -73,4 +80,121 @@ func CreatePledgeHistoryMap(creditDetails []model.PledgeHistory, miningTokenID, 
 	}
 
 	return result, nil
+}
+
+// getLatestBlock get latest block from the storage
+func (w *Wallet) GetLatestMiningChainBlock(token string) (*block.MiningChain, error) {
+	tt := tkn.MiningChainType
+	db := w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to get DB, invalid token type")
+		return nil, fmt.Errorf("Failed to get DB, invalid token type")
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(w.MiningChainKeyPrefix(token))), nil)
+	defer iter.Release()
+	if iter.Last() {
+		v := iter.Value()
+		blk := make([]byte, len(v))
+		copy(blk, v)
+		b := block.InitMiningBlock(blk, nil)
+		return b, nil
+	}
+	return nil, fmt.Errorf("failed to get mining chain latest block")
+}
+
+func (w *Wallet) AddMiningChainBlock(token string, miningChain *block.MiningChain) error {
+	opt := &opt.WriteOptions{
+		Sync: true,
+	}
+	tt := tkn.MiningChainType
+	db := w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to add chain block, invalid token type")
+		return fmt.Errorf("failed to get db")
+	}
+
+	// Get the latest block number for mining chain key
+	latestBlock, err := w.GetLatestMiningChainBlock(token)
+	var nextBlockNumber uint64
+
+	if err != nil || latestBlock == nil {
+		w.log.Warn("No existing mining chain block found, adding the first block")
+		nextBlockNumber = 1
+	} else {
+		latestBlockNumber, err := latestBlock.GetMiningChainBlockNumber()
+		if err != nil {
+			w.log.Error("Failed to get latest mining chain block number")
+			return fmt.Errorf("failed to get latest mining chain block number")
+		}
+		nextBlockNumber = latestBlockNumber + 1
+	}
+
+	key := w.MiningChainKey(token, nextBlockNumber)
+
+	db.l.Lock()
+	err = db.Put([]byte(key), miningChain.GetMiningBlock(), opt)
+	db.l.Unlock()
+
+	if err != nil {
+		w.log.Error("Failed to write mining chain block", "err", err)
+		return err
+	}
+	w.log.Info("Mining chain block added successfully with key:", key)
+	return nil
+}
+
+func (w *Wallet) MiningChainKeyPrefix(token string) string {
+	return fmt.Sprintf("mt-%s-", token)
+}
+
+func (w *Wallet) MiningChainKey(token string, blockNumber uint64) string {
+	return fmt.Sprintf("mt-%s-%010d", token, blockNumber)
+}
+
+func (w *Wallet) GetAllMiningChainBlocks(token string, startBlockNumber uint64) ([][]byte, uint64, error) {
+	tt := tkn.MiningChainType
+	db := w.getChainDB(tt)
+	if db == nil {
+		return nil, 0, fmt.Errorf("failed to get DB, invalid token type")
+	}
+	prefix := []byte(w.MiningChainKeyPrefix(token))
+	iter := db.NewIterator(util.BytesPrefix(prefix), nil)
+	defer iter.Release()
+
+	blks := make([][]byte, 0)
+	var nextBlockNumber uint64
+	count := 0
+
+	if startBlockNumber != 0 {
+		startKey := []byte(w.MiningChainKey(token, startBlockNumber))
+		if !iter.Seek(startKey) {
+			return nil, 0, nil // Start block not found, return empty result
+		}
+	} else {
+		if !iter.First() {
+			return nil, 0, nil // No blocks exist
+		}
+	}
+
+	for iter.Valid() && count < MiningChainBlockCountLimit {
+		key := string(iter.Key())
+		blockNumberStr := key[len(key)-10:]
+		blockNumber, err := strconv.ParseUint(blockNumberStr, 10, 64)
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid block number in key: %s", key)
+		}
+		v := iter.Value()
+		blk := make([]byte, len(v))
+		copy(blk, v)
+		blks = append(blks, blk)
+		count++
+		nextBlockNumber = blockNumber + 1
+		iter.Next()
+	}
+
+	if !iter.Valid() {
+		nextBlockNumber = 0 // No more blocks
+	}
+
+	return blks, nextBlockNumber, nil
 }

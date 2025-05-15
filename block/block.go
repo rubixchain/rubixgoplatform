@@ -808,14 +808,18 @@ func (b *Block) GetInitiatorSignature() *InitiatorSignature {
 	return &initiatorSign
 }
 
-// Fetch quorums' signature details from the given block
 func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
-	var quorumSignList []CreditSignature
 	s := b.bm[TCQuorumSignatureKey]
+	fmt.Println("Quorum signature list: ", s)
+	if quorumSignList, ok := s.([]CreditSignature); ok {
+		return quorumSignList, nil
+	}
 
+	var quorumSignList []CreditSignature
 	qrmSignListMap, ok := s.([]interface{})
+	fmt.Println("Quorum signature map is ", qrmSignListMap)
 	if !ok {
-		fmt.Println("not of type []interface{}")
+		fmt.Println("not of type []interface{} or []CreditSignature")
 		return nil, fmt.Errorf("failed to fetch quorums' signature information from block map")
 	}
 	for _, qrmSignMap := range qrmSignListMap {
