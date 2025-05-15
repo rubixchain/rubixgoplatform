@@ -190,6 +190,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIAddPeerDetailsFromExplorer, "POST", s.AuthHandle(s.APIAddPeerDetailsFromExplorer, false, s.AuthError, true))
 	s.AddRoute(setup.APIFindReadyToMineCredits, "POST", s.AuthHandle(s.APIFindReadyToMineCredits, false, s.AuthError, true))
 	s.AddRoute(setup.APIMineRBT, "POST", s.AuthHandle(s.APIMineRBT, false, s.AuthError, true))
+	s.AddRoute(setup.APIDumpMiningChain, "GET", s.AuthHandle(s.APIDumpMiningChain, true, s.AuthError, false))
 
 }
 

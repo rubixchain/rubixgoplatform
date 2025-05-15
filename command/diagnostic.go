@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -436,4 +437,56 @@ func (cmd *Command) releaseAllLockedTokens() {
 		return
 	}
 	cmd.log.Info("Locked Tokens released successfully Or No Locked Tokens found to be released")
+}
+
+// Dump mining chain
+func (cmd *Command) dumpMiningchain() {
+	blocks := make([]map[string]interface{}, 0)
+	blockID := ""
+	ds, err := cmd.c.DumpMiningChain()
+	if err != nil {
+		cmd.log.Error("Failed to dump mining chain", "err", err)
+		return
+	}
+	if !ds.Status {
+		cmd.log.Error("Failed to dump mining chain", "msg", ds.Message)
+		return
+	}
+	fmt.Println("ds.Blocks received at command is ", ds.Blocks)
+	for _, blk := range ds.Blocks {
+		b := block.InitMiningBlock(blk, nil)
+		if b != nil {
+			MiningBlockMap, err := b.GetMiningChainBlockMap()
+			blocks = append(blocks, MiningBlockMap)
+			MiningChainblockNumber, err := b.GetMiningChainBlockNumber()
+			if err != nil {
+				cmd.log.Error("Failed to get block number", "err", err)
+				return
+			}
+			blockID = strconv.FormatUint(MiningChainblockNumber, 10)
+			fmt.Println("MiningChainblockNumber", MiningChainblockNumber)
+			fmt.Println("blockID", blockID)
+			fmt.Println("ds.NextBlockID is ", ds.NextBlockID)
+
+		} else {
+			cmd.log.Error("Invalid block")
+		}
+	}
+	blockID = ds.NextBlockID
+	if ds.NextBlockID == "" {
+		fmt.Println("next block id is empty")
+	}
+	str, err := tcMarshal("", blocks)
+	if err != nil {
+		cmd.log.Error("Failed to dump token chain", "err", err)
+		return
+	}
+	f, err := os.Create("mining_chain.json")
+	if err != nil {
+		cmd.log.Error("Failed to dump token chain", "err", err)
+		return
+	}
+	f.WriteString(str)
+	f.Close()
+	cmd.log.Info("Mining chain dumped successfully!")
 }

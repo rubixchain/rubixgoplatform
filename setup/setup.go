@@ -97,6 +97,7 @@ const (
 	APIAddPeerDetailsFromExplorer       string = "/api/add-peer-details-from-explorer"
 	APIFindReadyToMineCredits           string = "/api/find-ready-to-mine-credits"
 	APIMineRBT                          string = "/api/mine-rbt"
+	APIDumpMiningChain                  string = "/api/dump-mining-chain"
 )
 
 // jwt.RegisteredClaims

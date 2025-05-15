@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -458,4 +459,26 @@ func (c *Core) GetFinalQuorumList(ql []string) ([]string, error) {
 	}
 	// Return finalQl
 	return finalQl, opError
+}
+
+func (c *Core) DumpMiningChain() *model.TCDumpReply {
+	fmt.Println("DumpMiningChain called at core")
+	ds := &model.TCDumpReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	fmt.Println("mining chain ID is ", block.GetMiningChainID())
+	blks, nextID, err := c.w.GetAllMiningChainBlocks(block.GetMiningChainID(), 0)
+	if err != nil {
+		ds.Message = "Failed to get mining chain blocks"
+		return ds
+	}
+	fmt.Println("DumpMiningChain got all blocks: ", blks)
+	fmt.Println("DumpMiningChain got nextID: ", nextID)
+	ds.Status = true
+	ds.Message = "Successfully got the mining chain"
+	ds.Blocks = blks
+	ds.NextBlockID = strconv.FormatUint(nextID, 10)
+	return ds
 }
