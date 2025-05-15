@@ -177,14 +177,18 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 
 	smartContractTokenJSON, err := c.ipfs.Cat(fetchSmartContractRequest.SmartContractToken)
 	if err != nil {
-		c.log.Error("Failed to get smart contract from network", "err", err)
+		errMsg := fmt.Sprintf("Failed to get smart contract from network: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
 	// Read the smart contract token JSON
 	smartContractTokenJSONBytes, err := io.ReadAll(smartContractTokenJSON)
 	if err != nil {
-		c.log.Error("Failed to read smart contract token from network", "err", err)
+		errMsg := fmt.Sprintf("Failed to read smart contract token from network: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
@@ -195,14 +199,18 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	var smartContractToken SmartContractToken
 	err = json.Unmarshal(smartContractTokenJSONBytes, &smartContractToken)
 	if err != nil {
-		c.log.Error("Failed to parse smart contract token", "err", err)
+		errMsg := fmt.Sprintf("Failed to parse smart contract token JSON: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
 	// Fetch and store the binary code file
 	binaryCodeFile, err := c.ipfs.Cat(smartContractToken.BinaryCodeHash)
 	if err != nil {
-		c.log.Error("Failed to fetch binary code file from network", "err", err)
+		errMsg := fmt.Sprintf("Failed to fetch binary code file from network: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 	defer binaryCodeFile.Close()
@@ -210,7 +218,9 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	binaryCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
 	err = os.MkdirAll(binaryCodeFilePath, 0755)
 	if err != nil {
-		c.log.Error("Failed to create binary code directory", "err", err)
+		errMsg := fmt.Sprintf("Failed to create binary code directory: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
@@ -219,20 +229,26 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	// Read the content of binaryCodeFile
 	binaryCodeContent, err := io.ReadAll(binaryCodeFile)
 	if err != nil {
-		c.log.Error("Failed to read binary code file", "err", err)
+		errMsg := fmt.Sprintf("Failed to read binary code file: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
 	// Write the content to binaryCodeFileDestPath
 	err = os.WriteFile(binaryCodeFileDestPath+".wasm", binaryCodeContent, 0644)
 	if err != nil {
-		c.log.Error("Failed to write binary code file", "err", err)
+		errMsg := fmt.Sprintf("Failed to write binary code file: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 	// Fetch and store the raw code file
 	rawCodeFile, err := c.ipfs.Cat(smartContractToken.RawCodeHash)
 	if err != nil {
-		c.log.Error("Failed to fetch raw code file from IPFS", "err", err)
+		errMsg := fmt.Sprintf("Failed to fetch raw code file from IPFS: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 	defer rawCodeFile.Close()
@@ -240,7 +256,9 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	rawCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
 	err = os.MkdirAll(rawCodeFilePath, 0755)
 	if err != nil {
-		c.log.Error("Failed to create raw code directory", "err", err)
+		errMsg := fmt.Sprintf("Failed to create raw code directory: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
@@ -249,27 +267,34 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	// Read the content of rawCodeFile
 	rawCodeContent, err := io.ReadAll(rawCodeFile)
 	if err != nil {
-		c.log.Error("Failed to read raw code file", "err", err)
+		errMsg := fmt.Sprintf("Failed to read raw code file: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 	loopExists := c.AnalyseCode(rawCodeContent)
 	if loopExists {
-		c.log.Error("Failed to fetch smart contract, Infinite loop exists in the given rust code")
-
+		errMsg := "Failed to fetch smart contract, Infinite loop exists in the given rust code"
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
 	// Write the content to rawCodeFileDestPath
 	err = os.WriteFile(rawCodeFileDestPath, rawCodeContent, 0644)
 	if err != nil {
-		c.log.Error("Failed to write raw code file", "err", err)
+		errMsg := fmt.Sprintf("Failed to write raw code file: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
 	// Fetch and store the Schema code file
 	schemaCodeFile, err := c.ipfs.Cat(smartContractToken.SchemaCodeHash)
 	if err != nil {
-		c.log.Error("Failed to fetch Schema code file from IPFS", "err", err)
+		errMsg := fmt.Sprintf("Failed to fetch Schema code file from IPFS: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 	defer schemaCodeFile.Close()
@@ -277,7 +302,9 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	schemaCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
 	err = os.MkdirAll(schemaCodeFilePath, 0755)
 	if err != nil {
-		c.log.Error("Failed to create Schema directory", "err", err)
+		errMsg := fmt.Sprintf("Failed to create Schema code directory: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
@@ -286,20 +313,26 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	// Read the content of schemaCodeFile
 	schemaCodeContent, err := io.ReadAll(schemaCodeFile)
 	if err != nil {
-		c.log.Error("Failed to read Schema code file", "err", err)
+		errMsg := fmt.Sprintf("Failed to read Schema code file: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
 	// Write the content to schemaCodeFileDestPath
 	err = os.WriteFile(schemaCodeFileDestPath+".json", schemaCodeContent, 0644)
 	if err != nil {
-		c.log.Error("Failed to write Schema code file", "err", err)
+		errMsg := fmt.Sprintf("Failed to write Schema code file: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
 	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, SchemaCodeHash: smartContractToken.SchemaCodeHash, ContractStatus: wallet.TokenIsFetched})
 	if err != nil {
-		c.log.Error("Failed to write smart contract token details to db", "err", err)
+		errMsg := fmt.Sprintf("Failed to write smart contract token details to db: %v", err)
+		c.log.Error(errMsg)
+		basicResponse.Message = errMsg
 		return basicResponse
 	}
 
