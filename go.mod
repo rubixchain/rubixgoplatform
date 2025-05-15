@@ -47,7 +47,7 @@ require (
 	github.com/multiformats/go-multihash v0.1.0 // indirect
 	github.com/natefinch/atomic v1.0.1
 	github.com/pierrec/lz4 v2.6.1+incompatible
-	github.com/stretchr/testify v1.8.3 // indirect
+	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/swaggo/files v1.0.0 // indirect
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/tyler-smith/go-bip32 v1.0.0
