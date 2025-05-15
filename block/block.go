@@ -680,8 +680,16 @@ func (b *Block) GetParentDetials(t string) (string, []string, error) {
 		return "", nil, fmt.Errorf("invalid token chain block, missing genesis block")
 	}
 	p := util.GetStringFromMap(gtm, GIParentIDKey)
-	gp := util.GetStringSliceFromMap(gtm, GIGrandParentIDKey)
-	return p, gp, nil
+	var grandPaas []string
+	grandPaasMap := util.GetFromMap(gtm, GIGrandParentIDKey)
+	if grandPaasMap != nil {
+		gpts := grandPaasMap.([]interface{})
+		for _, gptMap := range gpts {
+			gpt := gptMap.(string)
+			grandPaas = append(grandPaas, gpt)
+		}
+	}
+	return p, grandPaas, nil
 }
 
 func (b *Block) GetTokenDetials(t string) (int, int, error) {

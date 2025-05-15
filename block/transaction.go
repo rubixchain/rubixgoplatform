@@ -125,8 +125,8 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 			}
 		} else {
 			bid, err = b.GetBlockID(tt.Token)
-			fmt.Printf("failed to get block ID for token %s: %v\n", tt.Token, err)
 			if err != nil {
+				fmt.Printf("failed to get block ID for token %s: %v\n", tt.Token, err) //TODO: Remove the print statement after testing
 				return nil
 			}
 		}

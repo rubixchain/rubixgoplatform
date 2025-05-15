@@ -306,8 +306,6 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 			nextBlkID = blkID
 		}
 	}
-	// fmt.Println("****blks*****", blks)
-	fmt.Println("nextBlkID is:", nextBlkID)
 	return blks, nextBlkID, nil
 }
 

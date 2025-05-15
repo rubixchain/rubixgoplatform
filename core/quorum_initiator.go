@@ -174,6 +174,7 @@ type UpdatePreviousQuorums struct {
 	TokenID         string
 	CurrentEpoch    uint64
 	TokenType       int
+	ParentTokenID   string
 }
 
 type CreditSignature struct {
@@ -656,24 +657,54 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		//Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
 		for _, tokeninfo := range ti {
 			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
+			//If it is a part token which is created newly either from a whole token or from a part token,we should get the previous quorums as the quorums of the burnt token
+			latestTokenBlockNumber, _ := b.GetBlockNumber(tokeninfo.Token)
+			var previousQuorumDIDs []string
+			if latestTokenBlockNumber == 0 && tokeninfo.TokenType == c.TokenType(PartString) {
+				//get the quorums of the burnt token
+				parentTokenID, grandParentTokens, err := b.GetParentDetials(tokeninfo.Token)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("unable to fetch parent details for token: %v, err: %v", tokeninfo.Token, err)
+				}
+				var parentTokenType int
+				if grandParentTokens != nil {
+					parentTokenType = c.TokenType(PartString)
+				} else {
+					parentTokenType = c.TokenType(RBTString)
+				}
+				fmt.Println("parentTokeType is:", parentTokenType) //TODO:Remove Print statement after testing
+				latestBlockOfParentToken := c.w.GetLatestTokenBlock(parentTokenID, parentTokenType)
+				if latestBlockOfParentToken == nil {
+					return nil, nil, nil, fmt.Errorf("failed to get latest block of parent token: %v", parentTokenID)
+				}
+				previousBlockID, err := latestBlockOfParentToken.GetPrevBlockID(parentTokenID) //This will be the previous block of the burnt block of the parent token
+				if err != nil {
+					c.log.Error("Failed to get previous block ID for token: ", parentTokenID, "err: ", err)
+					return nil, nil, nil, err
+				}
+				previousBlockBytes, err := c.w.GetTokenBlock(parentTokenID, parentTokenType, previousBlockID)
+				if err != nil {
+					c.log.Error("Failed to get previous block for token: ", parentTokenID, "err: ", err)
+					return nil, nil, nil, err
+				}
+				previousBlock := block.InitBlock(previousBlockBytes, nil)
+				previousQuorumDIDs, err = previousBlock.GetSigner()
+				if err != nil {
+					c.log.Error("Failed to get the quorums for the block: ", previousBlock, "err: ", err)
+					return nil, nil, nil, err
+				}
 
-			blockHeight, err := b.GetBlockNumber(tokeninfo.Token)
-			if err != nil {
-				c.log.Error("failed to get latest block height of token ", tokeninfo.Token)
+			} else {
+				previousQuorumDIDs, err = b.GetSigner()
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
+				}
+				fmt.Println("Previous quorum DIDs", previousQuorumDIDs) //TODO:Remove Print statement after testing
+
 			}
 
-			// if latest block is genesis block of a whole token, then the signer(s) is(are) advisory node(s), not quorum(s)
-			// this is the case of all migrated RBTs
-			if blockHeight == 0 && tokeninfo.TokenValue == 1.0 {
-				continue
-			}
-			previousQuorumDIDs, err := b.GetSigner()
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
-			}
-
-			//if signer is similar to sender did skip this token, as the block is the genesis block
-			if previousQuorumDIDs[0] == sc.GetSenderDID() {
+			//if signer is similar to sender did skip this token, as the block is the genesis block of the newly generated token(through generate test RBT)
+			if previousQuorumDIDs[0] == sc.GetSenderDID() && tokeninfo.TokenType == c.TokenType(RBTString) {
 				continue
 			}
 
@@ -720,6 +751,52 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				updatePrevQuorums.TransactionID = b.GetTid()
 				updatePrevQuorums.TransactionType = cr.Type
 				updatePrevQuorums.TokenType = tokeninfo.TokenType
+				/*If any of the trans token is a newly split part token,then previous quorums which wuould have validated
+				the parent token of the current part token should get an updated token state hashes so that they can unpledge their tokens.*/
+				if tokeninfo.TokenType == c.TokenType(PartString) {
+					//get the latest blocknumber of the token
+					latestBlock := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
+					latestBlockNumber, err := latestBlock.GetBlockNumber(tokeninfo.Token)
+					if err != nil {
+						c.log.Error("Failed to get latest block number for token: ", tokeninfo.Token, "err: ", err)
+						return nil, nil, nil, err
+					}
+					if latestBlockNumber == 0 { //if latest block number is 0, then the token is a newly split token either from a whole token or from an another part token
+						parentTokenID, grandParentTokens, err := latestBlock.GetParentDetials(tokeninfo.Token)
+						updatePrevQuorums.ParentTokenID = parentTokenID //previous quorums validated parent token.
+						//Parent token Type is needed to get the latest block of the parent token. Even if parent token is of Mined token type, it is fine to take tokenType as RBTString because tcsprefix will be the same for whole tokens or mined token.
+						var parentTokenType int
+						if grandParentTokens != nil {
+							parentTokenType = c.TokenType(PartString)
+						} else {
+							parentTokenType = c.TokenType(RBTString)
+						}
+						//latestBlockOfParentToken will be the burnt block of the parent token
+						latestBlockOfParentToken := c.w.GetLatestTokenBlock(updatePrevQuorums.ParentTokenID, parentTokenType) //This will be the burnt block of the parent token
+						if latestBlockOfParentToken == nil {
+							c.log.Error("Failed to get latest block of parent token: ", updatePrevQuorums.ParentTokenID, "err: ", err)
+							return nil, nil, nil, err
+						}
+						previousBlockID, err := latestBlockOfParentToken.GetPrevBlockID(updatePrevQuorums.ParentTokenID) //This will be the previous block of the burnt block of the parent token
+						if err != nil {
+							c.log.Error("Failed to get previous block ID for token: ", updatePrevQuorums.ParentTokenID, "err: ", err)
+							return nil, nil, nil, err
+						}
+						previousBlockBytes, err := c.w.GetTokenBlock(updatePrevQuorums.ParentTokenID, parentTokenType, previousBlockID)
+						if err != nil {
+							c.log.Error("Failed to get previous block for token: ", updatePrevQuorums.ParentTokenID, "err: ", err)
+							return nil, nil, nil, err
+						}
+						previousBlock := block.InitBlock(previousBlockBytes, nil)
+						transactionIDOfPreviousBlock := previousBlock.GetTid()
+						updatePrevQuorums.TransactionID = transactionIDOfPreviousBlock
+						if err != nil {
+							c.log.Error("Failed to get parent details for token: ", tokeninfo.Token, "err: ", err)
+							return nil, nil, nil, err
+						}
+					}
+
+				}
 				PrevQuormEpochUpdateErr := previousQuorumPeer.SendJSONRequest("POST", APIUpdateCreditsAndWeekEpoch, nil, updatePrevQuorums, nil, true)
 				if PrevQuormEpochUpdateErr != nil {
 					c.log.Error("Unable to update epoch on previous quorum for credits, err: ", PrevQuormEpochUpdateErr)

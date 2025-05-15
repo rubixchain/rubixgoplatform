@@ -1637,7 +1637,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			if strings.Contains(readErr, "no records found") {
 				c.log.Info("No pledge history")
 			}
-			c.log.Error("Failed to check token exist", "err", err)
+			c.log.Error("Failed to check token exist", "tokenID", ur.NewlyMinedTokenID, "err", err)
 		}
 		if !exist {
 			tokenID := strings.TrimSpace(ur.NewlyMinedTokenID)
@@ -1649,7 +1649,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 			transTokenValue := float64(1)
-			// c.pledgeHistory = []model.PledgeHistory{}
 			newPledge := model.PledgeHistory{
 				QuorumDID:          did,
 				TransactionID:      ur.TransactionID,
@@ -1674,67 +1673,62 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	// c.pledgeHistory = []model.PledgeHistory{}
 	for _, tokenID := range b.GetTransTokens() {
-		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, tokenID)
+		exist, err := c.w.CheckTokenExistInPledgeHistory(tokenID, ur.TransactionID)
 		if err != nil {
-			readErr := fmt.Sprint(err)
-			if strings.Contains(readErr, "no records found") {
-				c.log.Info("No pledge history")
-			}
-			c.log.Error("Failed to check token exist", "err", err)
+			c.log.Error("Failed to check token exist", "tokenID", tokenID, "transID", ur.TransactionID, "err", err)
 		}
-		if exist {
-			continue
-		}
-		tokenID = strings.TrimSpace(tokenID)
-		tokenType := b.GetTokenType(tokenID)
+		if !exist {
+			tokenID = strings.TrimSpace(tokenID)
+			tokenType := b.GetTokenType(tokenID)
 
-		blockID, err := b.GetBlockID(tokenID)
-		if err != nil {
-			c.log.Error("Failed to get block ID for token: ", tokenID)
-			crep.Message = "Failed to get block ID PledgeHistory"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		b, err := c.getFromIPFS(tokenID)
-		if err != nil {
-			c.log.Error("failed to get parent token details from ipfs", "err", err, "token", tokenID)
-
-		}
-		iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
-
-		tt := token.RBTTokenType
-		transTokenValue := float64(1)
-		if !iswholeToken {
-			blk := util.StrToHex(string(b))
-			rb, err := rac.InitRacBlock(blk, nil)
+			blockID, err := b.GetBlockID(tokenID)
 			if err != nil {
-				c.log.Error("invalid token, invalid rac block", "err", err)
+				c.log.Error("Failed to get block ID for token: ", tokenID)
+				crep.Message = "Failed to get block ID PledgeHistory"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			b, err := c.getFromIPFS(tokenID)
+			if err != nil {
+				c.log.Error("failed to get parent token details from ipfs", "err", err, "token", tokenID)
 
 			}
-			tt = rac.RacType2TokenType(rb.GetRacType())
-			if c.TokenType(PartString) == tt {
-				transTokenValue = rb.GetRacValue()
-			}
-		}
-		c.log.Debug("transtoken value", transTokenValue)
+			iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
 
-		//TODO: Fix the function to get peer who pinned epoch for a token
-		// weekPassed := util.GetWeeksPassed()
-		//list, pinCheckErr := c.getPeerWhoPinTokenEpoch(tokenID, weekPassed)
-		// if pinCheckErr != nil {
-		// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
-		// }
-		newPledge := model.PledgeHistory{
-			QuorumDID:          did,
-			TransactionID:      ur.TransactionID,
-			TransactionType:    ur.TransactionType,
-			TransferTokenID:    tokenID,
-			TransferTokenType:  tokenType,
-			TransferTokenValue: transTokenValue,
-			TransferBlockID:    blockID,
-			Epoch:              uint64(ur.TransactionEpoch),
-			TokenCredit:        0,
+			tt := token.RBTTokenType
+			transTokenValue := float64(1)
+			if !iswholeToken {
+				blk := util.StrToHex(string(b))
+				rb, err := rac.InitRacBlock(blk, nil)
+				if err != nil {
+					c.log.Error("invalid token, invalid rac block", "err", err)
+
+				}
+				tt = rac.RacType2TokenType(rb.GetRacType())
+				if c.TokenType(PartString) == tt {
+					transTokenValue = rb.GetRacValue()
+				}
+			}
+			c.log.Debug("transtoken value", transTokenValue) //TODO:Remove this print statement after testing
+
+			//TODO: Fix the function to get peer who pinned epoch for a token
+			// weekPassed := util.GetWeeksPassed()
+			//list, pinCheckErr := c.getPeerWhoPinTokenEpoch(tokenID, weekPassed)
+			// if pinCheckErr != nil {
+			// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
+			// }
+			newPledge := model.PledgeHistory{
+				QuorumDID:          did,
+				TransactionID:      ur.TransactionID,
+				TransactionType:    ur.TransactionType,
+				TransferTokenID:    tokenID,
+				TransferTokenType:  tokenType,
+				TransferTokenValue: transTokenValue,
+				TransferBlockID:    blockID,
+				Epoch:              uint64(ur.TransactionEpoch),
+				TokenCredit:        0,
+			}
+			c.pledgeHistory = append(c.pledgeHistory, newPledge)
 		}
-		c.pledgeHistory = append(c.pledgeHistory, newPledge)
 	}
 	//TODO
 	//Even if there is any error, the token chain is already getting synced. The quorums pin the hash of (TokenID + epoch), the epoch being the week
@@ -2098,13 +2092,25 @@ func (c *Core) updateCreditsAndEpochPin(req *ensweb.Request) *ensweb.Result {
 	c.log.Warn("Next block Epoch updating for token: ", UpdateCreditsAndEpochPin.TokenID)               // TODO: Change log WARN to DEBUG/INFO
 	c.log.Warn("Next block Epoch updating for transactionID: ", UpdateCreditsAndEpochPin.TransactionID) // TODO: Change log WARN to DEBUG/INFO
 	fmt.Println("Update Epoch struct is ", UpdateCreditsAndEpochPin)
-	UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateCreditsAndEpochPin.TokenID, UpdateCreditsAndEpochPin.TransactionID, UpdateCreditsAndEpochPin.TransactionType, UpdateCreditsAndEpochPin.CurrentEpoch, UpdateCreditsAndEpochPin.TokenType)
-	if UpdateEpochErr != nil {
-		c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)
+	if UpdateCreditsAndEpochPin.ParentTokenID != "" {
+		c.log.Warn("Next block Epoch updating for Parent token: ", UpdateCreditsAndEpochPin.ParentTokenID) // TODO: Change log WARN to DEBUG/INFO
+		UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateCreditsAndEpochPin.ParentTokenID, UpdateCreditsAndEpochPin.TransactionID, UpdateCreditsAndEpochPin.TransactionType, UpdateCreditsAndEpochPin.CurrentEpoch, UpdateCreditsAndEpochPin.TokenType)
+		if UpdateEpochErr != nil {
+			c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)
+		}
+	} else {
+		UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateCreditsAndEpochPin.TokenID, UpdateCreditsAndEpochPin.TransactionID, UpdateCreditsAndEpochPin.TransactionType, UpdateCreditsAndEpochPin.CurrentEpoch, UpdateCreditsAndEpochPin.TokenType)
+		if UpdateEpochErr != nil {
+			c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)
+		}
 	}
 	//Update week epoch pins
 	currentWeek := util.GetWeeksPassed()
 	peers, err := c.getPeerWhoPinTokenEpoch(UpdateCreditsAndEpochPin.TokenID, currentWeek)
+	if err != nil {
+		c.log.Error("Failed to get peers who pin token epoch", "err", err)
+		return c.l.RenderJSON(req, struct{}{}, http.StatusOK)
+	}
 	tokenIsPinned := false
 	for _, peer := range peers {
 		if peer == c.peerID {
