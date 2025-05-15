@@ -43,78 +43,14 @@ func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) 
 	if pledgeHistoryReadErr != nil {
 		readErr := fmt.Sprint(pledgeHistoryReadErr)
 		if strings.Contains(readErr, "no records found") {
-			w.log.Info("No pledge history")
-			return false, pledgeHistoryReadErr
+			w.log.Info("No pledge history for tokenID", tokenID, "transID", transID)
+			return false, nil
 		}
-		w.log.Error("Failed to read pledge history", "err", pledgeHistoryReadErr)
+		w.log.Error("Failed to read pledge history", "tokenID", tokenID, "transID", transID, "err", pledgeHistoryReadErr)
 		return false, pledgeHistoryReadErr
-	} else {
-		return true, nil
 	}
+	return true, nil
 }
-
-// func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string) (map[string]TokenInfo, error) {
-// 	var pledges []PledgeHistory
-// 	tokenDetails := make(map[string]TokenInfo)
-
-// 	// Query the database for records matching the given QuorumDID
-// 	err := w.s.Read(PledgeHistoryTable, &pledges, "quorum_did=? and token_credit_status=?", quorumDID, 0)
-// 	if err != nil {
-// 		if strings.Contains(fmt.Sprint(err), "no records found") {
-// 			w.log.Info("No pledge history found for given QuorumDID", "quorumDID", quorumDID)
-// 			return nil, nil // Return nil if no records are found
-// 		}
-// 		w.log.Error("Failed to read pledge history", "quorumDID", quorumDID, "err", err)
-// 		return nil, err
-// 	}
-
-// 	// Iterate over the results and collect token details
-// 	for _, pledge := range pledges {
-// 		tokenDetails[pledge.TransferTokenID] = TokenInfo{
-// 			TokenType:           pledge.TransferTokenType,
-// 			TransferBlockNumber: uint64(pledge.CurrentBlockNumber),
-// 			TransactionID:       pledge.TransactionID,
-// 			TransactionEpoch:    pledge.Epoch,
-// 			TransferBlockID:     pledge.TransferBlockID,
-// 		}
-// 	}
-
-//		return tokenDetails, nil
-//	}
-// func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus int) (map[string][]TokenInfo, error) {
-// 	var pledges []PledgeHistory
-// 	tokenDetails := make(map[string][]TokenInfo) // Map with slice of TokenInfo
-
-// 	// Query the database for records matching the given QuorumDID
-// 	err := w.s.Read(PledgeHistoryTable, &pledges, "quorum_did=? and token_credit_status=?", quorumDID, tokenCreditStatus)
-// 	if err != nil {
-// 		if strings.Contains(fmt.Sprint(err), "no records found") {
-// 			w.log.Info("No pledge history found for given QuorumDID", "quorumDID", quorumDID)
-// 			return nil, nil // Return nil if no records are found
-// 		}
-// 		w.log.Error("Failed to read pledge history", "quorumDID", quorumDID, "err", err)
-// 		return nil, err
-// 	}
-
-// 	// Iterate over the results and group TokenInfo by TransferTokenID
-// 	for _, pledge := range pledges {
-// 		tokenInfo := TokenInfo{
-// 			TokenType:            pledge.TransferTokenType,
-// 			TransactionID:        pledge.TransactionID,
-// 			TransactionEpoch:     pledge.Epoch,
-// 			TransferBlockID:      pledge.TransferBlockID,
-// 			TransTokenValue:      pledge.TransferTokenValue,
-// 			TokenCredit:          pledge.TokenCredit,
-// 			TokenCreditStatus:    pledge.TokenCreditStatus,
-// 			LatestTokenStateHash: pledge.LatestTokenStateHash,
-// 		}
-
-// 		// Append to the slice of TokenInfo for this TransferTokenID
-// 		tokenDetails[pledge.TransferTokenID] = append(tokenDetails[pledge.TransferTokenID], tokenInfo)
-// 	}
-
-// 	return tokenDetails, nil
-// }
 
 // New GetTokenDetailsByQuorumDid function below
 func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus int) ([]model.PledgeHistory, error) {
@@ -293,6 +229,65 @@ func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transa
 	}
 	return nil
 }
+
+/*This is the updated function, If we have time we can test and use this function instead of above one.
+func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch uint64, tokenType int) error {
+	var pledgeHistoryRecords  []model.PledgeHistory
+	fmt.Println("tokenID:", tokenID, "transactionID:", transactionID, "transactionType:", transactionType, "epoch:", epoch, "tokenType:", tokenType)
+	err := w.s.Read(PledgeHistoryTable, &pledgeHistoryRecords, "transfer_tokens_id = ? AND transaction_id=?", tokenID, transactionID)
+	if err != nil {
+		fmt.Println("Error reading pledge history record:", err)
+		return err
+	}
+	if pledgeHistoryRecords.TransferTokenID == "" {
+		w.log.Error("no record found in Pledge history table for the token:", tokenID)
+		return fmt.Errorf("no record found in Pledge history table for the token")
+	}
+
+	// Check if record already has values for NextBlockEpoch or TokenCredit
+	if pledgeHistoryRecords.NextBlockEpoch > 0 || pledgeHistoryRecords.TokenCredit > 0 {
+		return nil
+	}
+
+	pledgeHistoryRecords.NextBlockEpoch = epoch
+
+	// Fetch the latest block for the token
+	latestBlock := w.GetLatestTokenBlock(pledgeHistoryRecords.TransferTokenID, tokenType)
+
+	if pledgeHistoryRecords.TransactionType == 1 {
+		var tokenCreditFloat float64
+		if latestBlock != nil && latestBlock.GetMinerDID() != "" {
+			// Mining quorum: 4x credits
+			tokenCreditFloat = float64(epoch-pledgeHistoryRecords.Epoch) * float64(pledgeHistoryRecords.TransferTokenValue) * 15 * 4
+		} else {
+			// Normal quorum
+			tokenCreditFloat = float64(epoch-pledgeHistoryRecords.Epoch) * float64(pledgeHistoryRecords.TransferTokenValue) * 15
+		}
+		tokenCreditsForEachQuorum := tokenCreditFloat / 5
+		pledgeHistoryRecords.TokenCredit = uint64(tokenCreditsForEachQuorum)
+
+	} else if pledgeHistoryRecords.TransactionType == 2 {
+		var tokenCreditFloat float64
+		if latestBlock != nil && latestBlock.GetMinerDID() != "" {
+			// Mining quorum: 4x credits
+			tokenCreditFloat = float64(epoch-pledgeHistoryRecords.Epoch) * float64(pledgeHistoryRecords.TransferTokenValue) * 4
+		} else {
+			// Normal quorum
+			tokenCreditFloat = float64(epoch-pledgeHistoryRecords.Epoch) * float64(pledgeHistoryRecords.TransferTokenValue)
+		}
+		tokenCreditsForEachQuorum := tokenCreditFloat / 5
+		pledgeHistoryRecords.TokenCredit = uint64(tokenCreditsForEachQuorum)
+	}
+
+	updateErr := w.s.Update(PledgeHistoryTable, pledgeHistoryRecords, "transfer_tokens_id = ? and transaction_id=?", pledgeHistoryRecords.TransferTokenID, pledgeHistoryRecords.TransactionID)
+	if updateErr != nil {
+		fmt.Println("Epoch updation failed for token: ", pledgeHistoryRecords.TransferTokenID, "Error:", updateErr)
+		return updateErr
+	}
+
+	return nil
+}
+*/
 
 func (w *Wallet) StoreCredit(transactionID string, quorumDID string, pledgeInfo []*PledgeInformation) error {
 	pledgeInfoBytes, err := json.Marshal(pledgeInfo)

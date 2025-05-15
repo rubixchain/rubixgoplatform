@@ -44,7 +44,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		//Get the peers from week epoch
 		var peers []string
 		currentWeek := util.GetWeeksPassed()
-		peers, err = c.getPeerWhoPinTokenEpoch(tokenInfo.TransferTokenID, currentWeek-1)
+		peers, err = c.getPeerWhoPinTokenEpoch(tokenInfo.TransferTokenID, currentWeek)
 		if err != nil {
 			c.log.Error("Error getting peers for token: ", tokenInfo.TransferTokenID, "err", err)
 			return fmt.Errorf("failed to get peers for token %s: %v", tokenInfo.TransferTokenID, err)
