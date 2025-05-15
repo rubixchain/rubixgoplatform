@@ -16,7 +16,7 @@ type FunctionInfo struct {
 	CallNodes []*sitter.Node
 }
 
-func (c *Core) AnalyseCode(code []byte) error {
+func AnalyseCode(code []byte) error {
 	// Initialize parser
 	parser := sitter.NewParser()
 	parser.SetLanguage(rust.GetLanguage())

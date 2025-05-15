@@ -203,7 +203,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to read raw code file for analysing", nil)
 	}
 	s.log.Info("Analyzing code for potential infinite loops and recursion")
-	err = s.c.AnalyseCode(code)
+	err = core.AnalyseCode(code)
 	if err != nil {
 		binaryCodeDestFile.Close()
 		codeFile.Close()

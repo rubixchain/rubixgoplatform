@@ -273,7 +273,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		return basicResponse
 	}
 	c.log.Info("Analyzing code for potential infinite loops and recursion before fetching smart contract")
-	err = c.AnalyseCode(rawCodeContent)
+	err = AnalyseCode(rawCodeContent)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to fetch smart contract, %v", err)
 		c.log.Error(errMsg)
