@@ -420,9 +420,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Error("Failed to get required quorums")
 		return nil, nil, nil, fmt.Errorf("failed to get required quorums")
 	}
-	// }
-	fmt.Println("Quorum list is:", cr.QuorumList)
-	fmt.Println("ql from GetQuorum function is", ql)
 	// TODO: Handle below
 	var finalQl []string
 	var errFQL error
@@ -432,7 +429,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("unable to get consensus from quorum(s). err: ", errFQL)
 			return nil, nil, nil, errFQL
 		}
-		fmt.Println("finalQl is:", finalQl)
 		cr.QuorumList = finalQl
 		if len(finalQl) < MinQuorumRequired {
 			c.log.Error("quorum(s) are unavailable for this trnx")
@@ -1742,9 +1738,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 
-		//Miner computes the new token state hash
-		fmt.Println("Mining tokenID is", cr.MiningTokenID)
-
 		blockID, err := nb.GetMinedTokenBlockID(cr.MiningTokenID)
 		if err != nil {
 			c.log.Error("not able to get blockID", "err", err)
@@ -1771,7 +1764,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		fmt.Println("Mining ID is ", tokendetails.TransactionID)
-		fmt.Println("New tokenID is ", tokendetails.TokenID)
+		fmt.Println("Mined tokenID is ", tokendetails.TokenID)
 		tt := token.MiningTokenType
 		if c.testNet {
 			tt = token.TestMiningTokenType
@@ -1853,8 +1846,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// 	PledgeHistory: sc.GetTokenCreditsDetails(),
 		// }
 
-		MiningIDreader := bytes.NewReader([]byte(block.GetMiningChainID()))
-		RubixMiningChainID, err := c.ipfs.Add(MiningIDreader, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		// MiningIDreader := bytes.NewReader([]byte(block.GetMiningChainID()))
+		// RubixMiningChainID, err := c.ipfs.Add(MiningIDreader, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 
 		// peerForMiningChainSync, err := c.getPeer(AddressForMiningChainSync, "")
 		// if err != nil {
@@ -1867,11 +1860,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		tokenLevel, tokenNumber, err := nb.GetTokenLevelAndNumberFromGenesisBlock()
 		epoch := nb.GetEpoch()
 		creditDetails, err := c.w.CreatePledgeHistoryMap(sc.GetTokenCreditsDetails(), cr.MiningTokenID, cr.MiningInfo.MinerDid)
-		fmt.Println("Credit details is ", creditDetails)
-		fmt.Println("RUBIX MINING CHAIN ID is", RubixMiningChainID)
-		fmt.Println("Epoch is ", epoch)
-		fmt.Println("Token level is ", tokenLevel)
-		fmt.Println("Token number is ", tokenNumber)
 		if err != nil {
 			c.log.Error("Failed to create pledge history map for mining chain", err)
 			return nil, nil, nil, err
@@ -1881,7 +1869,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Failed to get the quorum signature list for mining chain")
 		}
 
-		latestBlock, err := c.w.GetLatestMiningChainBlock(RubixMiningChainID)
+		latestBlock, err := c.w.GetLatestMiningChainBlock(block.GetMiningChainID())
 		var blockNumber uint64
 		if latestBlock == nil {
 			blockNumber = 1 // First block
@@ -1901,7 +1889,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				MinerDID:         cr.MiningInfo.MinerDid,
 				TokenID:          cr.MiningTokenID,
 				TokenLevel:       tokenLevel,
-				TokenNumber:      0,
+				TokenNumber:      tokenNumber,
 				CreditDetails:    creditDetails,
 				PledgeDetails:    pledgeTokenDetails,
 				QuorumSignature:  quorumSignatures,
@@ -1910,9 +1898,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			},
 		}
 
-		//Add signing of new mining chain block
-		//Add Mining Chain Block to mining chain
-		// Create and add mining chain block
 		mb := block.MiningChain{}
 		var ctcb map[string]*block.MiningChain
 		miningBlock := mb.CreateMiningChainBlock(ctcb, miningInfo)
@@ -1921,62 +1906,50 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 
-		fmt.Println("Mining block is created.........")
-
-		// Add signing of mining chain block
-		// DIDCrypto, err := c.SetupDID(cr.ReqID, cr.MiningInfo.MinerDid)
-		// if err != nil {
-		// 	c.log.Error("Failed to setup DID crypto", "err", err)
-		// 	return nil, nil, nil, err
-		// }
-
 		err = miningBlock.UpdateMiningChainBlockSignature(dc)
 		if err != nil {
 			c.log.Error("Failed to mine, failed to update signature", "err", err)
 			return nil, nil, nil, err
 		}
 
-		fmt.Println("Mining block is signed.........")
-
 		// Add mining chain block to mining chain
-		err = c.w.AddMiningChainBlock(RubixMiningChainID, miningBlock)
+		err = c.w.AddMiningChainBlock(block.GetMiningChainID(), miningBlock)
 		if err != nil {
 			c.log.Error("Failed to add mining chain block", "err", err)
 			return nil, nil, nil, err
 		}
 
-		blocks := make([]map[string]interface{}, 0)
-		var MiningblockIDNumber uint64
-		for {
-			MiningChainBytes, nextBlock, err := c.w.GetAllMiningChainBlocks(RubixMiningChainID, 0)
-			fmt.Println("Mining chain bytes is ", MiningChainBytes)
-			fmt.Println("next block is ", nextBlock)
-			if MiningChainBytes == nil {
-				c.log.Error("Failed to get latest mining chain block")
-				return nil, nil, nil, err
-			}
-			for _, blk := range MiningChainBytes {
-				b := block.InitMiningBlock(blk, nil)
-				if b != nil {
-					MiningBlockMap, err := b.GetMiningChainBlockMap()
-					blocks = append(blocks, MiningBlockMap)
-					// Update MiningblockIDNumber with the block's number
-					blockNumber, err := b.GetMiningChainBlockNumber()
-					if err != nil {
-						c.log.Error("Failed to get block number", "err", err)
-						return nil, nil, nil, err
-					}
-					MiningblockIDNumber = blockNumber
-					blockID = strconv.FormatUint(MiningblockIDNumber, 10) // Set blockID for each block
-					fmt.Println("Next Block number in Mining chain is ", MiningblockIDNumber)
-				} else {
-					c.log.Error("Invalid block")
-				}
-			}
-			if nextBlock == 0 {
-				break
-			}
-		}
+		// TODO : Remove below fetching of all mining chain
+
+		// blocks := make([]map[string]interface{}, 0)
+		// var MiningblockIDNumber uint64
+		// for {
+		// 	MiningChainBytes, nextBlock, err := c.w.GetAllMiningChainBlocks(block.GetMiningChainID(), 0)
+		// 	if MiningChainBytes == nil {
+		// 		c.log.Error("Failed to get latest mining chain block")
+		// 		return nil, nil, nil, err
+		// 	}
+		// 	for _, blk := range MiningChainBytes {
+		// 		b := block.InitMiningBlock(blk, nil)
+		// 		if b != nil {
+		// 			MiningBlockMap, err := b.GetMiningChainBlockMap()
+		// 			blocks = append(blocks, MiningBlockMap)
+		// 			// Update MiningblockIDNumber with the block's number
+		// 			blockNumber, err := b.GetMiningChainBlockNumber()
+		// 			if err != nil {
+		// 				c.log.Error("Failed to get block number", "err", err)
+		// 				return nil, nil, nil, err
+		// 			}
+		// 			MiningblockIDNumber = blockNumber
+		// 			blockID = strconv.FormatUint(MiningblockIDNumber, 10) // Set blockID for each block
+		// 		} else {
+		// 			c.log.Error("Invalid block")
+		// 		}
+		// 	}
+		// 	if nextBlock == 0 {
+		// 		break
+		// 	}
+		// }
 
 		// err = c.publishMiningdetails(miningRecord)
 		// if err != nil {
@@ -2621,7 +2594,6 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			Hash:        signData,
 			SignType:    minerSignType,
 		}
-		fmt.Println("token credit details", sc.GetTokenCreditsDetails())
 		miningGensisBlock := &block.GenesisBlock{
 			Type: block.TokenMinedType,
 			Info: []block.GenesisTokenInfo{

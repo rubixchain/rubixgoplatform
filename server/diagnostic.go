@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -203,7 +202,6 @@ func (s *Server) APIReleaseAllLockedTokens(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIDumpMiningChain(req *ensweb.Request) *ensweb.Result {
-	fmt.Println("Dump Mining Chain called at server")
 	drep := s.c.DumpMiningChain()
 	return s.RenderJSON(req, drep, http.StatusOK)
 }

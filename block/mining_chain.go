@@ -19,23 +19,23 @@ const (
 )
 
 const (
-	MiningChainBlockNumberKey    string = "1"
-	MiningChainBlockHashKey      string = "2"
-	MiningChainBlockSignatureKey string = "3"
-	MiningChainBlockInfoKey      string = "4"
+	MiningChainBlockNumberKey    string = "Block_number"
+	MiningChainBlockHashKey      string = "Block_hash"
+	MiningChainBlockSignatureKey string = "Block_sign"
+	MiningChainBlockInfoKey      string = "Block_info"
 )
 
 const (
-	MIMiningIDKey              string = "1"
-	MIMinerDID                 string = "2"
-	MIMinedTokenIDKey          string = "3"
-	MIMinedTokenLevelKey       string = "4"
-	MIMinedTokenNumberKey      string = "5"
-	MICreditDeatilsKey         string = "6"
-	MIPledgeDetailsKey         string = "7"
-	MIMiningQuorumSignatureKey string = "8"
-	MIEpochKey                 string = "9"
-	MIPreviousMiningIDKey      string = "10"
+	MIMiningIDKey              string = "Mining_ID"
+	MIMinerDID                 string = "Miner_DID"
+	MIMinedTokenIDKey          string = "TokenID"
+	MIMinedTokenLevelKey       string = "Token_level"
+	MIMinedTokenNumberKey      string = "Token_number"
+	MICreditDeatilsKey         string = "Credit_details"
+	MIPledgeDetailsKey         string = "Quorum_pledge_details"
+	MIMiningQuorumSignatureKey string = "Quorum_signature"
+	MIEpochKey                 string = "Epoch"
+	MIPreviousMiningIDKey      string = "Previous_mining_ID"
 )
 
 type MiningChainBlockInfo struct {
@@ -70,6 +70,9 @@ func NewMiningInfo(ctcb map[string]*MiningChain, mi *MiningChainBlockInfo) map[s
 	if len(mi.CreditDetails) > 0 {
 		nmcbi[MICreditDeatilsKey] = mi.CreditDetails
 	}
+	if len(mi.PledgeDetails) > 0 {
+		nmcbi[MIPledgeDetailsKey] = mi.PledgeDetails
+	}
 	if len(mi.QuorumSignature) > 0 {
 		nmcbi[MIMiningQuorumSignatureKey] = mi.QuorumSignature
 	}
@@ -79,7 +82,6 @@ func NewMiningInfo(ctcb map[string]*MiningChain, mi *MiningChainBlockInfo) map[s
 	if mi.PreviousMiningID != "" {
 		nmcbi[MIPreviousMiningIDKey] = mi.PreviousMiningID
 	}
-
 	return nmcbi
 }
 

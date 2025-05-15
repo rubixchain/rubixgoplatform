@@ -376,7 +376,6 @@ func (b *Block) GetMinedTokenBlockID(t string) (string, error) {
 		return "", fmt.Errorf("invalid token chain block, missing block hash")
 	}
 	blockNumber := 0
-	fmt.Printf("Mined block ID is: %d-%s", blockNumber, ha.(string))
 	return fmt.Sprintf("%d-%s", blockNumber, ha.(string)), nil
 }
 
@@ -818,16 +817,13 @@ func (b *Block) GetInitiatorSignature() *InitiatorSignature {
 
 func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
 	s := b.bm[TCQuorumSignatureKey]
-	fmt.Println("Quorum signature list: ", s)
 	if quorumSignList, ok := s.([]CreditSignature); ok {
 		return quorumSignList, nil
 	}
 
 	var quorumSignList []CreditSignature
 	qrmSignListMap, ok := s.([]interface{})
-	fmt.Println("Quorum signature map is ", qrmSignListMap)
 	if !ok {
-		fmt.Println("not of type []interface{} or []CreditSignature")
 		return nil, fmt.Errorf("failed to fetch quorums' signature information from block map")
 	}
 	for _, qrmSignMap := range qrmSignListMap {

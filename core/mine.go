@@ -21,7 +21,7 @@ import (
 
 const (
 	tokenLevel   = 004
-	tokenNumber  = 1500045
+	tokenNumber  = 1000003
 	miningPubSub = "mining-service"
 )
 
