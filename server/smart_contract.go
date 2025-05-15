@@ -202,16 +202,18 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Error reading raw code file for analysing: %v\n", err)
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to read raw code file for analysing", nil)
 	}
-	loopExists := s.c.AnalyseCode(code)
-	if loopExists {
+	s.log.Info("Analyzing code for potential infinite loops and recursion")
+	err = s.c.AnalyseCode(code)
+	if err != nil {
 		binaryCodeDestFile.Close()
 		codeFile.Close()
-		s.log.Error("Generate smart contract failed, Infinite loop exists in the given rust code")
+		errMsg := fmt.Sprintf("Generate smart contract failed, %v\n", err)
+		s.log.Error(errMsg)
 		err1 := removeTempFolder(deploySC.SCPath)
 		if err1 != nil {
 			s.log.Error("Failed to remove temp folder", "err", err1)
 		}
-		return s.BasicResponse(req, false, "Generate smart contract failed, Infinite loop exists in the given rust code", nil)
+		return s.BasicResponse(req, false, errMsg, nil)
 	}
 
 	schemaFile, schemaHeader, err := s.ParseMultiPartFormFile(req, "schemaFilePath")

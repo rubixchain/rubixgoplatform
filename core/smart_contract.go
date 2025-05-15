@@ -272,9 +272,10 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		basicResponse.Message = errMsg
 		return basicResponse
 	}
-	loopExists := c.AnalyseCode(rawCodeContent)
-	if loopExists {
-		errMsg := "Failed to fetch smart contract, Infinite loop exists in the given rust code"
+	c.log.Info("Analyzing code for potential infinite loops and recursion before fetching smart contract")
+	err = c.AnalyseCode(rawCodeContent)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to fetch smart contract, %v", err)
 		c.log.Error(errMsg)
 		basicResponse.Message = errMsg
 		return basicResponse
