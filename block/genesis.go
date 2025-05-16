@@ -75,15 +75,19 @@ func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 		ngib[GIGrandParentIDKey] = gi.GrandParentID
 	}
 	//To add commited tokeninfo
-	newCommitedTokensBlock := make(map[string]interface{})
-	for _, tokensInfo := range gi.CommitedTokens {
-		commitedTokenInfoMap := newTransToken(nil, &tokensInfo)
-		if commitedTokenInfoMap == nil {
-			return nil
+	if gi.CommitedTokens != nil {
+		newCommitedTokensBlock := make(map[string]interface{})
+		for _, tokensInfo := range gi.CommitedTokens {
+			commitedTokenInfoMap := newTransToken(nil, &tokensInfo)
+			if commitedTokenInfoMap == nil {
+				return nil
+			}
+			newCommitedTokensBlock[tokensInfo.Token] = commitedTokenInfoMap
 		}
-		newCommitedTokensBlock[tokensInfo.Token] = commitedTokenInfoMap
+		ngib[GICommitedTokensKey] = newCommitedTokensBlock
+
 	}
-	ngib[GICommitedTokensKey] = newCommitedTokensBlock
+	
 	if gi.SmartContractValue != 0 {
 		ngib[GISmartContractValueKey] = gi.SmartContractValue
 	}
