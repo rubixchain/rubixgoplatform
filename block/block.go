@@ -212,9 +212,7 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		ntcb[TCTokenValueKey] = floatPrecisionToMaxDecimalPlaces(tcb.TokenValue)
 	}
 
-	if len(tcb.ChildTokens) == 0 {
-		ntcb[TCChildTokensKey] = []string{}
-	} else {
+	if len(tcb.ChildTokens) != 0 {
 		ntcb[TCChildTokensKey] = tcb.ChildTokens
 	}
 
