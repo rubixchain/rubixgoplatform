@@ -2320,9 +2320,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	}
 	ti := sc.GetTransTokenInfo()
 	// TODO: Change the below credit struct name to quorum signatures
-	credit := make([]block.CreditSignature, 0)
+	credit := make([]block.QuorumSignature, 0)
 	for _, csig := range cs.Credit.Credit {
-		credit_ := block.CreditSignature{
+		credit_ := block.QuorumSignature{
 			Signature:     csig.Signature,
 			PrivSignature: csig.PrivSignature,
 			DID:           csig.DID,

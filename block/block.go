@@ -86,7 +86,7 @@ type TokenChainBlock struct {
 	GenesisBlock       *GenesisBlock       `json:"genesisBlock"`
 	TransInfo          *TransInfo          `json:"transInfo"`
 	PledgeDetails      []PledgeDetail      `json:"pledgeDetails"`
-	QuorumSignature    []CreditSignature   `json:"quorumSignature"`
+	QuorumSignature    []QuorumSignature   `json:"quorumSignature"`
 	SmartContract      []byte              `json:"smartContract"`
 	SmartContractData  string              `json:"smartContractData"`
 	TokenValue         float64             `json:"tokenValue"`
@@ -112,7 +112,8 @@ type Block struct {
 	log logger.Logger
 }
 
-type CreditSignature struct {
+// Quorum signature represents the quorum's signatures on transaction ID (Not on Block hash)
+type QuorumSignature struct {
 	Signature     string `json:"signature"`
 	PrivSignature string `json:"priv_signature"`
 	DID           string `json:"did"`
@@ -815,19 +816,19 @@ func (b *Block) GetInitiatorSignature() *InitiatorSignature {
 	return &initiatorSign
 }
 
-func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
+func (b *Block) GetQuorumSignatureList() ([]QuorumSignature, error) {
 	s := b.bm[TCQuorumSignatureKey]
-	if quorumSignList, ok := s.([]CreditSignature); ok {
+	if quorumSignList, ok := s.([]QuorumSignature); ok {
 		return quorumSignList, nil
 	}
 
-	var quorumSignList []CreditSignature
+	var quorumSignList []QuorumSignature
 	qrmSignListMap, ok := s.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("failed to fetch quorums' signature information from block map")
 	}
 	for _, qrmSignMap := range qrmSignListMap {
-		var quorumSig CreditSignature
+		var quorumSig QuorumSignature
 		// When qrmSignMap is a string (in older versions), qrmSign holds the value as a string
 		if qrmSign, ok := qrmSignMap.(string); ok {
 			// Unmarshal the JSON string into the struct

@@ -46,7 +46,7 @@ type MiningChainBlockInfo struct {
 	TokenNumber      int                    `json:"tokenNumber"`
 	CreditDetails    map[string]interface{} `json:"creditDetails"`
 	PledgeDetails    []PledgeDetail         `json:"pledgeDetails"`
-	QuorumSignature  []CreditSignature      `json:"quorumSignature"`
+	QuorumSignature  []QuorumSignature      `json:"quorumSignature"`
 	Epoch            int                    `json:"epoch"`
 	PreviousMiningID string                 `json:"previousMiningID"`
 }
