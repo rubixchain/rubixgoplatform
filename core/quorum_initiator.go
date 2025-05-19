@@ -1836,28 +1836,16 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 		}
 
-		// miningRecord := &model.MiningRecordPubSub{
-		// 	MiningID:      tid,
-		// 	MinedTokenID:  cr.MiningTokenID,
-		// 	MinerDID:      cr.MiningInfo.MinerDid,
-		// 	MinerPeerID:   c.peerID,
-		// 	TokenLevel:    0,
-		// 	TokenNumber:   0,
-		// 	PledgeHistory: sc.GetTokenCreditsDetails(),
-		// }
+		miningRecord := &model.MiningRecordPubSub{
+			MiningID:     tid,
+			MinedTokenID: cr.MiningTokenID,
+			MinerDID:     cr.MiningInfo.MinerDid,
+			MinerPeerID:  c.peerID,
+			TokenLevel:   cr.MiningInfo.MiningTokenDetails.TokenLevel,
+			TokenNumber:  cr.MiningInfo.MiningTokenDetails.TokenNumber,
+			Epoch:        uint64(cr.TransactionEpoch),
+		}
 
-		// MiningIDreader := bytes.NewReader([]byte(block.GetMiningChainID()))
-		// RubixMiningChainID, err := c.ipfs.Add(MiningIDreader, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-
-		// peerForMiningChainSync, err := c.getPeer(AddressForMiningChainSync, "")
-		// if err != nil {
-		// 	c.log.Error("Failed to get peer for syncing mining chain")
-		// }
-		// err = c.syncTokenChainFrom(peerForMiningChainSync, "", RubixMiningChainID, token.MiningChainType)
-		// latestMiningChainBlock := c.w.GetLatestTokenBlock(RubixMiningChainID, token.MiningTokenType)
-		// previousMiningID := latestMiningChainBlock.GetPreviousMiningID()
-
-		tokenLevel, tokenNumber, err := nb.GetTokenLevelAndNumberFromGenesisBlock()
 		epoch := nb.GetEpoch()
 		creditDetails, err := c.w.CreatePledgeHistoryMap(sc.GetTokenCreditsDetails(), cr.MiningTokenID, cr.MiningInfo.MinerDid)
 		if err != nil {
@@ -1881,20 +1869,24 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			blockNumber = latestNumber + 1
 		}
-
+		prevMiningChainID, err := latestBlock.GetPreviousMiningID()
+		if err != nil {
+			c.log.Error("Failed to get previous mining chain id", "err", err)
+			return nil, nil, nil, err
+		}
 		miningInfo := &block.MiningChainBlock{
 			MiningChainBlockNumber: blockNumber,
 			MiningChainInfo: &block.MiningChainBlockInfo{
 				MiningID:         tid,
 				MinerDID:         cr.MiningInfo.MinerDid,
 				TokenID:          cr.MiningTokenID,
-				TokenLevel:       tokenLevel,
-				TokenNumber:      tokenNumber,
+				TokenLevel:       cr.MiningInfo.MiningTokenDetails.TokenLevel,
+				TokenNumber:      cr.MiningInfo.MiningTokenDetails.TokenNumber,
 				CreditDetails:    creditDetails,
 				PledgeDetails:    pledgeTokenDetails,
 				QuorumSignature:  quorumSignatures,
 				Epoch:            epoch,
-				PreviousMiningID: "",
+				PreviousMiningID: prevMiningChainID,
 			},
 		}
 
@@ -1951,12 +1943,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// 	}
 		// }
 
-		// err = c.publishMiningdetails(miningRecord)
-		// if err != nil {
-		// 	c.log.Error(("Unable to publish mining details"))
-		// 	return nil, nil, nil, err
-		// }
-		// fmt.Println("Mining record published successfully")
+		err = c.publishMiningdetails(miningRecord)
+		if err != nil {
+			c.log.Error(("Unable to publish mining details"))
+			return nil, nil, nil, err
+		}
+		fmt.Println("Mining record published successfully")
 
 		return &miningDetails, nil, nil, err
 	default:
@@ -2380,8 +2372,8 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		ctcb[ti[0].Token] = b
 	} else if sc.GetMinerDID() != "" {
 
-		miningTokenNumberString := strconv.FormatUint(tokenNumber, 10)
-		MiningTokenLevelString := strconv.FormatUint(tokenLevel, 10)
+		miningTokenNumberString := strconv.FormatUint((cr.MiningInfo.MiningTokenDetails.TokenNumber), 10)
+		MiningTokenLevelString := strconv.FormatUint(uint64(cr.MiningInfo.MiningTokenDetails.TokenLevel), 10)
 		parts := []string{MiningTokenLevelString, miningTokenNumberString}
 		result := strings.Join(parts, " ")
 		byteArray := []byte(result)
@@ -2599,8 +2591,8 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			Info: []block.GenesisTokenInfo{
 				{
 					Token:         cr.MiningTokenID,
-					TokenLevel:    tokenLevel,
-					TokenNumber:   tokenNumber,
+					TokenLevel:    cr.MiningInfo.MiningTokenDetails.TokenLevel,
+					TokenNumber:   int(cr.MiningInfo.MiningTokenDetails.TokenNumber),
 					CreditDetails: sc.GetTokenCreditsDetails(),
 				},
 			},

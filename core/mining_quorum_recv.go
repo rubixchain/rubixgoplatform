@@ -20,19 +20,43 @@ const fiveWeeksInSeconds = 5 * 7 * 24 * 60 * 60 // 5 weeks = 5 * 7 days * 24 hou
 func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails []model.PledgeHistory, miningToken model.NewTokenDetails) error {
 
 	totalCredits := 0
-	// // record, err := c.w.FindLatestTokenLevelAndNumber()
-	// // if err != nil {
-	// // 	c.log.Error("Failed to get latest token level and number from mining records. err:", err)
-	// // }
-	// // fmt.Printf("Highest Token: Level %d, Number %d", record.TokenLevel, record.TokenNumber)
-	// fmt.Println("PledgeHistory details in ValidateCredits", pledgeDetails)
+	err := c.SyncMiningChain(AddressForMiningChainSync)
+	if err != nil {
+		return fmt.Errorf("failed to sync mining chain: %v", err)
+	}
+	latestMiningChainBlock, err := c.w.GetLatestMiningChainBlock(block.GetMiningChainID())
+	if err != nil {
+		return fmt.Errorf("failed to get latest mining chain block: %v", err)
+	}
+	latestMiningTokenLevel, err := latestMiningChainBlock.GetTokenLevel()
+	if err != nil {
+		return fmt.Errorf("failed to get token level for credit validation: %v", err)
+	}
+	latestMiningTokenNumber, err := latestMiningChainBlock.GetTokenNumber()
+	if err != nil {
+		return fmt.Errorf("failed to get token number for credit validation: %v", err)
+	}
+	var nextMiningTokenLevel int
+	var nextMiningTokenNumber int
+	maxTokenNumberfromLevel := token.MaxTokenFromLevel(latestMiningTokenLevel)
+	if maxTokenNumberfromLevel == latestMiningTokenNumber {
+		nextMiningTokenLevel = latestMiningTokenLevel + 1
+		nextMiningTokenNumber = 1
+	} else {
+		nextMiningTokenLevel = latestMiningTokenLevel
+		nextMiningTokenNumber = latestMiningTokenNumber + 1
+	}
+	if miningToken.TokenLevel != nextMiningTokenLevel || miningToken.TokenNumber != uint64(nextMiningTokenNumber) {
+		return fmt.Errorf("Mining token level or number does not match next minable token level or number")
+	}
+
 	for _, tokenInfo := range pledgeDetails {
-		// Query miningLevel DB to avoid double mining
-		// existingMining, err := c.QueryMiningRecord(tokenInfo.TransactionID, tokenInfo.TransferTokenID, tokenInfo.QuorumDID)
-		// if existingMining.MiningID != "" && existingMining.RemainingCredits == 0 {
-		// 	c.log.Error("Given record is already used for mining")
-		// 	return fmt.Errorf("Given record is already used for mining")
-		// }
+		// Query MiningChain to avoid double mining
+		existingMining, err := c.QueryMiningRecord(tokenInfo.TransactionID, tokenInfo.TransferTokenID, tokenInfo.QuorumDID)
+		if existingMining.MiningID != "" && existingMining.RemainingCredits == 0 {
+			c.log.Error("Given record is already used for mining")
+			return fmt.Errorf("Given record is already used for mining")
+		}
 		c.log.Debug("Validating credits for token: ", tokenInfo.TransferTokenID)
 		validatingBlockNumberStr := (tokenInfo.TransferBlockID[0:1])
 		validatingBlockNumber, err := strconv.Atoi(validatingBlockNumberStr)

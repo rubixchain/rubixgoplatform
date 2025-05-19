@@ -19,7 +19,8 @@ type MiningRecord struct {
 	MinedTokenID string `gorm:"column:mined_token_id"`
 	MinerDID     string `gorm:"column:miner_did"`
 	TokenLevel   int    `gorm:"column:token_level"`
-	TokenNumber  int    `gorm:"column:token_number"`
+	TokenNumber  uint64 `gorm:"column:token_number"`
+	Epoch        uint64 `gorm:"column:epoch"`
 }
 
 type CreditsDetailsMapValue struct {
@@ -190,6 +191,7 @@ func (w *Wallet) GetAllMiningChainBlocks(token string, startBlockNumber uint64) 
 		count++
 		nextBlockNumber = blockNumber + 1
 		iter.Next()
+		fmt.Println("Got mining chain block:", blockNumber)
 	}
 
 	if !iter.Valid() {

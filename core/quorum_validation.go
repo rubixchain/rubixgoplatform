@@ -137,7 +137,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	// 		lbID = ""
 	// 	}
 	// }
-	err = c.syncTokenChainFrom(p, lbID, pt, tt)
+	err = c.syncTokenChainFromPeer(p, lbID, pt, tt)
 	fmt.Println("sync 7") //TODO
 	if err != nil {
 		c.log.Error("failed to sync token chain block", "err", err)

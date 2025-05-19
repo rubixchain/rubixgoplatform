@@ -63,6 +63,7 @@ const (
 	APICheckPinRole                 string = "/api/check-pin-role"
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 	APIUpdateCreditsAndWeekEpoch    string = "/api/update-credits-and-week-epoch"
+	APISyncMiningChain              string = "/api/sync-mining-chain"
 )
 
 const (
@@ -74,7 +75,7 @@ const (
 	TestNetDir                string = "TestNet"
 	TestNetDIDDir             string = "TestNetDID/"
 	MaxDecimalPlaces          int    = 3
-	AddressForMiningChainSync string = "12D3KooWGppoT2BwPddMG3uLdwAar2b5yuFG1KCviELYtoFuQPAs.bafybmib6gtwq7kqlvfqzi4sbv7fpxuwp3smjro5bujtbckaajkbdkls3b4"
+	AddressForMiningChainSync string = "12D3KooWGppoT2BwPddMG3uLdwAar2b5yuFG1KCviELYtoFuQPAs" //bafybmib6gtwq7kqlvfqzi4sbv7fpxuwp3smjro5bujtbckaajkbdkls3b4
 )
 
 const (

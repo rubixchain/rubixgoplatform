@@ -31,7 +31,7 @@ const (
 	MIMinedTokenIDKey          string = "TokenID"
 	MIMinedTokenLevelKey       string = "Token_level"
 	MIMinedTokenNumberKey      string = "Token_number"
-	MICreditDeatilsKey         string = "Credit_details"
+	MICreditDetailsKey         string = "Credit_details"
 	MIPledgeDetailsKey         string = "Quorum_pledge_details"
 	MIMiningQuorumSignatureKey string = "Quorum_signature"
 	MIEpochKey                 string = "Epoch"
@@ -43,7 +43,7 @@ type MiningChainBlockInfo struct {
 	MinerDID         string                 `json:"minerDID"`
 	TokenID          string                 `json:"tokenID"`
 	TokenLevel       int                    `json:"tokenLevel"`
-	TokenNumber      int                    `json:"tokenNumber"`
+	TokenNumber      uint64                 `json:"tokenNumber"`
 	CreditDetails    map[string]interface{} `json:"creditDetails"`
 	PledgeDetails    []PledgeDetail         `json:"pledgeDetails"`
 	QuorumSignature  []QuorumSignature      `json:"quorumSignature"`
@@ -68,7 +68,7 @@ func NewMiningInfo(ctcb map[string]*MiningChain, mi *MiningChainBlockInfo) map[s
 	nmcbi[MIMinedTokenNumberKey] = mi.TokenNumber
 
 	if len(mi.CreditDetails) > 0 {
-		nmcbi[MICreditDeatilsKey] = mi.CreditDetails
+		nmcbi[MICreditDetailsKey] = mi.CreditDetails
 	}
 	if len(mi.PledgeDetails) > 0 {
 		nmcbi[MIPledgeDetailsKey] = mi.PledgeDetails
@@ -298,8 +298,18 @@ func (mb *MiningChain) GetMiningChainBlockNumber() (uint64, error) {
 	}
 }
 
+// GetMiningChainID retrieves the mining chain ID.
 func GetMiningChainID() string {
 	return RubixMiningChainID
+}
+
+// GetMiningInfos retrieves the mining info map.
+func (mb *MiningChain) GetMiningInfos() (map[string]interface{}, error) {
+	infos, ok := mb.bm[MiningChainBlockInfoKey].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("mining infos not found or invalid")
+	}
+	return infos, nil
 }
 
 // // GetHash retrieves the block hash.
@@ -311,20 +321,209 @@ func GetMiningChainID() string {
 // 	return hash, nil
 // }
 
-// // GetSignature retrieves the block signature.
-// func (mb *MiningBlock) GetSignature() (string, error) {
-// 	sig, ok := mb.bm[MiningChainBlockSignatureKey].(string)
-// 	if !ok {
-// 		return "", fmt.Errorf("block signature not found or invalid")
-// 	}
-// 	return sig, nil
-// }
+// GetMiningChainBlockSignature retrieves the block signature from MiningChainBlock.
+func (mb *MiningChain) GetMiningChainBlockSignature() (string, error) {
+	val, ok := mb.bm[MiningChainBlockSignatureKey]
+	if !ok {
+		return "", fmt.Errorf("block signature key not found")
+	}
+	sig, ok := val.(string)
+	if !ok {
+		return "", fmt.Errorf("block signature is not a string")
+	}
+	return sig, nil
+}
 
-// // GetMiningInfos retrieves the mining info map.
-// func (mb *MiningBlock) GetMiningInfos() (map[string]interface{}, error) {
-// 	infos, ok := mb.bm[MiningChainBlockInfoKey].(map[string]interface{})
-// 	if !ok {
-// 		return nil, fmt.Errorf("mining infos not found or invalid")
-// 	}
-// 	return infos, nil
-// }
+// GetMiningID retrieves the MiningID from MiningChainBlockInfo.
+func (mb *MiningChain) GetMiningID() (string, error) {
+	infos, err := mb.GetMiningInfos()
+	if err != nil {
+		return "", err
+	}
+	val, ok := infos[MIMiningIDKey]
+	if !ok {
+		return "", fmt.Errorf("mining ID key not found")
+	}
+	miningID, ok := val.(string)
+	if !ok {
+		return "", fmt.Errorf("mining ID is not a string")
+	}
+	return miningID, nil
+}
+
+// GetMinerDID retrieves the MinerDID from MiningChainBlockInfo.
+func (mb *MiningChain) GetMinerDID() (string, error) {
+	infos, err := mb.GetMiningInfos()
+	if err != nil {
+		return "", err
+	}
+	val, ok := infos[MIMinerDID]
+	if !ok {
+		return "", fmt.Errorf("miner DID key not found")
+	}
+	minerDID, ok := val.(string)
+	if !ok {
+		return "", fmt.Errorf("miner DID is not a string")
+	}
+	return minerDID, nil
+}
+
+// GetTokenID retrieves the TokenID from MiningChainBlockInfo.
+func (mb *MiningChain) GetTokenID() (string, error) {
+	infos, err := mb.GetMiningInfos()
+	if err != nil {
+		return "", err
+	}
+	val, ok := infos[MIMinedTokenIDKey]
+	if !ok {
+		return "", fmt.Errorf("token ID key not found")
+	}
+	tokenID, ok := val.(string)
+	if !ok {
+		return "", fmt.Errorf("token ID is not a string")
+	}
+	return tokenID, nil
+}
+
+// GetTokenLevel retrieves the TokenLevel from MiningChainBlockInfo.
+func (mb *MiningChain) GetTokenLevel() (int, error) {
+	infos, err := mb.GetMiningInfos()
+	if err != nil {
+		return 0, err
+	}
+	val, ok := infos[MIMinedTokenLevelKey]
+	if !ok {
+		return 0, fmt.Errorf("token level key not found")
+	}
+	switch v := val.(type) {
+	case float64:
+		if v != float64(int(v)) {
+			return 0, fmt.Errorf("token level is not an integer: %v", v)
+		}
+		return int(v), nil
+	case int64:
+		return int(v), nil
+	case int:
+		return v, nil
+	default:
+		return 0, fmt.Errorf("token level is not a number: %T", v)
+	}
+}
+
+// GetTokenNumber retrieves the TokenNumber from MiningChainBlockInfo.
+func (mb *MiningChain) GetTokenNumber() (int, error) {
+	infos, err := mb.GetMiningInfos()
+	if err != nil {
+		return 0, err
+	}
+	val, ok := infos[MIMinedTokenNumberKey]
+	if !ok {
+		return 0, fmt.Errorf("token number key not found")
+	}
+	switch v := val.(type) {
+	case float64:
+		if v != float64(int(v)) {
+			return 0, fmt.Errorf("token number is not an integer: %v", v)
+		}
+		return int(v), nil
+	case int64:
+		return int(v), nil
+	case int:
+		return v, nil
+	default:
+		return 0, fmt.Errorf("token number is not a number: %T", v)
+	}
+}
+
+// GetCreditDetails retrieves the CreditDetails from MiningChainBlockInfo.
+func (mb *MiningChain) GetCreditDetails() (map[string]interface{}, error) {
+	infos, err := mb.GetMiningInfos()
+	if err != nil {
+		return nil, err
+	}
+	val, ok := infos[MICreditDetailsKey]
+	if !ok {
+		return nil, fmt.Errorf("credit details key not found")
+	}
+	creditDetails, ok := val.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("credit details is not a map")
+	}
+	return creditDetails, nil
+}
+
+// GetPledgeDetails retrieves the PledgeDetails from MiningChainBlockInfo.
+func (mb *MiningChain) GetPledgeDetails() ([]interface{}, error) {
+	infos, err := mb.GetMiningInfos()
+	if err != nil {
+		return nil, err
+	}
+	val, ok := infos[MIPledgeDetailsKey]
+	if !ok {
+		return nil, fmt.Errorf("pledge details key not found")
+	}
+	pledgeDetails, ok := val.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("pledge details is not a slice")
+	}
+	return pledgeDetails, nil
+}
+
+// GetQuorumSignature retrieves the QuorumSignature from MiningChainBlockInfo.
+func (mb *MiningChain) GetQuorumSignature() ([]interface{}, error) {
+	infos, err := mb.GetMiningInfos()
+	if err != nil {
+		return nil, err
+	}
+	val, ok := infos[MIMiningQuorumSignatureKey]
+	if !ok {
+		return nil, fmt.Errorf("quorum signature key not found")
+	}
+	quorumSignature, ok := val.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("quorum signature is not a slice")
+	}
+	return quorumSignature, nil
+}
+
+// GetEpoch retrieves the Epoch from MiningChainBlockInfo.
+func (mb *MiningChain) GetEpoch() (int, error) {
+	infos, err := mb.GetMiningInfos()
+	if err != nil {
+		return 0, err
+	}
+	val, ok := infos[MIEpochKey]
+	if !ok {
+		return 0, fmt.Errorf("epoch key not found")
+	}
+	switch v := val.(type) {
+	case float64:
+		if v != float64(int(v)) {
+			return 0, fmt.Errorf("epoch is not an integer: %v", v)
+		}
+		return int(v), nil
+	case int64:
+		return int(v), nil
+	case int:
+		return v, nil
+	default:
+		return 0, fmt.Errorf("epoch is not a number: %T", v)
+	}
+}
+
+// GetPreviousMiningID retrieves the PreviousMiningID from MiningChainBlockInfo.
+func (mb *MiningChain) GetPreviousMiningID() (string, error) {
+	infos, err := mb.GetMiningInfos()
+	if err != nil {
+		return "", err
+	}
+	val, ok := infos[MIPreviousMiningIDKey]
+	if !ok {
+		return "", fmt.Errorf("previous mining ID key not found")
+	}
+	prevMiningID, ok := val.(string)
+	if !ok {
+		return "", fmt.Errorf("previous mining ID is not a string")
+	}
+	return prevMiningID, nil
+}

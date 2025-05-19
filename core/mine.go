@@ -1,12 +1,10 @@
 package core
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -20,15 +18,30 @@ import (
 )
 
 const (
-	tokenLevel   = 004
-	tokenNumber  = 1000003
+	// tokenLevel   = 004
 	miningPubSub = "mining-service"
+	// tokenFile    = `C:\Users\psy_k\OneDrive\Desktop\RubixGo\vaishnav\rubixgoplatformBKP\token.txt`
 )
 
 type CreditsDetailsMapValue struct {
 	MiningID         string `json:"miningID"`
 	RemainingCredits uint64 `json:"remainingCredits"`
 }
+
+// func (c *Core) readTokenNumber() int {
+// 	data, err := os.ReadFile(tokenFile)
+// 	if err != nil {
+// 		c.log.Error("Failed to read token file", "error", err)
+// 		return 1500055 // Fallback default
+// 	}
+// 	tokenStr := string(bytes.TrimSpace(data))
+// 	tokenNumber, err := strconv.Atoi(tokenStr)
+// 	if err != nil || tokenNumber <= 0 {
+// 		c.log.Error("Invalid token number", "error", err)
+// 		return 1500055 // Fallback default
+// 	}
+// 	return tokenNumber
+// }
 
 func (c *Core) InitiateMineRBT(reqID string, req *model.MiningRequest) {
 	br := c.initiateMineRBT(reqID, req)
@@ -40,6 +53,7 @@ func (c *Core) InitiateMineRBT(reqID string, req *model.MiningRequest) {
 	dc.OutChan <- br
 }
 func (c *Core) initiateMineRBT(reqID string, MiningReq *model.MiningRequest) *model.BasicResponse {
+	// tokenNumber := uint64(c.readTokenNumber())
 	st := time.Now()
 	txEpoch := int(st.Unix())
 	// var latestMined wallet.MiningRecord
@@ -47,16 +61,13 @@ func (c *Core) initiateMineRBT(reqID string, MiningReq *model.MiningRequest) *mo
 		Status: false,
 	}
 
-	// Sync the rubix_mining_chain -- from hardcodded peer, TODO: Sync from the peer who pinned the mining chain
+	// Sync the rubix_mining_chain
 
-	// MiningIDreader := bytes.NewReader([]byte(RubixMiningChainIDString))
-	// RubixMiningChainID, err := c.ipfs.Add(MiningIDreader, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 	// // Hardcode the peerID where mining chain can be synced
-	// peerForMiningChainSync, err := c.getPeer(AddressForMiningChainSync, "")
-	// if err != nil {
-	// 	c.log.Error("Failed to get peer for syncing mining chain")
-	// }
-	// err = c.syncTokenChainFrom(peerForMiningChainSync, "", RubixMiningChainID, token.MiningChainType)
+	err := c.SyncMiningChain(AddressForMiningChainSync)
+	if err != nil {
+		c.log.Error("Failed to get peer for syncing mining chain")
+	}
 
 	// 1. Fetch pledge history records where tokenCreditStatus = 1 (ready to mine)
 	tokenDetails, err := c.w.GetTokenDetailsByQuorumDID(MiningReq.MinerDid, 1)
@@ -72,24 +83,33 @@ func (c *Core) initiateMineRBT(reqID string, MiningReq *model.MiningRequest) *mo
 		totalCredits += tokenDetail.TokenCredit
 	}
 
-	// TODO: Sync the mining pubsub get the latest entry, get the next token level and number
 	// 3. Check how many credits are needed for mining the next token according to token level
-	// latestMined, err = c.w.FindLatestTokenLevelAndNumber()
-	// if err != nil {
-	// 	c.log.Error("Unable to find last mined token")
-	// }
-	//if last mining token number is maxtokennumber in a level, Then it need to go to next level  with 1 as token number
-	// nextMiningTokenLevel := latestMined.TokenLevel
-	// nextMiningTokenNumber := latestMined.TokenNumber + 1
-	// maxTokenNumberfromLevel := token.MaxTokenFromLevel(nextMiningTokenLevel)
-	// if maxTokenNumberfromLevel < nextMiningTokenNumber {
-	// 	nextMiningTokenLevel += 1
-	// 	nextMiningTokenNumber = 1
-	// }
-	// nextMiningTokenLevel := tokenLevel
+	latestMined, err := c.w.GetLatestMiningChainBlock(block.GetMiningChainID())
+	if err != nil {
+		c.log.Error("Failed to get latest mining chain block")
+	}
+	// if last mining token number is maxtokennumber in a level, Then it need to go to next level  with 1 as token number
+	latestMiningTokenLevel, err := latestMined.GetTokenLevel()
+	if err != nil {
+		c.log.Error("Failed to get token level from latest mining chain block")
+	}
+	latestMiningTokenNumber, err := latestMined.GetTokenNumber()
+	if err != nil {
+		c.log.Error("Failed to get token number from latest mining chain block")
+	}
+	var nextMiningTokenLevel int
+	var nextMiningTokenNumber int
+	maxTokenNumberfromLevel := token.MaxTokenFromLevel(latestMiningTokenLevel)
+	if maxTokenNumberfromLevel == latestMiningTokenNumber {
+		nextMiningTokenLevel = latestMiningTokenLevel + 1
+		nextMiningTokenNumber = 1
+	} else {
+		nextMiningTokenLevel = latestMiningTokenLevel
+		nextMiningTokenNumber = latestMiningTokenNumber + 1
+	}
 	var nextMiningTokenDetails model.NewTokenDetails
-	nextMiningTokenDetails.TokenLevel = tokenLevel
-	nextMiningTokenDetails.TokenNumber = tokenNumber
+	nextMiningTokenDetails.TokenLevel = nextMiningTokenLevel
+	nextMiningTokenDetails.TokenNumber = uint64(nextMiningTokenNumber)
 
 	MiningReq.MiningTokenDetails = nextMiningTokenDetails
 
@@ -228,16 +248,10 @@ func (c *Core) miningCallback(peerID string, topic string, data []byte) {
 		c.log.Error("Failed to parse mining callback data", "err", err)
 		return
 	}
-
-	MiningIDreader := bytes.NewReader([]byte(block.GetMiningChainID()))
-	RubixMiningChainID, err := c.ipfs.Add(MiningIDreader, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	err = c.SyncMiningChain(miningData.MinerPeerID)
 	if err != nil {
 		c.log.Error("Failed to get Rubix mining chain ID")
 	}
-	minerAddress := miningData.MinerPeerID + "." + miningData.MinerDID
-	minerPeer, err := c.getPeer(minerAddress)
-	c.syncTokenChainFrom(minerPeer, "", RubixMiningChainID, token.MiningChainType)
-
 	// Populate miningRecord from miningData
 	miningRecord := wallet.MiningRecord{
 		MiningID:     miningData.MiningID,
@@ -245,6 +259,7 @@ func (c *Core) miningCallback(peerID string, topic string, data []byte) {
 		MinerDID:     miningData.MinerDID,
 		TokenLevel:   miningData.TokenLevel,
 		TokenNumber:  miningData.TokenNumber,
+		Epoch:        miningData.Epoch,
 	}
 	fmt.Println("Mining record at the subscriber is ", miningRecord)
 	// Add mining record to the database or wallet
@@ -253,55 +268,72 @@ func (c *Core) miningCallback(peerID string, topic string, data []byte) {
 		c.log.Error("Failed to add mining record to mining records table")
 		return
 	}
-	// batch := new(leveldb.Batch)
-	// for _, pledge := range miningData.PledgeHistory {
-	// 	key := pledge.TransactionID + "-" + pledge.TransferTokenID + "-" + miningRecord.MinerDID
-	// 	keyBytes := []byte(key)
-	// 	miningChainValue := MiningLevelDBValue{
-	// 		MiningID:         miningData.MiningID,
-	// 		RemainingCredits: pledge.RemainingCredits,
-	// 	}
-
-	// 	valueBytes, err := json.Marshal(miningChainValue)
-	// 	if err != nil {
-	// 		c.log.Error("Failed to marshal MiningLevelDBValue", "err", err)
-	// 		continue
-	// 	}
-	// 	batch.Put(keyBytes, valueBytes)
-	// }
-	// err = c.w.MiningRecordsChainStorage.DB.Write(batch, nil)
-	// if err != nil {
-	// 	c.log.Error("Failed to batch write key-value pairs to LevelDB", "err", err)
-	// }
 }
 
-// func (c *Core) QueryMiningRecord(transactionID string, transferTokenID string, minerDID string) (*MiningLevelDBValue, error) {
-// 	// Create the composite key
-// 	key := transactionID + "-" + transferTokenID + "-" + minerDID
-// 	keyBytes := []byte(key)
+func (c *Core) QueryMiningRecord(transactionID string, transferTokenID string, minerDID string) (*CreditsDetailsMapValue, error) {
+	// Create the composite key
+	key := transactionID + "-" + transferTokenID + "-" + minerDID
 
-// 	// Read from LevelDB
-// 	valueBytes, err := c.w.MiningRecordsChainStorage.DB.Get(keyBytes, nil)
-// 	if err != nil {
-// 		if err == leveldb.ErrNotFound {
-// 			return nil, fmt.Errorf("mining record not found")
-// 		}
-// 		return nil, fmt.Errorf("mining record read error: %v", err)
-// 	}
+	// Get the MiningChainID (assuming a function or constant exists to fetch it)
+	miningChainID := block.GetMiningChainID() // Adjust based on your actual implementation
 
-// 	// Unmarshal the value
-// 	var miningValue MiningLevelDBValue
-// 	err = json.Unmarshal(valueBytes, &miningValue)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to decode mining record: %v", err)
-// 	}
+	// Fetch all blocks starting from block 1
+	blocks, _, err := c.w.GetAllMiningChainBlocks(miningChainID, 1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get mining chain blocks: %v", err)
+	}
 
-// 	c.log.Debug("Retrieved mining record",
-// 		"miningID", miningValue.MiningID,
-// 		"remainingCredits", miningValue.RemainingCredits)
+	// If no blocks exist, return nil (not found)
+	if len(blocks) == 0 {
+		return nil, nil
+	}
 
-// 	return &miningValue, nil
-// }
+	// Iterate through each block
+	for _, blockBytes := range blocks {
+		// Deserialize the block (assuming MiningChainBlock has a method to deserialize)
+		var miningBlock block.MiningChain
+		err := json.Unmarshal(blockBytes, &miningBlock)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize mining chain block: %v", err)
+		}
+
+		// Get MiningChainBlockInfo (adjust method name based on actual struct)
+		infos, err := miningBlock.GetMiningInfos()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get mining infos: %v", err)
+		}
+
+		// Access CreditDetails map
+		creditDetails, ok := infos[block.MICreditDetailsKey].(map[string]interface{})
+		if !ok {
+			continue // Skip if no CreditDetails in this block
+		}
+
+		// Check if the composite key exists
+		if value, exists := creditDetails[key]; exists {
+			// Convert interface{} to CreditsDetailsMapValue
+			valueBytes, err := json.Marshal(value)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal credit detail value: %v", err)
+			}
+
+			var miningValue CreditsDetailsMapValue
+			err = json.Unmarshal(valueBytes, &miningValue)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode mining record: %v", err)
+			}
+
+			c.log.Debug("Retrieved mining record",
+				"miningID", miningValue.MiningID,
+				"remainingCredits", miningValue.RemainingCredits)
+
+			return &miningValue, nil
+		}
+	}
+
+	// Key not found in any block
+	return nil, nil
+}
 
 func GetCreditsRequired(tokenLevel int) (uint64, error) {
 	creditsPerToken, ok := token.CreditLevelMap[tokenLevel]

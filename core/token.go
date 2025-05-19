@@ -48,6 +48,12 @@ type TCBSyncGenesisAndLatestBlockReply struct {
 	LatestBlock  []byte   `json:"tc_latest_block"`
 }
 
+type MiningChainSyncReply struct {
+	Status            bool     `json:"status"`
+	Message           string   `json:"message"`
+	MiningChainBlocks [][]byte `json:"mining_chain_blocks"`
+}
+
 // TokenVerificationRequest struct
 type TokenVerificationRequest struct {
 	Tokens []string `json:"tokens"`
@@ -67,6 +73,7 @@ type TokenSyncInfo struct {
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
 	c.l.AddRoute(APISyncGenesisAndLatestBlock, "POST", c.syncGenesisAndLatestBlock)
+	c.l.AddRoute(APISyncMiningChain, "GET", c.syncMiningChain)
 }
 
 func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {
@@ -303,10 +310,10 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	}
 
 	// Handle case where both error occurred and blocks are nil
-	if err != nil && blks == nil {
-		c.log.Warn("Token blocks missing and error occurred, falling back to role-based logic", "token", tr.Token)
-		return c.handleRoleBasedLogic(tr.Token, req)
-	}
+	// if err != nil && blks == nil {
+	// 	c.log.Warn("Token blocks missing and error occurred, falling back to role-based logic", "token", tr.Token)
+	// 	return c.handleRoleBasedLogic(tr.Token, req)
+	// }
 
 	// Handle other errors
 	if err != nil {
@@ -325,78 +332,92 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	}, http.StatusOK)
 }
 
-func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.Result {
-	fmt.Println("Handling role-based logic for token:", token)
-	list, err := c.GetDHTddrs(token)
+func (c *Core) syncMiningChain(req *ensweb.Request) *ensweb.Result {
+	// Fetch token blocks
+	blks, _, err := c.w.GetAllMiningChainBlocks(block.GetMiningChainID(), 0)
 	if err != nil {
-		c.log.Error("Failed to get DHT addresses", "err", err)
-		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to get DHT addresses"}, http.StatusInternalServerError)
+		c.log.Error("Error fetching token blocks", "error", err)
 	}
-
-	q := map[string]string{"token": token}
-	var response model.BasicResponse
-
-	for _, peerID := range list {
-		peerConn, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
-		if err != nil {
-			c.log.Warn("Failed to open peer connection", "peer", peerID, "err", err)
-			continue
-		}
-
-		if err := peerConn.SendJSONRequest("GET", APICheckPinRole, q, nil, &response, false); err != nil {
-			c.log.Warn("Failed to send JSON request", "peer", peerID, "err", err)
-			continue
-		}
-		fmt.Println("Response from peer:", response)
-		var result model.PinCheckReply
-		resultBytes, ok := response.Result.([]byte)
-		if !ok {
-			resultBytes, err = json.Marshal(response.Result)
-			if err != nil {
-				c.log.Error("Failed to marshal response.Result to JSON", "err", err)
-				continue
-			}
-		}
-
-		if err := json.Unmarshal(resultBytes, &result); err != nil {
-			c.log.Error("Failed to unmarshal response.Result", "err", err)
-			continue
-		}
-
-		message := c.processRole(result.PinDetails.Role)
-		if message != "" {
-			return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: message}, http.StatusNoContent)
-		}
+	// Handle other errors
+	if err != nil {
+		return c.l.RenderJSON(req, &TCBSyncReply{
+			Status:  false,
+			Message: "Error fetching token blocks",
+		}, http.StatusInternalServerError)
 	}
-
-	return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Unhandled error during role-based processing"}, http.StatusInternalServerError)
+	// Success response
+	return c.l.RenderJSON(req, &MiningChainSyncReply{
+		Status:            true,
+		Message:           "Got all blocks",
+		MiningChainBlocks: blks,
+	}, http.StatusOK)
 }
 
-// processRole handles specific roles (as integers) and returns a message
-func (c *Core) processRole(role int) string {
-	roleMessages := map[int]string{
-		wallet.OwnerRole:                  "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
-		wallet.QuorumRole:                 "Token chain block does not exist, the pinned role is QuorumRole",
-		wallet.PrevSenderRole:             "Token chain block does not exist, the pinned role is PrevSenderRole",
-		wallet.ReceiverRole:               "Token chain block does not exist, the pinned role is ReceiverRole",
-		wallet.ParentTokenLockRole:        "Token chain block does not exist, the pinned role is ParentTokenLockRole",
-		wallet.DIDRole:                    "Token chain block does not exist, the pinned role is DIDRole",
-		wallet.StakingRole:                "Token chain block does not exist, the pinned role is StakingRole",
-		wallet.PledgingRole:               "Token chain block does not exist, the pinned role is PledgingRole",
-		wallet.QuorumPinRole:              "Token chain block does not exist, the pinned role is QuorumPinRole",
-		wallet.QuorumUnpinRole:            "Token chain block does not exist, the pinned role is QuorumUnpinRole",
-		wallet.ParentTokenPinByQuorumRole: "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
-		wallet.PinningRole:                "Token chain block does not exist, the pinned role is PinningRole",
-	}
+// TODO: Need to remove after confirmation
 
-	if message, exists := roleMessages[role]; exists {
-		c.log.Info("Processing role", "role", role)
-		return message
-	}
-
-	c.log.Warn("Unhandled role encountered", "role", role)
-	return ""
-}
+// func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.Result {
+// 	fmt.Println("Handling role-based logic for token:", token)
+// 	list, err := c.GetDHTddrs(token)
+// 	if err != nil {
+// 		c.log.Error("Failed to get DHT addresses", "err", err)
+// 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to get DHT addresses"}, http.StatusInternalServerError)
+// 	}
+// 	q := map[string]string{"token": token}
+// 	var response model.BasicResponse
+// 	for _, peerID := range list {
+// 		peerConn, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
+// 		if err != nil {
+// 			c.log.Warn("Failed to open peer connection", "peer", peerID, "err", err)
+// 			continue
+// 		}
+// 		if err := peerConn.SendJSONRequest("GET", APICheckPinRole, q, nil, &response, false); err != nil {
+// 			c.log.Warn("Failed to send JSON request", "peer", peerID, "err", err)
+// 			continue
+// 		}
+// 		fmt.Println("Response from peer:", response)
+// 		var result model.PinCheckReply
+// 		resultBytes, ok := response.Result.([]byte)
+// 		if !ok {
+// 			resultBytes, err = json.Marshal(response.Result)
+// 			if err != nil {
+// 				c.log.Error("Failed to marshal response.Result to JSON", "err", err)
+// 				continue
+// 			}
+// 		}
+// 		if err := json.Unmarshal(resultBytes, &result); err != nil {
+// 			c.log.Error("Failed to unmarshal response.Result", "err", err)
+// 			continue
+// 		}
+// 		message := c.processRole(result.PinDetails.Role)
+// 		if message != "" {
+// 			return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: message}, http.StatusNoContent)
+// 		}
+// 	}
+// 	return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Unhandled error during role-based processing"}, http.StatusInternalServerError)
+// }
+// // processRole handles specific roles (as integers) and returns a message
+// func (c *Core) processRole(role int) string {
+// 	roleMessages := map[int]string{
+// 		wallet.OwnerRole:                  "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
+// 		wallet.QuorumRole:                 "Token chain block does not exist, the pinned role is QuorumRole",
+// 		wallet.PrevSenderRole:             "Token chain block does not exist, the pinned role is PrevSenderRole",
+// 		wallet.ReceiverRole:               "Token chain block does not exist, the pinned role is ReceiverRole",
+// 		wallet.ParentTokenLockRole:        "Token chain block does not exist, the pinned role is ParentTokenLockRole",
+// 		wallet.DIDRole:                    "Token chain block does not exist, the pinned role is DIDRole",
+// 		wallet.StakingRole:                "Token chain block does not exist, the pinned role is StakingRole",
+// 		wallet.PledgingRole:               "Token chain block does not exist, the pinned role is PledgingRole",
+// 		wallet.QuorumPinRole:              "Token chain block does not exist, the pinned role is QuorumPinRole",
+// 		wallet.QuorumUnpinRole:            "Token chain block does not exist, the pinned role is QuorumUnpinRole",
+// 		wallet.ParentTokenPinByQuorumRole: "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
+// 		wallet.PinningRole:                "Token chain block does not exist, the pinned role is PinningRole",
+// 	}
+// 	if message, exists := roleMessages[role]; exists {
+// 		c.log.Info("Processing role", "role", role)
+// 		return message
+// 	}
+// 	c.log.Warn("Unhandled role encountered", "role", role)
+// 	return ""
+// }
 
 func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
 	var err error
@@ -1574,6 +1595,38 @@ func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {
 		c.log.Error("Failed to sync some or all token chains", "err", lastErr)
 	}
 	return lastErr
+}
+
+func (c *Core) SyncMiningChain(peerID string) error {
+	peer, err := c.getPeer(peerID)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return err
+	}
+
+	var miningChainSyncresp MiningChainSyncReply
+	err = peer.SendJSONRequest("POST", APISyncMiningChain, nil, "", &miningChainSyncresp, false)
+	if err != nil {
+		c.log.Error("Failed to sync token chain block", "err", err)
+		return err
+	}
+	if !miningChainSyncresp.Status {
+		c.log.Error("Failed to sync token chain block", "msg", miningChainSyncresp.Message)
+		return fmt.Errorf(miningChainSyncresp.Message)
+	}
+	for _, bb := range miningChainSyncresp.MiningChainBlocks {
+		miningblk := block.InitMiningBlock(bb, nil)
+		if miningblk == nil {
+			c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
+			return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
+		}
+		err = c.w.AddMiningChainBlock(block.GetMiningChainID(), miningblk)
+		if err != nil {
+			c.log.Error("Failed to add token chain block, syncing failed", "err", err)
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Core) SyncAncestralTokens(p *ipfsport.Peer, parentToken string) ([]string, error) {

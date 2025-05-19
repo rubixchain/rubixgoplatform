@@ -29,13 +29,13 @@ type PledgeHistory struct {
 }
 
 type MiningRecordPubSub struct {
-	MiningID      string          `json:"mining_id"`
-	MinedTokenID  string          `json:"miner_token_id"`
-	MinerDID      string          `json:"miner_did"`
-	MinerPeerID   string          `json:"miner_peer_id"`
-	TokenLevel    int             `json:"token_level"`
-	TokenNumber   int             `json:"token_number"`
-	PledgeHistory []PledgeHistory `json:"pledge_history"`
+	MiningID     string `json:"mining_id"`
+	MinedTokenID string `json:"miner_token_id"`
+	MinerDID     string `json:"miner_did"`
+	MinerPeerID  string `json:"miner_peer_id"`
+	TokenLevel   int    `json:"token_level"`
+	TokenNumber  uint64 `json:"token_number"`
+	Epoch        uint64 `json:"epoch"`
 }
 
 type GetTotalCredits struct {
