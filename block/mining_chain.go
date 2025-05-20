@@ -14,8 +14,8 @@ type MiningChain struct {
 }
 
 const (
-	RubixMiningChainIDString string = "rubix_mining_chain_test_"
-	RubixMiningChainID       string = "QmT4HbZiQU6QXvVFvrKH6HSLP4PdxbVBDsseCr6jXq9AMM"
+	RubixMiningChainIDString string = "RUBIX_MINING_CHAIN_TEST_PART_1"
+	RubixMiningChainID       string = "QmZBygVYVKfp8T8epK9sEyYYU1MzqKbyTcUMAmqosUtQnK"
 )
 
 const (

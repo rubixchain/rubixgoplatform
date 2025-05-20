@@ -191,7 +191,6 @@ func (w *Wallet) GetAllMiningChainBlocks(token string, startBlockNumber uint64) 
 		count++
 		nextBlockNumber = blockNumber + 1
 		iter.Next()
-		fmt.Println("Got mining chain block:", blockNumber)
 	}
 
 	if !iter.Valid() {

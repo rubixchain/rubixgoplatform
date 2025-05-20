@@ -1597,15 +1597,15 @@ func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {
 	return lastErr
 }
 
-func (c *Core) SyncMiningChain(peerID string) error {
-	peer, err := c.getPeer(peerID)
+func (c *Core) SyncMiningChain(address string) error {
+	peer, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return err
 	}
 
 	var miningChainSyncresp MiningChainSyncReply
-	err = peer.SendJSONRequest("POST", APISyncMiningChain, nil, "", &miningChainSyncresp, false)
+	err = peer.SendJSONRequest("GET", APISyncMiningChain, nil, "", &miningChainSyncresp, false)
 	if err != nil {
 		c.log.Error("Failed to sync token chain block", "err", err)
 		return err
