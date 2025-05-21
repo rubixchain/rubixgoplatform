@@ -75,7 +75,7 @@ const (
 	TestNetDir                string = "TestNet"
 	TestNetDIDDir             string = "TestNetDID/"
 	MaxDecimalPlaces          int    = 3
-	AddressForMiningChainSync string = "12D3KooWMLD1bdHLgnDBPQFmm2uDeqi2fgfYvpUEixYavFUgdj7e.bafybmic3qz5nsz25eymi3ruunueyjb5btxiog3utxyqz6nhyqow2egdmf4"
+	AddressForMiningChainSync string = "12D3KooWMpR6nZmemJ88Z7HR4qXXhVKV4kerAEFkGsJRA19BEvrX" //bafybmib6gtwq7kqlvfqzi4sbv7fpxuwp3smjro5bujtbckaajkbdkls3b4
 )
 
 const (
@@ -131,6 +131,7 @@ type Core struct {
 	defaultSetup         bool
 	pledgeHistory        []model.PledgeHistory
 	epochPinningTicker   *time.Ticker
+	transEpoch           int
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {

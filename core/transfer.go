@@ -178,7 +178,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	st := time.Now()
 	txEpoch := int(st.Unix())
 	c.log.Debug("printing the time in initiateRBTTransfer in core package", txEpoch)
-
+    c.transEpoch = txEpoch
 	resp := &model.BasicResponse{
 		Status: false,
 	}

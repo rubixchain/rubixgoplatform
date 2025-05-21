@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,13 @@ import (
 )
 
 const fiveWeeksInSeconds = 5 * 7 * 24 * 60 * 60 // 5 weeks = 5 * 7 days * 24 hours * 60 minutes * 60 seconds
+
+func floorToUint64(f float64) uint64 {
+	if f < 0 {
+		return 0 // Prevent underflow for negative values
+	}
+	return uint64(math.Floor(f))
+}
 
 func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails []model.PledgeHistory, miningToken model.NewTokenDetails) error {
 
@@ -216,22 +224,25 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 		// c.log.Debug("Transfer value check passed")
 
 		// Check for the credit value
-		var cumulativeCredits int64
-		var creditsForEachQuorum int64
+		var cumulativeCredits float64
+		var creditsForEachQuorum uint64
 		// nextBlockofTransfer := block.InitBlock(blocks[validatingBlockNumber+1], nil)
 		nextBlockofTransferEpoch := nextBlockofTransfer.GetEpoch()
 		epochDiffWithNextBlock := nextBlockofTransferEpoch - transferBlock.GetEpoch()
 		if int(tokenInfo.TransactionType) == 2 {
-			cumulativeCredits = int64(epochDiffWithNextBlock) * int64(tokenInfo.TransferTokenValue)
-			creditsForEachQuorum = cumulativeCredits / 5
+			fmt.Println("transfer token value", tokenInfo.TransferTokenValue)
+			cumulativeCredits = float64(epochDiffWithNextBlock) * tokenInfo.TransferTokenValue
+			fmt.Println("cumulativeCredits", cumulativeCredits)
+			creditsForEachQuorum = floorToUint64(cumulativeCredits / 5)
 		} else if int(tokenInfo.TransactionType) == 1 {
-			cumulativeCredits = int64(epochDiffWithNextBlock) * int64(tokenInfo.TransferTokenValue) * 15
-			creditsForEachQuorum = cumulativeCredits / 5
+			cumulativeCredits = float64(epochDiffWithNextBlock) * tokenInfo.TransferTokenValue * 15
+			creditsForEachQuorum = floorToUint64(cumulativeCredits / 5)
 		}
 		fmt.Println("creditsForEachQuorum", creditsForEachQuorum)
 		fmt.Println("tokenInfo.TokenCredit", tokenInfo.TokenCredit)
 
-		if creditsForEachQuorum < int64(tokenInfo.TokenCredit) {
+		// Assuming TokenCredit is uint64 or non-negative int; adjust type if needed
+		if creditsForEachQuorum < uint64(tokenInfo.TokenCredit) {
 			c.log.Error("Failed to verify credit value check in credit validation")
 			return fmt.Errorf("credit value mismatch for token %s", tokenInfo.TransferTokenID)
 		} else {
@@ -327,7 +338,7 @@ func (c *Core) getPeerWhoPinTokenEpoch(tokenID string, weekCount int) ([]string,
 		}
 	}
 	if len(list) == 0 {
-		c.log.Info("no peers found for CID:", newCID)
+		c.log.Info("no peers found for CID:", newCID, "tokenID:", tokenID)
 		return nil, err
 	}
 	return list, nil
