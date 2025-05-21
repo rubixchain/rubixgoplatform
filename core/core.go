@@ -75,7 +75,7 @@ const (
 	TestNetDir                string = "TestNet"
 	TestNetDIDDir             string = "TestNetDID/"
 	MaxDecimalPlaces          int    = 3
-	AddressForMiningChainSync string = "12D3KooWMpR6nZmemJ88Z7HR4qXXhVKV4kerAEFkGsJRA19BEvrX" //bafybmib6gtwq7kqlvfqzi4sbv7fpxuwp3smjro5bujtbckaajkbdkls3b4
+	AddressForMiningChainSync string = "12D3KooWMxFmBs4LCq5dpnfgHDRL4gAbwf1WqZJZBrbtcqZ9JBxN.bafybmidexm44uwwvg5lfnfh5kxj6mydashzzb3xp3ytpr22awddou7n7ra"
 )
 
 const (

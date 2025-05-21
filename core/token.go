@@ -334,6 +334,7 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) syncMiningChain(req *ensweb.Request) *ensweb.Result {
 	// Fetch token blocks
+	fmt.Println("Mining chain sync request received")
 	blks, _, err := c.w.GetAllMiningChainBlocks(block.GetMiningChainID(), 0)
 	if err != nil {
 		c.log.Error("Error fetching token blocks", "error", err)
@@ -1620,7 +1621,7 @@ func (c *Core) SyncMiningChain(address string) error {
 			c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
 			return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
 		}
-		err = c.w.AddMiningChainBlock(block.GetMiningChainID(), miningblk)
+		err = c.w.AddMiningChainBlock(miningblk)
 		if err != nil {
 			c.log.Error("Failed to add token chain block, syncing failed", "err", err)
 			return err

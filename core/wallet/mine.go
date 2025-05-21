@@ -71,27 +71,24 @@ func (w *Wallet) CreatePledgeHistoryMap(creditDetails []model.PledgeHistory, min
 		}
 		key := strings.Join(keyParts, "-")
 
-		value := CreditsDetailsMapValue{
-			MiningID:         miningTokenID,
-			RemainingCredits: pledge.RemainingCredits,
-		}
+		// Store only RemainingCredits as the value
+		result[key] = pledge.RemainingCredits
 
-		// Add the struct directly to the result map
-		result[key] = value
+		w.log.Debug("Created pledge history entry", "key", key, "remainingCredits", pledge.RemainingCredits)
 	}
 
 	return result, nil
 }
 
 // getLatestBlock get latest block from the storage
-func (w *Wallet) GetLatestMiningChainBlock(token string) (*block.MiningChain, error) {
+func (w *Wallet) GetLatestMiningChainBlock() (*block.MiningChain, error) {
 	tt := tkn.MiningChainType
 	db := w.getChainDB(tt)
 	if db == nil {
 		w.log.Error("Failed to get DB, invalid token type")
 		return nil, fmt.Errorf("Failed to get DB, invalid token type")
 	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(w.MiningChainKeyPrefix(token))), nil)
+	iter := db.NewIterator(util.BytesPrefix([]byte(w.MiningChainKeyPrefix(block.GetMiningChainID()))), nil)
 	defer iter.Release()
 	if iter.Last() {
 		v := iter.Value()
@@ -103,7 +100,7 @@ func (w *Wallet) GetLatestMiningChainBlock(token string) (*block.MiningChain, er
 	return nil, fmt.Errorf("failed to get mining chain latest block")
 }
 
-func (w *Wallet) AddMiningChainBlock(token string, miningChain *block.MiningChain) error {
+func (w *Wallet) AddMiningChainBlock(miningChain *block.MiningChain) error {
 	opt := &opt.WriteOptions{
 		Sync: true,
 	}
@@ -115,22 +112,27 @@ func (w *Wallet) AddMiningChainBlock(token string, miningChain *block.MiningChai
 	}
 
 	// Get the latest block number for mining chain key
-	latestBlock, err := w.GetLatestMiningChainBlock(token)
-	var nextBlockNumber uint64
+	// latestBlock, err := w.GetLatestMiningChainBlock()
+	// var nextBlockNumber uint64
 
-	if err != nil || latestBlock == nil {
-		w.log.Warn("No existing mining chain block found, adding the first block")
-		nextBlockNumber = 1
-	} else {
-		latestBlockNumber, err := latestBlock.GetMiningChainBlockNumber()
-		if err != nil {
-			w.log.Error("Failed to get latest mining chain block number")
-			return fmt.Errorf("failed to get latest mining chain block number")
-		}
-		nextBlockNumber = latestBlockNumber + 1
+	// if err != nil || latestBlock == nil {
+	// 	w.log.Warn("No existing mining chain block found, adding the first block")
+	// 	nextBlockNumber = 1
+	// } else {
+	// 	latestBlockNumber, err := latestBlock.GetMiningChainBlockNumber()
+	// 	if err != nil {
+	// 		w.log.Error("Failed to get latest mining chain block number")
+	// 		return fmt.Errorf("failed to get latest mining chain block number")
+	// 	}
+	// 	nextBlockNumber = latestBlockNumber + 1
+	// }
+
+	blockNumber, err := miningChain.GetMiningChainBlockNumber()
+	if err != nil {
+		w.log.Error("Failed to get mining chain block number")
+		return fmt.Errorf("failed to get mining chain block number")
 	}
-
-	key := w.MiningChainKey(token, nextBlockNumber)
+	key := w.MiningChainKey(block.GetMiningChainID(), blockNumber)
 
 	db.l.Lock()
 	err = db.Put([]byte(key), miningChain.GetMiningBlock(), opt)
@@ -140,7 +142,7 @@ func (w *Wallet) AddMiningChainBlock(token string, miningChain *block.MiningChai
 		w.log.Error("Failed to write mining chain block", "err", err)
 		return err
 	}
-	w.log.Info("Mining chain block added successfully with key:", key)
+	w.log.Info("Mining chain block added successfully", "key", key)
 	return nil
 }
 

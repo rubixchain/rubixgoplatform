@@ -1856,10 +1856,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if err != nil {
 			c.log.Error("Failed to get the quorum signature list for mining chain")
 		}
-
-		latestBlock, err := c.w.GetLatestMiningChainBlock(block.GetMiningChainID())
+		// TODO: Modify the below code after first mining block is created
+		latestBlock, err := c.w.GetLatestMiningChainBlock()
 		var blockNumber uint64
-		if latestBlock == nil {
+		if latestBlock == nil || err != nil {
 			blockNumber = 1 // First block
 		} else {
 			latestNumber, err := latestBlock.GetMiningChainBlockNumber()
@@ -1869,7 +1869,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			blockNumber = latestNumber + 1
 		}
-		prevMiningChainID, err := latestBlock.GetPreviousMiningID()
+		prevMiningChainID, err := latestBlock.GetMiningID()
 		if err != nil {
 			c.log.Error("Failed to get previous mining chain id", "err", err)
 			return nil, nil, nil, err
@@ -1905,7 +1905,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		// Add mining chain block to mining chain
-		err = c.w.AddMiningChainBlock(block.GetMiningChainID(), miningBlock)
+		err = c.w.AddMiningChainBlock(miningBlock)
 		if err != nil {
 			c.log.Error("Failed to add mining chain block", "err", err)
 			return nil, nil, nil, err

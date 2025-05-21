@@ -827,18 +827,9 @@ func GetWeeksPassed() int {
 	duration := now.Sub(RubixWeekEpochStartDate)
 	// Handle case where current time is before ReferenceDate
 	if duration < 0 {
-		return 0 // If the current time is before the start date, return 0 intervals
+		return 0 // If the current time is before the start date, return 0
 	}
-	weeksPassed := int(duration.Hours() / (24 * 7))
-	// Add +1 to ensure the first week starts as week 1
-	return weeksPassed + 1
-
-	// // Calculate total minutes passed since ReferenceDate
-	// totalMinutesPassed := int(duration.Minutes())
-
-	// // Divide by 10 to get the number of 10-minute intervals
-	// intervalsPassed := totalMinutesPassed / 10
-
-	// Return the count of 10-minute intervals
-	// return intervalsPassed
+	yearsPassed := int(duration.Hours() / (24 * 365))
+	// Add +1 to ensure the first year returns 1
+	return yearsPassed + 1
 }

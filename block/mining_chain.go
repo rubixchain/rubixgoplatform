@@ -14,8 +14,8 @@ type MiningChain struct {
 }
 
 const (
-	RubixMiningChainIDString string = "RUBIX_MINING_CHAIN_TEST_PART_1"
-	RubixMiningChainID       string = "QmZBygVYVKfp8T8epK9sEyYYU1MzqKbyTcUMAmqosUtQnK"
+	RubixMiningChainIDString string = "RUBIX_MINING_CHAIN_TEST_PART_4"
+	RubixMiningChainID       string = "QmNdtJmgZm584gFQ5wvEpSJAgqE251uMGHkfWPUo5Kmu2D"
 )
 
 const (
@@ -39,23 +39,23 @@ const (
 )
 
 type MiningChainBlockInfo struct {
-	MiningID         string                 `json:"miningID"`
-	MinerDID         string                 `json:"minerDID"`
-	TokenID          string                 `json:"tokenID"`
-	TokenLevel       int                    `json:"tokenLevel"`
-	TokenNumber      uint64                 `json:"tokenNumber"`
-	CreditDetails    map[string]interface{} `json:"creditDetails"`
-	PledgeDetails    []PledgeDetail         `json:"pledgeDetails"`
-	QuorumSignature  []QuorumSignature      `json:"quorumSignature"`
-	Epoch            int                    `json:"epoch"`
-	PreviousMiningID string                 `json:"previousMiningID"`
+	MiningID         string                 `json:"Mining_ID"`
+	MinerDID         string                 `json:"Miner_DID"`
+	TokenID          string                 `json:"TokenID"`
+	TokenLevel       int                    `json:"Token_level"`
+	TokenNumber      uint64                 `json:"Token_number"`
+	CreditDetails    map[string]interface{} `json:"Credit_details"`
+	PledgeDetails    []PledgeDetail         `json:"Quorum_pledge_details"`
+	QuorumSignature  []QuorumSignature      `json:"Quorum_signature"`
+	Epoch            int                    `json:"Epoch"`
+	PreviousMiningID string                 `json:"Previous_mining_ID"`
 }
 
 type MiningChainBlock struct {
-	MiningChainBlockNumber    uint64                `json:"miningBlockNumber"`
-	MiningChainBlockHash      string                `json:"miningChainBlockHash"`
-	MiningChainBlockSignature string                `json:"miningChainBlockSignature"`
-	MiningChainInfo           *MiningChainBlockInfo `json:"miningChainInfo"`
+	MiningChainBlockNumber    uint64                `json:"Block_number"`
+	MiningChainBlockHash      string                `json:"Block_hash"`
+	MiningChainBlockSignature string                `json:"Block_sign"`
+	MiningChainInfo           *MiningChainBlockInfo `json:"Block_info"`
 }
 
 func NewMiningInfo(ctcb map[string]*MiningChain, mi *MiningChainBlockInfo) map[string]interface{} {
@@ -173,10 +173,33 @@ func (mb *MiningChain) miningBlkDecode() error {
 		return fmt.Errorf("invalid block, missing block content")
 	}
 	hb := util.CalculateHash(bc.([]byte), "SHA3-256")
-	var tcb map[string]interface{}
-	err = cbor.Unmarshal(bc.([]byte), &tcb)
+	var mcb map[interface{}]interface{}
+	err = cbor.Unmarshal(bc.([]byte), &mcb)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal block content: %v", err)
+	}
+	// Convert tcb to map[string]interface{}
+	convertedMcb := make(map[string]interface{})
+	for k, v := range mcb {
+		key, ok := k.(string)
+		if !ok {
+			return fmt.Errorf("non-string key found in block content: %v", k)
+		}
+		convertedMcb[key] = v
+	}
+	// Handle nested MiningChainBlockInfoKey if it exists
+	if info, ok := convertedMcb[MiningChainBlockInfoKey]; ok {
+		if infoMap, ok := info.(map[interface{}]interface{}); ok {
+			convertedInfo := make(map[string]interface{})
+			for k, v := range infoMap {
+				key, ok := k.(string)
+				if !ok {
+					return fmt.Errorf("non-string key found in mining infos: %v", k)
+				}
+				convertedInfo[key] = v
+			}
+			convertedMcb[MiningChainBlockInfoKey] = convertedInfo
+		}
 	}
 	if si, sok := m["2"]; sok {
 		var ksb string
@@ -184,10 +207,10 @@ func (mb *MiningChain) miningBlkDecode() error {
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal signature: %v", err)
 		}
-		tcb[MiningChainBlockSignatureKey] = ksb
+		convertedMcb[MiningChainBlockSignatureKey] = ksb
 	}
-	tcb[MiningChainBlockHashKey] = util.HexToStr(hb)
-	mb.bm = tcb
+	convertedMcb[MiningChainBlockHashKey] = util.HexToStr(hb)
+	mb.bm = convertedMcb
 	return nil
 }
 
@@ -305,9 +328,13 @@ func GetMiningChainID() string {
 
 // GetMiningInfos retrieves the mining info map.
 func (mb *MiningChain) GetMiningInfos() (map[string]interface{}, error) {
-	infos, ok := mb.bm[MiningChainBlockInfoKey].(map[string]interface{})
+	val, ok := mb.bm[MiningChainBlockInfoKey]
 	if !ok {
-		return nil, fmt.Errorf("mining infos not found or invalid")
+		return nil, fmt.Errorf("mining infos key '%s' not found", MiningChainBlockInfoKey)
+	}
+	infos, ok := val.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("mining infos is not a map[string]interface{}, got %T: %v", val, val)
 	}
 	return infos, nil
 }
@@ -389,7 +416,7 @@ func (mb *MiningChain) GetTokenID() (string, error) {
 func (mb *MiningChain) GetTokenLevel() (int, error) {
 	infos, err := mb.GetMiningInfos()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to get mining infos: %v", err)
 	}
 	val, ok := infos[MIMinedTokenLevelKey]
 	if !ok {
@@ -405,16 +432,18 @@ func (mb *MiningChain) GetTokenLevel() (int, error) {
 		return int(v), nil
 	case int:
 		return v, nil
+	case uint64:
+		return int(v), nil // Handle uint64 by converting to int
 	default:
-		return 0, fmt.Errorf("token level is not a number: %T", v)
+		return 0, fmt.Errorf("token level is not a number: %T, value: %v", v, v)
 	}
 }
 
 // GetTokenNumber retrieves the TokenNumber from MiningChainBlockInfo.
-func (mb *MiningChain) GetTokenNumber() (int, error) {
+func (mb *MiningChain) GetTokenNumber() (uint64, error) {
 	infos, err := mb.GetMiningInfos()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to get mining infos: %v", err)
 	}
 	val, ok := infos[MIMinedTokenNumberKey]
 	if !ok {
@@ -422,16 +451,24 @@ func (mb *MiningChain) GetTokenNumber() (int, error) {
 	}
 	switch v := val.(type) {
 	case float64:
-		if v != float64(int(v)) {
+		if v != float64(uint64(v)) {
 			return 0, fmt.Errorf("token number is not an integer: %v", v)
 		}
-		return int(v), nil
+		return uint64(v), nil
 	case int64:
-		return int(v), nil
+		if v < 0 {
+			return 0, fmt.Errorf("token number is negative: %v", v)
+		}
+		return uint64(v), nil
 	case int:
-		return v, nil
+		if v < 0 {
+			return 0, fmt.Errorf("token number is negative: %v", v)
+		}
+		return uint64(v), nil
+	case uint64:
+		return v, nil // Directly return uint64
 	default:
-		return 0, fmt.Errorf("token number is not a number: %T", v)
+		return 0, fmt.Errorf("token number is not a number: %T, value: %v", v, v)
 	}
 }
 
@@ -439,17 +476,39 @@ func (mb *MiningChain) GetTokenNumber() (int, error) {
 func (mb *MiningChain) GetCreditDetails() (map[string]interface{}, error) {
 	infos, err := mb.GetMiningInfos()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get mining infos: %v", err)
 	}
 	val, ok := infos[MICreditDetailsKey]
 	if !ok {
-		return nil, fmt.Errorf("credit details key not found")
+		return nil, nil // No Credit_details
 	}
-	creditDetails, ok := val.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("credit details is not a map")
+
+	// Try direct type assertion
+	if creditDetails, ok := val.(map[string]interface{}); ok {
+		return creditDetails, nil
 	}
-	return creditDetails, nil
+
+	// Handle map[interface{}]interface{} from CBOR deserialization
+	if genericMap, ok := val.(map[interface{}]interface{}); ok {
+		creditDetails := make(map[string]interface{})
+		for k, v := range genericMap {
+			keyStr, ok := k.(string)
+			if !ok {
+				fmt.Printf("GetCreditDetails: Non-string key in Credit_details, type %T, value: %v\n", k, k)
+				continue
+			}
+			creditDetails[keyStr] = v
+		}
+		if len(creditDetails) == 0 {
+			fmt.Printf("GetCreditDetails: Converted map is empty, original: %v\n", genericMap)
+			return nil, nil
+		}
+		return creditDetails, nil
+	}
+
+	// Log unexpected type for debugging
+	fmt.Printf("GetCreditDetails: Credit_details is not a map, got type %T, value: %v\n", val, val)
+	return nil, nil
 }
 
 // GetPledgeDetails retrieves the PledgeDetails from MiningChainBlockInfo.
