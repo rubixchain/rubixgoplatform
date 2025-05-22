@@ -49,19 +49,20 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					c.AddPeerDetails(*signerInfo)
 				}
 			}
-			if signerInfo == nil || *signerInfo.DIDType == -1 {
+			if signerInfo.DIDType == nil || *signerInfo.DIDType == -1 {
 				peerDetails, err := c.GetPeerInfo(p, signer)
+				basicDidType := did.BasicDIDMode
 				if err != nil || peerDetails.PeerInfo.DIDType == nil {
 					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
 					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
 					if !peerUpdateResult || err != nil {
-						*signerInfo.DIDType = did.BasicDIDMode
+						signerInfo.DIDType = &basicDidType
 						c.AddPeerDetails(*signerInfo)
 					}
 				} else {
 					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
 					if !peerUpdateResult || err != nil {
-						*signerInfo.DIDType = did.BasicDIDMode
+						signerInfo.DIDType = &basicDidType
 						c.AddPeerDetails(*signerInfo)
 					}
 				}
@@ -178,7 +179,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 				c.log.Error("failed to update parent token sync status as incomplete, token ", pt)
 			}
 		}
-		
+
 	}
 	if ptb.GetTransType() != block.TokenBurntType {
 		issueType = ParentTokenNotBurned // parent token is not in burnt stage
