@@ -165,7 +165,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	if err != nil {
 		w.log.Error("Failed to initialize FT storage", "err", err)
 	}
-	err = w.s.Init(PledgeHistoryTable, &model.PledgeHistory{}, true)
+	err = w.s.Init(PledgeHistoryTable, &PledgeHistoryRecord{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize Pledge history storage", "err", err)
 	}

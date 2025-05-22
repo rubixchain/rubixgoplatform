@@ -26,7 +26,7 @@ type PledgeInformation struct {
 	TransactionID   string `json:"transaction_id"`
 }
 
-func (w *Wallet) AddPledgeHistory(pledgeDetails []model.PledgeHistory) error {
+func (w *Wallet) AddPledgeHistory(pledgeDetails []PledgeHistoryRecord) error {
 	for _, detail := range pledgeDetails {
 		err := w.s.Write(PledgeHistoryTable, &detail)
 		if err != nil {
@@ -38,7 +38,7 @@ func (w *Wallet) AddPledgeHistory(pledgeDetails []model.PledgeHistory) error {
 }
 
 func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) (bool, error) {
-	var existingPledgeHistory model.PledgeHistory
+	var existingPledgeHistory PledgeHistoryRecord
 	pledgeHistoryReadErr := w.s.Read(PledgeHistoryTable, &existingPledgeHistory, "transfer_tokens_id=? AND transaction_id=?", tokenID, transID)
 	if pledgeHistoryReadErr != nil {
 		readErr := fmt.Sprint(pledgeHistoryReadErr)
@@ -54,7 +54,7 @@ func (w *Wallet) CheckTokenExistInPledgeHistory(tokenID string, transID string) 
 
 // New GetTokenDetailsByQuorumDid function below
 func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus int) ([]model.PledgeHistory, error) {
-	var pledges []model.PledgeHistory
+	var pledges []PledgeHistoryRecord
 
 	// Query the database for records matching the given QuorumDID and TokenCreditStatus
 	err := w.s.Read(PledgeHistoryTable, &pledges, "quorum_did=? and token_credit_status=?", quorumDID, tokenCreditStatus)
@@ -66,9 +66,12 @@ func (w *Wallet) GetTokenDetailsByQuorumDID(quorumDID string, tokenCreditStatus 
 		w.log.Error("Failed to read pledge history", "quorumDID", quorumDID, "err", err)
 		return nil, err
 	}
+
+	convertedPledges := w.ConvertPledgeHistoryRecordToModel(pledges)
+
 	// fmt.Println("pledges in GetTokenDetailsByQuorumDID function", pledges)
 	// Return the filtered pledge history records
-	return pledges, nil
+	return convertedPledges, nil
 }
 
 // This function will collect the required credit details for mining from the entire pledge history and add the remaining credits if any pledge history credit is not completly used.
@@ -78,7 +81,7 @@ func CollectRequiredCredits(pledges []model.PledgeHistory, requiredCredits uint6
 	unusedCredits := make([]model.PledgeHistory, 0, len(pledges))
 	var totalSelected uint64 = 0
 
-	// Use index-based loop for better performance [4]
+	// Iterate through pledges
 	for i := 0; i < len(pledges); i++ {
 		if totalSelected >= requiredCredits {
 			// Add remaining pledges and exit early
@@ -124,7 +127,7 @@ func CollectRequiredCredits(pledges []model.PledgeHistory, requiredCredits uint6
 }
 
 func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transactionID string) error {
-	var pledgeHistoryRecords []model.PledgeHistory
+	var pledgeHistoryRecords []PledgeHistoryRecord
 
 	err := w.s.Read(
 		PledgeHistoryTable,
@@ -164,7 +167,7 @@ func (w *Wallet) UpdateTokenCreditStatus(tokenID string, status int, transaction
 
 // This function will return the list of tokensIDs from `PledgeHistoryTable` whose next block is not added
 func (w *Wallet) GetTokenIDsWithoutNextBlockFromPledgeHistory() ([]string, error) {
-	var pledgeDetails []model.PledgeHistory
+	var pledgeDetails []PledgeHistoryRecord
 
 	err := w.s.Read(PledgeHistoryTable, &pledgeDetails, "next_epoch = ? AND token_credit = ?", 0, 0)
 	if err != nil {
@@ -181,7 +184,7 @@ func (w *Wallet) GetTokenIDsWithoutNextBlockFromPledgeHistory() ([]string, error
 }
 
 func (w *Wallet) UpdateEpochAndCreditInPledgeHistoryTable(tokenID string, transactionID string, transactionType int, epoch uint64, tokenType int) error {
-	var pledgeHistoryRecords []model.PledgeHistory
+	var pledgeHistoryRecords []PledgeHistoryRecord
 	err := w.s.Read(PledgeHistoryTable, &pledgeHistoryRecords, "transfer_tokens_id = ? and transaction_id=?", tokenID, transactionID)
 	if err != nil {
 		fmt.Println("Error reading pledge history records:", err)
@@ -336,7 +339,9 @@ func (w *Wallet) UpdateCredits(Credits []model.PledgeHistory) error {
 			credit.TokenCredit = credit.RemainingCredits
 			credit.RemainingCredits = 0
 		}
-		err := w.s.Update(PledgeHistoryTable, credit, "transfer_tokens_id = ? and transaction_id=?", credit.TransferTokenID, credit.TransactionID)
+
+		convertedCredit := w.ConvertSinglePledgeHistoryToRecord(credit)
+		err := w.s.Update(PledgeHistoryTable, convertedCredit, "transfer_tokens_id = ? and transaction_id=?", credit.TransferTokenID, credit.TransactionID)
 		if err != nil {
 			w.log.Error("Update failed for transaction:", credit.TransactionID, "Error:", err)
 			return err

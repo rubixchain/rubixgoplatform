@@ -14,6 +14,20 @@ import (
 
 const MiningChainBlockCountLimit = 100
 
+type PledgeHistoryRecord struct {
+	QuorumDID          string  `gorm:"column:quorum_did"`
+	TransactionID      string  `gorm:"column:transaction_id"`
+	TransactionType    int     `gorm:"column:transaction_type"`
+	TransferTokenID    string  `gorm:"column:transfer_tokens_id"`
+	TransferTokenType  int     `gorm:"column:transfer_tokens_type"`
+	TransferTokenValue float64 `gorm:"column:transfer_token_value"`
+	TransferBlockID    string  `gorm:"column:transfer_block_id"`
+	Epoch              uint64  `gorm:"column:epoch"`
+	NextBlockEpoch     uint64  `gorm:"column:next_epoch"`
+	TokenCredit        uint64  `gorm:"column:token_credit"`
+	TokenCreditStatus  int     `gorm:"column:token_credit_status"`
+}
+
 type MiningRecord struct {
 	MiningID     string `gorm:"column:mining_id"`
 	MinedTokenID string `gorm:"column:mined_token_id"`
@@ -26,6 +40,88 @@ type MiningRecord struct {
 type CreditsDetailsMapValue struct {
 	MiningID         string `json:"miningID"`
 	RemainingCredits uint64 `json:"remainingCredits"`
+}
+
+func (w *Wallet) ConvertPledgeHistoryToRecord(pledgeHistories []model.PledgeHistory) []PledgeHistoryRecord {
+	records := make([]PledgeHistoryRecord, 0, len(pledgeHistories))
+
+	for _, ph := range pledgeHistories {
+		record := PledgeHistoryRecord{
+			QuorumDID:          ph.QuorumDID,
+			TransactionID:      ph.TransactionID,
+			TransactionType:    ph.TransactionType,
+			TransferTokenID:    ph.TransferTokenID,
+			TransferTokenType:  ph.TransferTokenType,
+			TransferTokenValue: ph.TransferTokenValue,
+			TransferBlockID:    ph.TransferBlockID,
+			Epoch:              ph.Epoch,
+			NextBlockEpoch:     ph.NextBlockEpoch,
+			TokenCredit:        ph.TokenCredit,
+			TokenCreditStatus:  ph.TokenCreditStatus,
+		}
+		records = append(records, record)
+	}
+
+	return records
+}
+
+// ConvertSinglePledgeHistoryToRecord converts a single model.PledgeHistory to a wallet.PledgeHistoryRecord
+func (w *Wallet) ConvertSinglePledgeHistoryToRecord(pledgeHistory model.PledgeHistory) PledgeHistoryRecord {
+	return PledgeHistoryRecord{
+		QuorumDID:          pledgeHistory.QuorumDID,
+		TransactionID:      pledgeHistory.TransactionID,
+		TransactionType:    pledgeHistory.TransactionType,
+		TransferTokenID:    pledgeHistory.TransferTokenID,
+		TransferTokenType:  pledgeHistory.TransferTokenType,
+		TransferTokenValue: pledgeHistory.TransferTokenValue,
+		TransferBlockID:    pledgeHistory.TransferBlockID,
+		Epoch:              pledgeHistory.Epoch,
+		NextBlockEpoch:     pledgeHistory.NextBlockEpoch,
+		TokenCredit:        pledgeHistory.TokenCredit,
+		TokenCreditStatus:  pledgeHistory.TokenCreditStatus,
+	}
+}
+
+func (w *Wallet) ConvertPledgeHistoryRecordToModel(records []PledgeHistoryRecord) []model.PledgeHistory {
+	pledgeHistories := make([]model.PledgeHistory, 0, len(records))
+
+	for _, record := range records {
+		pledgeHistory := model.PledgeHistory{
+			QuorumDID:          record.QuorumDID,
+			TransactionID:      record.TransactionID,
+			TransactionType:    record.TransactionType,
+			TransferTokenID:    record.TransferTokenID,
+			TransferTokenType:  record.TransferTokenType,
+			TransferTokenValue: record.TransferTokenValue,
+			TransferBlockID:    record.TransferBlockID,
+			Epoch:              record.Epoch,
+			NextBlockEpoch:     record.NextBlockEpoch,
+			TokenCredit:        record.TokenCredit,
+			TokenCreditStatus:  record.TokenCreditStatus,
+			// RemainingCredits is not set explicitly; will default to 0
+		}
+		pledgeHistories = append(pledgeHistories, pledgeHistory)
+	}
+
+	return pledgeHistories
+}
+
+// ConvertSinglePledgeHistoryRecordToModel converts a single wallet.PledgeHistoryRecord to a model.PledgeHistory
+func (w *Wallet) ConvertSinglePledgeHistoryRecordToModel(record PledgeHistoryRecord) model.PledgeHistory {
+	return model.PledgeHistory{
+		QuorumDID:          record.QuorumDID,
+		TransactionID:      record.TransactionID,
+		TransactionType:    record.TransactionType,
+		TransferTokenID:    record.TransferTokenID,
+		TransferTokenType:  record.TransferTokenType,
+		TransferTokenValue: record.TransferTokenValue,
+		TransferBlockID:    record.TransferBlockID,
+		Epoch:              record.Epoch,
+		NextBlockEpoch:     record.NextBlockEpoch,
+		TokenCredit:        record.TokenCredit,
+		TokenCreditStatus:  record.TokenCreditStatus,
+		// RemainingCredits is not set explicitly; will default to 0
+	}
 }
 
 func (w *Wallet) AddMiningRecords(miningRecord MiningRecord) error {

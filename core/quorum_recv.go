@@ -61,7 +61,10 @@ func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
 	}
 
 	resp.Status = true
-	errAddingPledgeHistory := c.w.AddPledgeHistory(c.pledgeHistory)
+
+	pledgeHistory := c.w.ConvertPledgeHistoryToRecord(c.pledgeHistory)
+
+	errAddingPledgeHistory := c.w.AddPledgeHistory(pledgeHistory)
 	if errAddingPledgeHistory != nil {
 		c.log.Error("Failed to add pledge history", "err", errAddingPledgeHistory)
 	}

@@ -20,7 +20,7 @@ type PledgeHistory struct {
 	TransferTokenID    string  `gorm:"column:transfer_tokens_id"`
 	TransferTokenType  int     `gorm:"column:transfer_tokens_type"`
 	TransferTokenValue float64 `gorm:"column:transfer_token_value"`
-	TransferBlockID    string  `gorm:"column:transfer_block_number_and_id"`
+	TransferBlockID    string  `gorm:"column:transfer_block_id"`
 	Epoch              uint64  `gorm:"column:epoch"`
 	NextBlockEpoch     uint64  `gorm:"column:next_epoch"`
 	TokenCredit        uint64  `gorm:"column:token_credit"`

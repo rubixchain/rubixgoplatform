@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -72,7 +71,7 @@ type RacType struct {
 	PartInfo     *RacPartInfo
 	FTSymbol     string
 	FTInfo       *RacFTInfo
-	MiningInfo   *[]model.PledgeHistory
+	// MiningInfo   *[]model.PledgeHistory
 }
 
 type RacPartInfo struct {
