@@ -64,7 +64,7 @@ func (c *Core) ValidateCredits(did string, creditRequestValue int, pledgeDetails
 			c.log.Error("Failed to query mining record", "err", err)
 			return fmt.Errorf("failed to query mining record: %v", err)
 		}
-		if remainingCredits != 0 && recordExist {
+		if remainingCredits == 0 && recordExist {
 			c.log.Error("Given record is already used for mining")
 			return fmt.Errorf("Given record is already used for mining")
 		}
