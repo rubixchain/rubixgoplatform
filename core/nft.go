@@ -434,12 +434,21 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
 	}
 
-	receiverInfo, _ := c.GetPeerDIDInfo(executeReq.Receiver)
-	local := false
-	if receiverInfo.PeerID == c.peerID {
-		local = true
-	}
+	var local bool
+	if executeReq.Receiver != "" {
+		receiverInfo, err := c.GetPeerDIDInfo(executeReq.Receiver)
+		if err != nil {
+			c.log.Error("Failed to get receiver peer info", "err", err)
+			resp.Message = "Failed to get receiver peer info for " + executeReq.Receiver
+			return resp
+		}
 
+		local = false
+		if receiverInfo.PeerID == c.peerID {
+			local = true
+		}
+	}
+	
 	err = c.w.UpdateNFTStatus(executeReq.NFT, wallet.TokenIsTransferred, local, executeReq.Receiver, executeReq.NFTValue)
 	if err != nil {
 		c.log.Error("Failed to update NFT status after transferring", err)
