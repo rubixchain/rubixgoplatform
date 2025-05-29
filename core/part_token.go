@@ -44,9 +44,9 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	rem := value - fv
 	rem = floatPrecision(rem, MaxDecimalPlaces)
 	remWhole := 0
-	wt := make([]wallet.Token, 0)
+	wt := make([]wallet.Token, 0) 
 	if wholeValue != 0 {
-		wt, remWhole, err = c.w.GetWholeTokens(did, wholeValue, trnxMode)
+		wt, remWhole, err = c.w.GetWholeTokens(did, wholeValue, trnxMode,c.testNet)
 		if err != nil {
 			c.log.Error("failed to get token", "err", err)
 			return nil, err
@@ -293,6 +293,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		TransInfo:       bti,
 		TokenValue:      floatPrecision(amount, MaxDecimalPlaces),
 		ChildTokens:     pts,
+		Epoch:           c.transEpoch,
 	}
 	ctcb := make(map[string]*block.Block)
 	ctcb[tkn] = c.w.GetLatestTokenBlock(tkn, ptt)

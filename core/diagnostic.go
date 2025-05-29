@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -180,20 +181,17 @@ func (c *Core) DumpNFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	ds.NextBlockID = nextID
 	return ds
 }
-
 func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenChainDataReq) *model.SmartContractDataReply {
 	reply := &model.SmartContractDataReply{
 		BasicResponse: model.BasicResponse{
 			Status: false,
 		},
 	}
-
 	_, err := c.w.GetSmartContractToken(getReq.Token)
 	if err != nil {
 		reply.Message = "Failed to get smart contract token data, token does not exist"
 		return reply
 	}
-
 	sctDataArray := make([]model.SCTDataReply, 0)
 	c.log.Debug("latest flag ", getReq.Latest)
 	if getReq.Latest {
@@ -202,46 +200,27 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			reply.Message = "Failed to get smart contract token data, block is empty"
 			return reply
 		}
-
 		blockNo, err := latestBlock.GetBlockNumber(getReq.Token)
 		if err != nil {
 			reply.Message = "Failed to get smart contract token latest block number"
 			return reply
 		}
-
 		blockId, err := latestBlock.GetBlockID(getReq.Token)
 		if err != nil {
 			reply.Message = "Failed to get smart contract token latest block number"
 			return reply
 		}
-
 		epoch := latestBlock.GetEpoch()
 		scData := latestBlock.GetSmartContractData()
-
-		var initiatorSignature string
-		var initiatorSignData string
-
-		signObj := latestBlock.GetInitiatorSignature()
-		if signObj == nil {
-			reply.Message = "unable to fetch intiateor signature"
-			return reply
-		} else {
-			initiatorSignature = signObj.PrivateSign
-			initiatorSignData = signObj.Hash
+		if scData == "" && blockNo == 0 {
+			reply.Message = "Gensys Block, No Smart contract Data"
 		}
-
-		executorDID := latestBlock.GetExecutorDID()
-
 		sctData := model.SCTDataReply{
-			BlockNo:            blockNo,
-			BlockId:            blockId,
-			SmartContractData:  scData,
-			Epoch:              epoch,
-			InitiatorSignature: initiatorSignature,
-			ExecutorDID:        executorDID,
-			InitiatorSignData:  initiatorSignData,
+			BlockNo:           blockNo,
+			BlockId:           blockId,
+			SmartContractData: scData,
+			Epoch:             epoch,
 		}
-
 		sctDataArray = append(sctDataArray, sctData)
 		reply.SCTDataReply = sctDataArray
 		reply.Status = true
@@ -250,10 +229,6 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 	}
 
 	blks, _, err := c.w.GetAllTokenBlocks(getReq.Token, c.TokenType(SmartContractString), "")
-	if err != nil {
-		reply.Message = "unable to fetch token blocks for contract: " + getReq.Token
-		return reply
-	}
 
 	for _, blk := range blks {
 		block := block.InitBlock(blk, nil)
@@ -272,32 +247,14 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			return reply
 		}
 		scData := block.GetSmartContractData()
-
-		epoch := block.GetEpoch()
-
-		var executorSignature string
-		var executorSignData string
-		signObj := block.GetInitiatorSignature()
-		if signObj == nil {
-			reply.Message = "unable to fetch intiateor signature"
-			return reply
-		} else {
-			executorSignature = signObj.PrivateSign
-			executorSignData = signObj.Hash
+		if scData == "" && blockNo == 0 {
+			reply.Message = "Gensys Block, No Smart contract Data"
 		}
-
-		executorDID := block.GetExecutorDID()
-
 		sctData := model.SCTDataReply{
-			BlockNo:            blockNo,
-			BlockId:            blockId,
-			SmartContractData:  scData,
-			Epoch:              epoch,
-			InitiatorSignature: executorSignature,
-			ExecutorDID:        executorDID,
-			InitiatorSignData:  executorSignData,
+			BlockNo:           blockNo,
+			BlockId:           blockId,
+			SmartContractData: scData,
 		}
-
 		sctDataArray = append(sctDataArray, sctData)
 	}
 	reply.SCTDataReply = sctDataArray
@@ -335,13 +292,12 @@ func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq
 		}
 
 		nftDataArray = append(nftDataArray, model.NFTData{
-			BlockNo:       blockNo,
-			BlockId:       blockId,
-			NFTData:       latestBlock.GetNFTData(),
-			NFTOwner:      latestBlock.GetOwner(),
-			NFTValue:      latestBlock.GetTokenValue(),
-			Epoch:         latestBlock.GetEpoch(),
-			TransactionID: latestBlock.GetTid(),
+			BlockNo:  blockNo,
+			BlockId:  blockId,
+			NFTData:  latestBlock.GetNFTData(),
+			NFTOwner: latestBlock.GetOwner(),
+			NFTValue: latestBlock.GetTokenValue(),
+			Epoch:    latestBlock.GetEpoch(),
 		})
 	} else {
 		blks, _, err := c.w.GetAllTokenBlocks(getReq.Token, c.TokenType(NFTString), "")
@@ -365,13 +321,12 @@ func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq
 			}
 
 			nftDataArray = append(nftDataArray, model.NFTData{
-				BlockNo:       blockNo,
-				BlockId:       blockId,
-				NFTData:       block.GetNFTData(),
-				NFTOwner:      block.GetOwner(),
-				NFTValue:      block.GetTokenValue(),
-				Epoch:         block.GetEpoch(), // Fixed the missing Epoch value
-				TransactionID: block.GetTid(),
+				BlockNo:  blockNo,
+				BlockId:  blockId,
+				NFTData:  block.GetNFTData(),
+				NFTOwner: block.GetOwner(),
+				NFTValue: block.GetTokenValue(),
+				Epoch:    block.GetEpoch(), // Fixed the missing Epoch value
 			})
 		}
 	}
@@ -449,9 +404,10 @@ func (c *Core) ReleaseAllLockedTokens() model.BasicResponse {
 	return *response
 }
 
-func (c *Core) GetActiveQuorums(ql []string) []string {
-	var activeQuorumList []string
-
+func (c *Core) GetFinalQuorumList(ql []string) ([]string, error) {
+	// Initialize finalQl as an empty slice to store the groups that meet the condition
+	var finalQl []string
+	var opError error
 	// Loop through ql in groups of the Minimum Quorum Required
 	for i := 0; i < len(ql); i += QuorumRequired {
 		end := i + QuorumRequired
@@ -460,35 +416,65 @@ func (c *Core) GetActiveQuorums(ql []string) []string {
 		}
 		group := ql[i:end]
 
+		// Initialize a variable to keep track of whether all items in the group meet the condition
+		allQuorumSetup := true
+
 		// Loop through the items in the group and check if their response message is "quorum is setup"
 		for _, item := range group {
-			if len(activeQuorumList) == QuorumRequired {
-				return activeQuorumList
-			}
-
+			opError = nil
 			parts := strings.Split(item, ".")
 			if len(parts) != 2 {
 				continue
 			}
-
 			peerID := parts[0]
 			did := parts[1]
 
 			msg, _, err := c.CheckQuorumStatus(peerID, did)
 			if err != nil || strings.Contains(msg, "Quorum Connection Error") {
-				c.log.Error(fmt.Sprintf("Failed to check quorum status for quorum %v, error: %v", item, err))
-				continue
+				c.log.Error("Failed to check quorum status:", err)
+				opError = fmt.Errorf("failed to check quorum status:  %v", err)
+				allQuorumSetup = false
+				break
 			}
-
+			if msg != "Quorum is setup" {
+				// If any item in the group does not have the response message as "quorum is setup",
+				// set allQuorumSetup to false and break the loop
+				allQuorumSetup = false
+				break
+			}
 			if strings.Contains(msg, "Quorum is not setup") {
-				errMsg := fmt.Sprintf("Quorum %v is not setup", item)
-				c.log.Error(errMsg)
-				continue
+				c.log.Error("quorums are currently unavailable for this trnx")
+				opError = fmt.Errorf("quorums are uncurrently available for this trnx")
+				allQuorumSetup = false
+				break
 			}
+		}
 
-			activeQuorumList = append(activeQuorumList, item)
+		// If all items in the group have the response message as "quorum is setup",
+		// append the group to finalQl
+		if allQuorumSetup {
+			finalQl = append(finalQl, group...)
+			break
 		}
 	}
+	// Return finalQl
+	return finalQl, opError
+}
 
-	return activeQuorumList
+func (c *Core) DumpMiningChain() *model.TCDumpReply {
+	ds := &model.TCDumpReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	blks, nextID, err := c.w.GetAllMiningChainBlocks(block.GetMiningChainID(), 0)
+	if err != nil {
+		ds.Message = "Failed to get mining chain blocks"
+		return ds
+	}
+	ds.Status = true
+	ds.Message = "Successfully got the mining chain"
+	ds.Blocks = blks
+	ds.NextBlockID = strconv.FormatUint(nextID, 10)
+	return ds
 }

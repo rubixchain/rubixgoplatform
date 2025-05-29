@@ -144,3 +144,34 @@ func (cmd *Command) FaucetTokenCheck() {
 
 	cmd.log.Info("Validated token details successfully")
 }
+
+func (cmd *Command) FindReadyToMineCredits() {
+
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+
+	availableCreds, err := cmd.c.FindReadyToMineCredits(cmd.did)
+	if err != nil {
+		cmd.log.Info("Failed to update token credit status for ready to mine tokens")
+		return
+	}
+	fmt.Printf("Response : %v\n", availableCreds)
+	if !availableCreds.Status {
+		cmd.log.Error("Failed to get total ready to mine credits and update status in the DB", "message", availableCreds.Message)
+	} else {
+		cmd.log.Info("Successfully got the total ready to mine credits and update their status in the DB")
+		fmt.Printf("Did:%s,Total ready to mine credits:%d\n  ", availableCreds.CreditDetails.Did, availableCreds.CreditDetails.TotalCredits)
+	}
+}

@@ -95,6 +95,9 @@ const (
 	APIRequestDIDForPubKey              string = "/api/request-did-for-pubkey"
 	APISendJWTFromWallet                string = "/api/send-jwt-from-wallet"
 	APIAddPeerDetailsFromExplorer       string = "/api/add-peer-details-from-explorer"
+	APIFindReadyToMineCredits           string = "/api/find-ready-to-mine-credits"
+	APIMineRBT                          string = "/api/mine-rbt"
+	APIDumpMiningChain                  string = "/api/dump-mining-chain"
 )
 
 // jwt.RegisteredClaims

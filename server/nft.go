@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -203,7 +204,7 @@ func (s *Server) APIGetNFTsByDid(req *ensweb.Request) *ensweb.Result {
 
 type ExecuteNFTSwaggoInput struct {
 	NFT        string  `json:"nft"`
-	Executor   string  `json:"executor"`
+	Owner      string  `json:"owner"`
 	Receiver   string  `json:"receiver"`
 	QuorumType int     `json:"quorum_type"`
 	Comment    string  `json:"comment"`
@@ -226,7 +227,7 @@ func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", err)
 	}
-	_, did, ok := util.ParseAddress(executeReq.Executor)
+	_, did, ok := util.ParseAddress(executeReq.Owner)
 	if !ok {
 		return s.BasicResponse(req, false, "Invalid Owner address", nil)
 	}
@@ -236,8 +237,8 @@ func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Invalid NFT", nil)
 	}
 	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-	s.log.Info("The did trying to transfer the nft :", executeReq.Executor)
-	if !strings.HasPrefix(executeReq.Executor, "bafybmi") || len(executeReq.Executor) != 59 || !is_alphanumeric {
+	s.log.Info("The did trying to transfer the nft :", executeReq.Owner)
+	if !strings.HasPrefix(executeReq.Owner, "bafybmi") || len(executeReq.Owner) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid owner DID")
 		return s.BasicResponse(req, false, "Invalid owner DID", nil)
 	}
@@ -297,47 +298,38 @@ func (s *Server) APIFetchNft(req *ensweb.Request) *ensweb.Result {
 	var fetchNft core.FetchNFTRequest
 	var err error
 
-	// Get the NFT id from the request
 	fetchNft.NFT = s.GetQuerry(req, "nft")
 
-	// Validate the NFT id
-	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(fetchNft.NFT)
-	if len(fetchNft.NFT) != 46 || !strings.HasPrefix(fetchNft.NFT, "Qm") || !isAlphanumeric {
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(fetchNft.NFT)
+	if len(fetchNft.NFT) != 46 || !strings.HasPrefix(fetchNft.NFT, "Qm") || !is_alphanumeric {
 		s.log.Error("Invalid nft")
 		return s.BasicResponse(req, false, "Invalid nft", nil)
 	}
 
-	// Check if the NFT directory already exists
-	existingPath, err := s.c.CheckNFTFolderExists(fetchNft.NFT)
-	if err != nil {
-		s.log.Error("Failed to check if NFT folder exists", "err", err)
-		return s.BasicResponse(req, false, "Failed to check NFT folder", nil)
-	}
-	if existingPath != "" {
-		s.log.Debug("NFT directory already exists")
-		return s.BasicResponse(req, true, "NFT directory already exists", nil)
-	}
-
-	// Create a temporary NFT folder
-	fetchNft.NFTPath, err = s.c.CreateNFTTempFolder()
+	fetchNft.NFTPath, err = s.c.CreateSCTempFolder()
 	if err != nil {
 		s.log.Error("Fetch nft failed, failed to create nft folder", "err", err)
 		return s.BasicResponse(req, false, "Fetch nft failed, failed to create nft folder", nil)
 	}
 
-	// Rename the temporary folder to the NFT name
-	fetchNft.NFTPath, err = s.c.RenameNFTFolder(fetchNft.NFTPath, fetchNft.NFT)
+	fetchNft.NFTPath, err = s.c.RenameSCFolder(fetchNft.NFTPath, fetchNft.NFT)
 	if err != nil {
 		s.log.Error("Fetch nft failed, failed to rename nft folder", "err", err)
 		return s.BasicResponse(req, false, "Fetch nft failed, failed to rename nft folder", nil)
+	} else {
+		// The following condition indicates that the Smart Contract directory
+		// already exists in the node directory
+		if fetchNft.NFTPath == "" {
+			s.log.Debug("NFT directory already exists")
+			return s.BasicResponse(req, true, "NFT directory already exists", nil)
+		}
 	}
 
-	// Fetch the NFT
-	basicResponse := s.c.FetchNFT(&fetchNft)
-	if !basicResponse.Status {
-		s.log.Error("Fetch nft failed", "err", basicResponse.Message)
-		return s.BasicResponse(req, false, basicResponse.Message, nil)
-	}
+	s.c.AddWebReq(req)
+	go func() {
+		basicResponse := s.c.FetchNFT(req.ID, &fetchNft)
+		fmt.Printf("Basic Response server:  %+v\n", basicResponse.Message)
+	}()
+	return s.BasicResponse(req, true, "NFT fetched successfully", nil)
 
-	return s.BasicResponse(req, basicResponse.Status, basicResponse.Message, nil)
 }

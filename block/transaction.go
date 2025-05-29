@@ -1,8 +1,10 @@
 package block
 
 import (
+	"fmt"
 	"strconv"
 
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -44,6 +46,7 @@ const (
 	TIExecutorDIDKey    string = "9"
 	TICommitedTokensKey string = "10"
 	TIPinningDIDKey     string = "11"
+	TIMinerDIDKey       string = "12"
 )
 
 const (
@@ -80,6 +83,7 @@ type TransInfo struct {
 	DeployerDID    string        `json:"deployerDID"`
 	ExecutorDID    string        `json:"executorDID"`
 	PinningNodeDID string        `json:"pinningNodeDID"`
+	MinerDID       string        `json:"minerDID"`
 }
 
 func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
@@ -99,14 +103,32 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 		nttb[TTBlockNumberKey] = "0"
 		nttb[TTPreviousBlockIDKey] = ""
 	} else {
-		bn, err := b.GetBlockNumber(tt.Token)
-		if err != nil {
-			return nil
+		var bn uint64
+		var err error
+		if b.GetMinerDID() != "" {
+			bn = uint64(0)
+		} else {
+			bn, err = b.GetBlockNumber(tt.Token)
+			if err != nil {
+				return nil
+			}
 		}
+
 		bn++
-		bid, err := b.GetBlockID(tt.Token)
-		if err != nil {
-			return nil
+		var bid string
+		// var err error
+		if b.GetMinerDID() != "" || tt.TokenType == token.TestMiningTokenType || tt.TokenType == token.MiningTokenType {
+			bid, err = b.GetMinedTokenBlockID(tt.Token)
+			if err != nil {
+				fmt.Printf("failed to get mined token block ID for token %s: %v\n ", tt.Token, err)
+				return nil
+			}
+		} else {
+			bid, err = b.GetBlockID(tt.Token)
+			if err != nil {
+				fmt.Printf("failed to get block ID for token %s: %v\n", tt.Token, err) //TODO: Remove the print statement after testing
+				return nil
+			}
 		}
 		nttb[TTBlockNumberKey] = strconv.FormatUint(bn, 10)
 		nttb[TTPreviousBlockIDKey] = bid
@@ -116,9 +138,12 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 
 func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} {
 	ntib := make(map[string]interface{})
-	if ti.Tokens == nil || len(ti.Tokens) == 0 {
-		return nil
+	if ti.MinerDID == "" {
+		if ti.Tokens == nil || len(ti.Tokens) == 0 {
+			return nil
+		}
 	}
+
 	if ti.SenderDID != "" {
 		ntib[TISenderDIDKey] = ti.SenderDID
 	}
@@ -134,6 +159,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	if ti.ExecutorDID != "" {
 		ntib[TIExecutorDIDKey] = ti.ExecutorDID
 	}
+	if ti.MinerDID != "" {
+		ntib[TIMinerDIDKey] = ti.MinerDID
+	}
 	if ti.Comment != "" {
 		ntib[TICommentKey] = ti.Comment
 	}
@@ -147,15 +175,18 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 		ntib[TIRefIDKey] = ti.RefID
 	}
 	nttbs := make(map[string]interface{})
-	for _, tt := range ti.Tokens {
-		b := ctcb[tt.Token]
-		nttb := newTransToken(b, &tt)
-		if nttb == nil {
-			return nil
+	if ti.MinerDID == "" {
+		for _, tt := range ti.Tokens {
+			b := ctcb[tt.Token]
+			nttb := newTransToken(b, &tt)
+			if nttb == nil {
+				return nil
+			}
+			nttbs[tt.Token] = nttb
 		}
-		nttbs[tt.Token] = nttb
+		ntib[TITokensKey] = nttbs
+
 	}
-	ntib[TITokensKey] = nttbs
 
 	return ntib
 }

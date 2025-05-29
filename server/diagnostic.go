@@ -200,3 +200,8 @@ func (s *Server) APIReleaseAllLockedTokens(req *ensweb.Request) *ensweb.Result {
 	response = s.c.ReleaseAllLockedTokens()
 	return s.RenderJSON(req, response, http.StatusOK)
 }
+
+func (s *Server) APIDumpMiningChain(req *ensweb.Request) *ensweb.Result {
+	drep := s.c.DumpMiningChain()
+	return s.RenderJSON(req, drep, http.StatusOK)
+}

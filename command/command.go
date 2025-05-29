@@ -109,6 +109,9 @@ const (
 	CreateDIDFromPubKeyCmd         string = "createdidfrompubkey"
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	AddPeerDetailsFromExplorer     string = "exppeerdetails"
+	FindReadyToMineCreditsCmd      string = "fetch-credits"
+	MineRBTCmd                     string = "mine-rbt"
+	DumpMiningChainCmd             string = "dump-mining-chain"
 )
 
 var commands = []string{VersionCmd,
@@ -175,6 +178,9 @@ var commands = []string{VersionCmd,
 	FetchNftCmd,
 	GetNftsByDidCmd,
 	CreateDIDFromPubKeyCmd,
+	FindReadyToMineCreditsCmd,
+	MineRBTCmd,
+	DumpMiningChainCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -239,6 +245,10 @@ var commandsHelp = []string{"To get tool version",
 	"This command will subscribe NFT",
 	"This command will fetch NFT",
 	"This command will get all NFTs owned by the did",
+	"",
+	"This command will fetch the ready to mine credits",
+	"This command will mine RBT",
+	"This command will dump mining chain",
 }
 
 type Command struct {
@@ -761,6 +771,12 @@ func Run(args []string) {
 		cmd.addUserAPIKey()
 	case AddPeerDetailsFromExplorer:
 		cmd.addPeerDetailsFromExplorer()
+	case FindReadyToMineCreditsCmd:
+		cmd.FindReadyToMineCredits()
+	case MineRBTCmd:
+		cmd.MineRBT()
+	case DumpMiningChainCmd:
+		cmd.dumpMiningchain()
 	default:
 		cmd.log.Error("Invalid command")
 	}

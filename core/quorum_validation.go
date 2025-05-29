@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -16,6 +17,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
+
+const fourWeeksInSeconds = 4 * 7 * 24 * 60 * 60 // 4 weeks = 4 * 7 days * 24 hours * 60 minutes * 60 seconds
 
 type TokenStateCheckResult struct {
 	Token                 string
@@ -110,7 +113,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
 		return -1, err
 	}
-	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+	iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
 
 	tt := token.RBTTokenType
 	tv := float64(1)
@@ -134,7 +137,8 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	// 		lbID = ""
 	// 	}
 	// }
-	err = c.syncTokenChainFrom(p, lbID, pt, tt)
+	err = c.syncTokenChainFromPeer(p, lbID, pt, tt)
+	fmt.Println("sync 7") //TODO
 	if err != nil {
 		c.log.Error("failed to sync token chain block", "err", err)
 		return -1, fmt.Errorf("failed to sync tokenchain Parent Token: %v, issueType: %v", pt, TokenChainNotSynced)
@@ -178,7 +182,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 				c.log.Error("failed to update parent token sync status as incomplete, token ", pt)
 			}
 		}
-		
+
 	}
 	if ptb.GetTransType() != block.TokenBurntType {
 		issueType = ParentTokenNotBurned // parent token is not in burnt stage
@@ -190,6 +194,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	return tt, nil
 }
 
+// For RBT Transfer, Self transfer, Pinning, the quorums will sync the RBT token chain, TODO : they are syncing for all.
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error) {
 
 	var ti []contract.TokenInfo
@@ -197,6 +202,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	var receiverAddress string
 	if cr.Mode == SmartContractDeployMode || cr.Mode == NFTDeployMode {
 		ti = sc.GetCommitedTokensInfo()
+		fmt.Println("commited tokens validate : ", ti) //TODO : comments
 		address = cr.DeployerPeerID + "." + sc.GetDeployerDID()
 	} else {
 		ti = sc.GetTransTokenInfo()
@@ -208,6 +214,12 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		if err != nil || len(ids) == 0 {
 			continue
 		}
+		if len(ids) == 0 {
+			ids, err = c.GetRoutingAddrs(ti[i].Token)
+			if err != nil || len(ids) == 0 {
+				continue
+			}
+		}
 	}
 	p, err := c.getPeer(address)
 	if err != nil {
@@ -216,8 +228,10 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	}
 	defer p.Close()
 	tokensSyncInfo := make([]TokenSyncInfo, 0)
+	// currentWeek := util.GetWeeksPassed()
 	for i := range ti {
 		err := c.syncTokenChainFrom(p, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
+		fmt.Println("sync 8") //TODO
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", ti[i].Token, TokenChainNotSynced)
@@ -283,6 +297,12 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			// 	c.log.Error("Failed to add parent's latest token chain block of token", ti[i].Token, "err", err)
 			// 	return false, err
 			// }
+
+			//TODO: Add Epoch pinning of parent token
+			// for _, token := range parentTokens {
+			// 	c.pinTokenEpoch(token, currentWeek)
+			// }
+
 			_, err = c.w.Pin(parentToken, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti[i].TokenValue)
 			if err != nil {
 				// p.Close()
@@ -496,7 +516,13 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		resultArray[index] = result
 		return
 	}
-	blockId, err := block.GetBlockID(tokenId)
+	var blockId string
+	var err error
+	if block.GetMinerDID() != "" {
+		blockId, err = block.GetMinedTokenBlockID(tokenId)
+	} else {
+		blockId, err = block.GetBlockID(tokenId)
+	}
 	if err != nil {
 		c.log.Error("Error fetching block Id", err)
 		result.Error = err
@@ -605,4 +631,20 @@ func (c *Core) unPinTokenState(ids []string, did string) {
 	for i := range ids {
 		c.w.UnPin(ids[i], wallet.QuorumRole, did)
 	}
+}
+
+func (c *Core) fourweeksPassCheck(token string, tokenType int, index int, resultArray []string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	genesisBlock := c.w.GetGenesisTokenBlock(token, tokenType)
+	if genesisBlock != nil {
+		tokenTransType := genesisBlock.GetTransType()
+		if tokenTransType == block.TokenMinedType {
+			genesisBlockEpoch := genesisBlock.GetEpoch()
+			currentEpoch := time.Now().Unix()
+			if (currentEpoch - int64(genesisBlockEpoch)) < fourWeeksInSeconds {
+				resultArray[index] = token
+			}
+		}
+	}
+
 }

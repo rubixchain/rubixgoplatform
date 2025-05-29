@@ -17,8 +17,9 @@ var keyMapping = map[string]string{
 	"9":     "TCSmartContractDataKey",
 	"10":    "TCTokenValueKey",
 	"11":    "TCChildTokensKey",
-	"12":    "TCSenderSignatureKey",
+	"12":    "TCInitiatorSignatureKey",
 	"13":    "TCNFTDataKey",
+	"14":    "TCCreditDetailsKey",
 	"98":    "TCBlockHashKey",
 	"99":    "TCSignatureKey",
 	"epoch": "TCEpoch",
@@ -45,6 +46,7 @@ var keyMapping = map[string]string{
 	"5-8":    "TIDeployerDIDKey",
 	"5-9":    "TIExecutorDIDKey",
 	"5-10":   "TICommitedTokensKey",
+	"5-12":   "TIMinerDIDKey",
 	"5-6-1":  "TTTokenTypeKey",
 	"5-6-2":  "TTPledgedTokenKey",
 	"5-6-3":  "TTPledgedDIDKey",
@@ -57,6 +59,9 @@ var keyMapping = map[string]string{
 	"5-10-5": "TTPreviousBlockIDKey",
 	"5-10-6": "TTUnpledgedIDKey",
 	"5-10-7": "TTCommitedDIDKey",
+	"8-1":    "PDTokenKey",
+	"8-2":    "PDTokenTypeKey",
+	"8-3":    "PDTokenBlockIDKey",
 }
 
 // flattenKeys processes the input recursively, flattening numeric keys and retaining non-numeric keys.

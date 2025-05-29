@@ -106,3 +106,12 @@ func (c *Client) ReleaseAllLockedTokens() (*model.BasicResponse, error) {
 	}
 	return &response, nil
 }
+
+func (c *Client) DumpMiningChain() (*model.TCDumpReply, error) {
+	var drep model.TCDumpReply
+	err := c.sendJSONRequest("GET", setup.APIDumpMiningChain, nil, "", &drep)
+	if err != nil {
+		return nil, err
+	}
+	return &drep, nil
+}

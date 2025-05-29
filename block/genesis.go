@@ -1,5 +1,7 @@
 package block
 
+import "github.com/rubixchain/rubixgoplatform/core/model"
+
 // ----------GennesisBlock--------------------
 // {
 //   "1" : Type       : int
@@ -37,17 +39,18 @@ const (
 )
 
 type GenesisTokenInfo struct {
-	Token              string        `json:"token"`
-	TokenLevel         int           `json:"tokenLevel"`
-	TokenNumber        int           `json:"tokenNumber"`
-	MigratedBlockID    string        `json:"migratedBlockID"`
-	PreviousID         string        `json:"previosuID"`
-	ParentID           string        `json:"parentID"`
-	GrandParentID      []string      `json:"grandParentID"`
-	CommitedTokens     []TransTokens `json:"commitedTokens"`
-	SmartContractValue float64       `json:"smartContractValue"`
-	NFTValue           float64       `json:"nftValue"`
-	NFTData            string        `json:"nftData"`
+	Token              string                `json:"token"`
+	TokenLevel         int                   `json:"tokenLevel"`
+	TokenNumber        int                   `json:"tokenNumber"`
+	MigratedBlockID    string                `json:"migratedBlockID"`
+	PreviousID         string                `json:"previosuID"`
+	ParentID           string                `json:"parentID"`
+	GrandParentID      []string              `json:"grandParentID"`
+	CommitedTokens     []TransTokens         `json:"commitedTokens"`
+	SmartContractValue float64               `json:"smartContractValue"`
+	NFTValue           float64               `json:"nftValue"`
+	NFTData            string                `json:"nftData"`
+	CreditDetails      []model.PledgeHistory `json:"creditdetails"`
 }
 
 type GenesisBlock struct {
@@ -72,15 +75,19 @@ func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 		ngib[GIGrandParentIDKey] = gi.GrandParentID
 	}
 	//To add commited tokeninfo
-	newCommitedTokensBlock := make(map[string]interface{})
-	for _, tokensInfo := range gi.CommitedTokens {
-		commitedTokenInfoMap := newTransToken(nil, &tokensInfo)
-		if commitedTokenInfoMap == nil {
-			return nil
+	if gi.CommitedTokens != nil {
+		newCommitedTokensBlock := make(map[string]interface{})
+		for _, tokensInfo := range gi.CommitedTokens {
+			commitedTokenInfoMap := newTransToken(nil, &tokensInfo)
+			if commitedTokenInfoMap == nil {
+				return nil
+			}
+			newCommitedTokensBlock[tokensInfo.Token] = commitedTokenInfoMap
 		}
-		newCommitedTokensBlock[tokensInfo.Token] = commitedTokenInfoMap
+		ngib[GICommitedTokensKey] = newCommitedTokensBlock
+
 	}
-	ngib[GICommitedTokensKey] = newCommitedTokensBlock
+	
 	if gi.SmartContractValue != 0 {
 		ngib[GISmartContractValueKey] = gi.SmartContractValue
 	}

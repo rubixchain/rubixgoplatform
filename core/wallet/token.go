@@ -4,13 +4,21 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+
+	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
+
+const fourWeeksInSeconds = 4 * 7 * 24 * 60 * 60 // 4 weeks = 4 * 7 days * 24 hours * 60 minutes * 60 seconds
 
 const (
 	TokenIsFree int = iota
@@ -30,6 +38,7 @@ const (
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
 	TokenIsBurntForFT
+	TokenIsMined
 	QuorumPledgedForThisToken int = 20
 )
 const (
@@ -247,17 +256,17 @@ func (w *Wallet) GetCloserToken(did string, rem float64) (*Token, error) {
 	return &tks[0], nil
 }
 
-func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int) ([]Token, int, error) {
+func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int, testNet bool) ([]Token, int, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
 	if trnxMode == 0 {
-		err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=?) AND token_value=?", did, TokenIsFree, TokenIsPinnedAsService, 1.0)
+		err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=? OR token_status=?) AND token_value=?", did, TokenIsFree, TokenIsPinnedAsService, TokenIsMined, 1.0)
 		if err != nil {
 			return nil, num, err
 		}
 	} else {
-		err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
+		err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=?) AND token_value=?", did, TokenIsFree, TokenIsMined, 1.0)
 		if err != nil {
 			return nil, num, err
 		}
@@ -269,6 +278,32 @@ func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int) ([]Token, int
 	}
 	wt := make([]Token, 0)
 	for i := 0; i < tl; i++ {
+		// check each tokens genesis token block, if it is a newly mined token, check epoch whether 4 weeks passed or not
+		if trnxMode == 0 || trnxMode == 6 || trnxMode == 7 {
+			var tokenType int
+			if testNet {
+				tokenType = token.TestTokenType
+			} else {
+				tokenType = token.RBTTokenType
+			}
+			genesisBlock := w.GetGenesisTokenBlock(t[i].TokenID, tokenType)
+			if genesisBlock == nil {
+				w.log.Info("genesis block corresponding to %s tokenID is nil\n", t[i].TokenID)
+				return nil, 0, fmt.Errorf("not able to get the genesis block for the token %s", t[i].TokenID)
+			} else {
+				tokenTransType := genesisBlock.GetTransType()
+				if tokenTransType == block.TokenMinedType {
+					genesisBlockEpoch := genesisBlock.GetEpoch()
+					currentEpoch := time.Now().Unix()
+					if (currentEpoch - int64(genesisBlockEpoch)) < fourWeeksInSeconds {
+						fmt.Println("4 weeks have not passed yet, for the token\n", t[i].TokenID)
+						continue
+					}
+				}
+
+			}
+
+		}
 		wt = append(wt, t[i])
 	}
 	for i := range wt {
@@ -579,7 +614,16 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	for _, info := range ti {
 		t := info.Token
 		b := w.GetLatestTokenBlock(info.Token, info.TokenType)
-		blockId, _ := b.GetBlockID(t)
+		var blockId string
+		if b.GetMinerDID() != "" {
+			blockId, err = b.GetMinedTokenBlockID(t)
+		} else {
+			blockId, err = b.GetBlockID(t)
+
+		}
+		if err != nil {
+			return nil, err
+		}
 		tokenIDTokenStateData := t + blockId
 		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
 		tokenIDTokenStateHash, _ := ipfsShell.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
@@ -663,6 +707,13 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		}
 	}
 	return updatedtokenhashes, nil
+}
+func (w *Wallet) TokenStore(token Token) error {
+	err := w.s.Write(TokenStorage, &token)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // need to update in such a way that only for FTs
@@ -1082,4 +1133,27 @@ func (w *Wallet) UpdateTokenSyncStatus(tokenID string, syncStatus int) error {
 		return err
 	}
 	return nil
+}
+
+func (w *Wallet) CreateTokenID(details model.NewTokenDetails) (string, error) {
+	// Convert token level and number to strings
+	miningTokenLevelString := strconv.FormatInt(int64(details.TokenLevel), 10)
+	miningTokenNumberString := strconv.FormatUint(details.TokenNumber, 10)
+
+	// Combine the strings
+	parts := []string{miningTokenLevelString, miningTokenNumberString}
+	result := strings.Join(parts, " ")
+
+	// Convert to byte array and create buffer
+	byteArray := []byte(result)
+	newTokenBuffer := bytes.NewBuffer(byteArray)
+
+	// Add to IPFS and get tokenID
+	newTokenID, err := w.ipfs.Add(newTokenBuffer)
+	if err != nil {
+		// fmt.Errorf("Failed to create a new tokenID, Failed to add token to IPFS", "err", err)
+		return "", fmt.Errorf("failed to add token to IPFS: %w", err)
+	}
+
+	return newTokenID, nil
 }

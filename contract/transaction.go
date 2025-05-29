@@ -36,6 +36,7 @@ const (
 	TSPinningDIDKey         string = "11"
 	TSNFTKey                string = "12"
 	TSNFTDataKey            string = "13"
+	TSMinderDIDKey          string = "14"
 )
 
 const (
@@ -76,6 +77,7 @@ type TransInfo struct {
 	NFT                  string      `json:"nft"`
 	NFTValue             float64     `json:"nftValue"`
 	NFTData              string      `json:"nftData"`
+	MinerDID             string      `json:"minerDID"`
 }
 
 func newTokenInfoBlock(ti *TokenInfo) map[string]interface{} {
@@ -122,6 +124,9 @@ func newTransInfoBlock(ts *TransInfo) map[string]interface{} {
 	}
 	if ts.NFTData != "" {
 		ntsb[TSNFTDataKey] = ts.NFTData
+	}
+	if ts.MinerDID != ""{
+		ntsb[TSMinderDIDKey] = ts.MinerDID
 	}
 
 	if ts.CommitedTokens != nil && len(ts.CommitedTokens) > 0 {

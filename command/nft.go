@@ -125,7 +125,7 @@ func (cmd *Command) executeNFT() {
 
 	executeRequest := model.ExecuteNFTRequest{
 		NFT:        cmd.nft,
-		Executor:   cmd.executorAddr,
+		Owner:      cmd.executorAddr,
 		Receiver:   cmd.receiverAddr,
 		QuorumType: cmd.transType,
 		Comment:    cmd.transComment,

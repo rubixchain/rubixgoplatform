@@ -44,6 +44,7 @@ const (
 	TCInitiatorSignatureKey string = "12"
 	TCEpochKey              string = "epoch"
 	TCNFTDataKey            string = "13"
+	TCCreditDetailsKey      string = "14"
 )
 
 const (
@@ -60,6 +61,7 @@ const (
 	TokenContractCommited string = "11"
 	TokenPinnedAsService  string = "12"
 	TokenIsBurntForFT     string = "13"
+	TokenMinedType        string = "14"
 )
 
 const (
@@ -84,7 +86,7 @@ type TokenChainBlock struct {
 	GenesisBlock       *GenesisBlock       `json:"genesisBlock"`
 	TransInfo          *TransInfo          `json:"transInfo"`
 	PledgeDetails      []PledgeDetail      `json:"pledgeDetails"`
-	QuorumSignature    []CreditSignature   `json:"quorumSignature"`
+	QuorumSignature    []QuorumSignature   `json:"quorumSignature"`
 	SmartContract      []byte              `json:"smartContract"`
 	SmartContractData  string              `json:"smartContractData"`
 	TokenValue         float64             `json:"tokenValue"`
@@ -93,6 +95,7 @@ type TokenChainBlock struct {
 	NFT                []byte              `json:"nft"`
 	NFTData            string              `json:"nftData"`
 	Epoch              int                 `json:"epoch"`
+	RefToCreditDetails string              `json:"ref_to_creditdetails"`
 }
 
 type PledgeDetail struct {
@@ -109,7 +112,8 @@ type Block struct {
 	log logger.Logger
 }
 
-type CreditSignature struct {
+// Quorum signature represents the quorum's signatures on transaction ID (Not on Block hash)
+type QuorumSignature struct {
 	Signature     string `json:"signature"`
 	PrivSignature string `json:"priv_signature"`
 	DID           string `json:"did"`
@@ -163,7 +167,8 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 }
 
 func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
-	if tcb.TransInfo == nil || ctcb == nil {
+	if (tcb.TransInfo == nil && tcb.RefToCreditDetails == "") || ctcb == nil {
+		fmt.Println("tcb.TransInfo and tcb.CreditDetails both are nil OR ctcb is nil")
 		return nil
 	}
 	ntcb := make(map[string]interface{})
@@ -175,11 +180,14 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 			return nil
 		}
 	}
-	ntib := newTransInfo(ctcb, tcb.TransInfo)
-	if ntib == nil {
-		return nil
+	if tcb.TransInfo != nil {
+		ntib := newTransInfo(ctcb, tcb.TransInfo)
+		if ntib == nil {
+			fmt.Println("ntib is nil in CreateNewBlock function")
+			return nil
+		}
+		ntcb[TCTransInfoKey] = ntib
 	}
-	ntcb[TCTransInfoKey] = ntib
 	pdib := newPledgeDetails(tcb.PledgeDetails)
 	if pdib != nil {
 		ntcb[TCPledgeDetailsKey] = pdib
@@ -204,14 +212,15 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		ntcb[TCTokenValueKey] = floatPrecisionToMaxDecimalPlaces(tcb.TokenValue)
 	}
 
-	if len(tcb.ChildTokens) == 0 {
-		ntcb[TCChildTokensKey] = []string{}
-	} else {
+	if len(tcb.ChildTokens) != 0 {
 		ntcb[TCChildTokensKey] = tcb.ChildTokens
 	}
 
 	if tcb.Epoch != 0 {
 		ntcb[TCEpochKey] = tcb.Epoch
+	}
+	if tcb.RefToCreditDetails != "" {
+		ntcb[TCCreditDetailsKey] = tcb.RefToCreditDetails
 	}
 
 	blk := InitBlock(nil, ntcb)
@@ -294,22 +303,29 @@ func (b *Block) blkEncode() error {
 func (b *Block) getTokensMap(t string) interface{} {
 	tim := util.GetFromMap(b.bm, TCTransInfoKey)
 	if tim == nil {
+		fmt.Println("tim is nil getTokenMap function")
 		return nil
 	}
 	tm := util.GetFromMap(tim, TITokensKey)
 	if tm == nil {
+		fmt.Println("tm is nil in getTokenMap function")
 		return nil
 	}
 	ttm := util.GetFromMap(tm, t)
+	if ttm == nil {
+		fmt.Println("ttm is nil in getTokenMap function")
+	}
 	return ttm
 }
 
 func (b *Block) getGenesisTokenMap(t string) interface{} {
 	gbm := util.GetFromMap(b.bm, TCGenesisBlockKey)
+	fmt.Println("Genesis blk map is ", gbm)
 	if gbm == nil {
 		return nil
 	}
 	im := util.GetFromMap(gbm, GBInfoKey)
+	fmt.Println("Genesis info map is ", im)
 	if im == nil {
 		return nil
 	}
@@ -320,7 +336,7 @@ func (b *Block) getGenesisTokenMap(t string) interface{} {
 func (b *Block) GetBlockNumber(t string) (uint64, error) {
 	ttm := b.getTokensMap(t)
 	if ttm == nil {
-		return 0, fmt.Errorf("invalid token chain block, missing transaction token block")
+		return 0, fmt.Errorf("invalid token chain block, missing transaction token block in GetBlockNumber")
 	}
 	bni := util.GetFromMap(ttm, TTBlockNumberKey)
 	if bni == nil {
@@ -340,7 +356,7 @@ func (b *Block) GetBlockID(t string) (string, error) {
 	}
 	ttm := b.getTokensMap(t)
 	if ttm == nil {
-		return "", fmt.Errorf("invalid token chain block, missing transaction token block")
+		return "", fmt.Errorf("invalid token chain block, missing transaction token block in GetBlockID")
 	}
 	bni := util.GetFromMap(ttm, TTBlockNumberKey)
 	if bni == nil {
@@ -353,10 +369,19 @@ func (b *Block) GetBlockID(t string) (string, error) {
 	return bns + "-" + ha.(string), nil
 }
 
+func (b *Block) GetMinedTokenBlockID(t string) (string, error) {
+	ha, ok := b.bm[TCBlockHashKey]
+	if !ok {
+		return "", fmt.Errorf("invalid token chain block, missing block hash")
+	}
+	blockNumber := 0
+	return fmt.Sprintf("%d-%s", blockNumber, ha.(string)), nil
+}
+
 func (b *Block) GetPrevBlockID(t string) (string, error) {
 	ttm := b.getTokensMap(t)
 	if ttm == nil {
-		return "", fmt.Errorf("invalid token chain block, missing transaction token block")
+		return "", fmt.Errorf("invalid token chain block, missing transaction token block in GetPrevBlockID")
 	}
 	pbi := util.GetFromMap(ttm, TTPreviousBlockIDKey)
 	if pbi == nil {
@@ -621,6 +646,9 @@ func (b *Block) GetOwner() string {
 func (b *Block) GetSenderDID() string {
 	return b.getTrasnInfoString(TISenderDIDKey)
 }
+func (b *Block) GetMinerDID() string {
+	return b.getTrasnInfoString(TIMinerDIDKey)
+}
 
 func (b *Block) GetReceiverDID() string {
 	return b.getTrasnInfoString(TIReceiverDIDKey)
@@ -650,8 +678,16 @@ func (b *Block) GetParentDetials(t string) (string, []string, error) {
 		return "", nil, fmt.Errorf("invalid token chain block, missing genesis block")
 	}
 	p := util.GetStringFromMap(gtm, GIParentIDKey)
-	gp := util.GetStringSliceFromMap(gtm, GIGrandParentIDKey)
-	return p, gp, nil
+	var grandPaas []string
+	grandPaasMap := util.GetFromMap(gtm, GIGrandParentIDKey)
+	if grandPaasMap != nil {
+		gpts := grandPaasMap.([]interface{})
+		for _, gptMap := range gpts {
+			gpt := gptMap.(string)
+			grandPaas = append(grandPaas, gpt)
+		}
+	}
+	return p, grandPaas, nil
 }
 
 func (b *Block) GetTokenDetials(t string) (int, int, error) {
@@ -778,18 +814,19 @@ func (b *Block) GetInitiatorSignature() *InitiatorSignature {
 	return &initiatorSign
 }
 
-// Fetch quorums' signature details from the given block
-func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
-	var quorumSignList []CreditSignature
+func (b *Block) GetQuorumSignatureList() ([]QuorumSignature, error) {
 	s := b.bm[TCQuorumSignatureKey]
+	if quorumSignList, ok := s.([]QuorumSignature); ok {
+		return quorumSignList, nil
+	}
 
+	var quorumSignList []QuorumSignature
 	qrmSignListMap, ok := s.([]interface{})
 	if !ok {
-		fmt.Println("not of type []interface{}")
 		return nil, fmt.Errorf("failed to fetch quorums' signature information from block map")
 	}
 	for _, qrmSignMap := range qrmSignListMap {
-		var quorumSig CreditSignature
+		var quorumSig QuorumSignature
 		// When qrmSignMap is a string (in older versions), qrmSign holds the value as a string
 		if qrmSign, ok := qrmSignMap.(string); ok {
 			// Unmarshal the JSON string into the struct
@@ -849,4 +886,43 @@ func (b *Block) GetPledgedTokens() {
 	pledgedInfo := util.GetFromMap(b.bm, TCPledgeDetailsKey)
 	fmt.Println(pledgedInfo)
 	// return
+}
+
+// This function retrieves the TokenLevel and TokenNumber from the Genesis Block
+func (b *Block) GetTokenLevelAndNumberFromGenesisBlock() (int, int, error) {
+	// Access the GenesisBlock map
+	gb, ok := b.bm[TCGenesisBlockKey]
+	if !ok {
+		return 0, 0, fmt.Errorf("genesis block missing")
+	}
+	gbMap, ok := gb.(map[string]interface{})
+	if !ok {
+		return 0, 0, fmt.Errorf("invalid genesis block format")
+	}
+
+	// Access the GenesisTokenInfo map
+	gti, ok := gbMap[GBInfoKey]
+	if !ok {
+		return 0, 0, fmt.Errorf("genesis token info missing")
+	}
+	gtiMap, ok := gti.(map[string]interface{})
+	if !ok {
+		return 0, 0, fmt.Errorf("invalid genesis token info format")
+	}
+
+	// Get the first GenesisTokenInfo entry
+	for _, info := range gtiMap {
+		infoMap, ok := info.(map[string]interface{})
+		if !ok {
+			return 0, 0, fmt.Errorf("invalid genesis token info entry")
+		}
+
+		// Extract TokenLevel and TokenNumber
+		tokenLevel := util.GetIntFromMap(infoMap, GITokenLevelKey)
+		tokenNumber := util.GetIntFromMap(infoMap, GITokenNumberKey)
+
+		return tokenLevel, tokenNumber, nil
+	}
+
+	return 0, 0, fmt.Errorf("no genesis token info entries found")
 }

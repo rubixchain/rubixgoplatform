@@ -14,6 +14,8 @@ const (
 	DataString          string = "data"
 	SmartContractString string = "sc"
 	FTString            string = "ft"
+	MinedRBTString      string = "minedrbt"
+
 )
 
 func (c *Core) getTotalAmountFromTokenHashes(tokenHashes []string) (float64, error) {
@@ -43,6 +45,12 @@ func (c *Core) RACFTType() int {
 	}
 	return rac.RacFTType
 }
+func (c *Core) RACMiningTokenType() int{
+	if c.testNet {
+		return rac.RacTestMiningTokenType
+	}
+	return rac.RacMiningTokenType
+}
 
 func (c *Core) TokenType(tt string) int {
 	switch tt {
@@ -70,6 +78,11 @@ func (c *Core) TokenType(tt string) int {
 		return token.SmartContractTokenType
 	case FTString:
 		return token.FTTokenType
+	case MinedRBTString:
+		if c.testNet{
+			return token.TestMiningTokenType
+		}
+		return token.MiningTokenType
 	}
 	return token.RBTTokenType
 }

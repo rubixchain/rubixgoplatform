@@ -35,7 +35,7 @@ func (d *DIDLite) getPassword() (string, error) {
 		return d.pwd, nil
 	}
 	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
-		return "", fmt.Errorf("Invalid configuration")
+		return "", fmt.Errorf("invalid configuration")
 	}
 	sr := &SignResponse{
 		Status:  true,
@@ -50,14 +50,15 @@ func (d *DIDLite) getPassword() (string, error) {
 	select {
 	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
-		return "", fmt.Errorf("Timeout, failed to get password")
+		return "", fmt.Errorf("timeout, failed to get password")
 	}
 
 	srd, ok := ch.(SignRespData)
 	if !ok {
-		return "", fmt.Errorf("Invalid data received on the channel")
+		return "", fmt.Errorf("invalid data received on the channel")
 	}
 	d.pwd = srd.Password
+	fmt.Println("password is:", d.pwd)
 	return d.pwd, nil
 }
 

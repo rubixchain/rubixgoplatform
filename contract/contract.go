@@ -1,9 +1,11 @@
 package contract
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/fxamacker/cbor"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -19,6 +21,7 @@ const (
 	NFTDeployType
 	NFTExecuteType
 	SCFTType
+	MineRBTType
 )
 
 // ----------SmartContract----------------------
@@ -30,25 +33,28 @@ const (
 // }
 
 const (
-	SCTypeKey             string = "1"
-	SCPledgeModeKey       string = "2"
-	SCTransInfoKey        string = "3"
-	SCTotalRBTsKey        string = "4"
-	SCShareSignatureKey   string = "97"
-	SCKeySignatureKey     string = "98"
-	SCBlockHashKey        string = "99"
-	SCBlockContentKey     string = "1"
-	SCBlockContentSSigKey string = "2"
-	SCBlockContentPSigKey string = "3"
+	SCTypeKey               string = "1"
+	SCPledgeModeKey         string = "2"
+	SCTransInfoKey          string = "3"
+	SCTotalRBTsKey          string = "4"
+	SCTokenCreditDetailsKey string = "5"
+	SCShareSignatureKey     string = "97"
+	SCKeySignatureKey       string = "98"
+	SCBlockHashKey          string = "99"
+	SCBlockContentKey       string = "1"
+	SCBlockContentSSigKey   string = "2"
+	SCBlockContentPSigKey   string = "3"
 )
 
 type ContractType struct {
-	Type       int        `json:"type"`
-	PledgeMode int        `json:"pledge_mode"`
-	TransInfo  *TransInfo `json:"transInfo"`
-	TotalRBTs  float64    `json:"totalRBTs"`
-	ReqID      string     `json:"req_id"`
-	log        logger.Logger
+	Type               int                   `json:"type"`
+	PledgeMode         int                   `json:"pledge_mode"`
+	TransInfo          *TransInfo            `json:"transInfo"`
+	TotalRBTs          float64               `json:"totalRBTs"`
+	TokenCreditDetails []model.PledgeHistory `json:"token_credit_details"`
+	ReqTokenCredits    uint64                `json:"req_token_credits"`
+	ReqID              string                `json:"req_id"`
+	log                logger.Logger
 }
 
 type Contract struct {
@@ -59,7 +65,7 @@ type Contract struct {
 }
 
 func CreateNewContract(st *ContractType) *Contract {
-	if st.TransInfo == nil {
+	if st.TransInfo == nil && st.TokenCreditDetails == nil {
 		return nil
 	}
 	//	st.log.Debug("Creating new contract")
@@ -72,12 +78,25 @@ func CreateNewContract(st *ContractType) *Contract {
 	if st.PledgeMode > NoPledgeMode {
 		return nil
 	}
+
 	nm[SCPledgeModeKey] = st.PledgeMode
+	// Marshal st.TokenCreditDetails to []byte
+	if st.TokenCreditDetails != nil {
+		tokenCreditDetailsBytes, err := json.Marshal(st.TokenCreditDetails)
+		if err != nil {
+			fmt.Println("Failed to marshal TokenCreditDetails:", err)
+			return nil
+		}
+		nm[SCTokenCreditDetailsKey] = tokenCreditDetailsBytes
+	} else {
+		nm[SCTokenCreditDetailsKey] = nil
+	}
 	nm[SCTransInfoKey] = newTransInfoBlock(st.TransInfo)
-	if nm[SCTransInfoKey] == nil {
+	if nm[SCTransInfoKey] == nil && nm[SCTokenCreditDetailsKey] == nil {
 		return nil
 	}
 	nm[SCTotalRBTsKey] = st.TotalRBTs
+	// fmt.Println("new contract before returning", InitContract(nil, nm))
 	return InitContract(nil, nm)
 }
 
@@ -288,6 +307,9 @@ func (c *Contract) GetDeployerDID() string {
 func (c *Contract) GetExecutorDID() string {
 	return c.getTransInfoString(TSExecutorDIDKey)
 }
+func (c *Contract) GetMinerDID() string {
+	return c.getTransInfoString(TSMinderDIDKey)
+}
 
 func (c *Contract) GetSmartContractData() string {
 	return c.getTransInfoString(TSSmartContractDataKey)
@@ -346,6 +368,23 @@ func (c *Contract) GetTransTokenInfo() []TokenInfo {
 	}
 	return ti
 
+}
+
+func (c *Contract) GetTokenCreditsDetails() []model.PledgeHistory {
+	tokenCreditDetails := util.GetFromMap(c.sm, SCTokenCreditDetailsKey)
+	tokenCreditDetailsBytes, ok := tokenCreditDetails.([]byte)
+	if !ok {
+		c.log.Debug("not able to typecast into bytes")
+		return nil
+	}
+	var tokenCreditDetailsUnMarshalled []model.PledgeHistory
+	err := json.Unmarshal(tokenCreditDetailsBytes, &tokenCreditDetailsUnMarshalled)
+	if err != nil {
+		fmt.Println("Failed to unmarshal API response into []model.PledgeHistory:", err)
+		return nil
+	}
+
+	return tokenCreditDetailsUnMarshalled
 }
 
 func (c *Contract) GetCommitedTokensInfo() []TokenInfo {

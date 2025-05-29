@@ -14,9 +14,13 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/sha3"
 )
+
+// Rubix Week Epoch starting reference date is Jan 01 2025.
+var RubixWeekEpochStartDate = time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 type RandPos struct {
 	OriginalPos []int `json:"originalPos"`
@@ -738,6 +742,36 @@ func GetIntFromMap(m interface{}, key string) int {
 	}
 	return tl
 }
+func GetInt64FromMap(m interface{}, key string) int64 {
+	var tli interface{}
+	var ok bool
+	switch mm := m.(type) {
+	case map[string]interface{}:
+		tli, ok = mm[key]
+		if !ok {
+			return 0
+		}
+	case map[interface{}]interface{}:
+		tli, ok = mm[key]
+		if !ok {
+			return 0
+		}
+	default:
+		return 0
+	}
+	var tl int64
+	switch mt := tli.(type) {
+	case int:
+		tl = int64(mt)
+	case int64:
+		tl = mt
+	case uint64:
+		tl = int64(mt)
+	default:
+		tl = 0
+	}
+	return tl
+}
 
 func GetFloatFromMap(m interface{}, key string) float64 {
 	var tli interface{}
@@ -785,4 +819,17 @@ func BytesToString(b []byte) []string {
 		lines = append(lines, scanner.Text())
 	}
 	return lines
+}
+
+// To calculate the week number that's going on since reference date for a transaction
+func GetWeeksPassed() int {
+	now := time.Now().UTC()
+	duration := now.Sub(RubixWeekEpochStartDate)
+	// Handle case where current time is before ReferenceDate
+	if duration < 0 {
+		return 0 // If the current time is before the start date, return 0
+	}
+	yearsPassed := int(duration.Hours() / (24 * 365))
+	// Add +1 to ensure the first year returns 1
+	return yearsPassed + 1
 }

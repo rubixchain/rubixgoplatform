@@ -365,6 +365,41 @@ func (c *Core) GetDHTddrs(cid string) ([]string, error) {
 	return ids, nil
 }
 
+// This function will return the list of peer addresses pinning the given CID (replaces GetDHTddrs() as IPFS DHT is deprecated)
+func (c *Core) GetRoutingAddrs(cid string) ([]string, error) {
+	cmd := exec.Command(c.ipfsApp, "routing", "findprovs", cid)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		c.log.Error("failed to open command stdout (routing findprovs)", "err", err)
+		return nil, err
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		c.log.Error("failed to start command (routing findprovs)", "err", err)
+		return nil, err
+	}
+
+	ids := make([]string, 0)
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		m := scanner.Text()
+		if strings.Contains(m, "Error") {
+			return nil, fmt.Errorf(m)
+		}
+		if !strings.HasPrefix(m, "Qm") {
+			ids = append(ids, m)
+		}
+	}
+
+	if err = cmd.Wait(); err != nil {
+		c.log.Error("command wait failed (routing findprovs)", "err", err)
+		return nil, err
+	}
+
+	return ids, nil
+}
+
 func (c *Core) ipfsRepoGc() {
 	cmd := exec.Command(c.ipfsApp, "ipfs", "repo", "gc")
 	err := cmd.Start()

@@ -15,6 +15,7 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
@@ -61,17 +62,20 @@ const (
 	APIGetPrevQrmFromPrevSenderPath string = "/api/get-prev-qrms-info-from-sender"
 	APICheckPinRole                 string = "/api/check-pin-role"
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
+	APIUpdateCreditsAndWeekEpoch    string = "/api/update-credits-and-week-epoch"
+	APISyncMiningChain              string = "/api/sync-mining-chain"
 )
 
 const (
-	InvalidPasringErr string = "invalid json parsing"
-	RubixRootDir      string = "Rubix/"
-	DefaultMainNetDB  string = "rubix.db"
-	DefaultTestNetDB  string = "rubixtest.db"
-	MainNetDir        string = "MainNet"
-	TestNetDir        string = "TestNet"
-	TestNetDIDDir     string = "TestNetDID/"
-	MaxDecimalPlaces  int    = 3
+	InvalidPasringErr         string = "invalid json parsing"
+	RubixRootDir              string = "Rubix/"
+	DefaultMainNetDB          string = "rubix.db"
+	DefaultTestNetDB          string = "rubixtest.db"
+	MainNetDir                string = "MainNet"
+	TestNetDir                string = "TestNet"
+	TestNetDIDDir             string = "TestNetDID/"
+	MaxDecimalPlaces          int    = 3
+	AddressForMiningChainSync string = "12D3KooWMxFmBs4LCq5dpnfgHDRL4gAbwf1WqZJZBrbtcqZ9JBxN.bafybmidexm44uwwvg5lfnfh5kxj6mydashzzb3xp3ytpr22awddou7n7ra"
 )
 
 const (
@@ -125,6 +129,9 @@ type Core struct {
 	quorumCount          int
 	noBalanceQuorumCount int
 	defaultSetup         bool
+	pledgeHistory        []model.PledgeHistory
+	epochPinningTicker   *time.Ticker
+	transEpoch           int
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -416,6 +423,9 @@ func (c *Core) StopCore() {
 	if c.l != nil {
 		c.l.Shutdown()
 	}
+	if c.epochPinningTicker != nil {
+		c.epochPinningTicker.Stop()
+	}
 }
 
 func (c *Core) CreateTempFolder() (string, error) {
@@ -644,29 +654,20 @@ func (c *Core) FetchDID(did string) error {
 }
 
 func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
-	dirPath := c.cfg.DirPath + "NFT/" + nftTokenHash
-	// Check if the directory exists
-	_, err := os.Stat(dirPath)
-	if os.IsNotExist(err) {
-		// If the directory does not exist, create it
-		err = os.MkdirAll(dirPath, os.ModeDir|os.ModePerm)
+	_, err := os.Stat(c.cfg.DirPath + "NFT/" + nftTokenHash)
+	if err != nil {
+		err = os.MkdirAll(c.cfg.DirPath+"NFT/"+nftTokenHash, os.ModeDir|os.ModePerm)
 		if err != nil {
 			c.log.Error("failed to create directory", "err", err)
 			return err
 		}
-	} else if err != nil {
-		// Handle other errors while checking directory existence
-		c.log.Error("failed to check directory existence", "err", err)
-		return err
+		err = c.ipfs.Get(nftFolderHash, c.cfg.DirPath+"NFT/"+nftTokenHash)
+		if err != nil {
+			c.log.Error("failed to get NFT from IPFS", "err", err)
+			return err
+		}
 	}
-	// Fetch NFT data from IPFS and store in the directory
-	err = c.ipfs.Get(nftFolderHash, dirPath)
-	if err != nil {
-		c.log.Error("failed to get NFT from IPFS", "err", err)
-		return err
-	}
-	c.log.Info("NFT data fetched successfully from ipfs")
-	return nil
+	return err
 }
 
 func (c *Core) GetPeerID() string {

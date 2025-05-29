@@ -13,6 +13,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+
+	// "github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
@@ -46,6 +48,12 @@ type TCBSyncGenesisAndLatestBlockReply struct {
 	LatestBlock  []byte   `json:"tc_latest_block"`
 }
 
+type MiningChainSyncReply struct {
+	Status            bool     `json:"status"`
+	Message           string   `json:"message"`
+	MiningChainBlocks [][]byte `json:"mining_chain_blocks"`
+}
+
 // TokenVerificationRequest struct
 type TokenVerificationRequest struct {
 	Tokens []string `json:"tokens"`
@@ -65,6 +73,7 @@ type TokenSyncInfo struct {
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
 	c.l.AddRoute(APISyncGenesisAndLatestBlock, "POST", c.syncGenesisAndLatestBlock)
+	c.l.AddRoute(APISyncMiningChain, "GET", c.syncMiningChain)
 }
 
 func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {
@@ -144,6 +153,10 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 		case wallet.TokenIsPinnedAsService:
 			info.PinnedRBT = info.PinnedRBT + t.TokenValue
 			info.PinnedRBT = floatPrecision(info.PinnedRBT, MaxDecimalPlaces)
+		case wallet.TokenIsMined:
+			info.RBTAmount = info.RBTAmount + t.TokenValue
+			info.RBTAmount = floatPrecision(info.RBTAmount, MaxDecimalPlaces)
+
 		}
 	}
 	return info, nil
@@ -263,6 +276,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TokenValue:  1,
 			TokenStatus: wallet.TokenIsFree,
 		}
+
 		err = c.w.CreateTokenBlock(blk)
 		if err != nil {
 			c.log.Error("Failed to add token chain", "err", err)
@@ -296,10 +310,10 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	}
 
 	// Handle case where both error occurred and blocks are nil
-	if err != nil && blks == nil {
-		c.log.Warn("Token blocks missing and error occurred, falling back to role-based logic", "token", tr.Token)
-		return c.handleRoleBasedLogic(tr.Token, req)
-	}
+	// if err != nil && blks == nil {
+	// 	c.log.Warn("Token blocks missing and error occurred, falling back to role-based logic", "token", tr.Token)
+	// 	return c.handleRoleBasedLogic(tr.Token, req)
+	// }
 
 	// Handle other errors
 	if err != nil {
@@ -318,96 +332,112 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	}, http.StatusOK)
 }
 
-func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.Result {
-	fmt.Println("Handling role-based logic for token:", token)
-	list, err := c.GetDHTddrs(token)
+func (c *Core) syncMiningChain(req *ensweb.Request) *ensweb.Result {
+	// Fetch token blocks
+	fmt.Println("Mining chain sync request received")
+	blks, _, err := c.w.GetAllMiningChainBlocks(block.GetMiningChainID(), 0)
 	if err != nil {
-		c.log.Error("Failed to get DHT addresses", "err", err)
-		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to get DHT addresses"}, http.StatusInternalServerError)
+		c.log.Error("Error fetching token blocks", "error", err)
 	}
-
-	q := map[string]string{"token": token}
-	var response model.BasicResponse
-
-	for _, peerID := range list {
-		peerConn, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
-		if err != nil {
-			c.log.Warn("Failed to open peer connection", "peer", peerID, "err", err)
-			continue
-		}
-
-		if err := peerConn.SendJSONRequest("GET", APICheckPinRole, q, nil, &response, false); err != nil {
-			c.log.Warn("Failed to send JSON request", "peer", peerID, "err", err)
-			continue
-		}
-		fmt.Println("Response from peer:", response)
-		var result model.PinCheckReply
-		resultBytes, ok := response.Result.([]byte)
-		if !ok {
-			resultBytes, err = json.Marshal(response.Result)
-			if err != nil {
-				c.log.Error("Failed to marshal response.Result to JSON", "err", err)
-				continue
-			}
-		}
-
-		if err := json.Unmarshal(resultBytes, &result); err != nil {
-			c.log.Error("Failed to unmarshal response.Result", "err", err)
-			continue
-		}
-
-		message := c.processRole(result.PinDetails.Role)
-		if message != "" {
-			return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: message}, http.StatusNoContent)
-		}
+	// Handle other errors
+	if err != nil {
+		return c.l.RenderJSON(req, &TCBSyncReply{
+			Status:  false,
+			Message: "Error fetching token blocks",
+		}, http.StatusInternalServerError)
 	}
-
-	return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Unhandled error during role-based processing"}, http.StatusInternalServerError)
+	// Success response
+	return c.l.RenderJSON(req, &MiningChainSyncReply{
+		Status:            true,
+		Message:           "Got all blocks",
+		MiningChainBlocks: blks,
+	}, http.StatusOK)
 }
 
-// processRole handles specific roles (as integers) and returns a message
-func (c *Core) processRole(role int) string {
-	roleMessages := map[int]string{
-		wallet.OwnerRole:                  "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
-		wallet.QuorumRole:                 "Token chain block does not exist, the pinned role is QuorumRole",
-		wallet.PrevSenderRole:             "Token chain block does not exist, the pinned role is PrevSenderRole",
-		wallet.ReceiverRole:               "Token chain block does not exist, the pinned role is ReceiverRole",
-		wallet.ParentTokenLockRole:        "Token chain block does not exist, the pinned role is ParentTokenLockRole",
-		wallet.DIDRole:                    "Token chain block does not exist, the pinned role is DIDRole",
-		wallet.StakingRole:                "Token chain block does not exist, the pinned role is StakingRole",
-		wallet.PledgingRole:               "Token chain block does not exist, the pinned role is PledgingRole",
-		wallet.QuorumPinRole:              "Token chain block does not exist, the pinned role is QuorumPinRole",
-		wallet.QuorumUnpinRole:            "Token chain block does not exist, the pinned role is QuorumUnpinRole",
-		wallet.ParentTokenPinByQuorumRole: "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
-		wallet.PinningRole:                "Token chain block does not exist, the pinned role is PinningRole",
-	}
+// TODO: Need to remove after confirmation
 
-	if message, exists := roleMessages[role]; exists {
-		c.log.Info("Processing role", "role", role)
-		return message
-	}
-
-	c.log.Warn("Unhandled role encountered", "role", role)
-	return ""
-}
+// func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.Result {
+// 	fmt.Println("Handling role-based logic for token:", token)
+// 	list, err := c.GetDHTddrs(token)
+// 	if err != nil {
+// 		c.log.Error("Failed to get DHT addresses", "err", err)
+// 		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to get DHT addresses"}, http.StatusInternalServerError)
+// 	}
+// 	q := map[string]string{"token": token}
+// 	var response model.BasicResponse
+// 	for _, peerID := range list {
+// 		peerConn, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
+// 		if err != nil {
+// 			c.log.Warn("Failed to open peer connection", "peer", peerID, "err", err)
+// 			continue
+// 		}
+// 		if err := peerConn.SendJSONRequest("GET", APICheckPinRole, q, nil, &response, false); err != nil {
+// 			c.log.Warn("Failed to send JSON request", "peer", peerID, "err", err)
+// 			continue
+// 		}
+// 		fmt.Println("Response from peer:", response)
+// 		var result model.PinCheckReply
+// 		resultBytes, ok := response.Result.([]byte)
+// 		if !ok {
+// 			resultBytes, err = json.Marshal(response.Result)
+// 			if err != nil {
+// 				c.log.Error("Failed to marshal response.Result to JSON", "err", err)
+// 				continue
+// 			}
+// 		}
+// 		if err := json.Unmarshal(resultBytes, &result); err != nil {
+// 			c.log.Error("Failed to unmarshal response.Result", "err", err)
+// 			continue
+// 		}
+// 		message := c.processRole(result.PinDetails.Role)
+// 		if message != "" {
+// 			return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: message}, http.StatusNoContent)
+// 		}
+// 	}
+// 	return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Unhandled error during role-based processing"}, http.StatusInternalServerError)
+// }
+// // processRole handles specific roles (as integers) and returns a message
+// func (c *Core) processRole(role int) string {
+// 	roleMessages := map[int]string{
+// 		wallet.OwnerRole:                  "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
+// 		wallet.QuorumRole:                 "Token chain block does not exist, the pinned role is QuorumRole",
+// 		wallet.PrevSenderRole:             "Token chain block does not exist, the pinned role is PrevSenderRole",
+// 		wallet.ReceiverRole:               "Token chain block does not exist, the pinned role is ReceiverRole",
+// 		wallet.ParentTokenLockRole:        "Token chain block does not exist, the pinned role is ParentTokenLockRole",
+// 		wallet.DIDRole:                    "Token chain block does not exist, the pinned role is DIDRole",
+// 		wallet.StakingRole:                "Token chain block does not exist, the pinned role is StakingRole",
+// 		wallet.PledgingRole:               "Token chain block does not exist, the pinned role is PledgingRole",
+// 		wallet.QuorumPinRole:              "Token chain block does not exist, the pinned role is QuorumPinRole",
+// 		wallet.QuorumUnpinRole:            "Token chain block does not exist, the pinned role is QuorumUnpinRole",
+// 		wallet.ParentTokenPinByQuorumRole: "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
+// 		wallet.PinningRole:                "Token chain block does not exist, the pinned role is PinningRole",
+// 	}
+// 	if message, exists := roleMessages[role]; exists {
+// 		c.log.Info("Processing role", "role", role)
+// 		return message
+// 	}
+// 	c.log.Warn("Unhandled role encountered", "role", role)
+// 	return ""
+// }
 
 func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
-	// p, err := c.getPeer(address)
-	// if err != nil {
-	// 	c.log.Error("Failed to get peer", "err", err)
-	// 	return err
-	// }
-	// defer p.Close()
 	var err error
 	var blkHeight uint64
 	blk := c.w.GetLatestTokenBlock(token, tokenType)
 	blkID := ""
 	if blk != nil {
-		blkID, err = blk.GetBlockID(token)
-		if err != nil {
-			c.log.Error("Failed to get block id", "err", err)
-			return err
+		var err error
+		if blk.GetMinerDID() != "" {
+			blkID, err = blk.GetMinedTokenBlockID(token)
+		} else {
+			blkID, err = blk.GetBlockID(token)
 		}
+
+		if err != nil {
+			c.log.Error("Failed to get block ID", "token", token, "tokenType", tokenType, "err", err)
+			return fmt.Errorf("failed to get block ID for token %s: %w", token, err)
+		}
+
 		if blkID == pblkID {
 			return nil
 		}
@@ -440,6 +470,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		}
 	} else {
 		// in case of FTs, and NFTs
+		fmt.Println("blockID which is sent through API", blkID)
 		for {
 			var trep TCBSyncReply
 			err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &syncReq, &trep, false)
@@ -457,7 +488,11 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 					c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
 					return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
 				}
-				err = c.w.AddTokenBlock(token, blk)
+				if blk.GetMinerDID() != "" {
+					err = c.w.AddMiningTokenBlock(token, blk, tokenType)
+				} else {
+					err = c.w.AddTokenBlock(token, blk)
+				}
 				if err != nil {
 					c.log.Error("Failed to add token chain block, syncing failed", "err", err)
 					return err
@@ -621,7 +656,7 @@ func (c *Core) syncGenesisAndLatestBlockFrom(p *ipfsport.Peer, syncReq TCBSyncRe
 		c.log.Error("Failed to sync genesis and latest token chain block", "msg", trep.Message)
 		return fmt.Errorf(trep.Message)
 	}
-	
+
 	// add genesis block
 	if trep.GenesisBlock != nil {
 		fmt.Println("adding genesis block")
@@ -688,7 +723,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 	if wholeValue != 0 {
 		//extract the whole amount part that is the integer value of txn amount
 		//serach for the required whole amount
-		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode)
+		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode, c.testNet)
 		if err != nil && err.Error() != "no records found" {
 			c.w.ReleaseTokens(wholeTokens)
 			c.log.Error("failed to search for whole tokens", "err", err)
@@ -1353,4 +1388,307 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 	// restart all incomplete token chain sync as a background process
 	go c.syncFullTokenChains(tokenSyncMap)
 
+}
+func (c *Core) FindingLatestTokenChainHolders(token string) []string {
+	weekNumber := util.GetWeeksPassed()
+	pinned := fmt.Sprintf("%s-%d", token, weekNumber)
+	reader := bytes.NewReader([]byte(pinned))
+	newCid, _ := c.ipfs.Add(reader)
+	list, err1 := c.GetDHTddrs(newCid)
+	if err1 != nil {
+		c.log.Error("Failed to get pins for token epoch", "err", err1, "tokenID", token)
+	} else {
+		fmt.Println("token : ", token)
+		fmt.Println("list of providers for token : ", list)
+	}
+	return list
+}
+
+func (c *Core) SyncTokenChainFromListOfPeers(peerIDs []string, token string, tokenType int) error {
+	var lastErr error
+
+	for _, peerID := range peerIDs {
+		c.log.Info("Attempting to sync token chain from peer", "peerID", peerID)
+
+		// Try to open a connection with the peer
+		peer, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
+		if err != nil {
+			c.log.Warn("Failed to open peer connection, trying next peer", "peerID", peerID, "err", err)
+			lastErr = err
+			continue // Move to the next peer
+		}
+
+		// Try to sync the token chain from the connected peer
+		err = c.syncTokenChainFromPeer(peer, "", token, tokenType)
+		if err != nil {
+			c.log.Warn("Failed to sync token chain, trying next peer", "peerID", peerID, "err", err)
+			lastErr = err
+			continue // Move to the next peer
+		}
+
+		c.log.Info("Successfully synced token chain from peer", "peerID", peerID)
+		return nil // Successful sync, exit the function
+	}
+
+	// If we reach here, all peers failed. Return the last encountered error.
+	if lastErr != nil {
+		c.log.Error("Failed to sync token chain from all peers", "err", lastErr)
+	}
+	return lastErr
+}
+
+func (c *Core) syncTokenChainFromPeer(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
+	var err error
+	blk := c.w.GetLatestTokenBlock(token, tokenType)
+	var blkId string
+	if blk != nil {
+		var err error
+		if blk.GetMinerDID() != "" {
+			blkId, err = blk.GetMinedTokenBlockID(token)
+		} else {
+			blkId, err = blk.GetBlockID(token)
+		}
+
+		if err != nil {
+			c.log.Error("Failed to get block ID", "token", token, "tokenType", tokenType, "err", err)
+			return fmt.Errorf("failed to get block ID for token %s: %w", token, err)
+		}
+
+		if blkId == pblkID {
+			return nil
+		}
+	} else {
+		c.log.Debug("No block found, requesting full chain")
+
+		// If blk is nil, set blkId to empty string to request full chain
+		blkId = ""
+	}
+	tr := TCBSyncRequest{
+		Token:     token,
+		TokenType: tokenType,
+		BlockID:   blkId,
+	}
+	fmt.Println("blockID which is sent through API", blkId)
+	for {
+		var trep TCBSyncReply
+		err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &tr, &trep, false)
+		if err != nil {
+			c.log.Error("Failed to sync token chain block", "err", err)
+			return err
+		}
+		if !trep.Status {
+			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
+			return fmt.Errorf(trep.Message)
+		}
+		for _, bb := range trep.TCBlock {
+			blk := block.InitBlock(bb, nil)
+			if blk == nil {
+				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
+				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
+			}
+			if blk.GetMinerDID() != "" {
+				err = c.w.AddMiningTokenBlock(token, blk, tokenType)
+			} else {
+				err = c.w.AddTokenBlock(token, blk)
+			}
+			if err != nil {
+				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
+				return err
+			}
+		}
+		if trep.NextBlockID == "" {
+			break
+		}
+		tr.BlockID = trep.NextBlockID
+	}
+	return nil
+}
+
+// This function will update credit status of token credits in pledge history table as well as
+// this will output total credits which are ready to mine.
+func (c *Core) FindReadyToMineCredits(did string) (model.CredDetails, error) {
+	readyToMineCredits, err := c.ReadyToMineCredits(did)
+	if err != nil {
+		c.log.Error("Failed to update ready to Mine credits", "err", err)
+		return model.CredDetails{}, err
+	}
+	pledges, err := c.w.GetTokenDetailsByQuorumDID(did, 1)
+	if err != nil {
+		c.log.Error("Failed to fetch pledge history", "err", err)
+		return model.CredDetails{}, err // Return error if fetching fails
+	}
+
+	totalReadytoMineCredits := model.CredDetails{
+		Did: did,
+	}
+	for _, pledge := range pledges {
+		totalReadytoMineCredits.TotalCredits += pledge.TokenCredit
+	}
+	c.log.Debug("ready to mine credits are", readyToMineCredits)
+
+	return totalReadytoMineCredits, nil
+}
+
+func (c *Core) ReadyToMineCredits(did string) ([]model.PledgeHistory, error) {
+	// Fetch pledge history by QuorumDID with tokenCreditStatus = 0
+	pledges, err := c.w.GetTokenDetailsByQuorumDID(did, 0)
+	if err != nil {
+		c.log.Error("Failed to fetch pledge history", "err", err)
+		return []model.PledgeHistory{}, err // Return error if fetching fails
+	}
+
+	var readyToMinePledges []model.PledgeHistory
+
+	currentEpoch := int(time.Now().Unix())
+	// secondsInFiveWeeks := 7 * 24 * 60 * 60 * 5 // 5 weeks in seconds
+
+	// Filter pledges based on transaction block epoch
+	for _, pledge := range pledges {
+		if pledge.Epoch <= uint64(currentEpoch-120) && pledge.TokenCredit != 0 && pledge.NextBlockEpoch != 0 {
+			// Update token credit status to indicate it's now ready for mining
+			updateErr := c.w.UpdateTokenCreditStatus(pledge.TransferTokenID, 1, pledge.TransactionID)
+			if updateErr != nil {
+				c.log.Error("Failed to update token credit status", "tokenID", pledge.TransferTokenID, "transactionID", pledge.TransactionID, "err", updateErr)
+				continue // Continue processing other records even if one fails
+			}
+
+			// Append the pledge to the ready-to-mine list
+			readyToMinePledges = append(readyToMinePledges, pledge)
+		}
+	}
+	return readyToMinePledges, nil
+}
+
+func (c *Core) SyncLatestTokenChains(tokenTokenTypeMap map[string]int) error {
+	var lastErr error
+
+	for token, tokenType := range tokenTokenTypeMap {
+		c.log.Info("Fetching latest token chain holders", "token", token)
+
+		// Get the latest holders for the token
+		peerIDs := c.FindingLatestTokenChainHolders(token)
+		if len(peerIDs) == 0 {
+			c.log.Warn("No token chain holders found for token", "token", token)
+			lastErr = fmt.Errorf("no holders found for token: %s", token)
+			continue // Move to the next token
+		}
+
+		c.log.Info("Attempting to sync latest token chain", "token", token, "holders", peerIDs)
+
+		// Try syncing the token chain from one of the holders
+		err := c.SyncTokenChainFromListOfPeers(peerIDs, token, tokenType)
+		if err != nil {
+			c.log.Warn("Failed to sync token chain", "token", token, "err", err)
+			lastErr = err
+			continue // Move to the next token
+		}
+
+		c.log.Info("Successfully synced latest token chain", "token", token)
+	}
+
+	// If all tokens failed, return the last encountered error
+	if lastErr != nil {
+		c.log.Error("Failed to sync some or all token chains", "err", lastErr)
+	}
+	return lastErr
+}
+
+func (c *Core) SyncMiningChain(address string) error {
+	peer, err := c.getPeer(address)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return err
+	}
+
+	var miningChainSyncresp MiningChainSyncReply
+	err = peer.SendJSONRequest("GET", APISyncMiningChain, nil, "", &miningChainSyncresp, false)
+	if err != nil {
+		c.log.Error("Failed to sync token chain block", "err", err)
+		return err
+	}
+	if !miningChainSyncresp.Status {
+		c.log.Error("Failed to sync token chain block", "msg", miningChainSyncresp.Message)
+		return fmt.Errorf(miningChainSyncresp.Message)
+	}
+	for _, bb := range miningChainSyncresp.MiningChainBlocks {
+		miningblk := block.InitMiningBlock(bb, nil)
+		if miningblk == nil {
+			c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
+			return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
+		}
+		err = c.w.AddMiningChainBlock(miningblk)
+		if err != nil {
+			c.log.Error("Failed to add token chain block, syncing failed", "err", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Core) SyncAncestralTokens(p *ipfsport.Peer, parentToken string) ([]string, error) {
+	syncedTokens := make([]string, 0)
+
+	// Get parent token details from IPFS
+	b, err := c.getFromIPFS(parentToken)
+	if err != nil {
+		c.log.Error("failed to get parent token details from IPFS", "err", err, "token", parentToken)
+		// Return the error immediately if fetching from IPFS fails
+		return syncedTokens, err
+	}
+
+	isWholeToken, _ := token.CheckWholeToken(string(b), true)
+	tokenType := token.RBTTokenType
+
+	// Check if the token is not a whole token and handle it accordingly
+	if !isWholeToken {
+		blk := util.StrToHex(string(b))
+		rb, err := rac.InitRacBlock(blk, nil)
+		if err != nil {
+			c.log.Error("invalid token, invalid rac block", "err", err)
+			// Return the error immediately if the RAC block is invalid
+			return syncedTokens, err
+		} else {
+			tokenType = rac.RacType2TokenType(rb.GetRacType())
+		}
+	}
+
+	// Attempt to sync the token chain. If it fails, log the error but don't return an error
+	if err := c.syncTokenChainFrom(p, "", parentToken, tokenType); err != nil {
+		c.log.Error("failed to sync token chain block", "err", err)
+		// Continue to add parent token even if sync fails
+		syncedTokens = append(syncedTokens, parentToken)
+	}
+
+	// Add parent token to the list of synced tokens
+	syncedTokens = append(syncedTokens, parentToken)
+
+	// If the token is a part (not the whole token), attempt to sync its grandparent
+	if tokenType == c.TokenType(PartString) {
+		// Get the genesis block for this token
+		genesisBlock := c.w.GetGenesisTokenBlock(parentToken, tokenType)
+		grandParentToken, _, err := genesisBlock.GetParentDetials(parentToken)
+		if err != nil {
+			c.log.Error("failed to get grand-parent details", "err", err)
+			// Return the error immediately if fetching grandparent details fails
+			return syncedTokens, err
+		}
+
+		if grandParentToken == "" {
+			c.log.Error("empty grandparent token")
+			// Return the error immediately if the grandparent token is empty
+			return syncedTokens, fmt.Errorf("empty grandparent token")
+		}
+
+		// Recursively sync the grandparent token
+		grandparentSynced, err := c.SyncAncestralTokens(p, grandParentToken)
+		if err != nil {
+			// Log the error but continue syncing
+			c.log.Error("failed to sync grandparent token", "err", err)
+		}
+		// Append the grandparent tokens to the synced tokens list
+		syncedTokens = append(syncedTokens, grandparentSynced...)
+	}
+
+	// Return the list of synced tokens
+	return syncedTokens, nil
 }

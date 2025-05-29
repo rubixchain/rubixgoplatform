@@ -19,6 +19,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -60,6 +61,13 @@ func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
 	}
 
 	resp.Status = true
+
+	pledgeHistory := c.w.ConvertPledgeHistoryToRecord(c.pledgeHistory)
+
+	errAddingPledgeHistory := c.w.AddPledgeHistory(pledgeHistory)
+	if errAddingPledgeHistory != nil {
+		c.log.Error("Failed to add pledge history", "err", errAddingPledgeHistory)
+	}
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
@@ -118,6 +126,7 @@ func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	defer p.Close()
 	for k := range dt {
 		err := c.syncTokenChainFrom(p, dt[k].BlockID, dt[k].Token, dt[k].TokenType)
+		fmt.Println("sync 2") //TODO
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			crep.Message = "Failed to sync token chain block"
@@ -179,7 +188,22 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
-
+	/*check whether any of the transtoken is a newly mined token, If any of them is mined token, if it is, quorums make sure
+	it is getting transferred only after 4 weeks after the mining.  */
+	resultOutput := make([]string, len(ti))
+	var wg2 sync.WaitGroup
+	for i := range ti {
+		wg2.Add(1)
+		go c.fourweeksPassCheck(ti[i].Token, ti[i].TokenType, i, resultOutput, &wg2)
+	}
+	wg2.Wait()
+	for i := range resultOutput {
+		if resultOutput[i] != "" {
+			c.log.Error("not allowed to transfer %s token", ti[i].Token)
+			crep.Message = fmt.Sprintf("not allowed to transfer %s token, because 4 weeks didn't pass since mining of this token", ti[i].Token)
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
 	// check token ownership
 
 	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
@@ -455,6 +479,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		for i, ti := range smartContractTokenInfo {
 			t := ti.Token
 			err = c.syncTokenChainFrom(peerConn, "", ti.Token, ti.TokenType)
+			fmt.Println("sync 3") //TODO
 			if err != nil {
 				c.log.Error("Failed to sync smart contract token chain block fro execution validation", "err", err)
 				consensusReply.Message = "Failed to sync smart contract token chain block fro execution validation"
@@ -548,6 +573,7 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	if consensusRequest.Mode == NFTDeployMode {
 		//if deployment
 		commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
+		fmt.Println("commited tokens nft : ", commitedTokenInfo) //TODO
 		//1. check commited token authenticity
 		c.log.Debug("validation 1 - Authenticity of commited RBT tokens")
 		validateTokenOwnershipVar, err := c.validateTokenOwnership(consensusRequest, consensusContract, did)
@@ -610,7 +636,9 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		nftInfo := consensusContract.GetTransTokenInfo()
 		for i, ti := range nftInfo {
 			t := ti.Token
+			fmt.Println("execute nft consensus: ", t) //TODO
 			err = c.syncTokenChainFrom(peerConn, "", ti.Token, ti.TokenType)
+			fmt.Println("sync 4") //TODO
 			if err != nil {
 				c.log.Error("Failed to sync nft chain block from execution validation", "err", err)
 				consensusReply.Message = "Failed to sync nft chain block from execution validation"
@@ -775,6 +803,50 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
+func (c *Core) quorumMiningConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, miningRequest *ConensusRequest) *ensweb.Result {
+	crep := ConensusReply{
+		ReqID:  miningRequest.ReqID,
+		Status: false,
+	}
+	fmt.Println("QuorumDid in quorumMiningConsensus function is:", did)
+	miningContract := contract.InitContract(miningRequest.ContractBlock, nil)
+	dc, err := c.SetupForienDID(miningContract.GetMinerDID(), did)
+	if err != nil {
+		c.log.Error("Failed to get DID", "err", err)
+		crep.Message = "Failed to get DID"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	err = miningContract.VerifySignature(dc)
+	if err != nil {
+		crep.Message = "Failed to verify sender signature in quorumMiningConsensus function"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	// Validating the credits
+	tokenCreditsDetails := miningContract.GetTokenCreditsDetails()
+	err = c.ValidateCredits(did, int(miningRequest.MiningInfo.TokenCredits), tokenCreditsDetails, miningRequest.MiningInfo.MiningTokenDetails)
+	if err != nil {
+		c.log.Debug("Failed to validate credits", "err", err)
+		crep.Message = fmt.Sprintf("Failed to validate credits: %v", err)
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	//Mining quorums will sign on the block
+	qHash := util.CalculateHash(miningContract.GetBlock(), "SHA3-256")
+	miningQuorumSignBlock, privateSignBlock, err := qdc.Sign(util.HexToStr(qHash))
+	if err != nil {
+		c.log.Error("Failed to get quorum signature", "err", err)
+		crep.Message = "Failed to get quorum signature"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
+	crep.Status = true
+	crep.Message = "Mining Conensus finished successfully"
+	crep.ShareSig = miningQuorumSignBlock
+	crep.PrivSig = privateSignBlock
+	return c.l.RenderJSON(req, &crep, http.StatusOK)
+}
+
 func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var cr ConensusRequest
@@ -819,6 +891,9 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	case FTTransferMode:
 		c.log.Debug("FT consensus started")
 		return c.quorumFTConsensus(req, did, qdc, &cr)
+	case MiningMode:
+		c.log.Debug("Mining consensus started")
+		return c.quorumMiningConsensus(req, did, qdc, &cr)
 	default:
 		c.log.Error("Invalid consensus mode", "mode", cr.Mode)
 		crep.Message = "Invalid consensus mode"
@@ -949,6 +1024,19 @@ func (c *Core) updateReceiverToken(
 		}
 		// defer senderPeer.Close()
 
+		_, err = c.ValidateSender(b)
+		if err != nil {
+			c.log.Error("failed to validate sender", "err", err)
+			return nil, nil, fmt.Errorf("failed to validate sender")
+		}
+		//Check here How can we use ValidateQuorums function
+
+		_, err = c.ValidateQuorums(b, receiverDID)
+		if err != nil {
+			c.log.Error("failed to validate quorum", "err", err)
+			return nil, nil, fmt.Errorf("failed to validate quorum")
+		}
+
 		for _, ti := range tokenInfo {
 			t := ti.Token
 			pblkID, err := b.GetPrevBlockID(t)
@@ -957,6 +1045,7 @@ func (c *Core) updateReceiverToken(
 			}
 
 			err = c.syncTokenChainFrom(senderPeer, pblkID, t, ti.TokenType)
+			fmt.Println("sync 5") //TODO
 			if err != nil {
 				c.log.Error("receiver failed to sync token chain of token ", ti.Token, "error ", err)
 				return nil, senderPeer, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
@@ -977,9 +1066,25 @@ func (c *Core) updateReceiverToken(
 				}
 
 			}
+			//check if token is mined token, If it is a mined token, then check whether 4 weeks have passed or not after the minining of the token
+			genesisBlock := c.w.GetGenesisTokenBlock(t, ti.TokenType)
+			if genesisBlock.GetMinerDID() != "" {
+				//Check here How can we use ValidateQuorums function
+				_, err = c.ValidateQuorums(genesisBlock, receiverDID)
+				if err != nil {
+					c.log.Error("failed to validate quorum", "err", err)
+					return nil, nil, fmt.Errorf("failed to validate quorum")
+				}
+				genesisBlockEpoch := genesisBlock.GetEpoch()
+				currentEpoch := time.Now().Unix()
+				if currentEpoch-int64(genesisBlockEpoch) < fourWeeksInSeconds {
+					return nil, nil, fmt.Errorf("Token " + t + " is a mined token and it is not 4 weeks old")
+				}
+			}
+
 			ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
 			if err != nil {
-				return nil, senderPeer, fmt.Errorf("failed to fetch previous block for token: %v err : %v", t, err)
+				return nil, senderPeer, fmt.Errorf("failed to fetch previous block for token: %vv err : %v", t, err)
 			}
 			ptcb := block.InitBlock(ptcbArray, nil)
 			if c.checkIsPledged(ptcb) {
@@ -1038,8 +1143,13 @@ func (c *Core) updateReceiverToken(
 	if sc == nil {
 		return nil, senderPeer, fmt.Errorf("failed to update token status, missing smart contract")
 	}
-
-	bid, err := b.GetBlockID(tokenInfo[0].Token)
+	var bid string
+	// var err error
+	if b.GetMinerDID() != "" {
+		bid, err = b.GetMinedTokenBlockID(tokenInfo[0].Token)
+	} else {
+		bid, err = b.GetBlockID(tokenInfo[0].Token)
+	}
 	if err != nil {
 		return nil, senderPeer, fmt.Errorf("failed to update token status, failed to get block ID, err: %v", err)
 	}
@@ -1124,7 +1234,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 			if err != nil {
 				c.log.Error("failed to fetch parent token value, err ", err)
 				// update token sync status
-				c.w.UpdateTokenSyncStatus(tokenInfo.ParentTokenID,wallet.SyncIncomplete)
+				c.w.UpdateTokenSyncStatus(tokenInfo.ParentTokenID, wallet.SyncIncomplete)
 				continue
 			}
 			if parentTokenInfo.TokenValue != 1.0 {
@@ -1173,6 +1283,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		}
 
 		err = c.syncTokenChainFrom(senderPeer, pblkID, t, ti.TokenType)
+		fmt.Println("sync 6") //TODO
 		if err != nil {
 			c.log.Error("receiver failed to sync token chain of FT ", ti.Token, "error ", err)
 			return nil, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
@@ -1365,7 +1476,7 @@ func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
-	c.log.Debug("incoming request for pledge finlaity")
+	c.log.Debug("incoming request for pledge finality")
 	did := c.l.GetQuerry(req, "did")
 	c.log.Debug("DID from query", did)
 	var ur UpdatePledgeRequest
@@ -1380,13 +1491,15 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 	dc, ok := c.qc[did]
 	if !ok {
-		c.log.Debug("did crypto initilisation failed")
+		c.log.Debug("did crypto initialization failed")
 		c.log.Error("Failed to setup quorum crypto")
 		crep.Message = "Failed to setup quorum crypto"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	b := block.InitBlock(ur.TokenChainBlock, nil)
 	tks := b.GetTransTokens()
+
+	// miningBlockID,err := b.GetMinedTokenBlockID()
 
 	refID := ""
 	var refIDArr []string = make([]string, 0)
@@ -1427,6 +1540,20 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			}
 		}
 	}
+	if ur.Mode == MiningMode {
+		tt := token.MiningTokenType
+		if c.testNet {
+			tt = token.TestMiningTokenType
+		}
+		err = c.w.AddMiningTokenBlock(ur.NewlyMinedTokenID, b, tt)
+		if err != nil {
+			c.log.Error("Failed to add token block", "token", ur.NewlyMinedTokenID)
+			crep.Message = "Failed to add token block"
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+
+	}
+
 	for _, t := range ur.PledgedTokens {
 		tk, err := c.w.ReadToken(t)
 		if err != nil {
@@ -1489,13 +1616,130 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
-
 	//Adding to the Token State Hash Table
 	if ur.TransferredTokenStateHashes != nil {
 		err = c.w.AddTokenStateHash(did, ur.TransferredTokenStateHashes, ur.PledgedTokens, ur.TransactionID)
 		if err != nil {
 			c.log.Error("Failed to add token state hash", "err", err)
 		}
+	}
+	if ur.NewlyMinedTokenStateHash != "" {
+		tokenStateHashes := make([]string, 0)
+		tokenStateHashes = append(tokenStateHashes, ur.NewlyMinedTokenStateHash)
+		err = c.w.AddTokenStateHash(did, tokenStateHashes, ur.PledgedTokens, ur.TransactionID)
+		if err != nil {
+			c.log.Error("Failed to add token state hash", "err", err)
+		}
+	}
+	c.pledgeHistory = []model.PledgeHistory{}
+	// if b.GetMinerDID is not an empty string, which means that it is in mining mode so add pledge history details accordingly.
+	if b.GetMinerDID() != "" {
+		exist, err := c.w.CheckTokenExistInPledgeHistory(ur.TransactionID, ur.NewlyMinedTokenID)
+		if err != nil {
+			readErr := fmt.Sprint(err)
+			if strings.Contains(readErr, "no records found") {
+				c.log.Info("No pledge history")
+			}
+			c.log.Error("Failed to check token exist", "tokenID", ur.NewlyMinedTokenID, "err", err)
+		}
+		if !exist {
+			tokenID := strings.TrimSpace(ur.NewlyMinedTokenID)
+			tokenType := c.TokenType(MinedRBTString)
+			blockID, err := b.GetMinedTokenBlockID(tokenID)
+			if err != nil {
+				c.log.Error("Failed to get block ID for token: ", tokenID)
+				crep.Message = "Failed to get block ID PledgeHistory"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			transTokenValue := float64(1)
+			newPledge := model.PledgeHistory{
+				QuorumDID:          did,
+				TransactionID:      ur.TransactionID,
+				TransactionType:    ur.TransactionType,
+				TransferTokenID:    tokenID,
+				TransferTokenType:  tokenType,
+				TransferTokenValue: transTokenValue,
+				TransferBlockID:    blockID,
+				Epoch:              uint64(ur.TransactionEpoch),
+				TokenCredit:        0,
+			}
+			c.pledgeHistory = append(c.pledgeHistory, newPledge)
+
+		}
+		//when a new token is mined, the tokenID and weekEpoch are pinned at quorum side.
+		tokenID := strings.TrimSpace(ur.NewlyMinedTokenID)
+		fmt.Println("pinning token epoch at quorum side")
+		c.pinTokenEpoch(tokenID, ur.WeekCount)
+		// week number is not getting printed
+		c.log.Debug("Week epoch PINNED for tokenID " + tokenID + " for week number " + strconv.Itoa(ur.WeekCount))
+
+	}
+	// c.pledgeHistory = []model.PledgeHistory{}
+	for _, tokenID := range b.GetTransTokens() {
+		exist, err := c.w.CheckTokenExistInPledgeHistory(tokenID, ur.TransactionID)
+		if err != nil {
+			c.log.Error("Failed to check token exist", "tokenID", tokenID, "transID", ur.TransactionID, "err", err)
+		}
+		if !exist {
+			tokenID = strings.TrimSpace(tokenID)
+			tokenType := b.GetTokenType(tokenID)
+
+			blockID, err := b.GetBlockID(tokenID)
+			if err != nil {
+				c.log.Error("Failed to get block ID for token: ", tokenID)
+				crep.Message = "Failed to get block ID PledgeHistory"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			b, err := c.getFromIPFS(tokenID)
+			if err != nil {
+				c.log.Error("failed to get parent token details from ipfs", "err", err, "token", tokenID)
+
+			}
+			iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+
+			tt := token.RBTTokenType
+			transTokenValue := float64(1)
+			if !iswholeToken {
+				blk := util.StrToHex(string(b))
+				rb, err := rac.InitRacBlock(blk, nil)
+				if err != nil {
+					c.log.Error("invalid token, invalid rac block", "err", err)
+
+				}
+				tt = rac.RacType2TokenType(rb.GetRacType())
+				if c.TokenType(PartString) == tt {
+					transTokenValue = rb.GetRacValue()
+				}
+			}
+			c.log.Debug("transtoken value", transTokenValue) //TODO:Remove this print statement after testing
+
+			//TODO: Fix the function to get peer who pinned epoch for a token
+			// weekPassed := util.GetWeeksPassed()
+			//list, pinCheckErr := c.getPeerWhoPinTokenEpoch(tokenID, weekPassed)
+			// if pinCheckErr != nil {
+			// 	c.log.Error("Failed to get peer who pin token epoch", "err", pinCheckErr)
+			// }
+			newPledge := model.PledgeHistory{
+				QuorumDID:          did,
+				TransactionID:      ur.TransactionID,
+				TransactionType:    ur.TransactionType,
+				TransferTokenID:    tokenID,
+				TransferTokenType:  tokenType,
+				TransferTokenValue: transTokenValue,
+				TransferBlockID:    blockID,
+				Epoch:              uint64(ur.TransactionEpoch),
+				TokenCredit:        0,
+			}
+			c.pledgeHistory = append(c.pledgeHistory, newPledge)
+		}
+	}
+	//TODO
+	//Even if there is any error, the token chain is already getting synced. The quorums pin the hash of (TokenID + epoch), the epoch being the week
+	//count of when the transaction happened calculated from 1st Jan 2025.
+	for _, tokenID := range tks {
+		c.pinTokenEpoch(tokenID, ur.WeekCount)
+		// week number is not getting printed
+		c.log.Debug("Week epoch PINNED for tokenID " + tokenID + " for week number " + strconv.Itoa(ur.WeekCount))
 	}
 
 	crep.Status = true
@@ -1834,4 +2078,52 @@ func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
 	}
 	return c.l.RenderJSON(req, struct{}{}, http.StatusOK)
 
+}
+
+func (c *Core) updateCreditsAndEpochPin(req *ensweb.Request) *ensweb.Result {
+	c.log.Debug("Updating next block Epoch for credits in DB")
+	response := model.BasicResponse{
+		Status: false,
+	}
+	var UpdateCreditsAndEpochPin UpdatePreviousQuorums
+	err := c.l.ParseJSON(req, &UpdateCreditsAndEpochPin)
+	if err != nil {
+		c.log.Error("Failed to parse json request", "err", err)
+		response.Message = "Failed to parse json request"
+		return c.l.RenderJSON(req, &response, http.StatusOK)
+	}
+	c.log.Warn("Next block Epoch updating for token: ", UpdateCreditsAndEpochPin.TokenID)               // TODO: Change log WARN to DEBUG/INFO
+	c.log.Warn("Next block Epoch updating for transactionID: ", UpdateCreditsAndEpochPin.TransactionID) // TODO: Change log WARN to DEBUG/INFO
+	fmt.Println("Update Epoch struct is ", UpdateCreditsAndEpochPin)
+	if UpdateCreditsAndEpochPin.ParentTokenID != "" {
+		c.log.Warn("Next block Epoch updating for Parent token: ", UpdateCreditsAndEpochPin.ParentTokenID) // TODO: Change log WARN to DEBUG/INFO
+		UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateCreditsAndEpochPin.ParentTokenID, UpdateCreditsAndEpochPin.TransactionID, UpdateCreditsAndEpochPin.TransactionType, UpdateCreditsAndEpochPin.CurrentEpoch, UpdateCreditsAndEpochPin.TokenType)
+		if UpdateEpochErr != nil {
+			c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)
+		}
+	} else {
+		UpdateEpochErr := c.w.UpdateEpochAndCreditInPledgeHistoryTable(UpdateCreditsAndEpochPin.TokenID, UpdateCreditsAndEpochPin.TransactionID, UpdateCreditsAndEpochPin.TransactionType, UpdateCreditsAndEpochPin.CurrentEpoch, UpdateCreditsAndEpochPin.TokenType)
+		if UpdateEpochErr != nil {
+			c.log.Error("Failed to update epoch in pledge history table", "err", UpdateEpochErr)
+		}
+	}
+	//Update week epoch pins
+	currentWeek := util.GetWeeksPassed()
+	peers, err := c.getPeerWhoPinTokenEpoch(UpdateCreditsAndEpochPin.TokenID, currentWeek)
+	if err != nil {
+		c.log.Error("Failed to get peers who pin token epoch", "err", err)
+		return c.l.RenderJSON(req, struct{}{}, http.StatusOK)
+	}
+	tokenIsPinned := false
+	for _, peer := range peers {
+		if peer == c.peerID {
+			tokenIsPinned = true
+			break
+		}
+	}
+	if tokenIsPinned {
+		c.UnpinTokenEpoch(UpdateCreditsAndEpochPin.TokenID, currentWeek)
+		c.log.Debug("Week Epoch UNPINNED for tokenID %s for week %d", UpdateCreditsAndEpochPin.TokenID, currentWeek)
+	}
+	return c.l.RenderJSON(req, struct{}{}, http.StatusOK)
 }

@@ -45,7 +45,6 @@ type SmartContractToken struct {
 	RawCodeHash    string `json:"rawCodeHash"`
 	SchemaCodeHash string `json:"schemaCodeHash"`
 	DID            string `json:"did"`
-	PeerID         string `json:"peerID"`
 }
 
 type FetchSmartContractRequest struct {
@@ -125,7 +124,6 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		RawCodeHash:    rawCodeHash,
 		SchemaCodeHash: schemaCodeHash,
 		DID:            smartContractTokenRequest.DID,
-		PeerID:         c.peerID,
 	}
 
 	if err != nil {
@@ -296,26 +294,6 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 
 	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, SchemaCodeHash: smartContractToken.SchemaCodeHash, ContractStatus: wallet.TokenIsFetched})
-	if err != nil {
-		basicResponse.Message = "unable to add Smart contract record to DB, err: " + err.Error()
-		return basicResponse
-	}
-
-	if smartContractToken.PeerID != "" {
-		smartContractOriginPeer, err := c.getPeer(smartContractToken.PeerID+"."+smartContractToken.DID)
-		if err != nil {
-			basicResponse.Message = fmt.Sprintf("unable to get the peer for DID: %v, err: %v ", smartContractToken.DID, err)
-			return basicResponse
-		}
-
-		errSync := c.syncTokenChainFrom(smartContractOriginPeer, "", fetchSmartContractRequest.SmartContractToken, c.TokenType("sc"))
-		if errSync != nil {
-			basicResponse.Message = fmt.Sprintf("unable to sync token chain for contract: %v, err: %v", fetchSmartContractRequest.SmartContractToken, errSync)
-			return basicResponse
-		}
-	} else {
-		c.log.Debug(fmt.Sprintf("Unable to fetch Smart Contract %v deployer's PeerID, skipping token chain sync", fetchSmartContractRequest.SmartContractToken))
-	}
 
 	// Set the response values
 	basicResponse.Status = true
@@ -433,10 +411,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	payload := map[string]interface{}{
 		"smart_contract_hash": newEvent.SmartContractToken,
 		"port":                c.cfg.NodePort,
-		"smart_contract_data": newEvent.SmartContractData,
-		"initiator_did":       newEvent.Did,
 	}
-
 	payLoadBytes, err := json.Marshal(payload)
 	if err != nil {
 		c.log.Error("Failed to marshal JSON", "err", err)

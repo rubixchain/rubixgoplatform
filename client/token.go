@@ -106,3 +106,15 @@ func (c *Client) ValidateToken(token string) (*model.BasicResponse, error) {
 	}
 	return &br, nil
 }
+
+func (c *Client) FindReadyToMineCredits(didStr string)(*model.GetTotalCredits, error){
+	m := make(map[string]string)
+	m["did"] = didStr
+	var minerCredits model.GetTotalCredits 
+	err:= c.sendJSONRequest("POST",setup.APIFindReadyToMineCredits,m,nil,&minerCredits)
+	if err != nil {
+		return nil, err
+	}
+	return &minerCredits, nil
+
+}
