@@ -84,18 +84,6 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		return basicResponse
 	}
 
-	nftTokenDetails := wallet.NFT{
-		TokenID:     nftHash,
-		DID:         nft.DID,
-		TokenStatus: 0,
-		TokenValue:  0,
-	}
-
-	if err := c.w.CreateNFT(&nftTokenDetails, false); err != nil {
-		c.log.Error("Failed to write nft to storage", err)
-		return basicResponse
-	}
-
 	basicResponse.Status = true
 	basicResponse.Message = nftTokenResponse.Message
 	basicResponse.Result = nftTokenResponse.Result
@@ -125,37 +113,20 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		resp.Message = "Invalid Deployer DID"
 		return resp
 	}
+
+	_, err := c.w.GetNFT(deployReq.NFT, false)
+	if err == nil {
+		c.log.Error(fmt.Sprintf("NFT %v has been already been deployed", deployReq.NFT))
+		resp.Message = fmt.Sprintf("NFT %v has already been deployed", deployReq.NFT)
+		return resp
+	}
+
 	didCryptoLib, err := c.SetupDID(reqID, did)
 	if err != nil {
 		resp.Message = "Failed to setup Deployer DID of the NFT deployer, " + err.Error()
 		return resp
 	}
-	//check the NFT from the db
-	nft, err := c.w.GetNFT(did, deployReq.NFT, false)
-	if err != nil {
-		c.log.Error("Failed to retrieve nft details from storage", err)
-		resp.Message = err.Error()
-		return resp
-	}
-	nftJSON, err := c.ipfs.Cat(deployReq.NFT)
-	if err != nil {
-		c.log.Error("Failed to get NFT from network", "err", err)
-	}
-
-	nftJSONBytes, err := io.ReadAll(nftJSON)
-	if err != nil {
-		c.log.Error("Failed to read NFT from network", "err", err)
-	}
-	nftJSON.Close()
-	var nftToken NFTIpfsInfo
-	err = json.Unmarshal(nftJSONBytes, &nftToken)
-
-	if err != nil {
-		c.log.Error("Failed to parse nft", "err", err)
-	}
-
-	c.log.Info("The nft info fetched from the db is : ", nft)
-
+	
 	nftInfoArray := make([]contract.TokenInfo, 0)
 	nftInfo := contract.TokenInfo{
 		Token:      deployReq.NFT,
@@ -223,6 +194,18 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		return resp
 	}
 
+	nftTokenDetails := wallet.NFT{
+		TokenID:     deployReq.NFT,
+		DID:         deployReq.DID,
+		TokenStatus: wallet.TokenIsFree,
+		TokenValue:  floatPrecision(deployReq.NFTValue, MaxDecimalPlaces),
+	}
+
+	if err := c.w.CreateNFT(&nftTokenDetails, false); err != nil {
+		c.log.Error("Failed to write nft to storage in NFTTokenStorage", err)
+		return resp
+	}
+
 	et := time.Now()
 	dif := et.Sub(st)
 	//txnDetails.Amount = deployReq.RBTAmount
@@ -234,25 +217,28 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 	//Rename : TODO
 	eTrans := &ExplorerNFTDeploy{
-		NFTBlockHash:  []AllToken{{TokenHash: deployReq.NFT, BlockHash: strings.Split(txnDetails.BlockID, "-")[1], BlockNumber: blockNoInt}},
-		TransactionID: txnDetails.TransactionID,
-		Network:       conensusRequest.Type,
-		NFTValue:      nftInfo.TokenValue,
-		DeployerDID:   did,
-		OwnerDID:      nftInfo.OwnerDID,
-		PledgeAmount:  consensusContractDetails.TotalRBTs,
-		QuorumList:    extractQuorumDID(conensusRequest.QuorumList),
-		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
-		Comments:      txnDetails.Comment,
+		NFT:            deployReq.NFT,
+		NFTBlockNumber: blockNoInt,
+		NFTBlockHash:   strings.Split(txnDetails.BlockID, "-")[1],
+		TransactionID:  txnDetails.TransactionID,
+		Network:        conensusRequest.Type,
+		NFTValue:       nftInfo.TokenValue,
+		DeployerDID:    did,
+		OwnerDID:       nftInfo.OwnerDID,
+		PledgeAmount:   consensusContractDetails.TotalRBTs,
+		QuorumList:     extractQuorumDID(conensusRequest.QuorumList),
+		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		Comments:       txnDetails.Comment,
+		SCTokenHash:    "' '",
 	}
 	explorerErr := c.ec.ExplorerNFTDeploy(eTrans)
 	if explorerErr != nil {
-		c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
+		c.log.Error("Failed to send NFT transaction to explorer ", "err", explorerErr)
 	}
 
 	c.log.Info("NFT Deployed successfully", "duration", dif)
 	resp.Status = true
-	msg := fmt.Sprintf("NFT Deployed successfully in %v", dif)
+	msg := fmt.Sprintf("NFT Deployed successfully in %v with trnxid %v", dif, txnDetails.TransactionID)
 	resp.Message = msg
 	return resp
 }
@@ -287,7 +273,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		Status: false,
 	}
 
-	_, did, ok := util.ParseAddress(executeReq.Owner)
+	_, did, ok := util.ParseAddress(executeReq.Executor)
 	if !ok {
 		resp.Message = "Invalid Executor DID"
 		return resp
@@ -298,7 +284,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		return resp
 	}
 	//check the nft token from the DB base
-	_, err = c.w.GetNFT(executeReq.Owner, executeReq.NFT, false)
+	_, err = c.w.GetNFT(executeReq.NFT, false)
 	if err != nil {
 		c.log.Error("Failed to retrieve NFT Token details from storage", err)
 		resp.Message = err.Error()
@@ -309,25 +295,20 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	tokenType := c.TokenType(NFTString)
 	gensysBlock := c.w.GetGenesisTokenBlock(executeReq.NFT, tokenType)
 	if gensysBlock == nil {
-		c.log.Debug("Gensys block is empty - NFT not synced")
-		resp.Message = "Gensys block is empty - NFT not synced"
+		c.log.Debug("Genesis block is empty - NFT not synced")
+		resp.Message = "Genesis block is empty - NFT not synced"
 		return resp
 	}
 	latestBlock := c.w.GetLatestTokenBlock(executeReq.NFT, tokenType)
 	currentOwner := latestBlock.GetOwner()
 	c.log.Info("The current owner of the NFT is :", currentOwner)
 
-	if currentOwner != executeReq.Owner {
-		c.log.Error("NFT not owned by the executor")
-		resp.Message = "NFT not owned by the executor"
-		return resp
-	}
+	// if currentOwner != executeReq.Executor {
+	// 	c.log.Error("NFT not owned by the executor")
+	// 	resp.Message = "NFT not owned by the executor"
+	// 	return resp
+	// }
 
-	if err != nil {
-		c.log.Error("Failed to retrieve NFT Value , ", err)
-		resp.Message = err.Error()
-		return resp
-	}
 	var receiver string
 	var currentNFTValue float64
 
@@ -343,7 +324,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		}
 
 		currentNFTValue = nftToken.TokenValue
-		receiver = executeReq.Owner
+		receiver = nftToken.DID
 	} else {
 		currentNFTValue = executeReq.NFTValue
 		receiver = executeReq.Receiver
@@ -420,26 +401,38 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 	//Rename : TODO
 	eTrans := &ExplorerNFTExecute{
-		NFT:           NFTString,
-		ExecutorDID:   currentOwner,
-		ReceiverDID:   receiver,
-		Network:       executeReq.QuorumType,
-		Comments:      executeReq.Comment,
-		NFTValue:      executeReq.NFTValue,
-		NFTData:       executeReq.NFTData,
-		NFTBlockHash:  []AllToken{{TokenHash: executeReq.NFT, BlockHash: strings.Split(txnDetails.BlockID, "-")[1], BlockNumber: blockNoInt}},
-		PledgeAmount:  consensusContractDetails.TotalRBTs,
-		TransactionID: txnDetails.TransactionID,
-		QuorumList:    extractQuorumDID(conensusRequest.QuorumList),
-		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		NFT:            executeReq.NFT,
+		ExecutorDID:    executeReq.Executor,
+		ReceiverDID:    receiver,
+		Network:        executeReq.QuorumType,
+		Comments:       executeReq.Comment,
+		NFTValue:       executeReq.NFTValue,
+		NFTData:        executeReq.NFTData,
+		NFTBlockNumber: blockNoInt,
+		NFTBlockHash:   strings.Split(txnDetails.BlockID, "-")[1],
+		PledgeAmount:   consensusContractDetails.TotalRBTs,
+		TransactionID:  txnDetails.TransactionID,
+		QuorumList:     extractQuorumDID(conensusRequest.QuorumList),
+		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		SCTokenHash:    "' '",
+		Amount:         executeReq.NFTValue,
 	}
 
-	receiverInfo, _ := c.GetPeerDIDInfo(executeReq.Receiver)
-	local := false
-	if receiverInfo.PeerID == c.peerID {
-		local = true
-	}
+	var local bool
+	if executeReq.Receiver != "" {
+		receiverInfo, err := c.GetPeerDIDInfo(executeReq.Receiver)
+		if err != nil {
+			c.log.Error("Failed to get receiver peer info", "err", err)
+			resp.Message = "Failed to get receiver peer info for " + executeReq.Receiver
+			return resp
+		}
 
+		local = false
+		if receiverInfo.PeerID == c.peerID {
+			local = true
+		}
+	}
+	
 	err = c.w.UpdateNFTStatus(executeReq.NFT, wallet.TokenIsTransferred, local, executeReq.Receiver, executeReq.NFTValue)
 	if err != nil {
 		c.log.Error("Failed to update NFT status after transferring", err)
@@ -447,7 +440,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 
 	explorerErr := c.ec.ExplorerNFTTransaction(eTrans)
 	if explorerErr != nil {
-		c.log.Error("Failed to send FT transaction to explorer ", "err", explorerErr)
+		c.log.Error("Failed to send NFT transaction to explorer ", "err", explorerErr)
 	}
 
 	c.log.Info("NFT Executed successfully", "duration", dif)
@@ -470,7 +463,6 @@ func (c *Core) SubscribeNFTSetup(requestID string, topic string) error {
 
 func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	var newEvent model.NFTEvent
-	requestID := reqID
 	err := json.Unmarshal(data, &newEvent)
 	if err != nil {
 		c.log.Error("Failed to get nft details", "err", err)
@@ -484,7 +476,7 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	var fetchNFT FetchNFTRequest
 	fetchNFT.NFT = nft
 
-	fetchNFTResponse := c.FetchNFT(requestID, &fetchNFT)
+	fetchNFTResponse := c.FetchNFT(&fetchNFT)
 	if !fetchNFTResponse.Status {
 		c.log.Error("failed to fetch NFT: ", fetchNFTResponse.Message)
 		return
@@ -551,7 +543,7 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	c.log.Info("Token chain of " + nft + " syncing successful")
 }
 
-func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
+func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
 	basicResponse := &model.BasicResponse{
 		Status: false,
 	}
@@ -559,11 +551,13 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 	nftJSON, err := c.ipfs.Cat(fetchNFTRequest.NFT)
 	if err != nil {
 		c.log.Error("Failed to get NFT from network", "err", err)
+		basicResponse.Message = "Failed to get NFT details from network"
 		return basicResponse
 	}
 	nftJSONBytes, err := io.ReadAll(nftJSON)
 	if err != nil {
 		c.log.Error("Failed to read NFT from network", "err", err)
+		basicResponse.Message = "Failed to read NFT from network"
 		return basicResponse
 	}
 	nftJSON.Close()
@@ -572,16 +566,18 @@ func (c *Core) FetchNFT(requestID string, fetchNFTRequest *FetchNFTRequest) *mod
 	err = json.Unmarshal(nftJSONBytes, &nft)
 	if err != nil {
 		c.log.Error("Failed to parse nft", "err", err)
+		basicResponse.Message = "Failed to parse nft"
 		return basicResponse
 	}
-
-	if err := c.GetNFTFromIpfs(fetchNFTRequest.NFT, nft.ArtifactHash); err != nil {
-		c.log.Error("failed to fetch NFT from IPFS", "err", err)
+	err = c.GetNFTFromIpfs(fetchNFTRequest.NFT, nft.ArtifactHash)
+	if err != nil {
+		c.log.Error("failed to fetch NFT files from IPFS", "err", err)
+		basicResponse.Message = "Failed to fetch NFT files from IPFS"
+		return basicResponse
 	}
-
 	// Set the response values
 	basicResponse.Status = true
-	basicResponse.Message = "Successfully fetched NFT"
+	basicResponse.Message = "NFT fetched successfully"
 	basicResponse.Result = &nft
 
 	return basicResponse
@@ -635,4 +631,16 @@ func (c *Core) GetNFTsByDid(did string) model.NFTList {
 
 	return response
 
+}
+
+func (c *Core) CheckNFTFolderExists(nft string) (string, error) {
+	dirPath := c.cfg.DirPath + "NFT/" + nft
+	_, err := os.Stat(dirPath)
+	if err == nil {
+		return dirPath, nil // Folder exists
+	}
+	if os.IsNotExist(err) {
+		return "", nil // Folder does not exist
+	}
+	return "", err // Some other error occurred
 }

@@ -171,7 +171,7 @@ func (w *Wallet) GetPeerID(did string) string {
 	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
 		w.log.Error("couldn't read from peer did table", "err", err)
-		return "returned error in GetPeerID " + err.Error()
+		return ""
 	}
 	return dm.PeerID
 }

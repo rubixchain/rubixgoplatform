@@ -144,7 +144,7 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 					IPFSAPIPort:  (IPFSAPIPort + node),
 				},
 				BootStrap:     []string{"/ip4/161.35.169.251/tcp/4001/p2p/12D3KooWPhZEYEw4jG3kSRuwgMEHcVt7KMkm1ui2ddu4fgSgwvDq", "/ip4/103.127.158.120/tcp/4001/p2p/12D3KooWSQ94HRDzFf6W2rp7P8gzP6efZQHTaSU8uaQjskVBHiWP", "/ip4/172.104.191.191/tcp/4001/p2p/12D3KooWFudnWZY1v1m4YXCzDWZSbNt7nvf5F42uzM6vErZ4NwqJ"},
-				TestBootStrap: []string{"/ip4/103.209.145.177/tcp/4001/p2p/12D3KooWD8Rw7Fwo4n7QdXTCjbh6fua8dTqjXBvorNz3bu7d9xMc", "/ip4/98.70.52.158/tcp/4001/p2p/12D3KooWQyWFABF3CKFnzX85hf5ZwrT5zPsy4rWHdGPZ8bBpRVCK"},
+				TestBootStrap: []string{"/ip4/103.209.145.177/tcp/4001/p2p/12D3KooWD8Rw7Fwo4n7QdXTCjbh6fua8dTqjXBvorNz3bu7d9xMc", "/ip4/98.70.52.158/tcp/4001/p2p/12D3KooWQyWFABF3CKFnzX85hf5ZwrT5zPsy4rWHdGPZ8bBpRVCK", "/ip4/20.244.16.143/tcp/4001/p2p/12D3KooWAydFDJeSW5qupmp3AjRxc82Dq1AnjfJT1zwy4hg2TuNn", "/ip4/40.81.232.217/tcp/4001/p2p/12D3KooWK6V21GQotbub3cfgb5qAK1uUoUGPexf3vsLqw6yBJfen"},
 			},
 		}
 		cfgBytes, err := json.Marshal(cfg)
@@ -578,7 +578,7 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 			c.AddPeerDetails(*peerInfo)
 		}
 	}
-	if *peerInfo.DIDType == -1 {
+	if peerInfo.DIDType == nil || *peerInfo.DIDType == -1 {
 		c.log.Error("failed to get did type of peer did ", didStr, "error", err)
 		return nil, err
 	}
@@ -644,20 +644,29 @@ func (c *Core) FetchDID(did string) error {
 }
 
 func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
-	_, err := os.Stat(c.cfg.DirPath + "NFT/" + nftTokenHash)
-	if err != nil {
-		err = os.MkdirAll(c.cfg.DirPath+"NFT/"+nftTokenHash, os.ModeDir|os.ModePerm)
+	dirPath := c.cfg.DirPath + "NFT/" + nftTokenHash
+	// Check if the directory exists
+	_, err := os.Stat(dirPath)
+	if os.IsNotExist(err) {
+		// If the directory does not exist, create it
+		err = os.MkdirAll(dirPath, os.ModeDir|os.ModePerm)
 		if err != nil {
 			c.log.Error("failed to create directory", "err", err)
 			return err
 		}
-		err = c.ipfs.Get(nftFolderHash, c.cfg.DirPath+"NFT/"+nftTokenHash)
-		if err != nil {
-			c.log.Error("failed to get NFT from IPFS", "err", err)
-			return err
-		}
+	} else if err != nil {
+		// Handle other errors while checking directory existence
+		c.log.Error("failed to check directory existence", "err", err)
+		return err
 	}
-	return err
+	// Fetch NFT data from IPFS and store in the directory
+	err = c.ipfs.Get(nftFolderHash, dirPath)
+	if err != nil {
+		c.log.Error("failed to get NFT from IPFS", "err", err)
+		return err
+	}
+	c.log.Info("NFT data fetched successfully from ipfs")
+	return nil
 }
 
 func (c *Core) GetPeerID() string {

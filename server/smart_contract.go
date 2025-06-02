@@ -313,13 +313,13 @@ func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
-	s.c.AddWebReq(req)
-	go func() {
-		basicResponse := s.c.FetchSmartContract(req.ID, &fetchSC)
-		fmt.Printf("Basic Response server:  %+v\n", *&basicResponse.Message)
-	}()
-	return s.BasicResponse(req, true, "Smart contract fetched successfully", nil)
+	basicResponse := s.c.FetchSmartContract("", &fetchSC)
 
+	if !basicResponse.Status {
+		return s.BasicResponse(req, false, fmt.Sprintf("failed to fetch Smart Contract: %v", basicResponse.Message), nil)
+	}
+
+	return s.BasicResponse(req, true, "Smart Contract fetched successfully", nil)
 }
 
 func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {

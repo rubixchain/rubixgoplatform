@@ -11,8 +11,6 @@ definitions:
     properties:
       did:
         type: string
-      public_key:
-        type: string
     type: object
   model.FTInfo:
     properties:
@@ -164,14 +162,14 @@ definitions:
     properties:
       comment:
         type: string
+      executor:
+        type: string
       nft:
         type: string
       nft_data:
         type: string
       nft_value:
         type: number
-      owner:
-        type: string
       quorum_type:
         type: integer
       receiver:

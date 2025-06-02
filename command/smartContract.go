@@ -94,7 +94,7 @@ func (cmd *Command) fetchSmartContract() {
 		return
 	}
 	if !basicResponse.Status {
-		cmd.log.Error("Failed to fetch smart contract token", "err", err)
+		cmd.log.Error("Failed to fetch smart contract token", "err", basicResponse.Message)
 		return
 	}
 	cmd.log.Info("Smart contract token fetched successfully")

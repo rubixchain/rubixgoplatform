@@ -20,6 +20,9 @@ def setup():
     config_quorum_node4 = config_quorum["node4"]
     config_quorum_node5 = config_quorum["node5"]
 
+
+    run_quorum_nodes(False, False, "quorum2", "./quorum_config2.json", "quorumlist2.json")
+
     create_and_register_did(config_A, "did_a", register_did=True)
     
     # Sender and Receiver on same Non-Quorum server Scenario
@@ -36,8 +39,6 @@ def setup():
 
     save_to_config_file(__node_config_path, node_config)
     save_to_config_file("./quorum_config.json", config_quorum)
-
-    run_quorum_nodes(False, False, "quorum2", "./quorum_config2.json", "quorumlist2.json")
 
     print("Adding quorums for A")
     add_quorums(node_config, "node9")

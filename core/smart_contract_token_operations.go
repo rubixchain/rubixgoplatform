@@ -171,13 +171,13 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	// Convert the string part to an int
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 
-	eTrans := &ExplorerSCTrans{
+	eTrans := &ExplorerSCDeploy{
 		SCTokenHash:        deployReq.SmartContractToken,
+		SCTokenValue:       deployReq.RBTAmount,
 		SCBlockHash:        strings.Split(txnDetails.BlockID, "-")[1],
 		SCBlockNumber:      blockNoInt,
 		TransactionID:      txnDetails.TransactionID,
 		Network:            conensusRequest.Type,
-		ExecutorDID:        "",
 		DeployerDID:        did,
 		Creator:            did,
 		PledgeAmount:       deployReq.RBTAmount,
@@ -186,7 +186,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		CommittedTokenList: tokenListForExplorer,
 		Comments:           deployReq.Comment,
 	}
-	c.ec.ExplorerSCTransaction(eTrans)
+	c.ec.ExplorerSCDeploy(eTrans)
 
 	c.log.Info("Smart Contract Token Deployed successfully", "duration", dif)
 	resp.Status = true
@@ -319,33 +319,23 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	txnDetails.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(txnDetails)
 
-	// explorerTrans := &ExplorerTrans{
-	// 	TID:         txnDetails.TransactionID,
-	// 	ExecutorDID: did,
-	// 	TrasnType:   conensusRequest.Type,
-	// 	TokenIDs:    tokens,
-	// 	QuorumList:  conensusRequest.QuorumList,
-	// 	TokenTime:   float64(dif.Milliseconds()),
-	// 	//BlockHash:   txnDetails.BlockID,
-	// }
 	blockNoPart := strings.Split(txnDetails.BlockID, "-")[0]
 	// Convert the string part to an int
 	blockNoInt, _ := strconv.Atoi(blockNoPart)
 
 	eTrans := &ExplorerSCTrans{
-		SCTokenHash:        executeReq.SmartContractToken,
-		SCBlockHash:        strings.Split(txnDetails.BlockID, "-")[1],
-		SCBlockNumber:      blockNoInt,
-		TransactionID:      txnDetails.TransactionID,
-		Network:            consensusRequest.Type,
-		ExecutorDID:        did,
-		DeployerDID:        smartContractInfo.OwnerDID,
-		Creator:            smartContractInfo.OwnerDID,
-		QuorumList:         extractQuorumDID(consensusRequest.QuorumList),
-		PledgeAmount:       smartContractValue,
-		PledgeInfo:         PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
-		CommittedTokenList: []Token{},
-		Comments:           executeReq.Comment,
+		SCTokenHash:   executeReq.SmartContractToken,
+		SCBlockHash:   strings.Split(txnDetails.BlockID, "-")[1],
+		SCBlockNumber: blockNoInt,
+		TransactionID: txnDetails.TransactionID,
+		Network:       consensusRequest.Type,
+		ExecutorDID:   did,
+		DeployerDID:   smartContractInfo.OwnerDID,
+		Creator:       smartContractInfo.OwnerDID,
+		QuorumList:    extractQuorumDID(consensusRequest.QuorumList),
+		PledgeAmount:  smartContractValue,
+		PledgeInfo:    PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		Comments:      executeReq.Comment,
 	}
 	c.ec.ExplorerSCTransaction(eTrans)
 	/* newEvent := model.NewContractEvent{

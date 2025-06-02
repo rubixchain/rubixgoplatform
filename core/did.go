@@ -447,9 +447,12 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 
 	//if did type is not fetched yet or is incorrect, then try to fetch it from db or from the peer itself
 	if peerDIDInfo.DIDType == nil || *peerDIDInfo.DIDType == -1 {
-		peerDIDInfo, err = c.GetPeerFromExplorer(didStr)
-		if err != nil && *peerDIDInfo.DIDType != -1 {
-			c.log.Error("failed to fetch peer details from explorer for ", didStr, "err", err)
+		if !c.testNet {
+			peerDIDInfo, err = c.GetPeerFromExplorer(didStr)
+			if err != nil && *peerDIDInfo.DIDType != -1 {
+				c.log.Error("failed to fetch peer details from explorer for ", didStr, "err", err)
+
+			}
 		} else {
 			didType, _ := c.w.GetPeerDIDType(didStr)
 			if didType == -1 {

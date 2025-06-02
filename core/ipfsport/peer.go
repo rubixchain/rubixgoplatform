@@ -57,9 +57,9 @@ func NewPeerManager(startPort uint16, lport uint16, maxNumPort uint16, ipfs *ipf
 		_, bsID := path.Split(bs)
 		err := p.ipfs.SwarmConnect(context.Background(), "/ipfs/"+bsID)
 		if err == nil {
-			p.log.Info("Bootstrap swarm connected")
+			p.log.Info(fmt.Sprintf("Bootstrap swarm %v connected", bsID))
 		} else {
-			p.log.Error("Bootstrap swarm failed to connect")
+			p.log.Error(fmt.Sprintf("Bootstrap swarm %v failed to connect, err: %v", bsID, err))
 		}
 	}
 	return p

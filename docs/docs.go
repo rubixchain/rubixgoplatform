@@ -1369,9 +1369,6 @@ const docTemplate = `{
             "properties": {
                 "did": {
                     "type": "string"
-                },
-                "public_key": {
-                    "type": "string"
                 }
             }
         },
@@ -1604,6 +1601,9 @@ const docTemplate = `{
                 "comment": {
                     "type": "string"
                 },
+                "executor": {
+                    "type": "string"
+                },
                 "nft": {
                     "type": "string"
                 },
@@ -1612,9 +1612,6 @@ const docTemplate = `{
                 },
                 "nft_value": {
                     "type": "number"
-                },
-                "owner": {
-                    "type": "string"
                 },
                 "quorum_type": {
                     "type": "integer"

@@ -45,7 +45,7 @@ type DeployNFTRequest struct {
 
 type ExecuteNFTRequest struct {
 	NFT        string  `json:"nft"`
-	Owner      string  `json:"owner"`
+	Executor   string  `json:"executor"`
 	Receiver   string  `json:"receiver"`
 	QuorumType int     `json:"quorum_type"`
 	Comment    string  `json:"comment"`

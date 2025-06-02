@@ -5,6 +5,7 @@ type NewContractEvent struct {
 	Did                    string `json:"did"`
 	Type                   int    `json:"type"`
 	SmartContractBlockHash string `json:"smartContractBlockHash"`
+	SmartContractData      string `json:"smartContractData"`
 }
 
 type NewSubscription struct {

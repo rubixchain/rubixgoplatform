@@ -50,17 +50,17 @@ func (w *Wallet) GetNFTsByDid(did string) ([]NFT, error) {
 }
 
 // GetNFT get NFT from db
-func (w *Wallet) GetNFT(did string, nft string, lock bool) (*NFT, error) {
+func (w *Wallet) GetNFT(nft string, lock bool) (*NFT, error) {
 	var tkns NFT
 	w.l.Lock()
 	defer w.l.Unlock()
 	if lock {
-		err := w.s.Read(NFTTokenStorage, &tkns, "did=? AND token_id=? AND token_status <>?", did, nft, TokenIsLocked)
+		err := w.s.Read(NFTTokenStorage, &tkns, "token_id=? AND token_status <>?", nft, TokenIsLocked)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		err := w.s.Read(NFTTokenStorage, &tkns, "did=? AND token_id=?", did, nft)
+		err := w.s.Read(NFTTokenStorage, &tkns, "token_id=?", nft)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +70,7 @@ func (w *Wallet) GetNFT(did string, nft string, lock bool) (*NFT, error) {
 	}
 	if lock {
 		tkns.TokenStatus = TokenIsLocked
-		err := w.s.Update(NFTTokenStorage, &tkns, "did=? AND token_id=?", did, nft)
+		err := w.s.Update(NFTTokenStorage, &tkns, "token_id=?", nft)
 		if err != nil {
 			return nil, err
 		}

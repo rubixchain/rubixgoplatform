@@ -358,14 +358,14 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			// }
 
 			// Create new token entry
-			tokenInfo := wallet.Token{
+			tokenInfo = &wallet.Token{
 				TokenID:       ti[i].Token,
 				TokenValue:    ti[i].TokenValue,
 				ParentTokenID: parentToken,
 				DID:           ti[i].OwnerDID,
 			}
 
-			err = c.w.CreateToken(&tokenInfo)
+			err = c.w.CreateToken(tokenInfo)
 			if err != nil {
 				c.log.Error("failed to write to db, token ", ti[i].Token, "err", err)
 				return false, err

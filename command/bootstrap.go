@@ -11,7 +11,7 @@ func (cmd *Command) addBootStrap() {
 		return
 	}
 	for _, peer := range cmd.peers {
-		if !strings.HasSuffix(peer, "/") {
+		if !strings.HasPrefix(peer, "/") {
 			cmd.log.Error(fmt.Sprintf("Invalid bootstrap peer : %s", peer))
 			return
 		}
@@ -31,7 +31,7 @@ func (cmd *Command) removeBootStrap() {
 		return
 	}
 	for _, peer := range cmd.peers {
-		if !strings.HasSuffix(peer, "/") {
+		if !strings.HasPrefix(peer, "/") {
 			cmd.log.Error(fmt.Sprintf("Invalid bootstrap peer : %s", peer))
 			return
 		}
