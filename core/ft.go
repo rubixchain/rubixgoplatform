@@ -578,6 +578,7 @@ func (c *Core) updateFTTable(did string, ftName string, creatorDID string) error
 				deleteErr := fmt.Sprint(err)
 				if strings.Contains(deleteErr, "no records found") {
 					c.log.Info("Details not fount in FTTable")
+					return nil
 				} else {
 					c.log.Error("Failed to delete entry from FT table:", err)
 					return err
@@ -592,32 +593,30 @@ func (c *Core) updateFTTable(did string, ftName string, creatorDID string) error
 
 	var FTInfo wallet.FT
 
-	{
-		err = c.s.Read(wallet.FTStorage, &FTInfo, "ft_name=? AND creator_did=?", ftName, creatorDID)
-		if err != nil {
-			if strings.Contains(err.Error(), "no records found") {
-				c.log.Info("No records found for FT Name:", ftName, "Creator DID:", creatorDID)
-				FTInfo = wallet.FT{
-					FTName:     ftName,
-					FTCount:    len(AllFTs),
-					CreatorDID: creatorDID,
-				}
-				addErr := c.s.Write(wallet.FTStorage, &FTInfo)
-				if addErr != nil {
-					c.log.Error("Failed to add new FT:", FTInfo.FTName, "Error:", addErr)
-					return addErr
-				}
-				return nil
+	err = c.s.Read(wallet.FTStorage, &FTInfo, "ft_name=? AND creator_did=?", ftName, creatorDID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			c.log.Info("No records found for FT Name:", ftName, "Creator DID:", creatorDID)
+			FTInfo = wallet.FT{
+				FTName:     ftName,
+				FTCount:    len(AllFTs),
+				CreatorDID: creatorDID,
 			}
-			c.log.Error("Failed to read FT table:", err)
-			return err
+			addErr := c.s.Write(wallet.FTStorage, &FTInfo)
+			if addErr != nil {
+				c.log.Error("Failed to add new FT:", FTInfo.FTName, "Error:", addErr)
+				return addErr
+			}
+			return nil
 		}
-		FTInfo.FTCount = len(AllFTs)
-		err = c.s.Update(wallet.FTStorage, &FTInfo, "ft_name=? AND creator_did=?", ftName, creatorDID)
-		if err != nil {
-			c.log.Error("Failed to update FT:", ftName, "Error:", err)
-			return err
-		}
+		c.log.Error("Failed to read FT table:", err)
+		return err
+	}
+	FTInfo.FTCount = len(AllFTs)
+	err = c.s.Update(wallet.FTStorage, &FTInfo, "ft_name=? AND creator_did=?", ftName, creatorDID)
+	if err != nil {
+		c.log.Error("Failed to update FT:", ftName, "Error:", err)
+		return err
 	}
 	return nil
 }
