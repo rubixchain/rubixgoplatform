@@ -169,7 +169,7 @@ func (w *Wallet) GetFTsAndCount(did string) ([]FT, error) {
 	for ftName, creatorCounts := range ftNameCreatorCounts {
 		for creatorDID, count := range creatorCounts {
 			info = append(info, FT{
-				ID:         fmt.Sprintf("%d", idCounter),
+				ID:         idCounter,
 				FTName:     ftName,
 				FTCount:    count,
 				CreatorDID: creatorDID,

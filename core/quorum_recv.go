@@ -1124,7 +1124,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 			if err != nil {
 				c.log.Error("failed to fetch parent token value, err ", err)
 				// update token sync status
-				c.w.UpdateTokenSyncStatus(tokenInfo.ParentTokenID,wallet.SyncIncomplete)
+				c.w.UpdateTokenSyncStatus(tokenInfo.ParentTokenID, wallet.SyncIncomplete)
 				continue
 			}
 			if parentTokenInfo.TokenValue != 1.0 {
@@ -1247,7 +1247,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
 
-	updateFTTableErr := c.updateFTTable(receiverDID)
+	updateFTTableErr := c.updateFTTable(receiverDID, ftinfo.FTName, ftinfo.CreatorDID)
 	if updateFTTableErr != nil {
 		return nil, fmt.Errorf("Failed to update FT table, error: %v", updateFTTableErr)
 	}
