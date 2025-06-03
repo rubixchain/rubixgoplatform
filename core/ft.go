@@ -59,7 +59,11 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
 
-	did.GetPassword(dc) // Ensure password is fetched for DID crypto
+	_, err = did.GetPassword(dc) // Ensure password is fetched for DID crypto
+	if err != nil {
+		c.log.Error("Failed to get password for DID crypto", "err", err)
+		return fmt.Errorf("failed to get password for DID crypto, err: %v", err)
+	}
 	var FT wallet.FT
 	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND  creator_did=?", FTName, didString)
 
