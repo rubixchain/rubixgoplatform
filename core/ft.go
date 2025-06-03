@@ -24,8 +24,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int, continueCreation bool) {
-	err := c.createFTs(reqID, ftname, ftcount, wholeToken, did, continueCreation)
+func (c *Core) CreateFTs(reqID string, didString string, ftcount int, ftname string, wholeToken int, continueCreation bool) {
+	err := c.createFTs(reqID, ftname, ftcount, wholeToken, didString, continueCreation)
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "FT created successfully",
@@ -42,25 +42,26 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 	channel.OutChan <- &br
 }
 
-func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens int, did string, continueCreation bool) error {
-	if did == "" {
+func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens int, didString string, continueCreation bool) error {
+	if didString == "" {
 		c.log.Error("DID is empty")
 		return fmt.Errorf("DID is empty")
 	}
-	isAlphanumericDID := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-	if !isAlphanumericDID || !strings.HasPrefix(did, "bafybmi") || len(did) != 59 {
+	isAlphanumericDID := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(didString)
+	if !isAlphanumericDID || !strings.HasPrefix(didString, "bafybmi") || len(didString) != 59 {
 		c.log.Error("Invalid FT creator's DID. Please provide valid DID")
 		return fmt.Errorf("invalid DID, Please provide valid DID")
 	}
 
-	dc, err := c.SetupDID(reqID, did)
+	dc, err := c.SetupDID(reqID, didString)
 	if err != nil || dc == nil {
 		c.log.Error("Failed to setup DID")
 		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
 
+	did.GetPassword(dc) // Ensure password is fetched for DID crypto
 	var FT wallet.FT
-	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND  creator_did=?", FTName, did)
+	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND  creator_did=?", FTName, didString)
 
 	//If any one value exists in the table, stop reading
 	//Existing FT check
@@ -83,7 +84,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 
 	// Fetch whole tokens (RBT Tokens) using GetToken
 	//Locking the RBT Tokens to prevent any transactions on it
-	wholeTokens, err := c.GetTokens(dc, did, float64(numWholeTokens), 0)
+	wholeTokens, err := c.GetTokens(dc, didString, float64(numWholeTokens), 0)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
@@ -134,6 +135,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	} else {
 		startingFTNum = 0
 	}
+
 	//Worker Function
 	worker := func(workerID int) {
 		defer wg.Done()
@@ -146,7 +148,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 
 			fmt.Println("Worker", workerID, "processing FT", ftNum)
 
-			if err := processFT(c, dc, ftNum, newFTs, newFTTokenIDs, did, FTName, fractionalValue, parentTokenIDs, startingFTNum); err != nil {
+			if err := processFT(c, dc, ftNum, newFTs, newFTTokenIDs, didString, FTName, fractionalValue, parentTokenIDs, startingFTNum); err != nil {
 				c.log.Error("FT processing failed", "err", err)
 				once.Do(func() { cancel() })
 				errChan <- err
@@ -181,7 +183,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 
 	//Adding levelDB blocks for RBT Tokens as well
 	for i := range wholeTokens {
-		fmt.Println("Is this getting called?")
 		release := true
 		defer c.relaseToken(&release, wholeTokens[i].TokenID)
 		ptt := c.TokenType(RBTString)
@@ -201,7 +202,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		}
 		tcb := &block.TokenChainBlock{
 			TransactionType: block.TokenIsBurntForFT,
-			TokenOwner:      did,
+			TokenOwner:      didString,
 			TransInfo:       bti,
 			TokenValue:      wholeTokens[i].TokenValue,
 			ChildTokens:     newFTTokenIDs,
@@ -233,7 +234,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 
 	//Updating the SQLite3 table
 	for i := range newFTs {
-		newFTs[i].CreatorDID = did
+		newFTs[i].CreatorDID = didString
 	}
 	err = c.w.CreateFT(newFTs, numFTs)
 	if err != nil {
@@ -243,13 +244,13 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	if FT != (wallet.FT{}) {
 		FT.FTCountAvailable += numFTs
 		FT.FTCountOriginal += numFTs
-		Err := c.s.Update(wallet.FTStorage, &FT, "ft_name=? AND creator_did=?", FTName, did)
+		Err := c.s.Update(wallet.FTStorage, &FT, "ft_name=? AND creator_did=?", FTName, didString)
 		if Err != nil {
 			c.log.Error("Failed to update FT:", FTName, "Error:", Err)
 			return Err
 		}
 	} else {
-		Ft := wallet.FT{FTName: FTName, FTCountOriginal: numFTs, FTCountAvailable: numFTs, CreatorDID: did, FTValue: fractionalValue}
+		Ft := wallet.FT{FTName: FTName, FTCountOriginal: numFTs, FTCountAvailable: numFTs, CreatorDID: didString, FTValue: fractionalValue}
 		addErr := c.s.Write(wallet.FTStorage, &Ft)
 		if addErr != nil {
 			c.log.Error("Failed to add new FT:", Ft.FTName, "Error:", addErr)

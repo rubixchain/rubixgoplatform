@@ -30,12 +30,24 @@ func InitDIDLiteWithPassword(did string, baseDir string, pwd string) *DIDLite {
 	return &DIDLite{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 }
 
+// Thisfunction will return the did password for signature verification to prevent multiple singature for workers requests in FT creation
+func GetPassword(dc DIDCrypto) (string, error) {
+	switch d := dc.(type) {
+	case *DIDLite:
+		return d.getPassword()
+	case *DIDBasic:
+		return d.getPassword()
+	default:
+		return "", fmt.Errorf("unsupported DIDCrypto type: %T", dc)
+	}
+}
+
 func (d *DIDLite) getPassword() (string, error) {
 	if d.pwd != "" {
 		return d.pwd, nil
 	}
 	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
-		return "", fmt.Errorf("Invalid configuration")
+		return "", fmt.Errorf("invalid configuration")
 	}
 	sr := &SignResponse{
 		Status:  true,
@@ -50,12 +62,12 @@ func (d *DIDLite) getPassword() (string, error) {
 	select {
 	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
-		return "", fmt.Errorf("Timeout, failed to get password")
+		return "", fmt.Errorf("timeout, failed to get password")
 	}
 
 	srd, ok := ch.(SignRespData)
 	if !ok {
-		return "", fmt.Errorf("Invalid data received on the channel")
+		return "", fmt.Errorf("invalid data received on the channel")
 	}
 	d.pwd = srd.Password
 	return d.pwd, nil
