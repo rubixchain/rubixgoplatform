@@ -162,6 +162,10 @@ func (cmd *Command) CreateDID() {
 		MnemonicFile:   cmd.mnemonicFile,
 		ChildPath:      cmd.ChildPath,
 	}
+	cfg.HDPath[2] = uint32(cmd.accountType)
+	cfg.HDPath[3] = uint32(cmd.changeAddr)
+	cfg.HDPath[4] = uint32(cmd.addrIndex)
+
 	msg, status := cmd.c.CreateDID(&cfg)
 	if !status {
 		cmd.log.Error("Failed to create DID", "message", msg)

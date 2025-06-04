@@ -15,6 +15,19 @@ import (
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/tyler-smith/go-bip32"
+)
+
+const (
+	HDPurpose       uint32 = bip32.FirstHardenedChild + 44   // 44 for BIP-44
+	RBTcoinType     uint32 = bip32.FirstHardenedChild + 1001 // for RBT tokens in Rubix mainnet
+	TestRbtcoinType uint32 = bip32.FirstHardenedChild + 1002 // for test RBTs in Rubix testnet
+)
+
+const (
+	NonWalletAccount uint32 = iota
+	XellAcount
+	SafePassAccount
 )
 
 // Struct to match the API response
@@ -218,6 +231,15 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		c.log.Error("root did is already exist")
 		return "", fmt.Errorf("root did is already exist")
 	}
+	// HDPath defines the required path to create a new child address/did
+	didCreate.HDPath[0] = HDPurpose
+	if c.testNet {
+		didCreate.HDPath[1] = TestRbtcoinType
+	} else {
+		didCreate.HDPath[1] = RBTcoinType
+	}
+	didCreate.HDPath[2] = bip32.FirstHardenedChild + didCreate.HDPath[2]
+
 	did, err := c.d.CreateDID(didCreate)
 	if err != nil {
 		return "", err
@@ -234,6 +256,7 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	if didCreate.RootDID {
 		dt.RootDID = 1
 	}
+
 	err = c.w.CreateDID(&dt)
 	if err != nil {
 		c.log.Error("Failed to create did in the wallet", "err", err)

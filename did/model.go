@@ -31,24 +31,25 @@ const (
 )
 
 type DIDCreate struct {
-	Type              int    `json:"type"`
-	Dir               string `json:"dir"`
-	Config            string `json:"config"`
-	RootDID           bool   `json:"root_did"`
-	MasterDID         string `json:"master_did"`
-	Secret            string `json:"secret"`
-	PrivPWD           string `json:"priv_pwd"`
-	QuorumPWD         string `json:"quorum_pwd"`
-	ImgFile           string `json:"img_file"`
-	DIDImgFileName    string `json:"did_img_file"`
-	PubImgFile        string `json:"pub_img_file"`
-	PrivImgFile       string `json:"priv_img_file"`
-	PubKeyFile        string `json:"pub_key_file"`
-	PrivKeyFile       string `json:"priv_key_file"`
-	QuorumPubKeyFile  string `json:"quorum_pub_key_file"`
-	QuorumPrivKeyFile string `json:"quorum_priv_key_file"`
-	MnemonicFile      string `json:"mnemonic_file"`
-	ChildPath         int    `json:"childPath"`
+	Type              int       `json:"type"`
+	Dir               string    `json:"dir"`
+	Config            string    `json:"config"`
+	RootDID           bool      `json:"root_did"`
+	MasterDID         string    `json:"master_did"`
+	Secret            string    `json:"secret"`
+	PrivPWD           string    `json:"priv_pwd"`
+	QuorumPWD         string    `json:"quorum_pwd"`
+	ImgFile           string    `json:"img_file"`
+	DIDImgFileName    string    `json:"did_img_file"`
+	PubImgFile        string    `json:"pub_img_file"`
+	PrivImgFile       string    `json:"priv_img_file"`
+	PubKeyFile        string    `json:"pub_key_file"`
+	PrivKeyFile       string    `json:"priv_key_file"`
+	QuorumPubKeyFile  string    `json:"quorum_pub_key_file"`
+	QuorumPrivKeyFile string    `json:"quorum_priv_key_file"`
+	MnemonicFile      string    `json:"mnemonic_file"`
+	ChildPath         int       `json:"childPath"`
+	HDPath            [5]uint32 `json:"hd_path"`
 }
 
 type DIDSignature struct {
