@@ -35,15 +35,8 @@ const (
 // NewHDWallet creates a new HD wallet from a mnemonic or generates a new one
 func NewHDWallet(mnemonic string) (*HDWallet, error) {
 	if mnemonic == "" {
-		// Generate a new 12-word mnemonic (128-bit entropy)
-		entropy, err := bip39.NewEntropy(128)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate entropy: %v", err)
-		}
-		mnemonic, err = bip39.NewMnemonic(entropy)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate mnemonic: %v", err)
-		}
+		// Generate a new 24-word mnemonic (256-bit entropy)
+		mnemonic = BIPGenerateMnemonic()
 	}
 
 	// Validate mnemonic
@@ -72,7 +65,7 @@ func NewHDWallet(mnemonic string) (*HDWallet, error) {
 func (w *HDWallet) DerivePrivateKey(path []uint32) (*bip32.Key, error) {
 	// path := []uint32{
 	// 	bip32.FirstHardenedChild + Purpose,     // e.g., 44'
-	// 	bip32.FirstHardenedChild + coinType,    // e.g., 1001
+	// 	bip32.FirstHardenedChild + coinType,    // e.g., 1001'
 	// 	bip32.FirstHardenedChild + accountType, // e.g., 0'
 	// 	change,                                 // 0 (external) or 1 (change)
 	// 	index,                                  // 0, 1, 2, ...
@@ -85,11 +78,6 @@ func (w *HDWallet) DerivePrivateKey(path []uint32) (*bip32.Key, error) {
 	for _, i := range path {
 		var err error
 		currentKey, err = currentKey.NewChildKey(i)
-		// if i >= bip32.FirstHardenedChild {
-		// 	currentKey, err = currentKey.NewChildKey(i)
-		// } else { // useful for non-hardened keys, to derive the child public key without needing the private key
-		// 	currentKey, err = currentKey.PublicKey().NewChildKey(i)
-		// }
 		if err != nil {
 			return nil, fmt.Errorf("failed to derive key at index %d: %v", i, err)
 		}

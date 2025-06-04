@@ -15,12 +15,13 @@ import (
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/tyler-smith/go-bip32"
 )
 
 const (
-	HDPurpose       uint32 = 44   // 44 for BIP-44
-	RBTcoinType     uint32 = 1001 // for RBT tokens in Rubix mainnet
-	TestRbtcoinType uint32 = 1002 // for test RBTs in Rubix testnet
+	HDPurpose       uint32 = bip32.FirstHardenedChild + 44   // 44 for BIP-44
+	RBTcoinType     uint32 = bip32.FirstHardenedChild + 1001 // for RBT tokens in Rubix mainnet
+	TestRbtcoinType uint32 = bip32.FirstHardenedChild + 1002 // for test RBTs in Rubix testnet
 )
 
 const (
@@ -237,6 +238,7 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	} else {
 		didCreate.HDPath[1] = RBTcoinType
 	}
+	didCreate.HDPath[2] = bip32.FirstHardenedChild + didCreate.HDPath[2]
 
 	did, err := c.d.CreateDID(didCreate)
 	if err != nil {
