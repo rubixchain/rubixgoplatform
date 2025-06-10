@@ -40,6 +40,10 @@ func NewAdapter(cfg *config.Config) (*Adapter, error) {
 		userPwd := url.UserPassword(cfg.DBUserName, cfg.DBPassword)
 		dsn := fmt.Sprintf("sqlserver://%s@%s:%s?database=%s", userPwd, cfg.DBAddress, cfg.DBPort, cfg.DBName)
 		db, err = gorm.Open(sqlserver.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		// Enable WAL mode
+		if err := db.Exec("PRAGMA journal_mode=WAL;").Error; err != nil {
+			return nil, err
+		}
 	case postgressDB:
 		dsn := fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable", cfg.DBAddress, cfg.DBPort, cfg.DBUserName, cfg.DBName, cfg.DBPassword)
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})

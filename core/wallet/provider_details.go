@@ -24,6 +24,9 @@ func (w *Wallet) GetProviderDetails(token string) (*model.TokenProviderMap, erro
 // checks if entry exist for token,did either write or updates
 
 func (w *Wallet) AddProviderDetails(tokenProviderMap model.TokenProviderMap) error {
+	w.wl.Lock() // Using your existing wallet mutex (wl)
+	defer w.wl.Unlock()
+
 	var tpm model.TokenProviderMap
 	err := w.s.Read(TokenProvider, &tpm, "token=?", tokenProviderMap.Token)
 	if err != nil || tpm.Token == "" {
