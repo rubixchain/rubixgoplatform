@@ -341,6 +341,7 @@ type Command struct {
 	apiKey                       string
 	nftValue                     float64
 	ftNumStartIndex              int
+	fromRBT                      bool
 }
 
 func showVersion() {
@@ -562,6 +563,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
 	flag.IntVar(&cmd.ftNumStartIndex, "ftStartIndex", 0, "Start index of the FTs to be created")
+	flag.BoolVar(&cmd.fromRBT, "fromRBT", false, "Create FT by locking RBT")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

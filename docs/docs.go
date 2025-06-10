@@ -1580,6 +1580,9 @@ const docTemplate = `{
                 "did": {
                     "type": "string"
                 },
+                "from_rbt": {
+                    "type": "boolean"
+                },
                 "ft_count": {
                     "type": "integer"
                 },
