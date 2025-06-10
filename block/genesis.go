@@ -15,6 +15,11 @@ package block
 // }
 
 const (
+	RBTNotLocked int = iota
+	RBTLocked
+)
+
+const (
 	GenesisMigratedType int = iota
 	GenesisPartType
 	GenesisSmartContract
@@ -48,6 +53,7 @@ type GenesisTokenInfo struct {
 	SmartContractValue float64       `json:"smartContractValue"`
 	NFTValue           float64       `json:"nftValue"`
 	NFTData            string        `json:"nftData"`
+	RBTLockStatus      int           `json:"rbtLockStatus"`
 }
 
 type GenesisBlock struct {

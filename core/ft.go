@@ -142,6 +142,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		c.log.Info("FT created: " + ftID + " FT Num: " + ftnumString)
 		newFTTokenIDs = append(newFTTokenIDs, ftID)
 
+		var RBTLockStatus int
+
+		if fromRBT {
+			RBTLockStatus = block.RBTLocked
+		} else {
+			RBTLockStatus = block.RBTNotLocked
+		}
+
 		bti := &block.TransInfo{
 			Tokens: []block.TransTokens{
 				{
@@ -158,9 +166,10 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			GenesisBlock: &block.GenesisBlock{
 				Info: []block.GenesisTokenInfo{
 					{
-						Token:       ftID,
-						ParentID:    parentTokenIDs,
-						TokenNumber: i,
+						Token:         ftID,
+						ParentID:      parentTokenIDs,
+						TokenNumber:   i,
+						RBTLockStatus: RBTLockStatus,
 					},
 				},
 			},
@@ -184,11 +193,12 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		}
 		// Create the new token
 		ft := &wallet.FTToken{
-			TokenID:     ftID,
-			FTName:      FTName,
-			TokenStatus: wallet.TokenIsFree,
-			TokenValue:  fractionalValue,
-			DID:         did,
+			TokenID:       ftID,
+			FTName:        FTName,
+			TokenStatus:   wallet.TokenIsFree,
+			TokenValue:    fractionalValue,
+			DID:           did,
+			RBTLockStatus: RBTLockStatus,
 		}
 		newFTs = append(newFTs, *ft)
 	}
