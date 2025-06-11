@@ -163,3 +163,35 @@ func (cmd *Command) getFTinfo() {
 		}
 	}
 }
+
+func (cmd *Command) burnFT() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		return
+	}
+	if cmd.ftName == "" {
+		cmd.log.Info("FT name cannot be empty")
+		return
+	}
+	if cmd.ftCount < 1 {
+		cmd.log.Error("Input transaction amount is less than minimum FT transaction amount")
+		return
+	}
+	burnFtReq := model.BurnFTReq{
+		DID:     cmd.did,
+		FTName:  cmd.ftName,
+		FTCount: cmd.ftCount,
+	}
+	br, err := cmd.c.BurnFT(&burnFtReq)
+	if err != nil {
+		cmd.log.Error("Failed to burn FT", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to burn FT", "msg", msg)
+		return
+	}
+	cmd.log.Info("FT burned successfully")
+
+}

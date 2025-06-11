@@ -29,3 +29,9 @@ type FTInfo struct {
 	FTCount    int    `json:"ft_count"`
 	CreatorDID string `json:"creator_did"`
 }
+
+type BurnFTReq struct {
+	DID     string `json:"did"`
+	FTName  string `json:"ft_name"`
+	FTCount int    `json:"ft_count"`
+}

@@ -115,3 +115,17 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
+
+func (s *Server) APIBurnFT(req *ensweb.Request) *ensweb.Result {
+	var burnFTReq model.BurnFTReq
+	err := s.ParseJSON(req, &burnFTReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	if !s.validateDIDAccess(req, burnFTReq.DID) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.BurnFT(req.ID, &burnFTReq)
+	return s.didResponse(req, req.ID)
+}

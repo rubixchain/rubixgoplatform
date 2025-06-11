@@ -660,3 +660,78 @@ func (c *Core) updateFTTable() error {
 	}
 	return nil
 }
+
+func (c *Core) BurnFT(reqID string, req *model.BurnFTReq) {
+	br := c.burnFT(reqID, req)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
+
+func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicResponse {
+	resp := &model.BasicResponse{
+		Status: false,
+	}
+	isAlphanumericDID := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(burnReq.DID)
+	if !isAlphanumericDID {
+		c.log.Error("Invalid sender or receiver address. Please provide valid DID")
+		resp.Message = "Invalid sender or receiver address. Please provide valid DID"
+		return resp
+	}
+	if !strings.HasPrefix(burnReq.DID, "bafybmi") || len(burnReq.DID) != 59 {
+		c.log.Error("Invalid sender or receiver DID")
+		resp.Message = "Invalid sender or receiver DID"
+		return resp
+	}
+
+	if burnReq.FTCount <= 0 {
+		c.log.Error("No FT count provided for burning, All FTs will be burned")
+	}
+
+	if burnReq.FTName == "" {
+		c.log.Error("FT name cannot be empty")
+		resp.Message = "FT name is required"
+		return resp
+	}
+	//Gather all FTs to be burned
+	FTsToBurn, err := c.w.GetFreeFTsByNameAndCreatorDID(burnReq.FTName, burnReq.DID, burnReq.DID)
+	if err != nil {
+		c.log.Error("Failed to get FTs to burn")
+		resp.Message = "Failed to get FTs to burn"
+		return resp
+	}
+	if len(FTsToBurn) == 0 {
+		c.log.Error("No FTs found for burning")
+		resp.Message = "No FTs found for burning"
+		return resp
+	}
+
+	if burnReq.FTCount > 0 {
+		FTsToBurn = FTsToBurn[:burnReq.FTCount]
+	}
+	firstFT := &FTsToBurn[0]
+	ftTokenType := c.TokenType(FTString)
+	ftGenesisBlock := c.w.GetGenesisTokenBlock(firstFT.TokenID, ftTokenType)
+	ftCreator := ftGenesisBlock.GetOwner()
+
+	//Check if the DID is the creator of the FT
+	if ftCreator != burnReq.DID {
+		c.log.Error("Unable to burn FTs, Given DID is not the creator of the FT")
+		resp.Message = "Unable to burn FTs, Given DID is not the creator of the FT"
+		return resp
+	}
+
+	// Get parentToken details
+	parentRBTs, _, err := ftGenesisBlock.GetParentDetials(firstFT.TokenID)
+	if err != nil || len(parentRBTs) == 0 {
+		c.log.Error("Failed to get parent RBTs of FT")
+		resp.Message = "Failed to get parent RBTs of FT"
+		return resp
+	}
+	parentTokenIDsArray := strings.Split(parentRBTs, ",")
+
+	return resp
+}

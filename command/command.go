@@ -110,6 +110,7 @@ const (
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	AddPeerDetailsFromExplorer     string = "exppeerdetails"
 	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
+	BurnFTCmd                      string = "burn-ft"
 )
 
 var commands = []string{VersionCmd,
@@ -179,6 +180,7 @@ var commands = []string{VersionCmd,
 	AddUserAPIKeyCmd,
 	AddPeerDetailsFromExplorer,
 	GetFTTxnDetailsCmd,
+	BurnFTCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -247,6 +249,7 @@ var commandsHelp = []string{"To get tool version",
 	"",
 	"",
 	"This command will get FT transaction details by DID",
+	"This command will burn FT",
 }
 
 type Command struct {
@@ -773,6 +776,8 @@ func Run(args []string) {
 		cmd.addPeerDetailsFromExplorer()
 	case GetFTTxnDetailsCmd:
 		cmd.getFTTxnDetails()
+	case BurnFTCmd:
+		cmd.burnFT()
 	default:
 		cmd.log.Error("Invalid command")
 	}

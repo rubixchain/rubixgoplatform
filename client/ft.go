@@ -43,3 +43,12 @@ func (c *Client) GetFTInfo(didStr string) (*model.GetFTInfo, error) {
 	}
 	return &info, nil
 }
+
+func (c *Client) BurnFT(burnFTReq *model.BurnFTReq) (*model.BasicResponse, error) {
+	var basicresponse model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIBurnFT, nil, &burnFTReq, &basicresponse)
+	if err != nil {
+		return nil, err
+	}
+	return &basicresponse, nil
+}
