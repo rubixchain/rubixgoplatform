@@ -6,6 +6,7 @@ type CreateFTReq struct {
 	FTCount         int    `json:"ft_count"`
 	TokenCount      int    `json:"token_count"`
 	FTNumStartIndex int    `json:"ft_num_start_index"`
+	FromRBT         bool   `json:"from_rbt"`
 }
 
 type TransferFTReq struct {
