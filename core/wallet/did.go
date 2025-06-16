@@ -101,6 +101,8 @@ func (w *Wallet) IsDIDExist(did string) bool {
 }
 
 func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
+	w.wl.Lock()
+	defer w.wl.Unlock()
 	lastChar, err := w.GetLastChar(did)
 	if err != nil {
 		return err

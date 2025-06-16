@@ -13,6 +13,8 @@ type NFT struct {
 
 // CreateNFT write NFT into db
 func (w *Wallet) CreateNFT(nt *NFT, local bool) error {
+	w.l.Lock()
+	defer w.l.Unlock()
 	// TODO: Update should only occur in UpdateNFT status function
 	var err error
 	if local {

@@ -24,6 +24,8 @@ type PledgeInformation struct {
 }
 
 func (w *Wallet) StoreCredit(transactionID string, quorumDID string, pledgeInfo []*PledgeInformation) error {
+	w.wl.Lock()
+	defer w.wl.Unlock()
 	pledgeInfoBytes, err := json.Marshal(pledgeInfo)
 	if err != nil {
 		return fmt.Errorf("failed while marshalling credits: %v", err.Error())

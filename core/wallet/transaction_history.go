@@ -16,6 +16,8 @@ const (
 )
 
 func (w *Wallet) AddTransactionHistory(td *model.TransactionDetails) error {
+	w.wl.Lock()
+	defer w.wl.Unlock()
 	err := w.s.Write(TransactionStorage, td)
 	if err != nil {
 		w.log.Error("Failed to store transaction history", "err", err)

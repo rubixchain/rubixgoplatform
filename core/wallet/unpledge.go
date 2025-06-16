@@ -53,6 +53,8 @@ func (w *Wallet) GetUnpledgeSequenceInfoByTransactionID(transactionID string) (*
 }
 
 func (w *Wallet) AddUnpledgeSequenceInfo(unpledgeSequenceInfo *UnpledgeSequenceInfo) error {
+	w.wl.Lock()
+	defer w.wl.Unlock()
 	err := w.s.Write(UnpledgeSequence, &unpledgeSequenceInfo)
 	if err != nil {
 		errMsg := fmt.Errorf("error while adding unpledging sequence info for transaction: %v, err: %v", unpledgeSequenceInfo.TransactionID, err)
