@@ -48,11 +48,12 @@ type ExplorerClient struct {
 }
 
 type ExplorerDID struct {
-	PeerID    string                    `json:"peer_id"`
-	DID       string                    `json:"user_did"`
-	Balance   float64                   `json:"balance"`
-	DIDType   int                       `json:"did_type"`
-	FTDetails []model.FTInfoForExplorer `json:"ft_detials"`
+	PeerID     string                     `json:"peer_id"`
+	DID        string                     `json:"user_did"`
+	Balance    float64                    `json:"balance"`
+	DIDType    int                        `json:"did_type"`
+	FTDetails  []model.FTInfoForExplorer  `json:"ft_detials"`
+	NFTDetails []model.NFTInfoForExplorer `json:"nft_details"`
 }
 
 type ExplorerMapDID struct {
@@ -488,13 +489,25 @@ func (c *Core) ExplorerUserCreate() []string {
 								CreatorDID: item.CreatorDID,
 							}
 						}
+
+						nftInfo := c.GetNFTsByDid(d.DID)
+						nftInfoForExplorer := make([]model.NFTInfoForExplorer, len(nftInfo.NFTs))
+
+						for i, item := range nftInfo.NFTs {
+							nftInfoForExplorer[i] = model.NFTInfoForExplorer{
+								NFTId:    item.NFTId,
+								NFTValue: item.Value,
+							}
+						}
+
 						balance := float64(accInfo.RBTAmount) // Convert to float64 if necessary
 						ed := ExplorerDID{
-							DID:       d.DID,
-							Balance:   balance,
-							PeerID:    c.peerID,
-							DIDType:   d.Type,
-							FTDetails: ftInfoForExplorer,
+							DID:        d.DID,
+							Balance:    balance,
+							PeerID:     c.peerID,
+							DIDType:    d.Type,
+							FTDetails:  ftInfoForExplorer,
+							NFTDetails: nftInfoForExplorer,
 						}
 						err = c.ec.ExplorerUserCreate(&ed)
 						if err != nil {
@@ -565,13 +578,25 @@ func (c *Core) UpdateUserInfo(dids []string) {
 					CreatorDID: item.CreatorDID,
 				}
 			}
+
+			nftInfo := c.GetNFTsByDid(did)
+			nftInfoForExplorer := make([]model.NFTInfoForExplorer, len(nftInfo.NFTs))
+
+			for i, item := range nftInfo.NFTs {
+				nftInfoForExplorer[i] = model.NFTInfoForExplorer{
+					NFTId:    item.NFTId,
+					NFTValue: item.Value,
+				}
+			}
+
 			_ = c.s.Read(wallet.DIDStorage, &didList, "did=?", did)
 			var er ExplorerResponse
 			ed := ExplorerDID{
-				PeerID:    c.peerID,
-				Balance:   accInfo.RBTAmount,
-				DIDType:   didList.Type,
-				FTDetails: ftInfoForExplorer,
+				PeerID:     c.peerID,
+				Balance:    accInfo.RBTAmount,
+				DIDType:    didList.Type,
+				FTDetails:  ftInfoForExplorer,
+				NFTDetails: nftInfoForExplorer,
 			}
 
 			err = c.ec.SendExplorerJSONRequest("PUT", ExplorerUpdateUserInfoAPI+"/"+did, &ed, &er)

@@ -22,13 +22,13 @@ type NFTEvent struct {
 }
 
 type DeployNFTRequest struct {
-	NFT        string  `json:"nft"`
-	DID        string  `json:"did"`
-	QuorumType int     `json:"quorum_type"`
-	NFTValue   float64 `json:"nft_value"`
-	NFTData    string  `json:"nft_data"`
-	NFTMetadata string `json:"nft_metadata"`
-	NFTFileName string `json:"nft_file_name"`
+	NFT         string  `json:"nft"`
+	DID         string  `json:"did"`
+	QuorumType  int     `json:"quorum_type"`
+	NFTValue    float64 `json:"nft_value"`
+	NFTData     string  `json:"nft_data"`
+	NFTMetadata string  `json:"nft_metadata"`
+	NFTFileName string  `json:"nft_file_name"`
 }
 
 type ExecuteNFTRequest struct {
@@ -45,11 +45,10 @@ type NewNFTSubscription struct {
 	NFT string `json:"nft"`
 }
 
-
 type NFTInfo struct {
-	NFTId string  `json:"nft"`
-	Owner string  `json:"owner_did"`
-	Value float64 `json:"nft_value"`
+	NFTId    string  `json:"nft"`
+	Owner    string  `json:"owner_did"`
+	Value    float64 `json:"nft_value"`
 	Metadata string  `json:"nft_metadata"`
 	FileName string  `json:"nft_file_name"`
 }
@@ -57,4 +56,9 @@ type NFTInfo struct {
 type NFTList struct {
 	BasicResponse
 	NFTs []NFTInfo `json:"nfts"`
+}
+
+type NFTInfoForExplorer struct {
+	NFTId    string  `json:"nft_id"`
+	NFTValue float64 `json:"nft_value"`
 }
