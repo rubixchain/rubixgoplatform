@@ -39,6 +39,7 @@ const (
 	GIGrandParentIDKey      string = "6"
 	GICommitedTokensKey     string = "7"
 	GISmartContractValueKey string = "8"
+	GIRBTLockStatusKey      string = "9"
 )
 
 type GenesisTokenInfo struct {
@@ -77,6 +78,7 @@ func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 	if gi.GrandParentID != nil {
 		ngib[GIGrandParentIDKey] = gi.GrandParentID
 	}
+	ngib[GIRBTLockStatusKey] = gi.RBTLockStatus
 	//To add commited tokeninfo
 	newCommitedTokensBlock := make(map[string]interface{})
 	for _, tokensInfo := range gi.CommitedTokens {

@@ -34,6 +34,7 @@ var keyMapping = map[string]string{
 	"4-2-6": "GIGrandParentIDKey",
 	"4-2-7": "GICommitedTokensKey",
 	"4-2-8": "GISmartContractValueKey",
+	"4-2-9": "GIRBTLockStatusKey",
 
 	"5-1":    "TISenderDIDKey",
 	"5-2":    "TIReceiverDIDKey",

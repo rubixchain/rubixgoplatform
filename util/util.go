@@ -658,13 +658,17 @@ func GetStringSliceFromMap(m interface{}, key string) []string {
 	switch s := si.(type) {
 	case []string:
 		return s
-	case interface{}:
-		str, ok := si.([]string)
-		if ok {
-			return str
+	case []interface{}:
+		strs := make([]string, 0, len(s))
+		for _, item := range s {
+			if v, ok := item.(string); ok {
+				strs = append(strs, v)
+			}
 		}
+		return strs
+	default:
+		return nil
 	}
-	return nil
 }
 
 func GetInt(si interface{}) int {

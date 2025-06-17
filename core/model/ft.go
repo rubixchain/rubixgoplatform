@@ -35,4 +35,5 @@ type BurnFTReq struct {
 	DID     string `json:"did"`
 	FTName  string `json:"ft_name"`
 	FTCount int    `json:"ft_count"`
+	FromRBT bool   `json:"from_rbt"`
 }

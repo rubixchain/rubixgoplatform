@@ -173,14 +173,11 @@ func (cmd *Command) burnFT() {
 		cmd.log.Info("FT name cannot be empty")
 		return
 	}
-	if cmd.ftCount < 1 {
-		cmd.log.Error("Input transaction amount is less than minimum FT transaction amount")
-		return
-	}
 	burnFtReq := model.BurnFTReq{
 		DID:     cmd.did,
 		FTName:  cmd.ftName,
 		FTCount: cmd.ftCount,
+		FromRBT: cmd.fromRBT,
 	}
 	br, err := cmd.c.BurnFT(&burnFtReq)
 	if err != nil {
