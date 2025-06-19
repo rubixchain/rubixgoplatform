@@ -171,6 +171,10 @@ func (c *Core) runIPFS() {
 		c.SetIPFSState(false)
 	}()
 
+	go func() {
+		cmd.Wait()
+	}()
+
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		m := scanner.Text()
@@ -351,6 +355,7 @@ func (c *Core) GetDHTddrs(cid string) ([]string, error) {
 		c.log.Error("failed to start command", "err", err)
 		return nil, err
 	}
+
 	ids := make([]string, 0)
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
@@ -362,14 +367,19 @@ func (c *Core) GetDHTddrs(cid string) ([]string, error) {
 			ids = append(ids, m)
 		}
 	}
+	if err := cmd.Wait(); err != nil {
+		return nil, fmt.Errorf("ipfs error: %w", err)
+	}
 	return ids, nil
 }
 
 func (c *Core) ipfsRepoGc() {
 	cmd := exec.Command(c.ipfsApp, "ipfs", "repo", "gc")
-	err := cmd.Start()
+
+	err := cmd.Run()
 	if err != nil {
-		c.log.Error("failed to start command", "err", err)
-		//return nil, err
+		c.log.Error("ipfs gc failed", "err", err)
+	} else {
+		c.log.Info("ipfs gc completed successfully")
 	}
 }
