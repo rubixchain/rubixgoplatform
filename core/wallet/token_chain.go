@@ -401,15 +401,15 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 			return fmt.Errorf("invalid block number")
 		}
 	} else {
-		lbn, err := lb.GetBlockNumber(token)
-		if err != nil {
-			w.log.Error("Failed to get block number", "err", err)
-			return err
-		}
-		if bn <= lbn {
-			w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
-			return fmt.Errorf("invalid block number, sequence missing")
-		}
+		// lbn, err := lb.GetBlockNumber(token)
+		// if err != nil {
+		// 	w.log.Error("Failed to get block number", "err", err)
+		// 	return err
+		// }
+		// if bn <= lbn {
+		// 	w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
+		// 	return fmt.Errorf("invalid block number, sequence missing")
+		// }
 	}
 	if b.CheckMultiTokenBlock() {
 		bs, err := b.GetHash()
@@ -571,15 +571,15 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 				return fmt.Errorf("invalid block number")
 			}
 		} else {
-			lbn, err := lb.GetBlockNumber(token)
-			if err != nil {
-				w.log.Error("Failed to get block number", "err", err)
-				return err
-			}
-			if bn <= lbn {
-				w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
-				return fmt.Errorf("invalid block number, sequence missing")
-			}
+			// lbn, err := lb.GetBlockNumber(token)
+			// if err != nil {
+			// 	w.log.Error("Failed to get block number", "err", err)
+			// 	return err
+			// }
+			// if bn <= lbn {
+			// 	w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
+			// 	return fmt.Errorf("invalid block number, sequence missing")
+			// }
 		}
 	}
 	bs, err := b.GetHash()

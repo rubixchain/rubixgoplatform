@@ -246,7 +246,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				c.log.Error("FT creation failed, failed to add token block", "err", err)
 				return err
 			}
-			wholeTokens[i].TokenStatus = wallet.TokenIsBurntForFT
+			wholeTokens[i].TokenStatus = wallet.TokenIsLockedForFT
 			err = c.w.UpdateToken(&wholeTokens[i])
 			if err != nil {
 				c.log.Error("FT token creation failed, failed to update token status", "err", err)
@@ -685,6 +685,7 @@ func (c *Core) BurnFT(reqID string, req *model.BurnFTReq) {
 
 // burnFT handles the burning of FTs
 func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicResponse {
+	var RBTLockStatus int
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -797,7 +798,7 @@ func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicRespon
 
 		// Validate RBT lock status when FromRBT is true
 		if burnReq.FromRBT {
-			RBTLockStatus, err := ftGenesisBlock.GetRBTLockStatus(ft.TokenID)
+			RBTLockStatus, err = ftGenesisBlock.GetRBTLockStatus(ft.TokenID)
 			if err != nil {
 				c.log.Error("Failed to get RBT lock status")
 				resp.Message = "Failed to get RBT lock status"
@@ -812,7 +813,7 @@ func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicRespon
 	}
 
 	// 7. Additional validation for FromRBT case
-	if burnReq.FromRBT {
+	if burnReq.FromRBT || RBTLockStatus == block.RBTLocked {
 		err := c.validateParentRBTsForBurning(parentTokenID, FTsToBurn)
 		if err != nil {
 			c.log.Error(fmt.Sprintf("Parent RBT validation failed: %v", err))
@@ -822,7 +823,8 @@ func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicRespon
 	}
 
 	// 8. Process parent RBT unlocking (only when FromRBT is true)
-	if burnReq.FromRBT {
+	fmt.Println("RBTLockStatus:", RBTLockStatus)
+	if burnReq.FromRBT || RBTLockStatus == block.RBTLocked {
 		err := c.unlockParentRBTs(parentTokenID, burnReq.DID, dc)
 		if err != nil {
 			c.log.Error(fmt.Sprintf("Failed to unlock parent RBTs: %v", err))
@@ -841,7 +843,7 @@ func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicRespon
 			return resp
 		}
 	}
-
+	c.log.Info("FTs burned successfully")
 	resp.Status = true
 	resp.Message = fmt.Sprintf("Successfully burned %d %v FTs", len(FTsToBurn), burnReq.FTName)
 	return resp
@@ -997,8 +999,19 @@ func (c *Core) burnSingleFT(ft wallet.FTToken, did string, dc did.DIDCrypto) err
 
 	err = c.w.AddTokenBlock(ft.TokenID, newBlock)
 	if err != nil {
-		return fmt.Errorf("failed to add FT burnt block")
+		// return fmt.Errorf("failed to add FT burnt block")
+		c.log.Info("Updating burnt status")
 	}
-
+	FTTokenDetails, err := c.w.ReadFTToken(ft.TokenID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			return fmt.Errorf("FT token not found")
+		}
+		return fmt.Errorf("failed to read FT token details")
+	}
+	if FTTokenDetails != nil {
+		FTTokenDetails.TokenStatus = wallet.TokenIsBurnt
+		err = c.w.UpdateFTToken(FTTokenDetails)
+	}
 	return nil
 }

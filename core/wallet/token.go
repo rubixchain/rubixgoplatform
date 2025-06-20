@@ -29,7 +29,7 @@ const (
 	TokenPledgeIssue
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
-	TokenIsBurntForFT
+	TokenIsLockedForFT
 	QuorumPledgedForThisToken int = 20
 )
 const (
@@ -523,6 +523,17 @@ func (w *Wallet) UpdateToken(t *Token) error {
 	defer w.l.Unlock()
 	err := w.s.Update(TokenStorage, t, "token_id=?", t.TokenID)
 	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (w *Wallet) UpdateFTToken(t *FTToken) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.s.Update(FTTokenStorage, t, "token_id=?", t.TokenID)
+	if err != nil {
+
 		return err
 	}
 	return nil

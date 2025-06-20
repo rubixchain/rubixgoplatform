@@ -33,7 +33,7 @@ const (
 )
 
 const (
-	version string = "0.1_rc1"
+	version string = "0.1_rc1_FT_Burning"
 )
 const (
 	VersionCmd                     string = "-v"
