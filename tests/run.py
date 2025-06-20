@@ -12,7 +12,7 @@ from scenarios import (
     bip39_nlss_test
 )
 
-IPFS_KUBO_VERSION = "v0.21.0"
+IPFS_KUBO_VERSION = "v0.19.0"
 
 
 def generate_ipfs_swarm_key(build_name):

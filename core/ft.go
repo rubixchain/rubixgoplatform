@@ -312,6 +312,7 @@ func (c *Core) InitiateFTTransfer(reqID string, req *model.TransferFTReq) {
 
 func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model.BasicResponse {
 	st := time.Now()
+	txEpoch := int(st.Unix())
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -390,7 +391,9 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				return resp
 			}
 		}
-		creatorDID = info[0].CreatorDID
+		if info != nil && len(info) > 0 {
+			creatorDID = info[0].CreatorDID
+		}
 	}
 	var AllFTs []wallet.FTToken
 	if req.CreatorDID != "" {
@@ -490,13 +493,14 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		return resp
 	}
 	cr := &ConensusRequest{
-		Mode:           FTTransferMode,
-		ReqID:          uuid.New().String(),
-		Type:           req.QuorumType,
-		SenderPeerID:   c.peerID,
-		ReceiverPeerID: rpeerid,
-		ContractBlock:  sc.GetBlock(),
-		FTinfo:         FTData,
+		Mode:             FTTransferMode,
+		ReqID:            uuid.New().String(),
+		Type:             req.QuorumType,
+		SenderPeerID:     c.peerID,
+		ReceiverPeerID:   rpeerid,
+		ContractBlock:    sc.GetBlock(),
+		FTinfo:           FTData,
+		TransactionEpoch: txEpoch,
 	}
 	td, _, pds, err := c.initiateConsensus(cr, sc, dc)
 	if err != nil {
@@ -625,8 +629,7 @@ func (c *Core) updateFTTable() error {
 	if err != nil {
 		fetchErr := fmt.Sprint(err)
 		if strings.Contains(fetchErr, "no records found") {
-			c.log.Info("No records found. Removing all entries from FT table.")
-			err = c.s.Delete(wallet.FTStorage, &wallet.FT{}, "did=?")
+			err = c.s.Delete(wallet.FTStorage, &wallet.FT{}, "ft_name!=?", "")
 			if err != nil {
 				deleteErr := fmt.Sprint(err)
 				if strings.Contains(deleteErr, "no records found") {

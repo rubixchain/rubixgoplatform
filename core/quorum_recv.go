@@ -1173,9 +1173,11 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		}
 
 		err = c.syncTokenChainFrom(senderPeer, pblkID, t, ti.TokenType)
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "syncer block height discrepency") {
 			c.log.Error("receiver failed to sync token chain of FT ", ti.Token, "error ", err)
 			return nil, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
+		} else {
+			err = nil
 		}
 
 		if c.TokenType(PartString) == ti.TokenType {
@@ -1260,7 +1262,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
 	}
-	if sc.GetSenderDID() != sc.GetReceiverDID() {
+	if sc.GetSenderDID() != sc.GetReceiverDID() && senderPeerId != receiverPeerId {
 		td := &model.TransactionDetails{
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),

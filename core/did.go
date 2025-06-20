@@ -452,7 +452,6 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 
 			}
 		} else {
-			c.AddPeerDetails(*peerDIDInfo)
 			didType, _ := c.w.GetPeerDIDType(didStr)
 			if didType == -1 {
 				c.log.Debug("Connecting with peer to get DID type of peer did", didStr)
@@ -471,6 +470,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 			} else {
 				peerDIDInfo.DIDType = &didType
 			}
+			c.AddPeerDetails(*peerDIDInfo)
 		}
 
 	}

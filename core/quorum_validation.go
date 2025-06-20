@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -219,9 +220,47 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	for i := range ti {
 		err := c.syncTokenChainFrom(p, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
 		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
-			return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", ti[i].Token, TokenChainNotSynced)
+			if strings.Contains(err.Error(), "syncer block height discrepency") {
+				parts := strings.SplitN(err.Error(), "|", 2)   // split err into two parts: message & blockID
+				blockParts := strings.SplitN(parts[1], "-", 2) // split blockID into two parts: height & blockID
+				blockHeightStr := blockParts[0]
+				blockHeight, err := strconv.Atoi(blockHeightStr)
+				if err != nil {
+					return false, fmt.Errorf("invalid block height - block height discrepency: %v", err)
+				}
+				tknBlocks, _, err := c.w.GetAllTokenBlocks(ti[i].Token, ti[i].TokenType, "")
+				if err != nil {
+					c.log.Error("Failed to get all token blocks - block height discrepency", "err", err)
+					return false, fmt.Errorf("Failed to get all token blocks in block height discrepency")
+				}
+				verificationBlk := block.InitBlock(tknBlocks[blockHeight], nil)
+				verificationBlkNum, err := verificationBlk.GetBlockNumber(ti[i].Token)
+				if err != nil {
+					c.log.Error("Failed to get block number - block height discrepency", "err", err)
+					return false, fmt.Errorf("Failed to get block number in block height discrepency")
+				}
+				if verificationBlkNum != uint64(blockHeight) {
+					c.log.Error("Failed to verify block number - block height discrepency", "err", err)
+					return false, fmt.Errorf("Failed to verify block number in block height discrepency")
+				}
+				latestBlk := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
+				latestBlkRec := latestBlk.GetReceiverDID()
+				latestBlkSender := latestBlk.GetSenderDID()
+				if latestBlkRec != sc.GetReceiverDID() || latestBlkSender != sc.GetReceiverDID() {
+					c.log.Error("Failed to verify sender/receiver - block height discrepency exist", "err", err)
+					return false, fmt.Errorf("Failed to verify sender/receiver in block height discrepency")
+				}
+				err = c.w.RemoveTokenChainBlocklatest(ti[i].Token, ti[i].TokenType)
+				if err != nil {
+					c.log.Error("Failed to resolve sync issue", ti[i].Token, "err", err)
+					return false, fmt.Errorf("Failed to resolve sync issue : %v", ti[i].Token)
+				}
+			} else {
+				c.log.Error("Failed to sync token chain block", "err", err)
+				return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", ti[i].Token, TokenChainNotSynced)
+			}
 		}
+
 		// blocksToSync := cr.TransTokenSyncInfo[ti[i].Token]
 		// genesisBlock := block.InitBlock(blocksToSync.GenesisBlock, nil)
 		// if genesisBlock == nil {
