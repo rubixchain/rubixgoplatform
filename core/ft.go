@@ -60,9 +60,15 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 
 	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND creator_did=?", FTName, did)
 
+	var FTIndexValue wallet.FTIndex
+	var ftStartIndex int
 	if len(FT) != 0 {
-		c.log.Error("FT Name already exists")
-		return fmt.Errorf("FT Name already exists")
+		c.log.Info("FT Name already exists")
+		c.s.Read(wallet.FTIndexStorage, &FTIndexValue, "ft_name=? AND creator_did=?", FTName, did)
+		ftStartIndex = FTIndexValue.FTIndex
+	} else {
+		c.log.Info("FT Name does not exist")
+		ftStartIndex = ftNumStartIndex
 	}
 
 	// Validate input parameters
@@ -82,7 +88,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
 	}
-	//TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
+	// TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
 	defer c.w.ReleaseTokens(wholeTokens)
 	fractionalValue, err := c.GetPresiceFractionalValue(int(numWholeTokens), numFTs)
 	if err != nil {
@@ -98,7 +104,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		parentTokenIDsArray = append(parentTokenIDsArray, token.TokenID)
 	}
 	parentTokenIDs := strings.Join(parentTokenIDsArray, ",")
-	for i := ftNumStartIndex; i < ftNumStartIndex+numFTs; i++ {
+	for i := ftStartIndex; i < ftStartIndex+numFTs; i++ {
 		racType := &rac.RacType{
 			Type:        c.RACFTType(),
 			DID:         did,
@@ -272,6 +278,12 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			return err
 		}
 	}
+	ftIndex := ftStartIndex + numFTs
+	err = c.UpsertFTIndex(FTName, did, ftIndex)
+	if err != nil {
+		c.log.Error("Failed to update FT index", "err", err)
+		// return err
+	}
 	updateFTTableErr := c.updateFTTable()
 	if updateFTTableErr != nil {
 		c.log.Error("Failed to update FT table after FT creation", "err", err)
@@ -424,7 +436,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		}
 	}
 	FTsForTxn := AllFTs[:req.FTCount]
-	//TODO: Pinning of tokens
+	// TODO: Pinning of tokens
 
 	// Fetching peer's peer id
 	peerInfo, err := c.GetPeerDIDInfo(req.Receiver)
@@ -522,7 +534,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	td.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(td)
 
-	//TODO :  Extra details regarding the FT need to added in the explorer
+	// TODO :  Extra details regarding the FT need to added in the explorer
 	// etrans := &ExplorerTrans{
 	// 	TID:         td.TransactionID,
 	// 	SenderDID:   did,
@@ -671,6 +683,81 @@ func (c *Core) updateFTTable() error {
 		}
 	}
 	return nil
+}
+
+// func (c *Core) UpdateFTIndex(ftName string, creatorDid string, ftIndex int) error {
+// 	var FTInfo wallet.FTIndex
+// 	err := c.s.Read(wallet.FTIndexStorage, &FTInfo, "FTName!=? AND CreatorDID!=?", ftName, creatorDid)
+
+// 	return err
+// }
+
+// func (c *Core) UpsertFTIndex(ftName string, creatorDid string, ftIndex int) error {
+// 	// Try to read the existing record by primary key
+// 	var existingFtIndex wallet.FTIndex
+// 	err := c.s.Read(wallet.FTIndexStorage, &existingFtIndex, "ft_name=? AND creator_did=?", ftName, creatorDid)
+// 	fmt.Println("Error:", err)
+// 	fmt.Println("The existingFt index :", existingFtIndex)
+// 	if err != nil {
+// 		// If not found, insert the record
+// 		if strings.Contains(fmt.Sprint(err), "no records found") { // Adjust error handling based on your implementation
+// 			return c.s.Write(wallet.FTIndexStorage, wallet.FTIndex{FTName: ftName, CreatorDID: creatorDid, FTIndex: ftIndex})
+// 		}
+// 		return fmt.Errorf("error checking for existing record: %w", err)
+// 	}
+// 	existingFtIndex.FTIndex = existingFtIndex.FTIndex + ftIndex
+// 	// If found, update the existing record
+// 	return c.s.Update(
+// 		wallet.FTIndexStorage,
+// 		&existingFtIndex,
+// 		"ft_name=? AND creator_did=?",
+// 		ftName,
+// 		creatorDid,
+// 	)
+// }
+
+func (c *Core) UpsertFTIndex(ftName string, creatorDid string, ftIndex int) error {
+	// Use a pointer for existingFtIndex
+	var existingFtIndex wallet.FTIndex
+
+	// Use correct query condition
+	err := c.s.Read(wallet.FTIndexStorage, &existingFtIndex, "ft_name=? AND creator_did=?", ftName, creatorDid)
+	fmt.Println("Error:", err)
+	fmt.Println("The existingFtIndex:", existingFtIndex)
+
+	if err != nil {
+		// Check for "record not found" error
+		if strings.Contains(fmt.Sprint(err), "no records found") {
+			// Use a pointer for the new record
+			newFTIndex := &wallet.FTIndex{
+				FTName:     ftName,
+				CreatorDID: creatorDid,
+				FTIndex:    ftIndex,
+			}
+
+			// Write the record to the database
+			if writeErr := c.s.Write(wallet.FTIndexStorage, newFTIndex); writeErr != nil {
+				return fmt.Errorf("failed to insert new record: %w", writeErr)
+			}
+
+			// Log or use the auto-generated ID
+			fmt.Println("New record created with ID:", newFTIndex.FTIndexID)
+			return nil
+		}
+		return fmt.Errorf("error checking for existing record: %w", err)
+	}
+
+	// Update the FTIndex
+	existingFtIndex.FTIndex = ftIndex
+
+	// Pass a pointer to Update
+	return c.s.Update(
+		wallet.FTIndexStorage,
+		&existingFtIndex,
+		"ft_name=? AND creator_did=?",
+		ftName,
+		creatorDid,
+	)
 }
 
 func (c *Core) BurnFT(reqID string, req *model.BurnFTReq) {

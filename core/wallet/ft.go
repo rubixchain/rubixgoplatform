@@ -18,3 +18,10 @@ type FT struct {
 	FTCount    int    `gorm:"column:ft_count"`
 	CreatorDID string `gorm:"column:creator_did"`
 }
+
+type FTIndex struct {
+	FTIndexID  int    `gorm:"column:id;primaryKey;autoIncrement"`
+	FTName     string `gorm:"column:ft_name"`
+	CreatorDID string `gorm:"column:creator_did"`
+	FTIndex    int    `gorm:"column:ft_index"`
+}
