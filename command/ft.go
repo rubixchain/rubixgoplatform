@@ -125,7 +125,7 @@ func (cmd *Command) transferFT() {
 		return
 	}
 	cmd.log.Info(msg)
-	cmd.log.Info("FT transferred successfully")
+	// cmd.log.Info("FT transferred successfully")
 }
 
 func (cmd *Command) getFTinfo() {

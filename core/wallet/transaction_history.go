@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -126,6 +127,28 @@ func (w *Wallet) GetAllFTTransactionDetailsByDID(did string) ([]model.Transactio
 		w.log.Error("Failed to get FT transaction details with did", did, "err", err)
 		return nil, err
 	}
+	if len(ftTransactions) == 0 {
+		w.log.Info("No FT transactions found for DID", "did", did)
+		return []model.TransactionDetails{}, nil
+	}
+
+	// Get token summaries for all transactions
+	tokenSummaryMap, err := w.getFTTokenSummariesGroupedByTransactionID()
+	if err != nil {
+		w.log.Error("Failed to retrieve FT token summaries", "error", err)
+		return nil, err
+	}
+
+	// Attach token summaries to each transaction
+	for i := range ftTransactions {
+		txID := ftTransactions[i].TransactionID
+		if summaries, ok := tokenSummaryMap[txID]; ok {
+			ftTransactions[i].Tokens = summaries
+		} else {
+			ftTransactions[i].Tokens = []model.FTTokenSummary{}
+		}
+	}
+
 	return ftTransactions, nil
 }
 
@@ -136,6 +159,28 @@ func (w *Wallet) GetFTTransactionByReceiver(receiver string) ([]model.Transactio
 		w.log.Error("Failed to get transaction details with did as Receiver ", "err", err)
 		return nil, err
 	}
+	if len(ftTransactions) == 0 {
+		w.log.Info("No FT transactions found for receiver", "DID", receiver)
+		return []model.TransactionDetails{}, nil
+	}
+
+	// Get token summaries for all transactions
+	tokenSummaryMap, err := w.getFTTokenSummariesGroupedByTransactionID()
+	if err != nil {
+		w.log.Error("Failed to retrieve FT token summaries", "error", err)
+		return nil, err
+	}
+
+	// Attach token summaries to each transaction
+	for i := range ftTransactions {
+		txID := ftTransactions[i].TransactionID
+		if summaries, ok := tokenSummaryMap[txID]; ok {
+			ftTransactions[i].Tokens = summaries
+		} else {
+			ftTransactions[i].Tokens = []model.FTTokenSummary{}
+		}
+	}
+
 	return ftTransactions, nil
 }
 
@@ -147,5 +192,78 @@ func (w *Wallet) GetFTTransactionBySender(sender string) ([]model.TransactionDet
 		w.log.Error("Failed to get transaction details with did as sender", "err", err)
 		return nil, err
 	}
+	if len(ftTransactions) == 0 {
+		w.log.Info("No FT transactions found for sender", "DID", sender)
+		return []model.TransactionDetails{}, nil
+	}
+
+	// Get token summaries for all transactions
+	tokenSummaryMap, err := w.getFTTokenSummariesGroupedByTransactionID()
+	if err != nil {
+		w.log.Error("Failed to retrieve FT token summaries", "error", err)
+		return nil, err
+	}
+
+	// Attach token summaries to each transaction
+	for i := range ftTransactions {
+		txID := ftTransactions[i].TransactionID
+		if summaries, ok := tokenSummaryMap[txID]; ok {
+			ftTransactions[i].Tokens = summaries
+		} else {
+			ftTransactions[i].Tokens = []model.FTTokenSummary{}
+		}
+	}
+
 	return ftTransactions, nil
+}
+
+func (w *Wallet) getFTTokenSummariesGroupedByTransactionID() (map[string][]model.FTTokenSummary, error) {
+	type FTToken struct {
+		TransactionID string `gorm:"column:transaction_id"`
+		CreatorDID    string `gorm:"column:creator_did"`
+		FTName        string `gorm:"column:ft_name"`
+	}
+
+	var allTokens []FTToken
+
+	err := w.s.Read(FTTokenStorage, &allTokens, "1 = 1")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read FT tokens: %w", err)
+	}
+
+	if len(allTokens) == 0 {
+		return map[string][]model.FTTokenSummary{}, nil
+	}
+
+	// Group and count tokens per transaction_id, creator_did, ft_name
+	grouped := make(map[string]map[string]*model.FTTokenSummary)
+
+	for _, token := range allTokens {
+		txID := token.TransactionID
+		key := token.CreatorDID + "|" + token.FTName
+
+		if _, exists := grouped[txID]; !exists {
+			grouped[txID] = make(map[string]*model.FTTokenSummary)
+		}
+
+		if summary, exists := grouped[txID][key]; exists {
+			summary.Count++
+		} else {
+			grouped[txID][key] = &model.FTTokenSummary{
+				CreatorDID: token.CreatorDID,
+				FTName:     token.FTName,
+				Count:      1,
+			}
+		}
+	}
+
+	// Convert inner maps to slices
+	finalResult := make(map[string][]model.FTTokenSummary)
+	for txID, tokenMap := range grouped {
+		for _, summary := range tokenMap {
+			finalResult[txID] = append(finalResult[txID], *summary)
+		}
+	}
+
+	return finalResult, nil
 }
