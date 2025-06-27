@@ -644,17 +644,17 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		return nil, nil, nil, fmt.Errorf("failed to add quorums sig to block")
 	}
 
-	// request pledge finality, and
-	// if cr.Mode != SpendableRBTTransferMode {
-	c.log.Debug("*********** requesting pledge finality")
-	nb, err = c.requestPledgeQuorumSignature(nb, cr)
-	if err != nil {
-		c.log.Error("Failed to pledge token", "err", err)
-		return nil, nil, nil, err
-	}
-	// } else {
-
+	// // request pledge finality, and
+	// // if cr.Mode != SpendableRBTTransferMode {
+	// c.log.Debug("*********** requesting pledge finality")
+	// nb, err = c.requestPledgeQuorumSignature(nb, cr)
+	// if err != nil {
+	// 	c.log.Error("Failed to pledge token", "err", err)
+	// 	return nil, nil, nil, err
 	// }
+	// // } else {
+
+	// // }
 
 	blockHash1, _ := nb.GetHash()
 	c.log.Debug("********** block hash after adding quorum signature : %v", blockHash1)
@@ -779,6 +779,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		c.log.Debug("************** quorum info : ", quorumInfo)
 
+		var newtokenhashes []string
 		//if sender and receiver are not same, then add the block at receiver side
 		if sc.GetReceiverDID() != sc.GetSenderDID() {
 			c.log.Debug("***************** sending to receiver")
@@ -856,6 +857,22 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				return nil, nil, nil, err
 			}
 
+			// br.Result will contain the new token state after sending tokens to receiver as a response to APISendReceiverToken
+			newtokenhashresult, ok := br.Result.([]interface{})
+			if !ok {
+				c.log.Error("Type assertion to string failed")
+				return nil, nil, nil, fmt.Errorf("Type assertion to string failed")
+			}
+
+			for i, newTokenHash := range newtokenhashresult {
+				statehash, ok := newTokenHash.(string)
+				if !ok {
+					c.log.Error("Type assertion to string failed at index", i)
+					return nil, nil, nil, fmt.Errorf("Type assertion to string failed at index", i)
+				}
+				newtokenhashes = append(newtokenhashes, statehash)
+			}
+
 			c.log.Debug("********** sender is unpinning")
 			for _, t := range ti {
 				c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
@@ -864,13 +881,20 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 			c.log.Debug("************* self transfer mode********")
 			// Self update for self transfer tokens
-			_, _, err := c.updateReceiverToken(sc.GetSenderDID(), "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, wallet.CVRStage2_Sender_to_Receiver, cr.TransactionEpoch, false)
+			newtokenhashes, _, err = c.updateReceiverToken(sc.GetSenderDID(), "", ti, nb.GetBlock(), cr.QuorumList, quorumInfo, wallet.CVRStage2_Sender_to_Receiver, cr.TransactionEpoch, false)
 			if err != nil {
 				errMsg := fmt.Errorf("failed while update of self transfer tokens, err: %v", err)
 				c.log.Error(errMsg.Error())
 				return nil, nil, nil, errMsg
 
 			}
+		}
+
+		//trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
+		pledgeFinalityError := c.quorumPledgeFinality(cr, nb, newtokenhashes, tid)
+		if pledgeFinalityError != nil {
+			c.log.Error("Pledge finlaity not achieved", "err", pledgeFinalityError)
+			return nil, nil, nil, pledgeFinalityError
 		}
 
 		//call ipfs repo gc after unpinnning

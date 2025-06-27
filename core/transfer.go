@@ -390,72 +390,12 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			resp.Message = errMsg
 			return resp
 		}
-		//sender verifies whether the previous block is a cvr stage-2 block or not
+		
+		//sender verifies whether the previous block is a cvr stage-2 block or not, if it is a newly created part token, then sender will check,
+		// transaction type of the block which is previous to the burnt block of the parent token is ownership transferred type or not
 		if transferMode == SpendableRBTTransferMode {
-			if tts == "part" {
-				latestBlockNumber, err := blk.GetBlockNumber(tokensForTxn[i].TokenID)
-				if err != nil {
-					errMsg := fmt.Sprintf("failed to get block number for the token: %v", tokensForTxn[i].TokenID)
-					c.log.Error(errMsg)
-					resp.Message = errMsg
-					return resp
-				}
-				if latestBlockNumber == 0 && blk.GetTransType() == block.TokenGeneratedType {
-					parentToken, _, err := blk.GetParentDetials(tokensForTxn[i].TokenID)
-					if err != nil {
-						errMsg := fmt.Sprintf("failed to get parent token for the token: %v", tokensForTxn[i].TokenID)
-						c.log.Error(errMsg)
-						resp.Message = errMsg
-						return resp
-					}
-					parentTokenValue, err := c.w.GetTokenValueByTokenID(parentToken, req.Sender)
-					if err != nil {
-						errMsg := fmt.Sprintf("failed to get parent token value for the token: %v , error: %v", tokensForTxn[i].TokenID, err)
-						c.log.Error(errMsg)
-						resp.Message = errMsg
-						return resp
-					}
-					var tokenTypeStr string
-					if parentTokenValue != 1.0 {
-						tokenTypeStr = "part"
-					} else {
-						tokenTypeStr = "rbt"
-					}
-					parentTokenType := c.TokenType(tokenTypeStr)
-
-					burntBlockOfParentToken := c.w.GetLatestTokenBlock(parentToken, parentTokenType)
-					previousBlkIDOfBurntBlk, err := burntBlockOfParentToken.GetPrevBlockID(parentToken)
-					if err != nil {
-						errMsg := fmt.Sprintf("failed to get previous blockID of burnt block of the token : %v , error: %v", parentToken, err)
-						c.log.Error(errMsg)
-						resp.Message = errMsg
-						return resp
-					}
-					blkPreviousTOBurntBlkBytes, err := c.w.GetTokenBlock(parentToken, parentTokenType, previousBlkIDOfBurntBlk)
-					if err != nil {
-						errMsg := fmt.Sprintf("failed to get a block which is previous to the burnt block of the token : %v , error: %v", parentToken, err)
-						c.log.Error(errMsg)
-						resp.Message = errMsg
-						return resp
-					}
-					blkPreviousTOBurntBlk := block.InitBlock(blkPreviousTOBurntBlkBytes, nil)
-					if blkPreviousTOBurntBlk.GetTransType() != block.OwnershipTransferredType {
-						errmsg := fmt.Sprintf("block which is previous to the burnt block is not of type : %v", block.OwnershipTransferredType)
-						c.log.Error(errmsg)
-						resp.Message = errmsg
-						return resp
-					}
-
-				}
-
-			} else {
-				if blk.GetTransType() != block.OwnershipTransferredType {
-					errMsg := fmt.Sprintf("previous block is not of type : %v", block.OwnershipTransferredType)
-					c.log.Error(errMsg)
-					resp.Message = errMsg
-					return resp
-				}
-
+			if resp, err := c.checkTokenBlockType(tokensForTxn[i], tts, blk, req.Sender); err != nil {
+				return resp
 			}
 
 		}
