@@ -59,8 +59,8 @@ const (
 type PrePledgeRequest struct {
 	DID                 string `json:"did"`
 	QuorumType          int    `json:"quorum_type"`
-	TxnID               string `json:"txn_id"`
-	SelftransferTxnID   string `json:"self_txn_id"`
+	// TxnID               string `json:"txn_id"`
+	// SelftransferTxnID   string `json:"self_txn_id"`
 	SCTransferBlock     []byte `json:"sc_transfer_block"`
 	SCSelfTransferBlock []byte `json:"sc_self_transfer_block"`
 	TxnEpoch            int64  `json:"txn_epoch"`
