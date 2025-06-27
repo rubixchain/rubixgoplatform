@@ -33,8 +33,9 @@ const (
 )
 
 const (
-	version string = "0.1_rc1_FT_Burning"
+	version string = "0.2_rc1_FT_Burning"
 )
+
 const (
 	VersionCmd                     string = "-v"
 	HelpCmd                        string = "-h"
@@ -113,7 +114,8 @@ const (
 	BurnFTCmd                      string = "burn-ft"
 )
 
-var commands = []string{VersionCmd,
+var commands = []string{
+	VersionCmd,
 	HelpCmd,
 	RunCmd,
 	PingCmd,
@@ -183,7 +185,8 @@ var commands = []string{VersionCmd,
 	BurnFTCmd,
 }
 
-var commandsHelp = []string{"To get tool version",
+var commandsHelp = []string{
+	"To get tool version",
 	"To get help",
 	"To run the rubix core",
 	"This command will be used to ping the peer",
@@ -386,7 +389,6 @@ func (cmd *Command) getURL(url string) string {
 func (cmd *Command) runApp() {
 	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node), cmd.addr)
 	err := apiconfig.LoadAPIConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, &cmd.cfg)
-
 	if err != nil {
 		cmd.log.Error("Configfile is either currupted or cipher is wrong", "err", err)
 		return
@@ -429,10 +431,10 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Starting server...")
 	go s.Start()
 	cmd.log.Info("Syncing Details...")
-	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
+	dids := c.ExplorerUserCreate() // Checking if all the DIDs are in the ExplorerUserDetailtable or not.
 	if len(dids) != 0 {
-		c.UpdateUserInfo(dids)     //Updating the balance
-		c.GenerateUserAPIKey(dids) //Regenerating the API Key for DID
+		c.UpdateUserInfo(dids)     // Updating the balance
+		c.GenerateUserAPIKey(dids) // Regenerating the API Key for DID
 	}
 	// c.UpdateTokenInfo()
 	cmd.log.Info("Syncing Complete...")
@@ -446,7 +448,7 @@ func (cmd *Command) runApp() {
 	}
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
-	//c.ExpireUserAPIKey()
+	// c.ExpireUserAPIKey()
 }
 
 func (cmd *Command) validateOptions() bool {
@@ -474,7 +476,6 @@ func (cmd *Command) validateOptions() bool {
 }
 
 func Run(args []string) {
-
 	cmd := &Command{}
 	var peers string
 	var timeout int
@@ -604,7 +605,7 @@ func Run(args []string) {
 	level := logger.Debug
 
 	fp, err := os.OpenFile(cmd.logFile,
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		panic(err)
 	}
