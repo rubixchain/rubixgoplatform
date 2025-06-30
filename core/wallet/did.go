@@ -110,6 +110,7 @@ func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
 	if err == nil {
 		return nil
 	}
+
 	err = w.s.Read(DIDPeerStorage, &dm, "did=?", did)
 	if err != nil {
 		dm.DID = did
@@ -186,6 +187,7 @@ func (w *Wallet) GetPeerDIDType(did string) (int, error) {
 	if dm.DIDType == nil {
 		return -1, nil
 	}
+
 	return *dm.DIDType, nil
 }
 

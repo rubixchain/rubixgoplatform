@@ -252,6 +252,7 @@ func (cmd *Command) SetupDIDCmd() {
 func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.Duration) (string, bool) {
 	pwdSet := false
 	password := cmd.privPWD
+
 	for {
 		if !br.Status {
 			return br.Message, false
@@ -259,90 +260,109 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 		if br.Result == nil {
 			return br.Message, true
 		}
+
 		cmd.log.Info("Got the request for the signature")
-		jb, err := json.Marshal(br.Result)
-		if err != nil {
-			return "Invalid response, " + err.Error(), false
-		}
-		var sr did.SignReqData
-		err = json.Unmarshal(jb, &sr)
-		if err != nil {
-			return "Invalid response, " + err.Error(), false
-		}
-		if cmd.forcePWD && !pwdSet {
-			password, err = getpassword("Enter private key password: ")
+
+		switch res := br.Result.(type) {
+
+		case map[string]interface{}:
+			jb, err := json.Marshal(res)
 			if err != nil {
-				return "Failed to get password", false
+				return "Invalid response, " + err.Error(), false
 			}
-			pwdSet = true
-		}
-		sresp := did.SignRespData{
-			ID:   sr.ID,
-			Mode: sr.Mode,
-		}
-		switch sr.Mode {
-		case did.LiteDIDMode:
-			sresp.Password = password
-		case did.BasicDIDMode:
-			sresp.Password = password
-		case did.StandardDIDMode:
-			privKey, err := ioutil.ReadFile(cmd.privKeyFile)
+
+			var sr did.SignReqData
+			err = json.Unmarshal(jb, &sr)
 			if err != nil {
-				return "Failed to open private key file, " + err.Error(), false
+				return "Invalid response, " + err.Error(), false
 			}
-			key, _, err := crypto.DecodeKeyPair(password, privKey, nil)
-			if err != nil {
-				return "Failed to decode private key file, " + err.Error(), false
-			}
-			cmd.log.Info("Doing the private key signature")
-			sig, err := crypto.Sign(key, sr.Hash)
-			if err != nil {
-				return "Failed to do signature, " + err.Error(), false
-			}
-			sresp.Signature.Signature = sig
-		case did.WalletDIDMode:
-			hash := sr.Hash
-			if !sr.OnlyPrivKey {
-				byteImg, err := util.GetPNGImagePixels(cmd.privImgFile)
+
+			if cmd.forcePWD && !pwdSet {
+				password, err = getpassword("Enter private key password: ")
 				if err != nil {
-					return "Failed to read private share image file, " + err.Error(), false
+					return "Failed to get password", false
 				}
-				cmd.log.Info("Doing the private share signature")
-				ps := util.ByteArraytoIntArray(byteImg)
-				randPosObject := util.RandomPositions("signer", string(sr.Hash), 32, ps)
+				pwdSet = true
+			}
 
-				finalPos := randPosObject.PosForSign
-				pvtPos := util.GetPrivatePositions(finalPos, ps)
-				pvtPosStr := util.IntArraytoStr(pvtPos)
+			sresp := did.SignRespData{
+				ID:   sr.ID,
+				Mode: sr.Mode,
+			}
 
-				hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
-				hash = []byte(hashPvtSign)
+			switch sr.Mode {
+			case did.LiteDIDMode, did.BasicDIDMode:
+				sresp.Password = password
 
-				bs, err := util.BitstreamToBytes(pvtPosStr)
+			case did.StandardDIDMode:
+				privKey, err := ioutil.ReadFile(cmd.privKeyFile)
 				if err != nil {
-					return "Failed to read convert bitstream, " + err.Error(), false
+					return "Failed to open private key file, " + err.Error(), false
 				}
-				sresp.Signature.Pixels = bs
+				key, _, err := crypto.DecodeKeyPair(password, privKey, nil)
+				if err != nil {
+					return "Failed to decode private key file, " + err.Error(), false
+				}
+				cmd.log.Info("Doing the private key signature")
+				sig, err := crypto.Sign(key, sr.Hash)
+				if err != nil {
+					return "Failed to do signature, " + err.Error(), false
+				}
+				sresp.Signature.Signature = sig
+
+			case did.WalletDIDMode:
+				hash := sr.Hash
+				if !sr.OnlyPrivKey {
+					byteImg, err := util.GetPNGImagePixels(cmd.privImgFile)
+					if err != nil {
+						return "Failed to read private share image file, " + err.Error(), false
+					}
+					cmd.log.Info("Doing the private share signature")
+					ps := util.ByteArraytoIntArray(byteImg)
+					randPosObject := util.RandomPositions("signer", string(sr.Hash), 32, ps)
+
+					finalPos := randPosObject.PosForSign
+					pvtPos := util.GetPrivatePositions(finalPos, ps)
+					pvtPosStr := util.IntArraytoStr(pvtPos)
+
+					hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
+					hash = []byte(hashPvtSign)
+
+					bs, err := util.BitstreamToBytes(pvtPosStr)
+					if err != nil {
+						return "Failed to convert bitstream, " + err.Error(), false
+					}
+					sresp.Signature.Pixels = bs
+				}
+
+				privKey, err := ioutil.ReadFile(cmd.privKeyFile)
+				if err != nil {
+					return "Failed to open private key file, " + err.Error(), false
+				}
+				key, _, err := crypto.DecodeKeyPair(password, privKey, nil)
+				if err != nil {
+					return "Failed to decode private key file, " + err.Error(), false
+				}
+				cmd.log.Info("Doing the private key signature")
+				sig, err := crypto.Sign(key, hash)
+				if err != nil {
+					return "Failed to do signature, " + err.Error(), false
+				}
+				sresp.Signature.Signature = sig
 			}
-			privKey, err := ioutil.ReadFile(cmd.privKeyFile)
+
+			br, err = cmd.c.SignatureResponse(&sresp, timeout...)
 			if err != nil {
-				return "Failed to open private key file, " + err.Error(), false
+				cmd.log.Error("Failed to generate RBT", "err", err)
+				return "Failed in signature response, " + err.Error(), false
 			}
-			key, _, err := crypto.DecodeKeyPair(password, privKey, nil)
-			if err != nil {
-				return "Failed to decode private key file, " + err.Error(), false
-			}
-			cmd.log.Info("Doing the private key signature")
-			sig, err := crypto.Sign(key, hash)
-			if err != nil {
-				return "Failed to do signature, " + err.Error(), false
-			}
-			sresp.Signature.Signature = sig
-		}
-		br, err = cmd.c.SignatureResponse(&sresp, timeout...)
-		if err != nil {
-			cmd.log.Error("Failed to generate RBT", "err", err)
-			return "Failed in signature response, " + err.Error(), false
+
+		case string:
+			// fallback: result is just transaction ID string
+			return "Transaction is still processing, Transaction ID: " + res, true
+
+		default:
+			return "Invalid response: unexpected format", false
 		}
 	}
 }

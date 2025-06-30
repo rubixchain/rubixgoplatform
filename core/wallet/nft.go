@@ -51,34 +51,6 @@ func (w *Wallet) GetNFTsByDid(did string) ([]NFT, error) {
 	return tkns, nil
 }
 
-// GetNFT get NFT from db
-func (w *Wallet) GetNFT(nft string, lock bool) (*NFT, error) {
-	var tkns NFT
-	w.l.Lock()
-	defer w.l.Unlock()
-	if lock {
-		err := w.s.Read(NFTTokenStorage, &tkns, "token_id=? AND token_status <>?", nft, TokenIsLocked)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		err := w.s.Read(NFTTokenStorage, &tkns, "token_id=?", nft)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if tkns.TokenID != nft {
-		return nil, fmt.Errorf("nft does not exist, failed to get nft")
-	}
-	if lock {
-		tkns.TokenStatus = TokenIsLocked
-		err := w.s.Update(NFTTokenStorage, &tkns, "token_id=?", nft)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return &tkns, nil
-}
 
 func (w *Wallet) GetNFTToken(nftID string) (*NFT, error) {
 	w.dtl.Lock()
@@ -87,8 +59,7 @@ func (w *Wallet) GetNFTToken(nftID string) (*NFT, error) {
 
 	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nftID)
 	if err != nil {
-		w.log.Error(fmt.Sprintf("unable to find NFT Token %v", nftID))
-		return nil, err
+		return nil, fmt.Errorf("unable to find NFT Token %v, err: %v", nftID, err)
 	}
 
 	return tokens, nil

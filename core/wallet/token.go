@@ -9,6 +9,7 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -441,7 +442,7 @@ func (w *Wallet) ReadFTToken(token string) (*FTToken, error) {
 	var t FTToken
 	err := w.s.Read(FTTokenStorage, &t, "token_id=?", token)
 	if err != nil {
-		w.log.Error("Failed to get tokens", "err", err)
+		w.log.Error(fmt.Sprintf("failed to get FT Token %v from FTTokenStorage, err: %v", token, err))
 		return nil, err
 	}
 	return &t, nil
@@ -533,10 +534,114 @@ func (w *Wallet) UpdateFTToken(t *FTToken) error {
 	defer w.l.Unlock()
 	err := w.s.Update(FTTokenStorage, t, "token_id=?", t.TokenID)
 	if err != nil {
-
 		return err
 	}
 	return nil
+}
+
+func (w *Wallet) UpdateTokenStatus(did string, tokenHash string, tokenType int, tokenStatus int) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	var (
+		storage string
+		token   interface{}
+	)
+
+	// Determine the storage and token type
+	var didVar string
+	switch tokenType {
+	case 0, 1, 3, 5:
+		storage = TokenStorage
+		token = &Token{}
+		didVar = "did"
+	case 9:
+		storage = FTTokenStorage
+		token = &FTToken{}
+		didVar = "owner_did"
+	default:
+		w.log.Warn("Unsupported token type: %d", tokenType)
+		return fmt.Errorf("unsupported token type: %d", tokenType)
+	}
+	condition := fmt.Sprintf("%s=?", didVar)
+	// Read the token
+	err := w.s.Read(storage, token, condition+" AND token_id=?", did, tokenHash)
+	if err != nil {
+		w.log.Error("Error reading from %s: %v", storage, err)
+		return err
+	}
+
+	// Update the token status
+	switch t := token.(type) {
+	case *Token:
+		t.TokenStatus = tokenStatus
+	case *FTToken:
+		t.TokenStatus = tokenStatus
+	}
+
+	// Save the updated token
+	err = w.s.Update(storage, token, condition+" AND token_id=?", did, tokenHash)
+	if err != nil {
+		w.log.Error("Error updating %s: %v", storage, err)
+		return err
+	}
+	return nil
+}
+
+func (w *Wallet) GetTokenStatus(did string, tokenHash string, tokenType int) (model.TokenStatusResponse, error) {
+	var (
+		storage string
+		token   interface{}
+	)
+	var resp model.TokenStatusResponse
+	var didVar string
+	// Determine the storage and token type
+	switch tokenType {
+	case 0, 1, 3, 5:
+		storage = TokenStorage
+		token = &Token{}
+		didVar = "did"
+	case 9:
+		storage = FTTokenStorage
+		token = &FTToken{}
+		didVar = "owner_did"
+	default:
+		err := fmt.Errorf("unsupported token type: %d", tokenType)
+		w.log.Warn(err.Error())
+		return resp, err
+	}
+
+	// Lock only around the critical section
+	w.l.Lock()
+	condition := fmt.Sprintf("%s=?", didVar)
+	err := w.s.Read(storage, token, condition+" AND token_id=?", did, tokenHash)
+	w.l.Unlock()
+
+	if err != nil {
+		w.log.Error("Error reading from %s for DID: %s, TokenHash: %s: %v", storage, did, tokenHash, err)
+		return resp, err
+	}
+
+	// Populate the response based on the token type
+	switch t := token.(type) {
+	case *Token:
+		resp = populateTokenResponse(t.DID, t.TokenID, tokenType, t.TokenStatus, t.TransactionID, "")
+	case *FTToken:
+		resp = populateTokenResponse(t.DID, t.TokenID, tokenType, t.TokenStatus, t.TransactionID, t.FTName)
+	}
+	return resp, nil
+}
+
+// Helper function to populate the response
+func populateTokenResponse(did, tokenID string, tokenType, tokenStatus int, transactionID string, ftName string) model.TokenStatusResponse {
+	return model.TokenStatusResponse{
+		DID:           did,
+		Token:         tokenID,
+		Type:          tokenType,
+		Status:        tokenStatus,
+		TransactionID: transactionID,
+		FTName:        ftName,
+	}
 }
 
 func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block, local bool, pinningServiceMode bool) error {

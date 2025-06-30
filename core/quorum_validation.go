@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -178,7 +179,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 				c.log.Error("failed to update parent token sync status as incomplete, token ", pt)
 			}
 		}
-		
+
 	}
 	if ptb.GetTransType() != block.TokenBurntType {
 		issueType = ParentTokenNotBurned // parent token is not in burnt stage
@@ -190,7 +191,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	return tt, nil
 }
 
-func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error) {
+func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error, []string) {
 
 	var ti []contract.TokenInfo
 	var address string
@@ -212,16 +213,56 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
-		return false, err
+		return false, err, nil
 	}
 	defer p.Close()
 	tokensSyncInfo := make([]TokenSyncInfo, 0)
+	var syncIssueTokenArray []string
 	for i := range ti {
 		err := c.syncTokenChainFrom(p, ti[i].BlockID, ti[i].Token, ti[i].TokenType)
 		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
-			return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", ti[i].Token, TokenChainNotSynced)
+			if strings.Contains(err.Error(), "syncer block height discrepency") {
+				parts := strings.SplitN(err.Error(), "|", 2)   // split err into two parts: message & blockID
+				blockParts := strings.SplitN(parts[1], "-", 2) // split blockID into two parts: height & blockID
+				blockHeightStr := blockParts[0]
+				blockHeight, err := strconv.Atoi(blockHeightStr)
+				if err != nil {
+					return false, fmt.Errorf("invalid block height - block height discrepency: %v", err), nil
+				}
+				tknBlocks, _, err := c.w.GetAllTokenBlocks(ti[i].Token, ti[i].TokenType, "")
+				if err != nil {
+					c.log.Error("Failed to get all token blocks - block height discrepency", "err", err)
+					return false, fmt.Errorf("Failed to get all token blocks in block height discrepency"), nil
+				}
+				verificationBlk := block.InitBlock(tknBlocks[blockHeight], nil)
+				verificationBlkNum, err := verificationBlk.GetBlockNumber(ti[i].Token)
+				if err != nil {
+					c.log.Error("Failed to get block number - block height discrepency", "err", err)
+					return false, fmt.Errorf("Failed to get block number in block height discrepency"), nil
+				}
+				if verificationBlkNum != uint64(blockHeight) {
+					c.log.Error("Failed to verify block number - block height discrepency", "err", err)
+					return false, fmt.Errorf("Failed to verify block number in block height discrepency"), nil
+				}
+				latestBlk := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
+				latestBlkRec := latestBlk.GetReceiverDID()
+				latestBlkSender := latestBlk.GetSenderDID()
+				if latestBlkRec != sc.GetReceiverDID() || latestBlkSender != sc.GetSenderDID() {
+					c.log.Error("Failed to verify sender/receiver - block height discrepency exist", "err", err)
+					return false, fmt.Errorf("Failed to verify sender/receiver in block height discrepency"), syncIssueTokenArray
+				}
+				err = c.w.RemoveTokenChainBlocklatest(ti[i].Token, ti[i].TokenType)
+				if err != nil {
+					c.log.Error("Failed to resolve sync issue", ti[i].Token, "err", err)
+					return false, fmt.Errorf("Failed to resolve sync issue : %v", ti[i].Token), nil
+				}
+			} else {
+				c.log.Error("Failed to sync token chain block", "err", err)
+				syncIssueTokenArray = append(syncIssueTokenArray, ti[i].Token)
+				continue
+			}
 		}
+
 		// blocksToSync := cr.TransTokenSyncInfo[ti[i].Token]
 		// genesisBlock := block.InitBlock(blocksToSync.GenesisBlock, nil)
 		// if genesisBlock == nil {
@@ -247,7 +288,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		if genesisBlock == nil {
 			// p.Close()
 			c.log.Error("Failed to get first token chain block")
-			return false, fmt.Errorf("failed to get first token chain block %v", ti[i].Token)
+			return false, fmt.Errorf("failed to get first token chain block %v", ti[i].Token), nil
 		}
 		var parentToken string
 		if c.TokenType(PartString) == ti[i].TokenType {
@@ -255,13 +296,13 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			if err != nil {
 				// p.Close()
 				c.log.Error("failed to fetch parent token detials", "err", err, "token", ti[i].Token)
-				return false, err
+				return false, err, nil
 			}
 			parentTokenType, err := c.syncParentToken(p, parentToken)
 			if err != nil {
 				// p.Close()
 				c.log.Error("failed to sync parent token chain", "token", parentToken)
-				return false, err
+				return false, err, nil
 			}
 			tokensSyncInfo = append(tokensSyncInfo, TokenSyncInfo{TokenID: parentToken, TokenType: parentTokenType})
 
@@ -287,7 +328,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			if err != nil {
 				// p.Close()
 				c.log.Error("Failed to Pin parent token in Quorum", "err", err)
-				return false, err
+				return false, err, nil
 			}
 		}
 
@@ -297,7 +338,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			if err != nil {
 				// p.Close()
 				c.log.Error("Failed to get token detials", "err", err)
-				return false, err
+				return false, err, nil
 			}
 			ct := token.GetTokenString(tl, tn)
 			tb := bytes.NewBuffer([]byte(ct))
@@ -305,19 +346,19 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			if err != nil {
 				// p.Close()
 				c.log.Error("Failed to validate, failed to get token hash", "err", err)
-				return false, err
+				return false, err, nil
 			}
 			if tid != ti[i].Token {
 				// p.Close()
 				c.log.Error("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn)
-				return false, fmt.Errorf("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn)
+				return false, fmt.Errorf("Invalid token", "token", ti[i].Token, "exp_token", tid, "tl", tl, "tn", tn), nil
 			}
 		}
 		b := c.w.GetLatestTokenBlock(ti[i].Token, ti[i].TokenType)
 		if b == nil {
 			// p.Close()
 			c.log.Error("Invalid token chain block")
-			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token)
+			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token), nil
 		}
 		c.log.Info("Validating token ownership", "token", ti[i].Token, "owner", b.GetOwner(), "sender", sc.GetSenderDID())
 		pinningNodeDID := b.GetPinningNodeDID()
@@ -329,14 +370,14 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			if ownerDID != senderDID {
 				// p.Close()
 				c.log.Error("Invalid token owner: The token is Pinned as a service", "owner", ownerDID, "The node which is trying to transfer", senderDID)
-				return false, fmt.Errorf("invalid token owner: The token is Pinned as a service")
+				return false, fmt.Errorf("invalid token owner: The token is Pinned as a service"), nil
 			}
 		}
 		signatureValidation, err := c.validateSigner(b, quorumDID, p)
 		if !signatureValidation || err != nil {
 			// p.Close()
 			c.log.Error("Failed to validate token ownership ", "token ID:", ti[i].Token)
-			return false, err
+			return false, err, nil
 		}
 
 		// add trans tokens to TokensTable with token status = 17
@@ -368,7 +409,9 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			err = c.w.CreateToken(tokenInfo)
 			if err != nil {
 				c.log.Error("failed to write to db, token ", ti[i].Token, "err", err)
-				return false, err
+				return false, err, nil
+			} else {
+				fmt.Println("Token created successfully", tokenInfo, "!!! TokenID", tokenInfo.TokenID)
 			}
 		}
 
@@ -383,11 +426,15 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		err = c.w.UpdateToken(tokenInfo)
 		if err != nil {
 			c.log.Error("failed to update to db, token ", ti[i].Token, "err", err)
-			return false, err
+			return false, err, nil
 		}
 
 		// quorum fetches tokens to be synced
 		tokensSyncInfo = append(tokensSyncInfo, TokenSyncInfo{TokenID: ti[i].Token, TokenType: ti[i].TokenType})
+	}
+
+	if len(syncIssueTokenArray) > 0 {
+		return false, fmt.Errorf("failed to sync tokenchain Token: issueType: %v", TokenChainNotSynced), syncIssueTokenArray
 	}
 
 	// sync full token chain of all the tokens in syncing Queue
@@ -422,7 +469,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	// 		}
 	// 	}
 	// }
-	return true, nil
+	return true, nil, nil
 }
 
 func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {

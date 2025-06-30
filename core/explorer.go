@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
@@ -24,7 +25,7 @@ const (
 	ExplorerTokenCreateNFTAPI     string = "/api/v2/token/nft/create"
 	ExplorerTokenCreateSCAPI      string = "/api/v2/token/sc/create"
 	ExplorerCreateUserAPI         string = "/api/user/create"
-	ExplorerUpdateUserInfoAPI     string = "/api/user/update-user-info"
+	ExplorerUpdateUserInfoAPI     string = "/api/v2/user/update-user-info"
 	ExplorerUpdateTokenInfoAPI    string = "/api/token/update-token-info"
 	ExplorerGetUserKeyAPI         string = "/api/user/get-api-key"
 	ExplorerGenerateUserKeyAPI    string = "/api/user/generate-api-key"
@@ -47,10 +48,11 @@ type ExplorerClient struct {
 }
 
 type ExplorerDID struct {
-	PeerID  string  `json:"peer_id"`
-	DID     string  `json:"user_did"`
-	Balance float64 `json:"balance"`
-	DIDType int     `json:"did_type"`
+	PeerID    string                    `json:"peer_id"`
+	DID       string                    `json:"user_did"`
+	Balance   float64                   `json:"balance"`
+	DIDType   int                       `json:"did_type"`
+	FTDetails []model.FTInfoForExplorer `json:"ft_detials"`
 }
 
 type ExplorerMapDID struct {
@@ -473,12 +475,26 @@ func (c *Core) ExplorerUserCreate() []string {
 							c.log.Error(fmt.Sprintf("Error getting account info for DID %v: %v", d.DID, err))
 							return
 						}
+						ftInfo, err := c.GetFTInfoByDID(d.DID)
+						if err != nil {
+							c.log.Error("Failed to get ft info for DID %v", d.DID)
+							return
+						}
+						ftInfoForExplorer := make([]model.FTInfoForExplorer, len(ftInfo))
+						for i, item := range ftInfo {
+							ftInfoForExplorer[i] = model.FTInfoForExplorer{
+								FTName:     item.FTName,
+								FTCount:    item.FTCount,
+								CreatorDID: item.CreatorDID,
+							}
+						}
 						balance := float64(accInfo.RBTAmount) // Convert to float64 if necessary
 						ed := ExplorerDID{
-							DID:     d.DID,
-							Balance: balance,
-							PeerID:  c.peerID,
-							DIDType: d.Type,
+							DID:       d.DID,
+							Balance:   balance,
+							PeerID:    c.peerID,
+							DIDType:   d.Type,
+							FTDetails: ftInfoForExplorer,
 						}
 						err = c.ec.ExplorerUserCreate(&ed)
 						if err != nil {
@@ -534,20 +550,37 @@ func (c *Core) UpdateUserInfo(dids []string) {
 				c.log.Error("Failed to get account info for DID %v", did)
 				return
 			}
+
+			ftInfo, err := c.GetFTInfoByDID(did)
+			if err != nil {
+				c.log.Error("Failed to get ft info for DID %v", did)
+				return
+			}
+
+			ftInfoForExplorer := make([]model.FTInfoForExplorer, len(ftInfo))
+			for i, item := range ftInfo {
+				ftInfoForExplorer[i] = model.FTInfoForExplorer{
+					FTName:     item.FTName,
+					FTCount:    item.FTCount,
+					CreatorDID: item.CreatorDID,
+				}
+			}
 			_ = c.s.Read(wallet.DIDStorage, &didList, "did=?", did)
 			var er ExplorerResponse
 			ed := ExplorerDID{
-				PeerID:  c.peerID,
-				Balance: accInfo.RBTAmount,
-				DIDType: didList.Type,
+				PeerID:    c.peerID,
+				Balance:   accInfo.RBTAmount,
+				DIDType:   didList.Type,
+				FTDetails: ftInfoForExplorer,
 			}
+
 			err = c.ec.SendExplorerJSONRequest("PUT", ExplorerUpdateUserInfoAPI+"/"+did, &ed, &er)
 			if err != nil {
 				c.log.Error("Failed to send request for user DID, " + did + " Error : " + err.Error())
 				return
 			}
 
-			if !strings.Contains(er.Message, "User updated successfully") {
+			if !strings.Contains(er.Message, "updated successfully") {
 				c.log.Error("Failed to update user info for ", "DID", did, "msg", er.Message)
 			} else {
 				c.log.Info(fmt.Sprintf("%v for did %v", er.Message, did))
