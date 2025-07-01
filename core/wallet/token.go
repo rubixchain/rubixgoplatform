@@ -299,20 +299,31 @@ func (w *Wallet) GetAllPledgedTokens() ([]Token, error) {
 	return t, nil
 }
 
-func (w *Wallet) GetCloserToken(did string, rem float64, txnMode int) (*Token, error) {
+func (w *Wallet) GetCloserToken(did string, rem float64, txnMode int, FreeOrSpendableTokens bool) (*Token, error) {
+
+	w.log.Debug("*********GetCloserToken function got called ")
+
 	if rem > 1.0 {
 		return nil, fmt.Errorf("token value not less than whole token")
 	}
 	var tks []Token
 	var err error
-	if txnMode == 0 {
+	if FreeOrSpendableTokens {
+		w.log.Debug("*****Free or Spendable tokens is true ****")
+		err = w.s.Read(TokenStorage, &tks, "did=? AND (token_status=? OR token_status=?)  AND token_value>=? AND token_value <?", did, TokenIsSpendable, rem, 1.0)
+	} else if txnMode == 0 {
 		err = w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value>=? AND token_value <?", did, TokenIsFree, rem, 1.0)
 	} else {
 		err = w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value>=? AND token_value <?", did, TokenIsSpendable, rem, 1.0)
 	}
+
 	if err != nil || len(tks) == 0 {
 		var err error
-		if txnMode == 0 {
+
+		if FreeOrSpendableTokens {
+			w.log.Debug("*****Free or Spendable whole tokens should get selected****")
+			err = w.s.Read(TokenStorage, &tks, "did=? AND (token_status=? OR token_status=?) AND token_value=?", did, TokenIsSpendable, TokenIsFree, 1.0)
+		} else if txnMode == 0 {
 			err = w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
 		} else {
 			err = w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value=?", did, TokenIsSpendable, 1.0)
@@ -329,11 +340,19 @@ func (w *Wallet) GetCloserToken(did string, rem float64, txnMode int) (*Token, e
 	return &tks[0], nil
 }
 
-func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int) ([]Token, int, error) {
+func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int, FreeOrSpendableTokens bool) ([]Token, int, error) {
+
+	w.log.Debug("txnMode in GetWholeTokens", trnxMode, "boolean value of FreeOrSpendableTokens", FreeOrSpendableTokens)
+
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
-	if trnxMode == 0 {
+	if FreeOrSpendableTokens {
+		err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=?)  AND token_value=?", did, TokenIsFree, TokenIsSpendable, 1.0)
+		if err != nil {
+			return nil, num, err
+		}
+	} else if trnxMode == 0 {
 		err := w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=?) AND token_value=?", did, TokenIsFree, TokenIsPinnedAsService, 1.0)
 		if err != nil {
 			return nil, num, err
@@ -361,15 +380,25 @@ func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int) ([]Token, int
 			return nil, num, err1
 		}
 	}
+
+	w.log.Debug("whole tokens: ", wt)
+
 	return wt, (num - tl), nil
 }
 
-func (w *Wallet) GetTokensByLimit(did string, limit float64, txnMode int) ([]Token, error) {
+func (w *Wallet) GetTokensByLimit(did string, limit float64, txnMode int, FreeOrSpendableTokens bool) ([]Token, error) {
+
+	w.log.Debug("*********GetTokensByLimit function has been called *******")
+	w.log.Debug("**txnMode in GetTokensByLimit function****", txnMode)
+	w.log.Debug("***Free or spendable tokens status in GetTokensByLimit function ******8", FreeOrSpendableTokens, "limit", limit)
+
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
 	var err error
-	if txnMode == 0 {
+	if FreeOrSpendableTokens {
+		err = w.s.Read(TokenStorage, &t, "did=? AND (token_status=? OR token_status=?) AND token_value<=?", did, TokenIsSpendable, TokenIsFree, limit)
+	} else if txnMode == 0 {
 		err = w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value<=?", did, TokenIsFree, limit)
 	} else {
 		err = w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value<=?", did, TokenIsSpendable, limit)
@@ -387,6 +416,9 @@ func (w *Wallet) GetTokensByLimit(did string, limit float64, txnMode int) ([]Tok
 		}
 	}
 	TokenSort(t, true)
+
+	w.log.Debug("Token by limit are: ", t)
+
 	return t, nil
 }
 
@@ -423,6 +455,24 @@ func (w *Wallet) GetToken(token string, token_Status int) (*Token, error) {
 	defer w.l.Unlock()
 	var t Token
 	err := w.s.Read(TokenStorage, &t, "token_id=? AND token_status=?", token, token_Status)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	t.TokenStatus = TokenIsLocked
+	err = w.s.Update(TokenStorage, &t, "token_id=?", t.TokenID)
+	if err != nil {
+		w.log.Error("Failed to update token status", "err", err)
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (w *Wallet) GetFreeOrSpendableTokens(token string) (*Token, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t Token
+	err := w.s.Read(TokenStorage, &t, "token_id=? AND (token_status=? OR token_status=?)", token, TokenIsFree, TokenIsSpendable)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err

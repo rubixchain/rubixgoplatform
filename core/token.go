@@ -700,7 +700,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 	if wholeValue != 0 {
 		//extract the whole amount part that is the integer value of txn amount
 		//serach for the required whole amount
-		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode)
+		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode, false)
 		if err != nil && err.Error() != "no records found" {
 			c.w.ReleaseTokens(wholeTokens, c.testNet)
 			c.log.Error("failed to search for whole tokens", "err", err)
@@ -1399,6 +1399,14 @@ func (c *Core) GatherFreeTokensForConsensus(reqID string, req *model.CvrAPIReque
 		c.log.Error("No tokens present for cvr")
 		response.Message = "No tokens present for cvr"
 		return response
+	}
+
+	for i := range freeTokensList {
+		_, err := c.w.Pin(freeTokensList[i].TokenID, wallet.OwnerRole, req.DID, "TID-Not Generated", req.DID, req.DID, freeTokensList[i].TokenValue)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to pin the token: %v, error: %v", freeTokensList[i].TokenID, err)
+			c.log.Error(errMsg)
+		}
 	}
 
 	// release the locked tokens before exit

@@ -1006,7 +1006,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 
 	c.log.Debug("********* available balance : ", availableBalance)
 
-	availableRBT := availableBalance.RBTAmount
+	availableRBT := availableBalance.RBTAmount + availableBalance.SpendableRBT
 	if availableRBT < pr.TokensRequired {
 		c.log.Error("Quorum don't have enough balance to pledge")
 		crep.Message = "Quorum don't have enough balance to pledge"
@@ -1028,7 +1028,9 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 
 	dc := c.pqc[did]
-	wt, err := c.GetTokens(dc, did, pr.TokensRequired, RBTTransferMode)
+
+	c.log.Debug("*****transaction mode in reqPledgeToken function  is: ", pr.TxnMode)
+	wt, err := c.GetTokens(dc, did, pr.TokensRequired, pr.TxnMode, true)
 	if err != nil {
 		crep.Message = "Failed to get tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -1127,7 +1129,28 @@ func (c *Core) updateReceiverToken(
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get peer : %v", err.Error())
 		}
-		// defer senderPeer.Close()
+		defer senderPeer.Close()
+
+		//validate the sender's signature on the received block
+
+		c.log.Debug("******Verifying sender's signature on the contract at receiver's end******")
+
+		smartContract := contract.InitContract(b.GetSmartContract(), nil)
+		if smartContract != nil {
+			dc, err := c.SetupForienDID(smartContract.GetSenderDID(), "")
+
+			c.log.Debug("DID crypto of the sender: ", dc)
+
+			if err != nil {
+				c.log.Error("Failed to get DID", "err", err)
+				return nil, nil, err
+			}
+			err = smartContract.VerifySignature(dc)
+			if err != nil {
+				c.log.Error("Failed to verify sender signature in verifyContract", "err", err)
+				return nil, nil, err
+			}
+		}
 
 		for _, ti := range tokenInfo {
 			t := ti.Token

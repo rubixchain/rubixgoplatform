@@ -105,7 +105,7 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 		}
 
 		if remainingAmount > 0 {
-			wt, err := c.GetTokens(dc, senderDID, remainingAmount, SpendableRBTTransferMode)
+			wt, err := c.GetTokens(dc, senderDID, remainingAmount, SpendableRBTTransferMode, false)
 			if err != nil {
 				c.w.ReleaseTokens(tokensForTransfer, c.testNet)
 				return nil, transferMode, fmt.Errorf("failed to get additional spendable tokens: %v", err.Error())
@@ -731,7 +731,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 }
 
 // prepare self-transfer tokens and create self-transfer contract block
-func (c *Core) CreateSelfTransferContract(selfTransferTokensMap map[string]struct{}, dc did.DIDCrypto, req *model.RBTTransferRequest, txnEpoch int) (*model.BasicResponse) {
+func (c *Core) CreateSelfTransferContract(selfTransferTokensMap map[string]struct{}, dc did.DIDCrypto, req *model.RBTTransferRequest, txnEpoch int) *model.BasicResponse {
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -1003,7 +1003,7 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 	}
 
 	if remainingAmount > 0 {
-		wt, err := c.GetTokens(dc, did, remainingAmount, PinningServiceMode)
+		wt, err := c.GetTokens(dc, did, remainingAmount, PinningServiceMode, false)
 		if err != nil {
 			c.log.Error("Failed to get tokens", "err", err)
 			resp.Message = "Insufficient tokens or tokens are locked"

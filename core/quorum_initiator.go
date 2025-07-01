@@ -92,6 +92,7 @@ type PledgeDetails struct {
 type PledgeRequest struct {
 	TokensRequired    float64 `json:"tokens_required"`
 	ConensusRequestID string  `json:"conensus_id"`
+	TxnMode           int     `json:"txn_mode"`
 }
 
 type SignatureRequest struct {
@@ -2722,6 +2723,7 @@ func (c *Core) initPledgeQuorumToken(cr *ConensusRequest, p *ipfsport.Peer) (Quo
 		pr := PledgeRequest{
 			TokensRequired:    CeilfloatPrecision(pledgeTokensPerQuorum, MaxDecimalPlaces), // Request the determined number of tokens per quorum,
 			ConensusRequestID: cr.ReqID,
+			TxnMode:           cr.Mode,
 		}
 		var prs PledgeReply
 		err := p.SendJSONRequest("POST", APIReqPledgeToken, nil, &pr, &prs, true)

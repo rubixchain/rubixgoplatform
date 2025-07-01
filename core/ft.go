@@ -75,7 +75,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 
 	// Fetch whole tokens using GetToken
-	wholeTokens, err := c.GetTokens(dc, did, float64(numWholeTokens), 0)
+	wholeTokens, err := c.GetTokens(dc, did, float64(numWholeTokens), 0, true)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err

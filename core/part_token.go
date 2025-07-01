@@ -37,7 +37,10 @@ func CeilfloatPrecision(num float64, precision int) float64 {
 	return float64(Ceilround(num*output)) / output
 }
 
-func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode int) ([]wallet.Token, error) {
+func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode int, FreeOrSpendableTokens bool) ([]wallet.Token, error) {
+
+	c.log.Debug("******value", value, "trxnmode", trnxMode, "FreeOrSpendableToken status********in GetTokens function", FreeOrSpendableTokens)
+
 	wholeValue := int(value)
 	var err error
 	fv := float64(wholeValue)
@@ -45,8 +48,11 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	rem = floatPrecision(rem, MaxDecimalPlaces)
 	remWhole := 0
 	wt := make([]wallet.Token, 0)
+
+	c.log.Debug("whole value in GetTokens function is: ", wholeValue)
+
 	if wholeValue != 0 {
-		wt, remWhole, err = c.w.GetWholeTokens(did, wholeValue, trnxMode)
+		wt, remWhole, err = c.w.GetWholeTokens(did, wholeValue, trnxMode, FreeOrSpendableTokens)
 		if err != nil {
 			c.log.Error("failed to get token", "err", err)
 			return nil, err
@@ -56,7 +62,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	if rem == 0 {
 		return wt, nil
 	}
-	pt, err := c.w.GetTokensByLimit(did, rem, trnxMode)
+	pt, err := c.w.GetTokensByLimit(did, rem, trnxMode, FreeOrSpendableTokens)
 
 	c.log.Debug("descending ordered tokens whose value is less than remaining amount: ", rem, "tokens: ", pt)
 	if err != nil || len(pt) == 0 {
@@ -65,16 +71,16 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 			c.log.Error("failed to get part tokens", "err", err)
 			return nil, fmt.Errorf("insufficient balance")
 		}
-		tt, err := c.w.GetCloserToken(did, rem, trnxMode)
+		tt, err := c.w.GetCloserToken(did, rem, trnxMode, FreeOrSpendableTokens)
 		if err != nil {
 			c.w.ReleaseTokens(wt, c.testNet)
-			c.log.Error("failed to fetch whole token", "err", err)
+			c.log.Error("failed to fetch closer token", "err", err)
 			return nil, err
 		}
 		tkn := tt.TokenID
 		c.w.ReleaseToken(tkn)
 		parts := []float64{rem, floatPrecision(tt.TokenValue-rem, MaxDecimalPlaces)}
-		nt, err := c.createPartToken(dc, did, tkn, parts, trnxMode)
+		nt, err := c.createPartToken(dc, did, tkn, parts, trnxMode, FreeOrSpendableTokens)
 		if err != nil {
 			c.w.ReleaseTokens(wt, c.testNet)
 			c.log.Error("failed to create part tokens", "err", err)
@@ -115,7 +121,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	if len(rpt) > 0 {
 		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, MaxDecimalPlaces)}
 		c.w.ReleaseToken(rpt[0].TokenID)
-		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts, trnxMode)
+		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts, trnxMode, FreeOrSpendableTokens)
 		if err != nil {
 			c.w.ReleaseTokens(wt, c.testNet)
 			c.w.ReleaseTokens(rpt, c.testNet)
@@ -127,7 +133,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 		wt = append(wt, npt[0])
 		return wt, nil
 	}
-	nwt, err := c.w.GetCloserToken(did, rem, trnxMode)
+	nwt, err := c.w.GetCloserToken(did, rem, trnxMode, FreeOrSpendableTokens)
 	if err != nil && err.Error() != "no records found" {
 		c.w.ReleaseTokens(wt, c.testNet)
 		c.log.Error("failed to get whole token", "err", err)
@@ -140,7 +146,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	}
 	c.w.ReleaseToken(nwt.TokenID)
 	parts := []float64{rem, floatPrecision(nwt.TokenValue-rem, MaxDecimalPlaces)}
-	npt, err := c.createPartToken(dc, did, nwt.TokenID, parts, trnxMode)
+	npt, err := c.createPartToken(dc, did, nwt.TokenID, parts, trnxMode, FreeOrSpendableTokens)
 	if err != nil {
 		c.w.ReleaseTokens(wt, c.testNet)
 		c.w.ReleaseToken(nwt.TokenID)
@@ -153,15 +159,17 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	return wt, nil
 }
 
-func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts []float64, txnMode int) ([]wallet.Token, error) {
+func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts []float64, txnMode int, FreeOrSpendableTokens bool) ([]wallet.Token, error) {
 
-	c.log.Debug("*****CreatePartToken function has been called********")
+	c.log.Debug("*****CreatePartToken function has been called with txnMode********", txnMode)
 	if dc == nil {
 		return nil, fmt.Errorf("did crypto is not initialised")
 	}
 	var t *wallet.Token
 	var err error
-	if txnMode == SpendableRBTTransferMode {
+	if FreeOrSpendableTokens {
+		t, err = c.w.GetFreeOrSpendableTokens(tkn)
+	} else if txnMode == SpendableRBTTransferMode {
 		t, err = c.w.GetToken(tkn, wallet.TokenIsSpendable)
 	} else {
 		//free tokens can also be split into parts for pledging purpose
