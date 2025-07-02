@@ -553,41 +553,41 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
 			return fmt.Errorf(trep.Message)
 		}
-			if strings.Contains(trep.Message, "Sent all blocks") {
-				diffVar := int(blkHeight) - len(trep.TCBlock)
-				if diffVar > 1 {
-					// Quorum is ahead of sender by more than 1 block — not allowed
-					c.log.Error("Block height discrepancy too large")
-					return fmt.Errorf("sync failed: block height discrepancy too large (diff: %d)", diffVar)
-				} else {
-					// Get syncer latest token block hash
-					syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
-					syncerLatestBlkHash, err := syncerLatestBlk.GetHash()
+		if strings.Contains(trep.Message, "Sent all blocks") {
+			diffVar := int(blkHeight) - len(trep.TCBlock)
+			if diffVar > 1 {
+				// Quorum is ahead of sender by more than 1 block — not allowed
+				c.log.Error("Block height discrepancy too large")
+				return fmt.Errorf("sync failed: block height discrepancy too large (diff: %d)", diffVar)
+			} else {
+				// Get syncer latest token block hash
+				syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
+				syncerLatestBlkHash, err := syncerLatestBlk.GetHash()
+				if err != nil {
+					c.log.Error("Failed to get block hash of synced block", "err", err)
+					return err
+				}
+
+				// Get DID owner latest token block hash
+				didOwnerAllTknBlks, _, err := c.w.GetAllTokenBlocks(token, tokenType, "")
+				didOwnerBlock := block.InitBlock(didOwnerAllTknBlks[len(trep.TCBlock)-1], nil)
+				didOwnerLatestBlkHash, err := didOwnerBlock.GetHash()
+				if err != nil {
+					c.log.Error("Failed to get block hash of owner block", "err", err)
+					return err
+				}
+
+				// Compare both block hashes
+				if strings.Contains(syncerLatestBlkHash, didOwnerLatestBlkHash) {
+					syncerLatestBlkID, err := syncerLatestBlk.GetBlockID(token)
 					if err != nil {
-						c.log.Error("Failed to get block hash of synced block", "err", err)
+						c.log.Error("Failed to get block id of synced block", "err", err)
 						return err
 					}
-
-					// Get DID owner latest token block hash
-					didOwnerAllTknBlks, _, err := c.w.GetAllTokenBlocks(token, tokenType, "")
-					didOwnerBlock := block.InitBlock(didOwnerAllTknBlks[len(trep.TCBlock)-1], nil)
-					didOwnerLatestBlkHash, err := didOwnerBlock.GetHash()
-					if err != nil {
-						c.log.Error("Failed to get block hash of owner block", "err", err)
-						return err
-					}
-
-					// Compare both block hashes
-					if strings.Contains(syncerLatestBlkHash, didOwnerLatestBlkHash) {
-						syncerLatestBlkID, err := syncerLatestBlk.GetBlockID(token)
-						if err != nil {
-							c.log.Error("Failed to get block id of synced block", "err", err)
-							return err
-						}
-						return fmt.Errorf("syncer block height discrepency|%s", syncerLatestBlkID)
-					}
+					return fmt.Errorf("syncer block height discrepency|%s", syncerLatestBlkID)
 				}
 			}
+		}
 		for _, bb := range trep.TCBlock {
 			blk := block.InitBlock(bb, nil)
 			if blk == nil {
@@ -606,7 +606,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		syncReq.BlockID = trep.NextBlockID
 
 	}
-	
+
 	return nil
 }
 
@@ -1806,8 +1806,14 @@ func (c *Core) initiateCVRTwo(req *wallet.PrePledgeRequest) *model.BasicResponse
 		selfTransferConsensusReq.Mode = SpendableRBTTransferMode
 
 		c.log.Debug("********** consensus request : mode ", selfTransferConsensusReq.Mode, "cr req id", selfTransferConsensusReq.ReqID, "sender peerid", selfTransferConsensusReq.SenderPeerID, "receiver peerid", selfTransferConsensusReq.ReceiverPeerID)
+
+		dc, err := c.SetupDID(req.ReqID, req.DID)
+		if err != nil {
+			resp.Message = "Failed to setup DID, " + err.Error()
+			return resp
+		}
 		// initiate consensus for self transfer
-		_, _, _, err := c.initiateConsensus(selfTransferConsensusReq, selfTransferContractBlock, nil)
+		_, _, _, err = c.initiateConsensus(selfTransferConsensusReq, selfTransferContractBlock, dc)
 		if err != nil {
 			errMsg := fmt.Sprintf("Consensus failed for  self transfer, err: %v", err)
 			c.log.Error(errMsg)
