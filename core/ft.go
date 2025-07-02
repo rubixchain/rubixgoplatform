@@ -56,17 +56,19 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
 
-	var FT wallet.FT
-
-	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND creator_did=?", FTName, did)
+	var existingFT wallet.FT
+	readErr := c.s.Read(wallet.FTStorage, &existingFT, "ft_name=? AND creator_did=?", FTName, did)
 
 	var ftStartIndex int
-	if FT != (wallet.FT{}) {
-		c.log.Info("FT Name already exists")
-		ftStartIndex = FT.FTAvailableCount
-	} else {
+	if readErr != nil && strings.Contains(fmt.Sprint(readErr), "no records found") {
 		c.log.Info("FT Name does not exist")
 		ftStartIndex = ftNumStartIndex
+	} else if readErr == nil {
+		c.log.Info("FT Name already exists")
+		ftStartIndex = existingFT.FTCreatedCount
+	} else {
+		c.log.Error("Error checking for existing FT record during creation setup", "err", readErr)
+		return fmt.Errorf("failed to check existing FT record: %w", readErr)
 	}
 
 	// Validate input parameters
@@ -191,16 +193,16 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[ftID] = nil
-		block := block.CreateNewBlock(ctcb, tcb)
-		if block == nil {
+		blk := block.CreateNewBlock(ctcb, tcb)
+		if blk == nil {
 			return fmt.Errorf("failed to create new block")
 		}
-		err = block.UpdateSignature(dc)
+		err = blk.UpdateSignature(dc)
 		if err != nil {
 			c.log.Error("FT creation failed, failed to update signature", "err", err)
 			return err
 		}
-		err = c.w.AddTokenBlock(ftID, block)
+		err = c.w.AddTokenBlock(ftID, blk)
 		if err != nil {
 			c.log.Error("Failed to create FT, failed to add token chain block", "err", err)
 			return err
@@ -246,18 +248,18 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 			ctcb := make(map[string]*block.Block)
 			ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
 
-			block := block.CreateNewBlock(ctcb, tcb)
-			if block == nil {
+			blk := block.CreateNewBlock(ctcb, tcb)
+			if blk == nil {
 				return fmt.Errorf("failed to create new block")
 			}
 
-			err = block.UpdateSignature(dc)
+			err = blk.UpdateSignature(dc)
 			if err != nil {
 				c.log.Error("FT creation failed, failed to update signature", "err", err)
 				return err
 			}
 
-			err = c.w.AddTokenBlock(wholeTokens[i].TokenID, block)
+			err = c.w.AddTokenBlock(wholeTokens[i].TokenID, blk)
 			if err != nil {
 				c.log.Error("FT creation failed, failed to add token block", "err", err)
 				return err
@@ -289,10 +291,11 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 			return err
 		}
 	}
-	ftIndex := ftStartIndex + numFTs
-	err = c.UpsertFTTable(FTName, did, ftIndex)
+	finalFTCreatedCount := ftStartIndex + numFTs
+	err = c.UpsertFTTable(FTName, did, finalFTCreatedCount, numFTs)
 	if err != nil {
 		c.log.Error("Failed to update FT index", "err", err)
+		return fmt.Errorf("failed to finalize FT table update: %w", err)
 	}
 	return nil
 }
@@ -727,66 +730,69 @@ func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
 	return result, nil
 }
 
-func (c *Core) updateFTTable(ftName string, creatorDID string, ftAvailCount int, role string) error {
-	var existingFtIndex wallet.FT
+func (c *Core) updateFTTable(ftName string, creatorDID string, ftCount int, role string) error {
+	var existingFt wallet.FT
 
-	err := c.s.Read(wallet.FTStorage, &existingFtIndex, "ft_name=? AND creator_did=?", ftName, creatorDID)
+	err := c.s.Read(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDID)
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") {
-			newFTIndex := &wallet.FT{
+			newFT := &wallet.FT{
 				FTName:           ftName,
 				CreatorDID:       creatorDID,
-				FTAvailableCount: ftAvailCount,
+				FTAvailableCount: ftCount, // For a new entry, this should be the initial count
 			}
-			if writeErr := c.s.Write(wallet.FTStorage, newFTIndex); writeErr != nil {
+			if writeErr := c.s.Write(wallet.FTStorage, newFT); writeErr != nil {
 				return fmt.Errorf("failed to insert new record: %w", writeErr)
 			}
-			c.log.Info("New FT record created with ID:", newFTIndex.ID)
+			c.log.Info("New FT record created with ID:", newFT.ID) // Assuming ID field exists
 			return nil
 		}
 		return fmt.Errorf("error checking for existing record: %w", err)
 	}
+
+	// Adjust FTAvailableCount based on the role
 	if role == "sender" {
-		existingFtIndex.FTAvailableCount += ftAvailCount
+		existingFt.FTAvailableCount -= ftCount // Sender decreases available count
 	} else if role == "receiver" {
-		existingFtIndex.FTAvailableCount -= ftAvailCount
+		existingFt.FTAvailableCount += ftCount // Receiver increases available count
 	}
 
-	updateErr := c.s.Update(wallet.FTStorage, &existingFtIndex, "ft_name=? AND creator_did=?", ftName, creatorDID)
+	updateErr := c.s.Update(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDID)
 	if updateErr != nil {
-		return fmt.Errorf("failed to update FT index: %w", err)
+		return fmt.Errorf("failed to update FT index: %w", updateErr)
 	}
 	return nil
 }
 
-func (c *Core) UpsertFTTable(ftName string, creatorDid string, ftIndex int) error {
+func (c *Core) UpsertFTTable(ftName string, creatorDid string, newTotalFTCreatedCount int, numFTsCreatedInThisCall int) error {
+	var existingFt wallet.FT
 
-	var existingFtIndex wallet.FT
-
-	err := c.s.Read(wallet.FTStorage, &existingFtIndex, "ft_name=? AND creator_did=?", ftName, creatorDid)
+	err := c.s.Read(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDid)
 
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") {
-			newFTIndex := &wallet.FT{
+			newFT := &wallet.FT{
 				FTName:           ftName,
 				CreatorDID:       creatorDid,
-				FTCreatedCount:   ftIndex,
-				FTAvailableCount: ftIndex,
+				FTCreatedCount:   newTotalFTCreatedCount,
+				FTAvailableCount: numFTsCreatedInThisCall,
 			}
 
-			if writeErr := c.s.Write(wallet.FTStorage, newFTIndex); writeErr != nil {
+			if writeErr := c.s.Write(wallet.FTStorage, newFT); writeErr != nil {
 				return fmt.Errorf("failed to insert new record: %w", writeErr)
 			}
-			c.log.Info("New FT record created with ID:", newFTIndex.ID)
+			c.log.Info("New FT record created")
 			return nil
 		}
 		return fmt.Errorf("error checking for existing record: %w", err)
 	}
 
-	existingFtIndex.FTCreatedCount = ftIndex
-	updateErr := c.s.Update(wallet.FTStorage, &existingFtIndex, "ft_name=? AND creator_did=?", ftName, creatorDid)
+	existingFt.FTCreatedCount = newTotalFTCreatedCount
+	existingFt.FTAvailableCount += numFTsCreatedInThisCall
+
+	updateErr := c.s.Update(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDid)
 	if updateErr != nil {
-		return fmt.Errorf("failed to update FT index: %w", err)
+		return fmt.Errorf("failed to update FT index: %w", updateErr)
 	}
 	return nil
 }
