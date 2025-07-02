@@ -1592,8 +1592,8 @@ const docTemplate = `{
                 "ft_num_start_index": {
                     "type": "integer"
                 },
-                "token_count": {
-                    "type": "integer"
+                "ft_value": {
+                    "type": "number"
                 }
             }
         },

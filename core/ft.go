@@ -22,8 +22,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int, ftNumStartIndex int, fromRBT bool) {
-	err := c.createFTs(reqID, ftname, ftcount, wholeToken, did, ftNumStartIndex, fromRBT)
+func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, ftValue float64, ftNumStartIndex int, fromRBT bool) {
+	err := c.createFTs(reqID, ftname, ftcount, ftValue, did, ftNumStartIndex, fromRBT)
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "FT created successfully",
@@ -40,7 +40,7 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, w
 	channel.OutChan <- &br
 }
 
-func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens int, did string, ftNumStartIndex int, fromRBT bool) error {
+func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float64, did string, ftNumStartIndex int, fromRBT bool) error {
 	if did == "" {
 		c.log.Error("DID is empty")
 		return fmt.Errorf("DID is empty")
@@ -56,16 +56,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
 
-	var FT []wallet.FT
+	var FT wallet.FT
 
 	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND creator_did=?", FTName, did)
 
-	var FTIndexValue wallet.FTIndex
 	var ftStartIndex int
-	if len(FT) != 0 {
+	if FT != (wallet.FT{}) {
 		c.log.Info("FT Name already exists")
-		c.s.Read(wallet.FTIndexStorage, &FTIndexValue, "ft_name=? AND creator_did=?", FTName, did)
-		ftStartIndex = FTIndexValue.FTIndex
+		ftStartIndex = FT.FTAvailableCount
 	} else {
 		c.log.Info("FT Name does not exist")
 		ftStartIndex = ftNumStartIndex
@@ -76,34 +74,42 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	switch {
 	case numFTs <= 0:
 		return fmt.Errorf("number of tokens to create must be greater than zero")
-	case numWholeTokens <= 0:
-		return fmt.Errorf("number of whole tokens must be a positive integer")
-	case numFTs > int(numWholeTokens*1000):
-		return fmt.Errorf("max allowed FT count is 1000 for 1 RBT")
+	case FTValue < 0.001:
+		return fmt.Errorf("FT value must be at least 0.001")
+	case math.Round(FTValue*1000) != FTValue*1000:
+		return fmt.Errorf("FT value cannot have more than 3 decimal places")
 	}
 
-	// Fetch whole tokens using GetToken
-	wholeTokens, err := c.GetTokens(dc, did, float64(numWholeTokens), 0)
-	if err != nil || wholeTokens == nil {
-		c.log.Error("Failed to fetch whole token for FT creation")
-		return err
+	var numWholeTokens float64
+	var parentTokenIDsArray []string
+	var wholeTokens []wallet.Token
+	var parentTokenIDs string
+
+	if fromRBT {
+		numTokensRequired := FTValue * float64(numFTs)
+		numWholeTokens = floatPrecision(numTokensRequired, MaxDecimalPlaces)
+		// Fetch whole tokens using GetToken
+		wholeTokens, err = c.GetTokens(dc, did, float64(numWholeTokens), 0)
+		if err != nil {
+			c.log.Error("Failed to fetch whole token for FT creation, RBTs required are: %v", numWholeTokens)
+			return err
+		}
+		if wholeTokens == nil {
+			return fmt.Errorf("no tokens available for FT creation")
+		}
+		// TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
+
+		for _, token := range wholeTokens {
+			parentTokenIDsArray = append(parentTokenIDsArray, token.TokenID)
+		}
+		parentTokenIDs = strings.Join(parentTokenIDsArray, ",")
 	}
-	// TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
-	defer c.w.ReleaseTokens(wholeTokens)
-	fractionalValue, err := c.GetPresiceFractionalValue(int(numWholeTokens), numFTs)
-	if err != nil {
-		c.log.Error("Failed to calculate FT token value", err)
-		return err
+	if len(wholeTokens) != 0 {
+		defer c.w.ReleaseTokens(wholeTokens)
 	}
 
 	newFTs := make([]wallet.FTToken, 0, numFTs)
 	var newFTTokenIDs []string
-
-	var parentTokenIDsArray []string
-	for _, token := range wholeTokens {
-		parentTokenIDsArray = append(parentTokenIDsArray, token.TokenID)
-	}
-	parentTokenIDs := strings.Join(parentTokenIDsArray, ",")
 	for i := ftStartIndex; i < ftStartIndex+numFTs; i++ {
 		racType := &rac.RacType{
 			Type:        c.RACFTType(),
@@ -115,7 +121,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				Parents: parentTokenIDs,
 				FTNum:   i,
 				FTName:  FTName,
-				FTValue: fractionalValue,
+				FTValue: FTValue,
 			},
 		}
 
@@ -181,7 +187,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					},
 				},
 			},
-			TokenValue: fractionalValue,
+			TokenValue: FTValue,
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[ftID] = nil
@@ -204,7 +210,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			TokenID:       ftID,
 			FTName:        FTName,
 			TokenStatus:   wallet.TokenIsFree,
-			TokenValue:    fractionalValue,
+			TokenValue:    FTValue,
 			DID:           did,
 			RBTLockStatus: RBTLockStatus,
 		}
@@ -213,13 +219,12 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 
 	if fromRBT {
 		for i := range wholeTokens {
-			release := true
-			defer c.relaseToken(&release, wholeTokens[i].TokenID)
 			ptts := RBTString
 			if wholeTokens[i].ParentTokenID != "" && wholeTokens[i].TokenValue < 1 {
 				ptts = PartString
 			}
 			ptt := c.TokenType(ptts)
+
 			bti := &block.TransInfo{
 				Tokens: []block.TransTokens{
 					{
@@ -229,6 +234,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				},
 				Comment: "Token locked for FT at : " + time.Now().String(),
 			}
+
 			tcb := &block.TokenChainBlock{
 				TransactionType: block.TokenLockedForFT,
 				TokenOwner:      did,
@@ -236,29 +242,34 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				TokenValue:      wholeTokens[i].TokenValue,
 				ChildTokens:     newFTTokenIDs,
 			}
+
 			ctcb := make(map[string]*block.Block)
 			ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
+
 			block := block.CreateNewBlock(ctcb, tcb)
 			if block == nil {
 				return fmt.Errorf("failed to create new block")
 			}
+
 			err = block.UpdateSignature(dc)
 			if err != nil {
 				c.log.Error("FT creation failed, failed to update signature", "err", err)
 				return err
 			}
+
 			err = c.w.AddTokenBlock(wholeTokens[i].TokenID, block)
 			if err != nil {
 				c.log.Error("FT creation failed, failed to add token block", "err", err)
 				return err
 			}
+
+			// Mark the token as locked for FT
 			wholeTokens[i].TokenStatus = wallet.TokenIsLockedForFT
 			err = c.w.UpdateToken(&wholeTokens[i])
 			if err != nil {
 				c.log.Error("FT token creation failed, failed to update token status", "err", err)
 				return err
 			}
-			release = false
 		}
 	}
 
@@ -266,8 +277,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		tt := c.TokenType(FTString)
 		blk := c.w.GetGenesisTokenBlock(newFTs[i].TokenID, tt)
 		if blk == nil {
-			c.log.Error("failed to get gensis block for Parent DID updation, invalid token chain")
-			return err
+			c.log.Error("Failed to get genesis block for token", "tokenID", newFTs[i].TokenID)
+			return fmt.Errorf("failed to get genesis block for FT token: %s", newFTs[i].TokenID)
 		}
 		FTOwner := blk.GetOwner()
 		ft := &newFTs[i]
@@ -279,15 +290,9 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		}
 	}
 	ftIndex := ftStartIndex + numFTs
-	err = c.UpsertFTIndex(FTName, did, ftIndex)
+	err = c.UpsertFTTable(FTName, did, ftIndex)
 	if err != nil {
 		c.log.Error("Failed to update FT index", "err", err)
-		// return err
-	}
-	updateFTTableErr := c.updateFTTable()
-	if updateFTTableErr != nil {
-		c.log.Error("Failed to update FT table after FT creation", "err", err)
-		return updateFTTableErr
 	}
 	return nil
 }
@@ -297,19 +302,23 @@ func (c *Core) GetFTInfoByDID(did string) ([]model.FTInfo, error) {
 		c.log.Error("DID does not exist")
 		return nil, fmt.Errorf("DID does not exist")
 	}
-	FT, err := c.w.GetFTsAndCount(did)
-	if err != nil && err.Error() != "no records found" {
-		c.log.Error("Failed to get tokens FTs and Count", "err", err)
-		return []model.FTInfo{}, fmt.Errorf("Failed to get tokens FTs and Count")
+
+	ftTokens, err := c.w.GetFreeFTsByDID(did)
+	if err != nil {
+		if err.Error() == "no records found" {
+			c.log.Info("No FTTokens found for DID", "did", did)
+			return []model.FTInfo{}, nil // Return empty slice and nil error if no records
+		}
+		c.log.Error("Failed to get free FT tokens", "err", err)
+		return []model.FTInfo{}, fmt.Errorf("Failed to get free FT tokens: %w", err)
 	}
 	ftInfoMap := make(map[string]map[string]int)
 
-	// Iterate through retrieved FTs and populate the map
-	for _, t := range FT {
+	for _, t := range ftTokens {
 		if ftInfoMap[t.FTName] == nil {
 			ftInfoMap[t.FTName] = make(map[string]int) // Initialize map for each FTName
 		}
-		ftInfoMap[t.FTName][t.CreatorDID] += t.FTCount // Increment count for the specific CreatorDID
+		ftInfoMap[t.FTName][t.CreatorDID] += 1
 	}
 	info := make([]model.FTInfo, 0)
 	for ftName, creatorCounts := range ftInfoMap {
@@ -633,8 +642,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				resp.Result = txID
 			}
 		}
-
-		updateFTTableErr := c.updateFTTable()
+		updateFTTableErr := c.updateFTTable(req.FTName, creatorDID, len(FTsForTxn), "sender")
 		if updateFTTableErr != nil {
 			c.log.Error("Failed to update FT table after transfer ", "err", updateFTTableErr)
 			resp.Message = "Failed to update FT table after transfer"
@@ -719,43 +727,66 @@ func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
 	return result, nil
 }
 
-func (c *Core) updateFTTable() error {
-	AllFTs, err := c.w.GetAllFTsAndCount()
-	// If no records are found, remove all entries from the FT table
+func (c *Core) updateFTTable(ftName string, creatorDID string, ftAvailCount int, role string) error {
+	var existingFtIndex wallet.FT
+
+	err := c.s.Read(wallet.FTStorage, &existingFtIndex, "ft_name=? AND creator_did=?", ftName, creatorDID)
 	if err != nil {
-		fetchErr := fmt.Sprint(err)
-		if strings.Contains(fetchErr, "no records found") {
-			err = c.s.Delete(wallet.FTStorage, &wallet.FT{}, "ft_name!=?", "")
-			if err != nil {
-				deleteErr := fmt.Sprint(err)
-				if strings.Contains(deleteErr, "no records found") {
-					c.log.Info("FT table is empty")
-				} else {
-					c.log.Error("Failed to delete all entries from FT table:", err)
-					return err
-				}
+		if strings.Contains(fmt.Sprint(err), "no records found") {
+			newFTIndex := &wallet.FT{
+				FTName:           ftName,
+				CreatorDID:       creatorDID,
+				FTAvailableCount: ftAvailCount,
 			}
+			if writeErr := c.s.Write(wallet.FTIndexStorage, newFTIndex); writeErr != nil {
+				return fmt.Errorf("failed to insert new record: %w", writeErr)
+			}
+			c.log.Info("New FT record created with ID:", newFTIndex.ID)
 			return nil
-		} else {
-			c.log.Error("Failed to get FTs and Count")
-			return err
 		}
+		return fmt.Errorf("error checking for existing record: %w", err)
 	}
-	err = c.s.Delete(wallet.FTStorage, &wallet.FT{}, "ft_name!=?", "")
-	ReadErr := fmt.Sprint(err)
+	if role == "sender" {
+		existingFtIndex.FTAvailableCount += ftAvailCount
+	} else if role == "receiver" {
+		existingFtIndex.FTAvailableCount -= ftAvailCount
+	}
+
+	updateErr := c.s.Update(wallet.FTStorage, &existingFtIndex, "ft_name=? AND creator_did=?", ftName, creatorDID)
+	if updateErr != nil {
+		return fmt.Errorf("failed to update FT index: %w", err)
+	}
+	return nil
+}
+
+func (c *Core) UpsertFTTable(ftName string, creatorDid string, ftIndex int) error {
+
+	var existingFtIndex wallet.FT
+
+	err := c.s.Read(wallet.FTStorage, &existingFtIndex, "ft_name=? AND creator_did=?", ftName, creatorDid)
+
 	if err != nil {
-		if strings.Contains(ReadErr, "no records found") {
-			c.log.Info("FT table is empty")
+		if strings.Contains(fmt.Sprint(err), "no records found") {
+			newFTIndex := &wallet.FT{
+				FTName:           ftName,
+				CreatorDID:       creatorDid,
+				FTCreatedCount:   ftIndex,
+				FTAvailableCount: ftIndex,
+			}
+
+			if writeErr := c.s.Write(wallet.FTIndexStorage, newFTIndex); writeErr != nil {
+				return fmt.Errorf("failed to insert new record: %w", writeErr)
+			}
+			c.log.Info("New FT record created with ID:", newFTIndex.ID)
+			return nil
 		}
-		c.log.Error("Failed to remove current FTs from storage to add new:", err)
-		return err
+		return fmt.Errorf("error checking for existing record: %w", err)
 	}
-	for _, Ft := range AllFTs {
-		addErr := c.s.Write(wallet.FTStorage, &Ft)
-		if addErr != nil {
-			c.log.Error("Failed to add new FT:", Ft.FTName, "Error:", addErr)
-			return addErr
-		}
+
+	existingFtIndex.FTCreatedCount = ftIndex
+	updateErr := c.s.Update(wallet.FTStorage, &existingFtIndex, "ft_name=? AND creator_did=?", ftName, creatorDid)
+	if updateErr != nil {
+		return fmt.Errorf("failed to update FT index: %w", err)
 	}
 	return nil
 }
@@ -1147,7 +1178,7 @@ func (c *Core) burnSingleFT(ft wallet.FTToken, did string, dc did.DIDCrypto) err
 	}
 
 	ftBurntBlockMap := make(map[string]*block.Block)
-	ftBurntBlockMap[ft.TokenID] = nil
+	ftBurntBlockMap[ft.TokenID] = c.w.GetLatestTokenBlock(ft.TokenID, c.TokenType(FTString))
 
 	newBlock := block.CreateNewBlock(ftBurntBlockMap, ftBurntBlock)
 	if newBlock == nil {
@@ -1161,8 +1192,7 @@ func (c *Core) burnSingleFT(ft wallet.FTToken, did string, dc did.DIDCrypto) err
 
 	err = c.w.AddTokenBlock(ft.TokenID, newBlock)
 	if err != nil {
-		// return fmt.Errorf("failed to add FT burnt block")
-		c.log.Info("Updating burnt status")
+		return fmt.Errorf("failed to add FT burnt block")
 	}
 	FTTokenDetails, err := c.w.ReadFTToken(ft.TokenID)
 	if err != nil {

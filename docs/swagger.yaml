@@ -123,8 +123,8 @@ definitions:
         type: string
       ft_num_start_index:
         type: integer
-      token_count:
-        type: integer
+      ft_value:
+        type: number
     type: object
   server.DIDFromPubKeySwaggoRequest:
     properties:

@@ -348,6 +348,7 @@ type Command struct {
 	nftValue                     float64
 	ftNumStartIndex              int
 	fromRBT                      bool
+	ftvalue                      float64
 }
 
 func showVersion() {

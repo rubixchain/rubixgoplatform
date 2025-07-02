@@ -11,12 +11,12 @@ import (
 )
 
 type CreateFTReqSwaggoInput struct {
-	DID             string `json:"did" swaggo:"true,The DID of the user"`
-	FTName          string `json:"ft_name" swaggo:"true,The name of the FT"`
-	FTCount         int    `json:"ft_count" swaggo:"true,The number of FTs to create"`
-	TokenCount      int    `json:"token_count" swaggo:"true,The number of RBT tokens"`
-	FTNumStartIndex int    `json:"ft_num_start_index" swaggo:"true,The starting index for FT numbering"`
-	FromRBT         bool   `json:"from_rbt" swaggo:"false,Whether to create FT from RBT,default=false"`
+	DID             string  `json:"did" swaggo:"true,The DID of the user"`
+	FTName          string  `json:"ft_name" swaggo:"true,The name of the FT"`
+	FTCount         int     `json:"ft_count" swaggo:"true,The number of FTs to create"`
+	FTValue         float64 `json:"ft_value" swaggo:"true,The value of each FT to create"`
+	FTNumStartIndex int     `json:"ft_num_start_index" swaggo:"true,The starting index for FT numbering"`
+	FromRBT         bool    `json:"from_rbt" swaggo:"false,Whether to create FT from RBT,default=false"`
 }
 
 type TransferFTReqSwaggoInput struct {
@@ -49,8 +49,7 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	rbtAmount := int(createFTReq.TokenCount)
-	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, rbtAmount, createFTReq.FTNumStartIndex, createFTReq.FromRBT)
+	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, createFTReq.FTValue, createFTReq.FTNumStartIndex, createFTReq.FromRBT)
 	return s.didResponse(req, req.ID)
 }
 

@@ -145,80 +145,80 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 }
 
 // This function will return all the FTs, their count and the creator DID in the node
-func (w *Wallet) GetAllFTsAndCount() ([]FT, error) {
-	fts, err := w.GetAllFreeFTs()
-	if err != nil {
-		errStr := fmt.Sprint(err)
-		if strings.Contains(errStr, "no records found") {
-			w.log.Info("No free FTs found")
-			return nil, err
-		}
-		w.log.Error("Failed to free FTs", "err", err)
-		return nil, err
-	}
-	ftNameCreatorCounts := make(map[string]map[string]int)
+// func (w *Wallet) GetAllFTsAndCount() ([]FT, error) {
+// 	fts, err := w.GetAllFreeFTs()
+// 	if err != nil {
+// 		errStr := fmt.Sprint(err)
+// 		if strings.Contains(errStr, "no records found") {
+// 			w.log.Info("No free FTs found")
+// 			return nil, err
+// 		}
+// 		w.log.Error("Failed to free FTs", "err", err)
+// 		return nil, err
+// 	}
+// 	ftNameCreatorCounts := make(map[string]map[string]int)
 
-	for _, t := range fts {
-		if ftNameCreatorCounts[t.FTName] == nil {
-			ftNameCreatorCounts[t.FTName] = make(map[string]int)
-		}
-		ftNameCreatorCounts[t.FTName][t.CreatorDID]++
-	}
+// 	for _, t := range fts {
+// 		if ftNameCreatorCounts[t.FTName] == nil {
+// 			ftNameCreatorCounts[t.FTName] = make(map[string]int)
+// 		}
+// 		ftNameCreatorCounts[t.FTName][t.CreatorDID]++
+// 	}
 
-	info := make([]FT, 0)
-	idCounter := 1 // Initialize ID counter starting from 1
-	for ftName, creatorCounts := range ftNameCreatorCounts {
-		for creatorDID, count := range creatorCounts {
-			info = append(info, FT{
-				ID:         fmt.Sprintf("%d", idCounter),
-				FTName:     ftName,
-				FTCount:    count,
-				CreatorDID: creatorDID,
-			})
-			idCounter++
-		}
-	}
-	return info, nil
-}
+// 	info := make([]FT, 0)
+// 	idCounter := 1 // Initialize ID counter starting from 1
+// 	for ftName, creatorCounts := range ftNameCreatorCounts {
+// 		for creatorDID, count := range creatorCounts {
+// 			info = append(info, FT{
+// 				ID:         idCounter,
+// 				FTName:     ftName,
+// 				FTCount:    count,
+// 				CreatorDID: creatorDID,
+// 			})
+// 			idCounter++
+// 		}
+// 	}
+// 	return info, nil
+// }
 
-// This function will return all the FTs, their count and the creator DID for a DID
-func (w *Wallet) GetFTsAndCount(did string) ([]FT, error) {
-	fts, err := w.GetFreeFTsByDID(did)
-	if err != nil {
-		errStr := fmt.Sprint(err)
-		if strings.Contains(errStr, "no records found") {
-			w.log.Info("No free FTs found")
-			return nil, err
-		}
-		w.log.Error("Failed to free FTs", "err", err)
-		return nil, err
-	}
+// // This function will return all the FTs, their count and the creator DID for a DID
+// func (w *Wallet) GetFTsAndCount(did string) ([]FT, error) {
+// 	fts, err := w.GetFreeFTsByDID(did)
+// 	if err != nil {
+// 		errStr := fmt.Sprint(err)
+// 		if strings.Contains(errStr, "no records found") {
+// 			w.log.Info("No free FTs found")
+// 			return nil, err
+// 		}
+// 		w.log.Error("Failed to free FTs", "err", err)
+// 		return nil, err
+// 	}
 
-	ftNameCreatorCounts := make(map[string]map[string]int)
+// 	ftNameCreatorCounts := make(map[string]map[string]int)
 
-	for _, t := range fts {
-		if ftNameCreatorCounts[t.FTName] == nil {
-			ftNameCreatorCounts[t.FTName] = make(map[string]int)
-		}
-		ftNameCreatorCounts[t.FTName][t.CreatorDID]++
-	}
+// 	for _, t := range fts {
+// 		if ftNameCreatorCounts[t.FTName] == nil {
+// 			ftNameCreatorCounts[t.FTName] = make(map[string]int)
+// 		}
+// 		ftNameCreatorCounts[t.FTName][t.CreatorDID]++
+// 	}
 
-	info := make([]FT, 0)
-	idCounter := 1 // Initialize ID counter starting from 1
-	for ftName, creatorCounts := range ftNameCreatorCounts {
-		for creatorDID, count := range creatorCounts {
-			info = append(info, FT{
-				ID:         fmt.Sprintf("%d", idCounter),
-				FTName:     ftName,
-				FTCount:    count,
-				CreatorDID: creatorDID,
-			})
-			idCounter++
-		}
-	}
+// 	info := make([]FT, 0)
+// 	idCounter := 1 // Initialize ID counter starting from 1
+// 	for ftName, creatorCounts := range ftNameCreatorCounts {
+// 		for creatorDID, count := range creatorCounts {
+// 			info = append(info, FT{
+// 				ID:         idCounter,
+// 				FTName:     ftName,
+// 				FTCount:    count,
+// 				CreatorDID: creatorDID,
+// 			})
+// 			idCounter++
+// 		}
+// 	}
 
-	return info, nil
-}
+// 	return info, nil
+// }
 
 func (w *Wallet) GetFreeFTsByDID(did string) ([]FTToken, error) {
 	var FT []FTToken

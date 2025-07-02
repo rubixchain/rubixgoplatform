@@ -1258,7 +1258,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		return nil, nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
 
-	updateFTTableErr := c.updateFTTable()
+	updateFTTableErr := c.updateFTTable(ftinfo.FTName, ftinfo.CreatorDID, ftinfo.FTCount, "receiver")
 	if updateFTTableErr != nil {
 		return nil, nil, fmt.Errorf("Failed to update FT table, error: %v", updateFTTableErr)
 	}
