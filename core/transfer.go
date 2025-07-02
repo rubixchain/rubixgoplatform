@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"regexp"
+
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -17,7 +19,7 @@ import (
 )
 
 func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) {
-	br := c.initiateRBTTransfer(reqID, req)
+	br := c.initiateSpendableRBTTransfer(reqID, req)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")
@@ -273,7 +275,315 @@ func getConsensusRequest(consensusRequestType int, senderPeerID string, receiver
 
 // }
 
+func extractTransactionIDFromMessage(msg string) string {
+	re := regexp.MustCompile(`[a-fA-F0-9]{64}`)
+	return re.FindString(msg)
+}
+
 func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
+	st := time.Now()
+	txEpoch := int(st.Unix())
+
+	resp := &model.BasicResponse{
+		Status: false,
+	}
+
+	senderDID := req.Sender
+	receiverdid := req.Receiver
+
+	// This flag indicates if the call is made for Self Transfer or general token transfer
+	isSelfRBTTransfer := senderDID == receiverdid
+
+	dc, err := c.SetupDID(reqID, senderDID)
+	if err != nil {
+		resp.Message = "Failed to setup DID, " + err.Error()
+		return resp
+	}
+
+	tokensForTxn, _, err := gatherTokensForTransaction(c, req, dc, isSelfRBTTransfer)
+	if err != nil {
+		c.log.Error(err.Error())
+		resp.Message = err.Error()
+		return resp
+	}
+
+	// In case of self transfer
+	if len(tokensForTxn) == 0 && isSelfRBTTransfer {
+		resp.Status = true
+		resp.Message = "No tokens present for self transfer"
+		return resp
+	}
+
+	// release the locked tokens before exit
+	defer c.w.ReleaseTokens(tokensForTxn, c.testNet)
+
+	for i := range tokensForTxn {
+		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, senderDID, "TID-Not Generated", req.Sender, req.Receiver, tokensForTxn[i].TokenValue)
+	}
+
+	// Get the receiver & do sanity check
+	var rpeerid string = ""
+	if !isSelfRBTTransfer {
+		rpeerid = c.w.GetPeerID(receiverdid)
+		if rpeerid == "" {
+			// Check if DID is present in the DIDTable as the receiver might be part of the current node
+			didDetails, err := c.w.GetDID(receiverdid)
+			if err != nil {
+				if strings.Contains(err.Error(), "no records found") {
+					c.log.Error("receiver Peer ID not found", "did", receiverdid)
+					resp.Message = "invalid address, receiver Peer ID not found"
+					//return resp
+				} else {
+					c.log.Error(fmt.Sprintf("Error occurred while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err))
+					resp.Message = fmt.Sprintf("Error occurred while fetching DID info from DIDTable for DID: %v, err: %v", receiverdid, err)
+					return resp
+				}
+			}
+
+			if didDetails == nil {
+				receiverPeerInfo, err := c.GetPeerDIDInfo(receiverdid)
+				if err != nil {
+					c.log.Error("receiver Peer ID not found in network", "did", receiverdid)
+					resp.Message = "invalid address, receiver Peer ID not found"
+					return resp
+				}
+				rpeerid = receiverPeerInfo.PeerID
+			} else {
+				// Set the receiverPeerID to self Peer ID
+				rpeerid = c.peerID
+			}
+		} else {
+			p, err := c.getPeer(req.Receiver)
+			if err != nil {
+				resp.Message = "Failed to get receiver peer, " + err.Error()
+				return resp
+			}
+			if p != nil {
+				p.Close()
+			}
+		}
+	}
+	wta := make([]string, 0)
+	for i := range tokensForTxn {
+		wta = append(wta, tokensForTxn[i].TokenID)
+	}
+
+	tis := make([]contract.TokenInfo, 0)
+	tokenListForExplorer := []Token{}
+	// transTokensSyncInfo := make(map[string]GenesisAndLatestBlocks, len(tokensForTxn))
+
+	for i := range tokensForTxn {
+		tts := "rbt"
+		if tokensForTxn[i].TokenValue != 1 {
+			tts = "part"
+		}
+		tt := c.TokenType(tts)
+		blk := c.w.GetLatestTokenBlock(tokensForTxn[i].TokenID, tt)
+		if blk == nil {
+			c.log.Error("failed to get latest block, invalid token chain")
+			resp.Message = "failed to get latest block, invalid token chain"
+			return resp
+		}
+
+		bid, err := blk.GetBlockID(tokensForTxn[i].TokenID)
+		if err != nil {
+			c.log.Error("failed to get block id", "err", err)
+			resp.Message = "failed to get block id, " + err.Error()
+			return resp
+		}
+		ti := contract.TokenInfo{
+			Token:      tokensForTxn[i].TokenID,
+			TokenType:  tt,
+			TokenValue: floatPrecision(tokensForTxn[i].TokenValue, MaxDecimalPlaces),
+			OwnerDID:   tokensForTxn[i].DID,
+			BlockID:    bid,
+		}
+		tis = append(tis, ti)
+		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: ti.Token, TokenValue: ti.TokenValue})
+
+		// genesis := c.w.GetGenesisTokenBlock(ti.Token, ti.TokenType)
+		// genesisNLatestBlocks := GenesisAndLatestBlocks{
+		// 	GenesisBlock: genesis.GetBlock(),
+		// }
+		// if c.TokenType(PartString) == ti.TokenType {
+		// 	// get parent token id
+		// 	parentToken, _, err := genesis.GetParentDetials(ti.Token)
+		// 	if err != nil {
+		// 		c.log.Error("failed to fetch parent token detials", "err", err, "token", ti.Token)
+		// 		resp.Message = fmt.Sprintf("failed to fetch parent token detials, err : %v, token : %v", err, ti.Token)
+		// 		return resp
+		// 	}
+		// 	// get parent token type
+		// 	b, err := c.getFromIPFS(parentToken)
+		// 	if err != nil {
+		// 		c.log.Error("failed to get parent token details from ipfs", "err", err, "parent token", parentToken)
+		// 		resp.Message = fmt.Sprintf("failed to get parent token details from ipfs", "err", err, "parent token", parentToken)
+		// 		return resp
+		// 	}
+		// 	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+
+		// 	parentTokenType := token.RBTTokenType
+		// 	if !iswholeToken {
+		// 		blk := util.StrToHex(string(b))
+		// 		rb, err := rac.InitRacBlock(blk, nil)
+		// 		if err != nil {
+		// 			c.log.Error("invalid token, invalid rac block of parent token", "err", err)
+		// 			resp.Message = "failed to get parent token info for token " + ti.Token
+		// 			return resp
+		// 		}
+		// 		parentTokenType = rac.RacType2TokenType(rb.GetRacType())
+		// 	}
+
+		// 	// get parent genesis and latest blocks
+		// 	parentGenesis := c.w.GetGenesisTokenBlock(parentToken, parentTokenType)
+		// 	parentLatest := c.w.GetLatestTokenBlock(parentToken, parentTokenType)
+		// 	genesisNLatestBlocks.ParentGenesisBlock = parentGenesis.GetBlock()
+		// 	genesisNLatestBlocks.ParentLatestBlock = parentLatest.GetBlock()
+		// } else {
+		// 	if genesis != blk { // TODO : try using block id or number to compare
+		// 		genesisNLatestBlocks.LatestBlock = blk.GetBlock()
+		// 	}
+		// }
+	}
+
+	//check if sender has previous block pledged quorums' details
+	for _, tokeninfo := range tis {
+		b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
+		//check if the transaction in prev block involved any quorums
+		switch b.GetTransType() {
+		case block.TokenGeneratedType:
+			continue
+		case block.TokenBurntType:
+			c.log.Error("token is burnt, can't transfer anymore; token:", tokeninfo.Token)
+			resp.Message = "token is burnt, can't transfer anymore"
+			return resp
+		case block.TokenTransferredType:
+			//fetch all the pledged quorums, if the transaction involved quorums
+			prevQuorums, _ := b.GetSigner()
+
+			for _, prevQuorum := range prevQuorums {
+				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender
+				fmt.Println("Checking if the sender has previous block pledged quorum's did type")
+				prevQuorumInfo, err := c.GetPeerDIDInfo(prevQuorum)
+				if err != nil {
+					if strings.Contains(err.Error(), "retry") {
+						c.AddPeerDetails(*prevQuorumInfo)
+					}
+				}
+				if prevQuorumInfo == nil || *prevQuorumInfo.DIDType == -1 {
+					//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
+					//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
+					break
+				}
+
+			}
+		}
+	}
+
+	contractType := getContractType(reqID, req, tis, isSelfRBTTransfer)
+	sc := contract.CreateNewContract(contractType)
+
+	err = sc.UpdateSignature(dc)
+	if err != nil {
+		c.log.Error(err.Error())
+		resp.Message = err.Error()
+		return resp
+	}
+
+	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
+	resultChan := make(chan *model.BasicResponse, 1)
+
+	// Start the transaction in a goroutine
+	go func() {
+		td, _, pds, consError := c.initiateConsensus(cr, sc, dc)
+		if consError != nil {
+			resp.Message = fmt.Sprintf("Consensus failed " + consError.Error())
+			resp.Status = false
+			resultChan <- resp
+			return
+		}
+		et := time.Now()
+		dif := et.Sub(st)
+		if isSelfRBTTransfer {
+			var amt float64 = 0
+			for _, tknInfo := range tis {
+				amt += tknInfo.TokenValue
+			}
+			td.Amount = amt
+		} else {
+			td.Amount = req.TokenCount
+		}
+		td.TotalTime = float64(dif.Milliseconds())
+
+		if td.TotalTime < 0.00 {
+			td.TotalTime = 0.00
+		}
+
+		if err := c.w.AddTransactionHistory(td); err != nil {
+			errMsg := fmt.Sprintf("Error occured while adding transaction details: %v", err)
+			c.log.Error(errMsg)
+			resp.Message = errMsg
+
+			return
+		}
+		etrans := &ExplorerRBTTrans{
+			TokenHashes:    wta,
+			TransactionID:  td.TransactionID,
+			BlockHash:      strings.Split(td.BlockID, "-")[1],
+			Network:        req.Type,
+			SenderDID:      senderDID,
+			ReceiverDID:    receiverdid,
+			Amount:         req.TokenCount,
+			QuorumList:     extractQuorumDID(cr.QuorumList),
+			PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+			TransTokenList: tokenListForExplorer,
+			Comments:       req.Comment,
+		}
+
+		c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
+		resp.Status = true
+		msg := fmt.Sprintf("Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
+		resp.Message = msg
+		if strings.Contains(resp.Message, "with transaction id") {
+			if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
+				resp.Result = txID
+			}
+		}
+		c.ec.ExplorerRBTTransaction(etrans)
+
+		// Send final transaction completion response if not already timed out
+		select {
+		case resultChan <- resp:
+			// Successfully sent to resultChan
+		default:
+			// If no one is listening (already timed out), just log and exit
+			c.log.Debug("Transaction completed but resultChan is not being read anymore")
+		}
+	}()
+
+	select {
+	case result := <-resultChan:
+		// Transaction completed within 40s or failed
+		c.log.Debug("transaction completed before 20 secs")
+		return result
+
+	case <-time.After(20 * time.Second):
+		// Timeout occurred, return Transaction ID only
+		c.log.Debug("transaction still processing with txn id ", cr.TransactionID)
+
+		msg := fmt.Sprintf("Transaction is still processing, with transaction id %v ", cr.TransactionID)
+		resp.Message = msg
+		if strings.Contains(resp.Message, "with transaction id") {
+			if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
+				resp.Result = txID
+			}
+		}
+		resp.Status = true
+		return resp
+	}
+}
+
+func (c *Core) initiateSpendableRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
 
@@ -303,7 +613,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 
-	c.log.Debug("***Tokens gathered for transaction****")
+	c.log.Debug("***Tokens gathered for sender to receiver transaction****", tokensForTxn)
 	c.log.Debug("*****Transfer Mode is****", transferMode)
 
 	// In case of self transfer
@@ -390,7 +700,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			resp.Message = errMsg
 			return resp
 		}
-		
+
 		//sender verifies whether the previous block is a cvr stage-2 block or not, if it is a newly created part token, then sender will check,
 		// transaction type of the block which is previous to the burnt block of the parent token is ownership transferred type or not
 		if transferMode == SpendableRBTTransferMode {
@@ -690,16 +1000,15 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// 	c.log.Debug("************completed explorer updation")
 	// }
 
-	
 	// Starting CVR stage-2
 	cvrRequest := &wallet.PrePledgeRequest{
-		DID:               senderDID,
-		QuorumType:        req.Type,
+		DID:        senderDID,
+		QuorumType: req.Type,
 		// TxnID:             transactionID,
 		// SelftransferTxnID: selfTransactionID,
-		SCTransferBlock:   sc.GetBlock(),
-		TxnEpoch: int64(txEpoch),
-		ReqID:    reqID,
+		SCTransferBlock: sc.GetBlock(),
+		TxnEpoch:        int64(txEpoch),
+		ReqID:           reqID,
 	}
 	if selfTransferContract != nil {
 		cvrRequest.SCSelfTransferBlock = selfTransferContract.GetBlock()
@@ -707,7 +1016,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 	// cvr-2 go-routine
 	go func(cvrReq *wallet.PrePledgeRequest) {
-		resp := c.initiateRBTCVRTwo(cvrReq)
+		resp := c.initiateCVRTwo(cvrReq)
 		c.log.Debug("response from CVR-2 : ", resp)
 	}(cvrRequest)
 

@@ -802,7 +802,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				// TransTokenSyncInfo: cr.TransTokenSyncInfo,
 			}
 
-			c.log.Debug("*************** sending cvr-2 block to receiver : ", sr)
+			// c.log.Debug("*************** sending cvr-2 block to receiver : ", sr)
 
 			var br model.BasicResponse
 			err = rp.SendJSONRequest("POST", APISendReceiverToken, nil, &sr, &br, true)
@@ -2425,6 +2425,21 @@ func (c *Core) createTransTokenBlock(cr *ConensusRequest, sc *contract.Contract,
 	if cr.Mode == SmartContractDeployMode {
 		bti.DeployerDID = sc.GetDeployerDID()
 
+		//Fetching deployer signature to add it to transaction details
+		signData, deployerNLSSShare, deployerPrivSign, err := sc.GetHashSig(bti.DeployerDID)
+		if err != nil {
+			c.log.Error("failed to fetch deployer sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch deployer sign")
+		}
+		deployerSignType := dc.GetSignType()
+		deployerSign := &block.InitiatorSignature{
+			NLSSShare:   deployerNLSSShare,
+			PrivateSign: deployerPrivSign,
+			DID:         bti.DeployerDID,
+			Hash:        signData,
+			SignType:    deployerSignType,
+		}
+
 		var smartContractTokenValue float64
 
 		commitedTokens := sc.GetCommitedTokensInfo()
@@ -2449,43 +2464,91 @@ func (c *Core) createTransTokenBlock(cr *ConensusRequest, sc *contract.Contract,
 		}
 
 		tcb = block.TokenChainBlock{
-			TransactionType: block.TokenDeployedType,
-			TokenOwner:      sc.GetDeployerDID(),
-			TransInfo:       bti,
-			SmartContract:   sc.GetBlock(),
-			GenesisBlock:    smartContractGensisBlock,
-			PledgeDetails:   ptds,
-			Epoch:           cr.TransactionEpoch,
+			TransactionType:    block.TokenDeployedType,
+			TokenOwner:         sc.GetDeployerDID(),
+			TransInfo:          bti,
+			SmartContract:      sc.GetBlock(),
+			GenesisBlock:       smartContractGensisBlock,
+			PledgeDetails:      ptds,
+			InitiatorSignature: deployerSign,
+			Epoch:              cr.TransactionEpoch,
 		}
 	} else if cr.Mode == SmartContractExecuteMode {
 		bti.ExecutorDID = sc.GetExecutorDID()
 
+		//Fetching executor signature to add it to transaction details
+		signData, executorNLSSShare, executorPrivSign, err := sc.GetHashSig(bti.ExecutorDID)
+		if err != nil {
+			c.log.Error("failed to fetch executor sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch executor sign")
+		}
+		executorSignType := dc.GetSignType()
+		executorSign := &block.InitiatorSignature{
+			NLSSShare:   executorNLSSShare,
+			PrivateSign: executorPrivSign,
+			DID:         bti.ExecutorDID,
+			Hash:        signData,
+			SignType:    executorSignType,
+		}
+
 		tcb = block.TokenChainBlock{
-			TransactionType:   block.TokenExecutedType,
-			TokenOwner:        sc.GetExecutorDID(),
-			TransInfo:         bti,
-			SmartContract:     sc.GetBlock(),
-			PledgeDetails:     ptds,
-			SmartContractData: sc.GetSmartContractData(),
-			Epoch:             cr.TransactionEpoch,
+			TransactionType:    block.TokenExecutedType,
+			TokenOwner:         sc.GetExecutorDID(),
+			TransInfo:          bti,
+			SmartContract:      sc.GetBlock(),
+			PledgeDetails:      ptds,
+			SmartContractData:  sc.GetSmartContractData(),
+			InitiatorSignature: executorSign,
+			Epoch:              cr.TransactionEpoch,
 		}
 
 	} else if cr.Mode == NFTExecuteMode {
 		bti.ExecutorDID = sc.GetExecutorDID()
 
+		//Fetching executor signature to add it to transaction details
+		signData, executorNLSSsign, executorPrivSign, err := sc.GetHashSig(bti.ExecutorDID)
+		if err != nil {
+			c.log.Error("failed to fetch executor sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch executor sign")
+		}
+		executorSignType := dc.GetSignType()
+		executor_sign := &block.InitiatorSignature{
+			NLSSShare:   executorNLSSsign,
+			PrivateSign: executorPrivSign,
+			DID:         bti.ExecutorDID,
+			Hash:        signData,
+			SignType:    executorSignType,
+		}
+
 		tcb = block.TokenChainBlock{
-			TransactionType: block.TokenExecutedType,
-			TokenOwner:      sc.GetReceiverDID(),
-			TransInfo:       bti,
-			NFT:             sc.GetBlock(),
-			NFTData:         sc.GetNFTData(),
-			PledgeDetails:   ptds,
-			TokenValue:      sc.GetTotalRBTs(),
-			Epoch:           cr.TransactionEpoch,
+			TransactionType:    block.TokenExecutedType,
+			TokenOwner:         sc.GetReceiverDID(),
+			TransInfo:          bti,
+			NFT:                sc.GetBlock(),
+			NFTData:            sc.GetNFTData(),
+			PledgeDetails:      ptds,
+			TokenValue:         sc.GetTotalRBTs(),
+			InitiatorSignature: executor_sign,
+			Epoch:              cr.TransactionEpoch,
 		}
 
 	} else if cr.Mode == NFTDeployMode {
 		bti.DeployerDID = sc.GetDeployerDID()
+
+		//Fetching deployer signature to add it to transaction details
+		signData, deployerShareSign, deployerPrivSign, err := sc.GetHashSig(bti.DeployerDID)
+		if err != nil {
+			c.log.Error("failed to fetch deployer sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch deployer sign")
+		}
+		deployerSignType := dc.GetSignType()
+		deployer_sign := &block.InitiatorSignature{
+			NLSSShare:   deployerShareSign,
+			PrivateSign: deployerPrivSign,
+			DID:         bti.DeployerDID,
+			Hash:        signData,
+			SignType:    deployerSignType,
+		}
 
 		nftValue := sc.GetTotalRBTs()
 
@@ -2496,15 +2559,16 @@ func (c *Core) createTransTokenBlock(cr *ConensusRequest, sc *contract.Contract,
 			},
 		}
 		tcb = block.TokenChainBlock{
-			TransactionType: block.TokenDeployedType,
-			TokenOwner:      sc.GetDeployerDID(),
-			TransInfo:       bti,
-			NFT:             sc.GetBlock(),
-			NFTData:         sc.GetNFTData(),
-			TokenValue:      sc.GetTotalRBTs(),
-			GenesisBlock:    nftGenesisBlock,
-			PledgeDetails:   ptds,
-			Epoch:           cr.TransactionEpoch,
+			TransactionType:    block.TokenDeployedType,
+			TokenOwner:         sc.GetDeployerDID(),
+			TransInfo:          bti,
+			NFT:                sc.GetBlock(),
+			NFTData:            sc.GetNFTData(),
+			TokenValue:         sc.GetTotalRBTs(),
+			GenesisBlock:       nftGenesisBlock,
+			PledgeDetails:      ptds,
+			InitiatorSignature: deployer_sign,
+			Epoch:              cr.TransactionEpoch,
 		}
 
 	} else if cr.Mode == PinningServiceMode {
@@ -2518,26 +2582,60 @@ func (c *Core) createTransTokenBlock(cr *ConensusRequest, sc *contract.Contract,
 			PledgeDetails:   ptds,
 		}
 	} else if cr.Mode == SpendableRBTTransferMode {
+
+		//Fetching sender signature to add it to transaction details
+		senderdid := sc.GetSenderDID()
+		signData, senderNLSSShare, senderPrivSign, err := sc.GetHashSig(senderdid)
+		if err != nil {
+			c.log.Error("failed to fetch sender sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch sender sign")
+		}
+		senderSignType := dc.GetSignType()
+		senderSign := &block.InitiatorSignature{
+			NLSSShare:   senderNLSSShare,
+			PrivateSign: senderPrivSign,
+			DID:         senderdid,
+			Hash:        signData,
+			SignType:    senderSignType,
+		}
 		bti.SenderDID = sc.GetSenderDID()
 		bti.ReceiverDID = sc.GetReceiverDID()
 		tcb = block.TokenChainBlock{
-			TransactionType: block.OwnershipTransferredType,
-			TokenOwner:      sc.GetReceiverDID(),
-			TransInfo:       bti,
-			SmartContract:   sc.GetBlock(),
-			PledgeDetails:   ptds,
-			Epoch:           cr.TransactionEpoch,
+			TransactionType:    block.OwnershipTransferredType,
+			TokenOwner:         sc.GetReceiverDID(),
+			TransInfo:          bti,
+			SmartContract:      sc.GetBlock(),
+			PledgeDetails:      ptds,
+			Epoch:              cr.TransactionEpoch,
+			InitiatorSignature: senderSign,
 		}
 	} else {
+		//Fetching sender signature to add it to transaction details
+		senderdid := sc.GetSenderDID()
+		signData, senderNLSSShare, senderPrivSign, err := sc.GetHashSig(senderdid)
+		if err != nil {
+			c.log.Error("failed to fetch sender sign", "err", err)
+			return nil, fmt.Errorf("failed to fetch sender sign")
+		}
+		senderSignType := dc.GetSignType()
+		senderSign := &block.InitiatorSignature{
+			NLSSShare:   senderNLSSShare,
+			PrivateSign: senderPrivSign,
+			DID:         senderdid,
+			Hash:        signData,
+			SignType:    senderSignType,
+		}
+
 		bti.SenderDID = sc.GetSenderDID()
 		bti.ReceiverDID = sc.GetReceiverDID()
 		tcb = block.TokenChainBlock{
-			TransactionType: block.TokenTransferredType,
-			TokenOwner:      sc.GetReceiverDID(),
-			TransInfo:       bti,
-			SmartContract:   sc.GetBlock(),
-			PledgeDetails:   ptds,
-			Epoch:           cr.TransactionEpoch,
+			TransactionType:    block.TokenTransferredType,
+			TokenOwner:         sc.GetReceiverDID(),
+			TransInfo:          bti,
+			SmartContract:      sc.GetBlock(),
+			PledgeDetails:      ptds,
+			InitiatorSignature: senderSign,
+			Epoch:              cr.TransactionEpoch,
 		}
 	}
 

@@ -1532,11 +1532,11 @@ func (c *Core) GatherFreeTokensForConsensus(reqID string, req *model.CvrAPIReque
 		TxnEpoch:            int64(txEpoch),
 	}
 
-	response = c.initiateRBTCVRTwo(cvrReq)
+	response = c.initiateCVRTwo(cvrReq)
 	return response
 }
 
-func (c *Core) initiateRBTCVRTwo(req *wallet.PrePledgeRequest) *model.BasicResponse {
+func (c *Core) initiateCVRTwo(req *wallet.PrePledgeRequest) *model.BasicResponse {
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -1650,8 +1650,14 @@ func (c *Core) initiateRBTCVRTwo(req *wallet.PrePledgeRequest) *model.BasicRespo
 
 		c.log.Debug("********** consensus request : mode ", cr.Mode, "cr req id", cr.ReqID, "sender peerid", cr.SenderPeerID, "receiver peerid", cr.ReceiverPeerID)
 
+		dc, err := c.SetupDID(req.ReqID, req.DID)
+		if err != nil {
+			resp.Message = "Failed to setup DID, " + err.Error()
+			return resp
+		}
+
 		// initiate consensus for sender to receiver transaction.
-		_, _, _, err := c.initiateConsensus(cr, sc, nil)
+		_, _, _, err = c.initiateConsensus(cr, sc, dc)
 		if err != nil {
 			errMsg := fmt.Sprintf("Consensus failed for  sender to receiver transfer, err: %v", err)
 			c.log.Error(errMsg)
