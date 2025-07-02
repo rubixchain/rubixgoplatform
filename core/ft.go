@@ -738,7 +738,7 @@ func (c *Core) updateFTTable(ftName string, creatorDID string, ftAvailCount int,
 				CreatorDID:       creatorDID,
 				FTAvailableCount: ftAvailCount,
 			}
-			if writeErr := c.s.Write(wallet.FTIndexStorage, newFTIndex); writeErr != nil {
+			if writeErr := c.s.Write(wallet.FTStorage, newFTIndex); writeErr != nil {
 				return fmt.Errorf("failed to insert new record: %w", writeErr)
 			}
 			c.log.Info("New FT record created with ID:", newFTIndex.ID)
@@ -774,7 +774,7 @@ func (c *Core) UpsertFTTable(ftName string, creatorDid string, ftIndex int) erro
 				FTAvailableCount: ftIndex,
 			}
 
-			if writeErr := c.s.Write(wallet.FTIndexStorage, newFTIndex); writeErr != nil {
+			if writeErr := c.s.Write(wallet.FTStorage, newFTIndex); writeErr != nil {
 				return fmt.Errorf("failed to insert new record: %w", writeErr)
 			}
 			c.log.Info("New FT record created with ID:", newFTIndex.ID)
