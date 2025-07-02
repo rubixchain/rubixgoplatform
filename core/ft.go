@@ -540,7 +540,36 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	go func() {
 		td, _, pds, FTconsErr := c.initiateConsensus(cr, sc, dc)
 		if FTconsErr != nil {
-			resp.Message = fmt.Sprintf("Consensus failed " + FTconsErr.Error())
+			resp.Message = fmt.Sprintf("Consensus failed: %s", FTconsErr.Error())
+			tokens := sc.GetTransTokenInfo()
+			for _, token := range tokens {
+				if token.Token == "" {
+					continue
+				}
+
+				ftToken := &wallet.FTToken{}
+				ReadFTErr := c.s.Read(wallet.FTTokenStorage, ftToken, "token_id=?", token.Token)
+				if ReadFTErr != nil {
+					c.log.Error("Failed to read FT token", "token", token.Token, "err", ReadFTErr)
+					resp.Message = "Failed to read FT token"
+					resp.Status = false
+					resultChan <- resp
+					return
+				}
+
+				if ftToken.TokenStatus == wallet.TokenIsLocked {
+					ftToken.TokenStatus = wallet.TokenIsFree
+					updateFTErr := c.s.Update(wallet.FTTokenStorage, ftToken, "token_id=?", token.Token)
+					if updateFTErr != nil {
+						c.log.Error("Failed to update FT token status", "token", token.Token, "err", updateFTErr)
+						resp.Message = "Failed to update FT token status"
+						resp.Status = false
+						resultChan <- resp
+						return
+					}
+				}
+			}
+			c.UpdateUserInfo([]string{did})
 			resp.Status = false
 			resultChan <- resp
 			return
@@ -613,6 +642,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		}
 
 		c.ec.ExplorerFTTransaction(eTrans)
+		c.UpdateUserInfo([]string{did})
 		// Send final transaction completion response if not already timed out
 		select {
 		case resultChan <- resp:
@@ -1145,5 +1175,37 @@ func (c *Core) burnSingleFT(ft wallet.FTToken, did string, dc did.DIDCrypto) err
 		FTTokenDetails.TokenStatus = wallet.TokenIsBurnt
 		err = c.w.UpdateFTToken(FTTokenDetails)
 	}
+	return nil
+}
+
+func (c *Core) UnlockFTs() error {
+	lockedFTs, err := c.w.GetLockedFTs()
+	if err != nil {
+		c.log.Error("Failed to get locked FTs", "err", err)
+		return err
+	}
+
+	for _, ft := range lockedFTs {
+		if ft.TokenID == "" {
+			continue
+		}
+
+		ft.TokenStatus = wallet.TokenIsFree
+
+		// First, delete the token
+		err := c.s.Delete(wallet.FTTokenStorage, &wallet.FT{}, "token_id=?", ft.TokenID)
+		if err != nil {
+			c.log.Error("Failed to delete FT", "token_id", ft.TokenID, "err", err)
+			continue
+		}
+
+		// Then, re-insert the same token — this moves it to the bottom (new rowid)
+		err = c.s.Write(wallet.FTTokenStorage, &ft)
+		if err != nil {
+			c.log.Error("Failed to re-insert FT", "token_id", ft.TokenID, "err", err)
+			continue
+		}
+	}
+	c.log.Info("Unlocked FT")
 	return nil
 }

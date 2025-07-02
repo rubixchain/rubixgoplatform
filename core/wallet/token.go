@@ -1252,3 +1252,17 @@ func (w *Wallet) UpdateTokenSyncStatus(tokenID string, syncStatus int) error {
 	}
 	return nil
 }
+
+func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
+	var ftTokens []FTToken
+	err := w.s.Read(FTTokenStorage, &ftTokens, "token_status = ?", TokenIsLocked)
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			return []FTToken{}, nil
+		} else {
+			w.log.Error("Failed to get locked FTs", "err", err)
+			return nil, err
+		}
+	}
+	return ftTokens, nil
+}
