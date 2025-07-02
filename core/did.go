@@ -31,7 +31,7 @@ type DIDInfo struct {
 
 func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 	// Construct the API URL
-	fmt.Println("Fetching peer info from explorer for DID:", didStr)
+	fmt.Println("Fetching peer: ", didStr)
 	url := "https://rexplorer.azurewebsites.net/api/user/get-did-info/" + didStr
 
 	// Make the HTTP GET request
@@ -62,7 +62,7 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 	}
 
 	if strings.Contains(genericResp.Message, "Deployer not found") {
-		fmt.Println("Deployer not found for DID:", didStr)
+		c.log.Error("Deployer not found for DID:", didStr)
 		return nil, fmt.Errorf("PeerID not found for DID: %s", didStr)
 	}
 
@@ -72,12 +72,11 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		return nil, fmt.Errorf("failed to parse JSON: %v", err)
 	}
 
-	fmt.Println("API Response:", apiResp)
 	userDID := apiResp.Data.UserDID
 
 	// Fetch the DID
 	if err := c.FetchDID(userDID); err != nil {
-		fmt.Println("Failed to fetch DID:", err)
+		c.log.Error("Failed to fetch DID:", err)
 		return nil, fmt.Errorf("failed to fetch DID: %v", err)
 	}
 
@@ -93,7 +92,6 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 
 	for _, file := range files {
 		if !file.IsDir() && filepath.Ext(file.Name()) == ".png" {
-			fmt.Println("Found PNG file:", file.Name())
 			hasPNG = true
 			break
 		}
@@ -115,10 +113,10 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		peerInfo.DIDType = &mode
 	}
 
-	fmt.Println("PeerInfo:", peerInfo, "DIDType:", *peerInfo.DIDType)
-
-	if peerInfo.DIDType == &didType {
-		c.log.Error("DID type not found for ", didStr)
+	err = c.AddPeerDetails(*peerInfo)
+	if err != nil {
+		c.log.Error("failed to add peer to DIDPeerTable, err ", err)
+		return peerInfo, nil
 	}
 
 	return peerInfo, nil
@@ -305,6 +303,7 @@ func (c *Core) RegisterDID(reqID string, did string) {
 		br.Status = false
 		br.Message = err.Error()
 	}
+	c.UpdateUserInfo([]string{did}) //Updating the balance
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")
@@ -427,7 +426,6 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 		// if peer id not found in table, try to fetch from explorer for mainnet RBTs
 		peerDIDInfo, err = c.GetPeerFromExplorer(didStr)
 		if peerDIDInfo != nil {
-			c.log.Debug("PeerDIDInfo from explorer:", peerDIDInfo)
 			c.AddPeerDetails(*peerDIDInfo)
 		}
 		if err != nil {
@@ -457,7 +455,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 			didType, _ := c.w.GetPeerDIDType(didStr)
 			if didType == -1 {
 				c.log.Debug("Connecting with peer to get DID type of peer did", didStr)
-				p, err := c.getPeer(didStr + "." + peerDIDInfo.PeerID)
+				p, err := c.getPeer(peerDIDInfo.PeerID + "." + didStr)
 				if err != nil {
 					c.log.Error("could not connect with peer to fetch did type, error ", err)
 					return peerDIDInfo, nil
@@ -472,6 +470,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 			} else {
 				peerDIDInfo.DIDType = &didType
 			}
+			c.AddPeerDetails(*peerDIDInfo)
 		}
 
 	}

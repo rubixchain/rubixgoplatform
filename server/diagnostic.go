@@ -200,3 +200,30 @@ func (s *Server) APIReleaseAllLockedTokens(req *ensweb.Request) *ensweb.Result {
 	response = s.c.ReleaseAllLockedTokens()
 	return s.RenderJSON(req, response, http.StatusOK)
 }
+
+func (s *Server) APIUpdateTokenStatus(req *ensweb.Request) *ensweb.Result {
+	var updateReq model.UpdateTokenStatusReq
+	err := s.ParseJSON(req, &updateReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	err = s.c.UpdateTokenStatus(&updateReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to update token status", err)
+	}
+	return s.RenderJSON(req, model.BasicResponse{Message: "Token status updated successfully", Status: true}, http.StatusOK)
+}
+
+func (s *Server) APIGetTokenStatus(req *ensweb.Request) *ensweb.Result {
+	var getTokenStatusReq model.GetTokenStatusReq
+	err := s.ParseJSON(req, &getTokenStatusReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	var response model.TokenStatusResponse
+	response, err = s.c.GetTokenStatus(&getTokenStatusReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to get token status", nil)
+	}
+	return s.RenderJSON(req, response, http.StatusOK)
+}

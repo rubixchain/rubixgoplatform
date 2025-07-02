@@ -97,6 +97,8 @@ const (
 	APIAddPeerDetailsFromExplorer       string = "/api/add-peer-details-from-explorer"
 	APIGetFTTxnByDID                    string = "/api/get-ft-txn-by-did"
 	APIPrePledge                        string = "/api/prepledge"
+	APIUpdateTokenStatus                string = "/api/update-token-status"
+	APIGetTokenStatus                   string = "/api/get-token-status"
 )
 
 // jwt.RegisteredClaims

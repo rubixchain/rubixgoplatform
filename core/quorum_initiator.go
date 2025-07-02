@@ -58,12 +58,13 @@ type ConensusRequest struct {
 }
 
 type ConensusReply struct {
-	ReqID    string `json:"req_id"`
-	Status   bool   `json:"status"`
-	Message  string `json:"message"`
-	Hash     string `json:"hash"`
-	ShareSig []byte `json:"share_sig"`
-	PrivSig  []byte `json:"priv_sig"`
+	ReqID    string   `json:"req_id"`
+	Status   bool     `json:"status"`
+	Message  string   `json:"message"`
+	Result   []string `json:"result"`
+	Hash     string   `json:"hash"`
+	ShareSig []byte   `json:"share_sig"`
+	PrivSig  []byte   `json:"priv_sig"`
 }
 
 type ConsensusResult struct {
@@ -588,8 +589,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				loop = false
 			} else if cs.Result.RunningCount == 0 {
 				loop = false
-				err = fmt.Errorf("consensus failed, retry transaction after sometimes")
-				c.log.Error("Consensus failed, retry transaction after sometimes")
+				err = fmt.Errorf("consensus failed, retry transaction after sometime")
+				c.log.Error("Consensus failed, retry transaction after sometime")
 			}
 		}
 		c.qlock.Unlock()
@@ -953,10 +954,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 					c.AddPeerDetails(*qDidInfo)
 				}
 			}
-			fmt.Println("qDidInfo", qDidInfo)
-
 			if qDidInfo.DIDType == nil {
-				c.log.Debug("DID type of quorum is nil, fetching from explorer", qdid)
 				qdidPeerMap, err := c.GetPeerDIDInfo(qdid)
 				if err != nil {
 					c.log.Error("could not fetch did type of quorum", qdid, "err", err)
@@ -1143,6 +1141,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		return &td, pl, pds, nil
 	case FTTransferMode:
+		// #### FT Tranfer starts here
 		// Connect to the receiver's peer
 		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
 		if err != nil {
@@ -1218,17 +1217,21 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				return nil, nil, nil, fmt.Errorf(errMsg)
 			}
 			c.log.Debug("issue type in int is ", issueTypeInt)
-			syncIssueTokenDetails, err2 := c.w.ReadToken(token)
+
+			//loop through each items in br.message and update for each tkn
+
+			syncIssueTokenDetails, err2 := c.w.ReadFTToken(token)
 			if err2 != nil {
 				errMsg := fmt.Sprintf("Consensus failed due to tokenchain sync issue, err %v", err2)
 				c.log.Error(errMsg)
 				return nil, nil, nil, fmt.Errorf(errMsg)
 			}
 			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
+
 			if issueTypeInt == TokenChainNotSynced {
 				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
 				c.log.Debug("Token sync issue details updated:", syncIssueTokenDetails)
-				c.w.UpdateToken(syncIssueTokenDetails)
+				c.w.UpdateFTToken(syncIssueTokenDetails)
 				return nil, nil, nil, errors.New(br.Message)
 			}
 		}
@@ -1907,18 +1910,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, pledgeFinalityError
 		}
 
-		newEvent := model.NFTEvent{
-			NFT:          cr.NFT,
-			ExecutorDid:  sc.GetDeployerDID(),
-			NFTBlockHash: newnftIDTokenStateHash,
-			Type:         DeployType,
-		}
-
-		err = c.publishNewNftEvent(&newEvent)
-		if err != nil {
-			c.log.Error("Failed to publish NFT info")
-		}
-
 		txnDetails := model.TransactionDetails{
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
@@ -1968,20 +1959,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, nil, pledgeFinalityError
-		}
-
-		newEvent := model.NFTEvent{
-			NFT:          cr.NFT,
-			ExecutorDid:  sc.GetExecutorDID(),
-			ReceiverDid:  sc.GetReceiverDID(),
-			Type:         ExecuteType,
-			NFTBlockHash: newBlockId,
-			NFTValue:     sc.GetTotalRBTs(),
-		}
-
-		err = c.publishNewNftEvent(&newEvent)
-		if err != nil {
-			c.log.Error("Failed to publish NFT executed  info")
 		}
 
 		prevBlockId, _ := nb.GetPrevBlockID((cr.NFT))
@@ -2280,18 +2257,18 @@ func (c *Core) connectQuorum(consensusRequest *ConensusRequest, p *ipfsport.Peer
 	}
 
 	if strings.Contains(cresp.Message, "failed to sync tokenchain") {
-		tokenPrefix := "Token: "
+		//tokenPrefix := "Token: "
 		issueTypePrefix := "issueType: "
 
 		// Find the starting indexes of pt and issueType values
-		ptStart := strings.Index(cresp.Message, tokenPrefix) + len(tokenPrefix)
+		//ptStart := strings.Index(cresp.Message, tokenPrefix) + len(tokenPrefix)
 		issueTypeStart := strings.Index(cresp.Message, issueTypePrefix) + len(issueTypePrefix)
 
 		// Extracting the substrings from the message
-		token := cresp.Message[ptStart : strings.Index(cresp.Message[ptStart:], ",")+ptStart]
+		//	token := cresp.Message[ptStart : strings.Index(cresp.Message[ptStart:], ",")+ptStart]
 		issueType := cresp.Message[issueTypeStart:]
 
-		c.log.Debug("In connectQuorum, token is ", token, " issuetype is ", issueType)
+		c.log.Debug("In connectQuorum, token is ", cresp.Result, "||| issuetype is ", issueType)
 		issueTypeInt, err1 := strconv.Atoi(issueType)
 		if err1 != nil {
 			c.log.Error("Consensus failed due to token chain sync issue, issueType string conversion", "err", err1)
@@ -2299,20 +2276,39 @@ func (c *Core) connectQuorum(consensusRequest *ConensusRequest, p *ipfsport.Peer
 			return
 		}
 		c.log.Debug("issue type in int is ", issueTypeInt)
-		syncIssueTokenDetails, err2 := c.w.ReadToken(token)
-		if err2 != nil {
-			c.log.Error("Consensus failed due to tokenchain sync issue ", "err", err2)
-			c.finishConsensus(consensusRequest.ReqID, p, false, "", nil, nil)
-			return
+		for _, token := range cresp.Result {
+			if consensusRequest.Mode == FTTransferMode {
+				FTsyncIssueTokenDetails, err2 := c.w.ReadFTToken(token)
+				if err2 != nil {
+					c.log.Error("Consensus failed due to tokenchain sync issue ", "err", err2)
+					//	c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+					//	return
+				}
+				c.log.Debug("In connectQuorum, sync issue token details ", FTsyncIssueTokenDetails)
+				if issueTypeInt == TokenChainNotSynced {
+					FTsyncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+					c.log.Debug("In connectQuorum, sync issue token details status updated", FTsyncIssueTokenDetails)
+					c.w.UpdateFTToken(FTsyncIssueTokenDetails)
+				}
+			} else if consensusRequest.Mode == RBTTransferMode || consensusRequest.Mode == SpendableRBTTransferMode {
+				syncIssueTokenDetails, err2 := c.w.ReadToken(token)
+				if err2 != nil {
+					c.log.Error("Consensus failed due to tokenchain sync issue, token not found in tab ", "err", err2)
+					//	c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+					//	return
+				}
+				c.log.Debug("In connectQuorum, sync issue token details ", syncIssueTokenDetails)
+				if issueTypeInt == TokenChainNotSynced {
+					syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+					c.log.Debug("In connectQuorum, sync issue token details status updated", syncIssueTokenDetails)
+					c.w.UpdateToken(syncIssueTokenDetails)
+					//c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
+					//return
+				}
+			}
 		}
-		c.log.Debug("In connectQuorum, sync issue token details ", syncIssueTokenDetails)
-		if issueTypeInt == TokenChainNotSynced {
-			syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
-			c.log.Debug("In connectQuorum, sync issue token details status updated", syncIssueTokenDetails)
-			c.w.UpdateToken(syncIssueTokenDetails)
-			c.finishConsensus(consensusRequest.ReqID, p, false, "", nil, nil)
-			return
-		}
+		c.finishConsensus(consensusRequest.ReqID, p, false, "", nil, nil)
+		return
 	}
 
 	if strings.Contains(cresp.Message, "Token state is exhausted, Token is being Double spent.") {
@@ -2322,6 +2318,20 @@ func (c *Core) connectQuorum(consensusRequest *ConensusRequest, p *ipfsport.Peer
 		if tStart >= len(tokenPrefix) {
 			token = cresp.Message[tStart:]
 			c.log.Debug("Token is being Double spent. Token is ", token)
+		}
+		if consensusRequest.Mode == FTTransferMode {
+			doubleSpendFTDetails, err2 := c.w.ReadFTToken(token)
+			if err2 != nil {
+				c.log.Error("Consensus failed due to token being double spent ", "err", err2)
+				c.finishConsensus(consensusRequest.ReqID, p, false, "", nil, nil)
+				return
+			}
+			c.log.Debug("Double spend token details ", doubleSpendFTDetails)
+			doubleSpendFTDetails.TokenStatus = wallet.TokenIsBeingDoubleSpent
+			c.log.Debug("Double spend token details status updated", doubleSpendFTDetails)
+			c.w.UpdateFTToken(doubleSpendFTDetails)
+			c.finishConsensus(consensusRequest.ReqID, p, false, "", nil, nil)
+			return
 		}
 		doubleSpendTokenDetails, err2 := c.w.ReadToken(token)
 		if err2 != nil {

@@ -66,6 +66,8 @@ type TokenSyncInfo struct {
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
 	c.l.AddRoute(APISyncGenesisAndLatestBlock, "POST", c.syncGenesisAndLatestBlock)
+	c.l.AddRoute(APIUpdateStatus, "PUT", c.updateStatus)
+	c.l.AddRoute(APIGetTokenStatus, "GET", c.getTokenStatus)
 }
 
 func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {
@@ -293,37 +295,41 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 			Message: "Failed to parse request",
 		}, http.StatusBadRequest)
 	}
+	var tcbr TCBSyncReply
+	tcbr.Message = "Got all blocks"
 
 	// Fetch token blocks
 	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
 	if err != nil {
-		c.log.Error("Error fetching token blocks", "error", err)
+		blks, nextID, err = c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, "")
+		if err != nil {
+			c.log.Error("Error fetching token blocks", "error", err)
+		} else {
+			tcbr.Message = "Sent all blocks"
+		}
 	}
-
-	// Handle case where both error occurred and blocks are nil
+	/* // Handle case where both error occurred and blocks are nil
 	if err != nil && blks == nil {
 		c.log.Warn("Token blocks missing and error occurred, falling back to role-based logic", "token", tr.Token)
 		return c.handleRoleBasedLogic(tr.Token, req)
-	}
+	} */
 
 	// Handle other errors
-	if err != nil {
-		return c.l.RenderJSON(req, &TCBSyncReply{
-			Status:  false,
-			Message: "Error fetching token blocks",
-		}, http.StatusInternalServerError)
-	}
+	// if err != nil {
+	// 	respMsg := "token block not found for token: " + tr.Token + " and block: " + tr.BlockID
+	// 	return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: respMsg}, http.StatusInternalServerError)
+	// }
 
 	// Success response
 	return c.l.RenderJSON(req, &TCBSyncReply{
 		Status:      true,
-		Message:     "Got all blocks",
+		Message:     tcbr.Message,
 		TCBlock:     blks,
 		NextBlockID: nextID,
 	}, http.StatusOK)
 }
 
-func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.Result {
+/* func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.Result {
 	fmt.Println("Handling role-based logic for token:", token)
 	list, err := c.GetDHTddrs(token)
 	if err != nil {
@@ -368,7 +374,7 @@ func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.R
 	}
 
 	return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Unhandled error during role-based processing"}, http.StatusInternalServerError)
-}
+} */
 
 // processRole handles specific roles (as integers) and returns a message
 func (c *Core) processRole(role int) string {
@@ -396,6 +402,90 @@ func (c *Core) processRole(role int) string {
 	return ""
 }
 
+func (c *Core) updateStatus(req *ensweb.Request) *ensweb.Result {
+	var updateReq model.UpdateTokenStatusReq
+
+	// Parse request
+	if err := c.l.ParseJSON(req, &updateReq); err != nil {
+		c.log.Warn("Failed to parse request", "error", err)
+		return c.l.RenderJSON(req, &model.BasicResponse{
+			Status:  false,
+			Message: "Failed to parse request",
+		}, http.StatusBadRequest)
+	}
+	var resp model.BasicResponse
+
+	err := c.w.UpdateTokenStatus(updateReq.DID, updateReq.TokenHash, updateReq.TokenType, updateReq.NewTokenStatus)
+	if err != nil {
+		c.log.Error("Failed to update token status", "err", err)
+		resp.Message = "Failed to update token status"
+		resp.Status = false
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+
+	resp.Message = "Updated token status"
+	resp.Status = true
+	return c.l.RenderJSON(req, &resp, http.StatusOK)
+}
+
+func (c *Core) getTokenStatus(req *ensweb.Request) *ensweb.Result {
+	var getStatusReq model.GetTokenStatusReq
+
+	// Parse request
+	if err := c.l.ParseJSON(req, &getStatusReq); err != nil {
+		c.log.Warn("Failed to parse request", "error", err)
+		return c.l.RenderJSON(req, &model.BasicResponse{
+			Status:  false,
+			Message: "Failed to parse request",
+		}, http.StatusBadRequest)
+	}
+	var resp model.TokenStatusResponse
+
+	resp, err := c.w.GetTokenStatus(getStatusReq.DID, getStatusReq.Token, getStatusReq.Type)
+	if err != nil {
+		c.log.Error("Failed to get token status", "err", err)
+		return c.l.RenderJSON(req, &model.BasicResponse{
+			Status:  false,
+			Message: "Failed to parse request",
+		}, http.StatusBadRequest)
+	}
+
+	return c.l.RenderJSON(req, &resp, http.StatusOK)
+}
+
+func (c *Core) UpdateTokenStatus(updateReq *model.UpdateTokenStatusReq) error {
+	p, err := c.getPeer(updateReq.DID)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return err
+	}
+	defer p.Close()
+	var updateResp model.BasicResponse
+
+	err = p.SendJSONRequest("PUT", APIUpdateStatus, nil, &updateReq, &updateResp, false)
+	if !updateResp.Status {
+		c.log.Error("Failed to update status", "err", err)
+		return fmt.Errorf(updateResp.Message)
+	}
+	return nil
+}
+
+func (c *Core) GetTokenStatus(getTokenStatusReq *model.GetTokenStatusReq) (model.TokenStatusResponse, error) {
+	var resp model.TokenStatusResponse
+	p, err := c.getPeer(getTokenStatusReq.DID)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return resp, err
+	}
+	defer p.Close()
+	err = p.SendJSONRequest("GET", APIGetTokenStatus, nil, &getTokenStatusReq, &resp, false)
+	if err != nil {
+		c.log.Error("Failed to get status", "err", err)
+		return resp, err
+	}
+	return resp, nil
+}
+
 func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
 	// p, err := c.getPeer(address)
 	// if err != nil {
@@ -404,8 +494,15 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 	// }
 	// defer p.Close()
 	var err error
-	// var blkHeight uint64
+	var blkHeight uint64
 	blk := c.w.GetLatestTokenBlock(token, tokenType)
+	if blk != nil {
+		blkHeight, err = blk.GetBlockNumber(token)
+		if err != nil {
+			c.log.Error("Failed to get block number while syncing", "err", err)
+			return err
+		}
+	}
 	blkID := ""
 	if blk != nil {
 		blkID, err = blk.GetBlockID(token)
@@ -416,7 +513,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		if blkID == pblkID {
 			return nil
 		}
-		// blkHeight, err = blk.GetBlockNumber(token)
+		blkHeight, err = blk.GetBlockNumber(token)
 		if err != nil {
 			c.log.Error("invalid block, failed to get block number")
 			return err
@@ -456,6 +553,41 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
 			return fmt.Errorf(trep.Message)
 		}
+			if strings.Contains(trep.Message, "Sent all blocks") {
+				diffVar := int(blkHeight) - len(trep.TCBlock)
+				if diffVar > 1 {
+					// Quorum is ahead of sender by more than 1 block — not allowed
+					c.log.Error("Block height discrepancy too large")
+					return fmt.Errorf("sync failed: block height discrepancy too large (diff: %d)", diffVar)
+				} else {
+					// Get syncer latest token block hash
+					syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
+					syncerLatestBlkHash, err := syncerLatestBlk.GetHash()
+					if err != nil {
+						c.log.Error("Failed to get block hash of synced block", "err", err)
+						return err
+					}
+
+					// Get DID owner latest token block hash
+					didOwnerAllTknBlks, _, err := c.w.GetAllTokenBlocks(token, tokenType, "")
+					didOwnerBlock := block.InitBlock(didOwnerAllTknBlks[len(trep.TCBlock)-1], nil)
+					didOwnerLatestBlkHash, err := didOwnerBlock.GetHash()
+					if err != nil {
+						c.log.Error("Failed to get block hash of owner block", "err", err)
+						return err
+					}
+
+					// Compare both block hashes
+					if strings.Contains(syncerLatestBlkHash, didOwnerLatestBlkHash) {
+						syncerLatestBlkID, err := syncerLatestBlk.GetBlockID(token)
+						if err != nil {
+							c.log.Error("Failed to get block id of synced block", "err", err)
+							return err
+						}
+						return fmt.Errorf("syncer block height discrepency|%s", syncerLatestBlkID)
+					}
+				}
+			}
 		for _, bb := range trep.TCBlock {
 			blk := block.InitBlock(bb, nil)
 			if blk == nil {
@@ -474,7 +606,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		syncReq.BlockID = trep.NextBlockID
 
 	}
-	// }
+	
 	return nil
 }
 
@@ -551,7 +683,7 @@ func (c *Core) syncFullTokenChains(tokenSyncMap map[string][]TokenSyncInfo) {
 		defer p.Close()
 		// start syncing all tokens in queue
 		for _, tokenToSync := range tokenSyncInfo {
-			c.log.Debug("syncing token ", tokenToSync.TokenID)
+			c.log.Debug("syncing token: " + tokenToSync.TokenID)
 			err := c.syncFullTokenChain(p, tokenToSync)
 			if err != nil {
 				c.log.Error("failed to sync token chain for token ", tokenToSync.TokenID, "error", err)
@@ -565,7 +697,7 @@ func (c *Core) syncFullTokenChains(tokenSyncMap map[string][]TokenSyncInfo) {
 				c.log.Error("failed to update sync status after sync completed, token ", tokenToSync.TokenID)
 				continue
 			}
-			c.log.Debug("sync completed, updated sync status, token ", tokenToSync.TokenID)
+			c.log.Debug("sync completed, updated sync status, token: " + tokenToSync.TokenID)
 		}
 	}
 
@@ -594,7 +726,7 @@ func (c *Core) syncGenesisAndLatestBlock(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "genesis block is nil, invalid token chain"}, http.StatusOK)
 		}
 		trep.GenesisBlock = genesisBlock.GetBlock()
-		c.log.Debug("adding genesis block bytes ")
+		c.log.Debug("adding genesis block bytes for token", tr.Token)
 	}
 
 	latestBlock, err := c.GetLastCVR2Block(tr.Token, tr.TokenType)
@@ -938,7 +1070,6 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 	// Get the current value from Faucet
 	resp, err := http.Get("http://103.209.145.177:3999/api/current-token-value")
 	if err != nil {
-		fmt.Println("Error fetching value from React:", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -949,7 +1080,6 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 	//Populating the tokendetail with current token number and current token level received from Faucet.
 	json.Unmarshal(body, &tokendetail)
 	if err != nil {
-		fmt.Println("Error parsing JSON response:", err)
 		return nil, err
 	}
 	//Updating the Faucet token details with each new token
@@ -1070,7 +1200,6 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 	}
 
 	tokenval := string(b)
-	fmt.Println("Token value from IPFS: ", tokenval)
 	tokencontent := strings.Split(tokenval, ",")
 	if len(tokencontent) != 3 {
 		br.Message = "Non-faucet token"
@@ -1102,7 +1231,6 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 	// Get the current value from Faucet
 	resp, err := http.Get("http://103.209.145.177:3999/api/current-token-value")
 	if err != nil {
-		fmt.Println("Error fetching value from React:", err)
 		br.Status = false
 		br.Message = "Unable to fetch latest value"
 		return br
@@ -1113,21 +1241,17 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("Error reading response:", err)
 		br.Status = false
 		br.Message = "Unable to fetch latest value"
 		return br
 	}
-	fmt.Println(body)
 	//Populating the tokendetail with current token number and current token level received from Faucet.
 	err = json.Unmarshal(body, &tokendetail)
 	if err != nil {
-		fmt.Println("Error populating with the data:", err)
 		br.Status = false
 		br.Message = "Unable to fetch latest value"
 		return br
 	}
-	fmt.Println("tokenLevel Faucet: ", tokendetail)
 	if tokenLevel > tokendetail.TokenLevel {
 		br.Message = "Invalid token level"
 		return br

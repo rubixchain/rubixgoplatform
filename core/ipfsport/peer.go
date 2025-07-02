@@ -225,11 +225,18 @@ func (p *Peer) SendJSONRequest(method string, path string, querry map[string]str
 		}
 		defer httpResp.Body.Close()
 		if httpResp.StatusCode != http.StatusOK {
+			if httpResp.StatusCode == http.StatusInternalServerError {
+				err = fmt.Errorf("failed to get tokenchain, tokenchain does not exist in records")
+				p.log.Error("TC not available to sync. Possibly DS", "err", err)
+				//time.Sleep(time.Second * time.Duration(attempt)) // Exponential backoff
+				return err
+			}
 			err = fmt.Errorf("failed with status code %d", httpResp.StatusCode)
 			p.log.Error("request failed", "attempt", attempt, "status", httpResp.StatusCode)
 			time.Sleep(time.Second * time.Duration(attempt)) // Exponential backoff
 			continue
 		}
+
 		if resp != nil {
 			err = jsonutil.DecodeJSONFromReader(httpResp.Body, resp)
 			if err != nil {

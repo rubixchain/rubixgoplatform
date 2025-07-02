@@ -204,7 +204,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 
 	// check token ownership
 
-	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
+	validateTokenOwnershipVar, err, _ := c.validateTokenOwnership(cr, sc, did)
 	if err != nil {
 		validateTokenOwnershipErrorString := fmt.Sprint(err)
 		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -378,7 +378,7 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 		}
 	}
 	// check token ownership
-	validateTokenOwnershipVar, err := c.validateTokenOwnership(cr, sc, did)
+	validateTokenOwnershipVar, err, _ := c.validateTokenOwnership(cr, sc, did)
 	if err != nil {
 		validateTokenOwnershipErrorString := fmt.Sprint(err)
 		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -490,7 +490,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
 		//1. check commited token authenticity
 		c.log.Debug("validation 1 - Authenticity of commited RBT tokens")
-		validateTokenOwnershipVar, err := c.validateTokenOwnership(consensusRequest, consensusContract, did)
+		validateTokenOwnershipVar, err, _ := c.validateTokenOwnership(consensusRequest, consensusContract, did)
 		if err != nil {
 			validateTokenOwnershipErrorString := fmt.Sprint(err)
 			if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -669,7 +669,7 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		commitedTokenInfo := consensusContract.GetCommitedTokensInfo()
 		//1. check commited token authenticity
 		c.log.Debug("validation 1 - Authenticity of commited RBT tokens")
-		validateTokenOwnershipVar, err := c.validateTokenOwnership(consensusRequest, consensusContract, did)
+		validateTokenOwnershipVar, err, _ := c.validateTokenOwnership(consensusRequest, consensusContract, did)
 		if err != nil {
 			validateTokenOwnershipErrorString := fmt.Sprint(err)
 			if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -835,7 +835,10 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 
 	// check token ownership
 
-	validateTokenOwnershipVar, err := c.validateTokenOwnership(consensusRequest, sc, did)
+	validateTokenOwnershipVar, err, syncIssueTokens := c.validateTokenOwnership(consensusRequest, sc, did)
+	if len(syncIssueTokens) > 0 {
+		consensusReply.Result = syncIssueTokens
+	}
 	if err != nil {
 		validateTokenOwnershipErrorString := fmt.Sprint(err)
 		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -1161,6 +1164,7 @@ func (c *Core) updateReceiverToken(
 
 			err = c.syncTokenChainFrom(senderPeer, pblkID, t, ti.TokenType)
 			if err != nil {
+				// Add return of syncIssueTokenArray
 				c.log.Error("receiver failed to sync token chain of token ", ti.Token, "error ", err)
 				return nil, senderPeer, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
 			}
@@ -1401,7 +1405,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) updateFTToken(senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
-	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, ftinfo *model.FTInfo) ([]string, error) {
+	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, ftinfo *model.FTInfo) ([]string, []string, error) {
 
 	receiverPeerId, receiverDID, ok := util.ParseAddress(receiverAddress)
 	b := block.InitBlock(tokenChainBlock, nil)
@@ -1409,54 +1413,62 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	// Debugging block initialization
 	if b == nil {
 		c.log.Error("Failed to initialize block from tokenChainBlock. Check tokenChainBlock structure.")
-		return nil, fmt.Errorf("invalid token chain block")
+		return nil, nil, fmt.Errorf("invalid token chain block")
 	}
 	var senderPeer *ipfsport.Peer
 	var err error
 	senderPeer, err = c.getPeer(senderAddress)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get peer : %v", err.Error())
+		return nil, nil, fmt.Errorf("failed to get peer : %v", err.Error())
 	}
 	defer senderPeer.Close()
+	var syncIssueTokens []string
 	for _, ti := range tokenInfo {
 		t := ti.Token
 		pblkID, err := b.GetPrevBlockID(t)
 		if err != nil {
-			return nil, fmt.Errorf("failed to sync token chain block, missing previous block id for token %v, error: %v", t, err)
+			return nil, nil, fmt.Errorf("failed to sync token chain block, missing previous block id for token %v, error: %v", t, err)
 		}
 
 		err = c.syncTokenChainFrom(senderPeer, pblkID, t, ti.TokenType)
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "syncer block height discrepency") {
 			c.log.Error("receiver failed to sync token chain of FT ", ti.Token, "error ", err)
-			return nil, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
+			// return nil, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", t, TokenChainNotSynced)
+			syncIssueTokens = append(syncIssueTokens, t)
+			continue
+		} else {
+			err = nil
 		}
 
 		if c.TokenType(PartString) == ti.TokenType {
 			gb := c.w.GetGenesisTokenBlock(t, ti.TokenType)
 			if gb == nil {
-				return nil, fmt.Errorf("failed to get genesis block for token %v, err: %v", t, err)
+				return nil, nil, fmt.Errorf("failed to get genesis block for token %v, err: %v", t, err)
 			}
 			pt, _, err := gb.GetParentDetials(t)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
+				return nil, nil, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
 			}
 			_, err = c.syncParentToken(senderPeer, pt)
 			if err != nil {
-				return nil, fmt.Errorf("failed to sync parent token %v childtoken %v err %v : ", pt, t, err)
+				return nil, nil, fmt.Errorf("failed to sync parent token %v childtoken %v err %v : ", pt, t, err)
 			}
 		}
 		ptcbArray, err := c.w.GetTokenBlock(t, ti.TokenType, pblkID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch previous block for token: %v err : %v", t, err)
+			return nil, nil, fmt.Errorf("failed to fetch previous block for token: %v err : %v", t, err)
 		}
 		ptcb := block.InitBlock(ptcbArray, nil)
 		if c.checkIsPledged(ptcb) {
-			return nil, fmt.Errorf("Token " + t + " is a pledged Token")
+			return nil, nil, fmt.Errorf("Token " + t + " is a pledged Token")
 		}
+	}
+	if len(syncIssueTokens) > 0 {
+		return nil, syncIssueTokens, fmt.Errorf("failed to sync tokenchain Token: %v, : issueType: %v", nil, TokenChainNotSynced)
 	}
 	senderPeerId, _, ok := util.ParseAddress(senderAddress)
 	if !ok {
-		return nil, fmt.Errorf("Unable to parse sender address: %v", senderAddress)
+		return nil, nil, fmt.Errorf("Unable to parse sender address: %v", senderAddress)
 	}
 
 	results := make([]MultiPinCheckRes, len(tokenInfo))
@@ -1469,10 +1481,10 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	wg.Wait()
 	for i := range results {
 		if results[i].Error != nil {
-			return nil, fmt.Errorf("Error while checking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
+			return nil, nil, fmt.Errorf("Error while checking Token multiple Pins for token %v, error : %v", results[i].Token, results[i].Error)
 		}
 		if results[i].Status {
-			return nil, fmt.Errorf("Token %v has multiple owners: %v", results[i].Token, results[i].Owners)
+			return nil, nil, fmt.Errorf("Token %v has multiple owners: %v", results[i].Token, results[i].Owners)
 		}
 	}
 
@@ -1485,11 +1497,11 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	wg.Wait()
 	for i := range tokenStateCheckResult {
 		if tokenStateCheckResult[i].Error != nil {
-			return nil, fmt.Errorf("Error while checking Token State Message : %v", tokenStateCheckResult[i].Message)
+			return nil, nil, fmt.Errorf("Error while checking Token State Message : %v", tokenStateCheckResult[i].Message)
 		}
 		if tokenStateCheckResult[i].Exhausted {
 			c.log.Debug("Token state has been exhausted, Token being Double spent:", tokenStateCheckResult[i].Token)
-			return nil, fmt.Errorf("Token state has been exhausted, Token being Double spent: %v, msg: %v", tokenStateCheckResult[i].Token, tokenStateCheckResult[i].Message)
+			return nil, nil, fmt.Errorf("Token state has been exhausted, Token being Double spent: %v, msg: %v", tokenStateCheckResult[i].Token, tokenStateCheckResult[i].Message)
 		}
 		c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
 	}
@@ -1497,31 +1509,29 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	FT.FTName = ftinfo.FTName
 	updatedTokenStateHashes, err := c.w.FTTokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, c.ipfs, FT)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to update token status, error: %v", err)
+		return nil, nil, fmt.Errorf("Failed to update token status, error: %v", err)
 	}
 
 	updateFTTableErr := c.updateFTTable()
 	if updateFTTableErr != nil {
-		return nil, fmt.Errorf("Failed to update FT table, error: %v", updateFTTableErr)
+		return nil, nil, fmt.Errorf("Failed to update FT table, error: %v", updateFTTableErr)
 	}
 
 	sc := contract.InitContract(b.GetSmartContract(), nil)
 	if sc == nil {
-		return nil, fmt.Errorf("Failed to update token status, missing smart contract")
+		return nil, nil, fmt.Errorf("Failed to update token status, missing smart contract")
 	}
 	bid, err := b.GetBlockID(tokenInfo[0].Token)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
+		return nil, nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
 	}
-	// Only save the transaction details in Transaction history table whenever
-	// its a general RBT transfer
-	if sc.GetSenderDID() != sc.GetReceiverDID() {
+	if sc.GetSenderDID() != sc.GetReceiverDID() && senderPeerId != receiverPeerId {
 		td := &model.TransactionDetails{
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
 			BlockID:         bid,
 			Mode:            wallet.FTTransferMode,
-			Amount:          sc.GetTotalRBTs(),
+			Amount:          float64(len(b.GetTransTokens())),
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetReceiverDID(),
 			Comment:         sc.GetComment(),
@@ -1538,7 +1548,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	for _, qrm := range quorumInfo {
 		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID, *qrm.DIDType)
 	}
-	return updatedTokenStateHashes, nil
+	return updatedTokenStateHashes, nil, nil
 }
 
 func (c *Core) updateReceiverFTHandle(req *ensweb.Request) *ensweb.Result {
@@ -1556,7 +1566,7 @@ func (c *Core) updateReceiverFTHandle(req *ensweb.Request) *ensweb.Result {
 	}
 
 	receiverAddress := c.peerID + "." + did
-	updatedtokenhashes, err := c.updateFTToken(
+	updatedtokenhashes, syncIssueTokens, err := c.updateFTToken(
 		sr.Address,
 		receiverAddress,
 		sr.TokenInfo,
@@ -1569,6 +1579,7 @@ func (c *Core) updateReceiverFTHandle(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		c.log.Error(err.Error())
 		crep.Message = err.Error()
+		crep.Result = syncIssueTokens
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 

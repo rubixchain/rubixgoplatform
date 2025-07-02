@@ -64,3 +64,25 @@ type TCRemoveRequest struct {
 type TCRemoveReply struct {
 	BasicResponse
 }
+
+type UpdateTokenStatusReq struct {
+	DID            string `json:"did"`
+	TokenType      int    `json:"token_type"`
+	TokenHash      string `json:"token_hash"`
+	NewTokenStatus int    `json:"new_token_status"`
+}
+
+type GetTokenStatusReq struct {
+	DID   string `json:"did"`
+	Token string `json:"token"`
+	Type  int    `json:"token_type"`
+}
+
+type TokenStatusResponse struct {
+	DID           string `json:"did"`
+	Token         string `json:"token"`
+	Type          int    `json:"token_type"`
+	Status        int    `json:"status"`
+	TransactionID string `json:"transaction_id"`
+	FTName        string `json:"ft_name"`
+}

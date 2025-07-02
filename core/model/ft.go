@@ -29,3 +29,9 @@ type FTInfo struct {
 	FTCount    int    `json:"ft_count"`
 	CreatorDID string `json:"creator_did"`
 }
+
+type FTInfoForExplorer struct {
+	FTName     string `json:"ft_symbol"`
+	FTCount    int    `json:"ft_balance"`
+	CreatorDID string `json:"creator_did"`
+}

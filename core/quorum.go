@@ -190,7 +190,6 @@ func (qm *QuorumManager) GetPeerID(did string, selfPeer string) string {
 func (c *Core) AddFaucetQuorums() {
 	resp, err := http.Get("http://103.209.145.177:3999/api/get-faucet-quorums")
 	if err != nil {
-		fmt.Println("Error fetching value from React:", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -202,7 +201,6 @@ func (c *Core) AddFaucetQuorums() {
 	// Populating the tokendetail with current token number and current token level received from Faucet.
 	json.Unmarshal(body, &faucetQuorumList)
 	if err != nil {
-		fmt.Println("Error parsing JSON response:", err)
 		return
 	}
 
@@ -225,12 +223,8 @@ func (c *Core) AddFaucetQuorums() {
 	// Save to local JSON file
 	err = saveQuorumsToFile(qds, "faucet_quorumlist.json")
 	if err != nil {
-		fmt.Println("Error saving quorums to file:", err)
 		return
 	}
-
-	fmt.Println("Faucet quorums saved successfully to faucet_quorumlist.json")
-
 }
 func saveQuorumsToFile(qds []QuorumData, fileName string) error {
 	// Get the current working directory

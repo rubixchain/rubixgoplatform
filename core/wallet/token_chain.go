@@ -459,9 +459,18 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 			w.log.Error("Failed to get block number", "err", err)
 			return err
 		}
+
 		if bn <= lbn {
-			w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
-			return fmt.Errorf("invalid block number, sequence missing")
+			if bn == lbn {
+				err = w.removeTokenChainBlockLatest(token, tt)
+				if err != nil {
+					w.log.Error("Failed to remove latest block of token", token, "err", err)
+					return err
+				}
+			} else {
+				w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
+				return fmt.Errorf("invalid block number, sequence missing")
+			}
 		}
 	}
 	if b.CheckMultiTokenBlock() {
@@ -630,8 +639,24 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 				return err
 			}
 			if bn <= lbn {
-				w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
-				return fmt.Errorf("invalid block number, sequence missing")
+				if bn == lbn {
+					err = w.removeTokenChainBlockLatest(token, tt)
+					if err != nil {
+						w.log.Error("Failed to remove latest block of token", token, "err", err)
+						return err
+					} else {
+						lb = w.getLatestBlock(tt, token)
+						lbn, err = lb.GetBlockNumber(token)
+						if err != nil {
+							w.log.Error("Failed to initalise last block number", "err", err)
+							return err
+						}
+
+					}
+				} else {
+					w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
+					return fmt.Errorf("invalid block number, sequence missing")
+				}
 			}
 		}
 	}
