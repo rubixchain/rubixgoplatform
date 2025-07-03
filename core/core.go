@@ -329,6 +329,7 @@ func (c *Core) SetupCore() error {
 		c.log.Error("Failed to setup services", "err", err)
 		return err
 	}
+
 	c.w.SetupWallet(c.ipfs)
 	c.PingSetup()
 	c.CheckQuorumStatusSetup()
@@ -339,7 +340,6 @@ func (c *Core) SetupCore() error {
 	c.QuroumSetup()
 	c.PinService()
 	c.RestartIncompleteTokenChainSyncs()
-	c.UnlockFTs()
 	// c.selfTransferService()
 	return nil
 }
