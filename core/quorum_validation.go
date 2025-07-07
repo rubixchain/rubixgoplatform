@@ -3,6 +3,8 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -183,8 +185,8 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	}
 	if ptb.GetTransType() != block.TokenBurntType {
 		issueType = ParentTokenNotBurned // parent token is not in burnt stage
-		//Commenting gps
-		//fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
+		// Commenting gps
+		// fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
 		c.log.Error("parent token is not in burnt stage", "token", pt)
 		return -1, fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", pt, issueType)
 	}
@@ -192,7 +194,6 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 }
 
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error, []string) {
-
 	var ti []contract.TokenInfo
 	var address string
 	var receiverAddress string
@@ -534,7 +535,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	var result TokenStateCheckResult
 	result.Token = tokenId
 
-	//get the latest blockId i.e. latest token state
+	// get the latest blockId i.e. latest token state
 	block := c.w.GetLatestTokenBlock(tokenId, tokenType)
 	if block == nil {
 		c.log.Error("Invalid token chain block, Block is nil")
@@ -551,11 +552,24 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		resultArray[index] = result
 		return
 	}
-	//concat tokenId and BlockID
+	// concat tokenId and BlockID
 	tokenIDTokenStateData := tokenId + blockId
 	tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
-
-	//add to ipfs get only the hash of the token+tokenstate
+	var oldquorumList []string
+	oldquorumSignList, err := block.GetQuorumSignatureList()
+	if err != nil || oldquorumSignList == nil {
+		c.log.Error("failed to get quorum signature list from latest block")
+		return
+	}
+	for _, qrm := range oldquorumSignList {
+		qrmInfo, err := c.GetPeerDIDInfo(qrm.DID)
+		if err != nil || qrmInfo == nil || qrmInfo.PeerID == "" {
+			c.log.Error("failed to fetchh qrm peer id, qrm ", qrm.DID)
+			return
+		}
+		oldquorumList = append(oldquorumList, qrmInfo.PeerID+"."+qrm.DID)
+	}
+	// add to ipfs get only the hash of the token+tokenstate
 	tokenIDTokenStateHash, err := c.ipfs.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 	result.tokenIDTokenStateHash = tokenIDTokenStateHash
 	if err != nil {
@@ -566,7 +580,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		return
 	}
 
-	//check to see if tokenstate was already pinned by current validator, for any previous consensus
+	// check to see if tokenstate was already pinned by current validator, for any previous consensus
 	tokenStatePinInfo, err := c.w.GetStatePinnedInfo(tokenIDTokenStateHash)
 	if err != nil {
 		c.log.Error("Error checking if tokenstate pinned earlier", err)
@@ -584,40 +598,48 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		return
 	}
 
-	//check dht to see if any pin exist
-	list, err1 := c.GetDHTddrs(tokenIDTokenStateHash)
-	//try to call ipfs cat to check if any one has pinned the state i.e \
-	if err1 != nil {
-		c.log.Error("Error fetching content for the tokenstate ipfs hash :", tokenIDTokenStateHash, "Error", err)
-		result.Exhausted = true
-		result.Error = nil
-		result.Message = "Error fetching content for the tokenstate ipfs hash : " + tokenIDTokenStateHash
-		resultArray[index] = result
-		return
-	}
-	//remove ql peer ids from list
-	qPeerIds := make([]string, 0)
-
-	for i := range quorumList {
-		pId, _, ok := util.ParseAddress(quorumList[i])
-		if !ok {
-			c.log.Error("Error parsing addressing")
-			result.Error = err
-			result.Message = "Error parsing addressing"
+	sort.Strings(quorumList)
+	sort.Strings(oldquorumList)
+	c.log.Debug(" new ql is ", quorumList)
+	c.log.Debug(" old quorum list ", oldquorumList)
+	equal := reflect.DeepEqual(quorumList, oldquorumList)
+	fmt.Println("equalq ", equal)
+	if !equal {
+		// check dht to see if any pin exist
+		list, err1 := c.GetDHTddrs(tokenIDTokenStateHash)
+		// try to call ipfs cat to check if any one has pinned the state i.e \
+		if err1 != nil {
+			c.log.Error("Error fetching content for the tokenstate ipfs hash :", tokenIDTokenStateHash, "Error", err)
+			result.Exhausted = true
+			result.Error = nil
+			result.Message = "Error fetching content for the tokenstate ipfs hash : " + tokenIDTokenStateHash
 			resultArray[index] = result
 			return
 		}
-		qPeerIds = append(qPeerIds, pId)
-	}
-	updatedList := c.removeStrings(list, qPeerIds)
-	//if pin exist abort
-	if len(updatedList) != 0 {
-		c.log.Debug("Token state is exhausted, Token is being Double spent. Token : ", tokenId)
-		result.Exhausted = true
-		result.Error = nil
-		result.Message = "Token state is exhausted, Token is being Double spent. Token : " + tokenId
-		resultArray[index] = result
-		return
+		// remove ql peer ids from list
+		qPeerIds := make([]string, 0)
+
+		for i := range quorumList {
+			pId, _, ok := util.ParseAddress(quorumList[i])
+			if !ok {
+				c.log.Error("Error parsing addressing")
+				result.Error = err
+				result.Message = "Error parsing addressing"
+				resultArray[index] = result
+				return
+			}
+			qPeerIds = append(qPeerIds, pId)
+		}
+		updatedList := c.filterCurrentQuorums(list, qPeerIds)
+		// if pin exist abort
+		if len(updatedList) != 0 {
+			c.log.Debug("Token state is exhausted, Token is being Double spent. Token : ", tokenId)
+			result.Exhausted = true
+			result.Error = nil
+			result.Message = "Token state is exhausted, Token is being Double spent. Token : " + tokenId
+			resultArray[index] = result
+			return
+		}
 	}
 
 	c.log.Debug("Token state is not exhausted, Unique Txn")

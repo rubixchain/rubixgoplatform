@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -668,27 +670,59 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		crep.Message = "Failed to verify sender signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
 	// check if token has multiple pins
 	ti := sc.GetTransTokenInfo()
-	// results := make([]MultiPinCheckRes, len(ti))
+	block := c.w.GetLatestTokenBlock(ti[1].Token, ti[1].TokenType)
+	if block == nil {
+		c.log.Error("Invalid token chain block, Block is nil")
+		// crep.Error = fmt.Errorf("Invalid token chain block,Block is nil")
+		crep.Message = "Invalid token chain block"
+		// crep[index] = result
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	var oldquorumList []string
+	oldquorumSignList, err := block.GetQuorumSignatureList()
+	if err != nil || oldquorumSignList == nil {
+		c.log.Error("failed to get quorum signature list from latest block")
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	for _, qrm := range oldquorumSignList {
+		qrmInfo, err := c.GetPeerDIDInfo(qrm.DID)
+		if err != nil || qrmInfo == nil || qrmInfo.PeerID == "" {
+			c.log.Error("failed to fetchh qrm peer id, qrm ", qrm.DID)
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		oldquorumList = append(oldquorumList, qrmInfo.PeerID+"."+qrm.DID)
+	}
+	sort.Strings(cr.QuorumList)
+	sort.Strings(cr.QuorumList)
+	c.log.Debug(" new ql is ", cr.QuorumList)
+	c.log.Debug(" old quorum list ", oldquorumList)
+	equal := reflect.DeepEqual(cr.QuorumList, oldquorumList)
+	fmt.Println("equalq ", equal)
 	var wg sync.WaitGroup
-	// for i := range ti {
-	// 	wg.Add(1)
-	// 	go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
-	// }
-	wg.Wait()
-	// for i := range results {
-	// 	if results[i].Error != nil {
-	// 		c.log.Error("Error occured", "error", results[i].Error)
-	// 		crep.Message = "Error while cheking FT Token multiple Pins"
-	// 		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	// 	}
-	// 	if results[i].Status {
-	// 		c.log.Error("FT Token has multiple owners", "FT token", results[i].Token, "owners", results[i].Owners)
-	// 		crep.Message = "FT Token has multiple owners"
-	// 		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	// 	}
-	// }
+	if !equal {
+		results := make([]MultiPinCheckRes, len(ti))
+
+		for i := range ti {
+			wg.Add(1)
+			go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
+		}
+		wg.Wait()
+		for i := range results {
+			if results[i].Error != nil {
+				c.log.Error("Error occured", "error", results[i].Error)
+				crep.Message = "Error while cheking FT Token multiple Pins"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+			if results[i].Status {
+				c.log.Error("FT Token has multiple owners", "FT token", results[i].Token, "owners", results[i].Owners)
+				crep.Message = "FT Token has multiple owners"
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			}
+		}
+	}
 
 	// check token ownership
 

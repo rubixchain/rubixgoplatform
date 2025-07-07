@@ -16,7 +16,7 @@ type MultiPinCheckRes struct {
 	Error  error
 }
 
-func (c *Core) removeStrings(strings []string, targets []string) []string {
+func (c *Core) filterCurrentQuorums(strings []string, targets []string) []string {
 	targetMap := make(map[string]bool)
 	for _, t := range targets {
 		targetMap[t] = true
@@ -35,7 +35,6 @@ func (c *Core) removeStrings(strings []string, targets []string) []string {
 // Method checks for multiple Pins on token
 // if there are multiple owners the list of owners is returned back
 func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPeerId string, results []MultiPinCheckRes, wg *sync.WaitGroup) {
-
 	defer wg.Done()
 	var result MultiPinCheckRes
 	result.Token = token
@@ -81,7 +80,7 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 
 	if len(provList) >= 2 {
 		owners = provList
-		t := c.removeStrings(owners, knownPeer)
+		t := c.filterCurrentQuorums(owners, knownPeer)
 		if len(t) == 0 {
 			c.log.Info("Pins help by current sender and receiver, pass")
 			result.Status = false
@@ -117,7 +116,7 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 				}
 			}
 
-			for peerId, _ := range peerIdRolemap {
+			for peerId := range peerIdRolemap {
 				if peerIdRolemap[peerId] == wallet.OwnerRole {
 					// c.log.Error("Token has multiple Pins")
 					result.Status = true

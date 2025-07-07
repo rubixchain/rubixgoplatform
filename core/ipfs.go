@@ -126,7 +126,6 @@ func (c *Core) initIPFS(ipfsdir string) error {
 
 // configIPFS will configure IPFS
 func (c *Core) configIPFS() error {
-
 	req := c.ipfs.Request("config", "Experimental.Libp2pStreamMounting", "true")
 	resp, err := req.Option("bool", true).Send(context.Background())
 	if err != nil {
@@ -188,7 +187,7 @@ func (c *Core) runIPFS() {
 		c.log.Info(m)
 	}
 
-	//time.Sleep(15 * time.Second)
+	// time.Sleep(15 * time.Second)
 }
 
 // RunIPFS will run the IPFS daemon
@@ -340,7 +339,7 @@ func (c *Core) GetAllBootStrap() []string {
 }
 
 func (c *Core) GetDHTddrs(cid string) ([]string, error) {
-	cmd := exec.Command(c.ipfsApp, "dht", "findprovs", cid)
+	cmd := exec.Command(c.ipfsApp, "dht", "findprovs", cid) //--numprovider to 1
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		c.log.Error("failed to open command stdout", "err", err)
@@ -370,6 +369,6 @@ func (c *Core) ipfsRepoGc() {
 	err := cmd.Start()
 	if err != nil {
 		c.log.Error("failed to start command", "err", err)
-		//return nil, err
+		// return nil, err
 	}
 }

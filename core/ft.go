@@ -662,7 +662,6 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			// If no one is listening (already timed out), just log and exit
 			c.log.Debug("FT Transaction completed but resultChan is not being read anymore")
 		}
-
 	}()
 	select {
 	case result := <-resultChan:
@@ -768,7 +767,6 @@ func (c *Core) UpsertFTTable(ftName string, creatorDid string, newTotalFTCreated
 	var existingFt wallet.FT
 
 	err := c.s.Read(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDid)
-
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") {
 			newFT := &wallet.FT{
