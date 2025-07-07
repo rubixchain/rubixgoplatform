@@ -61,7 +61,7 @@ func (c *Core) initIPFS(ipfsdir string) error {
 		port = fmt.Sprintf("%d", c.cfg.CfgData.Ports.IPFSAPIPort)
 		configData = []byte(strings.Replace(string(configData), "8080", port, -1))
 		f, err := os.OpenFile(ipfsConfigFile,
-			os.O_CREATE|os.O_WRONLY, 0644)
+			os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
 			return err
 		}
@@ -339,6 +339,12 @@ func (c *Core) GetAllBootStrap() []string {
 }
 
 func (c *Core) GetDHTddrs(cid string) ([]string, error) {
+	start := time.Now() // Start timing
+
+	defer func() {
+		duration := time.Since(start)
+		c.log.Info("GetDHTddrs execution time", "duration", duration)
+	}()
 	cmd := exec.Command(c.ipfsApp, "dht", "findprovs", cid) //--numprovider to 1
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

@@ -2,6 +2,7 @@ package core
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -25,6 +26,12 @@ func (c *Core) PinService() {
 // add logic for checijng the pin of supplied token hash
 // return true if pin exist, false if not, reason for pin if true
 func (c *Core) checkProviderStatus(req *ensweb.Request) *ensweb.Result {
+	start := time.Now() // Start timing
+
+	defer func() {
+		duration := time.Since(start)
+		c.log.Info("checkProviderStatus execution time", "duration", duration)
+	}()
 	var reqObj PinStatusReq
 	res := PinStatusRes{}
 	err := c.l.ParseJSON(req, &reqObj)

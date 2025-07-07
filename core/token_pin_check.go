@@ -1,8 +1,10 @@
 package core
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -17,6 +19,12 @@ type MultiPinCheckRes struct {
 }
 
 func (c *Core) filterCurrentQuorums(strings []string, targets []string) []string {
+	start := time.Now() // Start timing
+
+	defer func() {
+		duration := time.Since(start)
+		c.log.Info("filterCurrentQuorums execution time", "duration", duration)
+	}()
 	targetMap := make(map[string]bool)
 	for _, t := range targets {
 		targetMap[t] = true
@@ -35,6 +43,12 @@ func (c *Core) filterCurrentQuorums(strings []string, targets []string) []string
 // Method checks for multiple Pins on token
 // if there are multiple owners the list of owners is returned back
 func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPeerId string, results []MultiPinCheckRes, wg *sync.WaitGroup) {
+	start := time.Now() // Start timing
+
+	defer func() {
+		duration := time.Since(start)
+		c.log.Info("pinCheck execution time", "token", token, "duration", duration)
+	}()
 	defer wg.Done()
 	var result MultiPinCheckRes
 	result.Token = token
@@ -102,6 +116,7 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 				req := PinStatusReq{
 					Token: token,
 				}
+				t1 := time.Now()
 				var psr PinStatusRes
 				err = p.SendJSONRequest("POST", APIDhtProviderCheck, nil, &req, &psr, true)
 				if err != nil {
@@ -111,6 +126,7 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 					result.Error = err
 					results[index] = result
 				}
+				fmt.Println("The time taken for the execution of APIDHTProviderCheck", time.Since(t1))
 				if psr.Status {
 					peerIdRolemap[peerId] = psr.Role
 				}

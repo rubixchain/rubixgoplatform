@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -106,6 +107,12 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 }
 
 func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
+	start := time.Now() // Start timing
+
+	defer func() {
+		duration := time.Since(start)
+		c.log.Info("syncParentToken execution time", "duration", duration)
+	}()
 	var issueType int
 	b, err := c.getFromIPFS(pt)
 	if err != nil {
@@ -193,6 +200,12 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 }
 
 func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error, []string) {
+	start := time.Now() // Start timing
+
+	defer func() {
+		duration := time.Since(start)
+		c.log.Info("validateTokenOwnership execution time", "duration", duration)
+	}()
 	var ti []contract.TokenInfo
 	var address string
 	var receiverAddress string
@@ -613,12 +626,13 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 
 	sort.Strings(quorumList)
 	sort.Strings(oldquorumList)
-	c.log.Debug(" new ql is ", quorumList)
-	c.log.Debug(" old quorum list ", oldquorumList)
+	// c.log.Debug(" new ql is ", quorumList)
+	// c.log.Debug(" old quorum list ", oldquorumList)
 	// equal := reflect.DeepEqual(quorumList, oldquorumList)
 	equal := containsAll(oldquorumList, quorumList)
 	fmt.Println("equalq ", equal)
 	if !equal {
+		fmt.Println("The quorumlist is not equal getDHTAddress called")
 		// check dht to see if any pin exist
 		list, err1 := c.GetDHTddrs(tokenIDTokenStateHash)
 		// try to call ipfs cat to check if any one has pinned the state i.e \

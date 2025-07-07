@@ -482,6 +482,12 @@ func (c *Core) GetTokenStatus(getTokenStatusReq *model.GetTokenStatusReq) (model
 }
 
 func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
+	start := time.Now() // Start timing
+
+	defer func() {
+		duration := time.Since(start)
+		c.log.Info("syncTokenChainFrom execution time", "duration", duration)
+	}()
 	// p, err := c.getPeer(address)
 	// if err != nil {
 	// 	c.log.Error("Failed to get peer", "err", err)
@@ -539,11 +545,13 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		// in case of FTs, and NFTs
 		for {
 			var trep TCBSyncReply
+			t1 := time.Now()
 			err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &syncReq, &trep, false)
 			if err != nil {
 				c.log.Error("Failed to sync token chain block", "err", err)
 				return err
 			}
+			fmt.Println("The time taken fro APISyncTokenChain", time.Since(t1))
 			if !trep.Status {
 				c.log.Error("Failed to sync token chain block", "msg", trep.Message)
 				return fmt.Errorf(trep.Message)
@@ -606,6 +614,12 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 }
 
 func (c *Core) syncFullTokenChain(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo) error {
+	start := time.Now() // Start timing
+
+	defer func() {
+		duration := time.Since(start)
+		c.log.Info("syncFullTokenChain execution time", "duration", duration)
+	}()
 	// read the level db and check the block number sequence and return the block numbers that needs to be synced
 	// if all blocks are synced then mark the token sync status as completed
 	minMissingBlockId, maxMissingblockId, err := c.GetMissingBlockSequence(tokenSyncInfo)
@@ -624,7 +638,7 @@ func (c *Core) syncFullTokenChain(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo)
 		}
 		return nil
 	}
-	//prepare sync request
+	// prepare sync request
 	syncReq := TCBSyncRequest{
 		Token:     tokenSyncInfo.TokenID,
 		TokenType: int(tokenSyncInfo.TokenType),
@@ -694,7 +708,6 @@ func (c *Core) syncFullTokenChains(tokenSyncMap map[string][]TokenSyncInfo) {
 			c.log.Debug("sync completed, updated sync status, token: " + tokenToSync.TokenID)
 		}
 	}
-
 }
 
 func (c *Core) syncGenesisAndLatestBlock(req *ensweb.Request) *ensweb.Result {
@@ -812,14 +825,14 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 	requiredTokens := make([]wallet.Token, 0)
 	var remainingAmount float64
 	wholeValue := int(txnAmount)
-	//fv := float64(txnAmount)
+	// fv := float64(txnAmount)
 	decimalValue := txnAmount - float64(wholeValue)
 	decimalValue = floatPrecision(decimalValue, MaxDecimalPlaces)
 	reqAmt := floatPrecision(txnAmount, MaxDecimalPlaces)
-	//check if whole value exists
+	// check if whole value exists
 	if wholeValue != 0 {
-		//extract the whole amount part that is the integer value of txn amount
-		//serach for the required whole amount
+		// extract the whole amount part that is the integer value of txn amount
+		// serach for the required whole amount
 		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode)
 		if err != nil && err.Error() != "no records found" {
 			c.w.ReleaseTokens(wholeTokens)
@@ -827,11 +840,11 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 			return nil, 0.0, err
 		}
 
-		//if whole tokens are found add thgem to the variable required Tokens
+		// if whole tokens are found add thgem to the variable required Tokens
 		if len(wholeTokens) != 0 {
 			c.log.Debug("found whole tokens in wallet adding them to required tokens list")
 			requiredTokens = append(requiredTokens, wholeTokens...)
-			//wholeValue = wholeValue - len(requiredTokens)
+			// wholeValue = wholeValue - len(requiredTokens)
 			reqAmt = reqAmt - float64(len(wholeTokens))
 			reqAmt = floatPrecision(reqAmt, MaxDecimalPlaces)
 		}
@@ -900,7 +913,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 			}
 		}
 
-		//if no parts found anf remWhole is also not 0
+		// if no parts found anf remWhole is also not 0
 		if len(wholeTokens) == 0 && remWhole > 0 {
 			c.log.Debug("No whole tokens found. proceeding to get part tokens for txn")
 
@@ -1006,7 +1019,7 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		Message: "",
 	}
 
-	//If an error occurs at any given time, and the tokens have been created for that, reduce the latest token number by 1
+	// If an error occurs at any given time, and the tokens have been created for that, reduce the latest token number by 1
 	if err != nil {
 		br.Status = false
 		br.Message = err.Error()
@@ -1065,16 +1078,16 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 	var tokendetail token.FaucetToken
 
 	body, err := io.ReadAll(resp.Body)
-	//Populating the tokendetail with current token number and current token level received from Faucet.
+	// Populating the tokendetail with current token number and current token level received from Faucet.
 	json.Unmarshal(body, &tokendetail)
 	if err != nil {
 		return nil, err
 	}
-	//Updating the Faucet token details with each new token
+	// Updating the Faucet token details with each new token
 	for i := 0; i < numTokens; i++ {
 		tokendetail.CurrentTokenNumber += 1
 
-		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
+		// If the latest token number to be generated is more than the max token value of previous token, increase the token level
 		maxTokens := token.TokenMap[tokendetail.TokenLevel]
 		if tokendetail.CurrentTokenNumber == maxTokens+1 {
 			tokendetail.TokenLevel += 1
@@ -1138,7 +1151,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		ctcb[id] = nil
 
 		blk := block.CreateNewBlock(ctcb, tcb)
-		//If error comes after adding in IPFS, removing the pin from that token.
+		// If error comes after adding in IPFS, removing the pin from that token.
 		if blk == nil {
 			c.log.Error("Failed to create new token chain block")
 			c.w.UnPin(id, wallet.OwnerRole, did)
@@ -1179,7 +1192,7 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 	br := model.BasicResponse{
 		Status: false,
 	}
-	//Cheking if token is valid
+	// Cheking if token is valid
 	b, err := c.getFromIPFS(tokenID)
 	if err != nil {
 		c.log.Error("failed to get token details from ipfs", "err", err, "token", tokenID)
@@ -1233,7 +1246,7 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		br.Message = "Unable to fetch latest value"
 		return br
 	}
-	//Populating the tokendetail with current token number and current token level received from Faucet.
+	// Populating the tokendetail with current token number and current token level received from Faucet.
 	err = json.Unmarshal(body, &tokendetail)
 	if err != nil {
 		br.Status = false
@@ -1245,7 +1258,7 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		return br
 	}
 
-	//Validating token chain
+	// Validating token chain
 	tokenType := c.TokenType(RBTString)
 	genBlock := c.w.GetGenesisTokenBlock(tokenID, tokenType)
 
@@ -1259,7 +1272,7 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		br.Message = "Invalid signer details"
 		return br
 	}
-	//The did will be hardcoded to match the faucet DID
+	// The did will be hardcoded to match the faucet DID
 	if signers[0] != "bafybmibexoa7owxdkjzfcg3ff3elqthkxsbaeznqoqq65gx6t2xkvm52fe" {
 		br.Message = "Signer DID doesn't match faucet DID"
 		return br
@@ -1277,8 +1290,8 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 
 	return br
 }
-func (c *Core) ValidateToken(token string) (*model.BasicResponse, error) {
 
+func (c *Core) ValidateToken(token string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{
 		Status:  false,
 		Message: "Invalid token hash",
@@ -1360,7 +1373,6 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 	}
 
 	return responseBody, nil
-
 }
 
 func (c *Core) GetMissingBlockSequence(tokenSyncInfo TokenSyncInfo) (string, string, error) {
@@ -1372,17 +1384,17 @@ func (c *Core) GetMissingBlockSequence(tokenSyncInfo TokenSyncInfo) (string, str
 	var maxMissingBlockId string
 	var err error
 
-	//This for loop ensures that we fetch all the blocks in the token chain
-	//starting from genesis block to latest block
+	// This for loop ensures that we fetch all the blocks in the token chain
+	// starting from genesis block to latest block
 	for {
-		//GetAllTokenBlocks returns next 100 blocks and nextBlockID of the 100th block,
-		//starting from the given block Id, in the direction: genesis to latest block
+		// GetAllTokenBlocks returns next 100 blocks and nextBlockID of the 100th block,
+		// starting from the given block Id, in the direction: genesis to latest block
 		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType, blockId)
 		if err != nil {
 			c.log.Error("Failed to get token chain block")
 			return "", "", err
 		}
-		//the nextBlockID of the latest block is empty string
+		// the nextBlockID of the latest block is empty string
 		blockId = nextBlockID
 		if nextBlockID == "" {
 			break
@@ -1476,5 +1488,4 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 
 	// restart all incomplete token chain sync as a background process
 	go c.syncFullTokenChains(tokenSyncMap)
-
 }

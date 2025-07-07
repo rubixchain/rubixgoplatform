@@ -660,6 +660,12 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 }
 
 func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, cr *ConensusRequest) *ensweb.Result {
+	start := time.Now() // Start timing
+
+	defer func() {
+		duration := time.Since(start)
+		c.log.Info("pinCheck execution time", "duration", duration)
+	}()
 	crep := ConensusReply{
 		ReqID:  cr.ReqID,
 		Status: false,
@@ -696,13 +702,14 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	}
 	sort.Strings(cr.QuorumList)
 	sort.Strings(cr.QuorumList)
-	c.log.Debug(" new ql is ", cr.QuorumList)
-	c.log.Debug(" old quorum list ", oldquorumList)
+	// c.log.Debug(" new ql is ", cr.QuorumList)
+	// c.log.Debug(" old quorum list ", oldquorumList)
 	// equal := reflect.DeepEqual(cr.QuorumList, oldquorumList)
 	equal := containsAll(oldquorumList, cr.QuorumList)
 	fmt.Println("equalq ", equal)
 	var wg sync.WaitGroup
 	if !equal {
+		fmt.Println("The quorum list is not equal proceeding with pincheck")
 		results := make([]MultiPinCheckRes, len(ti))
 
 		for i := range ti {
@@ -813,6 +820,12 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 }
 
 func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
+	start := time.Now() // Start timing
+
+	defer func() {
+		duration := time.Since(start)
+		c.log.Info("quorumConensus execution time", "duration", duration)
+	}()
 	did := c.l.GetQuerry(req, "did")
 	var cr ConensusRequest
 	err := c.l.ParseJSON(req, &cr)
