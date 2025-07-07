@@ -526,6 +526,20 @@ func (c *Core) getUnpledgeId(wt string, tokenType int) string {
 	return b.GetUnpledgeId(wt)
 }
 
+func containsAll(oldList, newList []string) bool {
+	newSet := make(map[string]struct{})
+	for _, val := range newList {
+		newSet[val] = struct{}{}
+	}
+
+	for _, val := range oldList {
+		if _, found := newSet[val]; !found {
+			return false
+		}
+	}
+	return true
+}
+
 /*
  * Function to check whether the TokenState is pinned or not
  * Input tokenId, index, resultArray, waitgroup,quorumList
@@ -602,7 +616,8 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	sort.Strings(oldquorumList)
 	c.log.Debug(" new ql is ", quorumList)
 	c.log.Debug(" old quorum list ", oldquorumList)
-	equal := reflect.DeepEqual(quorumList, oldquorumList)
+	// equal := reflect.DeepEqual(quorumList, oldquorumList)
+	equal := containsAll(oldquorumList, quorumList)
 	fmt.Println("equalq ", equal)
 	if !equal {
 		// check dht to see if any pin exist

@@ -699,7 +699,8 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	sort.Strings(cr.QuorumList)
 	c.log.Debug(" new ql is ", cr.QuorumList)
 	c.log.Debug(" old quorum list ", oldquorumList)
-	equal := reflect.DeepEqual(cr.QuorumList, oldquorumList)
+	// equal := reflect.DeepEqual(cr.QuorumList, oldquorumList)
+	equal := containsAll(oldquorumList, cr.QuorumList)
 	fmt.Println("equalq ", equal)
 	var wg sync.WaitGroup
 	if !equal {
