@@ -664,7 +664,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 
 	defer func() {
 		duration := time.Since(start)
-		c.log.Info("pinCheck execution time", "duration", duration)
+		c.log.Info("quorumFTConsensus execution time", "duration", duration)
 	}()
 	crep := ConensusReply{
 		ReqID:  cr.ReqID,
@@ -680,7 +680,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	ti := sc.GetTransTokenInfo()
 	block := c.w.GetLatestTokenBlock(ti[1].Token, ti[1].TokenType)
 	if block == nil {
-		c.log.Error("Invalid token chain block, Block is nil")
+		c.log.Error("Invalid token chain block in quorumFTConsensus, Block is nil")
 		// crep.Error = fmt.Errorf("Invalid token chain block,Block is nil")
 		crep.Message = "Invalid token chain block"
 		// crep[index] = result

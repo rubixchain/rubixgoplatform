@@ -35,7 +35,6 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 		c.log.Error("failed to get signers", "err", err)
 		return false, fmt.Errorf("failed to get signers", "err", err)
 	}
-	c.log.Debug("Signers", signers)
 	for _, signer := range signers {
 		var dc did.DIDCrypto
 		switch b.GetTransType() {
@@ -218,6 +217,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 		receiverAddress = cr.ReceiverPeerID + "." + sc.GetReceiverDID()
 	}
 	for i := range ti {
+		fmt.Println("GetDHTddrs is called in validateTokenOwnership")
 		ids, err := c.GetDHTddrs(ti[i].Token)
 		if err != nil || len(ids) == 0 {
 			continue
@@ -373,7 +373,6 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 			c.log.Error("Invalid token chain block")
 			return false, fmt.Errorf("Invalid token chain block for ", ti[i].Token), nil
 		}
-		c.log.Info("Validating token ownership", "token", ti[i].Token, "owner", b.GetOwner(), "sender", sc.GetSenderDID())
 		pinningNodeDID := b.GetPinningNodeDID()
 		ownerDID := b.GetOwner()
 		senderDID := sc.GetSenderDID()
@@ -670,7 +669,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 		}
 	}
 
-	c.log.Debug("Token state is not exhausted, Unique Txn")
+	// c.log.Debug("Token state is not exhausted, Unique Txn")
 	result.Error = nil
 	result.Message = "Token state is free, Unique Txn"
 	result.tokenIDTokenStateData = tokenIDTokenStateData
