@@ -678,14 +678,24 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 
 	// check if token has multiple pins
 	ti := sc.GetTransTokenInfo()
-	block := c.w.GetLatestTokenBlock(ti[1].Token, ti[1].TokenType)
-	if block == nil {
-		c.log.Error("Invalid token chain block in quorumFTConsensus, Block is nil")
-		// crep.Error = fmt.Errorf("Invalid token chain block,Block is nil")
-		crep.Message = "Invalid token chain block"
-		// crep[index] = result
+	// Defensive check
+	if len(ti) < 1 {
+		c.log.Error("No token info found in transaction")
+		crep.Message = "Invalid transaction: no token data found"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
+	// Use the first token for block lookup
+	tokenToCheck := ti[0]
+	block := c.w.GetLatestTokenBlock(tokenToCheck.Token, tokenToCheck.TokenType)
+	fmt.Println("The token is", tokenToCheck.Token)
+	fmt.Println("The tokenType is", tokenToCheck.TokenType)
+	if block == nil {
+		c.log.Error("Invalid token chain block in quorumFTConsensus, Block is nil")
+		crep.Message = "Invalid token chain block"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	var oldquorumList []string
 	oldquorumSignList, err := block.GetQuorumSignatureList()
 	if err != nil || oldquorumSignList == nil {

@@ -563,7 +563,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	// get the latest blockId i.e. latest token state
 	block := c.w.GetLatestTokenBlock(tokenId, tokenType)
 	if block == nil {
-		c.log.Error("Invalid token chain block, Block is nil")
+		c.log.Error("Invalid token chain block in checkTokenstate, Block is nil")
 		result.Error = fmt.Errorf("Invalid token chain block,Block is nil")
 		result.Message = "Invalid token chain block"
 		resultArray[index] = result
