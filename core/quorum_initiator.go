@@ -372,8 +372,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		reqPledgeTokens = sc.GetTotalRBTs()
 	case FTTransferMode:
 		ti := sc.GetTransTokenInfo()
-		for i := range ti {
-			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
+		if cr.FTinfo.HighValueFT {
+			reqPledgeTokens = 10
+		} else {
+			for i := range ti {
+				reqPledgeTokens += ti[i].TokenValue
+			}
 		}
 	}
 	minValue := MinDecimalValue(MaxDecimalPlaces)

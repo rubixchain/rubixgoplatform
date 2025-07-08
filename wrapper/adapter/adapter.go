@@ -45,6 +45,11 @@ func NewAdapter(cfg *config.Config) (*Adapter, error) {
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	case sqlite3:
 		db, err = gorm.Open(sqlite.Open(cfg.DBAddress), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		db.Exec("PRAGMA cache_size = -200000;")
+		db.Exec("PRAGMA journal_mode = WAL;")
+		db.Exec("PRAGMA synchronous = NORMAL;")
+		db.Exec("PRAGMA temp_store = MEMORY;")
+
 	default:
 		dsn := fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s", cfg.DBUserName, cfg.DBPassword, cfg.DBAddress, cfg.DBPort, cfg.DBName)
 		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})

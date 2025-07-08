@@ -775,53 +775,60 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		crep.Message = "Invalid token chain block"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-
-	var oldquorumList []string
-	oldquorumSignList, err := block.GetQuorumSignatureList()
-	if err != nil || oldquorumSignList == nil {
-		c.log.Error("failed to get quorum signature list from latest block")
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	for _, qrm := range oldquorumSignList {
-		qrmInfo, err := c.GetPeerDIDInfo(qrm.DID)
-		if err != nil || qrmInfo == nil || qrmInfo.PeerID == "" {
-			c.log.Error("failed to fetchh qrm peer id, qrm ", qrm.DID)
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		oldquorumList = append(oldquorumList, qrmInfo.PeerID+"."+qrm.DID)
-	}
-	sort.Strings(cr.QuorumList)
-	sort.Strings(cr.QuorumList)
-	// c.log.Debug(" new ql is ", cr.QuorumList)
-	// c.log.Debug(" old quorum list ", oldquorumList)
-	// isCurrentQuorumSameAsPrevQuorums := reflect.DeepEqual(cr.QuorumList, oldquorumList)
-	isCurrentQuorumSameAsPrevQuorums := containsAll(oldquorumList, cr.QuorumList)
-	fmt.Println("equalq ", isCurrentQuorumSameAsPrevQuorums)
 	blockNumber, err := block.GetBlockNumber(tokenToCheck.Token)
 	if err != nil {
 		c.log.Error("failed to get latest block number")
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	var wg sync.WaitGroup
-	if !isCurrentQuorumSameAsPrevQuorums || blockNumber == 0 {
-		fmt.Println("The quorum list is not equal proceeding with pincheck")
-		results := make([]MultiPinCheckRes, len(ti))
 
-		for i := range ti {
-			wg.Add(1)
-			go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
+	var wg sync.WaitGroup
+
+	// If blockNumber is 0, skip quorum comparison and pinCheck entirely
+	if blockNumber == 0 {
+		c.log.Warn("Block number is 0, skipping quorum check and pin validation")
+	} else {
+		var oldquorumList []string
+		oldquorumSignList, err := block.GetQuorumSignatureList()
+		if err != nil || oldquorumSignList == nil {
+			c.log.Error("failed to get quorum signature list from latest block")
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		wg.Wait()
-		for i := range results {
-			if results[i].Error != nil {
-				c.log.Error("Error occured", "error", results[i].Error)
-				crep.Message = "Error while cheking FT Token multiple Pins"
+
+		for _, qrm := range oldquorumSignList {
+			qrmInfo, err := c.GetPeerDIDInfo(qrm.DID)
+			if err != nil || qrmInfo == nil || qrmInfo.PeerID == "" {
+				c.log.Error("failed to fetch qrm peer id", "qrm", qrm.DID)
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
-			if results[i].Status {
-				c.log.Error("FT Token has multiple owners", "FT token", results[i].Token, "owners", results[i].Owners)
-				crep.Message = "FT Token has multiple owners"
-				return c.l.RenderJSON(req, &crep, http.StatusOK)
+			oldquorumList = append(oldquorumList, qrmInfo.PeerID+"."+qrm.DID)
+		}
+
+		sort.Strings(oldquorumList)
+		sort.Strings(cr.QuorumList)
+
+		isCurrentQuorumSameAsPrevQuorums := containsAll(oldquorumList, cr.QuorumList)
+		fmt.Println("equalq ", isCurrentQuorumSameAsPrevQuorums)
+
+		if !isCurrentQuorumSameAsPrevQuorums {
+			fmt.Println("The quorum list is not equal, proceeding with pincheck")
+			results := make([]MultiPinCheckRes, len(ti))
+			for i := range ti {
+				wg.Add(1)
+				go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
+			}
+			wg.Wait()
+
+			for i := range results {
+				if results[i].Error != nil {
+					c.log.Error("Error occurred", "error", results[i].Error)
+					crep.Message = "Error while checking FT Token multiple Pins"
+					return c.l.RenderJSON(req, &crep, http.StatusOK)
+				}
+				if results[i].Status {
+					c.log.Error("FT Token has multiple owners", "FT token", results[i].Token, "owners", results[i].Owners)
+					crep.Message = "FT Token has multiple owners"
+					return c.l.RenderJSON(req, &crep, http.StatusOK)
+				}
 			}
 		}
 	}

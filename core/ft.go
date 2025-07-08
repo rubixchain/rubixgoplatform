@@ -22,8 +22,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
-func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, ftValue float64, ftNumStartIndex int, fromRBT bool) {
-	err := c.createFTs(reqID, ftname, ftcount, ftValue, did, ftNumStartIndex, fromRBT)
+func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, ftValue float64, ftNumStartIndex int, fromRBT bool, isHighValueFt bool) {
+	err := c.createFTs(reqID, ftname, ftcount, ftValue, did, ftNumStartIndex, fromRBT, isHighValueFt)
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "FT created successfully",
@@ -40,7 +40,7 @@ func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, f
 	channel.OutChan <- &br
 }
 
-func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float64, did string, ftNumStartIndex int, fromRBT bool) error {
+func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float64, did string, ftNumStartIndex int, fromRBT bool, isHighValueFt bool) error {
 	if did == "" {
 		c.log.Error("DID is empty")
 		return fmt.Errorf("DID is empty")
@@ -58,6 +58,9 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 
 	var existingFT wallet.FT
 	readErr := c.s.Read(wallet.FTStorage, &existingFT, "ft_name=? AND creator_did=?", FTName, did)
+	if readErr != nil {
+		c.log.Info("There is no record for FT Name: %s and creator DID: %s", FTName, did)
+	}
 
 	var ftStartIndex int
 	if readErr != nil && strings.Contains(fmt.Sprint(readErr), "no records found") {
@@ -87,7 +90,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 	var wholeTokens []wallet.Token
 	var parentTokenIDs string
 
-	if fromRBT {
+	if fromRBT && !isHighValueFt {
 		numTokensRequired := FTValue * float64(numFTs)
 		numWholeTokens = floatPrecision(numTokensRequired, MaxDecimalPlaces)
 		// Fetch whole tokens using GetToken
@@ -109,10 +112,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 	if len(wholeTokens) != 0 {
 		defer c.w.ReleaseTokens(wholeTokens)
 	}
+	loopCount := numFTs
+	if isHighValueFt {
+		loopCount = 1
+	}
 
 	newFTs := make([]wallet.FTToken, 0, numFTs)
 	var newFTTokenIDs []string
-	for i := ftStartIndex; i < ftStartIndex+numFTs; i++ {
+	for i := ftStartIndex; i < ftStartIndex+loopCount; i++ {
 		racType := &rac.RacType{
 			Type:        c.RACFTType(),
 			DID:         did,
@@ -160,10 +167,9 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 
 		var RBTLockStatus int
 
-		if fromRBT {
+		RBTLockStatus = block.RBTNotLocked
+		if fromRBT && !isHighValueFt {
 			RBTLockStatus = block.RBTLocked
-		} else {
-			RBTLockStatus = block.RBTNotLocked
 		}
 
 		bti := &block.TransInfo{
@@ -219,7 +225,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 		newFTs = append(newFTs, *ft)
 	}
 
-	if fromRBT {
+	// Tokens are locked only if it is not fromRBT and is not high value ft
+	if fromRBT && !isHighValueFt {
 		for i := range wholeTokens {
 			ptts := RBTString
 			if wholeTokens[i].ParentTokenID != "" && wholeTokens[i].TokenValue < 1 {
@@ -291,8 +298,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 			return err
 		}
 	}
-	finalFTCreatedCount := ftStartIndex + numFTs
-	err = c.UpsertFTTable(FTName, did, finalFTCreatedCount, numFTs)
+	finalFTCreatedCount := ftStartIndex + loopCount
+	err = c.UpsertFTTable(FTName, did, finalFTCreatedCount, loopCount)
 	if err != nil {
 		c.log.Error("Failed to update FT index", "err", err)
 		return fmt.Errorf("failed to finalize FT table update: %w", err)
@@ -352,63 +359,64 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	resp := &model.BasicResponse{
 		Status: false,
 	}
+
+	// Initial validations
 	if req.Sender == req.Receiver {
-		c.log.Error("Sender and receiver cannot same")
 		resp.Message = "Sender and receiver cannot be same"
 		return resp
 	}
 	if req.Sender == "" || req.Receiver == "" {
-		c.log.Error("Sender and receiver cannot be empty")
 		resp.Message = "Sender and receiver cannot be empty"
 		return resp
 	}
+
 	isAlphanumericSender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(req.Sender)
 	isAlphanumericReceiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(req.Receiver)
 	if !isAlphanumericSender || !isAlphanumericReceiver {
-		c.log.Error("Invalid sender or receiver address. Please provide valid DID")
 		resp.Message = "Invalid sender or receiver address. Please provide valid DID"
 		return resp
 	}
-	if !strings.HasPrefix(req.Sender, "bafybmi") || len(req.Sender) != 59 || !strings.HasPrefix(req.Receiver, "bafybmi") || len(req.Receiver) != 59 {
-		c.log.Error("Invalid sender or receiver DID")
+	if !strings.HasPrefix(req.Sender, "bafybmi") || len(req.Sender) != 59 ||
+		!strings.HasPrefix(req.Receiver, "bafybmi") || len(req.Receiver) != 59 {
 		resp.Message = "Invalid sender or receiver DID"
 		return resp
 	}
+
 	_, did, ok := util.ParseAddress(req.Sender)
 	if !ok {
-		c.log.Error("Failed to parse sender DID")
 		resp.Message = "Invalid sender DID"
 		return resp
 	}
 
 	rpeerid, rdid, ok := util.ParseAddress(req.Receiver)
 	if !ok {
-		c.log.Error("Failed to parse receiver DID")
 		resp.Message = "Invalid receiver DID"
 		return resp
 	}
-	if req.FTCount <= 0 {
-		c.log.Error("Input transaction amount is less than minimum FT transaction amount")
+
+	if !req.IsHighValueFT && req.FTCount <= 0 {
 		resp.Message = "Invalid FT count"
 		return resp
 	}
+	if req.IsHighValueFT && req.FTTransferValue <= 0.0 {
+		resp.Message = "Invalid FT transfer value"
+		return resp
+	}
 	if req.FTName == "" {
-		c.log.Error("FT name cannot be empty")
 		resp.Message = "FT name is required"
 		return resp
 	}
+
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
-		c.log.Error("Failed to setup DID")
 		resp.Message = "Failed to setup DID, " + err.Error()
 		return resp
 	}
+
 	var creatorDID string
 	if req.CreatorDID == "" {
-		// Checking for same FTs with different creators
 		info, err := c.GetFTInfoByDID(did)
 		if err != nil || info == nil {
-			c.log.Error("Failed to get FT info for transfer", "err", err)
 			resp.Message = "Failed to get FT info for transfer"
 			return resp
 		}
@@ -416,21 +424,17 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		for _, ft := range info {
 			ftNameToCreators[ft.FTName] = append(ftNameToCreators[ft.FTName], ft.CreatorDID)
 		}
-		for ftName, creators := range ftNameToCreators {
+		for _, creators := range ftNameToCreators {
 			if len(creators) > 1 {
-				c.log.Error(fmt.Sprintf("There are same FTs '%s' with different creators.", ftName))
-				for i, creator := range creators {
-					c.log.Error(fmt.Sprintf("Creator DID %d: %s", i+1, creator))
-				}
-				c.log.Info("Use -creatorDID flag to specify the creator DID and can proceed for transfer")
-				resp.Message = "There are same FTs with different creators, use -creatorDID flag to specify creatorDID"
+				resp.Message = "There are same FTs with different creators, use -creatorDID flag"
 				return resp
 			}
 		}
-		if info != nil && len(info) > 0 {
+		if len(info) > 0 {
 			creatorDID = info[0].CreatorDID
 		}
 	}
+
 	var AllFTs []wallet.FTToken
 	if req.CreatorDID != "" {
 		AllFTs, err = c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, req.CreatorDID)
@@ -438,19 +442,33 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	} else {
 		AllFTs, err = c.w.GetFreeFTsByNameAndDID(req.FTName, did)
 	}
-	AvailableFTCount := len(AllFTs)
 	if err != nil {
-		c.log.Error("Failed to get FTs", "err", err)
-		resp.Message = "Insufficient FTs or FTs are locked or " + err.Error()
+		resp.Message = "Failed to get available FTs: " + err.Error()
 		return resp
-	} else {
-		if req.FTCount > AvailableFTCount {
-			c.log.Error(fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount))
-			resp.Message = fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount)
+	}
+
+	var FTsForTxn []wallet.FTToken
+	var accumulatedValue float64
+	if req.IsHighValueFT {
+		requiredValue := floatPrecision(req.FTTransferValue, MaxDecimalPlaces) // Need to ensure whether this should be float
+		for _, token := range AllFTs {
+			FTsForTxn = append(FTsForTxn, token)
+			accumulatedValue = floatPrecision(accumulatedValue+token.TokenValue, MaxDecimalPlaces)
+			if accumulatedValue >= requiredValue {
+				break
+			}
+		}
+		if accumulatedValue < requiredValue {
+			resp.Message = fmt.Sprintf("Insufficient FT value. Required: %.3f, Available: %.3f", requiredValue, accumulatedValue)
 			return resp
 		}
+	} else {
+		if req.FTCount > len(AllFTs) {
+			resp.Message = "Insufficient FT count"
+			return resp
+		}
+		FTsForTxn = AllFTs[:req.FTCount]
 	}
-	FTsForTxn := AllFTs[:req.FTCount]
 	// TODO: Pinning of tokens
 
 	// Fetching peer's peer id
@@ -525,8 +543,9 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		ReqID: reqID,
 	}
 	FTData := model.FTInfo{
-		FTName:  req.FTName,
-		FTCount: req.FTCount,
+		FTName:      req.FTName,
+		FTCount:     req.FTCount,
+		HighValueFT: req.IsHighValueFT,
 	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)
