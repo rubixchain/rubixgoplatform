@@ -686,6 +686,86 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	}
 
 	// Use the first token for block lookup
+	// tokenToCheck := ti[0]
+	// block := c.w.GetLatestTokenBlock(tokenToCheck.Token, tokenToCheck.TokenType)
+	// fmt.Println("The token is", tokenToCheck.Token)
+	// fmt.Println("The tokenType is", tokenToCheck.TokenType)
+	// if block == nil {
+	// 	c.log.Error("Invalid token chain block in quorumFTConsensus, Block is nil")
+	// 	crep.Message = "Invalid token chain block"
+	// 	return c.l.RenderJSON(req, &crep, http.StatusOK)
+	// }
+
+	// var oldquorumList []string
+	// oldquorumSignList, err := block.GetQuorumSignatureList()
+	// if err != nil || oldquorumSignList == nil {
+	// 	c.log.Error("failed to get quorum signature list from latest block")
+	// 	return c.l.RenderJSON(req, &crep, http.StatusOK)
+	// }
+	// for _, qrm := range oldquorumSignList {
+	// 	qrmInfo, err := c.GetPeerDIDInfo(qrm.DID)
+	// 	if err != nil || qrmInfo == nil || qrmInfo.PeerID == "" {
+	// 		c.log.Error("failed to fetchh qrm peer id, qrm ", qrm.DID)
+	// 		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	// 	}
+	// 	oldquorumList = append(oldquorumList, qrmInfo.PeerID+"."+qrm.DID)
+	// }
+	// sort.Strings(cr.QuorumList)
+	// sort.Strings(cr.QuorumList)
+	// // c.log.Debug(" new ql is ", cr.QuorumList)
+	// // c.log.Debug(" old quorum list ", oldquorumList)
+	// // isCurrentQuorumSameAsPrevQuorums := reflect.DeepEqual(cr.QuorumList, oldquorumList)
+	// isCurrentQuorumSameAsPrevQuorums := containsAll(oldquorumList, cr.QuorumList)
+	// fmt.Println("equalq ", isCurrentQuorumSameAsPrevQuorums)
+	// var wg sync.WaitGroup
+	// if !isCurrentQuorumSameAsPrevQuorums {
+	// 	fmt.Println("The quorum list is not equal proceeding with pincheck")
+	// 	results := make([]MultiPinCheckRes, len(ti))
+
+	// 	for i := range ti {
+	// 		wg.Add(1)
+	// 		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
+	// 	}
+	// 	wg.Wait()
+	// 	for i := range results {
+	// 		if results[i].Error != nil {
+	// 			c.log.Error("Error occured", "error", results[i].Error)
+	// 			crep.Message = "Error while cheking FT Token multiple Pins"
+	// 			return c.l.RenderJSON(req, &crep, http.StatusOK)
+	// 		}
+	// 		if results[i].Status {
+	// 			c.log.Error("FT Token has multiple owners", "FT token", results[i].Token, "owners", results[i].Owners)
+	// 			crep.Message = "FT Token has multiple owners"
+	// 			return c.l.RenderJSON(req, &crep, http.StatusOK)
+	// 		}
+	// 	}
+	// }
+
+	// check token ownership
+
+	validateTokenOwnershipVar, err, syncIssueTokens := c.validateTokenOwnership(cr, sc, did)
+	if len(syncIssueTokens) > 0 {
+		crep.Result = syncIssueTokens
+	}
+	if err != nil {
+		validateTokenOwnershipErrorString := fmt.Sprint(err)
+		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
+			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		if strings.Contains(validateTokenOwnershipErrorString, "failed to sync tokenchain Token") {
+			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		c.log.Error("Tokens ownership check failed")
+		crep.Message = "Token ownership check failed, err : " + err.Error()
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	if !validateTokenOwnershipVar {
+		c.log.Error("Tokens ownership check failed")
+		crep.Message = "Token ownership check failed"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
 	tokenToCheck := ti[0]
 	block := c.w.GetLatestTokenBlock(tokenToCheck.Token, tokenToCheck.TokenType)
 	fmt.Println("The token is", tokenToCheck.Token)
@@ -714,11 +794,16 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	sort.Strings(cr.QuorumList)
 	// c.log.Debug(" new ql is ", cr.QuorumList)
 	// c.log.Debug(" old quorum list ", oldquorumList)
-	// equal := reflect.DeepEqual(cr.QuorumList, oldquorumList)
-	equal := containsAll(oldquorumList, cr.QuorumList)
-	fmt.Println("equalq ", equal)
+	// isCurrentQuorumSameAsPrevQuorums := reflect.DeepEqual(cr.QuorumList, oldquorumList)
+	isCurrentQuorumSameAsPrevQuorums := containsAll(oldquorumList, cr.QuorumList)
+	fmt.Println("equalq ", isCurrentQuorumSameAsPrevQuorums)
+	blockNumber, err := block.GetBlockNumber(tokenToCheck.Token)
+	if err != nil {
+		c.log.Error("failed to get latest block number")
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
 	var wg sync.WaitGroup
-	if !equal {
+	if !isCurrentQuorumSameAsPrevQuorums || blockNumber == 0 {
 		fmt.Println("The quorum list is not equal proceeding with pincheck")
 		results := make([]MultiPinCheckRes, len(ti))
 
@@ -739,32 +824,6 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 		}
-	}
-
-	// check token ownership
-
-	validateTokenOwnershipVar, err, syncIssueTokens := c.validateTokenOwnership(cr, sc, did)
-	if len(syncIssueTokens) > 0 {
-		crep.Result = syncIssueTokens
-	}
-	if err != nil {
-		validateTokenOwnershipErrorString := fmt.Sprint(err)
-		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
-			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		if strings.Contains(validateTokenOwnershipErrorString, "failed to sync tokenchain Token") {
-			crep.Message = "Token ownership check failed, err: " + validateTokenOwnershipErrorString
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		c.log.Error("Tokens ownership check failed")
-		crep.Message = "Token ownership check failed, err : " + err.Error()
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	if !validateTokenOwnershipVar {
-		c.log.Error("Tokens ownership check failed")
-		crep.Message = "Token ownership check failed"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	/* 	if !c.validateTokenOwnership(cr, sc) {
 		c.log.Error("Token ownership check failed")
