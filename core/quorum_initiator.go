@@ -464,7 +464,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	// wg.Wait()
 
 	// Channel to collect server responses
-	responseCh := make(chan QuorumSelection, QuorumRequired)
+	responseCh := make(chan QuorumSelection, len(cr.QuorumList))
 	// // Channel to signal stopping connections
 	// stopCh := make(chan struct{})
 
@@ -491,7 +491,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	c.log.Debug("************** initial rejected quorums map : ", rejectedQuorums)
 
 	// TODO : handle the case where quorums are not responding for a long time, use select-case functionality
-	for i := 0; i < QuorumRequired; i++ {
+	for i := 0; i < len(cr.QuorumList); i++ {
 		resp := <-responseCh
 		c.log.Debug("********** response of quorum : ", resp)
 
