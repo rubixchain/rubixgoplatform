@@ -1854,7 +1854,7 @@ func (c *Core) GetLastCVR2Block(tokenId string, tokenType int) (*block.Block, er
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	if latestBlock.GetTransType() == block.SpendableRBTTransferredType {
+	if latestBlock.GetTransType() == block.SpendableTokenTransferredType {
 		// get the previous block with cvr-2, block type 15
 		prevBlockID, err := latestBlock.GetPrevBlockID(tokenId)
 		if err != nil {
@@ -1890,7 +1890,7 @@ func (c *Core) RemoveSpendableRBTTransferredBlock(tokenID string, tokenType int)
 		c.log.Error(errMsg)
 		return fmt.Errorf(errMsg)
 	}
-	if latestBlock.GetTransType() == block.SpendableRBTTransferredType {
+	if latestBlock.GetTransType() == block.SpendableTokenTransferredType {
 		//TODO: delete the temp block(cvr-1) before adding cvr-2 block
 		removeRequest := &model.TCRemoveRequest{
 			Token:  tokenID,

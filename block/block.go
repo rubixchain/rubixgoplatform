@@ -47,21 +47,21 @@ const (
 )
 
 const (
-	TokenMintedType             string = "01"
-	TokenTransferredType        string = "02"
-	TokenMigratedType           string = "03"
-	TokenPledgedType            string = "04"
-	TokenGeneratedType          string = "05"
-	TokenUnpledgedType          string = "06"
-	TokenCommittedType          string = "07"
-	TokenBurntType              string = "08"
-	TokenDeployedType           string = "09"
-	TokenExecutedType           string = "10"
-	TokenContractCommited       string = "11"
-	TokenPinnedAsService        string = "12"
-	TokenIsBurntForFT           string = "13"
-	SpendableRBTTransferredType string = "14" // cvr-1 block
-	OwnershipTransferredType    string = "15" // cvr-2 block
+	TokenMintedType               string = "01"
+	TokenTransferredType          string = "02"
+	TokenMigratedType             string = "03"
+	TokenPledgedType              string = "04"
+	TokenGeneratedType            string = "05"
+	TokenUnpledgedType            string = "06"
+	TokenCommittedType            string = "07"
+	TokenBurntType                string = "08"
+	TokenDeployedType             string = "09"
+	TokenExecutedType             string = "10"
+	TokenContractCommited         string = "11"
+	TokenPinnedAsService          string = "12"
+	TokenIsBurntForFT             string = "13"
+	SpendableTokenTransferredType string = "14" // cvr-1 block
+	OwnershipTransferredType      string = "15" // cvr-2 block
 )
 
 const (

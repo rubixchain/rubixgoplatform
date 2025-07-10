@@ -58,8 +58,8 @@ const (
 )
 
 type PrePledgeRequest struct {
-	DID                 string `json:"did"`
-	QuorumType          int    `json:"quorum_type"`
+	DID        string `json:"did"`
+	QuorumType int    `json:"quorum_type"`
 	// TxnID               string `json:"txn_id"`
 	// SelftransferTxnID   string `json:"self_txn_id"`
 	SCTransferBlock     []byte `json:"sc_transfer_block"`
@@ -851,7 +851,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	}
 
 	// read the added block to make sure it was added properly
-	if b.GetTransType() == block.SpendableRBTTransferredType {
+	if b.GetTransType() == block.SpendableTokenTransferredType {
 		w.log.Debug("************ reading cvr-1 block *********")
 		checkBlock, err := w.getBlock(ti[0].TokenType+50, ti[0].Token, blockId)
 		if err != nil {

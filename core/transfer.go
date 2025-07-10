@@ -835,7 +835,7 @@ func (c *Core) initiateSpendableRBTTransfer(reqID string, req *model.RBTTransfer
 	}
 
 	tcb := block.TokenChainBlock{
-		TransactionType: block.SpendableRBTTransferredType,
+		TransactionType: block.SpendableTokenTransferredType,
 		TokenOwner:      sc.GetReceiverDID(),
 		TransInfo:       bti,
 		SmartContract:   sc.GetBlock(),
@@ -1168,7 +1168,7 @@ func (c *Core) CreateSelfTransferContract(selfTransferTokensMap map[string]struc
 		}
 
 		selfTransferTCB := block.TokenChainBlock{
-			TransactionType: block.SpendableRBTTransferredType,     // cvr stage-1
+			TransactionType: block.SpendableTokenTransferredType,   // cvr stage-1
 			TokenOwner:      selfTransferContract.GetReceiverDID(), //ReceiverDID is same as req.Sender because it is self transfer
 			TransInfo:       selfTransBlockTransInfo,
 			SmartContract:   selfTransferContract.GetBlock(),
