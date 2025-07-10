@@ -99,6 +99,7 @@ const (
 	APIUpdateTokenStatus                string = "/api/update-token-status"
 	APIGetTokenStatus                   string = "/api/get-token-status"
 	APIBurnFT                           string = "/api/burn-ft"
+	APIGetFTValue                       string = "/api/get-ft-value"
 )
 
 // jwt.RegisteredClaims

@@ -7,6 +7,7 @@ type CreateFTReq struct {
 	FTValue         float64 `json:"ft_value"`
 	FTNumStartIndex int     `json:"ft_num_start_index"`
 	FromRBT         bool    `json:"from_rbt"`
+	IsHighValueFT   bool    `json:"is_high_value"`
 }
 
 type TransferFTReq struct {

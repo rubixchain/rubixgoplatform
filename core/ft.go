@@ -448,18 +448,14 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 
 	var FTsForTxn []wallet.FTToken
-	var accumulatedValue float64
+	// var accumulatedValue float64
 	if req.IsHighValueFT {
 		requiredValue := floatPrecision(req.FTTransferValue, MaxDecimalPlaces) // Need to ensure whether this should be float
-		for _, token := range AllFTs {
-			FTsForTxn = append(FTsForTxn, token)
-			accumulatedValue = floatPrecision(accumulatedValue+token.TokenValue, MaxDecimalPlaces)
-			if accumulatedValue >= requiredValue {
-				break
-			}
-		}
-		if accumulatedValue < requiredValue {
-			resp.Message = fmt.Sprintf("Insufficient FT value. Required: %.3f, Available: %.3f", requiredValue, accumulatedValue)
+		// requiredValue := floatPrecision(req.FTTransferValue, MaxDecimalPlaces)
+
+		FTsForTxn, err = c.GetClosestTokens(dc, did, requiredValue, req.FTName)
+		if err != nil {
+			resp.Message = "Failed to select tokens for high-value FT: " + err.Error()
 			return resp
 		}
 	} else {
@@ -1261,4 +1257,675 @@ func (c *Core) UnlockFTs() error {
 	}
 	c.log.Info("Unlocked FT")
 	return nil
+}
+
+func (c *Core) splitFTToken(dc did.DIDCrypto, did, token string, currentTokenValue float64, newTokenValue float64) ([]wallet.FTToken, error) {
+	if dc == nil {
+		return nil, fmt.Errorf("did crypto is not initialised")
+	}
+	t, err := c.w.GetFTToken(token, wallet.TokenIsFree)
+	if err != nil || t == nil {
+		return nil, fmt.Errorf("failed to get the specified token or the ft token does not exist")
+	}
+	release := true
+	defer c.relaseToken(&release, token)
+	tokenType := c.TokenType(FTString)
+
+	parentBlockDetails := c.w.GetGenesisTokenBlock(token, tokenType)
+	p, gp, err := parentBlockDetails.GetParentDetials(token)
+	if gp == nil {
+		gp = make([]string, 0)
+	}
+	if p != "" {
+		gp = append(gp, p)
+	}
+	if err != nil {
+		c.log.Error("failed to get parent details", "err", err)
+		return nil, err
+	}
+	// This existinfFT logic was added here to get the current FT number.
+	// The issue in that casd is that
+
+	// var existingFT wallet.FT
+	// readErr := c.s.Read(wallet.FTStorage, &existingFT, "ft_name=? AND creator_did=?", t.FTName, t.CreatorDID)
+	// if readErr != nil {
+	// 	c.log.Info("There is no record for FT Name: %s and creator DID: %s", FTName, did)
+	// }
+	targetFT := &rac.RacType{
+		Type:        c.RACFTType(),
+		DID:         t.CreatorDID,
+		TotalSupply: 1,
+		TimeStamp:   time.Now().String(),
+		FTInfo: &rac.RacFTInfo{
+			Parents: token,
+			FTNum:   1, // Need to ensure whether this will be  utilised or not
+			FTName:  t.FTName,
+			FTValue: newTokenValue,
+		},
+	}
+	// Create the RAC block
+	racBlocks, err := rac.CreateRac(targetFT)
+	if err != nil {
+		c.log.Error("Failed to create RAC block", "err", err)
+		return nil, err
+	}
+
+	if len(racBlocks) != 1 {
+		return nil, fmt.Errorf("failed to create RAC block")
+	}
+
+	// Update the signature of the RAC block
+	err = racBlocks[0].UpdateSignature(dc)
+	if err != nil {
+		c.log.Error("Failed to update DID signature", "err", err)
+		return nil, err
+	}
+	ftnumString := strconv.Itoa(1) // This should be changed if existingFT is being considered
+	parts := []string{t.FTName, ftnumString, did, time.Now().String()}
+	result := strings.Join(parts, " ")
+	byteArray := []byte(result)
+	ftBuffer := bytes.NewBuffer(byteArray)
+	ftID, err := c.w.Add(ftBuffer, did, wallet.AddFunc)
+	if err != nil {
+		c.log.Error("Failed to create FT, Failed to add token to IPFS", "err", err)
+		return nil, err
+	}
+	c.log.Info("FT created: " + ftID + " FT Num: " + ftnumString)
+	targetFtId := ftID
+	c.log.Info("The target FT Id is :", targetFtId)
+	RBTLockStatus := block.RBTNotLocked
+	bti := &block.TransInfo{
+		Tokens: []block.TransTokens{
+			{
+				Token:     ftID,
+				TokenType: c.TokenType(FTString),
+			},
+		},
+		Comment: "FT generated at : " + time.Now().String() + " for FT Name : " + t.FTName,
+	}
+	tcb := &block.TokenChainBlock{
+		TransactionType: block.TokenGeneratedType,
+		TokenOwner:      t.CreatorDID, // This is given as the creatordid because, this owner value is taken from this genesis block while we send this token to the receiver and updated in the DB
+		TransInfo:       bti,
+		GenesisBlock: &block.GenesisBlock{
+			Info: []block.GenesisTokenInfo{
+				{
+					Token:         ftID,
+					ParentID:      token,
+					TokenNumber:   1, // Need to be confirmed
+					RBTLockStatus: RBTLockStatus,
+				},
+			},
+		},
+		TokenValue: newTokenValue,
+	}
+	ctcb := make(map[string]*block.Block)
+	ctcb[ftID] = nil
+	blk := block.CreateNewBlock(ctcb, tcb)
+	if blk == nil {
+		return nil, fmt.Errorf("failed to create new block")
+	}
+	err = blk.UpdateSignature(dc)
+	if err != nil {
+		c.log.Error("FT creation failed, failed to update signature", "err", err)
+		return nil, err
+	}
+	err = c.w.AddTokenBlock(ftID, blk)
+	if err != nil {
+		c.log.Error("Failed to create FT, failed to add token chain block", "err", err)
+		return nil, err
+	}
+	// Create the new token
+	targetFtInfo := wallet.FTToken{
+		TokenID:       ftID,
+		FTName:        t.FTName,
+		TokenStatus:   wallet.TokenIsFree,
+		TokenValue:    newTokenValue,
+		DID:           did,
+		RBTLockStatus: RBTLockStatus,
+		CreatorDID:    t.CreatorDID,
+	}
+
+	err = c.w.CreateFT(&targetFtInfo)
+	if err != nil {
+		c.log.Error("Failed to write FT details in FT tokens table", "err", err)
+		return nil, err
+	}
+
+	balanceValue := currentTokenValue - newTokenValue
+	balanceFT := &rac.RacType{
+		Type:        c.RACFTType(),
+		DID:         t.CreatorDID,
+		TotalSupply: 1,
+		TimeStamp:   time.Now().String(),
+		FTInfo: &rac.RacFTInfo{
+			Parents: token,
+			FTNum:   2, // Need to ensure whether this will be  utilised or not
+			FTName:  t.FTName,
+			FTValue: balanceValue,
+		},
+	}
+	// Create the RAC block
+	balanceFTRacBlocks, err := rac.CreateRac(balanceFT)
+	if err != nil {
+		c.log.Error("Failed to create RAC block", "err", err)
+		return nil, err
+	}
+
+	if len(balanceFTRacBlocks) != 1 {
+		return nil, fmt.Errorf("failed to create RAC block")
+	}
+
+	// Update the signature of the RAC block
+	err = balanceFTRacBlocks[0].UpdateSignature(dc)
+	if err != nil {
+		c.log.Error("Failed to update DID signature", "err", err)
+		return nil, err
+	}
+	ftnumString2 := strconv.Itoa(2) // This should be changed if existingFT is being considered
+	balanceFtdetailsAddedtoIpfs := []string{t.FTName, ftnumString2, did, time.Now().String()}
+	result2 := strings.Join(balanceFtdetailsAddedtoIpfs, " ")
+	byteArray2 := []byte(result2)
+	ftBuffer2 := bytes.NewBuffer(byteArray2)
+	balanceFtID, err := c.w.Add(ftBuffer2, did, wallet.AddFunc)
+	if err != nil {
+		c.log.Error("Failed to create FT, Failed to add token to IPFS", "err", err)
+		return nil, err
+	}
+	c.log.Info("FT created: " + ftID + " FT Num: " + ftnumString)
+
+	c.log.Info("The target FT Id is :", balanceFtID)
+
+	bti2 := &block.TransInfo{
+		Tokens: []block.TransTokens{
+			{
+				Token:     balanceFtID,
+				TokenType: c.TokenType(FTString),
+			},
+		},
+		Comment: "FT generated at : " + time.Now().String() + " for FT Name : " + t.FTName,
+	}
+	tcb2 := &block.TokenChainBlock{
+		TransactionType: block.TokenGeneratedType,
+		TokenOwner:      t.CreatorDID,
+		TransInfo:       bti2,
+		GenesisBlock: &block.GenesisBlock{
+			Info: []block.GenesisTokenInfo{
+				{
+					Token:         balanceFtID,
+					ParentID:      token,
+					TokenNumber:   2, // Need to be confirmed
+					RBTLockStatus: RBTLockStatus,
+				},
+			},
+		},
+		TokenValue: balanceValue,
+	}
+	ctcb2 := make(map[string]*block.Block)
+	ctcb2[balanceFtID] = nil
+	blk2 := block.CreateNewBlock(ctcb2, tcb2)
+	if blk2 == nil {
+		return nil, fmt.Errorf("failed to create new block")
+	}
+	err = blk2.UpdateSignature(dc)
+	if err != nil {
+		c.log.Error("FT creation failed, failed to update signature", "err", err)
+		return nil, err
+	}
+	err = c.w.AddTokenBlock(balanceFtID, blk2)
+	if err != nil {
+		c.log.Error("Failed to create FT, failed to add token chain block", "err", err)
+		return nil, err
+	}
+	// Create the new token
+	balanceFTInfo := wallet.FTToken{
+		TokenID:       balanceFtID,
+		FTName:        t.FTName,
+		TokenStatus:   wallet.TokenIsFree,
+		TokenValue:    balanceValue,
+		DID:           did,
+		RBTLockStatus: RBTLockStatus,
+		CreatorDID:    t.CreatorDID,
+	}
+
+	err = c.w.CreateFT(&balanceFTInfo)
+	if err != nil {
+		c.log.Error("Failed to write FT details in FT tokens table", "err", err)
+		return nil, err
+	}
+
+	ftBurnBlock := &block.TransInfo{
+		Tokens: []block.TransTokens{
+			{
+				Token:     token,
+				TokenType: tokenType,
+			},
+		},
+		Comment: "Token burnt at : " + time.Now().String(),
+	}
+	parentFtBlock := &block.TokenChainBlock{
+		TransactionType: block.TokenBurntType,
+		TokenOwner:      did,
+		TransInfo:       ftBurnBlock,
+		TokenValue:      currentTokenValue,
+		ChildTokens:     []string{targetFtId, balanceFtID},
+	}
+	ctcb3 := make(map[string]*block.Block)
+	ctcb3[token] = c.w.GetLatestTokenBlock(token, tokenType)
+	parentBlockDetails = block.CreateNewBlock(ctcb3, parentFtBlock)
+	if parentBlockDetails == nil {
+		return nil, fmt.Errorf("failed to create new block")
+	}
+	err = parentBlockDetails.UpdateSignature(dc)
+	if err != nil {
+		c.log.Error("part token creation failed, failed to update signature", "err", err)
+		return nil, err
+	}
+	err = c.w.AddTokenBlock(token, parentBlockDetails)
+	if err != nil {
+		c.log.Error("part token creation failed, failed to add token block", "err", err)
+		return nil, err
+	}
+	t.TokenStatus = wallet.TokenIsBurnt
+	err = c.s.Update(wallet.FTTokenStorage, &t, "owner_did=? AND token_id=?", did, t.TokenID)
+	if err != nil {
+		c.log.Error("failed to update the token status to token is burned")
+	}
+
+	var ftTokens []wallet.FTToken
+	ftTokens = append(ftTokens, balanceFTInfo, targetFtInfo)
+
+	return ftTokens, nil
+}
+
+func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue float64, FTName string) ([]wallet.FTToken, error) {
+	var tokens []wallet.FTToken
+	err := c.s.Read(wallet.FTTokenStorage, &tokens, "owner_did=? AND token_status=? AND ft_name=?", ownerDID, wallet.TokenIsFree, FTName)
+	if err != nil {
+		c.log.Error("Failed to query free tokens", "err", err)
+		return nil, err
+	}
+
+	if len(tokens) == 0 {
+		c.log.Warn("No tokens available")
+		return nil, fmt.Errorf("insufficient balance")
+	}
+
+	// Step 1: Check total available balance
+	total := 0.0
+	for _, t := range tokens {
+		total += t.TokenValue
+	}
+	if total < targetValue {
+		c.log.Warn("Total balance is less than target", "total", total, "required", targetValue)
+		return nil, fmt.Errorf("insufficient balance")
+	}
+	// Step 2: Check for exact match
+	for _, token := range tokens {
+		if token.TokenValue == targetValue {
+			token.TokenStatus = wallet.TokenIsLocked
+			err := c.s.Update(wallet.FTTokenStorage, &token, "owner_did=? AND token_id=?", ownerDID, token.TokenID)
+			if err != nil {
+				return nil, err
+			}
+			return []wallet.FTToken{token}, nil
+		}
+	}
+
+	// Step 3: Try to find exact combination
+	selectedTokens, sum, err := c.findBestCombination(tokens, targetValue)
+	if err == nil && sum == targetValue {
+		for i := range selectedTokens {
+			selectedTokens[i].TokenStatus = wallet.TokenIsLocked
+			err := c.s.Update(wallet.FTTokenStorage, &selectedTokens[i], "owner_did=? AND token_id=?", ownerDID, selectedTokens[i].TokenID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return selectedTokens, nil
+	}
+
+	// Step 4: Try to split a token from an over-sum combination
+	if err == nil && sum > targetValue {
+		// The excess variable is the variable which stores the balance amount of the targetValue and the required Value
+		// Also the selectedTokens is the tokens which are selected for the transfer.
+		excess := sum - targetValue
+		for i, token := range selectedTokens {
+			if token.TokenValue > excess {
+				splitTokens, splitErr := c.splitFTToken(dc, ownerDID, token.TokenID, token.TokenValue, excess)
+				if splitErr != nil {
+					continue
+				}
+
+				var splitOutToken *wallet.FTToken
+				for _, t := range splitTokens {
+					if t.TokenValue == excess {
+						splitOutToken = &t
+						break
+					}
+				}
+				if splitOutToken == nil {
+					continue
+				}
+
+				// Remove the burned token and return the remaining combination with the splitOutToken
+				var finalTokens []wallet.FTToken
+				for j, t := range selectedTokens {
+					if j == i {
+						continue // skip the burned token
+					}
+					t.TokenStatus = wallet.TokenIsLocked
+					err := c.s.Update(wallet.FTTokenStorage, &t, "owner_did=? AND token_id=?", ownerDID, t.TokenID)
+					if err != nil {
+						return nil, err
+					}
+					finalTokens = append(finalTokens, t)
+				}
+
+				splitOutToken.TokenStatus = wallet.TokenIsLocked
+				finalTokens = append(finalTokens, *splitOutToken)
+				return finalTokens, nil
+			}
+		}
+	}
+
+	// Step 5: Try to find a single token > targetValue for split
+	for _, token := range tokens {
+		if token.TokenValue > targetValue {
+			splitTokens, splitErr := c.splitFTToken(dc, ownerDID, token.TokenID, token.TokenValue, targetValue)
+			if splitErr != nil {
+				continue
+			}
+
+			var splitOutToken *wallet.FTToken
+			for _, t := range splitTokens {
+				if t.TokenValue == targetValue {
+					splitOutToken = &t
+					break
+				}
+			}
+			if splitOutToken == nil {
+				continue
+			}
+
+			splitOutToken.TokenStatus = wallet.TokenIsLocked
+			return []wallet.FTToken{*splitOutToken}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("unable to fulfill the request: no suitable token combination or split possible")
+}
+
+// func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue float64) ([]wallet.FTToken, error) {
+// 	var tokens []wallet.FTToken
+// 	err := c.s.Read(wallet.FTTokenStorage, &tokens, "owner_did=? AND token_status=?", ownerDID, wallet.TokenIsFree)
+// 	if err != nil {
+// 		c.log.Error("Failed to query free tokens", "err", err)
+// 		return nil, err
+// 	}
+
+// 	if len(tokens) == 0 {
+// 		c.log.Warn("No tokens available")
+// 		return nil, fmt.Errorf("insufficient balance")
+// 	}
+
+// 	// Step 1: Check total available balance
+// 	total := 0.0
+// 	for _, t := range tokens {
+// 		total += t.TokenValue
+// 	}
+// 	if total < targetValue {
+// 		c.log.Warn("Total balance is less than target", "total", total, "required", targetValue)
+// 		return nil, fmt.Errorf("insufficient balance")
+// 	}
+
+// 	// Step 2: Check for exact match
+// 	for _, token := range tokens {
+// 		if token.TokenValue == targetValue {
+// 			token.TokenStatus = wallet.TokenIsLocked
+// 			err := c.s.Update(wallet.FTTokenStorage, &token, "owner_did=? AND token_id=?", ownerDID, token.TokenID)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			return []wallet.FTToken{token}, nil
+// 		}
+// 	}
+
+// 	// Step 3: Try to find exact combination
+// 	selectedTokens, sum, err := c.findBestCombination(tokens, targetValue)
+// 	if err == nil && sum == targetValue {
+// 		for i := range selectedTokens {
+// 			selectedTokens[i].TokenStatus = wallet.TokenIsLocked
+// 			err := c.s.Update(wallet.FTTokenStorage, &selectedTokens[i], "owner_did=? AND token_id=?", ownerDID, selectedTokens[i].TokenID)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 		}
+// 		return selectedTokens, nil
+// 	}
+
+// 	// Step 4: Try to split a token from an over-sum combination
+// 	if err == nil && sum > targetValue {
+// 		excess := sum - targetValue
+// 		for i, token := range selectedTokens {
+// 			if token.TokenValue > excess {
+// 				splitOutToken, _, splitErr := c.splitFTToken(dc, ownerDID, token.TokenID, token.TokenValue, excess)
+// 				if splitErr != nil {
+// 					continue
+// 				}
+
+// 				// Remove the burned token and return the remaining combination with the splitOutToken
+// 				var finalTokens []wallet.FTToken
+// 				for j, t := range selectedTokens {
+// 					if j == i {
+// 						continue // skip the burned token
+// 					}
+// 					t.TokenStatus = wallet.TokenIsLocked
+// 					err := c.s.Update(wallet.FTTokenStorage, &t, "owner_did=? AND token_id=?", ownerDID, t.TokenID)
+// 					if err != nil {
+// 						return nil, err
+// 					}
+// 					finalTokens = append(finalTokens, t)
+// 				}
+
+// 				splitOutToken.TokenStatus = wallet.TokenIsLocked
+// 				finalTokens = append(finalTokens, *splitOutToken)
+// 				return finalTokens, nil
+// 			}
+// 		}
+// 	}
+
+// 	// Step 5: Try to find a single token > targetValue for split
+// 	for _, token := range tokens {
+// 		if token.TokenValue > targetValue {
+// 			splitOutToken, splitErr := c.splitFTToken(dc, ownerDID, token.TokenID, token.TokenValue, targetValue)
+// 			if splitErr != nil {
+// 				continue
+// 			}
+// 			splitOutToken.TokenStatus = wallet.TokenIsLocked
+// 			return []wallet.FTToken{*splitOutToken}, nil
+// 		}
+// 	}
+
+// 	return nil, fmt.Errorf("unable to fulfill the request: no suitable token combination or split possible")
+// }
+
+// func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue float64) ([]wallet.FTToken, error) {
+// 	var tokens []wallet.FTToken
+// 	err := c.s.Read(wallet.FTTokenStorage, &tokens, "owner_did=? AND token_status=?", ownerDID, wallet.TokenIsFree)
+// 	if err != nil {
+// 		c.log.Error("Failed to query free tokens", "err", err)
+// 		return nil, err
+// 	}
+
+// 	if len(tokens) == 0 {
+// 		c.log.Warn("No tokens available")
+// 		return nil, fmt.Errorf("insufficient balance")
+// 	}
+
+// 	// Step 1: Check total available balance
+// 	total := 0.0
+// 	for _, t := range tokens {
+// 		total += t.TokenValue
+// 	}
+// 	if total < targetValue {
+// 		c.log.Warn("Total balance is less than target", "total", total, "required", targetValue)
+// 		return nil, fmt.Errorf("insufficient balance")
+// 	}
+
+// 	// Step 2: Check for exact match
+// 	for _, token := range tokens {
+// 		if token.TokenValue == targetValue {
+// 			token.TokenStatus = wallet.TokenIsLocked
+// 			err := c.s.Update(wallet.FTTokenStorage, &token, "owner_did=? AND token_id=?", ownerDID, token.TokenID)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			return []wallet.FTToken{token}, nil
+// 		}
+// 	}
+
+// 	// Step 3: Try to find exact combination
+// 	selectedTokens, sum, err := c.findBestCombination(tokens, targetValue)
+// 	if err == nil && sum == targetValue {
+// 		for i := range selectedTokens {
+// 			selectedTokens[i].TokenStatus = wallet.TokenIsLocked
+// 			err := c.s.Update(wallet.FTTokenStorage, &selectedTokens[i], "owner_did=? AND token_id=?", ownerDID, selectedTokens[i].TokenID)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 		}
+// 		return selectedTokens, nil
+// 	}
+
+// 	// Step 4: Try to split a token from an over-sum combination
+// 	if err == nil && sum > targetValue {
+// 		excess := sum - targetValue
+// 		for i, token := range selectedTokens {
+// 			if token.TokenValue > excess {
+// 				splitToken, err := c.splitFTToken(dc, ownerDID, token.TokenID, token.TokenValue, excess)
+// 				if err != nil {
+// 					continue
+// 				}
+
+// 				// Replace the original token with the split result (smaller token)
+// 				selectedTokens[i].TokenValue -= excess
+// 				err = c.s.Update(wallet.FTTokenStorage, &selectedTokens[i], "owner_did=? AND token_id=?", ownerDID, selectedTokens[i].TokenID)
+// 				if err != nil {
+// 					return nil, err
+// 				}
+
+// 				// Save split token
+// 				// err = w.s.Insert(FTTokenStorage, splitToken)
+// 				// if err != nil {
+// 				// 	return nil, err
+// 				// }
+
+// 				// Remove split token, keep the remaining as locked
+// 				selectedTokens[i].TokenStatus = wallet.TokenIsLocked
+// 				for j := range selectedTokens {
+// 					if j != i {
+// 						selectedTokens[j].TokenStatus = wallet.TokenIsLocked
+// 						err := c.s.Update(wallet.FTTokenStorage, &selectedTokens[j], "owner_did=? AND token_id=?", ownerDID, selectedTokens[j].TokenID)
+// 						if err != nil {
+// 							return nil, err
+// 						}
+// 					}
+// 				}
+// 				return selectedTokens, nil
+// 			}
+// 		}
+// 	}
+
+// 	// Step 5: Try to find a single token > targetValue for split
+// 	for _, token := range tokens {
+// 		if token.TokenValue > targetValue {
+// 			splitToken, err := c.splitFTToken(dc, ownerDID, token.TokenID, token.TokenValue, targetValue)
+// 			if err != nil {
+// 				continue
+// 			}
+
+// 			// Update original token (reduced value)
+// 			token.TokenValue -= targetValue
+// 			err = c.s.Update(wallet.FTTokenStorage, &token, "owner_did=? AND token_id=?", ownerDID, token.TokenID)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+
+// 			// Save new token
+// 			// err = w.s.Insert(FTTokenStorage, splitToken)
+// 			// if err != nil {
+// 			// 	return nil, err
+// 			// }
+// 			return splitToken, nil
+// 		}
+// 	}
+
+// 	return nil, fmt.Errorf("unable to fulfill the request: no suitable token combination or split possible")
+// }
+
+func (c *Core) findClosestToken(ownerDID string, targetValue float64) ([]wallet.FTToken, error) {
+	var tokens []wallet.FTToken
+	err := c.s.Read(wallet.FTTokenStorage, &tokens, "owner_did=? AND token_status=?", ownerDID, wallet.TokenIsFree)
+	if err != nil {
+		c.log.Error("Failed to query all free tokens", "err", err)
+		return nil, err
+	}
+	if len(tokens) == 0 {
+		c.log.Error("No free tokens found for owner DID", "owner_did", ownerDID)
+		return nil, fmt.Errorf("no free tokens found for owner DID %s", ownerDID)
+	}
+
+	// Find the token with value closest to targetValue
+	var closestToken wallet.FTToken
+	minDiff := int64(math.MaxInt64)
+	for _, token := range tokens {
+		diff := int64(math.Abs(float64(token.TokenValue - targetValue)))
+		if diff < minDiff {
+			minDiff = diff
+			closestToken = token
+		}
+	}
+
+	// Lock the closest token
+	closestToken.TokenStatus = wallet.TokenIsLocked
+	err = c.s.Update(wallet.FTTokenStorage, &closestToken, "owner_did=? AND token_id=?", ownerDID, closestToken.TokenID)
+	if err != nil {
+		c.log.Error("Failed to lock closest token", "err", err, "token_id", closestToken.TokenID)
+		return nil, err
+	}
+	c.log.Debug("Selected closest token", "token_id", closestToken.TokenID, "value", closestToken.TokenValue, "targetValue", targetValue)
+	return []wallet.FTToken{closestToken}, nil
+}
+
+// Helper function to find a combination of tokens summing to targetValue
+func (c *Core) findBestCombination(tokens []wallet.FTToken, targetValue float64) ([]wallet.FTToken, float64, error) {
+	var bestTokens []wallet.FTToken
+	bestSum := float64(0)
+	n := len(tokens)
+
+	// Use a bitmask to try all possible combinations
+	for i := 1; i < (1 << n); i++ {
+		var currentTokens []wallet.FTToken
+		sum := float64(0)
+		for j := 0; j < n; j++ {
+			if i&(1<<j) != 0 {
+				currentTokens = append(currentTokens, tokens[j])
+				sum += tokens[j].TokenValue
+			}
+		}
+		if sum == targetValue {
+			return currentTokens, sum, nil // Exact match found
+		}
+		if sum <= targetValue && sum > bestSum {
+			bestTokens = make([]wallet.FTToken, len(currentTokens))
+			copy(bestTokens, currentTokens)
+			bestSum = sum
+		}
+	}
+
+	if len(bestTokens) == 0 {
+		return nil, 0, fmt.Errorf("no valid combination found")
+	}
+	return bestTokens, bestSum, nil
 }

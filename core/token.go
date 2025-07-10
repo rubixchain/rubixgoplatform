@@ -151,6 +151,17 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	return info, nil
 }
 
+func (c *Core) GetFTValue(did string, FTName string) (float64, error) {
+	ft, err := c.w.GetAllFreeFTTokens(did, FTName)
+	if err != nil {
+		c.log.Error("Failed to get free tokens", "err", err)
+		return 0.0, err
+	}
+	totalFTValue := c.w.GetTotalFTValue(ft)
+	c.log.Info("Total FT value", "did", did, "FTName", FTName, "Balance", totalFTValue)
+	return totalFTValue, nil
+}
+
 func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
 	err := c.generateTestTokens(reqID, num, did)
 	br := model.BasicResponse{

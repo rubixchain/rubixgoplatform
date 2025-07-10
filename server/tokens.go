@@ -223,6 +223,46 @@ func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
 
+// ShowAccount godoc
+// @Summary      Check account balance
+// @Description  For a mentioned DID and FT name, check the account balance
+// @Tags         Account
+// @Accept       json
+// @Produce      json
+// @Param        did        query      string  true  "User DID"
+// @Param        ft_name    query      string  true  "FT Name"
+// @Success 200 {object} model.BasicResponse{result=model.FtValueInfo}
+// @Router /api/get-ft-value [get]
+
+func (s *Server) APIGetFTValue(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "did")
+	ftName := s.GetQuerry(req, "ft_name")
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID:", did)
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+	value, err := s.c.GetFTValue(did, ftName)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	ftValueInfo := model.FtValueInfo{
+		DID:     did,
+		FTName:  ftName,
+		FTValue: value,
+	}
+	response := model.BasicResponse{
+		Status:  true,
+		Message: "Got account info successfully",
+		Result:  ftValueInfo,
+	}
+	return s.RenderJSON(req, response, http.StatusOK)
+}
+
 type SignatureResponseSwaggoInput struct {
 	ID       string `json:"id"`
 	Mode     int    `json:"mode"`

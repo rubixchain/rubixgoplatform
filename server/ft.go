@@ -17,17 +17,20 @@ type CreateFTReqSwaggoInput struct {
 	FTValue         float64 `json:"ft_value" swaggo:"true,The value of each FT to create"`
 	FTNumStartIndex int     `json:"ft_num_start_index" swaggo:"true,The starting index for FT numbering"`
 	FromRBT         bool    `json:"from_rbt" swaggo:"false,Whether to create FT from RBT,default=false"`
+	IsHighValueFT   bool    `json:"is_high_value"`
 }
 
 type TransferFTReqSwaggoInput struct {
-	Receiver   string `json:"receiver"`
-	Sender     string `json:"sender"`
-	FTName     string `json:"ft_name"`
-	FTCount    int    `json:"ft_count"`
-	Comment    string `json:"comment"`
-	QuorumType int    `json:"quorum_type"`
-	Password   string `json:"password"`
-	CreatorDID string `json:"creatorDID"`
+	Receiver        string  `json:"receiver"`
+	Sender          string  `json:"sender"`
+	FTName          string  `json:"ft_name"`
+	FTCount         int     `json:"ft_count"`
+	Comment         string  `json:"comment"`
+	QuorumType      int     `json:"quorum_type"`
+	Password        string  `json:"password"`
+	CreatorDID      string  `json:"creatorDID"`
+	IsHighValueFT   bool    `json:"is_high_value"`
+	FTTransferValue float64 `json:"ft_transfer_value"`
 }
 
 // ShowAccount godoc
@@ -50,7 +53,7 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	}
 	s.c.AddWebReq(req)
 	// High Value true hardcoded for easy testing.
-	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, createFTReq.FTValue, createFTReq.FTNumStartIndex, createFTReq.FromRBT, true)
+	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, createFTReq.FTValue, createFTReq.FTNumStartIndex, createFTReq.FromRBT, createFTReq.IsHighValueFT)
 	return s.didResponse(req, req.ID)
 }
 

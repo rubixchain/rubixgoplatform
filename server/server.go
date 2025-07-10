@@ -184,6 +184,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIFetchNft, "GET", s.AuthHandle(s.APIFetchNft, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNftsByDid, "GET", s.AuthHandle(s.APIGetNFTsByDid, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetFTTokenchain, "GET", s.AuthHandle(s.APIGetFTTokenchain, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetFTValue, "GET", s.AuthHandle(s.APIGetFTValue, true, s.AuthError, false))
 
 	s.AddRoute(setup.APIRequestDIDForPubKey, "POST", s.APICreateDIDFromPubKey)
 	s.AddRoute(setup.APISendJWTFromWallet, "POST", s.APIAuthenticateWalletJWT)

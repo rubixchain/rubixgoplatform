@@ -50,6 +50,12 @@ type GetAccountInfo struct {
 	AccountInfo []DIDAccountInfo `json:"account_info"`
 }
 
+type FtValueInfo struct {
+	DID     string  `json:"did"`
+	FTName  string  `json:"ft_name"`
+	FTValue float64 `json:"ft_value"`
+}
+
 type DIDAccountInfo struct {
 	DID        string  `json:"did"`
 	DIDType    int     `json:"did_type"`

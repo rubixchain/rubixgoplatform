@@ -3,7 +3,6 @@ package wallet
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"os"
 	"strings"
 
@@ -63,277 +62,6 @@ type Token struct {
 	Added          bool    `gorm:"column:added"`
 	SyncStatus     int     `gorm:"column:sync_status"`
 }
-
-func (w *Wallet) GetClosestTokens(ownerDID string, targetValue float64) ([]FTToken, error) {
-	w.l.Lock()
-	defer w.l.Unlock()
-
-	var tokens []FTToken
-	// Query for a single token with the exact value
-	err := w.s.Read(FTTokenStorage, &tokens, "owner_did=? AND token_status=? AND token_value=?", ownerDID, TokenIsFree, targetValue)
-	if err != nil && !strings.Contains(err.Error(), "no records found") {
-		w.log.Error("Failed to query exact token", "err", err, "targetValue", targetValue)
-		return nil, err
-	}
-	if len(tokens) > 0 {
-		// Found an exact match; lock the token and return
-		tokens[0].TokenStatus = TokenIsLocked
-		err = w.s.Update(FTTokenStorage, &tokens[0], "owner_did=? AND token_id=?", ownerDID, tokens[0].TokenID)
-		if err != nil {
-			w.log.Error("Failed to lock exact token", "err", err, "token_id", tokens[0].TokenID)
-			return nil, err
-		}
-		w.log.Debug("Found exact token match", "token_id", tokens[0].TokenID, "value", tokens[0].TokenValue)
-		return tokens[:1], nil
-	}
-
-	// No exact match; query all free tokens with value <= targetValue
-	tokens = nil // Reset tokens slice
-	err = w.s.Read(FTTokenStorage, &tokens, "owner_did=? AND token_status=? AND token_value<=? ORDER BY token_value DESC", ownerDID, TokenIsFree, targetValue)
-	if err != nil {
-		if strings.Contains(err.Error(), "no records found") {
-			// No tokens <= targetValue; find the closest token
-			return w.findClosestToken(ownerDID, targetValue)
-		}
-		w.log.Error("Failed to query tokens <= targetValue", "err", err, "targetValue", targetValue)
-		return nil, err
-	}
-	if len(tokens) == 0 {
-		// No tokens <= targetValue; find the closest token
-		return w.findClosestToken(ownerDID, targetValue)
-	}
-
-	// Try to find a combination of tokens that sums exactly to targetValue
-	selectedTokens, sum, err := w.findBestCombination(tokens, targetValue)
-	if err != nil {
-		w.log.Error("Failed to find token combination", "err", err)
-		return nil, err
-	}
-	if sum == targetValue {
-		// Lock selected tokens
-		for i := range selectedTokens {
-			selectedTokens[i].TokenStatus = TokenIsLocked
-			err = w.s.Update(FTTokenStorage, &selectedTokens[i], "owner_did=? AND token_id=?", ownerDID, selectedTokens[i].TokenID)
-			if err != nil {
-				w.log.Error("Failed to lock token in combination", "err", err, "token_id", selectedTokens[i].TokenID)
-				// Roll back any locked tokens
-				for j := 0; j < i; j++ {
-					selectedTokens[j].TokenStatus = TokenIsFree
-					w.s.Update(FTTokenStorage, &selectedTokens[j], "owner_did=? AND token_id=?", ownerDID, selectedTokens[j].TokenID)
-				}
-				return nil, err
-			}
-		}
-		w.log.Debug("Found token combination summing to target", "count", len(selectedTokens), "sum", sum)
-		return selectedTokens, nil
-	}
-
-	// No exact combination; find the closest single token
-	return w.findClosestToken(ownerDID, targetValue)
-}
-
-// Helper function to find the single token with value closest to targetValue
-func (w *Wallet) findClosestToken(ownerDID string, targetValue float64) ([]FTToken, error) {
-	var tokens []FTToken
-	err := w.s.Read(FTTokenStorage, &tokens, "owner_did=? AND token_status=?", ownerDID, TokenIsFree)
-	if err != nil {
-		w.log.Error("Failed to query all free tokens", "err", err)
-		return nil, err
-	}
-	if len(tokens) == 0 {
-		w.log.Error("No free tokens found for owner DID", "owner_did", ownerDID)
-		return nil, fmt.Errorf("no free tokens found for owner DID %s", ownerDID)
-	}
-
-	// Find the token with value closest to targetValue
-	var closestToken FTToken
-	minDiff := int64(math.MaxInt64)
-	for _, token := range tokens {
-		diff := int64(math.Abs(float64(token.TokenValue - targetValue)))
-		if diff < minDiff {
-			minDiff = diff
-			closestToken = token
-		}
-	}
-
-	// Lock the closest token
-	closestToken.TokenStatus = TokenIsLocked
-	err = w.s.Update(FTTokenStorage, &closestToken, "owner_did=? AND token_id=?", ownerDID, closestToken.TokenID)
-	if err != nil {
-		w.log.Error("Failed to lock closest token", "err", err, "token_id", closestToken.TokenID)
-		return nil, err
-	}
-	w.log.Debug("Selected closest token", "token_id", closestToken.TokenID, "value", closestToken.TokenValue, "targetValue", targetValue)
-	return []FTToken{closestToken}, nil
-}
-
-// Helper function to find a combination of tokens summing to targetValue
-func (w *Wallet) findBestCombination(tokens []FTToken, targetValue float64) ([]FTToken, float64, error) {
-	var bestTokens []FTToken
-	bestSum := float64(0)
-	n := len(tokens)
-
-	// Use a bitmask to try all possible combinations
-	for i := 1; i < (1 << n); i++ {
-		var currentTokens []FTToken
-		sum := float64(0)
-		for j := 0; j < n; j++ {
-			if i&(1<<j) != 0 {
-				currentTokens = append(currentTokens, tokens[j])
-				sum += tokens[j].TokenValue
-			}
-		}
-		if sum == targetValue {
-			return currentTokens, sum, nil // Exact match found
-		}
-		if sum <= targetValue && sum > bestSum {
-			bestTokens = make([]FTToken, len(currentTokens))
-			copy(bestTokens, currentTokens)
-			bestSum = sum
-		}
-	}
-
-	if len(bestTokens) == 0 {
-		return nil, 0, fmt.Errorf("no valid combination found")
-	}
-	return bestTokens, bestSum, nil
-}
-
-// func (w *Wallet) GetClosestTokens(did string, targetValue float64) ([]Token, error) {
-// 	w.l.Lock()
-// 	defer w.l.Unlock()
-
-// 	var tokens []Token
-// 	// Query for a single token with the exact value
-// 	err := w.s.Read(TokenStorage, &tokens, "did=? AND token_status=? AND token_value=? ORDER BY token_value DESC", did, TokenIsFree, targetValue)
-// 	if err != nil && !strings.Contains(err.Error(), "no records found") {
-// 		w.log.Error("Failed to query exact token", "err", err, "targetValue", targetValue)
-// 		return nil, err
-// 	}
-// 	if len(tokens) > 0 {
-// 		// Found an exact match; lock the token and return
-// 		tokens[0].TokenStatus = TokenIsLocked
-// 		err = w.s.Update(TokenStorage, &tokens[0], "did=? AND token_id=?", did, tokens[0].TokenID)
-// 		if err != nil {
-// 			w.log.Error("Failed to lock exact token", "err", err, "token_id", tokens[0].TokenID)
-// 			return nil, err
-// 		}
-// 		w.log.Debug("Found exact token match", "token_id", tokens[0].TokenID, "value", tokens[0].TokenValue)
-// 		return tokens[:1], nil
-// 	}
-
-// 	// No exact match; query all free tokens with value <= targetValue
-// 	tokens = nil // Reset tokens slice
-// 	err = w.s.Read(TokenStorage, &tokens, "did=? AND token_status=? AND token_value<=? ORDER BY token_value DESC", did, TokenIsFree, targetValue)
-// 	if err != nil {
-// 		if strings.Contains(err.Error(), "no records found") {
-// 			// No tokens <= targetValue; find the closest token (above or below)
-// 			return w.findClosestToken(did, targetValue)
-// 		}
-// 		w.log.Error("Failed to query tokens <= targetValue", "err", err, "targetValue", targetValue)
-// 		return nil, err
-// 	}
-// 	if len(tokens) == 0 {
-// 		// No tokens <= targetValue; find the closest token
-// 		return w.findClosestToken(did, targetValue)
-// 	}
-
-// 	// Try to find a combination of tokens that sums exactly to targetValue
-// 	selectedTokens, sum, err := w.findBestCombination(tokens, targetValue)
-// 	if err != nil {
-// 		w.log.Error("Failed to find token combination", "err", err)
-// 		return nil, err
-// 	}
-// 	if sum == targetValue {
-// 		// Lock selected tokens
-// 		for i := range selectedTokens {
-// 			selectedTokens[i].TokenStatus = TokenIsLocked
-// 			err = w.s.Update(TokenStorage, &selectedTokens[i], "did=? AND token_id=?", did, selectedTokens[i].TokenID)
-// 			if err != nil {
-// 				w.log.Error("Failed to lock token in combination", "err", err, "token_id", selectedTokens[i].TokenID)
-// 				// Roll back any locked tokens
-// 				for j := 0; j < i; j++ {
-// 					selectedTokens[j].TokenStatus = TokenIsFree
-// 					w.s.Update(TokenStorage, &selectedTokens[j], "did=? AND token_id=?", did, selectedTokens[j].TokenID)
-// 				}
-// 				return nil, err
-// 			}
-// 		}
-// 		w.log.Debug("Found token combination summing to target", "count", len(selectedTokens), "sum", sum)
-// 		return selectedTokens, nil
-// 	}
-
-// 	// No exact combination; find the closest single token
-// 	return w.findClosestToken(did, targetValue)
-// }
-
-// // Helper function to find the single token with value closest to targetValue
-// func (w *Wallet) findClosestToken(did string, targetValue float64) ([]Token, error) {
-// 	var tokens []Token
-// 	err := w.s.Read(TokenStorage, &tokens, "did=? AND token_status=?", did, TokenIsFree)
-// 	if err != nil {
-// 		w.log.Error("Failed to query all free tokens", "err", err)
-// 		return nil, err
-// 	}
-// 	if len(tokens) == 0 {
-// 		w.log.Error("No free tokens found for DID", "did", did)
-// 		return nil, fmt.Errorf("no free tokens found for DID %s", did)
-// 	}
-
-// 	// Find the token with value closest to targetValue
-// 	var closestToken Token
-// 	minDiff := math.MaxFloat64
-// 	for _, token := range tokens {
-// 		diff := math.Abs(token.TokenValue - targetValue)
-// 		if diff < minDiff {
-// 			minDiff = diff
-// 			closestToken = token
-// 		}
-// 	}
-
-// 	// Lock the closest token
-// 	closestToken.TokenStatus = TokenIsLocked
-// 	err = w.s.Update(TokenStorage, &closestToken, "did=? AND token_id=?", did, closestToken.TokenID)
-// 	if err != nil {
-// 		w.log.Error("Failed to lock closest token", "err", err, "token_id", closestToken.TokenID)
-// 		return nil, err
-// 	}
-// 	w.log.Debug("Selected closest token", "token_id", closestToken.TokenID, "value", closestToken.TokenValue, "targetValue", targetValue)
-// 	return []Token{closestToken}, nil
-// }
-
-// // Helper function to find a combination of tokens summing to targetValue
-// func (w *Wallet) findBestCombination(tokens []Token, targetValue float64) ([]Token, float64, error) {
-// 	var bestTokens []Token
-// 	bestSum := 0.0
-// 	n := len(tokens)
-
-// 	// Use a bitmask to try all possible combinations
-// 	for i := 1; i < (1 << n); i++ {
-// 		var currentTokens []Token
-// 		sum := 0.0
-// 		for j := 0; j < n; j++ {
-// 			if i&(1<<j) != 0 {
-// 				currentTokens = append(currentTokens, tokens[j])
-// 				sum += tokens[j].TokenValue
-// 				sum = floatPrecision(sum, 3)
-// 			}
-// 		}
-// 		if sum == targetValue {
-// 			return currentTokens, sum, nil // Exact match found
-// 		}
-// 		if sum <= targetValue && sum > bestSum {
-// 			bestTokens = make([]Token, len(currentTokens))
-// 			copy(bestTokens, currentTokens)
-// 			bestSum = sum
-// 		}
-// 	}
-
-// 	if len(bestTokens) == 0 {
-// 		return nil, 0.0, fmt.Errorf("no valid combination found")
-// 	}
-// 	return bestTokens, bestSum, nil
-// }
 
 func (w *Wallet) CreateToken(t *Token) error {
 	return w.s.Write(TokenStorage, t)
@@ -404,6 +132,24 @@ func (w *Wallet) GetAllTokens(did string) ([]Token, error) {
 		return nil, err
 	}
 	return t, nil
+}
+
+func (w *Wallet) GetAllFreeFTTokens(did string, FTName string) ([]FTToken, error) {
+	var t []FTToken
+	err := w.s.Read(FTTokenStorage, &t, "owner_did=? AND ft_name=? AND token_status=? OR token_status=?", did, FTName, TokenIsFree, TokenIsGenerated)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
+
+func (w *Wallet) GetTotalFTValue(tokens []FTToken) float64 {
+	var total float64
+	for _, token := range tokens {
+		total += token.TokenValue
+	}
+	return total
 }
 
 func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
@@ -1540,4 +1286,22 @@ func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 		}
 	}
 	return ftTokens, nil
+}
+
+func (w *Wallet) GetFTToken(token string, token_Status int) (*FTToken, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t FTToken
+	err := w.s.Read(FTTokenStorage, &t, "token_id=? AND token_status=?", token, token_Status)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	t.TokenStatus = TokenIsLocked
+	err = w.s.Update(FTTokenStorage, &t, "token_id=?", t.TokenID)
+	if err != nil {
+		w.log.Error("Failed to update token status", "err", err)
+		return nil, err
+	}
+	return &t, nil
 }

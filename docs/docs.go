@@ -1435,6 +1435,9 @@ const docTemplate = `{
                 },
                 "ft_name": {
                     "type": "string"
+                },
+                "high_value_ft": {
+                    "type": "boolean"
                 }
             }
         },
@@ -1594,6 +1597,9 @@ const docTemplate = `{
                 },
                 "ft_value": {
                     "type": "number"
+                },
+                "is_high_value": {
+                    "type": "boolean"
                 }
             }
         },
@@ -1845,6 +1851,12 @@ const docTemplate = `{
                 },
                 "ft_name": {
                     "type": "string"
+                },
+                "ft_transfer_value": {
+                    "type": "number"
+                },
+                "is_high_value": {
+                    "type": "boolean"
                 },
                 "password": {
                     "type": "string"
