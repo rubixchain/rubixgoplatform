@@ -1638,9 +1638,55 @@ func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue f
 	}
 
 	// Step 4: Try to split a token from an over-sum combination
+	// if err == nil && sum > targetValue {
+	// 	// The excess variable is the variable which stores the balance amount of the targetValue and the required Value
+	// 	// Also the selectedTokens is the tokens which are selected for the transfer.
+	// 	excess := sum - targetValue
+	// 	for i, token := range selectedTokens {
+	// 		if token.TokenValue > excess {
+	// 			splitTokens, splitErr := c.splitFTToken(dc, ownerDID, token.TokenID, token.TokenValue, excess)
+	// 			if splitErr != nil {
+	// 				continue
+	// 			}
+
+	// 			var splitOutToken *wallet.FTToken
+	// 			for _, t := range splitTokens {
+	// 				// if t.TokenValue == excess {
+	// 				// 	splitOutToken = &t
+	// 				// 	break
+	// 				// }
+	// 				desiredSplitValue := token.TokenValue - excess
+	// 				if t.TokenValue == desiredSplitValue {
+	// 					splitOutToken = &t
+	// 					break
+	// 				}
+	// 			}
+	// 			if splitOutToken == nil {
+	// 				continue
+	// 			}
+
+	// 			// Remove the burned token and return the remaining combination with the splitOutToken
+	// 			var finalTokens []wallet.FTToken
+	// 			for j, t := range selectedTokens {
+	// 				if j == i {
+	// 					continue // skip the burned token
+	// 				}
+	// 				t.TokenStatus = wallet.TokenIsLocked
+	// 				err := c.s.Update(wallet.FTTokenStorage, &t, "owner_did=? AND token_id=?", ownerDID, t.TokenID)
+	// 				if err != nil {
+	// 					return nil, err
+	// 				}
+	// 				finalTokens = append(finalTokens, t)
+	// 			}
+
+	// 			splitOutToken.TokenStatus = wallet.TokenIsLocked
+	// 			finalTokens = append(finalTokens, *splitOutToken)
+	// 			return finalTokens, nil
+	// 		}
+	// 	}
+	// }
+	// Step 4: Try to split a token from an over-sum combination
 	if err == nil && sum > targetValue {
-		// The excess variable is the variable which stores the balance amount of the targetValue and the required Value
-		// Also the selectedTokens is the tokens which are selected for the transfer.
 		excess := sum - targetValue
 		for i, token := range selectedTokens {
 			if token.TokenValue > excess {
@@ -1650,13 +1696,9 @@ func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue f
 				}
 
 				var splitOutToken *wallet.FTToken
+				desiredValue := token.TokenValue - excess
 				for _, t := range splitTokens {
-					// if t.TokenValue == excess {
-					// 	splitOutToken = &t
-					// 	break
-					// }
-					desiredSplitValue := token.TokenValue - excess
-					if t.TokenValue == desiredSplitValue {
+					if t.TokenValue == desiredValue {
 						splitOutToken = &t
 						break
 					}
@@ -1665,11 +1707,11 @@ func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue f
 					continue
 				}
 
-				// Remove the burned token and return the remaining combination with the splitOutToken
+				// Build final list excluding the burned token
 				var finalTokens []wallet.FTToken
 				for j, t := range selectedTokens {
 					if j == i {
-						continue // skip the burned token
+						continue // skip burned token
 					}
 					t.TokenStatus = wallet.TokenIsLocked
 					err := c.s.Update(wallet.FTTokenStorage, &t, "owner_did=? AND token_id=?", ownerDID, t.TokenID)
@@ -1678,8 +1720,12 @@ func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue f
 					}
 					finalTokens = append(finalTokens, t)
 				}
-
+				c.log.Info("Split Token Found", "expected", desiredValue, "actual", splitOutToken.TokenValue)
 				splitOutToken.TokenStatus = wallet.TokenIsLocked
+				err := c.s.Update(wallet.FTTokenStorage, splitOutToken, "owner_did=? AND token_id=?", ownerDID, splitOutToken.TokenID)
+				if err != nil {
+					return nil, err
+				}
 				finalTokens = append(finalTokens, *splitOutToken)
 				return finalTokens, nil
 			}
