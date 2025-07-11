@@ -1591,6 +1591,7 @@ func (c *Core) splitFTToken(dc did.DIDCrypto, did, token string, currentTokenVal
 }
 
 func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue float64, FTName string) ([]wallet.FTToken, error) {
+	c.log.Warn("GetClosestTokens called", "owner_did", ownerDID, "target_value", targetValue, "ft_name", FTName)
 	var tokens []wallet.FTToken
 	err := c.s.Read(wallet.FTTokenStorage, &tokens, "owner_did=? AND token_status=? AND ft_name=?", ownerDID, wallet.TokenIsFree, FTName)
 	if err != nil {
@@ -1614,6 +1615,7 @@ func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue f
 	}
 	// Step 2: Check for exact match
 	for _, token := range tokens {
+		c.log.Warn("Checking for exact match", "token_value", token.TokenValue, "target_value", targetValue)
 		if token.TokenValue == targetValue {
 			token.TokenStatus = wallet.TokenIsLocked
 			err := c.s.Update(wallet.FTTokenStorage, &token, "owner_did=? AND token_id=?", ownerDID, token.TokenID)
@@ -1626,6 +1628,7 @@ func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue f
 
 	// Step 3: Try to find exact combination
 	selectedTokens, sum, err := c.findBestCombination(tokens, targetValue)
+	c.log.Warn("Best combination found", "sum", sum, "target_value", targetValue)
 	if err == nil && sum == targetValue {
 		for i := range selectedTokens {
 			selectedTokens[i].TokenStatus = wallet.TokenIsLocked
@@ -1687,7 +1690,9 @@ func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue f
 	// }
 	// Step 4: Try to split a token from an over-sum combination
 	if err == nil && sum > targetValue {
+		c.log.Warn("Trying to split a token from an over-sum combination", "sum", sum, "target_value", targetValue)
 		excess := sum - targetValue
+		c.log.Warn("Excess value to split", "excess", excess)
 		for i, token := range selectedTokens {
 			if token.TokenValue > excess {
 				splitTokens, splitErr := c.splitFTToken(dc, ownerDID, token.TokenID, token.TokenValue, excess)
@@ -1734,6 +1739,7 @@ func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue f
 
 	// Step 5: Try to find a single token > targetValue for split
 	for _, token := range tokens {
+		c.log.Warn("Checking for single token split", "token_value", token.TokenValue, "target_value", targetValue)
 		if token.TokenValue > targetValue {
 			splitTokens, splitErr := c.splitFTToken(dc, ownerDID, token.TokenID, token.TokenValue, targetValue)
 			if splitErr != nil {
@@ -2003,6 +2009,7 @@ func (c *Core) findClosestToken(ownerDID string, targetValue float64) ([]wallet.
 
 // Helper function to find a combination of tokens summing to targetValue
 func (c *Core) findBestCombination(tokens []wallet.FTToken, targetValue float64) ([]wallet.FTToken, float64, error) {
+	c.log.Warn("Finding best combination of tokens", "targetValue", targetValue, "availableTokens", len(tokens))
 	var bestTokens []wallet.FTToken
 	bestSum := float64(0)
 	n := len(tokens)
