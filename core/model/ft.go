@@ -42,8 +42,9 @@ type FTInfoForExplorer struct {
 }
 
 type BurnFTReq struct {
-	DID     string `json:"did"`
-	FTName  string `json:"ft_name"`
-	FTCount int    `json:"ft_count"`
-	FromRBT bool   `json:"from_rbt"`
+	DID         string `json:"did"`
+	FTName      string `json:"ft_name"`
+	FTCount     int    `json:"ft_count"`
+	FromRBT     bool   `json:"from_rbt"`
+	HighValueFT bool   `json:"high_value_ft"`
 }

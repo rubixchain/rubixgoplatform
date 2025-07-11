@@ -955,12 +955,55 @@ func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicRespon
 
 	// 5. Determine FTs to burn based on FromRBT flag
 	var FTsToBurn []wallet.FTToken
+
 	if burnReq.FromRBT {
 		// Burn all FTs when FromRBT is true
 		FTsToBurn = allFTs
 		c.log.Info("FromRBT is true, burning all available FTs")
+	} else if burnReq.HighValueFT {
+		targetValue := float64(burnReq.FTCount)
+		var selectedFTs []wallet.FTToken
+		var totalValue float64
+
+		for _, ft := range allFTs {
+			// Exact match
+			if ft.TokenValue == targetValue {
+				FTsToBurn = []wallet.FTToken{ft}
+				c.log.Info("Found exact match FT for burning")
+				break
+			}
+
+			// Accumulate FTs if their total value is still less than target
+			if totalValue+ft.TokenValue < targetValue {
+				selectedFTs = append(selectedFTs, ft)
+				totalValue += ft.TokenValue
+				continue
+			}
+
+			// This FT pushes us over the target — time to split
+			remaining := targetValue - totalValue
+			splitTokens, err := c.splitFTToken(dc, ft.DID, ft.TokenID, ft.TokenValue, remaining)
+			if err != nil {
+				c.log.Error("Failed to split FT token", "err", err)
+				resp.Message = "FT splitting failed"
+				return resp
+			}
+
+			// Add original accumulated tokens
+			selectedFTs = append(selectedFTs, findTokenOfValue(splitTokens, remaining))
+			FTsToBurn = selectedFTs
+			c.log.Info(fmt.Sprintf("Split FT and burning tokens totaling %.2f", targetValue))
+			break
+		}
+
+		if len(FTsToBurn) == 0 {
+			c.log.Error("Insufficient FT value available for burning")
+			resp.Message = fmt.Sprintf("Only total value %.2f FTs available, but %.2f requested", totalValue, targetValue)
+			return resp
+		}
+
 	} else {
-		// Burn specified count when FromRBT is false
+		// Burn by count (non-HighValue mode)
 		if burnReq.FTCount > len(allFTs) {
 			c.log.Error("Insufficient FTs available for burning")
 			resp.Message = fmt.Sprintf("Only %d FTs available, but %d requested", len(allFTs), burnReq.FTCount)
@@ -1059,6 +1102,15 @@ func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicRespon
 	resp.Status = true
 	resp.Message = fmt.Sprintf("Successfully burned %d %v FTs", len(FTsToBurn), burnReq.FTName)
 	return resp
+}
+
+func findTokenOfValue(tokens []wallet.FTToken, value float64) wallet.FTToken {
+	for _, t := range tokens {
+		if t.TokenValue == value {
+			return t
+		}
+	}
+	return wallet.FTToken{} // default zero value, will panic if used incorrectly — you can add a `bool` return to be safe
 }
 
 // Validate parent RBTs for burning
