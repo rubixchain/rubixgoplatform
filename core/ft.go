@@ -1651,7 +1651,12 @@ func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue f
 
 				var splitOutToken *wallet.FTToken
 				for _, t := range splitTokens {
-					if t.TokenValue == excess {
+					// if t.TokenValue == excess {
+					// 	splitOutToken = &t
+					// 	break
+					// }
+					desiredSplitValue := token.TokenValue - excess
+					if t.TokenValue == desiredSplitValue {
 						splitOutToken = &t
 						break
 					}
