@@ -154,8 +154,8 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	}
 	transRBTBlock := block.InitBlock(cr.TransTokenBlock, nil, block.NoSignature())
 	if transRBTBlock == nil {
-		c.log.Error("Failed to do signature, invalid NFT")
-		crep.Message = "Failed to do signature, invalid NFT"
+		c.log.Error("Failed to do signature, invalid RBT request")
+		crep.Message = "Failed to do signature, invalid RBT request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	//check if token has multiple pins
@@ -199,14 +199,14 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 
 	for err := range pinErrChan {
 		c.log.Error("Error occurred during pin check", "error", err)
-		crep.Message = "Error while checking FT Token multiple Pins: " + err.Error()
+		crep.Message = "Error while checking RBT Token multiple Pins: " + err.Error()
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
 	for i := range pinCheckResults {
 		if pinCheckResults[i].Status { // If Status is true, it means multiple owners
-			c.log.Error("FT Token has multiple owners", "FT token", pinCheckResults[i].Token, "owners", pinCheckResults[i].Owners)
-			crep.Message = "FT Token has multiple owners: " + pinCheckResults[i].Token
+			c.log.Error("RBT Token has multiple owners", "RBT token", pinCheckResults[i].Token, "owners", pinCheckResults[i].Owners)
+			crep.Message = "RBT Token has multiple owners: " + pinCheckResults[i].Token
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 	}
@@ -313,7 +313,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	}
 
 	crep.Status = true
-	crep.Message = "FT Consensus finished successfully"
+	crep.Message = "RBT Consensus finished successfully"
 	crep.ShareSig = qsb
 	crep.PrivSig = ppb
 	crep.Hash = txnBlockHash
