@@ -58,6 +58,7 @@ type ConensusRequest struct {
 	PinningNodePeerID  string       `json:"pinning_node_peer_id"`
 	NFT                string       `json:"nft"`
 	FTinfo             model.FTInfo `json:"ft_info"`
+	TransTokenBlock    []byte       `json:"trans_token_block"`
 	// TransTokenSyncInfo map[string]GenesisAndLatestBlocks `json:"tokens_sync_info"`
 }
 

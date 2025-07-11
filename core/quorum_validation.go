@@ -472,6 +472,145 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	return true, nil, nil
 }
 
+func (c *Core) validateTokenOwnershipInBatch(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error, []string) {
+
+	var ti []contract.TokenInfo
+	var address string
+	var receiverAddress string
+	if cr.Mode == SmartContractDeployMode || cr.Mode == NFTDeployMode {
+		ti = sc.GetCommitedTokensInfo()
+		address = cr.DeployerPeerID + "." + sc.GetDeployerDID()
+	} else {
+		ti = sc.GetTransTokenInfo()
+		address = cr.SenderPeerID + "." + sc.GetSenderDID()
+		receiverAddress = cr.ReceiverPeerID + "." + sc.GetReceiverDID()
+	}
+
+	p, err := c.getPeer(address)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return false, err, nil
+	}
+	defer p.Close()
+
+	var syncIssueTokenArray []string
+	bucketSize := 3
+	tokenBuckets := c.createTokenBuckets(ti, bucketSize)
+
+	for _, bucket := range tokenBuckets {
+		for _, t := range bucket {
+			// DHT check
+			ids, err := c.GetDHTddrs(t.Token)
+			if err != nil || len(ids) == 0 {
+				continue
+			}
+
+			err = c.syncTokenChainFrom(p, t.BlockID, t.Token, t.TokenType)
+			if err != nil {
+				if strings.Contains(err.Error(), "syncer block height discrepency") {
+					parts := strings.SplitN(err.Error(), "|", 2)
+					blockParts := strings.SplitN(parts[1], "-", 2)
+					blockHeightStr := blockParts[0]
+					blockHeight, err := strconv.Atoi(blockHeightStr)
+					if err != nil {
+						return false, fmt.Errorf("invalid block height - block height discrepancy: %v", err), nil
+					}
+					tknBlocks, _, err := c.w.GetAllTokenBlocks(t.Token, t.TokenType, "")
+					if err != nil {
+						return false, fmt.Errorf("failed to get all token blocks"), nil
+					}
+					verificationBlk := block.InitBlock(tknBlocks[blockHeight], nil)
+					verificationBlkNum, err := verificationBlk.GetBlockNumber(t.Token)
+					if err != nil || verificationBlkNum != uint64(blockHeight) {
+						return false, fmt.Errorf("block number verification failed"), nil
+					}
+					latestBlk := c.w.GetLatestTokenBlock(t.Token, t.TokenType)
+					if latestBlk.GetReceiverDID() != sc.GetReceiverDID() || latestBlk.GetSenderDID() != sc.GetSenderDID() {
+						return false, fmt.Errorf("sender/receiver mismatch"), syncIssueTokenArray
+					}
+					if err := c.w.RemoveTokenChainBlocklatest(t.Token, t.TokenType); err != nil {
+						return false, fmt.Errorf("failed to resolve sync issue for token: %v", t.Token), nil
+					}
+				} else {
+					syncIssueTokenArray = append(syncIssueTokenArray, t.Token)
+					continue
+				}
+			}
+
+			genesisBlock := c.w.GetGenesisTokenBlock(t.Token, t.TokenType)
+			if genesisBlock == nil {
+				return false, fmt.Errorf("failed to get genesis block for token %v", t.Token), nil
+			}
+
+			var parentToken string
+			if c.TokenType(PartString) == t.TokenType {
+				parentToken, _, err = genesisBlock.GetParentDetials(t.Token)
+				if err != nil {
+					return false, err, nil
+				}
+				if _, err := c.w.Pin(parentToken, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, t.TokenValue); err != nil {
+					return false, err, nil
+				}
+			}
+
+			if t.TokenType == token.RBTTokenType {
+				tl, tn, err := genesisBlock.GetTokenDetials(t.Token)
+				if err != nil {
+					return false, err, nil
+				}
+				ct := token.GetTokenString(tl, tn)
+				tid, err := c.ipfs.Add(bytes.NewBufferString(ct), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+				if err != nil {
+					return false, err, nil
+				}
+				if tid != t.Token {
+					return false, fmt.Errorf("invalid token hash for %v", t.Token), nil
+				}
+			}
+
+			latest := c.w.GetLatestTokenBlock(t.Token, t.TokenType)
+			if latest == nil {
+				return false, fmt.Errorf("invalid token chain block for %v", t.Token), nil
+			}
+			if latest.GetPinningNodeDID() != "" && latest.GetOwner() != sc.GetSenderDID() {
+				return false, fmt.Errorf("invalid token owner: pinned service token"), nil
+			}
+			ok, err := c.validateSigner(latest, quorumDID, p)
+			if err != nil || !ok {
+				return false, fmt.Errorf("failed to validate signer for token %v", t.Token), nil
+			}
+
+			tokenInfo, err := c.w.ReadToken(t.Token)
+			if err != nil || tokenInfo.TokenID == "" {
+				tokenInfo = &wallet.Token{
+					TokenID:       t.Token,
+					TokenValue:    t.TokenValue,
+					ParentTokenID: parentToken,
+					DID:           t.OwnerDID,
+				}
+				if err := c.w.CreateToken(tokenInfo); err != nil {
+					return false, err, nil
+				}
+			}
+
+			tokenInfo.DID = sc.GetSenderDID()
+			tokenInfo.TokenStatus = wallet.QuorumPledgedForThisToken
+			tokenInfo.TransactionID = latest.GetTid()
+			tokenInfo.SyncStatus = wallet.SyncUnrequired
+
+			if err := c.w.UpdateToken(tokenInfo); err != nil {
+				return false, err, nil
+			}
+		}
+	}
+
+	if len(syncIssueTokenArray) > 0 {
+		return false, fmt.Errorf("failed to sync tokenchain Token: issueType: %v", TokenChainNotSynced), syncIssueTokenArray
+	}
+
+	return true, nil, nil
+}
+
 func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
 	if dc == nil {
 		c.log.Error("Invalid DID setup")
