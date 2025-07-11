@@ -2011,31 +2011,48 @@ func (c *Core) findClosestToken(ownerDID string, targetValue float64) ([]wallet.
 func (c *Core) findBestCombination(tokens []wallet.FTToken, targetValue float64) ([]wallet.FTToken, float64, error) {
 	c.log.Warn("Finding best combination of tokens", "targetValue", targetValue, "availableTokens", len(tokens))
 	var bestTokens []wallet.FTToken
-	bestSum := float64(0)
+	bestSum := 0.0
 	n := len(tokens)
 
-	// Use a bitmask to try all possible combinations
+	minExcess := math.MaxFloat64
+	var overMatchTokens []wallet.FTToken
+	overMatchSum := 0.0
+
 	for i := 1; i < (1 << n); i++ {
 		var currentTokens []wallet.FTToken
-		sum := float64(0)
+		sum := 0.0
 		for j := 0; j < n; j++ {
 			if i&(1<<j) != 0 {
 				currentTokens = append(currentTokens, tokens[j])
 				sum += tokens[j].TokenValue
 			}
 		}
+
 		if sum == targetValue {
-			return currentTokens, sum, nil // Exact match found
+			return currentTokens, sum, nil // Exact match
 		}
-		if sum <= targetValue && sum > bestSum {
+
+		if sum < targetValue && sum > bestSum {
 			bestTokens = make([]wallet.FTToken, len(currentTokens))
 			copy(bestTokens, currentTokens)
 			bestSum = sum
 		}
+
+		if sum > targetValue && (sum-targetValue) < minExcess {
+			overMatchTokens = make([]wallet.FTToken, len(currentTokens))
+			copy(overMatchTokens, currentTokens)
+			overMatchSum = sum
+			minExcess = sum - targetValue
+		}
 	}
 
-	if len(bestTokens) == 0 {
-		return nil, 0, fmt.Errorf("no valid combination found")
+	if len(overMatchTokens) > 0 {
+		return overMatchTokens, overMatchSum, nil
 	}
-	return bestTokens, bestSum, nil
+
+	if len(bestTokens) > 0 {
+		return bestTokens, bestSum, nil
+	}
+
+	return nil, 0, fmt.Errorf("no valid combination found")
 }
