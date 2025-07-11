@@ -1751,6 +1751,15 @@ func (c *Core) initiateCVRTwo(req *wallet.PrePledgeRequest) *model.BasicResponse
 	// 				c.log.Error("failed to get quorum signature list")
 	// 			}
 
+	c.log.Debug("**reqID in initiateCVRTwo function**", req.ReqID, "DID", req.DID)
+
+	dc, err := c.SetupDID(req.ReqID, req.DID)
+
+	c.log.Debug("didCrypto in initiateCVRTwo is: ", dc)
+	if err != nil {
+		resp.Message = "Failed to setup DID, " + err.Error()
+		return resp
+	}
 	//cvrstage-2  sender to receiver transfer
 	if req.SCTransferBlock != nil {
 		c.log.Debug("********* sender to receiver transfer consensus starting***************")
@@ -1773,12 +1782,6 @@ func (c *Core) initiateCVRTwo(req *wallet.PrePledgeRequest) *model.BasicResponse
 		cr.Mode = SpendableRBTTransferMode
 
 		c.log.Debug("********** consensus request : mode ", cr.Mode, "cr req id", cr.ReqID, "sender peerid", cr.SenderPeerID, "receiver peerid", cr.ReceiverPeerID)
-
-		dc, err := c.SetupDID(req.ReqID, req.DID)
-		if err != nil {
-			resp.Message = "Failed to setup DID, " + err.Error()
-			return resp
-		}
 
 		// initiate consensus for sender to receiver transaction.
 		_, _, _, err = c.initiateConsensus(cr, sc, dc)
@@ -1807,11 +1810,6 @@ func (c *Core) initiateCVRTwo(req *wallet.PrePledgeRequest) *model.BasicResponse
 
 		c.log.Debug("********** consensus request : mode ", selfTransferConsensusReq.Mode, "cr req id", selfTransferConsensusReq.ReqID, "sender peerid", selfTransferConsensusReq.SenderPeerID, "receiver peerid", selfTransferConsensusReq.ReceiverPeerID)
 
-		dc, err := c.SetupDID(req.ReqID, req.DID)
-		if err != nil {
-			resp.Message = "Failed to setup DID, " + err.Error()
-			return resp
-		}
 		// initiate consensus for self transfer
 		_, _, _, err = c.initiateConsensus(selfTransferConsensusReq, selfTransferContractBlock, dc)
 		if err != nil {
