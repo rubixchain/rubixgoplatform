@@ -1346,6 +1346,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
 				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+				previousQuorumPeer.Close()
 			}
 		}
 
@@ -1550,6 +1551,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
 				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+				previousQuorumPeer.Close()
 
 			}
 		}
@@ -1749,6 +1751,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
 				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+				previousQuorumPeer.Close()
 
 			}
 		}
@@ -1889,6 +1892,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
 				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+				previousQuorumPeer.Close()
 
 			}
 		}
@@ -2107,6 +2111,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			updateTokenHashDetailsQuery := make(map[string]string)
 			updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = oldsctokenIDTokenStateHash
 			previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+			previousQuorumPeer.Close()
 
 		}
 
@@ -2230,6 +2235,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			updateTokenHashDetailsQuery := make(map[string]string)
 			updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = oldnfttokenIDTokenStateHash
 			previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+			previousQuorumPeer.Close()
 
 		}
 
@@ -2454,7 +2460,9 @@ func (c *Core) finishConsensus(id string, p *ipfsport.Peer, status bool, hash st
 func (c *Core) connectQuorum(consensusRequest *ConensusRequest, p *ipfsport.Peer, contractBlock *contract.Contract) {
 	c.startConsensus(consensusRequest.ReqID)
 	var cresp ConensusReply
-	err := p.SendJSONRequest("POST", APIQuorumConsensus, nil, consensusRequest, &cresp, true, 10*time.Minute)
+
+	err := p.SendJSONRequest("POST", APIQuorumConsensus, nil, consensusRequest, &cresp, true, 60*time.Minute)
+
 	if err != nil {
 		c.log.Error("Failed to get consensus", "err", err)
 		c.finishConsensus(consensusRequest.ReqID, p, false, "", nil, nil)
@@ -2632,7 +2640,8 @@ func (c *Core) connectQuorum(consensusRequest *ConensusRequest, p *ipfsport.Peer
 	}
 
 	if !cresp.Status {
-		c.log.Error("Failed to get consensus", "msg", cresp.Message)
+
+		c.log.Error("Failed to get consensus", "msg", cresp.Message, "|| crep is ", cresp)
 		c.finishConsensus(consensusRequest.ReqID, p, false, "", nil, nil)
 		return
 	}

@@ -262,8 +262,8 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 				latestBlkRec := latestBlk.GetReceiverDID()
 				latestBlkSender := latestBlk.GetSenderDID()
 				if latestBlkRec != sc.GetReceiverDID() || latestBlkSender != sc.GetSenderDID() {
-					c.log.Error("Failed to verify sender/receiver - block height discrepency exist", "err", err)
-					return false, fmt.Errorf("Failed to verify sender/receiver in block height discrepency"), syncIssueTokenArray
+					c.log.Error("Fto verify sender/receiver - block height exist", ti[i].Token, " | ", "err", err)
+					//return false, fmt.Errorf("Failed to verify sender/receiver in block height discrepency"), syncIssueTokenArray
 				}
 				err = c.w.RemoveTokenChainBlocklatest(ti[i].Token, ti[i].TokenType)
 				if err != nil {

@@ -105,29 +105,44 @@ func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
 	if err != nil {
 		return err
 	}
-	var dm DIDPeerMap
-	err = w.s.Read(DIDStorage, &dm, "did=?", did)
+
+	var existing DIDPeerMap
+
+	//If DID exists in DIDStorage (authoritative), do nothing
+	err = w.s.Read(DIDStorage, &existing, "did=?", did)
 	if err == nil {
 		return nil
 	}
 
-	err = w.s.Read(DIDPeerStorage, &dm, "did=?", did)
+	//Try reading from DIDPeerStorage
+	err = w.s.Read(DIDPeerStorage, &existing, "did=?", did)
 	if err != nil {
-		dm.DID = did
-		dm.PeerID = peerID
-		dm.DIDLastChar = lastChar
-		dm.DIDType = &didType
-		return w.s.Write(DIDPeerStorage, &dm)
+		// Not found — insert new record
+		newRecord := DIDPeerMap{
+			DID:         did,
+			PeerID:      peerID,
+			DIDLastChar: lastChar,
+			DIDType:     &didType,
+		}
+		return w.s.Write(DIDPeerStorage, &newRecord)
 	}
-	if dm.PeerID != peerID {
-		dm.PeerID = peerID
-		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
+
+	//Record exists — compare values
+	samePeerID := existing.PeerID == peerID
+	sameDIDType := (existing.DIDType != nil && *existing.DIDType == didType)
+	sameLastChar := existing.DIDLastChar == lastChar
+
+	// If all match, nothing to update
+	if samePeerID && sameDIDType && sameLastChar {
+		return nil
 	}
-	if dm.DIDType == nil {
-		dm.DIDType = &didType
-		return w.s.Update(DIDPeerStorage, &dm, "did=?", did)
-	}
-	return nil
+
+	//Update changed fields
+	existing.PeerID = peerID
+	existing.DIDType = &didType
+	existing.DIDLastChar = lastChar
+
+	return w.s.Update(DIDPeerStorage, &existing, "did=?", did)
 }
 
 func (w *Wallet) AddDIDLastChar() error {

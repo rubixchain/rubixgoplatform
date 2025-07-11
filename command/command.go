@@ -33,7 +33,8 @@ const (
 )
 
 const (
-	version string = "0.1_rc18exp"
+
+	version string = "0.1_rc20exp"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -434,6 +435,7 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Syncing Details...")
 	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
 	if len(dids) != 0 {
+		c.UnlockFTs()
 		c.UpdateUserInfo(dids)     //Updating the balance
 		c.GenerateUserAPIKey(dids) //Regenerating the API Key for DID
 	}

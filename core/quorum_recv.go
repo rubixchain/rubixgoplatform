@@ -806,6 +806,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	}
 
 	ti := sc.GetTransTokenInfo()
+
 	pinCheckResults := make([]MultiPinCheckRes, len(ti))
 	tokenStateCheckResults := make([]TokenStateCheckResult, len(ti))
 
@@ -864,6 +865,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	c.log.Debug("*********** starting validateTokenOwnership")
 	validateTokenOwnershipVar, err, syncIssueTokens := c.validateTokenOwnershipInBatch(consensusRequest, sc, did)
 	if len(syncIssueTokens) > 0 {
+
 		consensusReply.Result = syncIssueTokens
 	}
 	if err != nil {
