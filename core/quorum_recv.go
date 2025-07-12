@@ -1559,12 +1559,16 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 
 		tokenStateCheckResult := make([]TokenStateCheckResult, len(tokenInfo))
 		wg = sync.WaitGroup{}
+		limit := c.getConcurrencyLimit()
+		sem := make(chan struct{}, limit)
 		for i, ti := range tokenInfo {
 			t := ti.Token
 			wg.Add(1)
 			go func(t string, i int, tokenType int) {
 				defer wg.Done()
 				// NOTE: Removed wg param from checkTokenState to avoid WaitGroup panic
+				sem <- struct{}{}
+				defer func() { <-sem }()
 				c.checkTokenState(t, receiverDID, i, tokenStateCheckResult, quorumList, tokenType)
 			}(t, i, ti.TokenType)
 		}
