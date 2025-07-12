@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -511,4 +512,15 @@ func (c *Core) GetActiveQuorums(ql []string) []string {
 	}
 
 	return activeQuorumList
+}
+
+func (c *Core) getConcurrencyLimit() int {
+	switch runtime.GOOS {
+	case "windows":
+		return 5 // Safe for most Windows environments
+	case "darwin", "linux":
+		return 20 // Tuned for UNIX-like OSes
+	default:
+		return 10 // Conservative default
+	}
 }

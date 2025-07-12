@@ -832,11 +832,15 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	var completed int32
 	var lastLoggedPercent int32
 	total := len(ti)
-
+	limit := c.getConcurrencyLimit()
+	sem := make(chan struct{}, limit) // Limit to 5 concurrent goroutines
 	for i := range ti {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+
+			sem <- struct{}{}        // acquire a slot in the semaphore
+			defer func() { <-sem }() // release slot in the semaphore
 
 			c.checkTokenState(ti[i].Token, did, i, tokenStateCheckResult, consensusRequest.QuorumList, ti[i].TokenType)
 
