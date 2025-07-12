@@ -1655,7 +1655,7 @@ func (c *Core) GatherFreeRBTsForConsensus(reqID string, req *model.CvrAPIRequest
 		TxnEpoch:            int64(txEpoch),
 	}
 
-	c.log.Debug("********** initiating cvr-2")
+	// c.log.Debug("********** initiating cvr-2")
 
 	response = c.initiateCVRTwo(cvrReq)
 	return response
@@ -1794,7 +1794,6 @@ func (c *Core) initiateCVRTwo(req *wallet.PrePledgeRequest) *model.BasicResponse
 
 	//cvrstage-2  for sef transfer
 	if req.SCSelfTransferBlock != nil {
-		c.log.Debug("********* self transfer consensus starting***************")
 		selfTransferContractBlock := contract.InitContract(req.SCSelfTransferBlock, nil)
 		if selfTransferContractBlock == nil {
 			c.log.Error(" empty contract block, failked to self-transfer consensus")

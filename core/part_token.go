@@ -58,7 +58,6 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	}
 	pt, err := c.w.GetTokensByLimit(did, rem, trnxMode)
 
-	c.log.Debug("descending ordered tokens whose value is less than remaining amount: ", rem, "tokens: ", pt)
 	if err != nil || len(pt) == 0 {
 		if rem >= 1 {
 			c.w.ReleaseTokens(wt, c.testNet)
@@ -154,8 +153,6 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 }
 
 func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts []float64, txnMode int) ([]wallet.Token, error) {
-
-	c.log.Debug("*****CreatePartToken function has been called********")
 	if dc == nil {
 		return nil, fmt.Errorf("did crypto is not initialised")
 	}

@@ -438,7 +438,7 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 	}
 	key := tcsKey(tt, token, bid)
 
-	w.log.Debug("1. tcs key while adding the block :", bid, "token ", token, "tcs key : ", key)
+	// w.log.Debug("1. tcs key while adding the block :", bid, "token ", token, "tcs key : ", key)
 
 	lb := w.getLatestBlock(tt, token)
 	bn, err := b.GetBlockNumber(token)
@@ -684,7 +684,7 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 			return err
 		}
 		key := tcsKey(tt, token, bid)
-		w.log.Debug("2. tcs key while adding the block :", bid, "token ", token, "tcs key : ", key)
+		// w.log.Debug("2. tcs key while adding the block :", bid, "token ", token, "tcs key : ", key)
 		db.l.Lock()
 		err = db.Put([]byte(key), refkey, opt)
 		db.l.Unlock()

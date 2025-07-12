@@ -83,7 +83,6 @@ type Token struct {
 }
 
 func (w *Wallet) CreateToken(t *Token) error {
-	w.log.Debug("******token status just before writing onto the sqlite DB**", t.TokenStatus, "token: ", t.TokenID)
 	return w.s.Write(TokenStorage, t)
 }
 func (w *Wallet) CreateFT(ft *FTToken) error {
@@ -924,7 +923,6 @@ func (w *Wallet) FTTokensTransffered(did string, ti []contract.TokenInfo, b *blo
 	return nil
 }
 func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell) ([]string, error) {
-	w.log.Debug("****** inside TokensReceived, updating Ldb and sQlite Db")
 
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -938,7 +936,6 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 
 	// read the added block to make sure it was added properly
 	if b.GetTransType() == block.SpendableTokenTransferredType {
-		w.log.Debug("************ reading cvr-1 block *********")
 		checkBlock, err := w.getBlock(ti[0].TokenType+50, ti[0].Token, blockId)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to read added block in cvr-1, block id : %v, err : %v", blockId, err)
@@ -951,8 +948,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			return nil, fmt.Errorf(errMsg)
 		}
 	} else {
-		w.log.Debug("************ reading cvr-2 block *********")
-		w.log.Debug("reading added block in cvr-2 , token : ", ti[0].Token, "token type", ti[0].TokenType, "block id ", blockId)
+		// w.log.Debug("reading added block in cvr-2 , token : ", ti[0].Token, "token type", ti[0].TokenType, "block id ", blockId)
 		checkBlock, err := w.getBlock(ti[0].TokenType, ti[0].Token, blockId)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to read added block in cvr-2, block id : %v, err : %v", blockId, err)
@@ -1054,7 +1050,6 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		// 	t.SyncStatus = SyncIncomplete
 		// }
 
-		w.log.Debug("******** receiver is upating token in db : ", tokenInfo)
 
 		err = w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token)
 		if err != nil {
@@ -1089,7 +1084,6 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 	// read the added block to make sure it was added properly
 	blockId, _ := b.GetBlockID(ti[0].Token)
 	if b.GetTransType() == block.SpendableTokenTransferredType {
-		w.log.Debug("************ reading cvr-1 ft block *********")
 		checkBlock, err := w.getBlock(ti[0].TokenType+50, ti[0].Token, blockId)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to read added block in cvr-1, block id : %v, err : %v", blockId, err)
@@ -1102,8 +1096,6 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 			return nil, fmt.Errorf(errMsg)
 		}
 	} else {
-		w.log.Debug("************ reading cvr-2 ft block *********")
-		w.log.Debug("reading added ft block in cvr-2 , token : ", ti[0].Token, "token type", ti[0].TokenType, "block id ", blockId)
 		checkBlock, err := w.getBlock(ti[0].TokenType, ti[0].Token, blockId)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to read added block in cvr-2, block id : %v, err : %v", blockId, err)
@@ -1187,7 +1179,6 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 		FTInfo.TransactionID = b.GetTid()
 		FTInfo.TokenStateHash = tokenHashMap[tokenInfo.Token]
 
-		w.log.Debug("******** receiver is upating token in db : ", FTInfo)
 
 		err = w.s.Update(FTTokenStorage, &FTInfo, "token_id=?", tokenInfo.Token)
 		if err != nil {

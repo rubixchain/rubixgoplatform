@@ -847,8 +847,6 @@ func (c *Core) ftTransfer(reqID string, req *model.TransferFTReq) *model.BasicRe
 		return resp
 	}
 
-	c.log.Debug("******Receiver is:*********", req.Receiver)
-
 	receiverPeerID, err := c.getPeer(req.Receiver)
 	if err != nil {
 		resp.Message = "Failed to get receiver peer, " + err.Error()
@@ -890,16 +888,11 @@ func (c *Core) ftTransfer(reqID string, req *model.TransferFTReq) *model.BasicRe
 		// if exists delete the token from the self-transfer map, if does not exist
 		// then fetch the list of all tokens from the latest block, and
 		// add all the tokens to the self-transfer map except the trans-token
-		c.log.Debug("*********dealing with trans-token :", FTsForTxn[i].TokenID)
-
 		_, exists := selfTransferFTMap[FTsForTxn[i].TokenID]
 		if exists {
-			c.log.Debug("&&&&& self-trans map before deleting : ", selfTransferFTMap)
 			delete(selfTransferFTMap, FTsForTxn[i].TokenID)
-			c.log.Debug("&&&&&&& self-trans map after deleting : ", selfTransferFTMap)
 		} else {
 			transTokensInBlock := blk.GetTransTokens()
-			c.log.Debug("***********trans tokens in last block :", transTokensInBlock)
 			for _, token := range transTokensInBlock {
 				if token != FTsForTxn[i].TokenID {
 					selfTransferFTMap[token] = struct{}{}
@@ -963,7 +956,6 @@ func (c *Core) ftTransfer(reqID string, req *model.TransferFTReq) *model.BasicRe
 	td := cvr1Resp.Result.(*model.TransactionDetails)
 
 	// self transfer in cvr-1
-	c.log.Debug("self transefr ft map ", selfTransferFTMap)
 	selfTransferFTResponse := c.CreateSelfTransferFTContract(selfTransferFTMap, dc, req, txEpoch)
 	if !selfTransferFTResponse.Status {
 		errMsg := fmt.Sprintf("self transfer contract creation failed, err : %v", selfTransferFTResponse.Message)
@@ -1026,10 +1018,8 @@ func (c *Core) ftTransfer(reqID string, req *model.TransferFTReq) *model.BasicRe
 		FTSymbol:        "N/A",
 		Comments:        req.Comment,
 		TransactionID:   td.TransactionID,
-		// PledgeInfo:      PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
-		// QuorumList:      extractQuorumDID(cr.QuorumList),
-		Amount:      FTsForTxn[0].TokenValue * float64(req.FTCount),
-		FTTokenList: FTTokenIDs,
+		Amount:          FTsForTxn[0].TokenValue * float64(req.FTCount),
+		FTTokenList:     FTTokenIDs,
 	}
 
 	updateFTTableErr := c.updateFTTable()
@@ -1080,7 +1070,6 @@ func (c *Core) SendFTsToReceiver(sc *contract.Contract, ftData model.FTInfo, ftI
 	// create block in cvr stage-1
 	transactionID := util.HexToStr(util.CalculateHash(sc.GetBlock(), "SHA3-256"))
 
-	c.log.Debug("*****sender to receiver transactionID***", transactionID)
 	tks := make([]block.TransTokens, 0)
 	ctcb := make(map[string]*block.Block)
 
@@ -1108,7 +1097,6 @@ func (c *Core) SendFTsToReceiver(sc *contract.Contract, ftData model.FTInfo, ftI
 		InitiatorSignature: senderSig,
 		Epoch:              txEpoch,
 	}
-	c.log.Debug("****creating new FT transblock for sender to receiver transaction in cvr-1*********")
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
 		c.log.Error("Failed to create new FT-token chain block")
@@ -1187,7 +1175,6 @@ func (c *Core) SendFTsToReceiver(sc *contract.Contract, ftData model.FTInfo, ftI
 	// 1. sender receiver on different ports
 	// 2. sender receiver on same port
 	if rpeerid != c.peerID {
-		c.log.Debug("*********** updating token status for sender's transferred FTs")
 		err = c.UpdateTransferredFTsInfo(ftInfoForTable, wallet.TokenIsTransferred, transactionID)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to update trans tokens in DB, err : %v", err)
@@ -1195,9 +1182,10 @@ func (c *Core) SendFTsToReceiver(sc *contract.Contract, ftData model.FTInfo, ftI
 			resp.Message = errMsg
 			return resp
 		}
-	} else {
-		c.log.Debug("******sender peer and receiver's is same")
 	}
+	// else {
+	// 	c.log.Debug("******sender peer and receiver's is same")
+	// }
 
 	nbid, err := nb.GetBlockID(ftInfo[0].Token)
 	if err != nil {
@@ -1302,7 +1290,7 @@ func (c *Core) CreateSelfTransferFTContract(selfTransferFTsMap map[string]struct
 
 	// if there are no available tokens for self-transfer then no need of self-transfer
 	if len(selfTransferFTsList) != 0 {
-		c.log.Debug("********** self transfer fts : ", selfTransferFTsList)
+		// c.log.Debug("********** self transfer fts : ", selfTransferFTsList)/
 		//create new contract for self transfer
 		selfTransferContractType := &contract.ContractType{
 			Type:       contract.SCFTType,
@@ -1317,11 +1305,7 @@ func (c *Core) CreateSelfTransferFTContract(selfTransferFTsMap map[string]struct
 		}
 		// c.log.Debug("***********Contract type for self transaction in cvr-1******* ", selfTransferContractType)
 
-		c.log.Debug("*******creating the contract for self transaction in cvr-1*******")
-
 		selfTransferFTContract = contract.CreateNewContract(selfTransferContractType)
-
-		c.log.Debug("******** sender signing on self-transfer txn id")
 
 		err := selfTransferFTContract.UpdateSignature(dc)
 		if err != nil {
@@ -1380,15 +1364,12 @@ func (c *Core) CreateSelfTransferFTContract(selfTransferFTsMap map[string]struct
 			Epoch:              txnEpoch,
 		}
 
-		c.log.Debug("*******creating a new block for self transaction*****")
 		if latestTokenChainBlock == nil {
 			errMsg := fmt.Sprintf("failed to get prev block of tokens for self-transfer")
 			c.log.Error(errMsg)
 			resp.Message = errMsg
 			return resp
 		}
-
-		c.log.Debug(fmt.Sprintf("self transfer tcb : %v", selfTransferTCB))
 
 		selfTransferFTBlock = block.CreateNewBlock(latestTokenChainBlock, &selfTransferTCB)
 		if selfTransferFTBlock == nil {
@@ -1543,7 +1524,7 @@ func (c *Core) UnlockFTs() error {
 }
 
 func (c *Core) UpdateTransferredFTsInfo(tokenList []wallet.FTToken, newTokenStatus int, txnID string) error {
-	c.log.Debug("****** updating transferred FT info to", "new status ", newTokenStatus)
+	// c.log.Debug("****** updating transferred FT info to", "new status ", newTokenStatus)
 	for _, tokenInfo := range tokenList {
 		tokenInfo.TokenStatus = newTokenStatus
 		tokenInfo.TransactionID = txnID
@@ -1553,7 +1534,6 @@ func (c *Core) UpdateTransferredFTsInfo(tokenList []wallet.FTToken, newTokenStat
 			c.log.Error(errMsg)
 			return fmt.Errorf(errMsg)
 		}
-		c.log.Debug("****** FT updated in db")
 	}
 	return nil
 }
@@ -1611,7 +1591,6 @@ func (c *Core) GatherFreeFTsForConsensus(reqID string, req *model.CvrAPIRequest)
 	cvrFailureFtList := make([]string, 0)
 	// initiate cvr-2 for each FT name and creator did, sequentially
 	for ftNameAndCreatorDID, ftList := range segratedFtList {
-		c.log.Debug("********** initiating cvr-2 for ft name and creator did : ", ftNameAndCreatorDID, "ft list: ", ftList)
 		cvrResp := c.CreateFTContractAndInitiateCVrTwo(reqID, ftList, req.DID, req.QuorumType)
 		if !cvrResp.Status {
 			cvrFailureFtList = append(cvrFailureFtList, ftNameAndCreatorDID)
@@ -1622,7 +1601,7 @@ func (c *Core) GatherFreeFTsForConsensus(reqID string, req *model.CvrAPIRequest)
 		}
 	}
 
-	c.log.Debug("********cvr success FTs list length :", len(cvrSuccessFtList))
+	// c.log.Debug("********cvr success FTs list length :", len(cvrSuccessFtList))
 
 	if len(cvrSuccessFtList) > 0 {
 		response.Status = true

@@ -399,8 +399,6 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 // It returns a wallet.DIDPeerMap containing the peer's DID, Peer ID, and DID type,
 // or an error if the information cannot be found.
 func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
-	c.log.Debug("Resolving peer info", "did", didStr)
-
 	var peerID string
 	var didType int
 
@@ -421,7 +419,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 		didType, _ = c.w.GetPeerDIDType(didStr)
 
 		if peerID != "" && didType != -1 {
-			c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
+			// c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
 			return &wallet.DIDPeerMap{
 				DID:     didStr,
 				PeerID:  peerID,
@@ -434,7 +432,6 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 		didType, _ = c.w.GetPeerDIDType(didStr)
 
 		if peerID != "" && didType != -1 {
-			c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
 			return &wallet.DIDPeerMap{
 				DID:     didStr,
 				PeerID:  peerID,

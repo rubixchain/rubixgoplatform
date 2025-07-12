@@ -1009,7 +1009,6 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	crep := model.BasicResponse{
 		Status: false,
 	}
-	c.log.Debug("**********Request for pledge, crReqId : ", pr.ConensusRequestID, "pledge amount ", pr.TokensRequired)
 	if err != nil {
 		c.log.Error("Failed to parse json request", "err", err)
 		crep.Message = "Failed to parse json request"
@@ -1028,8 +1027,6 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		c.log.Error("Unable to check quorum balance")
 	}
-
-	c.log.Debug("********* available balance : ", availableBalance)
 
 	availableRBT := availableBalance.RBTAmount
 	if availableRBT < pr.TokensRequired {
@@ -1093,9 +1090,6 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		presp.TokenChainBlock = append(presp.TokenChainBlock, tc.GetBlock())
 	}
 
-	c.log.Debug("****** pledge reply :", presp.TokenValue)
-	c.log.Debug("********* total pledge amt ", floatPrecision(totalPledgeAmt, MaxDecimalPlaces))
-
 	// maintain pledge tokens map with conensus request ID in core struct for future reference
 	consensusPledgeTknMap := make(map[string][]string)
 	consensusPledgeTknMap[did] = presp.Tokens
@@ -1103,8 +1097,6 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		PledgedTokens:    consensusPledgeTknMap,
 		NumPledgedTokens: totalLockedTokens,
 	}
-
-	c.log.Debug("********* pledge tokens map : ", c.pd[pr.ConensusRequestID])
 
 	return c.l.RenderJSON(req, &presp, http.StatusOK)
 }
@@ -1144,8 +1136,6 @@ func (c *Core) updateReceiverToken(
 	}
 
 	if receiverAddress != "" && CVRStage == wallet.CVRStage1_Sender_to_Receiver {
-
-		c.log.Debug("*********** updating tokens in cvr-1************")
 
 		var err error
 		senderPeer, err = c.getPeer(senderAddress)
@@ -1191,7 +1181,7 @@ func (c *Core) updateReceiverToken(
 				return nil, senderPeer, fmt.Errorf("Token " + t + " is a pledged Token")
 			}
 
-			c.log.Debug("************ updating token type, adding 50 to the current type")
+			// c.log.Debug("************ updating token type, adding 50 to the current type")
 
 			// updating token type as per cvr stage
 			b, ok = b.UpdateTokenType(t, token.CVR_RBTTokenType+ti.TokenType)
@@ -1240,8 +1230,6 @@ func (c *Core) updateReceiverToken(
 				td.Epoch = time.Now().Unix()
 			}
 
-			c.log.Debug("************ adding transaction details to DB : ", td)
-
 			c.w.AddTransactionHistory(td)
 		}
 		//updating the token type in cvr stage1
@@ -1249,15 +1237,12 @@ func (c *Core) updateReceiverToken(
 	}
 
 	if CVRStage == wallet.CVRStage2_Sender_to_Receiver {
-
-		c.log.Debug("********** updating token in cvr-2 *****************")
-
 		results := make([]MultiPinCheckRes, len(tokenInfo))
 		var wg sync.WaitGroup
 		for i, ti := range tokenInfo {
 			t := ti.Token
 
-			c.log.Debug("************* removing cvr-1 block, token : ", t, " token type ", ti.TokenType)
+			// c.log.Debug("************* removing cvr-1 block, token : ", t, " token type ", ti.TokenType)
 
 			// if latest block is cvr-1 block, remove it before adding cvr-2 block
 			err := c.RemoveSpendableRBTTransferredBlock(t, ti.TokenType)
@@ -1304,7 +1289,7 @@ func (c *Core) updateReceiverToken(
 				return nil, senderPeer, fmt.Errorf("token state has been exhausted, Token being Double spent: %v, msg: %v", tokenStateCheckResult[i].Token, tokenStateCheckResult[i].Message)
 			}
 			c.log.Debug("Token", tokenStateCheckResult[i].Token, "Message", tokenStateCheckResult[i].Message)
-			c.log.Debug("************* token type is :", tokenInfo[i].TokenType)
+			// c.log.Debug("************* token type is :", tokenInfo[i].TokenType)
 		}
 		var err error
 		updatedTokenStateHashes, err = c.w.TokensReceived(receiverDID, tokenInfo, b, senderPeerId, receiverPeerId, pinningServiceMode, c.ipfs)
@@ -1323,9 +1308,6 @@ func (c *Core) updateReceiverToken(
 func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var sr SendTokenRequest
-
-	c.log.Debug("********* updatinhg receiver tokens, receiver : ", did, "tokens : ", sr.TokenInfo, " cvr stage ", sr.CVRStage)
-
 	err := c.l.ParseJSON(req, &sr)
 	crep := model.BasicResponse{
 		Status: false,
@@ -1530,8 +1512,6 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		var wg sync.WaitGroup
 		for i, ti := range tokenInfo {
 			t := ti.Token
-			c.log.Debug("************* removing cvr-1 block, token : ", t, " token type ", ti.TokenType)
-
 			// if latest block is cvr-1 block, remove it before adding cvr-2 block
 			err := c.RemoveSpendableRBTTransferredBlock(t, ti.TokenType)
 			if err != nil {
@@ -1719,8 +1699,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) UpdatePledgeToken(pledgeFinalityReq UpdatePledgeRequest, quorumDID string) model.BasicResponse {
-	c.log.Debug("********************pledge finality req, txn id : ", pledgeFinalityReq.TransactionID, "quorumDID ", quorumDID)
-	c.log.Debug("^^^^^^^^ is trans-token block empty : ", pledgeFinalityReq.TokenChainBlock == nil)
 	crep := model.BasicResponse{
 		Status: false,
 	}
