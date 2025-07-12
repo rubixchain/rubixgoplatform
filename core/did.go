@@ -401,23 +401,52 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 	c.log.Debug("Resolving peer info", "did", didStr)
 
-	// 1. Try peer table first
-	peerID := c.w.GetPeerID(didStr)
-	didType, _ := c.w.GetPeerDIDType(didStr)
+	var peerID string
+	var didType int
 
-	if peerID != "" && didType != -1 {
-		c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
-		return &wallet.DIDPeerMap{
-			DID:     didStr,
-			PeerID:  peerID,
-			DIDType: &didType,
-		}, nil
-	}
-
-	// 2. If missing, try DID table
-	if didType == -1 {
+	// In case of xell wallet, TRIE testnet and Rubix testnet have same swarm key but different peerIDs.
+	// So, an user should find another user's Rubix testnet DID-info in DIDTable and TRIE testnet DID-info in PeerDIDTable.
+	if c.testNet {
+		// 1. try DID table first
 		if didInfo, err := c.w.GetDID(didStr); err == nil {
-			didType = didInfo.Type
+			return &wallet.DIDPeerMap{
+				DID:     didStr,
+				PeerID:  c.peerID,
+				DIDType: &didInfo.Type,
+			}, nil
+		}
+
+		// 2. If missing, try peer table
+		peerID = c.w.GetPeerID(didStr)
+		didType, _ = c.w.GetPeerDIDType(didStr)
+
+		if peerID != "" && didType != -1 {
+			c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
+			return &wallet.DIDPeerMap{
+				DID:     didStr,
+				PeerID:  peerID,
+				DIDType: &didType,
+			}, nil
+		}
+	} else {
+		// 1. Try peer table first
+		peerID = c.w.GetPeerID(didStr)
+		didType, _ = c.w.GetPeerDIDType(didStr)
+
+		if peerID != "" && didType != -1 {
+			c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
+			return &wallet.DIDPeerMap{
+				DID:     didStr,
+				PeerID:  peerID,
+				DIDType: &didType,
+			}, nil
+		}
+
+		// 2. If missing, try DID table
+		if didType == -1 {
+			if didInfo, err := c.w.GetDID(didStr); err == nil {
+				didType = didInfo.Type
+			}
 		}
 	}
 
