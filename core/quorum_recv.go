@@ -172,7 +172,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 
 	//check if token has multiple pins
 	ti := sc.GetTransTokenInfo()
-	results := make([]MultiPinCheckRes, len(ti))
+	// results := make([]MultiPinCheckRes, len(ti))
 	var wg sync.WaitGroup
 	var receiverPeerId = cr.ReceiverPeerID
 	if receiverPeerId == "" {
@@ -180,27 +180,27 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		receiverPeerId = cr.PinningNodePeerID
 		c.log.Debug("Pinning Node Peer Id", receiverPeerId)
 	}
-	for i := range ti {
-		wg.Add(1)
-		if cr.Mode == SpendableRBTTransferMode {
-			go c.pinCheck(ti[i].Token, i, cr.ReceiverPeerID, "", results, &wg)
-		} else {
-			go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
-		}
-	}
+	// for i := range ti {
+	// 	wg.Add(1)
+	// 	if cr.Mode == SpendableRBTTransferMode {
+	// 		go c.pinCheck(ti[i].Token, i, cr.ReceiverPeerID, "", results, &wg)
+	// 	} else {
+	// 		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
+	// 	}
+	// }
 	wg.Wait()
-	for i := range results {
-		if results[i].Error != nil {
-			c.log.Error("Error occured", "error", results[i].Error)
-			crep.Message = "Error while cheking Token multiple Pins"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		if results[i].Status {
-			c.log.Error("Token has multiple owners", "token", results[i].Token, "owners", results[i].Owners)
-			crep.Message = "Token has multiple owners"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-	}
+	// for i := range results {
+	// 	if results[i].Error != nil {
+	// 		c.log.Error("Error occured", "error", results[i].Error)
+	// 		crep.Message = "Error while cheking Token multiple Pins"
+	// 		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	// 	}
+	// 	if results[i].Status {
+	// 		c.log.Error("Token has multiple owners", "token", results[i].Token, "owners", results[i].Owners)
+	// 		crep.Message = "Token has multiple owners"
+	// 		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	// 	}
+	// }
 
 	// check token ownership
 
