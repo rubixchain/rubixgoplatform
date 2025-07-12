@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
 )
 
 func (cmd *Command) GenerateTestRBT() {
@@ -143,4 +145,92 @@ func (cmd *Command) FaucetTokenCheck() {
 	fmt.Println(br.Message)
 
 	cmd.log.Info("Validated token details successfully")
+}
+
+func (cmd *Command) InitiateRBTPrePledge() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter owner DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get Sender DID")
+			return
+		}
+	}
+
+	isAlphanumericOwner := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !isAlphanumericOwner {
+		cmd.log.Error("Invalid owner. Please provide valid DID")
+		return
+	}
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 {
+		cmd.log.Error("Invalid owner DID")
+		return
+	}
+
+	if cmd.transType < 1 || cmd.transType > 2 {
+		cmd.log.Error("Invalid trans type. TransType should be 1 or 2")
+		return
+	}
+	rt := model.CvrAPIRequest{
+		DID:        cmd.did,
+		QuorumType: cmd.transType,
+	}
+
+	br, err := cmd.c.PrePledgeRBT(&rt)
+	if err != nil {
+		cmd.log.Error("Failed RBT pre-pledge", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to pre-pledge RBT", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
+	cmd.log.Info("RBT pre-pledged successfully")
+}
+
+func (cmd *Command) InitiateFTPrePledge() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter owner DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get Sender DID")
+			return
+		}
+	}
+
+	isAlphanumericOwner := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !isAlphanumericOwner {
+		cmd.log.Error("Invalid owner. Please provide valid DID")
+		return
+	}
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 {
+		cmd.log.Error("Invalid owner DID")
+		return
+	}
+
+	if cmd.transType < 1 || cmd.transType > 2 {
+		cmd.log.Error("Invalid trans type. TransType should be 1 or 2")
+		return
+	}
+	rt := model.CvrAPIRequest{
+		DID:        cmd.did,
+		QuorumType: cmd.transType,
+	}
+
+	br, err := cmd.c.PrePledgeFT(&rt)
+	if err != nil {
+		cmd.log.Error("Failed FT pre-pledge", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to pre-pledge FT", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
+	cmd.log.Info("FT pre-pledged successfully")
 }

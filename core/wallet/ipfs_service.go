@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -32,11 +33,18 @@ const (
 
 // modified pin method that pins token and update in DB with role of the machine pinning
 func (w *Wallet) Pin(hash string, role int, did string, transactionId string, sender string, receiver string, tokenValue float64) (bool, error) {
-	w.ipfs.Pin(hash)
-	err := w.AddProviderDetails(model.TokenProviderMap{Token: hash, Role: role, DID: did, FuncID: PinFunc, TransactionID: transactionId, Sender: sender, Receiver: receiver, TokenValue: tokenValue})
+	err := w.ipfs.Pin(hash)
 	if err != nil {
-		w.log.Info("Error addding provider details to DB", "error", err)
-		return false, err
+		errMsg := fmt.Sprintf("failed to pin the token: %v, error: %v", hash, err)
+		w.log.Error(errMsg)
+		return false, fmt.Errorf(errMsg)
+	}
+
+	err = w.AddProviderDetails(model.TokenProviderMap{Token: hash, Role: role, DID: did, FuncID: PinFunc, TransactionID: transactionId, Sender: sender, Receiver: receiver, TokenValue: tokenValue})
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to add pin provider details to DB, error: %v", err)
+		w.log.Error(errMsg)
+		return false, fmt.Errorf(errMsg)
 	}
 	return true, nil
 }

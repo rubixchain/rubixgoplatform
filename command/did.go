@@ -392,7 +392,7 @@ func (cmd *Command) GetAccountInfo() {
 		cmd.log.Error("Failed to get account info", "message", info.Message)
 	} else {
 		cmd.log.Info("Successfully got the account information")
-		fmt.Printf("RBT : %10.*f, Locked RBT : %10.*f, Pledged RBT : %10.*f, Pinned RBT : %10.*f\n", core.MaxDecimalPlaces, info.AccountInfo[0].RBTAmount, core.MaxDecimalPlaces, info.AccountInfo[0].LockedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].PledgedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].PinnedRBT)
+		fmt.Printf("RBT : %10.*f, Locked RBT : %10.*f, Pledged RBT : %10.*f, Pinned RBT : %10.*f,  Spendable RBT : %10.*f\n,", core.MaxDecimalPlaces, info.AccountInfo[0].RBTAmount, core.MaxDecimalPlaces, info.AccountInfo[0].LockedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].PledgedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].PinnedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].SpendableRBT)
 	}
 }
 

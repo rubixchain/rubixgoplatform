@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,7 +14,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	"golang.org/x/crypto/sha3"
 )
@@ -787,20 +785,4 @@ func BytesToString(b []byte) []string {
 		lines = append(lines, scanner.Text())
 	}
 	return lines
-}
-
-func RetrySQLiteWrite(op func() error, retries int, delay time.Duration) error {
-	for i := 0; i < retries; i++ {
-		err := op()
-		if err == nil {
-			return nil
-		}
-		if strings.Contains(err.Error(), "database is locked") {
-			time.Sleep(delay)
-			delay *= 2
-			continue
-		}
-		return err
-	}
-	return errors.New("SQLite write failed after max retries")
 }

@@ -114,11 +114,11 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string, selfPeer string) []st
 		err := qm.s.Read(wallet.DIDPeerStorage, &quorumList, "did_last_char=?", lastChar)
 		if err != nil {
 			qm.log.Error("Quorums not present")
-			return nil
+			return []string{}
 		}
 		if len(quorumList) < 5 {
 			qm.log.Error("Not enough quorums present")
-			return nil
+			return []string{}
 		}
 		var quorumAddrList []string
 		quorumAddrCount := 0

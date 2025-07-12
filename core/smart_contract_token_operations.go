@@ -61,7 +61,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	}
 
 	rbtTokensToCommit := make([]string, 0)
-	defer c.w.ReleaseTokens(rbtTokensToCommitDetails)
+	defer c.w.ReleaseTokens(rbtTokensToCommitDetails, c.testNet)
 
 	for i := range rbtTokensToCommitDetails {
 		c.w.Pin(rbtTokensToCommitDetails[i].TokenID, wallet.OwnerRole, did, "NA", "NA", "NA", float64(0)) //TODO: Ensure whether trnxId should be added ?

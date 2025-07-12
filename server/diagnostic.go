@@ -191,6 +191,11 @@ func (s *Server) APIRemoveTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
+	// when removing latest block using API call, it is not possible for the user 
+	// to pass the token type in integer format. So, hard code the integer value 
+	// as -1 so that it is not confused with the token type of whole RBT which is 0.
+	// The user can instead pass string value of the token type
+	removeReq.TokenType = -1
 	removeReply := s.c.RemoveTokenChainBlock(&removeReq)
 	return s.RenderJSON(req, removeReply, http.StatusOK)
 }

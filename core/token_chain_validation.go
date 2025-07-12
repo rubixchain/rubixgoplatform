@@ -499,19 +499,19 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 		Status: false,
 	}
 
-	sender := b.GetSenderDID()
-
 	senderSign := b.GetInitiatorSignature()
 	//check if it is a block addded to chain before adding sender signature to block structure
 	if senderSign == nil {
 		c.log.Info("old block, sender signature not found")
 		response.Message = "old block, sender signature not found"
 		return response, nil
-	} else if senderSign.DID != sender {
-		c.log.Info("invalid sender, sender did does not match")
-		response.Message = "invalid sender, sender did does not match"
-		return response, fmt.Errorf("invalid sender, sender did does not match")
+		// } else if senderSign.DID != sender {
+		// 	c.log.Info("invalid sender, sender did does not match; sender did in block : ", senderSign.DID, "sender did ", sender)
+		// 	response.Message = "invalid sender, sender did does not match"
+		// 	return response, fmt.Errorf("invalid sender, sender did does not match")
 	}
+
+	sender := senderSign.DID
 
 	var senderDIDType int
 	//sign type = 0, means it is a BIP signature and the did was created in light mode
@@ -701,7 +701,7 @@ func (c *Core) CurrentQuorumStatePinCheck(b *block.Block, tokenId string, tokenT
 	c.log.Debug("entering validation to check if token state is exhausted")
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go c.checkTokenState(tokenId, userDID, 0, tokenStateCheckResult, quorumList, tokenType)
+	go c.checkTokenState(tokenId, userDID, 0, tokenStateCheckResult, &wg, quorumList, tokenType)
 	wg.Wait()
 
 	for i := range tokenStateCheckResult {

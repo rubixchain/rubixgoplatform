@@ -98,6 +98,8 @@ const (
 	APIGetFTTxnByDID                    string = "/api/get-ft-txn-by-did"
 	APIUpdateTokenStatus                string = "/api/update-token-status"
 	APIGetTokenStatus                   string = "/api/get-token-status"
+	APIPrePledge                        string = "/api/rbt/prepledge"
+	APIPrePledgeFT                      string = "/api/ft/prepledge"
 )
 
 // jwt.RegisteredClaims

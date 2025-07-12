@@ -84,7 +84,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 	defer binaryCodeFile.Close()
 
 	// Add binary code file to IPFS
-	binaryCodeHash, err := IpfsAddWithBackoff(c.ipfs, binaryCodeFile)
+	binaryCodeHash, err := c.ipfs.Add(binaryCodeFile)
 	if err != nil {
 		c.log.Error("Failed to add binary code file to IPFS", "err", err)
 		return basicResponse
@@ -99,7 +99,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 	defer rawCodeFile.Close()
 
 	// Add raw code file to IPFS
-	rawCodeHash, err := IpfsAddWithBackoff(c.ipfs, rawCodeFile)
+	rawCodeHash, err := c.ipfs.Add(rawCodeFile)
 	if err != nil {
 		c.log.Error("Failed to add raw code file to IPFS", "err", err)
 		return basicResponse
@@ -114,7 +114,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 	defer schemaCodeFile.Close()
 
 	// Add Schema code file to IPFS
-	schemaCodeHash, err := IpfsAddWithBackoff(c.ipfs, schemaCodeFile)
+	schemaCodeHash, err := c.ipfs.Add(schemaCodeFile)
 	if err != nil {
 		c.log.Error("Failed to add Schema code file to IPFS", "err", err)
 		return basicResponse
@@ -139,7 +139,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		return basicResponse
 	}
 
-	smartContractTokenHash, err := IpfsAddWithBackoff(c.ipfs, bytes.NewReader(smartContractTokenJSON))
+	smartContractTokenHash, err := c.ipfs.Add(bytes.NewReader(smartContractTokenJSON))
 	if err != nil {
 		c.log.Error("Failed to add SmartContractToken to IPFS", "err", err)
 		return basicResponse
@@ -302,7 +302,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 
 	if smartContractToken.PeerID != "" {
-		smartContractOriginPeer, err := c.getPeer(smartContractToken.PeerID + "." + smartContractToken.DID)
+		smartContractOriginPeer, err := c.getPeer(smartContractToken.PeerID+"."+smartContractToken.DID)
 		if err != nil {
 			basicResponse.Message = fmt.Sprintf("unable to get the peer for DID: %v, err: %v ", smartContractToken.DID, err)
 			return basicResponse

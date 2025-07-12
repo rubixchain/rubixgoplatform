@@ -47,19 +47,21 @@ const (
 )
 
 const (
-	TokenMintedType       string = "01"
-	TokenTransferredType  string = "02"
-	TokenMigratedType     string = "03"
-	TokenPledgedType      string = "04"
-	TokenGeneratedType    string = "05"
-	TokenUnpledgedType    string = "06"
-	TokenCommittedType    string = "07"
-	TokenBurntType        string = "08"
-	TokenDeployedType     string = "09"
-	TokenExecutedType     string = "10"
-	TokenContractCommited string = "11"
-	TokenPinnedAsService  string = "12"
-	TokenIsBurntForFT     string = "13"
+	TokenMintedType               string = "01"
+	TokenTransferredType          string = "02"
+	TokenMigratedType             string = "03"
+	TokenPledgedType              string = "04"
+	TokenGeneratedType            string = "05"
+	TokenUnpledgedType            string = "06"
+	TokenCommittedType            string = "07"
+	TokenBurntType                string = "08"
+	TokenDeployedType             string = "09"
+	TokenExecutedType             string = "10"
+	TokenContractCommited         string = "11"
+	TokenPinnedAsService          string = "12"
+	TokenIsBurntForFT             string = "13"
+	SpendableTokenTransferredType string = "14" // cvr-1 block
+	OwnershipTransferredType      string = "15" // cvr-2 block
 )
 
 const (
@@ -141,6 +143,7 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 		op: false,
 	}
 	if b.bb == nil && b.bm == nil {
+		fmt.Println("getting empty map and bytes")
 		return nil
 	}
 	for _, opt := range opts {
@@ -150,12 +153,14 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 	if b.bb == nil {
 		err = b.blkEncode()
 		if err != nil {
+			fmt.Println("getting empty bytes 1, err ", err)
 			return nil
 		}
 	}
 	if b.bm == nil {
 		err = b.blkDecode()
 		if err != nil {
+			fmt.Println("getting empty map 2, err ", err)
 			return nil
 		}
 	}
@@ -164,6 +169,7 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 
 func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.TransInfo == nil || ctcb == nil {
+		fmt.Println("empty tokens and their latest block")
 		return nil
 	}
 	ntcb := make(map[string]interface{})
@@ -172,11 +178,13 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.GenesisBlock != nil {
 		ntcb[TCGenesisBlockKey] = newGenesisBlock(tcb.GenesisBlock)
 		if ntcb[TCGenesisBlockKey] == nil {
+			fmt.Println("failed to initiate genesis block")
 			return nil
 		}
 	}
 	ntib := newTransInfo(ctcb, tcb.TransInfo)
 	if ntib == nil {
+		fmt.Println("failed to initiate trans-info")
 		return nil
 	}
 	ntcb[TCTransInfoKey] = ntib
@@ -229,6 +237,14 @@ func (b *Block) blkDecode() error {
 	if !sok && !b.op {
 		return fmt.Errorf("invalid block, missing signature")
 	}
+	initiatorSig, iok := m[TCInitiatorSignatureKey]
+	if iok {
+		delete(b.bm, TCInitiatorSignatureKey)
+	}
+	quorumSig, qok := m[TCQuorumSignatureKey]
+	if qok {
+		delete(b.bm, TCQuorumSignatureKey)
+	}
 	bc, ok := m[TCBlockContentKey]
 	if !ok {
 		return fmt.Errorf("invalid block, missing block content")
@@ -248,6 +264,12 @@ func (b *Block) blkDecode() error {
 		}
 		tcb[TCSignatureKey] = ksb
 	}
+	if iok {
+		tcb[TCInitiatorSignatureKey] = initiatorSig
+	}
+	if qok {
+		tcb[TCQuorumSignatureKey] = quorumSig
+	}
 
 	tcb[TCBlockHashKey] = util.HexToStr(hb)
 
@@ -264,6 +286,14 @@ func (b *Block) blkEncode() error {
 	s, sok := b.bm[TCSignatureKey]
 	if sok {
 		delete(b.bm, TCSignatureKey)
+	}
+	initiatorSig, iok := b.bm[TCInitiatorSignatureKey]
+	if iok {
+		delete(b.bm, TCInitiatorSignatureKey)
+	}
+	quorumSig, qok := b.bm[TCQuorumSignatureKey]
+	if qok {
+		delete(b.bm, TCQuorumSignatureKey)
 	}
 	bc, err := cbor.Marshal(b.bm, cbor.CanonicalEncOptions())
 	if err != nil {
@@ -283,6 +313,14 @@ func (b *Block) blkEncode() error {
 		}
 		m[TCBlockContentSigKey] = ksm
 	}
+	if iok {
+		b.bm[TCInitiatorSignatureKey] = initiatorSig
+		m[TCInitiatorSignatureKey] = initiatorSig
+	}
+	if qok {
+		b.bm[TCQuorumSignatureKey] = quorumSig
+		m[TCQuorumSignatureKey] = quorumSig
+	}
 	blk, err := cbor.Marshal(m, cbor.CanonicalEncOptions())
 	if err != nil {
 		return err
@@ -292,6 +330,10 @@ func (b *Block) blkEncode() error {
 }
 
 func (b *Block) getTokensMap(t string) interface{} {
+	if b.bm == nil {
+		fmt.Println("b.bm is empty")
+		return nil
+	}
 	tim := util.GetFromMap(b.bm, TCTransInfoKey)
 	if tim == nil {
 		return nil
@@ -466,6 +508,7 @@ func (b *Block) UpdateSignature(dc didmodule.DIDCrypto) error {
 	return b.blkEncode()
 }
 
+// ReplaceSignature adds each quorums' signature to the block with the key "99"
 func (b *Block) ReplaceSignature(did string, sig string) error {
 	ksmi, ok := b.bm[TCSignatureKey]
 	if !ok {
@@ -590,6 +633,40 @@ func (b *Block) GetTokenType(t string) int {
 	return util.GetIntFromMap(ti, TTTokenTypeKey)
 }
 
+func (b *Block) UpdateTokenType(t string, newTokenType int) (*Block, bool) {
+	fmt.Println("****** token is : ", t)
+	tim := util.GetFromMap(b.bm, TCTransInfoKey)
+	if tim == nil {
+		return nil, false
+	}
+	tm := util.GetFromMap(tim, TITokensKey)
+	if tm == nil {
+		return nil, false
+	}
+	ti := util.GetFromMap(tm, t)
+	if ti == nil {
+		return nil, false
+	}
+	switch tokenTypeMap := ti.(type) {
+	case map[string]interface{}:
+		fmt.Println("***** 1. current token type to be updated :", util.GetIntFromMap(ti, TTTokenTypeKey))
+		tokenTypeMap[TTTokenTypeKey] = newTokenType
+	case map[interface{}]interface{}:
+		fmt.Println("***** 2. current token type to be updated :", util.GetIntFromMap(ti, TTTokenTypeKey))
+		tokenTypeMap[TTTokenTypeKey] = newTokenType
+	}
+
+	updatedBlock := InitBlock(nil, b.bm)
+	if updatedBlock == nil {
+		fmt.Println("unable to update token type of token : ", t)
+		return nil, false
+	} else {
+		fmt.Println("*****token type updated :", updatedBlock.GetTokenType(t))
+	}
+
+	return updatedBlock, true
+}
+
 func (b *Block) GetUnpledgeId(t string) string {
 	tim := util.GetFromMap(b.bm, TCTransInfoKey)
 	if tim == nil {
@@ -644,6 +721,7 @@ func (b *Block) GetComment() string {
 	return b.getTrasnInfoString(TICommentKey)
 }
 
+// TODO: correct the below function name
 func (b *Block) GetParentDetials(t string) (string, []string, error) {
 	gtm := b.getGenesisTokenMap(t)
 	if gtm == nil {
@@ -797,8 +875,9 @@ func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
 			if err != nil {
 				fmt.Println(err)
 			}
+			// in older versions (<v0.0.17), there was no field as sign type and all signatures were NLSS signatures
 			if quorumSig.SignType == "" {
-				quorumSig.SignType = "0"
+				quorumSig.SignType = strconv.Itoa(didmodule.NlssVersion)
 			}
 		} else {
 			//fetch quorum did
@@ -828,6 +907,14 @@ func (b *Block) CalculateBlockHash() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	_, iok := m[TCInitiatorSignatureKey]
+	if iok {
+		delete(m, TCInitiatorSignatureKey)
+	}
+	_, qok := m[TCQuorumSignatureKey]
+	if qok {
+		delete(m, TCQuorumSignatureKey)
+	}
 	bc, ok := m[TCBlockContentKey]
 	if !ok {
 		return "", fmt.Errorf("invalid block, block content missing")
@@ -849,4 +936,26 @@ func (b *Block) GetPledgedTokens() {
 	pledgedInfo := util.GetFromMap(b.bm, TCPledgeDetailsKey)
 	fmt.Println(pledgedInfo)
 	// return
+}
+
+func (b *Block) SignByInitiator(dc didmodule.DIDCrypto) error {
+	did := dc.GetDID()
+	blockHash, err := b.GetHash()
+	if err != nil {
+		return fmt.Errorf("failed to get hash")
+	}
+	nlssSig, pvtSig, err := dc.Sign(blockHash)
+	if err != nil {
+		return fmt.Errorf("failed to get initiator signature:%v; err: %v ", did, err.Error())
+	}
+
+	initiatorSigMap := make(map[string]interface{})
+	initiatorSigMap[InitiatorDID] = did
+	initiatorSigMap[InitiatorSignType] = uint64(dc.GetSignType())
+	initiatorSigMap[InitiatorNLSSShare] = util.HexToStr(nlssSig)
+	initiatorSigMap[InitiatorPrivateSign] = util.HexToStr(pvtSig)
+	initiatorSigMap[InitiatorHash] = blockHash
+	b.bm[TCInitiatorSignatureKey] = initiatorSigMap
+
+	return b.blkEncode()
 }

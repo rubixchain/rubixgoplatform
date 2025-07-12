@@ -1,6 +1,7 @@
 package block
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -84,9 +85,11 @@ type TransInfo struct {
 
 func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 	if tt.Token == "" {
+		fmt.Println("empty tokenid")
 		return nil
 	}
 	nttb := make(map[string]interface{})
+
 	nttb[TTTokenTypeKey] = tt.TokenType
 	// pledged detials moved out of trans token
 	if tt.UnplededID != "" {
@@ -101,11 +104,13 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 	} else {
 		bn, err := b.GetBlockNumber(tt.Token)
 		if err != nil {
+			fmt.Println("failed to get block no., err : ", err)
 			return nil
 		}
 		bn++
 		bid, err := b.GetBlockID(tt.Token)
 		if err != nil {
+			fmt.Println("failed to get block id, err : ", err)
 			return nil
 		}
 		nttb[TTBlockNumberKey] = strconv.FormatUint(bn, 10)
@@ -117,6 +122,7 @@ func newTransToken(b *Block, tt *TransTokens) map[string]interface{} {
 func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} {
 	ntib := make(map[string]interface{})
 	if ti.Tokens == nil || len(ti.Tokens) == 0 {
+		fmt.Println("no tokens found")
 		return nil
 	}
 	if ti.SenderDID != "" {
@@ -151,6 +157,7 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 		b := ctcb[tt.Token]
 		nttb := newTransToken(b, &tt)
 		if nttb == nil {
+			fmt.Println("failed to initiate trans token info : ", tt)
 			return nil
 		}
 		nttbs[tt.Token] = nttb

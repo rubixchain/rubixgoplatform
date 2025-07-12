@@ -16,6 +16,7 @@ const (
 	FTTransferMode
 )
 
+
 func (w *Wallet) AddTransactionHistory(td *model.TransactionDetails) error {
 	err := w.s.Write(TransactionStorage, td)
 	if err != nil {

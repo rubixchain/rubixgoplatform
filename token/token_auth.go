@@ -20,6 +20,19 @@ const (
 	TestSmartContractTokenType
 	FTTokenType
 )
+const (
+	CVR_RBTTokenType int = iota + 50
+	CVR_PartTokenType
+	CVR_NFTTokenType
+	CVR_TestTokenType
+	CVR_DataTokenType
+	CVR_TestPartTokenType
+	CVR_TestNFTTokenType
+	CVR_TestDataTokenType
+	CVR_SmartContractTokenType
+	CVR_TestSmartContractTokenType
+	CVR_FTTokenType
+)
 
 func GetWholeTokenValue(tokenDetails string) (int, string, bool, error) {
 	trimmedResult := strings.TrimSpace(tokenDetails)
