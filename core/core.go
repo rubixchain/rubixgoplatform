@@ -131,6 +131,7 @@ type Core struct {
 	quorumCount          int
 	noBalanceQuorumCount int
 	defaultSetup         bool
+	ipfsSem              chan struct{}
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {

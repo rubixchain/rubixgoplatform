@@ -195,6 +195,7 @@ func (c *Core) runIPFS() {
 func (c *Core) RunIPFS() error {
 	os.Setenv("IPFS_PATH", c.cfg.DirPath+".ipfs")
 	os.Setenv("LIBP2P_FORCE_PNET", "1")
+	c.ipfsSem = make(chan struct{}, c.getConcurrencyLimit())
 	err := c.initIPFS(c.cfg.DirPath + ".ipfs")
 	if err != nil {
 		c.log.Error("failed to initialize IPFS", "err", err)
@@ -340,6 +341,8 @@ func (c *Core) GetAllBootStrap() []string {
 }
 
 func (c *Core) GetDHTddrs(cid string) ([]string, error) {
+	c.ipfsSem <- struct{}{}        // acquire
+	defer func() { <-c.ipfsSem }() // release
 	cmd := exec.Command(c.ipfsApp, "dht", "findprovs", cid)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -366,6 +369,8 @@ func (c *Core) GetDHTddrs(cid string) ([]string, error) {
 }
 
 func (c *Core) ipfsRepoGc() {
+	c.ipfsSem <- struct{}{}        // acquire
+	defer func() { <-c.ipfsSem }() // release
 	cmd := exec.Command(c.ipfsApp, "ipfs", "repo", "gc")
 	err := cmd.Start()
 	if err != nil {
