@@ -88,6 +88,8 @@ const (
 	MaxPeerConn uint16 = 1000
 )
 
+var dbWriteSem = make(chan struct{}, 1)
+
 type Core struct {
 	cfg                  *config.Config
 	cfgFile              string

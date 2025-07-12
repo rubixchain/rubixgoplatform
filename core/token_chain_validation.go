@@ -701,7 +701,7 @@ func (c *Core) CurrentQuorumStatePinCheck(b *block.Block, tokenId string, tokenT
 	c.log.Debug("entering validation to check if token state is exhausted")
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go c.checkTokenState(tokenId, userDID, 0, tokenStateCheckResult, &wg, quorumList, tokenType)
+	go c.checkTokenState(tokenId, userDID, 0, tokenStateCheckResult, quorumList, tokenType)
 	wg.Wait()
 
 	for i := range tokenStateCheckResult {
