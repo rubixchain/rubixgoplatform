@@ -106,23 +106,3 @@ func (c *Client) ValidateToken(token string) (*model.BasicResponse, error) {
 	}
 	return &br, nil
 }
-
-func (c *Client) PrePledgeRBT(rt *model.CvrAPIRequest) (*model.BasicResponse, error) {
-	var br model.BasicResponse
-	err := c.sendJSONRequest("POST", setup.APIPrePledge, nil, rt, &br, time.Minute*2)
-	if err != nil {
-		c.log.Error("Failed RBT Pre-pledge", "err", err)
-		return nil, err
-	}
-	return &br, nil
-}
-
-func (c *Client) PrePledgeFT(rt *model.CvrAPIRequest) (*model.BasicResponse, error) {
-	var br model.BasicResponse
-	err := c.sendJSONRequest("POST", setup.APIPrePledgeFT, nil, rt, &br, time.Minute*2)
-	if err != nil {
-		c.log.Error("Failed FT Pre-pledge", "err", err)
-		return nil, err
-	}
-	return &br, nil
-}

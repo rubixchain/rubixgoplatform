@@ -99,7 +99,7 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Invalid DID")
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
-	info, err := s.c.GetFreeAndSpendableFTInfoByDID(did)
+	info, err := s.c.GetFTInfoByDID(did)
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}

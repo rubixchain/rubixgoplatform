@@ -33,8 +33,7 @@ const (
 )
 
 const (
-
-	version string = "0.1_rc20exp"
+	version string = "0.1_rc17"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -111,9 +110,6 @@ const (
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	AddPeerDetailsFromExplorer     string = "exppeerdetails"
 	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
-	InitiateRBTPrePledgeCmd        string = "prepledgerbt"
-	InitiateFTPrePledgeCmd         string = "prepledgeft"
-	RemoveLatestBlockCmd           string = "removelatestblock"
 )
 
 var commands = []string{VersionCmd,
@@ -183,9 +179,6 @@ var commands = []string{VersionCmd,
 	AddUserAPIKeyCmd,
 	AddPeerDetailsFromExplorer,
 	GetFTTxnDetailsCmd,
-	InitiateRBTPrePledgeCmd,
-	InitiateFTPrePledgeCmd,
-	RemoveLatestBlockCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -348,7 +341,6 @@ type Command struct {
 	apiKey                       string
 	nftValue                     float64
 	ftNumStartIndex              int
-	tokenType                    string
 }
 
 func showVersion() {
@@ -571,7 +563,6 @@ func Run(args []string) {
 	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
 	flag.IntVar(&cmd.ftNumStartIndex, "ftStartIndex", 0, "Start index of the FTs to be created")
-	flag.StringVar(&cmd.tokenType, "tokenType", "rbt", "to determine what kind of token it is")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -783,12 +774,6 @@ func Run(args []string) {
 		cmd.addPeerDetailsFromExplorer()
 	case GetFTTxnDetailsCmd:
 		cmd.getFTTxnDetails()
-	case InitiateRBTPrePledgeCmd:
-		cmd.InitiateRBTPrePledge()
-	case InitiateFTPrePledgeCmd:
-		cmd.InitiateFTPrePledge()
-	case RemoveLatestBlockCmd:
-		cmd.removeTokenChainBlock()
 	default:
 		cmd.log.Error("Invalid command")
 	}

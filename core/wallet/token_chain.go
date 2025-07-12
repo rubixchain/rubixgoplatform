@@ -31,8 +31,6 @@ const (
 	ReferenceType          string = "rf"
 	SmartContractTokenType string = "st"
 	FTTokenType            string = "ft"
-	CVRTokenType           string = "cvr"
-	// CVRTestTokenType       string = "tcvr"
 )
 
 const TCBlockCountLimit int = 100
@@ -46,7 +44,6 @@ type TokenStateDetails struct {
 
 func tcsType(tokenType int) string {
 	tt := "wt"
-	tokenType, _ = IsCVR(tokenType)
 	switch tokenType {
 	case tkn.RBTTokenType:
 		tt = WholeTokenType
@@ -72,7 +69,6 @@ func tcsType(tokenType int) string {
 
 func tcsPrefix(tokenType int, t string) string {
 	tt := "wt"
-	tokenType, _ = IsCVR(tokenType)
 	switch tokenType {
 	case tkn.RBTTokenType:
 		tt = WholeTokenType
@@ -96,45 +92,7 @@ func tcsPrefix(tokenType int, t string) string {
 	return tt + "-" + t + "-"
 }
 
-func tcsCvrPrefix(tokenType int, t string) string {
-	tt := "wt"
-	tokenType, isCVR := IsCVR(tokenType)
-	switch tokenType {
-	case tkn.RBTTokenType:
-		tt = WholeTokenType
-	case tkn.PartTokenType:
-		tt = PartTokenType
-	case tkn.TestPartTokenType:
-		tt = TestPartTokenType
-	case tkn.NFTTokenType:
-		tt = NFTType
-	case tkn.TestNFTTokenType:
-		tt = TestNFTType
-	case tkn.TestTokenType:
-		tt = TestTokenType
-	case tkn.DataTokenType:
-		tt = DataTokenType
-	case tkn.SmartContractTokenType:
-		tt = SmartContractTokenType
-	case tkn.FTTokenType:
-		tt = FTTokenType
-	}
-	if isCVR {
-		tt = CVRTokenType + "_" + tt
-	}
-	return tt + "-" + t + "-"
-}
-
-func IsCVR(tokenType int) (int, bool) {
-	if tokenType >= tkn.CVR_RBTTokenType {
-		return tokenType - 50, true
-	} else {
-		return tokenType, false
-	}
-
-}
 func tcsKey(tokenType int, t string, blockID string) string {
-	tokenType, isCVR := IsCVR(tokenType)
 	tt := "wt"
 	switch tokenType {
 	case tkn.RBTTokenType:
@@ -155,10 +113,6 @@ func tcsKey(tokenType int, t string, blockID string) string {
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
 		tt = FTTokenType
-
-	}
-	if isCVR {
-		tt = CVRTokenType + "_" + tt
 	}
 	bs := strings.Split(blockID, "-")
 	if len(bs) == 2 {
@@ -218,7 +172,6 @@ func tcsBlockID(token string, key string) string {
 
 func (w *Wallet) getChainDB(tt int) *ChainDB {
 	var db *ChainDB
-	tt, _ = IsCVR(tt)
 	switch tt {
 	case tkn.RBTTokenType:
 		db = w.tcs
@@ -247,7 +200,6 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 func (w *Wallet) getRawBlock(db *ChainDB, key []byte) ([]byte, error) {
 	v, err := db.Get(key, nil)
 	if err != nil {
-		w.log.Debug("error is ", err)
 		return nil, err
 	}
 	blk := make([]byte, len(v))
@@ -265,8 +217,6 @@ func (w *Wallet) getBlock(tt int, t string, blockID string) ([]byte, error) {
 	if db == nil {
 		return nil, fmt.Errorf("failed get block, invalid token type")
 	}
-	w.log.Debug("tt", tt)
-	w.log.Debug("tcs key while reading the block :", blockID, "token ", t, "tcs key : ", tcsKey(tt, t, blockID))
 	return w.getRawBlock(db, []byte(tcsKey(tt, t, blockID)))
 }
 
@@ -414,7 +364,7 @@ func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 				return nil
 			}
 		}
-		b := block.InitBlock(blk, nil, block.NoSignature())
+		b := block.InitBlock(blk, nil)
 		return b
 	}
 	return nil
@@ -428,8 +378,8 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 	tt := b.GetTokenType(token)
 	db := w.getChainDB(tt)
 	if db == nil {
-		w.log.Error("Failed to get tokenchain from db")
-		return fmt.Errorf("failed to get tokenchain from db")
+		w.log.Error("Failed to add block, invalid token type")
+		return fmt.Errorf("failed to get db")
 	}
 
 	bid, err := b.GetBlockID(token)
@@ -437,9 +387,6 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 		return err
 	}
 	key := tcsKey(tt, token, bid)
-
-	w.log.Debug("1. tcs key while adding the block :", bid, "token ", token, "tcs key : ", key)
-
 	lb := w.getLatestBlock(tt, token)
 	bn, err := b.GetBlockNumber(token)
 	if err != nil {
@@ -684,7 +631,6 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 			return err
 		}
 		key := tcsKey(tt, token, bid)
-		w.log.Debug("2. tcs key while adding the block :", bid, "token ", token, "tcs key : ", key)
 		db.l.Lock()
 		err = db.Put([]byte(key), refkey, opt)
 		db.l.Unlock()
@@ -744,7 +690,7 @@ func (w *Wallet) removeTokenChainBlockLatest(token string, tokenType int) error 
 	if db == nil {
 		return fmt.Errorf("failed get all blocks, invalid token type")
 	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(tcsCvrPrefix(tokenType, token))), nil)
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tokenType, token))), nil)
 	defer iter.Release()
 
 	if iter.Last() {

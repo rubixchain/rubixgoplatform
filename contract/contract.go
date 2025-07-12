@@ -306,10 +306,6 @@ func (c *Contract) GetPinningServiceDID() string {
 }
 
 func (c *Contract) GetTransTokenInfo() []TokenInfo {
-	if c.sm == nil {
-		fmt.Printf("c.sm is nil")
-		return nil
-	}
 	tim := util.GetFromMap(c.sm, SCTransInfoKey)
 	if tim == nil {
 		return nil

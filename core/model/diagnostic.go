@@ -57,10 +57,8 @@ type RegisterCallBackUrlReq struct {
 }
 
 type TCRemoveRequest struct {
-	Token           string `json:"token_id"`
-	Latest          bool   `json:"latest"`
-	TokenTypeString string `json:"token_type_str"`
-	TokenType       int    `json:"token_type"`
+	Token  string
+	Latest bool
 }
 
 type TCRemoveReply struct {

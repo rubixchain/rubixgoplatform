@@ -10,7 +10,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -32,17 +31,11 @@ const (
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
 	TokenIsBurntForFT
-	TokenIsSpendable
 	QuorumPledgedForThisToken int = 20
 )
 const (
 	Zero int = iota
 	One
-)
-const (
-	CVRStage1_Sender_to_Receiver int = iota
-	CVRStage2_Sender_to_Receiver
-	CVRStage2_Sender_to_Quorum
 )
 
 const (
@@ -57,19 +50,6 @@ const (
 	SyncCompleted
 )
 
-type PrePledgeRequest struct {
-	DID        string `json:"did"`
-	QuorumType int    `json:"quorum_type"`
-	// TxnID               string `json:"txn_id"`
-	// SelftransferTxnID   string `json:"self_txn_id"`
-	FTInfo              model.FTInfo `json:"ft_info"`
-	TransferMode        int          `json:"transfer_mode"`
-	SCTransferBlock     []byte       `json:"sc_transfer_block"`
-	SCSelfTransferBlock []byte       `json:"sc_self_transfer_block"`
-	TxnEpoch            int64        `json:"txn_epoch"`
-	ReqID               string       `json:"request_id"`
-}
-
 type Token struct {
 	TokenID        string  `gorm:"column:token_id;primaryKey"`
 	ParentTokenID  string  `gorm:"column:parent_token_id"`
@@ -83,7 +63,6 @@ type Token struct {
 }
 
 func (w *Wallet) CreateToken(t *Token) error {
-	w.log.Debug("******token status just before writing onto the sqlite DB**", t.TokenStatus, "token: ", t.TokenID)
 	return w.s.Write(TokenStorage, t)
 }
 func (w *Wallet) CreateFT(ft *FTToken) error {
@@ -167,7 +146,7 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 
 // This function will return all the FTs, their count and the creator DID in the node
 func (w *Wallet) GetAllFTsAndCount() ([]FT, error) {
-	fts, err := w.GetAllFreeAndSpendableFTs()
+	fts, err := w.GetAllFreeFTs()
 	if err != nil {
 		errStr := fmt.Sprint(err)
 		if strings.Contains(errStr, "no records found") {
@@ -203,43 +182,16 @@ func (w *Wallet) GetAllFTsAndCount() ([]FT, error) {
 }
 
 // This function will return all the FTs, their count and the creator DID for a DID
-func (w *Wallet) GetFTsAndCountByStatus(did string, ftStatus int) ([]FT, error) {
-	fts := []FTToken{}
-	var err error
-	switch ftStatus {
-	case TokenIsSpendable:
-		fts, err = w.GetSpendableFTsByDID(did)
-		if err != nil {
-			errStr := fmt.Sprint(err)
-			if strings.Contains(errStr, "no records found") {
-				w.log.Info("No free FTs found")
-				return nil, err
-			}
-			w.log.Error("Failed to free FTs", "err", err)
+func (w *Wallet) GetFTsAndCount(did string) ([]FT, error) {
+	fts, err := w.GetFreeFTsByDID(did)
+	if err != nil {
+		errStr := fmt.Sprint(err)
+		if strings.Contains(errStr, "no records found") {
+			w.log.Info("No free FTs found")
 			return nil, err
 		}
-	case TokenIsFree:
-		fts, err = w.GetFreeFTsByDID(did)
-		if err != nil {
-			errStr := fmt.Sprint(err)
-			if strings.Contains(errStr, "no records found") {
-				w.log.Info("No free FTs found")
-				return nil, err
-			}
-			w.log.Error("Failed to free FTs", "err", err)
-			return nil, err
-		}
-	default:
-		fts, err = w.GetFreeAndSpendableFTsByDID(did)
-		if err != nil {
-			errStr := fmt.Sprint(err)
-			if strings.Contains(errStr, "no records found") {
-				w.log.Info("No free FTs found")
-				return nil, err
-			}
-			w.log.Error("Failed to free FTs", "err", err)
-			return nil, err
-		}
+		w.log.Error("Failed to free FTs", "err", err)
+		return nil, err
 	}
 
 	ftNameCreatorCounts := make(map[string]map[string]int)
@@ -284,41 +236,9 @@ func (w *Wallet) GetFreeFTsByDID(did string) ([]FTToken, error) {
 	return FT, nil
 }
 
-func (w *Wallet) GetSpendableFTsByDID(did string) ([]FTToken, error) {
+func (w *Wallet) GetAllFreeFTs() ([]FTToken, error) {
 	var FT []FTToken
-	err := w.s.Read(FTTokenStorage, &FT, "owner_did=? AND token_status=? OR token_status=?", did, TokenIsSpendable, TokenIsGenerated)
-
-	if err != nil {
-		readErr := fmt.Sprint(err)
-		if strings.Contains(readErr, "no records found") {
-			w.log.Info("No free FTs")
-			return nil, err
-		}
-		w.log.Error("Failed to get FTs", "err", err)
-		return nil, err
-	}
-	return FT, nil
-}
-
-func (w *Wallet) GetFreeAndSpendableFTsByDID(did string) ([]FTToken, error) {
-	var FT []FTToken
-	err := w.s.Read(FTTokenStorage, &FT, "owner_did=? AND (token_status=? OR token_status=? OR token_status=?)", did, TokenIsFree, TokenIsGenerated, TokenIsSpendable)
-
-	if err != nil {
-		readErr := fmt.Sprint(err)
-		if strings.Contains(readErr, "no records found") {
-			w.log.Info("No free FTs")
-			return nil, err
-		}
-		w.log.Error("Failed to get FTs", "err", err)
-		return nil, err
-	}
-	return FT, nil
-}
-
-func (w *Wallet) GetAllFreeAndSpendableFTs() ([]FTToken, error) {
-	var FT []FTToken
-	err := w.s.Read(FTTokenStorage, &FT, "token_status=? OR token_status=?", TokenIsFree, TokenIsSpendable)
+	err := w.s.Read(FTTokenStorage, &FT, "token_status=?", TokenIsFree)
 	if err != nil {
 		readErr := fmt.Sprint(err)
 		if strings.Contains(readErr, "no records found") {
@@ -342,30 +262,9 @@ func (w *Wallet) GetFreeFTsByNameAndDID(ftName string, did string) ([]FTToken, e
 	return FT, nil
 }
 
-func (w *Wallet) GetSpendableFTsByNameAndDID(ftName string, did string) ([]FTToken, error) {
-	var FT []FTToken
-	err := w.s.Read(FTTokenStorage, &FT, "ft_name=? AND token_status =? AND  owner_did=?", ftName, TokenIsSpendable, did)
-
-	if err != nil {
-		w.log.Error("Failed to get Free FTs by name", "err", err)
-		return nil, err
-	}
-	return FT, nil
-}
-
 func (w *Wallet) GetFreeFTsByNameAndCreatorDID(ftName string, did string, creatorDID string) ([]FTToken, error) {
 	var FT []FTToken
 	err := w.s.Read(FTTokenStorage, &FT, "ft_name=? AND token_status =? AND owner_did=? AND creator_did=?", ftName, TokenIsFree, did, creatorDID)
-	if err != nil {
-		w.log.Error("Failed to get Free FTs by name and creator DID", "err", err)
-		return nil, err
-	}
-	return FT, nil
-}
-
-func (w *Wallet) GetSpendableFTsByNameAndCreatorDID(ftName string, did string, creatorDID string) ([]FTToken, error) {
-	var FT []FTToken
-	err := w.s.Read(FTTokenStorage, &FT, "ft_name=? AND token_status =? AND owner_did=? AND creator_did=?", ftName, TokenIsSpendable, did, creatorDID)
 	if err != nil {
 		w.log.Error("Failed to get Free FTs by name and creator DID", "err", err)
 		return nil, err
@@ -382,24 +281,14 @@ func (w *Wallet) GetAllPledgedTokens() ([]Token, error) {
 	return t, nil
 }
 
-func (w *Wallet) GetCloserToken(did string, rem float64, txnMode int) (*Token, error) {
+func (w *Wallet) GetCloserToken(did string, rem float64) (*Token, error) {
 	if rem > 1.0 {
 		return nil, fmt.Errorf("token value not less than whole token")
 	}
 	var tks []Token
-	var err error
-	if txnMode == 0 {
-		err = w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value>=? AND token_value <?", did, TokenIsFree, rem, 1.0)
-	} else {
-		err = w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value>=? AND token_value <?", did, TokenIsSpendable, rem, 1.0)
-	}
+	err := w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value>=? AND token_value <?", did, TokenIsFree, rem, 1.0)
 	if err != nil || len(tks) == 0 {
-		var err error
-		if txnMode == 0 {
-			err = w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
-		} else {
-			err = w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value=?", did, TokenIsSpendable, 1.0)
-		}
+		err := w.s.Read(TokenStorage, &tks, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
 		if err != nil {
 			return nil, err
 		}
@@ -422,7 +311,7 @@ func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int) ([]Token, int
 			return nil, num, err
 		}
 	} else {
-		err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsSpendable, 1.0)
+		err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value=?", did, TokenIsFree, 1.0)
 		if err != nil {
 			return nil, num, err
 		}
@@ -447,16 +336,11 @@ func (w *Wallet) GetWholeTokens(did string, num int, trnxMode int) ([]Token, int
 	return wt, (num - tl), nil
 }
 
-func (w *Wallet) GetTokensByLimit(did string, limit float64, txnMode int) ([]Token, error) {
+func (w *Wallet) GetTokensByLimit(did string, limit float64) ([]Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
-	var err error
-	if txnMode == 0 {
-		err = w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value<=?", did, TokenIsFree, limit)
-	} else {
-		err = w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value<=?", did, TokenIsSpendable, limit)
-	}
+	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value<=?", did, TokenIsFree, limit)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
@@ -564,60 +448,6 @@ func (w *Wallet) ReadFTToken(token string) (*FTToken, error) {
 	return &t, nil
 }
 
-func (w *Wallet) GetFTByDIDandStatus(ftId string, did string, tokenStatus int) (*FTToken, error) {
-	var ftInfo *FTToken
-	w.l.Lock()
-	defer w.l.Unlock()
-	err := w.s.Read(FTTokenStorage, &ftInfo, "token_id=? AND owner_did=? AND token_status", ftId, did, tokenStatus)
-	if err != nil {
-		w.log.Error("Failed to get tokens", "err", err)
-		return nil, err
-	}
-	ftInfo.TokenStatus = TokenIsLocked
-	err = w.s.Update(FTTokenStorage, &ftInfo, "owner_did=? AND token_id=?", did, ftInfo.TokenID)
-	if err != nil {
-		w.log.Error("Failed to update token status", "err", err)
-		return nil, err
-	}
-	return ftInfo, nil
-}
-
-func (w *Wallet) UnlockFT(ftId string) error {
-	ftInfo, err := w.ReadFTToken(ftId)
-	if err != nil {
-		w.log.Error("failed to read ft : ", ftId, "err", err)
-	}
-	if ftInfo.TokenStatus == TokenIsLocked {
-		// check the latest block type and update to it's previous state
-		tokenType := token.FTTokenType
-
-		latestBlock := w.GetLatestTokenBlock(ftId, tokenType)
-		if latestBlock.GetTransType() == block.OwnershipTransferredType {
-			ftInfo.TokenStatus = TokenIsSpendable
-		} else {
-			ftInfo.TokenStatus = TokenIsFree
-		}
-		err = w.s.Update(FTTokenStorage, &ftInfo, "token_id=?", ftId)
-		if err != nil {
-			w.log.Error("Failed to update ft status", "err", err)
-			return err
-		}
-	}
-	return nil
-}
-
-func (w *Wallet) ReleaseFTs(ftList []FTToken) error {
-	for _, ftInfo := range ftList {
-		err := w.UnlockFT(ftInfo.TokenID)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to unlock ft : %v; err : %v", ftInfo.TokenID, err)
-			w.log.Error(errMsg)
-			return fmt.Errorf(errMsg)
-		}
-	}
-	return nil
-}
-
 func (w *Wallet) LockToken(wt *Token) error {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -625,7 +455,7 @@ func (w *Wallet) LockToken(wt *Token) error {
 	return w.s.Update(TokenStorage, wt, "did=? AND token_id=?", wt.DID, wt.TokenID)
 }
 
-func (w *Wallet) ReleaseTokens(wt []Token, isTestNet bool) error {
+func (w *Wallet) ReleaseTokens(wt []Token) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	for i := range wt {
@@ -636,29 +466,7 @@ func (w *Wallet) ReleaseTokens(wt []Token, isTestNet bool) error {
 			return err
 		}
 		if t.TokenStatus == TokenIsLocked {
-			// check the latest block type and update to it's previous state
-			tokenType := 0
-			if t.TokenValue == 1 {
-				if isTestNet {
-					tokenType = token.TestTokenType
-				} else {
-					tokenType = token.RBTTokenType
-				}
-
-			} else {
-				if isTestNet {
-					tokenType = token.TestPartTokenType
-				} else {
-					tokenType = token.PartTokenType
-				}
-			}
-
-			latestBlock := w.GetLatestTokenBlock(wt[i].TokenID, tokenType)
-			if latestBlock.GetTransType() == block.OwnershipTransferredType {
-				t.TokenStatus = TokenIsSpendable
-			} else {
-				t.TokenStatus = TokenIsFree
-			}
+			t.TokenStatus = TokenIsFree
 			err = w.s.Update(TokenStorage, &t, "token_id=?", t.TokenID)
 			if err != nil {
 				w.log.Error("Failed to update token", "err", err)
@@ -849,8 +657,6 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 		var tokenStatus int
 		if pinningServiceMode {
 			tokenStatus = TokenIsPinnedAsService
-			// } else if b.GetTransType() == block.OwnershipTransferredType {
-			// 	tokenStatus = TokenIsSpendable
 		} else {
 			tokenStatus = TokenIsTransferred
 		}
@@ -924,46 +730,14 @@ func (w *Wallet) FTTokensTransffered(did string, ti []contract.TokenInfo, b *blo
 	return nil
 }
 func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell) ([]string, error) {
-	w.log.Debug("****** inside TokensReceived, updating Ldb and sQlite Db")
-
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
-	blockId, _ := b.GetBlockID(ti[0].Token)
 	err := w.CreateTokenBlock(b)
 	if err != nil {
-		w.log.Error("failed to create token block, block Id", blockId, " err ", err)
+		blockId, _ := b.GetBlockID(ti[0].Token)
+		fmt.Println("failed to create token block, block Id", blockId)
 		return nil, err
-	}
-
-	// read the added block to make sure it was added properly
-	if b.GetTransType() == block.SpendableTokenTransferredType {
-		w.log.Debug("************ reading cvr-1 block *********")
-		checkBlock, err := w.getBlock(ti[0].TokenType+50, ti[0].Token, blockId)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to read added block in cvr-1, block id : %v, err : %v", blockId, err)
-			w.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-		if checkBlock == nil {
-			errMsg := fmt.Sprintf("invalid cvr-1 block, failed create token block, block id : %v", blockId)
-			w.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-	} else {
-		w.log.Debug("************ reading cvr-2 block *********")
-		w.log.Debug("reading added block in cvr-2 , token : ", ti[0].Token, "token type", ti[0].TokenType, "block id ", blockId)
-		checkBlock, err := w.getBlock(ti[0].TokenType, ti[0].Token, blockId)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to read added block in cvr-2, block id : %v, err : %v", blockId, err)
-			w.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-		if checkBlock == nil {
-			errMsg := fmt.Sprintf("invalid cvr-2 block, failed create token block, block id : %v", blockId)
-			w.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
 	}
 
 	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
@@ -1025,12 +799,6 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		}
 		// Update token status and pin tokens
 		tokenStatus := TokenIsFree
-
-		// token status should be updated to spendable (17), only if the block is cvr-2 block (OwnershipTransferredType = 15)
-		// token status should be free (0) for receiver in case of cvr-1 block
-		if b.GetTransType() == block.OwnershipTransferredType {
-			tokenStatus = TokenIsSpendable
-		}
 		role := OwnerRole
 		ownerdid := did
 		if pinningServiceMode {
@@ -1044,17 +812,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		t.TokenStatus = tokenStatus
 		t.TransactionID = b.GetTid()
 		t.TokenStateHash = tokenHashMap[tokenInfo.Token]
-
-		// // if sender peer id and receiver peer id is same, then they both are sharing the same level DB,
-		// // and thus do not need to sync the token chain again.
-		// // Also in case of cvr stage-2 we don't need to sync the token chain as it is already synced in cvr stage-1
-		// if senderPeerId == receiverPeerId {
-		// 	t.SyncStatus = SyncCompleted
-		// } else {
-		// 	t.SyncStatus = SyncIncomplete
-		// }
-
-		w.log.Debug("******** receiver is upating token in db : ", tokenInfo)
+		t.SyncStatus = SyncIncomplete
 
 		err = w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token)
 		if err != nil {
@@ -1084,37 +842,6 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 	err := w.CreateTokenBlock(b)
 	if err != nil {
 		return nil, err
-	}
-
-	// read the added block to make sure it was added properly
-	blockId, _ := b.GetBlockID(ti[0].Token)
-	if b.GetTransType() == block.SpendableTokenTransferredType {
-		w.log.Debug("************ reading cvr-1 ft block *********")
-		checkBlock, err := w.getBlock(ti[0].TokenType+50, ti[0].Token, blockId)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to read added block in cvr-1, block id : %v, err : %v", blockId, err)
-			w.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-		if checkBlock == nil {
-			errMsg := fmt.Sprintf("invalid cvr-1 block, failed create token block, block id : %v", blockId)
-			w.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-	} else {
-		w.log.Debug("************ reading cvr-2 ft block *********")
-		w.log.Debug("reading added ft block in cvr-2 , token : ", ti[0].Token, "token type", ti[0].TokenType, "block id ", blockId)
-		checkBlock, err := w.getBlock(ti[0].TokenType, ti[0].Token, blockId)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to read added block in cvr-2, block id : %v, err : %v", blockId, err)
-			w.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-		if checkBlock == nil {
-			errMsg := fmt.Sprintf("invalid cvr-2 block, failed create token block, block id : %v", blockId)
-			w.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
 	}
 
 	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
@@ -1172,11 +899,6 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 		}
 		// Update token status and pin tokens
 		tokenStatus := TokenIsFree
-
-		// if block is cvr-2, then the ft can be spent
-		if b.GetTransType() == block.OwnershipTransferredType {
-			tokenStatus = TokenIsSpendable
-		}
 		role := OwnerRole
 		ownerdid := did
 
@@ -1186,8 +908,6 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 		FTInfo.TokenStatus = tokenStatus
 		FTInfo.TransactionID = b.GetTid()
 		FTInfo.TokenStateHash = tokenHashMap[tokenInfo.Token]
-
-		w.log.Debug("******** receiver is upating token in db : ", FTInfo)
 
 		err = w.s.Update(FTTokenStorage, &FTInfo, "token_id=?", tokenInfo.Token)
 		if err != nil {
@@ -1224,23 +944,15 @@ func (w *Wallet) CommitTokens(did string, rbtTokens []string) error {
 	return nil
 }
 
-func (w *Wallet) GetAllPartTokens(did string, txnMode int) ([]Token, error) {
+func (w *Wallet) GetAllPartTokens(did string) ([]Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var t []Token
-	var err error
-
-	if txnMode == 0 {
-		err = w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value>? AND token_value<? ORDER BY token_value DESC", did, TokenIsFree, Zero, One)
-	} else {
-		err = w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value>? AND token_value<? ORDER BY token_value DESC", did, TokenIsSpendable, Zero, One)
-	}
-
+	err := w.s.Read(TokenStorage, &t, "did=? AND token_status=? AND token_value>? AND token_value<? ORDER BY token_value DESC", did, TokenIsFree, Zero, One)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err
 	}
-
 	for i := range t {
 		t[i].TokenStatus = TokenIsLocked
 		err = w.s.Update(TokenStorage, &t[i], "did=? AND token_id=?", did, t[i].TokenID)
@@ -1249,7 +961,6 @@ func (w *Wallet) GetAllPartTokens(did string, txnMode int) ([]Token, error) {
 			return nil, err
 		}
 	}
-
 	return t, nil
 }
 
@@ -1338,7 +1049,7 @@ func (w *Wallet) ReleaseAllLockedTokens() error {
 	return nil
 }
 
-func (w *Wallet) UnlockLockedTokens(did string, tokenList []string, isTestNet bool) error {
+func (w *Wallet) UnlockLockedTokens(did string, tokenList []string) error {
 	for _, tid := range tokenList {
 		var t Token
 		err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, tid)
@@ -1346,35 +1057,11 @@ func (w *Wallet) UnlockLockedTokens(did string, tokenList []string, isTestNet bo
 			w.log.Error("Failed to update token status", "err", err)
 			return err
 		}
-		if t.TokenStatus == TokenIsLocked {
-			// check the latest block type and update to it's previous state
-			tokenType := 0
-			if t.TokenValue == 1 {
-				if isTestNet {
-					tokenType = token.TestTokenType
-				} else {
-					tokenType = token.RBTTokenType
-				}
-
-			} else {
-				if isTestNet {
-					tokenType = token.TestPartTokenType
-				} else {
-					tokenType = token.PartTokenType
-				}
-			}
-
-			latestBlock := w.GetLatestTokenBlock(tid, tokenType)
-			if latestBlock.GetTransType() == block.OwnershipTransferredType {
-				t.TokenStatus = TokenIsSpendable
-			} else {
-				t.TokenStatus = TokenIsFree
-			}
-			err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, tid)
-			if err != nil {
-				w.log.Error("Failed to update token status", "err", err)
-				return err
-			}
+		t.TokenStatus = TokenIsFree
+		err = w.s.Update(TokenStorage, &t, "did=? AND token_id=?", did, tid)
+		if err != nil {
+			w.log.Error("Failed to update token status", "err", err)
+			return err
 		}
 	}
 	return nil
@@ -1578,62 +1265,4 @@ func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 		}
 	}
 	return ftTokens, nil
-}
-
-// This function gets the pre pledged tokens from the tokens table
-func (w *Wallet) GetPrePledgedTokenIDs() ([]string, error) {
-	var tokensList []Token
-
-	// Query the database for records where token_status is TokenIsPrePledged
-	err := w.s.Read(TokenStorage, &tokensList, "token_status=?", TokenIsSpendable)
-	if err != nil {
-		if strings.Contains(fmt.Sprint(err), "no records found") {
-			w.log.Info("No pre-pledged tokens found")
-			return nil, nil // Return nil if no records are found
-		}
-		w.log.Error("Failed to read token storage", "err", err)
-		return nil, err
-	}
-
-	// Extract token IDs from the records
-	var tokenIDs []string
-	for _, token := range tokensList {
-		tokenIDs = append(tokenIDs, token.TokenID)
-	}
-
-	// Return the list of token IDs
-	return tokenIDs, nil
-}
-
-func (w *Wallet) GetTokensByTxnID(txnId string) ([]Token, error) {
-	var tokensList []Token
-	err := w.s.Read(TokenStorage, &tokensList, " transaction_id=?", txnId)
-	if err != nil {
-		if strings.Contains(fmt.Sprint(err), "no records found") {
-			w.log.Info(fmt.Sprintf("No tokens found with Txn Id : ", txnId))
-			return nil, nil // Return nil if no records are found
-		}
-		w.log.Error("Failed to read token storage", "err", err)
-		return nil, err
-	}
-
-	// // Extract token IDs from the records
-	// var tokenIDs []string
-	// for _, token := range tokensList {
-	// 	tokenIDs = append(tokenIDs, token.TokenID)
-	// }
-	return tokensList, nil
-}
-
-func (w *Wallet) GetTokenValueByTokenID(token string, did string) (float64, error) {
-	w.l.Lock()
-	defer w.l.Unlock()
-	var t Token
-	err := w.s.Read(TokenStorage, &t, "did=? AND token_id=?", did, token)
-	if err != nil {
-		w.log.Error("Failed to get token", "token", token, "err", err)
-		return 0, err
-	}
-	return t.TokenValue, nil
-
 }

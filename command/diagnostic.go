@@ -413,7 +413,7 @@ func (cmd *Command) getSmartContractData() {
 }
 
 func (cmd *Command) removeTokenChainBlock() {
-	response, err := cmd.c.RemoveTokenChainBlock(cmd.token, cmd.latest, cmd.tokenType)
+	response, err := cmd.c.RemoveTokenChainBlock(cmd.token, cmd.latest)
 	if err != nil {
 		cmd.log.Error("Failed to remove token chain", "err", err)
 		return

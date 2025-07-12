@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -147,10 +146,6 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 		case wallet.TokenIsPinnedAsService:
 			info.PinnedRBT = info.PinnedRBT + t.TokenValue
 			info.PinnedRBT = floatPrecision(info.PinnedRBT, MaxDecimalPlaces)
-		case wallet.TokenIsSpendable:
-			info.SpendableRBT = info.SpendableRBT + t.TokenValue
-			info.SpendableRBT = floatPrecision(info.SpendableRBT, MaxDecimalPlaces)
-
 		}
 	}
 	return info, nil
@@ -513,7 +508,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		if blkID == pblkID {
 			return nil
 		}
-		// blkHeight, err = blk.GetBlockNumber(token)
+		blkHeight, err = blk.GetBlockNumber(token)
 		if err != nil {
 			c.log.Error("invalid block, failed to get block number")
 			return err
@@ -525,88 +520,88 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		BlockID:   blkID,
 	}
 
-	// if tokenType == c.TokenType(RBTString) || tokenType == c.TokenType(PartString) {
-	// 	syncReq.BlockHeight = blkHeight
-	// 	// sync only latest blcok of the token chain for the transaction
-	// 	err = c.syncGenesisAndLatestBlockFrom(p, syncReq)
-	// 	if err != nil {
-	// 		c.log.Error("failed to sync latest block, err ", err)
-	// 		return err
-	// 	}
-	// 	// update sync status to incomplete
-	// 	err = c.w.UpdateTokenSyncStatus(syncReq.Token, wallet.SyncIncomplete)
-	// 	if err != nil {
-	// 		if !strings.Contains(err.Error(), "no records found") {
-	// 			c.log.Error("failed to update token sync status as incomplete, token ", token)
-	// 		}
-	// 	}
-	// } else {
-	// in case of FTs, and NFTs
-	for {
-		var trep TCBSyncReply
-		err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &syncReq, &trep, false)
+	if tokenType == c.TokenType(RBTString) || tokenType == c.TokenType(PartString) {
+		syncReq.BlockHeight = blkHeight
+		// sync only latest blcok of the token chain for the transaction
+		err = c.syncGenesisAndLatestBlockFrom(p, syncReq)
 		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
+			c.log.Error("failed to sync latest block, err ", err)
 			return err
 		}
-		if !trep.Status {
-			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
-			return fmt.Errorf(trep.Message)
-		}
-		if strings.Contains(trep.Message, "Sent all blocks") {
-			diffVar := int(blkHeight) - len(trep.TCBlock)
-			if diffVar > 1 {
-				// Quorum is ahead of sender by more than 1 block — not allowed
-				c.log.Error("Block height discrepancy too large")
-				return fmt.Errorf("sync failed: block height discrepancy too large (diff: %d)", diffVar)
-			} else {
-				// Get syncer latest token block hash
-				syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
-				syncerLatestBlkHash, err := syncerLatestBlk.GetHash()
-				if err != nil {
-					c.log.Error("Failed to get block hash of synced block", "err", err)
-					return err
-				}
-
-				// Get DID owner latest token block hash
-				didOwnerAllTknBlks, _, err := c.w.GetAllTokenBlocks(token, tokenType, "")
-				didOwnerBlock := block.InitBlock(didOwnerAllTknBlks[len(trep.TCBlock)-1], nil)
-				didOwnerLatestBlkHash, err := didOwnerBlock.GetHash()
-				if err != nil {
-					c.log.Error("Failed to get block hash of owner block", "err", err)
-					return err
-				}
-
-				// Compare both block hashes
-				if strings.Contains(syncerLatestBlkHash, didOwnerLatestBlkHash) {
-					syncerLatestBlkID, err := syncerLatestBlk.GetBlockID(token)
-					if err != nil {
-						c.log.Error("Failed to get block id of synced block", "err", err)
-						return err
-					}
-					return fmt.Errorf("syncer block height discrepency|%s", syncerLatestBlkID)
-				}
+		// update sync status to incomplete
+		err = c.w.UpdateTokenSyncStatus(syncReq.Token, wallet.SyncIncomplete)
+		if err != nil {
+			if !strings.Contains(err.Error(), "no records found") {
+				c.log.Error("failed to update token sync status as incomplete, token ", token)
 			}
 		}
-		for _, bb := range trep.TCBlock {
-			blk := block.InitBlock(bb, nil)
-			if blk == nil {
-				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
-				return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
-			}
-			err = c.w.AddTokenBlock(token, blk)
+	} else {
+		// in case of FTs, and NFTs
+		for {
+			var trep TCBSyncReply
+			err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &syncReq, &trep, false)
 			if err != nil {
-				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
+				c.log.Error("Failed to sync token chain block", "err", err)
 				return err
 			}
-		}
-		if trep.NextBlockID == "" {
-			break
-		}
-		syncReq.BlockID = trep.NextBlockID
+			if !trep.Status {
+				c.log.Error("Failed to sync token chain block", "msg", trep.Message)
+				return fmt.Errorf(trep.Message)
+			}
+			if strings.Contains(trep.Message, "Sent all blocks") {
+				diffVar := int(blkHeight) - len(trep.TCBlock)
+				if diffVar > 1 {
+					// Quorum is ahead of sender by more than 1 block — not allowed
+					c.log.Error("Block height discrepancy too large")
+					return fmt.Errorf("sync failed: block height discrepancy too large (diff: %d)", diffVar)
+				} else {
+					// Get syncer latest token block hash
+					syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
+					syncerLatestBlkHash, err := syncerLatestBlk.GetHash()
+					if err != nil {
+						c.log.Error("Failed to get block hash of synced block", "err", err)
+						return err
+					}
 
+					// Get DID owner latest token block hash
+					didOwnerAllTknBlks, _, err := c.w.GetAllTokenBlocks(token, tokenType, "")
+					didOwnerBlock := block.InitBlock(didOwnerAllTknBlks[len(trep.TCBlock)-1], nil)
+					didOwnerLatestBlkHash, err := didOwnerBlock.GetHash()
+					if err != nil {
+						c.log.Error("Failed to get block hash of owner block", "err", err)
+						return err
+					}
+
+					// Compare both block hashes
+					if strings.Contains(syncerLatestBlkHash, didOwnerLatestBlkHash) {
+						syncerLatestBlkID, err := syncerLatestBlk.GetBlockID(token)
+						if err != nil {
+							c.log.Error("Failed to get block id of synced block", "err", err)
+							return err
+						}
+						return fmt.Errorf("syncer block height discrepency|%s", syncerLatestBlkID)
+					}
+				}
+			}
+			for _, bb := range trep.TCBlock {
+				blk := block.InitBlock(bb, nil)
+				if blk == nil {
+					c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
+					return fmt.Errorf("failed to add token chain block, invalid block, sync failed")
+				}
+				err = c.w.AddTokenBlock(token, blk)
+				if err != nil {
+					c.log.Error("Failed to add token chain block, syncing failed", "err", err)
+					return err
+				}
+			}
+			if trep.NextBlockID == "" {
+				break
+			}
+			syncReq.BlockID = trep.NextBlockID
+
+		}
 	}
-	// }
 	return nil
 }
 
@@ -619,7 +614,6 @@ func (c *Core) syncFullTokenChain(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo)
 		return err
 	}
 
-	// TODO ; if token chain is missing then sync the entire chain
 	if minMissingBlockId == "" && maxMissingblockId == "" {
 		c.log.Debug("token chain is completely synced")
 		// update token sync status
@@ -729,12 +723,11 @@ func (c *Core) syncGenesisAndLatestBlock(req *ensweb.Request) *ensweb.Result {
 		c.log.Debug("adding genesis block bytes for token", tr.Token)
 	}
 
-	latestBlock, err := c.GetLastCVR2Block(tr.Token, tr.TokenType)
-	if err != nil {
-		c.log.Error(err.Error())
-		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: err.Error()}, http.StatusOK)
+	latestBlock := c.w.GetLatestTokenBlock(tr.Token, tr.TokenType)
+	if latestBlock == nil {
+		c.log.Error("latest block is nil, invalid token chain, failed to share token chain")
+		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "latest block is nil, invalid token chain"}, http.StatusOK)
 	}
-
 	latestBlockHeight, err := latestBlock.GetBlockNumber(tr.Token)
 	if err != nil {
 		c.log.Error("failed to get token chain height, err", err)
@@ -744,12 +737,7 @@ func (c *Core) syncGenesisAndLatestBlock(req *ensweb.Request) *ensweb.Result {
 	if latestBlockHeight != 0 && latestBlockHeight > tr.BlockHeight {
 		trep.LatestBlock = latestBlock.GetBlock()
 		c.log.Debug("adding latest block bytes ")
-	} else if latestBlockHeight < tr.BlockHeight {
-		errmsg := fmt.Sprintf("requester has longer chain than sender for token : %v; sender token chain height = %v, quorum's token chain height = %v ", tr.Token, latestBlockHeight, tr.BlockHeight)
-		c.log.Error(errmsg)
-		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: errmsg}, http.StatusOK)
 	}
-
 	return c.l.RenderJSON(req, &trep, http.StatusOK)
 }
 
@@ -768,7 +756,7 @@ func (c *Core) syncGenesisAndLatestBlockFrom(p *ipfsport.Peer, syncReq TCBSyncRe
 
 	// add genesis block
 	if trep.GenesisBlock != nil {
-		c.log.Debug("adding genesis block")
+		fmt.Println("adding genesis block")
 		genesisBlock := block.InitBlock(trep.GenesisBlock, nil)
 		if genesisBlock == nil {
 			c.log.Error("Failed to initiate genesis block, invalid block, sync failed", "err", err)
@@ -782,7 +770,7 @@ func (c *Core) syncGenesisAndLatestBlockFrom(p *ipfsport.Peer, syncReq TCBSyncRe
 	}
 	// add latest block
 	if trep.LatestBlock != nil {
-		c.log.Debug("adding latest block")
+		fmt.Println("adding latest block")
 		latestBlock := block.InitBlock(trep.LatestBlock, nil)
 		if latestBlock == nil {
 			c.log.Error("Failed to initiate latest block, invalid block, sync failed", "err", err)
@@ -834,7 +822,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 		//serach for the required whole amount
 		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode)
 		if err != nil && err.Error() != "no records found" {
-			c.w.ReleaseTokens(wholeTokens, c.testNet)
+			c.w.ReleaseTokens(wholeTokens)
 			c.log.Error("failed to search for whole tokens", "err", err)
 			return nil, 0.0, err
 		}
@@ -853,7 +841,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 				return requiredTokens, remainingAmount, nil
 			}
 			c.log.Debug("No more whole token left in wallet , rest of needed amt ", reqAmt)
-			allPartTokens, err := c.w.GetAllPartTokens(did, txnMode)
+			allPartTokens, err := c.w.GetAllPartTokens(did)
 			if err != nil {
 				// In GetAllPartTokens, we first check if there are any part tokens present in
 				// TokensTable. Now there could be a situation, where there aren't any part tokens
@@ -863,7 +851,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 				if strings.Contains(err.Error(), "no records found") {
 					return requiredTokens, reqAmt, nil
 				}
-				c.w.ReleaseTokens(wholeTokens, c.testNet)
+				c.w.ReleaseTokens(wholeTokens)
 				c.log.Error("failed to lock part tokens", "err", err)
 				return nil, 0.0, err
 			}
@@ -873,14 +861,14 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 				sum = floatPrecision(sum, MaxDecimalPlaces)
 			}
 			if sum < reqAmt {
-				c.w.ReleaseTokens(wholeTokens, c.testNet)
+				c.w.ReleaseTokens(wholeTokens)
 				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
 				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
 			}
 			// Create a slice to store the indices of elements to be removed
 			var indicesToRemove []int
 			// Iterate through allPartTokens
-			defer c.w.ReleaseTokens(allPartTokens, c.testNet)
+			defer c.w.ReleaseTokens(allPartTokens)
 			for i, partToken := range allPartTokens {
 				// Subtract the partToken value from the txnAmount
 				// If the transaction amount is less than the partToken.TokenValue, skip
@@ -903,7 +891,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 				copy(allPartTokens[idx-i:], allPartTokens[idx-i+1:])
 			}
 			allPartTokens = allPartTokens[:len(allPartTokens)-len(indicesToRemove)]
-			c.w.ReleaseTokens(allPartTokens, c.testNet)
+			c.w.ReleaseTokens(allPartTokens)
 
 			if reqAmt > 0 {
 				// Add the remaining amount to the remainingAmount variable
@@ -916,7 +904,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 		if len(wholeTokens) == 0 && remWhole > 0 {
 			c.log.Debug("No whole tokens found. proceeding to get part tokens for txn")
 
-			allPartTokens, err := c.w.GetAllPartTokens(did, txnMode)
+			allPartTokens, err := c.w.GetAllPartTokens(did)
 			if err != nil && err.Error() != "no records found" {
 				c.log.Error("failed to search for part tokens", "err", err)
 				return nil, 0.0, err
@@ -936,7 +924,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 			// Create a slice to store the indices of elements to be removed
 			var indicesToRemove []int
 			// Iterate through allPartTokens
-			defer c.w.ReleaseTokens(allPartTokens, c.testNet)
+			defer c.w.ReleaseTokens(allPartTokens)
 			for i, partToken := range allPartTokens {
 				// Subtract the partToken value from the txnAmount
 				// If the transaction amount is less than the partToken.TokenValue, skip
@@ -959,7 +947,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 				copy(allPartTokens[idx-i:], allPartTokens[idx-i+1:])
 			}
 			allPartTokens = allPartTokens[:len(allPartTokens)-len(indicesToRemove)]
-			c.w.ReleaseTokens(allPartTokens, c.testNet)
+			c.w.ReleaseTokens(allPartTokens)
 			if txnAmount > 0 {
 				// Add the remaining amount to the remainingAmount variable
 				remainingAmount += txnAmount
@@ -970,7 +958,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 	} else {
 		return make([]wallet.Token, 0), reqAmt, nil
 	}
-	defer c.w.ReleaseTokens(requiredTokens, c.testNet)
+	defer c.w.ReleaseTokens(requiredTokens)
 	remainingAmount = floatPrecision(remainingAmount, MaxDecimalPlaces)
 	return requiredTokens, remainingAmount, nil
 }
@@ -1401,7 +1389,6 @@ func (c *Core) GetMissingBlockSequence(tokenSyncInfo TokenSyncInfo) (string, str
 		}
 	}
 
-	// if len(blocks) = 0, then sync the entire token chain
 	if len(blocks) == 0 {
 		c.log.Error("invalid token chain of token ", tokenSyncInfo.TokenID)
 		return "", "", fmt.Errorf("missing token chain of token: %v", tokenSyncInfo.TokenID)
@@ -1490,418 +1477,4 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 	// restart all incomplete token chain sync as a background process
 	go c.syncFullTokenChains(tokenSyncMap)
 
-}
-func (c *Core) InitiateRBTCVRTwo(reqID string, req *model.CvrAPIRequest) {
-	br := c.GatherFreeRBTsForConsensus(reqID, req)
-	didChannel := c.GetWebReq(reqID)
-	if didChannel == nil {
-		c.log.Error("Failed to get did channels")
-		return
-	}
-	c.log.Debug("!!!!!!!!!!!!!!!!!!! final response from cvr ", br)
-	didChannel.OutChan <- br
-}
-
-// this function gathers all the required free tokens for CVR and creates a temp contract block for conensus
-func (c *Core) GatherFreeRBTsForConsensus(reqID string, req *model.CvrAPIRequest) *model.BasicResponse {
-
-	c.log.Debug("****** receievd API request for CVR-2 : ", reqID, "request :", req)
-
-	response := &model.BasicResponse{
-		Status: false,
-	}
-	// gather free tokens for cvr and prepare contract block
-	freeTokensList, err := c.w.GetAllFreeToken(req.DID)
-	if err != nil {
-		errMsg := fmt.Sprintf("failed to get all free tokens for DID : %v, err : %v", req.DID, err)
-		c.log.Error(errMsg)
-		response.Message = errMsg
-		return response
-	}
-
-	if len(freeTokensList) == 0 {
-		c.log.Error("No tokens present for cvr")
-		response.Message = "No tokens present for cvr"
-		return response
-	}
-
-	// release the locked tokens before exit
-	defer c.w.ReleaseTokens(freeTokensList, c.testNet)
-
-	c.log.Debug("list of free tokens :", freeTokensList)
-
-	senderDID := req.DID
-	dc, err := c.SetupDID(reqID, senderDID)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to setup DID, err : %v", err)
-		c.log.Error(errMsg)
-		response.Message = errMsg
-		return response
-	}
-
-	//TODO: handle the error in Pin func
-	for i := range freeTokensList {
-		c.w.Pin(freeTokensList[i].TokenID, wallet.OwnerRole, senderDID, "TID-Not Generated", req.DID, "", freeTokensList[i].TokenValue)
-	}
-
-	tis := make([]contract.TokenInfo, 0)
-	totalValue := 0.0
-
-	for i := range freeTokensList {
-		tts := "rbt"
-		if freeTokensList[i].TokenValue != 1 {
-			tts = "part"
-		}
-		tt := c.TokenType(tts)
-		blk := c.w.GetLatestTokenBlock(freeTokensList[i].TokenID, tt)
-		if blk == nil {
-			c.log.Error("failed to get latest block, invalid token chain")
-			response.Message = "failed to get latest block, invalid token chain"
-			return response
-		}
-
-		bid, err := blk.GetBlockID(freeTokensList[i].TokenID)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to get block id; err: %v", err)
-			c.log.Error(errMsg)
-			response.Message = errMsg
-			return response
-		}
-		ti := contract.TokenInfo{
-			Token:      freeTokensList[i].TokenID,
-			TokenType:  tt,
-			TokenValue: floatPrecision(freeTokensList[i].TokenValue, MaxDecimalPlaces),
-			OwnerDID:   freeTokensList[i].DID,
-			BlockID:    bid,
-		}
-		tis = append(tis, ti)
-
-		// calculate all free tokens sum
-		totalValue += floatPrecision(freeTokensList[i].TokenValue, MaxDecimalPlaces)
-
-	}
-
-	//check if sender has previous block pledged quorums' details
-	//TODO: Reuse blk for GetLatestTokenBlock
-	for _, tokeninfo := range tis {
-		b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
-		//check if the transaction in prev block involved any quorums
-		switch b.GetTransType() {
-		case block.TokenGeneratedType:
-			continue
-		case block.TokenBurntType:
-			errMsg := fmt.Sprintf("token is burnt, can't transfer anymore; token: %v", tokeninfo.Token)
-			c.log.Error(errMsg)
-			response.Message = errMsg
-			return response
-		case block.TokenTransferredType:
-			//fetch all the pledged quorums, if the transaction involved quorums
-			prevQuorums, _ := b.GetSigner()
-
-			for _, prevQuorum := range prevQuorums {
-				//check if the sender has prev pledged quorum's did type; if not, fetch it from the prev sender
-				fmt.Println("Checking if the sender has previous block pledged quorum's did type")
-				prevQuorumInfo, err := c.GetPeerDIDInfo(prevQuorum)
-				if err != nil {
-					if strings.Contains(err.Error(), "retry") {
-						c.AddPeerDetails(*prevQuorumInfo)
-					}
-				}
-				if prevQuorumInfo == nil || *prevQuorumInfo.DIDType == -1 {
-					//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
-					//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
-					break
-				}
-
-			}
-		}
-	}
-
-	rbtTransferreq := &model.RBTTransferRequest{
-		Sender:   senderDID,
-		Receiver: senderDID,
-		Type:     req.QuorumType,
-	}
-
-	c.log.Debug("********** creating contract")
-
-	// preaparing the block for tokens to be transferred to receiver
-	contractType := getContractType(reqID, rbtTransferreq, tis, false)
-	sc := contract.CreateNewContract(contractType)
-
-	// Starting CVR stage-1
-	// TODO : handle cvr stage-0 : quorum's signature
-	// And handle self-transfer of sender's remaining amount
-
-	c.log.Debug("********** signing on txn id")
-
-	err = sc.UpdateSignature(dc)
-	if err != nil {
-		c.log.Error(err.Error())
-		response.Message = err.Error()
-		return response
-	}
-
-	st := time.Now()
-	txEpoch := int(st.Unix())
-
-	cvrReq := &wallet.PrePledgeRequest{
-		DID:                 req.DID,
-		QuorumType:          req.QuorumType,
-		TransferMode:        SpendableRBTTransferMode,
-		SCSelfTransferBlock: sc.GetBlock(),
-		SCTransferBlock:     nil,
-		ReqID:               reqID,
-		TxnEpoch:            int64(txEpoch),
-	}
-
-	c.log.Debug("********** initiating cvr-2")
-
-	response = c.initiateCVRTwo(cvrReq)
-	return response
-}
-
-func (c *Core) initiateCVRTwo(req *wallet.PrePledgeRequest) *model.BasicResponse {
-	resp := &model.BasicResponse{
-		Status: false,
-	}
-
-	c.log.Debug("******** cvr-2 request received ", req.DID)
-	isSelfRBTTransfer := false
-
-	// tokensList, err := c.w.GetTokensByTxnID(req.TxnID)
-	// // TODO : proper error handling needed for db locking and unlocking
-	// if err != nil {
-	// 	c.log.Error("failed to get tokens to pre pledge, err ", err)
-	// 	resp.Message = err.Error()
-	// 	return resp
-	// }
-
-	// senderDID := req.DID
-
-	dc, err := c.SetupDID(req.ReqID, req.DID)
-	if err != nil {
-		resp.Message = "Failed to setup DID, " + err.Error()
-		return resp
-	}
-
-	// tokenInfoList := make([]contract.TokenInfo, 0)
-	// tokensToPrePledge := make([]wallet.Token, 0)
-
-	// for _, tokeninfo := range tokensList {
-	// 	tokenTypeStr := "rbt"
-	// 	if tokeninfo.TokenValue != 1 {
-	// 		tokenTypeStr = "part"
-	// 	}
-	// 	tokenType := c.TokenType(tokenTypeStr)
-
-	// 	// get latest block of the token
-	// 	tempBlock := c.w.GetLatestTokenBlock(tokeninfo.TokenID, tokenType)
-	// 	if tempBlock == nil {
-	// 		c.log.Error("failed to get latest block, invalid token chain")
-	// 		resp.Message = "failed to get latest block, invalid token chain"
-	// 		return resp
-	// 	}
-
-	// 	// get block id of the last CVR block from the latest temp block
-	// 	prevBlockID, err := tempBlock.GetPrevBlockID(tokeninfo.TokenID)
-	// 	if err != nil {
-	// 		errMsg := fmt.Sprintf("failed to get previous block ID from latest block, token : %v; err : %v", tokeninfo.TokenID, err)
-	// 		c.log.Error(errMsg)
-	// 		resp.Message = errMsg
-	// 		return resp
-	// 	}
-
-	// 	// get the block bytes of the last cvr block from the block id
-	// 	prevBlockBytes, err := c.w.GetTokenBlock(tokeninfo.TokenID, tokenType, prevBlockID)
-	// 	if err != nil {
-	// 		errMsg := fmt.Sprintf("failed to get prev CVR block from the prev block id : %v; err : %v", prevBlockID, err)
-	// 		c.log.Error(errMsg)
-	// 		resp.Message = errMsg
-	// 		return resp
-	// 	}
-
-	// 	// initiate the last cvr block from the block bytes
-	// 	prevBlock := block.InitBlock(prevBlockBytes, nil)
-	// 	if prevBlock == nil {
-	// 		errMsg := fmt.Sprintf("failed to initiate last CVR block, token : %v", tokeninfo.TokenID)
-	// 		c.log.Error(errMsg)
-	// 	}
-
-	// 	// fetch pledged-quorum details from latest block and store their details
-	// 	blockHeight, err := prevBlock.GetBlockNumber(tokeninfo.TokenID)
-	// 	if err != nil {
-	// 		errMsg := fmt.Sprintf("failed to fetch token chain height; token : %v; err : %v", tokeninfo.TokenID, err)
-	// 		c.log.Error(errMsg)
-	// 		resp.Message = errMsg
-	// 		return resp
-	// 	}
-
-	// 	//check if the transaction in prev block involved any quorums
-	// 	switch prevBlock.GetTransType() {
-	// 	case block.TokenBurntType:
-	// 		tokeninfo.TokenStatus = wallet.TokenIsBurnt
-	// 		c.w.UpdateToken(&tokeninfo)
-	// 		c.log.Error("token is burnt, can't transfer further; token ", tokeninfo.TokenID)
-	// 		continue
-	// 	case block.TokenTransferredType:
-	// 		if blockHeight != 0 {
-	// 			// validate quorums
-	// 			quorumSignList, err := prevBlock.GetQuorumSignatureList()
-	// 			if err != nil || quorumSignList == nil {
-	// 				c.log.Error("failed to get quorum signature list")
-	// 			}
-
-	//cvrstage-2  sender to receiver transfer
-	if req.SCTransferBlock != nil {
-		c.log.Debug("********* sender to receiver transfer consensus starting***************")
-		sc := contract.InitContract(req.SCTransferBlock, nil)
-		rpeerid := c.w.GetPeerID(sc.GetReceiverDID())
-		if rpeerid == "" {
-			isReceiverInSameNode := c.IsDIDExist("", sc.GetReceiverDID())
-			if !isReceiverInSameNode {
-				errMsg := fmt.Sprintf("unexpected error, unable to find receiver peer id in CVR-2 even after token has been transferred to receiver : %v", sc.GetReceiverDID())
-				c.log.Error(errMsg)
-				resp.Message = errMsg
-				return resp
-			}
-			rpeerid = c.peerID
-		}
-
-		c.log.Debug("**********receiver peer id is : ", rpeerid)
-
-		cr := getConsensusRequest(req.QuorumType, c.peerID, rpeerid, req.SCTransferBlock, int(req.TxnEpoch), isSelfRBTTransfer)
-		cr.Mode = req.TransferMode
-		if req.TransferMode == SpendableFTTransferMode {
-			cr.FTinfo = req.FTInfo
-		}
-
-		c.log.Debug("********** consensus request : mode ", cr.Mode, "cr req id", cr.ReqID, "sender peerid", cr.SenderPeerID, "receiver peerid", cr.ReceiverPeerID)
-
-		// initiate consensus for sender to receiver transaction.
-		_, _, _, err := c.initiateConsensus(cr, sc, dc)
-		if err != nil {
-			errMsg := fmt.Sprintf("Consensus failed for  sender to receiver transfer, err: %v", err)
-			c.log.Error(errMsg)
-			resp.Message = errMsg
-			return resp
-		}
-
-		c.log.Debug("******* sender to receiver transfer cvr-2 completed ******")
-	}
-
-	// TODO : add transaction details to DB, if not added alreay in initiate consensus
-
-	//cvrstage-2  for sef transfer
-	if req.SCSelfTransferBlock != nil {
-		c.log.Debug("********* self transfer consensus starting***************")
-		selfTransferContractBlock := contract.InitContract(req.SCSelfTransferBlock, nil)
-		if selfTransferContractBlock == nil {
-			c.log.Error(" empty contract block, failked to self-transfer consensus")
-			resp.Message = " empty contract block, failked to self-transfer consensus"
-			return resp
-		}
-
-		selfTransferConsensusReq := getConsensusRequest(req.QuorumType, c.peerID, c.peerID, req.SCSelfTransferBlock, int(req.TxnEpoch), isSelfRBTTransfer)
-		selfTransferConsensusReq.Mode = req.TransferMode
-		if req.TransferMode == SpendableFTTransferMode {
-			c.log.Debug("******* ft info : ", req.FTInfo)
-			// ftsList := selfTransferContractBlock.GetTransTokenInfo()
-			// req.FTInfo.FTCount = len(ftsList)
-			selfTransferConsensusReq.FTinfo = req.FTInfo
-		}
-
-		c.log.Debug("********** consensus request : mode ", selfTransferConsensusReq.Mode, "cr req id", selfTransferConsensusReq.ReqID, "sender peerid", selfTransferConsensusReq.SenderPeerID, "receiver peerid", selfTransferConsensusReq.ReceiverPeerID)
-		// initiate consensus for self transfer
-		_, _, _, err := c.initiateConsensus(selfTransferConsensusReq, selfTransferContractBlock, dc)
-		if err != nil {
-			errMsg := fmt.Sprintf("Consensus failed for  self transfer, err: %v", err)
-			c.log.Error(errMsg)
-			resp.Message = errMsg
-			return resp
-		}
-		c.log.Debug("********* self transfer cvr-2 completed***************")
-	}
-	c.log.Debug("*********cvr-2 completed*********")
-
-	resp.Status = true
-	resp.Message = "consensus completed"
-	return resp
-}
-
-func (c *Core) UpdateTransferredTokensInfo(tokenList []wallet.Token, newTokenStatus int, txnID string) error {
-	for _, tokenInfo := range tokenList {
-		tokenInfo.TokenStatus = newTokenStatus
-		tokenInfo.TransactionID = txnID
-		err := c.w.UpdateToken(&tokenInfo)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to update token : %v from Tokentable, err : %v", tokenInfo.TokenID, err)
-			c.log.Error(errMsg)
-			return fmt.Errorf(errMsg)
-		}
-
-	}
-	return nil
-}
-
-// If latest block is of spendableRBTTransferredType, that means it is a cvr-1 block, will be removed from the chain.
-// Thus share the previous block of the cvr-1 block
-func (c *Core) GetLastCVR2Block(tokenId string, tokenType int) (*block.Block, error) {
-	latestBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
-	if latestBlock == nil {
-		errMsg := fmt.Sprintf("latest block is nil, invalid token chain : %v", tokenId)
-		c.log.Error(errMsg)
-		return nil, fmt.Errorf(errMsg)
-	}
-
-	if latestBlock.GetTransType() == block.SpendableTokenTransferredType {
-		// get the previous block with cvr-2, block type 15
-		prevBlockID, err := latestBlock.GetPrevBlockID(tokenId)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to get block id of previous block of the latest block of token : %v; err : %v", tokenId, err)
-			c.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-
-		// get the block bytes of the last cvr block from the block id
-		prevBlockBytes, err := c.w.GetTokenBlock(tokenId, tokenType, prevBlockID)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to get prev CVR block from the prev block id : %v; err : %v", prevBlockID, err)
-			c.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-
-		// initiate the last cvr block from the block bytes
-		latestBlock = block.InitBlock(prevBlockBytes, nil)
-		if latestBlock == nil {
-			errMsg := fmt.Sprintf("failed to initiate last CVR block, token : %v", tokenId)
-			c.log.Error(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-	}
-	return latestBlock, nil
-}
-
-// check if the given token's latest block is cvr-1 block, if it is cvr-1 then remove the block
-func (c *Core) RemoveSpendableRBTTransferredBlock(tokenID string, tokenType int) error {
-	latestBlock := c.w.GetLatestTokenBlock(tokenID, tokenType)
-	if latestBlock == nil {
-		errMsg := fmt.Sprintf("failed to get token chain, latest block is empty for token : %v", tokenID)
-		c.log.Error(errMsg)
-		return fmt.Errorf(errMsg)
-	}
-	if latestBlock.GetTransType() == block.SpendableTokenTransferredType {
-		//TODO: delete the temp block(cvr-1) before adding cvr-2 block
-		removeRequest := &model.TCRemoveRequest{
-			Token:     tokenID,
-			Latest:    true,
-			TokenType: tokenType,
-		}
-		removeResp := c.RemoveTokenChainBlock(removeRequest)
-		if !removeResp.Status {
-			errMsg := fmt.Sprintf("error while removing the cvr-1 block for the token %v, error : %v", tokenID, removeResp.Message)
-			return fmt.Errorf(errMsg)
-		}
-	}
-	return nil
 }

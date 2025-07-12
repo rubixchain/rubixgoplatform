@@ -63,8 +63,6 @@ const (
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
-	APINotifyUnusedQuorums          string = "/api/notify-unused-quorums"
-	APINotifyReceiverToRollback     string = "/api/notify-receiver"
 )
 
 const (
@@ -87,6 +85,8 @@ const (
 	IPFSAPIPort uint16 = 8081
 	MaxPeerConn uint16 = 1000
 )
+
+var dbWriteSem = make(chan struct{}, 1)
 
 type Core struct {
 	cfg                  *config.Config
@@ -340,7 +340,7 @@ func (c *Core) SetupCore() error {
 	c.SetupToken()
 	c.QuroumSetup()
 	c.PinService()
-	//c.RestartIncompleteTokenChainSyncs()
+	c.RestartIncompleteTokenChainSyncs()
 	//c.UnlockFTs()
 	// c.selfTransferService()
 	return nil
@@ -693,7 +693,3 @@ func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) 
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	}
 }
-
-// func (c *Core)ConvertContractToBlock(contract *contract.ContractType) *block.Block {
-
-// }

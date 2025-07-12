@@ -51,13 +51,12 @@ type GetAccountInfo struct {
 }
 
 type DIDAccountInfo struct {
-	DID          string  `json:"did"`
-	DIDType      int     `json:"did_type"`
-	RBTAmount    float64 `json:"rbt_amount"`
-	PledgedRBT   float64 `json:"pledged_rbt"`
-	LockedRBT    float64 `json:"locked_rbt"`
-	PinnedRBT    float64 `json:"pinned_rbt"`
-	SpendableRBT float64 `json:"spendable_rbt"`
+	DID        string  `json:"did"`
+	DIDType    int     `json:"did_type"`
+	RBTAmount  float64 `json:"rbt_amount"`
+	PledgedRBT float64 `json:"pledged_rbt"`
+	LockedRBT  float64 `json:"locked_rbt"`
+	PinnedRBT  float64 `json:"pinned_rbt"`
 }
 
 type TokenDetail struct {
@@ -101,9 +100,4 @@ type PinCheckReply struct {
 	Status     bool              `json:"status"`
 	Message    string            `json:"message"`
 	PinDetails *TokenProviderMap `json:"pin_details"`
-}
-
-type CvrAPIRequest struct {
-	DID        string `json:"did"`
-	QuorumType int    `json:"quorum_type"`
 }

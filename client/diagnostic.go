@@ -84,11 +84,10 @@ func (c *Client) GetNFTTokenData(token string, latest bool) (*model.NFTDataReply
 
 }
 
-func (c *Client) RemoveTokenChainBlock(token string, latest bool, tokenTypeStr string) (*model.TCRemoveReply, error) {
+func (c *Client) RemoveTokenChainBlock(token string, latest bool) (*model.TCRemoveReply, error) {
 	removeReq := &model.TCRemoveRequest{
 		Token:  token,
 		Latest: latest,
-		TokenTypeString: tokenTypeStr,
 	}
 	var removeReply model.TCRemoveReply
 	err := c.sendJSONRequest("POST", setup.APIRemoveTokenChainBlock, nil, removeReq, &removeReply)

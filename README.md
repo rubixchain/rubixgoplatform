@@ -438,7 +438,7 @@ Create FT Command
 : To create FTs
 
 ```
-./rubixgoplatform create-ft
+./rubixgoplatform createft
 
 The following flags are used for this command
   -did string
@@ -461,7 +461,7 @@ Transfer FT Command
 : To transfer FT
 
 ```
-./rubixgoplatform transfer-ft
+./rubixgoplatform transferft
 
 The following flags are used for this command
   -ftName string
@@ -496,7 +496,7 @@ Get FT Info Command
 : To get info of all FTs with the DID.
 
 ```
-./rubixgoplatform get-ft-info-by-did
+./rubixgoplatform getftinfo
 
 The following flags are used for this command
   -did string
@@ -510,7 +510,7 @@ Dump FT command
 : To dump the token chain of an FT.
 
 ```
-./rubixgoplatform dump-ft 
+./rubixgoplatform dumpft 
 
 This following flags are used for this command
   -port string

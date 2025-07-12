@@ -56,27 +56,25 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	if rem == 0 {
 		return wt, nil
 	}
-	pt, err := c.w.GetTokensByLimit(did, rem, trnxMode)
-
-	c.log.Debug("descending ordered tokens whose value is less than remaining amount: ", rem, "tokens: ", pt)
+	pt, err := c.w.GetTokensByLimit(did, rem)
 	if err != nil || len(pt) == 0 {
 		if rem >= 1 {
-			c.w.ReleaseTokens(wt, c.testNet)
+			c.w.ReleaseTokens(wt)
 			c.log.Error("failed to get part tokens", "err", err)
 			return nil, fmt.Errorf("insufficient balance")
 		}
-		tt, err := c.w.GetCloserToken(did, rem, trnxMode)
+		tt, err := c.w.GetCloserToken(did, rem)
 		if err != nil {
-			c.w.ReleaseTokens(wt, c.testNet)
+			c.w.ReleaseTokens(wt)
 			c.log.Error("failed to fetch whole token", "err", err)
 			return nil, err
 		}
 		tkn := tt.TokenID
 		c.w.ReleaseToken(tkn)
 		parts := []float64{rem, floatPrecision(tt.TokenValue-rem, MaxDecimalPlaces)}
-		nt, err := c.createPartToken(dc, did, tkn, parts, trnxMode)
+		nt, err := c.createPartToken(dc, did, tkn, parts, 1)
 		if err != nil {
-			c.w.ReleaseTokens(wt, c.testNet)
+			c.w.ReleaseTokens(wt)
 			c.log.Error("failed to create part tokens", "err", err)
 			return nil, err
 		}
@@ -91,7 +89,7 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 			if pt[i].TokenValue == rem {
 				wt = append(wt, pt[i])
 				pt = append(pt[:i], pt[i+1:]...)
-				c.w.ReleaseTokens(pt, c.testNet)
+				c.w.ReleaseTokens(pt)
 				return wt, nil
 			}
 		}
@@ -109,40 +107,40 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	}
 
 	if rem == 0 {
-		c.w.ReleaseTokens(rpt, c.testNet)
+		c.w.ReleaseTokens(rpt)
 		return wt, nil
 	}
 	if len(rpt) > 0 {
 		parts := []float64{rem, floatPrecision(rpt[0].TokenValue-rem, MaxDecimalPlaces)}
 		c.w.ReleaseToken(rpt[0].TokenID)
-		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts, trnxMode)
+		npt, err := c.createPartToken(dc, did, rpt[0].TokenID, parts, 2)
 		if err != nil {
-			c.w.ReleaseTokens(wt, c.testNet)
-			c.w.ReleaseTokens(rpt, c.testNet)
+			c.w.ReleaseTokens(wt)
+			c.w.ReleaseTokens(rpt)
 			return nil, err
 		}
-		c.w.ReleaseTokens(rpt, c.testNet)
+		c.w.ReleaseTokens(rpt)
 		npt[0].TokenStatus = wallet.TokenIsLocked
 		c.w.UpdateToken(&npt[0])
 		wt = append(wt, npt[0])
 		return wt, nil
 	}
-	nwt, err := c.w.GetCloserToken(did, rem, trnxMode)
+	nwt, err := c.w.GetCloserToken(did, rem)
 	if err != nil && err.Error() != "no records found" {
-		c.w.ReleaseTokens(wt, c.testNet)
+		c.w.ReleaseTokens(wt)
 		c.log.Error("failed to get whole token", "err", err)
 		return nil, fmt.Errorf("failed to get whole token")
 	}
 	if nwt == nil {
-		c.w.ReleaseTokens(rpt, c.testNet)
+		c.w.ReleaseTokens(rpt)
 		c.log.Debug("No More tokens left to pledge")
 		return wt, nil
 	}
 	c.w.ReleaseToken(nwt.TokenID)
 	parts := []float64{rem, floatPrecision(nwt.TokenValue-rem, MaxDecimalPlaces)}
-	npt, err := c.createPartToken(dc, did, nwt.TokenID, parts, trnxMode)
+	npt, err := c.createPartToken(dc, did, nwt.TokenID, parts, 3)
 	if err != nil {
-		c.w.ReleaseTokens(wt, c.testNet)
+		c.w.ReleaseTokens(wt)
 		c.w.ReleaseToken(nwt.TokenID)
 		c.log.Error("failed to create part token", "err", err)
 		return nil, fmt.Errorf("failed to create part token")
@@ -153,20 +151,11 @@ func (c *Core) GetTokens(dc did.DIDCrypto, did string, value float64, trnxMode i
 	return wt, nil
 }
 
-func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts []float64, txnMode int) ([]wallet.Token, error) {
-
-	c.log.Debug("*****CreatePartToken function has been called********")
+func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts []float64, num int) ([]wallet.Token, error) {
 	if dc == nil {
 		return nil, fmt.Errorf("did crypto is not initialised")
 	}
-	var t *wallet.Token
-	var err error
-	if txnMode == SpendableRBTTransferMode {
-		t, err = c.w.GetToken(tkn, wallet.TokenIsSpendable)
-	} else {
-		//free tokens can also be split into parts for pledging purpose
-		t, err = c.w.GetToken(tkn, wallet.TokenIsFree)
-	}
+	t, err := c.w.GetToken(tkn, wallet.TokenIsFree)
 	if err != nil || t == nil {
 		return nil, fmt.Errorf("failed to get token or token does not exist")
 	}
@@ -306,11 +295,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		ChildTokens:     pts,
 	}
 	ctcb := make(map[string]*block.Block)
-	latestBlock := c.w.GetLatestTokenBlock(tkn, ptt)
-
-	c.log.Debug("transferType in the latest block is:", latestBlock.GetTransType())
-
-	ctcb[tkn] = latestBlock
+	ctcb[tkn] = c.w.GetLatestTokenBlock(tkn, ptt)
 	b = block.CreateNewBlock(ctcb, tcb)
 	if b == nil {
 		return nil, fmt.Errorf("failed to create new block")
@@ -327,20 +312,13 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	}
 	npt := make([]wallet.Token, 0)
 	for i := range parts {
-
 		ptkn := &wallet.Token{
 			TokenID:       pts[i],
 			ParentTokenID: tkn,
 			TokenValue:    parts[i],
 			DID:           did,
+			TokenStatus:   wallet.TokenIsFree,
 		}
-		ptkn.TokenStatus = wallet.TokenIsFree // Default status
-		if latestBlock != nil && latestBlock.GetTransType() == block.OwnershipTransferredType {
-
-			c.log.Debug("******latest block is spendable rbt trans type, so updating the token status to spendable*****")
-			ptkn.TokenStatus = wallet.TokenIsSpendable
-		}
-
 		err = c.w.CreateToken(ptkn)
 		if err != nil {
 			c.log.Error("part token creation failed, failed to create token", "err", err)

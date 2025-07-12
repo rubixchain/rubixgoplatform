@@ -326,7 +326,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					for i := range tns {
 						ntd := token.GetTokenString(tls[i], tns[i])
 						tb := bytes.NewReader([]byte(ntd))
-						tid, err := c.ipfs.Add(tb)
+						tid, err := IpfsAddWithBackoff(c.ipfs, tb)
 						if err != nil {
 							c.log.Error("Failed to migrate, failed to add token file", "err", err)
 							return fmt.Errorf("failed to migrate, failed to add token file")
@@ -377,8 +377,8 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 							continue
 						}
 						tb := bytes.NewReader(tk)
-						tid, err := c.ipfs.Add(tb)
-						//tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+						tid, err := IpfsAddWithBackoff(c.ipfs, tb)
+						//tid, err := IpfsAddWithBackoff(c.ipfs,tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 						if err != nil {
 							c.log.Error("Failed to migrate, failed to add token file", "err", err)
 							return fmt.Errorf("failed to migrate, failed to add token file")
@@ -446,7 +446,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 						c.log.Error("Failed to migrate, failed to read token chain files", "err", err)
 						return fmt.Errorf("failed to migrate, failed to read token chain files")
 					}
-					tcid, err := c.ipfs.Add(fb)
+					tcid, err := IpfsAddWithBackoff(c.ipfs, fb)
 					if err != nil {
 						c.log.Error("Failed to migrate, failed to add token chain file", "err", err)
 						return fmt.Errorf("failed to migrate, failed to add token chain file")

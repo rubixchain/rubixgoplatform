@@ -192,8 +192,6 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetFTTxnByDID, "GET", s.AuthHandle(s.APIGetFTTxnByDID, true, s.AuthError, false))
 	s.AddRoute(setup.APIUpdateTokenStatus, "PUT", s.AuthHandle(s.APIUpdateTokenStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetTokenStatus, "GET", s.AuthHandle(s.APIGetTokenStatus, false, s.AuthError, false))
-	s.AddRoute(setup.APIPrePledge, "POST", s.AuthHandle(s.APIPrePledge, true, s.AuthError, false))
-	s.AddRoute(setup.APIPrePledgeFT, "POST", s.AuthHandle(s.APIPrePledgeFTs, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {
