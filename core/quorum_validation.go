@@ -614,7 +614,7 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
 
 	//add to ipfs get only the hash of the token+tokenstate
-	tokenIDTokenStateHash, err := IpfsAddWithBackoff(c.ipfs, tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	tokenIDTokenStateHash, err := IpfsAddWithHealthCheck(c, tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 	result.tokenIDTokenStateHash = tokenIDTokenStateHash
 	if err != nil {
 		c.log.Error("Error adding data to ipfs", err)

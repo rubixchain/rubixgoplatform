@@ -59,3 +59,8 @@ func (ps *PubSub) Publish(topic string, model interface{}) error {
 	}
 	return ps.ipfs.PubSubPublish(topic, string(b))
 }
+
+// UpdateIPFS updates the IPFS shell reference in the pubsub
+func (ps *PubSub) UpdateIPFS(newShell *ipfsnode.Shell) {
+	ps.ipfs = newShell
+}

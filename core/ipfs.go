@@ -12,7 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"encoding/json"
+
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -211,6 +214,24 @@ func (c *Core) RunIPFS() error {
 		return fmt.Errorf("failed create ipfs shell")
 	}
 
+	// Initialize IPFS health manager
+	c.ipfsHealth = NewIPFSHealthManager(c.ipfs, c.cfg, c.log)
+	c.ipfsHealth.SetMaxConcurrency(c.getConcurrencyLimit())
+
+	// Initialize IPFS operations wrapper
+	c.ipfsOps = NewIPFSOperations(c)
+
+	// Initialize IPFS recovery manager
+	c.ipfsRecovery = NewIPFSRecoveryManager(c)
+
+	// Configure recovery settings from config
+	if c.cfg.CfgData.IPFSRecovery.MaxRecoveries > 0 {
+		c.ipfsRecovery.SetMaxRecoveries(c.cfg.CfgData.IPFSRecovery.MaxRecoveries)
+	}
+	if c.cfg.CfgData.IPFSRecovery.RestartDelay > 0 {
+		c.ipfsRecovery.SetRestartDelay(c.cfg.CfgData.IPFSRecovery.RestartDelay)
+	}
+
 	idoutput, err := c.ipfs.ID()
 	if err != nil {
 		c.log.Error("unable to get peer id", "err", err)
@@ -377,4 +398,17 @@ func (c *Core) ipfsRepoGc() {
 		c.log.Error("failed to start command", "err", err)
 		//return nil, err
 	}
+}
+
+func LoadIPFSRecoveryConfig(path string) (*config.IPFSRecoveryConfig, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var cfg config.IPFSRecoveryConfig
+	if err := json.NewDecoder(f).Decode(&cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
 }

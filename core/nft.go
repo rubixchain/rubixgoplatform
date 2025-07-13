@@ -48,7 +48,7 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 	basicResponse := &model.BasicResponse{
 		Status: false,
 	}
-	nftFolderHash, err := c.ipfs.AddDir(createNFTRequest.NFTPath)
+	nftFolderHash, err := c.ipfsOps.AddDir(createNFTRequest.NFTPath)
 	if err != nil {
 		c.log.Error("Failed to add nft file to IPFS", "err", err)
 		return basicResponse
@@ -64,7 +64,7 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		return basicResponse
 	}
 
-	nftHash, err := IpfsAddWithBackoff(c.ipfs, bytes.NewReader(nftJSON))
+	nftHash, err := IpfsAddWithHealthCheck(c, bytes.NewReader(nftJSON))
 	if err != nil {
 		c.log.Error("Failed to add nft to IPFS", "err", err)
 		return basicResponse

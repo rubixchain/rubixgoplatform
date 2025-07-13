@@ -103,6 +103,9 @@ type Core struct {
 	ipfs                 *ipfsnode.Shell
 	ipfsState            bool
 	ipfsChan             chan bool
+	ipfsHealth           *IPFSHealthManager
+	ipfsOps              *IPFSOperations
+	ipfsRecovery         *IPFSRecoveryManager
 	d                    *did.DID
 	didDir               string
 	pm                   *ipfsport.PeerManager
@@ -334,7 +337,7 @@ func (c *Core) SetupCore() error {
 		c.log.Error("Failed to setup services", "err", err)
 		return err
 	}
-	c.w.SetupWallet(c.ipfs)
+	c.w.SetupWallet(c.ipfs, c)
 	c.PingSetup()
 	c.CheckQuorumStatusSetup()
 	c.GetPeerdidTypeSetup()
@@ -420,6 +423,17 @@ func (c *Core) StopCore() {
 	// 	return
 	// }
 	time.Sleep(time.Second)
+
+	// Stop IPFS recovery manager
+	if c.ipfsRecovery != nil {
+		c.ipfsRecovery.Stop()
+	}
+
+	// Stop IPFS health manager
+	if c.ipfsHealth != nil {
+		c.ipfsHealth.Stop()
+	}
+
 	c.stopIPFS()
 	if c.l != nil {
 		c.l.Shutdown()
@@ -695,6 +709,11 @@ func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) 
 	default:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	}
+}
+
+// GetIPFSHealthManager returns the IPFS health manager
+func (c *Core) GetIPFSHealthManager() interface{} {
+	return c.ipfsHealth
 }
 
 // func (c *Core)ConvertContractToBlock(contract *contract.ContractType) *block.Block {

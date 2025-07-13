@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // Ports defines varies ports used
 type Ports struct {
 	SendPort     uint16 `json:"sender_port"`
@@ -24,14 +26,23 @@ type StorageConfig struct {
 	DBPassword  string `json:"db_password"`
 }
 
+// IPFSRecoveryConfig defines IPFS recovery configuration
+type IPFSRecoveryConfig struct {
+	MaxRecoveries   int           `json:"max_recoveries"`   // Maximum recovery attempts
+	RestartDelay    time.Duration `json:"restart_delay"`    // Delay between restart attempts
+	HealthTimeout   time.Duration `json:"health_timeout"`   // Timeout for health checks
+	MonitorInterval time.Duration `json:"monitor_interval"` // Health monitoring interval
+}
+
 // ConfigData defines configuration data
 type ConfigData struct {
-	Ports             Ports             `json:"ports"`
-	BootStrap         []string          `json:"bootstrap"`
-	TestBootStrap     []string          `json:"test_bootstrap"`
-	Services          map[string]string `json:"services"`
-	StorageConfig     StorageConfig     `json:"storage_config"`
-	TestStorageConfig StorageConfig     `json:"test_storage_config"`
+	Ports             Ports              `json:"ports"`
+	BootStrap         []string           `json:"bootstrap"`
+	TestBootStrap     []string           `json:"test_bootstrap"`
+	Services          map[string]string  `json:"services"`
+	StorageConfig     StorageConfig      `json:"storage_config"`
+	TestStorageConfig StorageConfig      `json:"test_storage_config"`
+	IPFSRecovery      IPFSRecoveryConfig `json:"ipfs_recovery"`
 }
 
 type Config struct {

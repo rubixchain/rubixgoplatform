@@ -1,9 +1,11 @@
 package wallet
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 )
@@ -90,6 +92,44 @@ func (w *Wallet) Get(hash string, did string, role int, path string) error {
 }
 
 func (w *Wallet) Add(r io.Reader, did string, role int) (string, error) {
+	// Try to use health manager if available
+	if w.core != nil {
+		if core, ok := w.core.(interface{ GetIPFSHealthManager() interface{} }); ok {
+			if healthManager, ok := core.GetIPFSHealthManager().(interface {
+				ExecuteWithHealthCheck(ctx context.Context, operation func() error) error
+			}); ok {
+				var result string
+				var operationErr error
+
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				defer cancel()
+
+				err := healthManager.ExecuteWithHealthCheck(ctx, func() error {
+					hash, err := w.ipfs.Add(r)
+					if err != nil {
+						operationErr = err
+						return err
+					}
+					result = hash
+					return nil
+				})
+
+				if err != nil {
+					w.log.Error("Error adding file to ipfs with health check", "error", err)
+					return "", err
+				}
+
+				err = w.AddProviderDetails(model.TokenProviderMap{Token: result, Role: role, DID: did, FuncID: AddFunc})
+				if err != nil {
+					w.log.Error("Error adding provider details", "error", err)
+					return "", err
+				}
+				return result, operationErr
+			}
+		}
+	}
+
+	// Fallback to direct IPFS call
 	result, err := w.ipfs.Add(r)
 	if err != nil {
 		w.log.Error("Error adding file to ipfs", "error", err)

@@ -256,6 +256,13 @@ func (p *Peer) IsLocal() bool {
 	return p.local
 }
 
+// UpdateIPFS updates the IPFS shell reference in the peer manager
+func (pm *PeerManager) UpdateIPFS(newShell *ipfsnode.Shell) {
+	pm.lock.Lock()
+	defer pm.lock.Unlock()
+	pm.ipfs = newShell
+}
+
 func (p *Peer) Close() error {
 	if !p.local {
 		defer p.pm.releasePeerPort(p.port)

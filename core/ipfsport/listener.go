@@ -60,3 +60,8 @@ func (l *Listener) listenIPFSPort() error {
 func (l *Listener) ExitFunc() error {
 	return nil
 }
+
+// UpdateIPFS updates the IPFS shell reference in the listener
+func (l *Listener) UpdateIPFS(newShell *ipfsnode.Shell) {
+	l.ipfs = newShell
+}

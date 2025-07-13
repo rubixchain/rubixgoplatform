@@ -54,6 +54,7 @@ type ChainDB struct {
 
 type Wallet struct {
 	ipfs                           *ipfsnode.Shell
+	core                           interface{} // Interface to access Core methods
 	s                              storage.Storage
 	l                              sync.Mutex
 	dtl                            sync.Mutex
@@ -158,7 +159,6 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize FT storage", "err", err)
 	}
 
-
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure token chain block storage", "err", err)
@@ -187,6 +187,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	return w, nil
 }
 
-func (w *Wallet) SetupWallet(ipfs *ipfsnode.Shell) {
+func (w *Wallet) SetupWallet(ipfs *ipfsnode.Shell, core interface{}) {
 	w.ipfs = ipfs
+	w.core = core
+}
+
+// getHealthManager returns the IPFS health manager from the core
+func (w *Wallet) getHealthManager() interface{} {
+	return w.core
 }
