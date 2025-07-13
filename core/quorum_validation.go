@@ -70,15 +70,19 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 	}
 	c.log.Debug("Signers", signers)
 	for _, signer := range signers {
+		c.log.Debug("Validating signer", "signer", signer, "transactionType", b.GetTransType())
+
 		var dc did.DIDCrypto
 		switch b.GetTransType() {
 		case block.TokenGeneratedType, block.TokenBurntType:
+			c.log.Debug("Setting up foreign DID for token generation/burn", "signer", signer)
 			dc, err = c.SetupForienDID(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
 		default:
+			c.log.Debug("Setting up foreign DID quorum for regular transaction", "signer", signer)
 			signerInfo, err := c.GetPeerDIDInfo(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "retry") {
@@ -116,9 +120,17 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 			return false, fmt.Errorf("DID crypto object is nil for signer: %s", signer)
 		}
 
+		c.log.Debug("About to verify signature", "signer", signer, "signType", dc.GetSignType())
+
+		// Set the logger on the block for detailed signature verification logging
+		b.SetLogger(c.log)
+
 		err := b.VerifySignature(dc)
 		if err != nil {
+			c.log.Error("Signature verification failed", "signer", signer, "err", err, "signType", dc.GetSignType())
+
 			if dc.GetSignType() == did.NlssVersion {
+				c.log.Debug("Retrying with LiteDIDMode due to NLSS signature failure", "signer", signer)
 				peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
 				if !peerUpdateResult || err != nil {
 					liteDID := did.LiteDIDMode
@@ -140,9 +152,10 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					return false, fmt.Errorf("DID crypto object is nil for signer after retry: %s", signer)
 				}
 
+				c.log.Debug("Retrying signature verification with LiteDIDMode", "signer", signer, "signType", dc.GetSignType())
 				err = b.VerifySignature(dc)
 				if err != nil {
-					c.log.Error("Failed to verify signature", "err", err)
+					c.log.Error("Failed to verify signature after retry", "signer", signer, "err", err)
 					return false, fmt.Errorf("failed to verify signature, err: %v", err)
 				}
 			} else {
@@ -150,6 +163,8 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				return false, fmt.Errorf("failed to verify signature, err: %v", err)
 			}
 		}
+
+		c.log.Debug("Signature verification successful", "signer", signer)
 	}
 	return true, nil
 }

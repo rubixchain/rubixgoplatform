@@ -136,6 +136,12 @@ func NoSignature() BlockOption {
 	}
 }
 
+func WithLogger(log logger.Logger) BlockOption {
+	return func(b *Block) {
+		b.log = log
+	}
+}
+
 func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block {
 	b := &Block{
 		bb: bb,
@@ -430,29 +436,65 @@ func (b *Block) GetHashSig(did string) (string, string, error) {
 	h, ok := b.bm[TCBlockHashKey]
 
 	if !ok {
+		if b.log != nil {
+			b.log.Error("GetHashSig: Missing block hash", "did", did)
+		}
 		return "", "", fmt.Errorf("invalid token chain block, missing block hash")
 	}
 	s, ok := b.bm[TCSignatureKey]
 	if !ok {
+		if b.log != nil {
+			b.log.Error("GetHashSig: Missing block signature", "did", did)
+		}
 		return "", "", fmt.Errorf("invalid token chain block, missing block signature")
 	}
 	ks, ok := s.(map[string]interface{})
 	if !ok {
 		ks, ok := s.(map[interface{}]interface{})
 		if !ok {
+			if b.log != nil {
+				b.log.Error("GetHashSig: Invalid signature block format", "did", did, "signatureType", fmt.Sprintf("%T", s))
+			}
 			return "", "", fmt.Errorf("invalid signature block")
 		}
 		ksi, ok := ks[did]
 		if !ok {
+			if b.log != nil {
+				b.log.Error("GetHashSig: DID not found in signature block", "did", did, "availableKeys", getMapKeys(ks))
+			}
 			return "", "", fmt.Errorf("invalid signature block")
 		}
 		return h.(string), ksi.(string), nil
 	}
 	ksi, ok := ks[did]
 	if !ok {
+		if b.log != nil {
+			b.log.Error("GetHashSig: DID not found in signature block", "did", did, "availableKeys", getMapKeys(ks))
+		}
 		return "", "", fmt.Errorf("invalid signature block")
 	}
 	return h.(string), ksi.(string), nil
+}
+
+// Helper function to get keys from a map for logging
+func getMapKeys(m interface{}) []string {
+	keys := make([]string, 0)
+
+	switch v := m.(type) {
+	case map[string]interface{}:
+		for k := range v {
+			keys = append(keys, k)
+		}
+	case map[interface{}]interface{}:
+		for k := range v {
+			if str, ok := k.(string); ok {
+				keys = append(keys, str)
+			} else {
+				keys = append(keys, fmt.Sprintf("%v", k))
+			}
+		}
+	}
+	return keys
 }
 
 func (b *Block) GetSignature(dc didmodule.DIDCrypto) (string, error) {
@@ -472,13 +514,41 @@ func (b *Block) VerifySignature(dc didmodule.DIDCrypto) error {
 		return fmt.Errorf("DIDCrypto is nil (possibly due to missing or failed DID initialization)")
 	}
 	did := dc.GetDID()
+
+	// Add detailed logging
+	if b.log != nil {
+		b.log.Debug("VerifySignature: Starting verification", "did", did)
+	}
+
 	h, s, err := b.GetHashSig(did)
 	if err != nil {
-		return fmt.Errorf("failed to read did signature & hash")
+		if b.log != nil {
+			b.log.Error("VerifySignature: Failed to get hash and signature", "did", did, "err", err)
+		}
+		return fmt.Errorf("failed to read did signature & hash: %v", err)
 	}
+
+	if b.log != nil {
+		b.log.Debug("VerifySignature: Got hash and signature", "did", did, "hash", h, "signature", s)
+	}
+
 	ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
-	if err != nil || !ok {
-		return fmt.Errorf("failed to verify did signature")
+	if err != nil {
+		if b.log != nil {
+			b.log.Error("VerifySignature: PvtVerify returned error", "did", did, "err", err)
+		}
+		return fmt.Errorf("failed to verify did signature: %v", err)
+	}
+
+	if !ok {
+		if b.log != nil {
+			b.log.Error("VerifySignature: Signature verification failed", "did", did, "hash", h, "signature", s)
+		}
+		return fmt.Errorf("failed to verify did signature: verification returned false")
+	}
+
+	if b.log != nil {
+		b.log.Debug("VerifySignature: Successfully verified signature", "did", did)
 	}
 	return nil
 }
@@ -535,6 +605,10 @@ func (b *Block) GetBlock() []byte {
 
 func (b *Block) GetBlockMap() map[string]interface{} {
 	return b.bm
+}
+
+func (b *Block) SetLogger(log logger.Logger) {
+	b.log = log
 }
 
 func (b *Block) getBlkString(key string) string {
