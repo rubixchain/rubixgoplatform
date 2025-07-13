@@ -23,13 +23,22 @@ type DIDQuorumLite struct {
 // InitDIDQuorumLite will return the Quorum did handle in lite mode
 func InitDIDQuorumLite(did string, baseDir string, pwd string) *DIDQuorumLite {
 	d := &DIDQuorumLite{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
+
+	// Check if directory exists
+	if _, err := ioutil.ReadDir(d.dir); err != nil {
+		fmt.Printf("[DEBUG] InitDIDQuorumLite: Directory does not exist or not readable: %s, error: %v\n", d.dir, err)
+		return nil
+	}
+
 	if d.pwd != "" {
 		privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 		if err != nil {
+			fmt.Printf("[DEBUG] InitDIDQuorumLite: Failed to read private key file: %s, error: %v\n", d.dir+PvtKeyFileName, err)
 			fmt.Println("private key must be in wallet")
 		} else {
 			d.privKey, _, err = crypto.DecodeBIPKeyPair(d.pwd, privKey, nil)
 			if err != nil {
+				fmt.Printf("[DEBUG] InitDIDQuorumLite: Failed to decode private key: %v\n", err)
 				return nil
 			}
 		}
@@ -37,12 +46,16 @@ func InitDIDQuorumLite(did string, baseDir string, pwd string) *DIDQuorumLite {
 
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
+		fmt.Printf("[DEBUG] InitDIDQuorumLite: Failed to read public key file: %s, error: %v\n", d.dir+PubKeyFileName, err)
 		return nil
 	}
 	_, d.pubKey, err = crypto.DecodeBIPKeyPair("", nil, pubKey)
 	if err != nil {
+		fmt.Printf("[DEBUG] InitDIDQuorumLite: Failed to decode public key: %v\n", err)
 		return nil
 	}
+
+	fmt.Printf("[DEBUG] InitDIDQuorumLite: Successfully initialized for DID: %s\n", did)
 	return d
 }
 

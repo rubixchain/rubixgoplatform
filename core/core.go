@@ -637,6 +637,18 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 	case did.LiteDIDMode:
 		quorumLite := did.InitDIDQuorumLite(didStr, c.didDir, "")
 		c.log.Debug("[SetupForienDIDQuorum] Initialized LiteDIDMode for ", didStr, " result=", quorumLite)
+		if quorumLite == nil {
+			c.log.Warn("LiteDIDMode quorum init failed, attempting FetchDID from IPFS", "did", didStr)
+			if err := c.FetchDID(didStr); err != nil {
+				c.log.Error("FetchDID also failed", "did", didStr, "err", err)
+				return nil, fmt.Errorf("failed to initialize LiteDIDMode quorum for DID: %s (FetchDID failed: %v)", didStr, err)
+			}
+			quorumLite = did.InitDIDQuorumLite(didStr, c.didDir, "")
+			if quorumLite == nil {
+				c.log.Error("Failed to initialize LiteDIDMode quorum after FetchDID", "did", didStr)
+				return nil, fmt.Errorf("failed to initialize LiteDIDMode quorum for DID: %s after FetchDID", didStr)
+			}
+		}
 		return quorumLite, nil
 	default:
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
@@ -644,27 +656,42 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 }
 
 func (c *Core) FetchDID(did string) error {
-	_, err := os.Stat(c.didDir + did)
+	didPath := c.didDir + did
+	_, err := os.Stat(didPath)
 	if err != nil {
-		err = os.MkdirAll(c.didDir+did, os.ModeDir|os.ModePerm)
+		err = os.MkdirAll(didPath, os.ModeDir|os.ModePerm)
 		if err != nil {
-			c.log.Error("failed to create directory", "err", err)
+			c.log.Error("failed to create directory", "err", err, "path", didPath)
 			return err
 		}
-		err = c.ipfs.Get(did, c.didDir+did+"/")
-		if err == nil {
-			_, e := os.Stat(c.didDir + did + "/" + didm.MasterDIDFileName)
-			// Fetch the master DID also
-			if e == nil {
-				var rb []byte
-				rb, err = ioutil.ReadFile(c.didDir + did + "/" + didm.MasterDIDFileName)
-				if err == nil {
-					return c.FetchDID(string(rb))
-				}
+		err = c.ipfs.Get(did, didPath+"/")
+		if err != nil {
+			c.log.Error("failed to fetch DID from IPFS", "err", err, "did", did)
+			return err
+		}
+
+		// Check if master DID file exists and fetch it if needed
+		masterDIDPath := didPath + "/" + didm.MasterDIDFileName
+		_, e := os.Stat(masterDIDPath)
+		if e == nil {
+			var rb []byte
+			rb, err = ioutil.ReadFile(masterDIDPath)
+			if err != nil {
+				c.log.Error("failed to read master DID file", "err", err, "path", masterDIDPath)
+				return err
 			}
+			return c.FetchDID(string(rb))
 		}
 	}
-	return err
+
+	// Validate that the DID directory contains required files
+	if _, err := os.Stat(didPath + "/" + didm.PubKeyFileName); err != nil {
+		c.log.Error("DID directory missing required public key file", "did", did, "path", didPath+"/"+didm.PubKeyFileName)
+		return fmt.Errorf("DID directory missing required public key file for %s", did)
+	}
+
+	c.log.Debug("Successfully fetched and validated DID", "did", did, "path", didPath)
+	return nil
 }
 
 func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
