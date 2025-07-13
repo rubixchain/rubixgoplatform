@@ -177,6 +177,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIDumpFTTokenChainBlock, "POST", s.AuthHandle(s.APIDumpFTTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIInitiateFTTransfer, "POST", s.AuthHandle(s.APIInitiateFTTransfer, true, s.AuthError, true))
 	s.AddRoute(setup.APIGetFTInfo, "GET", s.AuthHandle(s.APIGetFTInfo, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetSpendableFTInfo, "GET", s.AuthHandle(s.APIGetSpendableFTInfo, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
 	s.AddRoute(setup.APIDumpNFTTokenChain, "GET", s.AuthHandle(s.APIDumpNFTTokenChain, true, s.AuthError, false))
 	s.AddRoute(setup.APISubscribeNFT, "POST", s.AuthHandle(s.APISubscribeNFT, true, s.AuthError, false))
@@ -245,6 +246,9 @@ func (s *Server) addPortManagementEndpoints() {
 	// Force release all ports (emergency endpoint)
 	s.AddRoute("/api/force-release-ports", "POST", s.AuthHandle(s.handleForceReleasePorts, false, s.AuthError, true))
 
+	// Force release stuck ports (smart cleanup)
+	s.AddRoute("/api/force-release-stuck-ports", "POST", s.AuthHandle(s.handleForceReleaseStuckPorts, false, s.AuthError, true))
+
 	// Get port monitoring status
 	s.AddRoute("/api/port-monitoring-status", "GET", s.AuthHandle(s.handleGetPortMonitoringStatus, false, s.AuthError, false))
 }
@@ -259,6 +263,12 @@ func (s *Server) handleGetPortStats(req *ensweb.Request) *ensweb.Result {
 func (s *Server) handleForceReleasePorts(req *ensweb.Request) *ensweb.Result {
 	s.c.ForceReleaseAllPorts()
 	return s.BasicResponse(req, true, "All ports have been force released", nil)
+}
+
+// handleForceReleaseStuckPorts releases ports that are marked as used but are actually available
+func (s *Server) handleForceReleaseStuckPorts(req *ensweb.Request) *ensweb.Result {
+	s.c.ForceReleaseStuckPorts()
+	return s.BasicResponse(req, true, "Stuck ports have been force released", nil)
 }
 
 // handleGetPortMonitoringStatus returns whether port monitoring is active

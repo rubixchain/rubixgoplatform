@@ -401,6 +401,11 @@ func (c *Core) StopCore() {
 	// Stop port monitoring
 	c.StopPortMonitoring()
 
+	// Stop port queue processor
+	if c.pm != nil {
+		c.pm.StopPortQueue()
+	}
+
 	// Stop IPFS recovery manager
 	if c.ipfsRecovery != nil {
 		c.ipfsRecovery.Stop()
@@ -955,24 +960,19 @@ func (c *Core) GetIPFSHealthManager() interface{} {
 
 // }
 
-// GetPortUsageStats returns port usage statistics
+// GetPortUsageStats returns current port usage statistics
 func (c *Core) GetPortUsageStats() map[string]interface{} {
-	if c.pm != nil {
-		return c.pm.GetPortUsageStats()
-	}
-	return map[string]interface{}{
-		"error": "PeerManager not initialized",
-	}
+	return c.pm.GetPortUsageStats()
 }
 
 // ForceReleaseAllPorts forces release of all ports (for emergency situations)
 func (c *Core) ForceReleaseAllPorts() {
-	if c.pm != nil {
-		c.pm.ForceReleaseAllPorts()
-		c.log.Warn("Force released all ports via Core method")
-	} else {
-		c.log.Error("PeerManager not initialized - cannot release ports")
-	}
+	c.pm.ForceReleaseAllPorts()
+}
+
+// ForceReleaseStuckPorts releases ports that are marked as used but are actually available
+func (c *Core) ForceReleaseStuckPorts() {
+	c.pm.ForceReleaseStuckPorts()
 }
 
 // StartPortMonitoring starts the global port monitoring system

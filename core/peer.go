@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -88,11 +89,13 @@ func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &ps, http.StatusOK)
 }
 
-func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
+// getPeerWithPriority gets a peer connection with specified priority for port allocation
+func (c *Core) getPeerWithPriority(addr string, priority int, timeout time.Duration) (*ipfsport.Peer, error) {
 	peerID, did, ok := util.ParseAddress(addr)
 	if !ok {
 		return nil, fmt.Errorf("invalid address: %v", addr)
 	}
+
 	// check if addr contains the peer ID
 	if peerID == "" {
 		peerInfo, err := c.GetPeerDIDInfo(did)
@@ -111,24 +114,17 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 		}
 		peerID = peerInfo.PeerID
 	}
-	p, err := c.pm.OpenPeerConn(peerID, did, c.getCoreAppName(peerID))
+
+	// Use priority-based port allocation
+	requestID := fmt.Sprintf("peer_%s_%s", peerID, did)
+	p, err := c.pm.OpenPeerConnWithPriority(peerID, did, c.getCoreAppName(peerID), requestID, priority, timeout)
 	if err != nil {
 		return nil, err
 	}
+
 	q := make(map[string]string)
 	q["did"] = did
 
-	// //share self information to the peer, if required
-	// if selfDID != "" {
-	// 	q["self_peerId"] = c.peerID
-	// 	q["selfDID"] = selfDID
-	// 	selfDetails, err := c.w.GetDID(selfDID)
-	// 	if err != nil {
-	// 		c.log.Info("could not fetch did type of peer:", selfDID)
-	// 	} else {
-	// 		q["selfDID_type"] = strconv.Itoa(selfDetails.Type)
-	// 	}
-	// }
 	var ps model.PeerStatusResponse
 	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps, false)
 	if err != nil {
@@ -138,8 +134,13 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 		p.Close()
 		return nil, fmt.Errorf("did not exist with the peer")
 	}
-	// TODO:: Valid the peer version before proceesing
+
 	return p, nil
+}
+
+func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
+	// Use default priority for regular peer connections
+	return c.getPeerWithPriority(addr, 1, 30*time.Second)
 }
 
 /*

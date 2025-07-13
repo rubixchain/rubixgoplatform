@@ -43,3 +43,20 @@ func (c *Client) GetFTInfo(didStr string) (*model.GetFTInfo, error) {
 	}
 	return &info, nil
 }
+
+func (c *Client) GetSpendableFTInfo(didStr string, ftName string, creatorDID string) (*model.GetFTInfo, error) {
+	m := make(map[string]string)
+	m["did"] = didStr
+	if ftName != "" {
+		m["ft_name"] = ftName
+	}
+	if creatorDID != "" {
+		m["creator_did"] = creatorDID
+	}
+	var info model.GetFTInfo
+	err := c.sendJSONRequest("GET", setup.APIGetSpendableFTInfo, m, nil, &info)
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
+}

@@ -775,37 +775,52 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
 
-				// Add retry logic for port exhaustion
+				// Use priority-based port allocation for CVR-2 operations
 				var previousQuorumPeer *ipfsport.Peer
 				var errGetPeer error
-				maxRetries := 3
 
-				for attempt := 1; attempt <= maxRetries; attempt++ {
-					previousQuorumPeer, errGetPeer = c.getPeer(previousQuorumAddress)
-					if errGetPeer == nil {
-						break
-					}
-
+				// Use high priority (10) for CVR-2 unpledging operations
+				previousQuorumPeer, errGetPeer = c.getPeerWithPriority(previousQuorumAddress, 10, 60*time.Second)
+				if errGetPeer != nil {
 					if strings.Contains(errGetPeer.Error(), "all ports are busy") {
-						c.log.Warn("Port exhaustion during CVR-2 unpledging",
-							"attempt", attempt,
+						c.log.Warn("Port exhaustion during CVR-2 unpledging - using fallback retry",
 							"quorum", previousQuorumDID,
 							"peerID", previousQuorumInfo.PeerID)
 
-						if attempt == maxRetries {
-							c.log.Error("Failed to connect to previous quorum after retries",
-								"quorum", previousQuorumDID,
-								"err", errGetPeer)
-							continue // Continue with other quorums
-						}
+						// Fallback to retry logic with lower priority
+						maxRetries := 3
+						for attempt := 1; attempt <= maxRetries; attempt++ {
+							previousQuorumPeer, errGetPeer = c.getPeer(previousQuorumAddress)
+							if errGetPeer == nil {
+								break
+							}
 
-						// Wait before retry
-						time.Sleep(time.Duration(attempt) * 2 * time.Second)
+							if strings.Contains(errGetPeer.Error(), "all ports are busy") {
+								c.log.Warn("Port exhaustion during CVR-2 unpledging fallback",
+									"attempt", attempt,
+									"quorum", previousQuorumDID,
+									"peerID", previousQuorumInfo.PeerID)
+
+								if attempt == maxRetries {
+									c.log.Error("Failed to connect to previous quorum after retries",
+										"quorum", previousQuorumDID,
+										"err", errGetPeer)
+									continue // Continue with other quorums
+								}
+
+								// Wait before retry
+								time.Sleep(time.Duration(attempt) * 2 * time.Second)
+							} else {
+								c.log.Error("Failed to connect to previous quorum",
+									"quorum", previousQuorumDID,
+									"err", errGetPeer)
+								break
+							}
+						}
 					} else {
 						c.log.Error("Failed to connect to previous quorum",
 							"quorum", previousQuorumDID,
 							"err", errGetPeer)
-						break
 					}
 				}
 

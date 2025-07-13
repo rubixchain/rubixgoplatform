@@ -100,6 +100,7 @@ const (
 	DumpFTTokenChainCmd            string = "dump-ft"
 	TransferFTCmd                  string = "transfer-ft"
 	GetFTInfoCmd                   string = "get-ft-info-by-did"
+	GetSpendableFTInfoCmd          string = "get-spendable-ft-info"
 	ValidateTokenCmd               string = "validatetoken"
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
 	DeployNFTCmd                   string = "deploy-nft"
@@ -114,6 +115,10 @@ const (
 	InitiateRBTPrePledgeCmd        string = "prepledgerbt"
 	InitiateFTPrePledgeCmd         string = "prepledgeft"
 	RemoveLatestBlockCmd           string = "removelatestblock"
+	GetPortStatsCmd                string = "port-stats"
+	ForceReleasePortsCmd           string = "force-release-ports"
+	ForceReleaseStuckPortsCmd      string = "force-release-stuck-ports"
+	GetPortMonitoringStatusCmd     string = "port-monitoring-status"
 )
 
 var commands = []string{VersionCmd,
@@ -172,6 +177,7 @@ var commands = []string{VersionCmd,
 	DumpFTTokenChainCmd,
 	TransferFTCmd,
 	GetFTInfoCmd,
+	GetSpendableFTInfoCmd,
 	ValidateTokenCmd,
 	DumpNFTTokenChainCmd,
 	DeployNFTCmd,
@@ -186,6 +192,14 @@ var commands = []string{VersionCmd,
 	InitiateRBTPrePledgeCmd,
 	InitiateFTPrePledgeCmd,
 	RemoveLatestBlockCmd,
+	"To get port usage statistics",
+	"To force release all ports (emergency action)",
+	"To force release stuck ports (smart cleanup)",
+	"To get port monitoring status",
+	GetPortStatsCmd,
+	ForceReleasePortsCmd,
+	ForceReleaseStuckPortsCmd,
+	GetPortMonitoringStatusCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -244,6 +258,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will dump the token chain of FT",
 	"This command will transfer FT",
 	"This command will give the balance of FTs",
+	"This command will get spendable FT tokens with filtering",
 	"This command will validate the token",
 	"This command will deploy NFT",
 	"This command will execute NFT",
@@ -763,6 +778,8 @@ func Run(args []string) {
 		cmd.transferFT()
 	case GetFTInfoCmd:
 		cmd.getFTinfo()
+	case GetSpendableFTInfoCmd:
+		cmd.getSpendableFTinfo()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
 	case ExecuteNFTCmd:
@@ -791,6 +808,14 @@ func Run(args []string) {
 		cmd.InitiateFTPrePledge()
 	case RemoveLatestBlockCmd:
 		cmd.removeTokenChainBlock()
+	case GetPortStatsCmd:
+		cmd.getPortStats()
+	case ForceReleasePortsCmd:
+		cmd.forceReleasePorts()
+	case ForceReleaseStuckPortsCmd:
+		cmd.forceReleaseStuckPorts()
+	case GetPortMonitoringStatusCmd:
+		cmd.getPortMonitoringStatus()
 	default:
 		cmd.log.Error("Invalid command")
 	}
@@ -835,4 +860,98 @@ func getpassword(msg string) (string, error) {
 		return "", err
 	}
 	return string(bytePassword), nil
+}
+
+// Port management methods
+
+func (cmd *Command) getPortStats() {
+	c, r, err := cmd.basicClient("GET", "/api/port-stats", nil)
+	if err != nil {
+		cmd.log.Error("Failed to create request", "err", err)
+		return
+	}
+
+	resp, err := c.Do(r)
+	if err != nil {
+		cmd.log.Error("Failed to get port stats", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println("Port Statistics:")
+		fmt.Println(string(body))
+	} else {
+		cmd.log.Error("Failed to get port stats", "status", resp.StatusCode)
+	}
+}
+
+func (cmd *Command) forceReleasePorts() {
+	c, r, err := cmd.basicClient("POST", "/api/force-release-ports", nil)
+	if err != nil {
+		cmd.log.Error("Failed to create request", "err", err)
+		return
+	}
+
+	resp, err := c.Do(r)
+	if err != nil {
+		cmd.log.Error("Failed to force release ports", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println("Port Release Result:")
+		fmt.Println(string(body))
+	} else {
+		cmd.log.Error("Failed to force release ports", "status", resp.StatusCode)
+	}
+}
+
+func (cmd *Command) forceReleaseStuckPorts() {
+	c, r, err := cmd.basicClient("POST", "/api/force-release-stuck-ports", nil)
+	if err != nil {
+		cmd.log.Error("Failed to create request", "err", err)
+		return
+	}
+
+	resp, err := c.Do(r)
+	if err != nil {
+		cmd.log.Error("Failed to force release stuck ports", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println("Stuck Port Release Result:")
+		fmt.Println(string(body))
+	} else {
+		cmd.log.Error("Failed to force release stuck ports", "status", resp.StatusCode)
+	}
+}
+
+func (cmd *Command) getPortMonitoringStatus() {
+	c, r, err := cmd.basicClient("GET", "/api/port-monitoring-status", nil)
+	if err != nil {
+		cmd.log.Error("Failed to create request", "err", err)
+		return
+	}
+
+	resp, err := c.Do(r)
+	if err != nil {
+		cmd.log.Error("Failed to get port monitoring status", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println("Port Monitoring Status:")
+		fmt.Println(string(body))
+	} else {
+		cmd.log.Error("Failed to get port monitoring status", "status", resp.StatusCode)
+	}
 }

@@ -506,6 +506,31 @@ The following flags are used for this command
         Server/Host port (default "20000")
 
 ```
+Get Spendable FT Info Command
+: To get spendable FT tokens (status 17) with optional filtering by FT name and creator DID.
+
+```
+./rubixgoplatform get-spendable-ft-info
+
+The following flags are used for this command
+  -did string
+        DID address (default "")
+
+  -ftName string
+        FT name filter (optional) (default "")
+
+  -creatorDID string
+        Creator DID filter (optional) (default "")
+
+  -port string
+        Server/Host port (default "20000")
+
+      NOTE: This command returns only spendable FT tokens (status 17).
+            Use -ftName to filter by specific FT name.
+            Use -creatorDID to filter by specific creator DID.
+            Use both filters to get tokens matching both criteria.
+
+```
 Dump FT command
 : To dump the token chain of an FT.
 

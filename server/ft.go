@@ -115,3 +115,61 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
+
+// ShowAccount godoc
+// @Summary      Get spendable FT tokens with filtering
+// @Description  This API endpoint retrieves spendable FT tokens (status 17) filtered by creator DID and/or FT name.
+// @Tags         FT
+// @Accept       json
+// @Produce      json
+// @Param        did           query      string  true   "User DID"
+// @Param        ft_name       query      string  false  "FT name filter (optional)"
+// @Param        creator_did   query      string  false  "Creator DID filter (optional)"
+// @Success      200  {object}  model.GetFTInfo
+// @Router       /api/get-spendable-ft-info [get]
+func (s *Server) APIGetSpendableFTInfo(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "did")
+	ftName := s.GetQuerry(req, "ft_name")
+	creatorDID := s.GetQuerry(req, "creator_did")
+
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have access", nil)
+	}
+
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !isAlphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+
+	// Validate creator DID if provided
+	if creatorDID != "" {
+		isAlphanumericCreator := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(creatorDID)
+		if !strings.HasPrefix(creatorDID, "bafybmi") || len(creatorDID) != 59 || !isAlphanumericCreator {
+			s.log.Error("Invalid creator DID")
+			return s.BasicResponse(req, false, "Invalid creator DID", nil)
+		}
+	}
+
+	info, err := s.c.GetSpendableFTInfoByCreatorAndName(did, ftName, creatorDID)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+
+	ac := model.GetFTInfo{
+		BasicResponse: model.BasicResponse{
+			Status:  true,
+			Message: "Got spendable FT info successfully",
+		},
+		FTInfo: info,
+	}
+
+	if len(info) == 0 {
+		ac.Message = "No spendable FTs found"
+		if ftName != "" || creatorDID != "" {
+			ac.Message = "No spendable FTs found matching the specified filters"
+		}
+	}
+
+	return s.RenderJSON(req, ac, http.StatusOK)
+}
