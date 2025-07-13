@@ -109,6 +109,13 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
 			}
 		}
+
+		// Add nil check for dc before using it
+		if dc == nil {
+			c.log.Error("DID crypto object is nil after setup", "signer", signer)
+			return false, fmt.Errorf("DID crypto object is nil for signer: %s", signer)
+		}
+
 		err := b.VerifySignature(dc)
 		if err != nil {
 			if dc.GetSignType() == did.NlssVersion {
@@ -126,6 +133,13 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					c.log.Error("failed to setup foreign DID quorum", "err", err)
 					return false, fmt.Errorf("failed to setup foreign DID quorum : %v err: %v", signer, err)
 				}
+
+				// Add nil check again after retry
+				if dc == nil {
+					c.log.Error("DID crypto object is still nil after retry", "signer", signer)
+					return false, fmt.Errorf("DID crypto object is nil for signer after retry: %s", signer)
+				}
+
 				err = b.VerifySignature(dc)
 				if err != nil {
 					c.log.Error("Failed to verify signature", "err", err)

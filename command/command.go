@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -33,7 +34,6 @@ const (
 )
 
 const (
-
 	version string = "0.1_rc20exp"
 )
 const (
@@ -458,17 +458,19 @@ func (cmd *Command) validateOptions() bool {
 	if cmd.runDir == "" {
 		cmd.runDir = "./"
 	}
-	if !strings.HasPrefix(cmd.runDir, "\\") {
-		if !strings.HasPrefix(cmd.runDir, "/") {
-			cmd.runDir = cmd.runDir + "/"
-		}
+
+	// Use filepath.Clean to normalize the path and ensure it ends with a separator
+	cmd.runDir = filepath.Clean(cmd.runDir)
+	if !strings.HasSuffix(cmd.runDir, string(os.PathSeparator)) {
+		cmd.runDir = cmd.runDir + string(os.PathSeparator)
 	}
+
 	_, err := os.Stat(cmd.runDir)
 	if err == nil {
 		return true
 	}
 	if os.IsNotExist(err) {
-		err := os.MkdirAll(cmd.runDir, os.ModeDir|os.ModePerm)
+		err := os.MkdirAll(cmd.runDir, 0755)
 		if err == nil || os.IsExist(err) {
 			return true
 		} else {
