@@ -47,10 +47,20 @@ func InitDIDQuorumLite(did string, baseDir string, pwd string) *DIDQuorumLite {
 }
 
 func (d *DIDQuorumLite) GetDID() string {
+	if d == nil {
+		fmt.Printf("[DEBUG] DIDQuorumLite.GetDID called on nil receiver\n")
+		return ""
+	}
+	fmt.Printf("[DEBUG] DIDQuorumLite.GetDID called: %+v\n", d)
 	return d.did
 }
 
 func (d *DIDQuorumLite) GetSignType() int {
+	if d == nil {
+		fmt.Printf("[DEBUG] DIDQuorumLite.GetSignType called on nil receiver\n")
+		return -1
+	}
+	fmt.Printf("[DEBUG] DIDQuorumLite.GetSignType called: %+v\n", d)
 	return BIPVersion
 }
 

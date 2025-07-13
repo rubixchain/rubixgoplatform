@@ -635,7 +635,9 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 	case did.BasicDIDMode:
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.LiteDIDMode:
-		return did.InitDIDQuorumLite(didStr, c.didDir, ""), nil
+		quorumLite := did.InitDIDQuorumLite(didStr, c.didDir, "")
+		c.log.Debug("[SetupForienDIDQuorum] Initialized LiteDIDMode for ", didStr, " result=", quorumLite)
+		return quorumLite, nil
 	default:
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	}

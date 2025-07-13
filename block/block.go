@@ -468,6 +468,9 @@ func (b *Block) GetSignature(dc didmodule.DIDCrypto) (string, error) {
 }
 
 func (b *Block) VerifySignature(dc didmodule.DIDCrypto) error {
+	if dc == nil {
+		return fmt.Errorf("DIDCrypto is nil (possibly due to missing or failed DID initialization)")
+	}
 	did := dc.GetDID()
 	h, s, err := b.GetHashSig(did)
 	if err != nil {
