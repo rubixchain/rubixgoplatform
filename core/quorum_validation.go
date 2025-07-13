@@ -62,7 +62,62 @@ func recordFirstError(errPtr *error, err error, once *sync.Once) {
 	})
 }
 
-var validateSignerMutex sync.Mutex
+var (
+	validateSignerMutex sync.Mutex
+	didCache            = make(map[string]did.DIDCrypto)
+	didCacheMutex       sync.RWMutex
+	didCacheTTL         = 5 * time.Minute // Cache DIDs for 5 minutes
+)
+
+// getCachedDID retrieves a DID from cache or fetches it if not cached
+func (c *Core) getCachedDID(signer string, transactionType string) (did.DIDCrypto, error) {
+	didCacheMutex.RLock()
+	if cached, exists := didCache[signer]; exists {
+		didCacheMutex.RUnlock()
+		c.log.Debug("Using cached DID", "signer", signer)
+		return cached, nil
+	}
+	didCacheMutex.RUnlock()
+
+	// Fetch DID and cache it
+	didCacheMutex.Lock()
+	defer didCacheMutex.Unlock()
+
+	// Double-check after acquiring write lock
+	if cached, exists := didCache[signer]; exists {
+		c.log.Debug("Using cached DID (double-check)", "signer", signer)
+		return cached, nil
+	}
+
+	c.log.Debug("Fetching DID for caching", "signer", signer)
+	var dc did.DIDCrypto
+	var err error
+	switch transactionType {
+	case block.TokenGeneratedType, block.TokenBurntType:
+		dc, err = c.SetupForienDID(signer, "")
+	default:
+		dc, err = c.SetupForienDIDQuorum(signer, "")
+	}
+
+	if err != nil {
+		c.log.Error("Failed to setup DID for caching", "signer", signer, "err", err)
+		return nil, err
+	}
+
+	if dc != nil {
+		didCache[signer] = dc
+		// Schedule cache cleanup
+		go func(signerKey string) {
+			time.Sleep(didCacheTTL)
+			didCacheMutex.Lock()
+			delete(didCache, signerKey)
+			didCacheMutex.Unlock()
+			c.log.Debug("Removed DID from cache", "signer", signerKey)
+		}(signer)
+	}
+
+	return dc, nil
+}
 
 func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) (bool, error) {
 	validateSignerMutex.Lock()
@@ -85,56 +140,19 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 		currentHash, _ := b.GetHash()
 		c.log.Debug("Validating signer", "signer", signer, "transactionType", b.GetTransType(), "signerIndex", fmt.Sprintf("%d/%d", i+1, len(signers)), "blockHash", currentHash)
 
+		// Try to get DID from cache first
 		var dc did.DIDCrypto
-		switch b.GetTransType() {
-		case block.TokenGeneratedType, block.TokenBurntType:
-			c.log.Debug("Setting up foreign DID for token generation/burn", "signer", signer)
-			dc, err = c.SetupForienDID(signer, selfDID)
-			if err != nil {
-				c.log.Error("failed to setup foreign DID", "err", err)
-				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
-			}
-		default:
-			c.log.Debug("Setting up foreign DID quorum for regular transaction", "signer", signer)
-			signerInfo, err := c.GetPeerDIDInfo(signer)
-			if err != nil {
-				c.log.Debug("GetPeerDIDInfo returned error", "signer", signer, "err", err)
-				// Fix: Only dereference signerInfo if it's not nil
-				if signerInfo != nil && strings.Contains(err.Error(), "retry") {
-					c.log.Debug("Adding peer details due to retry error", "signer", signer)
-					c.AddPeerDetails(*signerInfo)
-				}
-			}
-			if signerInfo != nil && (signerInfo.DIDType == nil || *signerInfo.DIDType == -1) {
-				c.log.Debug("Signer info missing DID type, fetching from peer", "signer", signer)
-				peerDetails, err := c.GetPeerInfo(p, signer)
-				basicDidType := did.BasicDIDMode
-				if err != nil || peerDetails.PeerInfo.DIDType == nil {
-					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
-					if !peerUpdateResult || err != nil {
-						signerInfo.DIDType = &basicDidType
-						c.AddPeerDetails(*signerInfo)
-					}
-				} else {
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
-					if !peerUpdateResult || err != nil {
-						signerInfo.DIDType = &basicDidType
-						c.AddPeerDetails(*signerInfo)
-					}
-				}
-			}
-			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
-			if err != nil {
-				c.log.Error("failed to setup foreign DID quorum", "err", err)
-				return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
-			}
+		var err error
+		dc, err = c.getCachedDID(signer, b.GetTransType())
+		if err != nil {
+			c.log.Error("Failed to get cached DID", "signer", signer, "err", err)
+			return false, fmt.Errorf("failed to get DID for signer %s: %v", signer, err)
 		}
 
 		// Add nil check for dc before using it
 		if dc == nil {
-			c.log.Error("DID crypto object is nil after setup", "signer", signer)
-			return false, fmt.Errorf("DID crypto object is nil for signer: %s", signer)
+			c.log.Error("DID is nil for signer", "signer", signer)
+			return false, fmt.Errorf("DID is nil for signer %s", signer)
 		}
 
 		c.log.Debug("About to verify signature", "signer", signer, "signType", dc.GetSignType())
@@ -157,7 +175,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 				if err != nil {
 					c.log.Error("failed to setup foreign DID quorum", "err", err)
-					return false, fmt.Errorf("failed to setup foreign DID quorum : %v err: %v", signer, err)
+					return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
 				}
 
 				// Add nil check again after retry
