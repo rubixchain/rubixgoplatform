@@ -62,19 +62,28 @@ func recordFirstError(errPtr *error, err error, once *sync.Once) {
 	})
 }
 
+var validateSignerMutex sync.Mutex
+
 func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) (bool, error) {
+	validateSignerMutex.Lock()
+	defer validateSignerMutex.Unlock()
+
+	blockHash, _ := b.GetHash()
+	c.log.Debug("validateSigner called", "selfDID", selfDID, "blockHash", blockHash, "blockPointer", fmt.Sprintf("%p", b))
+
 	signers, err := b.GetSigner()
 	if err != nil {
-		c.log.Error("failed to get signers", "err", err)
+		c.log.Error("failed to get signers", "err", err, "blockHash", blockHash)
 		return false, fmt.Errorf("failed to get signers", "err", err)
 	}
-	c.log.Debug("Signers", "allSigners", signers, "signerCount", len(signers))
+	c.log.Debug("Signers", "allSigners", signers, "signerCount", len(signers), "blockHash", blockHash)
 
 	// Set the logger on the block for detailed signature verification logging
 	b.SetLogger(c.log)
 
 	for i, signer := range signers {
-		c.log.Debug("Validating signer", "signer", signer, "transactionType", b.GetTransType(), "signerIndex", fmt.Sprintf("%d/%d", i+1, len(signers)))
+		currentHash, _ := b.GetHash()
+		c.log.Debug("Validating signer", "signer", signer, "transactionType", b.GetTransType(), "signerIndex", fmt.Sprintf("%d/%d", i+1, len(signers)), "blockHash", currentHash)
 
 		var dc did.DIDCrypto
 		switch b.GetTransType() {
@@ -89,11 +98,15 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 			c.log.Debug("Setting up foreign DID quorum for regular transaction", "signer", signer)
 			signerInfo, err := c.GetPeerDIDInfo(signer)
 			if err != nil {
-				if strings.Contains(err.Error(), "retry") {
+				c.log.Debug("GetPeerDIDInfo returned error", "signer", signer, "err", err)
+				// Fix: Only dereference signerInfo if it's not nil
+				if signerInfo != nil && strings.Contains(err.Error(), "retry") {
+					c.log.Debug("Adding peer details due to retry error", "signer", signer)
 					c.AddPeerDetails(*signerInfo)
 				}
 			}
-			if signerInfo.DIDType == nil || *signerInfo.DIDType == -1 {
+			if signerInfo != nil && (signerInfo.DIDType == nil || *signerInfo.DIDType == -1) {
+				c.log.Debug("Signer info missing DID type, fetching from peer", "signer", signer)
 				peerDetails, err := c.GetPeerInfo(p, signer)
 				basicDidType := did.BasicDIDMode
 				if err != nil || peerDetails.PeerInfo.DIDType == nil {
@@ -168,7 +181,9 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 		c.log.Debug("Signature verification successful", "signer", signer)
 	}
 
-	c.log.Debug("All signers validated successfully", "totalSigners", len(signers))
+	finalHash, _ := b.GetHash()
+	c.log.Debug("All signers validated successfully", "totalSigners", len(signers), "initialBlockHash", blockHash, "finalBlockHash", finalHash)
+	c.log.Info("validateSigner returning success", "totalSigners", len(signers), "selfDID", selfDID, "blockHash", finalHash)
 	return true, nil
 }
 
@@ -320,8 +335,9 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	}
 
 	valid, err := c.validateSigner(b, quorumDID, p)
+	c.log.Debug("validateSigner returned", "valid", valid, "err", err, "token", ti.Token, "blockHash", func() string { h, _ := b.GetHash(); return h }())
 	if !valid || err != nil {
-		c.log.Error("Token validation failed", "token", ti.Token, "err", err)
+		c.log.Error("Token validation failed", "token", ti.Token, "err", err, "valid", valid)
 		return fmt.Errorf("failed to validate token signer for %s", ti.Token), false
 	}
 
@@ -661,6 +677,8 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 
 			// Validate this block
 			valid, err := c.validateSigner(br.Block, quorumDID, p)
+			blockHash, _ := br.Block.GetHash()
+			c.log.Debug("validateSigner returned (optimized)", "valid", valid, "err", err, "blockHash", blockHash, "tokenCount", len(br.Tokens))
 			br.IsValid = valid
 			br.Error = err
 
