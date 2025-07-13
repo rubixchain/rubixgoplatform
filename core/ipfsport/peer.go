@@ -417,6 +417,25 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 			"portStats", stats)
 		return nil, fmt.Errorf("all ports are busy")
 	}
+	// Set up IPFS port forwarding to the remote peer
+	addr := fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", portNum)
+	target := fmt.Sprintf("/p2p/%s", peerID)
+	pm.log.Debug("Setting up IPFS port forwarding", "addr", addr, "peerID", peerID, "port", portNum)
+	req := pm.ipfs.Request("p2p/forward")
+	resp, err := req.Option("listen-address", addr).Option("target", target).Send(context.Background())
+	if err != nil {
+		pm.log.Error("failed to setup ipfs port forwarding", "err", err, "addr", addr, "peerID", peerID)
+		pm.releasePeerPort(portNum)
+		return nil, err
+	}
+	defer resp.Close()
+	if resp.Error != nil {
+		pm.log.Error("failed to setup ipfs port forwarding", "err", resp.Error, "addr", addr, "peerID", peerID)
+		pm.releasePeerPort(portNum)
+		return nil, fmt.Errorf("failed to setup ipfs port forwarding: %v", resp.Error)
+	}
+	pm.log.Debug("Successfully set up IPFS port forwarding", "addr", addr, "peerID", peerID, "port", portNum)
+
 	scfg := &srvcfg.Config{
 		ServerAddress: "localhost",
 		ServerPort:    fmt.Sprintf("%d", portNum),
@@ -483,6 +502,24 @@ func (pm *PeerManager) OpenPeerConnWithPriority(peerID string, did string, appna
 			"portStats", stats)
 		return nil, fmt.Errorf("all ports are busy")
 	}
+	// Set up IPFS port forwarding to the remote peer
+	addr := fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", portNum)
+	target := fmt.Sprintf("/p2p/%s", peerID)
+	pm.log.Debug("Setting up IPFS port forwarding", "addr", addr, "peerID", peerID, "port", portNum)
+	req := pm.ipfs.Request("p2p/forward")
+	resp, err := req.Option("listen-address", addr).Option("target", target).Send(context.Background())
+	if err != nil {
+		pm.log.Error("failed to setup ipfs port forwarding", "err", err, "addr", addr, "peerID", peerID)
+		pm.releasePeerPort(portNum)
+		return nil, err
+	}
+	defer resp.Close()
+	if resp.Error != nil {
+		pm.log.Error("failed to setup ipfs port forwarding", "err", resp.Error, "addr", addr, "peerID", peerID)
+		pm.releasePeerPort(portNum)
+		return nil, fmt.Errorf("failed to setup ipfs port forwarding: %v", resp.Error)
+	}
+	pm.log.Debug("Successfully set up IPFS port forwarding", "addr", addr, "peerID", peerID, "port", portNum)
 
 	scfg := &srvcfg.Config{
 		ServerAddress: "localhost",
@@ -578,20 +615,22 @@ func (p *Peer) Close() error {
 		// Always release the port, regardless of IPFS close success/failure
 		defer p.pm.releasePeerPort(p.port)
 
-		addr := "/ip4/127.0.0.1/tcp/" + fmt.Sprintf("%d", p.port)
+		// Close the IPFS port forwarding
+		addr := fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", p.port)
 		req := p.pm.ipfs.Request("p2p/close")
 		resp, err := req.Option("listen-address", addr).Send(context.Background())
 		if err != nil {
-			p.log.Error("failed to close ipfs port", "err", err)
+			p.log.Error("failed to close ipfs port forwarding", "err", err)
 			// Don't return error here - we still want to release the port
 			return nil
 		}
 		defer resp.Close()
 		if resp.Error != nil {
-			p.log.Error("failed to close ipfs port", "err", resp.Error)
+			p.log.Error("failed to close ipfs port forwarding", "err", resp.Error)
 			// Don't return error here - we still want to release the port
 			return nil
 		}
+		p.log.Debug("Closed IPFS port forwarding", "port", p.port, "peerID", p.peerID)
 	}
 	return nil
 }
