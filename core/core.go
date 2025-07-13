@@ -89,6 +89,13 @@ const (
 	MaxPeerConn uint16 = 1000
 )
 
+// Port monitoring thresholds
+const (
+	PortWarningThreshold  = 0.8  // 80% port usage triggers warning
+	PortCriticalThreshold = 0.95 // 95% port usage triggers critical action
+	PortMonitorInterval   = 30 * time.Second
+)
+
 var dbWriteSem = make(chan struct{}, 1)
 
 type Core struct {
@@ -136,6 +143,8 @@ type Core struct {
 	noBalanceQuorumCount int
 	defaultSetup         bool
 	ipfsSem              chan struct{}
+	portMonitorStop      chan struct{} // Channel to stop port monitoring
+	portMonitorRunning   bool
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -376,34 +385,10 @@ func (c *Core) Start() (bool, string) {
 		c.log.Error("failed to start ping port", "err", err)
 		return false, "Failed to start ping port"
 	}
-	//c.w.ReleaseAllLockedTokens()
-	// exp := model.ExploreModel{
-	// 	Cmd:    ExpPeerStatusCmd,
-	// 	PeerID: c.peerID,
-	// 	Status: "On",
-	// }
-	// err = c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	c.log.Error("Failed to publish message to explorer", "err", err)
-	// 	return false, "Failed to publish message to explorer"
-	// }
-	// dt, err := c.w.GetAllDIDs()
-	// if err == nil && len(dt) > 0 {
-	// 	list := make([]string, 0)
-	// 	for _, d := range dt {
-	// 		list = append(list, d.DID)
-	// 	}
-	// 	// exp = model.ExploreModel{
-	// 	// 	Cmd:     ExpDIDPeerMapCmd,
-	// 	// 	PeerID:  c.peerID,
-	// 	// 	DIDList: list,
-	// 	// }
-	// 	// err = c.PublishExplorer(&exp)
-	// 	// if err != nil {
-	// 	// 	c.log.Error("Failed to publish message to explorer", "err", err)
-	// 	// 	return false, "Failed to publish message to explorer"
-	// 	// }
-	// }
+
+	// Start port monitoring after core is started
+	c.StartPortMonitoring()
+
 	return true, "Setup Complete"
 }
 
@@ -413,17 +398,8 @@ func (c *Core) NodeStatus() bool {
 }
 
 func (c *Core) StopCore() {
-	// exp := model.ExploreModel{
-	// 	Cmd:    ExpPeerStatusCmd,
-	// 	PeerID: c.peerID,
-	// 	Status: "Off",
-	// }
-	// err := c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	c.log.Error("Failed to publish explorer model", "err", err)
-	// 	return
-	// }
-	time.Sleep(time.Second)
+	// Stop port monitoring
+	c.StopPortMonitoring()
 
 	// Stop IPFS recovery manager
 	if c.ipfsRecovery != nil {
@@ -439,6 +415,7 @@ func (c *Core) StopCore() {
 	if c.l != nil {
 		c.l.Shutdown()
 	}
+	c.log.Info("Core stopped")
 }
 
 func (c *Core) CreateTempFolder() (string, error) {
@@ -977,3 +954,97 @@ func (c *Core) GetIPFSHealthManager() interface{} {
 // func (c *Core)ConvertContractToBlock(contract *contract.ContractType) *block.Block {
 
 // }
+
+// GetPortUsageStats returns port usage statistics
+func (c *Core) GetPortUsageStats() map[string]interface{} {
+	if c.pm != nil {
+		return c.pm.GetPortUsageStats()
+	}
+	return map[string]interface{}{
+		"error": "PeerManager not initialized",
+	}
+}
+
+// ForceReleaseAllPorts forces release of all ports (for emergency situations)
+func (c *Core) ForceReleaseAllPorts() {
+	if c.pm != nil {
+		c.pm.ForceReleaseAllPorts()
+		c.log.Warn("Force released all ports via Core method")
+	} else {
+		c.log.Error("PeerManager not initialized - cannot release ports")
+	}
+}
+
+// StartPortMonitoring starts the global port monitoring system
+func (c *Core) StartPortMonitoring() {
+	if c.portMonitorRunning {
+		return
+	}
+
+	c.portMonitorStop = make(chan struct{})
+	c.portMonitorRunning = true
+
+	go c.portMonitor()
+	c.log.Info("Port monitoring started")
+}
+
+// StopPortMonitoring stops the global port monitoring system
+func (c *Core) StopPortMonitoring() {
+	if !c.portMonitorRunning {
+		return
+	}
+
+	close(c.portMonitorStop)
+	c.portMonitorRunning = false
+	c.log.Info("Port monitoring stopped")
+}
+
+// portMonitor runs the periodic port monitoring loop
+func (c *Core) portMonitor() {
+	ticker := time.NewTicker(PortMonitorInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			c.checkPortUsage()
+		case <-c.portMonitorStop:
+			return
+		}
+	}
+}
+
+// checkPortUsage checks current port usage and takes action if needed
+func (c *Core) checkPortUsage() {
+	stats := c.GetPortUsageStats()
+
+	totalPorts := stats["totalPorts"].(int)
+	usedPorts := stats["usedPorts"].(int)
+
+	if totalPorts == 0 {
+		return
+	}
+
+	usageRatio := float64(usedPorts) / float64(totalPorts)
+
+	switch {
+	case usageRatio >= PortCriticalThreshold:
+		c.log.Error("Critical port usage detected - forcing port release",
+			"usageRatio", usageRatio,
+			"usedPorts", usedPorts,
+			"totalPorts", totalPorts)
+		c.ForceReleaseAllPorts()
+
+	case usageRatio >= PortWarningThreshold:
+		c.log.Warn("High port usage detected",
+			"usageRatio", usageRatio,
+			"usedPorts", usedPorts,
+			"totalPorts", totalPorts,
+			"availablePorts", stats["availablePorts"])
+	}
+}
+
+// IsPortMonitoringActive returns whether port monitoring is currently running
+func (c *Core) IsPortMonitoringActive() bool {
+	return c.portMonitorRunning
+}

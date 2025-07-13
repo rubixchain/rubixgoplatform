@@ -157,7 +157,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 
 		c.log.Debug("About to verify signature", "signer", signer, "signType", dc.GetSignType())
 
-		err := b.VerifySignature(dc)
+		err = b.VerifySignature(dc)
 		if err != nil {
 			c.log.Error("Signature verification failed", "signer", signer, "err", err, "signType", dc.GetSignType())
 

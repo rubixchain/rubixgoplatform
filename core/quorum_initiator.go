@@ -767,20 +767,75 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			//send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
 				// fetch previous quorum's peer Id
-				previousQuorumInfo, _ := c.GetPeerDIDInfo(previousQuorumDID)
-				if previousQuorumInfo.PeerID == "" {
-					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+				previousQuorumInfo, err := c.GetPeerDIDInfo(previousQuorumDID)
+				if previousQuorumInfo.PeerID == "" || err != nil {
+					c.log.Error("unable to get peerID for signer DID", "did", previousQuorumDID, "err", err)
+					continue // Continue with other quorums instead of failing completely
 				}
 
 				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
-				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
+
+				// Add retry logic for port exhaustion
+				var previousQuorumPeer *ipfsport.Peer
+				var errGetPeer error
+				maxRetries := 3
+
+				for attempt := 1; attempt <= maxRetries; attempt++ {
+					previousQuorumPeer, errGetPeer = c.getPeer(previousQuorumAddress)
+					if errGetPeer == nil {
+						break
+					}
+
+					if strings.Contains(errGetPeer.Error(), "all ports are busy") {
+						c.log.Warn("Port exhaustion during CVR-2 unpledging",
+							"attempt", attempt,
+							"quorum", previousQuorumDID,
+							"peerID", previousQuorumInfo.PeerID)
+
+						if attempt == maxRetries {
+							c.log.Error("Failed to connect to previous quorum after retries",
+								"quorum", previousQuorumDID,
+								"err", errGetPeer)
+							continue // Continue with other quorums
+						}
+
+						// Wait before retry
+						time.Sleep(time.Duration(attempt) * 2 * time.Second)
+					} else {
+						c.log.Error("Failed to connect to previous quorum",
+							"quorum", previousQuorumDID,
+							"err", errGetPeer)
+						break
+					}
 				}
+
+				if previousQuorumPeer == nil {
+					c.log.Error("Could not establish connection to previous quorum",
+						"quorum", previousQuorumDID)
+					continue
+				}
+
+				// Ensure peer is closed even if request fails
+				defer func() {
+					if previousQuorumPeer != nil {
+						previousQuorumPeer.Close()
+					}
+				}()
 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
-				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+
+				// Send request with timeout
+				err = previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true, 30*time.Second)
+				if err != nil {
+					c.log.Error("Failed to send unpledge request to previous quorum",
+						"quorum", previousQuorumDID,
+						"err", err)
+					continue // Continue with other quorums
+				}
+
+				c.log.Debug("Successfully sent unpledge request to previous quorum",
+					"quorum", previousQuorumDID)
 			}
 		}
 
@@ -1169,18 +1224,73 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				// fetch previous quorum's peer Id
 				previousQuorumInfo, err := c.GetPeerDIDInfo(previousQuorumDID)
 				if previousQuorumInfo.PeerID == "" || err != nil {
-					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+					c.log.Error("unable to get peerID for signer DID", "did", previousQuorumDID, "err", err)
+					continue // Continue with other quorums instead of failing completely
 				}
 
 				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
-				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
+
+				// Add retry logic for port exhaustion
+				var previousQuorumPeer *ipfsport.Peer
+				var errGetPeer error
+				maxRetries := 3
+
+				for attempt := 1; attempt <= maxRetries; attempt++ {
+					previousQuorumPeer, errGetPeer = c.getPeer(previousQuorumAddress)
+					if errGetPeer == nil {
+						break
+					}
+
+					if strings.Contains(errGetPeer.Error(), "all ports are busy") {
+						c.log.Warn("Port exhaustion during CVR-2 unpledging",
+							"attempt", attempt,
+							"quorum", previousQuorumDID,
+							"peerID", previousQuorumInfo.PeerID)
+
+						if attempt == maxRetries {
+							c.log.Error("Failed to connect to previous quorum after retries",
+								"quorum", previousQuorumDID,
+								"err", errGetPeer)
+							continue // Continue with other quorums
+						}
+
+						// Wait before retry
+						time.Sleep(time.Duration(attempt) * 2 * time.Second)
+					} else {
+						c.log.Error("Failed to connect to previous quorum",
+							"quorum", previousQuorumDID,
+							"err", errGetPeer)
+						break
+					}
 				}
+
+				if previousQuorumPeer == nil {
+					c.log.Error("Could not establish connection to previous quorum",
+						"quorum", previousQuorumDID)
+					continue
+				}
+
+				// Ensure peer is closed even if request fails
+				defer func() {
+					if previousQuorumPeer != nil {
+						previousQuorumPeer.Close()
+					}
+				}()
+
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
-				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
-				previousQuorumPeer.Close()
+
+				// Send request with timeout
+				err = previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true, 30*time.Second)
+				if err != nil {
+					c.log.Error("Failed to send unpledge request to previous quorum",
+						"quorum", previousQuorumDID,
+						"err", err)
+					continue // Continue with other quorums
+				}
+
+				c.log.Debug("Successfully sent unpledge request to previous quorum",
+					"quorum", previousQuorumDID)
 			}
 		}
 
@@ -1381,19 +1491,73 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				// fetch previous quorum's peer Id
 				previousQuorumInfo, err := c.GetPeerDIDInfo(previousQuorumDID)
 				if previousQuorumInfo.PeerID == "" || err != nil {
-					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+					c.log.Error("unable to get peerID for signer DID", "did", previousQuorumDID, "err", err)
+					continue // Continue with other quorums instead of failing completely
 				}
 
 				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
-				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
+
+				// Add retry logic for port exhaustion
+				var previousQuorumPeer *ipfsport.Peer
+				var errGetPeer error
+				maxRetries := 3
+
+				for attempt := 1; attempt <= maxRetries; attempt++ {
+					previousQuorumPeer, errGetPeer = c.getPeer(previousQuorumAddress)
+					if errGetPeer == nil {
+						break
+					}
+
+					if strings.Contains(errGetPeer.Error(), "all ports are busy") {
+						c.log.Warn("Port exhaustion during CVR-2 unpledging",
+							"attempt", attempt,
+							"quorum", previousQuorumDID,
+							"peerID", previousQuorumInfo.PeerID)
+
+						if attempt == maxRetries {
+							c.log.Error("Failed to connect to previous quorum after retries",
+								"quorum", previousQuorumDID,
+								"err", errGetPeer)
+							continue // Continue with other quorums
+						}
+
+						// Wait before retry
+						time.Sleep(time.Duration(attempt) * 2 * time.Second)
+					} else {
+						c.log.Error("Failed to connect to previous quorum",
+							"quorum", previousQuorumDID,
+							"err", errGetPeer)
+						break
+					}
 				}
+
+				if previousQuorumPeer == nil {
+					c.log.Error("Could not establish connection to previous quorum",
+						"quorum", previousQuorumDID)
+					continue
+				}
+
+				// Ensure peer is closed even if request fails
+				defer func() {
+					if previousQuorumPeer != nil {
+						previousQuorumPeer.Close()
+					}
+				}()
 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
-				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
-				previousQuorumPeer.Close()
+
+				// Send request with timeout
+				err = previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true, 30*time.Second)
+				if err != nil {
+					c.log.Error("Failed to send unpledge request to previous quorum",
+						"quorum", previousQuorumDID,
+						"err", err)
+					continue // Continue with other quorums
+				}
+
+				c.log.Debug("Successfully sent unpledge request to previous quorum",
+					"quorum", previousQuorumDID)
 			}
 		}
 
@@ -1587,19 +1751,73 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				// fetch previous quorum's peer Id
 				previousQuorumInfo, err := c.GetPeerDIDInfo(previousQuorumDID)
 				if previousQuorumInfo.PeerID == "" || err != nil {
-					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+					c.log.Error("unable to get peerID for signer DID", "did", previousQuorumDID, "err", err)
+					continue // Continue with other quorums instead of failing completely
 				}
 
 				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
-				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
+
+				// Add retry logic for port exhaustion
+				var previousQuorumPeer *ipfsport.Peer
+				var errGetPeer error
+				maxRetries := 3
+
+				for attempt := 1; attempt <= maxRetries; attempt++ {
+					previousQuorumPeer, errGetPeer = c.getPeer(previousQuorumAddress)
+					if errGetPeer == nil {
+						break
+					}
+
+					if strings.Contains(errGetPeer.Error(), "all ports are busy") {
+						c.log.Warn("Port exhaustion during CVR-2 unpledging",
+							"attempt", attempt,
+							"quorum", previousQuorumDID,
+							"peerID", previousQuorumInfo.PeerID)
+
+						if attempt == maxRetries {
+							c.log.Error("Failed to connect to previous quorum after retries",
+								"quorum", previousQuorumDID,
+								"err", errGetPeer)
+							continue // Continue with other quorums
+						}
+
+						// Wait before retry
+						time.Sleep(time.Duration(attempt) * 2 * time.Second)
+					} else {
+						c.log.Error("Failed to connect to previous quorum",
+							"quorum", previousQuorumDID,
+							"err", errGetPeer)
+						break
+					}
 				}
+
+				if previousQuorumPeer == nil {
+					c.log.Error("Could not establish connection to previous quorum",
+						"quorum", previousQuorumDID)
+					continue
+				}
+
+				// Ensure peer is closed even if request fails
+				defer func() {
+					if previousQuorumPeer != nil {
+						previousQuorumPeer.Close()
+					}
+				}()
+
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
-				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
-				previousQuorumPeer.Close()
 
+				// Send request with timeout
+				err = previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true, 30*time.Second)
+				if err != nil {
+					c.log.Error("Failed to send unpledge request to previous quorum",
+						"quorum", previousQuorumDID,
+						"err", err)
+					continue // Continue with other quorums
+				}
+
+				c.log.Debug("Successfully sent unpledge request to previous quorum",
+					"quorum", previousQuorumDID)
 			}
 		}
 		err = c.w.FTTokensTransffered(sc.GetSenderDID(), ti, nb, rp.IsLocal())
@@ -1786,20 +2004,73 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				// fetch previous quorum's peer Id
 				previousQuorumInfo, err := c.GetPeerDIDInfo(previousQuorumDID)
 				if previousQuorumInfo.PeerID == "" || err != nil {
-					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+					c.log.Error("unable to get peerID for signer DID", "did", previousQuorumDID, "err", err)
+					continue // Continue with other quorums instead of failing completely
 				}
 
 				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
-				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
+
+				// Add retry logic for port exhaustion
+				var previousQuorumPeer *ipfsport.Peer
+				var errGetPeer error
+				maxRetries := 3
+
+				for attempt := 1; attempt <= maxRetries; attempt++ {
+					previousQuorumPeer, errGetPeer = c.getPeer(previousQuorumAddress)
+					if errGetPeer == nil {
+						break
+					}
+
+					if strings.Contains(errGetPeer.Error(), "all ports are busy") {
+						c.log.Warn("Port exhaustion during CVR-2 unpledging",
+							"attempt", attempt,
+							"quorum", previousQuorumDID,
+							"peerID", previousQuorumInfo.PeerID)
+
+						if attempt == maxRetries {
+							c.log.Error("Failed to connect to previous quorum after retries",
+								"quorum", previousQuorumDID,
+								"err", errGetPeer)
+							continue // Continue with other quorums
+						}
+
+						// Wait before retry
+						time.Sleep(time.Duration(attempt) * 2 * time.Second)
+					} else {
+						c.log.Error("Failed to connect to previous quorum",
+							"quorum", previousQuorumDID,
+							"err", errGetPeer)
+						break
+					}
 				}
+
+				if previousQuorumPeer == nil {
+					c.log.Error("Could not establish connection to previous quorum",
+						"quorum", previousQuorumDID)
+					continue
+				}
+
+				// Ensure peer is closed even if request fails
+				defer func() {
+					if previousQuorumPeer != nil {
+						previousQuorumPeer.Close()
+					}
+				}()
 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
-				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
-				previousQuorumPeer.Close()
 
+				// Send request with timeout
+				err = previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true, 30*time.Second)
+				if err != nil {
+					c.log.Error("Failed to send unpledge request to previous quorum",
+						"quorum", previousQuorumDID,
+						"err", err)
+					continue // Continue with other quorums
+				}
+
+				c.log.Debug("Successfully sent unpledge request to previous quorum",
+					"quorum", previousQuorumDID)
 			}
 		}
 
@@ -1927,20 +2198,73 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				// fetch previous quorum's peer Id
 				previousQuorumInfo, err := c.GetPeerDIDInfo(previousQuorumDID)
 				if previousQuorumInfo.PeerID == "" || err != nil {
-					return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+					c.log.Error("unable to get peerID for signer DID", "did", previousQuorumDID, "err", err)
+					continue // Continue with other quorums instead of failing completely
 				}
 
 				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
-				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
+
+				// Add retry logic for port exhaustion
+				var previousQuorumPeer *ipfsport.Peer
+				var errGetPeer error
+				maxRetries := 3
+
+				for attempt := 1; attempt <= maxRetries; attempt++ {
+					previousQuorumPeer, errGetPeer = c.getPeer(previousQuorumAddress)
+					if errGetPeer == nil {
+						break
+					}
+
+					if strings.Contains(errGetPeer.Error(), "all ports are busy") {
+						c.log.Warn("Port exhaustion during CVR-2 unpledging",
+							"attempt", attempt,
+							"quorum", previousQuorumDID,
+							"peerID", previousQuorumInfo.PeerID)
+
+						if attempt == maxRetries {
+							c.log.Error("Failed to connect to previous quorum after retries",
+								"quorum", previousQuorumDID,
+								"err", errGetPeer)
+							continue // Continue with other quorums
+						}
+
+						// Wait before retry
+						time.Sleep(time.Duration(attempt) * 2 * time.Second)
+					} else {
+						c.log.Error("Failed to connect to previous quorum",
+							"quorum", previousQuorumDID,
+							"err", errGetPeer)
+						break
+					}
 				}
+
+				if previousQuorumPeer == nil {
+					c.log.Error("Could not establish connection to previous quorum",
+						"quorum", previousQuorumDID)
+					continue
+				}
+
+				// Ensure peer is closed even if request fails
+				defer func() {
+					if previousQuorumPeer != nil {
+						previousQuorumPeer.Close()
+					}
+				}()
 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
-				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
-				previousQuorumPeer.Close()
 
+				// Send request with timeout
+				err = previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true, 30*time.Second)
+				if err != nil {
+					c.log.Error("Failed to send unpledge request to previous quorum",
+						"quorum", previousQuorumDID,
+						"err", err)
+					continue // Continue with other quorums
+				}
+
+				c.log.Debug("Successfully sent unpledge request to previous quorum",
+					"quorum", previousQuorumDID)
 			}
 		}
 
@@ -2146,20 +2470,73 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			// fetch previous quorum's peer Id
 			previousQuorumInfo, err := c.GetPeerDIDInfo(previousQuorumDID)
 			if previousQuorumInfo.PeerID == "" || err != nil {
-				return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+				c.log.Error("unable to get peerID for signer DID", "did", previousQuorumDID, "err", err)
+				continue // Continue with other quorums instead of failing completely
 			}
 
 			previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
-			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
-			if errGetPeer != nil {
-				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
+
+			// Add retry logic for port exhaustion
+			var previousQuorumPeer *ipfsport.Peer
+			var errGetPeer error
+			maxRetries := 3
+
+			for attempt := 1; attempt <= maxRetries; attempt++ {
+				previousQuorumPeer, errGetPeer = c.getPeer(previousQuorumAddress)
+				if errGetPeer == nil {
+					break
+				}
+
+				if strings.Contains(errGetPeer.Error(), "all ports are busy") {
+					c.log.Warn("Port exhaustion during CVR-2 unpledging",
+						"attempt", attempt,
+						"quorum", previousQuorumDID,
+						"peerID", previousQuorumInfo.PeerID)
+
+					if attempt == maxRetries {
+						c.log.Error("Failed to connect to previous quorum after retries",
+							"quorum", previousQuorumDID,
+							"err", errGetPeer)
+						continue // Continue with other quorums
+					}
+
+					// Wait before retry
+					time.Sleep(time.Duration(attempt) * 2 * time.Second)
+				} else {
+					c.log.Error("Failed to connect to previous quorum",
+						"quorum", previousQuorumDID,
+						"err", errGetPeer)
+					break
+				}
 			}
+
+			if previousQuorumPeer == nil {
+				c.log.Error("Could not establish connection to previous quorum",
+					"quorum", previousQuorumDID)
+				continue
+			}
+
+			// Ensure peer is closed even if request fails
+			defer func() {
+				if previousQuorumPeer != nil {
+					previousQuorumPeer.Close()
+				}
+			}()
 
 			updateTokenHashDetailsQuery := make(map[string]string)
 			updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = oldsctokenIDTokenStateHash
-			previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
-			previousQuorumPeer.Close()
 
+			// Send request with timeout
+			err = previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true, 30*time.Second)
+			if err != nil {
+				c.log.Error("Failed to send unpledge request to previous quorum",
+					"quorum", previousQuorumDID,
+					"err", err)
+				continue // Continue with other quorums
+			}
+
+			c.log.Debug("Successfully sent unpledge request to previous quorum",
+				"quorum", previousQuorumDID)
 		}
 
 		txnDetails := model.TransactionDetails{
@@ -2270,20 +2647,73 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			// fetch previous quorum's peer Id
 			previousQuorumInfo, err := c.GetPeerDIDInfo(previousQuorumDID)
 			if previousQuorumInfo.PeerID == "" || err != nil {
-				return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+				c.log.Error("unable to get peerID for signer DID", "did", previousQuorumDID, "err", err)
+				continue // Continue with other quorums instead of failing completely
 			}
 
 			previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
-			previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
-			if errGetPeer != nil {
-				return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
+
+			// Add retry logic for port exhaustion
+			var previousQuorumPeer *ipfsport.Peer
+			var errGetPeer error
+			maxRetries := 3
+
+			for attempt := 1; attempt <= maxRetries; attempt++ {
+				previousQuorumPeer, errGetPeer = c.getPeer(previousQuorumAddress)
+				if errGetPeer == nil {
+					break
+				}
+
+				if strings.Contains(errGetPeer.Error(), "all ports are busy") {
+					c.log.Warn("Port exhaustion during CVR-2 unpledging",
+						"attempt", attempt,
+						"quorum", previousQuorumDID,
+						"peerID", previousQuorumInfo.PeerID)
+
+					if attempt == maxRetries {
+						c.log.Error("Failed to connect to previous quorum after retries",
+							"quorum", previousQuorumDID,
+							"err", errGetPeer)
+						continue // Continue with other quorums
+					}
+
+					// Wait before retry
+					time.Sleep(time.Duration(attempt) * 2 * time.Second)
+				} else {
+					c.log.Error("Failed to connect to previous quorum",
+						"quorum", previousQuorumDID,
+						"err", errGetPeer)
+					break
+				}
 			}
+
+			if previousQuorumPeer == nil {
+				c.log.Error("Could not establish connection to previous quorum",
+					"quorum", previousQuorumDID)
+				continue
+			}
+
+			// Ensure peer is closed even if request fails
+			defer func() {
+				if previousQuorumPeer != nil {
+					previousQuorumPeer.Close()
+				}
+			}()
 
 			updateTokenHashDetailsQuery := make(map[string]string)
 			updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = oldnfttokenIDTokenStateHash
-			previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
-			previousQuorumPeer.Close()
 
+			// Send request with timeout
+			err = previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true, 30*time.Second)
+			if err != nil {
+				c.log.Error("Failed to send unpledge request to previous quorum",
+					"quorum", previousQuorumDID,
+					"err", err)
+				continue // Continue with other quorums
+			}
+
+			c.log.Debug("Successfully sent unpledge request to previous quorum",
+				"quorum", previousQuorumDID)
 		}
 
 		txnDetails := model.TransactionDetails{

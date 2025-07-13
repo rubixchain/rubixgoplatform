@@ -68,6 +68,24 @@ func NewPeerManager(startPort uint16, lport uint16, maxNumPort uint16, ipfs *ipf
 func (pm *PeerManager) getPeerPort() uint16 {
 	pm.lock.Lock()
 	defer pm.lock.Unlock()
+
+	// Count available ports for logging
+	availablePorts := 0
+	for i, status := range pm.ps {
+		if !status {
+			port := pm.startPort + uint16(i)
+			availability := isPortAvailable(port)
+			if availability {
+				availablePorts++
+			}
+		}
+	}
+
+	// Log port usage if we're running low
+	if availablePorts < 100 {
+		pm.log.Warn("Low port availability", "availablePorts", availablePorts, "totalPorts", len(pm.ps))
+	}
+
 	for i, status := range pm.ps {
 		if !status {
 			port := pm.startPort + uint16(i)
@@ -79,7 +97,39 @@ func (pm *PeerManager) getPeerPort() uint16 {
 			}
 		}
 	}
+
+	// Log when all ports are exhausted
+	pm.log.Error("All ports are busy", "totalPorts", len(pm.ps), "startPort", pm.startPort)
 	return 0
+}
+
+// GetPortUsageStats returns statistics about port usage
+func (pm *PeerManager) GetPortUsageStats() map[string]interface{} {
+	pm.lock.Lock()
+	defer pm.lock.Unlock()
+
+	totalPorts := len(pm.ps)
+	usedPorts := 0
+	availablePorts := 0
+
+	for i, status := range pm.ps {
+		if status {
+			usedPorts++
+		} else {
+			port := pm.startPort + uint16(i)
+			if isPortAvailable(port) {
+				availablePorts++
+			}
+		}
+	}
+
+	return map[string]interface{}{
+		"totalPorts":     totalPorts,
+		"usedPorts":      usedPorts,
+		"availablePorts": availablePorts,
+		"startPort":      pm.startPort,
+		"endPort":        pm.startPort + uint16(totalPorts-1),
+	}
 }
 
 func isPortAvailable(port uint16) bool {
@@ -132,6 +182,17 @@ func (pm *PeerManager) SwarmConnect(peerID string) bool {
 	return false
 }
 
+// ForceReleaseAllPorts releases all ports (for emergency situations)
+func (pm *PeerManager) ForceReleaseAllPorts() {
+	pm.lock.Lock()
+	defer pm.lock.Unlock()
+
+	for i := range pm.ps {
+		pm.ps[i] = false
+	}
+	pm.log.Warn("Force released all ports")
+}
+
 func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (*Peer, error) {
 	// local peer
 	if peerID == pm.peerID {
@@ -160,6 +221,11 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 		}
 		portNum := pm.getPeerPort()
 		if portNum == 0 {
+			// Log port usage stats when we can't get a port
+			stats := pm.GetPortUsageStats()
+			pm.log.Error("All ports are busy - cannot create peer connection",
+				"peerID", peerID,
+				"portStats", stats)
 			return nil, fmt.Errorf("all ports are busy")
 		}
 		scfg := &srvcfg.Config{
@@ -185,6 +251,7 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 		defer resp.Close()
 		if resp.Error != nil {
 			pm.log.Error("error in forward request", "err", resp.Error)
+			pm.releasePeerPort(portNum)
 			return nil, resp.Error
 		}
 		p.Client, err = ensweb.NewClient(scfg, p.log)
@@ -265,18 +332,22 @@ func (pm *PeerManager) UpdateIPFS(newShell *ipfsnode.Shell) {
 
 func (p *Peer) Close() error {
 	if !p.local {
+		// Always release the port, regardless of IPFS close success/failure
 		defer p.pm.releasePeerPort(p.port)
+
 		addr := "/ip4/127.0.0.1/tcp/" + fmt.Sprintf("%d", p.port)
 		req := p.pm.ipfs.Request("p2p/close")
 		resp, err := req.Option("listen-address", addr).Send(context.Background())
 		if err != nil {
 			p.log.Error("failed to close ipfs port", "err", err)
-			return err
+			// Don't return error here - we still want to release the port
+			return nil
 		}
 		defer resp.Close()
 		if resp.Error != nil {
 			p.log.Error("failed to close ipfs port", "err", resp.Error)
-			return resp.Error
+			// Don't return error here - we still want to release the port
+			return nil
 		}
 	}
 	return nil

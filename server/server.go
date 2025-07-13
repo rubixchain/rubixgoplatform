@@ -194,6 +194,9 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetTokenStatus, "GET", s.AuthHandle(s.APIGetTokenStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIPrePledge, "POST", s.AuthHandle(s.APIPrePledge, true, s.AuthError, false))
 	s.AddRoute(setup.APIPrePledgeFT, "POST", s.AuthHandle(s.APIPrePledgeFTs, true, s.AuthError, false))
+
+	// Add port management endpoints
+	s.addPortManagementEndpoints()
 }
 
 func (s *Server) ExitFunc() error {
@@ -232,4 +235,36 @@ func (s *Server) AuthHandle(hf ensweb.HandlerFunc, did bool, ef ensweb.HandlerFu
 			return hf(req)
 		})
 	}
+}
+
+// Add port management endpoints
+func (s *Server) addPortManagementEndpoints() {
+	// Get port usage statistics
+	s.AddRoute("/api/port-stats", "GET", s.AuthHandle(s.handleGetPortStats, false, s.AuthError, false))
+
+	// Force release all ports (emergency endpoint)
+	s.AddRoute("/api/force-release-ports", "POST", s.AuthHandle(s.handleForceReleasePorts, false, s.AuthError, true))
+
+	// Get port monitoring status
+	s.AddRoute("/api/port-monitoring-status", "GET", s.AuthHandle(s.handleGetPortMonitoringStatus, false, s.AuthError, false))
+}
+
+// handleGetPortStats returns current port usage statistics
+func (s *Server) handleGetPortStats(req *ensweb.Request) *ensweb.Result {
+	stats := s.c.GetPortUsageStats()
+	return s.BasicResponse(req, true, "Port statistics retrieved successfully", stats)
+}
+
+// handleForceReleasePorts forces release of all ports (emergency action)
+func (s *Server) handleForceReleasePorts(req *ensweb.Request) *ensweb.Result {
+	s.c.ForceReleaseAllPorts()
+	return s.BasicResponse(req, true, "All ports have been force released", nil)
+}
+
+// handleGetPortMonitoringStatus returns whether port monitoring is active
+func (s *Server) handleGetPortMonitoringStatus(req *ensweb.Request) *ensweb.Result {
+	isActive := s.c.IsPortMonitoringActive()
+	return s.BasicResponse(req, true, "Port monitoring status retrieved", map[string]interface{}{
+		"monitoring_active": isActive,
+	})
 }
