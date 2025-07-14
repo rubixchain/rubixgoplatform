@@ -376,6 +376,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		for i := range ti {
 			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
 		}
+	case SpendableFTTransferMode:
+		ti := sc.GetTransTokenInfo()
+		for i := range ti {
+			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
+		}
+
 	}
 	minValue := MinDecimalValue(MaxDecimalPlaces)
 	minTotalPledgeAmount := minValue * float64(MinQuorumRequired)
