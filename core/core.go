@@ -970,6 +970,11 @@ func (c *Core) ForceReleaseAllPorts() {
 	c.pm.ForceReleaseAllPorts()
 }
 
+// SafeForceReleaseAllPorts safely releases only ports that are actually available (safer for bulk transfers)
+func (c *Core) SafeForceReleaseAllPorts() {
+	c.pm.SafeForceReleaseAllPorts()
+}
+
 // ForceReleaseStuckPorts releases ports that are marked as used but are actually available
 func (c *Core) ForceReleaseStuckPorts() {
 	c.pm.ForceReleaseStuckPorts()
@@ -1029,11 +1034,11 @@ func (c *Core) checkPortUsage() {
 
 	switch {
 	case usageRatio >= PortCriticalThreshold:
-		c.log.Error("Critical port usage detected - forcing port release",
+		c.log.Error("Critical port usage detected - using safe port release",
 			"usageRatio", usageRatio,
 			"usedPorts", usedPorts,
 			"totalPorts", totalPorts)
-		c.ForceReleaseAllPorts()
+		c.SafeForceReleaseAllPorts()
 
 	case usageRatio >= PortWarningThreshold:
 		c.log.Warn("High port usage detected",

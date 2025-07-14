@@ -41,6 +41,10 @@ type PeerManager struct {
 	queueLock    sync.Mutex
 	queueRunning bool
 	stopQueue    chan struct{}
+
+	// Active connection tracking
+	activeConnections map[uint16]*Peer
+	connLock          sync.RWMutex
 }
 
 type Peer struct {
@@ -59,15 +63,16 @@ func (peer Peer) GetPeerID() string {
 
 func NewPeerManager(startPort uint16, lport uint16, maxNumPort uint16, ipfs *ipfsnode.Shell, log logger.Logger, bootStrap []string, peerID string) *PeerManager {
 	p := &PeerManager{
-		peerID:    peerID,
-		ipfs:      ipfs,
-		log:       log.Named("PeerManager"),
-		ps:        make([]bool, maxNumPort),
-		startPort: startPort,
-		lport:     lport,
-		bootStrap: bootStrap,
-		portQueue: make([]*PortRequest, 0),
-		stopQueue: make(chan struct{}),
+		peerID:            peerID,
+		ipfs:              ipfs,
+		log:               log.Named("PeerManager"),
+		ps:                make([]bool, maxNumPort),
+		startPort:         startPort,
+		lport:             lport,
+		bootStrap:         bootStrap,
+		portQueue:         make([]*PortRequest, 0),
+		stopQueue:         make(chan struct{}),
+		activeConnections: make(map[uint16]*Peer),
 	}
 
 	// Start port queue processor
@@ -261,14 +266,52 @@ func (pm *PeerManager) GetPortUsageStats() map[string]interface{} {
 	queueLength := len(pm.portQueue)
 	pm.queueLock.Unlock()
 
+	pm.connLock.RLock()
+	activeConnCount := len(pm.activeConnections)
+	pm.connLock.RUnlock()
+
 	return map[string]interface{}{
-		"totalPorts":     totalPorts,
-		"usedPorts":      usedPorts,
-		"availablePorts": availablePorts,
-		"startPort":      pm.startPort,
-		"endPort":        pm.startPort + uint16(totalPorts-1),
-		"queueLength":    queueLength,
+		"totalPorts":        totalPorts,
+		"usedPorts":         usedPorts,
+		"availablePorts":    availablePorts,
+		"startPort":         pm.startPort,
+		"endPort":           pm.startPort + uint16(totalPorts-1),
+		"queueLength":       queueLength,
+		"activeConnections": activeConnCount,
 	}
+}
+
+// registerActiveConnection registers an active peer connection
+func (pm *PeerManager) registerActiveConnection(port uint16, peer *Peer) {
+	pm.connLock.Lock()
+	defer pm.connLock.Unlock()
+	pm.activeConnections[port] = peer
+	pm.log.Debug("Registered active connection", "port", port, "peerID", peer.peerID)
+}
+
+// unregisterActiveConnection unregisters an active peer connection
+func (pm *PeerManager) unregisterActiveConnection(port uint16) {
+	pm.connLock.Lock()
+	defer pm.connLock.Unlock()
+	if _, exists := pm.activeConnections[port]; exists {
+		delete(pm.activeConnections, port)
+		pm.log.Debug("Unregistered active connection", "port", port)
+	}
+}
+
+// getActiveConnectionCount returns the number of active connections
+func (pm *PeerManager) getActiveConnectionCount() int {
+	pm.connLock.RLock()
+	defer pm.connLock.RUnlock()
+	return len(pm.activeConnections)
+}
+
+// isPortActivelyUsed checks if a port is actively being used by a connection
+func (pm *PeerManager) isPortActivelyUsed(port uint16) bool {
+	pm.connLock.RLock()
+	defer pm.connLock.RUnlock()
+	_, exists := pm.activeConnections[port]
+	return exists
 }
 
 func isPortAvailable(port uint16) bool {
@@ -357,6 +400,28 @@ func (pm *PeerManager) ForceReleaseAllPorts() {
 	pm.log.Warn("Force released all ports", "releasedCount", releasedCount)
 }
 
+// SafeForceReleaseAllPorts releases only ports that are actually available (safer for bulk transfers)
+func (pm *PeerManager) SafeForceReleaseAllPorts() {
+	pm.lock.Lock()
+	defer pm.lock.Unlock()
+
+	releasedCount := 0
+	for i, status := range pm.ps {
+		if status {
+			port := pm.startPort + uint16(i)
+			// Only release if port is actually available (not actively used)
+			if isPortAvailableWithTimeout(port, 50*time.Millisecond) {
+				pm.ps[i] = false
+				releasedCount++
+				pm.log.Debug("Safe force released port", "port", port, "index", i)
+			} else {
+				pm.log.Debug("Port still in use, not releasing", "port", port, "index", i)
+			}
+		}
+	}
+	pm.log.Warn("Safe force released ports", "releasedCount", releasedCount)
+}
+
 // ForceReleaseStuckPorts releases ports that are marked as used but are actually available
 func (pm *PeerManager) ForceReleaseStuckPorts() {
 	pm.lock.Lock()
@@ -422,7 +487,7 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 	target := fmt.Sprintf("/p2p/%s", peerID)
 	pm.log.Debug("Setting up IPFS port forwarding", "addr", addr, "peerID", peerID, "port", portNum)
 	req := pm.ipfs.Request("p2p/forward")
-	resp, err := req.Option("listen-address", addr).Option("target", target).Send(context.Background())
+	resp, err := req.Option("listen-address", addr).Option("target", target).Option("protocol", "/rubix/1.0.0").Send(context.Background())
 	if err != nil {
 		pm.log.Error("failed to setup ipfs port forwarding", "err", err, "addr", addr, "peerID", peerID)
 		pm.releasePeerPort(portNum)
@@ -455,6 +520,10 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 		peerID: peerID,
 		did:    did,
 	}
+
+	// Register the active connection
+	pm.registerActiveConnection(portNum, p)
+
 	return p, nil
 }
 
@@ -507,7 +576,7 @@ func (pm *PeerManager) OpenPeerConnWithPriority(peerID string, did string, appna
 	target := fmt.Sprintf("/p2p/%s", peerID)
 	pm.log.Debug("Setting up IPFS port forwarding", "addr", addr, "peerID", peerID, "port", portNum)
 	req := pm.ipfs.Request("p2p/forward")
-	resp, err := req.Option("listen-address", addr).Option("target", target).Send(context.Background())
+	resp, err := req.Option("listen-address", addr).Option("target", target).Option("protocol", "/rubix/1.0.0").Send(context.Background())
 	if err != nil {
 		pm.log.Error("failed to setup ipfs port forwarding", "err", err, "addr", addr, "peerID", peerID)
 		pm.releasePeerPort(portNum)
@@ -541,6 +610,10 @@ func (pm *PeerManager) OpenPeerConnWithPriority(peerID string, did string, appna
 		peerID: peerID,
 		did:    did,
 	}
+
+	// Register the active connection
+	pm.registerActiveConnection(portNum, p)
+
 	return p, nil
 }
 
@@ -612,13 +685,16 @@ func (pm *PeerManager) UpdateIPFS(newShell *ipfsnode.Shell) {
 
 func (p *Peer) Close() error {
 	if !p.local {
+		// Unregister the active connection first
+		p.pm.unregisterActiveConnection(p.port)
+
 		// Always release the port, regardless of IPFS close success/failure
 		defer p.pm.releasePeerPort(p.port)
 
 		// Close the IPFS port forwarding
 		addr := fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", p.port)
 		req := p.pm.ipfs.Request("p2p/close")
-		resp, err := req.Option("listen-address", addr).Send(context.Background())
+		resp, err := req.Option("listen-address", addr).Option("protocol", "/rubix/1.0.0").Send(context.Background())
 		if err != nil {
 			p.log.Error("failed to close ipfs port forwarding", "err", err)
 			// Don't return error here - we still want to release the port

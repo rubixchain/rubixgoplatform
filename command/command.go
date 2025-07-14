@@ -118,6 +118,7 @@ const (
 	GetPortStatsCmd                string = "port-stats"
 	ForceReleasePortsCmd           string = "force-release-ports"
 	ForceReleaseStuckPortsCmd      string = "force-release-stuck-ports"
+	SafeForceReleasePortsCmd       string = "safe-force-release-ports"
 	GetPortMonitoringStatusCmd     string = "port-monitoring-status"
 )
 
@@ -816,6 +817,8 @@ func Run(args []string) {
 		cmd.forceReleaseStuckPorts()
 	case GetPortMonitoringStatusCmd:
 		cmd.getPortMonitoringStatus()
+	case SafeForceReleasePortsCmd:
+		cmd.safeForceReleasePorts()
 	default:
 		cmd.log.Error("Invalid command")
 	}
@@ -953,5 +956,28 @@ func (cmd *Command) getPortMonitoringStatus() {
 		fmt.Println(string(body))
 	} else {
 		cmd.log.Error("Failed to get port monitoring status", "status", resp.StatusCode)
+	}
+}
+
+func (cmd *Command) safeForceReleasePorts() {
+	c, r, err := cmd.basicClient("POST", "/api/safe-force-release-ports", nil)
+	if err != nil {
+		cmd.log.Error("Failed to create request", "err", err)
+		return
+	}
+
+	resp, err := c.Do(r)
+	if err != nil {
+		cmd.log.Error("Failed to safe force release ports", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println("Safe Port Release Result:")
+		fmt.Println(string(body))
+	} else {
+		cmd.log.Error("Failed to safe force release ports", "status", resp.StatusCode)
 	}
 }

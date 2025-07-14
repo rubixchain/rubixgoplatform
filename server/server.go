@@ -249,6 +249,9 @@ func (s *Server) addPortManagementEndpoints() {
 	// Force release stuck ports (smart cleanup)
 	s.AddRoute("/api/force-release-stuck-ports", "POST", s.AuthHandle(s.handleForceReleaseStuckPorts, false, s.AuthError, true))
 
+	// Force release ports safely (emergency endpoint)
+	s.AddRoute("/api/safe-force-release-ports", "POST", s.AuthHandle(s.safeForceReleasePorts, false, s.AuthError, true))
+
 	// Get port monitoring status
 	s.AddRoute("/api/port-monitoring-status", "GET", s.AuthHandle(s.handleGetPortMonitoringStatus, false, s.AuthError, false))
 }
@@ -269,6 +272,12 @@ func (s *Server) handleForceReleasePorts(req *ensweb.Request) *ensweb.Result {
 func (s *Server) handleForceReleaseStuckPorts(req *ensweb.Request) *ensweb.Result {
 	s.c.ForceReleaseStuckPorts()
 	return s.BasicResponse(req, true, "Stuck ports have been force released", nil)
+}
+
+// safeForceReleasePorts forces release of all ports safely (emergency action)
+func (s *Server) safeForceReleasePorts(req *ensweb.Request) *ensweb.Result {
+	s.c.SafeForceReleaseAllPorts()
+	return s.BasicResponse(req, true, "All ports have been force released safely", nil)
 }
 
 // handleGetPortMonitoringStatus returns whether port monitoring is active
