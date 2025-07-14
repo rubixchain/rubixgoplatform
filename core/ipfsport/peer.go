@@ -6,8 +6,9 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"sync"
 	"time"
+
+	"sync"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
@@ -49,12 +50,13 @@ type PeerManager struct {
 
 type Peer struct {
 	ensweb.Client
-	port   uint16
-	local  bool
-	log    logger.Logger
-	pm     *PeerManager
-	peerID string
-	did    string
+	port     uint16
+	local    bool
+	log      logger.Logger
+	pm       *PeerManager
+	peerID   string
+	did      string
+	protocol string // Store the protocol used for this connection
 }
 
 func (peer Peer) GetPeerID() string {
@@ -486,8 +488,10 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 	addr := fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", portNum)
 	target := fmt.Sprintf("/p2p/%s", peerID)
 	pm.log.Debug("Setting up IPFS port forwarding", "addr", addr, "peerID", peerID, "port", portNum)
-	req := pm.ipfs.Request("p2p/forward")
-	resp, err := req.Option("listen-address", addr).Option("target", target).Option("protocol", "/rubix/1.0.0").Send(context.Background())
+
+	// Use the working syntax with positional arguments and dynamic protocol
+	proto := "/x/" + appname + "/1.0"
+	resp, err := pm.ipfs.Request("p2p/forward", proto, addr, target).Send(context.Background())
 	if err != nil {
 		pm.log.Error("failed to setup ipfs port forwarding", "err", err, "addr", addr, "peerID", peerID)
 		pm.releasePeerPort(portNum)
@@ -512,13 +516,14 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 		return nil, err
 	}
 	p := &Peer{
-		Client: client,
-		port:   portNum,
-		local:  false,
-		log:    pm.log,
-		pm:     pm,
-		peerID: peerID,
-		did:    did,
+		Client:   client,
+		port:     portNum,
+		local:    false,
+		log:      pm.log,
+		pm:       pm,
+		peerID:   peerID,
+		did:      did,
+		protocol: proto, // Store the protocol used for this connection
 	}
 
 	// Register the active connection
@@ -575,8 +580,10 @@ func (pm *PeerManager) OpenPeerConnWithPriority(peerID string, did string, appna
 	addr := fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", portNum)
 	target := fmt.Sprintf("/p2p/%s", peerID)
 	pm.log.Debug("Setting up IPFS port forwarding", "addr", addr, "peerID", peerID, "port", portNum)
-	req := pm.ipfs.Request("p2p/forward")
-	resp, err := req.Option("listen-address", addr).Option("target", target).Option("protocol", "/rubix/1.0.0").Send(context.Background())
+
+	// Use the working syntax with positional arguments and dynamic protocol
+	proto := "/x/" + appname + "/1.0"
+	resp, err := pm.ipfs.Request("p2p/forward", proto, addr, target).Send(context.Background())
 	if err != nil {
 		pm.log.Error("failed to setup ipfs port forwarding", "err", err, "addr", addr, "peerID", peerID)
 		pm.releasePeerPort(portNum)
@@ -602,13 +609,14 @@ func (pm *PeerManager) OpenPeerConnWithPriority(peerID string, did string, appna
 	}
 
 	p := &Peer{
-		Client: client,
-		port:   portNum,
-		local:  false,
-		log:    pm.log,
-		pm:     pm,
-		peerID: peerID,
-		did:    did,
+		Client:   client,
+		port:     portNum,
+		local:    false,
+		log:      pm.log,
+		pm:       pm,
+		peerID:   peerID,
+		did:      did,
+		protocol: proto, // Store the protocol used for this connection
 	}
 
 	// Register the active connection
@@ -693,8 +701,8 @@ func (p *Peer) Close() error {
 
 		// Close the IPFS port forwarding
 		addr := fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", p.port)
-		req := p.pm.ipfs.Request("p2p/close")
-		resp, err := req.Option("listen-address", addr).Option("protocol", "/rubix/1.0.0").Send(context.Background())
+		proto := p.protocol
+		resp, err := p.pm.ipfs.Request("p2p/close", proto, addr).Send(context.Background())
 		if err != nil {
 			p.log.Error("failed to close ipfs port forwarding", "err", err)
 			// Don't return error here - we still want to release the port
