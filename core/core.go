@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -88,6 +89,13 @@ const (
 	MaxPeerConn uint16 = 1000
 )
 
+// Port monitoring thresholds
+const (
+	PortWarningThreshold  = 0.8  // 80% port usage triggers warning
+	PortCriticalThreshold = 0.95 // 95% port usage triggers critical action
+	PortMonitorInterval   = 30 * time.Second
+)
+
 var dbWriteSem = make(chan struct{}, 1)
 
 type Core struct {
@@ -135,6 +143,8 @@ type Core struct {
 	noBalanceQuorumCount int
 	defaultSetup         bool
 	ipfsSem              chan struct{}
+	portMonitorStop      chan struct{} // Channel to stop port monitoring
+	portMonitorRunning   bool
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -375,34 +385,10 @@ func (c *Core) Start() (bool, string) {
 		c.log.Error("failed to start ping port", "err", err)
 		return false, "Failed to start ping port"
 	}
-	//c.w.ReleaseAllLockedTokens()
-	// exp := model.ExploreModel{
-	// 	Cmd:    ExpPeerStatusCmd,
-	// 	PeerID: c.peerID,
-	// 	Status: "On",
-	// }
-	// err = c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	c.log.Error("Failed to publish message to explorer", "err", err)
-	// 	return false, "Failed to publish message to explorer"
-	// }
-	// dt, err := c.w.GetAllDIDs()
-	// if err == nil && len(dt) > 0 {
-	// 	list := make([]string, 0)
-	// 	for _, d := range dt {
-	// 		list = append(list, d.DID)
-	// 	}
-	// 	// exp = model.ExploreModel{
-	// 	// 	Cmd:     ExpDIDPeerMapCmd,
-	// 	// 	PeerID:  c.peerID,
-	// 	// 	DIDList: list,
-	// 	// }
-	// 	// err = c.PublishExplorer(&exp)
-	// 	// if err != nil {
-	// 	// 	c.log.Error("Failed to publish message to explorer", "err", err)
-	// 	// 	return false, "Failed to publish message to explorer"
-	// 	// }
-	// }
+
+	// Start port monitoring after core is started
+	c.StartPortMonitoring()
+
 	return true, "Setup Complete"
 }
 
@@ -412,17 +398,13 @@ func (c *Core) NodeStatus() bool {
 }
 
 func (c *Core) StopCore() {
-	// exp := model.ExploreModel{
-	// 	Cmd:    ExpPeerStatusCmd,
-	// 	PeerID: c.peerID,
-	// 	Status: "Off",
-	// }
-	// err := c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	c.log.Error("Failed to publish explorer model", "err", err)
-	// 	return
-	// }
-	time.Sleep(time.Second)
+	// Stop port monitoring
+	c.StopPortMonitoring()
+
+	// Stop port queue processor
+	if c.pm != nil {
+		c.pm.StopPortQueue()
+	}
 
 	// Stop IPFS recovery manager
 	if c.ipfsRecovery != nil {
@@ -438,23 +420,24 @@ func (c *Core) StopCore() {
 	if c.l != nil {
 		c.l.Shutdown()
 	}
+	c.log.Info("Core stopped")
 }
 
 func (c *Core) CreateTempFolder() (string, error) {
-	folderName := c.cfg.DirPath + "temp/" + uuid.New().String()
-	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
+	folderName := filepath.Join(c.cfg.DirPath, "temp", uuid.New().String())
+	err := os.MkdirAll(folderName, 0755)
 	return folderName, err
 }
 
 func (c *Core) CreateSCTempFolder() (string, error) {
-	folderName := c.cfg.DirPath + "SmartContract/" + uuid.New().String()
-	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
+	folderName := filepath.Join(c.cfg.DirPath, "SmartContract", uuid.New().String())
+	err := os.MkdirAll(folderName, 0755)
 	return folderName, err
 }
 
 func (c *Core) CreateNFTTempFolder() (string, error) {
-	folderName := c.cfg.DirPath + "NFT/" + uuid.New().String()
-	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
+	folderName := filepath.Join(c.cfg.DirPath, "NFT", uuid.New().String())
+	err := os.MkdirAll(folderName, 0755)
 	return folderName, err
 }
 
@@ -477,7 +460,7 @@ func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (
 
 func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error) {
 
-	nftFolderName := c.cfg.DirPath + "NFT/" + nft
+	nftFolderName := filepath.Join(c.cfg.DirPath, "NFT", nft)
 	err := os.Rename(tempFolderPath, nftFolderName)
 	if err != nil {
 		c.log.Error("Unable to rename ", tempFolderPath, " to ", nftFolderName, "error ", err)
@@ -583,111 +566,368 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 
 // Initializes the did in it's corresponding did mode (basic/ lite)
 func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, error) {
-	err := c.FetchDID(didStr)
-	if err != nil {
-		c.log.Error("couldn't fetch did")
-		return nil, err
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		c.log.Debug("SetupForienDID: Attempt", "did", didStr, "attempt", attempt, "maxRetries", maxRetries)
+
+		err := c.FetchDID(didStr)
+		if err != nil {
+			lastErr = err
+			c.log.Error("couldn't fetch did", "did", didStr, "attempt", attempt, "err", err)
+			if attempt == maxRetries {
+				return nil, fmt.Errorf("failed to fetch DID %s after %d attempts: %v", didStr, maxRetries, err)
+			}
+			// Wait a bit before retry
+			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+			continue
+		}
+
+		// Fetching peer's did type
+		peerInfo, err := c.GetPeerDIDInfo(didStr)
+		if err != nil {
+			if peerInfo == nil {
+				c.log.Error("failed to get did type of peer did ", didStr, "error", err, "attempt", attempt)
+				lastErr = err
+				if attempt == maxRetries {
+					return nil, fmt.Errorf("failed to get DID type for %s after %d attempts: %v", didStr, maxRetries, err)
+				}
+				continue
+			}
+			if strings.Contains(err.Error(), "retry") {
+				c.AddPeerDetails(*peerInfo)
+			}
+		}
+		if peerInfo.DIDType == nil || *peerInfo.DIDType == -1 {
+			c.log.Error("failed to get did type of peer did ", didStr, "error", err, "attempt", attempt)
+			lastErr = fmt.Errorf("invalid DID type for %s", didStr)
+			if attempt == maxRetries {
+				return nil, lastErr
+			}
+			continue
+		}
+
+		var dc did.DIDCrypto
+		switch *peerInfo.DIDType {
+		case did.LiteDIDMode:
+			dc = did.InitDIDLite(didStr, c.didDir, nil)
+		case did.BasicDIDMode:
+			dc = did.InitDIDBasic(didStr, c.didDir, nil)
+		case did.StandardDIDMode:
+			dc = did.InitDIDStandard(didStr, c.didDir, nil)
+		case did.WalletDIDMode:
+			dc = did.InitDIDWallet(didStr, c.didDir, nil)
+		case did.ChildDIDMode:
+			dc = did.InitDIDChild(didStr, c.didDir, nil)
+		default:
+			dc = did.InitDIDBasic(didStr, c.didDir, nil)
+		}
+
+		if dc == nil {
+			c.log.Error("Failed to initialize DID", "did", didStr, "type", *peerInfo.DIDType, "attempt", attempt)
+			lastErr = fmt.Errorf("failed to initialize DID %s with type %d", didStr, *peerInfo.DIDType)
+			if attempt == maxRetries {
+				return nil, lastErr
+			}
+			continue
+		}
+
+		c.log.Debug("Successfully initialized DID", "did", didStr, "type", *peerInfo.DIDType)
+		return dc, nil
 	}
 
-	// Fetching peer's did type
-	peerInfo, err := c.GetPeerDIDInfo(didStr)
-	if err != nil {
-		if peerInfo == nil {
-			c.log.Error("failed to get did type of peer did ", didStr, "error", err)
-			return nil, err
-		}
-		if strings.Contains(err.Error(), "retry") {
-			c.AddPeerDetails(*peerInfo)
-		}
-	}
-	if peerInfo.DIDType == nil || *peerInfo.DIDType == -1 {
-		c.log.Error("failed to get did type of peer did ", didStr, "error", err)
-		return nil, err
-	}
-
-	return c.InitialiseDID(didStr, *peerInfo.DIDType)
+	// This should never be reached, but just in case
+	return nil, fmt.Errorf("Failed to setup foreign DID for %s after %d attempts: %v", didStr, maxRetries, lastErr)
 }
 
 // Initializes the quorum in it's corresponding did mode (basic/ lite)
 func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypto, error) {
-	err := c.FetchDID(didStr)
-	if err != nil {
-		return nil, err
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		c.log.Debug("SetupForienDIDQuorum: Attempt", "did", didStr, "attempt", attempt, "maxRetries", maxRetries)
+
+		err := c.FetchDID(didStr)
+		if err != nil {
+			lastErr = err
+			c.log.Error("couldn't fetch did", "did", didStr, "attempt", attempt, "err", err)
+			if attempt == maxRetries {
+				return nil, fmt.Errorf("failed to fetch DID %s after %d attempts: %v", didStr, maxRetries, err)
+			}
+			// Wait a bit before retry
+			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+			continue
+		}
+
+		// Fetching peer's did type
+		peerInfo, err := c.GetPeerDIDInfo(didStr)
+		if err != nil {
+			if peerInfo == nil {
+				c.log.Error("failed to get did type of peer did ", didStr, "error", err, "attempt", attempt)
+				lastErr = err
+				if attempt == maxRetries {
+					return nil, fmt.Errorf("failed to get DID type for %s after %d attempts: %v", didStr, maxRetries, err)
+				}
+				continue
+			}
+			if strings.Contains(err.Error(), "retry") {
+				c.AddPeerDetails(*peerInfo)
+			}
+		}
+		if *peerInfo.DIDType == -1 {
+			c.log.Error("failed to get did type of peer did ", didStr, "error", err, "attempt", attempt)
+			lastErr = fmt.Errorf("invalid DID type for %s", didStr)
+			if attempt == maxRetries {
+				return nil, lastErr
+			}
+			continue
+		}
+
+		switch *peerInfo.DIDType {
+		case did.BasicDIDMode:
+			quorumBasic := did.InitDIDQuorumc(didStr, c.didDir, "")
+			if quorumBasic == nil {
+				c.log.Error("Failed to initialize BasicDIDMode quorum", "did", didStr, "attempt", attempt)
+				lastErr = fmt.Errorf("failed to initialize BasicDIDMode quorum for %s", didStr)
+				if attempt == maxRetries {
+					return nil, lastErr
+				}
+				continue
+			}
+			c.log.Debug("Successfully initialized BasicDIDMode quorum", "did", didStr)
+			return quorumBasic, nil
+
+		case did.LiteDIDMode:
+			quorumLite := did.InitDIDQuorumLite(didStr, c.didDir, "")
+			c.log.Debug("[SetupForienDIDQuorum] Initialized LiteDIDMode for ", didStr, " result=", quorumLite, "attempt", attempt)
+			if quorumLite == nil {
+				c.log.Warn("LiteDIDMode quorum init failed, attempting FetchDID from IPFS", "did", didStr, "attempt", attempt)
+				if err := c.FetchDID(didStr); err != nil {
+					c.log.Error("FetchDID also failed", "did", didStr, "err", err, "attempt", attempt)
+					lastErr = fmt.Errorf("failed to initialize LiteDIDMode quorum for DID: %s (FetchDID failed: %v)", didStr, err)
+					if attempt == maxRetries {
+						return nil, lastErr
+					}
+					continue
+				}
+				quorumLite = did.InitDIDQuorumLite(didStr, c.didDir, "")
+				if quorumLite == nil {
+					c.log.Error("Failed to initialize LiteDIDMode quorum after FetchDID", "did", didStr, "attempt", attempt)
+					lastErr = fmt.Errorf("failed to initialize LiteDIDMode quorum for DID: %s after FetchDID", didStr)
+					if attempt == maxRetries {
+						return nil, lastErr
+					}
+					continue
+				}
+			}
+			c.log.Debug("Successfully initialized LiteDIDMode quorum", "did", didStr)
+			return quorumLite, nil
+
+		default:
+			quorumDefault := did.InitDIDQuorumc(didStr, c.didDir, "")
+			if quorumDefault == nil {
+				c.log.Error("Failed to initialize default quorum", "did", didStr, "attempt", attempt)
+				lastErr = fmt.Errorf("failed to initialize default quorum for %s", didStr)
+				if attempt == maxRetries {
+					return nil, lastErr
+				}
+				continue
+			}
+			c.log.Debug("Successfully initialized default quorum", "did", didStr)
+			return quorumDefault, nil
+		}
 	}
 
-	// Fetching peer's did type
-	peerInfo, err := c.GetPeerDIDInfo(didStr)
-	if err != nil {
-		if peerInfo == nil {
-			c.log.Error("failed to get did type of peer did ", didStr, "error", err)
-			return nil, err
-		}
-		if strings.Contains(err.Error(), "retry") {
-			c.AddPeerDetails(*peerInfo)
-		}
-	}
-	if *peerInfo.DIDType == -1 {
-		c.log.Error("failed to get did type of peer did ", didStr, "error", err)
-		return nil, err
-	}
-
-	switch *peerInfo.DIDType {
-	case did.BasicDIDMode:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	case did.LiteDIDMode:
-		return did.InitDIDQuorumLite(didStr, c.didDir, ""), nil
-	default:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	}
+	// This should never be reached, but just in case
+	return nil, fmt.Errorf("Failed to setup foreign DID quorum for %s after %d attempts: %v", didStr, maxRetries, lastErr)
 }
 
 func (c *Core) FetchDID(did string) error {
-	_, err := os.Stat(c.didDir + did)
-	if err != nil {
-		err = os.MkdirAll(c.didDir+did, os.ModeDir|os.ModePerm)
+	didPath := filepath.Join(c.didDir, did)
+	c.log.Debug("FetchDID: Starting fetch", "did", did, "targetPath", didPath)
+
+	// Try up to 3 times with folder cleanup
+	maxRetries := 3
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		c.log.Debug("FetchDID: Attempt", "did", did, "attempt", attempt, "maxRetries", maxRetries)
+
+		_, err := os.Stat(didPath)
 		if err != nil {
-			c.log.Error("failed to create directory", "err", err)
-			return err
-		}
-		err = c.ipfs.Get(did, c.didDir+did+"/")
-		if err == nil {
-			_, e := os.Stat(c.didDir + did + "/" + didm.MasterDIDFileName)
-			// Fetch the master DID also
-			if e == nil {
-				var rb []byte
-				rb, err = ioutil.ReadFile(c.didDir + did + "/" + didm.MasterDIDFileName)
-				if err == nil {
-					return c.FetchDID(string(rb))
-				}
+			c.log.Debug("FetchDID: Directory does not exist, creating and fetching", "did", did, "path", didPath, "attempt", attempt)
+			err = os.MkdirAll(didPath, 0755) // Use proper permissions for cross-platform
+			if err != nil {
+				c.log.Error("failed to create directory", "err", err, "path", didPath)
+				return err
 			}
 		}
+
+		// Try fetching to the directory - use proper path separator
+		fetchPath := didPath + string(os.PathSeparator)
+		err = c.ipfs.Get(did, fetchPath)
+		if err != nil {
+			c.log.Error("failed to fetch DID from IPFS", "err", err, "did", did, "target", fetchPath, "attempt", attempt)
+			if attempt == maxRetries {
+				return err
+			}
+			// Clean up and retry - use RemoveAll for cross-platform compatibility
+			c.log.Debug("FetchDID: Cleaning up failed directory and retrying", "did", did, "attempt", attempt)
+			if removeErr := os.RemoveAll(didPath); removeErr != nil {
+				c.log.Warn("Failed to remove directory during cleanup", "path", didPath, "err", removeErr)
+			}
+			continue
+		}
+		c.log.Debug("FetchDID: Successfully fetched from IPFS", "did", did, "path", didPath, "attempt", attempt)
+
+		// Check if master DID file exists and fetch it if needed
+		masterDIDPath := filepath.Join(didPath, didm.MasterDIDFileName)
+		_, e := os.Stat(masterDIDPath)
+		if e == nil {
+			c.log.Debug("FetchDID: Found master DID file, fetching master", "did", did, "masterPath", masterDIDPath)
+			var rb []byte
+			rb, err = ioutil.ReadFile(masterDIDPath)
+			if err != nil {
+				c.log.Error("failed to read master DID file", "err", err, "path", masterDIDPath)
+				return err
+			}
+			return c.FetchDID(string(rb))
+		}
+
+		// List all files in the directory for debugging
+		if files, err := ioutil.ReadDir(didPath); err == nil {
+			c.log.Debug("FetchDID: Files in directory", "did", did, "files", func() []string {
+				var fileNames []string
+				for _, f := range files {
+					fileNames = append(fileNames, f.Name())
+				}
+				return fileNames
+			}())
+		} else {
+			c.log.Warn("FetchDID: Could not list directory contents", "did", did, "err", err)
+		}
+
+		// Validate that the DID directory contains required files
+		pubKeyPath := filepath.Join(didPath, didm.PubKeyFileName)
+		if _, err := os.Stat(pubKeyPath); err != nil {
+			c.log.Error("DID directory missing required public key file", "did", did, "path", pubKeyPath, "err", err, "attempt", attempt)
+
+			// Try alternative paths (in case IPFS created different structure)
+			altPaths := []string{
+				filepath.Join(didPath, didm.PubKeyFileName),      // Standard location
+				filepath.Join(didPath, did, didm.PubKeyFileName), // Nested structure
+			}
+
+			foundAtAltPath := false
+			for _, altPath := range altPaths {
+				if _, altErr := os.Stat(altPath); altErr == nil {
+					c.log.Info("Found public key at alternative path", "did", did, "altPath", altPath)
+					// Copy to expected location
+					if copyErr := copyFile(altPath, pubKeyPath); copyErr == nil {
+						c.log.Info("Copied public key to expected location", "did", did, "from", altPath, "to", pubKeyPath)
+						foundAtAltPath = true
+						break
+					} else {
+						c.log.Warn("Failed to copy public key", "did", did, "err", copyErr)
+					}
+				}
+			}
+
+			// If we found and copied the public key, check again
+			if foundAtAltPath {
+				if _, finalErr := os.Stat(pubKeyPath); finalErr == nil {
+					c.log.Debug("Successfully fetched and validated DID", "did", did, "path", didPath)
+					return nil
+				}
+			}
+
+			// If this is not the last attempt, clean up and retry
+			if attempt < maxRetries {
+				c.log.Warn("FetchDID: Public key missing, cleaning up directory and retrying", "did", did, "attempt", attempt)
+				if removeErr := os.RemoveAll(didPath); removeErr != nil {
+					c.log.Warn("Failed to remove directory during cleanup", "path", didPath, "err", removeErr)
+				}
+				continue
+			}
+
+			// Final attempt failed
+			return fmt.Errorf("DID directory missing required public key file for %s after %d attempts (checked paths: %v)", did, maxRetries, append([]string{pubKeyPath}, altPaths...))
+		}
+
+		// Success - public key found
+		c.log.Debug("Successfully fetched and validated DID", "did", did, "path", didPath)
+		return nil
 	}
-	return err
+
+	// This should never be reached, but just in case
+	return fmt.Errorf("Failed to fetch DID %s after %d attempts", did, maxRetries)
+}
+
+// Helper function to copy files with cross-platform compatibility
+func copyFile(src, dst string) error {
+	// Open source file
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file %s: %v", src, err)
+	}
+	defer sourceFile.Close()
+
+	// Get source file info for permissions
+	sourceInfo, err := sourceFile.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get source file info %s: %v", src, err)
+	}
+
+	// Create destination directory if it doesn't exist
+	dstDir := filepath.Dir(dst)
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		return fmt.Errorf("failed to create destination directory %s: %v", dstDir, err)
+	}
+
+	// Create destination file
+	destFile, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, sourceInfo.Mode())
+	if err != nil {
+		return fmt.Errorf("failed to create destination file %s: %v", dst, err)
+	}
+	defer destFile.Close()
+
+	// Copy the file content
+	_, err = io.Copy(destFile, sourceFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file content from %s to %s: %v", src, dst, err)
+	}
+
+	// Ensure the file is written to disk
+	if err := destFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync destination file %s: %v", dst, err)
+	}
+
+	return nil
 }
 
 func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
-	dirPath := c.cfg.DirPath + "NFT/" + nftTokenHash
+	dirPath := filepath.Join(c.cfg.DirPath, "NFT", nftTokenHash)
 	// Check if the directory exists
 	_, err := os.Stat(dirPath)
 	if os.IsNotExist(err) {
 		// If the directory does not exist, create it
-		err = os.MkdirAll(dirPath, os.ModeDir|os.ModePerm)
+		err = os.MkdirAll(dirPath, 0755)
 		if err != nil {
-			c.log.Error("failed to create directory", "err", err)
+			c.log.Error("failed to create directory", "err", err, "path", dirPath)
 			return err
 		}
 	} else if err != nil {
 		// Handle other errors while checking directory existence
-		c.log.Error("failed to check directory existence", "err", err)
+		c.log.Error("failed to check directory existence", "err", err, "path", dirPath)
 		return err
 	}
 	// Fetch NFT data from IPFS and store in the directory
-	err = c.ipfs.Get(nftFolderHash, dirPath)
+	err = c.ipfs.Get(nftFolderHash, dirPath+string(os.PathSeparator))
 	if err != nil {
-		c.log.Error("failed to get NFT from IPFS", "err", err)
+		c.log.Error("failed to get NFT from IPFS", "err", err, "nftFolderHash", nftFolderHash, "path", dirPath)
 		return err
 	}
-	c.log.Info("NFT data fetched successfully from ipfs")
+	c.log.Info("NFT data fetched successfully from ipfs", "nftTokenHash", nftTokenHash, "nftFolderHash", nftFolderHash)
 	return nil
 }
 
@@ -719,3 +959,97 @@ func (c *Core) GetIPFSHealthManager() interface{} {
 // func (c *Core)ConvertContractToBlock(contract *contract.ContractType) *block.Block {
 
 // }
+
+// GetPortUsageStats returns current port usage statistics
+func (c *Core) GetPortUsageStats() map[string]interface{} {
+	return c.pm.GetPortUsageStats()
+}
+
+// ForceReleaseAllPorts forces release of all ports (for emergency situations)
+func (c *Core) ForceReleaseAllPorts() {
+	c.pm.ForceReleaseAllPorts()
+}
+
+// SafeForceReleaseAllPorts safely releases only ports that are actually available (safer for bulk transfers)
+func (c *Core) SafeForceReleaseAllPorts() {
+	c.pm.SafeForceReleaseAllPorts()
+}
+
+// ForceReleaseStuckPorts releases ports that are marked as used but are actually available
+func (c *Core) ForceReleaseStuckPorts() {
+	c.pm.ForceReleaseStuckPorts()
+}
+
+// StartPortMonitoring starts the global port monitoring system
+func (c *Core) StartPortMonitoring() {
+	if c.portMonitorRunning {
+		return
+	}
+
+	c.portMonitorStop = make(chan struct{})
+	c.portMonitorRunning = true
+
+	go c.portMonitor()
+	c.log.Info("Port monitoring started")
+}
+
+// StopPortMonitoring stops the global port monitoring system
+func (c *Core) StopPortMonitoring() {
+	if !c.portMonitorRunning {
+		return
+	}
+
+	close(c.portMonitorStop)
+	c.portMonitorRunning = false
+	c.log.Info("Port monitoring stopped")
+}
+
+// portMonitor runs the periodic port monitoring loop
+func (c *Core) portMonitor() {
+	ticker := time.NewTicker(PortMonitorInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			c.checkPortUsage()
+		case <-c.portMonitorStop:
+			return
+		}
+	}
+}
+
+// checkPortUsage checks current port usage and takes action if needed
+func (c *Core) checkPortUsage() {
+	stats := c.GetPortUsageStats()
+
+	totalPorts := stats["totalPorts"].(int)
+	usedPorts := stats["usedPorts"].(int)
+
+	if totalPorts == 0 {
+		return
+	}
+
+	usageRatio := float64(usedPorts) / float64(totalPorts)
+
+	switch {
+	case usageRatio >= PortCriticalThreshold:
+		c.log.Error("Critical port usage detected - using safe port release",
+			"usageRatio", usageRatio,
+			"usedPorts", usedPorts,
+			"totalPorts", totalPorts)
+		c.SafeForceReleaseAllPorts()
+
+	case usageRatio >= PortWarningThreshold:
+		c.log.Warn("High port usage detected",
+			"usageRatio", usageRatio,
+			"usedPorts", usedPorts,
+			"totalPorts", totalPorts,
+			"availablePorts", stats["availablePorts"])
+	}
+}
+
+// IsPortMonitoringActive returns whether port monitoring is currently running
+func (c *Core) IsPortMonitoringActive() bool {
+	return c.portMonitorRunning
+}

@@ -139,11 +139,67 @@ func (cmd *Command) getFTinfo() {
 		return
 	}
 	if !info.Status {
-		cmd.log.Error("Failed to get FT info of DID " + cmd.did, "message", info.Message)
+		cmd.log.Error("Failed to get FT info of DID "+cmd.did, "message", info.Message)
 	} else if len(info.FTInfo) == 0 {
 		cmd.log.Info("No FTs found for DID " + cmd.did)
 	} else {
 		cmd.log.Info("Successfully got FT information of DID " + cmd.did)
+		var ftNames []string
+		var ftCounts []string
+		var creatorDIDs []string
+		for _, result := range info.FTInfo {
+			ftNames = append(ftNames, result.FTName)
+			ftCounts = append(ftCounts, fmt.Sprintf("%d", result.FTCount))
+			creatorDIDs = append(creatorDIDs, result.CreatorDID)
+		}
+		maxNameLength := 0
+		for _, name := range ftNames {
+			if len(name) > maxNameLength {
+				maxNameLength = len(name)
+			}
+		}
+		for i, name := range ftNames {
+			fmt.Printf("%-*s: %s (CreatorDID: %s)\n", maxNameLength, name, ftCounts[i], creatorDIDs[i])
+		}
+	}
+}
+
+func (cmd *Command) getSpendableFTinfo() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
+
+	// Validate DID format
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+
+	info, err := cmd.c.GetSpendableFTInfo(cmd.did, cmd.ftName, cmd.creatorDID)
+	if strings.Contains(fmt.Sprint(err), "DID does not exist") {
+		cmd.log.Error("Failed to get spendable FT info, DID does not exist")
+		return
+	}
+	if err != nil {
+		cmd.log.Error("Unable to get spendable FT info, Invalid response from the node", "err", err)
+		return
+	}
+	if !info.Status {
+		cmd.log.Error("Failed to get spendable FT info of DID "+cmd.did, "message", info.Message)
+	} else if len(info.FTInfo) == 0 {
+		cmd.log.Info("No spendable FTs (status 17) found for DID " + cmd.did)
+		if cmd.ftName != "" || cmd.creatorDID != "" {
+			cmd.log.Info("No spendable FTs (status 17) found matching the specified filters")
+		}
+	} else {
+		cmd.log.Info("Successfully got spendable FT information (status 17) of DID " + cmd.did)
 		var ftNames []string
 		var ftCounts []string
 		var creatorDIDs []string

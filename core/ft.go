@@ -1740,3 +1740,73 @@ func (c *Core) CreateFTContractAndInitiateCVrTwo(reqId string, ftList []wallet.F
 	c.log.Debug("*******cvr-2 response :", response.Message)
 	return response
 }
+
+// GetSpendableFTInfoByCreatorAndName returns spendable FT tokens (status 17) filtered by creator DID and FT name
+func (c *Core) GetSpendableFTInfoByCreatorAndName(did string, ftName string, creatorDID string) ([]model.FTInfo, error) {
+	if !c.w.IsDIDExist(did) {
+		c.log.Error("DID does not exist")
+		return nil, fmt.Errorf("DID does not exist")
+	}
+
+	var FT []wallet.FTToken
+	var err error
+
+	// Get FTs based on provided filters - ONLY SPENDABLE (status 17)
+	if creatorDID != "" && ftName != "" {
+		// Filter by both creator DID and FT name
+		FT, err = c.w.GetSpendableFTsByNameAndCreatorDID(ftName, did, creatorDID)
+	} else if ftName != "" {
+		// Filter by FT name only
+		FT, err = c.w.GetSpendableFTsByNameAndDID(ftName, did)
+	} else {
+		// No filters or creator DID only - get all spendable FTs and filter
+		allFTs, err := c.w.GetSpendableFTsByDID(did)
+		if err != nil && err.Error() != "no records found" {
+			c.log.Error("Failed to get spendable FT tokens", "err", err)
+			return []model.FTInfo{}, fmt.Errorf("Failed to get spendable FT tokens: %v", err)
+		}
+
+		// Filter by creator DID if specified
+		if creatorDID != "" {
+			for _, ft := range allFTs {
+				if ft.CreatorDID == creatorDID {
+					FT = append(FT, ft)
+				}
+			}
+		} else {
+			FT = allFTs
+		}
+	}
+
+	if err != nil && err.Error() != "no records found" {
+		c.log.Error("Failed to get spendable FT tokens", "err", err)
+		return []model.FTInfo{}, fmt.Errorf("Failed to get spendable FT tokens: %v", err)
+	}
+
+	if len(FT) == 0 {
+		return []model.FTInfo{}, nil
+	}
+
+	// Group by FT name and creator DID
+	ftInfoMap := make(map[string]map[string]int)
+	for _, t := range FT {
+		if ftInfoMap[t.FTName] == nil {
+			ftInfoMap[t.FTName] = make(map[string]int)
+		}
+		ftInfoMap[t.FTName][t.CreatorDID] += 1 // Count individual tokens
+	}
+
+	// Convert to response format
+	info := make([]model.FTInfo, 0)
+	for ftName, creatorCounts := range ftInfoMap {
+		for creatorDID, count := range creatorCounts {
+			info = append(info, model.FTInfo{
+				FTName:     ftName,
+				FTCount:    count,
+				CreatorDID: creatorDID,
+			})
+		}
+	}
+
+	return info, nil
+}

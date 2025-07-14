@@ -62,56 +62,107 @@ func recordFirstError(errPtr *error, err error, once *sync.Once) {
 	})
 }
 
+var (
+	validateSignerMutex sync.Mutex
+	didCache            = make(map[string]did.DIDCrypto)
+	didCacheMutex       sync.RWMutex
+	didCacheTTL         = 5 * time.Minute // Cache DIDs for 5 minutes
+)
+
+// getCachedDID retrieves a DID from cache or fetches it if not cached
+func (c *Core) getCachedDID(signer string, transactionType string) (did.DIDCrypto, error) {
+	didCacheMutex.RLock()
+	if cached, exists := didCache[signer]; exists {
+		didCacheMutex.RUnlock()
+		c.log.Debug("Using cached DID", "signer", signer)
+		return cached, nil
+	}
+	didCacheMutex.RUnlock()
+
+	// Fetch DID and cache it
+	didCacheMutex.Lock()
+	defer didCacheMutex.Unlock()
+
+	// Double-check after acquiring write lock
+	if cached, exists := didCache[signer]; exists {
+		c.log.Debug("Using cached DID (double-check)", "signer", signer)
+		return cached, nil
+	}
+
+	c.log.Debug("Fetching DID for caching", "signer", signer)
+	var dc did.DIDCrypto
+	var err error
+	switch transactionType {
+	case block.TokenGeneratedType, block.TokenBurntType:
+		dc, err = c.SetupForienDID(signer, "")
+	default:
+		dc, err = c.SetupForienDIDQuorum(signer, "")
+	}
+
+	if err != nil {
+		c.log.Error("Failed to setup DID for caching", "signer", signer, "err", err)
+		return nil, err
+	}
+
+	if dc != nil {
+		didCache[signer] = dc
+		// Schedule cache cleanup
+		go func(signerKey string) {
+			time.Sleep(didCacheTTL)
+			didCacheMutex.Lock()
+			delete(didCache, signerKey)
+			didCacheMutex.Unlock()
+			c.log.Debug("Removed DID from cache", "signer", signerKey)
+		}(signer)
+	}
+
+	return dc, nil
+}
+
 func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) (bool, error) {
+	validateSignerMutex.Lock()
+	defer validateSignerMutex.Unlock()
+
+	blockHash, _ := b.GetHash()
+	c.log.Debug("validateSigner called", "selfDID", selfDID, "blockHash", blockHash, "blockPointer", fmt.Sprintf("%p", b))
+
 	signers, err := b.GetSigner()
 	if err != nil {
-		c.log.Error("failed to get signers", "err", err)
+		c.log.Error("failed to get signers", "err", err, "blockHash", blockHash)
 		return false, fmt.Errorf("failed to get signers", "err", err)
 	}
-	c.log.Debug("Signers", signers)
-	for _, signer := range signers {
+	c.log.Debug("Signers", "allSigners", signers, "signerCount", len(signers), "blockHash", blockHash)
+
+	// Set the logger on the block for detailed signature verification logging
+	b.SetLogger(c.log)
+
+	for i, signer := range signers {
+		currentHash, _ := b.GetHash()
+		c.log.Debug("Validating signer", "signer", signer, "transactionType", b.GetTransType(), "signerIndex", fmt.Sprintf("%d/%d", i+1, len(signers)), "blockHash", currentHash)
+
+		// Try to get DID from cache first
 		var dc did.DIDCrypto
-		switch b.GetTransType() {
-		case block.TokenGeneratedType, block.TokenBurntType:
-			dc, err = c.SetupForienDID(signer, selfDID)
-			if err != nil {
-				c.log.Error("failed to setup foreign DID", "err", err)
-				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
-			}
-		default:
-			signerInfo, err := c.GetPeerDIDInfo(signer)
-			if err != nil {
-				if strings.Contains(err.Error(), "retry") {
-					c.AddPeerDetails(*signerInfo)
-				}
-			}
-			if signerInfo.DIDType == nil || *signerInfo.DIDType == -1 {
-				peerDetails, err := c.GetPeerInfo(p, signer)
-				basicDidType := did.BasicDIDMode
-				if err != nil || peerDetails.PeerInfo.DIDType == nil {
-					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
-					if !peerUpdateResult || err != nil {
-						signerInfo.DIDType = &basicDidType
-						c.AddPeerDetails(*signerInfo)
-					}
-				} else {
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
-					if !peerUpdateResult || err != nil {
-						signerInfo.DIDType = &basicDidType
-						c.AddPeerDetails(*signerInfo)
-					}
-				}
-			}
-			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
-			if err != nil {
-				c.log.Error("failed to setup foreign DID quorum", "err", err)
-				return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
-			}
-		}
-		err := b.VerifySignature(dc)
+		var err error
+		dc, err = c.getCachedDID(signer, b.GetTransType())
 		if err != nil {
+			c.log.Error("Failed to get cached DID", "signer", signer, "err", err)
+			return false, fmt.Errorf("failed to get DID for signer %s: %v", signer, err)
+		}
+
+		// Add nil check for dc before using it
+		if dc == nil {
+			c.log.Error("DID is nil for signer", "signer", signer)
+			return false, fmt.Errorf("DID is nil for signer %s", signer)
+		}
+
+		c.log.Debug("About to verify signature", "signer", signer, "signType", dc.GetSignType())
+
+		err = b.VerifySignature(dc)
+		if err != nil {
+			c.log.Error("Signature verification failed", "signer", signer, "err", err, "signType", dc.GetSignType())
+
 			if dc.GetSignType() == did.NlssVersion {
+				c.log.Debug("Retrying with LiteDIDMode due to NLSS signature failure", "signer", signer)
 				peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
 				if !peerUpdateResult || err != nil {
 					liteDID := did.LiteDIDMode
@@ -124,11 +175,19 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 				if err != nil {
 					c.log.Error("failed to setup foreign DID quorum", "err", err)
-					return false, fmt.Errorf("failed to setup foreign DID quorum : %v err: %v", signer, err)
+					return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
 				}
+
+				// Add nil check again after retry
+				if dc == nil {
+					c.log.Error("DID crypto object is still nil after retry", "signer", signer)
+					return false, fmt.Errorf("DID crypto object is nil for signer after retry: %s", signer)
+				}
+
+				c.log.Debug("Retrying signature verification with LiteDIDMode", "signer", signer, "signType", dc.GetSignType())
 				err = b.VerifySignature(dc)
 				if err != nil {
-					c.log.Error("Failed to verify signature", "err", err)
+					c.log.Error("Failed to verify signature after retry", "signer", signer, "err", err)
 					return false, fmt.Errorf("failed to verify signature, err: %v", err)
 				}
 			} else {
@@ -136,7 +195,13 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				return false, fmt.Errorf("failed to verify signature, err: %v", err)
 			}
 		}
+
+		c.log.Debug("Signature verification successful", "signer", signer)
 	}
+
+	finalHash, _ := b.GetHash()
+	c.log.Debug("All signers validated successfully", "totalSigners", len(signers), "initialBlockHash", blockHash, "finalBlockHash", finalHash)
+	c.log.Info("validateSigner returning success", "totalSigners", len(signers), "selfDID", selfDID, "blockHash", finalHash)
 	return true, nil
 }
 
@@ -228,6 +293,8 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 }
 
 func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, quorumDID string, ti contract.TokenInfo, p *ipfsport.Peer, address, receiverAddress string) (error, bool) {
+	c.log.Debug("Validating single token", "token", ti.Token, "blockID", ti.BlockID)
+
 	if ids, err := c.GetDHTddrs(ti.Token); err != nil || len(ids) == 0 {
 		return nil, false // skip token if no DHT entries found
 	}
@@ -279,12 +346,16 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 		return fmt.Errorf("Invalid token chain block for %s", ti.Token), false
 	}
 
+	c.log.Debug("Got latest block for validation", "token", ti.Token, "transactionType", b.GetTransType())
+
 	if b.GetPinningNodeDID() != "" && b.GetOwner() != sc.GetSenderDID() {
 		return fmt.Errorf("invalid token owner: token pinned as service, token %s", ti.Token), false
 	}
 
 	valid, err := c.validateSigner(b, quorumDID, p)
+	c.log.Debug("validateSigner returned", "valid", valid, "err", err, "token", ti.Token, "blockHash", func() string { h, _ := b.GetHash(); return h }())
 	if !valid || err != nil {
+		c.log.Error("Token validation failed", "token", ti.Token, "err", err, "valid", valid)
 		return fmt.Errorf("failed to validate token signer for %s", ti.Token), false
 	}
 
@@ -528,6 +599,147 @@ func (c *Core) validateTokenOwnershipInBatch(cr *ConensusRequest, sc *contract.C
 		return false, fmt.Errorf("failed to sync tokenchain Token: issueType: %v", TokenChainNotSynced), syncIssueTokenArray
 	}
 
+	return true, nil, nil
+}
+
+// BlockValidationResult represents the result of validating a specific block
+type BlockValidationResult struct {
+	BlockHash string
+	Block     *block.Block
+	Tokens    []string // List of tokens that share this block
+	IsValid   bool
+	Error     error
+	SyncIssue bool
+}
+
+// validateTokenOwnershipOptimized groups tokens by their latest block and validates each unique block only once
+func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error, []string) {
+	var ti []contract.TokenInfo
+	var address string
+
+	if cr.Mode == SmartContractDeployMode || cr.Mode == NFTDeployMode {
+		ti = sc.GetCommitedTokensInfo()
+		address = cr.DeployerPeerID + "." + sc.GetDeployerDID()
+	} else {
+		ti = sc.GetTransTokenInfo()
+		address = cr.SenderPeerID + "." + sc.GetSenderDID()
+	}
+
+	p, err := c.getPeer(address)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return false, err, nil
+	}
+	defer p.Close()
+
+	// Step 1: Group tokens by their latest block hash
+	blockGroups := make(map[string]*BlockValidationResult)
+
+	c.log.Debug("Grouping tokens by their latest blocks", "totalTokens", len(ti))
+
+	for _, tokenInfo := range ti {
+		// Get the latest block for this token
+		latestBlock := c.w.GetLatestTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
+		if latestBlock == nil {
+			c.log.Error("Invalid token chain block for token", "token", tokenInfo.Token)
+			return false, fmt.Errorf("invalid token chain block for %s", tokenInfo.Token), nil
+		}
+
+		// Get block hash as the grouping key
+		blockHash, err := latestBlock.GetHash()
+		if err != nil {
+			c.log.Error("Failed to get block hash for token", "token", tokenInfo.Token, "err", err)
+			return false, fmt.Errorf("failed to get block hash for token %s: %v", tokenInfo.Token, err), nil
+		}
+
+		// Group tokens by block hash
+		if result, exists := blockGroups[blockHash]; exists {
+			result.Tokens = append(result.Tokens, tokenInfo.Token)
+		} else {
+			blockGroups[blockHash] = &BlockValidationResult{
+				BlockHash: blockHash,
+				Block:     latestBlock,
+				Tokens:    []string{tokenInfo.Token},
+			}
+		}
+	}
+
+	c.log.Info("Token grouping completed", "totalTokens", len(ti), "uniqueBlocks", len(blockGroups))
+
+	// Log optimization statistics
+	c.logOptimizationStats(len(ti), len(blockGroups))
+
+	// Log grouping statistics
+	for blockHash, result := range blockGroups {
+		c.log.Debug("Block group", "blockHash", blockHash, "tokenCount", len(result.Tokens))
+	}
+
+	// Step 2: Validate each unique block
+	var wg sync.WaitGroup
+	results := make(chan *BlockValidationResult, len(blockGroups))
+
+	// Limit concurrency
+	numCores := runtime.NumCPU()
+	maxWorkers := numCores * 2
+	sem := make(chan struct{}, maxWorkers)
+
+	for _, blockResult := range blockGroups {
+		wg.Add(1)
+		sem <- struct{}{}
+
+		go func(br *BlockValidationResult) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			c.log.Debug("Validating unique block", "blockHash", br.BlockHash, "tokenCount", len(br.Tokens))
+
+			// Validate this block
+			valid, err := c.validateSigner(br.Block, quorumDID, p)
+			blockHash, _ := br.Block.GetHash()
+			c.log.Debug("validateSigner returned (optimized)", "valid", valid, "err", err, "blockHash", blockHash, "tokenCount", len(br.Tokens))
+			br.IsValid = valid
+			br.Error = err
+
+			// Check for sync issues
+			if err != nil && strings.Contains(err.Error(), "syncer block height discrepency") {
+				br.SyncIssue = true
+			}
+
+			results <- br
+		}(blockResult)
+	}
+
+	wg.Wait()
+	close(results)
+
+	// Step 3: Process results and identify failed tokens
+	var syncIssueTokens []string
+	var failedTokens []string
+
+	for result := range results {
+		if !result.IsValid || result.Error != nil {
+			c.log.Error("Block validation failed", "blockHash", result.BlockHash, "error", result.Error, "tokenCount", len(result.Tokens))
+
+			if result.SyncIssue {
+				// All tokens sharing this block have sync issues
+				syncIssueTokens = append(syncIssueTokens, result.Tokens...)
+			} else {
+				// All tokens sharing this block failed validation
+				failedTokens = append(failedTokens, result.Tokens...)
+				// Return immediately on first validation failure
+				return false, fmt.Errorf("failed to validate token signer for block %s: %v", result.BlockHash, result.Error), nil
+			}
+		} else {
+			c.log.Debug("Block validation successful", "blockHash", result.BlockHash, "tokenCount", len(result.Tokens))
+		}
+	}
+
+	// Step 4: Handle sync issues
+	if len(syncIssueTokens) > 0 {
+		return false, fmt.Errorf("failed to sync tokenchain Token: issueType: %v", TokenChainNotSynced), syncIssueTokens
+	}
+
+	c.log.Info("Optimized token validation completed successfully", "totalTokens", len(ti), "uniqueBlocks", len(blockGroups))
 	return true, nil, nil
 }
 
@@ -809,4 +1021,36 @@ func (c *Core) unPinTokenState(ids []string, did string) error {
 		}
 	}
 	return nil
+}
+
+// validateTokenOwnershipWrapper chooses between optimized and regular validation based on configuration
+func (c *Core) validateTokenOwnershipWrapper(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error, []string) {
+	// Check if optimized validation is enabled (you can add this to config later)
+	useOptimizedValidation := true // TODO: Make this configurable
+
+	if useOptimizedValidation {
+		c.log.Debug("Using optimized token validation")
+		return c.validateTokenOwnershipOptimized(cr, sc, quorumDID)
+	} else {
+		c.log.Debug("Using regular token validation")
+		return c.validateTokenOwnership(cr, sc, quorumDID)
+	}
+}
+
+// logOptimizationStats logs statistics about the optimization
+func (c *Core) logOptimizationStats(totalTokens int, uniqueBlocks int) {
+	reduction := float64(totalTokens-uniqueBlocks) / float64(totalTokens) * 100
+	c.log.Info("Token validation optimization stats",
+		"totalTokens", totalTokens,
+		"uniqueBlocks", uniqueBlocks,
+		"reductionPercent", fmt.Sprintf("%.2f%%", reduction),
+		"reducedValidations", totalTokens-uniqueBlocks)
+
+	if reduction > 50 {
+		c.log.Info("🚀 Significant optimization achieved!", "reduction", fmt.Sprintf("%.2f%%", reduction))
+	} else if reduction > 20 {
+		c.log.Info("⚡ Moderate optimization achieved", "reduction", fmt.Sprintf("%.2f%%", reduction))
+	} else {
+		c.log.Info("📊 Minimal optimization", "reduction", fmt.Sprintf("%.2f%%", reduction))
+	}
 }

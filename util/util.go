@@ -347,10 +347,10 @@ func DirCopy(src string, dst string) error {
 
 // SanitizeDirPath will check for proper directory path
 func SanitizeDirPath(path string) string {
-	if strings.HasSuffix(path, "/") || strings.HasSuffix(path, "\\") {
+	if strings.HasSuffix(path, string(os.PathSeparator)) {
 		return path
 	} else {
-		return path + "/"
+		return path + string(os.PathSeparator)
 	}
 }
 
@@ -425,7 +425,7 @@ func BytesToBitstream(data []byte) string {
 }
 
 func CreateDir(dirPath string) error {
-	return os.MkdirAll(dirPath, os.ModeDir|os.ModePerm)
+	return os.MkdirAll(dirPath, 0755)
 }
 
 func ParseJsonFile(fileName string, m interface{}) error {
