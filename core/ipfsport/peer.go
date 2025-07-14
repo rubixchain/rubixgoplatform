@@ -702,6 +702,7 @@ func (p *Peer) Close() error {
 		// Close the IPFS port forwarding
 		addr := fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", p.port)
 		proto := p.protocol
+		p.log.Debug("Closing IPFS port forwarding", "proto", proto, "addr", addr)
 		resp, err := p.pm.ipfs.Request("p2p/close", proto, addr).Send(context.Background())
 		if err != nil {
 			p.log.Error("failed to close ipfs port forwarding", "err", err)
