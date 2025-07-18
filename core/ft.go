@@ -1015,7 +1015,7 @@ func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicRespon
 
 	// 6. Validate all FTs before any state changes
 	var parentTokenID string
-	var parentRBTSet bool
+	// var parentRBTSet bool
 
 	for _, ft := range FTsToBurn {
 		// Get genesis block of FT
@@ -1035,21 +1035,21 @@ func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicRespon
 		}
 
 		// Get and validate parent RBT
-		currentParentTokenID, _, err := ftGenesisBlock.GetParentDetials(ft.TokenID)
-		if err != nil {
-			c.log.Error("Failed to get parent details")
-			resp.Message = "Failed to get parent details"
-			return resp
-		}
+		// currentParentTokenID, _, err := ftGenesisBlock.GetParentDetials(ft.TokenID)
+		// if err != nil {
+		// 	c.log.Error("Failed to get parent details")
+		// 	resp.Message = "Failed to get parent details"
+		// 	return resp
+		// }
 
-		if !parentRBTSet {
-			parentTokenID = currentParentTokenID
-			parentRBTSet = true
-		} else if currentParentTokenID != parentTokenID {
-			c.log.Error("Mismatch in parent RBTs among FTs")
-			resp.Message = "All FTs must originate from the same parent RBT"
-			return resp
-		}
+		// if !parentRBTSet {
+		// 	parentTokenID = currentParentTokenID
+		// 	parentRBTSet = true
+		// } else if currentParentTokenID != parentTokenID {
+		// 	c.log.Error("Mismatch in parent RBTs among FTs")
+		// 	resp.Message = "All FTs must originate from the same parent RBT"
+		// 	return resp
+		// }
 
 		// Validate RBT lock status when FromRBT is true
 		if burnReq.FromRBT {
