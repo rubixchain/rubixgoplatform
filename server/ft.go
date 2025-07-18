@@ -30,7 +30,7 @@ type TransferFTReqSwaggoInput struct {
 	Password        string  `json:"password"`
 	CreatorDID      string  `json:"creatorDID"`
 	IsHighValueFT   bool    `json:"is_high_value"`
-	FTTransferValue float64 `json:"ft_transfer_value"`
+	FTTransferValue float64 `json:"ft_value"`
 }
 
 // ShowAccount godoc

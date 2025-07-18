@@ -1852,7 +1852,7 @@ const docTemplate = `{
                 "ft_name": {
                     "type": "string"
                 },
-                "ft_transfer_value": {
+                "ft_value": {
                     "type": "number"
                 },
                 "is_high_value": {
