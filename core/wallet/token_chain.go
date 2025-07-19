@@ -337,36 +337,41 @@ func (w *Wallet) getGenesisBlock(tt int, token string) *block.Block {
 func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 	db := w.getChainDB(tt)
 	if db == nil {
-		w.log.Error("Failed to get latest block, invalid token type")
+		w.log.Error("Failed to get latest block, invalid token type", "token", token, "tokenType", tt)
 		return nil
 	}
+	w.log.Debug("Attempting to fetch latest block", "token", token, "tokenType", tt)
 	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
 	defer iter.Release()
 	var err error
 	if iter.Last() {
 		key := string(iter.Key())
+		w.log.Debug("Found latest block key", "token", token, "tokenType", tt, "key", key)
 		if isOldKey(key) {
 			err = w.updateNewKey(tt, token)
 			if err != nil {
-				w.log.Error("Failed to update new key", "err", err)
+				w.log.Error("Failed to update new key", "token", token, "tokenType", tt, "err", err)
 				return nil
 			}
-			w.log.Debug("Keys are updated successfully")
+			w.log.Debug("Keys are updated successfully", "token", token, "tokenType", tt)
 			return w.getLatestBlock(tt, token)
 		}
 		v := iter.Value()
 		blk := make([]byte, len(v))
 		copy(blk, v)
 		if string(blk[0:2]) == ReferenceType {
+			w.log.Debug("Block is a reference type, fetching raw block", "token", token, "tokenType", tt, "key", key)
 			blk, err = w.getRawBlock(db, blk)
 			if err != nil {
-				w.log.Error("Failed to get reference block", "err", err)
+				w.log.Error("Failed to get reference block", "token", token, "tokenType", tt, "key", key, "err", err)
 				return nil
 			}
 		}
+		w.log.Debug("Returning latest block for token", "token", token, "tokenType", tt, "key", key)
 		b := block.InitBlock(blk, nil)
 		return b
 	}
+	w.log.Error("No blocks found for token", "token", token, "tokenType", tt)
 	return nil
 }
 
