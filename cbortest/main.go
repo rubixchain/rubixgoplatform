@@ -1,53 +1,35 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/json"
 	"fmt"
+	"os"
 
-	"github.com/fxamacker/cbor"
+	// Try these import paths depending on your build environment:
+	// "rubixgoplatform/block"
+	// "rubixgoplatform/core/wallet"
+	"block"
+	"core/wallet"
 )
 
 func main() {
-	person := make(map[string]interface{})
-	contacts := make(map[string]string)
-	contacts["Token"] = "Testing"
-	contacts["Test"] = "Hello"
-	person["contacts"] = contacts
-	person["name"] = "Murali"
-	person["Age"] = 43
-
-	jb, err := json.Marshal(person)
+	w, err := wallet.NewWallet("/home/rubix/Rubix/Node/creator/api_config.json")
 	if err != nil {
-		fmt.Println("error:", err)
-		return
+		fmt.Println("Failed to initialize wallet:", err)
+		os.Exit(1)
 	}
-	fmt.Printf("%x\n", jb)
-	b, err := cbor.Marshal(person, cbor.CanonicalEncOptions())
-	if err != nil {
-		fmt.Println("error:", err)
-		return
-	}
-	fmt.Printf("%x\n", b)
-	wrapper := make(map[string]interface{})
-	wrapper["block"] = b
-	h := sha256.New()
-	h.Write(b)
-	wrapper["sig"] = h.Sum(nil)
 
-	wb, err := cbor.Marshal(wrapper, cbor.CanonicalEncOptions())
-	if err != nil {
-		fmt.Println("error:", err)
-		return
-	}
-	fmt.Printf("%x\n", wb)
+	token := "TRI"
+	tokenType := 10 // FTTokenType
 
-	var wm map[string]interface{}
-
-	err = cbor.Unmarshal(wb, &wm)
+	blocks, _, err := w.GetAllTokenBlocks(token, tokenType, "")
 	if err != nil {
-		fmt.Println("error:", err)
-		return
+		fmt.Println("Error fetching token blocks:", err)
+		os.Exit(1)
 	}
-	fmt.Printf("Unwrap : %v\n", wm)
+	fmt.Printf("Found %d blocks for token %s:\n", len(blocks), token)
+	for i, blk := range blocks {
+		b := block.InitBlock(blk, nil)
+		id, _ := b.GetBlockID(token)
+		fmt.Printf("Block %d: ID=%s\n", i, id)
+	}
 }
