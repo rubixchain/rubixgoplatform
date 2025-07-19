@@ -452,11 +452,29 @@ func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []Tok
 	//get the latest blockId i.e. latest token state
 	block := c.w.GetLatestTokenBlock(tokenId, tokenType)
 	if block == nil {
-		c.log.Error("Invalid token chain block, Block is nil", tokenId, "  ", tokenType)
-		result.Error = fmt.Errorf("Invalid token chain block,Block is nil")
-		result.Message = "Invalid token chain block"
-		resultArray[index] = result
-		return
+		c.log.Warn("Block missing, attempting to sync from sender", "token", tokenId, "tokenType", tokenType)
+		if len(quorumList) > 0 {
+			senderAddr := quorumList[0] // Assumes first in list is sender
+			p, err := c.getPeer(senderAddr)
+			if err != nil {
+				c.log.Error("Failed to get sender peer for sync", "token", tokenId, "tokenType", tokenType, "err", err)
+			} else {
+				err := c.syncTokenChainFrom(p, "", tokenId, tokenType)
+				if err != nil {
+					c.log.Error("Failed to sync missing block from sender", "token", tokenId, "tokenType", tokenType, "err", err)
+				} else {
+					c.log.Info("Successfully synced missing block from sender", "token", tokenId, "tokenType", tokenType)
+				}
+				block = c.w.GetLatestTokenBlock(tokenId, tokenType)
+			}
+		}
+		if block == nil {
+			c.log.Error("Invalid token chain block, Block is nil", tokenId, "  ", tokenType)
+			result.Error = fmt.Errorf("Invalid token chain block,Block is nil")
+			result.Message = "Invalid token chain block"
+			resultArray[index] = result
+			return
+		}
 	}
 	blockId, err := block.GetBlockID(tokenId)
 	if err != nil {
