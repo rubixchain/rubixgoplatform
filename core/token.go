@@ -282,23 +282,29 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	var tr TCBSyncRequest
 
+	c.log.Info("[syncTokenChain] Incoming sync request")
+
 	// Parse request
 	if err := c.l.ParseJSON(req, &tr); err != nil {
-		c.log.Warn("Failed to parse request", "error", err)
+		c.log.Warn("[syncTokenChain] Failed to parse request", "error", err)
 		return c.l.RenderJSON(req, &TCBSyncReply{
 			Status:  false,
 			Message: "Failed to parse request",
 		}, http.StatusBadRequest)
 	}
+	c.log.Info("[syncTokenChain] Parsed request", "token", tr.Token, "tokenType", tr.TokenType, "blockID", tr.BlockID)
+
 	var tcbr TCBSyncReply
 	tcbr.Message = "Got all blocks"
 
 	// Fetch token blocks
 	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
+	c.log.Info("[syncTokenChain] GetAllTokenBlocks result", "token", tr.Token, "tokenType", tr.TokenType, "blockID", tr.BlockID, "num_blocks", len(blks), "err", err)
 	if err != nil {
 		blks, nextID, err = c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, "")
+		c.log.Info("[syncTokenChain] Retried GetAllTokenBlocks with empty blockID", "token", tr.Token, "tokenType", tr.TokenType, "num_blocks", len(blks), "err", err)
 		if err != nil {
-			c.log.Error("Error fetching token blocks", "error", err)
+			c.log.Error("[syncTokenChain] Error fetching token blocks", "error", err)
 		} else {
 			tcbr.Message = "Sent all blocks"
 		}
@@ -316,6 +322,7 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	// }
 
 	// Success response
+	c.log.Info("[syncTokenChain] Responding", "status", true, "message", tcbr.Message, "num_blocks", len(blks), "nextBlockID", nextID)
 	return c.l.RenderJSON(req, &TCBSyncReply{
 		Status:      true,
 		Message:     tcbr.Message,
@@ -482,12 +489,6 @@ func (c *Core) GetTokenStatus(getTokenStatusReq *model.GetTokenStatusReq) (model
 }
 
 func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string, tokenType int) error {
-	// p, err := c.getPeer(address)
-	// if err != nil {
-	// 	c.log.Error("Failed to get peer", "err", err)
-	// 	return err
-	// }
-	// defer p.Close()
 	var err error
 	var blkHeight uint64
 	blk := c.w.GetLatestTokenBlock(token, tokenType)
@@ -520,26 +521,10 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		BlockID:   blkID,
 	}
 
-	// if tokenType == c.TokenType(RBTString) || tokenType == c.TokenType(PartString) {
-	// 	syncReq.BlockHeight = blkHeight
-	// 	// sync only latest blcok of the token chain for the transaction
-	// 	err = c.syncGenesisAndLatestBlockFrom(p, syncReq)
-	// 	if err != nil {
-	// 		c.log.Error("failed to sync latest block, err ", err)
-	// 		return err
-	// 	}
-	// 	// update sync status to incomplete
-	// 	err = c.w.UpdateTokenSyncStatus(syncReq.Token, wallet.SyncIncomplete)
-	// 	if err != nil {
-	// 		if !strings.Contains(err.Error(), "no records found") {
-	// 			c.log.Error("failed to update token sync status as incomplete, token ", token)
-	// 		}
-	// 	}
-	// } else {
-	// in case of FTs, and NFTs
 	for {
 		var trep TCBSyncReply
 		err = p.SendJSONRequest("POST", APISyncTokenChain, nil, &syncReq, &trep, false)
+		c.log.Info("[syncTokenChainFrom] Response from sender", "token", token, "tokenType", tokenType, "blockID", blkID, "status", trep.Status, "message", trep.Message, "num_blocks", len(trep.TCBlock), "nextBlockID", trep.NextBlockID, "err", err)
 		if err != nil {
 			c.log.Error("Failed to sync token chain block", "err", err)
 			return err
@@ -551,11 +536,9 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		if strings.Contains(trep.Message, "Sent all blocks") {
 			diffVar := int(blkHeight) - len(trep.TCBlock)
 			if diffVar > 1 {
-				// Quorum is ahead of sender by more than 1 block — not allowed
 				c.log.Error("Block height discrepancy too large")
 				return fmt.Errorf("sync failed: block height discrepancy too large (diff: %d)", diffVar)
 			} else {
-				// Get syncer latest token block hash
 				syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
 				syncerLatestBlkHash, err := syncerLatestBlk.GetHash()
 				if err != nil {
@@ -563,7 +546,6 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 					return err
 				}
 
-				// Get DID owner latest token block hash
 				didOwnerAllTknBlks, _, err := c.w.GetAllTokenBlocks(token, tokenType, "")
 				didOwnerBlock := block.InitBlock(didOwnerAllTknBlks[len(trep.TCBlock)-1], nil)
 				didOwnerLatestBlkHash, err := didOwnerBlock.GetHash()
@@ -572,7 +554,6 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 					return err
 				}
 
-				// Compare both block hashes
 				if strings.Contains(syncerLatestBlkHash, didOwnerLatestBlkHash) {
 					syncerLatestBlkID, err := syncerLatestBlk.GetBlockID(token)
 					if err != nil {
@@ -599,9 +580,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 			break
 		}
 		syncReq.BlockID = trep.NextBlockID
-
 	}
-	// }
 	return nil
 }
 
