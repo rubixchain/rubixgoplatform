@@ -653,7 +653,10 @@ func (w *Wallet) GetTokenBlock(token string, tokenType int, blockID string) ([]b
 
 // GetAllTokenBlocks get the tokecn chain blocks
 func (w *Wallet) GetAllTokenBlocks(token string, tokenType int, blockID string) ([][]byte, string, error) {
-	return w.getAllBlocks(tokenType, token, blockID)
+	w.log.Info("[GetAllTokenBlocks] Called", "token", token, "tokenType", tokenType, "blockID", blockID)
+	blks, nextID, err := w.getAllBlocks(tokenType, token, blockID)
+	w.log.Info("[GetAllTokenBlocks] Result", "token", token, "tokenType", tokenType, "blockID", blockID, "num_blocks", len(blks), "nextBlockID", nextID, "err", err)
+	return blks, nextID, err
 }
 
 // GetLatestTokenBlock get latest token block from the storage
