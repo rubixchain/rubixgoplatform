@@ -634,6 +634,10 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 
 			AllTokens[i] = tokenDetail
 		}
+		ftValue := req.FTCount
+		if req.IsHighValueFT {
+			ftValue = int(req.FTTransferValue)
+		}
 
 		eTrans := &ExplorerFTTrans{
 			FTBlockHash:     AllTokens,
@@ -641,7 +645,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			SenderDID:       did,
 			ReceiverDID:     rdid,
 			FTName:          req.FTName,
-			FTTransferCount: req.FTCount,
+			FTTransferCount: ftValue,
 			Network:         req.QuorumType,
 			FTSymbol:        "N/A",
 			Comments:        req.Comment,
