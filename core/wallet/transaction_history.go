@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -24,6 +25,32 @@ func (w *Wallet) AddTransactionHistory(td *model.TransactionDetails) error {
 	} else {
 		w.log.Info("Transaction history added", "transaction_id", td.TransactionID)
 	}
+	return nil
+}
+
+// AddFTTransactionTokens stores FT token metadata for a transaction
+func (w *Wallet) AddFTTransactionTokens(transactionID string, creatorDID string, ftName string, tokenCount int, direction string) error {
+	ftTxToken := &model.FTTransactionToken{
+		TransactionID: transactionID,
+		CreatorDID:    creatorDID,
+		FTName:        ftName,
+		TokenCount:    tokenCount,
+		Direction:     direction,
+	}
+	
+	err := w.s.Write(FTTransactionTokenStorage, ftTxToken)
+	if err != nil {
+		// Check if it's a table doesn't exist error
+		if strings.Contains(err.Error(), "no such table") {
+			w.log.Warn("FT transaction token table doesn't exist, skipping metadata storage", "err", err)
+			// Don't fail the transaction for backward compatibility
+			return nil
+		}
+		w.log.Error("Failed to store FT transaction token metadata", "err", err)
+		// Still don't fail the transaction, just log the error
+		return nil
+	}
+	
 	return nil
 }
 
@@ -134,8 +161,8 @@ func (w *Wallet) GetAllFTTransactionDetailsByDID(did string) ([]model.Transactio
 		return []model.TransactionDetails{}, nil
 	}
 
-	// Get token summaries for all transactions
-	tokenSummaryMap, err := w.getFTTokenSummariesGroupedByTransactionID()
+	// Get token summaries from both current tokens and transaction metadata
+	tokenSummaryMap, err := w.getFTTokenSummariesForAllTransactions()
 	if err != nil {
 		w.log.Error("Failed to retrieve FT token summaries", "error", err)
 		return nil, err
@@ -166,8 +193,8 @@ func (w *Wallet) GetFTTransactionByReceiver(receiver string) ([]model.Transactio
 		return []model.TransactionDetails{}, nil
 	}
 
-	// Get token summaries for all transactions
-	tokenSummaryMap, err := w.getFTTokenSummariesGroupedByTransactionID()
+	// Get token summaries from both current tokens and transaction metadata
+	tokenSummaryMap, err := w.getFTTokenSummariesForAllTransactions()
 	if err != nil {
 		w.log.Error("Failed to retrieve FT token summaries", "error", err)
 		return nil, err
@@ -199,8 +226,8 @@ func (w *Wallet) GetFTTransactionBySender(sender string) ([]model.TransactionDet
 		return []model.TransactionDetails{}, nil
 	}
 
-	// Get token summaries for all transactions
-	tokenSummaryMap, err := w.getFTTokenSummariesGroupedByTransactionID()
+	// Get token summaries from both current tokens and transaction metadata
+	tokenSummaryMap, err := w.getFTTokenSummariesForAllTransactions()
 	if err != nil {
 		w.log.Error("Failed to retrieve FT token summaries", "error", err)
 		return nil, err
@@ -268,4 +295,60 @@ func (w *Wallet) getFTTokenSummariesGroupedByTransactionID() (map[string][]model
 	}
 
 	return finalResult, nil
+}
+
+// getFTTokenSummariesForAllTransactions retrieves token summaries for all transactions
+// including both current tokens and historical transaction metadata
+func (w *Wallet) getFTTokenSummariesForAllTransactions() (map[string][]model.FTTokenSummary, error) {
+	// First get current tokens
+	currentTokens, err := w.getFTTokenSummariesGroupedByTransactionID()
+	if err != nil {
+		return nil, err
+	}
+	
+	// Then try to get historical transaction token data
+	// This handles backward compatibility - if table doesn't exist, we just use current tokens
+	var ftTransactionTokens []model.FTTransactionToken
+	err = w.s.Read(FTTransactionTokenStorage, &ftTransactionTokens, "1 = 1")
+	if err != nil {
+		// If it's just "no records found" or table doesn't exist, continue with current tokens
+		if err.Error() == "no records found" || strings.Contains(err.Error(), "no such table") {
+			w.log.Debug("No FT transaction token history available", "error", err)
+			// For backward compatibility, return current tokens only
+			return currentTokens, nil
+		}
+		// For other errors, log but don't fail
+		w.log.Warn("Failed to read FT transaction tokens, using current tokens only", "error", err)
+		return currentTokens, nil
+	}
+	
+	// Merge historical data with current tokens
+	for _, token := range ftTransactionTokens {
+		if _, exists := currentTokens[token.TransactionID]; !exists {
+			currentTokens[token.TransactionID] = []model.FTTokenSummary{}
+		}
+		
+		// Check if this token summary already exists
+		found := false
+		for i, summary := range currentTokens[token.TransactionID] {
+			if summary.CreatorDID == token.CreatorDID && summary.FTName == token.FTName {
+				// Update count if direction is "sent" (to avoid double counting)
+				if token.Direction == "sent" {
+					currentTokens[token.TransactionID][i].Count = token.TokenCount
+				}
+				found = true
+				break
+			}
+		}
+		
+		if !found {
+			currentTokens[token.TransactionID] = append(currentTokens[token.TransactionID], model.FTTokenSummary{
+				CreatorDID: token.CreatorDID,
+				FTName:     token.FTName,
+				Count:      token.TokenCount,
+			})
+		}
+	}
+	
+	return currentTokens, nil
 }

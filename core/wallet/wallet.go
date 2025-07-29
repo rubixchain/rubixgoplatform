@@ -20,6 +20,7 @@ const (
 	DIDStorage                     string = "DIDTable"
 	DIDPeerStorage                 string = "DIDPeerTable"
 	TransactionStorage             string = "TransactionHistory"
+	FTTransactionTokenStorage      string = "FTTransactionTokens"
 	TokensArrayStorage             string = "TokensTransferred"
 	TokenProvider                  string = "TokenProviderTable"
 	TokenChainStorage              string = "tokenchainstorage"
@@ -158,6 +159,10 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	err = w.s.Init(FTStorage, &FT{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize FT storage", "err", err)
+	}
+	err = w.s.Init(FTTransactionTokenStorage, &model.FTTransactionToken{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize FT transaction token storage", "err", err)
 	}
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)

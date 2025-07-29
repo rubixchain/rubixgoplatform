@@ -100,6 +100,8 @@ const (
 	APIGetFTTxnByDID                    string = "/api/get-ft-txn-by-did"
 	APIUpdateTokenStatus                string = "/api/update-token-status"
 	APIGetTokenStatus                   string = "/api/get-token-status"
+	APIMigrateFTTransactions            string = "/api/migrate-ft-transactions"
+	APIGetFTMigrationStatus             string = "/api/get-ft-migration-status"
 )
 
 // jwt.RegisteredClaims

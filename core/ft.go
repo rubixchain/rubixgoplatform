@@ -714,6 +714,12 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			resp.Message = errMsg
 			return
 		}
+		
+		// Store FT token metadata for sent transactions
+		if err := c.w.AddFTTransactionTokens(td.TransactionID, creatorDID, req.FTName, req.FTCount, "sent"); err != nil {
+			c.log.Error("Failed to store FT transaction token metadata", "err", err)
+			// Don't fail the transaction, just log the error
+		}
 		AllTokens := make([]AllToken, len(FTsForTxn))
 		for i := range FTsForTxn {
 			tokenDetail := AllToken{}
@@ -926,8 +932,7 @@ func (c *Core) UnlockFTs() error {
 
 // Helper to check config flag
 func (c *Core) IsAsyncFTResponse() bool {
-	return true
-	//return c.cfg.CfgData.AsyncFTResponse
+	return c.cfg.CfgData.AsyncFTResponse
 }
 
 // FixAllFTTokensWithPeerIDAsCreator fixes all FT tokens that have peer ID as CreatorDID
