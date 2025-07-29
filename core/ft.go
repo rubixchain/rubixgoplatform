@@ -432,18 +432,18 @@ func (c *Core) InitiateFTTransfer(reqID string, req *model.TransferFTReq) {
 func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
-	
+
 	// Track overall FT transaction performance
 	var txErr error
 	defer func() {
 		c.TrackOperation("tx.ft_transfer.total", map[string]interface{}{
-			"sender": req.Sender,
+			"sender":   req.Sender,
 			"receiver": req.Receiver,
 			"ft_count": req.FTCount,
-			"ft_name": req.FTName,
+			"ft_name":  req.FTName,
 		})(txErr)
 	}()
-	
+
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -568,7 +568,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			return resp
 		}
 	}
-	
+
 	receiverPeerID, err := c.getPeer(req.Receiver)
 	if err != nil {
 		resp.Message = "Failed to get receiver peer, " + err.Error()
@@ -579,7 +579,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	// Use optimized locking for large FT transfers
 	var TokenInfo []contract.TokenInfo
 	var lockingErr error
-	
+
 	if c.shouldUseOptimizedFTLocking(req.FTCount) {
 		c.log.Info("Using optimized FT locking for large transfer", "ft_count", req.FTCount)
 		TokenInfo, lockingErr = c.OptimizedFTTransferLocking(FTsForTxn, did, req.FTCount)
@@ -622,7 +622,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			TokenInfo = append(TokenInfo, ti)
 		}
 	}
-	
+
 	// Extract token IDs for later use
 	FTTokenIDs := make([]string, 0)
 	for i := range FTsForTxn {
@@ -926,7 +926,8 @@ func (c *Core) UnlockFTs() error {
 
 // Helper to check config flag
 func (c *Core) IsAsyncFTResponse() bool {
-	return c.cfg.CfgData.AsyncFTResponse
+	return true
+	//return c.cfg.CfgData.AsyncFTResponse
 }
 
 // FixAllFTTokensWithPeerIDAsCreator fixes all FT tokens that have peer ID as CreatorDID
