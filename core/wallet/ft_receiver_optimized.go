@@ -190,7 +190,7 @@ func (w *Wallet) OptimizedFTTokensReceived(did string, ti []contract.TokenInfo, 
 			CreatorDID:     FTOwner,
 			FTName:         ftInfo.FTName,
 			DID:            did,
-			TokenStatus:    TokenIsFree,
+			TokenStatus:    TokenIsPending,
 			TransactionID:  b.GetTid(),
 			TokenStateHash: tokenHashMap[tokenInfo.Token],
 		}
@@ -238,7 +238,7 @@ func (w *Wallet) OptimizedFTTokensReceived(did string, ti []contract.TokenInfo, 
 		// Update token status
 		FTInfo.FTName = ftInfo.FTName
 		FTInfo.DID = did
-		FTInfo.TokenStatus = TokenIsFree
+		FTInfo.TokenStatus = TokenIsPending
 		FTInfo.TransactionID = b.GetTid()
 		FTInfo.TokenStateHash = tokenHashMap[tokenInfo.Token]
 

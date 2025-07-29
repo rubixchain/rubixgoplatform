@@ -640,7 +640,7 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 			CreatorDID:     ftOwner,
 			FTName:         ftInfo.FTName,
 			DID:            did,
-			TokenStatus:    TokenIsFree,
+			TokenStatus:    TokenIsPending,
 			TransactionID:  b.GetTid(),
 			TokenStateHash: hashResult.Hash,
 		}
@@ -693,7 +693,7 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 			
 			ftEntry.FTName = ftInfo.FTName
 			ftEntry.DID = did
-			ftEntry.TokenStatus = TokenIsFree
+			ftEntry.TokenStatus = TokenIsPending
 			ftEntry.TransactionID = b.GetTid()
 			ftEntry.TokenStateHash = hashResult.Hash
 			
