@@ -187,12 +187,12 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 
 	c.log.Debug("Validating token ownership for RBT Consensus")
 	validateTokenOwnershipVar, err, _ := c.validateTokenOwnershipWrapper(cr, sc, did)
-	
+
 	// Log progress: 1st phase complete (ownership validation)
 	if len(ti) > 50 {
 		c.log.Info("Progress: Token ownership validation", "phase", "1/3", "status", "completed", "tokens", len(ti))
 	}
-	
+
 	if err != nil {
 		validateTokenOwnershipErrorString := fmt.Sprint(err)
 		if strings.Contains(validateTokenOwnershipErrorString, "parent token is not in burnt stage") {
@@ -229,12 +229,12 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	*/
 
 	c.log.Debug("Validating token state for RBT Consensus")
-	
+
 	// Log progress: 2nd phase starting (token state validation)
 	if len(ti) > 50 {
 		c.log.Info("Progress: Token state validation", "phase", "2/3", "status", "starting", "tokens", len(ti))
 	}
-	
+
 	tokenStateCheckResult := make([]TokenStateCheckResult, len(ti))
 	c.log.Debug("entering validation to check if token state is exhausted, ti len", len(ti))
 
@@ -306,16 +306,16 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	if len(ti) > 50 {
 		c.log.Info("Progress: Token state validation", "phase", "2/3", "status", "completed", "tokens", len(ti))
 	}
-	
+
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
 	sender := cr.SenderPeerID + "." + sc.GetSenderDID()
 	receiver := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
-	
+
 	// Log progress: 3rd phase starting (pinning)
 	if len(ti) > 50 {
 		c.log.Info("Progress: Token pinning", "phase", "3/3", "status", "starting", "tokens", len(ti))
 	}
-	
+
 	// For large RBT transactions in trusted networks, use async pinning
 	if len(ti) > 100 && c.cfg.CfgData.TrustedNetwork {
 		c.log.Info("Using async pinning for large RBT transaction",
@@ -337,7 +337,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 			crep.Message = "Error submitting pin job: " + err1.Error()
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		
+
 		c.log.Info("Async pin job submitted successfully",
 			"transaction_id", cr.TransactionID,
 			"tokens", len(ti))
@@ -1047,7 +1047,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		validTokens++
 		// Don't log for each token to reduce noise
 	}
-	
+
 	c.log.Info("Token state validation completed",
 		"total_tokens", len(tokenStateCheckResult),
 		"valid", validTokens,

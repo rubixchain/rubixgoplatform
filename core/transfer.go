@@ -183,15 +183,15 @@ func getConsensusRequest(consensusRequestType int, senderPeerID string, receiver
 func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
-	
+
 	// Track overall transaction performance
 	var txErr error
 	defer func() {
 		c.TrackOperation("tx.rbt_transfer.total", map[string]interface{}{
-			"sender": req.Sender,
+			"sender":   req.Sender,
 			"receiver": req.Receiver,
-			"amount": req.TokenCount,
-			"type": req.Type,
+			"amount":   req.TokenCount,
+			"type":     req.Type,
 		})(txErr)
 	}()
 
@@ -415,6 +415,34 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		td, _, pds, consError := c.initiateConsensus(cr, sc, dc)
 		if consError != nil {
 			resp.Message = fmt.Sprintf("Consensus failed " + consError.Error())
+			tokens := sc.GetTransTokenInfo()
+			for _, token := range tokens {
+				if token.Token == "" {
+					continue
+				}
+				exitsingToken := &wallet.Token{}
+				ReadFTErr := c.s.Read(wallet.TokenStorage, exitsingToken, "token_id=?", token.Token)
+				if ReadFTErr != nil {
+					c.log.Error("Failed to read token", "token", token.Token, "err", ReadFTErr)
+					resp.Message = "Failed to read token to update token status "
+					resp.Status = false
+					resultChan <- resp
+					return
+				}
+
+				if exitsingToken.TokenStatus == wallet.TokenIsLocked {
+					exitsingToken.TokenStatus = wallet.TokenIsFree
+					updateFTErr := c.s.Update(wallet.TokenStorage, exitsingToken, "token_id=?", token.Token)
+					if updateFTErr != nil {
+						c.log.Error("Failed to update token status", "token", token.Token, "err", updateFTErr)
+						resp.Message = "Failed to update token status"
+						resp.Status = false
+						resultChan <- resp
+						return
+					}
+				}
+			}
+			c.UpdateUserInfo([]string{senderDID})
 			resp.Status = false
 			resultChan <- resp
 			return
@@ -466,7 +494,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			}
 		}
 		c.ec.ExplorerRBTTransaction(etrans)
-
+		c.UpdateUserInfo([]string{senderDID})
 		// Send final transaction completion response if not already timed out
 		select {
 		case resultChan <- resp:
@@ -740,4 +768,36 @@ func extractQuorumDID(quorumList []string) []string {
 		}
 	}
 	return quorumListDID
+}
+
+func (c *Core) UnlockRBTs() error {
+	lockedRBTs, err := c.w.GetLockedRBTs()
+	if err != nil {
+		c.log.Error("Failed to get locked FTs", "err", err)
+		return err
+	}
+
+	for _, token := range lockedRBTs {
+		if token.TokenID == "" {
+			continue
+		}
+
+		token.TokenStatus = wallet.TokenIsFree
+
+		// First, delete the token
+		err := c.s.Delete(wallet.TokenStorage, &wallet.Token{}, "token_id=?", token.TokenID)
+		if err != nil {
+			c.log.Error("Failed to delete token", "token_id", token.TokenID, "err", err)
+			continue
+		}
+
+		// Then, re-insert the same token — this moves it to the bottom (new rowid)
+		err = c.s.Write(wallet.TokenStorage, &token)
+		if err != nil {
+			c.log.Error("Failed to re-insert token", "token_id", token.TokenID, "err", err)
+			continue
+		}
+	}
+	c.log.Info("Unlocked tokens")
+	return nil
 }

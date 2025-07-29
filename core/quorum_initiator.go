@@ -406,11 +406,11 @@ func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
 func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
 	// Track overall consensus time
 	defer c.TrackOperation("tx.rbt_transfer.consensus", map[string]interface{}{
-		"mode": cr.Mode,
-		"quorum_count": len(cr.QuorumList),
+		"mode":           cr.Mode,
+		"quorum_count":   len(cr.QuorumList),
 		"transaction_id": cr.TransactionID,
 	})(nil)
-	
+
 	cs := ConsensusStatus{
 		Credit: CreditScore{
 			Credit: make([]CreditSignature, 0),
@@ -626,7 +626,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	nb, err := c.pledgeQuorumToken(cr, sc, tid, dc)
 	c.TrackOperation("tx.rbt_transfer.pledge", map[string]interface{}{
 		"transaction_id": tid,
-		"duration_ms": time.Since(pledgeStart).Milliseconds(),
+		"duration_ms":    time.Since(pledgeStart).Milliseconds(),
 	})(err)
 	if err != nil {
 		c.log.Error("Failed to pledge token", "err", err)
@@ -683,8 +683,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		c.TrackOperation("tx.rbt_transfer.commit", map[string]interface{}{
 			"transaction_id": tid,
-			"token_count": len(ti),
-			"parallel": c.cfg.CfgData.TrustedNetwork && len(ti) > 100,
+			"token_count":    len(ti),
+			"parallel":       c.cfg.CfgData.TrustedNetwork && len(ti) > 100,
 		})(pledgeFinalityError)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
@@ -793,7 +793,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = c.sendTokenConfirmation(receiverAddr, tid, ti, tkn.RBTTokenType)
 		if err != nil {
 			// Log error but don't fail the transaction - tokens are already committed
-			c.log.Error("Failed to send token confirmation to receiver", 
+			c.log.Error("Failed to send token confirmation to receiver",
 				"receiver", receiverAddr,
 				"transaction_id", tid,
 				"error", err)
@@ -894,7 +894,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, nil, err
 		}
-		
+
 		// Skip unpinning if senderPeerID and receiverPeerID are same, as reciever
 		// already pinned it
 		if cr.SenderPeerID != c.peerID {
@@ -923,7 +923,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Status:          true,
 			Epoch:           int64(cr.TransactionEpoch),
 		}
-
 
 		go func() {
 			err = c.initiateUnpledgingProcess(cr, td.TransactionID, td.Epoch)
@@ -973,8 +972,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		c.TrackOperation("tx.rbt_transfer.commit", map[string]interface{}{
 			"transaction_id": tid,
-			"token_count": len(ti),
-			"parallel": c.cfg.CfgData.TrustedNetwork && len(ti) > 100,
+			"token_count":    len(ti),
+			"parallel":       c.cfg.CfgData.TrustedNetwork && len(ti) > 100,
 		})(pledgeFinalityError)
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
@@ -1076,7 +1075,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = c.sendTokenConfirmation(receiverAddr, tid, ti, tkn.FTTokenType)
 		if err != nil {
 			// Log error but don't fail the transaction - tokens are already committed
-			c.log.Error("Failed to send FT token confirmation to receiver", 
+			c.log.Error("Failed to send FT token confirmation to receiver",
 				"receiver", receiverAddr,
 				"transaction_id", tid,
 				"error", err)

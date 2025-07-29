@@ -34,7 +34,7 @@ const (
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
 	TokenIsBurntForFT
-	TokenIsPending // Tokens received but not yet confirmed by consensus finality
+	TokenIsPending                // Tokens received but not yet confirmed by consensus finality
 	QuorumPledgedForThisToken int = 20
 )
 const (
@@ -739,7 +739,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		w.log.Info("Using optimized token receiver with batch downloads", "token_count", len(ti))
 		return w.OptimizedTokensReceived(did, ti, b, senderPeerId, receiverPeerId, pinningServiceMode, ipfsShell)
 	}
-	
+
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
@@ -858,7 +858,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			// Fall back to synchronous processing
 			goto syncProcessing
 		}
-		w.log.Info("Provider details submitted for async processing", 
+		w.log.Info("Provider details submitted for async processing",
 			"transaction_id", b.GetTid(),
 			"token_count", len(providerMaps))
 		return updatedtokenhashes, nil
@@ -882,21 +882,21 @@ syncProcessing:
 func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, ipfsShell *ipfsnode.Shell, ftInfo FTToken) ([]string, error) {
 	// For very large FT transfers, use parallel processing without locks
 	if len(ti) > 100 {
-		w.log.Info("Using parallel FT receiver without serialized locks", 
+		w.log.Info("Using parallel FT receiver without serialized locks",
 			"ft_count", len(ti),
 			"ft_name", ftInfo.FTName)
 		parallelReceiver := NewParallelFTReceiver(w)
 		return parallelReceiver.ParallelFTTokensReceived(did, ti, b, senderPeerId, receiverPeerId, ipfsShell, ftInfo)
 	}
-	
+
 	// For large FT transfers, use optimized processing with batch downloads
 	if len(ti) > 50 {
-		w.log.Info("Using optimized FT receiver with batch downloads", 
+		w.log.Info("Using optimized FT receiver with batch downloads",
 			"ft_count", len(ti),
 			"ft_name", ftInfo.FTName)
 		return w.OptimizedFTTokensReceived(did, ti, b, senderPeerId, receiverPeerId, ipfsShell, ftInfo)
 	}
-	
+
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
@@ -1004,7 +1004,7 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 			// Fall back to synchronous processing
 			goto ftSyncProcessing
 		}
-		w.log.Info("FT provider details submitted for async processing", 
+		w.log.Info("FT provider details submitted for async processing",
 			"transaction_id", b.GetTid(),
 			"token_count", len(providerMaps))
 		return updatedtokenhashes, nil
@@ -1369,4 +1369,18 @@ func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 		}
 	}
 	return ftTokens, nil
+}
+
+func (w *Wallet) GetLockedRBTs() ([]Token, error) {
+	var tokens []Token
+	err := w.s.Read(TokenStorage, &tokens, "token_status = ?", TokenIsLocked)
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			return []Token{}, nil
+		} else {
+			w.log.Error("Failed to get locked RBTs", "err", err)
+			return nil, err
+		}
+	}
+	return tokens, nil
 }
