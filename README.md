@@ -19,6 +19,31 @@ This README provides comprehensive documentation of the platform’s command-lin
 - [CLI Commands](#cli-commands)
 - [API Reference](#api-reference)
 
+## 🧰 Prerequisites (Running Rubix Node)
+
+To run a **Rubix node**, you can either use the latest [release binary](https://github.com/rubixchain/rubixgoplatform/releases) or build it from source.
+
+### 📦 Required Tools (for Build from Source)
+
+| Tool                      | Purpose                                              |
+|---------------------------|------------------------------------------------------|
+| **Go 1.20+**              | Required to build the `rubixgoplatform` binary via `make` |
+| **Make**                  | Automates the build process                          |
+| **IPFS Binary (v0.21.0)** | Used for decentralized storage                       |
+| **Git**                   | To clone the Rubix repo                              |
+
+---
+
+### ⚙️ Quick Setup (Build from Source)
+
+```bash
+git clone https://github.com/rubixchain/rubixgoplatform.git
+cd rubixgoplatform
+
+# Build the binary
+make build
+```
+
 ## CLI Commands
 
 ### Basic Commands
