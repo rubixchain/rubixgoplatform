@@ -1,39 +1,23 @@
+<p align="center">
+  <img src="Rubix_logo.png" alt="Your Organization Logo" width="150"/>
+</p>
+
+<h1 align="center">RUBIX</h1>
+
+<p align="center">
+  <b>Empowering decentralized systems</b>
+</p>
+
+---
 # Rubix Go Platform
 
-A comprehensive blockchain platform with command-line interface and RESTful APIs for managing DIDs, tokens, smart contracts, and NFTs.
+Welcome to the RubixGoPlatform !!!
+This README provides comprehensive documentation of the platform’s command-line interface (CLI) tools alongside RESTful API endpoints, enabling developers and operators to easily interact with the Rubix blockchain node and its services.
 
 ## Table of Contents
 
-- [Installation & Setup](#installation--setup)
-- [Quick Start](#quick-start)
 - [CLI Commands](#cli-commands)
 - [API Reference](#api-reference)
-- [Examples](#examples)
-- [Troubleshooting](#troubleshooting)
-
-## Installation & Setup
-
-### Prerequisites
-- Go 1.18 or higher
-- Required dependencies (add specific requirements)
-
-### Installation
-```bash
-# Installation instructions
-```
-
-## Quick Start
-
-```bash
-# Start the Rubix node
-./rubixgoplatform run -p node1 -n 0 -s -testNet
-
-# Create a DID
-./rubixgoplatform create-did
-
-# Check node status
-curl http://localhost:20000/api/node-status
-```
 
 ## CLI Commands
 
@@ -41,7 +25,7 @@ curl http://localhost:20000/api/node-status
 
 #### Version & Help
 ```bash
-# Get tool version
+# Get executable version
 ./rubixgoplatform -v
 
 # Get help
