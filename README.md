@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="Rubix_logo.png" alt="Your Organization Logo" width="150"/>
+  <img src="Rubix_logo.png" alt="Your Organization Logo" width="300"/>
 </p>
 
-<h1 align="center">RUBIX</h1>
+<h1 align="center">RUBIX NETWORKING</h1>
 
 <p align="center">
-  <b>Empowering decentralized systems</b>
+  <b>An L1 monolithic blockchain protocol</b>
 </p>
 
 ---
@@ -16,869 +16,1469 @@ This README provides comprehensive documentation of the platform’s command-lin
 
 ## Table of Contents
 
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Quick Setup](#quick-setup)
 - [CLI Commands](#cli-commands)
-- [API Reference](#api-reference)
-
-## 🧰 Prerequisites (Running Rubix Node)
-
-To run a **Rubix node**, you can either use the latest [release binary](https://github.com/rubixchain/rubixgoplatform/releases) or build it from source.
-
-### 📦 Required Tools (for Build from Source)
-
-| Tool                      | Purpose                                              |
-|---------------------------|------------------------------------------------------|
-| **Go 1.20+**              | Required to build the `rubixgoplatform` binary via `make` |
-| **Make**                  | Automates the build process                          |
-| **IPFS Binary (v0.21.0)** | Used for decentralized storage                       |
-| **Git**                   | To clone the Rubix repo                              |
+  - [Basic Commands](#basic-commands)
+  - [Node Management](#node-management)
+  - [Bootstrap Management](#bootstrap-management)
+  - [DID Management](#did-management)
+  - [Quorum Management](#quorum-management)
+  - [Token Management](#token-management)
+  - [Token Chain Operations](#token-chain-operations)
+  - [FT Operations](#ft-operations)
+  - [NFT Operations](#nft-operations)
+  - [Smart Contract Operations](#smart-contract-operations)
+  - [Explorer Management](#explorer-management)
+  - [Peer Management](#peer-management)
+  - [Token Status & Monitoring](#token-status--monitoring)
+  - [Transaction Management](#transaction-management)
+  - [Migration & Recovery](#migration--recovery)
+- [Support and Community](#support-and-community)
+- [Version Compatibility](#version-compatibility)
 
 ---
 
-### ⚙️ Quick Setup (Build from Source)
+## Overview
+
+The **Rubix Go Platform** provides a high-performance blockchain node for the Rubix network, offering a powerful CLI to manage nodes, peers, and bootstrap configurations. Built with Go, it ensures reliability and scalability for decentralized applications and network operations.
+
+---
+
+## Prerequisites
+
+To run a **Rubix node**, you can use the latest [release binary](https://github.com/rubixchain/rubixgoplatform/releases) or build from source. The following tools are required for building from source:
+
+| Tool                      | Version       | Purpose                                              |
+|---------------------------|---------------|------------------------------------------------------|
+| **Go**                    | 1.20+         | Build the `rubixgoplatform` binary via `make`        |
+| **Make**                  | Latest        | Automates the build process                          |
+| **IPFS Binary**           | v0.21.0       | Enables decentralized storage                        |
+| **Git**                   | Latest        | Clones the Rubix repository                          |
+| **Test Swarm Key**        | Latest        | (`testswarm.key`) Required to join the Rubix testnet |
+| **Swarm Key**             | Latest        | (`swarm.key`) Required to join the Rubix Mainnet     |
+
+
+---
+
+## Quick Setup
+
+To build and run a Rubix node from source:
+
+### Clone the repository
 
 ```bash
 git clone https://github.com/rubixchain/rubixgoplatform.git
 cd rubixgoplatform
-
-# Build the binary
-make build
 ```
+
+### Build the binary
+
+```bash
+# For mac:
+ make compile-mac
+
+# For linux:
+ make compile-linux
+
+# For windows:
+ make compile-windows
+
+# Remove existing binary:
+ make clean
+```
+- Find the binary file in respective OS folder
+
+- Add the IPFS binary file to the respective OS folder
+
+- Move the `testswarm.key`/`swarm.key` from root folder(rubixgoplatform) to respective OS folder
+
+---
 
 ## CLI Commands
 
 ### Basic Commands
 
-#### Version & Help
-```bash
-# Get executable version
-./rubixgoplatform -v
+#### Version
 
-# Get help
+Display the version of the Rubix Go Platform executable.
+
+```bash
+./rubixgoplatform -v
+```
+
+**Description:** Retrieves the current version of the Rubix Go Platform.
+
+**Options:**
+- `-v`: Display the executable version.
+
+---
+
+#### Help
+
+Display help information for available CLI commands and options.
+
+```bash
 ./rubixgoplatform -h
 ```
+
+**Description:** Shows a list of available commands and their usage.
+
+**Options:**
+- `-h`: Show help information of commands.
+
+---
 
 ### Node Management
 
 #### Run Node
-Start the Rubix blockchain node.
+
+Start a Rubix blockchain node.
 
 ```bash
-./rubixgoplatform run [OPTIONS]
+./rubixgoplatform run -p <node-name> -n <node-number> -s -testNet
 ```
+
+**Description:** Initializes and runs the Rubix node, enabling core blockchain functionality.
 
 **Options:**
-- `-n uint` - Node number
-- `-p string` - Working directory path (default "./")
-- `-s` - Start the core
-- `-testNet` - Run as test net
-- `-testNetKey string` - Test net key (default "testswarm.key")
-
-**Example:**
-```bash
-./rubixgoplatform run -p node1 -n 0 -s -testNet
-```
+- `-n uint`: Node number.
+- `-p string`: Working directory path (default: "./").
+- `-s`: Start the core.
+- `-testNet`: Run as test network.
+- `-testNetKey string`: Test network key (default: "testswarm.key").
 
 **Related API:** `POST /api/start`
 
+---
+
 #### Shutdown Node
-Shutdown the Rubix node.
+
+Shut down the Rubix node.
 
 ```bash
-./rubixgoplatform shutdown
+./rubixgoplatform shutdown -port <port-number>
 ```
+
+**Description:** Gracefully terminates the Rubix node.
+
+**Options:**
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/shutdown`
 
-#### Ping Peer
-Test connectivity with network peers.
+---
+
+#### Get Peer ID
+
+Retrieve the node's peer ID.
 
 ```bash
-./rubixgoplatform ping [OPTIONS]
+./rubixgoplatform get-peer-id -port <port-number>
 ```
+
+**Description:** Fetches the unique peer ID of the running node.
 
 **Options:**
-- `-addr string` - Server/Host Address (default "localhost")
-- `-peerID string` - Peer ID
-- `-port string` - Server/Host port (default "20000")
+- `-port string`: Server/Host port (default: "20000").
 
-**Example:**
+**Related API:** `GET /api/get-peer-id`
+
+---
+
+#### Ping Peer
+
+Test connectivity with a specific peer in the Rubix network.
+
 ```bash
-./rubixgoplatform ping -peerID 12D3KooWKr8dEQiLXuKacxDCZiHePVEMpgjxk19C3QozuUVQcQHA -port 20000
+./rubixgoplatform ping -peerID <peer-id> -port <port-number>
 ```
+
+**Description:** Pings a peer to verify network connectivity.
+
+**Options:**
+- `-addr string`: Server/Host address (default: "localhost").
+- `-peerID string`: Peer ID.
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/ping`
 
-#### Get Peer ID
-Get the node's peer ID.
-
-```bash
-./rubixgoplatform get-peer-id [OPTIONS]
-```
-
-**Related API:** `GET /api/get-peer-id`
+---
 
 ### Bootstrap Management
 
 #### Add Bootstrap
-Add bootstrap peers to the network.
+
+Add bootstrap peers to the Rubix node.
 
 ```bash
-./rubixgoplatform add-bootstrap [OPTIONS]
+./rubixgoplatform add-bootstrap -peers <bootstarp-peer-address> -port <port-number>
 ```
+
+**Description:** Adds bootstrap peers to facilitate network discovery and connectivity.
 
 **Options:**
-- `-addr string` - Server/Host Address (default "localhost")
-- `-peers string` - Bootstrap peers (comma-separated for multiple)
-- `-port string` - Server/Host port (default "20000")
-
-**Example:**
-```bash
-./rubixgoplatform add-bootstrap -peers /ip4/103.60.213.76/tcp/4001/p2p/QmR1VH6SsEN1wf4EmstxXtNMvR35KEetbBetiGWWKWavJ6
-```
+- `-addr string`: Server/Host address (default: "localhost").
+- `-peers string`: Bootstrap peers (comma-separated for multiple peers).
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/add-bootstrap`
 
+---
+
 #### Remove Bootstrap
-Remove specific bootstrap peers.
+
+Remove specific bootstrap peers from the node.
 
 ```bash
-./rubixgoplatform remove-bootstrap [OPTIONS]
+./rubixgoplatform remove-bootstrap -peers <bootstarp-peer-address> -port <port-number>
 ```
 
+**Description:** Removes specified bootstrap peers from the node configuration.
+
 **Options:**
-- `-addr string` - Server/Host Address (default "localhost")
-- `-peers string` - Bootstrap peers to remove (comma-separated)
-- `-port string` - Server/Host port (default "20000")
+- `-addr string`: Server/Host address (default: "localhost").
+- `-peers string`: Bootstrap peers to remove (comma-separated).
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/remove-bootstrap`
 
+---
+
 #### Remove All Bootstrap
+
 Remove all bootstrap peers from the node.
 
 ```bash
-./rubixgoplatform remove-all-bootstrap [OPTIONS]
+./rubixgoplatform remove-all-bootstrap -port <port-number>
 ```
+
+**Description:** Clears all configured bootstrap peers.
+
+**Options:**
+- `-addr string`: Server/Host address (default: "localhost").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/remove-all-bootstrap`
 
+---
+
 #### Get All Bootstrap
-List all bootstrap peers.
+
+List all configured bootstrap peers.
 
 ```bash
-./rubixgoplatform get-all-bootstrap [OPTIONS]
+./rubixgoplatform get-all-bootstrap -port <port-number>
 ```
 
+**Description:** Retrieves a list of all bootstrap peers configured on the node.
+
+**Options:**
+- `-addr string`: Server/Host address (default: "localhost").
+- `-port string`: Server/Host port (default: "20000").
+
 **Related API:** `GET /api/get-all-bootstrap`
+
+---
 
 ### DID Management
 
 #### Create DID
-Create a new Decentralized Identifier.
+
+Create a new Decentralized Identifier (DID).
 
 ```bash
-./rubixgoplatform create-did [OPTIONS]
+./rubixgoplatform create-did -didType <did-type> -port <port-number>
 ```
+
+**Description:** Generates a new DID for use in the Rubix network.
 
 **Options:**
-- `-port string` - Server/Host port (default "20000")
-- `-didType int` - DID type: 0=Basic, 1=Standard, 2=Wallet, 3=Child, 4=Light (default 0)
-- `-didSecret string` - DID secret (default "My DID Secret")
-- `-privPWD string` - Private key password (default "mypassword")
-- `-quorumPWD string` - Quorum key password (default "mypassword")
-- `-imgFile string` - Image file for DID creation - must be 256x256 PNG (default "image.png")
-- `-didImgFile string` - DID image file name (default "did.png")
-- `-privImgFile string` - Private share image file name (default "pvtShare.png")
-- `-pubImgFile string` - Public share image file name (default "pubShare.png")
-- `-privKeyFile string` - Private key file name (default "pvtKey.pem")
-- `-pubKeyFile string` - Public key file name (default "pubKey.pem")
-- `-mnemonicKeyFile string` - Mnemonic key file (default "mnemonic.txt")
-- `-ChildPath int` - BIP Child Path (default 0)
-- `-fp` - Force password entry in terminal
-
-**Example:**
-```bash
-./rubixgoplatform create-did -didType 1 -didSecret "My Secure DID" -fp
-```
+- `-port string`: Server/Host port (default: "20000").
+- `-didType int`: DID type (0=Basic, 1=Standard, 2=Wallet, 3=Child, 4=Light; default: 0).
+- `-didSecret string`: DID secret (default: "My DID Secret").
+- `-privPWD string`: Private key password (default: "mypassword").
+- `-quorumPWD string`: Quorum key password (default: "mypassword").
+- `-imgFile string`: Image file for DID creation (must be 256x256 PNG; default: "image.png").
+- `-didImgFile string`: DID image file name (default: "did.png").
+- `-privImgFile string`: Private share image file name (default: "pvtShare.png").
+- `-pubImgFile string`: Public share image file name (default: "pubShare.png").
+- `-privKeyFile string`: Private key file name (default: "pvtKey.pem").
+- `-pubKeyFile string`: Public key file name (default: "pubKey.pem").
+- `-mnemonicKeyFile string`: Mnemonic key file (default: "mnemonic.txt").
+- `-ChildPath int`: BIP Child Path (default: 0).
+- `-fp`: Force password entry in terminal.
 
 **Related API:** `POST /api/createdid`
 
+---
+
 #### Create DID from Public Key
+
 Create a DID from an existing public key.
 
 ```bash
-./rubixgoplatform create-did-from-pubkey [OPTIONS]
+./rubixgoplatform create-did-from-pubkey
 ```
+
+**Description:** Generates a DID using a provided public key.
 
 **Related API:** `POST /api/request-did-for-pubkey`
 
+---
+
 #### Get All DIDs
+
 List all DIDs on the node.
 
 ```bash
-./rubixgoplatform get-all-did [OPTIONS]
+./rubixgoplatform get-all-did -port <port-number>
 ```
+
+**Description:** Retrieves a list of all DIDs configured on the node.
+
+**Options:**
+- `-addr string`: Server/Host address (default: "localhost").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/getalldid`
 
+---
+
 #### Register DID
-Register DID & PeerID mapping on the network.
+
+Register a DID and PeerID mapping on the network.
 
 ```bash
-./rubixgoplatform register-did [OPTIONS]
+./rubixgoplatform register-did -did <did-address> -port <port-number>
 ```
 
+**Description:** Registers a DID with its associated PeerID on the Rubix network.
+
 **Options:**
-- `-did string` - DID address
+- `-did string`: DID address.
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/register-did`
 
+---
+
 #### Setup DID
-Setup DID configuration.
+
+Configure DID settings.
 
 ```bash
-./rubixgoplatform setup-did [OPTIONS]
+./rubixgoplatform setup-did
 ```
 
+**Description:** Sets up configuration for a DID on the node.
+
 **Related API:** `POST /api/setup-did`
+
+---
 
 ### Quorum Management
 
 #### Add Quorum
-Add quorum list to the node.
+
+Add a quorum list to the node.
 
 ```bash
-./rubixgoplatform add-quorum [OPTIONS]
+./rubixgoplatform add-quorum -quorumList <quorumlist-json-file-name> -port <port-number>
 ```
 
+**Description:** Configures a quorum list for the node.
+
 **Options:**
-- `-quorumList string` - Quorum list file name (default "quorumlist.json")
+- `-quorumList string`: Quorum list file name (default: "quorumlist.json").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/addquorum`
 
+---
+
 #### Setup Quorum
-Setup quorum with private key password.
+
+Set up quorum with private key password.
 
 ```bash
-./rubixgoplatform setup-quorum [OPTIONS]
+./rubixgoplatform setup-quorum -did <did-address> -port <port-number>
 ```
 
+**Description:** Configures quorum settings with specified passwords.
+
 **Options:**
-- `-quorumPWD string` - Quorum key password (default "mypassword")
-- `-privPWD string` - Private key password (default "mypassword")
-- `-fp` - Force password entry in terminal
+- `-did string`: DID address.
+- `-port string`: Server/Host port (default: "20000").
+- `-quorumPWD string`: Quorum key password (default: "mypassword").
+- `-privPWD string`: Private key password (default: "mypassword").
+- `-fp`: Force password entry in terminal.
 
 **Related API:** `POST /api/setup-quorum`
 
+---
+
 #### Get All Quorum
+
 List all quorum configurations.
 
 ```bash
-./rubixgoplatform get-all-quorum
+./rubixgoplatform get-all-quorum -port <port-number>
 ```
+
+**Description:** Retrieves all quorum configurations on the node.
+
+**Options:**
+- `-addr string`: Server/Host address (default: "localhost").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/getallquorum`
 
+---
+
 #### Remove All Quorum
+
 Remove all quorum configurations.
 
 ```bash
-./rubixgoplatform remove-all-quorum
+./rubixgoplatform remove-all-quorum -port <port-number>
 ```
+
+**Description:** Clears all quorum configurations from the node.
+
+**Options:**
+- `-addr string`: Server/Host address (default: "localhost").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/removeallquorum`
 
+---
+
 #### Check Quorum Status
+
 Check the status of quorum configuration.
 
 ```bash
-./rubixgoplatform check-quorum-status [OPTIONS]
+./rubixgoplatform check-quorum-status -quorumAddr <quorum-did-address> -port <port-number>
 ```
 
+**Description:** Verifies the status of the quorum configuration.
+
+**Options:**
+- `-addr string`: Server/Host address (default: "localhost").
+- `-port string`: Server/Host port (default: "20000").
+- `-quorumAddr string`: Quorum DID address.
+
 **Related API:** `GET /api/check-quorum-status`
+
+---
 
 ### Token Management
 
 #### Generate Test RBT
+
 Generate test RBT tokens on the node.
 
 ```bash
-./rubixgoplatform generate-test-rbt [OPTIONS]
+./rubixgoplatform generate-test-rbt -did <did-address> -numTokens <token-amount> -port <port-number>
 ```
 
+**Description:** Creates test RBT tokens for a specified DID.
+
 **Options:**
-- `-did string` - DID address
-- `-numTokens int` - Number of tokens to generate (default 1)
-- `-fp` - Force password entry
-- `-privPWD string` - Private key password (default "mypassword")
-- `-privImgFile string` - Private share image file (default "pvtShare.png")
-- `-privKeyFile string` - Private key file (default "pvtKey.pem")
+- `-did string`: DID address.
+- `-numTokens int`: Number of tokens to generate (default: 1).
+- `-port string`: Server/Host port (default: "20000").
+- `-fp`: Force password entry.
+- `-privPWD string`: Private key password (default: "mypassword").
+- `-privImgFile string`: Private share image file (default: "pvtShare.png").
+- `-privKeyFile string`: Private key file (default: "pvtKey.pem").
 
 **Related API:** `POST /api/generate-test-token`
 
+---
+
 #### Generate Faucet Test RBT
+
 Generate faucet test RBT tokens.
 
 ```bash
-./rubixgoplatform generate-faucet-rbt [OPTIONS]
+./rubixgoplatform generate-faucet-rbt
 ```
+
+**Description:** Creates faucet test RBT tokens for testing purposes.
 
 **Related API:** `POST /api/generate-faucettest-token`
 
+---
+
 #### Transfer RBT
+
 Transfer RBT tokens between addresses.
 
 ```bash
-./rubixgoplatform transfer-rbt [OPTIONS]
+./rubixgoplatform transfer-rbt -senderAddr <sender-did> -receiverAddr <receiver-did> -rbtAmount <token-amonunt> -port <port-number>
 ```
 
+**Description:** Transfers RBT tokens from a sender to a receiver.
+
 **Options:**
-- `-senderAddr string` - Sender address
-- `-receiverAddr string` - Receiver address
-- `-rbtAmount float` - RBT amount to transfer
-- `-transComment string` - Transfer comment (default "Test transaction")
-- `-transType int` - Transaction type (default 2)
-- `-fp` - Force password entry
-- `-privPWD string` - Private key password
-- `-privImgFile string` - Private share image file
-- `-privKeyFile string` - Private key file
+- `-senderAddr string`: Sender address.
+- `-receiverAddr string`: Receiver address.
+- `-rbtAmount float`: RBT amount to transfer.
+- `-port string`: Server/Host port (default: "20000").
+- `-transComment string`: Transfer comment (default: "Test transaction").
+- `-transType int`: Transaction type (default: 2).
+- `-fp`: Force password entry.
+- `-privPWD string`: Private key password.
+- `-privImgFile string`: Private share image file.
+- `-privKeyFile string`: Private key file.
 
 **Related API:** `POST /api/initiate-rbt-transfer`
 
-#### Self Transfer RBT
+---
+
+<!-- #### Self Transfer RBT
+
 Perform self-transfer of RBT tokens.
 
 ```bash
-./rubixgoplatform self-transfer-rbt [OPTIONS]
+./rubixgoplatform self-transfer-rbt -did <did-address> -amount <token-amount> -port <port-number>
 ```
+
+**Description:** Transfers RBT tokens to the same DID.
 
 **Related API:** `POST /api/initiate-self-transfer`
 
+--- -->
+
 #### Get Account Info
-Get account information for a DID.
+
+Retrieve account information for a DID.
 
 ```bash
-./rubixgoplatform get-account-info [OPTIONS]
+./rubixgoplatform get-account-info -did <did-address> -port <port-number>
 ```
 
+**Description:** Fetches account details for a specified DID.
+
 **Options:**
-- `-did string` - DID address
+- `-did string`: DID address.
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/get-account-info`
 
-#### Lock Tokens
+---
+
+<!-- #### Lock Tokens
+
 Lock tokens for specific operations.
 
 ```bash
-./rubixgoplatform lock-tokens [OPTIONS]
+./rubixgoplatform lock-tokens
 ```
+
+**Description:** Locks tokens to restrict their use in certain operations.
 
 **Related API:** `POST /api/lock-tokens`
 
-#### Release All Locked Tokens
+--- -->
+
+<!-- #### Release All Locked Tokens
+
 Release all locked tokens.
 
 ```bash
-./rubixgoplatform release-all-locked-tokens [OPTIONS]
+./rubixgoplatform release-all-locked-tokens
 ```
+
+**Description:** Unlocks all previously locked tokens.
 
 **Related API:** `POST /api/release-all-locked-tokens`
 
+--- -->
+
 #### Pin Token
-Pin tokens for security purposes.
+
+Pin RBT tokens for pinning service.
 
 ```bash
-./rubixgoplatform pin-token [OPTIONS]
+./rubixgoplatform pin-token -pinningAddress <pinning-node-did-address> -senderAddr <sender-address> -rbtAmount <token-amount> -port <port-number>
 ```
+
+**Description:** Pins tokens to ensure secure handling.
+
+**Options:**
+- `-pinningAddress string`: Pinning DID address.
+- `-senderAddr string`: Sender address.
+- `-rbtAmount float`: RBT token amount.
+- `-transComment string`: Transfer comment (default: "Test transaction").
+- `-transType int`: Transaction type (default: 2).
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/initiate-pin-token`
 
+---
+
 #### Recover Tokens
-Recover RBT tokens.
+
+Recover RBT tokens after pinning for pinning service.
 
 ```bash
-./rubixgoplatform recover-token [OPTIONS]
+./rubixgoplatform recover-token -pinningAddress <pinning-node-did-address> -senderAddr <sender-address> -rbtAmount <token-amount> -port <port-number>
 ```
+
+**Description:** Recovers lost or inaccessible RBT tokens.
+
+**Options:**
+- `-pinningAddress string`: Pinning DID address.
+- `-senderAddr string`: Sender address.
+- `-rbtAmount float`: RBT token amount.
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/recover-token`
 
+---
+
 #### Validate Token
+
 Validate a specific token.
 
 ```bash
-./rubixgoplatform validatetoken [OPTIONS]
+./rubixgoplatform validatetoken -token <token-ID> -port <port-number>
 ```
+
+**Description:** Verifies the validity of a specific token.
+
+**Options:**
+- `-token string`: Token ID.
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/validate-token`
 
+---
+
 #### Faucet Token Check
+
 Check faucet token status.
 
 ```bash
-./rubixgoplatform faucet-token-check [OPTIONS]
+./rubixgoplatform faucet-token-check -did <did-address> -token <token-ID> -port <port-number>
 ```
 
+**Description:** Retrieves the status of faucet tokens.
+
+**Options:**
+- `-token string`: Token ID.
+- `-did string`: DID address.
+- `-port string`: Server/Host port (default: "20000").
+
 **Related API:** `GET /api/faucet-token-check`
+
+---
 
 ### Token Chain Operations
 
 #### Dump Token Chain
-Export token chain data.
+
+Get RBT token chain data.
 
 ```bash
-./rubixgoplatform dump-tokenchain [OPTIONS]
+./rubixgoplatform dump-tokenchain -token <token-id> -port <port-number>
 ```
 
+**Description:** Get data from a RBT token chain to a json file.
+
 **Options:**
-- `-token string` - Token address
+- `-token string`: Token ID.
+- `-port string`: Server/Host port (default: "20000").
+
+**Note:**
+- The token chain data will be saved as a json file named `dump.json` in the current directory.
 
 **Related API:** `GET /api/dump-token-chain`
 
+---
+
 #### Decode Token Chain
+
 Decode dumped token chain data.
 
 ```bash
-./rubixgoplatform decode-tokenchain [OPTIONS]
+./rubixgoplatform decode-tokenchain
 ```
 
+**Description:** Decodes previously dumped token chain (`dump.json`) data for better readability.
+
+---
+
 #### Validate Token Chain
+
 Validate RBT and smart contract token chains.
 
 ```bash
-./rubixgoplatform validate-tokenchain [OPTIONS]
+./rubixgoplatform validate-tokenchain -did <did-address> -token <token-ID> -port <port-number>
 ```
 
+**Description:** Validates the integrity of token chains.
+
 **Options:**
-- `-did string` - DID address
-- `-sctValidation bool` - Enable smart contract validation (default false)
-- `-token string` - Token ID
-- `-allmyTokens bool` - Validate all tokens (default false)
-- `-blockCount int` - Number of blocks to validate (default 0 = all)
+- `-did string`: DID address.
+- `-sctValidation bool`: Enable smart contract validation (default: false).
+- `-token string`: Token ID.
+- `-allmyTokens bool`: Validate all tokens (default: false).
+- `-blockCount int`: Number of blocks to validate (default: 0, all blocks).
 
 **Related API:** `POST /api/validate-token-chain`
 
-#### Faucet Token Chain Validate
-Validate faucet token chain.
+---
 
-```bash
-./rubixgoplatform faucet-tokenchain-validate [OPTIONS]
-```
-
-#### Get Token Block
-Get specific token block information.
-
-```bash
-./rubixgoplatform get-tokenblock [OPTIONS]
-```
-
-### Fungible Token (FT) Operations
+### FT Operations
 
 #### Create FT
+
 Create fungible tokens.
 
 ```bash
-./rubixgoplatform create-ft [OPTIONS]
+./rubixgoplatform create-ft -did <did-address> -ftName <name/symb-for-ft> -ftCount <token-amount> -rbtAmount <token-amount> -port <port-number>
 ```
 
+**Description:** Generates FTs on the node.
+
 **Options:**
-- `-did string` - DID address
-- `-ftName string` - Name of the FT
-- `-ftCount int` - Number of FTs to create
-- `-rbtAmount int` - RBT amount for FT creation
+- `-did string`: DID address.
+- `-ftName string`: Name of the FT.
+- `-ftCount int`: Number of FTs to create.
+- `-rbtAmount int`: RBT amount for FT creation.
+- `-port string`: Server/Host port (default: "20000").
+- `-ftStartIndex int`: FT number start index (default: "0").
+
+**Note:**
+- Use the `-ftStartIndex` flag when creating additional FTs with the same DID address and FT name. This ensures numbering continues from the correct index.
 
 **Related API:** `POST /api/create-ft`
 
+---
+
 #### Transfer FT
+
 Transfer fungible tokens.
 
 ```bash
-./rubixgoplatform transfer-ft [OPTIONS]
+./rubixgoplatform transfer-ft -ftName <name/symb-of-ft> -ftCount <token-amount> -senderAddr <sender-did> -receiverAddr <receiver-did> -port <port-number>
 ```
 
+**Description:** Transfers FTs between addresses.
+
 **Options:**
-- `-ftName string` - FT name to transfer
-- `-ftCount int` - Number of FTs to transfer
-- `-senderAddr string` - Sender address
-- `-receiverAddr string` - Receiver address
-- `-transType int` - Transaction type (default 2)
-- `-fp` - Force password authentication
-- `-creatorDID string` - FT Creator DID (for multiple FTs with same name)
+- `-ftName string`: FT name to transfer.
+- `-ftCount int`: Number of FTs to transfer.
+- `-senderAddr string`: Sender address.
+- `-receiverAddr string`: Receiver address.
+- `-port string`: Server/Host port (default: "20000").
+- `-transType int`: Transaction type (default: 2).
+- `-fp`: Force password authentication.
+- `-creatorDID string`: FT Creator DID (for multiple FTs with the same name).
+
+**Note:**
+- Use the `-creatorDID` flag when transferring FTs with duplicate names created by different DIDs, to accurately identify and transfer the correct FT batch. 
 
 **Related API:** `POST /api/initiate-ft-transfer`
 
+---
+
 #### Get FT Info by DID
-Get information about all FTs for a DID.
+
+Retrieve information about all FTs for a DID.
 
 ```bash
-./rubixgoplatform get-ft-info-by-did [OPTIONS]
+./rubixgoplatform get-ft-info-by-did -did <did-address> -port <port-number>
 ```
 
+**Description:** Fetches FT balance associated with a DID.
+
 **Options:**
-- `-did string` - DID address
+- `-did string`: DID address.
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/get-ft-info-by-did`
 
+---
+
 #### Dump FT Token Chain
-Export FT token chain data.
+
+Get FT token chain data.
 
 ```bash
-./rubixgoplatform dump-ft [OPTIONS]
+./rubixgoplatform dump-ft -token <ft-token-id> -port <port-number>
 ```
 
+**Description:** Get data from an FT token chain to a json file.
+
 **Options:**
-- `-token string` - FT token ID
+- `-token string`: FT token ID.
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/dump-ft-token-chain`
 
+**Note:**
+- The token chain data will be saved as a json file named `dump.json` in the current directory.
+
+---
+
 #### Get FT Transaction Details
-Get FT transaction details by DID.
+
+Retrieve FT transaction details by DID.
 
 ```bash
-./rubixgoplatform get-ft-txn-details [OPTIONS]
+./rubixgoplatform get-ft-txn-details -did <did-address> -port <port-number>
 ```
 
+**Description:** Fetches transaction details for FTs associated with a DID.
+
+**Options:**
+- `-did string`: DID address.
+- `-port string`: Server/Host port (default: "20000").
+
 **Related API:** `GET /api/get-ft-txn-by-did`
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### NFT Operations
 
 #### Create NFT
-Create Non-Fungible Tokens.
+
+Create Non-Fungible Tokens (NFTs).
 
 ```bash
-./rubixgoplatform create-nft [OPTIONS]
+./rubixgoplatform create-nft -did <did-address> -metadata <file-path> -artifact <file-path> -port <port-number>
 ```
+
+**Description:** Generates new NFTs on the node.
+
+**Options:**
+- `-did string`: DID address.
+- `-port string`: Server/Host port (default: "20000").
+- `-metadata string`: Path of JSON file which contains information about the NFT (default: "")
+- `-artifact string`: Path of file which is meant to be an NFT (default: "")
 
 **Related API:** `POST /api/create-nft`
 
-#### Get All NFT
-List all NFTs.
-
-```bash
-./rubixgoplatform get-all-nft [OPTIONS]
-```
-
-**Related API:** `GET /api/list-nfts`
+---
 
 #### Deploy NFT
-Deploy NFT smart contract.
+
+Deploy an NFT smart contract.
 
 ```bash
-./rubixgoplatform deploy-nft [OPTIONS]
+./rubixgoplatform deploy-nft -deployerAddr <deployer-did-address> -nft <nft-ID> -nftValue <value-of-nft> -port <port-number>
 ```
+
+**Description:** Deploys an NFT smart contract to the network.
+
+**Options:**
+- `-nft string`: NFT Id (default "")
+- `-deployerAddr string`: DID address of deployer of the NFT.
+- `-transType int`: Quorum type (default: "2").
+- `-nftValue float`: Value of the NFT (default: "0.0")
+- `-nftData string`: Arbitrary data associated with NFT (default "").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/deploy-nft`
 
+---
+
 #### Execute NFT
+
 Execute NFT transactions.
 
 ```bash
-./rubixgoplatform execute-nft [OPTIONS]
+./rubixgoplatform execute-nft -nft <nft-ID> -owner <owner-did-address> -receiver <receiver-address> -rbtAmount <token-amount> -nftData <arbitrary-data> -port <port-number>
 ```
+
+**Description:** Performs NFT transactions.
+
+**Options:**
+- `-nft string`: NFT Id (default "").
+- `-executorAddr string`: DID address of the executor of the NFT (default "").
+- `-receiver string`: DID that receives the ownership of NFT (default "").
+- `-transType int`: Quorum type (default: "2").
+- `-transComment string`: Transaction Comment (default "").
+- `-rbtAmount float`: Sale value of NFT (default "0.0").
+- `-nftData string`: Arbitrary data associated with NFT (default "").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/execute-nft`
 
+---
+
+#### Get All NFT
+
+List all NFTs.
+
+```bash
+./rubixgoplatform get-all-nft -did <did-address> -port <port-number>
+```
+
+**Description:** Retrieves a list of all NFTs on the node.
+
+**Options:**
+- `-did string`: DID address.
+
+**Related API:** `GET /api/list-nfts`
+
+---
+
 #### Subscribe NFT
+
 Subscribe to NFT events.
 
 ```bash
-./rubixgoplatform subscribe-nft [OPTIONS]
+./rubixgoplatform subscribe-nft -nft <nft-ID> -port <port-number>
 ```
+
+**Description:** Subscribes to NFT token chain updates.
+
+**Options:**
+- `-nft string`: NFT Id (default "").
 
 **Related API:** `POST /api/subscribe-nft`
 
+---
+
 #### Fetch NFT
+
 Fetch NFT details.
 
 ```bash
-./rubixgoplatform fetch-nft [OPTIONS]
+./rubixgoplatform fetch-nft -nft <nft-ID> -port <port-number>
 ```
+
+**Description:** Retrieves detailed information of NFT from network to the node
+
+**Options:**
+- `-nft string`: NFT Id (default "").
 
 **Related API:** `GET /api/fetch-nft`
 
+---
+
 #### Get NFTs by DID
-Get NFTs owned by a specific DID.
+
+Retrieve NFTs owned by a specific DID.
 
 ```bash
-./rubixgoplatform get-nfts-by-did [OPTIONS]
+./rubixgoplatform get-nfts-by-did -did <did-address> -port <port-number>
 ```
+
+**Description:** Lists all NFTs associated with a given DID.
+
+**Options:**
+- `-did string`: DID address.
 
 **Related API:** `GET /api/get-nfts-by-did`
 
+---
+
 #### Dump NFT Token Chain
+
 Export NFT token chain data.
 
 ```bash
-./rubixgoplatform dump-nft-tokenchain [OPTIONS]
+./rubixgoplatform dump-nft-tokenchain -nft <nft-ID> -port <port-number> 
 ```
 
+**Description:** Exports data from an NFT token chain to a json file.
+
+**Options:**
+- `-nft string`: NFT Id (default "").
+
 **Related API:** `GET /api/dump-nft-token-chain`
+
+---
 
 ### Smart Contract Operations
 
 #### Generate Smart Contract
+
 Generate smart contract code.
 
 ```bash
-./rubixgoplatform generate-sct [OPTIONS]
+./rubixgoplatform generate-sct -did <did-address> -binCode <binary-code-file-path> -rawCode <raw-code-file-path> -schemaFile <schema-file-path> -port <port-number>
 ```
+
+**Description:** Creates smart contract token for deployment.
+
+**Options:**
+- `-did string`: DID address.
+- `-port string`: Server/Host port (default: "20000").
+- `-binCode string`: Path of wasm file which is compiled from raw contract (default: "").
+- `-rawCode string`: Path of raw smart contract code file (default: "")
+- `-schemaFile string`: Path of json file which can be used to track state change (default: "").
 
 **Related API:** `POST /api/generate-smart-contract`
 
+---
+
 #### Deploy Smart Contract
-Deploy smart contract to the network.
+
+Deploy a smart contract to the network.
 
 ```bash
-./rubixgoplatform deploy-smartcontract [OPTIONS]
+./rubixgoplatform deploy-smartcontract -sct <smartcontract-ID> -deployerAddr <deployer-did-address> -rbtAmount <token-amount> -transType <quorum-type> -transComment <transaction-comment> -port <port-number>
 ```
+
+**Description:** Deploys a smart contract to the Rubix network.
+
+**Options:**
+- `-sct string`: Smart contract ID (default "").
+- `-deployerAddr string`: DID address of deployer of the smart contract.
+- `-rbtAmount float`: Value of the smart contract (default: "0.0").
+- `-transType int`: Quorum type (default: "2").
+- `-transComment string`: Transaction comment (default "").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/deploy-smart-contract`
 
+---
+
 #### Execute Smart Contract
+
 Execute smart contract functions.
 
 ```bash
-./rubixgoplatform execute-smartcontract [OPTIONS]
+./rubixgoplatform execute-smartcontract -sct <smartcontract-ID> -executorAddr <executor-did-address> -transType <quorum-type> -transComment <transaction-comment> -sctData <execution-input-data> -port <port-number>
 ```
+
+**Description:** Runs specified functions within a smart contract.
+
+**Options:**
+- `-sct string`: Smart contract ID (default "").
+- `-executorAddr string`: DID address of executor of the smart contract.
+- `-transType int`: Quorum type (default: "2").
+- `-transComment string`: Transaction comment (default "").
+- `-sctData string`: Arbitrary data associated with smart contract (default "").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/execute-smart-contract`
 
+---
+
 #### Fetch Smart Contract
+
 Fetch smart contract details.
 
 ```bash
-./rubixgoplatform fetch-sct [OPTIONS]
+./rubixgoplatform fetch-sct -sct <smartcontract-ID> -port <port-number>
 ```
+
+**Description:** Retrieves details of a smart contract.
+
+**Options:**
+- `-sct string`: Smart contract ID (default "").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/fetch-smart-contract`
 
+---
+
 #### Publish Smart Contract
-Publish smart contract to the network.
+
+Publish a smart contract to the network.
 
 ```bash
-./rubixgoplatform publish-sct [OPTIONS]
+./rubixgoplatform publish-sct -sct <smartcontarct-ID> -did <publisher-did-address> -pubType <publishing-event-type> -sctBlockHash <publishing-block-hash> -port <port-number>
 ```
+
+**Description:** Publishes a smart contract for network-wide access.
+
+**Options:**
+- `-sct string`: Smart contract ID.
+- `-did string`: Publisher DID address.
+- `-pubType int`: Smart contract event publishing type- Deploy:1 & Execute:2 (Default: "0").
+- `-sctBlockHash string`: Smart contract block.
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/publish-smart-contract`
 
+---
+
 #### Subscribe Smart Contract
+
 Subscribe to smart contract events.
 
 ```bash
-./rubixgoplatform subscribe-sct [OPTIONS]
+./rubixgoplatform subscribe-sct -sct <smartcontract-ID> -port <port-number>
 ```
+
+**Description:** Subscribes to events emitted by a smart contract.
+
+**Options:**
+- `-sct string`: Smart contract ID
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/subscribe-smart-contract`
 
+---
+
 #### Dump Smart Contract Token Chain
+
 Export smart contract token chain data.
 
 ```bash
-./rubixgoplatform dump-smartcontract-tokenchain [OPTIONS]
+./rubixgoplatform dump-smartcontract-tokenchain -sct <smartcontract-ID> -port <port-number>
 ```
+
+**Description:** Save data from a smart contract token chain to json file.
+
+**Options:** 
+- `-sct string`: Smartcontract ID
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/dump-smart-contract-token-chain`
 
+<!-- ---
+
 #### Get Smart Contract Data
-Get smart contract token chain data.
+
+Retrieve smart contract token chain data.
 
 ```bash
-./rubixgoplatform get-smartcontract-data [OPTIONS]
+./rubixgoplatform get-smartcontract-data -sct <smartcontract-ID> -port <port-number>
 ```
+
+**Description:** Fetches data from a smart contract token chain.
+
+**Options:** 
+- `-sct string`: Smartcontract ID
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/get-smart-contract-token-chain-data`
 
-### Data Token Operations
+--- -->
+
+<!-- ### Data Token Operations
 
 #### Create Data Token
+
 Create data tokens for data storage.
 
 ```bash
-./rubixgoplatform create-datatoken [OPTIONS]
+./rubixgoplatform create-datatoken
 ```
+
+**Description:** Generates data tokens for storing data on the network.
 
 **Related API:** `POST /api/create-data-token`
 
+---
+
 #### Commit Data Token
+
 Commit data token to the network.
 
 ```bash
-./rubixgoplatform commit-datatoken [OPTIONS]
+./rubixgoplatform commit-datatoken
 ```
+
+**Description:** Commits a data token to the Rubix network.
 
 **Related API:** `POST /api/commit-data-token`
 
-### Service Management
+--- -->
+
+<!-- ### Service Management
 
 #### Setup Service
+
 Configure services on the node.
 
 ```bash
-./rubixgoplatform setup-service [OPTIONS]
+./rubixgoplatform setup-service -srvName explorer_service
 ```
 
+**Description:** Configures services running on the node.
+
 **Options:**
-- `-srvName string` - Service name (default "explorer_service")
-- `-dbAddress string` - Database address (default "localhost")
-- `-dbName string` - Database name (default "ExplorerDB")
-- `-dbPassword string` - Database password (default "password")
-- `-dbPort string` - Database port (default "1433")
-- `-dbType string` - Database type: SQLServer, PostgreSQL, MySQL, Sqlite3 (default "SQLServer")
-- `-dbUsername string` - Database username (default "sa")
+- `-srvName string`: Service name (default: "explorer_service").
+- `-dbAddress string`: Database address (default: "localhost").
+- `-dbName string`: Database name (default: "ExplorerDB").
+- `-dbPassword string`: Database password (default: "password").
+- `-dbPort string`: Database port (default: "1433").
+- `-dbType string`: Database type (SQLServer, PostgreSQL, MySQL, Sqlite3; default: "SQLServer").
+- `-dbUsername string`: Database username (default: "sa").
 
 **Related API:** `POST /api/setup-service`
 
+---
+
 #### Setup Database
-Setup database configuration.
+
+Configure database settings.
 
 ```bash
-./rubixgoplatform setup-db [OPTIONS]
+./rubixgoplatform setup-db
 ```
+
+**Description:** Sets up database configuration for the node.
 
 **Related API:** `POST /api/setup-db`
 
+---
+
 #### Update Configuration
+
 Update node configuration.
 
 ```bash
-./rubixgoplatform update-config [OPTIONS]
+./rubixgoplatform update-config
 ```
+
+**Description:** Updates the node's configuration settings.
+
+--- -->
 
 ### Explorer Management
 
 #### Add Explorer
+
 Add explorer URLs for transaction data.
 
 ```bash
-./rubixgoplatform add-explorer [OPTIONS]
+./rubixgoplatform add-explorer -links <url> -port <port-number>
 ```
 
+**Description:** Adds explorer URLs to access transaction data.
+
 **Options:**
-- `-links string` - URLs (comma-separated for multiple)
+- `-links string`: URLs to add (comma-separated for multiple).
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/add-explorer`
 
+---
+
 #### Remove Explorer
+
 Remove explorer URLs.
 
 ```bash
-./rubixgoplatform remove-explorer [OPTIONS]
+./rubixgoplatform remove-explorer -links <url> -port <port-number>
 ```
 
+**Description:** Removes specified explorer URLs.
+
 **Options:**
-- `-links string` - URLs to remove (comma-separated)
+- `-links string`: URLs to remove (comma-separated for multiple).
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/remove-explorer`
 
+---
+
 #### Get All Explorer
+
 List all configured explorer URLs.
 
 ```bash
-./rubixgoplatform get-all-explorer
+./rubixgoplatform get-all-explorer -port <port-number>
 ```
 
+**Description:** Retrieves a list of all configured explorer URLs.
+
+**Options:**
+- `-port string`: Server/Host port (default: "20000").
+
 **Related API:** `GET /api/get-all-explorer`
+
+---
+
+#### Add User API Key
+
+Add an API key for user authentication.
+
+```bash
+./rubixgoplatform add-user-apikey -did <did-address> -apiKey <api-key> -port <port-number> 
+```
+
+**Description:** Adds an API key for authenticating users.
+
+**Options:**
+- `-did string`: DID address.
+- `-port string`: Server/Host port (default: "20000").
+- `-apiKey string`: API-Key corresponding to DID.
+
+**Related API:** `POST /api/add-user-api-key`
+
+---
 
 ### Peer Management
 
 #### Add Peer Details
+
 Manually add peer details.
 
 ```bash
-./rubixgoplatform add-peer-details [OPTIONS]
+./rubixgoplatform add-peer-details -peerID <peer-id> -did <did-address> -didType <did-type> -port <port-number>
 ```
 
+**Description:** Adds peer details to the node configuration.
+
 **Options:**
-- `-peerID string` - Peer ID
-- `-did string` - DID address
-- `-didType int` - DID type (0-4)
+- `-peerID string`: Peer ID.
+- `-did string`: DID address.
+- `-didType int`: DID type (0=Basic, 1=Standard, 2=Wallet, 3=Child, 4=Light; default: 0).
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/add-peer-details`
 
+---
+
 #### Add Peer Details from Explorer
+
 Add peer details from explorer data.
 
 ```bash
-./rubixgoplatform exp-peerdetails [OPTIONS]
+./rubixgoplatform exp-peerdetails -did <did-address> -port <port-number>
 ```
 
+**Description:** Adds peer details sourced from explorer data.
+
+**Options:**
+- `-port string`: Server/Host port (default: "20000").
+
 **Related API:** `POST /api/add-peer-details-from-explorer`
+
+---
 
 ### Token Status & Monitoring
 
 #### Get Pledged Token Details
+
 Check pledged token information.
 
 ```bash
-./rubixgoplatform get-pledged-token-details
+./rubixgoplatform get-pledged-token-details -port <port-number>
 ```
+
+**Description:** Retrieves details of pledged tokens.
+
+**Options:**
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/get-pledgedtoken-details`
 
+---
+
 #### Check Pinned State
-Check if tokens are in pinned state.
+
+Check if tokens are in a pinned state.
 
 ```bash
-./rubixgoplatform check-pinned-state [OPTIONS]
+./rubixgoplatform check-pinned-state -tokenstatehash <tokenstate-hash> -port <port-number>
 ```
+
+**Description:** Verifies the pinned state of tokens and return pinned peers.
+
+**Options:**
+- `-tokenstatehash string`: Token State Hash to check pinned state.
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/check-pinned-state`
 
+---
+
 #### Run Unpledge
+
 Execute unpledge operations.
 
 ```bash
-./rubixgoplatform run-unpledge [OPTIONS]
+./rubixgoplatform run-unpledge -port <port-number>
 ```
+
+**Description:** Performs unpledge operations for pledged tokens.
+
+**Options:**
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/run-unpledge`
 
+---
+
 #### Unpledge POW Pledge Tokens
+
 Unpledge Proof-of-Work pledged tokens.
 
 ```bash
-./rubixgoplatform unpledge-pow-pledge-tokens [OPTIONS]
+./rubixgoplatform unpledge-pow-pledge-tokens -port <port-number>
 ```
 
+**Description:** Unpledges tokens used in Proof-of-Work.
+
+**Options:**
+- `-port string`: Server/Host port (default: "20000").
+
 **Related API:** `POST /api/unpledge-pow-unpledge-tokens`
+
+---
 
 ### Transaction Management
 
 #### Get Transaction Details
-Get transaction details by various parameters.
+
+Retrieve transaction details by various parameters.
 
 ```bash
-./rubixgoplatform get-txn-details [OPTIONS]
+./rubixgoplatform get-txn-details -did <did-address> -txnID <transaction-ID> -transComment <transaction-comment> -port <port-number>
 ```
 
-**Related APIs:** 
+**Description:** Fetches transaction details based on specified parameters.
+
+**Options:**
+- `-did string`: DID address.
+- `-txnID string`: Transaction ID.
+- `-transComment string`: Transaction comment.
+- `-port string`: Server/Host port (default: "20000").
+
+**Related APIs:**
 - `GET /api/get-by-txnId`
 - `GET /api/get-by-did`
 - `GET /api/get-by-comment`
 - `GET /api/get-by-node`
 
+---
+
 ### Migration & Recovery
 
 #### Migrate Node
-Migrate existing Java node to RubixGo.
+
+Migrate an existing Java node to Rubix Go.
 
 ```bash
-./rubixgoplatform migrate-node [OPTIONS]
+./rubixgoplatform migrate-node -fp
 ```
 
+**Description:** Migrates a Java-based Rubix node to the Go platform.
+
 **Options:**
-- `-fp` - Force password entry
+- `-fp`: Force password entry.
 
 **Related API:** `POST /api/migrate-node`
 
-### User Management
-
-#### Add User API Key
-Add API key for user authentication.
-
-```bash
-./rubixgoplatform add-user-apikey [OPTIONS]
-```
-
-**Related API:** `POST /api/add-user-api-key`
+---
 
 ## API Reference
 
@@ -942,7 +1542,7 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/dump-token-chain` | GET | Dump token chain data | `dump-tokenchain` |
 | `/api/remove-token-chain-block` | POST | Remove token chain block | N/A |
 
-#### Fungible Token (FT) Operations
+#### FT Operations
 
 | Endpoint | Method | Description | CLI Command |
 |----------|--------|-------------|-------------|
@@ -1057,342 +1657,7 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/get-token-status` | GET | Get token status | N/A |
 | `/api/update-token-status` | POST | Update token status | N/A |
 
-## Examples
-
-### Basic Node Setup
-```bash
-# 1. Start the node
-./rubixgoplatform run -p node1 -n 0 -s -testNet
-
-# 2. Create a DID
-./rubixgoplatform create-did -didType 1 -didSecret "My DID Secret"
-
-# 3. Generate test tokens
-./rubixgoplatform generate-test-rbt -did "your-did-address" -numTokens 10
-
-# 4. Check account info
-./rubixgoplatform get-account-info -did "your-did-address"
-```
-
-### Working with Bootstrap Peers
-```bash
-# Add bootstrap peers
-./rubixgoplatform add-bootstrap -peers /ip4/103.60.213.76/tcp/4001/p2p/QmR1VH6SsEN1wf4EmstxXtNMvR35KEetbBetiGWWKWavJ6
-
-# List all bootstrap peers
-./rubixgoplatform get-all-bootstrap
-
-# Remove specific bootstrap peer
-./rubixgoplatform remove-bootstrap -peers /ip4/103.60.213.76/tcp/4001/p2p/QmR1VH6SsEN1wf4EmstxXtNMvR35KEetbBetiGWWKWavJ6
-
-# Remove all bootstrap peers
-./rubixgoplatform remove-all-bootstrap
-```
-
-### DID Operations
-```bash
-# Create a standard DID with custom settings
-./rubixgoplatform create-did -didType 1 -didSecret "MySecureDID" -privPWD "securepass" -fp
-
-# Create DID from existing public key
-./rubixgoplatform create-did-from-pubkey -pubkey "your-public-key"
-
-# Register DID on network
-./rubixgoplatform register-did -did "your-did-address"
-
-# Get all DIDs
-./rubixgoplatform get-all-did
-```
-
-### Token Management
-```bash
-# Generate test RBT tokens
-./rubixgoplatform generate-test-rbt -did "your-did" -numTokens 5
-
-# Transfer RBT tokens
-./rubixgoplatform transfer-rbt -senderAddr "sender-did" -receiverAddr "receiver-did" -rbtAmount 2.5
-
-# Self-transfer tokens
-./rubixgoplatform self-transfer-rbt -did "your-did" -amount 1.0
-
-# Validate token chain
-./rubixgoplatform validate-tokenchain -did "your-did" -allmyTokens true
-```
-
-### Fungible Token (FT) Operations
-```bash
-# Create fungible tokens
-./rubixgoplatform create-ft -did "your-did" -ftName "MyToken" -ftCount 100 -rbtAmount 10
-
-# Transfer FT tokens
-./rubixgoplatform transfer-ft -ftName "MyToken" -ftCount 5 -senderAddr "sender-did" -receiverAddr "receiver-did"
-
-# Get FT information
-./rubixgoplatform get-ft-info-by-did -did "your-did"
-
-# Dump FT token chain
-./rubixgoplatform dump-ft -token "ft-token-id"
-```
-
-### NFT Operations
-```bash
-# Create NFT
-./rubixgoplatform create-nft -did "your-did" -nftData "nft-metadata"
-
-# Deploy NFT contract
-./rubixgoplatform deploy-nft -contract "nft-contract-code"
-
-# Get NFTs by DID
-./rubixgoplatform get-nfts-by-did -did "your-did"
-
-# Execute NFT transaction
-./rubixgoplatform execute-nft -nftId "nft-id" -operation "transfer"
-```
-
-### Smart Contract Operations
-```bash
-# Generate smart contract
-./rubixgoplatform generate-sct -contractType "basic" -parameters "param1,param2"
-
-# Deploy smart contract
-./rubixgoplatform deploy-smartcontract -contract "contract-code" -did "your-did"
-
-# Execute smart contract
-./rubixgoplatform execute-smartcontract -contractId "contract-id" -function "functionName" -args "arg1,arg2"
-
-# Subscribe to smart contract events
-./rubixgoplatform subscribe-sct -contractId "contract-id"
-```
-
-### Quorum Management
-```bash
-# Add quorum configuration
-./rubixgoplatform add-quorum -quorumList "quorum.json"
-
-# Setup quorum with passwords
-./rubixgoplatform setup-quorum -quorumPWD "quorumpass" -privPWD "privatepass"
-
-# Check quorum status
-./rubixgoplatform check-quorum-status
-
-# Remove all quorum configurations
-./rubixgoplatform remove-all-quorum
-```
-
-### API Usage Examples
-
-#### Check Node Status
-```bash
-curl -X GET http://localhost:20000/api/node-status
-```
-
-#### Create DID via API
-```bash
-curl -X POST http://localhost:20000/api/createdid \
-  -H "Content-Type: application/json" \
-  -d '{
-    "didType": 1,
-    "didSecret": "My DID Secret",
-    "privPWD": "mypassword",
-    "quorumPWD": "mypassword"
-  }'
-```
-
-#### Generate Test Tokens via API
-```bash
-curl -X POST http://localhost:20000/api/generate-test-token \
-  -H "Content-Type: application/json" \
-  -d '{
-    "did": "your-did-address",
-    "numTokens": 5
-  }'
-```
-
-#### Transfer RBT via API
-```bash
-curl -X POST http://localhost:20000/api/initiate-rbt-transfer \
-  -H "Content-Type: application/json" \
-  -d '{
-    "senderAddr": "sender-did-address",
-    "receiverAddr": "receiver-did-address",
-    "rbtAmount": 5.0,
-    "transComment": "Test transfer"
-  }'
-```
-
-#### Create Fungible Token via API
-```bash
-curl -X POST http://localhost:20000/api/create-ft \
-  -H "Content-Type: application/json" \
-  -d '{
-    "did": "your-did-address",
-    "ftName": "MyToken",
-    "ftCount": 100,
-    "rbtAmount": 10
-  }'
-```
-
-#### Get Account Information via API
-```bash
-curl -X GET "http://localhost:20000/api/get-account-info?did=your-did-address"
-```
-
-#### Add Bootstrap Peer via API
-```bash
-curl -X POST http://localhost:20000/api/add-bootstrap \
-  -H "Content-Type: application/json" \
-  -d '{
-    "peers": "/ip4/103.60.213.76/tcp/4001/p2p/QmR1VH6SsEN1wf4EmstxXtNMvR35KEetbBetiGWWKWavJ6"
-  }'
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Node won't start**
-   - Check if port 20000 is available: `netstat -tulpn | grep 20000`
-   - Verify working directory permissions: `ls -la`
-   - Ensure testswarm.key exists for testnet mode
-   - Check logs: `tail -f ./logs/rubix.log`
-
-2. **DID creation fails**
-   - Verify image file is exactly 256x256 PNG format
-   - Check file permissions in working directory
-   - Ensure passwords meet minimum requirements
-   - Verify sufficient disk space
-
-3. **Token transfer fails**
-   - Verify sender has sufficient balance: `./rubixgoplatform get-account-info -did "sender-did"`
-   - Check if quorum is properly setup: `./rubixgoplatform check-quorum-status`
-   - Ensure both sender and receiver DIDs are registered
-   - Verify network connectivity between peers
-
-4. **API calls timeout or fail**
-   - Check if node is running: `curl http://localhost:20000/api/ping`
-   - Verify correct port and address configuration
-   - Check network connectivity and firewall settings
-   - Review API request format and required parameters
-
-5. **Bootstrap peer connection issues**
-   - Verify peer addresses are correctly formatted
-   - Check network connectivity to bootstrap peers
-   - Ensure bootstrap peers are online and accessible
-   - Try with different bootstrap peers
-
-6. **Quorum setup problems**
-   - Verify quorum list file format is correct JSON
-   - Check if quorum peers are accessible
-   - Ensure passwords are correctly provided
-   - Verify sufficient number of quorum members
-
-7. **Smart contract deployment fails**
-   - Check contract code syntax and format
-   - Verify sufficient RBT balance for deployment
-   - Ensure DID has necessary permissions
-   - Review contract size limits
-
-8. **Token validation errors**
-   - Check token chain integrity
-   - Verify all required signatures are present
-   - Ensure proper token state transitions
-   - Check for missing or corrupted token blocks
-
-### Performance Optimization
-
-1. **Node Performance**
-   - Increase system resources (RAM, CPU)
-   - Optimize database configuration
-   - Use SSD storage for better I/O performance
-   - Monitor and clean up log files regularly
-
-2. **Network Performance**
-   - Use reliable and fast internet connection
-   - Configure appropriate number of bootstrap peers
-   - Optimize peer discovery settings
-   - Monitor network latency to peers
-
-3. **Transaction Processing**
-   - Batch multiple operations when possible
-   - Use appropriate transaction types
-   - Monitor transaction queue size
-   - Optimize quorum configuration
-
-### Log Files and Debugging
-
-- **Node logs**: `./logs/rubix.log`
-- **Error logs**: `./logs/error.log`
-- **Debug logs**: `./logs/debug.log`
-- **Transaction logs**: `./logs/transaction.log`
-
-Enable debug mode for detailed logging:
-```bash
-./rubixgoplatform run -p node1 -n 0 -s -testNet -debug
-```
-
-### Configuration Files
-
-- **Node configuration**: `./config/node.json`
-- **Quorum configuration**: `./config/quorumlist.json`
-- **Network configuration**: `./config/network.json`
-- **Database configuration**: `./config/database.json`
-
-### System Requirements
-
-**Minimum Requirements:**
-- OS: Linux (Ubuntu 18.04+), macOS, Windows 10+
-- RAM: 4GB
-- Storage: 20GB available space
-- Network: Stable internet connection
-
-**Recommended Requirements:**
-- OS: Linux (Ubuntu 20.04+)
-- RAM: 8GB+
-- Storage: 100GB+ SSD
-- Network: High-speed internet connection
-- CPU: Multi-core processor
-
-### Port Configuration
-
-Default ports used by Rubix Go Platform:
-- **HTTP API**: 20000
-- **P2P Communication**: 4001
-- **Bootstrap**: Various (configured per peer)
-
-Ensure these ports are open in your firewall configuration.
-
-### Database Setup
-
-For production deployments:
-1. Configure external database (PostgreSQL, MySQL, or SQL Server)
-2. Set up proper database permissions
-3. Configure connection pooling
-4. Enable database backups
-5. Monitor database performance
-
-### Security Considerations
-
-1. **Password Management**
-   - Use strong, unique passwords for all accounts
-   - Store passwords securely
-   - Consider using hardware security modules
-
-2. **Network Security**
-   - Use secure connections (HTTPS/TLS)
-   - Configure firewall rules appropriately
-   - Monitor network traffic for anomalies
-
-3. **File Permissions**
-   - Restrict access to configuration files
-   - Secure private key files
-   - Regular security audits
-
-4. **API Security**
-   - Implement proper authentication
-   - Use API keys for external access
-   - Rate limiting for API endpoints
-
-### Support and Community
+## Support and Community
 
 For additional support:
 - Check the official documentation
@@ -1400,7 +1665,7 @@ For additional support:
 - Submit issues to the project repository
 - Contact technical support team
 
-### Version Compatibility
+## Version Compatibility
 
 Check version compatibility:
 ```bash

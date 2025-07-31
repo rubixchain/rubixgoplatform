@@ -99,7 +99,7 @@ const (
 	DumpFTTokenChainCmd            string = "dump-ft"
 	TransferFTCmd                  string = "transfer-ft"
 	GetFTInfoCmd                   string = "get-ft-info-by-did"
-	ValidateTokenCmd               string = "validatetoken"
+	ValidateTokenCmd               string = "validate-token"
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
 	DeployNFTCmd                   string = "deploy-nft"
 	ExecuteNFTCmd                  string = "execute-nft"
