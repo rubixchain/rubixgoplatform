@@ -539,7 +539,7 @@ Generate test RBT tokens on the node.
 ./rubixgoplatform generate-test-rbt -did <did-address> -numTokens <token-amount> -port <port-number>
 ```
 
-**Description:** Creates test RBT tokens for a specified DID.
+**Description:** Creates test RBT tokens for testing in local network.
 
 **Options:**
 - `-did string`: DID address.
@@ -563,7 +563,7 @@ Generate faucet test RBT tokens.
 ./rubixgoplatform generate-faucet-rbt -did <did-address> -numTokens <token-amount> -port <port-number>
 ```
 
-**Description:** Creates faucet test RBT tokens for testing purposes.
+**Description:** Creates faucet test RBT tokens for testing in Rubix Testnet.
 
 **Options:**
 - `-did string`: DID address.
