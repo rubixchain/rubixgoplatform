@@ -1,5 +1,3 @@
-# Rubix Go Platform
-
 <p align="center">
   <img src="Rubix_logo.png" alt="Rubix Logo" width="300"/>
 </p>
@@ -16,64 +14,6 @@ Welcome to the **Rubix Go Platform**! This README provides comprehensive documen
 
 ---
 
-<details>
-  <summary><strong>Prerequisites</strong></summary>
-
-- [Prerequisites](#prerequisites)
-
-</details>
-
-<details>
-  <summary><strong>Quick Setup</strong></summary>
-
-- [Quick Setup](#quick-setup)
-
-</details>
-
-<details>
-  <summary><strong>CLI Commands</strong></summary>
-
-- [Basic Commands](#basic-commands)
-- [Node Management](#node-management)
-- [Bootstrap Management](#bootstrap-management)
-- [Peer Management](#peer-management)
-- [DID Management](#did-management)
-- [Quorum Management](#quorum-management)
-- [Token Management](#token-management)
-- [Token Status & Monitoring](#token-status--monitoring)
-- [Token Chain Operations](#token-chain-operations)
-- [FT Operations](#ft-operations)
-- [NFT Operations](#nft-operations)
-- [Smart Contract Operations](#smart-contract-operations)
-- [Explorer Management](#explorer-management)
-- [Transaction Management](#transaction-management)
-- [Migration & Recovery](#migration--recovery)
-
-</details>
-
-<details>
-  <summary><strong>API Reference</strong></summary>
-
-- [API Reference](#api-reference)
-
-</details>
-
-<details>
-  <summary><strong>Support and Community</strong></summary>
-
-- [Support and Community](#support-and-community)
-
-</details>
-
-<details>
-  <summary><strong>Version Compatibility</strong></summary>
-
-- [Version Compatibility](#version-compatibility)
-
-</details>
-
----
-
 ## 🧰 Prerequisites
 
 To run a **Rubix node**, use the latest [release binary](https://github.com/rubixchain/rubixgoplatform/releases) or build from source. The following tools are required for building from source:
@@ -86,10 +26,8 @@ To run a **Rubix node**, use the latest [release binary](https://github.com/rubi
 | **Make**                  | Latest        | Automates the build process                          |
 | **IPFS Binary**           | v0.21.0       | Enables decentralized storage                        |
 | **Git**                   | Latest        | Clones the Rubix repository                          |
-| **Test Swarm Key**        | Latest        | (`testswarm.key`) Required to join the Rubix testnet |
+| **Test Swarm Key**        | Latest        | (`testswarm.key`) Required to join the Rubix Testnet |
 | **Swarm Key**             | Latest        | (`swarm.key`) Required to join the Rubix Mainnet     |
-
----
 
 ## ⚙️ Quick Setup (Build from Source)
 
@@ -124,19 +62,32 @@ make clean
 
 ---
 
-## Version Compatibility
-
-Check version compatibility:
-
-```bash
-./rubixgoplatform -v
-```
-
-Ensure all nodes are running latest version for proper operation.
+*Ensure all nodes are running the latest version for proper operation.*
 
 ---
 
 ## 🔧 CLI Commands
+
+<!-- <details>
+  <summary><strong>CLI Commands</strong></summary>
+
+- [Basic Commands](#basic-commands)
+- [Node Management](#node-management)
+- [Bootstrap Management](#bootstrap-management)
+- [Peer Management](#peer-management)
+- [DID Management](#did-management)
+- [Quorum Management](#quorum-management)
+- [Token Management](#token-management)
+- [Token Status & Monitoring](#token-status--monitoring)
+- [Token Chain Operations](#token-chain-operations)
+- [FT Operations](#ft-operations)
+- [NFT Operations](#nft-operations)
+- [Smart Contract Operations](#smart-contract-operations)
+- [Explorer Management](#explorer-management)
+- [Transaction Management](#transaction-management)
+- [Migration & Recovery](#migration--recovery)
+
+</details> -->
 
 ### Basic Commands
 
@@ -1521,15 +1472,12 @@ Migrate an existing Java node to Rubix Go.
 
 ---
 
-## API Reference
+## 🌐 API Endpoints
 
-### External APIs
+All below APIs are accessible via HTTP requests to your node (default port: 20000).
 
-All external APIs are accessible via HTTP requests to your node (default port: 20000).
-
----
-
-#### Node Management
+<details>
+  <summary><strong>Node Management</strong></summary>
 
 | Endpoint              | Method | Description          |
 |-----------------------|--------|----------------------|
@@ -1537,9 +1485,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/shutdown`       | POST   | Shutdown the node    |
 | `/api/node-status`    | GET    | Get node status      |
 
+</details>
+
 ---
 
-#### Bootstrap Management
+<details>
+  <summary><strong>Bootstrap Management</strong></summary>
 
 | Endpoint                    | Method | Description                  |
 |-----------------------------|--------|------------------------------|
@@ -1548,9 +1499,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/remove-all-bootstrap` | POST   | Remove all bootstrap peers   |
 | `/api/get-all-bootstrap`    | GET    | Get all bootstrap peers      |
 
+</details>
+
 ---
 
-#### Peer Management
+<details>
+  <summary><strong>Peer Management</strong></summary>
 
 | Endpoint                             | Method | Description                         |
 |--------------------------------------|--------|-------------------------------------|
@@ -1559,9 +1513,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/add-peer-details`              | POST   | Add peer details                    |
 | `/api/add-peer-details-from-explorer`| POST   | Add peer details from explorer      |
 
+</details>
+
 ---
 
-#### DID Management
+<details>
+  <summary><strong>DID Management</strong></summary>
 
 | Endpoint                         | Method | Description                                 |
 |----------------------------------|--------|---------------------------------------------|
@@ -1573,9 +1530,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/request-did-for-pubkey`    | POST   | Create DID from given pubKey                |
 | `/api/send-jwt-from-wallet`      | POST   | Authenticate RBT transfer JWT from wallet   |
 
+</details>
+
 ---
 
-#### Quorum Management
+<details>
+  <summary><strong>Quorum Management</strong></summary>
 
 | Endpoint                             | Method | Description                         |
 |--------------------------------------|--------|-------------------------------------|
@@ -1585,9 +1545,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/setup-quorum`                  | POST   | Setup quorum                        |
 | `/api/check-quorum-status`           | GET    | Check quorum status                 |
 
+</details>
+
 ---
 
-#### Token Management
+<details>
+  <summary><strong>Token Management</strong></summary>
 
 | Endpoint                              | Method | Description                           |
 |---------------------------------------|--------|---------------------------------------|
@@ -1604,9 +1567,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/recover-token`                  | POST   | Recover tokens after pinning service  |
 | `/api/faucet-token-check`             | GET    | Check faucet tokens                   |
 
+</details>
+
 ---
 
-#### Token Status & Monitoring
+<details>
+  <summary><strong>Token Status & Monitoring</strong></summary>
 
 | Endpoint                              | Method | Description                           |
 |---------------------------------------|--------|---------------------------------------|
@@ -1617,18 +1583,24 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/run-unpledge`                   | POST   | Unpledge pledged tokens               |
 | `/api/unpledge-pow-unpledge-tokens`   | POST   | Unpledge POW tokens                   |
 
+</details>
+
 ---
 
-#### Token Chain Operations
+<details>
+  <summary><strong>Token Chain Operations</strong></summary>
 
 | Endpoint                        | Method | Description                    |
 |---------------------------------|--------|--------------------------------|
 | `/api/dump-token-chain`         | GET    | Dump token chain data to JSON  |
 | `/api/validate-token-chain`     | POST   | Validate token chain           |
 
+</details>
+
 ---
 
-#### FT Operations
+<details>
+  <summary><strong>FT Operations</strong></summary>
 
 | Endpoint                        | Method | Description                         |
 |---------------------------------|--------|-------------------------------------|
@@ -1639,9 +1611,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/get-ft-token-chain`       | GET    | View FT token chain data            |
 | `/api/get-ft-txn-by-did`        | GET    | Get FT transactions by DID          |
 
+</details>
+
 ---
 
-#### NFT Operations
+<details>
+  <summary><strong>NFT Operations</strong></summary>
 
 | Endpoint                          | Method | Description                        |
 |-----------------------------------|--------|------------------------------------|
@@ -1656,9 +1631,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/get-nfts-by-did`            | GET    | Get NFTs by DID                    |
 | `/api/add-nft-sale`               | POST   | Add NFT for sale                   |
 
+</details>
+
 ---
 
-#### Smart Contract Operations
+<details>
+  <summary><strong>Smart Contract Operations</strong></summary>
 
 | Endpoint                                   | Method | Description                            |
 |--------------------------------------------|--------|----------------------------------------|
@@ -1672,10 +1650,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/get-smart-contract-token-chain-data` | GET    | Get smart contract token chain data    |
 | `/api/register-callback-url`               | POST   | Register callback URL                  |
 
+</details>
 
 ---
 
-#### Explorer Management
+<details>
+  <summary><strong>Explorer Management</strong></summary>
 
 | Endpoint                              | Method | Description                          |
 |---------------------------------------|--------|--------------------------------------|
@@ -1684,10 +1664,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/get-all-explorer`               | GET    | Get all explorer URLs                |
 | `/api/add-user-api-key`               | POST   | Add user API key                     |
 
+</details>
 
 ---
 
-#### Transaction Queries
+<details>
+  <summary><strong>Transaction Queries</strong></summary>
 
 | Endpoint              | Method | Description                 |
 |-----------------------|--------|-----------------------------|
@@ -1696,9 +1678,12 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/get-by-comment` | GET    | Get transactions by comment |
 | `/api/get-by-node`    | GET    | Get transactions by node    |
 
+</details>
+
 ---
 
-#### System & Utility
+<details>
+  <summary><strong>System & Utility</strong></summary>
 
 | Endpoint                     | Method | Description                    |
 |------------------------------|--------|--------------------------------|
@@ -1707,14 +1692,18 @@ All external APIs are accessible via HTTP requests to your node (default port: 2
 | `/api/signature-response`    | POST   | Handle signature response      |
 | `/api/migrate-node`          | POST   | Migrate node                   |
 
+</details>
+
 ---
 
-## Support and Community
+## 🤝 Support and Community
 
 For additional support:
-- Check the [official documentation](https://github.com/rubixchain/rubixgoplatform).
+- Checkout 
+    - [Rubix website](https://rubix.net/)
+    - [Rubix Learn website](https://learn.rubix.net/).
 - Join the community forums.
-- Submit issues to the [project repository](https://github.com/rubixchain/rubixgoplatform).
+- Submit issues to the [Issues page](https://github.com/rubixchain/rubixgoplatform/issues).
 - Contact the technical support team.
 
 ---
