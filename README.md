@@ -105,6 +105,8 @@ Display the version of the Rubix Go Platform executable.
 **Options:**
 - `-v`: Display the executable version.
 
+---
+
 </details>
 
 <details>
@@ -148,6 +150,8 @@ Start a Rubix blockchain node.
 
 **Related API:** `POST /api/start`
 
+---
+
 </details>
 
 <details>
@@ -190,6 +194,8 @@ Add bootstrap peers to the Rubix node.
 
 **Related API:** `POST /api/add-bootstrap`
 
+---
+
 </details>
 
 <details>
@@ -210,6 +216,8 @@ Remove specific bootstrap peers from the node.
 
 **Related API:** `POST /api/remove-bootstrap`
 
+---
+
 </details>
 
 <details>
@@ -228,6 +236,8 @@ Remove all bootstrap peers from the node.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/remove-all-bootstrap`
+
+---
 
 </details>
 
@@ -270,6 +280,8 @@ Retrieve the node's peer ID.
 
 **Related API:** `GET /api/get-peer-id`
 
+---
+
 </details>
 
 <details>
@@ -289,6 +301,8 @@ Test connectivity with a specific peer in the Rubix network.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/ping`
+
+---
 
 </details>
 
@@ -310,6 +324,8 @@ Manually add peer details.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/add-peer-details`
+
+---
 
 </details>
 
@@ -365,6 +381,8 @@ Create a new Decentralized Identifier (DID).
 
 **Related API:** `POST /api/createdid`
 
+---
+
 </details>
 
 <details>
@@ -373,15 +391,18 @@ Create a new Decentralized Identifier (DID).
 Create a DID from an existing public key.
 
 ```bash
-./rubixgoplatform create-did-from-pubkey
+./rubixgoplatform create-did-from-pubkey -pubKeyFile <public-key-file> -port <port-number>
 ```
 
 **Description:** Generates a DID using a provided public key.
 
 **Options:**
 - `-pubKeyFile string`: Public key file (default: "").
+- `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/request-did-for-pubkey`
+
+---
 
 </details>
 
@@ -401,6 +422,8 @@ List all DIDs on the node.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/getalldid`
+
+---
 
 </details>
 
@@ -444,18 +467,20 @@ Add a quorum list to the node.
 
 **Related API:** `POST /api/addquorum`
 
+---
+
 </details>
 
 <details>
   <summary><strong>Setup Quorum</strong></summary>
 
-Set up quorum with private key password.
+Set up quorum to enable participation in consensus.
 
 ```bash
 ./rubixgoplatform setup-quorum -did <did-address> -port <port-number>
 ```
 
-**Description:** Configures quorum settings with specified passwords.
+**Description:** Initializes quorum for the given DID using the provided passwords, enabling participation in consensus.
 
 **Options:**
 - `-did string`: DID address.
@@ -465,6 +490,8 @@ Set up quorum with private key password.
 - `-fp`: Force password entry in terminal.
 
 **Related API:** `POST /api/setup-quorum`
+
+---
 
 </details>
 
@@ -485,6 +512,8 @@ List all quorum configurations.
 
 **Related API:** `GET /api/getallquorum`
 
+---
+
 </details>
 
 <details>
@@ -503,6 +532,8 @@ Remove all quorum configurations.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/removeallquorum`
+
+---
 
 </details>
 
@@ -552,9 +583,11 @@ Generate test RBT tokens on the node.
 
 **Related API:** `POST /api/generate-test-token`
 
+---
+
 </details>
 
-<details>
+<!-- <details>
   <summary><strong>Generate Faucet Test RBT</strong></summary>
 
 Generate faucet test RBT tokens.
@@ -572,7 +605,9 @@ Generate faucet test RBT tokens.
 
 **Related API:** `POST /api/generate-faucettest-token`
 
-</details>
+---
+
+</details> -->
 
 <details>
   <summary><strong>Transfer RBT</strong></summary>
@@ -599,9 +634,11 @@ Transfer RBT tokens between addresses.
 
 **Related API:** `POST /api/initiate-rbt-transfer`
 
+---
+
 </details>
 
-<details>
+<!-- <details>
   <summary><strong>Self Transfer RBT</strong></summary>
 
 Perform self-transfer of RBT tokens.
@@ -626,7 +663,7 @@ Perform self-transfer of RBT tokens.
 
 **Related API:** `POST /api/initiate-self-transfer`
 
-</details>
+</details> -->
 
 <details>
   <summary><strong>Get Account Info</strong></summary>
@@ -647,7 +684,7 @@ Retrieve account information for a DID.
 
 </details>
 
-<details>
+<!-- <details>
   <summary><strong>Release All Locked Tokens</strong></summary>
 
 Release all locked tokens.
@@ -663,7 +700,7 @@ Release all locked tokens.
 
 **Related API:** `POST /api/release-all-locked-tokens`
 
-</details>
+</details> -->
 
 <details>
   <summary><strong>Pin Token</strong></summary>
@@ -686,6 +723,8 @@ Pin RBT tokens for pinning service.
 
 **Related API:** `POST /api/initiate-pin-token`
 
+---
+
 </details>
 
 <details>
@@ -707,6 +746,8 @@ Recover RBT tokens after pinning for pinning service.
 
 **Related API:** `POST /api/recover-token`
 
+---
+
 </details>
 
 <details>
@@ -726,9 +767,11 @@ Validate a specific token.
 
 **Related API:** `POST /api/validate-token`
 
+---
+
 </details>
 
-<details>
+<!-- <details>
   <summary><strong>Faucet Token Check</strong></summary>
 
 Check faucet token status.
@@ -746,7 +789,7 @@ Check faucet token status.
 
 **Related API:** `GET /api/faucet-token-check`
 
-</details>
+</details> -->
 
 ---
 
@@ -768,6 +811,8 @@ Check pledged token information.
 
 **Related API:** `GET /api/get-pledgedtoken-details`
 
+---
+
 </details>
 
 <details>
@@ -787,6 +832,8 @@ Check if tokens are in a pinned state.
 
 **Related API:** `GET /api/check-pinned-state`
 
+---
+
 </details>
 
 <details>
@@ -805,9 +852,11 @@ Execute unpledge operations.
 
 **Related API:** `POST /api/run-unpledge`
 
+---
+
 </details>
 
-<details>
+<!-- <details>
   <summary><strong>Unpledge POW Pledge Tokens</strong></summary>
 
 Unpledge Proof-of-Work pledged tokens.
@@ -823,7 +872,7 @@ Unpledge Proof-of-Work pledged tokens.
 
 **Related API:** `POST /api/unpledge-pow-unpledge-tokens`
 
-</details>
+</details> -->
 
 ---
 
@@ -844,9 +893,11 @@ Get RBT token chain data.
 - `-token string`: Token ID.
 - `-port string`: Server/Host port (default: "20000").
 
+**Related API:** `GET /api/dump-token-chain`
+
 **Note:** The token chain data will be saved as a JSON file named `dump.json` in the current directory.
 
-**Related API:** `GET /api/dump-token-chain`
+---
 
 </details>
 
@@ -860,6 +911,8 @@ Decode dumped token chain data.
 ```
 
 **Description:** Decodes previously dumped token chain (`dump.json`) data for better readability.
+
+---
 
 </details>
 
@@ -913,6 +966,8 @@ Create fungible tokens.
 
 **Related API:** `POST /api/create-ft`
 
+---
+
 </details>
 
 <details>
@@ -936,9 +991,11 @@ Transfer fungible tokens.
 - `-fp`: Force password authentication.
 - `-creatorDID string`: FT Creator DID (for multiple FTs with the same name).
 
+**Related API:** `POST /api/initiate-ft-transfer`
+
 **Note:** Use the `-creatorDID` flag when transferring FTs with duplicate names created by different DIDs to accurately identify and transfer the correct FT batch.
 
-**Related API:** `POST /api/initiate-ft-transfer`
+---
 
 </details>
 
@@ -959,6 +1016,8 @@ Retrieve information about all FTs for a DID.
 
 **Related API:** `GET /api/get-ft-info-by-did`
 
+---
+
 </details>
 
 <details>
@@ -976,9 +1035,11 @@ Get FT token chain data.
 - `-token string`: FT token ID.
 - `-port string`: Server/Host port (default: "20000").
 
+**Related API:** `GET /api/dump-ft-token-chain`
+
 **Note:** The token chain data will be saved as a JSON file named `dump.json` in the current directory.
 
-**Related API:** `GET /api/dump-ft-token-chain`
+---
 
 </details>
 
@@ -1024,6 +1085,8 @@ Create Non-Fungible Tokens (NFTs).
 
 **Related API:** `POST /api/create-nft`
 
+---
+
 </details>
 
 <details>
@@ -1046,6 +1109,8 @@ Deploy an NFT smart contract.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/deploy-nft`
+
+---
 
 </details>
 
@@ -1072,6 +1137,8 @@ Execute NFT transactions.
 
 **Related API:** `POST /api/execute-nft`
 
+---
+
 </details>
 
 <details>
@@ -1090,6 +1157,8 @@ List all NFTs.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/list-nfts`
+
+---
 
 </details>
 
@@ -1110,6 +1179,8 @@ Subscribe to NFT events.
 
 **Related API:** `POST /api/subscribe-nft`
 
+---
+
 </details>
 
 <details>
@@ -1129,6 +1200,8 @@ Fetch NFT details.
 
 **Related API:** `GET /api/fetch-nft`
 
+---
+
 </details>
 
 <details>
@@ -1147,6 +1220,8 @@ Retrieve NFTs owned by a specific DID.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/get-nfts-by-did`
+
+---
 
 </details>
 
@@ -1193,6 +1268,8 @@ Generate smart contract code.
 
 **Related API:** `POST /api/generate-smart-contract`
 
+---
+
 </details>
 
 <details>
@@ -1215,6 +1292,8 @@ Deploy a smart contract to the network.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `POST /api/deploy-smart-contract`
+
+---
 
 </details>
 
@@ -1239,6 +1318,8 @@ Execute smart contract functions.
 
 **Related API:** `POST /api/execute-smart-contract`
 
+---
+
 </details>
 
 <details>
@@ -1257,6 +1338,8 @@ Fetch smart contract details.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/fetch-smart-contract`
+
+---
 
 </details>
 
@@ -1280,6 +1363,8 @@ Publish a smart contract to the network.
 
 **Related API:** `POST /api/publish-smart-contract`
 
+---
+
 </details>
 
 <details>
@@ -1299,6 +1384,8 @@ Subscribe to smart contract events.
 
 **Related API:** `POST /api/subscribe-smart-contract`
 
+---
+
 </details>
 
 <details>
@@ -1317,6 +1404,8 @@ Export smart contract token chain data.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/dump-smart-contract-token-chain`
+
+---
 
 </details>
 
@@ -1360,6 +1449,8 @@ Add explorer URLs for transaction data.
 
 **Related API:** `POST /api/add-explorer`
 
+---
+
 </details>
 
 <details>
@@ -1379,6 +1470,8 @@ Remove explorer URLs.
 
 **Related API:** `POST /api/remove-explorer`
 
+---
+
 </details>
 
 <details>
@@ -1396,6 +1489,8 @@ List all configured explorer URLs.
 - `-port string`: Server/Host port (default: "20000").
 
 **Related API:** `GET /api/get-all-explorer`
+
+---
 
 </details>
 
