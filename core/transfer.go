@@ -477,25 +477,31 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		}
 	}()
 
-	select {
-	case result := <-resultChan:
-		// Transaction completed within 40s or failed
-		c.log.Debug("transaction completed before 20 secs")
-		return result
+	if c.IsAsyncRBTResponse() {
+		select {
+		case result := <-resultChan:
+			// Transaction completed within 20s or failed
+			c.log.Debug("RBT transaction completed before 20 secs")
+			return result
 
-	case <-time.After(20 * time.Second):
-		// Timeout occurred, return Transaction ID only
-		c.log.Debug("transaction still processing with txn id ", cr.TransactionID)
+		case <-time.After(20 * time.Second):
+			// Timeout occurred, return Transaction ID only
+			c.log.Debug("RBT transaction still processing with txn id ", cr.TransactionID)
 
-		msg := fmt.Sprintf("Transaction is still processing, with transaction id %v ", cr.TransactionID)
-		resp.Message = msg
-		if strings.Contains(resp.Message, "with transaction id") {
-			if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
-				resp.Result = txID
+			msg := fmt.Sprintf("Transaction is still processing, with transaction id %v ", cr.TransactionID)
+			resp.Message = msg
+			if strings.Contains(resp.Message, "with transaction id") {
+				if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
+					resp.Result = txID
+				}
 			}
+			resp.Status = true
+			return resp
 		}
-		resp.Status = true
-		return resp
+	} else {
+		// Wait for transaction to complete (sync mode)
+		result := <-resultChan
+		return result
 	}
 }
 

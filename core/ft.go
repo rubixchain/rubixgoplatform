@@ -955,6 +955,12 @@ func (c *Core) IsAsyncFTResponse() bool {
 	return c.cfg.CfgData.AsyncFTResponse
 }
 
+// Helper to check RBT async config flag
+func (c *Core) IsAsyncRBTResponse() bool {
+	// Return the actual config value
+	return c.cfg.CfgData.AsyncRBTResponse
+}
+
 // FixAllFTTokensWithPeerIDAsCreator fixes all FT tokens that have peer ID as CreatorDID
 func (c *Core) FixAllFTTokensWithPeerIDAsCreator() ([]wallet.FTTokenFixResult, error) {
 	return c.w.FixAllFTTokensWithPeerIDAsCreator()

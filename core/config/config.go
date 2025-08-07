@@ -53,6 +53,7 @@ type ConfigData struct {
 	StorageConfig     StorageConfig      `json:"storage_config"`
 	TestStorageConfig StorageConfig      `json:"test_storage_config"`
 	AsyncFTResponse   bool               `json:"async_ft_response"`
+	AsyncRBTResponse  bool               `json:"async_rbt_response"`
 	IPFSRecovery      *IPFSRecoveryConfig `json:"ipfs_recovery"`
 	TrustedNetwork    bool               `json:"trusted_network"` // Skip DHT/pin checks for trusted networks
 	UnpledgeConfig    *UnpledgePoolConfig `json:"unpledge_config"`
@@ -62,6 +63,7 @@ type ConfigData struct {
 func NewDefaultConfigData() ConfigData {
 	return ConfigData{
 		AsyncFTResponse: true,
+		AsyncRBTResponse: true,
 		EnableOptimizedUnpledge: true,
 	}
 }
