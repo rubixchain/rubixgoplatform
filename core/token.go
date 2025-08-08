@@ -868,6 +868,20 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 				sum = floatPrecision(sum, MaxDecimalPlaces)
 			}
 			if sum < reqAmt {
+				// Check if there are any tokens available that could be split to create parts
+				// First release the part tokens we can't use
+				c.w.ReleaseTokens(allPartTokens)
+				
+				// Check if we have any free tokens that could potentially be split
+				availableBalance, err := c.GetAccountInfo(did)
+				if err == nil && availableBalance.RBTAmount >= (float64(len(requiredTokens)) + reqAmt) {
+					// We have sufficient balance, let GetTokens handle part creation
+					c.log.Debug("Existing part tokens insufficient, will attempt to create new part tokens", 
+						"needed", reqAmt, "available_parts", sum, "total_balance", availableBalance.RBTAmount)
+					return requiredTokens, reqAmt, nil
+				}
+				
+				// Truly insufficient balance
 				c.w.ReleaseTokens(wholeTokens)
 				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
 				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
@@ -925,6 +939,20 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 				sum = sum + partToken.TokenValue
 			}
 			if sum < txnAmount {
+				// Check if there are any tokens available that could be split to create parts
+				// First release the part tokens we can't use
+				c.w.ReleaseTokens(allPartTokens)
+				
+				// Check if we have any free tokens that could potentially be split
+				availableBalance, err := c.GetAccountInfo(did)
+				if err == nil && availableBalance.RBTAmount >= txnAmount {
+					// We have sufficient balance, let GetTokens handle part creation
+					c.log.Debug("Existing part tokens insufficient, will attempt to create new part tokens", 
+						"needed", txnAmount, "available_parts", sum, "total_balance", availableBalance.RBTAmount)
+					return requiredTokens, txnAmount, nil
+				}
+				
+				// Truly insufficient balance
 				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
 				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
 			}
