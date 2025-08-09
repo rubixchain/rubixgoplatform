@@ -54,6 +54,7 @@ type ConfigData struct {
 	TestStorageConfig StorageConfig      `json:"test_storage_config"`
 	AsyncFTResponse   bool               `json:"async_ft_response"`
 	AsyncRBTResponse  bool               `json:"async_rbt_response"`
+	ParallelFTBurn    bool               `json:"parallel_ft_burn"`    // Enable parallel token burning for FT creation
 	IPFSRecovery      *IPFSRecoveryConfig `json:"ipfs_recovery"`
 	TrustedNetwork    bool               `json:"trusted_network"` // Skip DHT/pin checks for trusted networks
 	UnpledgeConfig    *UnpledgePoolConfig `json:"unpledge_config"`
@@ -64,6 +65,7 @@ func NewDefaultConfigData() ConfigData {
 	return ConfigData{
 		AsyncFTResponse: true,
 		AsyncRBTResponse: true,
+		ParallelFTBurn: true,
 		EnableOptimizedUnpledge: true,
 	}
 }

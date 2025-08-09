@@ -262,55 +262,199 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return firstErr
 	}
 
-	for i := range wholeTokens {
+	// Check if parallel burning is enabled
+	useParallelBurn := c.cfg.CfgData.ParallelFTBurn
+	
+	if !useParallelBurn {
+		// Fall back to sequential burning
+		c.log.Info("Using sequential token burning")
+		for i := range wholeTokens {
+			release := true
+			defer c.relaseToken(&release, wholeTokens[i].TokenID)
+			ptts := RBTString
+			if wholeTokens[i].ParentTokenID != "" && wholeTokens[i].TokenValue < 1 {
+				ptts = PartString
+			}
+			ptt := c.TokenType(ptts)
 
-		release := true
-		defer c.relaseToken(&release, wholeTokens[i].TokenID)
-		ptts := RBTString
-		if wholeTokens[i].ParentTokenID != "" && wholeTokens[i].TokenValue < 1 {
-			ptts = PartString
-		}
-		ptt := c.TokenType(ptts)
-
-		bti := &block.TransInfo{
-			Tokens: []block.TransTokens{
-				{
-					Token:     wholeTokens[i].TokenID,
-					TokenType: ptt,
+			bti := &block.TransInfo{
+				Tokens: []block.TransTokens{
+					{
+						Token:     wholeTokens[i].TokenID,
+						TokenType: ptt,
+					},
 				},
-			},
-			Comment: "Token burnt at : " + time.Now().String(),
+				Comment: "Token burnt at : " + time.Now().String(),
+			}
+			tcb := &block.TokenChainBlock{
+				TransactionType: block.TokenIsBurntForFT,
+				TokenOwner:      did,
+				TransInfo:       bti,
+				TokenValue:      wholeTokens[i].TokenValue,
+				ChildTokens:     newFTTokenIDs,
+			}
+			ctcb := make(map[string]*block.Block)
+			ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
+			block := block.CreateNewBlock(ctcb, tcb)
+			if block == nil {
+				return fmt.Errorf("failed to create new block")
+			}
+			err = block.UpdateSignature(dc)
+			if err != nil {
+				c.log.Error("FT creation failed, failed to update signature", "err", err)
+				return err
+			}
+			err = c.w.AddTokenBlock(wholeTokens[i].TokenID, block)
+			if err != nil {
+				c.log.Error("FT creation failed, failed to add token block", "err", err)
+				return err
+			}
+			wholeTokens[i].TokenStatus = wallet.TokenIsBurntForFT
+			err = c.w.UpdateToken(&wholeTokens[i])
+			if err != nil {
+				c.log.Error("FT token creation failed, failed to update token status", "err", err)
+				return err
+			}
+			release = false
 		}
-		tcb := &block.TokenChainBlock{
-			TransactionType: block.TokenIsBurntForFT,
-			TokenOwner:      did,
-			TransInfo:       bti,
-			TokenValue:      wholeTokens[i].TokenValue,
-			ChildTokens:     newFTTokenIDs,
+	} else {
+		// Parallel token burning implementation
+		c.log.Info("Using parallel token burning")
+		type burnJob struct {
+			index int
+			token wallet.Token
 		}
-		ctcb := make(map[string]*block.Block)
-		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
-		block := block.CreateNewBlock(ctcb, tcb)
-		if block == nil {
-			return fmt.Errorf("failed to create new block")
+	
+	type burnResult struct {
+		index int
+		err   error
+	}
+	
+	// Create channels for job distribution
+	burnJobs := make(chan burnJob, len(wholeTokens))
+	burnResults := make(chan burnResult, len(wholeTokens))
+	
+	// Worker function for burning tokens
+	burnWorker := func(wg *sync.WaitGroup) {
+		defer wg.Done()
+		for job := range burnJobs {
+			// Determine token type
+			ptts := RBTString
+			if job.token.ParentTokenID != "" && job.token.TokenValue < 1 {
+				ptts = PartString
+			}
+			ptt := c.TokenType(ptts)
+			
+			// Create burn transaction info
+			bti := &block.TransInfo{
+				Tokens: []block.TransTokens{
+					{
+						Token:     job.token.TokenID,
+						TokenType: ptt,
+					},
+				},
+				Comment: "Token burnt at : " + time.Now().String(),
+			}
+			
+			// Create token chain block
+			tcb := &block.TokenChainBlock{
+				TransactionType: block.TokenIsBurntForFT,
+				TokenOwner:      did,
+				TransInfo:       bti,
+				TokenValue:      job.token.TokenValue,
+				ChildTokens:     newFTTokenIDs,
+			}
+			
+			// Get latest block and create new block
+			ctcb := make(map[string]*block.Block)
+			ctcb[job.token.TokenID] = c.w.GetLatestTokenBlock(job.token.TokenID, ptt)
+			blk := block.CreateNewBlock(ctcb, tcb)
+			
+			if blk == nil {
+				burnResults <- burnResult{
+					index: job.index,
+					err:   fmt.Errorf("failed to create burn block for token %s", job.token.TokenID),
+				}
+				continue
+			}
+			
+			// Sign the block
+			if err := blk.UpdateSignature(dc); err != nil {
+				c.log.Error("Failed to sign burn block", "token", job.token.TokenID, "err", err)
+				burnResults <- burnResult{index: job.index, err: err}
+				continue
+			}
+			
+			// Add block to chain
+			if err := c.w.AddTokenBlock(job.token.TokenID, blk); err != nil {
+				c.log.Error("Failed to add burn block", "token", job.token.TokenID, "err", err)
+				burnResults <- burnResult{index: job.index, err: err}
+				continue
+			}
+			
+			// Update token status
+			job.token.TokenStatus = wallet.TokenIsBurntForFT
+			if err := c.w.UpdateToken(&job.token); err != nil {
+				c.log.Error("Failed to update token status", "token", job.token.TokenID, "err", err)
+				burnResults <- burnResult{index: job.index, err: err}
+				continue
+			}
+			
+			burnResults <- burnResult{index: job.index, err: nil}
 		}
-		err = block.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("FT creation failed, failed to update signature", "err", err)
-			return err
+	}
+	
+	// Start burn workers
+	var burnWg sync.WaitGroup
+	numBurnWorkers := runtime.NumCPU()
+	// Limit workers to avoid overwhelming the system
+	if numBurnWorkers > 8 {
+		numBurnWorkers = 8
+	}
+	c.log.Info("Starting parallel token burning", "workers", numBurnWorkers, "tokens", len(wholeTokens))
+	
+	for i := 0; i < numBurnWorkers; i++ {
+		burnWg.Add(1)
+		go burnWorker(&burnWg)
+	}
+	
+	// Queue all burn jobs
+	for i, token := range wholeTokens {
+		burnJobs <- burnJob{index: i, token: token}
+	}
+	close(burnJobs)
+	
+	// Collect results
+	var burnErrors []error
+	successCount := 0
+	for i := 0; i < len(wholeTokens); i++ {
+		result := <-burnResults
+		if result.err != nil {
+			burnErrors = append(burnErrors, fmt.Errorf("token %d: %v", result.index, result.err))
+		} else {
+			successCount++
 		}
-		err = c.w.AddTokenBlock(wholeTokens[i].TokenID, block)
-		if err != nil {
-			c.log.Error("FT creation failed, failed to add token block", "err", err)
-			return err
+		
+		// Log progress
+		if (i+1)%10 == 0 || i == len(wholeTokens)-1 {
+			c.log.Info("Token burning progress", 
+				"completed", i+1, 
+				"total", len(wholeTokens),
+				"success", successCount)
 		}
-		wholeTokens[i].TokenStatus = wallet.TokenIsBurntForFT
-		err = c.w.UpdateToken(&wholeTokens[i])
-		if err != nil {
-			c.log.Error("FT token creation failed, failed to update token status", "err", err)
-			return err
-		}
-		release = false
+	}
+	
+	// Wait for all workers to complete
+	burnWg.Wait()
+	close(burnResults)
+	
+	// Check if any burns failed
+	if len(burnErrors) > 0 {
+		c.log.Error("Token burning failed", "errors", len(burnErrors), "first_error", burnErrors[0])
+		return fmt.Errorf("token burning failed with %d errors: %v", len(burnErrors), burnErrors[0])
+	}
+	
+	c.log.Info("Successfully burnt all tokens", "count", len(wholeTokens))
 	}
 
 	// --- Batch Write FTs to Storage using WriteBatch ---
