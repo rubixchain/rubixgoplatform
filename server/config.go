@@ -29,6 +29,27 @@ type Config struct {
 	GRPCSecure  bool   `json:"grpc_secure"`
 }
 
+// APIGetConfig returns current node configuration status
+func (s *Server) APIGetConfig(req *ensweb.Request) *ensweb.Result {
+	cfg := s.c.GetConfig()
+	if cfg == nil {
+		return s.BasicResponse(req, false, "Failed to get configuration", nil)
+	}
+	
+	// Create a summary of important config settings
+	configInfo := map[string]interface{}{
+		"trusted_network":      cfg.CfgData.TrustedNetwork,
+		"async_ft_response":    cfg.CfgData.AsyncFTResponse,
+		"async_rbt_response":   cfg.CfgData.AsyncRBTResponse,
+		"parallel_ft_burn":     cfg.CfgData.ParallelFTBurn,
+		"optimized_unpledge":   cfg.CfgData.EnableOptimizedUnpledge,
+		"node_address":         cfg.NodeAddress,
+		"node_port":            cfg.NodePort,
+	}
+	
+	return s.BasicResponse(req, true, "Configuration retrieved successfully", configInfo)
+}
+
 // APIAddBootStrap will add bootstrap peers to the configuration
 func (s *Server) APIAddBootStrap(req *ensweb.Request) *ensweb.Result {
 	var m model.BootStrapPeers

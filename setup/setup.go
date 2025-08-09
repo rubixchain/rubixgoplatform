@@ -16,6 +16,7 @@ const (
 	APIShutdown                         string = "/api/shutdown"
 	APINodeStatus                       string = "/api/node-status"
 	APIPing                             string = "/api/ping"
+	APIGetConfig                        string = "/api/get-config"
 	APIAddBootStrap                     string = "/api/add-bootstrap"
 	APIRemoveBootStrap                  string = "/api/remove-bootstrap"
 	APIRemoveAllBootStrap               string = "/api/remove-all-bootstrap"

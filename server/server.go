@@ -109,6 +109,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIShutdown, "POST", s.AuthHandle(s.APIShutdown, false, s.AuthError, true))
 	s.AddRoute(setup.APINodeStatus, "GET", s.AuthHandle(s.APINodeStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIPing, "GET", s.AuthHandle(s.APIPing, false, s.AuthError, false))
+	s.AddRoute(setup.APIGetConfig, "GET", s.AuthHandle(s.APIGetConfig, false, s.AuthError, false))
 	s.AddRoute(setup.APIAddBootStrap, "POST", s.AuthHandle(s.APIAddBootStrap, false, s.AuthError, true))
 	s.AddRoute(setup.APIRemoveBootStrap, "POST", s.AuthHandle(s.APIRemoveBootStrap, false, s.AuthError, true))
 	s.AddRoute(setup.APIRemoveAllBootStrap, "POST", s.AuthHandle(s.APIRemoveAllBootStrap, false, s.AuthError, true))
