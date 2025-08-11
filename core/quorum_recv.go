@@ -543,8 +543,8 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 
 				select {
 				case <-done:
-					// checkTokenState completed successfully
-				case <-time.After(5 * time.Second):
+				// checkTokenState completed successfully
+				case <-time.After(10 * time.Minute):
 					c.log.Error("checkTokenState timed out", "token", token)
 					tokenStateCheckResult[idx] = TokenStateCheckResult{
 						Token:   token,
@@ -556,7 +556,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		}
 		wg.Wait()
 
-	} else {
+	} else { // Execute mode
 		address := consensusRequest.ExecuterPeerID + "." + consensusContract.GetExecutorDID()
 		peerConn, err := c.getPeer(address)
 		if err != nil {
@@ -583,7 +583,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 				}()
 				select {
 				case <-done:
-				case <-time.After(5 * time.Second):
+				case <-time.After(10 * time.Minute): // Changed from 5 sec to 10 mins
 					c.log.Error("checkTokenState timed out", "token", token)
 					tokenStateCheckResult[idx] = TokenStateCheckResult{
 						Token:   token,
@@ -610,11 +610,39 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	}
 
 	c.log.Debug("Proceeding to pin token state to prevent double spend")
-	ctx := req.Context()
-	err = c.pinTokenState(ctx, tokenStateCheckResult, did, consensusRequest.TransactionID, "NA", "NA", float64(0))
-	if err != nil {
-		consensusReply.Message = "Error Pinning token state: " + err.Error()
-		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+
+	// Only condition is TrustedNetwork for async pinning
+	if c.cfg.CfgData.TrustedNetwork {
+		c.log.Info("Using async pinning for SmartContract transaction (Trusted Network)",
+			"tokens", len(tokenStateCheckResult),
+			"transaction_id", consensusRequest.TransactionID,
+			"mode", consensusRequest.Mode)
+
+		err1 := c.asyncPinManager.SubmitPinJob(
+			tokenStateCheckResult,
+			did,
+			consensusRequest.TransactionID,
+			"NA", // sender
+			"NA", // receiver
+			float64(0),
+		)
+		if err1 != nil {
+			c.log.Error("Failed to submit async pin job", "err", err1)
+			consensusReply.Message = "Error submitting pin job: " + err1.Error()
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
+
+		c.log.Info("Async pin job submitted successfully",
+			"transaction_id", consensusRequest.TransactionID,
+			"tokens", len(tokenStateCheckResult))
+
+	} else {
+		ctx := req.Context()
+		err = c.pinTokenState(ctx, tokenStateCheckResult, did, consensusRequest.TransactionID, "NA", "NA", float64(0))
+		if err != nil {
+			consensusReply.Message = "Error Pinning token state: " + err.Error()
+			return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
+		}
 	}
 
 	c.log.Debug("Finished Tokenstate check")
