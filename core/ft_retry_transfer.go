@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/wrapper/config"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 // RetryFTTransferRequest represents the request to retry an FT transfer
@@ -58,17 +59,40 @@ func (c *Core) RetryFTTransfer(req *RetryFTTransferRequest) (*RetryFTTransferRes
 	}
 	
 	// Step 1: Fetch transaction details from explorer API
-	var explorerURL string
+	var explorerBaseURL string
+	var apiPath string
 	if c.testNet {
-		explorerURL = fmt.Sprintf("https://testnet-app-api.rubixexplorer.com/api/Transaction/GetById/%s", req.TransactionID)
+		explorerBaseURL = "testnet-app-api.rubixexplorer.com"
 	} else {
-		explorerURL = fmt.Sprintf("https://rexplorerapi.azurewebsites.net/api/Transaction/GetById/%s", req.TransactionID)
+		explorerBaseURL = "rexplorerapi.azurewebsites.net"
+	}
+	apiPath = fmt.Sprintf("/api/Transaction/GetById/%s", req.TransactionID)
+	
+	c.log.Info("Fetching transaction from explorer", "base_url", explorerBaseURL, "path", apiPath)
+	
+	// Create a temporary explorer client for this specific request
+	// Using Production: "true" ensures TLS certificate verification is skipped
+	cl, err := ensweb.NewClient(&config.Config{
+		ServerAddress: explorerBaseURL,
+		ServerPort:    "443",
+		Production:    "true",
+	}, c.log)
+	if err != nil {
+		c.log.Error("Failed to create explorer client", "err", err)
+		response.Message = fmt.Sprintf("Failed to create explorer client: %v", err)
+		return response, nil
 	}
 	
-	c.log.Info("Fetching transaction from explorer", "url", explorerURL)
+	// Create the request
+	httpReq, err := cl.JSONRequestForExplorer("GET", apiPath, nil, fmt.Sprintf("https://%s", explorerBaseURL), "")
+	if err != nil {
+		c.log.Error("Failed to create explorer request", "err", err)
+		response.Message = fmt.Sprintf("Failed to create explorer request: %v", err)
+		return response, nil
+	}
 	
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(explorerURL)
+	// Execute the request
+	resp, err := cl.Do(httpReq)
 	if err != nil {
 		c.log.Error("Failed to fetch transaction from explorer", "err", err)
 		response.Message = fmt.Sprintf("Failed to fetch transaction from explorer: %v", err)
