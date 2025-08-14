@@ -120,14 +120,14 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 
 func (s *Server) APIFixFTCreator(req *ensweb.Request) *ensweb.Result {
 	s.log.Info("Fixing FT tokens with peer ID as CreatorDID")
-	
+
 	// Run the fix utility
 	results, err := s.c.FixAllFTTokensWithPeerIDAsCreator()
 	if err != nil {
 		s.log.Error("Failed to fix FT creators", "err", err)
 		return s.BasicResponse(req, false, "Failed to fix FT creators: "+err.Error(), nil)
 	}
-	
+
 	// Convert results to a format suitable for JSON response
 	var responseResults []map[string]interface{}
 	successCount := 0
@@ -146,25 +146,25 @@ func (s *Server) APIFixFTCreator(req *ensweb.Request) *ensweb.Result {
 		}
 		responseResults = append(responseResults, r)
 	}
-	
+
 	message := fmt.Sprintf("Fixed %d of %d FT tokens", successCount, len(results))
 	if len(results) == 0 {
 		message = "No FT tokens found with peer ID as CreatorDID"
 	}
-	
+
 	return s.BasicResponse(req, true, message, responseResults)
 }
 
 func (s *Server) APIGetFTCreatorStats(req *ensweb.Request) *ensweb.Result {
 	s.log.Info("Getting FT creator statistics")
-	
+
 	// Get the statistics
 	stats, err := s.c.GetFTTokenCreatorStats()
 	if err != nil {
 		s.log.Error("Failed to get FT creator stats", "err", err)
 		return s.BasicResponse(req, false, "Failed to get FT creator statistics: "+err.Error(), nil)
 	}
-	
+
 	return s.BasicResponse(req, true, "FT creator statistics retrieved successfully", stats)
 }
 
@@ -178,13 +178,23 @@ func (s *Server) APIGetFTCreatorStats(req *ensweb.Request) *ensweb.Result {
 // @Success      200  {object}  core.RetryFTTransferResponse
 // @Router       /api/retry-ft-transfer [post]
 func (s *Server) APIRetryFTTransfer(req *ensweb.Request) *ensweb.Result {
+	s.log.Info("APIRetryFTTransfer endpoint hit",
+		"method", req.Method)
+	// "url", req.URL.String(),
+	// "remote_addr", req.RemoteAddr)
+
 	var retryReq core.RetryFTTransferRequest
 	err := s.ParseJSON(req, &retryReq)
 	if err != nil {
 		s.log.Error("Failed to parse retry FT transfer request", "err", err)
 		return s.BasicResponse(req, false, "Invalid input: "+err.Error(), nil)
 	}
-	
+
+	s.log.Debug("Parsed retry FT transfer request",
+		"transaction_id", retryReq.TransactionID,
+		"sender_did", retryReq.SenderDID,
+		"receiver_did", retryReq.ReceiverDID)
+
 	// Validate request parameters
 	if retryReq.TransactionID == "" {
 		return s.BasicResponse(req, false, "transaction_id is required", nil)
@@ -195,24 +205,24 @@ func (s *Server) APIRetryFTTransfer(req *ensweb.Request) *ensweb.Result {
 	if retryReq.ReceiverDID == "" {
 		return s.BasicResponse(req, false, "receiver_did is required", nil)
 	}
-	
+
 	// Validate sender DID access
 	if !s.validateDIDAccess(req, retryReq.SenderDID) {
 		return s.BasicResponse(req, false, "Sender DID does not have access", nil)
 	}
-	
+
 	s.log.Info("Retrying FT transfer",
 		"transaction_id", retryReq.TransactionID,
 		"sender_did", retryReq.SenderDID,
 		"receiver_did", retryReq.ReceiverDID)
-	
+
 	// Call the retry function
 	response, err := s.c.RetryFTTransfer(&retryReq)
 	if err != nil {
 		s.log.Error("Failed to retry FT transfer", "err", err)
 		return s.BasicResponse(req, false, "Failed to retry FT transfer: "+err.Error(), nil)
 	}
-	
+
 	// Return the response
 	return s.RenderJSON(req, response, http.StatusOK)
 }
