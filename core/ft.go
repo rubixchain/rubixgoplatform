@@ -1154,18 +1154,57 @@ func (c *Core) GetFTTransactionStatus(did string, transactionID string) (map[str
 			statusCounts["failed"]++
 		}
 
-		// Group by transaction ID (skip tokens without transaction ID)
+		// Group tokens by transaction ID (skip tokens without transaction ID)
 		if token.TransactionID != "" {
 			transactionsByID[token.TransactionID] = append(transactionsByID[token.TransactionID], token)
+		} else {
+			// Debug: log tokens without transaction ID
+			c.log.Debug("Token without transaction ID", 
+				"token_id", token.TokenID, 
+				"status", token.TokenStatus,
+				"ft_name", token.FTName)
 		}
 	}
 
 	// Build transaction summaries
 	var transactions []map[string]interface{}
-
+	
+	// Debug: log transaction grouping
+	c.log.Info("Transaction grouping debug", 
+		"total_tokens", len(ftTokens),
+		"transactions_by_id_count", len(transactionsByID),
+		"filter_transaction_id", transactionID)
+	
+	// Debug: show all available transaction IDs
+	var availableTxIDs []string
+	for txID := range transactionsByID {
+		availableTxIDs = append(availableTxIDs, txID)
+	}
+	
+	// Helper function for min
+	min := func(a, b int) int {
+		if a < b {
+			return a
+		}
+		return b
+	}
+	
+	c.log.Info("Available transaction IDs", 
+		"count", len(availableTxIDs),
+		"sample_ids", availableTxIDs[:min(5, len(availableTxIDs))])
+	
 	for txID, tokens := range transactionsByID {
+		// Debug: log each transaction being processed
+		c.log.Debug("Processing transaction", 
+			"tx_id", txID, 
+			"token_count", len(tokens),
+			"filter_transaction_id", transactionID)
+		
 		// Skip if we're filtering by specific transaction ID and this doesn't match
 		if transactionID != "" && txID != transactionID {
+			c.log.Debug("Skipping transaction - doesn't match filter", 
+				"tx_id", txID, 
+				"filter_transaction_id", transactionID)
 			continue
 		}
 

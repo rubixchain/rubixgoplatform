@@ -101,7 +101,7 @@ func (w *Wallet) MarkFTTokenAsInTransfer(tokenID, transactionID string) error {
 	ftToken.TokenStatus = TokenIsInTransfer
 	ftToken.TransactionID = transactionID
 
-	err = w.s.Update(FTTokenStorage, &ftToken, "tokenID=?", tokenID)
+	err = w.s.Update(FTTokenStorage, &ftToken, "token_id=?", tokenID)
 	if err != nil {
 		return fmt.Errorf("failed to mark FT token as in-transfer: %v", err)
 	}
