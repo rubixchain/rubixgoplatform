@@ -83,8 +83,9 @@ func (w *Wallet) GetFTTokensByDID(did string) ([]FTToken, error) {
 	return ftTokens, nil
 }
 
-// UpdateFTTokenToInTransfer updates a token from locked to in-transfer status
-func (w *Wallet) UpdateFTTokenToInTransfer(tokenID, transactionID string) error {
+// MarkFTTokenAsInTransfer marks a token as in-transfer for tracking purposes
+// This function works with tokens that are already locked by the existing FT system
+func (w *Wallet) MarkFTTokenAsInTransfer(tokenID, transactionID string) error {
 	var ftToken FTToken
 	err := w.s.Read(FTTokenStorage, &ftToken, "token_id=?", tokenID)
 	if err != nil {
@@ -100,9 +101,9 @@ func (w *Wallet) UpdateFTTokenToInTransfer(tokenID, transactionID string) error 
 	ftToken.TokenStatus = TokenIsInTransfer
 	ftToken.TransactionID = transactionID
 
-	err = w.s.Update(FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	err = w.s.Update(FTTokenStorage, &ftToken, "tokenID=?", tokenID)
 	if err != nil {
-		return fmt.Errorf("failed to update FT token to in-transfer: %v", err)
+		return fmt.Errorf("failed to mark FT token as in-transfer: %v", err)
 	}
 
 	return nil

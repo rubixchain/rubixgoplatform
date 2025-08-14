@@ -1116,7 +1116,8 @@ func (c *Core) GetFTTokenCreatorStats() (map[string]interface{}, error) {
 }
 
 // GetFTTransactionStatus returns the status of FT transactions for a given DID
-func (c *Core) GetFTTransactionStatus(did string) (map[string]interface{}, error) {
+// If transactionID is provided, returns details for that specific transaction only
+func (c *Core) GetFTTransactionStatus(did string, transactionID string) (map[string]interface{}, error) {
 	// Get all FT tokens for the DID
 	ftTokens, err := c.w.GetFTTokensByDID(did)
 	if err != nil {
@@ -1132,8 +1133,12 @@ func (c *Core) GetFTTransactionStatus(did string) (map[string]interface{}, error
 	statusCounts["pending"] = 0
 	statusCounts["failed"] = 0
 
-	// Count tokens by status
+	// Group tokens by transaction ID
+	transactionsByID := make(map[string][]wallet.FTToken)
+
+	// Count tokens by status and group by transaction
 	for _, token := range ftTokens {
+		// Count by status
 		switch token.TokenStatus {
 		case wallet.TokenIsFree:
 			statusCounts["free"]++
@@ -1148,38 +1153,107 @@ func (c *Core) GetFTTransactionStatus(did string) (map[string]interface{}, error
 		default:
 			statusCounts["failed"]++
 		}
+
+		// Group by transaction ID (skip tokens without transaction ID)
+		if token.TransactionID != "" {
+			transactionsByID[token.TransactionID] = append(transactionsByID[token.TransactionID], token)
+		}
 	}
 
-	// Get transaction details for in_transfer and transferred tokens
-	var inTransferTxs []map[string]interface{}
-	var transferredTxs []map[string]interface{}
+	// Build transaction summaries
+	var transactions []map[string]interface{}
 
-	for _, token := range ftTokens {
-		if token.TokenStatus == wallet.TokenIsInTransfer {
-			inTransferTxs = append(inTransferTxs, map[string]interface{}{
-				"token_id":       token.TokenID,
-				"ft_name":        token.FTName,
-				"transaction_id": token.TransactionID,
-				"status":         "in_transfer",
-				"locked_at":      token.UpdatedAt,
-			})
-		} else if token.TokenStatus == wallet.TokenIsTransferred {
-			transferredTxs = append(transferredTxs, map[string]interface{}{
-				"token_id":       token.TokenID,
-				"ft_name":        token.FTName,
-				"transaction_id": token.TransactionID,
-				"status":         "transferred",
-				"transferred_at": token.UpdatedAt,
-			})
+	for txID, tokens := range transactionsByID {
+		// Skip if we're filtering by specific transaction ID and this doesn't match
+		if transactionID != "" && txID != transactionID {
+			continue
+		}
+
+		// Count tokens by status in this transaction
+		txStatusCounts := make(map[string]int)
+		txStatusCounts["free"] = 0
+		txStatusCounts["locked"] = 0
+		txStatusCounts["in_transfer"] = 0
+		txStatusCounts["transferred"] = 0
+		txStatusCounts["pending"] = 0
+		txStatusCounts["failed"] = 0
+
+		// Determine transaction status and count tokens
+		var txStatus string
+		var txTimestamp time.Time
+		var ftName string
+
+		for _, token := range tokens {
+			switch token.TokenStatus {
+			case wallet.TokenIsFree:
+				txStatusCounts["free"]++
+			case wallet.TokenIsLocked:
+				txStatusCounts["locked"]++
+			case wallet.TokenIsInTransfer:
+				txStatusCounts["in_transfer"]++
+			case wallet.TokenIsTransferred:
+				txStatusCounts["transferred"]++
+			case wallet.TokenIsPending:
+				txStatusCounts["pending"]++
+			default:
+				txStatusCounts["failed"]++
+			}
+
+			// Track transaction metadata
+			if ftName == "" {
+				ftName = token.FTName
+			}
+			if txTimestamp.IsZero() || token.UpdatedAt.After(txTimestamp) {
+				txTimestamp = token.UpdatedAt
+			}
+		}
+
+		// Determine overall transaction status
+		if txStatusCounts["in_transfer"] > 0 {
+			txStatus = "in_progress"
+		} else if txStatusCounts["transferred"] > 0 && txStatusCounts["failed"] == 0 && txStatusCounts["in_transfer"] == 0 {
+			txStatus = "completed"
+		} else if txStatusCounts["failed"] > 0 {
+			txStatus = "failed"
+		} else {
+			txStatus = "unknown"
+		}
+
+		// Build transaction summary
+		txSummary := map[string]interface{}{
+			"transaction_id": txID,
+			"ft_name":        ftName,
+			"total_tokens":   len(tokens),
+			"status":         txStatus,
+			"timestamp":      txTimestamp,
+			"status_counts":  txStatusCounts,
+			"tokens":         tokens,
+		}
+
+		transactions = append(transactions, txSummary)
+	}
+
+	// Sort transactions by timestamp (newest first)
+	// Note: This is a simple sort, could be enhanced with proper sorting
+	// Sort transactions by timestamp (newest first)
+	for i := 0; i < len(transactions)-1; i++ {
+		for j := i + 1; j < len(transactions); j++ {
+			// Get timestamps
+			timeI := transactions[i]["timestamp"].(time.Time)
+			timeJ := transactions[j]["timestamp"].(time.Time)
+
+			// If current transaction is older than next, swap them
+			if timeI.Before(timeJ) {
+				transactions[i], transactions[j] = transactions[j], transactions[i]
+			}
 		}
 	}
 
 	result := map[string]interface{}{
-		"did":                did,
-		"total_tokens":       len(ftTokens),
-		"status_counts":      statusCounts,
-		"in_transfer_tokens": inTransferTxs,
-		"transferred_tokens": transferredTxs,
+		"did":           did,
+		"total_tokens":  len(ftTokens),
+		"status_counts": statusCounts,
+		"transactions":  transactions,
 		"summary": map[string]interface{}{
 			"available":   statusCounts["free"],
 			"locked":      statusCounts["locked"],
@@ -1188,6 +1262,12 @@ func (c *Core) GetFTTransactionStatus(did string) (map[string]interface{}, error
 			"pending":     statusCounts["pending"],
 			"failed":      statusCounts["failed"],
 		},
+	}
+
+	// If filtering by specific transaction, add filter info
+	if transactionID != "" {
+		result["filtered_by_transaction"] = transactionID
+		result["filtered_results"] = len(transactions)
 	}
 
 	return result, nil

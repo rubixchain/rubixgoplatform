@@ -243,24 +243,35 @@ func (s *Server) APIGetFTTxnByDID(req *ensweb.Request) *ensweb.Result {
 }
 
 // @Summary Get FT transaction status
-// @Description Retrieves the status of FT transactions (pending, in transfer, completed, failed).
+// @Description Retrieves the status of FT transactions grouped by transaction ID. Optionally filter by specific transaction ID.
 // @ID get-ft-transaction-status
 // @Tags FT
 // @Accept json
 // @Produce json
 // @Param DID query string true "DID of sender/receiver"
+// @Param transactionID query string false "Optional: Filter by specific transaction ID"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-ft-transaction-status [get]
 func (s *Server) APIGetFTTransactionStatus(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "DID")
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
-		s.log.Error("Invalid DID")
+	transactionID := s.GetQuerry(req, "transactionID") // Optional parameter
+
+	// Debug logging to see what's failing
+	s.log.Info("DID validation debug",
+		"did", did,
+		"length", len(did),
+		"starts_with_bafybmi", strings.HasPrefix(did, "bafybmi"),
+		"is_alphanumeric", regexp.MustCompile(`^[a-zA-Z0-9]+$`).MatchString(did))
+
+	// More permissive regex to handle edge cases
+	is_valid := regexp.MustCompile(`^[a-zA-Z0-9]+$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_valid {
+		s.log.Error("Invalid DID", "did", did, "length", len(did), "starts_with_bafybmi", strings.HasPrefix(did, "bafybmi"), "is_valid", is_valid)
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
 
 	// Get transaction status from core
-	status, err := s.c.GetFTTransactionStatus(did)
+	status, err := s.c.GetFTTransactionStatus(did, transactionID)
 	if err != nil {
 		s.log.Error("Error fetching FT transaction status", "err", err)
 		return s.BasicResponse(req, false, "Failed to fetch transaction status: "+err.Error(), nil)

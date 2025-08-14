@@ -1032,12 +1032,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
 		}
 
-		// Phase 1: Update tokens to in-transfer status (they're already locked by existing system)
+		// Phase 1: Mark tokens as in-transfer on sender side
+		// Note: These tokens are already locked by the existing FT system
+		// We're just marking them as "in-transfer" to track the confirmation process
 		for _, token := range ti {
-			// Update token status to in-transfer (they're already locked by existing FT locking)
-			err = c.w.UpdateFTTokenToInTransfer(token.Token, cr.TransactionID)
+			// Mark token as in-transfer for tracking purposes
+			err = c.w.MarkFTTokenAsInTransfer(token.Token, cr.TransactionID)
 			if err != nil {
-				c.log.Error("Failed to update token to in-transfer status", "token", token.Token, "err", err)
+				c.log.Error("Failed to mark token as in-transfer", "token", token.Token, "err", err)
 				return nil, nil, nil, err
 			}
 		}
