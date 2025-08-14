@@ -61,7 +61,7 @@ func (w *Wallet) UnlockFTTokenFromTransfer(tokenID string) error {
 		return fmt.Errorf("token is not in transfer state, status: %d", ftToken.TokenStatus)
 	}
 
-	// Unlock the token
+	// Unlock the token back to free status
 	ftToken.TokenStatus = TokenIsFree
 	ftToken.TransactionID = ""
 
@@ -81,4 +81,29 @@ func (w *Wallet) GetFTTokensByDID(did string) ([]FTToken, error) {
 		return nil, fmt.Errorf("failed to get FT tokens for DID %s: %v", did, err)
 	}
 	return ftTokens, nil
+}
+
+// UpdateFTTokenToInTransfer updates a token from locked to in-transfer status
+func (w *Wallet) UpdateFTTokenToInTransfer(tokenID, transactionID string) error {
+	var ftToken FTToken
+	err := w.s.Read(FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to get FT token: %v", err)
+	}
+
+	// Check if token is locked (existing system locks them)
+	if ftToken.TokenStatus != TokenIsLocked {
+		return fmt.Errorf("token is not locked, status: %d", ftToken.TokenStatus)
+	}
+
+	// Update to in-transfer status
+	ftToken.TokenStatus = TokenIsInTransfer
+	ftToken.TransactionID = transactionID
+
+	err = w.s.Update(FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to update FT token to in-transfer: %v", err)
+	}
+
+	return nil
 }

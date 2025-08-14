@@ -253,7 +253,7 @@ func (s *Server) APIGetFTTxnByDID(req *ensweb.Request) *ensweb.Result {
 // @Router /api/get-ft-transaction-status [get]
 func (s *Server) APIGetFTTransactionStatus(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "DID")
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z-D]*$`).MatchString(did)
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
 	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid DID")
 		return s.BasicResponse(req, false, "Invalid DID", nil)

@@ -1032,12 +1032,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
 		}
 
-		// Phase 1: Lock tokens for transfer (mark as TokenIsInTransfer)
+		// Phase 1: Update tokens to in-transfer status (they're already locked by existing system)
 		for _, token := range ti {
-			// Lock the token to prevent double spending
-			err = c.w.LockFTTokenForTransfer(token.Token, cr.TransactionID)
+			// Update token status to in-transfer (they're already locked by existing FT locking)
+			err = c.w.UpdateFTTokenToInTransfer(token.Token, cr.TransactionID)
 			if err != nil {
-				c.log.Error("Failed to lock token for transfer", "token", token.Token, "err", err)
+				c.log.Error("Failed to update token to in-transfer status", "token", token.Token, "err", err)
 				return nil, nil, nil, err
 			}
 		}
