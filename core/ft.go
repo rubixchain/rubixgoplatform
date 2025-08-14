@@ -264,7 +264,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 
 	// Check if parallel burning is enabled
 	useParallelBurn := c.cfg.CfgData.ParallelFTBurn
-	
+
 	if !useParallelBurn {
 		// Fall back to sequential burning
 		c.log.Info("Using sequential token burning")
@@ -324,137 +324,137 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			index int
 			token wallet.Token
 		}
-	
-	type burnResult struct {
-		index int
-		err   error
-	}
-	
-	// Create channels for job distribution
-	burnJobs := make(chan burnJob, len(wholeTokens))
-	burnResults := make(chan burnResult, len(wholeTokens))
-	
-	// Worker function for burning tokens
-	burnWorker := func(wg *sync.WaitGroup) {
-		defer wg.Done()
-		for job := range burnJobs {
-			// Determine token type
-			ptts := RBTString
-			if job.token.ParentTokenID != "" && job.token.TokenValue < 1 {
-				ptts = PartString
-			}
-			ptt := c.TokenType(ptts)
-			
-			// Create burn transaction info
-			bti := &block.TransInfo{
-				Tokens: []block.TransTokens{
-					{
-						Token:     job.token.TokenID,
-						TokenType: ptt,
-					},
-				},
-				Comment: "Token burnt at : " + time.Now().String(),
-			}
-			
-			// Create token chain block
-			tcb := &block.TokenChainBlock{
-				TransactionType: block.TokenIsBurntForFT,
-				TokenOwner:      did,
-				TransInfo:       bti,
-				TokenValue:      job.token.TokenValue,
-				ChildTokens:     newFTTokenIDs,
-			}
-			
-			// Get latest block and create new block
-			ctcb := make(map[string]*block.Block)
-			ctcb[job.token.TokenID] = c.w.GetLatestTokenBlock(job.token.TokenID, ptt)
-			blk := block.CreateNewBlock(ctcb, tcb)
-			
-			if blk == nil {
-				burnResults <- burnResult{
-					index: job.index,
-					err:   fmt.Errorf("failed to create burn block for token %s", job.token.TokenID),
+
+		type burnResult struct {
+			index int
+			err   error
+		}
+
+		// Create channels for job distribution
+		burnJobs := make(chan burnJob, len(wholeTokens))
+		burnResults := make(chan burnResult, len(wholeTokens))
+
+		// Worker function for burning tokens
+		burnWorker := func(wg *sync.WaitGroup) {
+			defer wg.Done()
+			for job := range burnJobs {
+				// Determine token type
+				ptts := RBTString
+				if job.token.ParentTokenID != "" && job.token.TokenValue < 1 {
+					ptts = PartString
 				}
-				continue
+				ptt := c.TokenType(ptts)
+
+				// Create burn transaction info
+				bti := &block.TransInfo{
+					Tokens: []block.TransTokens{
+						{
+							Token:     job.token.TokenID,
+							TokenType: ptt,
+						},
+					},
+					Comment: "Token burnt at : " + time.Now().String(),
+				}
+
+				// Create token chain block
+				tcb := &block.TokenChainBlock{
+					TransactionType: block.TokenIsBurntForFT,
+					TokenOwner:      did,
+					TransInfo:       bti,
+					TokenValue:      job.token.TokenValue,
+					ChildTokens:     newFTTokenIDs,
+				}
+
+				// Get latest block and create new block
+				ctcb := make(map[string]*block.Block)
+				ctcb[job.token.TokenID] = c.w.GetLatestTokenBlock(job.token.TokenID, ptt)
+				blk := block.CreateNewBlock(ctcb, tcb)
+
+				if blk == nil {
+					burnResults <- burnResult{
+						index: job.index,
+						err:   fmt.Errorf("failed to create burn block for token %s", job.token.TokenID),
+					}
+					continue
+				}
+
+				// Sign the block
+				if err := blk.UpdateSignature(dc); err != nil {
+					c.log.Error("Failed to sign burn block", "token", job.token.TokenID, "err", err)
+					burnResults <- burnResult{index: job.index, err: err}
+					continue
+				}
+
+				// Add block to chain
+				if err := c.w.AddTokenBlock(job.token.TokenID, blk); err != nil {
+					c.log.Error("Failed to add burn block", "token", job.token.TokenID, "err", err)
+					burnResults <- burnResult{index: job.index, err: err}
+					continue
+				}
+
+				// Update token status
+				job.token.TokenStatus = wallet.TokenIsBurntForFT
+				if err := c.w.UpdateToken(&job.token); err != nil {
+					c.log.Error("Failed to update token status", "token", job.token.TokenID, "err", err)
+					burnResults <- burnResult{index: job.index, err: err}
+					continue
+				}
+
+				burnResults <- burnResult{index: job.index, err: nil}
 			}
-			
-			// Sign the block
-			if err := blk.UpdateSignature(dc); err != nil {
-				c.log.Error("Failed to sign burn block", "token", job.token.TokenID, "err", err)
-				burnResults <- burnResult{index: job.index, err: err}
-				continue
-			}
-			
-			// Add block to chain
-			if err := c.w.AddTokenBlock(job.token.TokenID, blk); err != nil {
-				c.log.Error("Failed to add burn block", "token", job.token.TokenID, "err", err)
-				burnResults <- burnResult{index: job.index, err: err}
-				continue
-			}
-			
-			// Update token status
-			job.token.TokenStatus = wallet.TokenIsBurntForFT
-			if err := c.w.UpdateToken(&job.token); err != nil {
-				c.log.Error("Failed to update token status", "token", job.token.TokenID, "err", err)
-				burnResults <- burnResult{index: job.index, err: err}
-				continue
-			}
-			
-			burnResults <- burnResult{index: job.index, err: nil}
 		}
-	}
-	
-	// Start burn workers
-	var burnWg sync.WaitGroup
-	numBurnWorkers := runtime.NumCPU()
-	// Limit workers to avoid overwhelming the system
-	if numBurnWorkers > 8 {
-		numBurnWorkers = 8
-	}
-	c.log.Info("Starting parallel token burning", "workers", numBurnWorkers, "tokens", len(wholeTokens))
-	
-	for i := 0; i < numBurnWorkers; i++ {
-		burnWg.Add(1)
-		go burnWorker(&burnWg)
-	}
-	
-	// Queue all burn jobs
-	for i, token := range wholeTokens {
-		burnJobs <- burnJob{index: i, token: token}
-	}
-	close(burnJobs)
-	
-	// Collect results
-	var burnErrors []error
-	successCount := 0
-	for i := 0; i < len(wholeTokens); i++ {
-		result := <-burnResults
-		if result.err != nil {
-			burnErrors = append(burnErrors, fmt.Errorf("token %d: %v", result.index, result.err))
-		} else {
-			successCount++
+
+		// Start burn workers
+		var burnWg sync.WaitGroup
+		numBurnWorkers := runtime.NumCPU()
+		// Limit workers to avoid overwhelming the system
+		if numBurnWorkers > 8 {
+			numBurnWorkers = 8
 		}
-		
-		// Log progress
-		if (i+1)%10 == 0 || i == len(wholeTokens)-1 {
-			c.log.Info("Token burning progress", 
-				"completed", i+1, 
-				"total", len(wholeTokens),
-				"success", successCount)
+		c.log.Info("Starting parallel token burning", "workers", numBurnWorkers, "tokens", len(wholeTokens))
+
+		for i := 0; i < numBurnWorkers; i++ {
+			burnWg.Add(1)
+			go burnWorker(&burnWg)
 		}
-	}
-	
-	// Wait for all workers to complete
-	burnWg.Wait()
-	close(burnResults)
-	
-	// Check if any burns failed
-	if len(burnErrors) > 0 {
-		c.log.Error("Token burning failed", "errors", len(burnErrors), "first_error", burnErrors[0])
-		return fmt.Errorf("token burning failed with %d errors: %v", len(burnErrors), burnErrors[0])
-	}
-	
-	c.log.Info("Successfully burnt all tokens", "count", len(wholeTokens))
+
+		// Queue all burn jobs
+		for i, token := range wholeTokens {
+			burnJobs <- burnJob{index: i, token: token}
+		}
+		close(burnJobs)
+
+		// Collect results
+		var burnErrors []error
+		successCount := 0
+		for i := 0; i < len(wholeTokens); i++ {
+			result := <-burnResults
+			if result.err != nil {
+				burnErrors = append(burnErrors, fmt.Errorf("token %d: %v", result.index, result.err))
+			} else {
+				successCount++
+			}
+
+			// Log progress
+			if (i+1)%10 == 0 || i == len(wholeTokens)-1 {
+				c.log.Info("Token burning progress",
+					"completed", i+1,
+					"total", len(wholeTokens),
+					"success", successCount)
+			}
+		}
+
+		// Wait for all workers to complete
+		burnWg.Wait()
+		close(burnResults)
+
+		// Check if any burns failed
+		if len(burnErrors) > 0 {
+			c.log.Error("Token burning failed", "errors", len(burnErrors), "first_error", burnErrors[0])
+			return fmt.Errorf("token burning failed with %d errors: %v", len(burnErrors), burnErrors[0])
+		}
+
+		c.log.Info("Successfully burnt all tokens", "count", len(wholeTokens))
 	}
 
 	// --- Batch Write FTs to Storage using WriteBatch ---
@@ -578,18 +578,18 @@ func (c *Core) InitiateFTTransfer(reqID string, req *model.TransferFTReq) {
 func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
-	
+
 	// Track overall FT transaction performance
 	var txErr error
 	defer func() {
 		c.TrackOperation("tx.ft_transfer.total", map[string]interface{}{
-			"sender": req.Sender,
+			"sender":   req.Sender,
 			"receiver": req.Receiver,
 			"ft_count": req.FTCount,
-			"ft_name": req.FTName,
+			"ft_name":  req.FTName,
 		})(txErr)
 	}()
-	
+
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -677,14 +677,14 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	var AllFTs []wallet.FTToken
 	var TokenInfo []contract.TokenInfo
 	var lockingErr error
-	
+
 	if req.CreatorDID != "" {
 		AllFTs, err = c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, req.CreatorDID)
 		creatorDID = req.CreatorDID
 	} else {
 		AllFTs, err = c.w.GetFreeFTsByNameAndDID(req.FTName, did)
 	}
-	
+
 	AvailableFTCount := len(AllFTs)
 	if err != nil {
 		c.log.Error("Failed to get FTs", "err", err)
@@ -697,9 +697,9 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			return resp
 		}
 	}
-	
+
 	FTsForTxn := AllFTs[:req.FTCount]
-	
+
 	// Fetching peer's peer id
 	if !c.w.IsDIDExist(req.Receiver) {
 		peerInfo, err := c.GetPeerDIDInfo(req.Receiver)
@@ -719,7 +719,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			return resp
 		}
 	}
-	
+
 	receiverPeerID, err := c.getPeer(req.Receiver)
 	if err != nil {
 		resp.Message = "Failed to get receiver peer, " + err.Error()
@@ -770,7 +770,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			TokenInfo = append(TokenInfo, ti)
 		}
 	}
-	
+
 	// Extract token IDs for later use
 	FTTokenIDs := make([]string, 0)
 	for i := range TokenInfo {
@@ -862,13 +862,13 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			resp.Message = errMsg
 			return
 		}
-		
+
 		// Store in new FT transaction history table
 		if err := c.w.AddFTTransactionHistory(td, req.FTName, creatorDID, req.FTCount); err != nil {
 			c.log.Error("Failed to store FT transaction history", "err", err)
 			// Don't fail the transaction, just log the error
 		}
-		
+
 		// Store FT token metadata for sent transactions
 		if err := c.w.AddFTTransactionTokens(td.TransactionID, creatorDID, req.FTName, req.FTCount, "sent"); err != nil {
 			c.log.Error("Failed to store FT transaction token metadata", "err", err)
@@ -877,15 +877,15 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 
 		// Create a channel to signal explorer submission completion
 		explorerDone := make(chan struct{})
-		
-		go func ()  {
+
+		go func() {
 			defer close(explorerDone) // Signal completion when done
-			
+
 			AllTokens := make([]AllToken, len(TokenInfo))
 			for i := range TokenInfo {
 				tokenDetail := AllToken{}
 				tokenDetail.TokenHash = TokenInfo[i].Token
-				
+
 				blockNoPart := strings.Split(TokenInfo[i].BlockID, "-")[0]
 				// Convert the string part to an int
 				blockNoInt, err := strconv.Atoi(blockNoPart)
@@ -895,7 +895,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				}
 				tokenDetail.BlockNumber = blockNoInt
 				tokenDetail.BlockHash = strings.Split(TokenInfo[i].BlockID, "-")[1]
-	
+
 				AllTokens[i] = tokenDetail
 			}
 
@@ -918,7 +918,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			c.ec.ExplorerFTTransaction(eTrans)
 			c.log.Info("Explorer submission completed", "transaction_id", td.TransactionID)
 		}()
-		
+
 		// Pass the explorerDone channel to consensus request
 		cr.ExplorerDone = explorerDone
 
@@ -937,7 +937,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			c.log.Error("Failed to update FT table after transfer ", "err", updateFTTableErr)
 			resp.Message = "Failed to update FT table after transfer"
 			return
-		}		
+		}
 		c.UpdateUserInfo([]string{did})
 		// Send final transaction completion response if not already timed out
 		select {
@@ -1113,4 +1113,82 @@ func (c *Core) FixAllFTTokensWithPeerIDAsCreator() ([]wallet.FTTokenFixResult, e
 // GetFTTokenCreatorStats returns statistics about FT token creators
 func (c *Core) GetFTTokenCreatorStats() (map[string]interface{}, error) {
 	return c.w.GetFTTokenCreatorStats()
+}
+
+// GetFTTransactionStatus returns the status of FT transactions for a given DID
+func (c *Core) GetFTTransactionStatus(did string) (map[string]interface{}, error) {
+	// Get all FT tokens for the DID
+	ftTokens, err := c.w.GetFTTokensByDID(did)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get FT tokens: %v", err)
+	}
+
+	// Count tokens by status
+	statusCounts := make(map[string]int)
+	statusCounts["free"] = 0
+	statusCounts["locked"] = 0
+	statusCounts["in_transfer"] = 0
+	statusCounts["transferred"] = 0
+	statusCounts["pending"] = 0
+	statusCounts["failed"] = 0
+
+	// Count tokens by status
+	for _, token := range ftTokens {
+		switch token.TokenStatus {
+		case wallet.TokenIsFree:
+			statusCounts["free"]++
+		case wallet.TokenIsLocked:
+			statusCounts["locked"]++
+		case wallet.TokenIsInTransfer:
+			statusCounts["in_transfer"]++
+		case wallet.TokenIsTransferred:
+			statusCounts["transferred"]++
+		case wallet.TokenIsPending:
+			statusCounts["pending"]++
+		default:
+			statusCounts["failed"]++
+		}
+	}
+
+	// Get transaction details for in_transfer and transferred tokens
+	var inTransferTxs []map[string]interface{}
+	var transferredTxs []map[string]interface{}
+
+	for _, token := range ftTokens {
+		if token.TokenStatus == wallet.TokenIsInTransfer {
+			inTransferTxs = append(inTransferTxs, map[string]interface{}{
+				"token_id":       token.TokenID,
+				"ft_name":        token.FTName,
+				"transaction_id": token.TransactionID,
+				"status":         "in_transfer",
+				"locked_at":      token.UpdatedAt,
+			})
+		} else if token.TokenStatus == wallet.TokenIsTransferred {
+			transferredTxs = append(transferredTxs, map[string]interface{}{
+				"token_id":       token.TokenID,
+				"ft_name":        token.FTName,
+				"transaction_id": token.TransactionID,
+				"status":         "transferred",
+				"transferred_at": token.UpdatedAt,
+			})
+		}
+	}
+
+	result := map[string]interface{}{
+		"did":                did,
+		"total_tokens":       len(ftTokens),
+		"status_counts":      statusCounts,
+		"in_transfer_tokens": inTransferTxs,
+		"transferred_tokens": transferredTxs,
+		"summary": map[string]interface{}{
+			"available":   statusCounts["free"],
+			"locked":      statusCounts["locked"],
+			"in_transfer": statusCounts["in_transfer"],
+			"transferred": statusCounts["transferred"],
+			"pending":     statusCounts["pending"],
+			"failed":      statusCounts["failed"],
+		},
+	}
+
+	return result, nil
 }

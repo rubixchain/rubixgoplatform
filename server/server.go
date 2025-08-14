@@ -99,7 +99,7 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 	}
 	go s.grpc.Run()
 	s.RegisterRoutes()
-	
+
 	// Log server startup with version/build info to confirm restart
 	s.log.Info("=== Rubix Server Started Successfully ===",
 		"timestamp", time.Now().Format("2006-01-02 15:04:05"),
@@ -107,7 +107,7 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 		"port", cfg.Config.HostPort,
 		"retry_ft_transfer_enabled", true,
 		"total_routes_registered", "Server ready with retry-ft-transfer API")
-	
+
 	return s, nil
 }
 
@@ -205,6 +205,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIAddUserAPIKey, "POST", s.AuthHandle(s.APIAddUserAPIKey, false, s.AuthError, true))
 	s.AddRoute(setup.APIAddPeerDetailsFromExplorer, "POST", s.AuthHandle(s.APIAddPeerDetailsFromExplorer, false, s.AuthError, true))
 	s.AddRoute(setup.APIGetFTTxnByDID, "GET", s.AuthHandle(s.APIGetFTTxnByDID, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetFTTransactionStatus, "GET", s.AuthHandle(s.APIGetFTTransactionStatus, true, s.AuthError, false))
 	s.AddRoute(setup.APIUpdateTokenStatus, "PUT", s.AuthHandle(s.APIUpdateTokenStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetTokenStatus, "GET", s.AuthHandle(s.APIGetTokenStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIMigrateFTTransactions, "POST", s.AuthHandle(s.APIMigrateFTTransactions, false, s.AuthError, false))

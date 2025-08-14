@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -82,7 +81,7 @@ type ConensusRequest struct {
 	NFT                string       `json:"nft"`
 	FTinfo             model.FTInfo `json:"ft_info"`
 	// TransTokenSyncInfo map[string]GenesisAndLatestBlocks `json:"tokens_sync_info"`
-	ExplorerDone       chan struct{} `json:"-"` // Channel to signal explorer submission completion
+	ExplorerDone chan struct{} `json:"-"` // Channel to signal explorer submission completion
 }
 
 type ConensusReply struct {
@@ -793,14 +792,18 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// Send token confirmation to receiver after consensus finality
 		receiverAddr := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
-		err = c.sendTokenConfirmation(receiverAddr, tid, ti, tkn.RBTTokenType)
-		if err != nil {
-			// Log error but don't fail the transaction - tokens are already committed
-			c.log.Error("Failed to send token confirmation to receiver",
-				"receiver", receiverAddr,
-				"transaction_id", tid,
-				"error", err)
-			// Continue with the flow - receiver will eventually clean up pending tokens
+		if cr.SenderPeerID != cr.ReceiverPeerID {
+			go func() {
+				err = c.sendTokenConfirmation(receiverAddr, tid, ti, tkn.RBTTokenType)
+				if err != nil {
+					// Log error but don't fail the transaction - tokens are already committed
+					c.log.Error("Failed to send token confirmation to receiver",
+						"receiver", receiverAddr,
+						"transaction_id", tid,
+						"error", err)
+					// Continue with the flow - receiver will eventually clean up pending tokens
+				}
+			}()
 		}
 
 		// TODO:Remove this below commented out code, once after testing the quorum pledge finality location change.
@@ -1029,11 +1032,27 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			sr.QuorumInfo = append(sr.QuorumInfo, qrmInfo)
 		}
 
+		// Phase 1: Lock tokens for transfer (mark as TokenIsInTransfer)
+		for _, token := range ti {
+			// Lock the token to prevent double spending
+			err = c.w.LockFTTokenForTransfer(token.Token, cr.TransactionID)
+			if err != nil {
+				c.log.Error("Failed to lock token for transfer", "token", token.Token, "err", err)
+				return nil, nil, nil, err
+			}
+		}
+
 		// Send the FT transfer request to the receiver
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendFTToken, nil, &sr, &br, true)
 		if err != nil {
 			c.log.Error("Unable to send tokens to receiver", "err", err)
+			// Unlock tokens since we couldn't send to receiver
+			for _, token := range ti {
+				if unlockErr := c.w.UnlockFTTokenFromTransfer(token.Token); unlockErr != nil {
+					c.log.Error("Failed to unlock token", "token", token.Token, "err", unlockErr)
+				}
+			}
 			return nil, nil, nil, err
 		}
 		if strings.Contains(br.Message, "failed to sync tokenchain") {
@@ -1079,15 +1098,15 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, fmt.Errorf("unable to send FT tokens to receiver, " + br.Message)
 		}
 
-		// Send token confirmation to receiver after consensus finality
+		// Phase 2: Use existing confirmation logic but with enhanced verification
 		receiverAddr := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
 		if cr.SenderPeerID != cr.ReceiverPeerID {
 			go func() {
-				// First wait for explorer submission to complete if channel is provided
+				// Wait for explorer submission to complete if channel is provided
 				if cr.ExplorerDone != nil {
 					c.log.Info("Waiting for explorer submission to complete before sending confirmation",
 						"transaction_id", cr.TransactionID)
-					
+
 					select {
 					case <-cr.ExplorerDone:
 						c.log.Info("Explorer submission completed, proceeding with receiver confirmation",
@@ -1097,124 +1116,20 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 							"transaction_id", cr.TransactionID)
 					}
 				}
-				
-				// Calculate initial delay based on token count to allow receiver processing
-				tokenCount := len(ti)
-				var initialDelay time.Duration
-				
-				// Since we already waited for explorer submission, receiver has had time to start processing
-				// Use more realistic delays based on observed parallel performance
-				baseDelay := 2 * time.Second // Network latency + setup
-				
-				// Adjusted processing time based on parallel receiver performance
-				// Observed: ~12.5 tokens/second with parallel processing
-				// Use 15 tokens/sec for calculation since receiver started during explorer wait
-				processingTime := time.Duration(tokenCount/15) * time.Second
-				
-				// Reduced buffer since we already waited for explorer
-				var buffer time.Duration
-				switch {
-				case tokenCount <= 100:
-					buffer = 500 * time.Millisecond
-				case tokenCount <= 1000:
-					buffer = 1 * time.Second
-				case tokenCount <= 5000:
-					buffer = 2 * time.Second
-				default:
-					buffer = 3 * time.Second
-				}
-				
-				initialDelay = baseDelay + processingTime + buffer
-				
-				// Cap maximum delay at 30 seconds since we already waited for explorer
-				maxDelay := 30 * time.Second
-				if initialDelay > maxDelay {
-					c.log.Info("Capping confirmation delay to maximum",
-						"calculated_delay", initialDelay,
-						"max_delay", maxDelay,
-						"token_count", tokenCount)
-					initialDelay = maxDelay
-				}
-				
-				// Sleep before first attempt to let receiver process
-				c.log.Info("Waiting for receiver to process tokens before confirmation",
-					"delay", initialDelay,
-					"token_count", tokenCount)
-				time.Sleep(initialDelay)
-				
-				// Adaptive retry parameters based on token count
-				var backoff time.Duration
-				switch {
-				case tokenCount <= 100:
-					// 3s + (count * 20ms), so 100 tokens = 5s, 50 tokens = 4s
-					backoff = 3*time.Second + time.Duration(tokenCount*20)*time.Millisecond
-				case tokenCount <= 1000:
-					// 5s + (count * 5ms), so 1000 tokens = 10s, 500 tokens = 7.5s
-					backoff = 5*time.Second + time.Duration(tokenCount*5)*time.Millisecond
-				case tokenCount <= 10000:
-					// Larger transfers need more time between retries
-					backoff = 60 * time.Second
-				default:
-					// Very large transfers need significant retry spacing
-					backoff = 120 * time.Second
-				}
-				
-				maxBackoff := 5 * time.Minute
-				maxRetries := 10
-				totalTimeout := 30 * time.Minute
-				
-				// Create timeout context
-				ctx, cancel := context.WithTimeout(context.Background(), totalTimeout)
-				defer cancel()
-				
-				for currAttempt := 1; currAttempt <= maxRetries; currAttempt++ {
-					// Check if context is cancelled
-					select {
-					case <-ctx.Done():
-						c.log.Warn("Token confirmation cancelled due to timeout",
-							"receiver", receiverAddr,
-							"transaction_id", tid,
-							"attempt", currAttempt)
-						return
-					default:
-					}
-					err = c.sendTokenConfirmation(receiverAddr, tid, ti, tkn.FTTokenType)
-					if err != nil {
-						c.log.Error(fmt.Sprintf(
-							"tokenConfirmation: attempt %v for tx=%v to receiver=%v",
-							currAttempt,
-							tid,
-							receiverAddr,
-						))
-						
-						// If this is the last attempt, log the final error
-						if currAttempt == maxRetries {
-							c.log.Error("Failed to send FT token confirmation after all retries",
-								"receiver", receiverAddr,
-								"transaction_id", tid,
-								"attempts", maxRetries,
-								"error", err)
+
+				// Use existing confirmation logic with enhanced verification
+				err = c.sendTokenConfirmationWithVerification(receiverAddr, cr.TransactionID, ti, tkn.FTTokenType)
+				if err != nil {
+					c.log.Error("Token confirmation failed, unlocking tokens",
+						"receiver", receiverAddr,
+						"transaction_id", cr.TransactionID,
+						"error", err)
+
+					// Unlock tokens if confirmation fails
+					for _, token := range ti {
+						if unlockErr := c.w.UnlockFTTokenFromTransfer(token.Token); unlockErr != nil {
+							c.log.Error("Failed to unlock token", "token", token.Token, "err", unlockErr)
 						}
-						
-						// Wait with context awareness
-						select {
-						case <-ctx.Done():
-							return
-						case <-time.After(backoff):
-						}
-						
-						backoff = time.Duration(float64(backoff) * 1.5)
-						if backoff > maxBackoff {
-							backoff = maxBackoff
-						}
-						continue
-					} else {
-						// Success - token confirmation sent
-						c.log.Info("Successfully sent FT token confirmation",
-							"receiver", receiverAddr,
-							"transaction_id", tid,
-							"attempt", currAttempt)
-						break
 					}
 				}
 			}()

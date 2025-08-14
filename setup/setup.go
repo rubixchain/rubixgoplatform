@@ -100,12 +100,14 @@ const (
 	APISendJWTFromWallet                string = "/api/send-jwt-from-wallet"
 	APIAddPeerDetailsFromExplorer       string = "/api/add-peer-details-from-explorer"
 	APIGetFTTxnByDID                    string = "/api/get-ft-txn-by-did"
-	APIUpdateTokenStatus                string = "/api/update-token-status"
-	APIGetTokenStatus                   string = "/api/get-token-status"
-	APIMigrateFTTransactions            string = "/api/migrate-ft-transactions"
-	APIGetFTMigrationStatus             string = "/api/get-ft-migration-status"
-	APIRetryFailedFTDownloads           string = "/api/retry-failed-ft-downloads"
-	APIGetFailedFTDownloadStatus        string = "/api/get-failed-ft-download-status"
+	APIGetFTTransactionStatus           string = "/api/get-ft-transaction-status"
+
+	APIUpdateTokenStatus         string = "/api/update-token-status"
+	APIGetTokenStatus            string = "/api/get-token-status"
+	APIMigrateFTTransactions     string = "/api/migrate-ft-transactions"
+	APIGetFTMigrationStatus      string = "/api/get-ft-migration-status"
+	APIRetryFailedFTDownloads    string = "/api/retry-failed-ft-downloads"
+	APIGetFailedFTDownloadStatus string = "/api/get-failed-ft-download-status"
 )
 
 // jwt.RegisteredClaims

@@ -241,3 +241,30 @@ func (s *Server) APIGetFTTxnByDID(req *ensweb.Request) *ensweb.Result {
 
 	return s.RenderJSON(req, &ftTransactionDetails, http.StatusOK)
 }
+
+// @Summary Get FT transaction status
+// @Description Retrieves the status of FT transactions (pending, in transfer, completed, failed).
+// @ID get-ft-transaction-status
+// @Tags FT
+// @Accept json
+// @Produce json
+// @Param DID query string true "DID of sender/receiver"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/get-ft-transaction-status [get]
+func (s *Server) APIGetFTTransactionStatus(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuerry(req, "DID")
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z-D]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+
+	// Get transaction status from core
+	status, err := s.c.GetFTTransactionStatus(did)
+	if err != nil {
+		s.log.Error("Error fetching FT transaction status", "err", err)
+		return s.BasicResponse(req, false, "Failed to fetch transaction status: "+err.Error(), nil)
+	}
+
+	return s.BasicResponse(req, true, "Retrieved FT transaction status successfully", status)
+}

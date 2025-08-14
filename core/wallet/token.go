@@ -34,7 +34,8 @@ const (
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
 	TokenIsBurntForFT
-	TokenIsPending // Tokens received but not yet confirmed by consensus finality
+	TokenIsPending                // Tokens received but not yet confirmed by consensus finality
+	TokenIsInTransfer             // Tokens locked for transfer, waiting confirmation
 	QuorumPledgedForThisToken int = 20
 )
 const (
@@ -741,7 +742,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		w.log.Info("Using optimized token receiver with batch downloads", "token_count", len(ti))
 		return w.OptimizedTokensReceived(did, ti, b, senderPeerId, receiverPeerId, pinningServiceMode, ipfsShell)
 	}
-	
+
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
@@ -862,7 +863,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			// Fall back to synchronous processing
 			goto syncProcessing
 		}
-		w.log.Info("Provider details submitted for async processing", 
+		w.log.Info("Provider details submitted for async processing",
 			"transaction_id", b.GetTid(),
 			"token_count", len(providerMaps))
 		return updatedtokenhashes, nil
@@ -885,7 +886,7 @@ syncProcessing:
 // need to update in such a way that only for FTs
 func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, ipfsShell *ipfsnode.Shell, ftInfo FTToken) ([]string, error) {
 	// Always use parallel FT receiver for consistent performance and no global locks
-	w.log.Info("Using parallel FT receiver", 
+	w.log.Info("Using parallel FT receiver",
 		"ft_count", len(ti),
 		"ft_name", ftInfo.FTName)
 	parallelReceiver := NewParallelFTReceiver(w)
@@ -1009,7 +1010,7 @@ func (w *Wallet) FTTokensReceivedLegacy(did string, ti []contract.TokenInfo, b *
 			// Fall back to synchronous processing
 			goto ftSyncProcessing
 		}
-		w.log.Info("FT provider details submitted for async processing", 
+		w.log.Info("FT provider details submitted for async processing",
 			"transaction_id", b.GetTid(),
 			"token_count", len(providerMaps))
 		return updatedtokenhashes, nil

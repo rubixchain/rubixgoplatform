@@ -31,16 +31,17 @@ import (
 )
 
 const (
-	APIPingPath                     string = "/api/ping"
-	APIPeerStatus                   string = "/api/peerstatus"
-	APICreditStatus                 string = "/api/creditstatus"
-	APIQuorumConsensus              string = "/api/quorum-conensus"
-	APIQuorumCredit                 string = "/api/quorum-credit"
-	APIReqPledgeToken               string = "/api/req-pledge-token"
-	APIUpdatePledgeToken            string = "/api/update-pledge-token"
-	APISignatureRequest             string = "/api/signature-request"
-	APISendReceiverToken            string = "/api/send-receiver-token"
-	APIConfirmTokenTransfer         string = "/api/confirm-token-transfer"
+	APIPingPath             string = "/api/ping"
+	APIPeerStatus           string = "/api/peerstatus"
+	APICreditStatus         string = "/api/creditstatus"
+	APIQuorumConsensus      string = "/api/quorum-conensus"
+	APIQuorumCredit         string = "/api/quorum-credit"
+	APIReqPledgeToken       string = "/api/req-pledge-token"
+	APIUpdatePledgeToken    string = "/api/update-pledge-token"
+	APISignatureRequest     string = "/api/signature-request"
+	APISendReceiverToken    string = "/api/send-receiver-token"
+	APIConfirmTokenTransfer string = "/api/confirm-token-transfer"
+
 	APIRollbackTransaction          string = "/api/rollback-transaction"
 	APISyncTokenChain               string = "/api/sync-token-chain"
 	APIDhtProviderCheck             string = "/api/dht-provider-check"
@@ -66,6 +67,8 @@ const (
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
+
+	APIGetFTTransactionStatus string = "/api/get-ft-transaction-status"
 )
 
 const (
@@ -321,13 +324,13 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if c.testNet && c.defaultSetup {
 		c.AddFaucetQuorums()
 	}
-	
+
 	// Initialize token sync manager
 	c.tokenSyncManager = NewTokenSyncManager(c.log)
-	
+
 	// Initialize async pin manager with 4 workers by default
 	c.asyncPinManager = NewAsyncPinManager(c, 4)
-	
+
 	// Initialize performance tracker
 	perfConfig := &PerformanceConfig{
 		Enabled:        true, // TODO: Make this configurable
@@ -345,19 +348,19 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 
 	// Initialize transaction state manager
 	c.txStateMgr = NewTransactionStateManager(c)
-	
+
 	// Initialize rollback manager
 	c.rollbackMgr = NewRollbackManager(c, c.txStateMgr)
-	
+
 	// Initialize token pools for memory optimization
 	c.tokenPool = NewTokenInfoPool()
 	c.batchSyncTokenPool = NewBatchSyncTokenInfoPool()
 	c.tokenSlicePool = NewTokenSlicePool()
-	
+
 	// Initialize pending token monitor for self-healing
 	// Check every 5 minutes for tokens pending > 10 minutes
 	c.pendingTokenMonitor = NewPendingTokenMonitor(c, 5*time.Minute, 10*time.Minute)
-	
+
 	// Wrap storage with tracking if performance tracker is enabled
 	if c.perfTracker != nil && c.perfTracker.enabled && c.s != nil {
 		c.s = NewTrackedStorage(c.s, c)
@@ -365,7 +368,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			c.as = NewTrackedStorage(c.as, c)
 		}
 	}
-	
+
 	return c, nil
 }
 
@@ -413,10 +416,10 @@ func (c *Core) SetupCore() error {
 	// c.RestartIncompleteTokenChainSyncs()
 	//c.UnlockFTs()
 	// c.selfTransferService()
-	
+
 	// Start token sync cleanup routine
 	go c.tokenSyncCleanupRoutine()
-	
+
 	return nil
 }
 
@@ -487,19 +490,19 @@ func (c *Core) IPFSOperations() *IPFSOperations {
 // GetIPFSStats returns IPFS health and scalability statistics
 func (c *Core) GetIPFSStats() map[string]interface{} {
 	stats := make(map[string]interface{})
-	
+
 	if c.ipfsHealth != nil {
 		stats["health"] = c.ipfsHealth.GetStats()
 	}
-	
+
 	if c.ipfsScalability != nil {
 		stats["scalability"] = c.ipfsScalability.GetScalabilityStats()
 	}
-	
+
 	if c.ipfsRecovery != nil {
 		stats["recovery"] = c.ipfsRecovery.GetRecoveryStats()
 	}
-	
+
 	return stats
 }
 
@@ -508,7 +511,7 @@ func (c *Core) StopCore() {
 	if c.shutdownMgr == nil {
 		c.shutdownMgr = NewShutdownManager(c)
 	}
-	
+
 	// Perform graceful shutdown
 	if err := c.shutdownMgr.Shutdown(); err != nil {
 		c.log.Error("Shutdown completed with errors", "error", err)
@@ -830,7 +833,7 @@ func (c *Core) SetAsyncFTResponse(val bool) {
 func (c *Core) tokenSyncCleanupRoutine() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:

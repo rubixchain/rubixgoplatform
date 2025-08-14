@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -22,4 +23,62 @@ type FT struct {
 	FTName     string `gorm:"column:ft_name"`
 	FTCount    int    `gorm:"column:ft_count"`
 	CreatorDID string `gorm:"column:creator_did"`
+}
+
+// LockFTTokenForTransfer locks a token for transfer to prevent double spending
+func (w *Wallet) LockFTTokenForTransfer(tokenID, transactionID string) error {
+	var ftToken FTToken
+	err := w.s.Read(FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to get FT token: %v", err)
+	}
+
+	if ftToken.TokenStatus != TokenIsFree {
+		return fmt.Errorf("token is not free for transfer, status: %d", ftToken.TokenStatus)
+	}
+
+	// Lock the token for transfer
+	ftToken.TokenStatus = TokenIsInTransfer
+	ftToken.TransactionID = transactionID
+
+	err = w.s.Update(FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to lock FT token for transfer: %v", err)
+	}
+
+	return nil
+}
+
+// UnlockFTTokenFromTransfer unlocks a token if transfer fails
+func (w *Wallet) UnlockFTTokenFromTransfer(tokenID string) error {
+	var ftToken FTToken
+	err := w.s.Read(FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to get FT token: %v", err)
+	}
+
+	if ftToken.TokenStatus != TokenIsInTransfer {
+		return fmt.Errorf("token is not in transfer state, status: %d", ftToken.TokenStatus)
+	}
+
+	// Unlock the token
+	ftToken.TokenStatus = TokenIsFree
+	ftToken.TransactionID = ""
+
+	err = w.s.Update(FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to unlock FT token: %v", err)
+	}
+
+	return nil
+}
+
+// GetFTTokensByDID returns all FT tokens for a given DID
+func (w *Wallet) GetFTTokensByDID(did string) ([]FTToken, error) {
+	var ftTokens []FTToken
+	err := w.s.Read(FTTokenStorage, &ftTokens, "owner_did=?", did)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get FT tokens for DID %s: %v", did, err)
+	}
+	return ftTokens, nil
 }
