@@ -1,13 +1,15 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -26,7 +28,25 @@ type RetryFTTransferResponse struct {
 	TokenCount    int    `json:"token_count,omitempty"`
 }
 
-// RetryFTTransfer retries sending FT tokens to receiver using transaction details
+// ExplorerTransactionResponse represents the response from explorer API
+type ExplorerTransactionResponse struct {
+	Status bool `json:"status"`
+	Data   struct {
+		TransactionType  string   `json:"transactionType"`
+		TransactionID    string   `json:"transactionId"`
+		Creator          string   `json:"creator"`
+		Sender           string   `json:"sender"`
+		ReceiverDID      string   `json:"receiverDid"`
+		Amount           float64  `json:"amount"`
+		FTName           string   `json:"ftName"`
+		FTTransferCount  int      `json:"ftTransferCount"`
+		FTTokenList      []string `json:"ftTokenList"`
+		Timestamp        string   `json:"timestamp"`
+	} `json:"data"`
+	Message string `json:"message"`
+}
+
+// RetryFTTransfer retries sending FT tokens to receiver using transaction details from explorer
 func (c *Core) RetryFTTransfer(req *RetryFTTransferRequest) (*RetryFTTransferResponse, error) {
 	c.log.Info("Starting FT transfer retry", 
 		"transaction_id", req.TransactionID,
@@ -37,74 +57,96 @@ func (c *Core) RetryFTTransfer(req *RetryFTTransferRequest) (*RetryFTTransferRes
 		Status: false,
 	}
 	
-	// Step 1: Verify this is a valid FT transaction from FTTransactionHistoryStorage
-	var ftTxnHistory model.FTTransactionHistory
-	err := c.s.Read(wallet.FTTransactionHistoryStorage, &ftTxnHistory, 
-		"transaction_id=? AND sender_did=? AND receiver_did=?", 
-		req.TransactionID, req.SenderDID, req.ReceiverDID)
+	// Step 1: Fetch transaction details from explorer API
+	var explorerURL string
+	if c.testNet {
+		explorerURL = fmt.Sprintf("https://testnet-app-api.rubixexplorer.com/api/Transaction/GetById/%s", req.TransactionID)
+	} else {
+		explorerURL = fmt.Sprintf("https://rexplorerapi.azurewebsites.net/api/Transaction/GetById/%s", req.TransactionID)
+	}
+	
+	c.log.Info("Fetching transaction from explorer", "url", explorerURL)
+	
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(explorerURL)
 	if err != nil {
-		c.log.Error("FT transaction not found in FTTransactionHistoryStorage", 
-			"transaction_id", req.TransactionID, "err", err)
-		response.Message = fmt.Sprintf("FT transaction not found or sender/receiver mismatch: %v", err)
+		c.log.Error("Failed to fetch transaction from explorer", "err", err)
+		response.Message = fmt.Sprintf("Failed to fetch transaction from explorer: %v", err)
+		return response, nil
+	}
+	defer resp.Body.Close()
+	
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		c.log.Error("Failed to read explorer response", "err", err)
+		response.Message = fmt.Sprintf("Failed to read explorer response: %v", err)
 		return response, nil
 	}
 	
-	c.log.Info("Found FT transaction history", 
-		"ft_name", ftTxnHistory.FTName,
-		"token_count", ftTxnHistory.TokenCount,
-		"creator_did", ftTxnHistory.CreatorDID)
-	
-	// Step 2: Get all FT tokens for this transaction from FTTokenStorage
-	var ftTokens []wallet.FTToken
-	err = c.s.Read(wallet.FTTokenStorage, &ftTokens, "transaction_id=?", req.TransactionID)
-	if err != nil || len(ftTokens) == 0 {
-		c.log.Error("No FT tokens found in FTTokenStorage for transaction", 
-			"transaction_id", req.TransactionID, "err", err)
-		response.Message = fmt.Sprintf("No FT tokens found for transaction %s", req.TransactionID)
+	var explorerResp ExplorerTransactionResponse
+	if err := json.Unmarshal(body, &explorerResp); err != nil {
+		c.log.Error("Failed to parse explorer response", "err", err)
+		response.Message = fmt.Sprintf("Failed to parse explorer response: %v", err)
 		return response, nil
 	}
 	
-	// Verify token count matches FT transaction history
-	if len(ftTokens) != ftTxnHistory.TokenCount {
-		c.log.Warn("Token count mismatch", 
-			"expected", ftTxnHistory.TokenCount, 
-			"found", len(ftTokens))
+	if !explorerResp.Status {
+		c.log.Error("Explorer API returned error", "message", explorerResp.Message)
+		response.Message = fmt.Sprintf("Explorer API error: %s", explorerResp.Message)
+		return response, nil
 	}
 	
-	c.log.Info("Found FT tokens for transaction", 
-		"count", len(ftTokens), 
-		"transaction_id", req.TransactionID)
+	// Step 2: Validate transaction type and participants
+	if explorerResp.Data.TransactionType != "FT" {
+		response.Message = fmt.Sprintf("Transaction %s is not an FT transaction (type: %s)", req.TransactionID, explorerResp.Data.TransactionType)
+		return response, nil
+	}
 	
-	// Step 3: Build TokenInfo array from the FT tokens
+	if explorerResp.Data.Sender != req.SenderDID {
+		response.Message = fmt.Sprintf("Sender DID mismatch. Expected: %s, Got: %s", req.SenderDID, explorerResp.Data.Sender)
+		return response, nil
+	}
+	
+	if explorerResp.Data.ReceiverDID != req.ReceiverDID {
+		response.Message = fmt.Sprintf("Receiver DID mismatch. Expected: %s, Got: %s", req.ReceiverDID, explorerResp.Data.ReceiverDID)
+		return response, nil
+	}
+	
+	// Step 3: Extract FT details from explorer response
+	ftTokenList := explorerResp.Data.FTTokenList
+	ftName := explorerResp.Data.FTName
+	creatorDID := explorerResp.Data.Creator
+	ftCount := explorerResp.Data.FTTransferCount
+	tokenValue := explorerResp.Data.Amount / float64(ftCount) // Calculate individual token value
+	
+	c.log.Info("Found FT transaction in explorer", 
+		"ft_name", ftName,
+		"token_count", ftCount,
+		"creator_did", creatorDID,
+		"token_value", tokenValue)
+	
+	// Step 4: Build TokenInfo array from the token list
 	tokenInfo := make([]contract.TokenInfo, 0)
+	tt := c.TokenType(FTString)
 	
-	for _, ft := range ftTokens {
-		// Verify FT metadata matches
-		if ft.FTName != ftTxnHistory.FTName {
-			c.log.Warn("FT name mismatch for token", 
-				"token_id", ft.TokenID,
-				"expected", ftTxnHistory.FTName,
-				"found", ft.FTName)
-		}
-		
-		// Get the latest block for this token
-		tt := c.TokenType(FTString)
-		blk := c.w.GetLatestTokenBlock(ft.TokenID, tt)
+	for _, tokenID := range ftTokenList {
+		// Get the latest block for this token from local storage
+		blk := c.w.GetLatestTokenBlock(tokenID, tt)
 		if blk == nil {
-			c.log.Error("Failed to get latest block for token", "token_id", ft.TokenID)
+			c.log.Error("Failed to get latest block for token", "token_id", tokenID)
 			continue
 		}
 		
-		bid, err := blk.GetBlockID(ft.TokenID)
+		bid, err := blk.GetBlockID(tokenID)
 		if err != nil {
-			c.log.Error("Failed to get block ID", "token_id", ft.TokenID, "err", err)
+			c.log.Error("Failed to get block ID", "token_id", tokenID, "err", err)
 			continue
 		}
 		
 		ti := contract.TokenInfo{
-			Token:      ft.TokenID,
+			Token:      tokenID,
 			TokenType:  tt,
-			TokenValue: ft.TokenValue,
+			TokenValue: tokenValue,
 			OwnerDID:   req.ReceiverDID, // Tokens should be transferred to receiver
 			BlockID:    bid,
 		}
@@ -116,7 +158,7 @@ func (c *Core) RetryFTTransfer(req *RetryFTTransferRequest) (*RetryFTTransferRes
 		return response, nil
 	}
 	
-	// Step 4: Get the token chain block
+	// Step 5: Get the token chain block
 	firstToken := tokenInfo[0].Token
 	tokenChainBlock := c.w.GetLatestTokenBlock(firstToken, c.TokenType(FTString))
 	if tokenChainBlock == nil {
@@ -124,30 +166,8 @@ func (c *Core) RetryFTTransfer(req *RetryFTTransferRequest) (*RetryFTTransferRes
 		return response, nil
 	}
 	
-	// Step 5: Get transaction epoch from FT transaction history
-	transactionEpoch := ftTxnHistory.Epoch
-	if transactionEpoch == 0 {
-		// Fallback: try to get from general transaction storage if needed
-		var txHistory model.TransactionDetails
-		err = c.s.Read(wallet.TransactionStorage, &txHistory, "transaction_id=?", req.TransactionID)
-		if err == nil {
-			transactionEpoch = txHistory.Epoch
-		} else {
-			// Use current time as epoch if not found
-			transactionEpoch = time.Now().Unix()
-		}
-	}
-	
-	// Step 6: Check if we have FTTransactionToken metadata
-	var ftTxnTokens []model.FTTransactionToken
-	err = c.s.Read(wallet.FTTransactionTokenStorage, &ftTxnTokens, 
-		"transaction_id=? AND direction=?", req.TransactionID, "sent")
-	if err == nil && len(ftTxnTokens) > 0 {
-		c.log.Info("Found FT transaction token metadata", 
-			"count", len(ftTxnTokens),
-			"ft_name", ftTxnTokens[0].FTName,
-			"creator_did", ftTxnTokens[0].CreatorDID)
-	}
+	// Step 6: Use current time as transaction epoch for retry
+	transactionEpoch := time.Now().Unix()
 	
 	// Step 7: Prepare SendFTRequest
 	senderPeerID := c.peerID
@@ -158,9 +178,9 @@ func (c *Core) RetryFTTransfer(req *RetryFTTransferRequest) (*RetryFTTransferRes
 		QuorumList:       []string{}, // Empty for retry as tokens are already pledged
 		TransactionEpoch: int(transactionEpoch),
 		FTInfo: model.FTInfo{
-			FTName:     ftTxnHistory.FTName,
+			FTName:     ftName,
 			FTCount:    len(tokenInfo),
-			CreatorDID: ftTxnHistory.CreatorDID,
+			CreatorDID: creatorDID,
 		},
 	}
 	
@@ -193,7 +213,7 @@ func (c *Core) RetryFTTransfer(req *RetryFTTransferRequest) (*RetryFTTransferRes
 	c.log.Info("Sending FT tokens to receiver", 
 		"receiver", receiverPeerID+"."+receiverDID,
 		"token_count", len(tokenInfo),
-		"ft_name", ftTxnHistory.FTName)
+		"ft_name", ftName)
 	
 	var br model.BasicResponse
 	err = rp.SendJSONRequest("POST", APISendFTToken, nil, &sr, &br, true)
@@ -220,14 +240,14 @@ func (c *Core) RetryFTTransfer(req *RetryFTTransferRequest) (*RetryFTTransferRes
 	// Success
 	response.Status = true
 	response.Message = fmt.Sprintf("Successfully retried FT transfer for transaction %s. Sent %d %s tokens to receiver.",
-		req.TransactionID, len(tokenInfo), ftTxnHistory.FTName)
+		req.TransactionID, len(tokenInfo), ftName)
 	response.TransactionID = req.TransactionID
 	response.TokenCount = len(tokenInfo)
 	
 	c.log.Info("Successfully retried FT transfer", 
 		"transaction_id", req.TransactionID,
 		"tokens_sent", len(tokenInfo),
-		"ft_name", ftTxnHistory.FTName)
+		"ft_name", ftName)
 	
 	// Step 13: Update explorer balances (optional, in background)
 	go func() {

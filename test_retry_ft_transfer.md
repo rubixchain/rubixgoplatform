@@ -62,24 +62,33 @@ Expected: "sender_did is required"
 
 ## How It Works
 
-1. **Transaction Validation**: The API first checks if the transaction exists in `FTTransactionHistoryStorage` with matching sender and receiver DIDs.
+1. **Transaction Retrieval from Explorer**: The API fetches transaction details from the explorer API:
+   - Testnet: `https://testnet-app-api.rubixexplorer.com/api/Transaction/GetById/{transaction_id}`
+   - Mainnet: `https://rexplorerapi.azurewebsites.net/api/Transaction/GetById/{transaction_id}`
 
-2. **Token Retrieval**: It queries `FTTokenStorage` to get all tokens associated with the transaction ID.
+2. **Transaction Validation**: Validates that:
+   - Transaction type is "FT"
+   - Sender DID matches the request
+   - Receiver DID matches the request
 
-3. **Token Preparation**: For each token, it fetches the latest block information and prepares the TokenInfo array.
+3. **Token List Extraction**: Gets the FT token list from explorer response (`ftTokenList` field)
 
-4. **Receiver Connection**: Establishes connection with the receiver peer using their DID.
+4. **Token Preparation**: For each token in the list, fetches the latest block information from local storage and prepares the TokenInfo array
 
-5. **Token Transfer**: Sends the tokens to receiver using the existing `APISendFTToken` endpoint.
+5. **Receiver Connection**: Establishes connection with the receiver peer using their DID
 
-6. **Response**: Returns success/failure status with details about the number of tokens sent.
+6. **Token Transfer**: Sends the tokens to receiver using the existing `APISendFTToken` endpoint
+
+7. **Response**: Returns success/failure status with details about the number of tokens sent
 
 ## Key Features
 
-- **Uses FT-specific storage**: Properly queries `FTTransactionHistoryStorage` instead of general transaction storage
-- **Validates token count**: Checks if retrieved tokens match the expected count from history
+- **Explorer Integration**: Fetches transaction and token details from explorer API instead of local database
+- **Automatic Environment Detection**: Uses appropriate explorer endpoint based on testnet/mainnet configuration
+- **Transaction Validation**: Validates transaction type and participant DIDs from explorer data
+- **Token Recovery**: Extracts complete token list from explorer's `ftTokenList` field
+- **Local Block Verification**: Still uses local storage for token chain blocks to ensure integrity
 - **Error handling**: Comprehensive error messages for various failure scenarios
-- **Maintains consistency**: Uses original transaction's epoch and metadata
 - **Background updates**: Updates explorer balances after successful retry
 
 ## Implementation Files
