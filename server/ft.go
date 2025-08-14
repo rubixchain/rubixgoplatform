@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -165,4 +166,53 @@ func (s *Server) APIGetFTCreatorStats(req *ensweb.Request) *ensweb.Result {
 	}
 	
 	return s.BasicResponse(req, true, "FT creator statistics retrieved successfully", stats)
+}
+
+// APIRetryFTTransfer godoc
+// @Summary      Retry FT Transfer
+// @Description  This API endpoint will retry an FT transfer using transaction details
+// @Tags         FT
+// @Accept       json
+// @Produce      json
+// @Param        input body core.RetryFTTransferRequest true "Retry FT Transfer"
+// @Success      200  {object}  core.RetryFTTransferResponse
+// @Router       /api/retry-ft-transfer [post]
+func (s *Server) APIRetryFTTransfer(req *ensweb.Request) *ensweb.Result {
+	var retryReq core.RetryFTTransferRequest
+	err := s.ParseJSON(req, &retryReq)
+	if err != nil {
+		s.log.Error("Failed to parse retry FT transfer request", "err", err)
+		return s.BasicResponse(req, false, "Invalid input: "+err.Error(), nil)
+	}
+	
+	// Validate request parameters
+	if retryReq.TransactionID == "" {
+		return s.BasicResponse(req, false, "transaction_id is required", nil)
+	}
+	if retryReq.SenderDID == "" {
+		return s.BasicResponse(req, false, "sender_did is required", nil)
+	}
+	if retryReq.ReceiverDID == "" {
+		return s.BasicResponse(req, false, "receiver_did is required", nil)
+	}
+	
+	// Validate sender DID access
+	if !s.validateDIDAccess(req, retryReq.SenderDID) {
+		return s.BasicResponse(req, false, "Sender DID does not have access", nil)
+	}
+	
+	s.log.Info("Retrying FT transfer",
+		"transaction_id", retryReq.TransactionID,
+		"sender_did", retryReq.SenderDID,
+		"receiver_did", retryReq.ReceiverDID)
+	
+	// Call the retry function
+	response, err := s.c.RetryFTTransfer(&retryReq)
+	if err != nil {
+		s.log.Error("Failed to retry FT transfer", "err", err)
+		return s.BasicResponse(req, false, "Failed to retry FT transfer: "+err.Error(), nil)
+	}
+	
+	// Return the response
+	return s.RenderJSON(req, response, http.StatusOK)
 }

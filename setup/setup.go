@@ -82,6 +82,7 @@ const (
 	APICreateFT                         string = "/api/create-ft"
 	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
 	APIInitiateFTTransfer               string = "/api/initiate-ft-transfer"
+	APIRetryFTTransfer                  string = "/api/retry-ft-transfer"
 	APIGetFTInfo                        string = "/api/get-ft-info-by-did"
 	APIFixFTCreator                     string = "/api/fix-ft-creator"
 	APIGetFTCreatorStats                string = "/api/get-ft-creator-stats"
