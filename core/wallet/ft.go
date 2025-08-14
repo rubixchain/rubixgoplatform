@@ -108,3 +108,32 @@ func (w *Wallet) MarkFTTokenAsInTransfer(tokenID, transactionID string) error {
 
 	return nil
 }
+
+// MarkFTTokenAsTransferred marks a token as successfully transferred
+func (w *Wallet) MarkFTTokenAsTransferred(tokenID, transactionID string) error {
+	var ftToken FTToken
+	err := w.s.Read(FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to get FT token: %v", err)
+	}
+
+	if ftToken.TokenStatus != TokenIsInTransfer {
+		return fmt.Errorf("token is not in transfer state, status: %d", ftToken.TokenStatus)
+	}
+
+	// Mark as transferred and preserve TransactionID for tracking
+	ftToken.TokenStatus = TokenIsTransferred
+	// Note: We keep the TransactionID for transaction tracking
+
+	err = w.s.Update(FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to mark FT token as transferred: %v", err)
+	}
+
+	w.log.Info("FT token marked as transferred",
+		"token_id", tokenID,
+		"transaction_id", transactionID,
+		"status", TokenIsTransferred)
+
+	return nil
+}

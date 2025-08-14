@@ -1376,3 +1376,60 @@ func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 	}
 	return ftTokens, nil
 }
+
+// MarkTokenAsTransferred marks a token as successfully transferred
+func (w *Wallet) MarkTokenAsTransferred(tokenID, transactionID string) error {
+	var t Token
+	err := w.s.Read(TokenStorage, &t, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to get token: %v", err)
+	}
+
+	if t.TokenStatus != TokenIsInTransfer {
+		return fmt.Errorf("token is not in transfer state, status: %d", t.TokenStatus)
+	}
+
+	// Mark as transferred and preserve TransactionID for tracking
+	t.TokenStatus = TokenIsTransferred
+	// Note: We keep the TransactionID for transaction tracking
+
+	err = w.s.Update(TokenStorage, &t, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to mark token as transferred: %v", err)
+	}
+
+	w.log.Info("Token marked as transferred",
+		"token_id", tokenID,
+		"transaction_id", transactionID,
+		"status", TokenIsTransferred)
+
+	return nil
+}
+
+// UnlockTokenFromTransfer unlocks a token from transfer state back to free
+func (w *Wallet) UnlockTokenFromTransfer(tokenID string) error {
+	var t Token
+	err := w.s.Read(TokenStorage, &t, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to get token: %v", err)
+	}
+
+	if t.TokenStatus != TokenIsInTransfer {
+		return fmt.Errorf("token is not in transfer state, status: %d", t.TokenStatus)
+	}
+
+	// Unlock the token back to free status
+	t.TokenStatus = TokenIsFree
+	// Note: We keep the TransactionID for tracking purposes
+
+	err = w.s.Update(TokenStorage, &t, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to unlock token from transfer: %v", err)
+	}
+
+	w.log.Info("Token unlocked from transfer",
+		"token_id", tokenID,
+		"status", TokenIsFree)
+
+	return nil
+}

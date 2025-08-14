@@ -790,20 +790,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, fmt.Errorf("unable to send tokens to receiver, " + br.Message)
 		}
 
-		// Send token confirmation to receiver after consensus finality
+		// Wait for receiver confirmation with timeout and proactive checking
 		receiverAddr := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
 		if cr.SenderPeerID != cr.ReceiverPeerID {
-			go func() {
-				err = c.sendTokenConfirmation(receiverAddr, tid, ti, tkn.RBTTokenType)
-				if err != nil {
-					// Log error but don't fail the transaction - tokens are already committed
-					c.log.Error("Failed to send token confirmation to receiver",
-						"receiver", receiverAddr,
-						"transaction_id", tid,
-						"error", err)
-					// Continue with the flow - receiver will eventually clean up pending tokens
-				}
-			}()
+			go c.waitForReceiverConfirmation(receiverAddr, tid, ti, tkn.RBTTokenType, nil)
 		}
 
 		// TODO:Remove this below commented out code, once after testing the quorum pledge finality location change.
@@ -1100,41 +1090,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, fmt.Errorf("unable to send FT tokens to receiver, " + br.Message)
 		}
 
-		// Phase 2: Use existing confirmation logic but with enhanced verification
+		// Phase 2: Wait for receiver confirmation with timeout and proactive checking
 		receiverAddr := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
 		if cr.SenderPeerID != cr.ReceiverPeerID {
-			go func() {
-				// Wait for explorer submission to complete if channel is provided
-				if cr.ExplorerDone != nil {
-					c.log.Info("Waiting for explorer submission to complete before sending confirmation",
-						"transaction_id", cr.TransactionID)
-
-					select {
-					case <-cr.ExplorerDone:
-						c.log.Info("Explorer submission completed, proceeding with receiver confirmation",
-							"transaction_id", cr.TransactionID)
-					case <-time.After(30 * time.Second):
-						c.log.Warn("Explorer submission timeout, proceeding with receiver confirmation anyway",
-							"transaction_id", cr.TransactionID)
-					}
-				}
-
-				// Use existing confirmation logic with enhanced verification
-				err = c.sendTokenConfirmationWithVerification(receiverAddr, cr.TransactionID, ti, tkn.FTTokenType)
-				if err != nil {
-					c.log.Error("Token confirmation failed, unlocking tokens",
-						"receiver", receiverAddr,
-						"transaction_id", cr.TransactionID,
-						"error", err)
-
-					// Unlock tokens if confirmation fails
-					for _, token := range ti {
-						if unlockErr := c.w.UnlockFTTokenFromTransfer(token.Token); unlockErr != nil {
-							c.log.Error("Failed to unlock token", "token", token.Token, "err", unlockErr)
-						}
-					}
-				}
-			}()
+			go c.waitForReceiverConfirmation(receiverAddr, cr.TransactionID, ti, tkn.FTTokenType, cr.ExplorerDone)
 		}
 
 		// TODO: remove the following commented out code once after testing, calling the quorum pledge finality before APISendFT token

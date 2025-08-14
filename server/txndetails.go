@@ -206,7 +206,7 @@ func (s *Server) APIGetTxnByNode(req *ensweb.Request) *ensweb.Result {
 // @Router /api/get-ft-txn-by-did [get]
 func (s *Server) APIGetFTTxnByDID(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "DID")
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9-]*$`).MatchString(did)
 	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid DID")
 		return s.BasicResponse(req, false, "Invalid DID", nil)
@@ -264,7 +264,7 @@ func (s *Server) APIGetFTTransactionStatus(req *ensweb.Request) *ensweb.Result {
 		"is_alphanumeric", regexp.MustCompile(`^[a-zA-Z0-9]+$`).MatchString(did))
 
 	// More permissive regex to handle edge cases
-	is_valid := regexp.MustCompile(`^[a-zA-Z0-9]+$`).MatchString(did)
+	is_valid := regexp.MustCompile(`^[a-zA-Z0-9-]+$`).MatchString(did)
 	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_valid {
 		s.log.Error("Invalid DID", "did", did, "length", len(did), "starts_with_bafybmi", strings.HasPrefix(did, "bafybmi"), "is_valid", is_valid)
 		return s.BasicResponse(req, false, "Invalid DID", nil)

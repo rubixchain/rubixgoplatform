@@ -1154,57 +1154,18 @@ func (c *Core) GetFTTransactionStatus(did string, transactionID string) (map[str
 			statusCounts["failed"]++
 		}
 
-		// Group tokens by transaction ID (skip tokens without transaction ID)
+		// Group by transaction ID (only for tokens with TransactionID)
 		if token.TransactionID != "" {
 			transactionsByID[token.TransactionID] = append(transactionsByID[token.TransactionID], token)
-		} else {
-			// Debug: log tokens without transaction ID
-			c.log.Debug("Token without transaction ID", 
-				"token_id", token.TokenID, 
-				"status", token.TokenStatus,
-				"ft_name", token.FTName)
 		}
 	}
 
 	// Build transaction summaries
 	var transactions []map[string]interface{}
-	
-	// Debug: log transaction grouping
-	c.log.Info("Transaction grouping debug", 
-		"total_tokens", len(ftTokens),
-		"transactions_by_id_count", len(transactionsByID),
-		"filter_transaction_id", transactionID)
-	
-	// Debug: show all available transaction IDs
-	var availableTxIDs []string
-	for txID := range transactionsByID {
-		availableTxIDs = append(availableTxIDs, txID)
-	}
-	
-	// Helper function for min
-	min := func(a, b int) int {
-		if a < b {
-			return a
-		}
-		return b
-	}
-	
-	c.log.Info("Available transaction IDs", 
-		"count", len(availableTxIDs),
-		"sample_ids", availableTxIDs[:min(5, len(availableTxIDs))])
-	
+
 	for txID, tokens := range transactionsByID {
-		// Debug: log each transaction being processed
-		c.log.Debug("Processing transaction", 
-			"tx_id", txID, 
-			"token_count", len(tokens),
-			"filter_transaction_id", transactionID)
-		
 		// Skip if we're filtering by specific transaction ID and this doesn't match
 		if transactionID != "" && txID != transactionID {
-			c.log.Debug("Skipping transaction - doesn't match filter", 
-				"tx_id", txID, 
-				"filter_transaction_id", transactionID)
 			continue
 		}
 
@@ -1273,8 +1234,6 @@ func (c *Core) GetFTTransactionStatus(did string, transactionID string) (map[str
 	}
 
 	// Sort transactions by timestamp (newest first)
-	// Note: This is a simple sort, could be enhanced with proper sorting
-	// Sort transactions by timestamp (newest first)
 	for i := 0; i < len(transactions)-1; i++ {
 		for j := i + 1; j < len(transactions); j++ {
 			// Get timestamps
@@ -1288,22 +1247,25 @@ func (c *Core) GetFTTransactionStatus(did string, transactionID string) (map[str
 		}
 	}
 
+	// Calculate summary
+	summary := map[string]interface{}{
+		"available":   statusCounts["free"],
+		"locked":      statusCounts["locked"],
+		"in_transfer": statusCounts["in_transfer"],
+		"transferred": statusCounts["transferred"],
+		"pending":     statusCounts["pending"],
+		"failed":      statusCounts["failed"],
+	}
+
 	result := map[string]interface{}{
 		"did":           did,
 		"total_tokens":  len(ftTokens),
 		"status_counts": statusCounts,
+		"summary":       summary,
 		"transactions":  transactions,
-		"summary": map[string]interface{}{
-			"available":   statusCounts["free"],
-			"locked":      statusCounts["locked"],
-			"in_transfer": statusCounts["in_transfer"],
-			"transferred": statusCounts["transferred"],
-			"pending":     statusCounts["pending"],
-			"failed":      statusCounts["failed"],
-		},
 	}
 
-	// If filtering by specific transaction, add filter info
+	// Add transaction details if filtering by transactionID
 	if transactionID != "" {
 		result["filtered_by_transaction"] = transactionID
 		result["filtered_results"] = len(transactions)

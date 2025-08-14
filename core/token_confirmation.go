@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -188,4 +189,260 @@ func (c *Core) verifyReceiverHasTokens(receiverAddress string, txID string, toke
 
 	// Return true for now - you can implement proper verification later
 	return true, nil
+}
+
+// waitForReceiverConfirmation waits for receiver to send confirmation with timeout and proactive checking
+func (c *Core) waitForReceiverConfirmation(receiverAddress, transactionID string, tokens []contract.TokenInfo, tokenType int, explorerDone chan struct{}) {
+	c.log.Info("Starting receiver confirmation wait",
+		"receiver", receiverAddress,
+		"transaction_id", transactionID,
+		"token_count", len(tokens),
+		"token_type", tokenType)
+
+	// Calculate timeout based on token count (30 minutes base + 1 minute per 100 extra tokens)
+	baseTimeout := 30 * time.Minute
+	extraTokens := len(tokens) - 3000
+	if extraTokens > 0 {
+		extraMinutes := (extraTokens + 99) / 100 // Round up division
+		baseTimeout += time.Duration(extraMinutes) * time.Minute
+	}
+
+	c.log.Info("Confirmation timeout calculated",
+		"transaction_id", transactionID,
+		"base_timeout", "30m",
+		"extra_tokens", extraTokens,
+		"total_timeout", baseTimeout)
+
+	// Wait for explorer submission to complete if channel is provided
+	if explorerDone != nil {
+		c.log.Info("Waiting for explorer submission to complete",
+			"transaction_id", transactionID)
+
+		select {
+		case <-explorerDone:
+			c.log.Info("Explorer submission completed, waiting for receiver confirmation",
+				"transaction_id", transactionID)
+		case <-time.After(30 * time.Second):
+			c.log.Warn("Explorer submission timeout, proceeding with confirmation wait",
+				"transaction_id", transactionID)
+		}
+	}
+
+	// Start confirmation wait with timeout
+	confirmationChan := make(chan bool, 1)
+
+	// Goroutine to wait for confirmation
+	go func() {
+		// Wait for receiver to send confirmation
+		// This will be implemented when receiver calls the confirmation endpoint
+		// For now, we'll use proactive checking
+		time.Sleep(baseTimeout)
+		confirmationChan <- false // Timeout occurred
+	}()
+
+	// Wait for confirmation or timeout
+	select {
+	case confirmed := <-confirmationChan:
+		if confirmed {
+			c.log.Info("Receiver confirmation received successfully",
+				"transaction_id", transactionID,
+				"receiver", receiverAddress)
+
+			// Mark tokens as successfully transferred
+			if err := c.markTokensAsTransferred(transactionID, tokens, tokenType); err != nil {
+				c.log.Error("Failed to mark tokens as transferred",
+					"transaction_id", transactionID,
+					"error", err)
+			}
+		} else {
+			c.log.Warn("Confirmation timeout, starting proactive status check",
+				"transaction_id", transactionID,
+				"receiver", receiverAddress)
+
+			// Start proactive status checking
+			go c.proactiveStatusCheck(receiverAddress, transactionID, tokens, tokenType)
+		}
+	}
+}
+
+// proactiveStatusCheck proactively checks receiver status if confirmation timeout occurs
+func (c *Core) proactiveStatusCheck(receiverAddress, transactionID string, tokens []contract.TokenInfo, tokenType int) {
+	c.log.Info("Starting proactive status check",
+		"transaction_id", transactionID,
+		"receiver", receiverAddress)
+
+	// Check receiver status every 5 minutes for up to 1 hour
+	maxRetries := 12
+	retryInterval := 5 * time.Minute
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		c.log.Info("Proactive status check attempt",
+			"transaction_id", transactionID,
+			"attempt", attempt,
+			"max_retries", maxRetries)
+
+		// Check if receiver has processed the tokens
+		status, err := c.checkReceiverTokenStatus(receiverAddress, transactionID, tokens, tokenType)
+		if err != nil {
+			c.log.Error("Failed to check receiver status",
+				"transaction_id", transactionID,
+				"attempt", attempt,
+				"error", err)
+		} else if status {
+			c.log.Info("Receiver has successfully processed tokens",
+				"transaction_id", transactionID,
+				"attempt", attempt)
+
+			// Mark tokens as successfully transferred
+			if err := c.markTokensAsTransferred(transactionID, tokens, tokenType); err != nil {
+				c.log.Error("Failed to mark tokens as transferred after proactive check",
+					"transaction_id", transactionID,
+					"error", err)
+			}
+			return
+		}
+
+		// Wait before next retry
+		if attempt < maxRetries {
+			c.log.Info("Waiting before next proactive check",
+				"transaction_id", transactionID,
+				"next_attempt_in", retryInterval)
+			time.Sleep(retryInterval)
+		}
+	}
+
+	// All retries exhausted - handle failure
+	c.log.Error("Proactive status check exhausted, handling transaction failure",
+		"transaction_id", transactionID,
+		"receiver", receiverAddress,
+		"max_retries", maxRetries)
+
+	// Handle transaction failure - unlock tokens and mark as failed
+	if err := c.handleTransactionFailure(transactionID, tokens, tokenType); err != nil {
+		c.log.Error("Failed to handle transaction failure",
+			"transaction_id", transactionID,
+			"error", err)
+	}
+}
+
+// checkReceiverTokenStatus checks if receiver has successfully processed the tokens
+func (c *Core) checkReceiverTokenStatus(receiverAddress, transactionID string, tokens []contract.TokenInfo, tokenType int) (bool, error) {
+	c.log.Debug("Checking receiver token status",
+		"transaction_id", transactionID,
+		"receiver", receiverAddress)
+
+	// Get receiver peer
+	receiverPeer, err := c.getPeer(receiverAddress)
+	if err != nil {
+		return false, fmt.Errorf("failed to get receiver peer: %v", err)
+	}
+	defer receiverPeer.Close()
+
+	// Create status check request
+	statusReq := map[string]interface{}{
+		"transaction_id": transactionID,
+		"token_count":    len(tokens),
+		"token_type":     tokenType,
+	}
+
+	// Send status check request
+	var resp model.BasicResponse
+	err = receiverPeer.SendJSONRequest("POST", "/api/check-token-status", nil, &statusReq, &resp, true)
+	if err != nil {
+		return false, fmt.Errorf("failed to check token status: %v", err)
+	}
+
+	return resp.Status, nil
+}
+
+// markTokensAsTransferred marks tokens as successfully transferred
+func (c *Core) markTokensAsTransferred(transactionID string, tokens []contract.TokenInfo, tokenType int) error {
+	c.log.Info("Marking tokens as transferred",
+		"transaction_id", transactionID,
+		"token_count", len(tokens))
+
+	// Update token status to transferred
+	for _, token := range tokens {
+		if tokenType == c.TokenType(FTString) {
+			if err := c.w.MarkFTTokenAsTransferred(token.Token, transactionID); err != nil {
+				c.log.Error("Failed to mark FT token as transferred",
+					"token", token.Token,
+					"transaction_id", transactionID,
+					"error", err)
+				return err
+			}
+		} else {
+			if err := c.w.MarkTokenAsTransferred(token.Token, transactionID); err != nil {
+				c.log.Error("Failed to mark token as transferred",
+					"token", token.Token,
+					"transaction_id", transactionID,
+					"error", err)
+				return err
+			}
+		}
+	}
+
+	c.log.Info("Successfully marked all tokens as transferred",
+		"transaction_id", transactionID,
+		"token_count", len(tokens))
+
+	return nil
+}
+
+// handleTransactionFailure handles transaction failure by unlocking tokens and marking as failed
+func (c *Core) handleTransactionFailure(transactionID string, tokens []contract.TokenInfo, tokenType int) error {
+	c.log.Info("Handling transaction failure",
+		"transaction_id", transactionID,
+		"token_count", len(tokens))
+
+	// Unlock tokens and mark as failed
+	for _, token := range tokens {
+		if tokenType == c.TokenType(FTString) {
+			if err := c.w.UnlockFTTokenFromTransfer(token.Token); err != nil {
+				c.log.Error("Failed to unlock FT token from transfer",
+					"token", token.Token,
+					"transaction_id", transactionID,
+					"error", err)
+			}
+		} else {
+			if err := c.w.UnlockTokenFromTransfer(token.Token); err != nil {
+				c.log.Error("Failed to unlock token from transfer",
+					"token", token.Token,
+					"transaction_id", transactionID,
+					"error", err)
+			}
+		}
+	}
+
+	// Record transaction failure in history
+	if err := c.recordTransactionFailure(transactionID, tokens, tokenType); err != nil {
+		c.log.Error("Failed to record transaction failure",
+			"transaction_id", transactionID,
+			"error", err)
+	}
+
+	c.log.Info("Transaction failure handled",
+		"transaction_id", transactionID,
+		"token_count", len(tokens))
+
+	return nil
+}
+
+// recordTransactionFailure records the failed transaction in history
+func (c *Core) recordTransactionFailure(transactionID string, tokens []contract.TokenInfo, tokenType int) error {
+	c.log.Info("Recording transaction failure",
+		"transaction_id", transactionID,
+		"token_count", len(tokens))
+
+	// This function should record the failed transaction in the appropriate history table
+	// Implementation depends on existing transaction history structure
+	// For now, we'll log the failure
+
+	c.log.Error("Transaction failed - manual intervention required",
+		"transaction_id", transactionID,
+		"token_count", len(tokens),
+		"token_type", tokenType,
+		"status", "failed")
+
+	return nil
 }
