@@ -9,11 +9,11 @@ import (
 func (w *Wallet) ConfirmPendingTokens(txID string, tokenIDs []string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	
+
 	w.log.Info("Confirming pending tokens",
 		"transaction_id", txID,
 		"token_count", len(tokenIDs))
-	
+
 	confirmedCount := 0
 	for _, tokenID := range tokenIDs {
 		var t Token
@@ -25,7 +25,7 @@ func (w *Wallet) ConfirmPendingTokens(txID string, tokenIDs []string) error {
 				"error", err)
 			return fmt.Errorf("token not found: %s", tokenID)
 		}
-		
+
 		if t.TokenStatus != TokenIsPending {
 			// If token is already free, it's not an error - just skip it
 			if t.TokenStatus == TokenIsFree {
@@ -41,7 +41,7 @@ func (w *Wallet) ConfirmPendingTokens(txID string, tokenIDs []string) error {
 				"expected_status", TokenIsPending)
 			return fmt.Errorf("token %s not in pending state (current: %d)", tokenID, t.TokenStatus)
 		}
-		
+
 		// Update to free status
 		t.TokenStatus = TokenIsFree
 		err = w.s.Update(TokenStorage, &t, "token_id=?", tokenID)
@@ -53,11 +53,11 @@ func (w *Wallet) ConfirmPendingTokens(txID string, tokenIDs []string) error {
 		}
 		confirmedCount++
 	}
-	
+
 	w.log.Info("Successfully confirmed tokens",
 		"transaction_id", txID,
 		"confirmed_count", confirmedCount)
-	
+
 	return nil
 }
 
@@ -65,11 +65,11 @@ func (w *Wallet) ConfirmPendingTokens(txID string, tokenIDs []string) error {
 func (w *Wallet) ConfirmPendingFTTokens(txID string, tokenIDs []string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	
+
 	w.log.Info("Confirming pending FT tokens",
 		"transaction_id", txID,
 		"token_count", len(tokenIDs))
-	
+
 	confirmedCount := 0
 	for _, tokenID := range tokenIDs {
 		var ft FTToken
@@ -81,7 +81,7 @@ func (w *Wallet) ConfirmPendingFTTokens(txID string, tokenIDs []string) error {
 				"error", err)
 			return fmt.Errorf("FT token not found: %s", tokenID)
 		}
-		
+
 		if ft.TokenStatus != TokenIsPending {
 			// If token is already free, it's not an error - just skip it
 			if ft.TokenStatus == TokenIsFree {
@@ -97,7 +97,7 @@ func (w *Wallet) ConfirmPendingFTTokens(txID string, tokenIDs []string) error {
 				"expected_status", TokenIsPending)
 			return fmt.Errorf("FT token %s not in pending state (current: %d)", tokenID, ft.TokenStatus)
 		}
-		
+
 		// Update to free status
 		ft.TokenStatus = TokenIsFree
 		err = w.s.Update(FTTokenStorage, &ft, "token_id=?", tokenID)
@@ -109,11 +109,11 @@ func (w *Wallet) ConfirmPendingFTTokens(txID string, tokenIDs []string) error {
 		}
 		confirmedCount++
 	}
-	
+
 	w.log.Info("Successfully confirmed FT tokens",
 		"transaction_id", txID,
 		"confirmed_count", confirmedCount)
-	
+
 	return nil
 }
 
@@ -121,11 +121,11 @@ func (w *Wallet) ConfirmPendingFTTokens(txID string, tokenIDs []string) error {
 func (w *Wallet) RollbackPendingTokens(txID string, tokenIDs []string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	
+
 	w.log.Info("Rolling back pending tokens",
 		"transaction_id", txID,
 		"token_count", len(tokenIDs))
-	
+
 	rolledBackCount := 0
 	for _, tokenID := range tokenIDs {
 		var t Token
@@ -137,14 +137,14 @@ func (w *Wallet) RollbackPendingTokens(txID string, tokenIDs []string) error {
 				"transaction_id", txID)
 			continue
 		}
-		
+
 		if t.TokenStatus != TokenIsPending {
 			w.log.Debug("Token not in pending state, skipping rollback",
 				"token_id", tokenID,
 				"current_status", t.TokenStatus)
 			continue
 		}
-		
+
 		// Remove the pending token
 		err = w.s.Delete(TokenStorage, &Token{}, "token_id=? AND transaction_id=?", tokenID, txID)
 		if err != nil {
@@ -155,11 +155,11 @@ func (w *Wallet) RollbackPendingTokens(txID string, tokenIDs []string) error {
 		}
 		rolledBackCount++
 	}
-	
+
 	w.log.Info("Successfully rolled back tokens",
 		"transaction_id", txID,
 		"rolled_back_count", rolledBackCount)
-	
+
 	return nil
 }
 
@@ -167,11 +167,11 @@ func (w *Wallet) RollbackPendingTokens(txID string, tokenIDs []string) error {
 func (w *Wallet) RollbackPendingFTTokens(txID string, tokenIDs []string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	
+
 	w.log.Info("Rolling back pending FT tokens",
 		"transaction_id", txID,
 		"token_count", len(tokenIDs))
-	
+
 	rolledBackCount := 0
 	for _, tokenID := range tokenIDs {
 		var ft FTToken
@@ -183,14 +183,14 @@ func (w *Wallet) RollbackPendingFTTokens(txID string, tokenIDs []string) error {
 				"transaction_id", txID)
 			continue
 		}
-		
+
 		if ft.TokenStatus != TokenIsPending {
 			w.log.Debug("FT token not in pending state, skipping rollback",
 				"token_id", tokenID,
 				"current_status", ft.TokenStatus)
 			continue
 		}
-		
+
 		// Remove the pending token
 		err = w.s.Delete(FTTokenStorage, &FTToken{}, "token_id=? AND transaction_id=?", tokenID, txID)
 		if err != nil {
@@ -201,11 +201,11 @@ func (w *Wallet) RollbackPendingFTTokens(txID string, tokenIDs []string) error {
 		}
 		rolledBackCount++
 	}
-	
+
 	w.log.Info("Successfully rolled back FT tokens",
 		"transaction_id", txID,
 		"rolled_back_count", rolledBackCount)
-	
+
 	return nil
 }
 
@@ -213,16 +213,16 @@ func (w *Wallet) RollbackPendingFTTokens(txID string, tokenIDs []string) error {
 func (w *Wallet) CleanupExpiredPendingTokens(expiry time.Duration) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	
+
 	expiryTime := time.Now().Add(-expiry)
 	w.log.Info("Cleaning up expired pending tokens",
 		"expiry_time", expiryTime)
-	
+
 	// Clean up regular tokens
 	var pendingTokens []Token
-	err := w.s.Read(TokenStorage, &pendingTokens, 
+	err := w.s.Read(TokenStorage, &pendingTokens,
 		"token_status=? AND created_at<?", TokenIsPending, expiryTime)
-	
+
 	if err == nil {
 		for _, t := range pendingTokens {
 			err = w.s.Delete(TokenStorage, &Token{}, "token_id=?", t.TokenID)
@@ -235,12 +235,12 @@ func (w *Wallet) CleanupExpiredPendingTokens(expiry time.Duration) error {
 		w.log.Info("Cleaned up expired pending tokens",
 			"count", len(pendingTokens))
 	}
-	
+
 	// Clean up FT tokens
 	var pendingFTTokens []FTToken
 	err = w.s.Read(FTTokenStorage, &pendingFTTokens,
 		"token_status=? AND created_at<?", TokenIsPending, expiryTime)
-	
+
 	if err == nil {
 		for _, ft := range pendingFTTokens {
 			err = w.s.Delete(FTTokenStorage, &FTToken{}, "token_id=?", ft.TokenID)
@@ -253,6 +253,52 @@ func (w *Wallet) CleanupExpiredPendingTokens(expiry time.Duration) error {
 		w.log.Info("Cleaned up expired pending FT tokens",
 			"count", len(pendingFTTokens))
 	}
-	
+
 	return nil
+}
+
+// GetFTTokenIDsByTransactionID gets all FT token IDs for a specific transaction
+func (w *Wallet) GetFTTokenIDsByTransactionID(transactionID string) ([]string, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	var tokens []FTToken
+	err := w.s.Read(FTTokenStorage, &tokens, "transaction_id=?", transactionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read FT tokens: %v", err)
+	}
+
+	tokenIDs := make([]string, len(tokens))
+	for i, token := range tokens {
+		tokenIDs[i] = token.TokenID
+	}
+
+	w.log.Debug("Retrieved FT token IDs by transaction ID",
+		"transaction_id", transactionID,
+		"token_count", len(tokenIDs))
+
+	return tokenIDs, nil
+}
+
+// GetTokenIDsByTransactionID gets all regular token IDs for a specific transaction
+func (w *Wallet) GetTokenIDsByTransactionID(transactionID string) ([]string, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	var tokens []Token
+	err := w.s.Read(TokenStorage, &tokens, "transaction_id=?", transactionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tokens: %v", err)
+	}
+
+	tokenIDs := make([]string, len(tokens))
+	for i, token := range tokens {
+		tokenIDs[i] = token.TokenID
+	}
+
+	w.log.Debug("Retrieved token IDs by transaction ID",
+		"transaction_id", transactionID,
+		"token_count", len(tokenIDs))
+
+	return tokenIDs, nil
 }

@@ -279,3 +279,163 @@ func (s *Server) APIGetFTTransactionStatus(req *ensweb.Request) *ensweb.Result {
 
 	return s.BasicResponse(req, true, "Retrieved FT transaction status successfully", status)
 }
+
+// @Summary Coordinated rollback for failed transactions
+// @Description Handles coordinated rollback requests from senders when confirmation timeout occurs
+// @ID coordinated-rollback
+// @Tags FT
+// @Accept json
+// @Produce json
+// @Param transaction_id body string true "Transaction ID to rollback"
+// @Param token_count body int true "Number of tokens to rollback"
+// @Param token_type body int true "Type of tokens (FT or RBT)"
+// @Param rollback_type body string true "Type of rollback (coordinated_rollback)"
+// @Param reason body string true "Reason for rollback"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/coordinated-rollback [post]
+func (s *Server) APICoordinatedRollback(req *ensweb.Request) *ensweb.Result {
+	// Parse request data from ensweb request
+	rollbackReq := struct {
+		TransactionID string `json:"transaction_id"`
+		TokenCount    int    `json:"token_count"`
+		TokenType     int    `json:"token_type"`
+		RollbackType  string `json:"rollback_type"`
+		Reason        string `json:"reason"`
+	}{}
+
+	// Access data from the request
+	if req.Data != nil {
+		if txID, ok := req.Data["transaction_id"].(string); ok {
+			rollbackReq.TransactionID = txID
+		}
+		if tokenCount, ok := req.Data["token_count"].(float64); ok {
+			rollbackReq.TokenCount = int(tokenCount)
+		}
+		if tokenType, ok := req.Data["token_type"].(float64); ok {
+			rollbackReq.TokenType = int(tokenType)
+		}
+		if rollbackType, ok := req.Data["rollback_type"].(string); ok {
+			rollbackReq.RollbackType = rollbackType
+		}
+		if reason, ok := req.Data["reason"].(string); ok {
+			rollbackReq.Reason = reason
+		}
+	}
+
+	// Validate request
+	if rollbackReq.TransactionID == "" {
+		return s.BasicResponse(req, false, "Transaction ID is required", nil)
+	}
+
+	if rollbackReq.TokenCount <= 0 {
+		return s.BasicResponse(req, false, "Token count must be positive", nil)
+	}
+
+	if rollbackReq.RollbackType != "coordinated_rollback" {
+		return s.BasicResponse(req, false, "Invalid rollback type", nil)
+	}
+
+	s.log.Info("Received coordinated rollback request",
+		"transaction_id", rollbackReq.TransactionID,
+		"token_count", rollbackReq.TokenCount,
+		"token_type", rollbackReq.TokenType,
+		"reason", rollbackReq.Reason)
+
+	// Perform the rollback
+	err := s.c.CoordinatedRollback(rollbackReq.TransactionID, rollbackReq.TokenType)
+	if err != nil {
+		s.log.Error("Failed to perform coordinated rollback",
+			"transaction_id", rollbackReq.TransactionID,
+			"error", err)
+		return s.BasicResponse(req, false, "Rollback failed: "+err.Error(), nil)
+	}
+
+	s.log.Info("Coordinated rollback completed successfully",
+		"transaction_id", rollbackReq.TransactionID,
+		"token_count", rollbackReq.TokenCount)
+
+	return s.BasicResponse(req, true, "Coordinated rollback completed successfully", nil)
+}
+
+// @Summary Send token transfer confirmation
+// @Description Allows receivers to send confirmation to senders that tokens have been successfully processed
+// @ID send-token-confirmation
+// @Tags FT
+// @Accept json
+// @Produce json
+// @Param transaction_id body string true "Transaction ID to confirm"
+// @Param receiver_did body string true "DID of the receiver"
+// @Param token_count body int true "Number of tokens confirmed"
+// @Param token_type body int true "Type of tokens (FT or RBT)"
+// @Param status body string true "Status of confirmation (success/failure)"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/send-token-confirmation [post]
+func (s *Server) APISendTokenConfirmation(req *ensweb.Request) *ensweb.Result {
+	// Parse request data from ensweb request
+	confirmationReq := struct {
+		TransactionID string `json:"transaction_id"`
+		ReceiverDID   string `json:"receiver_did"`
+		TokenCount    int    `json:"token_count"`
+		TokenType     int    `json:"token_type"`
+		Status        string `json:"status"`
+	}{}
+
+	// Access data from the request
+	if req.Data != nil {
+		if txID, ok := req.Data["transaction_id"].(string); ok {
+			confirmationReq.TransactionID = txID
+		}
+		if receiverDID, ok := req.Data["receiver_did"].(string); ok {
+			confirmationReq.ReceiverDID = receiverDID
+		}
+		if tokenCount, ok := req.Data["token_count"].(float64); ok {
+			confirmationReq.TokenCount = int(tokenCount)
+		}
+		if tokenType, ok := req.Data["token_type"].(float64); ok {
+			confirmationReq.TokenType = int(tokenType)
+		}
+		if status, ok := req.Data["status"].(string); ok {
+			confirmationReq.Status = status
+		}
+	}
+
+	// Validate request
+	if confirmationReq.TransactionID == "" {
+		return s.BasicResponse(req, false, "Transaction ID is required", nil)
+	}
+
+	if confirmationReq.ReceiverDID == "" {
+		return s.BasicResponse(req, false, "Receiver DID is required", nil)
+	}
+
+	if confirmationReq.TokenCount <= 0 {
+		return s.BasicResponse(req, false, "Token count must be positive", nil)
+	}
+
+	if confirmationReq.Status != "success" && confirmationReq.Status != "failure" {
+		return s.BasicResponse(req, false, "Status must be 'success' or 'failure'", nil)
+	}
+
+	s.log.Info("Received token confirmation request",
+		"transaction_id", confirmationReq.TransactionID,
+		"receiver_did", confirmationReq.ReceiverDID,
+		"token_count", confirmationReq.TokenCount,
+		"token_type", confirmationReq.TokenType,
+		"status", confirmationReq.Status)
+
+	// Send confirmation signal to the sender
+	err := s.c.SignalConfirmation(confirmationReq.TransactionID)
+	if err != nil {
+		s.log.Error("Failed to send confirmation signal",
+			"transaction_id", confirmationReq.TransactionID,
+			"error", err)
+		return s.BasicResponse(req, false, "Failed to send confirmation: "+err.Error(), nil)
+	}
+
+	s.log.Info("Token confirmation sent successfully",
+		"transaction_id", confirmationReq.TransactionID,
+		"receiver_did", confirmationReq.ReceiverDID,
+		"status", confirmationReq.Status)
+
+	return s.BasicResponse(req, true, "Token confirmation sent successfully", nil)
+}

@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/contract"
@@ -230,14 +231,25 @@ func (c *Core) waitForReceiverConfirmation(receiverAddress, transactionID string
 
 	// Start confirmation wait with timeout
 	confirmationChan := make(chan bool, 1)
+	timeoutChan := time.After(baseTimeout)
 
-	// Goroutine to wait for confirmation
+	// Goroutine to wait for receiver confirmation
 	go func() {
-		// Wait for receiver to send confirmation
-		// This will be implemented when receiver calls the confirmation endpoint
-		// For now, we'll use proactive checking
-		time.Sleep(baseTimeout)
-		confirmationChan <- false // Timeout occurred
+		// Wait for receiver to send confirmation via API endpoint
+		// This will be implemented as a separate API endpoint that receiver calls
+		// For now, we'll simulate waiting for confirmation
+		select {
+		case <-timeoutChan:
+			c.log.Warn("Confirmation timeout occurred, no confirmation received from receiver",
+				"transaction_id", transactionID,
+				"receiver", receiverAddress)
+			confirmationChan <- false
+		case <-c.getConfirmationSignal(transactionID): // This will be implemented
+			c.log.Info("Receiver confirmation received",
+				"transaction_id", transactionID,
+				"receiver", receiverAddress)
+			confirmationChan <- true
+		}
 	}()
 
 	// Wait for confirmation or timeout
@@ -254,6 +266,9 @@ func (c *Core) waitForReceiverConfirmation(receiverAddress, transactionID string
 					"transaction_id", transactionID,
 					"error", err)
 			}
+
+			// Clean up confirmation channel
+			c.CleanupConfirmation(transactionID)
 		} else {
 			c.log.Warn("Confirmation timeout, starting proactive status check",
 				"transaction_id", transactionID,
@@ -265,9 +280,64 @@ func (c *Core) waitForReceiverConfirmation(receiverAddress, transactionID string
 	}
 }
 
+// confirmationManager manages confirmation signals for transactions
+type confirmationManager struct {
+	confirmations map[string]chan struct{}
+	mu            sync.RWMutex
+}
+
+var globalConfirmationManager = &confirmationManager{
+	confirmations: make(map[string]chan struct{}),
+}
+
+// getConfirmationSignal returns a channel that will receive a signal when receiver confirms
+func (c *Core) getConfirmationSignal(transactionID string) chan struct{} {
+	globalConfirmationManager.mu.Lock()
+	defer globalConfirmationManager.mu.Unlock()
+
+	// Create confirmation channel for this transaction
+	if _, exists := globalConfirmationManager.confirmations[transactionID]; !exists {
+		globalConfirmationManager.confirmations[transactionID] = make(chan struct{}, 1)
+	}
+
+	return globalConfirmationManager.confirmations[transactionID]
+}
+
+// SignalConfirmation signals that a transaction has been confirmed by the receiver
+func (c *Core) SignalConfirmation(transactionID string) error {
+	globalConfirmationManager.mu.Lock()
+	defer globalConfirmationManager.mu.Unlock()
+
+	if ch, exists := globalConfirmationManager.confirmations[transactionID]; exists {
+		select {
+		case ch <- struct{}{}:
+			c.log.Info("Confirmation signal sent successfully",
+				"transaction_id", transactionID)
+			return nil
+		default:
+			return fmt.Errorf("confirmation channel is full for transaction %s", transactionID)
+		}
+	}
+
+	return fmt.Errorf("no confirmation channel found for transaction %s", transactionID)
+}
+
+// CleanupConfirmation removes the confirmation channel for a completed transaction
+func (c *Core) CleanupConfirmation(transactionID string) {
+	globalConfirmationManager.mu.Lock()
+	defer globalConfirmationManager.mu.Unlock()
+
+	if ch, exists := globalConfirmationManager.confirmations[transactionID]; exists {
+		close(ch)
+		delete(globalConfirmationManager.confirmations, transactionID)
+		c.log.Debug("Cleaned up confirmation channel",
+			"transaction_id", transactionID)
+	}
+}
+
 // proactiveStatusCheck proactively checks receiver status if confirmation timeout occurs
 func (c *Core) proactiveStatusCheck(receiverAddress, transactionID string, tokens []contract.TokenInfo, tokenType int) {
-	c.log.Info("Starting proactive status check",
+	c.log.Info("Starting enhanced proactive status check",
 		"transaction_id", transactionID,
 		"receiver", receiverAddress)
 
@@ -281,13 +351,28 @@ func (c *Core) proactiveStatusCheck(receiverAddress, transactionID string, token
 			"attempt", attempt,
 			"max_retries", maxRetries)
 
-		// Check if receiver has processed the tokens
-		status, err := c.checkReceiverTokenStatus(receiverAddress, transactionID, tokens, tokenType)
+		// Enhanced status check with rollback coordination
+		status, err := c.enhancedReceiverStatusCheck(receiverAddress, transactionID, tokens, tokenType)
 		if err != nil {
 			c.log.Error("Failed to check receiver status",
 				"transaction_id", transactionID,
 				"attempt", attempt,
 				"error", err)
+
+			// If this is the last attempt, we need to handle the failure
+			if attempt == maxRetries {
+				c.log.Error("All proactive status check attempts failed, handling transaction failure",
+					"transaction_id", transactionID,
+					"receiver", receiverAddress)
+
+				// Attempt coordinated rollback to prevent double-spending
+				if err := c.handleTransactionFailureWithRollback(receiverAddress, transactionID, tokens, tokenType); err != nil {
+					c.log.Error("Failed to handle transaction failure with rollback",
+						"transaction_id", transactionID,
+						"error", err)
+				}
+				return
+			}
 		} else if status {
 			c.log.Info("Receiver has successfully processed tokens",
 				"transaction_id", transactionID,
@@ -299,35 +384,32 @@ func (c *Core) proactiveStatusCheck(receiverAddress, transactionID string, token
 					"transaction_id", transactionID,
 					"error", err)
 			}
+
+			// Clean up confirmation channel
+			c.CleanupConfirmation(transactionID)
 			return
 		}
 
-		// Wait before next retry
-		if attempt < maxRetries {
-			c.log.Info("Waiting before next proactive check",
-				"transaction_id", transactionID,
-				"next_attempt_in", retryInterval)
-			time.Sleep(retryInterval)
-		}
+		// Wait before next attempt
+		time.Sleep(retryInterval)
 	}
 
-	// All retries exhausted - handle failure
-	c.log.Error("Proactive status check exhausted, handling transaction failure",
+	// If we reach here, all attempts failed
+	c.log.Error("All proactive status check attempts failed",
 		"transaction_id", transactionID,
-		"receiver", receiverAddress,
-		"max_retries", maxRetries)
+		"receiver", receiverAddress)
 
-	// Handle transaction failure - unlock tokens and mark as failed
-	if err := c.handleTransactionFailure(transactionID, tokens, tokenType); err != nil {
-		c.log.Error("Failed to handle transaction failure",
+	// Handle transaction failure with coordinated rollback
+	if err := c.handleTransactionFailureWithRollback(receiverAddress, transactionID, tokens, tokenType); err != nil {
+		c.log.Error("Failed to handle transaction failure with rollback",
 			"transaction_id", transactionID,
 			"error", err)
 	}
 }
 
-// checkReceiverTokenStatus checks if receiver has successfully processed the tokens
-func (c *Core) checkReceiverTokenStatus(receiverAddress, transactionID string, tokens []contract.TokenInfo, tokenType int) (bool, error) {
-	c.log.Debug("Checking receiver token status",
+// enhancedReceiverStatusCheck performs enhanced status checking with rollback coordination
+func (c *Core) enhancedReceiverStatusCheck(receiverAddress, transactionID string, tokens []contract.TokenInfo, tokenType int) (bool, error) {
+	c.log.Debug("Performing enhanced receiver status check",
 		"transaction_id", transactionID,
 		"receiver", receiverAddress)
 
@@ -338,14 +420,15 @@ func (c *Core) checkReceiverTokenStatus(receiverAddress, transactionID string, t
 	}
 	defer receiverPeer.Close()
 
-	// Create status check request
+	// Create enhanced status check request
 	statusReq := map[string]interface{}{
 		"transaction_id": transactionID,
 		"token_count":    len(tokens),
 		"token_type":     tokenType,
+		"check_type":     "enhanced_status_check",
 	}
 
-	// Send status check request
+	// Send enhanced status check request
 	var resp model.BasicResponse
 	err = receiverPeer.SendJSONRequest("POST", "/api/check-token-status", nil, &statusReq, &resp, true)
 	if err != nil {
@@ -353,6 +436,140 @@ func (c *Core) checkReceiverTokenStatus(receiverAddress, transactionID string, t
 	}
 
 	return resp.Status, nil
+}
+
+// handleTransactionFailureWithRollback handles transaction failure with coordinated rollback
+func (c *Core) handleTransactionFailureWithRollback(receiverAddress, transactionID string, tokens []contract.TokenInfo, tokenType int) error {
+	c.log.Info("Handling transaction failure with coordinated rollback",
+		"transaction_id", transactionID,
+		"receiver", receiverAddress,
+		"token_count", len(tokens))
+
+	// Step 1: Attempt to coordinate rollback with receiver
+	rollbackSuccess := c.attemptCoordinatedRollback(receiverAddress, transactionID, tokens, tokenType)
+
+	if rollbackSuccess {
+		c.log.Info("Coordinated rollback successful, unlocking sender tokens",
+			"transaction_id", transactionID,
+			"receiver", receiverAddress)
+
+		// Step 2: Unlock sender tokens (safe now that receiver has rolled back)
+		if err := c.unlockSenderTokens(transactionID, tokens, tokenType); err != nil {
+			c.log.Error("Failed to unlock sender tokens after successful rollback",
+				"transaction_id", transactionID,
+				"error", err)
+			return err
+		}
+	} else {
+		c.log.Warn("Coordinated rollback failed, proceeding with sender unlock",
+			"transaction_id", transactionID,
+			"receiver", receiverAddress,
+			"warning", "This may create a double-spending risk if receiver comes back online")
+
+		// Step 2: Unlock sender tokens (with warning about potential double-spending)
+		if err := c.unlockSenderTokens(transactionID, tokens, tokenType); err != nil {
+			c.log.Error("Failed to unlock sender tokens",
+				"transaction_id", transactionID,
+				"error", err)
+			return err
+		}
+	}
+
+	// Step 3: Record transaction failure in history
+	if err := c.recordTransactionFailure(transactionID, tokens, tokenType); err != nil {
+		c.log.Error("Failed to record transaction failure",
+			"transaction_id", transactionID,
+			"error", err)
+	}
+
+	c.log.Info("Transaction failure handling completed",
+		"transaction_id", transactionID,
+		"coordinated_rollback", rollbackSuccess)
+
+	return nil
+}
+
+// attemptCoordinatedRollback attempts to coordinate rollback with receiver
+func (c *Core) attemptCoordinatedRollback(receiverAddress, transactionID string, tokens []contract.TokenInfo, tokenType int) bool {
+	c.log.Info("Attempting coordinated rollback with receiver",
+		"transaction_id", transactionID,
+		"receiver", receiverAddress)
+
+	// Get receiver peer
+	receiverPeer, err := c.getPeer(receiverAddress)
+	if err != nil {
+		c.log.Error("Failed to get receiver peer for coordinated rollback",
+			"transaction_id", transactionID,
+			"receiver", receiverAddress,
+			"error", err)
+		return false
+	}
+	defer receiverPeer.Close()
+
+	// Create rollback request
+	rollbackReq := map[string]interface{}{
+		"transaction_id": transactionID,
+		"token_count":    len(tokens),
+		"token_type":     tokenType,
+		"rollback_type":  "coordinated_rollback",
+		"reason":         "sender_confirmation_timeout",
+	}
+
+	// Send coordinated rollback request
+	var resp model.BasicResponse
+	err = receiverPeer.SendJSONRequest("POST", "/api/coordinated-rollback", nil, &rollbackReq, &resp, true)
+	if err != nil {
+		c.log.Error("Failed to send coordinated rollback request",
+			"transaction_id", transactionID,
+			"receiver", receiverAddress,
+			"error", err)
+		return false
+	}
+
+	if !resp.Status {
+		c.log.Error("Receiver rejected coordinated rollback",
+			"transaction_id", transactionID,
+			"receiver", receiverAddress,
+			"message", resp.Message)
+		return false
+	}
+
+	c.log.Info("Coordinated rollback successful",
+		"transaction_id", transactionID,
+		"receiver", receiverAddress)
+	return true
+}
+
+// unlockSenderTokens unlocks sender tokens from transfer state
+func (c *Core) unlockSenderTokens(transactionID string, tokens []contract.TokenInfo, tokenType int) error {
+	c.log.Info("Unlocking sender tokens from transfer state",
+		"transaction_id", transactionID,
+		"token_count", len(tokens))
+
+	// Unlock tokens and mark as failed
+	for _, token := range tokens {
+		if tokenType == c.TokenType(FTString) {
+			if err := c.w.UnlockFTTokenFromTransfer(token.Token); err != nil {
+				c.log.Error("Failed to unlock FT token from transfer",
+					"token", token.Token,
+					"transaction_id", transactionID,
+					"error", err)
+			}
+		} else {
+			if err := c.w.UnlockTokenFromTransfer(token.Token); err != nil {
+				c.log.Error("Failed to unlock token from transfer",
+					"token", token.Token,
+					"transaction_id", transactionID,
+					"error", err)
+			}
+		}
+	}
+
+	c.log.Info("Successfully unlocked all sender tokens",
+		"transaction_id", transactionID,
+		"token_count", len(tokens))
+
+	return nil
 }
 
 // markTokensAsTransferred marks tokens as successfully transferred
@@ -389,45 +606,6 @@ func (c *Core) markTokensAsTransferred(transactionID string, tokens []contract.T
 	return nil
 }
 
-// handleTransactionFailure handles transaction failure by unlocking tokens and marking as failed
-func (c *Core) handleTransactionFailure(transactionID string, tokens []contract.TokenInfo, tokenType int) error {
-	c.log.Info("Handling transaction failure",
-		"transaction_id", transactionID,
-		"token_count", len(tokens))
-
-	// Unlock tokens and mark as failed
-	for _, token := range tokens {
-		if tokenType == c.TokenType(FTString) {
-			if err := c.w.UnlockFTTokenFromTransfer(token.Token); err != nil {
-				c.log.Error("Failed to unlock FT token from transfer",
-					"token", token.Token,
-					"transaction_id", transactionID,
-					"error", err)
-			}
-		} else {
-			if err := c.w.UnlockTokenFromTransfer(token.Token); err != nil {
-				c.log.Error("Failed to unlock token from transfer",
-					"token", token.Token,
-					"transaction_id", transactionID,
-					"error", err)
-			}
-		}
-	}
-
-	// Record transaction failure in history
-	if err := c.recordTransactionFailure(transactionID, tokens, tokenType); err != nil {
-		c.log.Error("Failed to record transaction failure",
-			"transaction_id", transactionID,
-			"error", err)
-	}
-
-	c.log.Info("Transaction failure handled",
-		"transaction_id", transactionID,
-		"token_count", len(tokens))
-
-	return nil
-}
-
 // recordTransactionFailure records the failed transaction in history
 func (c *Core) recordTransactionFailure(transactionID string, tokens []contract.TokenInfo, tokenType int) error {
 	c.log.Info("Recording transaction failure",
@@ -443,6 +621,71 @@ func (c *Core) recordTransactionFailure(transactionID string, tokens []contract.
 		"token_count", len(tokens),
 		"token_type", tokenType,
 		"status", "failed")
+
+	return nil
+}
+
+// CoordinatedRollback handles coordinated rollback requests from senders
+func (c *Core) CoordinatedRollback(transactionID string, tokenType int) error {
+	c.log.Info("Handling coordinated rollback request",
+		"transaction_id", transactionID,
+		"token_type", tokenType)
+
+	// Extract token IDs for this transaction
+	var tokenIDs []string
+	var err error
+
+	if tokenType == c.TokenType(FTString) {
+		// Get FT token IDs for this transaction
+		tokenIDs, err = c.w.GetFTTokenIDsByTransactionID(transactionID)
+		if err != nil {
+			c.log.Error("Failed to get FT token IDs for rollback",
+				"transaction_id", transactionID,
+				"error", err)
+			return fmt.Errorf("failed to get FT token IDs: %v", err)
+		}
+	} else {
+		// Get regular token IDs for this transaction
+		tokenIDs, err = c.w.GetTokenIDsByTransactionID(transactionID)
+		if err != nil {
+			c.log.Error("Failed to get token IDs for rollback",
+				"transaction_id", transactionID,
+				"error", err)
+			return fmt.Errorf("failed to get token IDs: %v", err)
+		}
+	}
+
+	if len(tokenIDs) == 0 {
+		c.log.Warn("No tokens found for rollback",
+			"transaction_id", transactionID,
+			"token_type", tokenType)
+		return nil // No tokens to rollback
+	}
+
+	c.log.Info("Found tokens for coordinated rollback",
+		"transaction_id", transactionID,
+		"token_count", len(tokenIDs),
+		"token_type", tokenType)
+
+	// Perform the rollback
+	if tokenType == c.TokenType(FTString) {
+		err = c.w.RollbackPendingFTTokens(transactionID, tokenIDs)
+	} else {
+		err = c.w.RollbackPendingTokens(transactionID, tokenIDs)
+	}
+
+	if err != nil {
+		c.log.Error("Failed to perform coordinated rollback",
+			"transaction_id", transactionID,
+			"token_type", tokenType,
+			"error", err)
+		return fmt.Errorf("rollback failed: %v", err)
+	}
+
+	c.log.Info("Coordinated rollback completed successfully",
+		"transaction_id", transactionID,
+		"token_count", len(tokenIDs),
+		"token_type", tokenType)
 
 	return nil
 }

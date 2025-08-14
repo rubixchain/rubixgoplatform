@@ -101,6 +101,8 @@ const (
 	APIAddPeerDetailsFromExplorer       string = "/api/add-peer-details-from-explorer"
 	APIGetFTTxnByDID                    string = "/api/get-ft-txn-by-did"
 	APIGetFTTransactionStatus           string = "/api/get-ft-transaction-status"
+	APICoordinatedRollback              string = "/api/coordinated-rollback"
+	APISendTokenConfirmation            string = "/api/send-token-confirmation"
 
 	APIUpdateTokenStatus         string = "/api/update-token-status"
 	APIGetTokenStatus            string = "/api/get-token-status"
