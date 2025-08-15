@@ -1034,6 +1034,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 		}
 
+		// CRITICAL: Create confirmation channel BEFORE sending tokens to avoid race condition
+		// This ensures the channel exists when receiver sends confirmation back
+		if cr.TransactionID != "" {
+			_ = c.getConfirmationSignal(cr.TransactionID) // Create channel before sending
+			c.log.Debug("Pre-created confirmation channel for transaction", "transaction_id", cr.TransactionID)
+		}
+		
 		// Send the FT transfer request to the receiver
 		var br model.BasicResponse
 		err = rp.SendJSONRequest("POST", APISendFTToken, nil, &sr, &br, true)
