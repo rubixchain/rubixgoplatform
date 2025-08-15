@@ -208,6 +208,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetFTTransactionStatus, "GET", s.AuthHandle(s.APIGetFTTransactionStatus, true, s.AuthError, false))
 	s.AddRoute(setup.APICoordinatedRollback, "POST", s.AuthHandle(s.APICoordinatedRollback, true, s.AuthError, false))
 	s.AddRoute(setup.APISendTokenConfirmation, "POST", s.AuthHandle(s.APISendTokenConfirmation, true, s.AuthError, false))
+	// CRITICAL: Register the missing confirmation endpoint that receivers call
+	s.AddRoute(setup.APIConfirmTokenTransfer, "POST", s.AuthHandle(s.APIConfirmTokenTransfer, true, s.AuthError, false))
 	s.AddRoute(setup.APIRecoverLostTokens, "POST", s.AuthHandle(s.APIRecoverLostTokens, true, s.AuthError, false))
 	s.AddRoute(setup.APIVerifyTokenOwnership, "POST", s.AuthHandle(s.APIVerifyTokenOwnership, true, s.AuthError, false))
 	s.AddRoute(setup.APICheckTokenTransferStatus, "POST", s.AuthHandle(s.APICheckTokenTransferStatus, true, s.AuthError, false))

@@ -103,6 +103,7 @@ const (
 	APIGetFTTransactionStatus           string = "/api/get-ft-transaction-status"
 	APICoordinatedRollback              string = "/api/coordinated-rollback"
 	APISendTokenConfirmation            string = "/api/send-token-confirmation"
+	APIConfirmTokenTransfer             string = "/api/confirm-token-transfer"
 	APIRecoverLostTokens                string = "/api/recover-lost-tokens"
 	APIVerifyTokenOwnership             string = "/api/verify-token-ownership"
 	APICheckTokenTransferStatus         string = "/api/check-token-transfer-status"

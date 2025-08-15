@@ -153,6 +153,7 @@ type Core struct {
 	batchSyncTokenPool   *BatchSyncTokenInfoPool
 	tokenSlicePool       *TokenSlicePool
 	pendingTokenMonitor  *PendingTokenMonitor
+	confirmationManager  *ConfirmationManager
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -360,6 +361,9 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	// Initialize pending token monitor for self-healing
 	// Check every 5 minutes for tokens pending > 10 minutes
 	c.pendingTokenMonitor = NewPendingTokenMonitor(c, 5*time.Minute, 10*time.Minute)
+
+	// Initialize confirmation manager
+	c.confirmationManager = NewConfirmationManager(c.log)
 
 	// Wrap storage with tracking if performance tracker is enabled
 	if c.perfTracker != nil && c.perfTracker.enabled && c.s != nil {

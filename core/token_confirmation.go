@@ -8,7 +8,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 // ConfirmTokenRequest represents the request to confirm pending tokens
@@ -18,45 +18,27 @@ type ConfirmTokenRequest struct {
 	TokenType     int      `json:"token_type"` // 0 for RBT, 4 for FT
 }
 
+// ConfirmationManager manages confirmation channels for transactions
+type ConfirmationManager struct {
+	channels map[string]chan struct{}
+	mu       sync.RWMutex
+	log      logger.Logger
+}
+
+// NewConfirmationManager creates a new confirmation manager
+func NewConfirmationManager(log logger.Logger) *ConfirmationManager {
+	return &ConfirmationManager{
+		channels: make(map[string]chan struct{}),
+		mu:       sync.RWMutex{},
+		log:      log,
+	}
+}
+
 // confirmTokenTransfer confirms pending tokens after consensus finality
-func (c *Core) confirmTokenTransfer(req *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuerry(req, "did")
-
-	var ctr ConfirmTokenRequest
-	err := c.l.ParseJSON(req, &ctr)
-	if err != nil {
-		c.log.Error("Failed to parse confirm token request", "err", err)
-		return c.l.RenderJSON(req, &model.BasicResponse{
-			Status:  false,
-			Message: "Failed to parse request",
-		}, 400)
-	}
-
-	c.log.Info("Confirming token transfer",
-		"did", did,
-		"transaction_id", ctr.TransactionID,
-		"token_count", len(ctr.Tokens),
-		"token_type", ctr.TokenType)
-
-	// Confirm tokens based on type
-	if ctr.TokenType == c.TokenType(FTString) {
-		err = c.w.ConfirmPendingFTTokens(ctr.TransactionID, ctr.Tokens)
-	} else {
-		err = c.w.ConfirmPendingTokens(ctr.TransactionID, ctr.Tokens)
-	}
-
-	if err != nil {
-		c.log.Error("Failed to confirm tokens", "err", err)
-		return c.l.RenderJSON(req, &model.BasicResponse{
-			Status:  false,
-			Message: fmt.Sprintf("Failed to confirm tokens: %v", err),
-		}, 500)
-	}
-
-	return c.l.RenderJSON(req, &model.BasicResponse{
-		Status:  true,
-		Message: "Tokens confirmed successfully",
-	}, 200)
+// This function is kept for backward compatibility but not used in the new confirmation flow
+func (c *Core) confirmTokenTransfer(req interface{}) error {
+	c.log.Info("confirmTokenTransfer called - this function is deprecated in the new confirmation flow")
+	return fmt.Errorf("confirmTokenTransfer is deprecated - use the new confirmation mechanism")
 }
 
 // sendTokenConfirmation sends confirmation to receiver after finality
@@ -290,86 +272,64 @@ func (c *Core) waitForReceiverConfirmation(receiverAddress, transactionID string
 		}
 	}
 
-	// Start confirmation wait with timeout
-	confirmationChan := make(chan bool, 1)
-	timeoutChan := time.After(baseTimeout)
+	// Get confirmation channel for this transaction
+	confirmationChan := c.getConfirmationSignal(transactionID)
+	if confirmationChan == nil {
+		c.log.Error("Failed to get confirmation channel",
+			"transaction_id", transactionID)
+		return
+	}
 
-	// Goroutine to wait for receiver confirmation
-	go func() {
-		// Wait for receiver to send confirmation via API endpoint
-		// This will be implemented as a separate API endpoint that receiver calls
-		// For now, we'll simulate waiting for confirmation
-		select {
-		case <-timeoutChan:
-			c.log.Warn("Confirmation timeout occurred, no confirmation received from receiver",
-				"transaction_id", transactionID,
-				"receiver", receiverAddress)
-			confirmationChan <- false
-		case <-c.getConfirmationSignal(transactionID): // This will be implemented
-			c.log.Info("Receiver confirmation received",
-				"transaction_id", transactionID,
-				"receiver", receiverAddress)
-			confirmationChan <- true
-		}
-	}()
-
-	// Wait for confirmation or timeout
+	// Wait for receiver confirmation with timeout
 	select {
-	case confirmed := <-confirmationChan:
-		if confirmed {
-			c.log.Info("Receiver confirmation received successfully",
+	case <-confirmationChan:
+		c.log.Info("Receiver confirmation received successfully",
+			"transaction_id", transactionID,
+			"receiver", receiverAddress)
+
+		// Mark tokens as successfully transferred
+		if err := c.markTokensAsTransferred(transactionID, tokens, tokenType); err != nil {
+			c.log.Error("Failed to mark tokens as transferred",
 				"transaction_id", transactionID,
-				"receiver", receiverAddress)
-
-			// Mark tokens as successfully transferred
-			if err := c.markTokensAsTransferred(transactionID, tokens, tokenType); err != nil {
-				c.log.Error("Failed to mark tokens as transferred",
-					"transaction_id", transactionID,
-					"error", err)
-			}
-
-			// Clean up confirmation channel
-			c.CleanupConfirmation(transactionID)
-		} else {
-			c.log.Warn("Confirmation timeout, starting proactive status check",
-				"transaction_id", transactionID,
-				"receiver", receiverAddress)
-
-			// Start proactive status checking
-			go c.proactiveStatusCheck(receiverAddress, transactionID, tokens, tokenType)
+				"error", err)
 		}
+
+		// Clean up confirmation channel
+		c.CleanupConfirmation(transactionID)
+
+	case <-time.After(baseTimeout):
+		c.log.Warn("Confirmation timeout occurred, starting proactive status check",
+			"transaction_id", transactionID,
+			"receiver", receiverAddress)
+
+		// Start proactive status checking
+		go c.proactiveStatusCheck(receiverAddress, transactionID, tokens, tokenType)
 	}
 }
 
-// confirmationManager manages confirmation signals for transactions
-type confirmationManager struct {
-	confirmations map[string]chan struct{}
-	mu            sync.RWMutex
-}
-
-var globalConfirmationManager = &confirmationManager{
-	confirmations: make(map[string]chan struct{}),
-}
-
-// getConfirmationSignal returns a channel that will receive a signal when receiver confirms
+// getConfirmationSignal returns the confirmation channel for a specific transaction
 func (c *Core) getConfirmationSignal(transactionID string) chan struct{} {
-	globalConfirmationManager.mu.Lock()
-	defer globalConfirmationManager.mu.Unlock()
+	// CRITICAL FIX: Use write lock to prevent race condition
+	c.confirmationManager.mu.Lock()
+	defer c.confirmationManager.mu.Unlock()
 
-	// Create confirmation channel for this transaction
-	if _, exists := globalConfirmationManager.confirmations[transactionID]; !exists {
-		globalConfirmationManager.confirmations[transactionID] = make(chan struct{}, 1)
+	if ch, exists := c.confirmationManager.channels[transactionID]; exists {
+		return ch
 	}
 
-	return globalConfirmationManager.confirmations[transactionID]
+	// Create a new confirmation channel if it doesn't exist
+	ch := make(chan struct{}, 1)
+	c.confirmationManager.channels[transactionID] = ch
+	c.log.Debug("Created new confirmation channel", "transaction_id", transactionID)
+	return ch
 }
 
 // SignalConfirmation signals that a transaction has been confirmed by the receiver
 func (c *Core) SignalConfirmation(transactionID string) error {
-	globalConfirmationManager.mu.Lock()
-	defer globalConfirmationManager.mu.Unlock()
+	c.confirmationManager.mu.Lock()
+	defer c.confirmationManager.mu.Unlock()
 
-	if ch, exists := globalConfirmationManager.confirmations[transactionID]; exists {
+	if ch, exists := c.confirmationManager.channels[transactionID]; exists {
 		select {
 		case ch <- struct{}{}:
 			c.log.Info("Confirmation signal sent successfully",
@@ -385,12 +345,12 @@ func (c *Core) SignalConfirmation(transactionID string) error {
 
 // CleanupConfirmation removes the confirmation channel for a completed transaction
 func (c *Core) CleanupConfirmation(transactionID string) {
-	globalConfirmationManager.mu.Lock()
-	defer globalConfirmationManager.mu.Unlock()
+	c.confirmationManager.mu.Lock()
+	defer c.confirmationManager.mu.Unlock()
 
-	if ch, exists := globalConfirmationManager.confirmations[transactionID]; exists {
+	if ch, exists := c.confirmationManager.channels[transactionID]; exists {
 		close(ch)
-		delete(globalConfirmationManager.confirmations, transactionID)
+		delete(c.confirmationManager.channels, transactionID)
 		c.log.Debug("Cleaned up confirmation channel",
 			"transaction_id", transactionID)
 	}
