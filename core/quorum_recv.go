@@ -1900,6 +1900,56 @@ func (c *Core) updateReceiverFTHandle(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
+// handleTokenConfirmation handles peer-to-peer token confirmation requests
+// This is called directly by receivers to confirm token receipt
+func (c *Core) handleTokenConfirmation(req *ensweb.Request) *ensweb.Result {
+	var ctr ConfirmTokenRequest
+	err := c.l.ParseJSON(req, &ctr)
+	
+	resp := model.BasicResponse{
+		Status: false,
+	}
+	
+	if err != nil {
+		c.log.Error("Failed to parse confirmation request", "err", err)
+		resp.Message = "Failed to parse confirmation request"
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	
+	// Validate required fields
+	if ctr.TransactionID == "" {
+		resp.Message = "Transaction ID is required"
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	
+	if len(ctr.Tokens) == 0 {
+		resp.Message = "Token list is required"
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	
+	c.log.Info("Received token confirmation from receiver",
+		"transaction_id", ctr.TransactionID,
+		"token_count", len(ctr.Tokens))
+	
+	// Signal the confirmation to the waiting sender
+	err = c.SignalConfirmation(ctr.TransactionID)
+	if err != nil {
+		c.log.Error("Failed to signal confirmation",
+			"transaction_id", ctr.TransactionID,
+			"error", err)
+		resp.Message = err.Error()
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	
+	resp.Status = true
+	resp.Message = "Confirmation received and processed"
+	
+	c.log.Info("Token confirmation processed successfully",
+		"transaction_id", ctr.TransactionID)
+	
+	return c.l.RenderJSON(req, &resp, http.StatusOK)
+}
+
 func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuerry(req, "did")
 	var sr SignatureRequest
