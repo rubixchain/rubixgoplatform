@@ -836,9 +836,11 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 					return
 				}
 
-				// FIX: Handle both TokenIsLocked and TokenIsInTransfer states
-				// Tokens are marked as TokenIsInTransfer before sending to receiver
-				if ftToken.TokenStatus == wallet.TokenIsLocked || ftToken.TokenStatus == wallet.TokenIsInTransfer {
+				// FIX: Handle TokenIsLocked, TokenIsInTransfer, and TokenChainSyncIssue states
+				// Tokens can be in various states when consensus fails
+				if ftToken.TokenStatus == wallet.TokenIsLocked || 
+				   ftToken.TokenStatus == wallet.TokenIsInTransfer || 
+				   ftToken.TokenStatus == wallet.TokenChainSyncIssue {
 					c.log.Debug("Unlocking token after failed consensus", "token", token.Token, "current_status", ftToken.TokenStatus)
 					ftToken.TokenStatus = wallet.TokenIsFree
 					ftToken.TransactionID = "" // Clear transaction ID
