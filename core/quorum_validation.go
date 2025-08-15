@@ -485,7 +485,12 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	}
 
 	if len(syncIssueTokens) > 0 {
-		return false, fmt.Errorf("failed to sync tokenchain Token: issueType: %v", TokenChainNotSynced), syncIssueTokens
+		// Standardized error format with first failed token or "multiple" if many
+		firstToken := "multiple"
+		if len(syncIssueTokens) > 0 {
+			firstToken = syncIssueTokens[0]
+		}
+		return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", firstToken, TokenChainNotSynced), syncIssueTokens
 	}
 
 	return true, nil, nil
@@ -883,7 +888,12 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 	
 		// Step 4: Handle sync issues
 		if len(syncIssueTokens) > 0 {
-			return false, fmt.Errorf("failed to sync tokenchain Token: issueType: %v", TokenChainNotSynced), syncIssueTokens
+			// Standardized error format with first failed token or "multiple" if many
+			firstToken := "multiple"
+			if len(syncIssueTokens) > 0 {
+				firstToken = syncIssueTokens[0]
+			}
+			return false, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", firstToken, TokenChainNotSynced), syncIssueTokens
 		}
 	}
 

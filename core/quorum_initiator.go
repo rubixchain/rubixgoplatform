@@ -1063,42 +1063,76 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 		if strings.Contains(br.Message, "failed to sync tokenchain") {
+			c.log.Debug("Processing tokenchain sync failure", "message", br.Message)
+			
 			tokenPrefix := "Token: "
 			issueTypePrefix := "issueType: "
 
 			// Find the starting indexes of pt and issueType values
-			ptStart := strings.Index(br.Message, tokenPrefix) + len(tokenPrefix)
-			issueTypeStart := strings.Index(br.Message, issueTypePrefix) + len(issueTypePrefix)
-
-			// Extracting the substrings from the message
-			token := br.Message[ptStart : strings.Index(br.Message[ptStart:], ",")+ptStart]
-			issueType := br.Message[issueTypeStart:]
-
-			c.log.Debug("String: token is ", token, " issuetype is ", issueType)
+			issueTypeStart := strings.Index(br.Message, issueTypePrefix)
+			
+			if issueTypeStart == -1 {
+				errMsg := fmt.Sprintf("Consensus failed due to tokenchain sync issue, invalid error format (missing issueType): %s", br.Message)
+				c.log.Error(errMsg)
+				return nil, nil, nil, fmt.Errorf(errMsg)
+			}
+			
+			issueTypeStart += len(issueTypePrefix)
+			issueType := strings.TrimSpace(br.Message[issueTypeStart:])
+			
 			issueTypeInt, err1 := strconv.Atoi(issueType)
 			if err1 != nil {
 				errMsg := fmt.Sprintf("Consensus failed due to token chain sync issue, issueType string conversion, err %v", err1)
 				c.log.Error(errMsg)
 				return nil, nil, nil, fmt.Errorf(errMsg)
 			}
-			c.log.Debug("issue type in int is ", issueTypeInt)
+			c.log.Debug("Parsed issueType", "issueType", issueTypeInt)
 
-			// loop through each items in br.message and update for each tkn
-
-			syncIssueTokenDetails, err2 := c.w.ReadFTToken(token)
-			if err2 != nil {
-				errMsg := fmt.Sprintf("Consensus failed due to tokenchain sync issue, err %v", err2)
-				c.log.Error(errMsg)
-				return nil, nil, nil, fmt.Errorf(errMsg)
+			// Try to extract token ID if present (new format)
+			ptStart := strings.Index(br.Message, tokenPrefix)
+			if ptStart != -1 {
+				ptStart += len(tokenPrefix)
+				
+				// Find the comma that separates token from issueType
+				commaIdx := strings.Index(br.Message[ptStart:], ",")
+				if commaIdx != -1 {
+					token := strings.TrimSpace(br.Message[ptStart : ptStart+commaIdx])
+					c.log.Debug("Parsed sync error with token", "token", token, "issueType", issueType)
+					
+					// Skip processing if token is placeholder values
+					if token == "" || token == "<nil>" || token == "nil" || token == "multiple" {
+						c.log.Warn("Consensus failed due to tokenchain sync issue, skipping token status update (no specific token ID)")
+						// Just return the error without trying to update token status
+						return nil, nil, nil, fmt.Errorf("Consensus failed due to tokenchain sync issue")
+					}
+					
+					// Try to update the specific token status
+					syncIssueTokenDetails, err2 := c.w.ReadFTToken(token)
+					if err2 != nil {
+						c.log.Warn("Failed to read sync issue token, skipping status update", "token", token, "err", err2)
+						// Don't fail completely, just log and continue
+						return nil, nil, nil, fmt.Errorf("Consensus failed due to tokenchain sync issue")
+					}
+					
+					c.log.Debug("sync issue token details ", syncIssueTokenDetails)
+					
+					if issueTypeInt == TokenChainNotSynced {
+						syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+						c.log.Debug("Token sync issue details updated:", syncIssueTokenDetails)
+						c.w.UpdateFTToken(syncIssueTokenDetails)
+					}
+				} else {
+					// Old format without comma, just return error
+					c.log.Warn("Old error format detected, no specific token to update")
+					return nil, nil, nil, fmt.Errorf("Consensus failed due to tokenchain sync issue")
+				}
+			} else {
+				// No token prefix found (old format), just return error
+				c.log.Warn("No token ID in error message, cannot update specific token status")
+				return nil, nil, nil, fmt.Errorf("Consensus failed due to tokenchain sync issue")
 			}
-			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
-
-			if issueTypeInt == TokenChainNotSynced {
-				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
-				c.log.Debug("Token sync issue details updated:", syncIssueTokenDetails)
-				c.w.UpdateFTToken(syncIssueTokenDetails)
-				return nil, nil, nil, errors.New(br.Message)
-			}
+			// Return the consensus failure error
+			return nil, nil, nil, fmt.Errorf("Consensus failed due to tokenchain sync issue")
 		}
 		if !br.Status {
 			c.log.Error("Unable to send FT tokens to receiver", "msg", br.Message)

@@ -1665,7 +1665,12 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		}
 	}
 	if len(syncIssueTokens) > 0 {
-		return syncIssueTokens, fmt.Errorf("failed to sync tokenchain Token: %v, : issueType: %v", nil, TokenChainNotSynced)
+		// Return the first failed token ID for proper error handling
+		firstFailedToken := ""
+		if len(syncIssueTokens) > 0 {
+			firstFailedToken = syncIssueTokens[0]
+		}
+		return syncIssueTokens, fmt.Errorf("failed to sync tokenchain Token: %v, issueType: %v", firstFailedToken, TokenChainNotSynced)
 	}
 
 	//results := make([]MultiPinCheckRes, len(tokenInfo))
@@ -1871,6 +1876,23 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 			"transaction_id", b.GetTid(),
 			"sender_peer_id", senderPeerID,
 			"response", response.Message)
+		
+		// CRITICAL FIX: Immediately confirm the tokens to FREE status after sending confirmation
+		// This prevents tokens from being stuck in PENDING state for 10 minutes
+		tokenIDs := make([]string, 0, len(confirmationReq.Tokens))
+		for _, token := range confirmationReq.Tokens {
+			tokenIDs = append(tokenIDs, token)
+		}
+		
+		if err := c.w.ConfirmPendingFTTokens(b.GetTid(), tokenIDs); err != nil {
+			c.log.Error("Failed to confirm FT tokens to FREE status after sending confirmation",
+				"transaction_id", b.GetTid(),
+				"error", err)
+		} else {
+			c.log.Info("Successfully confirmed FT tokens to FREE status",
+				"transaction_id", b.GetTid(),
+				"token_count", len(tokenIDs))
+		}
 	}()
 	
 	return nil, nil
