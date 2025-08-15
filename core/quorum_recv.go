@@ -1761,6 +1761,102 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	for _, qrm := range quorumInfo {
 		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID, *qrm.DIDType)
 	}
+	
+	// CRITICAL FIX: Send confirmation to sender after successful token processing
+	// This completes the two-phase commit protocol
+	c.log.Info("FT tokens processed successfully, sending confirmation to sender",
+		"transaction_id", b.GetTid(),
+		"token_count", len(tokenInfo),
+		"sender_did", sc.GetSenderDID())
+	
+	// Prepare confirmation request
+	confirmationReq := &ConfirmTokenRequest{
+		TransactionID: b.GetTid(),
+		TokenType:     tokenInfo[0].TokenType,
+	}
+	
+	// Extract token IDs for confirmation
+	for _, token := range tokenInfo {
+		confirmationReq.Tokens = append(confirmationReq.Tokens, token.Token)
+	}
+	
+	// Send confirmation to sender to complete two-phase commit
+	// This signals the sender that tokens were successfully received
+	go func() {
+		// Extract sender's peer ID and DID from sender address
+		senderPeerID := strings.Split(senderAddress, ".")[0]
+		senderDID := sc.GetSenderDID()
+		
+		// Don't send confirmation to ourselves (in case of self-transfer)
+		if senderPeerID == "" || senderPeerID == c.peerID {
+			c.log.Debug("Skipping confirmation for self-transfer or empty peer ID",
+				"sender_peer_id", senderPeerID,
+				"own_peer_id", c.peerID)
+			return
+		}
+		
+		c.log.Info("Attempting to send confirmation to sender",
+			"transaction_id", b.GetTid(),
+			"sender_did", senderDID,
+			"sender_peer_id", senderPeerID,
+			"token_count", len(confirmationReq.Tokens))
+		
+		// Use the standard peer connection mechanism to send confirmation
+		// This is how all peer-to-peer communication is done in production
+		p, err := c.pm.OpenPeerConn(senderPeerID, senderDID, c.getCoreAppName(senderPeerID))
+		if err != nil {
+			c.log.Error("Failed to open peer connection to sender for confirmation",
+				"transaction_id", b.GetTid(),
+				"sender_peer_id", senderPeerID,
+				"sender_did", senderDID,
+				"error", err)
+			
+			// Try alternative approach: Get peer info and retry
+			peerInfo, peerErr := c.GetPeerDIDInfo(senderDID)
+			if peerErr == nil && peerInfo != nil && peerInfo.PeerID != "" {
+				c.log.Info("Retrying with discovered peer info",
+					"peer_id", peerInfo.PeerID,
+					"did", peerInfo.DID)
+				
+				p, err = c.pm.OpenPeerConn(peerInfo.PeerID, peerInfo.DID, c.getCoreAppName(peerInfo.PeerID))
+				if err != nil {
+					c.log.Error("Failed to open peer connection after peer discovery",
+						"error", err)
+					return
+				}
+			} else {
+				c.log.Error("Failed to discover peer info for sender",
+					"sender_did", senderDID,
+					"error", peerErr)
+				return
+			}
+		}
+		defer p.Close()
+		
+		// Send the confirmation request to the sender's /api/confirm-token-transfer endpoint
+		var response model.BasicResponse
+		err = p.SendJSONRequest("POST", "/api/confirm-token-transfer", nil, confirmationReq, &response, true)
+		if err != nil {
+			c.log.Error("Failed to send confirmation to sender via peer connection",
+				"transaction_id", b.GetTid(),
+				"sender_peer_id", senderPeerID,
+				"error", err)
+			return
+		}
+		
+		if !response.Status {
+			c.log.Error("Sender rejected confirmation",
+				"transaction_id", b.GetTid(),
+				"message", response.Message)
+			return
+		}
+		
+		c.log.Info("Confirmation sent successfully to sender",
+			"transaction_id", b.GetTid(),
+			"sender_peer_id", senderPeerID,
+			"response", response.Message)
+	}()
+	
 	return nil, nil
 }
 
@@ -1794,39 +1890,7 @@ func (c *Core) updateReceiverFTHandle(req *ensweb.Request) *ensweb.Result {
 			c.log.Error(err.Error())
 			return
 		}
-
-		// CRITICAL FIX: Automatically send confirmation to sender after successful token processing
-		c.log.Info("Tokens processed successfully, sending confirmation to sender",
-			"token_count", len(sr.TokenInfo))
-
-		// Extract transaction ID from the block
-		b := block.InitBlock(sr.TokenChainBlock, nil)
-		if b == nil {
-			c.log.Error("Failed to initialize block for confirmation")
-			return
-		}
-		transactionID := b.GetTid()
-
-		// Prepare confirmation request
-		confirmationReq := &ConfirmTokenRequest{
-			TransactionID: transactionID,
-			TokenType:     sr.TokenInfo[0].TokenType,
-		}
-
-		// Extract token IDs for confirmation
-		for _, tokenInfo := range sr.TokenInfo {
-			confirmationReq.Tokens = append(confirmationReq.Tokens, tokenInfo.Token)
-		}
-
-		// Send confirmation to sender
-		if err := c.APIConfirmTokenTransfer(confirmationReq); err != nil {
-			c.log.Error("Failed to send confirmation to sender",
-				"transaction_id", transactionID,
-				"error", err)
-		} else {
-			c.log.Info("Confirmation sent successfully to sender",
-				"transaction_id", transactionID)
-		}
+		// Confirmation is now handled inside updateFTToken
 	}()
 
 	crep.Status = true
@@ -2348,4 +2412,42 @@ func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
 		c.log.Error("Failed to remove token state hash", "err", err)
 	}
 	return c.l.RenderJSON(req, struct{}{}, http.StatusOK)
+}
+
+// sendConfirmationToSender sends a confirmation request to the sender's node
+func (c *Core) sendConfirmationToSender(confirmURL string, confirmReq *ConfirmTokenRequest) error {
+	// Marshal the confirmation request
+	jsonData, err := json.Marshal(confirmReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal confirmation request: %v", err)
+	}
+	
+	// Create HTTP request
+	req, err := http.NewRequest("POST", confirmURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create confirmation request: %v", err)
+	}
+	
+	req.Header.Set("Content-Type", "application/json")
+	
+	// Send the request with timeout
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send confirmation request: %v", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("confirmation request failed with status: %d", resp.StatusCode)
+	}
+	
+	c.log.Info("Confirmation sent successfully via HTTP",
+		"url", confirmURL,
+		"transaction_id", confirmReq.TransactionID)
+	
+	return nil
 }
