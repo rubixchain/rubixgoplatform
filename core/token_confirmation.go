@@ -1227,13 +1227,16 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 		return nil, fmt.Errorf("failed to unlock transferred tokens: %v", err)
 	}
 
-	// Step 4: Update transaction history to mark as recovered
-	err = c.markTransactionAsRecovered(transactionID)
+	// Step 4: Remove transaction from history to prevent double recovery
+	err = c.removeTransactionFromHistory(transactionID, senderDID)
 	if err != nil {
-		c.log.Warn("Failed to mark transaction as recovered",
+		c.log.Warn("Failed to remove transaction from history",
 			"transaction_id", transactionID,
 			"error", err)
-		// Don't fail the recovery if this step fails
+		// Don't fail the recovery if this step fails, but log it
+	} else {
+		c.log.Info("Transaction removed from history to prevent double recovery",
+			"transaction_id", transactionID)
 	}
 
 	// Step 3: Create recovery result
@@ -1457,6 +1460,40 @@ func (c *Core) markTransactionAsRecovered(transactionID string) error {
 		"transaction_id", transactionID,
 		"recovery_comment", recoveryComment)
 	return nil
+}
+
+// removeTransactionFromHistory removes the transaction from history after successful recovery
+// This prevents the same transaction from being recovered multiple times
+func (c *Core) removeTransactionFromHistory(transactionID string, senderDID string) error {
+	c.log.Info("REMOVING TRANSACTION FROM HISTORY",
+		"transaction_id", transactionID,
+		"sender_did", senderDID,
+		"reason", "Successful recovery - preventing double recovery")
+
+	// First, try to delete from FTTransactionHistory table
+	err := c.w.GetStorage().Delete("ft_transaction_history", "transaction_id=? AND sender_did=?", transactionID, senderDID)
+	if err == nil {
+		c.log.Info("Successfully removed transaction from FT history",
+			"transaction_id", transactionID,
+			"table", "ft_transaction_history")
+		return nil
+	}
+
+	// If not found in FT history, try regular TransactionHistory table
+	err = c.w.GetStorage().Delete("TransactionHistory", "transaction_id=? AND sender_did=?", transactionID, senderDID)
+	if err == nil {
+		c.log.Info("Successfully removed transaction from regular history",
+			"transaction_id", transactionID,
+			"table", "TransactionHistory")
+		return nil
+	}
+
+	// If not found in either table, log but don't fail
+	c.log.Warn("Transaction not found in history tables for removal",
+		"transaction_id", transactionID,
+		"note", "Transaction may have already been removed or never existed")
+	
+	return nil // Don't fail recovery if we can't remove from history
 }
 
 // VerifyLocalTokenOwnership checks if this node has tokens for the given transaction
