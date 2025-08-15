@@ -1874,28 +1874,32 @@ func (c *Core) updateReceiverFTHandle(req *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
-	go func() {
-		receiverAddress := c.peerID + "." + did
-		_, err := c.updateFTToken(
-			sr.Address,
-			receiverAddress,
-			sr.TokenInfo,
-			sr.TokenChainBlock,
-			sr.QuorumList,
-			sr.QuorumInfo,
-			sr.TransactionEpoch,
-			&sr.FTInfo,
-		)
-		if err != nil {
-			c.log.Error(err.Error())
-			return
-		}
-		// Confirmation is now handled inside updateFTToken
-	}()
+	// CRITICAL FIX: Process tokens synchronously and return actual result
+	// This ensures we return the correct status to sender
+	receiverAddress := c.peerID + "." + did
+	tokenHashes, err := c.updateFTToken(
+		sr.Address,
+		receiverAddress,
+		sr.TokenInfo,
+		sr.TokenChainBlock,
+		sr.QuorumList,
+		sr.QuorumInfo,
+		sr.TransactionEpoch,
+		&sr.FTInfo,
+	)
+	
+	if err != nil {
+		c.log.Error("Failed to process FT tokens", "err", err)
+		// Return the actual error to sender so it knows tokens weren't received
+		crep.Status = false
+		crep.Message = err.Error()
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
 
+	// Only return success if tokens were actually processed
 	crep.Status = true
 	crep.Message = "Token received successfully"
-	crep.Result = nil
+	crep.Result = tokenHashes
 
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
