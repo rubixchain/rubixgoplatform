@@ -9,11 +9,9 @@ import (
 
 // RemoteRecoverTokens triggers token recovery on a remote node (exactly like UpdateTokenStatus)
 func (c *Core) RemoteRecoverTokens(req *model.RemoteRecoveryRequest) (*TokenRecoveryResult, error) {
-	c.log.Info("Initiating remote token recovery",
+	c.log.Info("Initiating token recovery",
 		"target_did", req.TargetDID,
 		"transaction_id", req.TransactionID,
-		"requester_did", req.RequesterDID,
-		"reason", req.Reason,
 		"timestamp", time.Now().Format("2006-01-02 15:04:05"))
 
 	// Validate the request
@@ -24,14 +22,14 @@ func (c *Core) RemoteRecoverTokens(req *model.RemoteRecoveryRequest) (*TokenReco
 	// Get peer connection to the target node (just like UpdateTokenStatus does)
 	p, err := c.getPeer(req.TargetDID)
 	if err != nil {
-		c.log.Error("Failed to get peer for remote recovery", "target_did", req.TargetDID, "err", err)
+		c.log.Error("Failed to get peer for recovery", "target_did", req.TargetDID, "err", err)
 		return nil, fmt.Errorf("failed to connect to target node: %v", err)
 	}
 	defer p.Close()
 
 	// Prepare the recovery request for the remote node
 	recoveryReq := map[string]interface{}{
-		"sender_did":     req.TargetDID,  // The target node is the sender for its own recovery
+		"sender_did":     req.TargetDID, // The target node is the sender for its own recovery
 		"transaction_id": req.TransactionID,
 	}
 
@@ -42,14 +40,14 @@ func (c *Core) RemoteRecoverTokens(req *model.RemoteRecoveryRequest) (*TokenReco
 		Result  *TokenRecoveryResult `json:"result"`
 	}
 
-	c.log.Info("Sending recovery request to remote node",
+	c.log.Info("Sending recovery request to node",
 		"target_did", req.TargetDID,
 		"endpoint", APIRecoverLostTokens)
 
 	// Send JSON request to the remote node (just like UpdateTokenStatus does)
 	err = p.SendJSONRequest("POST", APIRecoverLostTokens, nil, &recoveryReq, &recoveryResp, false)
 	if err != nil {
-		c.log.Error("Failed to send recovery request to remote node", 
+		c.log.Error("Failed to send recovery request to node",
 			"target_did", req.TargetDID,
 			"err", err)
 		return nil, fmt.Errorf("remote recovery request failed: %v", err)

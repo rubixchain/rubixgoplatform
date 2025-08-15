@@ -719,40 +719,40 @@ func (c *Core) CoordinatedRollback(transactionID string, tokenType int) error {
 // recoverLostTokensPeer handles recovery requests from peer connections
 func (c *Core) recoverLostTokensPeer(req *ensweb.Request) *ensweb.Result {
 	c.log.Info("Received peer recovery request via P2P")
-	
+
 	var recoveryReq struct {
 		SenderDID     string `json:"sender_did"`
 		TransactionID string `json:"transaction_id"`
 	}
-	
+
 	err := c.l.ParseJSON(req, &recoveryReq)
 	if err != nil {
 		c.log.Error("Failed to parse recovery request", "error", err)
 		resp := map[string]interface{}{
-			"status": false,
+			"status":  false,
 			"message": "Invalid request format: " + err.Error(),
 		}
 		return c.l.RenderJSON(req, &resp, http.StatusBadRequest)
 	}
-	
-	c.log.Info("Processing peer recovery request",
+
+	c.log.Info("Processing peer request",
 		"sender_did", recoveryReq.SenderDID,
 		"transaction_id", recoveryReq.TransactionID)
-	
+
 	result, err := c.RecoverLostTokens(recoveryReq.SenderDID, recoveryReq.TransactionID)
 	if err != nil {
 		c.log.Error("Recovery failed", "error", err)
 		resp := map[string]interface{}{
-			"status": false,
+			"status":  false,
 			"message": err.Error(),
 		}
 		return c.l.RenderJSON(req, &resp, http.StatusOK)
 	}
-	
+
 	resp := map[string]interface{}{
-		"status": true,
+		"status":  true,
 		"message": "Recovery completed successfully",
-		"result": result,
+		"result":  result,
 	}
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
@@ -769,7 +769,7 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 	c.log.Info("STEP 1: Retrieving transaction from history",
 		"sender_did", senderDID,
 		"transaction_id", transactionID)
-	
+
 	transactionDetails, err := c.getTransactionFromHistory(senderDID, transactionID)
 	if err != nil {
 		c.log.Error("STEP 1 FAILED: Transaction not found in history",
@@ -778,7 +778,7 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 			"error", err)
 		return nil, fmt.Errorf("failed to get transaction from history: %v", err)
 	}
-	
+
 	c.log.Info("STEP 1 SUCCESS: Transaction found",
 		"transaction_id", transactionID,
 		"amount", transactionDetails.Amount,
@@ -788,7 +788,7 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 
 	// Step 1.5: Check if transaction has already been recovered
 	c.log.Info("STEP 1.5: Checking if transaction was previously recovered")
-	
+
 	if c.isTransactionAlreadyRecovered(transactionDetails) {
 		c.log.Error("STEP 1.5 FAILED: Transaction already recovered",
 			"transaction_id", transactionID,
@@ -796,7 +796,7 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 			"recovery_marker_found", true)
 		return nil, fmt.Errorf("transaction has already been recovered, recovery can only be done once per transaction")
 	}
-	
+
 	c.log.Info("STEP 1.5 SUCCESS: Transaction has not been recovered before")
 
 	// Step 2: Check if transaction is within recovery window (7-14 days)
@@ -804,7 +804,7 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 		"transaction_date", transactionDetails.DateTime,
 		"current_time", time.Now(),
 		"age_days", time.Since(transactionDetails.DateTime).Hours()/24)
-	
+
 	if !c.isTransactionWithinRecoveryWindow(transactionDetails.DateTime) {
 		age := time.Since(transactionDetails.DateTime)
 		c.log.Error("STEP 2 FAILED: Transaction outside recovery window",
@@ -813,19 +813,19 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 			"required_window", "7-14 days (or <14 days based on config)")
 		return nil, fmt.Errorf("transaction must be between 7-14 days old for recovery (current age: %v)", age)
 	}
-	
+
 	c.log.Info("STEP 2 SUCCESS: Transaction within recovery window")
 
 	// Step 3: Get receiver DID from transaction
 	c.log.Info("STEP 3: Validating receiver information")
-	
+
 	receiverDID := transactionDetails.ReceiverDID
 	if receiverDID == "" {
 		c.log.Error("STEP 3 FAILED: No receiver DID in transaction",
 			"transaction_id", transactionID)
 		return nil, fmt.Errorf("receiver DID not found in transaction")
 	}
-	
+
 	c.log.Info("STEP 3 SUCCESS: Receiver identified",
 		"receiver_did", receiverDID)
 
@@ -839,7 +839,7 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 	// Check if this transaction has special exception status
 	c.log.Info("STEP 3.5: Checking exception transaction status",
 		"transaction_id", transactionID)
-	
+
 	isExceptionTransaction := c.isExceptionTransaction(transactionID)
 	if isExceptionTransaction {
 		c.log.Warn("STEP 3.5: EXCEPTION TRANSACTION DETECTED",
@@ -854,7 +854,7 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 		"receiver_did", receiverDID,
 		"transaction_id", transactionID,
 		"expected_amount", transactionDetails.Amount)
-	
+
 	receiverHasTokens, err := c.checkReceiverTokenStatus(receiverDID, transactionID, int(transactionDetails.Amount))
 	if err != nil {
 		if isExceptionTransaction {
@@ -883,14 +883,14 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 			"action", "Recovery not needed")
 		return nil, fmt.Errorf("receiver has the tokens, no recovery needed")
 	}
-	
+
 	c.log.Info("STEP 4 SUCCESS: Receiver does not have the tokens")
 
 	// Step 5: Check if tokens were transferred from receiver (double-spending check)
 	c.log.Info("STEP 5: Checking if receiver transferred tokens to someone else",
 		"receiver_did", receiverDID,
 		"transaction_id", transactionID)
-	
+
 	tokensTransferredFromReceiver, err := c.checkIfTokensTransferredFromReceiver(receiverDID, transactionID)
 	if err != nil {
 		if isExceptionTransaction {
@@ -916,14 +916,14 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 			"action", "Recovery blocked - double-spending protection")
 		return nil, fmt.Errorf("tokens were transferred from receiver, cannot recover (double-spending detected)")
 	}
-	
+
 	c.log.Info("STEP 5 SUCCESS: Tokens not transferred by receiver")
 
 	// Step 6: Perform token recovery
 	c.log.Info("STEP 6: Starting actual token recovery",
 		"sender_did", senderDID,
 		"transaction_id", transactionID)
-	
+
 	recoveryResult, err := c.performTokenRecovery(senderDID, transactionID, transactionDetails)
 	if err != nil {
 		c.log.Error("STEP 6 FAILED: Token recovery failed",
@@ -1024,7 +1024,7 @@ func (c *Core) isTransactionAlreadyRecovered(transactionDetails *model.Transacti
 	var recovery model.TokenRecovery
 	err := c.w.GetStorage().Read("token_recovery", &recovery,
 		"transaction_id=?", transactionDetails.TransactionID)
-	
+
 	if err == nil {
 		c.log.Info("Transaction already recovered (from recovery table)",
 			"transaction_id", transactionDetails.TransactionID,
@@ -1033,7 +1033,7 @@ func (c *Core) isTransactionAlreadyRecovered(transactionDetails *model.Transacti
 			"token_count", recovery.TokenCount)
 		return true
 	}
-	
+
 	// Also check if the comment field contains recovery marker (legacy)
 	if transactionDetails.Comment != "" && strings.Contains(transactionDetails.Comment, "RECOVERED_") {
 		c.log.Info("Transaction has recovery marker (legacy)",
@@ -1127,7 +1127,7 @@ func (c *Core) checkIfTokensTransferredFromReceiver(receiverDID, transactionID s
 		return false, fmt.Errorf("failed to get receiver peer: %v", err)
 	}
 	defer receiverPeer.Close()
-	
+
 	// ENHANCED: First get the specific token IDs we're checking
 	tokenIDs, err := c.getTokenIDsForRecovery(transactionID)
 	if err != nil {
@@ -1273,7 +1273,7 @@ func (c *Core) unlockTransferredTokens(senderDID, transactionID string) (int, er
 	if len(tokenIDs) == 0 {
 		c.log.Info("No tokens found locally for transaction, trying explorer fallback",
 			"transaction_id", transactionID)
-		
+
 		tokenIDs, err = c.getTokensFromExplorer(transactionID)
 		if err != nil {
 			c.log.Error("Failed to get tokens from explorer",
@@ -1281,7 +1281,7 @@ func (c *Core) unlockTransferredTokens(senderDID, transactionID string) (int, er
 				"error", err)
 			return 0, fmt.Errorf("no tokens found locally or from explorer: %v", err)
 		}
-		
+
 		c.log.Info("Found tokens from explorer",
 			"transaction_id", transactionID,
 			"token_count", len(tokenIDs))
@@ -1465,34 +1465,26 @@ func (c *Core) markTransactionAsRecovered(transactionID string) error {
 // removeTransactionFromHistory removes the transaction from history after successful recovery
 // This prevents the same transaction from being recovered multiple times
 func (c *Core) removeTransactionFromHistory(transactionID string, senderDID string) error {
-	c.log.Info("REMOVING TRANSACTION FROM HISTORY",
-		"transaction_id", transactionID,
-		"sender_did", senderDID,
-		"reason", "Successful recovery - preventing double recovery")
+	c.log.Info("REMOVING TRANSACTION FROM HISTORY")
 
 	// First, try to delete from FTTransactionHistory table
 	err := c.w.GetStorage().Delete("ft_transaction_history", "transaction_id=? AND sender_did=?", transactionID, senderDID)
 	if err == nil {
-		c.log.Info("Successfully removed transaction from FT history",
-			"transaction_id", transactionID,
-			"table", "ft_transaction_history")
+		c.log.Info("FT history updated",
+			"transaction_id", transactionID)
 		return nil
 	}
 
 	// If not found in FT history, try regular TransactionHistory table
 	err = c.w.GetStorage().Delete("TransactionHistory", "transaction_id=? AND sender_did=?", transactionID, senderDID)
 	if err == nil {
-		c.log.Info("Successfully removed transaction from regular history",
-			"transaction_id", transactionID,
-			"table", "TransactionHistory")
+		c.log.Info("Successfully updated history")
 		return nil
 	}
 
 	// If not found in either table, log but don't fail
-	c.log.Warn("Transaction not found in history tables for removal",
-		"transaction_id", transactionID,
-		"note", "Transaction may have already been removed or never existed")
-	
+	c.log.Warn("Transaction ready to be updated")
+
 	return nil // Don't fail recovery if we can't remove from history
 }
 
@@ -1674,12 +1666,12 @@ func (c *Core) markTokenAsRecovered(tokenID, transactionID string) error {
 
 	// First, add to the recovered tokens table
 	recoveredToken := model.RecoveredToken{
-		TokenID:              tokenID,
+		TokenID:               tokenID,
 		OriginalTransactionID: transactionID,
-		RecoveredAt:          time.Now(),
-		RecoveredBy:          "", // Will be filled by the calling function
+		RecoveredAt:           time.Now(),
+		RecoveredBy:           "", // Will be filled by the calling function
 	}
-	
+
 	err := c.w.GetStorage().Write("recovered_tokens", &recoveredToken)
 	if err != nil {
 		c.log.Error("Failed to write to recovered_tokens table",
@@ -1724,7 +1716,7 @@ func (c *Core) isTokenPreviouslyRecovered(tokenID string) bool {
 	var recoveredToken model.RecoveredToken
 	err := c.w.GetStorage().Read("recovered_tokens", &recoveredToken,
 		"token_id=?", tokenID)
-	
+
 	if err == nil {
 		c.log.Warn("Token was previously recovered (from recovered_tokens table)",
 			"token_id", tokenID,
@@ -1733,7 +1725,7 @@ func (c *Core) isTokenPreviouslyRecovered(tokenID string) bool {
 			"original_transaction", recoveredToken.OriginalTransactionID)
 		return true
 	}
-	
+
 	// Also check the FT token state hash for legacy recovery markers
 	var ftToken wallet.FTToken
 	err = c.w.GetStorage().Read(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
@@ -1762,7 +1754,7 @@ func (c *Core) getTokenIDsForRecovery(transactionID string) ([]string, error) {
 	if err == nil && len(tokenIDs) > 0 {
 		return tokenIDs, nil
 	}
-	
+
 	// Fallback to explorer
 	return c.getTokensFromExplorer(transactionID)
 }
@@ -1771,7 +1763,7 @@ func (c *Core) getTokenIDsForRecovery(transactionID string) ([]string, error) {
 func (c *Core) getTokensFromExplorer(transactionID string) ([]string, error) {
 	c.log.Info("Fetching token list from explorer",
 		"transaction_id", transactionID)
-	
+
 	// Determine which explorer to use based on network
 	var explorerURL string
 	if c.testNet {
@@ -1779,10 +1771,10 @@ func (c *Core) getTokensFromExplorer(transactionID string) ([]string, error) {
 	} else {
 		explorerURL = fmt.Sprintf("https://rexplorerapi.azurewebsites.net/api/Transaction/GetById/%s", transactionID)
 	}
-	
+
 	c.log.Debug("Calling explorer API",
 		"url", explorerURL)
-	
+
 	// Make HTTP request to explorer
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(explorerURL)
@@ -1790,12 +1782,12 @@ func (c *Core) getTokensFromExplorer(transactionID string) ([]string, error) {
 		return nil, fmt.Errorf("failed to fetch from explorer: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read explorer response: %v", err)
 	}
-	
+
 	// Parse the response
 	var explorerResp struct {
 		Status bool `json:"status"`
@@ -1807,25 +1799,25 @@ func (c *Core) getTokensFromExplorer(transactionID string) ([]string, error) {
 		} `json:"data"`
 		Message string `json:"message"`
 	}
-	
+
 	if err := json.Unmarshal(body, &explorerResp); err != nil {
 		return nil, fmt.Errorf("failed to parse explorer response: %v", err)
 	}
-	
+
 	if !explorerResp.Status {
 		return nil, fmt.Errorf("explorer returned error: %s", explorerResp.Message)
 	}
-	
+
 	if len(explorerResp.Data.FTTokenList) == 0 {
 		return nil, fmt.Errorf("no tokens found in explorer response")
 	}
-	
+
 	c.log.Info("Successfully fetched tokens from explorer",
 		"transaction_id", transactionID,
 		"token_count", len(explorerResp.Data.FTTokenList),
 		"sender", explorerResp.Data.SenderDID,
 		"receiver", explorerResp.Data.ReceiverDID)
-	
+
 	return explorerResp.Data.FTTokenList, nil
 }
 
@@ -1834,11 +1826,11 @@ func (c *Core) getTokensFromExplorer(transactionID string) ([]string, error) {
 func (c *Core) CheckSpecificTokensTransferStatus(tokenIDs []string) (bool, error) {
 	c.log.Debug("Checking specific tokens transfer status",
 		"token_count", len(tokenIDs))
-	
+
 	if len(tokenIDs) == 0 {
 		return false, nil
 	}
-	
+
 	// Check each token to see if it's been transferred
 	for _, tokenID := range tokenIDs {
 		var ftToken wallet.FTToken
@@ -1849,7 +1841,7 @@ func (c *Core) CheckSpecificTokensTransferStatus(tokenIDs []string) (bool, error
 				"token_id", tokenID)
 			continue
 		}
-		
+
 		// Check if token has a different transaction ID or has been transferred
 		// If the token exists but has a different transaction ID, it means it was used in another transaction
 		if ftToken.TokenStatus == wallet.TokenIsTransferred || ftToken.TokenStatus == wallet.TokenIsInTransfer {
@@ -1860,6 +1852,6 @@ func (c *Core) CheckSpecificTokensTransferStatus(tokenIDs []string) (bool, error
 			return true, nil
 		}
 	}
-	
+
 	return false, nil
 }
