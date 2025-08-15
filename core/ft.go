@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"regexp"
 	"strconv"
@@ -850,70 +849,71 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			return
 		}
 
-		// CRITICAL FIX: Wait for receiver confirmation before proceeding with transaction finalization
+		// CRITICAL FIX: Handle confirmation and DB/explorer updates asynchronously
+		// This allows sender to proceed with other transactions while waiting for confirmation
 		receiverAddr := rpeerid + "." + req.Receiver
-		if c.peerID != rpeerid {
-			c.log.Info("Waiting for receiver confirmation before finalizing transaction",
-				"transaction_id", td.TransactionID,
-				"receiver", receiverAddr)
-
-			// Wait for receiver confirmation with timeout
-			confirmationReceived := make(chan bool, 1)
-			go func() {
-				// Wait for actual receiver confirmation
-				c.waitForReceiverConfirmation(receiverAddr, td.TransactionID, TokenInfo, 9, nil) // 9 = FTTokenType
-				confirmationReceived <- true
-			}()
-
-			// Wait for confirmation before proceeding
-			select {
-			case <-confirmationReceived:
-				c.log.Info("Receiver confirmation received, proceeding with transaction finalization",
-					"transaction_id", td.TransactionID)
-			case <-time.After(30 * time.Minute): // 30 minute timeout
-				c.log.Warn("Receiver confirmation timeout, proceeding with proactive status check",
-					"transaction_id", td.TransactionID)
-				// Start proactive checking
-				go c.proactiveStatusCheck(receiverAddr, td.TransactionID, TokenInfo, 9) // 9 = FTTokenType
-			}
-		} else {
-			c.log.Info("Self-transfer detected, skipping confirmation wait",
-				"transaction_id", td.TransactionID)
-		}
-
-		// Only proceed with transaction finalization after confirmation or timeout
-		et := time.Now()
-		dif := et.Sub(st)
-		td.Amount = float64(req.FTCount)
-		td.TotalTime = float64(dif.Milliseconds())
-		if td.TotalTime < 0.00 {
-			td.TotalTime = 0.00
-		}
-		if err := c.w.AddTransactionHistory(td); err != nil {
-			errMsg := fmt.Sprintf("Error occured while adding FT transaction details: %v", err)
-			c.log.Error(errMsg)
-			resp.Message = errMsg
-			return
-		}
-
-		// Store in new FT transaction history table
-		if err := c.w.AddFTTransactionHistory(td, req.FTName, creatorDID, req.FTCount); err != nil {
-			c.log.Error("Failed to store FT transaction history", "err", err)
-			// Don't fail the transaction, just log the error
-		}
-
-		// Store FT token metadata for sent transactions
-		if err := c.w.AddFTTransactionTokens(td.TransactionID, creatorDID, req.FTName, req.FTCount, "sent"); err != nil {
-			c.log.Error("Failed to store FT transaction token metadata", "err", err)
-			// Don't fail the transaction, just log the error
-		}
-
-		// Create a channel to signal explorer submission completion
-		explorerDone := make(chan struct{})
-
+		
+		// Start async confirmation handler that will update DB/explorer when confirmation received
 		go func() {
-			defer close(explorerDone) // Signal completion when done
+			// Determine if we should wait for confirmation
+			shouldWaitForConfirmation := c.peerID != rpeerid
+			
+			if shouldWaitForConfirmation {
+				c.log.Info("Starting async confirmation handler",
+					"transaction_id", td.TransactionID,
+					"receiver", receiverAddr)
 
+				// Create a channel to signal explorer submission completion
+				explorerDone := make(chan struct{})
+
+				// Start the confirmation wait with explorer channel
+				go func() {
+					c.waitForReceiverConfirmation(receiverAddr, td.TransactionID, TokenInfo, 9, explorerDone) // 9 = FTTokenType
+				}()
+
+				// Wait for confirmation with timeout
+				confirmationChan := c.getConfirmationSignal(td.TransactionID)
+				select {
+				case <-confirmationChan:
+					c.log.Info("Receiver confirmation received, finalizing transaction",
+						"transaction_id", td.TransactionID)
+				case <-time.After(30 * time.Minute):
+					c.log.Warn("Confirmation timeout, starting proactive status check",
+						"transaction_id", td.TransactionID)
+					// Start proactive checking
+					go c.proactiveStatusCheck(receiverAddr, td.TransactionID, TokenInfo, 9) // 9 = FTTokenType
+				}
+			} else {
+				c.log.Info("Self-transfer detected, proceeding immediately",
+					"transaction_id", td.TransactionID)
+			}
+
+			// Now update DB and explorer after confirmation (or immediately for self-transfer)
+			et := time.Now()
+			dif := et.Sub(st)
+			td.Amount = float64(req.FTCount)
+			td.TotalTime = float64(dif.Milliseconds())
+			if td.TotalTime < 0.00 {
+				td.TotalTime = 0.00
+			}
+			
+			// Update transaction history
+			if err := c.w.AddTransactionHistory(td); err != nil {
+				c.log.Error("Error occurred while adding FT transaction details", "err", err)
+				// Transaction already happened, just log the error
+			}
+
+			// Store in new FT transaction history table
+			if err := c.w.AddFTTransactionHistory(td, req.FTName, creatorDID, req.FTCount); err != nil {
+				c.log.Error("Failed to store FT transaction history", "err", err)
+			}
+
+			// Store FT token metadata for sent transactions
+			if err := c.w.AddFTTransactionTokens(td.TransactionID, creatorDID, req.FTName, req.FTCount, "sent"); err != nil {
+				c.log.Error("Failed to store FT transaction token metadata", "err", err)
+			}
+
+			// Submit to explorer
 			AllTokens := make([]AllToken, len(TokenInfo))
 			for i := range TokenInfo {
 				tokenDetail := AllToken{}
@@ -923,7 +923,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				// Convert the string part to an int
 				blockNoInt, err := strconv.Atoi(blockNoPart)
 				if err != nil {
-					log.Printf("Error getting BlockID: %v", err)
+					c.log.Error("Error getting BlockID", "err", err)
 					continue
 				}
 				tokenDetail.BlockNumber = blockNoInt
@@ -949,14 +949,17 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				FTTokenList:     FTTokenIDs,
 			}
 			c.ec.ExplorerFTTransaction(eTrans)
-			c.log.Info("Explorer submission completed", "transaction_id", td.TransactionID)
+			c.log.Info("Transaction finalized and submitted to explorer",
+				"transaction_id", td.TransactionID,
+				"duration", dif)
 		}()
 
-		// Pass the explorerDone channel to consensus request
-		cr.ExplorerDone = explorerDone
-
-		c.log.Info("FT Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
-		msg := fmt.Sprintf("FT Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
+		// Calculate initial duration for immediate response
+		et := time.Now()
+		dif := et.Sub(st)
+		
+		c.log.Info("FT Transfer initiated successfully", "duration", dif, " trnxid", td.TransactionID)
+		msg := fmt.Sprintf("FT Transfer initiated successfully in %v with trnxid %v", dif, td.TransactionID)
 		resp.Status = true
 		resp.Message = msg
 		if strings.Contains(resp.Message, "with transaction id") {
