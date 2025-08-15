@@ -44,10 +44,10 @@ func (c *Core) RemoteRecoverTokens(req *model.RemoteRecoveryRequest) (*TokenReco
 
 	c.log.Info("Sending recovery request to remote node",
 		"target_did", req.TargetDID,
-		"endpoint", "/api/recover-lost-tokens")
+		"endpoint", APIRecoverLostTokens)
 
 	// Send JSON request to the remote node (just like UpdateTokenStatus does)
-	err = p.SendJSONRequest("POST", "/api/recover-lost-tokens", nil, &recoveryReq, &recoveryResp, false)
+	err = p.SendJSONRequest("POST", APIRecoverLostTokens, nil, &recoveryReq, &recoveryResp, false)
 	if err != nil {
 		c.log.Error("Failed to send recovery request to remote node", 
 			"target_did", req.TargetDID,

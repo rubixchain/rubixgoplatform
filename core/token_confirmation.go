@@ -12,6 +12,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -713,6 +714,47 @@ func (c *Core) CoordinatedRollback(transactionID string, tokenType int) error {
 		"token_type", tokenType)
 
 	return nil
+}
+
+// recoverLostTokensPeer handles recovery requests from peer connections
+func (c *Core) recoverLostTokensPeer(req *ensweb.Request) *ensweb.Result {
+	c.log.Info("Received peer recovery request via P2P")
+	
+	var recoveryReq struct {
+		SenderDID     string `json:"sender_did"`
+		TransactionID string `json:"transaction_id"`
+	}
+	
+	err := c.l.ParseJSON(req, &recoveryReq)
+	if err != nil {
+		c.log.Error("Failed to parse recovery request", "error", err)
+		resp := map[string]interface{}{
+			"status": false,
+			"message": "Invalid request format: " + err.Error(),
+		}
+		return c.l.RenderJSON(req, &resp, http.StatusBadRequest)
+	}
+	
+	c.log.Info("Processing peer recovery request",
+		"sender_did", recoveryReq.SenderDID,
+		"transaction_id", recoveryReq.TransactionID)
+	
+	result, err := c.RecoverLostTokens(recoveryReq.SenderDID, recoveryReq.TransactionID)
+	if err != nil {
+		c.log.Error("Recovery failed", "error", err)
+		resp := map[string]interface{}{
+			"status": false,
+			"message": err.Error(),
+		}
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+	
+	resp := map[string]interface{}{
+		"status": true,
+		"message": "Recovery completed successfully",
+		"result": result,
+	}
+	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
 // RecoverLostTokens attempts to recover tokens that were sent but not received

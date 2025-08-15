@@ -67,6 +67,7 @@ const (
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
+	APIRecoverLostTokens            string = "/api/recover-lost-tokens"
 
 	APIGetFTTransactionStatus string = "/api/get-ft-transaction-status"
 )
