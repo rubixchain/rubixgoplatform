@@ -15,7 +15,8 @@ type TokenRecovery struct {
 	RecoveryNotes string    `gorm:"column:recovery_notes"`
 }
 
-// RecoveredToken tracks individual token recovery to prevent double-spending
+// RecoveredToken - DEPRECATED: No longer used as tokens can be recovered multiple times
+// Kept for reference and potential future use if per-token tracking is needed
 type RecoveredToken struct {
 	TokenID               string    `gorm:"column:token_id;primaryKey"`
 	OriginalTransactionID string    `gorm:"column:original_transaction_id"`
@@ -26,8 +27,9 @@ type RecoveredToken struct {
 
 // RemoteRecoveryRequest represents a request to recover tokens on a remote node
 type RemoteRecoveryRequest struct {
-	TargetDID     string `json:"target_did"`     // DID of node B where tokens should be recovered
-	TransactionID string `json:"transaction_id"` // Transaction ID to recover
-	RequesterDID  string `json:"requester_did"`  // DID of node A requesting the recovery
-	Reason        string `json:"reason"`         // Reason for remote recovery
+	TargetDID      string `json:"target_did"`       // DID of node B where tokens should be recovered
+	TransactionID  string `json:"transaction_id"`   // Transaction ID to recover
+	RequesterDID   string `json:"requester_did"`    // DID of node A requesting the recovery
+	Reason         string `json:"reason"`           // Reason for remote recovery
+	TargetNodeURL  string `json:"target_node_url"`  // Optional: Direct URL of target node (e.g., "localhost:20960")
 }

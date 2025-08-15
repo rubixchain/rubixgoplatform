@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -60,7 +61,18 @@ func (c *Core) RemoteRecoverTokens(req *model.RemoteRecoveryRequest) (*TokenReco
 			"target_did", req.TargetDID,
 			"transaction_id", req.TransactionID,
 			"error", err)
+		// Check if it's a 404 error
+		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not Found") {
+			return nil, fmt.Errorf("target node does not have the recovery API endpoint. Please ensure target node is running the latest version with recovery support")
+		}
 		return nil, fmt.Errorf("target node failed to recover tokens: %v", err)
+	}
+	
+	// Check if we got an empty response (which shouldn't happen but let's be safe)
+	if recoveryResp.RecoveredTokenCount == 0 && recoveryResp.Status == "" {
+		c.log.Warn("Received empty recovery response from target node",
+			"target_did", req.TargetDID,
+			"transaction_id", req.TransactionID)
 	}
 
 	c.log.Info("STEP 2 SUCCESS: Target node recovered tokens",
@@ -78,7 +90,7 @@ func (c *Core) RemoteRecoverTokens(req *model.RemoteRecoveryRequest) (*TokenReco
 		RecoveryNotes: fmt.Sprintf("Remote recovery initiated for %s, reason: %s", req.TargetDID, req.Reason),
 	}
 	
-	err = c.w.GetStorage().Write("token_recovery_audit", &auditRecord)
+	err = c.w.GetStorage().Write("token_recovery", &auditRecord)
 	if err != nil {
 		c.log.Warn("Failed to record remote recovery audit",
 			"error", err)

@@ -1246,15 +1246,13 @@ func (c *Core) unlockTransferredTokens(senderDID, transactionID string) (int, er
 		return 0, nil // No tokens to recover
 	}
 
-	// Check if any of these tokens have been recovered before
-	for _, tokenID := range tokenIDs {
-		if c.isTokenPreviouslyRecovered(tokenID) {
-			c.log.Error("Token has been previously recovered, aborting recovery",
-				"token_id", tokenID,
-				"transaction_id", transactionID)
-			return 0, fmt.Errorf("token %s has been previously recovered, potential double-recovery attempt detected", tokenID)
-		}
-	}
+	// NOTE: We intentionally DO NOT check if individual tokens were recovered before
+	// because the same token can be in multiple failed transactions.
+	// We only check at the transaction level to prevent recovering the same transaction twice.
+	c.log.Info("Proceeding with token recovery (no per-token checks)",
+		"transaction_id", transactionID,
+		"token_count", len(tokenIDs),
+		"note", "Tokens can be recovered multiple times for different transactions")
 
 	// Unlock each token and ensure they are transaction ready
 	unlockedCount := 0
@@ -1275,14 +1273,15 @@ func (c *Core) unlockTransferredTokens(senderDID, transactionID string) (int, er
 			continue
 		}
 
-		// IMPORTANT: Mark the token with recovery metadata in its state hash
-		// This prevents the token from being recovered again in future transactions
-		if err := c.markTokenAsRecovered(tokenID, transactionID); err != nil {
-			c.log.Error("Failed to mark token as recovered",
-				"token_id", tokenID,
-				"error", err)
-			// Don't fail the recovery, but log the error
-		}
+		// NOTE: We do NOT mark individual tokens as recovered anymore
+		// Tokens can be part of multiple transactions and should be recoverable
+		// each time a different transaction fails.
+		// Only the transaction itself is marked as recovered to prevent
+		// recovering the same transaction multiple times.
+		c.log.Debug("Token unlocked for recovery",
+			"token_id", tokenID,
+			"transaction_id", transactionID,
+			"note", "Token can be recovered again in different transactions")
 
 		unlockedCount++
 		c.log.Debug("Successfully unlocked and made token transaction ready",
@@ -1586,7 +1585,9 @@ func (c *Core) VerifyLocalTokenExistence(tokenID, transactionID string) (bool, e
 	return false, nil
 }
 
-// markTokenAsRecovered marks a token as recovered to prevent double recovery
+// markTokenAsRecovered - DEPRECATED: No longer used as tokens can be recovered multiple times
+// This function is kept for reference but is not called anymore.
+// Tokens can be part of multiple failed transactions and should be recoverable each time.
 func (c *Core) markTokenAsRecovered(tokenID, transactionID string) error {
 	c.log.Debug("Marking token as recovered",
 		"token_id", tokenID,
@@ -1636,7 +1637,9 @@ func (c *Core) markTokenAsRecovered(tokenID, transactionID string) error {
 	return nil
 }
 
-// isTokenPreviouslyRecovered checks if a token has been recovered before
+// isTokenPreviouslyRecovered - DEPRECATED: No longer used as tokens can be recovered multiple times
+// This function is kept for reference but is not called anymore.
+// We only check recovery at the transaction level, not token level.
 func (c *Core) isTokenPreviouslyRecovered(tokenID string) bool {
 	// First check in the recovered tokens table
 	var recoveredToken model.RecoveredToken

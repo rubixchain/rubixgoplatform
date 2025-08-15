@@ -576,10 +576,21 @@ func (s *Server) APIRemoteRecoverTokens(req *ensweb.Request) *ensweb.Result {
 		"target_did", remoteReq.TargetDID,
 		"transaction_id", remoteReq.TransactionID,
 		"requester_did", remoteReq.RequesterDID,
-		"reason", remoteReq.Reason)
+		"reason", remoteReq.Reason,
+		"target_node_url", remoteReq.TargetNodeURL)
 
 	// Initiate the remote recovery
-	recoveryResult, err := s.c.RemoteRecoverTokens(&remoteReq)
+	var recoveryResult *core.TokenRecoveryResult
+	
+	// Use HTTP method if target URL is provided
+	if remoteReq.TargetNodeURL != "" {
+		s.log.Info("Using HTTP method for remote recovery",
+			"target_url", remoteReq.TargetNodeURL)
+		recoveryResult, err = s.c.RemoteRecoverTokensHTTP(&remoteReq, remoteReq.TargetNodeURL)
+	} else {
+		s.log.Info("Using peer connection method for remote recovery")
+		recoveryResult, err = s.c.RemoteRecoverTokens(&remoteReq)
+	}
 	if err != nil {
 		s.log.Error("Remote token recovery failed",
 			"target_did", remoteReq.TargetDID,
