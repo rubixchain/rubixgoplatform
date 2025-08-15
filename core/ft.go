@@ -849,6 +849,39 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			resultChan <- resp
 			return
 		}
+
+		// CRITICAL FIX: Wait for receiver confirmation before proceeding with transaction finalization
+		receiverAddr := rpeerid + "." + req.Receiver
+		if c.peerID != rpeerid {
+			c.log.Info("Waiting for receiver confirmation before finalizing transaction",
+				"transaction_id", td.TransactionID,
+				"receiver", receiverAddr)
+
+			// Wait for receiver confirmation with timeout
+			confirmationReceived := make(chan bool, 1)
+			go func() {
+				// Wait for actual receiver confirmation
+				c.waitForReceiverConfirmation(receiverAddr, td.TransactionID, TokenInfo, 9, nil) // 9 = FTTokenType
+				confirmationReceived <- true
+			}()
+
+			// Wait for confirmation before proceeding
+			select {
+			case <-confirmationReceived:
+				c.log.Info("Receiver confirmation received, proceeding with transaction finalization",
+					"transaction_id", td.TransactionID)
+			case <-time.After(30 * time.Minute): // 30 minute timeout
+				c.log.Warn("Receiver confirmation timeout, proceeding with proactive status check",
+					"transaction_id", td.TransactionID)
+				// Start proactive checking
+				go c.proactiveStatusCheck(receiverAddr, td.TransactionID, TokenInfo, 9) // 9 = FTTokenType
+			}
+		} else {
+			c.log.Info("Self-transfer detected, skipping confirmation wait",
+				"transaction_id", td.TransactionID)
+		}
+
+		// Only proceed with transaction finalization after confirmation or timeout
 		et := time.Now()
 		dif := et.Sub(st)
 		td.Amount = float64(req.FTCount)

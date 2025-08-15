@@ -1089,32 +1089,19 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, fmt.Errorf("unable to send FT tokens to receiver, " + br.Message)
 		}
 
-		// Phase 2: Wait for receiver confirmation with timeout and proactive checking
+		// Phase 2: Send tokens to receiver (confirmation flow now handled in main FT transfer)
 		receiverAddr := cr.ReceiverPeerID + "." + sc.GetReceiverDID()
 		if cr.SenderPeerID != cr.ReceiverPeerID {
-			// Create a confirmation channel to wait for receiver confirmation
-			confirmationChan := make(chan bool, 1)
-
-			// Start confirmation wait in background
-			go func() {
-				// Wait for actual receiver confirmation
-				c.waitForReceiverConfirmation(receiverAddr, cr.TransactionID, ti, tkn.FTTokenType, cr.ExplorerDone)
-				// Only send true after confirmation is actually received
-				confirmationChan <- true
-			}()
-
-			// Wait for confirmation before proceeding
-			select {
-			case <-confirmationChan:
-				c.log.Info("Receiver confirmation received, proceeding with transaction finalization",
-					"transaction_id", cr.TransactionID)
-			case <-time.After(30 * time.Minute): // 30 minute timeout
-				c.log.Warn("Receiver confirmation timeout, proceeding with proactive status check",
-					"transaction_id", cr.TransactionID)
-				// Start proactive checking
-				go c.proactiveStatusCheck(receiverAddr, cr.TransactionID, ti, tkn.FTTokenType)
-			}
+			c.log.Info("Tokens sent to receiver, confirmation will be handled in main transfer flow",
+				"transaction_id", cr.TransactionID,
+				"receiver", receiverAddr)
+		} else {
+			c.log.Info("Self-transfer detected, skipping receiver confirmation",
+				"transaction_id", cr.TransactionID)
 		}
+
+		// CRITICAL: Transaction finalization (history, explorer) now happens in main FT transfer flow
+		// after receiver confirmation is received
 
 		// TODO: remove the following commented out code once after testing, calling the quorum pledge finality before APISendFT token
 		// // Extract new token state hashes from response

@@ -1794,6 +1794,39 @@ func (c *Core) updateReceiverFTHandle(req *ensweb.Request) *ensweb.Result {
 			c.log.Error(err.Error())
 			return
 		}
+
+		// CRITICAL FIX: Automatically send confirmation to sender after successful token processing
+		c.log.Info("Tokens processed successfully, sending confirmation to sender",
+			"token_count", len(sr.TokenInfo))
+
+		// Extract transaction ID from the block
+		b := block.InitBlock(sr.TokenChainBlock, nil)
+		if b == nil {
+			c.log.Error("Failed to initialize block for confirmation")
+			return
+		}
+		transactionID := b.GetTid()
+
+		// Prepare confirmation request
+		confirmationReq := &ConfirmTokenRequest{
+			TransactionID: transactionID,
+			TokenType:     sr.TokenInfo[0].TokenType,
+		}
+
+		// Extract token IDs for confirmation
+		for _, tokenInfo := range sr.TokenInfo {
+			confirmationReq.Tokens = append(confirmationReq.Tokens, tokenInfo.Token)
+		}
+
+		// Send confirmation to sender
+		if err := c.APIConfirmTokenTransfer(confirmationReq); err != nil {
+			c.log.Error("Failed to send confirmation to sender",
+				"transaction_id", transactionID,
+				"error", err)
+		} else {
+			c.log.Info("Confirmation sent successfully to sender",
+				"transaction_id", transactionID)
+		}
 	}()
 
 	crep.Status = true
