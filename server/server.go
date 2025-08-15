@@ -212,6 +212,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIConfirmTokenTransfer, "POST", s.AuthHandle(s.APIConfirmTokenTransfer, true, s.AuthError, false))
 	// Token recovery doesn't need authentication - anyone should be able to recover their tokens
 	s.AddRoute(setup.APIRecoverLostTokens, "POST", s.APIRecoverLostTokens)
+	s.AddRoute(setup.APIRemoteRecoverTokens, "POST", s.APIRemoteRecoverTokens)
 	s.AddRoute(setup.APIVerifyTokenOwnership, "POST", s.AuthHandle(s.APIVerifyTokenOwnership, true, s.AuthError, false))
 	s.AddRoute(setup.APICheckTokenTransferStatus, "POST", s.AuthHandle(s.APICheckTokenTransferStatus, true, s.AuthError, false))
 	s.AddRoute(setup.APIVerifyTokenExistence, "POST", s.AuthHandle(s.APIVerifyTokenExistence, true, s.AuthError, false))

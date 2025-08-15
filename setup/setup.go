@@ -105,6 +105,7 @@ const (
 	APISendTokenConfirmation            string = "/api/send-token-confirmation"
 	APIConfirmTokenTransfer             string = "/api/confirm-token-transfer"
 	APIRecoverLostTokens                string = "/api/recover-lost-tokens"
+	APIRemoteRecoverTokens              string = "/api/remote-recover-tokens"
 	APIVerifyTokenOwnership             string = "/api/verify-token-ownership"
 	APICheckTokenTransferStatus         string = "/api/check-token-transfer-status"
 	APIVerifyTokenExistence             string = "/api/verify-token-existence"

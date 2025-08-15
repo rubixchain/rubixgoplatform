@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -455,6 +456,9 @@ func (s *Server) APIRecoverLostTokens(req *ensweb.Request) *ensweb.Result {
 	recoveryReq := struct {
 		SenderDID     string `json:"sender_did"`
 		TransactionID string `json:"transaction_id"`
+		RequesterDID  string `json:"requester_did"`  // For remote recovery tracking
+		RemoteRequest bool   `json:"remote_request"` // Flag for remote recovery
+		Reason        string `json:"reason"`         // Reason for recovery
 	}{}
 
 	// Parse JSON from request body since we're not using auth middleware
@@ -485,12 +489,33 @@ func (s *Server) APIRecoverLostTokens(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Invalid sender DID format", nil)
 	}
 
-	s.log.Info("Received token recovery request",
-		"sender_did", recoveryReq.SenderDID,
-		"transaction_id", recoveryReq.TransactionID)
+	// Check if this is a remote recovery request
+	if recoveryReq.RemoteRequest {
+		s.log.Info("Received remote token recovery request",
+			"sender_did", recoveryReq.SenderDID,
+			"transaction_id", recoveryReq.TransactionID,
+			"requester_did", recoveryReq.RequesterDID,
+			"reason", recoveryReq.Reason)
+	} else {
+		s.log.Info("Received token recovery request",
+			"sender_did", recoveryReq.SenderDID,
+			"transaction_id", recoveryReq.TransactionID)
+	}
 
 	// Perform token recovery
-	recoveryResult, err := s.c.RecoverLostTokens(recoveryReq.SenderDID, recoveryReq.TransactionID)
+	var recoveryResult *core.TokenRecoveryResult
+	
+	if recoveryReq.RemoteRequest {
+		// Handle remote recovery request
+		recoveryResult, err = s.c.HandleRemoteRecoveryRequest(
+			recoveryReq.SenderDID,
+			recoveryReq.TransactionID,
+			recoveryReq.RequesterDID,
+			recoveryReq.Reason)
+	} else {
+		// Handle normal recovery request
+		recoveryResult, err = s.c.RecoverLostTokens(recoveryReq.SenderDID, recoveryReq.TransactionID)
+	}
 	if err != nil {
 		s.log.Error("Failed to recover lost tokens",
 			"sender_did", recoveryReq.SenderDID,
@@ -505,6 +530,80 @@ func (s *Server) APIRecoverLostTokens(req *ensweb.Request) *ensweb.Result {
 		"recovered_count", recoveryResult.RecoveredTokenCount)
 
 	return s.BasicResponse(req, true, "Token recovery completed successfully", recoveryResult)
+}
+
+// @Summary Initiate remote token recovery
+// @Description Allows Node A to trigger token recovery on Node B
+// @ID remote-recover-tokens
+// @Tags FT
+// @Accept json
+// @Produce json
+// @Param target_did body string true "DID of the target node where recovery should happen"
+// @Param transaction_id body string true "Transaction ID to recover"
+// @Param requester_did body string true "DID of the requesting node"
+// @Param reason body string false "Reason for remote recovery"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/remote-recover-tokens [post]
+func (s *Server) APIRemoteRecoverTokens(req *ensweb.Request) *ensweb.Result {
+	// Parse the remote recovery request
+	var remoteReq model.RemoteRecoveryRequest
+	err := s.ParseJSON(req, &remoteReq)
+	if err != nil {
+		s.log.Error("Failed to parse remote recovery request", "error", err)
+		return s.BasicResponse(req, false, "Invalid request format", nil)
+	}
+
+	// Validate required fields
+	if remoteReq.TargetDID == "" {
+		return s.BasicResponse(req, false, "Target DID is required", nil)
+	}
+	if remoteReq.TransactionID == "" {
+		return s.BasicResponse(req, false, "Transaction ID is required", nil)
+	}
+
+	// If requester DID is not provided, use the current node's DID
+	if remoteReq.RequesterDID == "" {
+		// Get the current node's DID
+		remoteReq.RequesterDID = s.c.GetPeerID()
+	}
+
+	// Set a default reason if not provided
+	if remoteReq.Reason == "" {
+		remoteReq.Reason = "Remote recovery requested"
+	}
+
+	s.log.Info("Initiating remote token recovery",
+		"target_did", remoteReq.TargetDID,
+		"transaction_id", remoteReq.TransactionID,
+		"requester_did", remoteReq.RequesterDID,
+		"reason", remoteReq.Reason)
+
+	// Initiate the remote recovery
+	recoveryResult, err := s.c.RemoteRecoverTokens(&remoteReq)
+	if err != nil {
+		s.log.Error("Remote token recovery failed",
+			"target_did", remoteReq.TargetDID,
+			"transaction_id", remoteReq.TransactionID,
+			"error", err)
+		return s.BasicResponse(req, false, "Remote recovery failed: "+err.Error(), nil)
+	}
+
+	s.log.Info("Remote token recovery completed successfully",
+		"target_did", remoteReq.TargetDID,
+		"transaction_id", remoteReq.TransactionID,
+		"recovered_count", recoveryResult.RecoveredTokenCount)
+
+	// Return the recovery result
+	response := map[string]interface{}{
+		"transaction_id":        recoveryResult.TransactionID,
+		"recovered_token_count": recoveryResult.RecoveredTokenCount,
+		"recovery_date":         recoveryResult.RecoveryDate,
+		"status":                recoveryResult.Status,
+		"message":               recoveryResult.Message,
+		"target_did":            remoteReq.TargetDID,
+	}
+
+	return s.BasicResponse(req, true, "Remote recovery completed successfully", response)
 }
 
 // @Summary Verify token ownership for recovery
