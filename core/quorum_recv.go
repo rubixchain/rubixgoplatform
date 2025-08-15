@@ -1605,8 +1605,24 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	}
 	defer senderPeer.Close()
 	var syncIssueTokens []string
+	
+	// TEST CODE: Intentionally fail sync for 2 specific tokens to test error handling
+	// These are the first 2 tokens from your A1 token list
+	failTokens := map[string]bool{
+		"QmNQXDguxh3rPchkYRYXk8kr1eKWjW5vXhk4iB2PncRzxe": true, // First token to fail
+		"QmU43cSGw1ZM7Xe5vyZ3Uk24Lee4i6n5TNi2Jnek96i5Rn": true, // Second token to fail
+	}
+	
 	for _, ti := range tokenInfo {
 		t := ti.Token
+		
+		// TEST CODE: Check if this token should fail
+		if failTokens[t] {
+			c.log.Error("TEST: Intentionally failing sync for token", "token", t)
+			syncIssueTokens = append(syncIssueTokens, t)
+			continue // Skip processing this token
+		}
+		
 		pblkID, err := b.GetPrevBlockID(t)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sync token chain block, missing previous block id for token %v, error: %v", t, err)
