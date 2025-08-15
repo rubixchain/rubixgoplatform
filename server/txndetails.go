@@ -439,3 +439,268 @@ func (s *Server) APISendTokenConfirmation(req *ensweb.Request) *ensweb.Result {
 
 	return s.BasicResponse(req, true, "Token confirmation sent successfully", nil)
 }
+
+// @Summary Recover lost tokens
+// @Description Allows senders to recover tokens that were sent but not received by the receiver
+// @ID recover-lost-tokens
+// @Tags FT
+// @Accept json
+// @Produce json
+// @Param sender_did body string true "DID of the sender"
+// @Param transaction_id body string true "Transaction ID to recover tokens from"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/recover-lost-tokens [post]
+func (s *Server) APIRecoverLostTokens(req *ensweb.Request) *ensweb.Result {
+	// Parse request data from ensweb request
+	recoveryReq := struct {
+		SenderDID     string `json:"sender_did"`
+		TransactionID string `json:"transaction_id"`
+	}{}
+
+	// Access data from the request
+	if req.Data != nil {
+		if senderDID, ok := req.Data["sender_did"].(string); ok {
+			recoveryReq.SenderDID = senderDID
+		}
+		if transactionID, ok := req.Data["transaction_id"].(string); ok {
+			recoveryReq.TransactionID = transactionID
+		}
+	}
+
+	// Validate request
+	if recoveryReq.SenderDID == "" {
+		return s.BasicResponse(req, false, "Sender DID is required", nil)
+	}
+
+	if recoveryReq.TransactionID == "" {
+		return s.BasicResponse(req, false, "Transaction ID is required", nil)
+	}
+
+	// Validate DID format
+	if !strings.HasPrefix(recoveryReq.SenderDID, "bafybmi") || len(recoveryReq.SenderDID) != 59 {
+		return s.BasicResponse(req, false, "Invalid sender DID format", nil)
+	}
+
+	s.log.Info("Received token recovery request",
+		"sender_did", recoveryReq.SenderDID,
+		"transaction_id", recoveryReq.TransactionID)
+
+	// Perform token recovery
+	recoveryResult, err := s.c.RecoverLostTokens(recoveryReq.SenderDID, recoveryReq.TransactionID)
+	if err != nil {
+		s.log.Error("Failed to recover lost tokens",
+			"sender_did", recoveryReq.SenderDID,
+			"transaction_id", recoveryReq.TransactionID,
+			"error", err)
+		return s.BasicResponse(req, false, "Token recovery failed: "+err.Error(), nil)
+	}
+
+	s.log.Info("Token recovery completed successfully",
+		"sender_did", recoveryReq.SenderDID,
+		"transaction_id", recoveryReq.TransactionID,
+		"recovered_count", recoveryResult.RecoveredTokenCount)
+
+	return s.BasicResponse(req, true, "Token recovery completed successfully", recoveryResult)
+}
+
+// @Summary Verify token ownership for recovery
+// @Description Allows senders to verify if receiver has tokens for recovery purposes
+// @ID verify-token-ownership
+// @Tags FT
+// @Accept json
+// @Produce json
+// @Param transaction_id body string true "Transaction ID to verify"
+// @Param expected_amount body int true "Expected amount of tokens"
+// @Param check_type body string true "Type of check (recovery_verification)"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/verify-token-ownership [post]
+func (s *Server) APIVerifyTokenOwnership(req *ensweb.Request) *ensweb.Result {
+	// Parse request data from ensweb request
+	verifyReq := struct {
+		TransactionID  string `json:"transaction_id"`
+		ExpectedAmount int    `json:"expected_amount"`
+		CheckType      string `json:"check_type"`
+	}{}
+
+	// Access data from the request
+	if req.Data != nil {
+		if txID, ok := req.Data["transaction_id"].(string); ok {
+			verifyReq.TransactionID = txID
+		}
+		if expectedAmount, ok := req.Data["expected_amount"].(float64); ok {
+			verifyReq.ExpectedAmount = int(expectedAmount)
+		}
+		if checkType, ok := req.Data["check_type"].(string); ok {
+			verifyReq.CheckType = checkType
+		}
+	}
+
+	// Validate request
+	if verifyReq.TransactionID == "" {
+		return s.BasicResponse(req, false, "Transaction ID is required", nil)
+	}
+
+	if verifyReq.ExpectedAmount <= 0 {
+		return s.BasicResponse(req, false, "Expected amount must be positive", nil)
+	}
+
+	if verifyReq.CheckType != "recovery_verification" {
+		return s.BasicResponse(req, false, "Invalid check type", nil)
+	}
+
+	s.log.Info("Received token ownership verification request",
+		"transaction_id", verifyReq.TransactionID,
+		"expected_amount", verifyReq.ExpectedAmount)
+
+	// Check if this node has the tokens for the given transaction
+	hasTokens, err := s.c.VerifyLocalTokenOwnership(verifyReq.TransactionID, verifyReq.ExpectedAmount)
+	if err != nil {
+		s.log.Error("Failed to verify local token ownership",
+			"transaction_id", verifyReq.TransactionID,
+			"error", err)
+		return s.BasicResponse(req, false, "Verification failed: "+err.Error(), nil)
+	}
+
+	if hasTokens {
+		s.log.Info("Token ownership verified - tokens exist",
+			"transaction_id", verifyReq.TransactionID,
+			"expected_amount", verifyReq.ExpectedAmount)
+		return s.BasicResponse(req, true, "Tokens found", nil)
+	} else {
+		s.log.Info("Token ownership verified - tokens not found",
+			"transaction_id", verifyReq.TransactionID,
+			"expected_amount", verifyReq.ExpectedAmount)
+		return s.BasicResponse(req, false, "Tokens not found", nil)
+	}
+}
+
+// @Summary Check token transfer status for recovery
+// @Description Allows senders to check if tokens were transferred from receiver for recovery purposes
+// @ID check-token-transfer-status
+// @Tags FT
+// @Accept json
+// @Produce json
+// @Param transaction_id body string true "Transaction ID to check"
+// @Param check_type body string true "Type of check (transfer_verification)"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/check-token-transfer-status [post]
+func (s *Server) APICheckTokenTransferStatus(req *ensweb.Request) *ensweb.Result {
+	// Parse request data from ensweb request
+	checkReq := struct {
+		TransactionID string `json:"transaction_id"`
+		CheckType     string `json:"check_type"`
+	}{}
+
+	// Access data from the request
+	if req.Data != nil {
+		if txID, ok := req.Data["transaction_id"].(string); ok {
+			checkReq.TransactionID = txID
+		}
+		if checkType, ok := req.Data["check_type"].(string); ok {
+			checkReq.CheckType = checkType
+		}
+	}
+
+	// Validate request
+	if checkReq.TransactionID == "" {
+		return s.BasicResponse(req, false, "Transaction ID is required", nil)
+	}
+
+	if checkReq.CheckType != "transfer_verification" {
+		return s.BasicResponse(req, false, "Invalid check type", nil)
+	}
+
+	s.log.Info("Received token transfer status check request",
+		"transaction_id", checkReq.TransactionID)
+
+	// Check if tokens were transferred from this node for the given transaction
+	transferred, err := s.c.CheckLocalTokenTransferStatus(checkReq.TransactionID)
+	if err != nil {
+		s.log.Error("Failed to check local token transfer status",
+			"transaction_id", checkReq.TransactionID,
+			"error", err)
+		return s.BasicResponse(req, false, "Check failed: "+err.Error(), nil)
+	}
+
+	if transferred {
+		s.log.Info("Token transfer status checked - tokens were transferred",
+			"transaction_id", checkReq.TransactionID)
+		return s.BasicResponse(req, true, "Tokens were transferred", nil)
+	} else {
+		s.log.Info("Token transfer status checked - tokens were not transferred",
+			"transaction_id", checkReq.TransactionID)
+		return s.BasicResponse(req, false, "Tokens were not transferred", nil)
+	}
+}
+
+// @Summary Verify token existence in storage
+// @Description Allows senders to verify if a specific token exists in receiver's storage
+// @ID verify-token-existence
+// @Tags FT
+// @Accept json
+// @Produce json
+// @Param token_id body string true "Token ID to verify"
+// @Param transaction_id body string true "Transaction ID associated with the token"
+// @Param verify_type body string true "Type of verification (token_existence)"
+// @Success 200 {object} model.BasicResponse
+// @Router /api/verify-token-existence [post]
+func (s *Server) APIVerifyTokenExistence(req *ensweb.Request) *ensweb.Result {
+	// Parse request data from ensweb request
+	verifyReq := struct {
+		TokenID       string `json:"token_id"`
+		TransactionID string `json:"transaction_id"`
+		VerifyType    string `json:"verify_type"`
+	}{}
+
+	// Access data from the request
+	if req.Data != nil {
+		if tokenID, ok := req.Data["token_id"].(string); ok {
+			verifyReq.TokenID = tokenID
+		}
+		if transactionID, ok := req.Data["transaction_id"].(string); ok {
+			verifyReq.TransactionID = transactionID
+		}
+		if verifyType, ok := req.Data["verify_type"].(string); ok {
+			verifyReq.VerifyType = verifyType
+		}
+	}
+
+	// Validate request
+	if verifyReq.TokenID == "" {
+		return s.BasicResponse(req, false, "Token ID is required", nil)
+	}
+
+	if verifyReq.TransactionID == "" {
+		return s.BasicResponse(req, false, "Transaction ID is required", nil)
+	}
+
+	if verifyReq.VerifyType != "token_existence" {
+		return s.BasicResponse(req, false, "Invalid verify type", nil)
+	}
+
+	s.log.Info("Received token existence verification request",
+		"token_id", verifyReq.TokenID,
+		"transaction_id", verifyReq.TransactionID)
+
+	// Check if this token exists in local storage
+	tokenExists, err := s.c.VerifyLocalTokenExistence(verifyReq.TokenID, verifyReq.TransactionID)
+	if err != nil {
+		s.log.Error("Failed to verify local token existence",
+			"token_id", verifyReq.TokenID,
+			"transaction_id", verifyReq.TransactionID,
+			"error", err)
+		return s.BasicResponse(req, false, "Verification failed: "+err.Error(), nil)
+	}
+
+	if tokenExists {
+		s.log.Info("Token existence verified - token found",
+			"token_id", verifyReq.TokenID,
+			"transaction_id", verifyReq.TransactionID)
+		return s.BasicResponse(req, true, "Token found", nil)
+	} else {
+		s.log.Info("Token existence verified - token not found",
+			"token_id", verifyReq.TokenID,
+			"transaction_id", verifyReq.TransactionID)
+		return s.BasicResponse(req, false, "Token not found", nil)
+	}
+}

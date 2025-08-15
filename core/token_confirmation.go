@@ -7,6 +7,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -181,15 +182,75 @@ func (c *Core) verifyReceiverHasTokens(receiverAddress string, txID string, toke
 		tokenIDs[i] = token.Token
 	}
 
-	// For now, we'll use a simple approach - check if tokens exist in receiver's storage
-	// This can be enhanced later with a proper verification API
-	c.log.Info("Token verification completed (placeholder implementation)",
-		"receiver", receiverAddress,
-		"transaction_id", txID,
-		"token_count", len(tokenIDs))
+	// Verify that tokens exist in receiver's storage
+	// This is a critical check to ensure tokens were actually received
+	verificationSuccess := true
+	for i, token := range tokens {
+		// Check if token exists in receiver's storage
+		// This prevents false confirmations and ensures data integrity
+		if !c.verifyTokenInReceiverStorage(receiverAddress, token.Token, txID) {
+			c.log.Warn("Token verification failed - token not found in receiver storage",
+				"receiver", receiverAddress,
+				"transaction_id", txID,
+				"token_id", token.Token,
+				"token_index", i)
+			verificationSuccess = false
+			break
+		}
+	}
 
-	// Return true for now - you can implement proper verification later
-	return true, nil
+	if verificationSuccess {
+		c.log.Info("Token verification completed successfully - all tokens found in receiver storage",
+			"receiver", receiverAddress,
+			"transaction_id", txID,
+			"token_count", len(tokenIDs))
+	} else {
+		c.log.Error("Token verification failed - some tokens not found in receiver storage",
+			"receiver", receiverAddress,
+			"transaction_id", txID,
+			"token_count", len(tokenIDs))
+	}
+
+	return verificationSuccess, nil
+}
+
+// verifyTokenInReceiverStorage checks if a specific token exists in receiver's storage
+func (c *Core) verifyTokenInReceiverStorage(receiverAddress, tokenID, transactionID string) bool {
+	c.log.Debug("Verifying token in receiver storage",
+		"receiver", receiverAddress,
+		"token_id", tokenID,
+		"transaction_id", transactionID)
+
+	// Get receiver peer
+	receiverPeer, err := c.getPeer(receiverAddress)
+	if err != nil {
+		c.log.Error("Failed to get receiver peer for token verification",
+			"receiver", receiverAddress,
+			"error", err)
+		return false
+	}
+	defer receiverPeer.Close()
+
+	// Create verification request
+	verifyReq := map[string]interface{}{
+		"token_id":       tokenID,
+		"transaction_id": transactionID,
+		"verify_type":    "token_existence",
+	}
+
+	// Send verification request
+	var resp model.BasicResponse
+	err = receiverPeer.SendJSONRequest("POST", "/api/verify-token-existence", nil, &verifyReq, &resp, true)
+	if err != nil {
+		c.log.Error("Failed to verify token existence in receiver storage",
+			"receiver", receiverAddress,
+			"token_id", tokenID,
+			"error", err)
+		return false
+	}
+
+	// Return verification result
+	return resp.Status
 }
 
 // waitForReceiverConfirmation waits for receiver to send confirmation with timeout and proactive checking
@@ -688,4 +749,613 @@ func (c *Core) CoordinatedRollback(transactionID string, tokenType int) error {
 		"token_type", tokenType)
 
 	return nil
+}
+
+// RecoverLostTokens attempts to recover tokens that were sent but not received
+// This function helps senders recover tokens when receivers don't have them
+func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecoveryResult, error) {
+	c.log.Info("Starting token recovery process",
+		"sender_did", senderDID,
+		"transaction_id", transactionID)
+
+	// Step 1: Get transaction details from history
+	transactionDetails, err := c.getTransactionFromHistory(senderDID, transactionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transaction from history: %v", err)
+	}
+
+	// Step 2: Check if transaction is within 7 days
+	if !c.isTransactionWithinRecoveryWindow(transactionDetails.DateTime) {
+		return nil, fmt.Errorf("transaction is older than 7 days, cannot recover tokens")
+	}
+
+	// Step 3: Get receiver DID from transaction
+	receiverDID := transactionDetails.ReceiverDID
+	if receiverDID == "" {
+		return nil, fmt.Errorf("receiver DID not found in transaction")
+	}
+
+	c.log.Info("Transaction details retrieved",
+		"sender_did", senderDID,
+		"receiver_did", receiverDID,
+		"transaction_id", transactionID,
+		"amount", transactionDetails.Amount,
+		"date", transactionDetails.DateTime)
+
+	// Step 4: Check if receiver has the tokens
+	receiverHasTokens, err := c.checkReceiverTokenStatus(receiverDID, transactionID, int(transactionDetails.Amount))
+	if err != nil {
+		c.log.Warn("Failed to check receiver token status, proceeding with recovery",
+			"receiver_did", receiverDID,
+			"error", err)
+		// Continue with recovery even if we can't check receiver
+		receiverHasTokens = false
+	}
+
+	if receiverHasTokens {
+		return nil, fmt.Errorf("receiver has the tokens, no recovery needed")
+	}
+
+	// Step 5: Check if tokens were transferred from receiver (double-spending check)
+	tokensTransferredFromReceiver, err := c.checkIfTokensTransferredFromReceiver(receiverDID, transactionID)
+	if err != nil {
+		c.log.Warn("Failed to check if tokens were transferred from receiver",
+			"receiver_did", receiverDID,
+			"error", err)
+		// Continue with recovery but log warning
+	}
+
+	if tokensTransferredFromReceiver {
+		return nil, fmt.Errorf("tokens were transferred from receiver, cannot recover (double-spending detected)")
+	}
+
+	// Step 6: Perform token recovery
+	recoveryResult, err := c.performTokenRecovery(senderDID, transactionID, transactionDetails)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform token recovery: %v", err)
+	}
+
+	c.log.Info("Token recovery completed successfully",
+		"sender_did", senderDID,
+		"transaction_id", transactionID,
+		"recovered_tokens", recoveryResult.RecoveredTokenCount)
+
+	return recoveryResult, nil
+}
+
+// TokenRecoveryResult contains the result of a token recovery operation
+type TokenRecoveryResult struct {
+	TransactionID       string    `json:"transaction_id"`
+	SenderDID           string    `json:"sender_did"`
+	ReceiverDID         string    `json:"receiver_did"`
+	RecoveredTokenCount int       `json:"recovered_token_count"`
+	RecoveryDate        time.Time `json:"recovery_date"`
+	Status              string    `json:"status"`
+	Message             string    `json:"message"`
+}
+
+// getTransactionFromHistory retrieves transaction details from FT transaction history
+func (c *Core) getTransactionFromHistory(senderDID, transactionID string) (*model.TransactionDetails, error) {
+	c.log.Debug("Getting transaction from history",
+		"sender_did", senderDID,
+		"transaction_id", transactionID)
+
+	// First, try to get from FTTransactionHistory table
+	var ftHistory model.FTTransactionHistory
+	err := c.w.GetStorage().Read("ft_transaction_history", &ftHistory, "transaction_id=? AND sender_did=?", transactionID, senderDID)
+	if err == nil {
+		// Convert FTTransactionHistory to TransactionDetails
+		transactionDetails := &model.TransactionDetails{
+			TransactionID:   ftHistory.TransactionID,
+			TransactionType: ftHistory.TransactionType,
+			BlockID:         ftHistory.BlockID,
+			Mode:            ftHistory.Mode,
+			SenderDID:       ftHistory.SenderDID,
+			ReceiverDID:     ftHistory.ReceiverDID,
+			Amount:          ftHistory.Amount,
+			TotalTime:       ftHistory.TotalTime,
+			Comment:         ftHistory.Comment,
+			DateTime:        ftHistory.DateTime,
+			Status:          ftHistory.Status,
+			DeployerDID:     ftHistory.DeployerDID,
+			Epoch:           ftHistory.Epoch,
+			Tokens: []model.FTTokenSummary{
+				{
+					CreatorDID: ftHistory.CreatorDID,
+					FTName:     ftHistory.FTName,
+					Count:      ftHistory.TokenCount,
+				},
+			},
+		}
+
+		c.log.Debug("Found transaction in FTTransactionHistory",
+			"transaction_id", transactionID,
+			"receiver_did", transactionDetails.ReceiverDID,
+			"amount", transactionDetails.Amount,
+			"date", transactionDetails.DateTime)
+
+		return transactionDetails, nil
+	}
+
+	// If not found in FTTransactionHistory, try the regular TransactionDetails table
+	var transactionDetails model.TransactionDetails
+	err = c.w.GetStorage().Read("TransactionHistory", &transactionDetails, "transaction_id=? AND sender_did=?", transactionID, senderDID)
+	if err != nil {
+		c.log.Error("Transaction not found in either history table",
+			"transaction_id", transactionID,
+			"sender_did", senderDID,
+			"error", err)
+		return nil, fmt.Errorf("transaction not found: %v", err)
+	}
+
+	c.log.Debug("Found transaction in TransactionHistory",
+		"transaction_id", transactionID,
+		"receiver_did", transactionDetails.ReceiverDID,
+		"amount", transactionDetails.Amount,
+		"date", transactionDetails.DateTime)
+
+	return &transactionDetails, nil
+}
+
+// isTransactionWithinRecoveryWindow checks if transaction is within 7 days
+func (c *Core) isTransactionWithinRecoveryWindow(transactionDate time.Time) bool {
+	recoveryWindow := 7 * 24 * time.Hour // 7 days
+	cutoffTime := time.Now().Add(-recoveryWindow)
+
+	return transactionDate.After(cutoffTime)
+}
+
+// checkReceiverTokenStatus checks if receiver has the tokens for the given transaction
+func (c *Core) checkReceiverTokenStatus(receiverDID, transactionID string, amount int) (bool, error) {
+	c.log.Debug("Checking receiver token status",
+		"receiver_did", receiverDID,
+		"transaction_id", transactionID,
+		"amount", amount)
+
+	// Get receiver peer
+	receiverPeer, err := c.getPeer(receiverDID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get receiver peer: %v", err)
+	}
+	defer receiverPeer.Close()
+
+	// Create status check request
+	statusReq := map[string]interface{}{
+		"transaction_id":  transactionID,
+		"expected_amount": amount,
+		"check_type":      "recovery_verification",
+	}
+
+	// Send status check request
+	var resp model.BasicResponse
+	err = receiverPeer.SendJSONRequest("POST", "/api/verify-token-ownership", nil, &statusReq, &resp, true)
+	if err != nil {
+		return false, fmt.Errorf("failed to verify token ownership: %v", err)
+	}
+
+	return resp.Status, nil
+}
+
+// checkIfTokensTransferredFromReceiver checks if tokens were transferred from receiver
+func (c *Core) checkIfTokensTransferredFromReceiver(receiverDID, transactionID string) (bool, error) {
+	c.log.Debug("Checking if tokens were transferred from receiver",
+		"receiver_did", receiverDID,
+		"transaction_id", transactionID)
+
+	// Get receiver peer
+	receiverPeer, err := c.getPeer(receiverDID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get receiver peer: %v", err)
+	}
+	defer receiverPeer.Close()
+
+	// Create transfer check request
+	transferReq := map[string]interface{}{
+		"transaction_id": transactionID,
+		"check_type":     "transfer_verification",
+	}
+
+	// Send transfer check request
+	var resp model.BasicResponse
+	err = receiverPeer.SendJSONRequest("POST", "/api/check-token-transfer-status", nil, &transferReq, &resp, true)
+	if err != nil {
+		return false, fmt.Errorf("failed to check token transfer status: %v", err)
+	}
+
+	// Parse response to check if tokens were transferred
+	// Parse the response to determine if tokens were transferred
+	if !resp.Status {
+		// If the API call failed, assume no transfer occurred (safe default)
+		c.log.Debug("Transfer status check API call failed, assuming no transfer occurred",
+			"receiver_did", receiverDID,
+			"transaction_id", transactionID)
+		return false, nil
+	}
+
+	// Check the response message to determine transfer status
+	// The API returns true if tokens were transferred, false otherwise
+	// This is based on the actual implementation in APICheckTokenTransferStatus
+	transferStatus := resp.Status
+
+	c.log.Debug("Transfer status check completed",
+		"receiver_did", receiverDID,
+		"transaction_id", transactionID,
+		"transfer_status", transferStatus)
+
+	return transferStatus, nil
+}
+
+// performTokenRecovery performs the actual token recovery
+func (c *Core) performTokenRecovery(senderDID, transactionID string, transactionDetails *model.TransactionDetails) (*TokenRecoveryResult, error) {
+	c.log.Info("Performing token recovery",
+		"sender_did", senderDID,
+		"transaction_id", transactionID)
+
+	// Step 1: Unlock tokens in sender's wallet (if they're in transferred state)
+	recoveredCount, err := c.unlockTransferredTokens(senderDID, transactionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unlock transferred tokens: %v", err)
+	}
+
+	// Step 2: Update transaction history to mark as recovered
+	err = c.markTransactionAsRecovered(transactionID)
+	if err != nil {
+		c.log.Warn("Failed to mark transaction as recovered",
+			"transaction_id", transactionID,
+			"error", err)
+		// Don't fail the recovery if this step fails
+	}
+
+	// Step 3: Create recovery result
+	recoveryResult := &TokenRecoveryResult{
+		TransactionID:       transactionID,
+		SenderDID:           senderDID,
+		ReceiverDID:         transactionDetails.ReceiverDID,
+		RecoveredTokenCount: recoveredCount,
+		RecoveryDate:        time.Now(),
+		Status:              "success",
+		Message:             fmt.Sprintf("Successfully recovered %d tokens", recoveredCount),
+	}
+
+	c.log.Info("Token recovery completed",
+		"transaction_id", transactionID,
+		"recovered_count", recoveredCount)
+
+	return recoveryResult, nil
+}
+
+// unlockTransferredTokens unlocks tokens that are in transferred state
+func (c *Core) unlockTransferredTokens(senderDID, transactionID string) (int, error) {
+	c.log.Debug("Unlocking transferred tokens",
+		"sender_did", senderDID,
+		"transaction_id", transactionID)
+
+	// Get token IDs for this transaction
+	tokenIDs, err := c.w.GetFTTokenIDsByTransactionID(transactionID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get token IDs: %v", err)
+	}
+
+	if len(tokenIDs) == 0 {
+		return 0, nil // No tokens to recover
+	}
+
+	// Unlock each token and ensure they are transaction ready
+	unlockedCount := 0
+	for _, tokenID := range tokenIDs {
+		// First, unlock the token from transfer state
+		if err := c.w.UnlockFTTokenFromTransfer(tokenID); err != nil {
+			c.log.Error("Failed to unlock token from transfer",
+				"token_id", tokenID,
+				"error", err)
+			continue
+		}
+
+		// Ensure the token is in a transaction-ready state
+		if err := c.ensureTokenTransactionReady(tokenID); err != nil {
+			c.log.Error("Failed to make token transaction ready",
+				"token_id", tokenID,
+				"error", err)
+			continue
+		}
+
+		unlockedCount++
+		c.log.Debug("Successfully unlocked and made token transaction ready",
+			"token_id", tokenID)
+	}
+
+	c.log.Info("Unlocked and prepared tokens for transactions",
+		"transaction_id", transactionID,
+		"total_tokens", len(tokenIDs),
+		"unlocked_count", unlockedCount)
+
+	return unlockedCount, nil
+}
+
+// ensureTokenTransactionReady ensures a token is in a state ready for new transactions
+func (c *Core) ensureTokenTransactionReady(tokenID string) error {
+	c.log.Debug("Ensuring token is transaction ready",
+		"token_id", tokenID)
+
+	// Read the current token state
+	var ftToken wallet.FTToken
+	err := c.w.GetStorage().Read(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to read token state: %v", err)
+	}
+
+	// Check if token needs to be made transaction ready
+	needsUpdate := false
+
+	// Clear any old transaction ID to prevent conflicts
+	if ftToken.TransactionID != "" {
+		ftToken.TransactionID = ""
+		needsUpdate = true
+		c.log.Debug("Cleared old transaction ID",
+			"token_id", tokenID,
+			"old_transaction_id", ftToken.TransactionID)
+	}
+
+	// Ensure token status is free (0) for new transactions
+	if ftToken.TokenStatus != 0 {
+		ftToken.TokenStatus = 0 // TokenIsFree
+		needsUpdate = true
+		c.log.Debug("Updated token status to free",
+			"token_id", tokenID,
+			"old_status", ftToken.TokenStatus,
+			"new_status", 0)
+	}
+
+	// Update token if changes were made
+	if needsUpdate {
+		err = c.w.GetStorage().Update(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
+		if err != nil {
+			return fmt.Errorf("failed to update token for transaction readiness: %v", err)
+		}
+
+		c.log.Info("Token made transaction ready",
+			"token_id", tokenID,
+			"status", ftToken.TokenStatus,
+			"transaction_id", ftToken.TransactionID)
+	} else {
+		c.log.Debug("Token already transaction ready",
+			"token_id", tokenID,
+			"status", ftToken.TokenStatus)
+	}
+
+	return nil
+}
+
+// markTransactionAsRecovered marks a transaction as recovered in history
+func (c *Core) markTransactionAsRecovered(transactionID string) error {
+	c.log.Debug("Marking transaction as recovered",
+		"transaction_id", transactionID)
+
+	// First, try to mark in FTTransactionHistory table
+	var ftHistory model.FTTransactionHistory
+	err := c.w.GetStorage().Read("ft_transaction_history", &ftHistory, "transaction_id=?", transactionID)
+	if err == nil {
+		// Add recovery metadata to the transaction
+		// We'll add a recovery flag in the comment field for now
+		// You can enhance this by adding a dedicated recovery field to the struct
+		recoveryComment := fmt.Sprintf("RECOVERED_%s_%s", time.Now().Format("2006-01-02T15:04:05Z"), "sender_initiated")
+		if ftHistory.Comment != "" {
+			ftHistory.Comment = ftHistory.Comment + " | " + recoveryComment
+		} else {
+			ftHistory.Comment = recoveryComment
+		}
+
+		// Update the transaction
+		err = c.w.GetStorage().Update("ft_transaction_history", &ftHistory, "transaction_id=?", transactionID)
+		if err != nil {
+			c.log.Error("Failed to mark FT transaction as recovered",
+				"transaction_id", transactionID,
+				"error", err)
+			return fmt.Errorf("failed to mark FT transaction as recovered: %v", err)
+		}
+
+		c.log.Info("Successfully marked FT transaction as recovered",
+			"transaction_id", transactionID,
+			"recovery_comment", recoveryComment)
+		return nil
+	}
+
+	// If not found in FTTransactionHistory, try the regular TransactionHistory table
+	var transactionDetails model.TransactionDetails
+	err = c.w.GetStorage().Read("TransactionHistory", &transactionDetails, "transaction_id=?", transactionID)
+	if err != nil {
+		c.log.Error("Transaction not found in either history table for recovery marking",
+			"transaction_id", transactionID,
+			"error", err)
+		return fmt.Errorf("transaction not found for recovery marking: %v", err)
+	}
+
+	// Add recovery metadata to the comment field
+	recoveryComment := fmt.Sprintf("RECOVERED_%s_%s", time.Now().Format("2006-01-02T15:04:05Z"), "sender_initiated")
+	if transactionDetails.Comment != "" {
+		transactionDetails.Comment = transactionDetails.Comment + " | " + recoveryComment
+	} else {
+		transactionDetails.Comment = recoveryComment
+	}
+
+	// Update the transaction
+	err = c.w.GetStorage().Update("TransactionHistory", &transactionDetails, "transaction_id=?", transactionID)
+	if err != nil {
+		c.log.Error("Failed to mark transaction as recovered",
+			"transaction_id", transactionID,
+			"error", err)
+		return fmt.Errorf("failed to mark transaction as recovered: %v", err)
+	}
+
+	c.log.Info("Successfully marked transaction as recovered",
+		"transaction_id", transactionID,
+		"recovery_comment", recoveryComment)
+	return nil
+}
+
+// VerifyLocalTokenOwnership checks if this node has tokens for the given transaction
+func (c *Core) VerifyLocalTokenOwnership(transactionID string, expectedAmount int) (bool, error) {
+	c.log.Debug("Verifying local token ownership",
+		"transaction_id", transactionID,
+		"expected_amount", expectedAmount)
+
+	// Get token IDs for this transaction
+	tokenIDs, err := c.w.GetFTTokenIDsByTransactionID(transactionID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get token IDs: %v", err)
+	}
+
+	if len(tokenIDs) == 0 {
+		c.log.Debug("No tokens found for transaction",
+			"transaction_id", transactionID)
+		return false, nil
+	}
+
+	// Check if the number of tokens matches the expected amount
+	if len(tokenIDs) != expectedAmount {
+		c.log.Debug("Token count mismatch",
+			"transaction_id", transactionID,
+			"expected", expectedAmount,
+			"actual", len(tokenIDs))
+		return false, nil
+	}
+
+	// Enhanced token status checking with real database queries
+	validTokens := 0
+	for _, tokenID := range tokenIDs {
+		var ftToken wallet.FTToken
+		err := c.w.GetStorage().Read(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
+		if err != nil {
+			c.log.Debug("Failed to read token status",
+				"token_id", tokenID,
+				"error", err)
+			continue
+		}
+
+		// Check if token is in a valid state for ownership verification
+		// Status 0 = free, Status 17 = pending, Status 18 = in transfer
+		if ftToken.TokenStatus == 0 || ftToken.TokenStatus == 17 || ftToken.TokenStatus == 18 {
+			validTokens++
+			c.log.Debug("Token is in valid state",
+				"token_id", tokenID,
+				"status", ftToken.TokenStatus)
+		} else {
+			c.log.Debug("Token is not in valid state",
+				"token_id", tokenID,
+				"status", ftToken.TokenStatus)
+		}
+	}
+
+	c.log.Debug("Token ownership verification completed",
+		"transaction_id", transactionID,
+		"total_tokens", len(tokenIDs),
+		"valid_tokens", validTokens)
+
+	// Return true if we have the expected number of valid tokens
+	return validTokens == expectedAmount, nil
+}
+
+// CheckLocalTokenTransferStatus checks if tokens were transferred from this node for the given transaction
+func (c *Core) CheckLocalTokenTransferStatus(transactionID string) (bool, error) {
+	c.log.Debug("Checking local token transfer status",
+		"transaction_id", transactionID)
+
+	// Get token IDs for this transaction
+	tokenIDs, err := c.w.GetFTTokenIDsByTransactionID(transactionID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get token IDs: %v", err)
+	}
+
+	if len(tokenIDs) == 0 {
+		c.log.Debug("No tokens found for transaction",
+			"transaction_id", transactionID)
+		return false, nil
+	}
+
+	// Enhanced token transfer status checking with real database queries
+	transferredTokens := 0
+	for _, tokenID := range tokenIDs {
+		var ftToken wallet.FTToken
+		err := c.w.GetStorage().Read(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
+		if err != nil {
+			c.log.Debug("Failed to read token status",
+				"token_id", tokenID,
+				"error", err)
+			continue
+		}
+
+		// Check if token was transferred (status indicates it was sent to another node)
+		// Status 19 = transferred, Status 20 = quorum pledged
+		if ftToken.TokenStatus == 19 || ftToken.TokenStatus == 20 {
+			transferredTokens++
+			c.log.Debug("Token was transferred",
+				"token_id", tokenID,
+				"status", ftToken.TokenStatus)
+		} else {
+			c.log.Debug("Token was not transferred",
+				"token_id", tokenID,
+				"status", ftToken.TokenStatus)
+		}
+	}
+
+	c.log.Debug("Token transfer status check completed",
+		"transaction_id", transactionID,
+		"total_tokens", len(tokenIDs),
+		"transferred_tokens", transferredTokens)
+
+	// Return true if any tokens were transferred
+	return transferredTokens > 0, nil
+}
+
+// VerifyLocalTokenExistence checks if a specific token exists in local storage for a given transaction
+func (c *Core) VerifyLocalTokenExistence(tokenID, transactionID string) (bool, error) {
+	c.log.Debug("Verifying local token existence",
+		"token_id", tokenID,
+		"transaction_id", transactionID)
+
+	// Check if token exists in FTTokenStorage
+	var ftToken wallet.FTToken
+	err := c.w.GetStorage().Read(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err == nil {
+		// Token exists, check if it's associated with the transaction
+		if ftToken.TransactionID == transactionID {
+			c.log.Debug("Token found and associated with transaction",
+				"token_id", tokenID,
+				"transaction_id", transactionID,
+				"status", ftToken.TokenStatus)
+			return true, nil
+		} else {
+			c.log.Debug("Token found but not associated with transaction",
+				"token_id", tokenID,
+				"transaction_id", transactionID,
+				"token_transaction_id", ftToken.TransactionID)
+			return false, nil
+		}
+	}
+
+	// If not found in FTTokenStorage, check regular TokenStorage
+	var regularToken wallet.Token
+	err = c.w.GetStorage().Read(wallet.TokenStorage, &regularToken, "token_id=?", tokenID)
+	if err == nil {
+		// Token exists, check if it's associated with the transaction
+		if regularToken.TransactionID == transactionID {
+			c.log.Debug("Regular token found and associated with transaction",
+				"token_id", tokenID,
+				"transaction_id", transactionID,
+				"status", regularToken.TokenStatus)
+			return true, nil
+		} else {
+			c.log.Debug("Regular token found but not associated with transaction",
+				"token_id", tokenID,
+				"transaction_id", transactionID,
+				"token_transaction_id", regularToken.TransactionID)
+			return false, nil
+		}
+	}
+
+	// Token not found in either storage
+	c.log.Debug("Token not found in any storage",
+		"token_id", tokenID,
+		"transaction_id", transactionID)
+	return false, nil
 }

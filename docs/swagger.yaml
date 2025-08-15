@@ -99,6 +99,38 @@ definitions:
       txnSend:
         type: integer
     type: object
+  model.TokenRecoveryResult:
+    properties:
+      transaction_id:
+        type: string
+        description: Transaction ID that was recovered
+        example: "abc123def456"
+      sender_did:
+        type: string
+        description: DID of the sender who recovered tokens
+        example: "bafybmialice..."
+      receiver_did:
+        type: string
+        description: DID of the receiver who didn't have tokens
+        example: "bafybmibob..."
+      recovered_token_count:
+        type: integer
+        description: Number of tokens successfully recovered
+        example: 1000
+      recovery_date:
+        type: string
+        format: date-time
+        description: Date and time when recovery was completed
+        example: "2025-08-15T05:30:00Z"
+      status:
+        type: string
+        description: Status of the recovery operation
+        example: "success"
+      message:
+        type: string
+        description: Human-readable message about the recovery
+        example: "Successfully recovered 1000 tokens"
+    type: object
   model.TxnCountForDID:
     properties:
       message:
@@ -1222,6 +1254,273 @@ paths:
       summary: Unpledge POW Based pledge Tokens
       tags:
       - Account
+  /api/recover-lost-tokens:
+    post:
+      consumes:
+      - application/json
+      description: Allows senders to recover tokens that were sent but not received by the receiver
+      parameters:
+      - description: Recovery request details
+        in: body
+        name: input
+        required: true
+        schema:
+          type: object
+          properties:
+            sender_did:
+              type: string
+              description: DID of the sender
+              example: "bafybmialice..."
+            transaction_id:
+              type: string
+              description: Transaction ID to recover tokens from
+              example: "abc123def456"
+          required:
+            - sender_did
+            - transaction_id
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+            properties:
+              status:
+                type: boolean
+                example: true
+              message:
+                type: string
+                example: "Token recovery completed successfully"
+              result:
+                $ref: '#/definitions/model.TokenRecoveryResult'
+        "400":
+          description: Bad Request - Invalid input parameters
+        "404":
+          description: Transaction not found
+        "409":
+          description: Recovery not allowed (too old, double-spending detected, etc.)
+      summary: Recover lost tokens
+      tags:
+      - FT
+  /api/verify-token-ownership:
+    post:
+      consumes:
+      - application/json
+      description: Allows senders to verify if receiver has tokens for recovery purposes
+      parameters:
+      - description: Verification request details
+        in: body
+        name: input
+        required: true
+        schema:
+          type: object
+          properties:
+            transaction_id:
+              type: string
+              description: Transaction ID to verify
+              example: "abc123def456"
+            expected_amount:
+              type: integer
+              description: Expected amount of tokens
+              example: 1000
+            check_type:
+              type: string
+              description: Type of check (recovery_verification)
+              example: "recovery_verification"
+          required:
+            - transaction_id
+            - expected_amount
+            - check_type
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request - Invalid input parameters
+      summary: Verify token ownership for recovery
+      tags:
+      - FT
+  /api/check-token-transfer-status:
+    post:
+      consumes:
+      - application/json
+      description: Allows senders to check if tokens were transferred from receiver for recovery purposes
+      parameters:
+      - description: Transfer status check request details
+        in: body
+        name: input
+        required: true
+        schema:
+          type: object
+          properties:
+            transaction_id:
+              type: string
+              description: Transaction ID to check
+              example: "abc123def456"
+            check_type:
+              type: string
+              description: Type of check (transfer_verification)
+              example: "transfer_verification"
+          required:
+            - transaction_id
+            - check_type
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request - Invalid input parameters
+      summary: Check token transfer status for recovery
+      tags:
+      - FT
+  /api/verify-token-existence:
+    post:
+      consumes:
+      - application/json
+      description: Allows senders to verify if a specific token exists in receiver's storage
+      parameters:
+      - description: Token existence verification request details
+        in: body
+        name: input
+        required: true
+        schema:
+          type: object
+          properties:
+            token_id:
+              type: string
+              description: Token ID to verify
+              example: "token123"
+            transaction_id:
+              type: string
+              description: Transaction ID associated with the token
+              example: "abc123def456"
+            verify_type:
+              type: string
+              description: Type of verification (token_existence)
+              example: "token_existence"
+          required:
+            - token_id
+            - transaction_id
+            - verify_type
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request - Invalid input parameters
+      summary: Verify token existence in storage
+      tags:
+      - FT
+  /api/coordinated-rollback:
+    post:
+      consumes:
+      - application/json
+      description: Allows senders to request a coordinated rollback from receivers
+      parameters:
+      - description: Rollback request details
+        in: body
+        name: input
+        required: true
+        schema:
+          type: object
+          properties:
+            transaction_id:
+              type: string
+              description: Transaction ID to rollback
+              example: "abc123def456"
+            token_count:
+              type: integer
+              description: Number of tokens to rollback
+              example: 1000
+            token_type:
+              type: string
+              description: Type of token (FT or RBT)
+              example: "FT"
+            rollback_type:
+              type: string
+              description: Type of rollback operation
+              example: "sender_initiated"
+            reason:
+              type: string
+              description: Reason for rollback
+              example: "Transfer failed, need to recover tokens"
+          required:
+            - transaction_id
+            - token_count
+            - token_type
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request - Invalid input parameters
+      summary: Request coordinated rollback
+      tags:
+      - FT
+  /api/send-token-confirmation:
+    post:
+      consumes:
+      - application/json
+      description: Allows receivers to send confirmation to senders that tokens have been successfully processed
+      parameters:
+      - description: Token confirmation details
+        in: body
+        name: input
+        required: true
+        schema:
+          type: object
+          properties:
+            transaction_id:
+              type: string
+              description: Transaction ID being confirmed
+              example: "abc123def456"
+            receiver_did:
+              type: string
+              description: DID of the receiver
+              example: "bafybmibob..."
+            token_count:
+              type: integer
+              description: Number of tokens confirmed
+              example: 1000
+            token_type:
+              type: string
+              description: Type of token (FT or RBT)
+              example: "FT"
+            status:
+              type: string
+              description: Status of the confirmation
+              example: "success"
+          required:
+            - transaction_id
+            - receiver_did
+            - token_count
+            - token_type
+            - status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request - Invalid input parameters
+      summary: Send token confirmation
+      tags:
+      - FT
 securityDefinitions:
   SessionToken:
     in: header
