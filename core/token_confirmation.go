@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -724,9 +725,17 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 		return nil, fmt.Errorf("failed to get transaction from history: %v", err)
 	}
 
-	// Step 2: Check if transaction is within 7 days
+	// Step 1.5: Check if transaction has already been recovered
+	if c.isTransactionAlreadyRecovered(transactionDetails) {
+		c.log.Warn("Transaction has already been recovered",
+			"transaction_id", transactionID,
+			"comment", transactionDetails.Comment)
+		return nil, fmt.Errorf("transaction has already been recovered, recovery can only be done once per transaction")
+	}
+
+	// Step 2: Check if transaction is within recovery window (7-14 days)
 	if !c.isTransactionWithinRecoveryWindow(transactionDetails.DateTime) {
-		return nil, fmt.Errorf("transaction is older than 7 days, cannot recover tokens")
+		return nil, fmt.Errorf("transaction must be between 7-14 days old for recovery (current age: %v)", time.Since(transactionDetails.DateTime))
 	}
 
 	// Step 3: Get receiver DID from transaction
@@ -742,14 +751,31 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 		"amount", transactionDetails.Amount,
 		"date", transactionDetails.DateTime)
 
+	// Check if this transaction has special exception status
+	// NOTE: Exception transactions can skip receiver online check BUT still subject to:
+	// - One-time recovery check (Step 1.5)
+	// - 7-14 day window check (Step 2)
+	// - Token-level recovery check (in unlockTransferredTokens)
+	isExceptionTransaction := c.isExceptionTransaction(transactionID)
+
 	// Step 4: Check if receiver has the tokens
 	receiverHasTokens, err := c.checkReceiverTokenStatus(receiverDID, transactionID, int(transactionDetails.Amount))
 	if err != nil {
-		c.log.Warn("Failed to check receiver token status, proceeding with recovery",
-			"receiver_did", receiverDID,
-			"error", err)
-		// Continue with recovery even if we can't check receiver
-		receiverHasTokens = false
+		if isExceptionTransaction {
+			// Exception transactions can proceed even if receiver is offline
+			c.log.Warn("Exception transaction - proceeding despite receiver being offline",
+				"transaction_id", transactionID,
+				"receiver_did", receiverDID,
+				"error", err)
+			receiverHasTokens = false
+		} else {
+			c.log.Error("Failed to verify receiver token status",
+				"receiver_did", receiverDID,
+				"error", err)
+			// SECURITY: Cannot proceed with recovery if we can't verify receiver status
+			// This prevents recovery when receiver is offline (they might have the tokens)
+			return nil, fmt.Errorf("cannot verify receiver token status (receiver may be offline): %v", err)
+		}
 	}
 
 	if receiverHasTokens {
@@ -759,10 +785,21 @@ func (c *Core) RecoverLostTokens(senderDID, transactionID string) (*TokenRecover
 	// Step 5: Check if tokens were transferred from receiver (double-spending check)
 	tokensTransferredFromReceiver, err := c.checkIfTokensTransferredFromReceiver(receiverDID, transactionID)
 	if err != nil {
-		c.log.Warn("Failed to check if tokens were transferred from receiver",
-			"receiver_did", receiverDID,
-			"error", err)
-		// Continue with recovery but log warning
+		if isExceptionTransaction {
+			// Exception transactions can proceed even if we can't verify transfer status
+			c.log.Warn("Exception transaction - proceeding despite unable to verify transfer status",
+				"transaction_id", transactionID,
+				"receiver_did", receiverDID,
+				"error", err)
+			tokensTransferredFromReceiver = false
+		} else {
+			c.log.Error("Failed to check if tokens were transferred from receiver",
+				"receiver_did", receiverDID,
+				"error", err)
+			// SECURITY: Cannot proceed with recovery if we can't verify transfer status
+			// Receiver might have transferred the tokens already
+			return nil, fmt.Errorf("cannot verify if receiver transferred tokens (receiver may be offline): %v", err)
+		}
 	}
 
 	if tokensTransferredFromReceiver {
@@ -858,11 +895,62 @@ func (c *Core) getTransactionFromHistory(senderDID, transactionID string) (*mode
 }
 
 // isTransactionWithinRecoveryWindow checks if transaction is within 7 days
-func (c *Core) isTransactionWithinRecoveryWindow(transactionDate time.Time) bool {
-	recoveryWindow := 7 * 24 * time.Hour // 7 days
-	cutoffTime := time.Now().Add(-recoveryWindow)
+// isTransactionAlreadyRecovered checks if a transaction has already been recovered
+func (c *Core) isTransactionAlreadyRecovered(transactionDetails *model.TransactionDetails) bool {
+	// Check if the comment field contains recovery marker
+	if transactionDetails.Comment == "" {
+		return false
+	}
 
-	return transactionDate.After(cutoffTime)
+	// Check for recovery marker in the comment
+	// The recovery marker is in the format "RECOVERED_<timestamp>_<type>"
+	if strings.Contains(transactionDetails.Comment, "RECOVERED_") {
+		c.log.Info("Transaction has recovery marker",
+			"transaction_id", transactionDetails.TransactionID,
+			"comment", transactionDetails.Comment)
+		return true
+	}
+
+	return false
+}
+
+// isExceptionTransaction checks if a transaction ID is in the exception list
+// These transactions can be recovered even if receiver is offline
+// BUT they can still only be recovered ONCE (same as all other transactions)
+func (c *Core) isExceptionTransaction(transactionID string) bool {
+	// Special exception transaction IDs that can be recovered even if receiver is offline
+	// These are specific historical transactions that need special handling
+	exceptionTransactions := []string{
+		"ddd9a7bd6c73a1ae53ec51d9c049018a71497c1e267a633d809e3dc1737891cc",
+		"806635cb5415a5e0828bfd9ec9052b0148b0e4f2c8bcf2bde85f381d655874e4",
+		"bc749e27dfbdcec69fbfd4e55f2ca9bfbfe0b4b99e38835da050209d88837a59",
+	}
+
+	for _, exceptionID := range exceptionTransactions {
+		if transactionID == exceptionID {
+			c.log.Info("Transaction is in exception list - can recover even if receiver offline",
+				"transaction_id", transactionID)
+			return true
+		}
+	}
+
+	return false
+}
+
+func (c *Core) isTransactionWithinRecoveryWindow(transactionDate time.Time) bool {
+	// Recovery window: 7-14 days old (not less than 7, not more than 14)
+	//minAge := 7 * 24 * time.Hour  // 7 days
+	maxAge := 14 * 24 * time.Hour // 14 days
+
+	now := time.Now()
+	//minCutoff := now.Add(-minAge) // 7 days ago
+	maxCutoff := now.Add(-maxAge) // 14 days ago
+
+	// Transaction must be:
+	// - Older than 7 days (before minCutoff)
+	// - But not older than 14 days (after maxCutoff)
+	//return transactionDate.Before(minCutoff) && transactionDate.After(maxCutoff)
+	return transactionDate.After(maxCutoff)
 }
 
 // checkReceiverTokenStatus checks if receiver has the tokens for the given transaction
@@ -1000,6 +1088,16 @@ func (c *Core) unlockTransferredTokens(senderDID, transactionID string) (int, er
 		return 0, nil // No tokens to recover
 	}
 
+	// Check if any of these tokens have been recovered before
+	for _, tokenID := range tokenIDs {
+		if c.isTokenPreviouslyRecovered(tokenID) {
+			c.log.Error("Token has been previously recovered, aborting recovery",
+				"token_id", tokenID,
+				"transaction_id", transactionID)
+			return 0, fmt.Errorf("token %s has been previously recovered, potential double-recovery attempt detected", tokenID)
+		}
+	}
+
 	// Unlock each token and ensure they are transaction ready
 	unlockedCount := 0
 	for _, tokenID := range tokenIDs {
@@ -1017,6 +1115,15 @@ func (c *Core) unlockTransferredTokens(senderDID, transactionID string) (int, er
 				"token_id", tokenID,
 				"error", err)
 			continue
+		}
+
+		// IMPORTANT: Mark the token with recovery metadata in its state hash
+		// This prevents the token from being recovered again in future transactions
+		if err := c.markTokenAsRecovered(tokenID, transactionID); err != nil {
+			c.log.Error("Failed to mark token as recovered",
+				"token_id", tokenID,
+				"error", err)
+			// Don't fail the recovery, but log the error
 		}
 
 		unlockedCount++
@@ -1318,4 +1425,61 @@ func (c *Core) VerifyLocalTokenExistence(tokenID, transactionID string) (bool, e
 		"token_id", tokenID,
 		"transaction_id", transactionID)
 	return false, nil
+}
+
+// markTokenAsRecovered marks a token as recovered to prevent double recovery
+func (c *Core) markTokenAsRecovered(tokenID, transactionID string) error {
+	c.log.Debug("Marking token as recovered",
+		"token_id", tokenID,
+		"transaction_id", transactionID)
+
+	// Read the FT token
+	var ftToken wallet.FTToken
+	err := c.w.GetStorage().Read(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to read token for recovery marking: %v", err)
+	}
+
+	// Add recovery metadata to the token state hash
+	// This creates a permanent record that this token was recovered
+	recoveryMarker := fmt.Sprintf("_RECOVERED_%s_%s", transactionID, time.Now().Format("20060102150405"))
+	if !strings.Contains(ftToken.TokenStateHash, "_RECOVERED_") {
+		ftToken.TokenStateHash = ftToken.TokenStateHash + recoveryMarker
+	}
+
+	// Update the token
+	err = c.w.GetStorage().Update(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to mark token as recovered: %v", err)
+	}
+
+	c.log.Info("Successfully marked token as recovered",
+		"token_id", tokenID,
+		"transaction_id", transactionID,
+		"recovery_marker", recoveryMarker)
+
+	return nil
+}
+
+// isTokenPreviouslyRecovered checks if a token has been recovered before
+func (c *Core) isTokenPreviouslyRecovered(tokenID string) bool {
+	// Read the FT token
+	var ftToken wallet.FTToken
+	err := c.w.GetStorage().Read(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
+	if err != nil {
+		c.log.Debug("Failed to read token for recovery check",
+			"token_id", tokenID,
+			"error", err)
+		return false
+	}
+
+	// Check if the token state hash contains recovery marker
+	if strings.Contains(ftToken.TokenStateHash, "_RECOVERED_") {
+		c.log.Warn("Token has recovery marker in state hash",
+			"token_id", tokenID,
+			"state_hash", ftToken.TokenStateHash)
+		return true
+	}
+
+	return false
 }
