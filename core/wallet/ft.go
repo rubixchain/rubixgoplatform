@@ -49,7 +49,7 @@ func (w *Wallet) LockFTTokenForTransfer(tokenID, transactionID string) error {
 	return nil
 }
 
-// UnlockFTTokenFromTransfer unlocks a token if transfer fails
+// UnlockFTTokenFromTransfer unlocks a token if transfer fails or for recovery
 func (w *Wallet) UnlockFTTokenFromTransfer(tokenID string) error {
 	var ftToken FTToken
 	err := w.s.Read(FTTokenStorage, &ftToken, "token_id=?", tokenID)
@@ -57,8 +57,10 @@ func (w *Wallet) UnlockFTTokenFromTransfer(tokenID string) error {
 		return fmt.Errorf("failed to get FT token: %v", err)
 	}
 
-	if ftToken.TokenStatus != TokenIsInTransfer {
-		return fmt.Errorf("token is not in transfer state, status: %d", ftToken.TokenStatus)
+	// Allow unlocking tokens in both TokenIsInTransfer (18) and TokenIsTransferred (4) states
+	// TokenIsTransferred (4) happens when transaction completes but receiver never got tokens
+	if ftToken.TokenStatus != TokenIsInTransfer && ftToken.TokenStatus != TokenIsTransferred {
+		return fmt.Errorf("token is not in transfer or transferred state, status: %d", ftToken.TokenStatus)
 	}
 
 	// Unlock the token back to free status

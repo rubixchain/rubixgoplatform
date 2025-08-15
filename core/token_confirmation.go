@@ -1,7 +1,10 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -1084,6 +1087,24 @@ func (c *Core) unlockTransferredTokens(senderDID, transactionID string) (int, er
 		return 0, fmt.Errorf("failed to get token IDs: %v", err)
 	}
 
+	// If no tokens found locally, try to get them from explorer
+	if len(tokenIDs) == 0 {
+		c.log.Info("No tokens found locally for transaction, trying explorer fallback",
+			"transaction_id", transactionID)
+		
+		tokenIDs, err = c.getTokensFromExplorer(transactionID)
+		if err != nil {
+			c.log.Error("Failed to get tokens from explorer",
+				"transaction_id", transactionID,
+				"error", err)
+			return 0, fmt.Errorf("no tokens found locally or from explorer: %v", err)
+		}
+		
+		c.log.Info("Found tokens from explorer",
+			"transaction_id", transactionID,
+			"token_count", len(tokenIDs))
+	}
+
 	if len(tokenIDs) == 0 {
 		return 0, nil // No tokens to recover
 	}
@@ -1482,4 +1503,66 @@ func (c *Core) isTokenPreviouslyRecovered(tokenID string) bool {
 	}
 
 	return false
+}
+
+// getTokensFromExplorer fetches token IDs from explorer API when local DB doesn't have them
+func (c *Core) getTokensFromExplorer(transactionID string) ([]string, error) {
+	c.log.Info("Fetching token list from explorer",
+		"transaction_id", transactionID)
+	
+	// Determine which explorer to use based on network
+	var explorerURL string
+	if c.testNet {
+		explorerURL = fmt.Sprintf("https://testnet-app-api.rubixexplorer.com/api/Transaction/GetById/%s", transactionID)
+	} else {
+		explorerURL = fmt.Sprintf("https://rexplorerapi.azurewebsites.net/api/Transaction/GetById/%s", transactionID)
+	}
+	
+	c.log.Debug("Calling explorer API",
+		"url", explorerURL)
+	
+	// Make HTTP request to explorer
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(explorerURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch from explorer: %v", err)
+	}
+	defer resp.Body.Close()
+	
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read explorer response: %v", err)
+	}
+	
+	// Parse the response
+	var explorerResp struct {
+		Status bool `json:"status"`
+		Data   struct {
+			FTTokenList []string `json:"ftTokenList"`
+			SenderDID   string   `json:"sender"`
+			ReceiverDID string   `json:"receiverDid"`
+			Amount      float64  `json:"amount"`
+		} `json:"data"`
+		Message string `json:"message"`
+	}
+	
+	if err := json.Unmarshal(body, &explorerResp); err != nil {
+		return nil, fmt.Errorf("failed to parse explorer response: %v", err)
+	}
+	
+	if !explorerResp.Status {
+		return nil, fmt.Errorf("explorer returned error: %s", explorerResp.Message)
+	}
+	
+	if len(explorerResp.Data.FTTokenList) == 0 {
+		return nil, fmt.Errorf("no tokens found in explorer response")
+	}
+	
+	c.log.Info("Successfully fetched tokens from explorer",
+		"transaction_id", transactionID,
+		"token_count", len(explorerResp.Data.FTTokenList),
+		"sender", explorerResp.Data.SenderDID,
+		"receiver", explorerResp.Data.ReceiverDID)
+	
+	return explorerResp.Data.FTTokenList, nil
 }
