@@ -457,13 +457,17 @@ func (s *Server) APIRecoverLostTokens(req *ensweb.Request) *ensweb.Result {
 		TransactionID string `json:"transaction_id"`
 	}{}
 
-	// Access data from the request
-	if req.Data != nil {
-		if senderDID, ok := req.Data["sender_did"].(string); ok {
-			recoveryReq.SenderDID = senderDID
-		}
-		if transactionID, ok := req.Data["transaction_id"].(string); ok {
-			recoveryReq.TransactionID = transactionID
+	// Parse JSON from request body since we're not using auth middleware
+	err := s.ParseJSON(req, &recoveryReq)
+	if err != nil {
+		// Fallback to checking req.Data if ParseJSON fails
+		if req.Data != nil {
+			if senderDID, ok := req.Data["sender_did"].(string); ok {
+				recoveryReq.SenderDID = senderDID
+			}
+			if transactionID, ok := req.Data["transaction_id"].(string); ok {
+				recoveryReq.TransactionID = transactionID
+			}
 		}
 	}
 
