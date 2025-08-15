@@ -726,6 +726,11 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 	defer receiverPeerID.Close()
 
+	// VERIFICATION: Check token status before locking
+	if err := c.VerifyTokenStatusBeforeTransfer(req.FTName, req.FTCount); err != nil {
+		c.log.Error("Token verification failed before transfer", "err", err)
+	}
+	
 	// Use optimized locking for transfers > 100 tokens
 	if c.shouldUseOptimizedFTLocking(req.FTCount) {
 		c.log.Info("Using optimized FT locking", "ft_count", req.FTCount)
@@ -831,8 +836,12 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 					return
 				}
 
-				if ftToken.TokenStatus == wallet.TokenIsLocked {
+				// FIX: Handle both TokenIsLocked and TokenIsInTransfer states
+				// Tokens are marked as TokenIsInTransfer before sending to receiver
+				if ftToken.TokenStatus == wallet.TokenIsLocked || ftToken.TokenStatus == wallet.TokenIsInTransfer {
+					c.log.Debug("Unlocking token after failed consensus", "token", token.Token, "current_status", ftToken.TokenStatus)
 					ftToken.TokenStatus = wallet.TokenIsFree
+					ftToken.TransactionID = "" // Clear transaction ID
 					updateFTErr := c.s.Update(wallet.FTTokenStorage, ftToken, "token_id=?", token.Token)
 					if updateFTErr != nil {
 						c.log.Error("Failed to update FT token status", "token", token.Token, "err", updateFTErr)
@@ -844,6 +853,26 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				}
 			}
 			c.UpdateUserInfo([]string{did})
+			
+			// VERIFICATION: Check all tokens are properly unlocked after failure
+			tokenIDs := make([]string, 0, len(tokens))
+			for _, token := range tokens {
+				if token.Token != "" {
+					tokenIDs = append(tokenIDs, token.Token)
+				}
+			}
+			
+			// Log transaction failure summary
+			c.LogTransactionSummary(cr.ReqID, false, FTconsErr.Error())
+			
+			// Verify tokens are reverted to free status
+			if verifyErr := c.VerifyTokenStatusAfterFailure(req.FTName, req.FTCount, did); verifyErr != nil {
+				c.log.Error("CRITICAL: Token status verification failed after transaction failure!", "err", verifyErr)
+				resp.Message = fmt.Sprintf("Transaction failed and tokens may be stuck: %v", verifyErr)
+			} else {
+				c.log.Info("SUCCESS: All tokens properly reverted after failed transaction")
+			}
+			
 			resp.Status = false
 			resultChan <- resp
 			return

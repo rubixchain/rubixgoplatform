@@ -1025,13 +1025,21 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// Phase 1: Mark tokens as in-transfer on sender side
 		// Note: These tokens are already locked by the existing FT system
 		// We're just marking them as "in-transfer" to track the confirmation process
+		// Collect token IDs for verification
+		tokenIDs := make([]string, 0, len(ti))
 		for _, token := range ti {
+			tokenIDs = append(tokenIDs, token.Token)
 			// Mark token as in-transfer for tracking purposes
 			err = c.w.MarkFTTokenAsInTransfer(token.Token, cr.TransactionID)
 			if err != nil {
 				c.log.Error("Failed to mark token as in-transfer", "token", token.Token, "err", err)
 				return nil, nil, nil, err
 			}
+		}
+		
+		// VERIFICATION: Confirm all tokens are marked as in-transfer
+		if verifyErr := c.VerifyTokenStatusAfterInTransfer(tokenIDs, cr.TransactionID); verifyErr != nil {
+			c.log.Error("Token verification failed after marking in-transfer", "err", verifyErr)
 		}
 
 		// CRITICAL: Create confirmation channel BEFORE sending tokens to avoid race condition
@@ -1094,6 +1102,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		if !br.Status {
 			c.log.Error("Unable to send FT tokens to receiver", "msg", br.Message)
+			// FIX: Unlock tokens when receiver returns error status
+			// This handles the case where network call succeeds but receiver rejects tokens
+			for _, token := range ti {
+				if unlockErr := c.w.UnlockFTTokenFromTransfer(token.Token); unlockErr != nil {
+					c.log.Error("Failed to unlock token after receiver rejection", "token", token.Token, "err", unlockErr)
+				}
+			}
 			return nil, nil, nil, fmt.Errorf("unable to send FT tokens to receiver, " + br.Message)
 		}
 
