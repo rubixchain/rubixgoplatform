@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -456,9 +455,6 @@ func (s *Server) APIRecoverLostTokens(req *ensweb.Request) *ensweb.Result {
 	recoveryReq := struct {
 		SenderDID     string `json:"sender_did"`
 		TransactionID string `json:"transaction_id"`
-		RequesterDID  string `json:"requester_did"`  // For remote recovery tracking
-		RemoteRequest bool   `json:"remote_request"` // Flag for remote recovery
-		Reason        string `json:"reason"`         // Reason for recovery
 	}{}
 
 	// Parse JSON from request body since we're not using auth middleware
@@ -489,33 +485,12 @@ func (s *Server) APIRecoverLostTokens(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Invalid sender DID format", nil)
 	}
 
-	// Check if this is a remote recovery request
-	if recoveryReq.RemoteRequest {
-		s.log.Info("Received remote token recovery request",
-			"sender_did", recoveryReq.SenderDID,
-			"transaction_id", recoveryReq.TransactionID,
-			"requester_did", recoveryReq.RequesterDID,
-			"reason", recoveryReq.Reason)
-	} else {
-		s.log.Info("Received token recovery request",
-			"sender_did", recoveryReq.SenderDID,
-			"transaction_id", recoveryReq.TransactionID)
-	}
+	s.log.Info("Received token recovery request",
+		"sender_did", recoveryReq.SenderDID,
+		"transaction_id", recoveryReq.TransactionID)
 
-	// Perform token recovery
-	var recoveryResult *core.TokenRecoveryResult
-	
-	if recoveryReq.RemoteRequest {
-		// Handle remote recovery request
-		recoveryResult, err = s.c.HandleRemoteRecoveryRequest(
-			recoveryReq.SenderDID,
-			recoveryReq.TransactionID,
-			recoveryReq.RequesterDID,
-			recoveryReq.Reason)
-	} else {
-		// Handle normal recovery request
-		recoveryResult, err = s.c.RecoverLostTokens(recoveryReq.SenderDID, recoveryReq.TransactionID)
-	}
+	// Perform token recovery (same for both local and remote)
+	recoveryResult, err := s.c.RecoverLostTokens(recoveryReq.SenderDID, recoveryReq.TransactionID)
 	if err != nil {
 		s.log.Error("Failed to recover lost tokens",
 			"sender_did", recoveryReq.SenderDID,
@@ -576,21 +551,10 @@ func (s *Server) APIRemoteRecoverTokens(req *ensweb.Request) *ensweb.Result {
 		"target_did", remoteReq.TargetDID,
 		"transaction_id", remoteReq.TransactionID,
 		"requester_did", remoteReq.RequesterDID,
-		"reason", remoteReq.Reason,
-		"target_node_url", remoteReq.TargetNodeURL)
+		"reason", remoteReq.Reason)
 
-	// Initiate the remote recovery
-	var recoveryResult *core.TokenRecoveryResult
-	
-	// Use HTTP method if target URL is provided
-	if remoteReq.TargetNodeURL != "" {
-		s.log.Info("Using HTTP method for remote recovery",
-			"target_url", remoteReq.TargetNodeURL)
-		recoveryResult, err = s.c.RemoteRecoverTokensHTTP(&remoteReq, remoteReq.TargetNodeURL)
-	} else {
-		s.log.Info("Using peer connection method for remote recovery")
-		recoveryResult, err = s.c.RemoteRecoverTokens(&remoteReq)
-	}
+	// Use the new RemoteRecoverTokens that works like update-status with peer connection
+	recoveryResult, err := s.c.RemoteRecoverTokens(&remoteReq)
 	if err != nil {
 		s.log.Error("Remote token recovery failed",
 			"target_did", remoteReq.TargetDID,

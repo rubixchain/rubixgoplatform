@@ -25,11 +25,10 @@ type RecoveredToken struct {
 	RecoveryTransactionID string    `gorm:"column:recovery_transaction_id"` // New transaction after recovery
 }
 
-// RemoteRecoveryRequest represents a request to recover tokens on a remote node
+// RemoteRecoveryRequest represents a request to recover tokens for another DID
 type RemoteRecoveryRequest struct {
-	TargetDID      string `json:"target_did"`       // DID of node B where tokens should be recovered
-	TransactionID  string `json:"transaction_id"`   // Transaction ID to recover
-	RequesterDID   string `json:"requester_did"`    // DID of node A requesting the recovery
-	Reason         string `json:"reason"`           // Reason for remote recovery
-	TargetNodeURL  string `json:"target_node_url"`  // Optional: Direct URL of target node (e.g., "localhost:20960")
+	TargetDID     string `json:"target_did"`     // DID whose tokens should be recovered
+	TransactionID string `json:"transaction_id"` // Transaction ID to recover
+	RequesterDID  string `json:"requester_did"`  // Optional: DID requesting the recovery
+	Reason        string `json:"reason"`         // Optional: Reason for remote recovery
 }
