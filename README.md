@@ -1101,9 +1101,9 @@ Deploy an NFT smart contract.
 **Description:** Deploys an NFT smart contract to the network.
 
 **Options:**
-- `-nft string`: NFT ID (default: "").
+- `-nft string`: NFT ID.
 - `-deployerAddr string`: DID address of the deployer of the NFT.
-- `-transType int`: Quorum type (default: 2).
+- `-quorumType int`: Quorum type (default: 2).
 - `-nftValue float`: Value of the NFT (default: 0.0).
 - `-nftData string`: Arbitrary data associated with NFT (default: "").
 - `-port string`: Server/Host port (default: "20000").
