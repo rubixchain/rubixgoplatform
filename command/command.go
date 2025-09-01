@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1_rc42"
+	version string = "0.1_rc51"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -393,43 +393,43 @@ func (cmd *Command) backupDatabase() error {
 		cmd.log.Info("Database backup is only supported for SQLite databases")
 		return nil
 	}
-	
+
 	// Check if database file exists
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		cmd.log.Info("No database file found to backup", "path", dbPath)
 		return nil
 	}
-	
+
 	// Create backup directory
 	backupDir := filepath.Join(cmd.runDir, "db_backups")
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
 	}
-	
+
 	// Generate backup filename with timestamp
 	timestamp := time.Now().Format("20060102_150405")
 	backupFileName := fmt.Sprintf("rubixdata_backup_%s.db", timestamp)
 	backupPath := filepath.Join(backupDir, backupFileName)
-	
+
 	// Copy database file
 	sourceFile, err := os.Open(dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open source database: %w", err)
 	}
 	defer sourceFile.Close()
-	
+
 	destFile, err := os.Create(backupPath)
 	if err != nil {
 		return fmt.Errorf("failed to create backup file: %w", err)
 	}
 	defer destFile.Close()
-	
+
 	// Copy the file
 	_, err = io.Copy(destFile, sourceFile)
 	if err != nil {
 		return fmt.Errorf("failed to copy database: %w", err)
 	}
-	
+
 	// Also backup WAL and SHM files if they exist (for SQLite WAL mode)
 	walPath := dbPath + "-wal"
 	if _, err := os.Stat(walPath); err == nil {
@@ -437,21 +437,21 @@ func (cmd *Command) backupDatabase() error {
 			cmd.log.Warn("Failed to backup WAL file", "err", err)
 		}
 	}
-	
+
 	shmPath := dbPath + "-shm"
 	if _, err := os.Stat(shmPath); err == nil {
 		if err := cmd.copyFile(shmPath, backupPath+"-shm"); err != nil {
 			cmd.log.Warn("Failed to backup SHM file", "err", err)
 		}
 	}
-	
+
 	cmd.log.Info("Database backup completed successfully", "backup_path", backupPath)
-	
+
 	// Clean up old backups (keep only last 10)
 	if err := cmd.cleanupOldBackups(backupDir); err != nil {
 		cmd.log.Warn("Failed to cleanup old backups", "err", err)
 	}
-	
+
 	return nil
 }
 
@@ -462,13 +462,13 @@ func (cmd *Command) copyFile(src, dst string) error {
 		return err
 	}
 	defer sourceFile.Close()
-	
+
 	destFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
 	defer destFile.Close()
-	
+
 	_, err = io.Copy(destFile, sourceFile)
 	return err
 }
@@ -479,7 +479,7 @@ func (cmd *Command) cleanupOldBackups(backupDir string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Filter backup files
 	var backupFiles []os.DirEntry
 	for _, file := range files {
@@ -487,7 +487,7 @@ func (cmd *Command) cleanupOldBackups(backupDir string) error {
 			backupFiles = append(backupFiles, file)
 		}
 	}
-	
+
 	// If we have more than 10 backups, remove the oldest ones
 	if len(backupFiles) > 10 {
 		// Files are already sorted by name (which includes timestamp)
@@ -498,13 +498,13 @@ func (cmd *Command) cleanupOldBackups(backupDir string) error {
 			} else {
 				cmd.log.Info("Removed old backup", "file", oldBackup)
 			}
-			
+
 			// Also remove associated WAL and SHM files if they exist
 			os.Remove(oldBackup + "-wal")
 			os.Remove(oldBackup + "-shm")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -537,7 +537,7 @@ func (cmd *Command) runApp() {
 
 	// Override directory path
 	cmd.cfg.DirPath = cmd.runDir
-	
+
 	// Backup database if flag is set
 	if cmd.backupDB {
 		if err := cmd.backupDatabase(); err != nil {
@@ -545,7 +545,7 @@ func (cmd *Command) runApp() {
 			return
 		}
 	}
-	
+
 	// Apply trusted network setting (enabled by default)
 	// Check if user explicitly wants to disable trusted network
 	if cmd.disableTrustedNetwork {
@@ -556,7 +556,7 @@ func (cmd *Command) runApp() {
 		cmd.cfg.CfgData.TrustedNetwork = true
 		cmd.log.Info("Trusted network mode enabled (default)")
 	}
-	
+
 	sc := make(chan bool, 1)
 	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup)
 	if err != nil {
@@ -591,10 +591,10 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
-	
+
 	// Start the pending token monitor for self-healing
 	c.StartPendingTokenMonitor()
-	
+
 	cmd.log.Info("Syncing Details...")
 	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
 	if len(dids) != 0 {

@@ -15,6 +15,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
+	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -68,6 +69,7 @@ func (c *Core) SetupToken() {
 	c.l.AddRoute(APIUpdateStatus, "PUT", c.updateStatus)
 	c.l.AddRoute(APIGetTokenStatus, "GET", c.getTokenStatus)
 	c.l.AddRoute(APIUpdateTransactionHistory, "PUT", c.updateTransactionHistory)
+	c.l.AddRoute(setup.APIRecoverLostTokens, "POST", c.recoverLostTokensHandler)
 }
 
 func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {
@@ -475,6 +477,57 @@ func (c *Core) getTokenStatus(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
+// recoverLostTokensHandler handles P2P requests for token recovery
+func (c *Core) recoverLostTokensHandler(req *ensweb.Request) *ensweb.Result {
+	var recoveryReq struct {
+		SenderDID     string `json:"sender_did"`
+		TransactionID string `json:"transaction_id"`
+	}
+
+	// Parse request
+	if err := c.l.ParseJSON(req, &recoveryReq); err != nil {
+		c.log.Warn("Failed to parse recovery request", "error", err)
+		return c.l.RenderJSON(req, &struct {
+			Status  bool   `json:"status"`
+			Message string `json:"message"`
+		}{
+			Status:  false,
+			Message: "Failed to parse request",
+		}, http.StatusBadRequest)
+	}
+
+	c.log.Info("Received P2P token recovery request",
+		"sender_did", recoveryReq.SenderDID,
+		"transaction_id", recoveryReq.TransactionID)
+
+	// Perform the recovery
+	result, err := c.RecoverLostTokens(recoveryReq.SenderDID, recoveryReq.TransactionID)
+	if err != nil {
+		c.log.Error("Token recovery failed",
+			"sender_did", recoveryReq.SenderDID,
+			"transaction_id", recoveryReq.TransactionID,
+			"error", err)
+		return c.l.RenderJSON(req, &struct {
+			Status  bool   `json:"status"`
+			Message string `json:"message"`
+		}{
+			Status:  false,
+			Message: err.Error(),
+		}, http.StatusOK)
+	}
+
+	// Return success response
+	return c.l.RenderJSON(req, &struct {
+		Status  bool                 `json:"status"`
+		Message string               `json:"message"`
+		Result  *TokenRecoveryResult `json:"result"`
+	}{
+		Status:  true,
+		Message: "Token recovery successful",
+		Result:  result,
+	}, http.StatusOK)
+}
+
 func (c *Core) UpdateTokenStatus(updateReq *model.UpdateTokenStatusReq) error {
 	p, err := c.getPeer(updateReq.DID)
 	if err != nil {
@@ -855,7 +908,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 			totalValue += t.TokenValue
 		}
 		totalValue = floatPrecision(totalValue, MaxDecimalPlaces)
-		remainingAmount := floatPrecision(totalValue - txnAmount, MaxDecimalPlaces)
+		remainingAmount := floatPrecision(totalValue-txnAmount, MaxDecimalPlaces)
 		return tokens, remainingAmount, nil
 	}
 

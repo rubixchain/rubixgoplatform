@@ -179,6 +179,11 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	if err != nil {
 		w.log.Error("Failed to initialize FT transaction history storage", "err", err)
 	}
+	// Initialize token recovery tracking table
+	err = w.s.Init("TokenRecovery", &model.TokenRecovery{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize token recovery storage", "err", err)
+	}
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {
