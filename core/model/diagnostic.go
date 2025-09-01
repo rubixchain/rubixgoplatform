@@ -72,6 +72,11 @@ type UpdateTokenStatusReq struct {
 	NewTokenStatus int    `json:"new_token_status"`
 }
 
+type UpdateTransactionHistoryReq struct {
+	DID           string `json:"did"`
+	TransactionID string `json:"transaction_id"`
+}
+
 type GetTokenStatusReq struct {
 	DID   string `json:"did"`
 	Token string `json:"token"`

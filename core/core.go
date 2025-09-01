@@ -64,8 +64,9 @@ const (
 	APIGetPrevQrmFromPrevSenderPath string = "/api/get-prev-qrms-info-from-sender"
 	APICheckPinRole                 string = "/api/check-pin-role"
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
-	APIUpdateStatus                 string = "/api/update-status"
+	APIUpdateStatus                 string = "/api/update-token-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
+	APIUpdateTransactionHistory     string = "/api/update-transaction-history"
 )
 
 const (
@@ -220,7 +221,6 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	c.didDir = c.cfg.DirPath + RubixRootDir
 	if c.testNet {
 		c.didDir = c.cfg.DirPath + RubixRootDir + TestNetDIDDir
-
 	}
 	if _, err := os.Stat(c.didDir); os.IsNotExist(err) {
 		err := os.MkdirAll(c.didDir, os.ModeDir|os.ModePerm)
@@ -229,11 +229,13 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			return nil, err
 		}
 	}
-	c.arbitaryAddr = []string{"12D3KooWHwsKu3GS9rh5X5eS9RTKGFy6NcdX1bV1UHcH8sQ8WqCM.bafybmicttgw2qx4grueyytrgln35vq2hbyhznv6ks4fabeakm47u72c26u",
+	c.arbitaryAddr = []string{
+		"12D3KooWHwsKu3GS9rh5X5eS9RTKGFy6NcdX1bV1UHcH8sQ8WqCM.bafybmicttgw2qx4grueyytrgln35vq2hbyhznv6ks4fabeakm47u72c26u",
 		"12D3KooWQ2as3FNtvL1MKTeo7XAuBZxSv8QqobxX4AmURxyNe5mX.bafybmicro2m4kove5vsetej63xq4csobtlzchb2c34lp6dnakzkwtq2mmy",
 		"12D3KooWJUJz2ipK78LAiwhc1QUVDvSMjZNBHt4vSAeVAq6FsneA.bafybmics43ef7ldgrogzurh7vukormpgscq4um44bss6mfuopsbjorbyaq",
 		"12D3KooWC5fHUg2yzAHydgenodN52MYPKhpK4DKRfS8TSm3idSUV.bafybmif5qnkfnkkrffxvoofah3fjzkmieohjbgyte35rrjrn3goufaiykq",
-		"12D3KooWDd7c7DAVb38a9vfCFpqxh5nHbDQ4CYjMJuFfBgzpiagK.bafybmie4iynumz2v3obbtkqirxrejjoljjs3l76frvl43wgalqqgprze6q"}
+		"12D3KooWDd7c7DAVb38a9vfCFpqxh5nHbDQ4CYjMJuFfBgzpiagK.bafybmie4iynumz2v3obbtkqirxrejjoljjs3l76frvl43wgalqqgprze6q",
+	}
 
 	c.log = log.Named("Core")
 
@@ -321,13 +323,13 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if c.testNet && c.defaultSetup {
 		c.AddFaucetQuorums()
 	}
-	
+
 	// Initialize token sync manager
 	c.tokenSyncManager = NewTokenSyncManager(c.log)
-	
+
 	// Initialize async pin manager with 4 workers by default
 	c.asyncPinManager = NewAsyncPinManager(c, 4)
-	
+
 	// Initialize performance tracker
 	perfConfig := &PerformanceConfig{
 		Enabled:        true, // TODO: Make this configurable
@@ -345,19 +347,19 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 
 	// Initialize transaction state manager
 	c.txStateMgr = NewTransactionStateManager(c)
-	
+
 	// Initialize rollback manager
 	c.rollbackMgr = NewRollbackManager(c, c.txStateMgr)
-	
+
 	// Initialize token pools for memory optimization
 	c.tokenPool = NewTokenInfoPool()
 	c.batchSyncTokenPool = NewBatchSyncTokenInfoPool()
 	c.tokenSlicePool = NewTokenSlicePool()
-	
+
 	// Initialize pending token monitor for self-healing
 	// Check every 5 minutes for tokens pending > 10 minutes
 	c.pendingTokenMonitor = NewPendingTokenMonitor(c, 5*time.Minute, 10*time.Minute)
-	
+
 	// Wrap storage with tracking if performance tracker is enabled
 	if c.perfTracker != nil && c.perfTracker.enabled && c.s != nil {
 		c.s = NewTrackedStorage(c.s, c)
@@ -365,7 +367,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			c.as = NewTrackedStorage(c.as, c)
 		}
 	}
-	
+
 	return c, nil
 }
 
@@ -411,12 +413,12 @@ func (c *Core) SetupCore() error {
 	c.QuroumSetup()
 	c.PinService()
 	// c.RestartIncompleteTokenChainSyncs()
-	//c.UnlockFTs()
+	// c.UnlockFTs()
 	// c.selfTransferService()
-	
+
 	// Start token sync cleanup routine
 	go c.tokenSyncCleanupRoutine()
-	
+
 	return nil
 }
 
@@ -443,7 +445,7 @@ func (c *Core) Start() (bool, string) {
 		c.log.Error("failed to start ping port", "err", err)
 		return false, "Failed to start ping port"
 	}
-	//c.w.ReleaseAllLockedTokens()
+	// c.w.ReleaseAllLockedTokens()
 	// exp := model.ExploreModel{
 	// 	Cmd:    ExpPeerStatusCmd,
 	// 	PeerID: c.peerID,
@@ -487,19 +489,19 @@ func (c *Core) IPFSOperations() *IPFSOperations {
 // GetIPFSStats returns IPFS health and scalability statistics
 func (c *Core) GetIPFSStats() map[string]interface{} {
 	stats := make(map[string]interface{})
-	
+
 	if c.ipfsHealth != nil {
 		stats["health"] = c.ipfsHealth.GetStats()
 	}
-	
+
 	if c.ipfsScalability != nil {
 		stats["scalability"] = c.ipfsScalability.GetScalabilityStats()
 	}
-	
+
 	if c.ipfsRecovery != nil {
 		stats["recovery"] = c.ipfsRecovery.GetRecoveryStats()
 	}
-	
+
 	return stats
 }
 
@@ -508,7 +510,7 @@ func (c *Core) StopCore() {
 	if c.shutdownMgr == nil {
 		c.shutdownMgr = NewShutdownManager(c)
 	}
-	
+
 	// Perform graceful shutdown
 	if err := c.shutdownMgr.Shutdown(); err != nil {
 		c.log.Error("Shutdown completed with errors", "error", err)
@@ -553,7 +555,6 @@ func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (
 }
 
 func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error) {
-
 	nftFolderName := c.cfg.DirPath + "NFT/" + nft
 	err := os.Rename(tempFolderPath, nftFolderName)
 	if err != nil {
@@ -564,7 +565,6 @@ func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error
 }
 
 func (c *Core) HandleQuorum(conn net.Conn) {
-
 }
 
 func (c *Core) updateConfig() error {
@@ -830,7 +830,7 @@ func (c *Core) SetAsyncFTResponse(val bool) {
 func (c *Core) tokenSyncCleanupRoutine() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:

@@ -34,9 +34,10 @@ const (
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
 	TokenIsBurntForFT
-	TokenIsPending // Tokens received but not yet confirmed by consensus finality
+	TokenIsPending                // Tokens received but not yet confirmed by consensus finality
 	QuorumPledgedForThisToken int = 20
 )
+
 const (
 	Zero int = iota
 	One
@@ -71,9 +72,11 @@ type Token struct {
 func (w *Wallet) CreateToken(t *Token) error {
 	return w.s.Write(TokenStorage, t)
 }
+
 func (w *Wallet) CreateFT(ft *FTToken) error {
 	return w.s.Write(FTTokenStorage, ft)
 }
+
 func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) error {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -229,7 +232,6 @@ func (w *Wallet) GetFTsAndCount(did string) ([]FT, error) {
 func (w *Wallet) GetFreeFTsByDID(did string) ([]FTToken, error) {
 	var FT []FTToken
 	err := w.s.Read(FTTokenStorage, &FT, "owner_did=? AND token_status=? OR token_status=?", did, TokenIsFree, TokenIsGenerated)
-
 	if err != nil {
 		readErr := fmt.Sprint(err)
 		if strings.Contains(readErr, "no records found") {
@@ -260,7 +262,6 @@ func (w *Wallet) GetAllFreeFTs() ([]FTToken, error) {
 func (w *Wallet) GetFreeFTsByNameAndDID(ftName string, did string) ([]FTToken, error) {
 	var FT []FTToken
 	err := w.s.Read(FTTokenStorage, &FT, "ft_name=? AND token_status =? AND  owner_did=?", ftName, TokenIsFree, did)
-
 	if err != nil {
 		w.log.Error("Failed to get Free FTs by name", "err", err)
 		return nil, err
@@ -594,6 +595,17 @@ func (w *Wallet) UpdateTokenStatus(did string, tokenHash string, tokenType int, 
 	return nil
 }
 
+func (w *Wallet) UpdateTransactionHistory(did string, transactionId string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.s.Delete(TransactionStorage, &model.TransactionDetails{}, "transaction_id=?", transactionId)
+	if err != nil {
+		w.log.Error("Error deleting from %s: %v", TransactionStorage, err)
+		return err
+	}
+	return nil
+}
+
 func (w *Wallet) GetTokenStatus(did string, tokenHash string, tokenType int) (model.TokenStatusResponse, error) {
 	var (
 		storage string
@@ -704,6 +716,7 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 	// }
 	return nil
 }
+
 func (w *Wallet) FTTokensTransffered(did string, ti []contract.TokenInfo, b *block.Block, areReceiverAndSenderPeerSame bool) error {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -724,8 +737,8 @@ func (w *Wallet) FTTokensTransffered(did string, ti []contract.TokenInfo, b *blo
 				return err
 			}
 			t.TokenStatus = tokenStatus
-			//TODO: Check the need of transaction ID in FT Tokens table
-			//t.TransactionID = b.GetTid()
+			// TODO: Check the need of transaction ID in FT Tokens table
+			// t.TransactionID = b.GetTid()
 			err = w.s.Update(FTTokenStorage, &t, "token_id=?", ti[i].Token)
 			if err != nil {
 				return err
@@ -735,13 +748,14 @@ func (w *Wallet) FTTokensTransffered(did string, ti []contract.TokenInfo, b *blo
 
 	return nil
 }
+
 func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell) ([]string, error) {
 	// For large transfers, use optimized processing with batch downloads
 	if len(ti) > 50 {
 		w.log.Info("Using optimized token receiver with batch downloads", "token_count", len(ti))
 		return w.OptimizedTokensReceived(did, ti, b, senderPeerId, receiverPeerId, pinningServiceMode, ipfsShell)
 	}
-	
+
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
@@ -752,8 +766,8 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		return nil, err
 	}
 
-	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
-	//quorums using pledgefinality function, to be added to TokenStateHash Table
+	// add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
+	// quorums using pledgefinality function, to be added to TokenStateHash Table
 	var updatedtokenhashes []string = make([]string, 0)
 	var tokenHashMap map[string]string = make(map[string]string)
 
@@ -845,7 +859,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-		//Pinnig the whole tokens and pat tokens (skip AddProviderDetails)
+		// Pinnig the whole tokens and pat tokens (skip AddProviderDetails)
 		_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 		if err != nil {
 			fmt.Println("failed to pin token ", tokenInfo.Token)
@@ -862,7 +876,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			// Fall back to synchronous processing
 			goto syncProcessing
 		}
-		w.log.Info("Provider details submitted for async processing", 
+		w.log.Info("Provider details submitted for async processing",
 			"transaction_id", b.GetTid(),
 			"token_count", len(providerMaps))
 		return updatedtokenhashes, nil
@@ -885,7 +899,7 @@ syncProcessing:
 // need to update in such a way that only for FTs
 func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, ipfsShell *ipfsnode.Shell, ftInfo FTToken) ([]string, error) {
 	// Always use parallel FT receiver for consistent performance and no global locks
-	w.log.Info("Using parallel FT receiver", 
+	w.log.Info("Using parallel FT receiver",
 		"ft_count", len(ti),
 		"ft_name", ftInfo.FTName)
 	parallelReceiver := NewParallelFTReceiver(w)
@@ -903,8 +917,8 @@ func (w *Wallet) FTTokensReceivedLegacy(did string, ti []contract.TokenInfo, b *
 		return nil, err
 	}
 
-	//add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
-	//quorums using pledgefinality function, to be added to TokenStateHash Table
+	// add to ipfs to get latest Token State Hash after receiving the token by receiver. The hashes will be returned to sender, and from there to
+	// quorums using pledgefinality function, to be added to TokenStateHash Table
 	var updatedtokenhashes []string = make([]string, 0)
 	var tokenHashMap map[string]string = make(map[string]string)
 
@@ -991,7 +1005,7 @@ func (w *Wallet) FTTokensReceivedLegacy(did string, ti []contract.TokenInfo, b *
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-		//Pinnig the whole tokens and pat tokens (skip AddProviderDetails)
+		// Pinnig the whole tokens and pat tokens (skip AddProviderDetails)
 		if senderPeerId != receiverPeerId {
 			_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 			if err != nil {
@@ -1009,7 +1023,7 @@ func (w *Wallet) FTTokensReceivedLegacy(did string, ti []contract.TokenInfo, b *
 			// Fall back to synchronous processing
 			goto ftSyncProcessing
 		}
-		w.log.Info("FT provider details submitted for async processing", 
+		w.log.Info("FT provider details submitted for async processing",
 			"transaction_id", b.GetTid(),
 			"token_count", len(providerMaps))
 		return updatedtokenhashes, nil
@@ -1228,7 +1242,7 @@ func (w *Wallet) GetAllTokenStateHash() ([]TokenStateDetails, error) {
 func (w *Wallet) RemoveTokenStateHash(tokenstatehash string) error {
 	var td TokenStateDetails
 
-	//Getting all the details about a particular token state hash
+	// Getting all the details about a particular token state hash
 	err := w.s.Read(TokenStateHash, &td, "token_state_hash=?", tokenstatehash)
 	if err != nil {
 		if strings.Contains(err.Error(), "no records found") {
@@ -1251,7 +1265,7 @@ func (w *Wallet) RemoveTokenStateHash(tokenstatehash string) error {
 func (w *Wallet) RemoveTokenStateHashByTransactionID(transactionID string) error {
 	var td []TokenStateDetails
 
-	//Getting all the details about a particular token state hash
+	// Getting all the details about a particular token state hash
 	err := w.s.Read(TokenStateHash, &td, "transaction_id=?", transactionID)
 	if err != nil {
 		if !strings.Contains(err.Error(), "no records found") {
@@ -1291,7 +1305,6 @@ func (w *Wallet) GetAllPinnedTokens(did string) ([]Token, error) {
 		}
 	}
 	return t, nil
-
 }
 
 func (w *Wallet) UpdateUnpledgedTokenStatus(did string, token string, tt int) error {

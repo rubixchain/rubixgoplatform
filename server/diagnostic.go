@@ -151,7 +151,7 @@ func (s *Server) APIGetNFTTokenChainData(req *ensweb.Request) *ensweb.Result {
 		}
 
 	}
-	//var getReq model.SmartContractTokenChainDataReq
+	// var getReq model.SmartContractTokenChainDataReq
 	getReq := model.SmartContractTokenChainDataReq{
 		Token:  nft,
 		Latest: islatest,
@@ -212,6 +212,19 @@ func (s *Server) APIUpdateTokenStatus(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to update token status", err)
 	}
 	return s.RenderJSON(req, model.BasicResponse{Message: "Token status updated successfully", Status: true}, http.StatusOK)
+}
+
+func (s *Server) APIUpdateTransactionHistory(req *ensweb.Request) *ensweb.Result {
+	var updateReq model.UpdateTransactionHistoryReq
+	err := s.ParseJSON(req, &updateReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	err = s.c.UpdateTransactionHistory(&updateReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to update transaction history", err)
+	}
+	return s.RenderJSON(req, model.BasicResponse{Message: "Transaction history updated successfully", Status: true}, http.StatusOK)
 }
 
 func (s *Server) APIGetTokenStatus(req *ensweb.Request) *ensweb.Result {

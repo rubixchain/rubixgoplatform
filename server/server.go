@@ -80,7 +80,7 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 		s.log.Error("failed to create server", "err", err)
 		return nil, err
 	}
-	//s.CreateSessionStore(sessionStore, cfg.ClientSecret, sessions.Options{})
+	// s.CreateSessionStore(sessionStore, cfg.ClientSecret, sessions.Options{})
 	if start {
 		ok, _ := s.c.Start()
 		if !ok {
@@ -194,6 +194,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetFTTxnByDID, "GET", s.AuthHandle(s.APIGetFTTxnByDID, true, s.AuthError, false))
 	s.AddRoute(setup.APIUpdateTokenStatus, "PUT", s.AuthHandle(s.APIUpdateTokenStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetTokenStatus, "GET", s.AuthHandle(s.APIGetTokenStatus, false, s.AuthError, false))
+	s.AddRoute(setup.APIUpdateTransactionHistory, "PUT", s.AuthHandle(s.APIUpdateTransactionHistory, false, s.AuthError, false))
 	s.AddRoute(setup.APIMigrateFTTransactions, "POST", s.AuthHandle(s.APIMigrateFTTransactions, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetFTMigrationStatus, "GET", s.AuthHandle(s.APIGetFTMigrationStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIRetryFailedFTDownloads, "POST", s.AuthHandle(s.RetryFailedFTDownloads, false, s.AuthError, false))

@@ -67,6 +67,7 @@ func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncGenesisAndLatestBlock, "POST", c.syncGenesisAndLatestBlock)
 	c.l.AddRoute(APIUpdateStatus, "PUT", c.updateStatus)
 	c.l.AddRoute(APIGetTokenStatus, "GET", c.getTokenStatus)
+	c.l.AddRoute(APIUpdateTransactionHistory, "PUT", c.updateTransactionHistory)
 }
 
 func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {
@@ -423,6 +424,32 @@ func (c *Core) updateStatus(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
 }
 
+func (c *Core) updateTransactionHistory(req *ensweb.Request) *ensweb.Result {
+	var updateReq model.UpdateTransactionHistoryReq
+
+	// Parse request
+	if err := c.l.ParseJSON(req, &updateReq); err != nil {
+		c.log.Warn("Failed to parse request", "error", err)
+		return c.l.RenderJSON(req, &model.BasicResponse{
+			Status:  false,
+			Message: "Failed to parse request",
+		}, http.StatusBadRequest)
+	}
+	var resp model.BasicResponse
+
+	err := c.w.UpdateTransactionHistory(updateReq.DID, updateReq.TransactionID)
+	if err != nil {
+		c.log.Error("Failed to update transaction history", "err", err)
+		resp.Message = "Failed to update transaction history"
+		resp.Status = false
+		return c.l.RenderJSON(req, &resp, http.StatusOK)
+	}
+
+	resp.Message = "Updated transaction history"
+	resp.Status = true
+	return c.l.RenderJSON(req, &resp, http.StatusOK)
+}
+
 func (c *Core) getTokenStatus(req *ensweb.Request) *ensweb.Result {
 	var getStatusReq model.GetTokenStatusReq
 
@@ -465,6 +492,23 @@ func (c *Core) UpdateTokenStatus(updateReq *model.UpdateTokenStatusReq) error {
 	return nil
 }
 
+func (c *Core) UpdateTransactionHistory(updateReq *model.UpdateTransactionHistoryReq) error {
+	p, err := c.getPeer(updateReq.DID)
+	if err != nil {
+		c.log.Error("Failed to get peer", "err", err)
+		return err
+	}
+	defer p.Close()
+	var updateResp model.BasicResponse
+
+	err = p.SendJSONRequest("PUT", APIUpdateTransactionHistory, nil, &updateReq, &updateResp, false)
+	if !updateResp.Status {
+		c.log.Error("Failed to update status", "err", err)
+		return fmt.Errorf(updateResp.Message)
+	}
+	return nil
+}
+
 func (c *Core) GetTokenStatus(getTokenStatusReq *model.GetTokenStatusReq) (model.TokenStatusResponse, error) {
 	var resp model.TokenStatusResponse
 	p, err := c.getPeer(getTokenStatusReq.DID)
@@ -488,7 +532,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 	// 	return err
 	// }
 	// defer p.Close()
-	
+
 	// Use token sync manager to prevent race conditions
 	if !c.tokenSyncManager.AcquireSyncLock(token) {
 		// Another sync is in progress, wait for it to complete
@@ -506,7 +550,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 		}
 	}
 	defer c.tokenSyncManager.ReleaseSyncLock(token)
-	
+
 	var err error
 	blk := c.w.GetLatestTokenBlock(token, tokenType)
 	if blk != nil {
@@ -798,13 +842,13 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 	// Use optimized version for large amounts
 	if txnAmount > 100 {
 		c.log.Info("Using optimized token fetch for large amount", "amount", txnAmount)
-		
+
 		// Use the wallet's own optimized method
 		tokens, err := c.w.GetTokensForOptimizedTransfer(did, txnAmount, txnMode)
 		if err != nil {
 			return nil, 0, err
 		}
-		
+
 		// Calculate if we have exact amount or need to create change
 		var totalValue float64
 		for _, t := range tokens {
@@ -814,7 +858,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 		remainingAmount := floatPrecision(totalValue - txnAmount, MaxDecimalPlaces)
 		return tokens, remainingAmount, nil
 	}
-	
+
 	// Original logic for smaller amounts
 	requiredTokens := make([]wallet.Token, 0)
 	var remainingAmount float64
