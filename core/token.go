@@ -275,6 +275,20 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to create token", "err", err)
 			return err
 		}
+		// publish the transaction in the network with topic : rubix_txns
+		publishingTxn := &model.PubSubTxnInfo{
+			TxnType:      tcb.TransactionType,
+			TxnMode:      RBTTransferMode,
+			TokenType:    ti.Tokens[0].TokenType,
+			PublisherDID: dc.GetDID(),
+			TxnBlock:     blk.GetBlock(),
+		}
+
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return err
+		}
 	}
 	return nil
 }

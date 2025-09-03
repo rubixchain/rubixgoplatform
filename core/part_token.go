@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/rac"
@@ -271,6 +272,21 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 			return nil, err
 		}
 		ChildTokenList = append(ChildTokenList, ChildToken{ChildTokenID: pt, TokenValue: parts[i]})
+
+		// publish the transaction in the network with topic : rubix_txns
+		publishingTxn := &model.PubSubTxnInfo{
+			TxnType:      tcb.TransactionType,
+			TxnMode:      RBTTransferMode,
+			TokenType:    bti.Tokens[0].TokenType,
+			PublisherDID: dc.GetDID(),
+			TxnBlock:     b.GetBlock(),
+		}
+
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return nil, err
+		}
 	}
 	newPartToken := &ExplorerCreateTokenParts{
 		ChildTokenList: ChildTokenList,

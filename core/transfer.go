@@ -760,74 +760,97 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	// get tokens list from block, do sanity check, and add block to the token chain(s)
 	tokensList := txnBlock.GetTransTokens()
 	switch newEvent.TxnMode {
-	case SmartContractDeployMode, SmartContractExecuteMode:
-		token := tokensList[0]
-		// fetch latest block from LDB and check if the publisher is the token owner in the last block
-		latestTokenBlock := c.w.GetLatestTokenBlock(token, tokenType)
-		if latestTokenBlock == nil {
-			// TODO : sync the token chain if not there
-			c.log.Error(fmt.Sprintf("failed to get the latest block for token: %v", token))
-			return
-		}
-
-		// make sure there is no missing blocks, by comparing prev and current block numbers
-		latestBlockNumber, err := latestTokenBlock.GetBlockNumber(token)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to get latest block number for token chain : %v", token)
-			c.log.Error(errMsg)
-		}
-		currentBlockNumber, err := txnBlock.GetBlockNumber(token)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to get current block number for token chain : %v", token)
-			c.log.Error(errMsg)
-		}
-		// if the fullnode is the sender or the receiver then skip adding the current block again
-		if c.IsDIDExist("", newEvent.ReceiverDID) || c.IsDIDExist("", newEvent.PublisherDID) {
-			if latestBlockNumber != currentBlockNumber {
-				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", token, latestBlockNumber, currentBlockNumber)
-				c.log.Error(errMsg)
-				// TODO : handle all tokens with missing blocks
-				return
-			}
-		} else if latestBlockNumber+1 != currentBlockNumber {
-			errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", token, latestBlockNumber, currentBlockNumber)
-			c.log.Error(errMsg)
-			// TODO : handle all tokens with missing blocks
-			return
-		} else {
-			previousOwner := latestTokenBlock.GetOwner()
-
-			// Sanity check
-			if previousOwner != newEvent.PublisherDID {
+	case SmartContractDeployMode, SmartContractExecuteMode, NFTDeployMode, NFTExecuteMode:
+		tokenId := tokensList[0]
+		// skip txn sanity check, if txn type is token generated type
+		if newEvent.TxnType == block.TokenGeneratedType {
+			if currentOwner != newEvent.PublisherDID {
 				c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
 				return
 			}
-
 			// add block to the token chain
-			c.w.AddTokenBlock(token, txnBlock)
-		}
+			c.w.AddTokenBlock(tokenId, txnBlock)
+		} else {
 
-	case RBTTransferMode, FTTransferMode:
-		// sanity check of all tokens in list
-		for _, token := range tokensList {
 			// fetch latest block from LDB and check if the publisher is the token owner in the last block
-			latestTokenBlock := c.w.GetLatestTokenBlock(token, tokenType)
+			latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
 			if latestTokenBlock == nil {
 				// TODO : sync the token chain if not there
-				c.log.Error(fmt.Sprintf("failed to get the latest block for token: %v", token))
+				c.log.Error(fmt.Sprintf("failed to get the latest block for token: %v", tokenId))
 				return
 			}
 
 			// make sure there is no missing blocks, by comparing prev and current block numbers
-			latestBlockNumber, err := latestTokenBlock.GetBlockNumber(token)
+			latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
 			if err != nil {
-				errMsg := fmt.Sprintf("failed to get latest block number for token chain : %v", token)
+				errMsg := fmt.Sprintf("failed to get latest block number for token chain : %v", tokenId)
+				c.log.Error(errMsg)
+			}
+			currentBlockNumber, err := txnBlock.GetBlockNumber(tokenId)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to get current block number for token chain : %v", tokenId)
+				c.log.Error(errMsg)
+			}
+			// if the fullnode is the sender or the receiver then skip adding the current block again
+			if c.IsDIDExist("", newEvent.ReceiverDID) || c.IsDIDExist("", newEvent.PublisherDID) {
+				if latestBlockNumber != currentBlockNumber {
+					errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
+					c.log.Error(errMsg)
+					// TODO : handle all tokens with missing blocks
+					return
+				}
+			} else if latestBlockNumber+1 != currentBlockNumber {
+				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
+				c.log.Error(errMsg)
+				// TODO : handle all tokens with missing blocks
+				return
+			} else {
+				previousOwner := latestTokenBlock.GetOwner()
+
+				// Sanity check
+				if previousOwner != newEvent.PublisherDID {
+					c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
+					return
+				}
+
+				// add block to the token chain
+				c.w.AddTokenBlock(tokenId, txnBlock)
+			}
+		}
+
+	case RBTTransferMode, FTTransferMode:
+		// sanity check of all tokens in list
+		for _, tokenId := range tokensList {
+			
+			// skip txn sanity check, if txn type is token generated type
+			if newEvent.TxnType == block.TokenGeneratedType {
+				if currentOwner != newEvent.PublisherDID {
+					c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
+					return
+				}
+				// add block to the token chain
+				c.w.AddTokenBlock(tokenId, txnBlock)
+				continue
+			}
+
+			currentBlockNumber, err := txnBlock.GetBlockNumber(tokenId)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to get current block number for token chain : %v", tokenId)
 				c.log.Error(errMsg)
 				return
 			}
-			currentBlockNumber, err := txnBlock.GetBlockNumber(token)
+			// fetch latest block from LDB and check if the publisher is the token owner in the last block
+			latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
+			if latestTokenBlock == nil {
+				// TODO : sync the token chain if not there
+				c.log.Error(fmt.Sprintf("failed to get the latest block for token: %v", tokenId))
+				return
+			}
+
+			// make sure there is no missing blocks, by comparing prev and current block numbers
+			latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
 			if err != nil {
-				errMsg := fmt.Sprintf("failed to get current block number for token chain : %v", token)
+				errMsg := fmt.Sprintf("failed to get latest block number for token chain : %v", tokenId)
 				c.log.Error(errMsg)
 				return
 			}
@@ -835,14 +858,14 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 			// if the fullnode is the sender or the receiver then skip adding the current block again
 			if c.IsDIDExist("", newEvent.ReceiverDID) || c.IsDIDExist("", newEvent.PublisherDID) {
 				if latestBlockNumber != currentBlockNumber {
-					errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", token, latestBlockNumber, currentBlockNumber)
+					errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
 					c.log.Error(errMsg)
 					// TODO : handle all tokens with missing blocks
 					return
 				}
 				continue
 			} else if latestBlockNumber+1 != currentBlockNumber {
-				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", token, latestBlockNumber, currentBlockNumber)
+				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
 				c.log.Error(errMsg)
 				// TODO : hamdle all tokens with missing blocks
 				return
@@ -865,7 +888,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 			}
 
 			// add block to the token chain
-			c.w.AddTokenBlock(token, txnBlock)
+			c.w.AddTokenBlock(tokenId, txnBlock)
 		}
 	}
 

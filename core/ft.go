@@ -191,6 +191,21 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			DID:         did,
 		}
 		newFTs = append(newFTs, *ft)
+
+		// publish the transaction in the network with topic : rubix_txns
+		publishingTxn := &model.PubSubTxnInfo{
+			TxnType:      tcb.TransactionType,
+			TxnMode:      RBTTransferMode,
+			TokenType:    bti.Tokens[0].TokenType,
+			PublisherDID: dc.GetDID(),
+			TxnBlock:     block.GetBlock(),
+		}
+
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return err
+		}
 	}
 
 	for i := range wholeTokens {
