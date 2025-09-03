@@ -127,6 +127,7 @@ type Core struct {
 	quorumCount          int
 	noBalanceQuorumCount int
 	defaultSetup         bool
+	fullNode             bool
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -161,7 +162,7 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, fullNode bool) (*Core, error) {
 	var err error
 	update := false
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
@@ -193,6 +194,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		arbitaryMode:  am,
 		secret:        util.GetRandBytes(32),
 		defaultSetup:  defaultSetup,
+		fullNode:      fullNode,
 	}
 	c.didDir = c.cfg.DirPath + RubixRootDir
 	if c.testNet {
@@ -272,7 +274,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
 	}
 
-	c.w, err = wallet.InitWallet(c.s, tcDir, c.log)
+	c.w, err = wallet.InitWallet(c.s, tcDir, c.log, c.fullNode)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
@@ -297,6 +299,9 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	}
 	if c.testNet && c.defaultSetup {
 		c.AddFaucetQuorums()
+	}
+	if c.fullNode {
+		c.SubscribeTxnSetup()
 	}
 	return c, nil
 }

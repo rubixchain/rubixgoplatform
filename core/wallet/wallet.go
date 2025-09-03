@@ -34,6 +34,7 @@ const (
 	FTTokenStorage                 string = "FTTokenTable"
 	FTChainStorage                 string = "FTchainstorage"
 	FTStorage                      string = "FTTable"
+	FullNodeStorage                string = "fullnodestorage"
 )
 
 type WalletConfig struct {
@@ -64,19 +65,23 @@ type Wallet struct {
 	ntcs                           *ChainDB
 	smartContractTokenChainStorage *ChainDB
 	FTChainStorage                 *ChainDB
+	fullNodeStorage                *ChainDB
+	FullNode                       bool
 }
 
-func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, error) {
+func InitWallet(s storage.Storage, dir string, log logger.Logger, fullNode bool) (*Wallet, error) {
 	var err error
 	w := &Wallet{
-		log: log.Named("wallet"),
-		s:   s,
+		log:      log.Named("wallet"),
+		s:        s,
+		FullNode: fullNode,
 	}
 	w.tcs = &ChainDB{}
 	w.dtcs = &ChainDB{}
 	w.ntcs = &ChainDB{}
 	w.smartContractTokenChainStorage = &ChainDB{}
 	w.FTChainStorage = &ChainDB{}
+	w.fullNodeStorage = &ChainDB{}
 	op := &opt.Options{
 		WriteBuffer: 64 * 1024 * 1024,
 	}
@@ -158,7 +163,6 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize FT storage", "err", err)
 	}
 
-
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure token chain block storage", "err", err)
@@ -182,6 +186,16 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	if err != nil {
 		w.log.Error("Failed to initialize TokenStateHash", "err", err)
 		return nil, err
+	}
+
+	// DB for fullnodes to store all token-chains
+	if w.FullNode {
+		fullNodeDB, err := leveldb.OpenFile(dir+FullNodeStorage, op)
+		if err != nil {
+			w.log.Error("failed to configure token chain block storage", "err", err)
+			return nil, fmt.Errorf("failed to configure token chain block storage")
+		}
+		w.fullNodeStorage.DB = fullNodeDB
 	}
 
 	return w, nil

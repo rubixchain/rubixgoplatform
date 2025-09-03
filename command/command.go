@@ -341,6 +341,7 @@ type Command struct {
 	apiKey                       string
 	nftValue                     float64
 	ftNumStartIndex              int
+	fullNode                     bool
 }
 
 func showVersion() {
@@ -391,7 +392,7 @@ func (cmd *Command) runApp() {
 	// Override directory path
 	cmd.cfg.DirPath = cmd.runDir
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.fullNode)
 	if err != nil {
 		cmd.log.Error("failed to create core")
 		return
@@ -563,6 +564,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
 	flag.IntVar(&cmd.ftNumStartIndex, "ftStartIndex", 0, "Start index of the FTs to be created")
+	flag.BoolVar(&cmd.fullNode, "subscribeAllTxns", false, "receive all published transactions")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

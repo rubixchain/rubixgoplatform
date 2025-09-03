@@ -31,6 +31,7 @@ const (
 	ReferenceType          string = "rf"
 	SmartContractTokenType string = "st"
 	FTTokenType            string = "ft"
+	// FullNodeType               string = "fn"
 )
 
 const TCBlockCountLimit int = 100
@@ -172,6 +173,12 @@ func tcsBlockID(token string, key string) string {
 
 func (w *Wallet) getChainDB(tt int) *ChainDB {
 	var db *ChainDB
+
+	// full nodes store all chains in a single DB called "fullnodestoarge"
+	if w.FullNode {
+		return w.fullNodeStorage
+	}
+
 	switch tt {
 	case tkn.RBTTokenType:
 		db = w.tcs
@@ -376,10 +383,16 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 		Sync: true,
 	}
 	tt := b.GetTokenType(token)
-	db := w.getChainDB(tt)
-	if db == nil {
-		w.log.Error("Failed to add block, invalid token type")
-		return fmt.Errorf("failed to get db")
+
+	var db *ChainDB
+	if w.FullNode {
+		db = w.fullNodeStorage
+	} else {
+		db = w.getChainDB(tt)
+		if db == nil {
+			w.log.Error("Failed to add block, invalid token type")
+			return fmt.Errorf("failed to get db")
+		}
 	}
 
 	bid, err := b.GetBlockID(token)
