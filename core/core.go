@@ -300,9 +300,6 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if c.testNet && c.defaultSetup {
 		c.AddFaucetQuorums()
 	}
-	if c.fullNode {
-		c.SubscribeTxnSetup()
-	}
 	return c, nil
 }
 
@@ -333,6 +330,9 @@ func (c *Core) SetupCore() error {
 	if err != nil {
 		c.log.Error("Failed to setup services", "err", err)
 		return err
+	}
+	if c.fullNode {
+		c.SubscribeTxnSetup()
 	}
 	c.w.SetupWallet(c.ipfs)
 	c.PingSetup()

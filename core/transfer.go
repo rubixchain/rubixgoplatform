@@ -781,23 +781,31 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 			errMsg := fmt.Sprintf("failed to get current block number for token chain : %v", token)
 			c.log.Error(errMsg)
 		}
-		if latestBlockNumber+1 != currentBlockNumber {
+		// if the fullnode is the sender or the receiver then skip adding the current block again
+		if c.IsDIDExist("", newEvent.ReceiverDID) || c.IsDIDExist("", newEvent.PublisherDID) {
+			if latestBlockNumber != currentBlockNumber {
+				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", token, latestBlockNumber, currentBlockNumber)
+				c.log.Error(errMsg)
+				// TODO : handle all tokens with missing blocks
+				return
+			}
+		} else if latestBlockNumber+1 != currentBlockNumber {
 			errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", token, latestBlockNumber, currentBlockNumber)
 			c.log.Error(errMsg)
 			// TODO : handle all tokens with missing blocks
 			return
+		} else {
+			previousOwner := latestTokenBlock.GetOwner()
+
+			// Sanity check
+			if previousOwner != newEvent.PublisherDID {
+				c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
+				return
+			}
+
+			// add block to the token chain
+			c.w.AddTokenBlock(token, txnBlock)
 		}
-
-		previousOwner := latestTokenBlock.GetOwner()
-
-		// Sanity check
-		if previousOwner != newEvent.PublisherDID {
-			c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
-			return
-		}
-
-		// add block to the token chain
-		c.w.AddTokenBlock(token, txnBlock)
 
 	case RBTTransferMode, FTTransferMode:
 		// sanity check of all tokens in list
@@ -823,7 +831,17 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 				c.log.Error(errMsg)
 				return
 			}
-			if latestBlockNumber+1 != currentBlockNumber {
+
+			// if the fullnode is the sender or the receiver then skip adding the current block again
+			if c.IsDIDExist("", newEvent.ReceiverDID) || c.IsDIDExist("", newEvent.PublisherDID) {
+				if latestBlockNumber != currentBlockNumber {
+					errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", token, latestBlockNumber, currentBlockNumber)
+					c.log.Error(errMsg)
+					// TODO : handle all tokens with missing blocks
+					return
+				}
+				continue
+			} else if latestBlockNumber+1 != currentBlockNumber {
 				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", token, latestBlockNumber, currentBlockNumber)
 				c.log.Error(errMsg)
 				// TODO : hamdle all tokens with missing blocks

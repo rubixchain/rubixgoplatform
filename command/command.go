@@ -564,7 +564,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
 	flag.IntVar(&cmd.ftNumStartIndex, "ftStartIndex", 0, "Start index of the FTs to be created")
-	flag.BoolVar(&cmd.fullNode, "subscribeAllTxns", false, "receive all published transactions")
+	flag.BoolVar(&cmd.fullNode, "fullnode", false, "receive all published transactions")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
