@@ -751,7 +751,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	c.log.Info("Recieved Update on txn " + newEvent.TxnID)
 
 	receiverDid := newEvent.ReceiverDID
-	tokenType := newEvent.TokenType
+	// tokenType := newEvent.TokenType
 
 	// initiate block
 	txnBlock := block.InitBlock(newEvent.TxnBlock, nil)
@@ -773,6 +773,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 		} else {
 
 			// fetch latest block from LDB and check if the publisher is the token owner in the last block
+			tokenType := txnBlock.GetTokenType(tokenId)
 			latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
 			if latestTokenBlock == nil {
 				// TODO : sync the token chain if not there
@@ -821,7 +822,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	case RBTTransferMode, FTTransferMode:
 		// sanity check of all tokens in list
 		for _, tokenId := range tokensList {
-			
+
 			// skip txn sanity check, if txn type is token generated type
 			if newEvent.TxnType == block.TokenGeneratedType {
 				if currentOwner != newEvent.PublisherDID {
@@ -840,6 +841,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 				return
 			}
 			// fetch latest block from LDB and check if the publisher is the token owner in the last block
+			tokenType := txnBlock.GetTokenType(tokenId)
 			latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
 			if latestTokenBlock == nil {
 				// TODO : sync the token chain if not there

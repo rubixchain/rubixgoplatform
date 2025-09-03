@@ -495,7 +495,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		TxnID:        tid,
 		TxnType:      nb.GetTransType(),
 		TxnMode:      cr.Mode,
-		TokenType:    ti[0].TokenType,
 		PublisherDID: dc.GetDID(),
 		ReceiverDID:  sc.GetReceiverDID(),
 		TxnBlock:     nb.GetBlock(),

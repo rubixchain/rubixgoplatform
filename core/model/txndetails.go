@@ -47,7 +47,7 @@ type PubSubTxnInfo struct {
 	TxnID        string `gorm:"column:transaction_id;primaryKey"`
 	TxnType      string `gorm:"column:transaction_type"`
 	TxnMode      int    `gorm:"column:transaction_mode"`
-	TokenType    int `gorm:"column:token_type"`
+	// TokenType    int `gorm:"column:token_type"`
 	// BlockID      string `gorm:"column:block_id"`
 	PublisherDID string `gorm:"column:publisher_did"`
 	ReceiverDID  string `gorm:"column:receiver_did"`

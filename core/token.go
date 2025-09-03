@@ -279,7 +279,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		publishingTxn := &model.PubSubTxnInfo{
 			TxnType:      tcb.TransactionType,
 			TxnMode:      RBTTransferMode,
-			TokenType:    ti.Tokens[0].TokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     blk.GetBlock(),
 		}

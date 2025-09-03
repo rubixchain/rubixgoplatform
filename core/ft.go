@@ -196,7 +196,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		publishingTxn := &model.PubSubTxnInfo{
 			TxnType:      tcb.TransactionType,
 			TxnMode:      RBTTransferMode,
-			TokenType:    bti.Tokens[0].TokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     block.GetBlock(),
 		}

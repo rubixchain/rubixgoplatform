@@ -277,7 +277,6 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		publishingTxn := &model.PubSubTxnInfo{
 			TxnType:      tcb.TransactionType,
 			TxnMode:      RBTTransferMode,
-			TokenType:    bti.Tokens[0].TokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     b.GetBlock(),
 		}
