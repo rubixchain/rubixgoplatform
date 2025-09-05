@@ -265,6 +265,7 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 				return nil, "", fmt.Errorf("invalid token chain block")
 			}
 			nextBlkID = blkID
+			break
 		}
 	}
 	return blks, nextBlkID, nil

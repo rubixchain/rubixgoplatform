@@ -101,3 +101,15 @@ type PinCheckReply struct {
 	Message    string            `json:"message"`
 	PinDetails *TokenProviderMap `json:"pin_details"`
 }
+
+type SendTokenDetailsInfo struct {
+	TokenChainLength uint64 `json:"tc_length"`
+	TokenType        int    `json:"token_type"`
+	Token            string `json:"token"`
+	Did              string `json:"did"`
+}
+
+type TokenChainDetailsEvent struct {
+	PublisherPeerID string                 `json:"publisher_peer_id"`
+	TokenDetails    []SendTokenDetailsInfo `json:"token_details"`
+}

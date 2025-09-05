@@ -144,6 +144,16 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 	return t, nil
 }
 
+func (w *Wallet) GetTokensWithMaxChainLength() ([]Token, error) {
+	var tokens []Token
+	err := w.s.Read(TokenStorage, &tokens, "token_status=? OR token_status=? OR token_status=? OR token_status=?", TokenIsFree, TokenIsPledged, TokenIsBurnt, TokenIsBurntForFT)
+	if err != nil {
+		w.log.Error("Failed to get tokens ", "err", err)
+		return nil, err
+	}
+	return tokens, nil
+}
+
 // This function will return all the FTs, their count and the creator DID in the node
 func (w *Wallet) GetAllFTsAndCount() ([]FT, error) {
 	fts, err := w.GetAllFreeFTs()
@@ -1248,6 +1258,14 @@ func (w *Wallet) UpdateTokenSyncStatus(tokenID string, syncStatus int) error {
 	err = w.s.Update(TokenStorage, &tokenInfo, "token_id=?", tokenID)
 	if err != nil {
 		w.log.Error("Failed to update token sync status", "err", err)
+		return err
+	}
+	return nil
+}
+func (w *Wallet) AddTokenDetailsToTokensTable(tokenDetails Token) error {
+	err := w.s.Write(TokenStorage, tokenDetails)
+	if err != nil {
+		w.log.Error("failed to write to db, token ", tokenDetails.TokenID)
 		return err
 	}
 	return nil
