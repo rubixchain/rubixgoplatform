@@ -358,8 +358,8 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 // 			continue
 // 		}
 
-// 	}
-// }
+//		}
+//	}
 func (c *Core) PublishTokenChainDetailsEvent(details []model.SendTokenDetailsInfo) {
 	event := &model.TokenChainDetailsEvent{
 		PublisherPeerID: c.peerID, // assuming you have node DID in config
@@ -965,6 +965,7 @@ func (c *Core) SyncFullTokenChain(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo)
 	tokenDetails.TokenStateHash = tokenStateHash
 	tokenDetails.TransactionID = transactionID
 	tokenDetails.DID = ownerDid
+	tokenDetails.TokenStatus = wallet.TokenIsSyncedFromOtherNode
 
 	// Update sync status to completed
 	err = c.w.UpdateTokenSyncStatus(tokenSyncInfo.TokenID, wallet.SyncCompleted)
