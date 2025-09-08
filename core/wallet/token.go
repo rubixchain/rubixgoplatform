@@ -31,6 +31,7 @@ const (
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
 	TokenIsBurntForFT
+	TokenIsSyncedFromOtherNode
 	QuorumPledgedForThisToken int = 20
 )
 const (
@@ -66,6 +67,8 @@ func (w *Wallet) CreateToken(t *Token) error {
 	return w.s.Write(TokenStorage, t)
 }
 func (w *Wallet) CreateFT(ft *FTToken) error {
+	w.l.Lock()
+	defer w.l.Unlock()
 	return w.s.Write(FTTokenStorage, ft)
 }
 func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) error {
@@ -1265,4 +1268,10 @@ func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 		}
 	}
 	return ftTokens, nil
+}
+
+func (w *Wallet) AddTokenDetailsToTokensTable(t *Token) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.s.Write(TokenStorage, t)
 }

@@ -1491,3 +1491,68 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 	go c.syncFullTokenChains(tokenSyncMap)
 
 }
+
+// Extract token details from given genesis block and add to the respective table, depending on the transaction type
+func (c *Core) AddTokenToRespectiveTable(tokenId string, txnMode int, genesisBlock *block.Block) error {
+	var err error
+	switch txnMode {
+	case RBTTransferMode:
+
+		tokenValue := genesisBlock.GetTokenValue()
+		parentId, _, err := genesisBlock.GetParentDetials(tokenId)
+		if err != nil {
+			c.log.Error("failed to fetch parent token Id of the token ", tokenId)
+		}
+		tokenOwner := genesisBlock.GetOwner()
+		tokenInfo := &wallet.Token{
+			TokenID:       tokenId,
+			TokenValue:    tokenValue,
+			ParentTokenID: parentId,
+			DID:           tokenOwner,
+			TokenStatus: wallet.TokenIsSyncedFromOtherNode,
+		}
+		err = c.w.AddTokenDetailsToTokensTable(tokenInfo)
+		if err != nil {
+			return err
+		}
+	case FTTransferMode:
+		ftValue := genesisBlock.GetTokenValue()
+		ftOwner := genesisBlock.GetOwner()
+		ftInfo := &wallet.FTToken{
+			TokenID:    tokenId,
+			TokenValue: ftValue,
+			CreatorDID: ftOwner,
+			TokenStatus: wallet.TokenIsSyncedFromOtherNode,
+		}
+		err = c.w.CreateFT(ftInfo)
+		if err != nil {
+			return err
+		}
+	case SmartContractDeployMode:
+		scDeployer := genesisBlock.GetDeployerDID()
+		scInfo := &wallet.SmartContract{
+			SmartContractHash: tokenId,
+			Deployer: scDeployer,
+			ContractStatus: wallet.TokenIsSyncedFromOtherNode,
+		} // TODO : add sc file details
+		err = c.w.CreateSmartContractToken(scInfo)
+		if err != nil {
+			return err
+		}
+	case NFTDeployMode:
+		nftValue := genesisBlock.GetTokenValue()
+		nftOwner := genesisBlock.GetDeployerDID()
+		nftInfo := &wallet.NFT{
+			TokenID: tokenId,
+			TokenValue: nftValue,
+			DID: nftOwner,
+			TokenStatus: wallet.TokenIsSyncedFromOtherNode,
+		} // TODO : add metadata details
+		local := false
+		err = c.w.CreateNFT(nftInfo, local)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
