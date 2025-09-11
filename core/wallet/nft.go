@@ -11,6 +11,14 @@ type NFT struct {
 	Filename    string  `gorm:"column:filename;" json:"filename"`
 }
 
+type SyncedNFT struct {
+	TokenID     string  `gorm:"column:token_id;primaryKey" json:"token_id"`
+	DID         string  `gorm:"column:did" json:"did"`
+	TokenValue  float64 `gorm:"column:token_value;" json:"token_value"`
+	// Metadata    string  `gorm:"column:metadata;" json:"metadata"`
+	// Filename    string  `gorm:"column:filename;" json:"filename"`
+}
+
 // CreateNFT write NFT into db
 func (w *Wallet) CreateNFT(nt *NFT, local bool) error {
 	// TODO: Update should only occur in UpdateNFT status function

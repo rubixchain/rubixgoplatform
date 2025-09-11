@@ -63,6 +63,14 @@ type Token struct {
 	SyncStatus     int     `gorm:"column:sync_status"`
 }
 
+type SyncedRBT struct {
+	TokenID       string  `gorm:"column:token_id;primaryKey"`
+	ParentTokenID string  `gorm:"column:parent_token_id"`
+	TokenValue    float64 `gorm:"column:token_value"`
+	DID           string  `gorm:"column:did"`
+	// TokenStateHash string  `gorm:"column:token_state_hash"`
+}
+
 func (w *Wallet) CreateToken(t *Token) error {
 	return w.s.Write(TokenStorage, t)
 }
@@ -1270,8 +1278,82 @@ func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 	return ftTokens, nil
 }
 
-func (w *Wallet) AddTokenDetailsToTokensTable(t *Token) error {
+// This function is used by fullnode to list all synced RBTs
+func (w *Wallet) AddSyncedRBTToTable(t *SyncedRBT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.s.Write(TokenStorage, t)
+	return w.s.Write(FullNodeRBTTable, t)
+}
+
+// This function is used by fullnode to list all synced FTs
+func (w *Wallet) AddSyncedFTToTable(t *SyncedFT) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.s.Write(FullNodeFTTable, t)
+}
+
+// This function is used by fullnode to list all synced NFTs
+func (w *Wallet) AddSyncedNFTToTable(t *SyncedNFT) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.s.Write(FullNodeNFTTable, t)
+}
+
+// This function is used by fullnode to list all synced smart contracts
+func (w *Wallet) AddSyncedSmartContractToTable(t *SyncedSmartContract) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.s.Write(FullNodeSmartContractTable, t)
+}
+
+// This function is used by fullnode to read from the list of all synced RBTs
+func (w *Wallet) ReadSyncedRBTFromTable(tokenId string) (*SyncedRBT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var rbt SyncedRBT
+	err := w.s.Read(FullNodeRBTTable, &rbt, "token_id=?", tokenId)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return &rbt, nil
+}
+
+// This function is used by fullnode to read from the list of all synced FTs
+func (w *Wallet) ReadSyncedFTFromTable(tokenId string) (*SyncedFT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var ft SyncedFT
+	err := w.s.Read(FullNodeFTTable, &ft, "token_id=?", tokenId)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return &ft, nil
+}
+
+// This function is used by fullnode to read from the list of all synced NFTs
+func (w *Wallet) ReadSyncedNFTFromTable(tokenId string) (*SyncedNFT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var nft SyncedNFT
+	err := w.s.Read(FullNodeNFTTable, &nft, "token_id=?", tokenId)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return &nft, nil
+}
+
+// This function is used by fullnode to read from the list of all synced smart contracts
+func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedSmartContract, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var sc SyncedSmartContract
+	err := w.s.Read(FullNodeSmartContractTable, &sc, "token_id=?", contractHash)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return &sc, nil
 }

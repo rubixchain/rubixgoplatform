@@ -17,3 +17,11 @@ type FT struct {
 	FTCount    int    `gorm:"column:ft_count"`
 	CreatorDID string `gorm:"column:creator_did"`
 }
+
+type SyncedFT struct {
+	TokenID    string  `gorm:"column:token_id;primaryKey"`
+	FTName     string  `gorm:"column:ft_name"`
+	DID        string  `gorm:"column:owner_did"`
+	CreatorDID string  `gorm:"column:creator_did"`
+	TokenValue float64 `gorm:"column:token_value"`
+}

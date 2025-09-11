@@ -1504,52 +1504,47 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnMode int, genesisBlo
 			c.log.Error("failed to fetch parent token Id of the token ", tokenId)
 		}
 		tokenOwner := genesisBlock.GetOwner()
-		tokenInfo := &wallet.Token{
+		tokenInfo := &wallet.SyncedRBT{
 			TokenID:       tokenId,
 			TokenValue:    tokenValue,
 			ParentTokenID: parentId,
 			DID:           tokenOwner,
-			TokenStatus: wallet.TokenIsSyncedFromOtherNode,
 		}
-		err = c.w.AddTokenDetailsToTokensTable(tokenInfo)
+		err = c.w.AddSyncedRBTToTable(tokenInfo)
 		if err != nil {
 			return err
 		}
 	case FTTransferMode:
 		ftValue := genesisBlock.GetTokenValue()
 		ftOwner := genesisBlock.GetOwner()
-		ftInfo := &wallet.FTToken{
-			TokenID:    tokenId,
-			TokenValue: ftValue,
-			CreatorDID: ftOwner,
-			TokenStatus: wallet.TokenIsSyncedFromOtherNode,
+		ftInfo := &wallet.SyncedFT{
+			TokenID:     tokenId,
+			TokenValue:  ftValue,
+			CreatorDID:  ftOwner,
 		}
-		err = c.w.CreateFT(ftInfo)
+		err = c.w.AddSyncedFTToTable(ftInfo)
 		if err != nil {
 			return err
 		}
 	case SmartContractDeployMode:
 		scDeployer := genesisBlock.GetDeployerDID()
-		scInfo := &wallet.SmartContract{
+		scInfo := &wallet.SyncedSmartContract{
 			SmartContractHash: tokenId,
-			Deployer: scDeployer,
-			ContractStatus: wallet.TokenIsSyncedFromOtherNode,
+			Deployer:          scDeployer,
 		} // TODO : add sc file details
-		err = c.w.CreateSmartContractToken(scInfo)
+		err = c.w.AddSyncedSmartContractToTable(scInfo)
 		if err != nil {
 			return err
 		}
 	case NFTDeployMode:
 		nftValue := genesisBlock.GetTokenValue()
 		nftOwner := genesisBlock.GetDeployerDID()
-		nftInfo := &wallet.NFT{
-			TokenID: tokenId,
-			TokenValue: nftValue,
-			DID: nftOwner,
-			TokenStatus: wallet.TokenIsSyncedFromOtherNode,
+		nftInfo := &wallet.SyncedNFT{
+			TokenID:     tokenId,
+			TokenValue:  nftValue,
+			DID:         nftOwner,
 		} // TODO : add metadata details
-		local := false
-		err = c.w.CreateNFT(nftInfo, local)
+		err = c.w.AddSyncedNFTToTable(nftInfo)
 		if err != nil {
 			return err
 		}
