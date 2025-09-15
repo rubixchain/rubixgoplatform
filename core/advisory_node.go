@@ -16,12 +16,12 @@ func (c *Core) InitializeAdvisoryNode() {
 		c.advisoryNodeEnabled = false
 		return
 	}
-	
+
 	// Create HTTP client with timeout
 	client := &http.Client{
-		Timeout: 2 * time.Second,
+		Timeout: 10 * time.Second, // Increased timeout for advisory node service
 	}
-	
+
 	// Check if advisory node is available
 	resp, err := client.Get(c.advisoryNodeURL + "/api/quorum/health")
 	if err != nil {
