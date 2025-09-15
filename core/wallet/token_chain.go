@@ -174,11 +174,6 @@ func tcsBlockID(token string, key string) string {
 func (w *Wallet) getChainDB(tt int) *ChainDB {
 	var db *ChainDB
 
-	// full nodes store all chains in a single DB called "fullnodestoarge"
-	if w.FullNode {
-		return w.fullNodeStorage
-	}
-
 	switch tt {
 	case tkn.RBTTokenType:
 		db = w.tcs
@@ -221,6 +216,15 @@ func (w *Wallet) getRawBlock(db *ChainDB, key []byte) ([]byte, error) {
 // getBlock get chain block from the storage
 func (w *Wallet) getBlock(tt int, t string, blockID string) ([]byte, error) {
 	db := w.getChainDB(tt)
+	if db == nil {
+		return nil, fmt.Errorf("failed get block, invalid token type")
+	}
+	return w.getRawBlock(db, []byte(tcsKey(tt, t, blockID)))
+}
+
+// getFullNodeBlock gets chain block from the FullNode storage
+func (w *Wallet) getFullNodeBlock(tt int, t string, blockID string) ([]byte, error) {
+	db := w.fullNodeStorage
 	if db == nil {
 		return nil, fmt.Errorf("failed get block, invalid token type")
 	}
@@ -277,8 +281,86 @@ func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, s
 	return blks, nextBlkID, nil
 }
 
+// getAllFullNodeBlocks gets the chain blocks from the FullNode storage
+func (w *Wallet) getAllFullNodeBlocks(tt int, token string, blockID string) ([][]byte, string, error) {
+	db := w.fullNodeStorage
+	if db == nil {
+		return nil, "", fmt.Errorf("failed get all blocks, invalid token type")
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
+	defer iter.Release()
+	blks := make([][]byte, 0)
+	count := 0
+	if blockID != "" {
+		if !iter.Seek([]byte(tcsKey(tt, token, blockID))) {
+			return nil, "", fmt.Errorf("Token chain block does not exist")
+		}
+	}
+	nextBlkID := ""
+	var err error
+	for iter.Next() {
+		key := string(iter.Key())
+		if isOldKey(key) {
+			err = w.updateFullNodeNewKey(tt, token)
+			if err != nil {
+				w.log.Error("Failed to update new key", "err", err)
+				return nil, "", err
+			}
+			return w.getAllFullNodeBlocks(tt, token, blockID)
+		}
+		v := iter.Value()
+		blk := make([]byte, len(v))
+		copy(blk, v)
+		if string(blk[0:2]) == ReferenceType {
+			blk, err = w.getRawBlock(db, blk)
+			if err != nil {
+				return nil, "", err
+			}
+		}
+		blks = append(blks, blk)
+		count++
+		if count == TCBlockCountLimit {
+			b := block.InitBlock(blk, nil)
+			blkID, err := b.GetBlockID(token)
+			if err != nil {
+				return nil, "", fmt.Errorf("invalid token chain block")
+			}
+			nextBlkID = blkID
+		}
+	}
+	return blks, nextBlkID, nil
+}
+
 func (w *Wallet) updateNewKey(tt int, token string) error {
 	db := w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to get latest block, invalid token type")
+		return nil
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
+	defer iter.Release()
+	for iter.Next() {
+		key := string(iter.Key())
+		if isOldKey(key) {
+			v := iter.Value()
+			blk := make([]byte, len(v))
+			copy(blk, v)
+			db.l.Lock()
+			err := db.Delete([]byte(key), nil)
+			if err == nil {
+				err = db.Put([]byte(old2NewKey(key)), blk, nil)
+			}
+			db.l.Unlock()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (w *Wallet) updateFullNodeNewKey(tt int, token string) error {
+	db := w.fullNodeStorage
 	if db == nil {
 		w.log.Error("Failed to get latest block, invalid token type")
 		return nil
@@ -340,6 +422,42 @@ func (w *Wallet) getGenesisBlock(tt int, token string) *block.Block {
 	return nil
 }
 
+// getGenesisBlock get the genesis block from the storage
+func (w *Wallet) getFullNodeGenesisBlock(tt int, token string) *block.Block {
+	db := w.fullNodeStorage
+	if db == nil {
+		w.log.Error("Failed to get first block, invalid token type")
+		return nil
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
+	defer iter.Release()
+	var err error
+	if iter.First() {
+		key := string(iter.Key())
+		if isOldKey(key) {
+			err = w.updateFullNodeNewKey(tt, token)
+			if err != nil {
+				w.log.Error("Failed to update new key", "err", err)
+				return nil
+			}
+			return w.getFullNodeGenesisBlock(tt, token)
+		}
+		v := iter.Value()
+		blk := make([]byte, len(v))
+		copy(blk, v)
+		if string(blk[0:2]) == ReferenceType {
+			blk, err = w.getRawBlock(db, blk)
+			if err != nil {
+				return nil
+			}
+		}
+		b := block.InitBlock(blk, nil)
+		return b
+	}
+	return nil
+}
+
+
 // getLatestBlock get latest block from the storage
 func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 	db := w.getChainDB(tt)
@@ -360,6 +478,43 @@ func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 			}
 			w.log.Debug("Keys are updated successfully")
 			return w.getLatestBlock(tt, token)
+		}
+		v := iter.Value()
+		blk := make([]byte, len(v))
+		copy(blk, v)
+		if string(blk[0:2]) == ReferenceType {
+			blk, err = w.getRawBlock(db, blk)
+			if err != nil {
+				w.log.Error("Failed to get reference block", "err", err)
+				return nil
+			}
+		}
+		b := block.InitBlock(blk, nil)
+		return b
+	}
+	return nil
+}
+
+// getLatestBlock get latest block from the storage
+func (w *Wallet) getFullNodeLatestBlock(tt int, token string) *block.Block {
+	db := w.fullNodeStorage
+	if db == nil {
+		w.log.Error("Failed to get latest block, invalid token type")
+		return nil
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
+	defer iter.Release()
+	var err error
+	if iter.Last() {
+		key := string(iter.Key())
+		if isOldKey(key) {
+			err = w.updateFullNodeNewKey(tt, token)
+			if err != nil {
+				w.log.Error("Failed to update new key", "err", err)
+				return nil
+			}
+			w.log.Debug("Keys are updated successfully")
+			return w.getFullNodeLatestBlock(tt, token)
 		}
 		v := iter.Value()
 		blk := make([]byte, len(v))
@@ -423,6 +578,92 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 		if bn <= lbn {
 			if bn == lbn {
 				err = w.removeTokenChainBlockLatest(token, tt)
+				if err != nil {
+					w.log.Error("Failed to remove latest block of token", token, "err", err)
+					return err
+				}
+			} else {
+				w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
+				return fmt.Errorf("invalid block number, sequence missing")
+			}
+		}
+	}
+	if b.CheckMultiTokenBlock() {
+		bs, err := b.GetHash()
+		if err != nil {
+			return err
+		}
+		hs := ut.HexToStr(ut.CalculateHash(b.GetBlock(), "SHA3-256"))
+		refkey := []byte(ReferenceType + "-" + hs + "-" + bs)
+		_, err = w.getRawBlock(db, refkey)
+		// Write only if reference block not exist
+		if err != nil {
+			db.l.Lock()
+			err = db.Put(refkey, b.GetBlock(), opt)
+			db.l.Unlock()
+			if err != nil {
+				return err
+			}
+		}
+		db.l.Lock()
+		err = db.Put([]byte(key), refkey, opt)
+		db.l.Unlock()
+		return err
+	} else {
+		db.l.Lock()
+		err = db.Put([]byte(key), b.GetBlock(), opt)
+		if tt == tkn.TestTokenType {
+			w.log.Debug("Written", "key", key)
+		}
+		db.l.Unlock()
+		return err
+	}
+}
+
+
+// addFullNodeBlock will write block into fullnode-storage
+func (w *Wallet) addFullNodeBlock(token string, b *block.Block) error {
+	opt := &opt.WriteOptions{
+		Sync: true,
+	}
+	tt := b.GetTokenType(token)
+
+	var db *ChainDB
+	if w.FullNode {
+		db = w.fullNodeStorage
+	} else {
+		w.log.Error("Not a fullnode, fullnode storage does not exist")
+		return fmt.Errorf("not a fullnode, fullnode storage does not exist")
+	}
+
+	bid, err := b.GetBlockID(token)
+	if err != nil {
+		return err
+	}
+	key := tcsKey(tt, token, bid)
+	lb := w.getFullNodeLatestBlock(tt, token)
+	bn, err := b.GetBlockNumber(token)
+	if err != nil {
+		w.log.Error("Failed to get block number", "err", err)
+		return err
+	}
+
+	// First block check block number start with zero
+	if lb == nil {
+		if bn != 0 {
+			w.log.Error("Invalid block number, expect 0", "bn", bn)
+			return fmt.Errorf("invalid block number")
+		}
+	} else {
+		lbn, err := lb.GetBlockNumber(token)
+		if err != nil {
+			w.log.Error("Failed to get block number", "err", err)
+			return err
+		}
+
+		if bn <= lbn {
+			if bn == lbn {
+				err = w.removeFullNodeTokenChainBlockLatest(token, tt)
 				if err != nil {
 					w.log.Error("Failed to remove latest block of token", token, "err", err)
 					return err
@@ -659,9 +900,19 @@ func (w *Wallet) GetTokenBlock(token string, tokenType int, blockID string) ([]b
 	return w.getBlock(tokenType, token, blockID)
 }
 
+// GetFullNodeTokenBlock gets token chain block from the FullNode storage
+func (w *Wallet) GetFullNodeTokenBlock(token string, tokenType int, blockID string) ([]byte, error) {
+	return w.getFullNodeBlock(tokenType, token, blockID)
+}
+
 // GetAllTokenBlocks get the tokecn chain blocks
 func (w *Wallet) GetAllTokenBlocks(token string, tokenType int, blockID string) ([][]byte, string, error) {
 	return w.getAllBlocks(tokenType, token, blockID)
+}
+
+// GetAllFullNodeTokenBlocks gets the token chain blocks from the FullNode storage
+func (w *Wallet) GetAllFullNodeTokenBlocks(token string, tokenType int, blockID string) ([][]byte, string, error) {
+	return w.getAllFullNodeBlocks(tokenType, token, blockID)
 }
 
 // GetLatestTokenBlock get latest token block from the storage
@@ -669,14 +920,29 @@ func (w *Wallet) GetLatestTokenBlock(token string, tokenType int) *block.Block {
 	return w.getLatestBlock(tokenType, token)
 }
 
-// GetLatestTokenBlock get latest token block from the storage
+// GetFullNodeLatestTokenBlock get latest token block from the storage
+func (w *Wallet) GetFullNodeLatestTokenBlock(token string, tokenType int) *block.Block {
+	return w.getFullNodeLatestBlock(tokenType, token)
+}
+
+// GetGenesisTokenBlock gets genesis token block from the storage
 func (w *Wallet) GetGenesisTokenBlock(token string, tokenType int) *block.Block {
 	return w.getGenesisBlock(tokenType, token)
+}
+
+// GetFullNodeGenesisTokenBlock gets genesis token block from the FullNode storage
+func (w *Wallet) GetFullNodeGenesisTokenBlock(token string, tokenType int) *block.Block {
+	return w.getFullNodeGenesisBlock(tokenType, token)
 }
 
 // AddTokenBlock will write token block into storage
 func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
 	return w.addBlock(token, b)
+}
+
+// AddTokenBlock will write token block into storage
+func (w *Wallet) AddFullNodeTokenBlock(token string, b *block.Block) error {
+	return w.addFullNodeBlock(token, b)
 }
 
 // AddMissingTokenBlock will write token block into existing token chain in storage
@@ -700,6 +966,28 @@ func (w *Wallet) RemoveTokenChainBlocklatest(token string, tokenType int) error 
 // Remove Tokenchain for mentioned token
 func (w *Wallet) removeTokenChainBlockLatest(token string, tokenType int) error {
 	db := w.getChainDB(tokenType)
+	if db == nil {
+		return fmt.Errorf("failed get all blocks, invalid token type")
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tokenType, token))), nil)
+	defer iter.Release()
+
+	if iter.Last() {
+		k := iter.Key()
+		err := db.Delete(k, nil)
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("no blocks found for the given token type and token")
+	}
+
+	return nil
+}
+
+// Remove Tokenchain for mentioned token
+func (w *Wallet) removeFullNodeTokenChainBlockLatest(token string, tokenType int) error {
+	db := w.fullNodeStorage
 	if db == nil {
 		return fmt.Errorf("failed get all blocks, invalid token type")
 	}

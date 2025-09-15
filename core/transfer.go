@@ -777,7 +777,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 					c.log.Error(errMsg)
 				}
 				// add block to the token chain
-				c.w.AddTokenBlock(tokenId, txnBlock)
+				c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
 				continue
 			}
 
@@ -804,16 +804,8 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 				return
 			}
 
-			// if the fullnode is the sender or the receiver then skip adding the current block again
-			if c.IsDIDExist("", newEvent.ReceiverDID) || c.IsDIDExist("", newEvent.PublisherDID) {
-				if latestBlockNumber != currentBlockNumber {
-					errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
-					c.log.Error(errMsg)
-					// TODO : handle all tokens with missing blocks
-					return
-				}
-				continue
-			} else if latestBlockNumber+1 != currentBlockNumber {
+			// check if the fullnode is updated with latest blocks
+			if latestBlockNumber+1 != currentBlockNumber {
 				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
 				c.log.Error(errMsg)
 				// TODO : handle all tokens with missing blocks
@@ -824,20 +816,20 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 
 			// Sanity check
 			if previousOwner != newEvent.PublisherDID {
-				c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
+				c.log.Error("txn callback: publisher DID is not same as the owner of token extracted from its previous token block")
 				return
 			}
 			if receiverDid != "" {
 				// Sanity check: In case of transfer NFT, it is always expected that receiver DID
 				// will always be same as the onwer (extracted from the latest NFT block)
 				if currentOwner != receiverDid {
-					c.log.Error("txn callback: reciever DID is not same as the owner of NFT extract from its latest token block")
+					c.log.Error("txn callback: reciever DID is not same as the owner of NFT extracted from received token block")
 					return
 				}
 			}
 
 			// add block to the token chain
-			err = c.w.AddTokenBlock(tokenId, txnBlock)
+			err = c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
 			if err != nil {
 				errMsg := fmt.Sprintf("failed to add block to token chain: %v, err : %v", tokenId, err)
 				c.log.Error(errMsg)
@@ -862,7 +854,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 				c.log.Error(errMsg)
 			}
 			// add block to the token chain
-			c.w.AddTokenBlock(tokenId, txnBlock)
+			c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
 		} else {
 
 			// fetch latest block from LDB and check if the publisher is the token owner in the last block
@@ -885,15 +877,9 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 				errMsg := fmt.Sprintf("failed to get current block number for token chain : %v", tokenId)
 				c.log.Error(errMsg)
 			}
-			// if the fullnode is the sender or the receiver then skip adding the current block again
-			if c.IsDIDExist("", newEvent.ReceiverDID) || c.IsDIDExist("", newEvent.PublisherDID) {
-				if latestBlockNumber != currentBlockNumber {
-					errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
-					c.log.Error(errMsg)
-					// TODO : handle all tokens with missing blocks
-					return
-				}
-			} else if latestBlockNumber+1 != currentBlockNumber {
+
+			// check if the fullnode is updated with latest blocks
+			if latestBlockNumber+1 != currentBlockNumber {
 				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
 				c.log.Error(errMsg)
 				// TODO : handle all tokens with missing blocks
@@ -908,7 +894,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 				}
 
 				// add block to the token chain
-				err = c.w.AddTokenBlock(tokenId, txnBlock)
+				err = c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
 				if err != nil {
 					errMsg := fmt.Sprintf("failed to add block to token chain: %v, err : %v", tokenId, err)
 					c.log.Error(errMsg)

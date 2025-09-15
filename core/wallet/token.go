@@ -31,7 +31,6 @@ const (
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
 	TokenIsBurntForFT
-	TokenIsSyncedFromOtherNode
 	QuorumPledgedForThisToken int = 20
 )
 const (
