@@ -150,6 +150,8 @@ type Core struct {
 	batchSyncTokenPool   *BatchSyncTokenInfoPool
 	tokenSlicePool       *TokenSlicePool
 	pendingTokenMonitor  *PendingTokenMonitor
+	advisoryNodeEnabled  bool
+	advisoryNodeURL      string
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -202,20 +204,22 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	}
 
 	c := &Core{
-		cfg:           cfg,
-		cfgFile:       cfgFile,
-		encKey:        encKey,
-		testNet:       testNet,
-		testNetKey:    testNetKey,
-		quorumRequest: make(map[string]*ConsensusStatus),
-		pd:            make(map[string]*PledgeDetails),
-		webReq:        make(map[string]*did.DIDChan),
-		qc:            make(map[string]did.DIDCrypto),
-		pqc:           make(map[string]did.DIDCrypto),
-		sd:            make(map[string]*ServiceDetials),
-		arbitaryMode:  am,
-		secret:        util.GetRandBytes(32),
-		defaultSetup:  defaultSetup,
+		cfg:                 cfg,
+		cfgFile:             cfgFile,
+		encKey:              encKey,
+		testNet:             testNet,
+		testNetKey:          testNetKey,
+		quorumRequest:       make(map[string]*ConsensusStatus),
+		pd:                  make(map[string]*PledgeDetails),
+		webReq:              make(map[string]*did.DIDChan),
+		qc:                  make(map[string]did.DIDCrypto),
+		pqc:                 make(map[string]did.DIDCrypto),
+		sd:                  make(map[string]*ServiceDetials),
+		arbitaryMode:        am,
+		secret:              util.GetRandBytes(32),
+		defaultSetup:        defaultSetup,
+		advisoryNodeURL:     "http://localhost:8082",
+		advisoryNodeEnabled: false,
 	}
 	c.didDir = c.cfg.DirPath + RubixRootDir
 	if c.testNet {
@@ -365,6 +369,9 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			c.as = NewTrackedStorage(c.as, c)
 		}
 	}
+	
+	// Initialize advisory node connection
+	c.InitializeAdvisoryNode()
 	
 	return c, nil
 }

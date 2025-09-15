@@ -201,6 +201,21 @@ func (s *Server) RegisterRoutes() {
 	// Token recovery doesn't need authentication - anyone should be able to recover their tokens
 	s.AddRoute(setup.APIRecoverLostTokens, "POST", s.APIRecoverLostTokens)
 	s.AddRoute(setup.APIRemoteRecoverTokens, "POST", s.APIRemoteRecoverTokens)
+
+	// Dashboard routes
+	s.AddRoute("/dashboard", "GET", s.ServeDashboard)
+	s.AddRoute("/dashboard/", "GET", s.ServeDashboard)
+	s.AddRoute("/dashboard/index.html", "GET", s.ServeDashboard)
+	s.AddRoute("/dashboard/dashboard.js", "GET", s.ServeDashboard)
+	s.AddRoute("/dashboard.js", "GET", s.ServeDashboard) // Route for browser requesting dashboard.js from root
+	s.AddRoute("/api/dashboard/data", "GET", s.GetDashboardData)
+	s.AddRoute("/api/dashboard/pledged", "GET", s.GetDashboardPledgedTokens)
+	s.AddRoute("/api/dashboard/unpledge", "GET", s.GetDashboardUnpledgeSequence)
+	s.AddRoute("/api/v1/tokens", "GET", s.GetDashboardTokensAPI)
+	s.AddRoute("/api/v1/account-info", "GET", s.GetDashboardAccountInfoAPI)
+	s.AddRoute("/api/v1/transactions", "GET", s.GetDashboardTransactionsAPI)
+	s.AddRoute("/api/v1/unpledge-sequence", "GET", s.GetDashboardUnpledgeSequenceAPI)
+	s.AddRoute("/api/v1/dids", "GET", s.GetDashboardDIDsAPI)
 }
 
 func (s *Server) ExitFunc() error {

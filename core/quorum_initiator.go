@@ -358,11 +358,34 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 		}
 	}
 
+	// Register with advisory node if enabled
+	if c.advisoryNodeEnabled {
+		// Get current balance for this DID
+		balance := c.GetAccountBalance(didStr)
+		
+		// Register with advisory node
+		err := c.RegisterQuorumWithAdvisory(didStr, balance, dt.Type)
+		if err != nil {
+			c.log.Error("Failed to register with advisory node", "err", err)
+			// Don't fail the setup, just log the error
+		} else {
+			// Confirm availability
+			err = c.ConfirmQuorumAvailability(didStr)
+			if err != nil {
+				c.log.Error("Failed to confirm availability with advisory node", "err", err)
+			}
+			
+			// Start heartbeat goroutine
+			go c.MaintainQuorumHeartbeat(didStr)
+		}
+	}
+
 	return nil
 }
 
 func (c *Core) GetAllQuorum() []string {
-	return c.qm.GetQuorum(QuorumTypeTwo, "", c.peerID)
+	// Use advisory node if available, with 0 transaction amount for listing all
+	return c.GetQuorumsFromAdvisory(0.0, MinQuorumRequired, "")
 }
 
 func (c *Core) AddQuorum(ql []QuorumData) error {
@@ -475,9 +498,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	lastCharTID := string(tid[len(tid)-1])
 	cr.TransactionID = tid
 
-	ql := c.qm.GetQuorum(cr.Type, lastCharTID, c.peerID) // passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
+	// Use advisory node to get quorums with balance validation
+	ql := c.GetQuorumsFromAdvisory(reqPledgeTokens, MinQuorumRequired, lastCharTID)
 	if ql == nil || len(ql) < MinQuorumRequired {
-		c.log.Error("Failed to get required quorums")
+		c.log.Error("Failed to get required quorums", "required", MinQuorumRequired, "got", len(ql))
 		return nil, nil, nil, fmt.Errorf("failed to get required quorums")
 	}
 
