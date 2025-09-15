@@ -107,6 +107,7 @@ type SendTokenDetailsInfo struct {
 	TokenType        int    `json:"token_type"`
 	Token            string `json:"token"`
 	Did              string `json:"did"`
+	AssetType       int     `json:"asset_type"`
 }
 
 type TokenChainDetailsEvent struct {

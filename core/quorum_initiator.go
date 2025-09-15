@@ -37,6 +37,12 @@ const (
 	FTTransferMode
 )
 const (
+	RBTTokenType int = iota
+	SmartContractTokenType
+	NFTTokenType
+	FTTokenType
+)
+const (
 	AlphaQuorumType int = iota
 	BetaQuorumType
 	GammaQuorumType

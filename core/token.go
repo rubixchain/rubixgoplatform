@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -61,6 +60,7 @@ type TokenVerificationResponse struct {
 type TokenSyncInfo struct {
 	TokenID   string `gorm:"column:token_id;primaryKey"`
 	TokenType int    `gorm:"column:token_type"`
+	AsseType  int    `gorm:"column:asset_type"`
 }
 
 //	type SendTokenDetailsInfo struct {
@@ -68,9 +68,9 @@ type TokenSyncInfo struct {
 //		TokenType        int    `json:"token_type"`
 //		Token            string `json:"token"`
 //	}
-type AllTokenChainDetails struct {
-	TokenTCLengthDetails map[string]model.SendTokenDetailsInfo `json:"token_tc_details"`
-}
+// type AllTokenChainDetails struct {
+// 	TokenTCLengthDetails map[string]model.SendTokenDetailsInfo `json:"token_tc_details"`
+// }
 
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
@@ -387,16 +387,46 @@ func (c *Core) publishTokenChainDetailsEvent(event *model.TokenChainDetailsEvent
 // First, It should read the sqlite DB and publish all those tokens details to a pub-sub event
 func (c *Core) publishTokenChainDetails() error {
 
-	tokenswithMaxChainLength, err := c.w.GetTokensWithMaxChainLength()
-	if err != nil {
-		if strings.Contains(err.Error(), "no records found") {
-			c.log.Error("There are no tokens to publish the tokenchain length details")
-			return fmt.Errorf("no tokens available for publishing")
+	var rbtError error
+	rbtTokensWithMaxChainLength, rbtError := c.w.GetRBTTokensWithMaxChainLength()
+	if rbtError != nil {
+		if strings.Contains(rbtError.Error(), "no records found") {
+			c.log.Error("There are no rbt tokens to publish the tokenchain length details")
+			// return fmt.Errorf("no rbt tokens available for publishing")
 		}
-		return fmt.Errorf("failed to get tokens to publish: %w", err)
+		// return fmt.Errorf("failed to get rbt tokens to publish: %w", err)
 	}
+	var ftError error
+	ftTokensWithMaxChainLength, ftError := c.w.GetFTTokensWithMaxChainLength()
+	if ftError != nil {
+		if strings.Contains(ftError.Error(), "no records found") {
+			c.log.Error("There are no FT tokens to publish the tokenchain length details")
+			// return fmt.Errorf("no FT tokens available for publishing")
+		}
+		// return fmt.Errorf("failed to get FT tokens to publish: %w", err)
+	}
+	var nftError error
+	nftTokensWithMaxChainLength, nftError := c.w.GetNFTTokensWithMaxChainLength()
+	if nftError != nil {
+		if strings.Contains(nftError.Error(), "no records found") {
+			c.log.Error("There are no NFT tokens to publish the tokenchain length details")
+			// return fmt.Errorf("no NFT tokens available for publishing")
+		}
+		// return fmt.Errorf("failed to get NFT tokens to publish: %w", err)
+	}
+
+	var smartcontractErr error
+	smartContractTokensWithMaxChainLength, smartcontractErr := c.w.GetSmartContractTokensWithMaxChainLength()
+	if smartcontractErr != nil {
+		if strings.Contains(smartcontractErr.Error(), "no records found") {
+			c.log.Error("There are no smart contract tokens to publish the tokenchain length details")
+			// return fmt.Errorf("no smart contract tokens available for publishing")
+		}
+		// return fmt.Errorf("failed to get smart contract tokens to publish: %w", err)
+	}
+
 	var tokenDetailsToPublish []model.SendTokenDetailsInfo
-	for _, token := range tokenswithMaxChainLength {
+	for _, token := range rbtTokensWithMaxChainLength {
 		var tokenType int
 		tokenType = c.TokenType(RBTString)
 		if token.TokenValue != float64(1) {
@@ -420,9 +450,80 @@ func (c *Core) publishTokenChainDetails() error {
 		tokenDetails.TokenChainLength = blockHeight
 		tokenDetails.TokenType = tokenType
 		tokenDetails.Did = token.DID
+		tokenDetails.AssetType = RBTTokenType
+		tokenDetailsToPublish = append(tokenDetailsToPublish, tokenDetails)
+	}
+
+	for _, token := range ftTokensWithMaxChainLength {
+		tokenType := c.TokenType(FTString)
+		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
+		if latestBlock == nil {
+			c.log.Error("Failed to get latest block for token", "token", token)
+			return fmt.Errorf("Failed to get latest block for token", "token", token)
+		}
+
+		// Get block height
+		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
+		if err != nil {
+			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
+			return fmt.Errorf("Failed to get latest block height of token", "token", token, "error", err)
+		}
+		var tokenDetails model.SendTokenDetailsInfo
+		tokenDetails.Token = token.TokenID
+		tokenDetails.TokenChainLength = blockHeight
+		tokenDetails.TokenType = tokenType
+		tokenDetails.Did = token.DID
+		tokenDetails.AssetType = FTTokenType
 		tokenDetailsToPublish = append(tokenDetailsToPublish, tokenDetails)
 
 	}
+	for _, token := range nftTokensWithMaxChainLength {
+		tokenType := c.TokenType(NFTString)
+		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
+		if latestBlock == nil {
+			c.log.Error("Failed to get latest block for token", "token", token)
+			return fmt.Errorf("Failed to get latest block for token", "token", token)
+		}
+
+		// Get block height
+		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
+		if err != nil {
+			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
+			return fmt.Errorf("Failed to get latest block height of token", "token", token, "error", err)
+		}
+		var tokenDetails model.SendTokenDetailsInfo
+		tokenDetails.Token = token.TokenID
+		tokenDetails.TokenChainLength = blockHeight
+		tokenDetails.TokenType = tokenType
+		tokenDetails.Did = token.DID
+		tokenDetails.AssetType = NFTTokenType
+		tokenDetailsToPublish = append(tokenDetailsToPublish, tokenDetails)
+
+	}
+	for _, token := range smartContractTokensWithMaxChainLength {
+		tokenType := c.TokenType(SmartContractString)
+		latestBlock := c.w.GetLatestTokenBlock(token.SmartContractHash, tokenType)
+		if latestBlock == nil {
+			c.log.Error("Failed to get latest block for token", "token", token)
+			return fmt.Errorf("Failed to get latest block for token", "token", token)
+		}
+
+		// Get block height
+		blockHeight, err := latestBlock.GetBlockNumber(token.SmartContractHash)
+		if err != nil {
+			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
+			return fmt.Errorf("Failed to get latest block height of token", "token", token, "error", err)
+		}
+		var tokenDetails model.SendTokenDetailsInfo
+		tokenDetails.Token = token.SmartContractHash
+		tokenDetails.TokenChainLength = blockHeight
+		tokenDetails.TokenType = tokenType
+		tokenDetails.Did = token.Deployer
+		tokenDetails.AssetType = SmartContractTokenType
+		tokenDetailsToPublish = append(tokenDetailsToPublish, tokenDetails)
+
+	}
+
 	//call publishing function to pub-sub
 	c.PublishTokenChainDetailsEvent(tokenDetailsToPublish)
 	c.log.Info("**returning from publishTokenChainDetails function**")
@@ -473,18 +574,19 @@ func (c *Core) TokenChainDetailsCallback(peerID string, topic string, data []byt
 	for _, detail := range event.TokenDetails {
 		// Validate DID
 		if detail.Did == "" {
-			c.log.Warn("Empty DID in token details, using peerID only", "token", detail.Token)
-			detail.Did = event.PublisherPeerID
+			c.log.Error("token owner DID is Empty in token details", "token", detail.Token)
+			continue
 		}
 		address := event.PublisherPeerID + "." + detail.Did
 
 		// Check if token chain exists locally
 		latestBlock := c.w.GetLatestTokenBlock(detail.Token, detail.TokenType)
 		if latestBlock == nil {
-			c.log.Debug("No local token chain, queuing for sync from genesis", "token", detail.Token, "peerAddr", address)
+			c.log.Error("No local token chain, queuing for sync from genesis", "token", detail.Token, "peerAddr", address)
 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
 				TokenID:   detail.Token,
 				TokenType: detail.TokenType,
+				AsseType:  detail.AssetType,
 			})
 			continue
 		}
@@ -502,6 +604,7 @@ func (c *Core) TokenChainDetailsCallback(peerID string, topic string, data []byt
 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
 				TokenID:   detail.Token,
 				TokenType: detail.TokenType,
+				AsseType:  detail.AssetType,
 			})
 		}
 	}
@@ -927,57 +1030,53 @@ func (c *Core) SyncFullTokenChain(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo)
 	}
 
 	genesisBlock := c.w.GetGenesisTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
-	var tokenValue float64
-	var parentTokenID string
+	// var tokenValue float64
+	// // var parentTokenID string
+	// if genesisBlock != nil {
+	// 	// tokenValue = genesisBlock.GetTokenValue()
+	// 	// parentTokenID, _, err = genesisBlock.GetParentDetials(tokenSyncInfo.TokenID)
+	// 	if err != nil {
+	// 		c.log.Error("failed to get parent tokenID of the token ", tokenSyncInfo.TokenID)
+	// 	}
+	// }
+	// var ownerDid string
+	// var transactionID string
+	// var latestBlockID string
+	// var tokenStateHash string
+	// latestBlockAfterSync := c.w.GetLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
+	// if latestBlockAfterSync != nil {
+	// 	ownerDid = latestBlockAfterSync.GetOwner()
+	// 	transactionID = latestBlockAfterSync.GetTid()
+	// 	latestBlockID, err = latestBlockAfterSync.GetBlockID(tokenSyncInfo.TokenID)
+	// 	if err != nil {
+	// 		c.log.Error("failed to get latest blockID", "token: ", tokenSyncInfo.TokenID)
+	// 	}
+	// 	//concat tokenId and BlockID
+	// 	tokenStateData := tokenSyncInfo.TokenID + latestBlockID
+	// 	tokenStateBuffer := bytes.NewBuffer([]byte(tokenStateData))
+	// 	tokenStateHash, err = c.ipfs.Add(tokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	// 	if err != nil {
+	// 		c.log.Error("unable to get previous token state hash for token: %v, err: %v", tokenSyncInfo.TokenID, err)
+	// 	}
+
+	// }
+
+	// var tokenDetails wallet.Token
+	// tokenDetails.TokenID = tokenSyncInfo.TokenID
+	// tokenDetails.TokenValue = tokenValue
+	// tokenDetails.ParentTokenID = parentTokenID
+	// tokenDetails.TokenStateHash = tokenStateHash
+	// tokenDetails.TransactionID = transactionID
+	// tokenDetails.DID = ownerDid
+	// tokenDetails.TokenStatus = wallet.TokenIsSyncedFromOtherNode
+
+	//add synced tokens to respective sqlite tables
 	if genesisBlock != nil {
-		tokenValue = genesisBlock.GetTokenValue()
-		parentTokenID, _, err = genesisBlock.GetParentDetials(tokenSyncInfo.TokenID)
+		err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, tokenSyncInfo.AsseType, genesisBlock)
 		if err != nil {
-			c.log.Error("failed to get parent tokenID of the token ", tokenSyncInfo.TokenID)
+			c.log.Error("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
+			return err
 		}
-	}
-	var ownerDid string
-	var transactionID string
-	var latestBlockID string
-	var tokenStateHash string
-	latestBlockAfterSync := c.w.GetLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
-	if latestBlockAfterSync != nil {
-		ownerDid = latestBlockAfterSync.GetOwner()
-		transactionID = latestBlockAfterSync.GetTid()
-		latestBlockID, err = latestBlockAfterSync.GetBlockID(tokenSyncInfo.TokenID)
-		if err != nil {
-			c.log.Error("failed to get latest blockID", "token: ", tokenSyncInfo.TokenID)
-		}
-		//concat tokenId and BlockID
-		tokenStateData := tokenSyncInfo.TokenID + latestBlockID
-		tokenStateBuffer := bytes.NewBuffer([]byte(tokenStateData))
-		tokenStateHash, err = c.ipfs.Add(tokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-		if err != nil {
-			c.log.Error("unable to get previous token state hash for token: %v, err: %v", tokenSyncInfo.TokenID, err)
-		}
-
-	}
-
-	var tokenDetails wallet.Token
-	tokenDetails.TokenID = tokenSyncInfo.TokenID
-	tokenDetails.TokenValue = tokenValue
-	tokenDetails.ParentTokenID = parentTokenID
-	tokenDetails.TokenStateHash = tokenStateHash
-	tokenDetails.TransactionID = transactionID
-	tokenDetails.DID = ownerDid
-	tokenDetails.TokenStatus = wallet.TokenIsSyncedFromOtherNode
-
-	// Update sync status to completed
-	err = c.w.UpdateTokenSyncStatus(tokenSyncInfo.TokenID, wallet.SyncCompleted)
-	if err != nil {
-		c.log.Error("Failed to update token sync status", "token", tokenSyncInfo.TokenID, "err", err)
-		if strings.Contains(err.Error(), "no records found") {
-			err = c.w.AddTokenDetailsToTokensTable(tokenDetails)
-			if err != nil {
-				c.log.Error("failed to add token details to Tokens table", "error: ", err)
-			}
-		}
-		return err
 	}
 	return nil
 }
@@ -1043,7 +1142,6 @@ func (c *Core) syncMissingBlocks(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo) 
 	return nil
 }
 
-// TODO:*******Create another function similar to syncMissingBlocksOfTokenChains to call the NewSyncFullTokenChain function and change the name of the syncFullTokenChain and syncMissingBlocksOfTokenChains functions*****************
 func (c *Core) syncMissingBlocksOfTokenChains(tokenSyncMap map[string][]TokenSyncInfo) {
 	// sync sequencially for each peer
 	for peerAddr, tokenSyncInfo := range tokenSyncMap {
@@ -1887,4 +1985,65 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 	// restart all incomplete token chain sync as a background process
 	go c.syncMissingBlocksOfTokenChains(tokenSyncMap)
 
+}
+
+// Extract token details from given genesis block and add synced tokens  to the respective token table of Fullnode, depending on the asset type
+func (c *Core) AddTokenToRespectiveTable(tokenId string, txnMode int, genesisBlock *block.Block) error {
+	var err error
+	switch txnMode {
+	case RBTTransferMode:
+
+		tokenValue := genesisBlock.GetTokenValue()
+		parentId, _, err := genesisBlock.GetParentDetials(tokenId)
+		if err != nil {
+			c.log.Error("failed to fetch parent token Id of the token ", tokenId)
+		}
+		tokenOwner := genesisBlock.GetOwner()
+		tokenInfo := &wallet.SyncedRBT{
+			TokenID:       tokenId,
+			TokenValue:    tokenValue,
+			ParentTokenID: parentId,
+			DID:           tokenOwner,
+		}
+		err = c.w.AddSyncedRBTToTable(tokenInfo)
+		if err != nil {
+			return err
+		}
+	case FTTransferMode:
+		ftValue := genesisBlock.GetTokenValue()
+		ftOwner := genesisBlock.GetOwner()
+		ftInfo := &wallet.SyncedFT{
+			TokenID:    tokenId,
+			TokenValue: ftValue,
+			CreatorDID: ftOwner,
+		}
+		err = c.w.AddSyncedFTToTable(ftInfo)
+		if err != nil {
+			return err
+		}
+	case SmartContractDeployMode:
+		scDeployer := genesisBlock.GetDeployerDID()
+		scInfo := &wallet.SyncedSmartContract{
+			SmartContractHash: tokenId,
+			Deployer:          scDeployer,
+		} // TODO : add sc file details
+		err = c.w.AddSyncedSmartContractToTable(scInfo)
+		if err != nil {
+			return err
+		}
+	case NFTDeployMode:
+		nftValue := genesisBlock.GetTokenValue()
+		nftOwner := genesisBlock.GetDeployerDID()
+		nftInfo := &wallet.SyncedNFT{
+			TokenID:    tokenId,
+			TokenValue: nftValue,
+			DID:        nftOwner,
+		} // TODO : add metadata details
+		err = c.w.AddSyncedNFTToTable(nftInfo)
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

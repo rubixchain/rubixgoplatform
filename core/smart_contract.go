@@ -158,7 +158,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		c.log.Error("Failed to rename SC folder", "err", err)
 		return basicResponse
 	}
-	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, SchemaCodeHash: schemaCodeHash, ContractStatus: 6})
+	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, SchemaCodeHash: schemaCodeHash, ContractStatus: wallet.TokenIsGenerated})
 	if err != nil {
 		c.log.Error("Failed to create smart contract token", "err", err)
 		return basicResponse
