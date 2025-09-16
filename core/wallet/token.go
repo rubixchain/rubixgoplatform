@@ -1282,28 +1282,28 @@ func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 func (w *Wallet) AddSyncedRBTToTable(t *SyncedRBT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.s.Write(FullNodeRBTTable, t)
+	return w.fullNodeSQLDB.Write(FullNodeRBTTable, t)
 }
 
 // This function is used by fullnode to list all synced FTs
 func (w *Wallet) AddSyncedFTToTable(t *SyncedFT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.s.Write(FullNodeFTTable, t)
+	return w.fullNodeSQLDB.Write(FullNodeFTTable, t)
 }
 
 // This function is used by fullnode to list all synced NFTs
 func (w *Wallet) AddSyncedNFTToTable(t *SyncedNFT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.s.Write(FullNodeNFTTable, t)
+	return w.fullNodeSQLDB.Write(FullNodeNFTTable, t)
 }
 
 // This function is used by fullnode to list all synced smart contracts
 func (w *Wallet) AddSyncedSmartContractToTable(t *SyncedSmartContract) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.s.Write(FullNodeSmartContractTable, t)
+	return w.fullNodeSQLDB.Write(FullNodeSmartContractTable, t)
 }
 
 // This function is used by fullnode to read from the list of all synced RBTs
@@ -1311,10 +1311,11 @@ func (w *Wallet) ReadSyncedRBTFromTable(tokenId string) (*SyncedRBT, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var rbt SyncedRBT
-	err := w.s.Read(FullNodeRBTTable, &rbt, "token_id=?", tokenId)
+	err := w.fullNodeSQLDB.Read(FullNodeRBTTable, &rbt, "token_id=?", tokenId)
 	if err != nil {
-		w.log.Error("Failed to get tokens", "err", err)
-		return nil, err
+		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
+		// w.log.Error(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 	return &rbt, nil
 }
@@ -1324,9 +1325,9 @@ func (w *Wallet) ReadSyncedFTFromTable(tokenId string) (*SyncedFT, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var ft SyncedFT
-	err := w.s.Read(FullNodeFTTable, &ft, "token_id=?", tokenId)
+	err := w.fullNodeSQLDB.Read(FullNodeFTTable, &ft, "token_id=?", tokenId)
 	if err != nil {
-		w.log.Error("Failed to get tokens", "err", err)
+		// w.log.Error("Failed to get ft", "err", err)
 		return nil, err
 	}
 	return &ft, nil
@@ -1337,9 +1338,9 @@ func (w *Wallet) ReadSyncedNFTFromTable(tokenId string) (*SyncedNFT, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var nft SyncedNFT
-	err := w.s.Read(FullNodeNFTTable, &nft, "token_id=?", tokenId)
+	err := w.fullNodeSQLDB.Read(FullNodeNFTTable, &nft, "token_id=?", tokenId)
 	if err != nil {
-		w.log.Error("Failed to get tokens", "err", err)
+		// w.log.Error("Failed to get nft", "err", err)
 		return nil, err
 	}
 	return &nft, nil
@@ -1350,9 +1351,9 @@ func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedS
 	w.l.Lock()
 	defer w.l.Unlock()
 	var sc SyncedSmartContract
-	err := w.s.Read(FullNodeSmartContractTable, &sc, "token_id=?", contractHash)
+	err := w.fullNodeSQLDB.Read(FullNodeSmartContractTable, &sc, "token_id=?", contractHash)
 	if err != nil {
-		w.log.Error("Failed to get tokens", "err", err)
+		// w.log.Error("Failed to get sc", "err", err)
 		return nil, err
 	}
 	return &sc, nil
@@ -1362,26 +1363,26 @@ func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedS
 func (w *Wallet) UpdateSyncedRBTToTable(rbt *SyncedRBT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.s.Update(FullNodeRBTTable, &rbt, "token_id=?", rbt.TokenID)
+	return w.fullNodeSQLDB.Update(FullNodeRBTTable, &rbt, "token_id=?", rbt.TokenID)
 }
 
 // This function is used by fullnode to update synced FTs
 func (w *Wallet) UpdateSyncedFTToTable(ft *SyncedFT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.s.Update(FullNodeFTTable, &ft, "token_id=?", ft.TokenID)
+	return w.fullNodeSQLDB.Update(FullNodeFTTable, &ft, "token_id=?", ft.TokenID)
 }
 
 // This function is used by fullnode to update synced NFTs
 func (w *Wallet) UpdateSyncedNFTToTable(nft *SyncedNFT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.s.Update(FullNodeNFTTable, &nft, "token_id=?", nft.TokenID)
+	return w.fullNodeSQLDB.Update(FullNodeNFTTable, &nft, "token_id=?", nft.TokenID)
 }
 
 // This function is used by fullnode to update synced smart contracts
 func (w *Wallet) UpdateSyncedSmartContractToTable(sc *SyncedSmartContract) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.s.Update(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", sc.SmartContractHash)
+	return w.fullNodeSQLDB.Update(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", sc.SmartContractHash)
 }

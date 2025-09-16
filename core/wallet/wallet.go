@@ -60,7 +60,7 @@ type ChainDB struct {
 type Wallet struct {
 	ipfs                           *ipfsnode.Shell
 	s                              storage.Storage
-	fullNodeS                      storage.Storage
+	fullNodeSQLDB                  storage.Storage
 	l                              sync.Mutex
 	dtl                            sync.Mutex
 	log                            logger.Logger
@@ -71,16 +71,16 @@ type Wallet struct {
 	smartContractTokenChainStorage *ChainDB
 	FTChainStorage                 *ChainDB
 	fullNodeStorage                *ChainDB
-	FullNode                       bool
+	IsFullNode                     bool
 }
 
-func InitWallet(s storage.Storage, fullNodeStorage storage.Storage, dir string, log logger.Logger, fullNode bool) (*Wallet, error) {
+func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, dir string, log logger.Logger, fullNode bool) (*Wallet, error) {
 	var err error
 	w := &Wallet{
-		log:            log.Named("wallet"),
-		s:              s,
-		fullNodeS: fullNodeStorage,
-		FullNode: fullNode,
+		log:           log.Named("wallet"),
+		s:             s,
+		fullNodeSQLDB: fullNodeSQLDB,
+		IsFullNode:    fullNode,
 	}
 	w.tcs = &ChainDB{}
 	w.dtcs = &ChainDB{}
@@ -195,37 +195,37 @@ func InitWallet(s storage.Storage, fullNodeStorage storage.Storage, dir string, 
 	}
 
 	// DB for fullnodes to store all token-chains
-	if w.FullNode {
+	if w.IsFullNode {
 		fullNodeDB, err := leveldb.OpenFile(dir+FullNodeStorage, op)
 		if err != nil {
 			w.log.Error("failed to configure token chain block storage", "err", err)
 			return nil, fmt.Errorf("failed to configure token chain block storage")
 		}
 		w.fullNodeStorage.DB = fullNodeDB
-	}	
-	
-	err = w.fullNodeS.Init(FullNodeRBTTable, &SyncedRBT{}, true)
-	if err != nil {
-		w.log.Error("Failed to initialize RBT token storage", "err", err)
-		return nil, err
-	}
 
-	err = w.fullNodeS.Init(FullNodeFTTable, &SyncedFT{}, true)
-	if err != nil {
-		w.log.Error("Failed to initialize FT token storage", "err", err)
-		return nil, err
-	}
+		err = w.fullNodeSQLDB.Init(FullNodeRBTTable, &SyncedRBT{}, true)
+		if err != nil {
+			w.log.Error("Failed to initialize RBT token storage", "err", err)
+			return nil, err
+		}
 
-	err = w.fullNodeS.Init(FullNodeNFTTable, &SyncedNFT{}, true)
-	if err != nil {
-		w.log.Error("Failed to initialize whole token storage", "err", err)
-		return nil, err
-	}
+		err = w.fullNodeSQLDB.Init(FullNodeFTTable, &SyncedFT{}, true)
+		if err != nil {
+			w.log.Error("Failed to initialize FT token storage", "err", err)
+			return nil, err
+		}
 
-	err = w.fullNodeS.Init(FullNodeSmartContractTable, &SyncedSmartContract{}, true)
-	if err != nil {
-		w.log.Error("Failed to initialize whole token storage", "err", err)
-		return nil, err
+		err = w.fullNodeSQLDB.Init(FullNodeNFTTable, &SyncedNFT{}, true)
+		if err != nil {
+			w.log.Error("Failed to initialize whole token storage", "err", err)
+			return nil, err
+		}
+
+		err = w.fullNodeSQLDB.Init(FullNodeSmartContractTable, &SyncedSmartContract{}, true)
+		if err != nil {
+			w.log.Error("Failed to initialize whole token storage", "err", err)
+			return nil, err
+		}
 	}
 
 	return w, nil

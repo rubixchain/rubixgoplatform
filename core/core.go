@@ -120,7 +120,7 @@ type Core struct {
 	pqc                  map[string]did.DIDCrypto
 	sd                   map[string]*ServiceDetials
 	s                    storage.Storage
-	fullNodeS                storage.Storage
+	fullNodeS            storage.Storage
 	as                   storage.Storage
 	srv                  *service.Service
 	arbitaryMode         bool
@@ -285,20 +285,21 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 				return nil, fmt.Errorf("failed to create storage DB")
 			}
 		}
-		// if c.fullNode {
-		fullNodeDBName := FullNodeMainNetDB
-		if c.testNet {
-			fullNodeDBName = FullNodeTestNetDB
-		}
-		fullNodeStoragecfg := &econfig.Config{
-			DBAddress: cfg.DirPath + RubixRootDir + fullNodeDBName,
-			DBType:    "Sqlite3",
-			// Other fields like DBUserName, DBPassword, etc., can be copied from sc if needed, but defaults are fine for Sqlite3.
-		}
-		c.fullNodeS, err = storage.NewStorageDB(fullNodeStoragecfg)
-		if err != nil {
-			c.log.Error("Failed to create full node storage DB", "err", err)
-			return nil, fmt.Errorf("failed to create full node storage DB")
+		if c.fullNode {
+			fullNodeDBName := FullNodeMainNetDB
+			if c.testNet {
+				fullNodeDBName = FullNodeTestNetDB
+			}
+			fullNodeStoragecfg := &econfig.Config{
+				DBAddress: cfg.DirPath + RubixRootDir + fullNodeDBName,
+				DBType:    "Sqlite3",
+				// Other fields like DBUserName, DBPassword, etc., can be copied from sc if needed, but defaults are fine for Sqlite3.
+			}
+			c.fullNodeS, err = storage.NewStorageDB(fullNodeStoragecfg)
+			if err != nil {
+				c.log.Error("Failed to create full node storage DB", "err", err)
+				return nil, fmt.Errorf("failed to create full node storage DB")
+			}
 		}
 
 	default:

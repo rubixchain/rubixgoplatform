@@ -764,13 +764,6 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 		// sanity check of all tokens in list
 		for _, tokenId := range tokensList {
 
-			// add token to sqlite db
-			err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnID, receiverDid, newEvent.TxnMode, txnBlock)
-			if err != nil {
-				errMsg := fmt.Sprintf("failed to add token : %v, to tokensTable, error : %v ", tokenId, err)
-				c.log.Error(errMsg)
-			}
-
 			// skip txn sanity check, if txn type is token generated type
 			if newEvent.TxnType == block.TokenGeneratedType {
 				if currentOwner != newEvent.PublisherDID {
@@ -778,17 +771,24 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 					return
 				}
 
+				// add token to sqlite db
+				err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnID, newEvent.PublisherDID, newEvent.TxnMode, txnBlock)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to add token : %v, to tokensTable, error : %v ", tokenId, err)
+					c.log.Error(errMsg)
+				}
 				// add block to the token chain
 				c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
 				continue
 			}
 
-			currentBlockNumber, err := txnBlock.GetBlockNumber(tokenId)
-			if err != nil {
-				errMsg := fmt.Sprintf("failed to get current block number for token chain : %v", tokenId)
-				c.log.Error(errMsg)
-				return
-			}
+			// currentBlockNumber, err := txnBlock.GetBlockNumber(tokenId)
+			// if err != nil {
+			// 	errMsg := fmt.Sprintf("failed to get current block number for token chain : %v", tokenId)
+			// 	c.log.Error(errMsg)
+			// 	return
+			// }
+
 			// fetch latest block from LDB and check if the publisher is the token owner in the last block
 			tokenType := txnBlock.GetTokenType(tokenId)
 			latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
@@ -798,21 +798,21 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 				return
 			}
 
-			// make sure there is no missing blocks, by comparing prev and current block numbers
-			latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
-			if err != nil {
-				errMsg := fmt.Sprintf("failed to get latest block number for token chain : %v", tokenId)
-				c.log.Error(errMsg)
-				return
-			}
+			// // make sure there is no missing blocks, by comparing prev and current block numbers
+			// latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
+			// if err != nil {
+			// 	errMsg := fmt.Sprintf("failed to get latest block number for token chain : %v", tokenId)
+			// 	c.log.Error(errMsg)
+			// 	return
+			// }
 
-			// check if the fullnode is updated with latest blocks
-			if latestBlockNumber+1 != currentBlockNumber {
-				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
-				c.log.Error(errMsg)
-				// TODO : handle all tokens with missing blocks
-				return
-			}
+			// // check if the fullnode is updated with latest blocks
+			// if latestBlockNumber+1 != currentBlockNumber {
+			// 	errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
+			// 	c.log.Error(errMsg)
+			// 	// TODO : handle all tokens with missing blocks
+			// 	return
+			// }
 
 			previousOwner := latestTokenBlock.GetOwner()
 
@@ -830,6 +830,12 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 				}
 			}
 
+			// add token to sqlite db
+			err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnID, receiverDid, newEvent.TxnMode, txnBlock)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to add token : %v, to tokensTable, error : %v ", tokenId, err)
+				c.log.Error(errMsg)
+			}
 			// add block to the token chain
 			err = c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
 			if err != nil {
@@ -845,11 +851,12 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 		tokenId := tokensList[0]
 
 		// add token to sqlite db
-		err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnID, "", newEvent.TxnMode, txnBlock)
+		err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnID, txnBlock.GetDeployerDID(), newEvent.TxnMode, txnBlock)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to add token : %v, to tokensTable, error : %v ", tokenId, err)
 			c.log.Error(errMsg)
 		}
+
 		// skip txn sanity check, if txn type is token generated type
 		if newEvent.TxnType == block.TokenGeneratedType {
 			if currentOwner != newEvent.PublisherDID {

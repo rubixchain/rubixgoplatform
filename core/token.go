@@ -1500,9 +1500,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 
 		// check if token already exists in db
 		syncedRBT, err := c.w.ReadSyncedRBTFromTable(tokenId)
-		if err != nil {
+		if err == nil {
+			c.log.Debug("rbt exists, need to update")
 			// if there is no error, meaning if token exists in table, then update token info
-			syncedRBT.OwnerDID = genesisBlock.GetOwner()
+			syncedRBT.OwnerDID = tokenOwner
 			syncedRBT.TransactionID = txnId
 
 			err = c.w.UpdateSyncedRBTToTable(syncedRBT)
@@ -1513,13 +1514,15 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 			return nil
 		}
 
+		c.log.Debug("rbt doesn't exist, need to add new rec")
+
 		tokenValue := genesisBlock.GetTokenValue()
 		parentId, _, err := genesisBlock.GetParentDetials(tokenId)
 		if err != nil {
 			c.log.Error("failed to fetch parent token Id of the token ", tokenId)
 		}
 
-		tokenOwner := genesisBlock.GetOwner()
+		tokenOwner := tokenOwner
 		tokenInfo := &wallet.SyncedRBT{
 			TokenID:       tokenId,
 			TokenValue:    tokenValue,
@@ -1534,9 +1537,9 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 	case FTTransferMode:
 		// check if token already exists in db
 		syncedFT, err := c.w.ReadSyncedFTFromTable(tokenId)
-		if err != nil {
+		if err == nil {
 			// if there is no error, meaning if token exists in table, then update token info
-			syncedFT.OwnerDID = genesisBlock.GetOwner()
+			syncedFT.OwnerDID = tokenOwner
 			syncedFT.TransactionID = txnId
 
 			err = c.w.UpdateSyncedFTToTable(syncedFT)
@@ -1548,7 +1551,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 		}
 
 		ftValue := genesisBlock.GetTokenValue()
-		ftOwner := genesisBlock.GetOwner()
+		ftOwner := tokenOwner
 		ftInfo := &wallet.SyncedFT{
 			TokenID:       tokenId,
 			TokenValue:    ftValue,
@@ -1562,7 +1565,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 	case SmartContractDeployMode:
 		// check if token already exists in db
 		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
-		if err != nil {
+		if err == nil {
 			// if there is no error, meaning if token exists in table, then update token info
 			syncedSC.TransactionID = txnId
 
@@ -1587,9 +1590,8 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 	case NFTDeployMode:
 		// check if token already exists in db
 		syncedNFT, err := c.w.ReadSyncedNFTFromTable(tokenId)
-		if err != nil {
+		if err == nil {
 			// if there is no error, meaning if token exists in table, then update token info
-			syncedNFT.OwnerDID = genesisBlock.GetOwner()
 			syncedNFT.TransactionID = txnId
 
 			err = c.w.UpdateSyncedNFTToTable(syncedNFT)
