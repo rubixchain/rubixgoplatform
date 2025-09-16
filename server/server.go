@@ -216,6 +216,15 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute("/api/v1/transactions", "GET", s.GetDashboardTransactionsAPI)
 	s.AddRoute("/api/v1/unpledge-sequence", "GET", s.GetDashboardUnpledgeSequenceAPI)
 	s.AddRoute("/api/v1/dids", "GET", s.GetDashboardDIDsAPI)
+
+	// Advisory URL management routes
+	s.AddRoute("/api/v1/advisory-urls", "GET", s.GetAdvisoryURLs)
+	s.AddRoute("/api/v1/advisory-urls/network", "GET", s.GetAdvisoryURLsByNetwork)
+	s.AddRoute("/api/v1/advisory-urls", "POST", s.AddAdvisoryURL)
+	s.AddRoute("/api/v1/advisory-urls/update", "PUT", s.UpdateAdvisoryURL)
+	s.AddRoute("/api/v1/advisory-urls/set-default", "PUT", s.SetDefaultAdvisoryURL)
+	s.AddRoute("/api/v1/advisory-urls/delete", "DELETE", s.DeleteAdvisoryURL)
+	s.AddRoute("/api/v1/advisory-urls/current", "GET", s.GetCurrentAdvisoryURL)
 }
 
 func (s *Server) ExitFunc() error {

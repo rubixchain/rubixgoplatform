@@ -36,6 +36,7 @@ const (
 	FTStorage                      string = "FTTable"
 	FTTransactionTokenStorage      string = "FTTransactionTokens"
 	FailedFTDownloadStorage        string = "FailedFTDownloads"
+	AdvisoryURLStorage             string = "AdvisoryURLStorage"
 )
 
 type WalletConfig struct {
@@ -183,6 +184,12 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	err = w.s.Init("TokenRecovery", &model.TokenRecovery{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize token recovery storage", "err", err)
+	}
+
+	// Initialize advisory URL storage table
+	err = w.s.Init(AdvisoryURLStorage, &model.AdvisoryURL{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize advisory URL storage", "err", err)
 	}
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)

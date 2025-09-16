@@ -521,4 +521,312 @@ This following flags are used for this command
 
 ```
 
+## Advisory URL Management APIs
+
+The RubixGo platform includes a comprehensive advisory URL management system that allows dynamic configuration of advisory node services for both MainNet and TestNet environments. This system provides automatic failover, health monitoring, and database-driven URL management.
+
+### Overview
+
+The advisory URL management system replaces hardcoded advisory node URLs with a flexible, database-driven approach that supports:
+- **Multiple URLs per network** (MainNet/TestNet)
+- **Automatic failover** when primary URLs fail
+- **Health monitoring** and status tracking
+- **Priority-based selection** with default URL support
+- **REST API management** for runtime configuration
+
+### API Endpoints
+
+All advisory URL management APIs are available under the `/api/v1/advisory-urls` prefix and return standardized JSON responses.
+
+#### 1. Get All Advisory URLs
+
+Retrieve all configured advisory URLs for both networks.
+
+```bash
+GET /api/v1/advisory-urls
+```
+
+**Response:**
+```json
+{
+  "status": true,
+  "message": "Advisory URLs retrieved successfully",
+  "data": {
+    "urls": [
+      {
+        "id": 1,
+        "url": "https://advisory-node-service.onrender.com",
+        "network_type": "testnet",
+        "is_default": true,
+        "is_active": true,
+        "priority": 1,
+        "description": "Official TestNet Advisory Node Service",
+        "created_at": "2025-09-16T10:30:48Z",
+        "updated_at": "2025-09-16T10:30:48Z",
+        "last_tested": "2025-09-16T10:35:22Z",
+        "is_healthy": true
+      }
+    ]
+  }
+}
+```
+
+#### 2. Get URLs by Network
+
+Retrieve advisory URLs for a specific network (testnet or mainnet).
+
+```bash
+GET /api/v1/advisory-urls/network?network=testnet
+GET /api/v1/advisory-urls/network?network=mainnet
+```
+
+**Parameters:**
+- `network` (required): Either "testnet" or "mainnet"
+
+#### 3. Add New Advisory URL
+
+Add a new advisory URL to the system.
+
+```bash
+POST /api/v1/advisory-urls
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "url": "https://backup-advisory.example.com",
+  "network_type": "testnet",
+  "is_default": false,
+  "is_active": true,
+  "priority": 2,
+  "description": "Backup TestNet Advisory Service"
+}
+```
+
+**Fields:**
+- `url` (required): The advisory node service URL
+- `network_type` (required): Either "mainnet" or "testnet"
+- `is_default` (optional): Set as default URL for the network
+- `is_active` (optional): Enable/disable the URL (default: true)
+- `priority` (optional): Priority level (lower = higher priority, default: 1)
+- `description` (optional): Human-readable description
+
+**Example:**
+```bash
+curl -X POST http://localhost:20000/api/v1/advisory-urls \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://mainnet-advisory.example.com",
+    "network_type": "mainnet",
+    "is_default": true,
+    "is_active": true,
+    "priority": 1,
+    "description": "Production MainNet Advisory"
+  }'
+```
+
+#### 4. Update Advisory URL
+
+Update an existing advisory URL configuration.
+
+```bash
+PUT /api/v1/advisory-urls/update?id=<url_id>
+Content-Type: application/json
+```
+
+**Parameters:**
+- `id` (required): The ID of the URL to update
+
+**Request Body:** Same fields as Add URL (all optional for updates)
+
+**Example:**
+```bash
+curl -X PUT http://localhost:20000/api/v1/advisory-urls/update?id=2 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Updated Production MainNet Advisory",
+    "priority": 1
+  }'
+```
+
+#### 5. Set Default Advisory URL
+
+Set a specific URL as the default for its network type.
+
+```bash
+PUT /api/v1/advisory-urls/set-default?id=<url_id>
+```
+
+**Parameters:**
+- `id` (required): The ID of the URL to set as default
+
+**Note:** This automatically unsets any existing default for the same network type.
+
+**Example:**
+```bash
+curl -X PUT http://localhost:20000/api/v1/advisory-urls/set-default?id=3
+```
+
+#### 6. Delete Advisory URL
+
+Remove an advisory URL from the system.
+
+```bash
+DELETE /api/v1/advisory-urls/delete?id=<url_id>
+```
+
+**Parameters:**
+- `id` (required): The ID of the URL to delete
+
+**Example:**
+```bash
+curl -X DELETE http://localhost:20000/api/v1/advisory-urls/delete?id=4
+```
+
+#### 7. Get Current Active URL
+
+Retrieve the currently active advisory URL for the running node or a specific network.
+
+```bash
+GET /api/v1/advisory-urls/current
+GET /api/v1/advisory-urls/current?network=testnet
+GET /api/v1/advisory-urls/current?network=mainnet
+```
+
+**Parameters:**
+- `network` (optional): Specific network to query (auto-detected if omitted)
+
+**Response:**
+```json
+{
+  "status": true,
+  "message": "Current advisory URL retrieved",
+  "data": {
+    "network": "testnet",
+    "current_url": "https://advisory-node-service.onrender.com",
+    "default_url": {
+      "id": 1,
+      "url": "https://advisory-node-service.onrender.com",
+      "network_type": "testnet",
+      "is_default": true,
+      "is_active": true,
+      "priority": 1
+    },
+    "status": "active"
+  }
+}
+```
+
+### Common Use Cases
+
+#### Setting up Multiple Advisory URLs
+
+1. **Add a backup TestNet URL:**
+```bash
+curl -X POST http://localhost:20000/api/v1/advisory-urls \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://backup-testnet-advisory.com",
+    "network_type": "testnet",
+    "is_default": false,
+    "is_active": true,
+    "priority": 2,
+    "description": "Backup TestNet Advisory"
+  }'
+```
+
+2. **Add a MainNet URL:**
+```bash
+curl -X POST http://localhost:20000/api/v1/advisory-urls \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://prod-advisory.com",
+    "network_type": "mainnet",
+    "is_default": true,
+    "is_active": true,
+    "priority": 1,
+    "description": "Production MainNet Advisory"
+  }'
+```
+
+#### Managing URL Priorities
+
+3. **Switch to a different default URL:**
+```bash
+# First, get all URLs to see IDs
+curl http://localhost:20000/api/v1/advisory-urls
+
+# Set new default (automatically unsets old default for same network)
+curl -X PUT http://localhost:20000/api/v1/advisory-urls/set-default?id=3
+```
+
+#### Monitoring and Health Checks
+
+4. **Check current active URL:**
+```bash
+curl http://localhost:20000/api/v1/advisory-urls/current
+```
+
+5. **View all URLs with health status:**
+```bash
+curl http://localhost:20000/api/v1/advisory-urls
+```
+
+### Automatic Failover System
+
+The advisory URL management system includes sophisticated failover logic:
+
+1. **Primary Selection**: Uses the default URL for the current network first
+2. **Health Checking**: Automatically tests URL connectivity before use
+3. **Priority Fallback**: Falls back to next highest priority URL if primary fails
+4. **Health Monitoring**: Continuously monitors and updates URL health status
+5. **Network Isolation**: Maintains separate URL pools for MainNet and TestNet
+
+### Database Schema
+
+The advisory URLs are stored in the `AdvisoryURLStorage` table with the following structure:
+
+- `id`: Primary key (auto-increment)
+- `url`: Advisory node service URL
+- `network_type`: "mainnet" or "testnet"
+- `is_default`: Boolean flag for default URL per network
+- `is_active`: Boolean flag to enable/disable URL
+- `priority`: Integer priority (lower = higher priority)
+- `description`: Human-readable description
+- `created_at`: Creation timestamp
+- `updated_at`: Last modification timestamp
+- `last_tested`: Last health check timestamp
+- `is_healthy`: Current health status
+
+### Integration with Quorum Management
+
+The advisory URL system integrates seamlessly with the existing quorum management:
+
+- **Automatic Network Detection**: Uses `c.testNet` flag to determine network type
+- **Quorum Registration**: Registers quorums with the active advisory URL via `setupquorum` command
+- **Heartbeat Monitoring**: Maintains periodic heartbeats to keep quorums available
+- **Failover Support**: Automatically switches URLs if the primary becomes unavailable
+- **Periodic Availability Confirmation**: Regular availability confirmation every ~20 minutes
+
+### Error Handling
+
+The system includes robust error handling:
+
+- **Graceful Fallback**: Falls back to hardcoded URLs if database is unavailable
+- **Validation**: Validates network types and URL formats
+- **Conflict Prevention**: Prevents duplicate URLs for the same network
+- **Default Management**: Ensures only one default per network type
+- **Automatic Table Creation**: Creates database table automatically on first run
+
+### Installation and Setup
+
+The advisory URL system is automatically initialized when the RubixGo node starts:
+
+1. **Database Table Creation**: `AdvisoryURLStorage` table is created automatically
+2. **Default URLs**: Default advisory URLs are inserted for both MainNet and TestNet
+3. **Network Detection**: Automatically detects current network (MainNet/TestNet)
+4. **Health Monitoring**: Begins continuous health monitoring of configured URLs
+
+For more information about setting up and configuring advisory URLs, see the API examples above or contact the development team.
 
