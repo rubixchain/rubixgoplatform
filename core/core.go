@@ -71,6 +71,8 @@ const (
 	RubixRootDir      string = "Rubix/"
 	DefaultMainNetDB  string = "rubix.db"
 	DefaultTestNetDB  string = "rubixtest.db"
+	FullNodeMainNetDB string = "fullnode-rubix.db"
+	FullNodeTestNetDB string = "fullnode-rubixtest.db"
 	MainNetDir        string = "MainNet"
 	TestNetDir        string = "TestNet"
 	TestNetDIDDir     string = "TestNetDID/"
@@ -119,6 +121,7 @@ type Core struct {
 	pqc                  map[string]did.DIDCrypto
 	sd                   map[string]*ServiceDetials
 	s                    storage.Storage
+	fullNodeS                storage.Storage
 	as                   storage.Storage
 	srv                  *service.Service
 	arbitaryMode         bool
@@ -177,6 +180,19 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if cfg.CfgData.TestStorageConfig.StorageType == 0 {
 		cfg.CfgData.TestStorageConfig.StorageType = storage.StorageDBType
 		cfg.CfgData.TestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + DefaultTestNetDB
+		cfg.CfgData.TestStorageConfig.DBType = "Sqlite3"
+		update = true
+	}
+
+	if cfg.CfgData.StorageConfig.StorageType == 0 {
+		cfg.CfgData.StorageConfig.StorageType = storage.StorageDBType
+		cfg.CfgData.StorageConfig.DBAddress = cfg.DirPath + RubixRootDir + FullNodeMainNetDB
+		cfg.CfgData.StorageConfig.DBType = "Sqlite3"
+		update = true
+	}
+	if cfg.CfgData.TestStorageConfig.StorageType == 0 {
+		cfg.CfgData.TestStorageConfig.StorageType = storage.StorageDBType
+		cfg.CfgData.TestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + FullNodeTestNetDB
 		cfg.CfgData.TestStorageConfig.DBType = "Sqlite3"
 		update = true
 	}
@@ -272,12 +288,28 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 				return nil, fmt.Errorf("failed to create storage DB")
 			}
 		}
+		// if c.fullNode {
+		fullNodeDBName := FullNodeMainNetDB
+		if c.testNet {
+			fullNodeDBName = FullNodeTestNetDB
+		}
+		fullNodeStoragecfg := &econfig.Config{
+			DBAddress: cfg.DirPath + RubixRootDir + fullNodeDBName,
+			DBType:    "Sqlite3",
+			// Other fields like DBUserName, DBPassword, etc., can be copied from sc if needed, but defaults are fine for Sqlite3.
+		}
+		c.fullNodeS, err = storage.NewStorageDB(fullNodeStoragecfg)
+		if err != nil {
+			c.log.Error("Failed to create full node storage DB", "err", err)
+			return nil, fmt.Errorf("failed to create full node storage DB")
+		}
+
 	default:
 		c.log.Error("Unsupported DB type, please check the configuration", "type", sc.StorageType)
 		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
 	}
 
-	c.w, err = wallet.InitWallet(c.s, tcDir, c.log)
+	c.w, err = wallet.InitWallet(c.s, c.fullNodeS, tcDir, c.log, c.fullNode)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
@@ -333,6 +365,9 @@ func (c *Core) SetupCore() error {
 	if err != nil {
 		c.log.Error("Failed to setup services", "err", err)
 		return err
+	}
+	if c.fullNode {
+		c.SubscribeTxnSetup()
 	}
 	c.w.SetupWallet(c.ipfs)
 	c.PingSetup()

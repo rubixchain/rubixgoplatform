@@ -341,8 +341,8 @@ type Command struct {
 	apiKey                       string
 	nftValue                     float64
 	ftNumStartIndex              int
-	publishTokenChainDetails     bool
 	fullNode                     bool
+	publishTokenChainDetails     bool
 }
 
 func showVersion() {
@@ -573,7 +573,7 @@ func Run(args []string) {
 	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
 	flag.IntVar(&cmd.ftNumStartIndex, "ftStartIndex", 0, "Start index of the FTs to be created")
 	flag.BoolVar(&cmd.publishTokenChainDetails, "publishTokenchain", false, "Publish tokenchain details to pubsub")
-	flag.BoolVar(&cmd.fullNode, "fullNode", false, "subscribe and receive tokenchain details from the publisgers")
+	flag.BoolVar(&cmd.fullNode, "fullnode", false, "receive all published transactions and tokenchain details")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

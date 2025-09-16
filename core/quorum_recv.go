@@ -1508,6 +1508,21 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
+	// publish the transaction in the network with topic : rubix_txns
+	publishingTxn := &model.PubSubTxnInfo{
+		TxnType: tcb.TransactionType,
+		TxnMode: RBTTransferMode,
+		PublisherDID: dc.GetDID(),
+		TxnBlock:     nb.GetBlock(),
+	}
+
+	err = c.publishTxn(publishingTxn)
+	if err != nil {
+		c.log.Error("Failed to publish txn", "err", err)
+		crep.Message = fmt.Sprintf("Failed to publish txn, err : %v", err)
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+
 	crep.Status = true
 	crep.Message = "Token pledge status updated"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)

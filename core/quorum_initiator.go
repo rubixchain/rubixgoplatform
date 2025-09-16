@@ -496,6 +496,16 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 	}
 
+	// publish the transaction in the network with topic : rubix_txns
+	publishingTxn := &model.PubSubTxnInfo{
+		TxnID:        tid,
+		TxnType:      nb.GetTransType(),
+		TxnMode:      cr.Mode,
+		PublisherDID: dc.GetDID(),
+		ReceiverDID:  sc.GetReceiverDID(),
+		TxnBlock:     nb.GetBlock(),
+	}
+
 	switch cr.Mode {
 	case RBTTransferMode:
 		rp, err := c.getPeer(cr.ReceiverPeerID + "." + sc.GetReceiverDID())
@@ -715,6 +725,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 
+		// publish txn
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return nil, nil, nil, err
+		}
 		return &td, pl, pds, nil
 	case FTTransferMode:
 		// #### FT Tranfer starts here
@@ -919,6 +935,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 
+		// publish txn
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return nil, nil, nil, err
+		}
+
 		return &td, pl, pds, nil
 	case PinningServiceMode:
 		c.log.Debug("Mode = PinningServiceMode ")
@@ -1118,6 +1141,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
 			return nil, nil, nil, err
 		}
+		// publish txn
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return nil, nil, nil, err
+		}
+
 		return &td, pl, pds, nil
 	case SelfTransferMode:
 		var quorumInfo []QuorumDIDPeerMap = make([]QuorumDIDPeerMap, 0)
@@ -1249,6 +1279,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 
+		// publish txn
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return nil, nil, nil, err
+		}
+
 		return &td, pl, pds, nil
 	case DTCommitMode:
 		err = c.w.CreateTokenBlock(nb)
@@ -1268,6 +1305,12 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if pledgeFinalityError != nil {
 			c.log.Error("Pledge finlaity not achieved", "err", err)
 			return nil, nil, nil, pledgeFinalityError
+		}
+		// publish txn
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return nil, nil, nil, err
 		}
 		return &td, pl, pds, nil
 	case SmartContractDeployMode:
@@ -1350,6 +1393,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = c.initiateUnpledgingProcess(cr, txnDetails.TransactionID, txnDetails.Epoch)
 		if err != nil {
 			c.log.Error("Failed to store transactiond details with quorum ", "err", err)
+			return nil, nil, nil, err
+		}
+
+		// publish txn
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
 			return nil, nil, nil, err
 		}
 
@@ -1459,6 +1509,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 
+		// publish txn
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return nil, nil, nil, err
+		}
+
 		return &txnDetails, pl, pds, nil
 	case NFTDeployMode:
 		//Create tokechain for the smart contract token and add genesys block
@@ -1501,6 +1558,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		err = c.initiateUnpledgingProcess(cr, txnDetails.TransactionID, txnDetails.Epoch)
 		if err != nil {
 			c.log.Error("Failed to store transaction details with quorum ", "err", err)
+			return nil, nil, nil, err
+		}
+
+		// publish txn
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
 			return nil, nil, nil, err
 		}
 
@@ -1582,6 +1646,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 
+		// publish txn
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return nil, nil, nil, err
+		}
+
 		return &txnDetails, pl, pds, nil
 
 	default:
@@ -1589,6 +1660,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		c.log.Error(err.Error())
 		return nil, nil, nil, err
 	}
+
 }
 
 func (c *Core) initiateUnpledgingProcess(cr *ConensusRequest, transactionHash string, transactionEpoch int64) error {

@@ -35,10 +35,10 @@ const (
 	FTChainStorage                 string = "FTchainstorage"
 	FTStorage                      string = "FTTable"
 	FullNodeStorage                string = "Fullnodestorage"
-	FullNodeRBTTable               string = "Fullnoderbttable"
-	FullNodeFTTable                string = "Fullnodefttable"
-	FullNodeNFTTable               string = "Fullnodenfttable"
-	FullNodeSmartContractTable     string = "Fullnodesctable"
+	FullNodeRBTTable               string = "FullnodeRBTtable"
+	FullNodeFTTable                string = "FullnodeFTtable"
+	FullNodeNFTTable               string = "FullnodeNFTtable"
+	FullNodeSmartContractTable     string = "FullnodeSCtable"
 )
 
 type WalletConfig struct {
@@ -60,6 +60,7 @@ type ChainDB struct {
 type Wallet struct {
 	ipfs                           *ipfsnode.Shell
 	s                              storage.Storage
+	fullNodeS                      storage.Storage
 	l                              sync.Mutex
 	dtl                            sync.Mutex
 	log                            logger.Logger
@@ -73,17 +74,20 @@ type Wallet struct {
 	FullNode                       bool
 }
 
-func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, error) {
+func InitWallet(s storage.Storage, fullNodeStorage storage.Storage, dir string, log logger.Logger, fullNode bool) (*Wallet, error) {
 	var err error
 	w := &Wallet{
-		log: log.Named("wallet"),
-		s:   s,
+		log:            log.Named("wallet"),
+		s:              s,
+		fullNodeS: fullNodeStorage,
+		FullNode: fullNode,
 	}
 	w.tcs = &ChainDB{}
 	w.dtcs = &ChainDB{}
 	w.ntcs = &ChainDB{}
 	w.smartContractTokenChainStorage = &ChainDB{}
 	w.FTChainStorage = &ChainDB{}
+	w.fullNodeStorage = &ChainDB{}
 	op := &opt.Options{
 		WriteBuffer: 64 * 1024 * 1024,
 	}
@@ -174,6 +178,7 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		w.log.Error("Failed to initialize FT storage", "err", err)
 	}
 
+
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure smart contract token chain block storage", "err", err)
@@ -199,32 +204,39 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 		return nil, err
 	}
 
-
-
-	err = w.s.Init(FullNodeRBTTable, &SyncedRBT{}, true)
+	// DB for fullnodes to store all token-chains
+	if w.FullNode {
+		fullNodeDB, err := leveldb.OpenFile(dir+FullNodeStorage, op)
+		if err != nil {
+			w.log.Error("failed to configure token chain block storage", "err", err)
+			return nil, fmt.Errorf("failed to configure token chain block storage")
+		}
+		w.fullNodeStorage.DB = fullNodeDB
+	}	
+	
+	err = w.fullNodeS.Init(FullNodeRBTTable, &SyncedRBT{}, true)
 	if err != nil {
-		w.log.Error("Failed to initialize full node RBT token storage", "err", err)
+		w.log.Error("Failed to initialize RBT token storage", "err", err)
 		return nil, err
 	}
 
-	err = w.s.Init(FullNodeFTTable, &SyncedFT{}, true)
+	err = w.fullNodeS.Init(FullNodeFTTable, &SyncedFT{}, true)
 	if err != nil {
-		w.log.Error("Failed to initialize full node FT token storage", "err", err)
+		w.log.Error("Failed to initialize FT token storage", "err", err)
 		return nil, err
 	}
 
-	err = w.s.Init(FullNodeNFTTable, &SyncedNFT{}, true)
+	err = w.fullNodeS.Init(FullNodeNFTTable, &SyncedNFT{}, true)
 	if err != nil {
-		w.log.Error("Failed to initialize whole full node NFT token storage", "err", err)
+		w.log.Error("Failed to initialize whole token storage", "err", err)
 		return nil, err
 	}
 
-	err = w.s.Init(FullNodeSmartContractTable, &SyncedSmartContract{}, true)
+	err = w.fullNodeS.Init(FullNodeSmartContractTable, &SyncedSmartContract{}, true)
 	if err != nil {
-		w.log.Error("Failed to initialize full node smart contract token storage", "err", err)
+		w.log.Error("Failed to initialize whole token storage", "err", err)
 		return nil, err
 	}
-
 	return w, nil
 }
 

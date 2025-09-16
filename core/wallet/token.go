@@ -71,10 +71,13 @@ type SyncedRBT struct {
 	// TokenStateHash string  `gorm:"column:token_state_hash"`
 }
 
+
 func (w *Wallet) CreateToken(t *Token) error {
 	return w.s.Write(TokenStorage, t)
 }
 func (w *Wallet) CreateFT(ft *FTToken) error {
+	w.l.Lock()
+	defer w.l.Unlock()
 	w.l.Lock()
 	defer w.l.Unlock()
 	return w.s.Write(FTTokenStorage, ft)

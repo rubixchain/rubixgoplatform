@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,6 +13,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
+)
+
+const (
+	RubixTxnTopic string = "rubix_txns"
 )
 
 type ConsensusReturns struct {
@@ -724,4 +729,193 @@ func extractQuorumDID(quorumList []string) []string {
 		}
 	}
 	return quorumListDID
+}
+
+func (c *Core) SubscribeTxnSetup() {
+	topic := RubixTxnTopic
+	err := c.ps.SubscribeTopic(topic, c.TxnCallBack)
+	if err != nil {
+		c.log.Error("Unable to subscribe NFT", topic)
+		return
+	}
+	c.log.Info("Subscribing " + topic + " is successful")
+}
+
+func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
+	var newEvent model.PubSubTxnInfo
+	err := json.Unmarshal(data, &newEvent)
+	if err != nil {
+		c.log.Error("Failed to get nft details", "err", err)
+		return
+	}
+	c.log.Info("Recieved Update on txn " + newEvent.TxnID)
+
+	receiverDid := newEvent.ReceiverDID
+	// tokenType := newEvent.TokenType
+
+	// initiate block
+	txnBlock := block.InitBlock(newEvent.TxnBlock, nil)
+	currentOwner := txnBlock.GetOwner()
+
+	// get tokens list from block, do sanity check, and add block to the token chain(s)
+	tokensList := txnBlock.GetTransTokens()
+	switch newEvent.TxnMode {
+	case RBTTransferMode, FTTransferMode:
+		// sanity check of all tokens in list
+		for _, tokenId := range tokensList {
+
+			// skip txn sanity check, if txn type is token generated type
+			if newEvent.TxnType == block.TokenGeneratedType {
+				if currentOwner != newEvent.PublisherDID {
+					c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
+					return
+				}
+				// add token to sqlite db
+				err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnMode, txnBlock)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to add token : %v, to tokensTable, error : %v ", tokenId, err)
+					c.log.Error(errMsg)
+				}
+				// add block to the token chain
+				c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
+				continue
+			}
+
+			currentBlockNumber, err := txnBlock.GetBlockNumber(tokenId)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to get current block number for token chain : %v", tokenId)
+				c.log.Error(errMsg)
+				return
+			}
+			// fetch latest block from LDB and check if the publisher is the token owner in the last block
+			tokenType := txnBlock.GetTokenType(tokenId)
+			latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
+			if latestTokenBlock == nil {
+				// TODO : sync the token chain if not there
+				c.log.Error(fmt.Sprintf("failed to get the latest block for token: %v", tokenId))
+				return
+			}
+
+			// make sure there is no missing blocks, by comparing prev and current block numbers
+			latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to get latest block number for token chain : %v", tokenId)
+				c.log.Error(errMsg)
+				return
+			}
+
+			// check if the fullnode is updated with latest blocks
+			if latestBlockNumber+1 != currentBlockNumber {
+				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
+				c.log.Error(errMsg)
+				// TODO : handle all tokens with missing blocks
+				return
+			}
+
+			previousOwner := latestTokenBlock.GetOwner()
+
+			// Sanity check
+			if previousOwner != newEvent.PublisherDID {
+				c.log.Error("txn callback: publisher DID is not same as the owner of token extracted from its previous token block")
+				return
+			}
+			if receiverDid != "" {
+				// Sanity check: In case of transfer NFT, it is always expected that receiver DID
+				// will always be same as the onwer (extracted from the latest NFT block)
+				if currentOwner != receiverDid {
+					c.log.Error("txn callback: reciever DID is not same as the owner of NFT extracted from received token block")
+					return
+				}
+			}
+
+			// add block to the token chain
+			err = c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to add block to token chain: %v, err : %v", tokenId, err)
+				c.log.Error(errMsg)
+				return
+			}
+			c.log.Info("Transaction added to token-chain")
+
+		}
+
+	case SmartContractDeployMode, SmartContractExecuteMode, NFTDeployMode, NFTExecuteMode:
+		tokenId := tokensList[0]
+		// skip txn sanity check, if txn type is token generated type
+		if newEvent.TxnType == block.TokenGeneratedType {
+			if currentOwner != newEvent.PublisherDID {
+				c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
+				return
+			}
+			// add token to sqlite db
+			err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnMode, txnBlock)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to add token : %v, to tokensTable, error : %v ", tokenId, err)
+				c.log.Error(errMsg)
+			}
+			// add block to the token chain
+			c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
+		} else {
+
+			// fetch latest block from LDB and check if the publisher is the token owner in the last block
+			tokenType := txnBlock.GetTokenType(tokenId)
+			latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
+			if latestTokenBlock == nil {
+				// TODO : sync the token chain if not there
+				c.log.Error(fmt.Sprintf("failed to get the latest block for token: %v", tokenId))
+				return
+			}
+
+			// make sure there is no missing blocks, by comparing prev and current block numbers
+			latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to get latest block number for token chain : %v", tokenId)
+				c.log.Error(errMsg)
+			}
+			currentBlockNumber, err := txnBlock.GetBlockNumber(tokenId)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to get current block number for token chain : %v", tokenId)
+				c.log.Error(errMsg)
+			}
+
+			// check if the fullnode is updated with latest blocks
+			if latestBlockNumber+1 != currentBlockNumber {
+				errMsg := fmt.Sprintf("missing block for token chain : %v, latest block number is : %v and received block number is : %v", tokenId, latestBlockNumber, currentBlockNumber)
+				c.log.Error(errMsg)
+				// TODO : handle all tokens with missing blocks
+				return
+			} else {
+				previousOwner := latestTokenBlock.GetOwner()
+
+				// Sanity check
+				if previousOwner != newEvent.PublisherDID {
+					c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
+					return
+				}
+
+				// add block to the token chain
+				err = c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to add block to token chain: %v, err : %v", tokenId, err)
+					c.log.Error(errMsg)
+					return
+				}
+				c.log.Info("Transaction added to token-chain")
+			}
+		}
+
+	}
+
+}
+
+func (c *Core) publishTxn(newEvent *model.PubSubTxnInfo) error {
+	topic := RubixTxnTopic
+	if c.ps != nil {
+		err := c.ps.Publish(topic, newEvent)
+		if err != nil {
+			c.log.Error("Failed to publish new event", "err", err)
+		}
+		c.log.Info("New state published on NFT " + topic)
+	}
+	return nil
 }
