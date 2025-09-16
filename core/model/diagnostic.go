@@ -11,7 +11,7 @@ type TCDumpReply struct {
 	Blocks      [][]byte `json:"blocks"`
 }
 
-type GetFTTokenChainReply struct {
+type GetTokenChainResponce struct {
 	BasicResponse
 	TokenChainData []interface{}
 }

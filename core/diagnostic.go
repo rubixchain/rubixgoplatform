@@ -60,8 +60,8 @@ func (c *Core) DumpFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	return ds
 }
 
-func (c *Core) GetFTTokenchain(FTTokenID string) *model.GetFTTokenChainReply {
-	getFTReply := &model.GetFTTokenChainReply{
+func (c *Core) GetFTTokenchain(FTTokenID string) *model.GetTokenChainResponce {
+	getFTReply := &model.GetTokenChainResponce{
 		BasicResponse: model.BasicResponse{
 			Status: false,
 			Result: nil,
