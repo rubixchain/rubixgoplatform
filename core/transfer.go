@@ -792,11 +792,11 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 			// fetch latest block from LDB and check if the publisher is the token owner in the last block
 			tokenType := txnBlock.GetTokenType(tokenId)
 			latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
-			if latestTokenBlock == nil {
-				// TODO : sync the token chain if not there
-				c.log.Error(fmt.Sprintf("failed to get the latest block for token: %v", tokenId))
-				return
-			}
+			// if latestTokenBlock == nil {
+			// 	// TODO : sync the token chain if not there
+			// 	c.log.Error(fmt.Sprintf("failed to get the latest block for token: %v", tokenId))
+			// 	continue
+			// }
 
 			// // make sure there is no missing blocks, by comparing prev and current block numbers
 			// latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
