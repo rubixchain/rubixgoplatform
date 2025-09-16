@@ -764,18 +764,20 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 		// sanity check of all tokens in list
 		for _, tokenId := range tokensList {
 
+			// add token to sqlite db
+			err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnID, receiverDid, newEvent.TxnMode, txnBlock)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to add token : %v, to tokensTable, error : %v ", tokenId, err)
+				c.log.Error(errMsg)
+			}
+
 			// skip txn sanity check, if txn type is token generated type
 			if newEvent.TxnType == block.TokenGeneratedType {
 				if currentOwner != newEvent.PublisherDID {
 					c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
 					return
 				}
-				// add token to sqlite db
-				err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnMode, txnBlock)
-				if err != nil {
-					errMsg := fmt.Sprintf("failed to add token : %v, to tokensTable, error : %v ", tokenId, err)
-					c.log.Error(errMsg)
-				}
+
 				// add block to the token chain
 				c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
 				continue
@@ -841,17 +843,18 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 
 	case SmartContractDeployMode, SmartContractExecuteMode, NFTDeployMode, NFTExecuteMode:
 		tokenId := tokensList[0]
+
+		// add token to sqlite db
+		err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnID, "", newEvent.TxnMode, txnBlock)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to add token : %v, to tokensTable, error : %v ", tokenId, err)
+			c.log.Error(errMsg)
+		}
 		// skip txn sanity check, if txn type is token generated type
 		if newEvent.TxnType == block.TokenGeneratedType {
 			if currentOwner != newEvent.PublisherDID {
 				c.log.Error("txn callback: publisher DID is not same as the owner of token extract from its previous token block")
 				return
-			}
-			// add token to sqlite db
-			err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnMode, txnBlock)
-			if err != nil {
-				errMsg := fmt.Sprintf("failed to add token : %v, to tokensTable, error : %v ", tokenId, err)
-				c.log.Error(errMsg)
 			}
 			// add block to the token chain
 			c.w.AddFullNodeTokenBlock(tokenId, txnBlock)

@@ -66,7 +66,8 @@ type SyncedRBT struct {
 	TokenID       string  `gorm:"column:token_id;primaryKey"`
 	ParentTokenID string  `gorm:"column:parent_token_id"`
 	TokenValue    float64 `gorm:"column:token_value"`
-	DID           string  `gorm:"column:did"`
+	OwnerDID      string  `gorm:"column:owner_did"`
+	TransactionID string  `gorm:"column:transaction_id"`
 	// TokenStateHash string  `gorm:"column:token_state_hash"`
 }
 
@@ -1355,4 +1356,32 @@ func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedS
 		return nil, err
 	}
 	return &sc, nil
+}
+
+// This function is used by fullnode to update synced RBTs
+func (w *Wallet) UpdateSyncedRBTToTable(rbt *SyncedRBT) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.s.Update(FullNodeRBTTable, &rbt, "token_id=?", rbt.TokenID)
+}
+
+// This function is used by fullnode to update synced FTs
+func (w *Wallet) UpdateSyncedFTToTable(ft *SyncedFT) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.s.Update(FullNodeFTTable, &ft, "token_id=?", ft.TokenID)
+}
+
+// This function is used by fullnode to update synced NFTs
+func (w *Wallet) UpdateSyncedNFTToTable(nft *SyncedNFT) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.s.Update(FullNodeNFTTable, &nft, "token_id=?", nft.TokenID)
+}
+
+// This function is used by fullnode to update synced smart contracts
+func (w *Wallet) UpdateSyncedSmartContractToTable(sc *SyncedSmartContract) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.s.Update(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", sc.SmartContractHash)
 }
