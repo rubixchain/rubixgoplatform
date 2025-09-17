@@ -720,6 +720,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		// publish txn
+		c.log.Debug("sender publishing txn : ", publishingTxn.TxnID)
 		err = c.publishTxn(publishingTxn)
 		if err != nil {
 			c.log.Error("Failed to publish txn", "err", err)
