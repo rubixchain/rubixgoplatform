@@ -77,10 +77,10 @@ type Wallet struct {
 func InitWallet(s storage.Storage, fullNodeStorage storage.Storage, dir string, log logger.Logger, fullNode bool) (*Wallet, error) {
 	var err error
 	w := &Wallet{
-		log:            log.Named("wallet"),
-		s:              s,
+		log:       log.Named("wallet"),
+		s:         s,
 		fullNodeS: fullNodeStorage,
-		FullNode: fullNode,
+		FullNode:  fullNode,
 	}
 	w.tcs = &ChainDB{}
 	w.dtcs = &ChainDB{}
@@ -110,15 +110,7 @@ func InitWallet(s storage.Storage, fullNodeStorage storage.Storage, dir string, 
 		return nil, fmt.Errorf("failed to configure data chain block storage")
 	}
 	w.dtcs.DB = dtdb
-	// DB for fullnodes to store all token-chains
-	if w.FullNode {
-		fullNodeDB, err := leveldb.OpenFile(dir+FullNodeStorage, op)
-		if err != nil {
-			w.log.Error("failed to configure full node token chain block storage", "err", err)
-			return nil, fmt.Errorf("failed to configure full node token chain block storage")
-		}
-		w.fullNodeStorage.DB = fullNodeDB
-	}
+
 	err = w.s.Init(DIDStorage, &DIDType{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID storage", "err", err)
@@ -178,7 +170,6 @@ func InitWallet(s storage.Storage, fullNodeStorage storage.Storage, dir string, 
 		w.log.Error("Failed to initialize FT storage", "err", err)
 	}
 
-
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {
 		w.log.Error("failed to configure smart contract token chain block storage", "err", err)
@@ -208,8 +199,8 @@ func InitWallet(s storage.Storage, fullNodeStorage storage.Storage, dir string, 
 	if w.FullNode {
 		fullNodeDB, err := leveldb.OpenFile(dir+FullNodeStorage, op)
 		if err != nil {
-			w.log.Error("failed to configure token chain block storage", "err", err)
-			return nil, fmt.Errorf("failed to configure token chain block storage")
+			w.log.Error("failed to configure token chain block storage for full node", "err", err)
+			return nil, fmt.Errorf("failed to configure token chain block storage for full node")
 		}
 		w.fullNodeStorage.DB = fullNodeDB
 	}	

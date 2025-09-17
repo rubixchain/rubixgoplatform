@@ -951,11 +951,11 @@ func (c *Core) SyncFullTokenChain(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo)
 		// 	}
 		// 	return nil
 		// }
-		blkHeight, err = blk.GetBlockNumber(tokenSyncInfo.TokenID)
-		if err != nil {
-			c.log.Error("Invalid block, failed to get block number", "err", err, "token", tokenSyncInfo.TokenID)
-			return err
-		}
+		// blkHeight, err = blk.GetBlockNumber(tokenSyncInfo.TokenID)
+		// if err != nil {
+		// 	c.log.Error("Invalid block, failed to get block number", "err", err, "token", tokenSyncInfo.TokenID)
+		// 	return err
+		// }
 	}
 
 	syncReq := TCBSyncRequest{
@@ -2060,4 +2060,3 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnMode int, genesisBlo
 	}
 	return nil
 }
-
