@@ -789,9 +789,9 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 			// 	return
 			// }
 
-			// fetch latest block from LDB and check if the publisher is the token owner in the last block
-			tokenType := txnBlock.GetTokenType(tokenId)
-			latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
+			// // fetch latest block from LDB and check if the publisher is the token owner in the last block
+			// tokenType := txnBlock.GetTokenType(tokenId)
+			// latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
 			// if latestTokenBlock == nil {
 			// 	// TODO : sync the token chain if not there
 			// 	c.log.Error(fmt.Sprintf("failed to get the latest block for token: %v", tokenId))
@@ -814,21 +814,21 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 			// 	return
 			// }
 
-			previousOwner := latestTokenBlock.GetOwner()
+			// previousOwner := latestTokenBlock.GetOwner()
 
-			// Sanity check
-			if previousOwner != newEvent.PublisherDID {
-				c.log.Error("txn callback: publisher DID is not same as the owner of token extracted from its previous token block")
-				return
-			}
-			if receiverDid != "" {
-				// Sanity check: In case of transfer NFT, it is always expected that receiver DID
-				// will always be same as the onwer (extracted from the latest NFT block)
-				if currentOwner != receiverDid {
-					c.log.Error("txn callback: reciever DID is not same as the owner of NFT extracted from received token block")
-					return
-				}
-			}
+			// // Sanity check
+			// if previousOwner != newEvent.PublisherDID {
+			// 	c.log.Error("txn callback: publisher DID is not same as the owner of token extracted from its previous token block")
+			// 	return
+			// }
+			// if receiverDid != "" {
+			// 	// Sanity check: In case of transfer NFT, it is always expected that receiver DID
+			// 	// will always be same as the onwer (extracted from the latest NFT block)
+			// 	if currentOwner != receiverDid {
+			// 		c.log.Error("txn callback: reciever DID is not same as the owner of NFT extracted from received token block")
+			// 		return
+			// 	}
+			// }
 
 			// add token to sqlite db
 			err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnID, receiverDid, newEvent.TxnMode, txnBlock)
