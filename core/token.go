@@ -1493,56 +1493,122 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 }
 
 // Extract token details from given genesis block and add to the respective table, depending on the transaction type
-func (c *Core) AddTokenToRespectiveTable(tokenId string, txnMode int, genesisBlock *block.Block) error {
-	var err error
+func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwner string, txnMode int, genesisBlock *block.Block) error {
+	// var err error
 	switch txnMode {
 	case RBTTransferMode:
+
+		// check if token already exists in db
+		syncedRBT, err := c.w.ReadSyncedRBTFromTable(tokenId)
+		if err == nil {
+			c.log.Debug("rbt exists, need to update")
+			// if there is no error, meaning if token exists in table, then update token info
+			syncedRBT.OwnerDID = tokenOwner
+			syncedRBT.TransactionID = txnId
+
+			err = c.w.UpdateSyncedRBTToTable(syncedRBT)
+			if err != nil {
+				c.log.Error("failed to update token ", tokenId)
+				return err
+			}
+			return nil
+		}
+
+		c.log.Debug("rbt doesn't exist, need to add new rec")
 
 		tokenValue := genesisBlock.GetTokenValue()
 		parentId, _, err := genesisBlock.GetParentDetials(tokenId)
 		if err != nil {
 			c.log.Error("failed to fetch parent token Id of the token ", tokenId)
 		}
-		tokenOwner := genesisBlock.GetOwner()
+
+		tokenOwner := tokenOwner
 		tokenInfo := &wallet.SyncedRBT{
 			TokenID:       tokenId,
 			TokenValue:    tokenValue,
 			ParentTokenID: parentId,
-			DID:           tokenOwner,
+			OwnerDID:      tokenOwner,
+			TransactionID: txnId,
 		}
 		err = c.w.AddSyncedRBTToTable(tokenInfo)
 		if err != nil {
 			return err
 		}
 	case FTTransferMode:
+		// check if token already exists in db
+		syncedFT, err := c.w.ReadSyncedFTFromTable(tokenId)
+		if err == nil {
+			// if there is no error, meaning if token exists in table, then update token info
+			syncedFT.OwnerDID = tokenOwner
+			syncedFT.TransactionID = txnId
+
+			err = c.w.UpdateSyncedFTToTable(syncedFT)
+			if err != nil {
+				c.log.Error("failed to update token ", tokenId)
+				return err
+			}
+			return nil
+		}
+
 		ftValue := genesisBlock.GetTokenValue()
-		ftOwner := genesisBlock.GetOwner()
+		ftOwner := tokenOwner
 		ftInfo := &wallet.SyncedFT{
-			TokenID:     tokenId,
-			TokenValue:  ftValue,
-			CreatorDID:  ftOwner,
+			TokenID:       tokenId,
+			TokenValue:    ftValue,
+			CreatorDID:    ftOwner,
+			TransactionID: txnId,
 		}
 		err = c.w.AddSyncedFTToTable(ftInfo)
 		if err != nil {
 			return err
 		}
 	case SmartContractDeployMode:
+		// check if token already exists in db
+		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
+		if err == nil {
+			// if there is no error, meaning if token exists in table, then update token info
+			syncedSC.TransactionID = txnId
+
+			err = c.w.UpdateSyncedSmartContractToTable(syncedSC)
+			if err != nil {
+				c.log.Error("failed to update token ", tokenId)
+				return err
+			}
+			return nil
+		}
+
 		scDeployer := genesisBlock.GetDeployerDID()
 		scInfo := &wallet.SyncedSmartContract{
 			SmartContractHash: tokenId,
 			Deployer:          scDeployer,
+			TransactionID:     txnId,
 		} // TODO : add sc file details
 		err = c.w.AddSyncedSmartContractToTable(scInfo)
 		if err != nil {
 			return err
 		}
 	case NFTDeployMode:
+		// check if token already exists in db
+		syncedNFT, err := c.w.ReadSyncedNFTFromTable(tokenId)
+		if err == nil {
+			// if there is no error, meaning if token exists in table, then update token info
+			syncedNFT.TransactionID = txnId
+
+			err = c.w.UpdateSyncedNFTToTable(syncedNFT)
+			if err != nil {
+				c.log.Error("failed to update token ", tokenId)
+				return err
+			}
+			return nil
+		}
+
 		nftValue := genesisBlock.GetTokenValue()
 		nftOwner := genesisBlock.GetDeployerDID()
 		nftInfo := &wallet.SyncedNFT{
-			TokenID:     tokenId,
-			TokenValue:  nftValue,
-			DID:         nftOwner,
+			TokenID:       tokenId,
+			TokenValue:    nftValue,
+			OwnerDID:      nftOwner,
+			TransactionID: txnId,
 		} // TODO : add metadata details
 		err = c.w.AddSyncedNFTToTable(nftInfo)
 		if err != nil {

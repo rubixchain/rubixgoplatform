@@ -1516,6 +1516,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		TxnBlock:     nb.GetBlock(),
 	}
 
+	c.log.Debug("quorum publishing pledge block : ", publishingTxn.TxnID)
 	err = c.publishTxn(publishingTxn)
 	if err != nil {
 		c.log.Error("Failed to publish txn", "err", err)
