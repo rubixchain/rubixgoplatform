@@ -60,7 +60,7 @@ type TokenVerificationResponse struct {
 type TokenSyncInfo struct {
 	TokenID   string `gorm:"column:token_id;primaryKey"`
 	TokenType int    `gorm:"column:token_type"`
-	AsseType  int    `gorm:"column:asset_type"`
+	AssetType int    `gorm:"column:asset_type"`
 }
 
 //	type SendTokenDetailsInfo struct {
@@ -599,7 +599,7 @@ func (c *Core) TokenChainDetailsCallback(peerID string, topic string, data []byt
 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
 				TokenID:   detail.Token,
 				TokenType: detail.TokenType,
-				AsseType:  detail.AssetType,
+				AssetType: detail.AssetType,
 			})
 			continue
 		}
@@ -617,7 +617,7 @@ func (c *Core) TokenChainDetailsCallback(peerID string, topic string, data []byt
 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
 				TokenID:   detail.Token,
 				TokenType: detail.TokenType,
-				AsseType:  detail.AssetType,
+				AssetType: detail.AssetType,
 			})
 		}
 	}
@@ -1052,44 +1052,46 @@ func (c *Core) SyncFullTokenChain(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo)
 	// 		c.log.Error("failed to get parent tokenID of the token ", tokenSyncInfo.TokenID)
 	// 	}
 	// }
-	// var ownerDid string
-	// var transactionID string
+	var ownerDid string
+	var transactionID string
 	// var latestBlockID string
 	// var tokenStateHash string
-	// latestBlockAfterSync := c.w.GetLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
-	// if latestBlockAfterSync != nil {
-	// 	ownerDid = latestBlockAfterSync.GetOwner()
-	// 	transactionID = latestBlockAfterSync.GetTid()
-	// 	latestBlockID, err = latestBlockAfterSync.GetBlockID(tokenSyncInfo.TokenID)
-	// 	if err != nil {
-	// 		c.log.Error("failed to get latest blockID", "token: ", tokenSyncInfo.TokenID)
-	// 	}
-	// 	//concat tokenId and BlockID
-	// 	tokenStateData := tokenSyncInfo.TokenID + latestBlockID
-	// 	tokenStateBuffer := bytes.NewBuffer([]byte(tokenStateData))
-	// 	tokenStateHash, err = c.ipfs.Add(tokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-	// 	if err != nil {
-	// 		c.log.Error("unable to get previous token state hash for token: %v, err: %v", tokenSyncInfo.TokenID, err)
-	// 	}
-
-	// }
-
-	// var tokenDetails wallet.Token
-	// tokenDetails.TokenID = tokenSyncInfo.TokenID
-	// tokenDetails.TokenValue = tokenValue
-	// tokenDetails.ParentTokenID = parentTokenID
-	// tokenDetails.TokenStateHash = tokenStateHash
-	// tokenDetails.TransactionID = transactionID
-	// tokenDetails.DID = ownerDid
-	// tokenDetails.TokenStatus = wallet.TokenIsSyncedFromOtherNode
-
-	//add synced tokens to respective sqlite tables
-	if genesisBlock != nil {
-		err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, tokenSyncInfo.AsseType, genesisBlock)
+	latestBlockAfterSync := c.w.GetLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
+	if latestBlockAfterSync != nil {
+		ownerDid = latestBlockAfterSync.GetOwner()
+		transactionID = latestBlockAfterSync.GetTid()
+		// latestBlockID, err = latestBlockAfterSync.GetBlockID(tokenSyncInfo.TokenID)
 		if err != nil {
-			c.log.Error("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
-			return err
+			c.log.Error("failed to get latest blockID", "token: ", tokenSyncInfo.TokenID)
 		}
+		// 	//concat tokenId and BlockID
+		// 	tokenStateData := tokenSyncInfo.TokenID + latestBlockID
+		// 	tokenStateBuffer := bytes.NewBuffer([]byte(tokenStateData))
+		// 	tokenStateHash, err = c.ipfs.Add(tokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		// 	if err != nil {
+		// 		c.log.Error("unable to get previous token state hash for token: %v, err: %v", tokenSyncInfo.TokenID, err)
+		// 	}
+
+		// }
+
+		// var tokenDetails wallet.Token
+		// tokenDetails.TokenID = tokenSyncInfo.TokenID
+		// tokenDetails.TokenValue = tokenValue
+		// tokenDetails.ParentTokenID = parentTokenID
+		// tokenDetails.TokenStateHash = tokenStateHash
+		// tokenDetails.TransactionID = transactionID
+		// tokenDetails.DID = ownerDid
+		// tokenDetails.TokenStatus = wallet.TokenIsSyncedFromOtherNode
+
+		//add synced tokens to respective sqlite tables
+		if genesisBlock != nil {
+			err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, transactionID, ownerDid, tokenSyncInfo.AssetType, genesisBlock)
+			if err != nil {
+				c.log.Error("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
+				return err
+			}
+		}
+
 	}
 	return nil
 }
@@ -1099,7 +1101,7 @@ func (c *Core) syncMissingBlocks(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo) 
 	// if all blocks are synced then mark the token sync status as completed
 	minMissingBlockId, maxMissingblockId, err := c.GetMissingBlockSequence(tokenSyncInfo)
 	if err != nil {
-		c.log.Error("failed to fetch missing block sequence, error", err)
+		c.log.Error("failed to fetch missing block sequence", "error", err)
 		return err
 	}
 
@@ -2000,57 +2002,123 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 
 }
 
-// Extract token details from given genesis block and add synced tokens  to the respective token table of Fullnode, depending on the asset type
-func (c *Core) AddTokenToRespectiveTable(tokenId string, txnMode int, genesisBlock *block.Block) error {
-	var err error
+// Extract token details from given genesis block and add synced tokens  to the respective tokens table of Fullnode, depending on the asset type
+func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwner string, txnMode int, genesisBlock *block.Block) error {
+	// var err error
 	switch txnMode {
 	case RBTTransferMode:
+
+		// check if token already exists in db
+		syncedRBT, err := c.w.ReadSyncedRBTFromTable(tokenId)
+		if err == nil {
+			c.log.Debug("rbt exists, need to update")
+			// if there is no error, meaning if token exists in table, then update token info
+			syncedRBT.OwnerDID = tokenOwner
+			syncedRBT.TransactionID = txnId
+
+			err = c.w.UpdateSyncedRBTToTable(syncedRBT)
+			if err != nil {
+				c.log.Error("failed to update token ", tokenId)
+				return err
+			}
+			return nil
+		}
+
+		c.log.Debug("rbt doesn't exist, need to add new rec")
 
 		tokenValue := genesisBlock.GetTokenValue()
 		parentId, _, err := genesisBlock.GetParentDetials(tokenId)
 		if err != nil {
 			c.log.Error("failed to fetch parent token Id of the token ", tokenId)
 		}
-		tokenOwner := genesisBlock.GetOwner()
+
+		tokenOwner := tokenOwner
 		tokenInfo := &wallet.SyncedRBT{
 			TokenID:       tokenId,
 			TokenValue:    tokenValue,
 			ParentTokenID: parentId,
-			DID:           tokenOwner,
+			OwnerDID:      tokenOwner,
+			TransactionID: txnId,
 		}
 		err = c.w.AddSyncedRBTToTable(tokenInfo)
 		if err != nil {
 			return err
 		}
 	case FTTransferMode:
+		// check if token already exists in db
+		syncedFT, err := c.w.ReadSyncedFTFromTable(tokenId)
+		if err == nil {
+			// if there is no error, meaning if token exists in table, then update token info
+			syncedFT.OwnerDID = tokenOwner
+			syncedFT.TransactionID = txnId
+
+			err = c.w.UpdateSyncedFTToTable(syncedFT)
+			if err != nil {
+				c.log.Error("failed to update token ", tokenId)
+				return err
+			}
+			return nil
+		}
+
 		ftValue := genesisBlock.GetTokenValue()
-		ftOwner := genesisBlock.GetOwner()
+		ftOwner := tokenOwner
 		ftInfo := &wallet.SyncedFT{
-			TokenID:    tokenId,
-			TokenValue: ftValue,
-			CreatorDID: ftOwner,
+			TokenID:       tokenId,
+			TokenValue:    ftValue,
+			CreatorDID:    ftOwner,
+			TransactionID: txnId,
 		}
 		err = c.w.AddSyncedFTToTable(ftInfo)
 		if err != nil {
 			return err
 		}
 	case SmartContractDeployMode:
+		// check if token already exists in db
+		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
+		if err == nil {
+			// if there is no error, meaning if token exists in table, then update token info
+			syncedSC.TransactionID = txnId
+
+			err = c.w.UpdateSyncedSmartContractToTable(syncedSC)
+			if err != nil {
+				c.log.Error("failed to update token ", tokenId)
+				return err
+			}
+			return nil
+		}
+
 		scDeployer := genesisBlock.GetDeployerDID()
 		scInfo := &wallet.SyncedSmartContract{
 			SmartContractHash: tokenId,
 			Deployer:          scDeployer,
+			TransactionID:     txnId,
 		} // TODO : add sc file details
 		err = c.w.AddSyncedSmartContractToTable(scInfo)
 		if err != nil {
 			return err
 		}
 	case NFTDeployMode:
+		// check if token already exists in db
+		syncedNFT, err := c.w.ReadSyncedNFTFromTable(tokenId)
+		if err == nil {
+			// if there is no error, meaning if token exists in table, then update token info
+			syncedNFT.TransactionID = txnId
+
+			err = c.w.UpdateSyncedNFTToTable(syncedNFT)
+			if err != nil {
+				c.log.Error("failed to update token ", tokenId)
+				return err
+			}
+			return nil
+		}
+
 		nftValue := genesisBlock.GetTokenValue()
 		nftOwner := genesisBlock.GetDeployerDID()
 		nftInfo := &wallet.SyncedNFT{
-			TokenID:    tokenId,
-			TokenValue: nftValue,
-			DID:        nftOwner,
+			TokenID:       tokenId,
+			TokenValue:    nftValue,
+			OwnerDID:      nftOwner,
+			TransactionID: txnId,
 		} // TODO : add metadata details
 		err = c.w.AddSyncedNFTToTable(nftInfo)
 

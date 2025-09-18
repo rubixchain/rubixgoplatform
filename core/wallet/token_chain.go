@@ -458,7 +458,6 @@ func (w *Wallet) getFullNodeGenesisBlock(tt int, token string) *block.Block {
 	return nil
 }
 
-
 // getLatestBlock get latest block from the storage
 func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 	db := w.getChainDB(tt)
@@ -541,7 +540,7 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 	tt := b.GetTokenType(token)
 
 	var db *ChainDB
-	if w.FullNode {
+	if w.IsFullNode {
 		db = w.fullNodeStorage
 	} else {
 		db = w.getChainDB(tt)
@@ -621,7 +620,6 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 	}
 }
 
-
 // addFullNodeBlock will write block into fullnode-storage
 func (w *Wallet) addFullNodeBlock(token string, b *block.Block) error {
 	opt := &opt.WriteOptions{
@@ -630,7 +628,7 @@ func (w *Wallet) addFullNodeBlock(token string, b *block.Block) error {
 	tt := b.GetTokenType(token)
 
 	var db *ChainDB
-	if w.FullNode {
+	if w.IsFullNode {
 		db = w.fullNodeStorage
 	} else {
 		w.log.Error("Not a fullnode, fullnode storage does not exist")
