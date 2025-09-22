@@ -1030,14 +1030,14 @@ func (c *Core) processTransferToken(event *model.PubSubTxnInfo, txnBlock *block.
 	// For regular transfers, perform validation (currently commented out in original)
 	// TODO: Implement proper validation logic when ready
 
-	// Add token to database
-	if err := c.AddTokenToRespectiveTable(tokenId, event.TxnID, event.ReceiverDID, event.TxnMode, txnBlock); err != nil {
-		return fmt.Errorf("failed to add token to database: %w", err)
-	}
-
 	// Add block to token chain
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 		return fmt.Errorf("failed to add block to token chain: %w", err)
+	}
+
+	// Add token to database
+	if err := c.AddTokenToRespectiveTable(tokenId, event.TxnID, event.ReceiverDID, event.TxnMode, txnBlock, wallet.SyncCompleted); err != nil {
+		return fmt.Errorf("failed to add token to database: %w", err)
 	}
 
 	return nil
@@ -1050,14 +1050,14 @@ func (c *Core) processTokenGeneration(event *model.PubSubTxnInfo, txnBlock *bloc
 		return fmt.Errorf("publisher DID mismatch: expected %s, got %s", event.PublisherDID, currentOwner)
 	}
 
-	// Add token to database
-	if err := c.AddTokenToRespectiveTable(tokenId, event.TxnID, event.PublisherDID, event.TxnMode, txnBlock); err != nil {
-		return fmt.Errorf("failed to add generated token to database: %w", err)
-	}
-
 	// Add block to token chain
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 		return fmt.Errorf("failed to add generated token block to chain: %w", err)
+	}
+
+	// Add token to database
+	if err := c.AddTokenToRespectiveTable(tokenId, event.TxnID, event.PublisherDID, event.TxnMode, txnBlock, wallet.SyncCompleted); err != nil {
+		return fmt.Errorf("failed to add generated token to database: %w", err)
 	}
 
 	return nil
@@ -1073,7 +1073,7 @@ func (c *Core) processContractTransaction(event *model.PubSubTxnInfo, txnBlock *
 	tokenId := tokensList[0]
 
 	// Add token to database first
-	if err := c.AddTokenToRespectiveTable(tokenId, event.TxnID, txnBlock.GetDeployerDID(), event.TxnMode, txnBlock); err != nil {
+	if err := c.AddTokenToRespectiveTable(tokenId, event.TxnID, txnBlock.GetDeployerDID(), event.TxnMode, txnBlock, wallet.SyncCompleted); err != nil {
 		return fmt.Errorf("failed to add contract token to database: %w", err)
 	}
 

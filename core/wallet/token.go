@@ -69,6 +69,7 @@ type SyncedRBT struct {
 	TokenValue    float64 `gorm:"column:token_value"`
 	OwnerDID      string  `gorm:"column:owner_did"`
 	TransactionID string  `gorm:"column:transaction_id"`
+	SyncStaus     int     `gorm:"column:sync_status"`
 	// TokenStateHash string  `gorm:"column:token_state_hash"`
 }
 
