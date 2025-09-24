@@ -1386,3 +1386,60 @@ func (w *Wallet) UpdateSyncedSmartContractToTable(sc *SyncedSmartContract) error
 	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Update(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", sc.SmartContractHash)
 }
+
+// This function will return array of RBTs which are free (Used in de-exp)
+func (w *Wallet) GetAllRBTs() ([]SyncedRBT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var RBTs []SyncedRBT
+	err := w.fullNodeSQLDB.Read(FullNodeRBTTable, &RBTs, "token_id!=?", "")
+	if err != nil {
+		readErr := fmt.Sprint(err)
+		if strings.Contains(readErr, "no records found") {
+			w.log.Info("No free RBTs")
+			return nil, fmt.Errorf("Failed to get tokens, No free RBTs")
+		}
+		w.log.Error("Failed to get RBTs", "err", err)
+		return nil, err
+	}
+	return RBTs, nil
+}
+
+func (w *Wallet) GetAllFTs() ([]SyncedFT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var FT []SyncedFT
+	err := w.fullNodeSQLDB.Read(FullNodeFTTable, &FT, "token_id!=?", "")
+	if err != nil {
+		readErr := fmt.Sprint(err)
+		if strings.Contains(readErr, "no records found") {
+			w.log.Info("No free FTs")
+			return nil, err
+		}
+		w.log.Error("Failed to get FTs", "err", err)
+		return nil, err
+	}
+	return FT, nil
+}
+
+func (w *Wallet) GetAllRBTbyDID(did string) ([]SyncedRBT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []SyncedRBT
+	err := w.fullNodeSQLDB.Read(FullNodeRBTTable, &t, "owner_did=?", did)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
+
+func (w *Wallet) GetAllFTsbyDID(did string) ([]FTToken, error) {
+	var t []FTToken
+	err := w.s.Read(FTTokenStorage, &t, "owner_did=?", did)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
