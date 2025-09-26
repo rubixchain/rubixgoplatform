@@ -1493,9 +1493,9 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 }
 
 // Extract token details from given genesis block and add to the respective table, depending on the transaction type
-func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwner string, txnMode int, genesisBlock *block.Block) error {
+func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, receivedBlock *block.Block, event *model.PubSubTxnInfo) error {
 	// var err error
-	switch txnMode {
+	switch event.TxnMode {
 	case RBTTransferMode:
 
 		// check if token already exists in db
@@ -1504,7 +1504,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 			c.log.Debug("rbt exists, need to update")
 			// if there is no error, meaning if token exists in table, then update token info
 			syncedRBT.OwnerDID = tokenOwner
-			syncedRBT.TransactionID = txnId
+			syncedRBT.TransactionID = event.TxnID
 
 			err = c.w.UpdateSyncedRBTToTable(syncedRBT)
 			if err != nil {
@@ -1516,8 +1516,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 
 		c.log.Debug("rbt doesn't exist, need to add new rec")
 
-		tokenValue := genesisBlock.GetTokenValue()
-		parentId, _, err := genesisBlock.GetParentDetials(tokenId)
+		tokenValue := receivedBlock.GetTokenValue()
 		if err != nil {
 			c.log.Error("failed to fetch parent token Id of the token ", tokenId)
 		}
@@ -1526,9 +1525,8 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 		tokenInfo := &wallet.SyncedRBT{
 			TokenID:       tokenId,
 			TokenValue:    tokenValue,
-			ParentTokenID: parentId,
 			OwnerDID:      tokenOwner,
-			TransactionID: txnId,
+			TransactionID: event.TxnID,
 		}
 		err = c.w.AddSyncedRBTToTable(tokenInfo)
 		if err != nil {
@@ -1540,7 +1538,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 		if err == nil {
 			// if there is no error, meaning if token exists in table, then update token info
 			syncedFT.OwnerDID = tokenOwner
-			syncedFT.TransactionID = txnId
+			syncedFT.TransactionID = event.TxnID
 
 			err = c.w.UpdateSyncedFTToTable(syncedFT)
 			if err != nil {
@@ -1550,13 +1548,13 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 			return nil
 		}
 
-		ftValue := genesisBlock.GetTokenValue()
+		ftValue := receivedBlock.GetTokenValue()
 		ftOwner := tokenOwner
 		ftInfo := &wallet.SyncedFT{
 			TokenID:       tokenId,
 			TokenValue:    ftValue,
 			CreatorDID:    ftOwner,
-			TransactionID: txnId,
+			TransactionID: event.TxnID,
 		}
 		err = c.w.AddSyncedFTToTable(ftInfo)
 		if err != nil {
@@ -1567,7 +1565,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
 		if err == nil {
 			// if there is no error, meaning if token exists in table, then update token info
-			syncedSC.TransactionID = txnId
+			syncedSC.TransactionID = event.TxnID
 
 			err = c.w.UpdateSyncedSmartContractToTable(syncedSC)
 			if err != nil {
@@ -1577,11 +1575,11 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 			return nil
 		}
 
-		scDeployer := genesisBlock.GetDeployerDID()
+		scDeployer := receivedBlock.GetDeployerDID()
 		scInfo := &wallet.SyncedSmartContract{
 			SmartContractHash: tokenId,
 			Deployer:          scDeployer,
-			TransactionID:     txnId,
+			TransactionID:     event.TxnID,
 		} // TODO : add sc file details
 		err = c.w.AddSyncedSmartContractToTable(scInfo)
 		if err != nil {
@@ -1592,7 +1590,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 		syncedNFT, err := c.w.ReadSyncedNFTFromTable(tokenId)
 		if err == nil {
 			// if there is no error, meaning if token exists in table, then update token info
-			syncedNFT.TransactionID = txnId
+			syncedNFT.TransactionID = event.TxnID
 
 			err = c.w.UpdateSyncedNFTToTable(syncedNFT)
 			if err != nil {
@@ -1602,13 +1600,13 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, txnId string, tokenOwne
 			return nil
 		}
 
-		nftValue := genesisBlock.GetTokenValue()
-		nftOwner := genesisBlock.GetDeployerDID()
+		nftValue := receivedBlock.GetTokenValue()
+		nftOwner := receivedBlock.GetDeployerDID()
 		nftInfo := &wallet.SyncedNFT{
 			TokenID:       tokenId,
 			TokenValue:    nftValue,
 			OwnerDID:      nftOwner,
-			TransactionID: txnId,
+			TransactionID: event.TxnID,
 		} // TODO : add metadata details
 		err = c.w.AddSyncedNFTToTable(nftInfo)
 		if err != nil {

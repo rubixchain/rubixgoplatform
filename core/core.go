@@ -131,6 +131,7 @@ type Core struct {
 	noBalanceQuorumCount int
 	defaultSetup         bool
 	fullNode             bool
+	txnProcessor         *TxnProcessor
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
