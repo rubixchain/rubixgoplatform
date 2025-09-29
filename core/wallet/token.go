@@ -64,10 +64,11 @@ type Token struct {
 }
 
 type SyncedRBT struct {
-	TokenID       string  `gorm:"column:token_id;primaryKey"`
-	ParentTokenID string  `gorm:"column:parent_token_id"`
+	TokenID string `gorm:"column:token_id;primaryKey"`
+	// ParentTokenID string  `gorm:"column:parent_token_id"`
 	TokenValue    float64 `gorm:"column:token_value"`
 	OwnerDID      string  `gorm:"column:owner_did"`
+	PublisherDID  string  `gorm:"column:publisher_did"`
 	TransactionID string  `gorm:"column:transaction_id"`
 	SyncStaus     int     `gorm:"column:sync_status"`
 	// TokenStateHash string  `gorm:"column:token_state_hash"`
@@ -1444,4 +1445,11 @@ func (w *Wallet) UpdateSyncedSmartContractToTable(sc *SyncedSmartContract) error
 	w.l.Lock()
 	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Update(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", sc.SmartContractHash)
+}
+
+// Store failed transactions in fullnode DB for later analysis and retry
+func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Write(FailedTxnsTable, failedTxn)
 }

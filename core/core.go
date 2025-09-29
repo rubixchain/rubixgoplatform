@@ -133,6 +133,7 @@ type Core struct {
 	defaultSetup         bool
 	publishTokenChain    bool
 	fullNode             bool
+	txnProcessor         *TxnProcessor
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {

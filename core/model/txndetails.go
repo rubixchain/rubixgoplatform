@@ -44,13 +44,21 @@ type TxnCountForDID struct {
 }
 
 type PubSubTxnInfo struct {
-	TxnID        string `gorm:"column:transaction_id;primaryKey"`
-	TxnType      string `gorm:"column:transaction_type"`
-	TxnMode      int    `gorm:"column:transaction_mode"`
+	TxnID   string `gorm:"column:transaction_id;primaryKey"`
+	TxnType string `gorm:"column:transaction_type"`
+	AssetType int    `gorm:"column:asset_type"`
 	// TokenType    int `gorm:"column:token_type"`
 	// BlockID      string `gorm:"column:block_id"`
 	PublisherDID string `gorm:"column:publisher_did"`
 	ReceiverDID  string `gorm:"column:receiver_did"`
 	TxnBlock     []byte `gorm:"column:block"`
 	// Epoch        int64  `gorm:"column:epoch"`
+}
+
+type FailedTransaction struct {
+	TxnID        string    `json:"txn_id"`
+	PublisherDID string    `json:"publisher_did"`
+	Error        string    `json:"error"`
+	FailedAt     time.Time `json:"failed_at"`
+	RetryCount   int       `json:"retry_count"`
 }
