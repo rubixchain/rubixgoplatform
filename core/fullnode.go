@@ -177,10 +177,10 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 	}
 
 	switch newEvent.AssetType {
-	case RBTTransferMode, FTTransferMode:
+	case RBTTokenType, FTTokenType:
 		return c.processTransferTransaction(newEvent, txnBlock, tokensList, receiverDid, currentOwner)
 
-	case SmartContractDeployMode, SmartContractExecuteMode, NFTDeployMode, NFTExecuteMode:
+	case SmartContractTokenType, NFTTokenType:
 		return c.processContractTransaction(newEvent, txnBlock, tokensList[0], currentOwner)
 
 	default:

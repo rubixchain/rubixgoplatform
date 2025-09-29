@@ -195,7 +195,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		// publish the transaction in the network with topic : rubix_txns
 		publishingTxn := &model.PubSubTxnInfo{
 			TxnType:      tcb.TransactionType,
-			TxnMode:      RBTTransferMode,
+			AssetType:    FTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     block.GetBlock(),
 		}

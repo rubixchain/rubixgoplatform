@@ -1510,8 +1510,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 
 	// publish the transaction in the network with topic : rubix_txns
 	publishingTxn := &model.PubSubTxnInfo{
-		TxnType: tcb.TransactionType,
-		TxnMode: RBTTransferMode,
+		TxnType:      tcb.TransactionType,
+		AssetType:    RBTTokenType,
 		PublisherDID: dc.GetDID(),
 		TxnBlock:     nb.GetBlock(),
 	}

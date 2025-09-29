@@ -276,7 +276,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		// publish the transaction in the network with topic : rubix_txns
 		publishingTxn := &model.PubSubTxnInfo{
 			TxnType:      tcb.TransactionType,
-			TxnMode:      RBTTransferMode,
+			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     b.GetBlock(),
 		}
