@@ -1422,6 +1422,42 @@ func (w *Wallet) GetAllFTs() ([]SyncedFT, error) {
 	return FT, nil
 }
 
+// function to return all the NFTs from the fullnode database
+func (w *Wallet) GetAllNFTs() ([]SyncedNFT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var NFT []SyncedNFT
+	err := w.fullNodeSQLDB.Read(FullNodeNFTTable, &NFT, "token_id!=?", "")
+	if err != nil {
+		readErr := fmt.Sprint(err)
+		if strings.Contains(readErr, "no records found") {
+			w.log.Info("No free NFTs")
+			return nil, err
+		}
+		w.log.Error("Failed to get NFTs", "err", err)
+		return nil, err
+	}
+	return NFT, nil
+}
+
+// function to return all the smart contracts from the fullnode database
+func (w *Wallet) GetAllSmartContracts() ([]SyncedSmartContract, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var SC []SyncedSmartContract
+	err := w.fullNodeSQLDB.Read(FullNodeSmartContractTable, &SC, "smart_contract_hash!=?", "")
+	if err != nil {
+		readErr := fmt.Sprint(err)
+		if strings.Contains(readErr, "no records found") {
+			w.log.Info("No free Smart Contracts")
+			return nil, err
+		}
+		w.log.Error("Failed to get Smart Contracts", "err", err)
+		return nil, err
+	}
+	return SC, nil
+}
+
 func (w *Wallet) GetAllRBTbyDID(did string) ([]SyncedRBT, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -1437,6 +1473,30 @@ func (w *Wallet) GetAllRBTbyDID(did string) ([]SyncedRBT, error) {
 func (w *Wallet) GetAllFTsbyDID(did string) ([]FTToken, error) {
 	var t []FTToken
 	err := w.s.Read(FTTokenStorage, &t, "owner_did=?", did)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
+
+func (w *Wallet) GetAllNFTsbyDID(did string) ([]SyncedNFT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []SyncedNFT
+	err := w.fullNodeSQLDB.Read(FullNodeNFTTable, &t, "owner_did=?", did)
+	if err != nil {
+		w.log.Error("Failed to get tokens", "err", err)
+		return nil, err
+	}
+	return t, nil
+}
+
+func (w *Wallet) GetAllSmartContractsbyDID(did string) ([]SyncedSmartContract, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var t []SyncedSmartContract
+	err := w.fullNodeSQLDB.Read(FullNodeSmartContractTable, &t, "deployer=?", did)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err

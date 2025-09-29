@@ -100,16 +100,25 @@ const (
 	APIGetTokenStatus                   string = "/api/get-token-status"
 
 	//Below are Explorer-service API endpoints
-	APIGetAllRBTs             string = "/api/de-exp/get-rbt-list"
-	APIGetAllFTs              string = "/api/de-exp/get-ft-list"
-	APIGetRBTbyDID            string = "/api/de-exp/get-rbt-list-by-did"
-	APIGetFTbyDID             string = "/api/de-exp/get-ft-list-by-did"
-	APIGetRBTFullTokenChain   string = "/api/de-exp/get-rbt-token-chain"
-	APIGetFTFullTokenChain    string = "/api/de-exp/get-ft-token-chain"
-	APIGetRBTGenesisBlock     string = "/api/de-exp/get-rbt-token-chain-genesis-block"
-	APIGetFTGenesisBlock      string = "/api/de-exp/get-ft-token-chain-genesis-block"
-	APIGetRBTLatestBlock      string = "/api/de-exp/get-rbt-token-chain-latest-block"
-	APIGetFTLatestBlock       string = "/api/de-exp/get-ft-token-chain-latest-block"
+	APIGetAllRBTs           string = "/api/de-exp/get-rbt-list"
+	APIGetAllFTs            string = "/api/de-exp/get-ft-list"
+	APIGetAllNFTs           string = "/api/de-exp/get-nft-list"
+	APIGetAllSmartContracts string = "/api/de-exp/get-smart-contract-list"
+
+	APIGetRBTbyDID           string = "/api/de-exp/get-rbt-list-by-did"
+	APIGetFTbyDID            string = "/api/de-exp/get-ft-list-by-did"
+	APIGetNFTbyDID           string = "/api/de-exp/get-nft-list-by-did"
+	APIGetSmartContractbyDID string = "/api/de-exp/get-smart-contract-list-by-did"
+
+	APIGetRBTFullTokenChain string = "/api/de-exp/get-rbt-token-chain"
+	APIGetFTFullTokenChain  string = "/api/de-exp/get-ft-token-chain"
+
+	APIGetRBTGenesisBlock string = "/api/de-exp/get-rbt-token-chain-genesis-block"
+	APIGetFTGenesisBlock  string = "/api/de-exp/get-ft-token-chain-genesis-block"
+
+	APIGetRBTLatestBlock string = "/api/de-exp/get-rbt-token-chain-latest-block"
+	APIGetFTLatestBlock  string = "/api/de-exp/get-ft-token-chain-latest-block"
+
 	APIGetRBTLatestValidators string = "/api/de-exp/get-rbt-token-chain-latest-block-validators"
 	APIGetFTLatestValidators  string = "/api/de-exp/get-ft-token-chain-latest-block-validators"
 )

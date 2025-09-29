@@ -24,6 +24,24 @@ func (s *Server) APIGetAllFreeFTs(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "Free RBTs fetched successfully", FTs)
 }
 
+// to fetch the info for all the NFTs
+func (s *Server) APIGetAllFreeNFTs(req *ensweb.Request) *ensweb.Result {
+	NFTs, err := s.c.GetAllNFTs()
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to get tokens", nil)
+	}
+	return s.BasicResponse(req, true, "Free NFTs fetched successfully", NFTs)
+}
+
+// to fetch the info for all the NFTs
+func (s *Server) APIGetAllFreeSmartContracts(req *ensweb.Request) *ensweb.Result {
+	SmartContracts, err := s.c.GetAllSmartContracts()
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to get Smart contracts", nil)
+	}
+	return s.BasicResponse(req, true, "Free Smart Contracts fetched successfully", SmartContracts)
+}
+
 func (s *Server) APIGetRBTbyDID(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuerry(req, "did")
 	if did == "" {
@@ -46,6 +64,32 @@ func (s *Server) APIGetFTbyDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to get FTs by DID", nil)
 	}
 	return s.BasicResponse(req, true, "FTs fetched successfully", Tokens)
+}
+
+// to fetch the NFTs(syncedNFT) by DID
+func (s *Server) APIGetNFTbyDID(req *ensweb.Request) *ensweb.Result {
+	DID := s.GetQuerry(req, "did")
+	if DID == "" {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	Tokens, err := s.c.GetNFTsbyDID(DID)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to get NFTs by DID", nil)
+	}
+	return s.BasicResponse(req, true, "NFTs fetched successfully", Tokens)
+}
+
+// to fetch the SmartContracts(syncedSmartContract) by DID
+func (s *Server) APIGetSmartContractbyDID(req *ensweb.Request) *ensweb.Result {
+	DID := s.GetQuerry(req, "did")
+	if DID == "" {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	Tokens, err := s.c.GetSmartContractsbyDID(DID)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to get SmartContracts by DID", nil)
+	}
+	return s.BasicResponse(req, true, "SmartContracts fetched successfully", Tokens)
 }
 
 func (s *Server) APIGetRBTFullTokenChain(req *ensweb.Request) *ensweb.Result {
