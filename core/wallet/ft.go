@@ -25,4 +25,5 @@ type SyncedFT struct {
 	CreatorDID    string  `gorm:"column:creator_did"`
 	TokenValue    float64 `gorm:"column:token_value"`
 	TransactionID string  `gorm:"column:transaction_id"`
+	SyncStatus    string  `gorm:"column:sync_status"`
 }
