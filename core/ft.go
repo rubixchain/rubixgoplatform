@@ -193,9 +193,15 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		newFTs = append(newFTs, *ft)
 
 		// publish the transaction in the network with topic : rubix_txns
+		blockHash, err := block.GetHash()
+		if err != nil {
+			blockHash = ""
+			c.log.Error("failed to get block hash")
+		}
 		publishingTxn := &model.PubSubTxnInfo{
+			BlockHash:    blockHash,
 			TxnType:      tcb.TransactionType,
-			TxnMode:      RBTTransferMode,
+			AssetType:    FTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     block.GetBlock(),
 		}

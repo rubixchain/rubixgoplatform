@@ -111,6 +111,7 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, dir string, lo
 		return nil, fmt.Errorf("failed to configure data chain block storage")
 	}
 	w.dtcs.DB = dtdb
+
 	err = w.s.Init(DIDStorage, &DIDType{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID storage", "err", err)
@@ -172,15 +173,15 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, dir string, lo
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {
-		w.log.Error("failed to configure token chain block storage", "err", err)
-		return nil, fmt.Errorf("failed to configure token chain block storage")
+		w.log.Error("failed to configure smart contract token chain block storage", "err", err)
+		return nil, fmt.Errorf("failed to configure smart contract token chain block storage")
 	}
 	w.smartContractTokenChainStorage.DB = smartcontracTokenchainstorageDB
 
 	FTtokenStorageDB, err := leveldb.OpenFile(dir+FTChainStorage, op)
 	if err != nil {
-		w.log.Error("failed to configure token chain block storage", "err", err)
-		return nil, fmt.Errorf("failed to configure token chain block storage")
+		w.log.Error("failed to configure FT token chain block storage", "err", err)
+		return nil, fmt.Errorf("failed to configure FT token chain block storage")
 	}
 	w.FTChainStorage.DB = FTtokenStorageDB
 	err = w.s.Init(CallBackUrlStorage, &CallBackUrl{}, true)
@@ -199,8 +200,8 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, dir string, lo
 	if w.IsFullNode {
 		fullNodeDB, err := leveldb.OpenFile(dir+FullNodeStorage, op)
 		if err != nil {
-			w.log.Error("failed to configure token chain block storage", "err", err)
-			return nil, fmt.Errorf("failed to configure token chain block storage")
+			w.log.Error("failed to configure token chain block storage for full node", "err", err)
+			return nil, fmt.Errorf("failed to configure token chain block storage for full node")
 		}
 		w.fullNodeStorage.DB = fullNodeDB
 
@@ -234,7 +235,6 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, dir string, lo
 			return nil, err
 		}
 	}
-
 	return w, nil
 }
 

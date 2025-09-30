@@ -63,6 +63,7 @@ const (
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
+	// APISendTokenChainDetails        string = "api/send-token-chain-details"
 )
 
 const (
@@ -130,6 +131,7 @@ type Core struct {
 	quorumCount          int
 	noBalanceQuorumCount int
 	defaultSetup         bool
+	publishTokenChain    bool
 	fullNode             bool
 	txnProcessor         *TxnProcessor
 }
@@ -166,7 +168,7 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, fullNode bool) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool) (*Core, error) {
 	var err error
 	update := false
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
@@ -197,21 +199,22 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	}
 
 	c := &Core{
-		cfg:           cfg,
-		cfgFile:       cfgFile,
-		encKey:        encKey,
-		testNet:       testNet,
-		testNetKey:    testNetKey,
-		quorumRequest: make(map[string]*ConsensusStatus),
-		pd:            make(map[string]*PledgeDetails),
-		webReq:        make(map[string]*did.DIDChan),
-		qc:            make(map[string]did.DIDCrypto),
-		pqc:           make(map[string]did.DIDCrypto),
-		sd:            make(map[string]*ServiceDetials),
-		arbitaryMode:  am,
-		secret:        util.GetRandBytes(32),
-		defaultSetup:  defaultSetup,
-		fullNode:      fullNode,
+		cfg:               cfg,
+		cfgFile:           cfgFile,
+		encKey:            encKey,
+		testNet:           testNet,
+		testNetKey:        testNetKey,
+		quorumRequest:     make(map[string]*ConsensusStatus),
+		pd:                make(map[string]*PledgeDetails),
+		webReq:            make(map[string]*did.DIDChan),
+		qc:                make(map[string]did.DIDCrypto),
+		pqc:               make(map[string]did.DIDCrypto),
+		sd:                make(map[string]*ServiceDetials),
+		arbitaryMode:      am,
+		secret:            util.GetRandBytes(32),
+		defaultSetup:      defaultSetup,
+		publishTokenChain: publishTokenChainDetails,
+		fullNode:          fullNode,
 	}
 	c.didDir = c.cfg.DirPath + RubixRootDir
 	if c.testNet {

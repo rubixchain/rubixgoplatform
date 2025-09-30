@@ -71,9 +71,11 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 
 	// add publisher to peer did table
+	unknownDIDType := -1 //DID Type -1 means, we don't know  the publisher's DID Type
 	publisherDetails := &wallet.DIDPeerMap{
-		DID:    newEvent.PublisherDID,
-		PeerID: peerID,
+		DID:     newEvent.PublisherDID,
+		PeerID:  peerID,
+		DIDType: &unknownDIDType,
 	}
 	err = c.AddPeerDetails(*publisherDetails)
 	if err != nil {
@@ -81,19 +83,19 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 
 	// Check for duplicate transactions
-	if _, exists := c.txnProcessor.processedTxns.LoadOrStore(newEvent.TxnID, time.Now()); exists {
-		c.log.Info("Duplicate transaction ignored", "txnID", newEvent.TxnID)
+	if _, exists := c.txnProcessor.processedTxns.LoadOrStore(newEvent.BlockHash, time.Now()); exists {
+		c.log.Info("Duplicate transaction ignored", "blockHash", newEvent.BlockHash)
 		return
 	}
 
-	c.log.Info("Received transaction", "txnID", newEvent.TxnID, "mode", newEvent.TxnMode)
+	c.log.Info("Received transaction", "blockHash", newEvent.BlockHash, "mode", newEvent.AssetType)
 
 	// Queue transaction for processing with timeout
 	select {
 	case c.txnProcessor.txnQueue <- &newEvent:
-		c.log.Debug("Transaction queued successfully", "txnID", newEvent.TxnID)
+		c.log.Debug("Transaction queued successfully", "blockHash", newEvent.BlockHash)
 	case <-time.After(5 * time.Second):
-		c.log.Error("Failed to queue transaction - queue full", "txnID", newEvent.TxnID)
+		c.log.Error("Failed to queue transaction - queue full", "blockHash", newEvent.BlockHash)
 		// Optionally implement overflow handling here
 	case <-c.txnProcessor.ctx.Done():
 		c.log.Info("Transaction processor shutting down")
@@ -108,7 +110,7 @@ func (c *Core) txnWorker(workerID int) {
 	for {
 		select {
 		case txnEvent := <-c.txnProcessor.txnQueue:
-			c.log.Debug("Worker processing transaction", "workerID", workerID, "txnID", txnEvent.TxnID)
+			c.log.Debug("Worker processing transaction", "workerID", workerID, "blockHash", txnEvent.BlockHash)
 
 			// Acquire worker slot
 			c.txnProcessor.workerPool <- struct{}{}
@@ -133,7 +135,7 @@ func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) 
 	for attempt := 0; attempt < c.txnProcessor.maxRetries; attempt++ {
 		if attempt > 0 {
 			c.log.Info("Retrying transaction processing",
-				"txnID", txnEvent.TxnID,
+				"blockHash", txnEvent.BlockHash,
 				"attempt", attempt+1,
 				"workerID", workerID)
 			time.Sleep(c.txnProcessor.retryDelay * time.Duration(attempt))
@@ -142,14 +144,14 @@ func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) 
 		err := c.processSingleTransaction(txnEvent)
 		if err == nil {
 			c.log.Info("Transaction processed successfully",
-				"txnID", txnEvent.TxnID,
+				"blockHash", txnEvent.BlockHash,
 				"workerID", workerID)
 			return
 		}
 
 		lastErr = err
 		c.log.Error("Transaction processing failed",
-			"txnID", txnEvent.TxnID,
+			"blockHash", txnEvent.BlockHash,
 			"attempt", attempt+1,
 			"error", err,
 			"workerID", workerID)
@@ -166,25 +168,25 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 	// Initialize block with error handling
 	txnBlock := block.InitBlock(newEvent.TxnBlock, nil)
 	if txnBlock == nil {
-		return fmt.Errorf("failed to initialize transaction block for txn %s", newEvent.TxnID)
+		return fmt.Errorf("failed to initialize transaction block for txn %s", newEvent.BlockHash)
 	}
 
 	currentOwner := txnBlock.GetOwner()
 	tokensList := txnBlock.GetTransTokens()
 
 	if len(tokensList) == 0 {
-		return fmt.Errorf("no tokens found in transaction %s", newEvent.TxnID)
+		return fmt.Errorf("no tokens found in transaction %s", newEvent.BlockHash)
 	}
 
-	switch newEvent.TxnMode {
-	case RBTTransferMode, FTTransferMode:
+	switch newEvent.AssetType {
+	case RBTTokenType, FTTokenType:
 		return c.processTransferTransaction(newEvent, txnBlock, tokensList, receiverDid, currentOwner)
 
-	case SmartContractDeployMode, SmartContractExecuteMode, NFTDeployMode, NFTExecuteMode:
+	case SmartContractTokenType, NFTTokenType:
 		return c.processContractTransaction(newEvent, txnBlock, tokensList[0], currentOwner)
 
 	default:
-		return fmt.Errorf("unsupported transaction mode: %s", newEvent.TxnMode)
+		return fmt.Errorf("unsupported transaction mode: %s", newEvent.AssetType)
 	}
 }
 
@@ -214,11 +216,12 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 			return fmt.Errorf("publisher DID mismatch for token generation: expected %s, got %s", currentOwner, newEvent.PublisherDID)
 		}
 
-		if err := c.AddTokenToRespectiveTable(tokenId, newEvent.TxnID, txnBlock, newEvent); err != nil {
-			return fmt.Errorf("failed to add generated token to table: %v", err)
+		if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
+			return fmt.Errorf("failed to add generated block to token chain: %v", err)
 		}
+		syncStatus := wallet.SyncCompleted
 
-		return c.w.AddFullNodeTokenBlock(tokenId, txnBlock)
+		return c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus)
 	}
 
 	// Regular transfer processing with enhanced validation
@@ -233,46 +236,48 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		return fmt.Errorf("failed to get current block number: %v", err)
 	}
 
-	tokenType := txnBlock.GetTokenType(tokenId)
-	latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
-	if latestTokenBlock == nil {
-		return fmt.Errorf("failed to get latest block for token %s - may need sync", tokenId)
-	}
-
-	latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
-	if err != nil {
-		return fmt.Errorf("failed to get latest block number: %v", err)
-	}
-
-	// Check for missing blocks
-	if latestBlockNumber+1 != currentBlockNumber {
-		return fmt.Errorf("missing blocks detected: latest=%d, current=%d", latestBlockNumber, currentBlockNumber)
-	}
-
-	// Validate ownership
-	previousOwner := latestTokenBlock.GetOwner()
-	if previousOwner != newEvent.PublisherDID {
-		return fmt.Errorf("publisher DID mismatch: expected %s, got %s", previousOwner, newEvent.PublisherDID)
-	}
-
-	// Validate receiver for transfers
-	if receiverDid != "" {
-		currentOwner := txnBlock.GetOwner()
-		if currentOwner != receiverDid {
-			return fmt.Errorf("receiver DID mismatch: expected %s, got %s", receiverDid, currentOwner)
+	if currentBlockNumber != 0 {
+		tokenType := txnBlock.GetTokenType(tokenId)
+		latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
+		if latestTokenBlock == nil {
+			return fmt.Errorf("failed to get latest block for token %s - may need sync", tokenId)
 		}
-	}
 
-	// Add to database and blockchain
-	if err := c.AddTokenToRespectiveTable(tokenId, receiverDid, txnBlock, newEvent); err != nil {
-		return fmt.Errorf("failed to add token to table: %v", err)
+		latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
+		if err != nil {
+			return fmt.Errorf("failed to get latest block number: %v", err)
+		}
+
+		// Check for missing blocks
+		if latestBlockNumber+1 != currentBlockNumber {
+			return fmt.Errorf("missing blocks detected: latest=%d, current=%d", latestBlockNumber, currentBlockNumber)
+		}
+
+		// Validate ownership
+		previousOwner := latestTokenBlock.GetOwner()
+		if previousOwner != newEvent.PublisherDID {
+			return fmt.Errorf("publisher DID mismatch: expected %s, got %s", previousOwner, newEvent.PublisherDID)
+		}
+
+		// Validate receiver for transfers
+		if receiverDid != "" {
+			currentOwner := txnBlock.GetOwner()
+			if currentOwner != receiverDid {
+				return fmt.Errorf("receiver DID mismatch: expected %s, got %s", receiverDid, currentOwner)
+			}
+		}
 	}
 
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 		return fmt.Errorf("failed to add block to token chain: %v", err)
 	}
+	syncStatus := wallet.SyncCompleted
+	// Add to database and blockchain
+	if err := c.AddTokenToRespectiveTable(tokenId, receiverDid, txnBlock, newEvent, syncStatus); err != nil {
+		return fmt.Errorf("failed to add token to table: %v", err)
+	}
 
-	c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "txnId", newEvent.TxnID)
+	c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 	return nil
 }
 
@@ -280,9 +285,6 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId, currentOwner string) error {
 	// Add token to database first
 	deployerDID := txnBlock.GetDeployerDID()
-	if err := c.AddTokenToRespectiveTable(tokenId, deployerDID, txnBlock, newEvent); err != nil {
-		return fmt.Errorf("failed to add contract token to table: %v", err)
-	}
 
 	// Handle token generated type (new deployments)
 	if newEvent.TxnType == block.TokenGeneratedType {
@@ -295,8 +297,12 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 			return fmt.Errorf("failed to add contract block to token chain: %v", err)
 		}
 
-		c.log.Info("New contract deployment processed", "tokenId", tokenId, "txnId", newEvent.TxnID)
+		c.log.Info("New contract deployment processed", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 		return nil
+	}
+	syncStatus := wallet.SyncCompleted
+	if err := c.AddTokenToRespectiveTable(tokenId, deployerDID, txnBlock, newEvent, syncStatus); err != nil {
+		return fmt.Errorf("failed to add contract token to table: %v", err)
 	}
 
 	// Handle existing contract executions with validation
@@ -307,7 +313,7 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId string) error {
 	// Get token type and latest block for validation
 	tokenType := txnBlock.GetTokenType(tokenId)
-	latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
+	latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
 	if latestTokenBlock == nil {
 		return fmt.Errorf("failed to get latest block for contract token %s - may need sync", tokenId)
 	}
@@ -341,14 +347,14 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 		return fmt.Errorf("failed to add contract execution block to chain: %v", err)
 	}
 
-	c.log.Info("Contract execution processed successfully", "tokenId", tokenId, "txnId", newEvent.TxnID)
+	c.log.Info("Contract execution processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 	return nil
 }
 
 // Handle failed transactions after all retries
 func (c *Core) handleFailedTransaction(txnEvent *model.PubSubTxnInfo, lastErr error) {
 	c.log.Error("Transaction processing failed permanently",
-		"txnID", txnEvent.TxnID,
+		"blockHash", txnEvent.BlockHash,
 		"error", lastErr)
 
 	// Implement failure handling strategy:
@@ -358,7 +364,7 @@ func (c *Core) handleFailedTransaction(txnEvent *model.PubSubTxnInfo, lastErr er
 
 	// Example: Store in failed transactions table
 	failedTxn := &model.FailedTransaction{
-		TxnID:        txnEvent.TxnID,
+		BlockHash:    txnEvent.BlockHash,
 		PublisherDID: txnEvent.PublisherDID,
 		Error:        lastErr.Error(),
 		FailedAt:     time.Now(),
@@ -366,7 +372,7 @@ func (c *Core) handleFailedTransaction(txnEvent *model.PubSubTxnInfo, lastErr er
 	}
 
 	if err := c.w.StoreFailedTransaction(failedTxn); err != nil {
-		c.log.Error("Failed to store failed transaction", "txnID", txnEvent.TxnID, "error", err)
+		c.log.Error("Failed to store failed transaction", "blockHash", txnEvent.BlockHash, "error", err)
 	}
 }
 

@@ -1141,7 +1141,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 	tokenSyncMap[senderPeer.GetPeerID()+"."+senderPeer.GetPeerDID()] = tokensSyncInfo
 
 	// syncing starts in the background
-	go c.syncFullTokenChains(tokenSyncMap)
+	go c.syncMissingBlocksOfTokenChains(tokenSyncMap)
 
 	crep.Status = true
 	crep.Message = "Token received successfully"
@@ -1509,14 +1509,20 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 
 	// publish the transaction in the network with topic : rubix_txns
+	blockHash, err := nb.GetHash()
+	if err != nil {
+		blockHash = ""
+		c.log.Error("failed to get block hash")
+	}
 	publishingTxn := &model.PubSubTxnInfo{
-		TxnType: tcb.TransactionType,
-		TxnMode: RBTTransferMode,
+		BlockHash:    blockHash,
+		TxnType:      tcb.TransactionType,
+		AssetType:    RBTTokenType,
 		PublisherDID: dc.GetDID(),
 		TxnBlock:     nb.GetBlock(),
 	}
 
-	c.log.Debug("quorum publishing pledge block : ", publishingTxn.TxnID)
+	c.log.Debug("quorum publishing pledge block : ", publishingTxn.BlockHash)
 	err = c.publishTxn(publishingTxn)
 	if err != nil {
 		c.log.Error("Failed to publish txn", "err", err)
