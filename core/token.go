@@ -1101,9 +1101,10 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 		//add synced tokens to respective sqlite tables
 	}
-	var event *model.PubSubTxnInfo
-	event.TxnID = transactionID
-	event.AssetType = tokenSyncInfo.AssetType
+	event := &model.PubSubTxnInfo{
+		TxnID:     transactionID,
+		AssetType: tokenSyncInfo.AssetType,
+	}
 	if genesisBlock != nil {
 		err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, genesisBlock, event, syncStatus)
 		if err != nil {
