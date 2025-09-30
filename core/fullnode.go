@@ -236,33 +236,35 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		return fmt.Errorf("failed to get current block number: %v", err)
 	}
 
-	tokenType := txnBlock.GetTokenType(tokenId)
-	latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
-	if latestTokenBlock == nil {
-		return fmt.Errorf("failed to get latest block for token %s - may need sync", tokenId)
-	}
+	if currentBlockNumber != 0 {
+		tokenType := txnBlock.GetTokenType(tokenId)
+		latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
+		if latestTokenBlock == nil {
+			return fmt.Errorf("failed to get latest block for token %s - may need sync", tokenId)
+		}
 
-	latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
-	if err != nil {
-		return fmt.Errorf("failed to get latest block number: %v", err)
-	}
+		latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
+		if err != nil {
+			return fmt.Errorf("failed to get latest block number: %v", err)
+		}
 
-	// Check for missing blocks
-	if latestBlockNumber+1 != currentBlockNumber {
-		return fmt.Errorf("missing blocks detected: latest=%d, current=%d", latestBlockNumber, currentBlockNumber)
-	}
+		// Check for missing blocks
+		if latestBlockNumber+1 != currentBlockNumber {
+			return fmt.Errorf("missing blocks detected: latest=%d, current=%d", latestBlockNumber, currentBlockNumber)
+		}
 
-	// Validate ownership
-	previousOwner := latestTokenBlock.GetOwner()
-	if previousOwner != newEvent.PublisherDID {
-		return fmt.Errorf("publisher DID mismatch: expected %s, got %s", previousOwner, newEvent.PublisherDID)
-	}
+		// Validate ownership
+		previousOwner := latestTokenBlock.GetOwner()
+		if previousOwner != newEvent.PublisherDID {
+			return fmt.Errorf("publisher DID mismatch: expected %s, got %s", previousOwner, newEvent.PublisherDID)
+		}
 
-	// Validate receiver for transfers
-	if receiverDid != "" {
-		currentOwner := txnBlock.GetOwner()
-		if currentOwner != receiverDid {
-			return fmt.Errorf("receiver DID mismatch: expected %s, got %s", receiverDid, currentOwner)
+		// Validate receiver for transfers
+		if receiverDid != "" {
+			currentOwner := txnBlock.GetOwner()
+			if currentOwner != receiverDid {
+				return fmt.Errorf("receiver DID mismatch: expected %s, got %s", receiverDid, currentOwner)
+			}
 		}
 	}
 
@@ -311,7 +313,7 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId string) error {
 	// Get token type and latest block for validation
 	tokenType := txnBlock.GetTokenType(tokenId)
-	latestTokenBlock := c.w.GetLatestTokenBlock(tokenId, tokenType)
+	latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
 	if latestTokenBlock == nil {
 		return fmt.Errorf("failed to get latest block for contract token %s - may need sync", tokenId)
 	}
