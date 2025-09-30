@@ -274,7 +274,13 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		ChildTokenList = append(ChildTokenList, ChildToken{ChildTokenID: pt, TokenValue: parts[i]})
 
 		// publish the transaction in the network with topic : rubix_txns
+		blockHash, err := b.GetHash()
+		if err != nil {
+			blockHash = ""
+			c.log.Error("failed to get block hash")
+		}
 		publishingTxn := &model.PubSubTxnInfo{
+			BlockHash:    blockHash,
 			TxnType:      tcb.TransactionType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),

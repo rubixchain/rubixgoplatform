@@ -287,7 +287,13 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			return err
 		}
 		// publish the transaction in the network with topic : rubix_txns
+		blockHash, err := blk.GetHash()
+		if err != nil {
+			blockHash = ""
+			c.log.Error("failed to get block hash")
+		}
 		publishingTxn := &model.PubSubTxnInfo{
+			BlockHash:    blockHash,
 			TxnType:      tcb.TransactionType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
@@ -1061,16 +1067,17 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	// 	}
 	// }
 	var ownerDid string
-	var transactionID string
+	var blockHash, transactionID string
 	var syncStatus int
 	syncStatus = wallet.SyncCompleted
 	latestBlockAfterSync := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 	if latestBlockAfterSync != nil {
 		ownerDid = latestBlockAfterSync.GetOwner()
 		transactionID = latestBlockAfterSync.GetTid()
+		blockHash, err = latestBlockAfterSync.GetHash()
 		// latestBlockID, err = latestBlockAfterSync.GetBlockID(tokenSyncInfo.TokenID)
 		if err != nil {
-			c.log.Error("failed to get latest blockID", "token: ", tokenSyncInfo.TokenID)
+			c.log.Error("failed to get latest block hash", "token: ", tokenSyncInfo.TokenID)
 		}
 		latestBlockID, err := latestBlockAfterSync.GetBlockID(tokenSyncInfo.TokenID)
 		if err != nil {
@@ -1102,8 +1109,9 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		//add synced tokens to respective sqlite tables
 	}
 	event := &model.PubSubTxnInfo{
-		TxnID:     transactionID,
-		AssetType: tokenSyncInfo.AssetType,
+		BlockHash:     blockHash,
+		TransactionID: transactionID,
+		AssetType:     tokenSyncInfo.AssetType,
 	}
 	if genesisBlock != nil {
 		err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, genesisBlock, event, syncStatus)
@@ -2038,7 +2046,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			c.log.Debug("rbt exists, need to update")
 			// if there is no error, meaning if token exists in table, then update token info
 			syncedRBT.OwnerDID = tokenOwner
-			syncedRBT.TransactionID = event.TxnID
+			syncedRBT.BlockHash = event.BlockHash
 			syncedRBT.SyncStaus = syncStatus
 
 			err = c.w.UpdateSyncedRBTToTable(syncedRBT)
@@ -2058,11 +2066,11 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 		tokenOwner := tokenOwner
 		tokenInfo := &wallet.SyncedRBT{
-			TokenID:       tokenId,
-			TokenValue:    tokenValue,
-			OwnerDID:      tokenOwner,
-			TransactionID: event.TxnID,
-			SyncStaus:     syncStatus,
+			TokenID:    tokenId,
+			TokenValue: tokenValue,
+			OwnerDID:   tokenOwner,
+			BlockHash:  event.BlockHash,
+			SyncStaus:  syncStatus,
 		}
 		err = c.w.AddSyncedRBTToTable(tokenInfo)
 		if err != nil {
@@ -2074,7 +2082,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		if err == nil {
 			// if there is no error, meaning if token exists in table, then update token info
 			syncedFT.OwnerDID = tokenOwner
-			syncedFT.TransactionID = event.TxnID
+			syncedFT.BlockHash = event.BlockHash
 			syncedFT.SyncStatus = syncStatus
 
 			err = c.w.UpdateSyncedFTToTable(syncedFT)
@@ -2088,11 +2096,11 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		ftValue := receivedBlock.GetTokenValue()
 		ftOwner := tokenOwner
 		ftInfo := &wallet.SyncedFT{
-			TokenID:       tokenId,
-			TokenValue:    ftValue,
-			CreatorDID:    ftOwner,
-			TransactionID: event.TxnID,
-			SyncStatus:    syncStatus,
+			TokenID:    tokenId,
+			TokenValue: ftValue,
+			CreatorDID: ftOwner,
+			BlockHash:  event.BlockHash,
+			SyncStatus: syncStatus,
 		}
 		err = c.w.AddSyncedFTToTable(ftInfo)
 		if err != nil {
@@ -2103,7 +2111,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
 		if err == nil {
 			// if there is no error, meaning if token exists in table, then update token info
-			syncedSC.TransactionID = event.TxnID
+			syncedSC.BlockHash = event.BlockHash
 			syncedSC.SyncStatus = syncStatus
 
 			err = c.w.UpdateSyncedSmartContractToTable(syncedSC)
@@ -2118,7 +2126,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		scInfo := &wallet.SyncedSmartContract{
 			SmartContractHash: tokenId,
 			Deployer:          scDeployer,
-			TransactionID:     event.TxnID,
+			BlockHash:         event.BlockHash,
 			SyncStatus:        syncStatus,
 		} // TODO : add sc file details
 		err = c.w.AddSyncedSmartContractToTable(scInfo)
@@ -2130,7 +2138,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedNFT, err := c.w.ReadSyncedNFTFromTable(tokenId)
 		if err == nil {
 			// if there is no error, meaning if token exists in table, then update token info
-			syncedNFT.TransactionID = event.TxnID
+			syncedNFT.BlockHash = event.BlockHash
 			syncedNFT.SyncStatus = syncStatus
 
 			err = c.w.UpdateSyncedNFTToTable(syncedNFT)
@@ -2144,11 +2152,11 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		nftValue := receivedBlock.GetTokenValue()
 		nftOwner := receivedBlock.GetDeployerDID()
 		nftInfo := &wallet.SyncedNFT{
-			TokenID:       tokenId,
-			TokenValue:    nftValue,
-			OwnerDID:      nftOwner,
-			TransactionID: event.TxnID,
-			SyncStatus:    syncStatus,
+			TokenID:    tokenId,
+			TokenValue: nftValue,
+			OwnerDID:   nftOwner,
+			BlockHash:  event.BlockHash,
+			SyncStatus: syncStatus,
 		} // TODO : add metadata details
 		err = c.w.AddSyncedNFTToTable(nftInfo)
 

@@ -83,19 +83,19 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 
 	// Check for duplicate transactions
-	if _, exists := c.txnProcessor.processedTxns.LoadOrStore(newEvent.TxnID, time.Now()); exists {
-		c.log.Info("Duplicate transaction ignored", "txnID", newEvent.TxnID)
+	if _, exists := c.txnProcessor.processedTxns.LoadOrStore(newEvent.BlockHash, time.Now()); exists {
+		c.log.Info("Duplicate transaction ignored", "blockHash", newEvent.BlockHash)
 		return
 	}
 
-	c.log.Info("Received transaction", "txnID", newEvent.TxnID, "mode", newEvent.AssetType)
+	c.log.Info("Received transaction", "blockHash", newEvent.BlockHash, "mode", newEvent.AssetType)
 
 	// Queue transaction for processing with timeout
 	select {
 	case c.txnProcessor.txnQueue <- &newEvent:
-		c.log.Debug("Transaction queued successfully", "txnID", newEvent.TxnID)
+		c.log.Debug("Transaction queued successfully", "blockHash", newEvent.BlockHash)
 	case <-time.After(5 * time.Second):
-		c.log.Error("Failed to queue transaction - queue full", "txnID", newEvent.TxnID)
+		c.log.Error("Failed to queue transaction - queue full", "blockHash", newEvent.BlockHash)
 		// Optionally implement overflow handling here
 	case <-c.txnProcessor.ctx.Done():
 		c.log.Info("Transaction processor shutting down")
@@ -110,7 +110,7 @@ func (c *Core) txnWorker(workerID int) {
 	for {
 		select {
 		case txnEvent := <-c.txnProcessor.txnQueue:
-			c.log.Debug("Worker processing transaction", "workerID", workerID, "txnID", txnEvent.TxnID)
+			c.log.Debug("Worker processing transaction", "workerID", workerID, "blockHash", txnEvent.BlockHash)
 
 			// Acquire worker slot
 			c.txnProcessor.workerPool <- struct{}{}
@@ -135,7 +135,7 @@ func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) 
 	for attempt := 0; attempt < c.txnProcessor.maxRetries; attempt++ {
 		if attempt > 0 {
 			c.log.Info("Retrying transaction processing",
-				"txnID", txnEvent.TxnID,
+				"blockHash", txnEvent.BlockHash,
 				"attempt", attempt+1,
 				"workerID", workerID)
 			time.Sleep(c.txnProcessor.retryDelay * time.Duration(attempt))
@@ -144,14 +144,14 @@ func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) 
 		err := c.processSingleTransaction(txnEvent)
 		if err == nil {
 			c.log.Info("Transaction processed successfully",
-				"txnID", txnEvent.TxnID,
+				"blockHash", txnEvent.BlockHash,
 				"workerID", workerID)
 			return
 		}
 
 		lastErr = err
 		c.log.Error("Transaction processing failed",
-			"txnID", txnEvent.TxnID,
+			"blockHash", txnEvent.BlockHash,
 			"attempt", attempt+1,
 			"error", err,
 			"workerID", workerID)
@@ -168,14 +168,14 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 	// Initialize block with error handling
 	txnBlock := block.InitBlock(newEvent.TxnBlock, nil)
 	if txnBlock == nil {
-		return fmt.Errorf("failed to initialize transaction block for txn %s", newEvent.TxnID)
+		return fmt.Errorf("failed to initialize transaction block for txn %s", newEvent.BlockHash)
 	}
 
 	currentOwner := txnBlock.GetOwner()
 	tokensList := txnBlock.GetTransTokens()
 
 	if len(tokensList) == 0 {
-		return fmt.Errorf("no tokens found in transaction %s", newEvent.TxnID)
+		return fmt.Errorf("no tokens found in transaction %s", newEvent.BlockHash)
 	}
 
 	switch newEvent.AssetType {
@@ -217,7 +217,7 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 		}
 
 		if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
-			return fmt.Errorf("failed to add generated token to table: %v", err)
+			return fmt.Errorf("failed to add generated block to token chain: %v", err)
 		}
 		syncStatus := wallet.SyncCompleted
 
@@ -277,7 +277,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		return fmt.Errorf("failed to add token to table: %v", err)
 	}
 
-	c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "txnId", newEvent.TxnID)
+	c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 	return nil
 }
 
@@ -297,7 +297,7 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 			return fmt.Errorf("failed to add contract block to token chain: %v", err)
 		}
 
-		c.log.Info("New contract deployment processed", "tokenId", tokenId, "txnId", newEvent.TxnID)
+		c.log.Info("New contract deployment processed", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 		return nil
 	}
 	syncStatus := wallet.SyncCompleted
@@ -347,14 +347,14 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 		return fmt.Errorf("failed to add contract execution block to chain: %v", err)
 	}
 
-	c.log.Info("Contract execution processed successfully", "tokenId", tokenId, "txnId", newEvent.TxnID)
+	c.log.Info("Contract execution processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 	return nil
 }
 
 // Handle failed transactions after all retries
 func (c *Core) handleFailedTransaction(txnEvent *model.PubSubTxnInfo, lastErr error) {
 	c.log.Error("Transaction processing failed permanently",
-		"txnID", txnEvent.TxnID,
+		"blockHash", txnEvent.BlockHash,
 		"error", lastErr)
 
 	// Implement failure handling strategy:
@@ -364,7 +364,7 @@ func (c *Core) handleFailedTransaction(txnEvent *model.PubSubTxnInfo, lastErr er
 
 	// Example: Store in failed transactions table
 	failedTxn := &model.FailedTransaction{
-		TxnID:        txnEvent.TxnID,
+		BlockHash:    txnEvent.BlockHash,
 		PublisherDID: txnEvent.PublisherDID,
 		Error:        lastErr.Error(),
 		FailedAt:     time.Now(),
@@ -372,7 +372,7 @@ func (c *Core) handleFailedTransaction(txnEvent *model.PubSubTxnInfo, lastErr er
 	}
 
 	if err := c.w.StoreFailedTransaction(failedTxn); err != nil {
-		c.log.Error("Failed to store failed transaction", "txnID", txnEvent.TxnID, "error", err)
+		c.log.Error("Failed to store failed transaction", "blockHash", txnEvent.BlockHash, "error", err)
 	}
 }
 

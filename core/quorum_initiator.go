@@ -497,12 +497,18 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	}
 
 	// publish the transaction in the network with topic : rubix_txns
+	blockHash, err := nb.GetHash()
+	if err != nil {
+		blockHash = ""
+		c.log.Error("failed to get block hash")
+	}
 	publishingTxn := &model.PubSubTxnInfo{
-		TxnID:   tid,
-		TxnType: nb.GetTransType(),
-		PublisherDID: dc.GetDID(),
-		ReceiverDID:  sc.GetReceiverDID(),
-		TxnBlock:     nb.GetBlock(),
+		BlockHash:     blockHash,
+		TransactionID: tid,
+		TxnType:       nb.GetTransType(),
+		PublisherDID:  dc.GetDID(),
+		ReceiverDID:   sc.GetReceiverDID(),
+		TxnBlock:      nb.GetBlock(),
 	}
 
 	switch cr.Mode {
@@ -725,7 +731,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		// publish txn
-		c.log.Debug("sender publishing txn : ", publishingTxn.TxnID)
+		c.log.Debug("sender publishing txn : ", publishingTxn.TransactionID)
 		publishingTxn.AssetType = RBTTokenType
 		err = c.publishTxn(publishingTxn)
 		if err != nil {
