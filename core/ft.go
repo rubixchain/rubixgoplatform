@@ -195,13 +195,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		// publish the transaction in the network with topic : rubix_txns
 		blockHash, err := block.GetHash()
 		if err != nil {
-			blockHash = ""
 			c.log.Error("failed to get block hash")
+			return err
 		}
 		publishingTxn := &model.PubSubTxnInfo{
 			BlockHash:    blockHash,
 			TxnType:      tcb.TransactionType,
 			AssetType:    FTTokenType,
+			FTName:       FTName,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     block.GetBlock(),
 		}
@@ -255,13 +256,36 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			c.log.Error("FT creation failed, failed to add token block", "err", err)
 			return err
 		}
+		c.log.Debug("burnt token block added ")
 		wholeTokens[i].TokenStatus = wallet.TokenIsBurntForFT
 		err = c.w.UpdateToken(&wholeTokens[i])
 		if err != nil {
 			c.log.Error("FT token creation failed, failed to update token status", "err", err)
 			return err
 		}
+		c.log.Debug("burnt token block status updated ")
 		release = false
+
+		// publish the burnt block in the network with topic : rubix_txns
+		blockHash, err := block.GetHash()
+		if err != nil {
+			c.log.Error("failed to get burnt block hash")
+			return err
+		}
+		publishingTxn := &model.PubSubTxnInfo{
+			BlockHash:    blockHash,
+			TxnType:      tcb.TransactionType,
+			AssetType:    RBTTokenType,
+			PublisherDID: dc.GetDID(),
+			TxnBlock:     block.GetBlock(),
+		}
+
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return err
+		}
+		c.log.Debug("burnt token block published ")
 	}
 
 	for i := range newFTs {

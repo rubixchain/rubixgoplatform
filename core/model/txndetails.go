@@ -48,6 +48,7 @@ type PubSubTxnInfo struct {
 	TransactionID string `gorm:"column:transaction_id"`
 	TxnType       string `gorm:"column:transaction_type"`
 	AssetType     int    `gorm:"column:asset_type"`
+	FTName        string `gorm:"column:ft_name"`
 	// TokenType    int `gorm:"column:token_type"`
 	// BlockID      string `gorm:"column:block_id"`
 	PublisherDID string `gorm:"column:publisher_did"`
