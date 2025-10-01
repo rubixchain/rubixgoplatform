@@ -240,7 +240,24 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		tokenType := txnBlock.GetTokenType(tokenId)
 		latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
 		if latestTokenBlock == nil {
-			return fmt.Errorf("failed to get latest block for token %s - may need sync", tokenId)
+			//connect to publisher and fetch token chain
+			p, err := c.getPeer(newEvent.PublisherDID)
+			if err != nil {
+				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
+				return fmt.Errorf("failed to open peer connection with publisher ", newEvent.PublisherDID)
+			}
+			defer p.Close()
+			tokenSyncInfo := &TokenSyncInfo{
+				TokenID: tokenId,
+				TokenType: tokenType,
+				AssetType: newEvent.AssetType,
+			}
+			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
+			if err != nil {
+				c.log.Error("failed to sync token chain for token ", tokenId, "error", err)
+				return fmt.Errorf("failed to get latest block for token %s - may need sync", tokenId)
+
+			}
 		}
 
 		latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
