@@ -195,6 +195,7 @@ func (c *Core) processTransferTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 	var errors []string
 
 	for _, tokenId := range tokensList {
+		c.log.Debug("...... processing token ", tokenId)
 		if err := c.processTransferToken(newEvent, txnBlock, tokenId, receiverDid, currentOwner); err != nil {
 			errors = append(errors, fmt.Sprintf("token %s: %v", tokenId, err))
 			continue
@@ -235,6 +236,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 	if err != nil {
 		return fmt.Errorf("failed to get current block number: %v", err)
 	}
+	c.log.Debug("current block number is ", currentBlockNumber)
 
 	if currentBlockNumber != 0 {
 		tokenType := txnBlock.GetTokenType(tokenId)
@@ -248,7 +250,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			}
 			defer p.Close()
 			tokenSyncInfo := &TokenSyncInfo{
-				TokenID: tokenId,
+				TokenID:   tokenId,
 				TokenType: tokenType,
 				AssetType: newEvent.AssetType,
 			}

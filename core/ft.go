@@ -298,12 +298,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		FTOwner := blk.GetOwner()
 		ft := &newFTs[i]
 		ft.CreatorDID = FTOwner
+		c.log.Debug("adding new ft to table with count ", i)
 		err = c.w.CreateFT(ft)
 		if err != nil {
 			c.log.Error("Failed to write FT details in FT tokens table", "err", err)
 			return err
 		}
 	}
+	c.log.Debug("updating ft table with new fts")
 	updateFTTableErr := c.updateFTTable()
 	if updateFTTableErr != nil {
 		c.log.Error("Failed to update FT table after FT creation", "err", err)
