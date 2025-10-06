@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1553,4 +1554,382 @@ func (c *Core) GetClosestTokens(dc did.DIDCrypto, ownerDID string, targetValue f
 	}
 
 	return nil, fmt.Errorf("unable to fulfill the request: no suitable token combination or split possible")
+}
+
+// findTokenOfValue finds and returns a token with the specified value from the slice
+func findTokenOfValue(tokens []wallet.FTToken, value float64) wallet.FTToken {
+	for _, t := range tokens {
+		if t.TokenValue == value {
+			return t
+		}
+	}
+	return wallet.FTToken{} // Return zero value if not found
+}
+
+// burnSingleFT burns a single FT token and updates its status
+func (c *Core) burnSingleFT(ft wallet.FTToken, did string, dc did.DIDCrypto) error {
+	// Create FT burn info
+	ftInfo := &block.TransInfo{
+		Tokens: []block.TransTokens{
+			{
+				Token:     ft.TokenID,
+				TokenType: c.TokenType(FTString),
+			},
+		},
+		Comment: "FT burnt at : " + time.Now().String(),
+	}
+
+	// Create burn block
+	ftBurntBlock := &block.TokenChainBlock{
+		TransactionType: block.TokenBurntType,
+		TokenOwner:      did,
+		TransInfo:       ftInfo,
+		TokenValue:      ft.TokenValue,
+	}
+
+	ftBurntBlockMap := make(map[string]*block.Block)
+	ftBurntBlockMap[ft.TokenID] = c.w.GetLatestTokenBlock(ft.TokenID, c.TokenType(FTString))
+
+	newBlock := block.CreateNewBlock(ftBurntBlockMap, ftBurntBlock)
+	if newBlock == nil {
+		return fmt.Errorf("failed to create FT burnt block")
+	}
+
+	err := newBlock.UpdateSignature(dc)
+	if err != nil {
+		return fmt.Errorf("failed to update FT burnt block signature")
+	}
+
+	err = c.w.AddTokenBlock(ft.TokenID, newBlock)
+	if err != nil {
+		return fmt.Errorf("failed to add FT burnt block")
+	}
+
+	FTTokenDetails, err := c.w.ReadFTToken(ft.TokenID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			return fmt.Errorf("FT token not found")
+		}
+		return fmt.Errorf("failed to read FT token details")
+	}
+	if FTTokenDetails != nil {
+		FTTokenDetails.TokenStatus = wallet.TokenIsBurnt
+		err = c.w.UpdateFTToken(FTTokenDetails)
+	}
+	return nil
+}
+
+// unlockParentRBTs unlocks parent RBTs after FT burning
+func (c *Core) unlockParentRBTs(parentTokenID string, did string, dc did.DIDCrypto) error {
+	parentTokenIDsArray := strings.Split(parentTokenID, ",")
+
+	for _, parentRBT := range parentTokenIDsArray {
+		// Get parent RBT details
+		ParentRBTDetails, err := c.w.ReadToken(parentRBT)
+		if err != nil {
+			return fmt.Errorf("failed to get parent RBT details for %s", parentRBT)
+		}
+
+		// Create unlock block
+		rbtInfo := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     parentRBT,
+					TokenType: c.TokenType(RBTString),
+				},
+			},
+			Comment: "Token Unlocked after burning FT at : " + time.Now().String(),
+		}
+
+		unlockBlock := &block.TokenChainBlock{
+			TransactionType: block.TokenUnlocked,
+			TokenOwner:      did,
+			TransInfo:       rbtInfo,
+			TokenValue:      ParentRBTDetails.TokenValue,
+		}
+
+		unlockBlockMap := make(map[string]*block.Block)
+		unlockBlockMap[parentRBT] = c.w.GetLatestTokenBlock(parentRBT, c.TokenType(RBTString))
+
+		newBlock := block.CreateNewBlock(unlockBlockMap, unlockBlock)
+		if newBlock == nil {
+			return fmt.Errorf("failed to create unlock block for %s", parentRBT)
+		}
+
+		err = newBlock.UpdateSignature(dc)
+		if err != nil {
+			return fmt.Errorf("failed to update unlock block signature for %s", parentRBT)
+		}
+
+		err = c.w.AddTokenBlock(parentRBT, newBlock)
+		if err != nil {
+			return fmt.Errorf("failed to add unlock block for %s", parentRBT)
+		}
+
+		// Update token status
+		ParentRBTDetails.TokenStatus = wallet.TokenIsFree
+		err = c.w.UpdateToken(ParentRBTDetails)
+		if err != nil {
+			return fmt.Errorf("failed to update token status for %s", parentRBT)
+		}
+	}
+
+	return nil
+}
+
+// validateParentRBTsForBurning validates that parent RBTs and child FTs are consistent
+func (c *Core) validateParentRBTsForBurning(parentTokenID string, FTsToBurn []wallet.FTToken) error {
+	parentTokenIDsArray := strings.Split(parentTokenID, ",")
+
+	// Create sorted list of FT token IDs for comparison
+	var FTTokenIDsToBurn []string
+	for _, ft := range FTsToBurn {
+		FTTokenIDsToBurn = append(FTTokenIDsToBurn, ft.TokenID)
+	}
+	sort.Strings(FTTokenIDsToBurn)
+
+	var firstChildFTs []string
+
+	for parentTokenIDNumber, parentRBT := range parentTokenIDsArray {
+		// Get parent RBT details
+		_, err := c.w.ReadToken(parentRBT)
+		if err != nil {
+			return fmt.Errorf("failed to get parent RBT details for %s", parentRBT)
+		}
+
+		// Get latest block and child tokens
+		parentRBTLatestBlock := c.w.GetLatestTokenBlock(parentRBT, c.TokenType(RBTString))
+		if parentRBTLatestBlock == nil {
+			return fmt.Errorf("failed to get latest block for parent RBT %s", parentRBT)
+		}
+
+		childFTs := parentRBTLatestBlock.GetChildTokens()
+		if len(childFTs) != len(FTTokenIDsToBurn) {
+			return fmt.Errorf("FTs count (%d) does not match with the child FTs count (%d) for RBT %s",
+				len(FTTokenIDsToBurn), len(childFTs), parentRBT)
+		}
+
+		sort.Strings(childFTs)
+
+		// Validate child FTs match the FTs to be burned
+		for i := range childFTs {
+			if childFTs[i] != FTTokenIDsToBurn[i] {
+				return fmt.Errorf("child FTs do not match with the FTs to be burned for RBT %s", parentRBT)
+			}
+		}
+
+		// Ensure consistency across all parent RBTs
+		if parentTokenIDNumber == 0 {
+			firstChildFTs = childFTs
+		} else {
+			for i := range childFTs {
+				if childFTs[i] != firstChildFTs[i] {
+					return fmt.Errorf("mismatch in child FTs among parent RBTs")
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// burnFT handles the burning of FTs with support for count-based and value-based modes
+func (c *Core) burnFT(reqID string, burnReq *model.BurnFTReq) *model.BasicResponse {
+	var RBTLockStatus int
+	resp := &model.BasicResponse{
+		Status: false,
+	}
+
+	// 1. Input validation
+	isAlphanumericDID := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(burnReq.DID)
+	if !isAlphanumericDID {
+		c.log.Error("Invalid sender or receiver address. Please provide valid DID")
+		resp.Message = "Invalid sender or receiver address. Please provide valid DID"
+		return resp
+	}
+	if !strings.HasPrefix(burnReq.DID, "bafybmi") || len(burnReq.DID) != 59 {
+		c.log.Error("Invalid sender or receiver DID")
+		resp.Message = "Invalid sender or receiver DID"
+		return resp
+	}
+	if burnReq.FTName == "" {
+		c.log.Error("FT name cannot be empty")
+		resp.Message = "FT name is required"
+		return resp
+	}
+
+	// 2. Validate RBTLockStatus and FTCount combination
+	if burnReq.FromRBT && burnReq.FTCount > 0 {
+		c.log.Error("FTCount cannot be specified when FromRBT is true, Try again with FTCount as 0")
+		resp.Message = "FTCount cannot be specified when FromRBT is true, Try again with FTCount as 0"
+		return resp
+	}
+	if !burnReq.FromRBT && burnReq.FTCount <= 0 {
+		c.log.Error("FTCount is required when FromRBT is false")
+		resp.Message = "FTCount is required when FromRBT is false"
+		return resp
+	}
+
+	// 3. DID crypto setup
+	dc, err := c.SetupDID(reqID, burnReq.DID)
+	if err != nil || dc == nil {
+		c.log.Error("Failed to setup DID")
+		resp.Message = "DID crypto is not initialized"
+		return resp
+	}
+
+	// 4. Gather all available FTs
+	allFTs, err := c.w.GetFreeFTsByNameAndCreatorDID(burnReq.FTName, burnReq.DID, burnReq.DID)
+	if err != nil {
+		c.log.Error("Failed to get FTs to burn")
+		resp.Message = "Failed to get FTs to burn"
+		return resp
+	}
+	if len(allFTs) == 0 {
+		c.log.Error("No FTs available to process")
+		resp.Message = "No FTs found for burning"
+		return resp
+	}
+
+	// 5. Determine FTs to burn based on FromRBT flag
+	var FTsToBurn []wallet.FTToken
+
+	if burnReq.FromRBT {
+		// Burn all FTs when FromRBT is true
+		FTsToBurn = allFTs
+		c.log.Info("FromRBT is true, burning all available FTs")
+	} else if burnReq.HighValueFT {
+		targetValue := float64(burnReq.FTCount)
+		var selectedFTs []wallet.FTToken
+		var totalValue float64
+
+		for _, ft := range allFTs {
+			// Exact match
+			if ft.TokenValue == targetValue {
+				FTsToBurn = []wallet.FTToken{ft}
+				c.log.Info("Found exact match FT for burning")
+				break
+			}
+
+			// Accumulate FTs if their total value is still less than target
+			if totalValue+ft.TokenValue < targetValue {
+				selectedFTs = append(selectedFTs, ft)
+				totalValue += ft.TokenValue
+				continue
+			}
+
+			// This FT pushes us over the target — time to split
+			remaining := targetValue - totalValue
+			splitTokens, err := c.splitFTToken(dc, ft.DID, ft.TokenID, ft.TokenValue, remaining)
+			if err != nil {
+				c.log.Error("Failed to split FT token", "err", err)
+				resp.Message = "FT splitting failed"
+				return resp
+			}
+
+			// Add original accumulated tokens
+			selectedFTs = append(selectedFTs, findTokenOfValue(splitTokens, remaining))
+			FTsToBurn = selectedFTs
+			c.log.Info(fmt.Sprintf("Split FT and burning tokens totaling %.2f", targetValue))
+			break
+		}
+
+		if len(FTsToBurn) == 0 {
+			c.log.Error("Insufficient FT value available for burning")
+			resp.Message = fmt.Sprintf("Only total value %.2f FTs available, but %.2f requested", totalValue, targetValue)
+			return resp
+		}
+
+	} else {
+		// Burn by count (non-HighValue mode)
+		if burnReq.FTCount > len(allFTs) {
+			c.log.Error("Insufficient FTs available for burning")
+			resp.Message = fmt.Sprintf("Only %d FTs available, but %d requested", len(allFTs), burnReq.FTCount)
+			return resp
+		}
+		FTsToBurn = allFTs[:burnReq.FTCount]
+		c.log.Info(fmt.Sprintf("Burning %d FTs as requested", burnReq.FTCount))
+	}
+
+	// 6. Validate all FTs before any state changes
+	var parentTokenID string
+
+	for _, ft := range FTsToBurn {
+		// Get genesis block of FT
+		ftGenesisBlock := c.w.GetGenesisTokenBlock(ft.TokenID, c.TokenType(FTString))
+		if ftGenesisBlock == nil {
+			c.log.Error(fmt.Sprintf("Failed to get genesis block for FT: %s", ft.TokenID))
+			resp.Message = "Failed to get genesis block for FT"
+			return resp
+		}
+
+		// Validate creator DID from genesis block
+		ftCreator := ftGenesisBlock.GetOwner()
+		if ftCreator != burnReq.DID {
+			c.log.Error(fmt.Sprintf("DID %s is not the creator of FT %s", burnReq.DID, ft.TokenID))
+			resp.Message = "Unable to burn FTs, Given DID is not the creator of the FT"
+			return resp
+		}
+
+		// Validate RBT lock status when FromRBT is true
+		if burnReq.FromRBT {
+			RBTLockStatus, err = ftGenesisBlock.GetRBTLockStatus(ft.TokenID)
+			if err != nil {
+				c.log.Error("Failed to get RBT lock status")
+				resp.Message = "Failed to get RBT lock status"
+				return resp
+			}
+			if RBTLockStatus != block.RBTLocked {
+				c.log.Error("RBT is not locked, cannot burn FTs")
+				resp.Message = "RBT is not locked, cannot burn FTs"
+				return resp
+			}
+		}
+	}
+
+	// 7. Additional validation for FromRBT case
+	if burnReq.FromRBT || RBTLockStatus == block.RBTLocked {
+		err := c.validateParentRBTsForBurning(parentTokenID, FTsToBurn)
+		if err != nil {
+			c.log.Error(fmt.Sprintf("Parent RBT validation failed: %v", err))
+			resp.Message = err.Error()
+			return resp
+		}
+	}
+
+	// 8. Process parent RBT unlocking (only when FromRBT is true)
+	fmt.Println("RBTLockStatus:", RBTLockStatus)
+	if burnReq.FromRBT || RBTLockStatus == block.RBTLocked {
+		err := c.unlockParentRBTs(parentTokenID, burnReq.DID, dc)
+		if err != nil {
+			c.log.Error(fmt.Sprintf("Failed to unlock parent RBTs: %v", err))
+			resp.Message = "Failed to unlock parent RBTs"
+			return resp
+		}
+	}
+
+	// 9. Burn all FTs
+	for _, ft := range FTsToBurn {
+		err := c.burnSingleFT(ft, burnReq.DID, dc)
+		if err != nil {
+			c.log.Error(fmt.Sprintf("Failed to burn FT %s: %v", ft.TokenID, err))
+			resp.Message = fmt.Sprintf("Failed to burn FT %s", ft.TokenID)
+			return resp
+		}
+	}
+	c.log.Info("FTs burned successfully")
+	resp.Status = true
+	resp.Message = fmt.Sprintf("Successfully burned %d %v FTs", len(FTsToBurn), burnReq.FTName)
+	return resp
+}
+
+// BurnFT is the main entry point for burning FTs
+func (c *Core) BurnFT(reqID string, req *model.BurnFTReq) {
+	br := c.burnFT(reqID, req)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
 }

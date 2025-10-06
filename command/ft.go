@@ -275,22 +275,81 @@ func (cmd *Command) getFTCreatorStats() {
 	}
 }
 
+// func (cmd *Command) burnFT() {
+// 	if cmd.did == "" {
+// 		cmd.log.Info("DID cannot be empty")
+// 		return
+// 	}
+// 	if cmd.ftName == "" {
+// 		cmd.log.Info("FT name cannot be empty")
+// 		return
+// 	}
+// 	burnFtReq := model.BurnFTReq{
+// 		DID:     cmd.did,
+// 		FTName:  cmd.ftName,
+// 		FTCount: cmd.ftCount,
+// 		FromRBT: cmd.fromRBT,
+// 	}
+// 	br, err := cmd.c.BurnFT(&burnFtReq)
+// 	if err != nil {
+// 		cmd.log.Error("Failed to burn FT", "err", err)
+// 		return
+// 	}
+// 	msg, status := cmd.SignatureResponse(br)
+// 	if !status {
+// 		cmd.log.Error("Failed to burn FT", "msg", msg)
+// 		return
+// 	}
+// 	cmd.log.Info("FT burned successfully")
+
+// }
+
 func (cmd *Command) burnFT() {
+	// Validate DID
 	if cmd.did == "" {
-		cmd.log.Info("DID cannot be empty")
+		cmd.log.Error("DID cannot be empty")
 		return
 	}
+	isAlphanumericDID := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !isAlphanumericDID {
+		cmd.log.Error("Invalid DID. Please provide valid DID")
+		return
+	}
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+
+	// Validate FT name
 	if cmd.ftName == "" {
-		cmd.log.Info("FT name cannot be empty")
+		cmd.log.Error("FT name cannot be empty")
 		return
 	}
-	burnFtReq := model.BurnFTReq{
-		DID:     cmd.did,
-		FTName:  cmd.ftName,
-		FTCount: cmd.ftCount,
-		FromRBT: cmd.fromRBT,
+
+	// Validate based on burn mode
+	if cmd.fromRBT {
+		// FromRBT mode: burn all FTs, ftCount should be 0
+		if cmd.ftCount != 0 {
+			cmd.log.Error("FTCount should be 0 when fromRBT is true")
+			return
+		}
+	} else {
+		// Normal mode: ftCount is required
+		if cmd.ftCount <= 0 {
+			cmd.log.Error("FT count must be greater than 0 when fromRBT is false")
+			return
+		}
 	}
-	br, err := cmd.c.BurnFT(&burnFtReq)
+
+	burnFTReq := model.BurnFTReq{
+		DID:         cmd.did,
+		FTName:      cmd.ftName,
+		FTCount:     cmd.ftCount,
+		FromRBT:     cmd.fromRBT,
+		HighValueFT: cmd.isHighValueFT,
+	}
+
+	br, err := cmd.c.BurnFT(&burnFTReq)
 	if err != nil {
 		cmd.log.Error("Failed to burn FT", "err", err)
 		return
@@ -300,6 +359,5 @@ func (cmd *Command) burnFT() {
 		cmd.log.Error("Failed to burn FT", "msg", msg)
 		return
 	}
-	cmd.log.Info("FT burned successfully")
-
+	cmd.log.Info(msg)
 }

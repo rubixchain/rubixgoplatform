@@ -99,6 +99,7 @@ const (
 	CreateFTCmd                    string = "create-ft"
 	DumpFTTokenChainCmd            string = "dump-ft"
 	TransferFTCmd                  string = "transfer-ft"
+	BurnFTCmd                      string = "burn-ft"
 	GetFTInfoCmd                   string = "get-ft-info-by-did"
 	ValidateTokenCmd               string = "validatetoken"
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
@@ -945,6 +946,8 @@ func Run(args []string) {
 		cmd.dumpFTTokenchain()
 	case TransferFTCmd:
 		cmd.transferFT()
+	case BurnFTCmd:
+		cmd.burnFT()
 	case GetFTInfoCmd:
 		cmd.getFTinfo()
 	case ValidateTokenCmd:

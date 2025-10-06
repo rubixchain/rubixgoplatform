@@ -82,6 +82,38 @@ func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+// BurnFTReqSwaggoInput represents the input for burning FTs
+type BurnFTReqSwaggoInput struct {
+	DID         string `json:"did"`
+	FTName      string `json:"ft_name"`
+	FTCount     int    `json:"ft_count"`
+	FromRBT     bool   `json:"from_rbt"`
+	HighValueFT bool   `json:"high_value_ft"`
+}
+
+// ShowAccount godoc
+// @Summary      Burn FTs
+// @Description  This API endpoint will burn FTs and optionally unlock parent RBTs.
+// @Tags         FT
+// @Accept       json
+// @Produce      json
+// @Param        input body BurnFTReqSwaggoInput true "Burn FT"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/burn-ft [post]
+func (s *Server) APIBurnFT(req *ensweb.Request) *ensweb.Result {
+	var burnReq model.BurnFTReq
+	err := s.ParseJSON(req, &burnReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	if !s.validateDIDAccess(req, burnReq.DID) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.BurnFT(req.ID, &burnReq)
+	return s.didResponse(req, req.ID)
+}
+
 // ShowAccount godoc
 // @Summary      Get FT balance information for a given DID
 // @Description  This API endpoint retrieves the names and count of FTs of a given DID.
