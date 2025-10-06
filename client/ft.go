@@ -7,7 +7,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
-func (c *Client) CreateFT(did string, ftName string, ftCount int, ftValue float64, ftNumStartIndex int, fromRBT bool) (*model.BasicResponse, error) {
+func (c *Client) CreateFT(did string, ftName string, ftCount int, ftValue float64, ftNumStartIndex int, fromRBT bool, isHighValueFt bool) (*model.BasicResponse, error) {
 	createFTReq := model.CreateFTReq{
 		DID:             did,
 		FTName:          ftName,
@@ -15,6 +15,7 @@ func (c *Client) CreateFT(did string, ftName string, ftCount int, ftValue float6
 		FTValue:         ftValue,
 		FTNumStartIndex: ftNumStartIndex,
 		FromRBT:         fromRBT,
+		IsHighValueFT:   isHighValueFt,
 	}
 	var basicresponse model.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APICreateFT, nil, &createFTReq, &basicresponse)

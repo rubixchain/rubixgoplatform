@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 
@@ -26,18 +27,14 @@ func (cmd *Command) createFT() {
 	case cmd.ftCount <= 0:
 		cmd.log.Error("number of tokens to create must be greater than zero")
 		return
-	case cmd.rbtAmount <= 0:
-		cmd.log.Error("number of whole tokens must be a positive integer")
+	case cmd.ftvalue < 0.001:
+		cmd.log.Error("FT value must be at least 0.001")
 		return
-	case cmd.ftCount > int(cmd.rbtAmount*1000):
-		cmd.log.Error("max allowed FT count is 1000 for 1 RBT")
-		return
-	}
-	if cmd.rbtAmount != float64(int(cmd.rbtAmount)) {
-		cmd.log.Error("rbtAmount must be a positive integer")
+	case math.Round(cmd.ftvalue*1000) != cmd.ftvalue*1000:
+		cmd.log.Error("FT value cannot have more than 3 decimal places")
 		return
 	}
-	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, int(cmd.rbtAmount), cmd.ftNumStartIndex)
+	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, cmd.ftvalue, cmd.ftNumStartIndex, cmd.fromRBT, false)
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") || strings.Contains(br.Message, "no records found") {
 			cmd.log.Error("Failed to create FT, No RBT available to create FT")

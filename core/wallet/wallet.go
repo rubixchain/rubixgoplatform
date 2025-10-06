@@ -34,6 +34,7 @@ const (
 	FTTokenStorage                 string = "FTTokenTable"
 	FTChainStorage                 string = "FTchainstorage"
 	FTStorage                      string = "FTTable"
+	FTIndexStorage                 string = "FTIndexTable"
 	FTTransactionTokenStorage      string = "FTTransactionTokens"
 	FailedFTDownloadStorage        string = "FailedFTDownloads"
 )
@@ -170,6 +171,10 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	err = w.s.Init(FTStorage, &FT{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize FT storage", "err", err)
+	}
+	err = w.s.Init(FTIndexStorage, &FTIndex{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize FT Index storage", "err", err)
 	}
 	err = w.s.Init(FTTransactionTokenStorage, &model.FTTransactionToken{}, true)
 	if err != nil {
