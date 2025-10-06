@@ -944,6 +944,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// publish txn
 		publishingTxn.AssetType = FTTokenType
+		publishingTxn.FTName = sr.FTInfo.FTName
 		err = c.publishTxn(publishingTxn)
 		if err != nil {
 			c.log.Error("Failed to publish txn", "err", err)

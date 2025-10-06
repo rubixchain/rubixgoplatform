@@ -195,6 +195,7 @@ func (c *Core) processTransferTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 	var errors []string
 
 	for _, tokenId := range tokensList {
+		c.log.Debug("...... processing token ", tokenId)
 		if err := c.processTransferToken(newEvent, txnBlock, tokenId, receiverDid, currentOwner); err != nil {
 			errors = append(errors, fmt.Sprintf("token %s: %v", tokenId, err))
 			continue
@@ -235,12 +236,30 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 	if err != nil {
 		return fmt.Errorf("failed to get current block number: %v", err)
 	}
+	c.log.Debug("current block number is ", currentBlockNumber)
 
 	if currentBlockNumber != 0 {
 		tokenType := txnBlock.GetTokenType(tokenId)
 		latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
 		if latestTokenBlock == nil {
-			return fmt.Errorf("failed to get latest block for token %s - may need sync", tokenId)
+			//connect to publisher and fetch token chain
+			p, err := c.getPeer(newEvent.PublisherDID)
+			if err != nil {
+				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
+				return fmt.Errorf("failed to open peer connection with publisher ", newEvent.PublisherDID)
+			}
+			defer p.Close()
+			tokenSyncInfo := &TokenSyncInfo{
+				TokenID:   tokenId,
+				TokenType: tokenType,
+				AssetType: newEvent.AssetType,
+			}
+			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
+			if err != nil {
+				c.log.Error("failed to sync token chain for token ", tokenId, "error", err)
+				return fmt.Errorf("failed to get latest block for token %s - may need sync", tokenId)
+
+			}
 		}
 
 		latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)

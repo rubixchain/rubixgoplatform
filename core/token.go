@@ -2093,14 +2093,14 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			return nil
 		}
 
-		ftValue := receivedBlock.GetTokenValue()
-		ftOwner := tokenOwner
 		ftInfo := &wallet.SyncedFT{
 			TokenID:    tokenId,
-			TokenValue: ftValue,
-			CreatorDID: ftOwner,
+			TokenValue: receivedBlock.GetTokenValue(),
+			CreatorDID: tokenOwner,
+			OwnerDID:   tokenOwner,
 			BlockHash:  event.BlockHash,
 			SyncStatus: syncStatus,
+			FTName:     event.FTName,
 		}
 		err = c.w.AddSyncedFTToTable(ftInfo)
 		if err != nil {

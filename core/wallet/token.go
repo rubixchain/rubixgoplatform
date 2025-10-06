@@ -80,8 +80,6 @@ func (w *Wallet) CreateToken(t *Token) error {
 func (w *Wallet) CreateFT(ft *FTToken) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	w.l.Lock()
-	defer w.l.Unlock()
 	return w.s.Write(FTTokenStorage, ft)
 }
 func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) error {
