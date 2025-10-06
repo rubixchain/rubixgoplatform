@@ -145,6 +145,30 @@ func (s *StorageLDB) Read(storageName string, value interface{}, querryString st
 	return err
 }
 
+// WriteBatch will write a batch of items into storage
+func (s *StorageLDB) WriteBatch(storageName string, values interface{}, batchSize int) error {
+	items, ok := values.([]*StorageType)
+	if !ok {
+		return fmt.Errorf("invalid data type for batch write")
+	}
+	s.getStorage(storageName)
+	defer s.releaseStorage(storageName)
+	db, err := leveldb.OpenFile(s.dirPath+storageName+".db", nil)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	batch := new(leveldb.Batch)
+	for _, v := range items {
+		vb, err := json.Marshal(v.Value)
+		if err != nil {
+			return err
+		}
+		batch.Put([]byte(v.Key), vb)
+	}
+	return db.Write(batch, nil)
+}
+
 // Close will close the stroage BD
 func (s *StorageLDB) Close() error {
 	return nil

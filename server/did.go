@@ -299,3 +299,54 @@ func (s *Server) APICreateDIDFromPubKey(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.RenderJSON(req, didResp, http.StatusOK)
 }
+
+// arbitrary signature API
+// @Summary     Request Arbitrary Signature
+// @Description Accepts a DID and message to request an arbitrary signature asynchronously.
+// @Tags        Signature
+// @ID          arbitrary-signature
+// @Accept      json
+// @Produce     json
+// @Param       input body model.ArbitrarySignRequest true "Arbitrary Signature Request"
+// @Success     200 {object} model.BasicResponse
+// @Failure     400 {object} model.BasicResponse
+// @Router      /api/sign [post]
+func (s *Server) APIArbitrarySignature(req *ensweb.Request) *ensweb.Result {
+	var signReq model.ArbitrarySignRequest
+	err := s.ParseJSON(req, &signReq)
+	if err != nil {
+		s.log.Error("failed to parse sign input ", "err ", err)
+		return s.BasicResponse(req, false, "arbitrary sign failed, failed to parse input", nil)
+	}
+
+	s.c.AddWebReq(req)
+	go s.c.ArbitrarySign(req.ID, &signReq)
+	return s.didResponse(req, req.ID)
+}
+
+// arbitrary signature verification API
+// @Summary     Verify Arbitrary Signature
+// @Description Verifies a signature for a given DID and signed message.
+// @Tags        Signature
+// @ID          verify-arbitrary-signature
+// @Accept      json
+// @Produce     json
+// @Param       signer_did        query string true "DID of the signer"
+// @Param       signed_msg   query string true "Signed message"
+// @Param       signature  query string true "Signature to verify"
+// @Success     200 {object} model.BasicResponse
+// @Failure     400 {object} model.BasicResponse
+// @Router      /api/verify-signature [get]
+func (s *Server) APISignVerification(req *ensweb.Request) *ensweb.Result {
+	var verificationReq model.SignVerificationRequest
+	verificationReq.SignerDID = s.GetQuerry(req, "signer_did")
+	verificationReq.SignedMsg = s.GetQuerry(req, "signed_msg")
+	verificationReq.Signature = s.GetQuerry(req, "signature")
+
+	verificationResp, err := s.c.ArbitrarySignVerification(req.ID, &verificationReq)
+	if err != nil {
+		s.log.Error("failed to verify given signature", "err", err)
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	return s.RenderJSON(req, verificationResp, http.StatusOK)
+}

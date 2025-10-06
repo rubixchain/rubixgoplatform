@@ -8,6 +8,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	tkn "github.com/rubixchain/rubixgoplatform/token"
 	ut "github.com/rubixchain/rubixgoplatform/util"
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -582,14 +583,31 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 
 		if bn <= lbn {
 			if bn == lbn {
+				// Block already exists, check if it's the same block
+				existingBlock := w.getLatestBlock(tt, token)
+				if existingBlock != nil {
+					existingBlockID, _ := existingBlock.GetBlockID(token)
+					newBlockID, _ := b.GetBlockID(token)
+					if existingBlockID == newBlockID {
+						// Same block, skip adding
+						w.log.Debug("Block already exists, skipping", "token", token, "blockID", newBlockID)
+						return nil
+					}
+				}
+				// Different block with same number, remove existing and add new one
 				err = w.removeTokenChainBlockLatest(token, tt)
 				if err != nil {
 					w.log.Error("Failed to remove latest block of token", token, "err", err)
 					return err
 				}
 			} else {
-				w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
-				return fmt.Errorf("invalid block number, sequence missing")
+				// Check if this is a missing block that we need to insert
+				// This can happen during recovery or sync operations
+				if bn < lbn {
+					w.log.Warn("Attempting to add older block, checking if it's missing", "lbn", lbn, "bn", bn)
+					// Use addMissingBlock instead
+					return w.addMissingBlock(token, b)
+				}
 			}
 		}
 	}
@@ -673,8 +691,13 @@ func (w *Wallet) addFullNodeBlock(token string, b *block.Block) error {
 					return err
 				}
 			} else {
-				w.log.Error("Invalid block number, sequence missing", "lbn", lbn, "bn", bn)
-				return fmt.Errorf("invalid block number, sequence missing")
+				// Check if this is a missing block that we need to insert
+				// This can happen during recovery or sync operations
+				if bn < lbn {
+					w.log.Warn("Attempting to add older block, checking if it's missing", "lbn", lbn, "bn", bn)
+					// Use addMissingBlock instead
+					return w.addMissingBlock(token, b)
+				}
 			}
 		}
 	}
@@ -747,8 +770,10 @@ func (w *Wallet) addMissingBlock(token string, b *block.Block) error {
 			return err
 		}
 		if bn > lbn {
-			w.log.Error("Invalid block number, not from missing blocks sequence", "lbn", lbn, "bn", bn)
-			return fmt.Errorf("invalid block number, not from missing blocks sequence")
+			// This might be a new block that arrived while we were syncing
+			// Try to add it as a regular block instead
+			w.log.Warn("Block number higher than latest, attempting regular add", "lbn", lbn, "bn", bn)
+			return w.addBlock(token, b)
 		}
 	}
 	if b.CheckMultiTokenBlock() {
@@ -823,6 +848,9 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 		w.log.Error("Failed to add block, invalid token type")
 		return fmt.Errorf("failed to get db")
 	}
+	
+	// Track how many tokens already have this block
+	skippedTokens := 0
 	for _, token := range tokens {
 		tt := b.GetTokenType(token)
 		lb := w.getLatestBlock(tt, token)
@@ -845,6 +873,19 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 			}
 			if bn <= lbn {
 				if bn == lbn {
+					// Check if it's the same block
+					existingBlockID, _ := lb.GetBlockID(token)
+					newBlockID, _ := b.GetBlockID(token)
+					if existingBlockID == newBlockID {
+						// Same block already exists, this is okay for idempotent operations
+						w.log.Debug("Block already exists for token, continuing", 
+							"token", token, 
+							"blockID", newBlockID,
+							"blockNumber", bn)
+						skippedTokens++
+						continue // Skip to next token
+					}
+					// Different block with same number, remove existing
 					err = w.removeTokenChainBlockLatest(token, tt)
 					if err != nil {
 						w.log.Error("Failed to remove latest block of token", token, "err", err)
@@ -865,6 +906,20 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 			}
 		}
 	}
+	
+	// If all tokens already have this block, it's an idempotent operation
+	if skippedTokens == len(tokens) {
+		w.log.Info("All tokens already have this block, operation is idempotent",
+			"total_tokens", len(tokens),
+			"block_id", func() string {
+				if bid, err := b.GetBlockID(tokens[0]); err == nil {
+					return bid
+				}
+				return "unknown"
+			}())
+		return nil
+	}
+	
 	bs, err := b.GetHash()
 	if err != nil {
 		return err
@@ -872,15 +927,17 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 	hs := ut.HexToStr(ut.CalculateHash(b.GetBlock(), "SHA3-256"))
 	refkey := []byte(ReferenceType + "-" + hs + "-" + bs)
 	_, err = w.getRawBlock(db, refkey)
-	// if block already exist return error
+	// if block already exist, just skip writing the reference block
 	if err == nil {
-		return fmt.Errorf("failed write the block, block already exist")
-	}
-	db.l.Lock()
-	err = db.Put(refkey, b.GetBlock(), opt)
-	db.l.Unlock()
-	if err != nil {
-		return err
+		w.log.Debug("Reference block already exists, skipping write", "hash", hs)
+		// Still need to update token references
+	} else {
+		db.l.Lock()
+		err = db.Put(refkey, b.GetBlock(), opt)
+		db.l.Unlock()
+		if err != nil {
+			return err
+		}
 	}
 	for _, token := range tokens {
 		bid, err := b.GetBlockID(token)
@@ -1012,4 +1069,60 @@ func (w *Wallet) removeFullNodeTokenChainBlockLatest(token string, tokenType int
 	}
 
 	return nil
+}
+
+// BatchAddTokenBlocks writes multiple token blocks to LevelDB in a single batch for any token type
+func (w *Wallet) BatchAddTokenBlocks(pairs []struct {
+	Token     string
+	Block     *block.Block
+	TokenType int
+}) error {
+	if len(pairs) == 0 {
+		return nil
+	}
+	// Assume all pairs are for the same token type (enforced by caller)
+	tt := pairs[0].TokenType
+	db := w.getChainDB(tt)
+	if db == nil {
+		return fmt.Errorf("failed to get chain DB for token type %d", tt)
+	}
+	batch := new(leveldb.Batch)
+	for _, pair := range pairs {
+		if pair.Block == nil {
+			return fmt.Errorf("nil block for token %s", pair.Token)
+		}
+		bid, err := pair.Block.GetBlockID(pair.Token)
+		if err != nil {
+			return fmt.Errorf("failed to get block ID for token %s: %v", pair.Token, err)
+		}
+		key := tcsKey(tt, pair.Token, bid)
+		batch.Put([]byte(key), pair.Block.GetBlock())
+	}
+	db.l.Lock()
+	err := db.DB.Write(batch, nil)
+	db.l.Unlock()
+	return err
+}
+
+// BatchAddTokenBlocksFT is a thin wrapper for FT tokens
+func (w *Wallet) BatchAddTokenBlocksFT(pairs []struct {
+	Token string
+	Block *block.Block
+}) error {
+	if len(pairs) == 0 {
+		return nil
+	}
+	var genericPairs []struct {
+		Token     string
+		Block     *block.Block
+		TokenType int
+	}
+	for _, p := range pairs {
+		genericPairs = append(genericPairs, struct {
+			Token     string
+			Block     *block.Block
+			TokenType int
+		}{Token: p.Token, Block: p.Block, TokenType: tkn.FTTokenType})
+	}
+	return w.BatchAddTokenBlocks(genericPairs)
 }

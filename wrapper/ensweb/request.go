@@ -2,6 +2,7 @@ package ensweb
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"net"
 	"net/http"
@@ -66,6 +67,12 @@ func inRange(r ipRange, ipAddress net.IP) bool {
 		return true
 	}
 	return false
+}
+func (req *Request) Context() context.Context {
+	if req.r != nil {
+		return req.r.Context()
+	}
+	return context.Background()
 }
 
 var privateRanges = []ipRange{

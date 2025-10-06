@@ -1,6 +1,11 @@
 package wallet
 
-import "github.com/rubixchain/rubixgoplatform/core/model"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/rubixchain/rubixgoplatform/core/model"
+)
 
 // struct definition for Mapping token and reason the did is a provider
 
@@ -27,11 +32,57 @@ func (w *Wallet) AddProviderDetails(tokenProviderMap model.TokenProviderMap) err
 	var tpm model.TokenProviderMap
 	err := w.s.Read(TokenProvider, &tpm, "token=?", tokenProviderMap.Token)
 	if err != nil || tpm.Token == "" {
-		w.log.Info("Token Details not found: Creating new Record")
-		// create new entry
-		return w.s.Write(TokenProvider, tokenProviderMap)
+		w.log.Debug("Token Details not found: Creating new Record")
+		// create new entry, but handle unique constraint error
+		writeErr := w.s.Write(TokenProvider, tokenProviderMap)
+		if writeErr != nil && strings.Contains(writeErr.Error(), "UNIQUE constraint failed") {
+			// Someone else inserted, so update instead
+			return w.s.Update(TokenProvider, tokenProviderMap, "token=?", tokenProviderMap.Token)
+		}
+		return writeErr
 	}
 	return w.s.Update(TokenProvider, tokenProviderMap, "token=?", tokenProviderMap.Token)
+}
+
+// Method to add provider details to DB in batch during ipfs ops
+// Accepts a slice of TokenProviderMap and writes/updates them efficiently
+func (w *Wallet) AddProviderDetailsBatch(tokenProviderMaps []model.TokenProviderMap) error {
+	if len(tokenProviderMaps) == 0 {
+		return nil
+	}
+	
+	// Process each token provider individually to handle UNIQUE constraints properly
+	// We don't use WriteBatch because it doesn't handle UNIQUE constraint violations
+	var lastErr error
+	successCount := 0
+	
+	for _, tpm := range tokenProviderMaps {
+		err := w.AddProviderDetails(tpm)
+		if err != nil {
+			// Log the error but continue processing other entries
+			w.log.Warn("Failed to add provider details in batch", "token", tpm.Token, "did", tpm.DID, "err", err)
+			lastErr = err
+			// If it's not a UNIQUE constraint error, it might be more serious
+			if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				w.log.Error("Non-recoverable error in batch provider details", "err", err)
+			}
+		} else {
+			successCount++
+		}
+	}
+	
+	// Log summary
+	w.log.Debug("Batch provider details completed", 
+		"total", len(tokenProviderMaps), 
+		"success", successCount, 
+		"failed", len(tokenProviderMaps)-successCount)
+	
+	// Return error only if all operations failed
+	if successCount == 0 && lastErr != nil {
+		return fmt.Errorf("all provider detail operations failed: %w", lastErr)
+	}
+	
+	return nil
 }
 
 // Method deletes entry ffrom DB during unpin op

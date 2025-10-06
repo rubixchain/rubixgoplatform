@@ -3,8 +3,10 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,92 +32,91 @@ type DIDInfo struct {
 }
 
 func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
-	// Construct the API URL
-	fmt.Println("Fetching peer: ", didStr)
-	url := "https://rexplorer.azurewebsites.net/api/user/get-did-info/" + didStr
+	c.log.Debug("Fetching peer from explorer", "did", didStr)
 
-	// Make the HTTP GET request
+	url := "https://rexplorer.azurewebsites.net/api/user/get-did-info/" + didStr
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %v", err)
+		return nil, fmt.Errorf("failed to request explorer: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Check if the request was successful
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned non-200 status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("explorer returned status: %d", resp.StatusCode)
 	}
 
-	// Read the response body
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
+		return nil, fmt.Errorf("failed to read explorer response: %w", err)
 	}
 
-	// Check for known error message
+	c.log.Debug("Explorer raw response", "body", string(body))
+
+	// First, parse basic structure
 	var genericResp struct {
 		Message string          `json:"message"`
 		Data    json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(body, &genericResp); err != nil {
-		return nil, fmt.Errorf("failed to parse generic JSON: %v", err)
+		return nil, fmt.Errorf("failed to parse explorer response: %w", err)
 	}
 
 	if strings.Contains(genericResp.Message, "Deployer not found") {
-		c.log.Error("Deployer not found for DID:", didStr)
-		return nil, fmt.Errorf("PeerID not found for DID: %s", didStr)
+		c.log.Error("Deployer not found for DID", "did", didStr)
+		return nil, fmt.Errorf("peer not found in explorer for DID: %s", didStr)
 	}
 
-	// Parse the JSON response
+	// Parse full response
 	var apiResp APIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+		return nil, fmt.Errorf("failed to parse DID data: %w", err)
 	}
 
-	userDID := apiResp.Data.UserDID
+	c.log.Debug("Explorer response parsed", "userDID", apiResp.Data.UserDID, "peerID", apiResp.Data.PeerID, "didType", apiResp.Data.DIDType)
 
-	// Fetch the DID
-	if err := c.FetchDID(userDID); err != nil {
-		c.log.Error("Failed to fetch DID:", err)
-		return nil, fmt.Errorf("failed to fetch DID: %v", err)
+	// Fetch DID content to local node
+	if err := c.FetchDID(apiResp.Data.UserDID); err != nil {
+		c.log.Error("Failed to fetch DID", "did", apiResp.Data.UserDID, "err", err)
+		return nil, fmt.Errorf("failed to fetch DID from network: %w", err)
 	}
 
-	// Check for .png files in the folder
-	didDirPath := filepath.Join(c.didDir, userDID)
+	// Determine if DID has .png file to identify BasicDID
 	hasPNG := false
-
-	files, err := ioutil.ReadDir(didDirPath)
-	if err != nil {
-		fmt.Println("Failed to read DID directory:", err)
-		return nil, fmt.Errorf("failed to read DID directory: %v", err)
+	didDir := filepath.Join(c.didDir, apiResp.Data.UserDID)
+	if files, err := os.ReadDir(didDir); err == nil {
+		for _, f := range files {
+			if !f.IsDir() && strings.HasSuffix(f.Name(), ".png") {
+				hasPNG = true
+				break
+			}
+		}
+	} else {
+		c.log.Warn("Failed to scan DID directory", "path", didDir, "err", err)
 	}
 
-	for _, file := range files {
-		if !file.IsDir() && filepath.Ext(file.Name()) == ".png" {
-			hasPNG = true
-			break
+	// Resolve DID type
+	var resolvedType int
+	switch apiResp.Data.DIDType {
+	case "BIP39":
+		resolvedType = did.LiteDIDMode
+	default:
+		if hasPNG {
+			resolvedType = did.BasicDIDMode
+		} else {
+			resolvedType = did.LiteDIDMode // fallback default
 		}
 	}
 
-	// Initialize DIDType with a pointer
-	didType := -1
 	peerInfo := &wallet.DIDPeerMap{
 		DID:     apiResp.Data.UserDID,
 		PeerID:  apiResp.Data.PeerID,
-		DIDType: &didType,
+		DIDType: &resolvedType,
 	}
 
-	// Determine DIDType based on conditions
-	if apiResp.Data.DIDType == "BIP39" {
-		*peerInfo.DIDType = did.LiteDIDMode
-	} else if hasPNG {
-		mode := did.BasicDIDMode
-		peerInfo.DIDType = &mode
-	}
-
-	err = c.AddPeerDetails(*peerInfo)
-	if err != nil {
-		c.log.Error("failed to add peer to DIDPeerTable, err ", err)
+	// Add peer to table (upsert logic should be inside AddPeerDetails)
+	if err := c.AddPeerDetails(*peerInfo); err != nil {
+		c.log.Error("Failed to add peer details to table", "did", peerInfo.DID, "err", err)
+		// Return peerInfo anyway, in case caller can proceed
 		return peerInfo, nil
 	}
 
@@ -393,95 +394,225 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 	return did, nil
 }
 
-// GetPeerDIDInfo fetched peer info either from DIDTable (if in the same node), or DIDPeerTable, or explorer
-// If did type is still not found then it connects the peer and fetches did type
-// And it adds peer to DIDPeerTable, in case peer is not in the same node
-// This function throws error in 3 cases :
-// case-1 : if peer details not found anywhere, returns nil, and error;
-// case-2 : if peerId not found anywhere but did type is in DB, retrns did type and error;
-// case-3 : if failed to add peer info to DB, returns DIDPeerMap and error containing 'retry' msg
+// This function, GetPeerDIDInfo, retrieves information about a peer's DID (Decentralized Identifier)
+// from various sources, including the local database, an explorer, or directly from the peer.
+// It returns a wallet.DIDPeerMap containing the peer's DID, Peer ID, and DID type,
+// or an error if the information cannot be found.
 func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
-	peerDIDInfo := &wallet.DIDPeerMap{
-		DID: didStr,
-	}
-	// check if peer is in same node
-	didInfo, err := c.w.GetDID(didStr)
-	if err == nil {
-		peerDIDInfo.DIDType = &didInfo.Type
-		peerDIDInfo.PeerID = c.peerID
-		return peerDIDInfo, nil
-	}
-	// if peer is in different node, fetch peer id from DIDPeerTable
-	peerID := c.w.GetPeerID(didStr)
-	if peerID == "" {
-		if c.testNet {
-			didType, _ := c.w.GetPeerDIDType(didStr)
-			if didType == -1 {
-				c.log.Error("missing peer details of peer ", didStr)
-				return nil, err
-			}
-			peerDIDInfo.DIDType = &didType
-			return peerDIDInfo, fmt.Errorf("failed to find peer ID, err : " + err.Error())
-		}
-		// if peer id not found in table, try to fetch from explorer for mainnet RBTs
-		peerDIDInfo, err = c.GetPeerFromExplorer(didStr)
-		if peerDIDInfo != nil {
-			c.AddPeerDetails(*peerDIDInfo)
-		}
-		if err != nil {
-			c.log.Error("failed to fetch peer Id from explorer for ", didStr, "err", err)
+	c.log.Debug("Resolving peer info", "did", didStr)
 
-			// if peer id not found in explorer too, then return only did type, if it is in table
-			didType, _ := c.w.GetPeerDIDType(didStr)
-			if didType == -1 {
-				return nil, err
-			}
-			peerDIDInfo.DIDType = &didType
-			return peerDIDInfo, fmt.Errorf("failed find peer ID, err : " + err.Error())
+	var peerID string
+	var didType int
+
+	// In case of xell wallet, TRIE testnet and Rubix testnet have same swarm key but different peerIDs.
+	// So, an user should find another user's Rubix testnet DID-info in DIDTable and TRIE testnet DID-info in PeerDIDTable.
+	if c.testNet {
+		// 1. try DID table first
+		if didInfo, err := c.w.GetDID(didStr); err == nil {
+			return &wallet.DIDPeerMap{
+				DID:     didStr,
+				PeerID:  c.peerID,
+				DIDType: &didInfo.Type,
+			}, nil
+		}
+
+		// 2. If missing, try peer table
+		peerID = c.w.GetPeerID(didStr)
+		didType, _ = c.w.GetPeerDIDType(didStr)
+
+		if peerID != "" && didType != -1 {
+			//c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
+			return &wallet.DIDPeerMap{
+				DID:     didStr,
+				PeerID:  peerID,
+				DIDType: &didType,
+			}, nil
 		}
 	} else {
-		peerDIDInfo.PeerID = peerID
+		// 1. Try peer table first
+		peerID = c.w.GetPeerID(didStr)
+		didType, _ = c.w.GetPeerDIDType(didStr)
+
+		if peerID != "" && didType != -1 {
+			//c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
+			return &wallet.DIDPeerMap{
+				DID:     didStr,
+				PeerID:  peerID,
+				DIDType: &didType,
+			}, nil
+		}
+
+		// 2. If missing, try DID table
+		if didType == -1 {
+			if didInfo, err := c.w.GetDID(didStr); err == nil {
+				didType = didInfo.Type
+			}
+		}
 	}
 
-	//if did type is not fetched yet or is incorrect, then try to fetch it from db or from the peer itself
-	if peerDIDInfo.DIDType == nil || *peerDIDInfo.DIDType == -1 {
+	// If peerID still missing, try resolving (via explorer or peer fetch)
+	if peerID == "" {
 		if !c.testNet {
-			peerDIDInfo, err = c.GetPeerFromExplorer(didStr)
-			if err != nil && *peerDIDInfo.DIDType != -1 {
-				c.log.Error("failed to fetch peer details from explorer for ", didStr, "err", err)
-
+			peerInfo, err := c.GetPeerFromExplorer(didStr)
+			if err != nil {
+				return nil, fmt.Errorf("explorer lookup failed: %w", err)
 			}
-		} else {
-			didType, _ := c.w.GetPeerDIDType(didStr)
-			if didType == -1 {
-				c.log.Debug("Connecting with peer to get DID type of peer did", didStr)
-				p, err := c.getPeer(peerDIDInfo.PeerID + "." + didStr)
-				if err != nil {
-					c.log.Error("could not connect with peer to fetch did type, error ", err)
-					return peerDIDInfo, nil
-				}
-				defer p.Close()
-				peerDetails, err := c.GetPeerInfo(p, didStr)
-				if err != nil {
-					c.log.Error("failed to fetch did type from peer ", didStr, "err", err)
-					return peerDIDInfo, nil
-				}
-				peerDIDInfo.DIDType = peerDetails.PeerInfo.DIDType
-			} else {
-				peerDIDInfo.DIDType = &didType
-			}
-			c.AddPeerDetails(*peerDIDInfo)
+			return peerInfo, nil
 		}
 
-	}
-
-	// add peer to DIDPeerTable, if peer is in different node
-	if peerDIDInfo.PeerID != c.peerID {
-		err = c.AddPeerDetails(*peerDIDInfo)
+		// Testnet: resolve from peer directly
+		p, err := c.getPeer(didStr)
 		if err != nil {
-			c.log.Error("failed to add peer to DIDPeerTable, err ", err)
-			return peerDIDInfo, fmt.Errorf("failed to add peer info to table, please retry adding")
+			return nil, fmt.Errorf("failed to connect to peer: %w", err)
 		}
+		defer p.Close()
+
+		details, err := c.GetPeerInfo(p, didStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get peer info: %w", err)
+		}
+
+		peerInfo := &wallet.DIDPeerMap{
+			DID:     didStr,
+			PeerID:  p.GetPeerID(),
+			DIDType: details.PeerInfo.DIDType,
+		}
+		// Save resolved info
+		if err := c.AddPeerDetails(*peerInfo); err != nil {
+			return nil, err
+		}
+		return peerInfo, nil
 	}
-	return peerDIDInfo, nil
+
+	// PeerID exists, but no DIDType — fetch from peer or explorer
+	if didType == -1 {
+		var peerInfo *wallet.DIDPeerMap
+		if !c.testNet {
+			peerInfo, err := c.GetPeerFromExplorer(didStr)
+			if err != nil {
+				return nil, fmt.Errorf("explorer fetch failed: %w", err)
+			}
+			return peerInfo, nil
+		}
+
+		p, err := c.getPeer(peerID + "." + didStr)
+		if err != nil {
+			return nil, fmt.Errorf("peer connection failed: %w", err)
+		}
+		defer p.Close()
+
+		peerDetails, err := c.GetPeerInfo(p, didStr)
+		if err != nil {
+			return nil, fmt.Errorf("peer info fetch failed: %w", err)
+		}
+
+		peerInfo = &wallet.DIDPeerMap{
+			DID:     didStr,
+			PeerID:  peerID,
+			DIDType: peerDetails.PeerInfo.DIDType,
+		}
+		if err := c.AddPeerDetails(*peerInfo); err != nil {
+			return nil, err
+		}
+		return peerInfo, nil
+	}
+
+	return &wallet.DIDPeerMap{
+		DID:     didStr,
+		PeerID:  peerID,
+		DIDType: &didType,
+	}, nil
+}
+
+func (c *Core) ArbitrarySign(reqID string, signReq *model.ArbitrarySignRequest) {
+	signResp := c.arbitrarySign(reqID, signReq)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("arbitrary sign failed, Failed to get did channels")
+		return
+	}
+	dc.OutChan <- signResp
+}
+func (c *Core) arbitrarySign(reqID string, signReq *model.ArbitrarySignRequest) *model.BasicResponse {
+	signResp := &model.BasicResponse{
+		Status: false,
+	}
+
+	// initiate the did with did crypto
+	didCrypto, err := c.SetupDID(reqID, signReq.SignerDID)
+	if err != nil {
+		errMsg := fmt.Sprintf("arbitrary sign failed, failed to setup did, err : %v", err)
+		c.log.Error(errMsg)
+		signResp.Message = errMsg
+		return signResp
+	}
+
+	// sign the given message with private key
+	signatureBytes, err := didCrypto.PvtSign([]byte(signReq.MsgToSign))
+	if err != nil {
+		errMsg := fmt.Sprintf("arbitrary sign failed, err : %v", err)
+		c.log.Error(errMsg)
+		signResp.Message = errMsg
+		return signResp
+	}
+	// convert signature bytes into string
+	signature := util.HexToStr(signatureBytes)
+
+	// verify the signature before returning
+	verificationResult, err := didCrypto.PvtVerify([]byte(signReq.MsgToSign), signatureBytes)
+	if err != nil {
+		errMsg := fmt.Sprintf("arbitrary sign failed, failed to verify signature, err : %v", err)
+		c.log.Error(errMsg)
+		signResp.Message = errMsg
+		return signResp
+	}
+
+	if !verificationResult {
+		c.log.Error("verification failed, signature is invalid")
+		signResp.Message = "arbitrary sign failed, verification failed, signature is invalid"
+	} else {
+		signResp.Message = "arbitrary sign successful"
+		signMap := model.Signature{
+			Signature: signature,
+		}
+		signResp.Result = signMap
+	}
+
+	signResp.Status = true
+	return signResp
+}
+
+func (c *Core) ArbitrarySignVerification(reqID string, verificationReq *model.SignVerificationRequest) (*model.BasicResponse, error) {
+	verificationResp := &model.BasicResponse{
+		Status: false,
+	}
+
+	// initiate the did with did crypto
+	didCrypto, err := c.SetupForienDID(verificationReq.SignerDID, "")
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to setup did for sign verification, err : %v", err)
+		c.log.Error(errMsg)
+		verificationResp.Message = errMsg
+		return verificationResp, fmt.Errorf("%v", errMsg)
+	}
+
+	signatureBytes := util.StrToHex(verificationReq.Signature)
+
+	verificationResult, err := didCrypto.PvtVerify([]byte(verificationReq.SignedMsg), signatureBytes)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to verify signature, err : %v", err)
+		c.log.Error(errMsg)
+		verificationResp.Message = errMsg
+		return verificationResp, fmt.Errorf("%v", errMsg)
+	}
+
+	if verificationResult {
+		verificationResp.Message = "verification passed, signature is valid"
+	} else {
+		c.log.Error("verification failed, signature is invalid")
+		verificationResp.Message = "verification failed, signature is invalid"
+	}
+
+	verificationResp.Status = verificationResult
+	return verificationResp, nil
 }

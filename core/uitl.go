@@ -16,6 +16,16 @@ const (
 	FTString            string = "ft"
 )
 
+func isPresentInList(list []string, element string) bool {
+	for _, e := range list {
+		if e == element {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (c *Core) getTotalAmountFromTokenHashes(tokenHashes []string) (float64, error) {
 	var totalAmount float64 = 0.0
 
