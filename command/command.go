@@ -113,10 +113,11 @@ const (
 	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
 	ArbitrarySignCmd               string = "sign"
 	VerifySignatureCmd             string = "verify-signature"
-  AsyncFTStatusCmd               string = "asyncftstatus"
+	AsyncFTStatusCmd               string = "asyncftstatus"
 	SetAsyncFTStatusCmd            string = "setasyncftstatus"
 	FixFTCreatorCmd                string = "fix-ft-creator"
 	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
+	BurnFTCmd                      string = "burn-ft"
 )
 
 var commands = []string{VersionCmd,
@@ -192,6 +193,7 @@ var commands = []string{VersionCmd,
 	SetAsyncFTStatusCmd,
 	FixFTCreatorCmd,
 	GetFTCreatorStatsCmd,
+	BurnFTCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -264,6 +266,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will set the async FT response status",
 	"This command will fix FT tokens that have peer ID as CreatorDID",
 	"This command will get statistics about FT token creators",
+	"This command will burn FT",
 }
 
 type Command struct {
@@ -364,6 +367,8 @@ type Command struct {
 	enableTrustedNetwork         bool
 	disableTrustedNetwork        bool
 	backupDB                     bool
+	fromRBT                      bool
+	ftvalue                      float64
 }
 
 func showVersion() {
@@ -749,6 +754,8 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.enableTrustedNetwork, "enableTrustedNetwork", true, "Enable trusted network mode (skips DHT checks) - enabled by default")
 	flag.BoolVar(&cmd.disableTrustedNetwork, "disableTrustedNetwork", false, "Disable trusted network mode to enable full DHT checks")
 	flag.BoolVar(&cmd.backupDB, "backupDB", false, "Create backup of database before starting node")
+	flag.BoolVar(&cmd.fromRBT, "fromRBT", false, "Create FT by locking RBT")
+	flag.Float64Var(&cmd.ftvalue, "ftValue", 0.0, "value of the ft to be minted")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -981,6 +988,8 @@ func Run(args []string) {
 		cmd.fixFTCreator()
 	case GetFTCreatorStatsCmd:
 		cmd.getFTCreatorStats()
+	case BurnFTCmd:
+		cmd.burnFT()
 	default:
 		cmd.log.Error("Invalid command")
 	}
