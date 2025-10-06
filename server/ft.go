@@ -20,14 +20,16 @@ type CreateFTReqSwaggoInput struct {
 }
 
 type TransferFTReqSwaggoInput struct {
-	Receiver   string `json:"receiver"`
-	Sender     string `json:"sender"`
-	FTName     string `json:"ft_name"`
-	FTCount    int    `json:"ft_count"`
-	Comment    string `json:"comment"`
-	QuorumType int    `json:"quorum_type"`
-	Password   string `json:"password"`
-	CreatorDID string `json:"creatorDID"`
+	Receiver        string  `json:"receiver"`
+	Sender          string  `json:"sender"`
+	FTName          string  `json:"ft_name"`
+	FTCount         int     `json:"ft_count"`
+	Comment         string  `json:"comment"`
+	QuorumType      int     `json:"quorum_type"`
+	Password        string  `json:"password"`
+	CreatorDID      string  `json:"creatorDID"`
+	IsHighValueFT   bool    `json:"is_high_value"`
+	FTTransferValue float64 `json:"ft_value"`
 }
 
 // ShowAccount godoc

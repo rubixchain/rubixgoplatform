@@ -369,6 +369,7 @@ type Command struct {
 	backupDB                     bool
 	fromRBT                      bool
 	ftvalue                      float64
+	isHighValueFT                bool
 }
 
 func showVersion() {
@@ -755,7 +756,8 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.disableTrustedNetwork, "disableTrustedNetwork", false, "Disable trusted network mode to enable full DHT checks")
 	flag.BoolVar(&cmd.backupDB, "backupDB", false, "Create backup of database before starting node")
 	flag.BoolVar(&cmd.fromRBT, "fromRBT", false, "Create FT by locking RBT")
-	flag.Float64Var(&cmd.ftvalue, "ftValue", 0.0, "value of the ft to be minted")
+	flag.Float64Var(&cmd.ftvalue, "ftValue", 0.0, "value of the ft to be minted or transferred")
+	flag.BoolVar(&cmd.isHighValueFT, "isHighValueFT", false, "Enable high-value FT transfer mode (uses ftValue for transfer amount)")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

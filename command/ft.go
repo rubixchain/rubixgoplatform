@@ -90,9 +90,19 @@ func (cmd *Command) transferFT() {
 			return
 		}
 	}
-	if cmd.ftCount < 1 {
-		cmd.log.Error("Input transaction amount is less than minimum FT transaction amount")
-		return
+	// Validate based on transfer mode
+	if cmd.isHighValueFT {
+		// High-value FT mode: validate transfer value
+		if cmd.ftvalue <= 0 {
+			cmd.log.Error("FT transfer value must be greater than 0 for high-value FT transfer")
+			return
+		}
+	} else {
+		// Standard mode: validate count
+		if cmd.ftCount < 1 {
+			cmd.log.Error("Input transaction amount is less than minimum FT transaction amount")
+			return
+		}
 	}
 	if cmd.ftName == "" {
 		cmd.log.Error("FT name cannot be empty")
@@ -102,13 +112,15 @@ func (cmd *Command) transferFT() {
 		return
 	}
 	transferFtReq := model.TransferFTReq{
-		Receiver:   cmd.receiverAddr,
-		Sender:     cmd.senderAddr,
-		FTName:     cmd.ftName,
-		FTCount:    cmd.ftCount,
-		QuorumType: cmd.transType,
-		Comment:    cmd.transComment,
-		CreatorDID: cmd.creatorDID,
+		Receiver:        cmd.receiverAddr,
+		Sender:          cmd.senderAddr,
+		FTName:          cmd.ftName,
+		FTCount:         cmd.ftCount,
+		QuorumType:      cmd.transType,
+		Comment:         cmd.transComment,
+		CreatorDID:      cmd.creatorDID,
+		IsHighValueFT:   cmd.isHighValueFT,
+		FTTransferValue: cmd.ftvalue,
 	}
 
 	br, err := cmd.c.TransferFT(&transferFtReq)
