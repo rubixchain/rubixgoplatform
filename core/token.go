@@ -1087,6 +1087,13 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		syncReq.BlockID = trep.NextBlockID
 	}
 
+	latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
+	if latestBlock == nil {
+		errMsg := fmt.Sprintf("failed to add synced token blocks of token : %v", tokenSyncInfo.TokenID)
+		c.log.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
 	c.log.Debug("****Adding token details to sqlite DB********")
 
 	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
@@ -1161,7 +1168,6 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 	return nil
 }
-
 
 func (c *Core) syncMissingBlocks(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo) error {
 	// read the level db and check the block number sequence and return the block numbers that needs to be synced
@@ -2121,7 +2127,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 		tokenValue := receivedBlock.GetTokenValue()
 		if err != nil {
-			c.log.Error("failed to fetch parent token Id of the token ", tokenId)
+			c.log.Error("failed to fetch value of the token ", tokenId)
 		}
 
 		tokenOwner := tokenOwner

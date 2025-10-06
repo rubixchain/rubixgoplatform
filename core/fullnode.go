@@ -186,7 +186,7 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 		return c.processContractTransaction(newEvent, txnBlock, tokensList[0], currentOwner)
 
 	default:
-		return fmt.Errorf("unsupported transaction mode: %s", newEvent.AssetType)
+		return fmt.Errorf("unsupported transaction mode: %v", newEvent.AssetType)
 	}
 }
 
@@ -237,12 +237,13 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		return fmt.Errorf("failed to get current block number: %v", err)
 	}
 	c.log.Debug("current block number is ", currentBlockNumber)
+	txnBlockType := txnBlock.GetTransType()
 
 	if currentBlockNumber != 0 {
 		tokenType := txnBlock.GetTokenType(tokenId)
 		latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
 		if latestTokenBlock == nil {
-			//connect to publisher and fetch token chain
+			//connect to publisher and fetch complete token chain
 			p, err := c.getPeer(newEvent.PublisherDID)
 			if err != nil {
 				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
@@ -260,6 +261,8 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 				return fmt.Errorf("failed to get latest block for token %s - may need sync", tokenId)
 
 			}
+			c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
+			return nil
 		}
 
 		latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
@@ -267,20 +270,56 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			return fmt.Errorf("failed to get latest block number: %v", err)
 		}
 
+		c.log.Debug("latest block number is ", latestBlockNumber)
+
 		// Check for missing blocks
 		if latestBlockNumber+1 != currentBlockNumber {
-			return fmt.Errorf("missing blocks detected: latest=%d, current=%d", latestBlockNumber, currentBlockNumber)
+			if latestBlockNumber == currentBlockNumber {
+				latestBlockHash, _ := latestTokenBlock.GetHash()
+				if newEvent.BlockHash == latestBlockHash {
+					c.log.Debug("fullnode is updated with complete token chain of token ", tokenId)
+					return nil
+				}
+				return fmt.Errorf("invalid blocks detected: latest block number=%d, current block number=%d", latestBlockNumber, currentBlockNumber)
+			} else if latestBlockNumber < currentBlockNumber {
+				//connect to publisher and fetch complete token chain
+				p, err := c.getPeer(newEvent.PublisherDID)
+				if err != nil {
+					c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
+					return fmt.Errorf("failed to open peer connection with publisher ", newEvent.PublisherDID)
+				}
+				defer p.Close()
+				tokenSyncInfo := &TokenSyncInfo{
+					TokenID:   tokenId,
+					TokenType: tokenType,
+					AssetType: newEvent.AssetType,
+				}
+				err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
+				if err != nil {
+					c.log.Error("failed to sync token chain for token ", tokenId, "error", err)
+					return fmt.Errorf("failed to get latest block for token %s - may need sync", tokenId)
+
+				}
+				c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
+				return nil
+			}
+			return fmt.Errorf("mismatch of blocks detected: latest block number=%d, current block number=%d", latestBlockNumber, currentBlockNumber)
 		}
 
 		// Validate ownership
 		previousOwner := latestTokenBlock.GetOwner()
+		currentOwner := txnBlock.GetOwner()
+		if txnBlockType == block.TokenBurntType {
+			if currentOwner != newEvent.PublisherDID {
+				return fmt.Errorf("publisher DID mismatch with current owner in burnt block: expected %s, got %s", currentOwner, newEvent.PublisherDID)
+			}
+		}
 		if previousOwner != newEvent.PublisherDID {
-			return fmt.Errorf("publisher DID mismatch: expected %s, got %s", previousOwner, newEvent.PublisherDID)
+			return fmt.Errorf("publisher DID mismatch with prev-owner: expected %s, got %s", previousOwner, newEvent.PublisherDID)
 		}
 
 		// Validate receiver for transfers
 		if receiverDid != "" {
-			currentOwner := txnBlock.GetOwner()
 			if currentOwner != receiverDid {
 				return fmt.Errorf("receiver DID mismatch: expected %s, got %s", receiverDid, currentOwner)
 			}
