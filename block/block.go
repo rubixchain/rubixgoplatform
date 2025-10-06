@@ -59,7 +59,8 @@ const (
 	TokenExecutedType     string = "10"
 	TokenContractCommited string = "11"
 	TokenPinnedAsService  string = "12"
-	TokenIsBurntForFT     string = "13"
+	TokenLockedForFT      string = "13"
+	TokenUnlocked         string = "14"
 )
 
 const (
@@ -849,4 +850,13 @@ func (b *Block) GetPledgedTokens() {
 	pledgedInfo := util.GetFromMap(b.bm, TCPledgeDetailsKey)
 	fmt.Println(pledgedInfo)
 	// return
+}
+
+func (b *Block) GetRBTLockStatus(token string) (int, error) {
+	gtm := b.getGenesisTokenMap(token)
+	if gtm == nil {
+		return 0, fmt.Errorf("invalid token chain block, missing genesis block")
+	}
+	status := util.GetIntFromMap(gtm, GIRBTLockStatusKey)
+	return status, nil
 }
