@@ -52,6 +52,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/burn-ft": {
+            "post": {
+                "description": "This API endpoint will burn FTs and optionally unlock parent RBTs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Burn FTs",
+                "parameters": [
+                    {
+                        "description": "Burn FT",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.BurnFTReqSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/check-pinned-state": {
             "delete": {
                 "description": "This API is used to check if the token state for which the token is pledged is exhausted or not.",
@@ -721,6 +755,41 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/get-failed-ft-download-status": {
+            "post": {
+                "description": "This API returns the status of failed FT downloads",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Get Failed FT Download Status",
+                "operationId": "get-failed-ft-download-status",
+                "parameters": [
+                    {
+                        "description": "DID",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.FailedFTDownloadStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/get-ft-info-by-did": {
             "get": {
                 "description": "This API endpoint retrieves the names and count of FTs of a given DID.",
@@ -1122,6 +1191,50 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/recover-lost-tokens": {
+            "post": {
+                "description": "Allows senders to recover tokens that were sent but not received by the receiver",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Recover lost tokens",
+                "operationId": "recover-lost-tokens",
+                "parameters": [
+                    {
+                        "description": "DID of the sender",
+                        "name": "sender_did",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Transaction ID to recover tokens from",
+                        "name": "transaction_id",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/recover-token": {
             "post": {
                 "description": "This API will recover token and tokenchain from the Pinning node to the node which has pinned the token",
@@ -1192,6 +1305,67 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/remote-recover-tokens": {
+            "post": {
+                "description": "Allows Node A to trigger token recovery on Node B",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Initiate remote token recovery",
+                "operationId": "remote-recover-tokens",
+                "parameters": [
+                    {
+                        "description": "DID of the target node where recovery should happen",
+                        "name": "target_did",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Transaction ID to recover",
+                        "name": "transaction_id",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "DID of the requesting node",
+                        "name": "requester_did",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Reason for remote recovery",
+                        "name": "reason",
+                        "in": "body",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/request-did-for-pubkey": {
             "post": {
                 "description": "This API will returns DID for corresponding public key",
@@ -1222,6 +1396,41 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/model.DIDFromPubKeyResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/retry-failed-ft-downloads": {
+            "post": {
+                "description": "This API retries downloading failed FT tokens",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Retry Failed FT Downloads",
+                "operationId": "retry-failed-ft-downloads",
+                "parameters": [
+                    {
+                        "description": "DID",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.RetryFailedFTDownloadsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
                         }
                     }
                 }
@@ -1539,6 +1748,9 @@ const docTemplate = `{
                 },
                 "ft_name": {
                     "type": "string"
+                },
+                "high_value_ft": {
+                    "type": "boolean"
                 }
             }
         },
@@ -1678,6 +1890,26 @@ const docTemplate = `{
                 }
             }
         },
+        "server.BurnFTReqSwaggoInput": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "from_rbt": {
+                    "type": "boolean"
+                },
+                "ft_count": {
+                    "type": "integer"
+                },
+                "ft_name": {
+                    "type": "string"
+                },
+                "high_value_ft": {
+                    "type": "boolean"
+                }
+            }
+        },
         "server.CreateFTReqSwaggoInput": {
             "type": "object",
             "properties": {
@@ -1812,6 +2044,14 @@ const docTemplate = `{
                 }
             }
         },
+        "server.FailedFTDownloadStatusRequest": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                }
+            }
+        },
         "server.GetSmartContractTokenChainDataSwaggoInput": {
             "type": "object",
             "properties": {
@@ -1918,6 +2158,14 @@ const docTemplate = `{
                 }
             }
         },
+        "server.RetryFailedFTDownloadsRequest": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                }
+            }
+        },
         "server.SignatureResponseSwaggoInput": {
             "type": "object",
             "properties": {
@@ -1946,6 +2194,12 @@ const docTemplate = `{
                 },
                 "ft_name": {
                     "type": "string"
+                },
+                "ft_value": {
+                    "type": "number"
+                },
+                "is_high_value": {
+                    "type": "boolean"
                 },
                 "password": {
                     "type": "string"

@@ -27,6 +27,8 @@ definitions:
         type: integer
       ft_name:
         type: string
+      high_value_ft:
+        type: boolean
     type: object
   model.GetFTInfo:
     properties:
@@ -118,6 +120,19 @@ definitions:
           $ref: '#/definitions/model.TransactionCount'
         type: array
     type: object
+  server.BurnFTReqSwaggoInput:
+    properties:
+      did:
+        type: string
+      from_rbt:
+        type: boolean
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
+      high_value_ft:
+        type: boolean
+    type: object
   server.CreateFTReqSwaggoInput:
     properties:
       did:
@@ -205,6 +220,11 @@ definitions:
       smartContractToken:
         type: string
     type: object
+  server.FailedFTDownloadStatusRequest:
+    properties:
+      did:
+        type: string
+    type: object
   server.GetSmartContractTokenChainDataSwaggoInput:
     properties:
       latest:
@@ -273,6 +293,11 @@ definitions:
       SmartContractToken:
         type: string
     type: object
+  server.RetryFailedFTDownloadsRequest:
+    properties:
+      did:
+        type: string
+    type: object
   server.SignatureResponseSwaggoInput:
     properties:
       id:
@@ -292,6 +317,10 @@ definitions:
         type: integer
       ft_name:
         type: string
+      ft_value:
+        type: number
+      is_high_value:
+        type: boolean
       password:
         type: string
       quorum_type:
@@ -331,6 +360,28 @@ paths:
       summary: Add Peer
       tags:
       - Account
+  /api/burn-ft:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint will burn FTs and optionally unlock parent RBTs.
+      parameters:
+      - description: Burn FT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.BurnFTReqSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Burn FTs
+      tags:
+      - FT
   /api/check-pinned-state:
     delete:
       consumes:
@@ -776,6 +827,29 @@ paths:
       summary: Get Data Token
       tags:
       - Data Tokens
+  /api/get-failed-ft-download-status:
+    post:
+      consumes:
+      - application/json
+      description: This API returns the status of failed FT downloads
+      operationId: get-failed-ft-download-status
+      parameters:
+      - description: DID
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.FailedFTDownloadStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get Failed FT Download Status
+      tags:
+      - FT
   /api/get-ft-info-by-did:
     get:
       consumes:
@@ -1042,6 +1116,36 @@ paths:
       summary: Get ALL NFTs
       tags:
       - NFT
+  /api/recover-lost-tokens:
+    post:
+      consumes:
+      - application/json
+      description: Allows senders to recover tokens that were sent but not received
+        by the receiver
+      operationId: recover-lost-tokens
+      parameters:
+      - description: DID of the sender
+        in: body
+        name: sender_did
+        required: true
+        schema:
+          type: string
+      - description: Transaction ID to recover tokens from
+        in: body
+        name: transaction_id
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Recover lost tokens
+      tags:
+      - FT
   /api/recover-token:
     post:
       consumes:
@@ -1090,6 +1194,46 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
+  /api/remote-recover-tokens:
+    post:
+      consumes:
+      - application/json
+      description: Allows Node A to trigger token recovery on Node B
+      operationId: remote-recover-tokens
+      parameters:
+      - description: DID of the target node where recovery should happen
+        in: body
+        name: target_did
+        required: true
+        schema:
+          type: string
+      - description: Transaction ID to recover
+        in: body
+        name: transaction_id
+        required: true
+        schema:
+          type: string
+      - description: DID of the requesting node
+        in: body
+        name: requester_did
+        required: true
+        schema:
+          type: string
+      - description: Reason for remote recovery
+        in: body
+        name: reason
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiate remote token recovery
+      tags:
+      - FT
   /api/request-did-for-pubkey:
     post:
       consumes:
@@ -1113,6 +1257,29 @@ paths:
       summary: Returns DID for corresponding public key
       tags:
       - Account
+  /api/retry-failed-ft-downloads:
+    post:
+      consumes:
+      - application/json
+      description: This API retries downloading failed FT tokens
+      operationId: retry-failed-ft-downloads
+      parameters:
+      - description: DID
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.RetryFailedFTDownloadsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Retry Failed FT Downloads
+      tags:
+      - FT
   /api/run-unpledge:
     post:
       consumes:
