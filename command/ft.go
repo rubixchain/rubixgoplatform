@@ -23,8 +23,16 @@ func (cmd *Command) createFT() {
 		cmd.log.Error("FT Name can't be empty")
 		return
 	}
+
+	// If high-value FT mode is enabled, set ftCount to 1
+	ftCount := cmd.ftCount
+	if cmd.isHighValueFT {
+		ftCount = 1
+		cmd.log.Info("High-value FT mode enabled, setting ft_count to 1")
+	}
+
 	switch {
-	case cmd.ftCount <= 0:
+	case ftCount <= 0:
 		cmd.log.Error("number of tokens to create must be greater than zero")
 		return
 	case cmd.ftvalue < 0.001:
@@ -34,7 +42,7 @@ func (cmd *Command) createFT() {
 		cmd.log.Error("FT value cannot have more than 3 decimal places")
 		return
 	}
-	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, cmd.ftvalue, cmd.ftNumStartIndex, cmd.fromRBT, false)
+	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, ftCount, cmd.ftvalue, cmd.ftNumStartIndex, cmd.fromRBT, cmd.isHighValueFT)
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") || strings.Contains(br.Message, "no records found") {
 			cmd.log.Error("Failed to create FT, No RBT available to create FT")

@@ -50,8 +50,16 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	if !s.validateDIDAccess(req, createFTReq.DID) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
+
+	// If high-value FT mode is enabled, override ftCount to 1
+	ftCount := createFTReq.FTCount
+	if createFTReq.IsHighValueFT {
+		ftCount = 1
+		s.log.Info("High-value FT mode enabled, setting ft_count to 1")
+	}
+
 	s.c.AddWebReq(req)
-	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, createFTReq.FTValue, createFTReq.FTNumStartIndex, createFTReq.FromRBT, createFTReq.IsHighValueFT)
+	go s.c.CreateFTs(req.ID, createFTReq.DID, ftCount, createFTReq.FTName, createFTReq.FTValue, createFTReq.FTNumStartIndex, createFTReq.FromRBT, createFTReq.IsHighValueFT)
 	return s.didResponse(req, req.ID)
 }
 

@@ -8,6 +8,12 @@ import (
 )
 
 func (c *Client) CreateFT(did string, ftName string, ftCount int, ftValue float64, ftNumStartIndex int, fromRBT bool, isHighValueFt bool) (*model.BasicResponse, error) {
+	// If high-value FT mode is enabled, override ftCount to 1
+	if isHighValueFt {
+		ftCount = 1
+		c.log.Info("High-value FT mode enabled, setting ft_count to 1")
+	}
+
 	createFTReq := model.CreateFTReq{
 		DID:             did,
 		FTName:          ftName,
