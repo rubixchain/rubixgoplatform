@@ -207,9 +207,13 @@ func (s *Server) RegisterRoutes() {
 	//Below are De-Explorer APIs
 	s.AddRoute(setup.APIGetAllRBTs, "GET", s.AuthHandle(s.APIGetAllFreeRBT, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetAllFTs, "GET", s.AuthHandle(s.APIGetAllFreeFTs, false, s.AuthError, false))
+	s.AddRoute(setup.APIGetAllNFTs, "GET", s.AuthHandle(s.APIGetAllFreeNFTs, false, s.AuthError, false))
+	s.AddRoute(setup.APIGetAllSmartContracts, "GET", s.AuthHandle(s.APIGetAllFreeSmartContracts, false, s.AuthError, false))
 
 	s.AddRoute(setup.APIGetRBTbyDID, "GET", s.AuthHandle(s.APIGetRBTbyDID, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetFTbyDID, "GET", s.AuthHandle(s.APIGetFTbyDID, false, s.AuthError, false))
+	s.AddRoute(setup.APIGetNFTbyDID, "GET", s.AuthHandle(s.APIGetNFTbyDID, false, s.AuthError, false))
+	s.AddRoute(setup.APIGetSmartContractbyDID, "GET", s.AuthHandle(s.APIGetSmartContractbyDID, false, s.AuthError, false))
 
 	s.AddRoute(setup.APIGetRBTFullTokenChain, "GET", s.AuthHandle(s.APIGetRBTFullTokenChain, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetFTFullTokenChain, "GET", s.AuthHandle(s.APIGetFTFullTokenChain, false, s.AuthError, false))
