@@ -118,7 +118,6 @@ const (
 	SetAsyncFTStatusCmd            string = "setasyncftstatus"
 	FixFTCreatorCmd                string = "fix-ft-creator"
 	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
-	BurnFTCmd                      string = "burn-ft"
 )
 
 var commands = []string{VersionCmd,
@@ -993,8 +992,6 @@ func Run(args []string) {
 		cmd.fixFTCreator()
 	case GetFTCreatorStatsCmd:
 		cmd.getFTCreatorStats()
-	case BurnFTCmd:
-		cmd.burnFT()
 	default:
 		cmd.log.Error("Invalid command")
 	}
