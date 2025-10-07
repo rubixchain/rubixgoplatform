@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -39,6 +40,8 @@ const (
 	APIUpdatePledgeToken            string = "/api/update-pledge-token"
 	APISignatureRequest             string = "/api/signature-request"
 	APISendReceiverToken            string = "/api/send-receiver-token"
+	APIConfirmTokenTransfer         string = "/api/confirm-token-transfer"
+	APIRollbackTransaction          string = "/api/rollback-transaction"
 	APISyncTokenChain               string = "/api/sync-token-chain"
 	APIDhtProviderCheck             string = "/api/dht-provider-check"
 	APIMapDIDArbitration            string = "/api/map-did-arbitration"
@@ -63,6 +66,7 @@ const (
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
+	// APISendTokenChainDetails        string = "api/send-token-chain-details"
 )
 
 const (
@@ -88,6 +92,8 @@ const (
 	MaxPeerConn uint16 = 1000
 )
 
+var dbWriteSem = make(chan struct{}, 1)
+
 type Core struct {
 	cfg                  *config.Config
 	cfgFile              string
@@ -101,6 +107,15 @@ type Core struct {
 	ipfs                 *ipfsnode.Shell
 	ipfsState            bool
 	ipfsChan             chan bool
+	ipfsCmd              *exec.Cmd
+	ipfsPID              int
+	ipfsHealth           *IPFSHealthManager
+	ipfsRecovery         *IPFSRecoveryManager
+	ipfsOps              *IPFSOperations
+	ipfsScalability      *IPFSScalabilityManager
+	connRecovery         *ConnectionRecovery
+	p2pReconnect         *P2PReconnectManager
+	shutdownMgr          *ShutdownManager
 	d                    *did.DID
 	didDir               string
 	pm                   *ipfsport.PeerManager
@@ -130,7 +145,18 @@ type Core struct {
 	quorumCount          int
 	noBalanceQuorumCount int
 	defaultSetup         bool
+	tokenSyncManager     *TokenSyncManager
+	asyncPinManager      *AsyncPinManager
+	perfTracker          *PerformanceTracker
+	txStateMgr           *TransactionStateManager
+	rollbackMgr          *RollbackManager
+	tokenPool            *TokenInfoPool
+	batchSyncTokenPool   *BatchSyncTokenInfoPool
+	tokenSlicePool       *TokenSlicePool
+	pendingTokenMonitor  *PendingTokenMonitor
+	publishTokenChain    bool
 	fullNode             bool
+	txnProcessor         *TxnProcessor
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -165,7 +191,7 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, fullNode bool) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool) (*Core, error) {
 	var err error
 	update := false
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
@@ -196,21 +222,22 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	}
 
 	c := &Core{
-		cfg:           cfg,
-		cfgFile:       cfgFile,
-		encKey:        encKey,
-		testNet:       testNet,
-		testNetKey:    testNetKey,
-		quorumRequest: make(map[string]*ConsensusStatus),
-		pd:            make(map[string]*PledgeDetails),
-		webReq:        make(map[string]*did.DIDChan),
-		qc:            make(map[string]did.DIDCrypto),
-		pqc:           make(map[string]did.DIDCrypto),
-		sd:            make(map[string]*ServiceDetials),
-		arbitaryMode:  am,
-		secret:        util.GetRandBytes(32),
-		defaultSetup:  defaultSetup,
-		fullNode:      fullNode,
+		cfg:               cfg,
+		cfgFile:           cfgFile,
+		encKey:            encKey,
+		testNet:           testNet,
+		testNetKey:        testNetKey,
+		quorumRequest:     make(map[string]*ConsensusStatus),
+		pd:                make(map[string]*PledgeDetails),
+		webReq:            make(map[string]*did.DIDChan),
+		qc:                make(map[string]did.DIDCrypto),
+		pqc:               make(map[string]did.DIDCrypto),
+		sd:                make(map[string]*ServiceDetials),
+		arbitaryMode:      am,
+		secret:            util.GetRandBytes(32),
+		defaultSetup:      defaultSetup,
+		publishTokenChain: publishTokenChainDetails,
+		fullNode:          fullNode,
 	}
 	c.didDir = c.cfg.DirPath + RubixRootDir
 	if c.testNet {
@@ -333,6 +360,51 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if c.testNet && c.defaultSetup {
 		c.AddFaucetQuorums()
 	}
+	
+	// Initialize token sync manager
+	c.tokenSyncManager = NewTokenSyncManager(c.log)
+	
+	// Initialize async pin manager with 4 workers by default
+	c.asyncPinManager = NewAsyncPinManager(c, 4)
+	
+	// Initialize performance tracker
+	perfConfig := &PerformanceConfig{
+		Enabled:        true, // TODO: Make this configurable
+		DataPath:       c.cfg.DirPath,
+		RetentionHours: 24,
+		MaxFileSize:    100, // 100MB
+		DetailLevel:    "detailed",
+	}
+	c.perfTracker, err = NewPerformanceTracker(perfConfig, c.log)
+	if err != nil {
+		c.log.Error("Failed to initialize performance tracker", "err", err)
+		// Continue without performance tracking
+		c.perfTracker = &PerformanceTracker{enabled: false}
+	}
+
+	// Initialize transaction state manager
+	c.txStateMgr = NewTransactionStateManager(c)
+	
+	// Initialize rollback manager
+	c.rollbackMgr = NewRollbackManager(c, c.txStateMgr)
+	
+	// Initialize token pools for memory optimization
+	c.tokenPool = NewTokenInfoPool()
+	c.batchSyncTokenPool = NewBatchSyncTokenInfoPool()
+	c.tokenSlicePool = NewTokenSlicePool()
+	
+	// Initialize pending token monitor for self-healing
+	// Check every 5 minutes for tokens pending > 10 minutes
+	c.pendingTokenMonitor = NewPendingTokenMonitor(c, 5*time.Minute, 10*time.Minute)
+	
+	// Wrap storage with tracking if performance tracker is enabled
+	if c.perfTracker != nil && c.perfTracker.enabled && c.s != nil {
+		c.s = NewTrackedStorage(c.s, c)
+		if c.arbitaryMode && c.as != nil {
+			c.as = NewTrackedStorage(c.as, c)
+		}
+	}
+	
 	return c, nil
 }
 
@@ -368,6 +440,10 @@ func (c *Core) SetupCore() error {
 		c.SubscribeTxnSetup()
 	}
 	c.w.SetupWallet(c.ipfs)
+	// Set health-managed IPFS operations for the wallet
+	if c.ipfsOps != nil {
+		c.w.SetIPFSOperations(NewWalletIPFSAdapter(c.ipfsOps))
+	}
 	c.PingSetup()
 	c.CheckQuorumStatusSetup()
 	c.GetPeerdidTypeSetup()
@@ -376,9 +452,13 @@ func (c *Core) SetupCore() error {
 	c.SetupToken()
 	c.QuroumSetup()
 	c.PinService()
-	c.RestartIncompleteTokenChainSyncs()
+	// c.RestartIncompleteTokenChainSyncs()
 	//c.UnlockFTs()
 	// c.selfTransferService()
+	
+	// Start token sync cleanup routine
+	go c.tokenSyncCleanupRoutine()
+	
 	return nil
 }
 
@@ -441,21 +521,41 @@ func (c *Core) NodeStatus() bool {
 	return true
 }
 
+// IPFSOperations returns the IPFS operations wrapper
+func (c *Core) IPFSOperations() *IPFSOperations {
+	return c.ipfsOps
+}
+
+// GetIPFSStats returns IPFS health and scalability statistics
+func (c *Core) GetIPFSStats() map[string]interface{} {
+	stats := make(map[string]interface{})
+	
+	if c.ipfsHealth != nil {
+		stats["health"] = c.ipfsHealth.GetStats()
+	}
+	
+	if c.ipfsScalability != nil {
+		stats["scalability"] = c.ipfsScalability.GetScalabilityStats()
+	}
+	
+	if c.ipfsRecovery != nil {
+		stats["recovery"] = c.ipfsRecovery.GetRecoveryStats()
+	}
+	
+	return stats
+}
+
 func (c *Core) StopCore() {
-	// exp := model.ExploreModel{
-	// 	Cmd:    ExpPeerStatusCmd,
-	// 	PeerID: c.peerID,
-	// 	Status: "Off",
-	// }
-	// err := c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	c.log.Error("Failed to publish explorer model", "err", err)
-	// 	return
-	// }
-	time.Sleep(time.Second)
-	c.stopIPFS()
-	if c.l != nil {
-		c.l.Shutdown()
+	// Initialize shutdown manager if not already done
+	if c.shutdownMgr == nil {
+		c.shutdownMgr = NewShutdownManager(c)
+	}
+	
+	// Perform graceful shutdown
+	if err := c.shutdownMgr.Shutdown(); err != nil {
+		c.log.Error("Shutdown completed with errors", "error", err)
+	} else {
+		c.log.Info("Shutdown completed successfully")
 	}
 }
 
@@ -528,6 +628,11 @@ func (c *Core) updateConfig() error {
 	return nil
 }
 
+// GetConfig returns the core configuration
+func (c *Core) GetConfig() *config.Config {
+	return c.cfg
+}
+
 func (c *Core) AddWebReq(req *ensweb.Request) {
 	c.rlock.Lock()
 	defer c.rlock.Unlock()
@@ -538,6 +643,11 @@ func (c *Core) AddWebReq(req *ensweb.Request) {
 		Finish:  make(chan bool),
 		Req:     req,
 		Timeout: 3 * time.Minute,
+		
+		// Initialize password caching fields
+		CachedPassword: "",
+		PasswordSet:    false,
+		PasswordMutex:  sync.RWMutex{},
 	}
 }
 
@@ -569,6 +679,13 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 	if !ok {
 		return nil
 	}
+	
+	// Clear cached password for security before removing request
+	req.PasswordMutex.Lock()
+	req.CachedPassword = ""
+	req.PasswordSet = false
+	req.PasswordMutex.Unlock()
+	
 	delete(c.webReq, reqID)
 	return req.Req
 }
@@ -661,27 +778,34 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 }
 
 func (c *Core) FetchDID(did string) error {
-	_, err := os.Stat(c.didDir + did)
-	if err != nil {
-		err = os.MkdirAll(c.didDir+did, os.ModeDir|os.ModePerm)
+	didDir := c.didDir + did
+	pubKeyPath := didDir + "/pubKey.pem"
+	_, dirErr := os.Stat(didDir)
+	_, pubKeyErr := os.Stat(pubKeyPath)
+
+	if os.IsNotExist(dirErr) || os.IsNotExist(pubKeyErr) {
+		// Directory or pubKey.pem missing, fetch from IPFS
+		err := os.MkdirAll(didDir, os.ModeDir|os.ModePerm)
 		if err != nil {
 			c.log.Error("failed to create directory", "err", err)
 			return err
 		}
-		err = c.ipfs.Get(did, c.didDir+did+"/")
+		err = c.ipfsOps.Get(did, didDir+"/")
 		if err == nil {
-			_, e := os.Stat(c.didDir + did + "/" + didm.MasterDIDFileName)
+			_, e := os.Stat(didDir + "/" + didm.MasterDIDFileName)
 			// Fetch the master DID also
 			if e == nil {
 				var rb []byte
-				rb, err = ioutil.ReadFile(c.didDir + did + "/" + didm.MasterDIDFileName)
+				rb, err = ioutil.ReadFile(didDir + "/" + didm.MasterDIDFileName)
 				if err == nil {
 					return c.FetchDID(string(rb))
 				}
 			}
 		}
+		return err
 	}
-	return err
+	// Directory and pubKey.pem exist, nothing to do
+	return nil
 }
 
 func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
@@ -701,7 +825,7 @@ func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
 		return err
 	}
 	// Fetch NFT data from IPFS and store in the directory
-	err = c.ipfs.Get(nftFolderHash, dirPath)
+	err = c.ipfsOps.Get(nftFolderHash, dirPath)
 	if err != nil {
 		c.log.Error("failed to get NFT from IPFS", "err", err)
 		return err
@@ -727,5 +851,46 @@ func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) 
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	default:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
+	}
+}
+
+// StartPendingTokenMonitor starts the self-healing monitor for pending tokens
+func (c *Core) StartPendingTokenMonitor() {
+	if c.pendingTokenMonitor != nil {
+		c.pendingTokenMonitor.Start()
+		c.log.Info("Started pending token monitor for self-healing")
+	}
+}
+
+// StopPendingTokenMonitor stops the pending token monitor
+func (c *Core) StopPendingTokenMonitor() {
+	if c.pendingTokenMonitor != nil {
+		c.pendingTokenMonitor.Stop()
+		c.log.Info("Stopped pending token monitor")
+	}
+}
+
+// GetAsyncFTResponse returns the current value of the async FT response config flag
+func (c *Core) GetAsyncFTResponse() bool {
+	return c.cfg.CfgData.AsyncFTResponse
+}
+
+// SetAsyncFTResponse sets the async FT response config flag at runtime
+func (c *Core) SetAsyncFTResponse(val bool) {
+	c.cfg.CfgData.AsyncFTResponse = val
+}
+
+// tokenSyncCleanupRoutine periodically cleans up stale token sync entries
+func (c *Core) tokenSyncCleanupRoutine() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-ticker.C:
+			if c.tokenSyncManager != nil {
+				c.tokenSyncManager.CleanupStaleSync(10 * time.Minute)
+			}
+		}
 	}
 }

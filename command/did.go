@@ -260,7 +260,24 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 		if br.Result == nil {
 			return br.Message, true
 		}
+		
+		// signature response for arbitrary signature
+		if strings.Contains(br.Message, "arbitrary sign") {
+			jsonbytes, err := json.Marshal(br.Result)
+			if err != nil {
+				errMsg := "Invalid response, " + err.Error()
+				return errMsg, false
+			}
 
+			signMap := model.Signature{}
+			err = json.Unmarshal(jsonbytes, &signMap)
+			if err != nil {
+				errMsg := "Invalid response, " + err.Error()
+				return errMsg, false
+			}
+			return signMap.Signature, true
+		}
+		
 		cmd.log.Info("Got the request for the signature")
 
 		switch res := br.Result.(type) {
@@ -403,4 +420,38 @@ func (cmd *Command) CreateDIDFromPubKey() {
 		cmd.log.Error("err", err)
 	}
 	cmd.log.Debug("received did", did)
+}
+
+func (cmd *Command) ArbitrarySign() {
+	signResp, err := cmd.c.ArbitrarySignature(cmd.signerDID, cmd.message)
+	if err != nil {
+		cmd.log.Error("err", err)
+		return
+	}
+	if !signResp.Status {
+		cmd.log.Error("Failed to sign, msg ", signResp.Message)
+		return
+	}
+	msg, status := cmd.SignatureResponse(signResp)
+	if !status {
+		cmd.log.Error("Failed to sign, msg ", msg)
+		return
+	}
+	var result string
+	if status {
+		result = fmt.Sprintf("Status : %v, Signature : %v", status, msg)
+	} else {
+		result = fmt.Sprintf("Status : %v, message : %v", status, msg)
+	}
+	
+	cmd.log.Info(result)
+}
+
+func (cmd *Command) SignVerification() {
+	result, err := cmd.c.SignVerification(cmd.signerDID, cmd.message, cmd.signature)
+	if err != nil {
+		cmd.log.Error("err", err)
+		return
+	}
+	cmd.log.Info("signature verification result", result)
 }

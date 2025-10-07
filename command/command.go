@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -33,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1_rc17"
+	version string = "0.1"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -110,6 +111,12 @@ const (
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	AddPeerDetailsFromExplorer     string = "exppeerdetails"
 	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
+	ArbitrarySignCmd               string = "sign"
+	VerifySignatureCmd             string = "verify-signature"
+  AsyncFTStatusCmd               string = "asyncftstatus"
+	SetAsyncFTStatusCmd            string = "setasyncftstatus"
+	FixFTCreatorCmd                string = "fix-ft-creator"
+	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
 )
 
 var commands = []string{VersionCmd,
@@ -179,6 +186,12 @@ var commands = []string{VersionCmd,
 	AddUserAPIKeyCmd,
 	AddPeerDetailsFromExplorer,
 	GetFTTxnDetailsCmd,
+	ArbitrarySignCmd,
+	VerifySignatureCmd,
+	AsyncFTStatusCmd,
+	SetAsyncFTStatusCmd,
+	FixFTCreatorCmd,
+	GetFTCreatorStatsCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -247,6 +260,10 @@ var commandsHelp = []string{"To get tool version",
 	"",
 	"",
 	"This command will get FT transaction details by DID",
+	"This command will check the async FT response status",
+	"This command will set the async FT response status",
+	"This command will fix FT tokens that have peer ID as CreatorDID",
+	"This command will get statistics about FT token creators",
 }
 
 type Command struct {
@@ -341,7 +358,14 @@ type Command struct {
 	apiKey                       string
 	nftValue                     float64
 	ftNumStartIndex              int
+	message                      string
+	signature                    string
+	signerDID                    string
+	enableTrustedNetwork         bool
+	disableTrustedNetwork        bool
+	backupDB                     bool
 	fullNode                     bool
+	publishTokenChainDetails     bool
 }
 
 func showVersion() {
@@ -360,6 +384,137 @@ func showHelp() {
 	for i := range commands {
 		fmt.Printf("     %20s : %s\n\n", commands[i], commandsHelp[i])
 	}
+}
+
+// backupDatabase creates a timestamped backup of the database
+func (cmd *Command) backupDatabase() error {
+	// Determine database path based on config
+	var dbPath string
+	if cmd.cfg.CfgData.StorageConfig.DBType == "sqlite3" || cmd.cfg.CfgData.StorageConfig.DBType == "" {
+		// For SQLite, DBAddress contains the file path
+		dbPath = cmd.cfg.CfgData.StorageConfig.DBAddress
+		if dbPath == "" {
+			// Default SQLite database path
+			dbPath = filepath.Join(cmd.runDir, "rubixdata.db")
+		}
+	} else {
+		// For other database types, we can't do file-based backup
+		cmd.log.Info("Database backup is only supported for SQLite databases")
+		return nil
+	}
+
+	// Check if database file exists
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		cmd.log.Info("No database file found to backup", "path", dbPath)
+		return nil
+	}
+
+	// Create backup directory
+	backupDir := filepath.Join(cmd.runDir, "db_backups")
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		return fmt.Errorf("failed to create backup directory: %w", err)
+	}
+
+	// Generate backup filename with timestamp
+	timestamp := time.Now().Format("20060102_150405")
+	backupFileName := fmt.Sprintf("rubixdata_backup_%s.db", timestamp)
+	backupPath := filepath.Join(backupDir, backupFileName)
+
+	// Copy database file
+	sourceFile, err := os.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open source database: %w", err)
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(backupPath)
+	if err != nil {
+		return fmt.Errorf("failed to create backup file: %w", err)
+	}
+	defer destFile.Close()
+
+	// Copy the file
+	_, err = io.Copy(destFile, sourceFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy database: %w", err)
+	}
+
+	// Also backup WAL and SHM files if they exist (for SQLite WAL mode)
+	walPath := dbPath + "-wal"
+	if _, err := os.Stat(walPath); err == nil {
+		if err := cmd.copyFile(walPath, backupPath+"-wal"); err != nil {
+			cmd.log.Warn("Failed to backup WAL file", "err", err)
+		}
+	}
+
+	shmPath := dbPath + "-shm"
+	if _, err := os.Stat(shmPath); err == nil {
+		if err := cmd.copyFile(shmPath, backupPath+"-shm"); err != nil {
+			cmd.log.Warn("Failed to backup SHM file", "err", err)
+		}
+	}
+
+	cmd.log.Info("Database backup completed successfully", "backup_path", backupPath)
+
+	// Clean up old backups (keep only last 10)
+	if err := cmd.cleanupOldBackups(backupDir); err != nil {
+		cmd.log.Warn("Failed to cleanup old backups", "err", err)
+	}
+
+	return nil
+}
+
+// copyFile is a helper function to copy a file
+func (cmd *Command) copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
+}
+
+// cleanupOldBackups removes old backup files, keeping only the most recent ones
+func (cmd *Command) cleanupOldBackups(backupDir string) error {
+	files, err := os.ReadDir(backupDir)
+	if err != nil {
+		return err
+	}
+
+	// Filter backup files
+	var backupFiles []os.DirEntry
+	for _, file := range files {
+		if strings.HasPrefix(file.Name(), "rubixdata_backup_") && strings.HasSuffix(file.Name(), ".db") {
+			backupFiles = append(backupFiles, file)
+		}
+	}
+
+	// If we have more than 10 backups, remove the oldest ones
+	if len(backupFiles) > 10 {
+		// Files are already sorted by name (which includes timestamp)
+		for i := 0; i < len(backupFiles)-10; i++ {
+			oldBackup := filepath.Join(backupDir, backupFiles[i].Name())
+			if err := os.Remove(oldBackup); err != nil {
+				cmd.log.Warn("Failed to remove old backup", "file", oldBackup, "err", err)
+			} else {
+				cmd.log.Info("Removed old backup", "file", oldBackup)
+			}
+
+			// Also remove associated WAL and SHM files if they exist
+			os.Remove(oldBackup + "-wal")
+			os.Remove(oldBackup + "-shm")
+		}
+	}
+
+	return nil
 }
 
 // Get preferred outbound ip of this machine
@@ -391,8 +546,28 @@ func (cmd *Command) runApp() {
 
 	// Override directory path
 	cmd.cfg.DirPath = cmd.runDir
+
+	// Backup database if flag is set
+	if cmd.backupDB {
+		if err := cmd.backupDatabase(); err != nil {
+			cmd.log.Error("Failed to backup database", "err", err)
+			return
+		}
+	}
+
+	// Apply trusted network setting (enabled by default)
+	// Check if user explicitly wants to disable trusted network
+	if cmd.disableTrustedNetwork {
+		cmd.cfg.CfgData.TrustedNetwork = false
+		cmd.log.Info("Trusted network mode explicitly disabled via -disableTrustedNetwork flag")
+	} else {
+		// Trusted network is enabled by default
+		cmd.cfg.CfgData.TrustedNetwork = true
+		cmd.log.Info("Trusted network mode enabled (default)")
+	}
+
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.fullNode)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.publishTokenChainDetails, cmd.fullNode)
 	if err != nil {
 		cmd.log.Error("failed to create core")
 		return
@@ -421,10 +596,21 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("Failed to create server")
 		return
 	}
+	if cmd.publishTokenChainDetails {
+		c.PublishTCDetails()
+	}
+	if cmd.fullNode {
+		cmd.log.Info("**calling SubscribeTCDetails function***")
+		c.SubscribeTCDetails()
+	}
 	s.EnableSWagger(cmd.getURL(s.GetServerURL()))
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
 	go s.Start()
+
+	// Start the pending token monitor for self-healing
+	c.StartPendingTokenMonitor()
+
 	cmd.log.Info("Syncing Details...")
 	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
 	if len(dids) != 0 {
@@ -442,6 +628,8 @@ func (cmd *Command) runApp() {
 	case <-ch:
 	case <-sc:
 	}
+	// Stop the pending token monitor
+	c.StopPendingTokenMonitor()
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
 	//c.ExpireUserAPIKey()
@@ -564,7 +752,14 @@ func Run(args []string) {
 	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
 	flag.IntVar(&cmd.ftNumStartIndex, "ftStartIndex", 0, "Start index of the FTs to be created")
-	flag.BoolVar(&cmd.fullNode, "fullnode", false, "receive all published transactions")
+	flag.StringVar(&cmd.message, "message", "", "Value to be signed on")
+	flag.StringVar(&cmd.signature, "signature", "", "signature to be verified")
+	flag.StringVar(&cmd.signerDID, "signerdid", "", "DID of the signer")
+	flag.BoolVar(&cmd.enableTrustedNetwork, "enableTrustedNetwork", true, "Enable trusted network mode (skips DHT checks) - enabled by default")
+	flag.BoolVar(&cmd.disableTrustedNetwork, "disableTrustedNetwork", false, "Disable trusted network mode to enable full DHT checks")
+	flag.BoolVar(&cmd.backupDB, "backupDB", false, "Create backup of database before starting node")
+	flag.BoolVar(&cmd.publishTokenChainDetails, "publishTokenchain", false, "Publish tokenchain details to pubsub")
+	flag.BoolVar(&cmd.fullNode, "fullnode", false, "receive all published transactions and tokenchain details")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -776,6 +971,27 @@ func Run(args []string) {
 		cmd.addPeerDetailsFromExplorer()
 	case GetFTTxnDetailsCmd:
 		cmd.getFTTxnDetails()
+	case ArbitrarySignCmd:
+		cmd.ArbitrarySign()
+	case VerifySignatureCmd:
+		cmd.SignVerification()
+	case AsyncFTStatusCmd:
+		cmd.asyncFTStatus()
+	case SetAsyncFTStatusCmd:
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: setasyncftstatus <true|false>")
+			return
+		}
+		val := strings.ToLower(os.Args[2])
+		if val != "true" && val != "false" {
+			fmt.Println("Usage: setasyncftstatus <true|false>")
+			return
+		}
+		cmd.setAsyncFTStatus(val == "true")
+	case FixFTCreatorCmd:
+		cmd.fixFTCreator()
+	case GetFTCreatorStatsCmd:
+		cmd.getFTCreatorStats()
 	default:
 		cmd.log.Error("Invalid command")
 	}
@@ -820,4 +1036,14 @@ func getpassword(msg string) (string, error) {
 		return "", err
 	}
 	return string(bytePassword), nil
+}
+
+func (cmd *Command) asyncFTStatus() {
+	status := cmd.c.GetAsyncFTResponse()
+	fmt.Printf("Async FT Response is currently: %v\n", status)
+}
+
+func (cmd *Command) setAsyncFTStatus(val bool) {
+	cmd.c.SetAsyncFTResponse(val)
+	fmt.Printf("Async FT Response set to: %v\n", val)
 }

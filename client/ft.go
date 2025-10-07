@@ -43,3 +43,21 @@ func (c *Client) GetFTInfo(didStr string) (*model.GetFTInfo, error) {
 	}
 	return &info, nil
 }
+
+func (c *Client) FixFTCreator() (*model.BasicResponse, error) {
+	var basicresponse model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIFixFTCreator, nil, nil, &basicresponse, time.Minute*5)
+	if err != nil {
+		return nil, err
+	}
+	return &basicresponse, nil
+}
+
+func (c *Client) GetFTCreatorStats() (*model.BasicResponse, error) {
+	var basicresponse model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIGetFTCreatorStats, nil, nil, &basicresponse)
+	if err != nil {
+		return nil, err
+	}
+	return &basicresponse, nil
+}

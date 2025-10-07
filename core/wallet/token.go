@@ -3,8 +3,11 @@ package wallet
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"math/rand"
 	"os"
 	"strings"
+	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -31,6 +34,7 @@ const (
 	TokenIsBeingDoubleSpent
 	TokenIsPinnedAsService
 	TokenIsBurntForFT
+	TokenIsPending                // Tokens received but not yet confirmed by consensus finality
 	QuorumPledgedForThisToken int = 20
 )
 const (
@@ -51,23 +55,27 @@ const (
 )
 
 type Token struct {
-	TokenID        string  `gorm:"column:token_id;primaryKey"`
-	ParentTokenID  string  `gorm:"column:parent_token_id"`
-	TokenValue     float64 `gorm:"column:token_value"`
-	DID            string  `gorm:"column:did"`
-	TokenStatus    int     `gorm:"column:token_status;"`
-	TokenStateHash string  `gorm:"column:token_state_hash"`
-	TransactionID  string  `gorm:"column:transaction_id"`
-	Added          bool    `gorm:"column:added"`
-	SyncStatus     int     `gorm:"column:sync_status"`
+	TokenID        string    `gorm:"column:token_id;primaryKey"`
+	ParentTokenID  string    `gorm:"column:parent_token_id"`
+	TokenValue     float64   `gorm:"column:token_value"`
+	DID            string    `gorm:"column:did"`
+	TokenStatus    int       `gorm:"column:token_status;"`
+	TokenStateHash string    `gorm:"column:token_state_hash"`
+	TransactionID  string    `gorm:"column:transaction_id"`
+	Added          bool      `gorm:"column:added"`
+	SyncStatus     int       `gorm:"column:sync_status"`
+	CreatedAt      time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt      time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 type SyncedRBT struct {
-	TokenID       string  `gorm:"column:token_id;primaryKey"`
-	ParentTokenID string  `gorm:"column:parent_token_id"`
-	TokenValue    float64 `gorm:"column:token_value"`
-	OwnerDID      string  `gorm:"column:owner_did"`
-	TransactionID string  `gorm:"column:transaction_id"`
+	TokenID string `gorm:"column:token_id;primaryKey"`
+	// ParentTokenID string  `gorm:"column:parent_token_id"`
+	TokenValue   float64 `gorm:"column:token_value"`
+	OwnerDID     string  `gorm:"column:owner_did"`
+	PublisherDID string  `gorm:"column:publisher_did"`
+	BlockHash    string  `gorm:"column:block_hash"`
+	SyncStaus    int     `gorm:"column:sync_status"`
 	// TokenStateHash string  `gorm:"column:token_state_hash"`
 }
 
@@ -153,6 +161,50 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 		}
 	}
 	return t, nil
+}
+
+// This function fetches all rbt  tokens, which a node can have maximum token chain length(i.e Tokens with status as Free, Pledged, Burnt or TokenISBurntForFT)
+func (w *Wallet) GetRBTTokensWithMaxChainLength() ([]Token, error) {
+	var tokens []Token
+	err := w.s.Read(TokenStorage, &tokens, "token_status=? OR token_status=? OR token_status=? OR token_status=?", TokenIsFree, TokenIsPledged, TokenIsBurnt, TokenIsBurntForFT)
+	if err != nil {
+		w.log.Error("Failed to get rbt tokens with maximum chain length ", "err", err)
+		return nil, err
+	}
+	return tokens, nil
+}
+
+// This function fetches FT Tokens, which a node can have maximum token chain length(i.e tokens with status Free)
+func (w *Wallet) GetFTTokensWithMaxChainLength() ([]FTToken, error) {
+	var FTTokens []FTToken
+	err := w.s.Read(FTTokenStorage, &FTTokens, "token_status=?", TokenIsFree)
+	if err != nil {
+		w.log.Error("Failed to get FT tokens with maximum chain length ", "err", err)
+		return nil, err
+	}
+	return FTTokens, nil
+}
+
+// This function fetches NFT Tokens, which a node can have maximum token chain length(i.e tokens with status Free and TokenIsDeployed)
+func (w *Wallet) GetNFTTokensWithMaxChainLength() ([]NFT, error) {
+	var NFTTokens []NFT
+	err := w.s.Read(NFTTokenStorage, &NFTTokens, "token_status=? OR token_status=?", TokenIsDeployed, TokenIsFree)
+	if err != nil {
+		w.log.Error("Failed to get NFT tokens with maximum chain length ", "err", err)
+		return nil, err
+	}
+	return NFTTokens, nil
+}
+
+// This function fetches smart contract Tokens, which a node can have maximum token chain length(i.e tokens with status Free and TokenIsDeployed)
+func (w *Wallet) GetSmartContractTokensWithMaxChainLength() ([]SmartContract, error) {
+	var SmartContractTokens []SmartContract
+	err := w.s.Read(SmartContractStorage, &SmartContractTokens, "contract_status=? OR contract_status=?", TokenIsDeployed, TokenIsExecuted)
+	if err != nil {
+		w.log.Error("Failed to get smart contract tokens with maximum chain length ", "err", err)
+		return nil, err
+	}
+	return SmartContractTokens, nil
 }
 
 // This function will return all the FTs, their count and the creator DID in the node
@@ -741,6 +793,12 @@ func (w *Wallet) FTTokensTransffered(did string, ti []contract.TokenInfo, b *blo
 	return nil
 }
 func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell) ([]string, error) {
+	// For large transfers, use optimized processing with batch downloads
+	if len(ti) > 50 {
+		w.log.Info("Using optimized token receiver with batch downloads", "token_count", len(ti))
+		return w.OptimizedTokensReceived(did, ti, b, senderPeerId, receiverPeerId, pinningServiceMode, ipfsShell)
+	}
+
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
@@ -756,15 +814,25 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	var updatedtokenhashes []string = make([]string, 0)
 	var tokenHashMap map[string]string = make(map[string]string)
 
+	// Prepare to collect provider details for batch write
+	providerMaps := make([]model.TokenProviderMap, 0, len(ti))
+
 	for _, info := range ti {
 		t := info.Token
 		b := w.GetLatestTokenBlock(info.Token, info.TokenType)
 		blockId, _ := b.GetBlockID(t)
 		tokenIDTokenStateData := t + blockId
 		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
-		tokenIDTokenStateHash, _ := ipfsShell.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		tokenIDTokenStateHash, tpm, _ := w.AddWithProviderMap(tokenIDTokenStateBuffer, did, OwnerRole)
 		updatedtokenhashes = append(updatedtokenhashes, tokenIDTokenStateHash)
 		tokenHashMap[t] = tokenIDTokenStateHash
+		// Fill in extra fields for pinning
+		tpm.FuncID = PinFunc
+		tpm.TransactionID = b.GetTid()
+		tpm.Sender = senderPeerId + "." + b.GetSenderDID()
+		tpm.Receiver = receiverPeerId + "." + b.GetReceiverDID()
+		tpm.TokenValue = info.TokenValue
+		providerMaps = append(providerMaps, tpm)
 	}
 
 	// Handle each token
@@ -800,6 +868,8 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 				TokenValue:    tokenInfo.TokenValue,
 				ParentTokenID: parentTokenID,
 				DID:           tokenInfo.OwnerDID,
+				CreatedAt:     time.Now(),
+				UpdatedAt:     time.Now(),
 			}
 
 			err = w.s.Write(TokenStorage, &t)
@@ -809,7 +879,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			}
 		}
 		// Update token status and pin tokens
-		tokenStatus := TokenIsFree
+		tokenStatus := TokenIsPending // Changed from TokenIsFree to prevent premature spending
 		role := OwnerRole
 		ownerdid := did
 		if pinningServiceMode {
@@ -832,21 +902,56 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-		//Pinnig the whole tokens and pat tokens
-		ok, err := w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue)
+		//Pinnig the whole tokens and pat tokens (skip AddProviderDetails)
+		_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 		if err != nil {
 			fmt.Println("failed to pin token ", tokenInfo.Token)
 			return nil, err
 		}
-		if !ok {
-			return nil, fmt.Errorf("failed to pin token")
-		}
 	}
-	return updatedtokenhashes, nil
+
+	// For large transfers, use async provider details processing
+	if len(providerMaps) > 100 && w.asyncProviderMgr != nil {
+		// Submit to async queue
+		err := w.asyncProviderMgr.SubmitProviderDetails(providerMaps, b.GetTid())
+		if err != nil {
+			w.log.Error("Failed to submit provider details to async queue, falling back to sync", "err", err)
+			// Fall back to synchronous processing
+			goto syncProcessing
+		}
+		w.log.Info("Provider details submitted for async processing",
+			"transaction_id", b.GetTid(),
+			"token_count", len(providerMaps))
+		return updatedtokenhashes, nil
+	}
+
+syncProcessing:
+	// Batch write provider details with retry/backoff (synchronous)
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		err := w.AddProviderDetailsBatch(providerMaps)
+		if err == nil {
+			return updatedtokenhashes, nil
+		}
+		w.log.Error("Batch AddProviderDetails failed, retrying", "attempt", attempt+1, "err", err)
+		time.Sleep(backoff(attempt))
+	}
+	return nil, fmt.Errorf("failed to batch add provider details after retries")
 }
 
 // need to update in such a way that only for FTs
 func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, ipfsShell *ipfsnode.Shell, ftInfo FTToken) ([]string, error) {
+	// Always use parallel FT receiver for consistent performance and no global locks
+	w.log.Info("Using parallel FT receiver",
+		"ft_count", len(ti),
+		"ft_name", ftInfo.FTName)
+	parallelReceiver := NewParallelFTReceiver(w)
+	return parallelReceiver.ParallelFTTokensReceived(did, ti, b, senderPeerId, receiverPeerId, ipfsShell, ftInfo)
+}
+
+// FTTokensReceivedLegacy is the old implementation with global wallet lock
+// Kept for reference but should not be used in production
+func (w *Wallet) FTTokensReceivedLegacy(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, ipfsShell *ipfsnode.Shell, ftInfo FTToken) ([]string, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// TODO :: Needs to be address
@@ -860,15 +965,25 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 	var updatedtokenhashes []string = make([]string, 0)
 	var tokenHashMap map[string]string = make(map[string]string)
 
+	// Prepare to collect provider details for batch write
+	providerMaps := make([]model.TokenProviderMap, 0, len(ti))
+
 	for _, info := range ti {
 		t := info.Token
 		b := w.GetLatestTokenBlock(info.Token, info.TokenType)
 		blockId, _ := b.GetBlockID(t)
 		tokenIDTokenStateData := t + blockId
 		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
-		tokenIDTokenStateHash, _ := ipfsShell.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		tokenIDTokenStateHash, tpm, _ := w.AddWithProviderMap(tokenIDTokenStateBuffer, did, OwnerRole)
 		updatedtokenhashes = append(updatedtokenhashes, tokenIDTokenStateHash)
 		tokenHashMap[t] = tokenIDTokenStateHash
+		// Fill in extra fields for pinning
+		tpm.FuncID = PinFunc
+		tpm.TransactionID = b.GetTid()
+		tpm.Sender = senderPeerId + "." + b.GetSenderDID()
+		tpm.Receiver = receiverPeerId + "." + b.GetReceiverDID()
+		tpm.TokenValue = info.TokenValue
+		providerMaps = append(providerMaps, tpm)
 	}
 
 	// Handle each token
@@ -901,6 +1016,8 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 				TokenID:    tokenInfo.Token,
 				TokenValue: tokenInfo.TokenValue,
 				CreatorDID: FTOwner,
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
 			}
 
 			err = w.s.Write(FTTokenStorage, &FTInfo)
@@ -909,7 +1026,12 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 			}
 		}
 		// Update token status and pin tokens
-		tokenStatus := TokenIsFree
+		var tokenStatus int
+		if senderPeerId != receiverPeerId {
+			tokenStatus = TokenIsPending // Changed from TokenIsFree to prevent premature spending
+		} else {
+			tokenStatus = TokenIsFree
+		}
 		role := OwnerRole
 		ownerdid := did
 
@@ -926,17 +1048,50 @@ func (w *Wallet) FTTokensReceived(did string, ti []contract.TokenInfo, b *block.
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-		//Pinnig the whole tokens and pat tokens
-		ok, err := w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("failed to pin token")
+		//Pinnig the whole tokens and pat tokens (skip AddProviderDetails)
+		if senderPeerId != receiverPeerId {
+			_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
-	return updatedtokenhashes, nil
+
+	// For large FT transfers, use async provider details processing
+	if len(providerMaps) > 100 && w.asyncProviderMgr != nil {
+		// Submit to async queue
+		err := w.asyncProviderMgr.SubmitProviderDetails(providerMaps, b.GetTid())
+		if err != nil {
+			w.log.Error("Failed to submit FT provider details to async queue, falling back to sync", "err", err)
+			// Fall back to synchronous processing
+			goto ftSyncProcessing
+		}
+		w.log.Info("FT provider details submitted for async processing",
+			"transaction_id", b.GetTid(),
+			"token_count", len(providerMaps))
+		return updatedtokenhashes, nil
+	}
+
+ftSyncProcessing:
+	// Batch write provider details with retry/backoff (synchronous)
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		err := w.AddProviderDetailsBatch(providerMaps)
+		if err == nil {
+			return updatedtokenhashes, nil
+		}
+		w.log.Error("Batch AddProviderDetails failed, retrying", "attempt", attempt+1, "err", err)
+		time.Sleep(backoff(attempt))
+	}
+	return nil, fmt.Errorf("failed to batch add provider details after retries")
 }
+
+// Local backoff function for retry logic in FTTokensReceived
+func backoff(attempt int) time.Duration {
+	jitter := time.Duration(rand.Intn(100)) * time.Millisecond
+	return time.Duration(math.Pow(2, float64(attempt-1)))*100*time.Millisecond + jitter
+}
+
 func (w *Wallet) CommitTokens(did string, rbtTokens []string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -1264,6 +1419,17 @@ func (w *Wallet) UpdateTokenSyncStatus(tokenID string, syncStatus int) error {
 	return nil
 }
 
+// func (w *Wallet) AddTokenDetailsToTokensTable(tokenDetails Token) error {
+// 	// w.l.Lock()
+// 	// defer w.l.Unlock()
+// 	err := w.s.Write(TokenStorage, tokenDetails)
+// 	if err != nil {
+// 		w.log.Error("failed to write to db, token ", tokenDetails.TokenID)
+// 		return err
+// 	}
+// 	return nil
+// }
+
 func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 	var ftTokens []FTToken
 	err := w.s.Read(FTTokenStorage, &ftTokens, "token_status = ?", TokenIsLocked)
@@ -1278,21 +1444,21 @@ func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 	return ftTokens, nil
 }
 
-// This function is used by fullnode to list all synced RBTs
+// This function is used by fullnode to write all synced RBTs to sqlite table
 func (w *Wallet) AddSyncedRBTToTable(t *SyncedRBT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Write(FullNodeRBTTable, t)
 }
 
-// This function is used by fullnode to list all synced FTs
+// This function is used by fullnode to write all synced FTs to sqlite table
 func (w *Wallet) AddSyncedFTToTable(t *SyncedFT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Write(FullNodeFTTable, t)
 }
 
-// This function is used by fullnode to list all synced NFTs
+// This function is used by fullnode to write all synced NFTs to sqlite table
 func (w *Wallet) AddSyncedNFTToTable(t *SyncedNFT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -1502,4 +1668,9 @@ func (w *Wallet) GetAllSmartContractsbyDID(did string) ([]SyncedSmartContract, e
 		return nil, err
 	}
 	return t, nil
+// Store failed transactions in fullnode DB for later analysis and retry
+func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Write(FailedTxnsTable, failedTxn)
 }

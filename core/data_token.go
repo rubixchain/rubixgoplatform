@@ -133,7 +133,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 		}
 		hb := util.CalculateHash(fb, "SHA3-256")
 		fbr := bytes.NewBuffer(fb)
-		fileUrl, err := c.ipfs.Add(fbr)
+		fileUrl, err := IpfsAddWithBackoff(c.ipfs, fbr)
 		if err != nil {
 			c.log.Error("Failed to create data token, failed to add file to ipfs", "err", err)
 			br.Message = "Failed to create data token, failed to add file to ipfs"
@@ -163,7 +163,7 @@ func (c *Core) createDataToken(reqID string, dr *DataTokenReq) *model.BasicRespo
 	rtb := dtb[0].GetBlock()
 	td := util.HexToStr(rtb)
 	fr := bytes.NewBuffer([]byte(td))
-	dt, err := c.ipfs.Add(fr)
+	dt, err := IpfsAddWithBackoff(c.ipfs, fr)
 	if err != nil {
 		c.log.Error("Failed to create data token, failed to add rac token to ipfs", "err", err)
 		br.Message = "Failed to create data token, failed to add rac token to ipfs"
@@ -348,7 +348,7 @@ func (c *Core) commitDataToken(reqID string, did string, batchID string) *model.
 }
 
 func (c *Core) CheckDataToken(dt string) bool {
-	err := c.ipfs.Get(dt, c.cfg.DirPath)
+	err := c.ipfsOps.Get(dt, c.cfg.DirPath)
 	if err != nil {
 		c.log.Error("failed to get the data token")
 		return false

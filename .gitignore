@@ -32,3 +32,15 @@ test_swarm_key/
 
 # used for testing purpose
 !node_registry.json
+
+# Build artifacts
+rubixgoplatform
+test-build
+
+# Log files
+result/
+*.log
+
+# Documentation artifacts
+compact-*.md
+context-*.md

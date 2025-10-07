@@ -132,3 +132,15 @@ func (c *Client) sendMutiFormRequest(method string, path string, query map[strin
 	}
 	return nil
 }
+
+// Add stubs for async FT response config
+func (c *Client) GetAsyncFTResponse() bool {
+	// TODO: Implement REST call to server if needed
+	fmt.Println("[WARN] GetAsyncFTResponse is not implemented for remote client. This only works in-process.")
+	return false
+}
+
+func (c *Client) SetAsyncFTResponse(val bool) {
+	// TODO: Implement REST call to server if needed
+	fmt.Printf("[WARN] SetAsyncFTResponse(%v) is not implemented for remote client. This only works in-process.\n", val)
+}

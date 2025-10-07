@@ -177,6 +177,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIDumpFTTokenChainBlock, "POST", s.AuthHandle(s.APIDumpFTTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIInitiateFTTransfer, "POST", s.AuthHandle(s.APIInitiateFTTransfer, true, s.AuthError, true))
 	s.AddRoute(setup.APIGetFTInfo, "GET", s.AuthHandle(s.APIGetFTInfo, true, s.AuthError, false))
+	s.AddRoute(setup.APIFixFTCreator, "POST", s.AuthHandle(s.APIFixFTCreator, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetFTCreatorStats, "GET", s.AuthHandle(s.APIGetFTCreatorStats, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
 	s.AddRoute(setup.APIDumpNFTTokenChain, "GET", s.AuthHandle(s.APIDumpNFTTokenChain, true, s.AuthError, false))
 	s.AddRoute(setup.APISubscribeNFT, "POST", s.AuthHandle(s.APISubscribeNFT, true, s.AuthError, false))
@@ -192,6 +194,15 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetFTTxnByDID, "GET", s.AuthHandle(s.APIGetFTTxnByDID, true, s.AuthError, false))
 	s.AddRoute(setup.APIUpdateTokenStatus, "PUT", s.AuthHandle(s.APIUpdateTokenStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetTokenStatus, "GET", s.AuthHandle(s.APIGetTokenStatus, false, s.AuthError, false))
+	s.AddRoute(setup.APIArbitrarySign, "POST", s.AuthHandle(s.APIArbitrarySignature, true, s.AuthError, true))
+	s.AddRoute(setup.APISignVerification, "GET", s.AuthHandle(s.APISignVerification, false, s.AuthError, false))
+	s.AddRoute(setup.APIMigrateFTTransactions, "POST", s.AuthHandle(s.APIMigrateFTTransactions, false, s.AuthError, false))
+	s.AddRoute(setup.APIGetFTMigrationStatus, "GET", s.AuthHandle(s.APIGetFTMigrationStatus, false, s.AuthError, false))
+	s.AddRoute(setup.APIRetryFailedFTDownloads, "POST", s.AuthHandle(s.RetryFailedFTDownloads, false, s.AuthError, false))
+	s.AddRoute(setup.APIGetFailedFTDownloadStatus, "POST", s.AuthHandle(s.GetFailedFTDownloadStatus, false, s.AuthError, false))
+	// Token recovery doesn't need authentication - anyone should be able to recover their tokens
+	s.AddRoute(setup.APIRecoverLostTokens, "POST", s.APIRecoverLostTokens)
+	s.AddRoute(setup.APIRemoteRecoverTokens, "POST", s.APIRemoteRecoverTokens)
 
 	//Below are De-Explorer APIs
 	s.AddRoute(setup.APIGetAllRBTs, "GET", s.AuthHandle(s.APIGetAllFreeRBT, false, s.AuthError, false))

@@ -12,10 +12,11 @@ type NFT struct {
 }
 
 type SyncedNFT struct {
-	TokenID       string  `gorm:"column:token_id;primaryKey" json:"token_id"`
-	TokenValue    float64 `gorm:"column:token_value;" json:"token_value"`
-	OwnerDID      string  `gorm:"column:owner_did"`
-	TransactionID string  `gorm:"column:transaction_id"`
+	TokenID    string  `gorm:"column:token_id;primaryKey" json:"token_id"`
+	TokenValue float64 `gorm:"column:token_value;" json:"token_value"`
+	OwnerDID   string  `gorm:"column:owner_did"`
+	BlockHash  string  `gorm:"column:block_hash"`
+	SyncStatus int     `gorm:"column:sync_status"`
 	// Metadata    string  `gorm:"column:metadata;" json:"metadata"`
 	// Filename    string  `gorm:"column:filename;" json:"filename"`
 }

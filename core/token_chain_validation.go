@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -213,6 +214,31 @@ func (c *Core) ValidateTokenChain(userDID string, tokenInfo *wallet.Token, token
 	//Get latest block in the token chain
 	latestBlock := c.w.GetLatestTokenBlock(tokenInfo.TokenID, tokenType)
 
+	if latestBlock == nil {
+		c.log.Info("DEBUG BLOCK LIST LOG REACHED (sender)", "token", tokenInfo.TokenID)
+		// Debug log: print all block IDs for this token
+		blocks, _, _ := c.w.GetAllTokenBlocks(tokenInfo.TokenID, tokenType, "")
+		blockIDs := make([]string, 0, len(blocks))
+		for _, blkBytes := range blocks {
+			blk := block.InitBlock(blkBytes, nil)
+			if blk != nil {
+				bid, err := blk.GetBlockID(tokenInfo.TokenID)
+				if err == nil {
+					blockIDs = append(blockIDs, bid)
+				}
+			}
+		}
+		c.log.Debug("Token chain block list for token", "token", tokenInfo.TokenID, "blockIDs", blockIDs)
+		c.log.Error("Invalid token chain block for token", "token", tokenInfo.TokenID)
+		response.Message = "Invalid token chain block"
+		return response, fmt.Errorf("invalid token chain block")
+	}
+	c.log.Info("DEBUG LATEST BLOCK LOG REACHED (sender)", "token", tokenInfo.TokenID)
+	// Debug log: print latest block details
+	blockID, _ := latestBlock.GetBlockID(tokenInfo.TokenID)
+	blockHash, _ := latestBlock.GetHash()
+	c.log.Debug("Latest block for token", "token", tokenInfo.TokenID, "blockID", blockID, "blockHash", blockHash, "owner", latestBlock.GetOwner())
+
 	if latestBlock.GetTransType() == block.TokenTransferredType {
 		//Verify if the token is pinned only by the current owner aka receiver in the latest block
 		response, err = c.CurrentOwnerPinCheck(latestBlock, tokenInfo.TokenID, userDID)
@@ -395,6 +421,8 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 			TokenValue:  tokenValue,
 			TokenStatus: wallet.TokenIsBurnt,
 			DID:         tokenOwner,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
 		}
 	}
 
@@ -701,7 +729,7 @@ func (c *Core) CurrentQuorumStatePinCheck(b *block.Block, tokenId string, tokenT
 	c.log.Debug("entering validation to check if token state is exhausted")
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go c.checkTokenState(tokenId, userDID, 0, tokenStateCheckResult, &wg, quorumList, tokenType)
+	go c.checkTokenState(tokenId, userDID, 0, tokenStateCheckResult, quorumList, tokenType)
 	wg.Wait()
 
 	for i := range tokenStateCheckResult {

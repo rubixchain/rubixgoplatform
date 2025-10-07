@@ -11,6 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"runtime"
+	"sync"
+	"sync/atomic"
+
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -54,14 +58,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
 
-	var FT []wallet.FT
+	// var FT []wallet.FT
 
-	c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND creator_did=?", FTName, did)
+	// c.s.Read(wallet.FTStorage, &FT, "ft_name=? AND creator_did=?", FTName, did)
 
-	if len(FT) != 0 {
-		c.log.Error("FT Name already exists")
-		return fmt.Errorf("FT Name already exists")
-	}
+	// if len(FT) != 0 {
+	// 	c.log.Error("FT Name already exists")
+	// 	return fmt.Errorf("FT Name already exists")
+	// }
 
 	// Validate input parameters
 
@@ -80,7 +84,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
 	}
-	//TODO: Need to test and verify whether tokens are getiing unlocked if there is an error in creating FT.
 	defer c.w.ReleaseTokens(wholeTokens)
 	fractionalValue, err := c.GetPresiceFractionalValue(int(numWholeTokens), numFTs)
 	if err != nil {
@@ -88,123 +91,199 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return err
 	}
 
-	newFTs := make([]wallet.FTToken, 0, numFTs)
-	var newFTTokenIDs []string
-
 	var parentTokenIDsArray []string
 	for _, token := range wholeTokens {
 		parentTokenIDsArray = append(parentTokenIDsArray, token.TokenID)
 	}
 	parentTokenIDs := strings.Join(parentTokenIDsArray, ",")
-	for i := ftNumStartIndex; i < ftNumStartIndex+numFTs; i++ {
-		racType := &rac.RacType{
-			Type:        c.RACFTType(),
-			DID:         did,
-			TokenNumber: uint64(i),
-			TotalSupply: 1,
-			TimeStamp:   time.Now().String(),
-			FTInfo: &rac.RacFTInfo{
-				Parents: parentTokenIDs,
-				FTNum:   i,
-				FTName:  FTName,
-				FTValue: fractionalValue,
-			},
-		}
 
-		// Create the RAC block
-		racBlocks, err := rac.CreateRac(racType)
-		if err != nil {
-			c.log.Error("Failed to create RAC block", "err", err)
-			return err
-		}
+	type ftJob struct {
+		Index int
+	}
+	type ftResult struct {
+		FTToken wallet.FTToken
+		FTID    string
+		Err     error
+	}
 
-		if len(racBlocks) != 1 {
-			return fmt.Errorf("failed to create RAC block")
-		}
+	numWorkers := runtime.NumCPU()
+	jobs := make(chan ftJob, numFTs)
+	results := make(chan ftResult, numFTs)
+	var wg sync.WaitGroup
 
-		// Update the signature of the RAC block
-		err = racBlocks[0].UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update DID signature", "err", err)
-			return err
-		}
+	var completed int32
+	var lastLoggedPercent int32
 
-		ftnumString := strconv.Itoa(i)
-		parts := []string{FTName, ftnumString, did}
-		result := strings.Join(parts, " ")
-		byteArray := []byte(result)
-		ftBuffer := bytes.NewBuffer(byteArray)
-		ftID, err := c.w.Add(ftBuffer, did, wallet.AddFunc)
-		if err != nil {
-			c.log.Error("Failed to create FT, Failed to add token to IPFS", "err", err)
-			return err
-		}
-		c.log.Info("FT created: " + ftID + " FT Num: " + ftnumString)
-		newFTTokenIDs = append(newFTTokenIDs, ftID)
+	// Prepare to collect provider details for batch write
+	providerMaps := make([]model.TokenProviderMap, 0, numFTs)
+	// Mutex for providerMaps slice
+	var providerMapMutex sync.Mutex
+	c.log.Info("Initializing FT creation: progress logging")
 
-		bti := &block.TransInfo{
-			Tokens: []block.TransTokens{
-				{
+	worker := func() {
+		defer wg.Done()
+		for job := range jobs {
+			i := job.Index
+			racType := &rac.RacType{
+				Type:        c.RACFTType(),
+				DID:         did,
+				TokenNumber: uint64(i),
+				TotalSupply: 1,
+				TimeStamp:   time.Now().String(),
+				FTInfo: &rac.RacFTInfo{
+					Parents: parentTokenIDs,
+					FTNum:   i,
+					FTName:  FTName,
+					FTValue: fractionalValue,
+				},
+			}
+
+			// Create the RAC block
+			racBlocks, err := rac.CreateRac(racType)
+			if err != nil {
+				results <- ftResult{Err: err}
+				continue
+			}
+			if len(racBlocks) != 1 {
+				results <- ftResult{Err: fmt.Errorf("failed to create RAC block")}
+				continue
+			}
+			err = racBlocks[0].UpdateSignature(dc)
+			if err != nil {
+				results <- ftResult{Err: err}
+				continue
+			}
+
+			ftnumString := strconv.Itoa(i)
+			parts := []string{FTName, ftnumString, did}
+			result := strings.Join(parts, " ")
+			byteArray := []byte(result)
+			ftBuffer := bytes.NewBuffer(byteArray)
+			ftID, tpm, err := c.w.AddWithProviderMap(ftBuffer, did, wallet.AddFunc)
+			if err != nil {
+				results <- ftResult{Err: err}
+				continue
+			}
+			// Collect provider map for batch
+			// Use mutex to avoid race condition
+			providerMapMutex.Lock()
+			providerMaps = append(providerMaps, tpm)
+			providerMapMutex.Unlock()
+			// Progress logging (remove per-token log)
+			newCount := atomic.AddInt32(&completed, 1)
+			currentPercent := int32(math.Floor(float64(newCount*100) / float64(numFTs)))
+			if currentPercent%10 == 0 && atomic.LoadInt32(&lastLoggedPercent) < currentPercent {
+				if atomic.CompareAndSwapInt32(&lastLoggedPercent, lastLoggedPercent, currentPercent) {
+					c.log.Info(fmt.Sprintf("FT creation progress: %d%% (%d/%d created)", currentPercent, newCount, numFTs))
+				}
+			}
+
+			bti := &block.TransInfo{
+				Tokens: []block.TransTokens{{
 					Token:     ftID,
 					TokenType: c.TokenType(FTString),
-				},
-			},
-			Comment: "FT generated at : " + time.Now().String() + " for FT Name : " + FTName,
-		}
-		tcb := &block.TokenChainBlock{
-			TransactionType: block.TokenGeneratedType,
-			TokenOwner:      did,
-			TransInfo:       bti,
-			GenesisBlock: &block.GenesisBlock{
-				Info: []block.GenesisTokenInfo{
-					{
+				}},
+				Comment: "FT generated at : " + time.Now().String() + " for FT Name : " + FTName,
+			}
+			tcb := &block.TokenChainBlock{
+				TransactionType: block.TokenGeneratedType,
+				TokenOwner:      did,
+				TransInfo:       bti,
+				GenesisBlock: &block.GenesisBlock{
+					Info: []block.GenesisTokenInfo{{
 						Token:       ftID,
 						ParentID:    parentTokenIDs,
 						TokenNumber: i,
-					},
+					}},
 				},
-			},
-			TokenValue: fractionalValue,
-		}
-		ctcb := make(map[string]*block.Block)
-		ctcb[ftID] = nil
-		block := block.CreateNewBlock(ctcb, tcb)
-		if block == nil {
-			return fmt.Errorf("failed to create new block")
-		}
-		err = block.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("FT creation failed, failed to update signature", "err", err)
-			return err
-		}
-		err = c.w.AddTokenBlock(ftID, block)
-		if err != nil {
-			c.log.Error("Failed to create FT, failed to add token chain block", "err", err)
-			return err
-		}
-		// Create the new token
-		ft := &wallet.FTToken{
-			TokenID:     ftID,
-			FTName:      FTName,
-			TokenStatus: wallet.TokenIsFree,
-			TokenValue:  fractionalValue,
-			DID:         did,
-		}
-		newFTs = append(newFTs, *ft)
+				TokenValue: fractionalValue,
+			}
+			ctcb := make(map[string]*block.Block)
+			ctcb[ftID] = nil
+			blockObj := block.CreateNewBlock(ctcb, tcb)
+			if blockObj == nil {
+				results <- ftResult{Err: fmt.Errorf("failed to create new block")}
+				continue
+			}
+			err = blockObj.UpdateSignature(dc)
+			if err != nil {
+				results <- ftResult{Err: err}
+				continue
+			}
+			err = c.w.AddTokenBlock(ftID, blockObj)
+			if err != nil {
+				results <- ftResult{Err: err}
+				continue
+			}
+			ft := wallet.FTToken{
+				TokenID:     ftID,
+				FTName:      FTName,
+				TokenStatus: wallet.TokenIsFree,
+				TokenValue:  fractionalValue,
+				DID:         did,
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+			}
+			results <- ftResult{FTToken: ft, FTID: ftID}
 
-		// publish the transaction in the network with topic : rubix_txns
-		publishingTxn := &model.PubSubTxnInfo{
-			TxnType:      tcb.TransactionType,
-			TxnMode:      RBTTransferMode,
-			PublisherDID: dc.GetDID(),
-			TxnBlock:     block.GetBlock(),
+			// publish the transaction in the network with topic : rubix_txns
+			blockHash, err := blockObj.GetHash()
+			if err != nil {
+				c.log.Error("failed to get block hash")
+				results <- ftResult{Err: err}
+				continue
+			}
+			publishingTxn := &model.PubSubTxnInfo{
+				BlockHash:    blockHash,
+				TxnType:      tcb.TransactionType,
+				AssetType:    FTTokenType,
+				FTName:       FTName,
+				PublisherDID: dc.GetDID(),
+				TxnBlock:     blockObj.GetBlock(),
+			}
+
+			err = c.publishTxn(publishingTxn)
+			if err != nil {
+				c.log.Error("Failed to publish txn", "err", err)
+				results <- ftResult{Err: err}
+				continue
+			}
 		}
 
-		err = c.publishTxn(publishingTxn)
-		if err != nil {
-			c.log.Error("Failed to publish txn", "err", err)
-			return err
+	}
+
+	// Start workers
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go worker()
+	}
+
+	// Enqueue jobs
+	for i := ftNumStartIndex; i < ftNumStartIndex+numFTs; i++ {
+		jobs <- ftJob{Index: i}
+	}
+	close(jobs)
+
+	// Collect results
+	newFTs := make([]wallet.FTToken, 0, numFTs)
+	var newFTTokenIDs []string
+	var firstErr error
+	for i := 0; i < numFTs; i++ {
+		res := <-results
+		if res.Err != nil && firstErr == nil {
+			firstErr = res.Err
 		}
+		if res.FTID != "" {
+			newFTTokenIDs = append(newFTTokenIDs, res.FTID)
+		}
+		if res.FTToken.TokenID != "" {
+			newFTs = append(newFTs, res.FTToken)
+		}
+	}
+	wg.Wait()
+
+	if firstErr != nil {
+		return firstErr
 	}
 
 	for i := range wholeTokens {
@@ -249,34 +328,112 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			c.log.Error("FT creation failed, failed to add token block", "err", err)
 			return err
 		}
+		c.log.Debug("burnt token block added ")
 		wholeTokens[i].TokenStatus = wallet.TokenIsBurntForFT
 		err = c.w.UpdateToken(&wholeTokens[i])
 		if err != nil {
 			c.log.Error("FT token creation failed, failed to update token status", "err", err)
 			return err
 		}
+		c.log.Debug("burnt token block status updated ")
 		release = false
+
+		// publish the burnt block in the network with topic : rubix_txns
+		blockHash, err := block.GetHash()
+		if err != nil {
+			c.log.Error("failed to get burnt block hash")
+			return err
+		}
+		publishingTxn := &model.PubSubTxnInfo{
+			BlockHash:    blockHash,
+			TxnType:      tcb.TransactionType,
+			AssetType:    RBTTokenType,
+			PublisherDID: dc.GetDID(),
+			TxnBlock:     block.GetBlock(),
+		}
+
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return err
+		}
+		c.log.Debug("burnt token block published ")
 	}
 
+	// --- Batch Write FTs to Storage using WriteBatch ---
+	var batch []*wallet.FTToken
 	for i := range newFTs {
-		tt := c.TokenType(FTString)
-		blk := c.w.GetGenesisTokenBlock(newFTs[i].TokenID, tt)
-		if blk == nil {
-			c.log.Error("failed to get gensis block for Parent DID updation, invalid token chain")
-			return err
+		if newFTs[i].DID == did {
+			newFTs[i].CreatorDID = did
+		} else {
+			tt := c.TokenType(FTString)
+			blk := c.w.GetGenesisTokenBlock(newFTs[i].TokenID, tt)
+			if blk == nil {
+				c.log.Error("failed to get genesis block for Parent DID updation, invalid token chain")
+				return fmt.Errorf("failed to get genesis block for Parent DID updation, invalid token chain")
+			}
+			FTOwner := blk.GetOwner()
+			newFTs[i].CreatorDID = FTOwner
+			c.log.Debug("adding new ft to table with count ", i)
 		}
-		FTOwner := blk.GetOwner()
-		ft := &newFTs[i]
-		ft.CreatorDID = FTOwner
-		err = c.w.CreateFT(ft)
-		if err != nil {
-			c.log.Error("Failed to write FT details in FT tokens table", "err", err)
-			return err
-		}
+		batch = append(batch, &newFTs[i])
 	}
+	batchSize := 1000 // or tune as needed
+	// 1. Write to SQL DB first
+	err = c.w.S().WriteBatch(wallet.FTTokenStorage, batch, batchSize)
+	if err != nil {
+		c.log.Error("Failed to batch write FT tokens (SQL phase)", "err", err)
+		return err
+	}
+
+	// 2. Write all token chain blocks to LevelDB in a batch
+	var blockPairs []struct {
+		Token string
+		Block *block.Block
+	}
+	for i := range newFTs {
+		ft := &newFTs[i]
+		blockObj := c.w.GetLatestTokenBlock(ft.TokenID, c.TokenType(FTString))
+		if blockObj == nil {
+			c.log.Error("Failed to get latest token block for FT", "token_id", ft.TokenID)
+			// Rollback SQL writes
+			for _, rollbackFT := range newFTs {
+				errDel := c.w.S().Delete(wallet.FTTokenStorage, &rollbackFT, "token_id=?", rollbackFT.TokenID)
+				if errDel != nil {
+					c.log.Error("Rollback failed: could not delete FT from SQL after LevelDB failure", "token_id", rollbackFT.TokenID, "err", errDel)
+				}
+			}
+			return fmt.Errorf("failed to get latest token block for FT %s", ft.TokenID)
+		}
+		blockPairs = append(blockPairs, struct {
+			Token string
+			Block *block.Block
+		}{Token: ft.TokenID, Block: blockObj})
+	}
+	if err := c.w.BatchAddTokenBlocksFT(blockPairs); err != nil {
+		c.log.Error("Failed to batch add token blocks to LevelDB after SQL write", "err", err)
+		// Rollback SQL writes
+		for _, rollbackFT := range newFTs {
+			errDel := c.w.S().Delete(wallet.FTTokenStorage, &rollbackFT, "token_id=?", rollbackFT.TokenID)
+			if errDel != nil {
+				c.log.Error("Rollback failed: could not delete FT from SQL after LevelDB failure", "token_id", rollbackFT.TokenID, "err", errDel)
+			}
+		}
+		return fmt.Errorf("failed to batch add token blocks to LevelDB: %v", err)
+	}
+
+	// After all workers finish, batch add provider details
+	err = c.w.AddProviderDetailsBatch(providerMaps)
+	if err != nil {
+		c.log.Error("Failed to batch add provider details for FTs", "err", err)
+		return err
+	}
+
+	c.log.Debug("updating ft table with new fts")
+	
 	updateFTTableErr := c.updateFTTable()
 	if updateFTTableErr != nil {
-		c.log.Error("Failed to update FT table after FT creation", "err", err)
+		c.log.Error("Failed to update FT table after FT creation", "err", updateFTTableErr)
 		return updateFTTableErr
 	}
 	return nil
@@ -327,12 +484,25 @@ func (c *Core) InitiateFTTransfer(reqID string, req *model.TransferFTReq) {
 func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
+
+	// Track overall FT transaction performance
+	var txErr error
+	defer func() {
+		c.TrackOperation("tx.ft_transfer.total", map[string]interface{}{
+			"sender":   req.Sender,
+			"receiver": req.Receiver,
+			"ft_count": req.FTCount,
+			"ft_name":  req.FTName,
+		})(txErr)
+	}()
+
 	resp := &model.BasicResponse{
 		Status: false,
 	}
 	if req.Sender == req.Receiver {
 		c.log.Error("Sender and receiver cannot same")
 		resp.Message = "Sender and receiver cannot be same"
+		txErr = fmt.Errorf("sender and receiver cannot be same")
 		return resp
 	}
 	if req.Sender == "" || req.Receiver == "" {
@@ -409,13 +579,18 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			creatorDID = info[0].CreatorDID
 		}
 	}
+	// Get all available FT tokens
 	var AllFTs []wallet.FTToken
+	var TokenInfo []contract.TokenInfo
+	var lockingErr error
+
 	if req.CreatorDID != "" {
 		AllFTs, err = c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, req.CreatorDID)
 		creatorDID = req.CreatorDID
 	} else {
 		AllFTs, err = c.w.GetFreeFTsByNameAndDID(req.FTName, did)
 	}
+
 	AvailableFTCount := len(AllFTs)
 	if err != nil {
 		c.log.Error("Failed to get FTs", "err", err)
@@ -428,25 +603,27 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			return resp
 		}
 	}
+
 	FTsForTxn := AllFTs[:req.FTCount]
-	//TODO: Pinning of tokens
 
 	// Fetching peer's peer id
-	peerInfo, err := c.GetPeerDIDInfo(req.Receiver)
-	if err != nil {
-		if peerInfo == nil {
-			c.log.Error("could not get peerId of receiver ", req.Receiver, "error", err)
-			resp.Message = fmt.Sprintf("could not get peerId of receiver : %v, error: %v", req.Receiver, err)
+	if !c.w.IsDIDExist(req.Receiver) {
+		peerInfo, err := c.GetPeerDIDInfo(req.Receiver)
+		if err != nil {
+			if peerInfo == nil {
+				c.log.Error("could not get peerId of receiver ", req.Receiver, "error", err)
+				resp.Message = fmt.Sprintf("could not get peerId of receiver : %v, error: %v", req.Receiver, err)
+				return resp
+			}
+			if strings.Contains(err.Error(), "retry") {
+				c.AddPeerDetails(*peerInfo)
+			}
+		}
+		if peerInfo.PeerID == "" {
+			c.log.Error("failed to get peerId of receiver ", req.Receiver, "error", err)
+			resp.Message = fmt.Sprintf("failed to get peerId of receiver : %v, error: %v", req.Receiver, err)
 			return resp
 		}
-		if strings.Contains(err.Error(), "retry") {
-			c.AddPeerDetails(*peerInfo)
-		}
-	}
-	if peerInfo.PeerID == "" {
-		c.log.Error("failed to get peerId of receiver ", req.Receiver, "error", err)
-		resp.Message = fmt.Sprintf("failed to get peerId of receiver : %v, error: %v", req.Receiver, err)
-		return resp
 	}
 
 	receiverPeerID, err := c.getPeer(req.Receiver)
@@ -456,40 +633,54 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 	defer receiverPeerID.Close()
 
-	FTTokenIDs := make([]string, 0)
-	for i := range FTsForTxn {
-		FTTokenIDs = append(FTTokenIDs, FTsForTxn[i].TokenID)
+	// Use optimized locking for transfers > 100 tokens
+	if c.shouldUseOptimizedFTLocking(req.FTCount) {
+		c.log.Info("Using optimized FT locking", "ft_count", req.FTCount)
+		TokenInfo, lockingErr = c.OptimizedFTTransferLocking(FTsForTxn, did, req.FTCount)
+		if lockingErr != nil {
+			c.log.Error("Failed to lock FT tokens optimized", "err", lockingErr)
+			resp.Message = "Failed to lock FT tokens: " + lockingErr.Error()
+			return resp
+		}
+	} else {
+		// Original logic for small transfers
+		TokenInfo = make([]contract.TokenInfo, 0)
+		for i := range FTsForTxn {
+			FTsForTxn[i].TokenStatus = wallet.TokenIsLocked
+			lockFTErr := c.s.Update(wallet.FTTokenStorage, &FTsForTxn[i], "token_id=?", FTsForTxn[i].TokenID)
+			if lockFTErr != nil {
+				c.log.Error("Failed to update FT token status", "err", lockFTErr)
+				resp.Message = "Failed to update FT token status"
+				return resp
+			}
+			tt := c.TokenType(FTString)
+			blk := c.w.GetLatestTokenBlock(FTsForTxn[i].TokenID, tt)
+			if blk == nil {
+				c.log.Error("failed to get latest block, invalid token chain")
+				resp.Message = "failed to get latest block, invalid token chain"
+				return resp
+			}
+			bid, err := blk.GetBlockID(FTsForTxn[i].TokenID)
+			if err != nil {
+				c.log.Error("failed to get block id", "err", err)
+				resp.Message = "failed to get block id, " + err.Error()
+				return resp
+			}
+			ti := contract.TokenInfo{
+				Token:      FTsForTxn[i].TokenID,
+				TokenType:  tt,
+				TokenValue: FTsForTxn[i].TokenValue,
+				OwnerDID:   did,
+				BlockID:    bid,
+			}
+			TokenInfo = append(TokenInfo, ti)
+		}
 	}
-	TokenInfo := make([]contract.TokenInfo, 0)
-	for i := range FTsForTxn {
-		FTsForTxn[i].TokenStatus = wallet.TokenIsLocked
-		lockFTErr := c.s.Update(wallet.FTTokenStorage, FTsForTxn, "ft_name=?", FTsForTxn[i].FTName)
-		if lockFTErr != nil {
-			c.log.Error("Failed to update FT token status", "err", lockFTErr)
-			resp.Message = "Failed to update FT token status"
-			return resp
-		}
-		tt := c.TokenType(FTString)
-		blk := c.w.GetLatestTokenBlock(FTsForTxn[i].TokenID, tt)
-		if blk == nil {
-			c.log.Error("failed to get latest block, invalid token chain")
-			resp.Message = "failed to get latest block, invalid token chain"
-			return resp
-		}
-		bid, err := blk.GetBlockID(FTsForTxn[i].TokenID)
-		if err != nil {
-			c.log.Error("failed to get block id", "err", err)
-			resp.Message = "failed to get block id, " + err.Error()
-			return resp
-		}
-		ti := contract.TokenInfo{
-			Token:      FTsForTxn[i].TokenID,
-			TokenType:  tt,
-			TokenValue: FTsForTxn[i].TokenValue,
-			OwnerDID:   did,
-			BlockID:    bid,
-		}
-		TokenInfo = append(TokenInfo, ti)
+
+	// Extract token IDs for later use
+	FTTokenIDs := make([]string, 0)
+	for i := range TokenInfo {
+		FTTokenIDs = append(FTTokenIDs, TokenInfo[i].Token)
 	}
 	sct := &contract.ContractType{
 		Type:       contract.SCFTType,
@@ -526,7 +717,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 
 	resultChan := make(chan *model.BasicResponse, 1)
 
-	// start transacion in go routine
+	// start transaction in go routine
 	go func() {
 		td, _, pds, FTconsErr := c.initiateConsensus(cr, sc, dc)
 		if FTconsErr != nil {
@@ -577,43 +768,66 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			resp.Message = errMsg
 			return
 		}
-		AllTokens := make([]AllToken, len(FTsForTxn))
-		for i := range FTsForTxn {
-			tokenDetail := AllToken{}
-			tokenDetail.TokenHash = FTsForTxn[i].TokenID
-			tt := c.TokenType(FTString)
-			blk := c.w.GetLatestTokenBlock(FTsForTxn[i].TokenID, tt)
-			bid, _ := blk.GetBlockID(FTsForTxn[i].TokenID)
 
-			blockNoPart := strings.Split(bid, "-")[0]
-			// Convert the string part to an int
-			blockNoInt, err := strconv.Atoi(blockNoPart)
-			if err != nil {
-				log.Printf("Error getting BlockID: %v", err)
-				continue
+		// Store in new FT transaction history table
+		if err := c.w.AddFTTransactionHistory(td, req.FTName, creatorDID, req.FTCount); err != nil {
+			c.log.Error("Failed to store FT transaction history", "err", err)
+			// Don't fail the transaction, just log the error
+		}
+
+		// Store FT token metadata for sent transactions
+		if err := c.w.AddFTTransactionTokens(td.TransactionID, creatorDID, req.FTName, req.FTCount, "sent"); err != nil {
+			c.log.Error("Failed to store FT transaction token metadata", "err", err)
+			// Don't fail the transaction, just log the error
+		}
+
+		// Create a channel to signal explorer submission completion
+		explorerDone := make(chan struct{})
+
+		go func() {
+			defer close(explorerDone) // Signal completion when done
+
+			AllTokens := make([]AllToken, len(TokenInfo))
+			for i := range TokenInfo {
+				tokenDetail := AllToken{}
+				tokenDetail.TokenHash = TokenInfo[i].Token
+
+				blockNoPart := strings.Split(TokenInfo[i].BlockID, "-")[0]
+				// Convert the string part to an int
+				blockNoInt, err := strconv.Atoi(blockNoPart)
+				if err != nil {
+					log.Printf("Error getting BlockID: %v", err)
+					continue
+				}
+				tokenDetail.BlockNumber = blockNoInt
+				tokenDetail.BlockHash = strings.Split(TokenInfo[i].BlockID, "-")[1]
+
+				AllTokens[i] = tokenDetail
 			}
-			tokenDetail.BlockNumber = blockNoInt
-			tokenDetail.BlockHash = strings.Split(bid, "-")[1]
 
-			AllTokens[i] = tokenDetail
-		}
+			eTrans := &ExplorerFTTrans{
+				FTBlockHash:     AllTokens,
+				CreatorDID:      creatorDID,
+				SenderDID:       did,
+				ReceiverDID:     rdid,
+				FTName:          req.FTName,
+				FTTransferCount: req.FTCount,
+				Network:         req.QuorumType,
+				FTSymbol:        "N/A",
+				Comments:        req.Comment,
+				TransactionID:   td.TransactionID,
+				PledgeInfo:      PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+				QuorumList:      extractQuorumDID(cr.QuorumList),
+				Amount:          TokenInfo[0].TokenValue * float64(req.FTCount),
+				FTTokenList:     FTTokenIDs,
+			}
+			c.ec.ExplorerFTTransaction(eTrans)
+			c.log.Info("Explorer submission completed", "transaction_id", td.TransactionID)
+		}()
 
-		eTrans := &ExplorerFTTrans{
-			FTBlockHash:     AllTokens,
-			CreatorDID:      creatorDID,
-			SenderDID:       did,
-			ReceiverDID:     rdid,
-			FTName:          req.FTName,
-			FTTransferCount: req.FTCount,
-			Network:         req.QuorumType,
-			FTSymbol:        "N/A",
-			Comments:        req.Comment,
-			TransactionID:   td.TransactionID,
-			PledgeInfo:      PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
-			QuorumList:      extractQuorumDID(cr.QuorumList),
-			Amount:          FTsForTxn[0].TokenValue * float64(req.FTCount),
-			FTTokenList:     FTTokenIDs,
-		}
+		// Pass the explorerDone channel to consensus request
+		cr.ExplorerDone = explorerDone
+
 		c.log.Info("FT Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
 		msg := fmt.Sprintf("FT Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
 		resp.Status = true
@@ -630,8 +844,6 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			resp.Message = "Failed to update FT table after transfer"
 			return
 		}
-
-		c.ec.ExplorerFTTransaction(eTrans)
 		c.UpdateUserInfo([]string{did})
 		// Send final transaction completion response if not already timed out
 		select {
@@ -643,25 +855,30 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		}
 
 	}()
-	select {
-	case result := <-resultChan:
-		// Transaction completed within 40s or failed
-		c.log.Debug("FT transaction completed before 20 secs")
-		return result
 
-	case <-time.After(20 * time.Second):
-		// Timeout occurred, return Transaction ID only
-		c.log.Debug("FT transaction still processing with txn id ", cr.TransactionID)
-
-		msg := fmt.Sprintf("FT Transaction is still processing, with transaction id %v ", cr.TransactionID)
-		resp.Message = msg
-		if strings.Contains(resp.Message, "with transaction id") {
-			if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
-				resp.Result = txID
+	if c.IsAsyncFTResponse() {
+		select {
+		case result := <-resultChan:
+			// Transaction completed within 20s or failed
+			c.log.Debug("FT transaction completed before 20 secs")
+			return result
+		case <-time.After(20 * time.Second):
+			// Timeout occurred, return Transaction ID only
+			c.log.Debug("FT transaction still processing with txn id ", cr.TransactionID)
+			msg := fmt.Sprintf("FT Transaction is still processing, with transaction id %v ", cr.TransactionID)
+			resp.Message = msg
+			if strings.Contains(resp.Message, "with transaction id") {
+				if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
+					resp.Result = txID
+				}
 			}
+			resp.Status = true
+			return resp
 		}
-		resp.Status = true
-		return resp
+	} else {
+		// Wait for the transaction to complete, no timeout
+		result := <-resultChan
+		return result
 	}
 }
 
@@ -780,4 +997,20 @@ func (c *Core) UnlockFTs() error {
 	}
 	c.log.Info("Unlocked FT")
 	return nil
+}
+
+// Helper to check config flag
+func (c *Core) IsAsyncFTResponse() bool {
+	// Return the actual config value
+	return c.cfg.CfgData.AsyncFTResponse
+}
+
+// FixAllFTTokensWithPeerIDAsCreator fixes all FT tokens that have peer ID as CreatorDID
+func (c *Core) FixAllFTTokensWithPeerIDAsCreator() ([]wallet.FTTokenFixResult, error) {
+	return c.w.FixAllFTTokensWithPeerIDAsCreator()
+}
+
+// GetFTTokenCreatorStats returns statistics about FT token creators
+func (c *Core) GetFTTokenCreatorStats() (map[string]interface{}, error) {
+	return c.w.GetFTTokenCreatorStats()
 }
