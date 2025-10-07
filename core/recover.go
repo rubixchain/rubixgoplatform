@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -173,6 +174,8 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 			TokenValue:    tokenInfo.TokenValue,
 			DID:           tokenInfo.OwnerDID,
 			TokenStatus:   wallet.TokenIsFree,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
 		}
 		c.w.CreateToken(&tokenDetails)
 	}

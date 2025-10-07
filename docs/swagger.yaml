@@ -1,4 +1,11 @@
 definitions:
+  model.ArbitrarySignRequest:
+    properties:
+      msg_to_sign:
+        type: string
+      signer_did:
+        type: string
+    type: object
   model.BasicResponse:
     properties:
       message:
@@ -1122,6 +1129,33 @@ paths:
       summary: Run Unpledge
       tags:
       - Account
+  /api/sign:
+    post:
+      consumes:
+      - application/json
+      description: Accepts a DID and message to request an arbitrary signature asynchronously.
+      operationId: arbitrary-signature
+      parameters:
+      - description: Arbitrary Signature Request
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/model.ArbitrarySignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Request Arbitrary Signature
+      tags:
+      - Signature
   /api/signature-response:
     post:
       consumes:
@@ -1222,6 +1256,42 @@ paths:
       summary: Unpledge POW Based pledge Tokens
       tags:
       - Account
+  /api/verify-signature:
+    get:
+      consumes:
+      - application/json
+      description: Verifies a signature for a given DID and signed message.
+      operationId: verify-arbitrary-signature
+      parameters:
+      - description: DID of the signer
+        in: query
+        name: signer_did
+        required: true
+        type: string
+      - description: Signed message
+        in: query
+        name: signed_msg
+        required: true
+        type: string
+      - description: Signature to verify
+        in: query
+        name: signature
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Verify Arbitrary Signature
+      tags:
+      - Signature
 securityDefinitions:
   SessionToken:
     in: header

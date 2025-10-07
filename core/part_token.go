@@ -340,6 +340,8 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 			TokenValue:    parts[i],
 			DID:           did,
 			TokenStatus:   wallet.TokenIsFree,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
 		}
 		err = c.w.CreateToken(ptkn)
 		if err != nil {

@@ -326,7 +326,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					for i := range tns {
 						ntd := token.GetTokenString(tls[i], tns[i])
 						tb := bytes.NewReader([]byte(ntd))
-						tid, err := c.ipfs.Add(tb)
+						tid, err := c.ipfsOps.Add(tb)
 						if err != nil {
 							c.log.Error("Failed to migrate, failed to add token file", "err", err)
 							return fmt.Errorf("failed to migrate, failed to add token file")
@@ -377,14 +377,14 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 							continue
 						}
 						tb := bytes.NewReader(tk)
-						tid, err := c.ipfs.Add(tb)
-						//tid, err := c.ipfs.Add(tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+						tid, err := c.ipfsOps.Add(tb)
+						//tid, err := IpfsAddWithBackoff(c.ipfs,tb, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 						if err != nil {
 							c.log.Error("Failed to migrate, failed to add token file", "err", err)
 							return fmt.Errorf("failed to migrate, failed to add token file")
 						}
 						if t != tid {
-							c.ipfs.Unpin(tid)
+							c.ipfsOps.Unpin(tid)
 							//c.log.Info("Token hash not matching Invalid token skipping : " + t)
 							invalidTokens = append(invalidTokens, t)
 							invalidMap[t] = true
@@ -427,7 +427,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					tn := tns[i]
 					tl := tls[i]
 					if !token.ValidateTokenDetials(tl, tn) {
-						c.ipfs.Unpin(t)
+						c.ipfsOps.Unpin(t)
 						//c.log.Info("Invalid token skipping : " + t)
 						invalidTokens = append(invalidTokens, t)
 						invalidMap[t] = true
@@ -446,7 +446,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 						c.log.Error("Failed to migrate, failed to read token chain files", "err", err)
 						return fmt.Errorf("failed to migrate, failed to read token chain files")
 					}
-					tcid, err := c.ipfs.Add(fb)
+					tcid, err := c.ipfsOps.Add(fb)
 					if err != nil {
 						c.log.Error("Failed to migrate, failed to add token chain file", "err", err)
 						return fmt.Errorf("failed to migrate, failed to add token chain file")
@@ -560,6 +560,8 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 							DID:         did,
 							TokenValue:  1,
 							TokenStatus: wallet.TokenIsFree,
+							CreatedAt:   time.Now(),
+							UpdatedAt:   time.Now(),
 						}
 						err = c.w.CreateToken(tkn)
 						if err != nil {

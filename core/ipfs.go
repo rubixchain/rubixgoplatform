@@ -54,12 +54,15 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			c.log.Error("failed to read ipfs config file", "err", err)
 			return err
 		}
-		port := fmt.Sprintf("%d", c.cfg.CfgData.Ports.SwarmPort)
-		configData = []byte(strings.Replace(string(configData), "4001", port, -1))
-		port = fmt.Sprintf("%d", c.cfg.CfgData.Ports.IPFSPort)
-		configData = []byte(strings.Replace(string(configData), "5001", port, -1))
-		port = fmt.Sprintf("%d", c.cfg.CfgData.Ports.IPFSAPIPort)
-		configData = []byte(strings.Replace(string(configData), "8080", port, -1))
+		// Replace ports more precisely to avoid unintended replacements
+		swarmPort := fmt.Sprintf("%d", c.cfg.CfgData.Ports.SwarmPort)
+		configData = []byte(strings.Replace(string(configData), "/tcp/4001", "/tcp/"+swarmPort, -1))
+		
+		apiPort := fmt.Sprintf("%d", c.cfg.CfgData.Ports.IPFSPort)
+		configData = []byte(strings.Replace(string(configData), "/tcp/5001", "/tcp/"+apiPort, -1))
+		
+		gatewayPort := fmt.Sprintf("%d", c.cfg.CfgData.Ports.IPFSAPIPort)
+		configData = []byte(strings.Replace(string(configData), "/tcp/8080", "/tcp/"+gatewayPort, -1))
 		f, err := os.OpenFile(ipfsConfigFile,
 			os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
@@ -80,7 +83,7 @@ func (c *Core) initIPFS(ipfsdir string) error {
 		}
 		time.Sleep(1 * time.Second)
 		c.runIPFS()
-		c.ipfs = ipfsnode.NewLocalShell()
+		c.ipfs = ipfsnode.NewShell(fmt.Sprintf("localhost:%d", c.cfg.CfgData.Ports.IPFSPort))
 		if c.ipfs == nil {
 			c.log.Error("failed create ipfs shell")
 			return fmt.Errorf("failed create ipfs shell")
@@ -142,6 +145,7 @@ func (c *Core) configIPFS() error {
 // runIPFS will run the IPFS
 func (c *Core) runIPFS() {
 	cmd := exec.Command(c.ipfsApp, "daemon", "--enable-pubsub-experiment")
+	c.ipfsCmd = cmd // Store the command reference
 	c.SetIPFSState(true)
 
 	stdout, err := cmd.StdoutPipe()
@@ -160,15 +164,64 @@ func (c *Core) runIPFS() {
 		c.log.Error("failed to start command", "err", err)
 		panic(err)
 	}
+	
+	// Store the process PID
+	if cmd.Process != nil {
+		c.ipfsPID = cmd.Process.Pid
+		c.log.Info("IPFS daemon started", "pid", c.ipfsPID, "repo", c.cfg.DirPath+".ipfs")
+	}
 
 	go func() {
 		<-c.ipfsChan
-		if err := cmd.Process.Kill(); err != nil {
-			c.log.Error("failed to kill ipfs daemon", "err", err)
+		c.log.Info("IPFS daemon shutdown requested")
+		
+		// Try graceful shutdown first with interrupt signal
+		if runtime.GOOS == "windows" {
+			// Windows: Kill only this specific process
+			if cmd.Process != nil {
+				c.log.Info("Killing IPFS process", "pid", c.ipfsPID)
+				if err := cmd.Process.Kill(); err != nil {
+					c.log.Error("failed to kill ipfs daemon", "err", err, "pid", c.ipfsPID)
+				} else {
+					c.log.Info("Killed IPFS process successfully", "pid", c.ipfsPID)
+				}
+			}
+		} else {
+			// Unix-like systems: try SIGTERM first, then SIGKILL
+			if cmd.Process != nil {
+				c.log.Info("Sending interrupt to IPFS process", "pid", c.ipfsPID)
+				cmd.Process.Signal(os.Interrupt)
+			}
+			
+			// Give it 5 seconds to shutdown gracefully
+			done := make(chan error, 1)
+			go func() {
+				done <- cmd.Wait()
+			}()
+			
+			select {
+			case <-done:
+				// Process exited gracefully
+				c.log.Info("IPFS daemon stopped gracefully")
+			case <-time.After(5 * time.Second):
+				// Force kill after timeout
+				c.log.Warn("IPFS daemon didn't stop gracefully, forcing kill")
+				if err := cmd.Process.Kill(); err != nil {
+					c.log.Error("failed to kill ipfs daemon", "err", err)
+				}
+				// Wait for the process to actually exit
+				if err := cmd.Wait(); err != nil {
+					c.log.Debug("IPFS process wait error (expected after kill)", "err", err)
+				}
+			}
 		}
-		c.log.Info("IPFS daemon requested to close")
-		c.log.Info("IPFS daemon finished")
+		
+		c.log.Info("IPFS daemon process terminated")
 		c.SetIPFSState(false)
+		
+		// Close stdin/stdout to release any blocked reads
+		stdin.Close()
+		stdout.Close()
 	}()
 
 	scanner := bufio.NewScanner(stdout)
@@ -188,7 +241,8 @@ func (c *Core) runIPFS() {
 		c.log.Info(m)
 	}
 
-	//time.Sleep(15 * time.Second)
+	// Wait for IPFS to be ready before continuing
+	time.Sleep(5 * time.Second)
 }
 
 // RunIPFS will run the IPFS daemon
@@ -203,14 +257,35 @@ func (c *Core) RunIPFS() error {
 
 	c.runIPFS()
 
-	c.ipfs = ipfsnode.NewLocalShell()
+	// Wait for IPFS daemon to be ready
+	time.Sleep(5 * time.Second)
+
+	c.ipfs = ipfsnode.NewShell(fmt.Sprintf("localhost:%d", c.cfg.CfgData.Ports.IPFSPort))
 
 	if c.ipfs == nil {
 		c.log.Error("failed create ipfs shell")
 		return fmt.Errorf("failed create ipfs shell")
 	}
 
-	idoutput, err := c.ipfs.ID()
+	// Initialize IPFS health manager
+	c.ipfsHealth = NewIPFSHealthManager(c.ipfs, c.cfg, c.log)
+
+	// Initialize IPFS recovery manager
+	c.ipfsRecovery = NewIPFSRecoveryManager(c)
+
+	// Initialize IPFS operations wrapper
+	c.ipfsOps = NewIPFSOperations(c)
+
+	// Initialize IPFS scalability manager
+	c.ipfsScalability = NewIPFSScalabilityManager(c)
+	
+	// Initialize connection recovery manager
+	c.connRecovery = NewConnectionRecovery(c.log)
+	
+	// Initialize P2P reconnect manager
+	c.p2pReconnect = NewP2PReconnectManager(c)
+
+	idoutput, err := c.ipfsOps.ID()
 	if err != nil {
 		c.log.Error("unable to get peer id", "err", err)
 		return err
@@ -239,12 +314,38 @@ func (c *Core) stopIPFS() {
 	if !c.GetIPFSState() {
 		return
 	}
+
+	// Stop scalability manager first
+	if c.ipfsScalability != nil {
+		c.ipfsScalability.Stop()
+	}
+
+	// Stop health manager
+	if c.ipfsHealth != nil {
+		c.ipfsHealth.Stop()
+	}
+
+	// Stop recovery manager
+	if c.ipfsRecovery != nil {
+		c.ipfsRecovery.Stop()
+	}
+
 	c.ipfsChan <- true
+	// Wait for IPFS to stop with a timeout
+	timeout := time.After(10 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	
 	for {
-		if !c.GetIPFSState() {
-			break
-		} else {
-			time.Sleep(10 * time.Millisecond)
+		select {
+		case <-timeout:
+			c.log.Error("Timeout waiting for IPFS to stop")
+			return
+		case <-ticker.C:
+			if !c.GetIPFSState() {
+				c.log.Info("IPFS stopped successfully")
+				return
+			}
 		}
 	}
 }
@@ -281,7 +382,7 @@ func (c *Core) AddBootStrap(peers []string) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.ipfs.BootstrapAdd(peers)
+	_, err = c.ipfsOps.BootstrapAdd(peers)
 	return err
 }
 
@@ -307,12 +408,12 @@ func (c *Core) RemoveBootStrap(peers []string) error {
 		if err != nil {
 			return err
 		}
-		_, err = c.ipfs.BootstrapRmAll()
+		_, err = c.ipfsOps.BootstrapRmAll()
 		if err != nil {
 			return err
 		}
 		if len(c.cfg.CfgData.BootStrap) != 0 {
-			_, err = c.ipfs.BootstrapAdd(c.cfg.CfgData.BootStrap)
+			_, err = c.ipfsOps.BootstrapAdd(c.cfg.CfgData.BootStrap)
 		}
 		return err
 	}
@@ -325,7 +426,7 @@ func (c *Core) RemoveAllBootStrap() error {
 	if err != nil {
 		return err
 	}
-	_, err = c.ipfs.BootstrapRmAll()
+	_, err = c.ipfsOps.BootstrapRmAll()
 	if err != nil {
 		return err
 	}

@@ -20,7 +20,16 @@ import (
 func (s *Server) RunUnpledgeHandle(req *ensweb.Request) *ensweb.Result {
 	var resp model.BasicResponse
 
-	msg, err := s.c.InititateUnpledgeProcess()
+	var msg string
+	var err error
+	
+	// Check if optimized unpledging is enabled
+	if s.c.GetConfig() != nil && s.c.GetConfig().CfgData.EnableOptimizedUnpledge {
+		msg, err = s.c.InitiateOptimizedUnpledgeProcess()
+	} else {
+		msg, err = s.c.InititateUnpledgeProcess()
+	}
+	
 	if err != nil {
 		errMsg := fmt.Sprintf("%v: %v", setup.APIRunUnpledge, err.Error())
 		resp.Status = false

@@ -44,7 +44,9 @@ func NewAdapter(cfg *config.Config) (*Adapter, error) {
 		dsn := fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable", cfg.DBAddress, cfg.DBPort, cfg.DBUserName, cfg.DBName, cfg.DBPassword)
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	case sqlite3:
-		db, err = gorm.Open(sqlite.Open(cfg.DBAddress), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		// Enable WAL mode for better concurrent access
+		// This is safe for existing databases - SQLite will automatically migrate
+		db, err = gorm.Open(sqlite.Open(cfg.DBAddress+"?_journal_mode=WAL&_busy_timeout=5000"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	default:
 		dsn := fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s", cfg.DBUserName, cfg.DBPassword, cfg.DBAddress, cfg.DBPort, cfg.DBName)
 		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})

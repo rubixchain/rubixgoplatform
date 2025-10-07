@@ -40,5 +40,22 @@ type DIDFromPubKeyRequest struct {
 
 // DIDFromPubKeyResponse to receive request to create did for provided pub key
 type DIDFromPubKeyResponse struct {
-	DID    string `json:"did"`
+	DID string `json:"did"`
+}
+
+// Arbitrary sign request
+type ArbitrarySignRequest struct {
+	SignerDID string `json:"signer_did"`
+	MsgToSign string `json:"msg_to_sign"`
+}
+
+// Arbitrary sign request
+type SignVerificationRequest struct {
+	SignerDID string `json:"signer_did"`
+	SignedMsg string `json:"signed_msg"`
+	Signature string `json:"signature"`
+}
+
+type Signature struct {
+	Signature string `json:"signature"`
 }

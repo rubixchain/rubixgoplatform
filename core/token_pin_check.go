@@ -40,6 +40,17 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 	var result MultiPinCheckRes
 	result.Token = token
 	var owners []string
+	
+	// Skip DHT check in trusted network mode
+	if c.cfg.CfgData.TrustedNetwork {
+		c.log.Debug("Skipping multi-pin check in trusted network mode", "token", token)
+		result.Status = false
+		result.Owners = []string{senderPeerId} // Assume sender owns it
+		result.Error = nil
+		results[index] = result
+		return
+	}
+	
 	provList, err := c.GetDHTddrs(token)
 	if err != nil {
 		c.log.Error("Error triggered while fetching providers ", "error", err)

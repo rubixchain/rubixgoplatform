@@ -34,6 +34,8 @@ const (
 	FTTokenStorage                 string = "FTTokenTable"
 	FTChainStorage                 string = "FTchainstorage"
 	FTStorage                      string = "FTTable"
+	FTTransactionTokenStorage      string = "FTTransactionTokens"
+	FailedFTDownloadStorage        string = "FailedFTDownloads"
 	FullNodeStorage                string = "Fullnodestorage"
 	FullNodeRBTTable               string = "FullnodeRBTtable"
 	FullNodeFTTable                string = "FullnodeFTtable"
@@ -60,6 +62,7 @@ type ChainDB struct {
 
 type Wallet struct {
 	ipfs                           *ipfsnode.Shell
+	ipfsOps                        IPFSOperations
 	s                              storage.Storage
 	fullNodeSQLDB                  storage.Storage
 	l                              sync.Mutex
@@ -71,8 +74,19 @@ type Wallet struct {
 	ntcs                           *ChainDB
 	smartContractTokenChainStorage *ChainDB
 	FTChainStorage                 *ChainDB
+	asyncProviderMgr               *AsyncProviderDetailsManager
 	fullNodeStorage                *ChainDB
 	IsFullNode                     bool
+}
+
+// GetStorage returns the storage interface
+func (w *Wallet) GetStorage() storage.Storage {
+	return w.s
+}
+
+// GetIpfsOps returns the IPFS operations interface
+func (w *Wallet) GetIpfsOps() IPFSOperations {
+	return w.ipfsOps
 }
 
 func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, dir string, log logger.Logger, fullNode bool) (*Wallet, error) {
@@ -170,6 +184,19 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, dir string, lo
 	if err != nil {
 		w.log.Error("Failed to initialize FT storage", "err", err)
 	}
+	err = w.s.Init(FTTransactionTokenStorage, &model.FTTransactionToken{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize FT transaction token storage", "err", err)
+	}
+	err = w.s.Init(FTTransactionHistoryStorage, &model.FTTransactionHistory{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize FT transaction history storage", "err", err)
+	}
+	// Initialize token recovery tracking table
+	err = w.s.Init("TokenRecovery", &model.TokenRecovery{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize token recovery storage", "err", err)
+	}
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)
 	if err != nil {
@@ -195,6 +222,12 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, dir string, lo
 		w.log.Error("Failed to initialize TokenStateHash", "err", err)
 		return nil, err
 	}
+
+	// Initialize async provider details manager with 2 workers
+	w.asyncProviderMgr = NewAsyncProviderDetailsManager(w, 2)
+
+	// Initialize async provider details manager with 2 workers
+	w.asyncProviderMgr = NewAsyncProviderDetailsManager(w, 2)
 
 	// DB for fullnodes to store all token-chains
 	if w.IsFullNode {
@@ -235,9 +268,28 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, dir string, lo
 			return nil, err
 		}
 	}
+	
 	return w, nil
 }
 
 func (w *Wallet) SetupWallet(ipfs *ipfsnode.Shell) {
 	w.ipfs = ipfs
+	// Default to direct IPFS operations if no health-managed operations are set
+	if w.ipfsOps == nil {
+		w.ipfsOps = NewDirectIPFSOperations(ipfs)
+	}
+}
+
+// SetIPFSOperations sets the IPFS operations interface (for health-managed operations)
+func (w *Wallet) SetIPFSOperations(ops IPFSOperations) {
+	w.ipfsOps = ops
+}
+
+// Re-export StorageType for convenience
+// StorageType is used for batch writes (Key, Value)
+type StorageType = storage.StorageType
+
+// S returns the storage interface (for batch writes)
+func (w *Wallet) S() storage.Storage {
+	return w.s
 }

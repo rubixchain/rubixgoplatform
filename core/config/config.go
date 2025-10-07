@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // Ports defines varies ports used
 type Ports struct {
 	SendPort     uint16 `json:"sender_port"`
@@ -24,14 +26,44 @@ type StorageConfig struct {
 	DBPassword  string `json:"db_password"`
 }
 
+// IPFSRecoveryConfig defines IPFS recovery configuration
+type IPFSRecoveryConfig struct {
+	MaxRecoveries   int           `json:"max_recoveries"`   // Maximum recovery attempts
+	RestartDelay    time.Duration `json:"restart_delay"`    // Delay between restart attempts
+	HealthTimeout   time.Duration `json:"health_timeout"`   // Timeout for health checks
+	MonitorInterval time.Duration `json:"monitor_interval"` // Health monitoring interval
+}
+
+// UnpledgePoolConfig defines unpledge worker pool configuration
+type UnpledgePoolConfig struct {
+	MaxWorkers        int           `json:"max_workers"`
+	QueueSize         int           `json:"queue_size"`
+	BatchSize         int           `json:"batch_size"`
+	TokenConcurrency  int           `json:"token_concurrency"`
+	ShutdownTimeout   time.Duration `json:"shutdown_timeout"`
+	EnableMetrics     bool          `json:"enable_metrics"`
+}
+
 // ConfigData defines configuration data
 type ConfigData struct {
-	Ports             Ports             `json:"ports"`
-	BootStrap         []string          `json:"bootstrap"`
-	TestBootStrap     []string          `json:"test_bootstrap"`
-	Services          map[string]string `json:"services"`
-	StorageConfig     StorageConfig     `json:"storage_config"`
-	TestStorageConfig StorageConfig     `json:"test_storage_config"`
+	Ports             Ports              `json:"ports"`
+	BootStrap         []string           `json:"bootstrap"`
+	TestBootStrap     []string           `json:"test_bootstrap"`
+	Services          map[string]string  `json:"services"`
+	StorageConfig     StorageConfig      `json:"storage_config"`
+	TestStorageConfig StorageConfig      `json:"test_storage_config"`
+	AsyncFTResponse   bool               `json:"async_ft_response"`
+	IPFSRecovery      *IPFSRecoveryConfig `json:"ipfs_recovery"`
+	TrustedNetwork    bool               `json:"trusted_network"` // Skip DHT/pin checks for trusted networks
+	UnpledgeConfig    *UnpledgePoolConfig `json:"unpledge_config"`
+	EnableOptimizedUnpledge bool         `json:"enable_optimized_unpledge"`
+}
+
+func NewDefaultConfigData() ConfigData {
+	return ConfigData{
+		AsyncFTResponse: true,
+		EnableOptimizedUnpledge: true,
+	}
 }
 
 type Config struct {
@@ -50,5 +82,4 @@ type ServiceConfig struct {
 	DBType          string `json:"db_type"`          // DBType is type of database to use
 	DBUserName      string `json:"db_user_name"`     // DBUserName is the user name for the DB
 	DBPassword      string `json:"db_password"`      // DBPassword is the password  for the user
-
 }

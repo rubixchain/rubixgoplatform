@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -32,6 +33,11 @@ type DIDChan struct {
 	Finish  chan bool
 	Req     *ensweb.Request
 	Timeout time.Duration
+	
+	// Password caching fields for request-scoped authentication
+	CachedPassword string       // Cached password for this request
+	PasswordSet    bool         // Flag to track if password is set
+	PasswordMutex  sync.RWMutex // Thread-safe access to password cache
 }
 
 type DID struct {

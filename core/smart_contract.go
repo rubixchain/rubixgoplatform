@@ -84,7 +84,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 	defer binaryCodeFile.Close()
 
 	// Add binary code file to IPFS
-	binaryCodeHash, err := c.ipfs.Add(binaryCodeFile)
+	binaryCodeHash, err := IpfsAddWithBackoff(c.ipfs, binaryCodeFile)
 	if err != nil {
 		c.log.Error("Failed to add binary code file to IPFS", "err", err)
 		return basicResponse
@@ -99,7 +99,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 	defer rawCodeFile.Close()
 
 	// Add raw code file to IPFS
-	rawCodeHash, err := c.ipfs.Add(rawCodeFile)
+	rawCodeHash, err := IpfsAddWithBackoff(c.ipfs, rawCodeFile)
 	if err != nil {
 		c.log.Error("Failed to add raw code file to IPFS", "err", err)
 		return basicResponse
@@ -114,7 +114,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 	defer schemaCodeFile.Close()
 
 	// Add Schema code file to IPFS
-	schemaCodeHash, err := c.ipfs.Add(schemaCodeFile)
+	schemaCodeHash, err := IpfsAddWithBackoff(c.ipfs, schemaCodeFile)
 	if err != nil {
 		c.log.Error("Failed to add Schema code file to IPFS", "err", err)
 		return basicResponse
@@ -139,7 +139,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		return basicResponse
 	}
 
-	smartContractTokenHash, err := c.ipfs.Add(bytes.NewReader(smartContractTokenJSON))
+	smartContractTokenHash, err := IpfsAddWithBackoff(c.ipfs, bytes.NewReader(smartContractTokenJSON))
 	if err != nil {
 		c.log.Error("Failed to add SmartContractToken to IPFS", "err", err)
 		return basicResponse
@@ -178,7 +178,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		Status: false,
 	}
 
-	smartContractTokenJSON, err := c.ipfs.Cat(fetchSmartContractRequest.SmartContractToken)
+	smartContractTokenJSON, err := c.ipfsOps.Cat(fetchSmartContractRequest.SmartContractToken)
 	if err != nil {
 		c.log.Error("Failed to get smart contract from network", "err", err)
 		return basicResponse
@@ -203,7 +203,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 
 	// Fetch and store the binary code file
-	binaryCodeFile, err := c.ipfs.Cat(smartContractToken.BinaryCodeHash)
+	binaryCodeFile, err := c.ipfsOps.Cat(smartContractToken.BinaryCodeHash)
 	if err != nil {
 		c.log.Error("Failed to fetch binary code file from network", "err", err)
 		return basicResponse
@@ -234,7 +234,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 
 	// Fetch and store the raw code file
-	rawCodeFile, err := c.ipfs.Cat(smartContractToken.RawCodeHash)
+	rawCodeFile, err := c.ipfsOps.Cat(smartContractToken.RawCodeHash)
 	if err != nil {
 		c.log.Error("Failed to fetch raw code file from IPFS", "err", err)
 		return basicResponse
@@ -265,7 +265,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 
 	// Fetch and store the Schema code file
-	schemaCodeFile, err := c.ipfs.Cat(smartContractToken.SchemaCodeHash)
+	schemaCodeFile, err := c.ipfsOps.Cat(smartContractToken.SchemaCodeHash)
 	if err != nil {
 		c.log.Error("Failed to fetch Schema code file from IPFS", "err", err)
 		return basicResponse
@@ -302,13 +302,13 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	}
 
 	if smartContractToken.PeerID != "" {
-		smartContractOriginPeer, err := c.getPeer(smartContractToken.PeerID+"."+smartContractToken.DID)
+		smartContractOriginPeer, err := c.getPeer(smartContractToken.PeerID + "." + smartContractToken.DID)
 		if err != nil {
 			basicResponse.Message = fmt.Sprintf("unable to get the peer for DID: %v, err: %v ", smartContractToken.DID, err)
 			return basicResponse
 		}
 
-		errSync := c.syncTokenChainFrom(smartContractOriginPeer, "", fetchSmartContractRequest.SmartContractToken, c.TokenType("sc"))
+		errSync, _ := c.syncTokenChainFrom(smartContractOriginPeer, "", fetchSmartContractRequest.SmartContractToken, c.TokenType("sc"))
 		if errSync != nil {
 			basicResponse.Message = fmt.Sprintf("unable to sync token chain for contract: %v, err: %v", fetchSmartContractRequest.SmartContractToken, errSync)
 			return basicResponse
@@ -419,7 +419,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		c.log.Error("Failed to get peer", "err", err)
 		return
 	}
-	err = c.syncTokenChainFrom(p, "", smartContractToken, tokenType)
+	err, _ = c.syncTokenChainFrom(p, "", smartContractToken, tokenType)
 	if err != nil {
 		c.log.Error("Failed to sync token chain block", "err", err)
 		return

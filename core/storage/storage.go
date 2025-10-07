@@ -19,5 +19,5 @@ type Storage interface {
 
 type StorageType struct {
 	Key   string
-	Value string
+	Value interface{}
 }
