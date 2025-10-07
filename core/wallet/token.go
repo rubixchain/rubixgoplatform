@@ -1668,6 +1668,8 @@ func (w *Wallet) GetAllSmartContractsbyDID(did string) ([]SyncedSmartContract, e
 		return nil, err
 	}
 	return t, nil
+}
+
 // Store failed transactions in fullnode DB for later analysis and retry
 func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) error {
 	w.l.Lock()
