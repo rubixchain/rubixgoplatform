@@ -5,10 +5,12 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
-func (c *Client) DumpTokenChain(token string, blockID string) (*model.TCDumpReply, error) {
+func (c *Client) DumpTokenChain(token string, blockID string, fullnodeToken bool, assetType string) (*model.TCDumpReply, error) {
 	dr := &model.TCDumpRequest{
-		Token:   token,
-		BlockID: blockID,
+		Token:         token,
+		BlockID:       blockID,
+		FullnodeToken: fullnodeToken,
+		AssetType:     assetType,
 	}
 	var drep model.TCDumpReply
 	err := c.sendJSONRequest("POST", setup.APIDumpTokenChainBlock, nil, dr, &drep)

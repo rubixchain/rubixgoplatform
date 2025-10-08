@@ -113,10 +113,11 @@ const (
 	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
 	ArbitrarySignCmd               string = "sign"
 	VerifySignatureCmd             string = "verify-signature"
-  AsyncFTStatusCmd               string = "asyncftstatus"
+	AsyncFTStatusCmd               string = "asyncftstatus"
 	SetAsyncFTStatusCmd            string = "setasyncftstatus"
 	FixFTCreatorCmd                string = "fix-ft-creator"
 	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
+	DumpFullNodeTokenChainCmd      string = "fullnodedumptokenchain"
 )
 
 var commands = []string{VersionCmd,
@@ -192,6 +193,7 @@ var commands = []string{VersionCmd,
 	SetAsyncFTStatusCmd,
 	FixFTCreatorCmd,
 	GetFTCreatorStatsCmd,
+	DumpFullNodeTokenChainCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -366,6 +368,8 @@ type Command struct {
 	backupDB                     bool
 	fullNode                     bool
 	publishTokenChainDetails     bool
+	dumpFullnodeTokenChain       bool
+	assetType                    string
 }
 
 func showVersion() {
@@ -760,6 +764,8 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.backupDB, "backupDB", false, "Create backup of database before starting node")
 	flag.BoolVar(&cmd.publishTokenChainDetails, "publishTokenchain", false, "Publish tokenchain details to pubsub")
 	flag.BoolVar(&cmd.fullNode, "fullnode", false, "receive all published transactions and tokenchain details")
+	flag.BoolVar(&cmd.dumpFullnodeTokenChain, "fullnodetoken", false, "dump tokenchain from fullnode storage")
+	flag.StringVar(&cmd.assetType, "assettype", "rbt", "DID of the signer")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

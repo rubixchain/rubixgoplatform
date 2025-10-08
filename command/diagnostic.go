@@ -156,7 +156,7 @@ func (cmd *Command) dumpTokenChain() {
 	blocks := make([]map[string]interface{}, 0)
 	blockID := ""
 	for {
-		ds, err := cmd.c.DumpTokenChain(cmd.token, blockID)
+		ds, err := cmd.c.DumpTokenChain(cmd.token, blockID, cmd.dumpFullnodeTokenChain, cmd.assetType)
 		if err != nil {
 			cmd.log.Error("Failed to dump token chain", "err", err)
 			return
