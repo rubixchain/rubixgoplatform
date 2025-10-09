@@ -237,7 +237,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.CreateFTReqSwaggoInput"
+                            "$ref": "#/definitions/model.CreateFTReq"
                         }
                     }
                 ],
@@ -1729,6 +1729,32 @@ const docTemplate = `{
                 }
             }
         },
+        "model.CreateFTReq": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "from_rbt": {
+                    "type": "boolean"
+                },
+                "ft_count": {
+                    "type": "integer"
+                },
+                "ft_name": {
+                    "type": "string"
+                },
+                "ft_num_start_index": {
+                    "type": "integer"
+                },
+                "ft_value": {
+                    "type": "number"
+                },
+                "is_high_value": {
+                    "type": "boolean"
+                }
+            }
+        },
         "model.DIDFromPubKeyResponse": {
             "type": "object",
             "properties": {
@@ -1748,6 +1774,9 @@ const docTemplate = `{
                 },
                 "ft_name": {
                     "type": "string"
+                },
+                "ft_total_value": {
+                    "type": "number"
                 },
                 "high_value_ft": {
                     "type": "boolean"
@@ -1907,26 +1936,6 @@ const docTemplate = `{
                 },
                 "high_value_ft": {
                     "type": "boolean"
-                }
-            }
-        },
-        "server.CreateFTReqSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "did": {
-                    "type": "string"
-                },
-                "ft_count": {
-                    "type": "integer"
-                },
-                "ft_name": {
-                    "type": "string"
-                },
-                "ft_num_start_index": {
-                    "type": "integer"
-                },
-                "token_count": {
-                    "type": "integer"
                 }
             }
         },
