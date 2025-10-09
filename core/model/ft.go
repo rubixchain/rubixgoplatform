@@ -29,16 +29,19 @@ type GetFTInfo struct {
 }
 
 type FTInfo struct {
-	FTName      string `json:"ft_name"`
-	FTCount     int    `json:"ft_count"`
-	CreatorDID  string `json:"creator_did"`
-	HighValueFT bool   `json:"high_value_ft"`
+	FTName       string  `json:"ft_name"`
+	FTCount      int     `json:"ft_count"`
+	CreatorDID   string  `json:"creator_did"`
+	HighValueFT  bool    `json:"high_value_ft"`
+	FTTotalValue float64 `json:"ft_total_value"`
 }
 
 type FTInfoForExplorer struct {
-	FTName     string `json:"ft_symbol"`
-	FTCount    int    `json:"ft_balance"`
-	CreatorDID string `json:"creator_did"`
+	FTName       string  `json:"ft_symbol"`
+	FTCount      int     `json:"ft_balance"`
+	CreatorDID   string  `json:"creator_did"`
+	HighValueFT  bool    `json:"high_value_ft"`
+	FTTotalValue float64 `json:"ft_total_value"`
 }
 
 type BurnFTReq struct {

@@ -419,7 +419,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 	}
 
 	finalFTCreatedCount := ftStartIndex + loopCount
-	err = c.UpsertFTTable(FTName, did, finalFTCreatedCount, loopCount)
+	err = c.UpsertFTTable(FTName, did, finalFTCreatedCount, loopCount, isHighValueFt)
 	if err != nil {
 		c.log.Error("Failed to update FT index", "err", err)
 		return fmt.Errorf("failed to finalize FT table update: %w", err)
@@ -437,22 +437,53 @@ func (c *Core) GetFTInfoByDID(did string) ([]model.FTInfo, error) {
 		c.log.Error("Failed to get tokens FTs and Count", "err", err)
 		return []model.FTInfo{}, fmt.Errorf("Failed to get tokens FTs and Count")
 	}
-	ftInfoMap := make(map[string]map[string]int)
+	// Build map keyed by ft_name -> creator_did with count and total value
+	type FTBalanceSummary struct {
+		Count int
+		Total float64
+		High  bool
+	}
+	ftInfoMap := make(map[string]map[string]*FTBalanceSummary)
 
 	// Iterate through retrieved FTs and populate the map
 	for _, t := range FT {
 		if ftInfoMap[t.FTName] == nil {
-			ftInfoMap[t.FTName] = make(map[string]int) // Initialize map for each FTName
+			ftInfoMap[t.FTName] = make(map[string]*FTBalanceSummary)
 		}
-		ftInfoMap[t.FTName][t.CreatorDID] += t.FTCount // Increment count for the specific CreatorDID
+		if ftInfoMap[t.FTName][t.CreatorDID] == nil {
+			ftInfoMap[t.FTName][t.CreatorDID] = &FTBalanceSummary{}
+		}
+		// Count is already aggregated by wallet layer; track it
+		ftInfoMap[t.FTName][t.CreatorDID].Count += t.FTCount
+		// Determine if this FT is high value by looking up FT table row
+		var meta wallet.FT
+		if readErr := c.s.Read(wallet.FTStorage, &meta, "ft_name=? AND creator_did=?", t.FTName, t.CreatorDID); readErr == nil {
+			ftInfoMap[t.FTName][t.CreatorDID].High = meta.HighValueFT
+		}
+		// If HVFT, compute total by summing token values of free tokens for this did+name
+		// We'll compute totals after the loop to avoid repeated queries
 	}
 	info := make([]model.FTInfo, 0)
-	for ftName, creatorCounts := range ftInfoMap {
-		for creatorDID, count := range creatorCounts {
+	for ftName, creators := range ftInfoMap {
+		for creatorDID, balanceSummary := range creators {
+			totalValue := 0.0
+			if balanceSummary.High {
+				// Sum token_value of free tokens for this DID+name
+				var tokens []wallet.FTToken
+				if err := c.s.Read(wallet.FTTokenStorage, &tokens, "owner_did=? AND token_status=? AND ft_name=?", did, wallet.TokenIsFree, ftName); err == nil {
+					for _, tok := range tokens {
+						if tok.CreatorDID == creatorDID {
+							totalValue += tok.TokenValue
+						}
+					}
+				}
+			}
 			info = append(info, model.FTInfo{
-				FTName:     ftName,
-				FTCount:    count,
-				CreatorDID: creatorDID,
+				FTName:       ftName,
+				FTCount:      balanceSummary.Count,
+				CreatorDID:   creatorDID,
+				HighValueFT:  balanceSummary.High,
+				FTTotalValue: totalValue,
 			})
 		}
 	}
@@ -584,12 +615,11 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		c.log.Error("Failed to get FTs", "err", err)
 		resp.Message = "Insufficient FTs or FTs are locked or " + err.Error()
 		return resp
-	} else {
-		if req.FTCount > AvailableFTCount {
-			c.log.Error(fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount))
-			resp.Message = fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount)
-			return resp
-		}
+	}
+	if req.FTCount > AvailableFTCount {
+		c.log.Error(fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount))
+		resp.Message = fmt.Sprint("Insufficient balance, Available FT balance is ", AvailableFTCount, " trnx value is ", req.FTCount)
+		return resp
 	}
 
 	// Select tokens based on high-value FT mode or standard count-based mode
@@ -702,8 +732,9 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		ReqID: reqID,
 	}
 	FTData := model.FTInfo{
-		FTName:  req.FTName,
-		FTCount: req.FTCount,
+		FTName:      req.FTName,
+		FTCount:     req.FTCount,
+		HighValueFT: req.IsHighValueFT,
 	}
 	sc := contract.CreateNewContract(sct)
 	err = sc.UpdateSignature(dc)
@@ -934,7 +965,7 @@ func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
 	return result, nil
 }
 
-func (c *Core) UpsertFTTable(ftName string, creatorDid string, newTotalFTCreatedCount int, numFTsCreatedInThisCall int) error {
+func (c *Core) UpsertFTTable(ftName string, creatorDid string, newTotalFTCreatedCount int, numFTsCreatedInThisCall int, isHighValue bool) error {
 	var existingFt wallet.FT
 
 	err := c.s.Read(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDid)
@@ -946,6 +977,7 @@ func (c *Core) UpsertFTTable(ftName string, creatorDid string, newTotalFTCreated
 				FTCreatedCount:   newTotalFTCreatedCount,
 				FTAvailableCount: numFTsCreatedInThisCall,
 				FTCount:          numFTsCreatedInThisCall, // Keep old field in sync for backwards compatibility
+				HighValueFT:      isHighValue,
 			}
 
 			if writeErr := c.s.Write(wallet.FTStorage, newFT); writeErr != nil {
@@ -960,6 +992,7 @@ func (c *Core) UpsertFTTable(ftName string, creatorDid string, newTotalFTCreated
 	existingFt.FTCreatedCount = newTotalFTCreatedCount
 	existingFt.FTAvailableCount += numFTsCreatedInThisCall
 	existingFt.FTCount = existingFt.FTAvailableCount // Keep old field in sync for backwards compatibility
+	existingFt.HighValueFT = isHighValue
 
 	updateErr := c.s.Update(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDid)
 	if updateErr != nil {

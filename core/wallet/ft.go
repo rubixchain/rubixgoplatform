@@ -25,4 +25,5 @@ type FT struct {
 	FTCreatedCount   int    `gorm:"column:ft_created_count"`
 	FTAvailableCount int    `gorm:"column:ft_available_count"`
 	CreatorDID       string `gorm:"column:creator_did"`
+	HighValueFT      bool   `gorm:"column:high_value_ft"`
 }
