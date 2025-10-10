@@ -189,9 +189,10 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 				}
 			}
 
-			RBTLockStatus := block.RBTNotLocked
-			if fromRBT && !isHighValueFt {
-				RBTLockStatus = block.RBTLocked
+			// Default lock status is Locked (1). For high-value FT created without RBT, set NotLocked (0).
+			RBTLockStatus := block.RBTLocked
+			if isHighValueFt && !fromRBT {
+				RBTLockStatus = block.RBTNotLocked
 			}
 
 			bti := &block.TransInfo{
@@ -404,6 +405,12 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 		return err
 	}
 
+	// Set/ensure HighValueFT flag for this FT (preserved during refresh)
+	if setErr := c.setFTHighValueFlag(FTName, did, isHighValueFt); setErr != nil {
+		c.log.Error("Failed to set HighValueFT flag before refresh", "err", setErr)
+		// continue; non-fatal
+	}
+
 	// Refresh FTTable using full recompute to ensure IDs are populated
 	// Here the main issue is that, the ID in this table is string, which ideally should be integer. inorder to maintain backward compatibility we had to use this function.
 	// This needs to be updated such that the existing table will get migrated or some work around needs to be done.
@@ -412,6 +419,29 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 		return err
 	}
 	return nil
+}
+
+// setFTHighValueFlag upserts only the HighValueFT flag for a given (ft_name, creator_did)
+func (c *Core) setFTHighValueFlag(ftName string, creatorDid string, isHigh bool) error {
+	var existingFt wallet.FT
+	err := c.s.Read(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDid)
+	if err != nil {
+		if strings.Contains(fmt.Sprint(err), "no records found") {
+			// Insert minimal row so refresh can preserve the flag
+			newFT := &wallet.FT{
+				FTName:      ftName,
+				CreatorDID:  creatorDid,
+				HighValueFT: isHigh,
+			}
+			if writeErr := c.s.Write(wallet.FTStorage, newFT); writeErr != nil {
+				return writeErr
+			}
+			return nil
+		}
+		return err
+	}
+	existingFt.HighValueFT = isHigh
+	return c.s.Update(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDid)
 }
 
 func (c *Core) GetFTInfoByDID(did string) ([]model.FTInfo, error) {
@@ -1005,6 +1035,17 @@ func (c *Core) updateFTTable() error {
 			return err
 		}
 	}
+	// Read existing FTTable to preserve HighValueFT flags
+	var existing []wallet.FT
+	_ = c.s.Read(wallet.FTStorage, &existing, "1 = 1")
+	hvftMap := make(map[string]map[string]bool)
+	for i := range existing {
+		if hvftMap[existing[i].FTName] == nil {
+			hvftMap[existing[i].FTName] = make(map[string]bool)
+		}
+		hvftMap[existing[i].FTName][existing[i].CreatorDID] = existing[i].HighValueFT
+	}
+
 	err = c.s.Delete(wallet.FTStorage, &wallet.FT{}, "ft_name!=?", "")
 	ReadErr := fmt.Sprint(err)
 	if err != nil {
@@ -1015,6 +1056,10 @@ func (c *Core) updateFTTable() error {
 		return err
 	}
 	for _, Ft := range AllFTs {
+		// Preserve HighValueFT from previous table if available
+		if hvftMap[Ft.FTName] != nil {
+			Ft.HighValueFT, _ = hvftMap[Ft.FTName][Ft.CreatorDID]
+		}
 		addErr := c.s.Write(wallet.FTStorage, &Ft)
 		if addErr != nil {
 			c.log.Error("Failed to add new FT:", Ft.FTName, "Error:", addErr)
