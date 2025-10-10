@@ -27,6 +27,7 @@ import (
 )
 
 func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, ftValue float64, ftNumStartIndex int, fromRBT bool, isHighValueFt bool) {
+	// Removed legacy backfill: rbt_lock_status now defaults to 1 via GORM default
 	err := c.createFTs(reqID, ftname, ftcount, ftValue, did, ftNumStartIndex, fromRBT, isHighValueFt)
 	br := model.BasicResponse{
 		Status:  true,
@@ -248,13 +249,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 				continue
 			}
 			ft := wallet.FTToken{
-				TokenID:     ftID,
-				FTName:      FTName,
-				TokenStatus: wallet.TokenIsFree,
-				TokenValue:  FTValue,
-				DID:         did,
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
+				TokenID:       ftID,
+				FTName:        FTName,
+				TokenStatus:   wallet.TokenIsFree,
+				TokenValue:    FTValue,
+				DID:           did,
+				RBTLockStatus: RBTLockStatus,
+				CreatedAt:     time.Now(),
+				UpdatedAt:     time.Now(),
 			}
 			results <- ftResult{FTToken: ft, FTID: ftID}
 		}
@@ -427,6 +429,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 	return nil
 }
 
+// Legacy backfill removed as column default is set to 1 in schema
+
 func (c *Core) GetFTInfoByDID(did string) ([]model.FTInfo, error) {
 	if !c.w.IsDIDExist(did) {
 		c.log.Error("DID does not exist")
@@ -435,7 +439,7 @@ func (c *Core) GetFTInfoByDID(did string) ([]model.FTInfo, error) {
 	FT, err := c.w.GetFTsAndCount(did)
 	if err != nil && err.Error() != "no records found" {
 		c.log.Error("Failed to get tokens FTs and Count", "err", err)
-		return []model.FTInfo{}, fmt.Errorf("Failed to get tokens FTs and Count")
+		return []model.FTInfo{}, fmt.Errorf("failed to get tokens FTs and Count")
 	}
 	// Build map keyed by ft_name -> creator_did with count and total value
 	type FTBalanceSummary struct {

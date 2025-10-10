@@ -13,7 +13,7 @@ type FTToken struct {
 	TokenValue     float64   `gorm:"column:token_value"`
 	TokenStateHash string    `gorm:"column:token_state_hash"`
 	TransactionID  string    `gorm:"column:transaction_id"`
-	RBTLockStatus  int       `gorm:"column:rbt_lock_status"`
+	RBTLockStatus  int       `gorm:"column:rbt_lock_status;default:1"`
 	CreatedAt      time.Time `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt      time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
