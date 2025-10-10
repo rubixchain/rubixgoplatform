@@ -669,13 +669,19 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 		}
 		address := event.PublisherPeerID + "." + detail.Did
 		latestBlock := c.w.GetFullNodeLatestTokenBlock(detail.Token, detail.TokenType)
-		latestBlockHeight, err := latestBlock.GetBlockNumber(detail.Token)
-		if err != nil {
-			c.log.Error("failed to get the latest Block Height", "error: ", err)
-			continue
+		var latestBlockHeight uint64
+		var err error
+		if latestBlock != nil {
+			latestBlockHeight, err = latestBlock.GetBlockNumber(detail.Token)
+			if err != nil {
+				c.log.Error("failed to get the latest Block Height", "error: ", err)
+				continue
+			}
+			c.log.Debug("full node side latest block height is: ", latestBlockHeight, "for the token: ", detail.Token)
+			c.log.Debug("subscriber side latest block height is: ", detail.TokenChainLength, "for the token: ", detail.Token)
+
 		}
-		c.log.Debug("full node side latest block height is: ", latestBlockHeight, "for the token: ", detail.Token)
-		c.log.Debug("subscriber side latest block height is: ", detail.TokenChainLength, "for the token: ", detail.Token)
+
 		if latestBlock == nil || detail.TokenChainLength > latestBlockHeight {
 			c.log.Debug("Publisher chain longer or full node need entire chain, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", latestBlockHeight, "peerAddr", address, "AssetType", detail.AssetType)
 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
@@ -686,6 +692,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 		}
 	}
 	var wg sync.WaitGroup
+
+
 	for addr, tokens := range tokenSyncMap {
 		for _, token := range tokens {
 			wg.Add(1)
