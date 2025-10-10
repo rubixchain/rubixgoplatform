@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -20,6 +21,12 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
+
+const defaultBatchSize = 500               // Tweak according to RAM/network
+const publishDelay = 25 * time.Millisecond // Throttle interval, tune further
+
+const subscriberBufferSize = 1000 // process up to this many idle batches
+const workerCount = 8             // Tune according to hardware/network
 
 type TokenPublish struct {
 	Token string `json:"token"`
@@ -387,29 +394,51 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 
 //		}
 //	}
-func (c *Core) PublishTokenChainDetailsEvent(details []model.SendTokenDetailsInfo) {
-	event := &model.TokenChainDetailsEvent{
-		PublisherPeerID: c.peerID, // assuming you have node DID in config
-		TokenDetails:    details,
+func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetailsInfo) {
+	total := len(tokenDetails)
+	if total == 0 {
+		c.log.Info("Nothing to publish")
+		return
 	}
-	err := c.publishTokenChainDetailsEvent(event)
-	if err != nil {
-		c.log.Error("Failed to publish token chain details", "err", err)
+	c.log.Info(fmt.Sprintf("Publishing %d token details in %d-sized batches", total, defaultBatchSize))
+	for i := 0; i < total; i += defaultBatchSize {
+		end := i + defaultBatchSize
+		if end > total {
+			end = total
+		}
+		batch := tokenDetails[i:end]
+		event := model.TokenChainDetailsEvent{
+			PublisherPeerID: c.peerID,
+			TokenDetails:    batch,
+		}
+		// payload, err := json.Marshal(event)
+		// if err != nil {
+		// 	c.log.Error("Failed to marshal batch", "err", err)
+		// 	continue
+		// }
+		if err := c.ps.Publish("token_chain_details", event); err != nil {
+			c.log.Error("Failed to publish batch", "idx", i, "err", err)
+			continue
+		}
+		c.log.Info(fmt.Sprintf("Published batch from %d to %d", i, end-1))
+		// Slight delay to avoid flooding
+		time.Sleep(publishDelay)
 	}
+	c.log.Info("All batches published")
 }
 
-func (c *Core) publishTokenChainDetailsEvent(event *model.TokenChainDetailsEvent) error {
-	topic := "token_chain_details" // fixed pubsub topic
-	if c.ps != nil {
-		err := c.ps.Publish(topic, event)
-		if err != nil {
-			c.log.Error("Failed to publish token chain details event", "err", err)
-			return err
-		}
-		c.log.Info("Published token chain details to topic " + topic)
-	}
-	return nil
-}
+// func (c *Core) publishTokenChainDetailsEvent(event *model.TokenChainDetailsEvent) error {
+// 	topic := "token_chain_details" // fixed pubsub topic
+// 	if c.ps != nil {
+// 		err := c.ps.Publish(topic, event)
+// 		if err != nil {
+// 			c.log.Error("Failed to publish token chain details event", "err", err)
+// 			return err
+// 		}
+// 		c.log.Info("Published token chain details to topic " + topic)
+// 	}
+// 	return nil
+// }
 
 // First, It should read the sqlite DB and publish all those tokens details to a pub-sub event
 func (c *Core) publishTokenChainDetails() error {
@@ -581,66 +610,74 @@ func (c *Core) SubscribeTCDetails() {
 	}
 }
 
-func (c *Core) SubscribeToTokenChainDetails() error {
+// func (c *Core) SubscribeToTokenChainDetails() error {
+// 	if c.ps == nil {
+// 		c.log.Error("Cannot subscribe to token_chain_details: pub-sub not initialized")
+// 		return fmt.Errorf("pub-sub not initialized")
+// 	}
+// 	err := c.ps.SubscribeTopic("token_chain_details", c.TokenChainDetailsCallback)
+// 	if err != nil {
+// 		c.log.Error("Unable to subscribe to token_chain_details", "topic", "token_chain_details", "err", err)
+// 		return err
+// 	}
+// 	c.log.Info("Subscribing to token_chain_details is successful")
+// 	return nil
+// }
 
+func (c *Core) SubscribeToTokenChainDetails() error {
 	if c.ps == nil {
-		c.log.Error("Cannot subscribe to token_chain_details: pub-sub not initialized")
-		return fmt.Errorf("pub-sub not initialized")
+		c.log.Warn("PubSub not initialized")
+		return fmt.Errorf("pubsub not ready")
 	}
-	err := c.ps.SubscribeTopic("token_chain_details", c.TokenChainDetailsCallback)
-	if err != nil {
-		c.log.Error("Unable to subscribe to token_chain_details", "topic", "token_chain_details", "err", err)
-		return err
+
+	// Increase buffer size here if needed to avoid blocking/drops during bursts
+	eventCh := make(chan model.TokenChainDetailsEvent, subscriberBufferSize)
+
+	// Start workers
+	for i := 0; i < workerCount; i++ {
+		go c.tokenDetailWorker(eventCh, i)
 	}
-	c.log.Info("Subscribing to token_chain_details is successful")
-	return nil
+
+	return c.ps.SubscribeTopic("token_chain_details", func(peerID, topic string, data []byte) {
+		c.log.Debug("Raw incoming pubsub data: ", string(data))
+		var event model.TokenChainDetailsEvent
+		if err := json.Unmarshal(data, &event); err != nil {
+			c.log.Error("Failed to unmarshal token chain details event", "err", err)
+			return
+		}
+
+		c.log.Info("Received token chain details event", "peerID", peerID, "tokenBatchSize", len(event.TokenDetails))
+
+		// Use blocking send so no drop happens — be cautious of potential backpressure if workers are slow
+		eventCh <- event
+	})
 }
 
-func (c *Core) TokenChainDetailsCallback(peerID string, topic string, data []byte) {
-	var event model.TokenChainDetailsEvent
-	err := json.Unmarshal(data, &event)
-	if err != nil {
-		c.log.Error("Failed to unmarshal token chain details event", "err", err)
-		return
+// Dedicated worker for batch processing
+func (c *Core) tokenDetailWorker(eventCh <-chan model.TokenChainDetailsEvent, workerNum int) {
+	for event := range eventCh {
+		c.processReceivedTokenDetails(event)
 	}
-	c.log.Info("Received token chain details from peer", "peerID", event.PublisherPeerID)
+}
 
-	c.log.Debug("***Number of token details received at full node side***", len(event.TokenDetails))
-
-	// Initialize map to collect tokens needing sync
+// processing logic, parallel-safe (no global locks)
+func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 	tokenSyncMap := make(map[string][]TokenSyncInfo)
 	for _, detail := range event.TokenDetails {
-		// Validate DID
 		if detail.Did == "" {
-			c.log.Error("token owner DID is Empty in token details", "token", detail.Token)
 			continue
 		}
 		address := event.PublisherPeerID + "." + detail.Did
-
-		// Check if token chain exists locally
 		latestBlock := c.w.GetFullNodeLatestTokenBlock(detail.Token, detail.TokenType)
-		if latestBlock == nil {
-			c.log.Error("No local token chain, queuing for sync from genesis", "token", detail.Token, "peerAddr", address)
-			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
-				TokenID:   detail.Token,
-				TokenType: detail.TokenType,
-				AssetType: detail.AssetType,
-			})
-			continue
-		}
-
-		// Get local block height
-		blockHeight, err := latestBlock.GetBlockNumber(detail.Token)
+		latestBlockHeight, err := latestBlock.GetBlockNumber(detail.Token)
 		if err != nil {
-			c.log.Error("Failed to get latest block height of token", "token", detail.Token, "error", err)
+			c.log.Error("failed to get the latest Block Height", "error: ", err)
 			continue
 		}
-		c.log.Debug("full node side latest block height is: ", blockHeight, "for the token: ", detail.Token)
+		c.log.Debug("full node side latest block height is: ", latestBlockHeight, "for the token: ", detail.Token)
 		c.log.Debug("subscriber side latest block height is: ", detail.TokenChainLength, "for the token: ", detail.Token)
-
-		// Compare publisher's chain length with local block height
-		if detail.TokenChainLength > blockHeight {
-			c.log.Debug("Publisher chain longer, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", blockHeight, "peerAddr", address, "AssetType", detail.AssetType)
+		if latestBlock == nil || detail.TokenChainLength > latestBlockHeight {
+			c.log.Debug("Publisher chain longer or full node need entire chain, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", latestBlockHeight, "peerAddr", address, "AssetType", detail.AssetType)
 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
 				TokenID:   detail.Token,
 				TokenType: detail.TokenType,
@@ -648,27 +685,100 @@ func (c *Core) TokenChainDetailsCallback(peerID string, topic string, data []byt
 			})
 		}
 	}
-
-	// Log tokens needing sync and start background syncing
-	if len(tokenSyncMap) > 0 {
-		for address, tokens := range tokenSyncMap {
-			tokenIDs := make([]string, 0, len(tokens))
-			for _, t := range tokens {
-				tokenIDs = append(tokenIDs, t.TokenID)
-			}
-			c.log.Info("Tokens queued for sync", "peerAddr", address, "tokens", tokenIDs)
+	var wg sync.WaitGroup
+	for addr, tokens := range tokenSyncMap {
+		for _, token := range tokens {
+			wg.Add(1)
+			go func(addr string, token TokenSyncInfo) {
+				defer wg.Done()
+				peer, err := c.getPeer(addr)
+				if err != nil {
+					c.log.Error("Cannot open peer", "peer", addr)
+					return
+				}
+				defer peer.Close()
+				if err := c.SyncFullTokenChainForFullNode(peer, token); err != nil {
+					c.log.Error("Failed to sync chain", "token", token.TokenID, "err", err)
+				}
+			}(addr, token)
 		}
-		c.log.Info("Starting background sync for tokens", "peerID", event.PublisherPeerID)
-		c.lock.Lock()
-		go func() {
-			defer c.lock.Unlock()
-			c.syncFullTokenChains(tokenSyncMap)
-
-		}()
-	} else {
-		c.log.Info("No tokens need syncing from peer", "peerID", event.PublisherPeerID)
 	}
+	wg.Wait()
 }
+
+// func (c *Core) TokenChainDetailsCallback(peerID string, topic string, data []byte) {
+// 	var event model.TokenChainDetailsEvent
+// 	err := json.Unmarshal(data, &event)
+// 	if err != nil {
+// 		c.log.Error("Failed to unmarshal token chain details event", "err", err)
+// 		return
+// 	}
+// 	c.log.Info("Received token chain details from peer", "peerID", event.PublisherPeerID)
+
+// 	c.log.Debug("***Number of token details received at full node side***", len(event.TokenDetails))
+
+// 	// Initialize map to collect tokens needing sync
+// 	tokenSyncMap := make(map[string][]TokenSyncInfo)
+// 	for _, detail := range event.TokenDetails {
+// 		// Validate DID
+// 		if detail.Did == "" {
+// 			c.log.Error("token owner DID is Empty in token details", "token", detail.Token)
+// 			continue
+// 		}
+// 		address := event.PublisherPeerID + "." + detail.Did
+
+// 		// Check if token chain exists locally
+// 		latestBlock := c.w.GetFullNodeLatestTokenBlock(detail.Token, detail.TokenType)
+// 		if latestBlock == nil {
+// 			c.log.Error("No local token chain, queuing for sync from genesis", "token", detail.Token, "peerAddr", address)
+// 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
+// 				TokenID:   detail.Token,
+// 				TokenType: detail.TokenType,
+// 				AssetType: detail.AssetType,
+// 			})
+// 			continue
+// 		}
+
+// 		// Get local block height
+// 		blockHeight, err := latestBlock.GetBlockNumber(detail.Token)
+// 		if err != nil {
+// 			c.log.Error("Failed to get latest block height of token", "token", detail.Token, "error", err)
+// 			continue
+// 		}
+// 		c.log.Debug("full node side latest block height is: ", blockHeight, "for the token: ", detail.Token)
+// 		c.log.Debug("subscriber side latest block height is: ", detail.TokenChainLength, "for the token: ", detail.Token)
+
+// 		// Compare publisher's chain length with local block height
+// 		if detail.TokenChainLength > blockHeight {
+// 			c.log.Debug("Publisher chain longer, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", blockHeight, "peerAddr", address, "AssetType", detail.AssetType)
+// 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
+// 				TokenID:   detail.Token,
+// 				TokenType: detail.TokenType,
+// 				AssetType: detail.AssetType,
+// 			})
+// 		}
+// 	}
+
+// 	// Log tokens needing sync and start background syncing
+// 	if len(tokenSyncMap) > 0 {
+// 		for address, tokens := range tokenSyncMap {
+// 			tokenIDs := make([]string, 0, len(tokens))
+// 			for _, t := range tokens {
+// 				tokenIDs = append(tokenIDs, t.TokenID)
+// 			}
+// 			c.log.Info("Tokens queued for sync", "peerAddr", address, "tokens", tokenIDs)
+// 		}
+// 		c.log.Info("Starting background sync for tokens", "peerID", event.PublisherPeerID)
+// 		c.lock.Lock()
+// 		go func() {
+// 			defer c.lock.Unlock()
+// 			c.syncFullTokenChains(tokenSyncMap)
+
+// 		}()
+// 	} else {
+// 		c.log.Info("No tokens need syncing from peer", "peerID", event.PublisherPeerID)
+// 	}
+// }
 
 /* func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.Result {
 	fmt.Println("Handling role-based logic for token:", token)
