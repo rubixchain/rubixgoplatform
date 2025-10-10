@@ -71,12 +71,13 @@ type Token struct {
 type SyncedRBT struct {
 	TokenID string `gorm:"column:token_id;primaryKey"`
 	// ParentTokenID string  `gorm:"column:parent_token_id"`
-	TokenValue   float64 `gorm:"column:token_value"`
-	OwnerDID     string  `gorm:"column:owner_did"`
-	PublisherDID string  `gorm:"column:publisher_did"`
-	BlockHash    string  `gorm:"column:block_hash"`
-	SyncStaus    int     `gorm:"column:sync_status"`
-	// TokenStateHash string  `gorm:"column:token_state_hash"`
+	TokenValue    float64 `gorm:"column:token_value"`
+	OwnerDID      string  `gorm:"column:owner_did"`
+	PublisherDID  string  `gorm:"column:publisher_did"`
+	TransactionID string  `gorm:"column:transaction_id"`
+	BlockHash     string  `gorm:"column:block_hash"`
+	BlockHeight   int64   `gorm:"column:block_height"`
+	SyncStaus     int     `gorm:"column:sync_status"`
 }
 
 func (w *Wallet) CreateToken(t *Token) error {

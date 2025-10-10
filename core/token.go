@@ -2112,6 +2112,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			c.log.Debug("rbt exists, need to update")
 			// if there is no error, meaning if token exists in table, then update token info
 			syncedRBT.OwnerDID = tokenOwner
+			syncedRBT.TransactionID = event.TransactionID
 			syncedRBT.BlockHash = event.BlockHash
 			syncedRBT.SyncStaus = syncStatus
 
@@ -2125,19 +2126,16 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 		c.log.Debug("rbt doesn't exist, need to add new rec")
 
-		tokenValue := receivedBlock.GetTokenValue()
-		if err != nil {
-			c.log.Error("failed to fetch value of the token ", tokenId)
-		}
-
 		tokenOwner := tokenOwner
 		tokenInfo := &wallet.SyncedRBT{
-			TokenID:    tokenId,
-			TokenValue: tokenValue,
-			OwnerDID:   tokenOwner,
-			BlockHash:  event.BlockHash,
-			SyncStaus:  syncStatus,
+			TokenID:       tokenId,
+			TokenValue:    receivedBlock.GetTokenValue(),
+			OwnerDID:      tokenOwner,
+			BlockHash:     event.BlockHash,
+			TransactionID: event.TransactionID,
+			SyncStaus:     syncStatus,
 		}
+
 		err = c.w.AddSyncedRBTToTable(tokenInfo)
 		if err != nil {
 			return err
@@ -2150,6 +2148,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			syncedFT.OwnerDID = tokenOwner
 			syncedFT.BlockHash = event.BlockHash
 			syncedFT.SyncStatus = syncStatus
+			syncedFT.TransactionID = event.TransactionID
 
 			err = c.w.UpdateSyncedFTToTable(syncedFT)
 			if err != nil {
@@ -2160,13 +2159,14 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		}
 
 		ftInfo := &wallet.SyncedFT{
-			TokenID:    tokenId,
-			TokenValue: receivedBlock.GetTokenValue(),
-			CreatorDID: tokenOwner,
-			OwnerDID:   tokenOwner,
-			BlockHash:  event.BlockHash,
-			SyncStatus: syncStatus,
-			FTName:     event.FTName,
+			TokenID:       tokenId,
+			TokenValue:    receivedBlock.GetTokenValue(),
+			CreatorDID:    tokenOwner,
+			OwnerDID:      tokenOwner,
+			BlockHash:     event.BlockHash,
+			TransactionID: event.TransactionID,
+			SyncStatus:    syncStatus,
+			FTName:        event.FTName,
 		}
 		err = c.w.AddSyncedFTToTable(ftInfo)
 		if err != nil {
@@ -2179,6 +2179,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			// if there is no error, meaning if token exists in table, then update token info
 			syncedSC.BlockHash = event.BlockHash
 			syncedSC.SyncStatus = syncStatus
+			syncedSC.TransactionID = event.TransactionID
 
 			err = c.w.UpdateSyncedSmartContractToTable(syncedSC)
 			if err != nil {
@@ -2193,6 +2194,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			SmartContractHash: tokenId,
 			Deployer:          scDeployer,
 			BlockHash:         event.BlockHash,
+			TransactionID:     event.TransactionID,
 			SyncStatus:        syncStatus,
 		} // TODO : add sc file details
 		err = c.w.AddSyncedSmartContractToTable(scInfo)
@@ -2206,6 +2208,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			// if there is no error, meaning if token exists in table, then update token info
 			syncedNFT.BlockHash = event.BlockHash
 			syncedNFT.SyncStatus = syncStatus
+			syncedNFT.TransactionID = event.TransactionID
 
 			err = c.w.UpdateSyncedNFTToTable(syncedNFT)
 			if err != nil {
@@ -2218,11 +2221,12 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		nftValue := receivedBlock.GetTokenValue()
 		nftOwner := receivedBlock.GetDeployerDID()
 		nftInfo := &wallet.SyncedNFT{
-			TokenID:    tokenId,
-			TokenValue: nftValue,
-			OwnerDID:   nftOwner,
-			BlockHash:  event.BlockHash,
-			SyncStatus: syncStatus,
+			TokenID:       tokenId,
+			TokenValue:    nftValue,
+			OwnerDID:      nftOwner,
+			BlockHash:     event.BlockHash,
+			TransactionID: event.TransactionID,
+			SyncStatus:    syncStatus,
 		} // TODO : add metadata details
 		err = c.w.AddSyncedNFTToTable(nftInfo)
 
