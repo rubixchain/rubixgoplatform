@@ -1,10 +1,9 @@
 package core
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
@@ -12,42 +11,11 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
-// TxnProcessor handles concurrent transaction processing
-type TxnProcessor struct {
-	txnQueue      chan *model.PubSubTxnInfo
-	workerPool    chan struct{}
-	processedTxns sync.Map // Track processed transaction IDs
-	maxRetries    int
-	retryDelay    time.Duration
-	ctx           context.Context
-	cancel        context.CancelFunc
-	wg            sync.WaitGroup
-}
-
-// Initialize the transaction processor
-func (c *Core) initTxnProcessor() {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	c.txnProcessor = &TxnProcessor{
-		txnQueue:   make(chan *model.PubSubTxnInfo, 1000), // Buffered channel for queue
-		workerPool: make(chan struct{}, 10),               // Limit concurrent workers
-		maxRetries: 3,
-		retryDelay: time.Second * 2,
-		ctx:        ctx,
-		cancel:     cancel,
-	}
-
-	// Start worker goroutines
-	for i := 0; i < 10; i++ {
-		c.txnProcessor.wg.Add(1)
-		go c.txnWorker(i)
-	}
-}
 
 // Enhanced subscription setup with error handling
 func (c *Core) SubscribeTxnSetup() {
 	// Initialize the transaction processor
-	c.initTxnProcessor()
+	c.initDynamicTxnProcessor()
 
 	topic := RubixTxnTopic
 	err := c.ps.SubscribeTopic(topic, c.TxnCallBack)
@@ -58,9 +26,8 @@ func (c *Core) SubscribeTxnSetup() {
 	c.log.Info("Successfully subscribed to topic: " + topic)
 }
 
-// Enhanced callback that queues transactions for processing
+// Enhanced callback with dynamic scaling integration
 func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
-
 	c.log.Debug("piblisher peer id : ", peerID)
 
 	var newEvent model.PubSubTxnInfo
@@ -71,7 +38,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 
 	// add publisher to peer did table
-	unknownDIDType := -1 //DID Type -1 means, we don't know  the publisher's DID Type
+	unknownDIDType := -1
 	publisherDetails := &wallet.DIDPeerMap{
 		DID:     newEvent.PublisherDID,
 		PeerID:  peerID,
@@ -88,43 +55,37 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 
+	// INCREMENT COUNTER when new transaction is processed
+	atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
+
 	c.log.Info("Received transaction", "blockHash", newEvent.BlockHash, "mode", newEvent.AssetType)
 
-	// Queue transaction for processing with timeout
+	// Update queue length metric for dynamic scaling
+	currentQueueLen := int64(len(c.txnProcessor.txnQueue))
+	c.txnProcessor.queueLength = currentQueueLen
+
+	// Queue transaction for processing with enhanced timeout handling
 	select {
 	case c.txnProcessor.txnQueue <- &newEvent:
-		c.log.Debug("Transaction queued successfully", "blockHash", newEvent.BlockHash)
+		c.log.Debug("Transaction queued successfully",
+			"blockHash", newEvent.BlockHash,
+			"queueLength", currentQueueLen)
+
 	case <-time.After(5 * time.Second):
-		c.log.Error("Failed to queue transaction - queue full", "blockHash", newEvent.BlockHash)
-		// Optionally implement overflow handling here
+		c.log.Error("Failed to queue transaction - queue full",
+			"blockHash", newEvent.BlockHash,
+			"queueLength", len(c.txnProcessor.txnQueue))
+
+		if currentQueueLen > int64(c.txnProcessor.queueThreshold) {
+			c.log.Warn("Queue threshold exceeded - scaling may be needed",
+				"current", currentQueueLen,
+				"threshold", c.txnProcessor.queueThreshold)
+		}
+		return
+
 	case <-c.txnProcessor.ctx.Done():
 		c.log.Info("Transaction processor shutting down")
 		return
-	}
-}
-
-// Worker goroutine for processing transactions
-func (c *Core) txnWorker(workerID int) {
-	defer c.txnProcessor.wg.Done()
-
-	for {
-		select {
-		case txnEvent := <-c.txnProcessor.txnQueue:
-			c.log.Debug("Worker processing transaction", "workerID", workerID, "blockHash", txnEvent.BlockHash)
-
-			// Acquire worker slot
-			c.txnProcessor.workerPool <- struct{}{}
-
-			// Process transaction with retry logic
-			c.processTxnWithRetry(txnEvent, workerID)
-
-			// Release worker slot
-			<-c.txnProcessor.workerPool
-
-		case <-c.txnProcessor.ctx.Done():
-			c.log.Info("Worker shutting down", "workerID", workerID)
-			return
-		}
 	}
 }
 

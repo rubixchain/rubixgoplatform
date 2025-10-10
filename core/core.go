@@ -156,7 +156,7 @@ type Core struct {
 	pendingTokenMonitor  *PendingTokenMonitor
 	publishTokenChain    bool
 	fullNode             bool
-	txnProcessor         *TxnProcessor
+	txnProcessor         *DynamicTxnProcessor
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
