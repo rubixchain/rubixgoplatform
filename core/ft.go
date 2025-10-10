@@ -27,7 +27,6 @@ import (
 )
 
 func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, ftValue float64, ftNumStartIndex int, fromRBT bool, isHighValueFt bool) {
-	// Removed legacy backfill: rbt_lock_status now defaults to 1 via GORM default
 	err := c.createFTs(reqID, ftname, ftcount, ftValue, did, ftNumStartIndex, fromRBT, isHighValueFt)
 	br := model.BasicResponse{
 		Status:  true,
@@ -61,23 +60,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
 
-	var existingFT wallet.FT
-	readErr := c.s.Read(wallet.FTStorage, &existingFT, "ft_name=? AND creator_did=?", FTName, did)
-	if readErr != nil {
-		c.log.Info("There is no record for FT Name: %s and creator DID: %s", FTName, did)
-	}
-
 	var ftStartIndex int
-	if readErr != nil && strings.Contains(fmt.Sprint(readErr), "no records found") {
-		c.log.Info("FT Name does not exist")
-		ftStartIndex = ftNumStartIndex
-	} else if readErr == nil {
-		c.log.Info("FT Name already exists")
-		ftStartIndex = existingFT.FTCreatedCount
-	} else {
-		c.log.Error("Error checking for existing FT record during creation setup", "err", readErr)
-		return fmt.Errorf("failed to check existing FT record: %w", readErr)
-	}
+	ftStartIndex = ftNumStartIndex
 
 	// Validate input parameters
 
@@ -420,16 +404,15 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 		return err
 	}
 
-	finalFTCreatedCount := ftStartIndex + loopCount
-	err = c.UpsertFTTable(FTName, did, finalFTCreatedCount, loopCount, isHighValueFt)
-	if err != nil {
-		c.log.Error("Failed to update FT index", "err", err)
-		return fmt.Errorf("failed to finalize FT table update: %w", err)
+	// Refresh FTTable using full recompute to ensure IDs are populated
+	// Here the main issue is that, the ID in this table is string, which ideally should be integer. inorder to maintain backward compatibility we had to use this function.
+	// This needs to be updated such that the existing table will get migrated or some work around needs to be done.
+	if err := c.updateFTTable(); err != nil {
+		c.log.Error("Failed to update FT table after FT creation", "err", err)
+		return err
 	}
 	return nil
 }
-
-// Legacy backfill removed as column default is set to 1 in schema
 
 func (c *Core) GetFTInfoByDID(did string) ([]model.FTInfo, error) {
 	if !c.w.IsDIDExist(did) {
@@ -969,21 +952,18 @@ func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
 	return result, nil
 }
 
-func (c *Core) UpsertFTTable(ftName string, creatorDid string, newTotalFTCreatedCount int, numFTsCreatedInThisCall int, isHighValue bool) error {
+func (c *Core) UpsertFTTable(ftName string, creatorDid string, _ int, numFTsCreatedInThisCall int, isHighValue bool) error {
 	var existingFt wallet.FT
 
 	err := c.s.Read(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDid)
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") {
 			newFT := &wallet.FT{
-				FTName:           ftName,
-				CreatorDID:       creatorDid,
-				FTCreatedCount:   newTotalFTCreatedCount,
-				FTAvailableCount: numFTsCreatedInThisCall,
-				FTCount:          numFTsCreatedInThisCall, // Keep old field in sync for backwards compatibility
-				HighValueFT:      isHighValue,
+				FTName:      ftName,
+				CreatorDID:  creatorDid,
+				FTCount:     numFTsCreatedInThisCall,
+				HighValueFT: isHighValue,
 			}
-
 			if writeErr := c.s.Write(wallet.FTStorage, newFT); writeErr != nil {
 				return fmt.Errorf("failed to insert new record: %w", writeErr)
 			}
@@ -993,9 +973,7 @@ func (c *Core) UpsertFTTable(ftName string, creatorDid string, newTotalFTCreated
 		return fmt.Errorf("error checking for existing record: %w", err)
 	}
 
-	existingFt.FTCreatedCount = newTotalFTCreatedCount
-	existingFt.FTAvailableCount += numFTsCreatedInThisCall
-	existingFt.FTCount = existingFt.FTAvailableCount // Keep old field in sync for backwards compatibility
+	existingFt.FTCount += numFTsCreatedInThisCall
 	existingFt.HighValueFT = isHighValue
 
 	updateErr := c.s.Update(wallet.FTStorage, &existingFt, "ft_name=? AND creator_did=?", ftName, creatorDid)
