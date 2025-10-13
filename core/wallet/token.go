@@ -78,6 +78,7 @@ type SyncedRBT struct {
 	BlockHash     string  `gorm:"column:block_hash"`
 	BlockHeight   int64   `gorm:"column:block_height"`
 	SyncStaus     int     `gorm:"column:sync_status"`
+	// SenderAddress string  `gorm:"column:owner_address"`
 }
 
 func (w *Wallet) CreateToken(t *Token) error {
@@ -1472,6 +1473,11 @@ func (w *Wallet) AddSyncedSmartContractToTable(t *SyncedSmartContract) error {
 	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Write(FullNodeSmartContractTable, t)
 }
+func (w *Wallet) AddFailedTokensToTable(t *model.FailedToSyncTokenDetailsInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Write(FullNodeFailedToSyncTokens, t)
+}
 
 // This function is used by fullnode to read from the list of all synced RBTs
 func (w *Wallet) ReadSyncedRBTFromTable(tokenId string) (*SyncedRBT, error) {
@@ -1526,6 +1532,18 @@ func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedS
 	return &sc, nil
 }
 
+func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedToSyncTokenDetailsInfo, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var token model.FailedToSyncTokenDetailsInfo
+	err := w.fullNodeSQLDB.Read(FullNodeFailedToSyncTokens, &token, "token_id=?", tokenID)
+	if err != nil {
+		// w.log.Error("Failed to get sc", "err", err)
+		return nil, err
+	}
+	return &token, nil
+}
+
 // This function is used by fullnode to update synced RBTs
 func (w *Wallet) UpdateSyncedRBTToTable(rbt *SyncedRBT) error {
 	w.l.Lock()
@@ -1552,6 +1570,12 @@ func (w *Wallet) UpdateSyncedSmartContractToTable(sc *SyncedSmartContract) error
 	w.l.Lock()
 	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Update(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", sc.SmartContractHash)
+}
+
+func (w *Wallet) UpdateFailedToSyncTokensFromTable(token *model.FailedToSyncTokenDetailsInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Update(FullNodeFailedToSyncTokens, &token, "token=?", token.Token)
 }
 
 // Store failed transactions in fullnode DB for later analysis and retry

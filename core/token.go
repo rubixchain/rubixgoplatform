@@ -663,23 +663,38 @@ func (c *Core) tokenDetailWorker(eventCh <-chan model.TokenChainDetailsEvent, wo
 // processing logic, parallel-safe (no global locks)
 func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 	tokenSyncMap := make(map[string][]TokenSyncInfo)
+
 	for _, detail := range event.TokenDetails {
 		if detail.Did == "" {
 			continue
 		}
+
 		address := event.PublisherPeerID + "." + detail.Did
+		didType := -1 // -1 means that we doesn't know the DID Type but we need to pass some integer otherwise it will give nil pointer dereference error
+		didPeerDetails := wallet.DIDPeerMap{
+			DID:     detail.Did,
+			DIDType: &didType,
+			PeerID:  event.PublisherPeerID,
+		}
+		// Add peer to table (upsert logic should be inside AddPeerDetails)
+		if err := c.AddPeerDetails(didPeerDetails); err != nil {
+			c.log.Error("Failed to add peer details to table", "did", detail.Did, "err", err)
+			// Return peerInfo anyway, in case caller can proceed
+			continue
+		}
+
 		latestBlock := c.w.GetFullNodeLatestTokenBlock(detail.Token, detail.TokenType)
 		var latestBlockHeight uint64
 		var err error
+
 		if latestBlock != nil {
 			latestBlockHeight, err = latestBlock.GetBlockNumber(detail.Token)
 			if err != nil {
-				c.log.Error("failed to get the latest Block Height", "error: ", err)
+				c.log.Error("failed to get the latest Block Height", "error", err)
 				continue
 			}
-			c.log.Debug("full node side latest block height is: ", latestBlockHeight, "for the token: ", detail.Token)
-			c.log.Debug("subscriber side latest block height is: ", detail.TokenChainLength, "for the token: ", detail.Token)
-
+			c.log.Debug("full node side latest block height", "height", latestBlockHeight, "token", detail.Token)
+			c.log.Debug("publisher side latest block height", "height", detail.TokenChainLength, "token", detail.Token)
 		}
 
 		if latestBlock == nil || detail.TokenChainLength > latestBlockHeight {
@@ -691,26 +706,62 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			})
 		}
 	}
-	var wg sync.WaitGroup
 
+	var wg sync.WaitGroup
 
 	for addr, tokens := range tokenSyncMap {
 		for _, token := range tokens {
 			wg.Add(1)
 			go func(addr string, token TokenSyncInfo) {
 				defer wg.Done()
-				peer, err := c.getPeer(addr)
-				if err != nil {
-					c.log.Error("Cannot open peer", "peer", addr)
-					return
+
+				const maxRetries = 3
+				const retryDelay = 2 * time.Second
+
+				var peer *ipfsport.Peer
+				var err error
+
+				for attempt := 1; attempt <= maxRetries; attempt++ {
+					peer, err = c.getPeer(addr)
+					if err == nil && peer != nil {
+						break
+					}
+					c.log.Warn("Failed to open peer connection, retrying...",
+						"peer", addr,
+						"attempt", attempt,
+						"error", err)
+					time.Sleep(retryDelay)
 				}
+
+				if peer == nil || err != nil {
+					c.log.Error("Failed to open peer after retries", "peer", addr, "error", err)
+					_, did, ok := util.ParseAddress(addr)
+					if !ok {
+						c.log.Error("invalid address: %v", addr)
+					}
+					info := &model.FailedToSyncTokenDetailsInfo{
+						Token:     token.TokenID,
+						TokenType: token.TokenType,
+						AssetType: token.AssetType,
+						Did:       did,
+					}
+
+					if err := c.w.AddFailedTokensToTable(info); err != nil {
+						c.log.Error("Failed to record failed token sync in DB", "token", token.TokenID, "error", err)
+					} else {
+						c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
+					}
+				}
+
 				defer peer.Close()
+
 				if err := c.SyncFullTokenChainForFullNode(peer, token); err != nil {
 					c.log.Error("Failed to sync chain", "token", token.TokenID, "err", err)
 				}
 			}(addr, token)
 		}
 	}
+
 	wg.Wait()
 }
 
