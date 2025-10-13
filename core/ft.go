@@ -429,41 +429,43 @@ func (c *Core) allocateFTIndices(ftName string, creatorDid string, num int) (int
 	// Read or create the FTIndex row
 	var idx wallet.FTIndex
 	readErr := c.s.Read(wallet.FTIndexStorage, &idx, "ft_name=? AND creator_did=?", ftName, creatorDid)
-	if readErr != nil && !strings.Contains(fmt.Sprint(readErr), "no records found") {
-		return 0, readErr
-	}
-	start := 0
-	if readErr == nil {
-		start = idx.FTIndex
-		idx.FTIndex = idx.FTIndex + num
-		if err := c.s.Update(wallet.FTIndexStorage, &idx, "ft_name=? AND creator_did=?", ftName, creatorDid); err != nil {
-			return 0, err
+	if readErr != nil {
+		// If the index table/row is missing, fall back to scanning existing tokens
+		errStr := fmt.Sprint(readErr)
+		if !(strings.Contains(errStr, "no records found") || strings.Contains(errStr, "no such table")) {
+			return 0, readErr
 		}
-	} else {
-		// Fallback: derive start by scanning existing FT tokens for this (ft_name, creator_did)
-		var existingTokens []wallet.FTToken
-		// Prefer CreatorDID filter; owner_did may also match creator in our flows
-		_ = c.s.Read(wallet.FTTokenStorage, &existingTokens, "ft_name=? AND (creator_did=? OR owner_did=?)", ftName, creatorDid, creatorDid)
+	}
+	// Always compute the derived maximum from existing tokens to avoid stale index collisions
+	var existingTokens []wallet.FTToken
+	_ = c.s.Read(wallet.FTTokenStorage, &existingTokens, "ft_name=? AND (creator_did=? OR owner_did=?)", ftName, creatorDid, creatorDid)
 
-		maxNum := -1
-		for i := range existingTokens {
-			// token_id format: FTName <num> DID (assuming FTName has no spaces)
-			parts := strings.Split(existingTokens[i].TokenID, " ")
-			if len(parts) >= 3 {
-				if n, convErr := strconv.Atoi(parts[1]); convErr == nil {
-					if n > maxNum {
-						maxNum = n
-					}
+	maxNum := -1
+	for i := range existingTokens {
+		// token_id format: FTName <num> DID
+		parts := strings.Split(existingTokens[i].TokenID, " ")
+		if len(parts) >= 3 {
+			if n, convErr := strconv.Atoi(parts[1]); convErr == nil {
+				if n > maxNum {
+					maxNum = n
 				}
 			}
 		}
-		start = maxNum + 1
-		// Insert new FTIndex row with end = start + num
-		idx = wallet.FTIndex{FTName: ftName, CreatorDID: creatorDid, FTIndex: start + num}
-		if err := c.s.Write(wallet.FTIndexStorage, &idx); err != nil {
-			// If FTIndex table doesn't exist or write fails, proceed without persisting; caller will still get a unique start
-			// Next call will recompute via fallback again
-		}
+	}
+
+	start := maxNum + 1
+	// If an index row exists and is ahead of derived start, honor it
+	if readErr == nil && idx.FTIndex > start {
+		start = idx.FTIndex
+	}
+
+	// Persist updated end if the table exists (ignore write errors)
+	newEnd := start + num
+	if readErr == nil {
+		idx.FTIndex = newEnd
+		_ = c.s.Update(wallet.FTIndexStorage, &idx, "ft_name=? AND creator_did=?", ftName, creatorDid)
+	} else {
+		_ = c.s.Write(wallet.FTIndexStorage, &wallet.FTIndex{FTName: ftName, CreatorDID: creatorDid, FTIndex: newEnd})
 	}
 	return start, nil
 }
