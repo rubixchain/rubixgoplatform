@@ -36,6 +36,7 @@ const (
 	FTStorage                      string = "FTTable"
 	FTTransactionTokenStorage      string = "FTTransactionTokens"
 	FailedFTDownloadStorage        string = "FailedFTDownloads"
+	FTIndexStorage                 string = "FTIndexTable"
 )
 
 type WalletConfig struct {

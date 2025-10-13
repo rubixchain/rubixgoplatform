@@ -25,3 +25,11 @@ type FT struct {
 	CreatorDID  string `gorm:"column:creator_did"`
 	HighValueFT bool   `gorm:"column:high_value_ft"`
 }
+
+// FTIndex tracks the next FT number per (ft_name, creator_did)
+type FTIndex struct {
+	FTIndexID  int    `gorm:"column:id;primaryKey;autoIncrement"`
+	FTName     string `gorm:"column:ft_name"`
+	CreatorDID string `gorm:"column:creator_did"`
+	FTIndex    int    `gorm:"column:ft_index"`
+}

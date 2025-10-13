@@ -60,8 +60,11 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
 
-	var ftStartIndex int
-	ftStartIndex = ftNumStartIndex
+	// Compute a unique start index using FTIndexTable to avoid token_id collisions
+	ftStartIndex, err := c.allocateFTIndices(FTName, did, numFTs)
+	if err != nil {
+		return fmt.Errorf("failed to allocate FT indices: %w", err)
+	}
 
 	// Validate input parameters
 
@@ -419,6 +422,32 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 		return err
 	}
 	return nil
+}
+
+// allocateFTIndices atomically reserves a range of FT numbers for (ft_name, creator_did)
+func (c *Core) allocateFTIndices(ftName string, creatorDid string, num int) (int, error) {
+	// Read or create the FTIndex row
+	var idx wallet.FTIndex
+	readErr := c.s.Read(wallet.FTIndexStorage, &idx, "ft_name=? AND creator_did=?", ftName, creatorDid)
+	if readErr != nil && !strings.Contains(fmt.Sprint(readErr), "no records found") {
+		return 0, readErr
+	}
+	start := 0
+	if readErr == nil {
+		start = idx.FTIndex
+		idx.FTIndex = idx.FTIndex + num
+		if err := c.s.Update(wallet.FTIndexStorage, &idx, "ft_name=? AND creator_did=?", ftName, creatorDid); err != nil {
+			return 0, err
+		}
+	} else {
+		// Insert new row with end = num
+		idx = wallet.FTIndex{FTName: ftName, CreatorDID: creatorDid, FTIndex: num}
+		if err := c.s.Write(wallet.FTIndexStorage, &idx); err != nil {
+			return 0, err
+		}
+		start = 0
+	}
+	return start, nil
 }
 
 // setFTHighValueFlag upserts only the HighValueFT flag for a given (ft_name, creator_did)
