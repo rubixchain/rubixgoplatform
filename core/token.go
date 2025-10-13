@@ -751,6 +751,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					} else {
 						c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
 					}
+					return
 				}
 
 				defer peer.Close()
