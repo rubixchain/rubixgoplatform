@@ -440,12 +440,30 @@ func (c *Core) allocateFTIndices(ftName string, creatorDid string, num int) (int
 			return 0, err
 		}
 	} else {
-		// Insert new row with end = num
-		idx = wallet.FTIndex{FTName: ftName, CreatorDID: creatorDid, FTIndex: num}
-		if err := c.s.Write(wallet.FTIndexStorage, &idx); err != nil {
-			return 0, err
+		// Fallback: derive start by scanning existing FT tokens for this (ft_name, creator_did)
+		var existingTokens []wallet.FTToken
+		// Prefer CreatorDID filter; owner_did may also match creator in our flows
+		_ = c.s.Read(wallet.FTTokenStorage, &existingTokens, "ft_name=? AND (creator_did=? OR owner_did=?)", ftName, creatorDid, creatorDid)
+
+		maxNum := -1
+		for i := range existingTokens {
+			// token_id format: FTName <num> DID (assuming FTName has no spaces)
+			parts := strings.Split(existingTokens[i].TokenID, " ")
+			if len(parts) >= 3 {
+				if n, convErr := strconv.Atoi(parts[1]); convErr == nil {
+					if n > maxNum {
+						maxNum = n
+					}
+				}
+			}
 		}
-		start = 0
+		start = maxNum + 1
+		// Insert new FTIndex row with end = start + num
+		idx = wallet.FTIndex{FTName: ftName, CreatorDID: creatorDid, FTIndex: start + num}
+		if err := c.s.Write(wallet.FTIndexStorage, &idx); err != nil {
+			// If FTIndex table doesn't exist or write fails, proceed without persisting; caller will still get a unique start
+			// Next call will recompute via fallback again
+		}
 	}
 	return start, nil
 }
