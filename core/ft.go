@@ -60,10 +60,36 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 		return fmt.Errorf("DID crypto is not initialized, err: %v ", err)
 	}
 
-	// Compute a unique start index using FTIndexTable to avoid token_id collisions
-	ftStartIndex, err := c.allocateFTIndices(FTName, did, numFTs)
-	if err != nil {
-		return fmt.Errorf("failed to allocate FT indices: %w", err)
+	// Decide start index strategy based on FT type
+	// - High value FT: auto-allocate using FTIndex (with fallback scan)
+	// - Standard FT: honor provided ftNumStartIndex and validate no collisions
+	var ftStartIndex int
+	if isHighValueFt {
+		var allocErr error
+		ftStartIndex, allocErr = c.allocateFTIndices(FTName, did, numFTs)
+		if allocErr != nil {
+			return fmt.Errorf("failed to allocate FT indices: %w", allocErr)
+		}
+	} else {
+		ftStartIndex = ftNumStartIndex
+		// Validate that the requested range does not collide with existing tokens
+		var existingTokens []wallet.FTToken
+		_ = c.s.Read(wallet.FTTokenStorage, &existingTokens, "ft_name=? AND (creator_did=? OR owner_did=?)", FTName, did, did)
+
+		existingNums := make(map[int]struct{})
+		for i := range existingTokens {
+			parts := strings.Split(existingTokens[i].TokenID, " ")
+			if len(parts) >= 3 {
+				if n, convErr := strconv.Atoi(parts[1]); convErr == nil {
+					existingNums[n] = struct{}{}
+				}
+			}
+		}
+		for n := ftStartIndex; n < ftStartIndex+numFTs; n++ {
+			if _, exists := existingNums[n]; exists {
+				return fmt.Errorf("FT number %d already exists for ft_name=%s and creator_did=%s", n, FTName, did)
+			}
+		}
 	}
 
 	// Validate input parameters
