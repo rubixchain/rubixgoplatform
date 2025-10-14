@@ -78,12 +78,16 @@ func (c *Core) InitializeAdvisoryNode() {
 	if err != nil {
 		c.log.Error("Failed to initialize default advisory URLs, falling back to hardcoded URL", "err", err)
 		// Fallback to hardcoded URL for now
-		c.advisoryNodeURL = "https://advisory-node-service.onrender.com"
-
+		advisoryNodeURL := "https://mainnet-pool.universe.rubix.net"
+		if c.testNet {
+			advisoryNodeURL = c.advisoryNodeTestnetURL
+		} else {
+			advisoryNodeURL = c.advisoryNodeMainnetURL
+		}
 		// Test the hardcoded URL
-		if c.testAdvisoryNodeHealth(c.advisoryNodeURL) {
+		if c.testAdvisoryNodeHealth(advisoryNodeURL) {
 			c.advisoryNodeEnabled = true
-			c.log.Info("Advisory node connected using fallback URL", "url", c.advisoryNodeURL)
+			c.log.Info("Advisory node connected using fallback URL", "url", advisoryNodeURL)
 		} else {
 			c.log.Info("No advisory node available, using local quorum management")
 			c.advisoryNodeEnabled = false
@@ -102,9 +106,17 @@ func (c *Core) InitializeAdvisoryNode() {
 	}
 
 	// Store the current working URL
-	c.advisoryNodeURL = advisoryURL
+	if c.testNet {
+		c.advisoryNodeTestnetURL = advisoryURL
+		c.advisoryNodeEnabled = true
+
+	} else {
+		c.advisoryNodeMainnetURL = advisoryURL
+		c.advisoryNodeEnabled = true
+	}
+	//c.advisoryNodeURL = advisoryURL
 	c.advisoryNodeEnabled = true
-	c.log.Info("Advisory node connected", "url", c.advisoryNodeURL)
+	c.log.Info("Advisory node connected", "url", advisoryURL)
 
 	// Advisory node is connected - quorum setup will be handled by explicit setupquorum commands
 }

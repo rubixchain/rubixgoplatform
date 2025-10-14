@@ -555,7 +555,7 @@ GET /api/v1/advisory-urls
     "urls": [
       {
         "id": 1,
-        "url": "https://advisory-node-service.onrender.com",
+        "url": "https://testnet-pool.universe.rubix.net",
         "network_type": "testnet",
         "is_default": true,
         "is_active": true,
@@ -617,7 +617,7 @@ Content-Type: application/json
 curl -X POST http://localhost:20000/api/v1/advisory-urls \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://mainnet-advisory.example.com",
+    "url": "https://mainnet-pool.universe.rubix.net",
     "network_type": "mainnet",
     "is_default": true,
     "is_active": true,
@@ -704,10 +704,10 @@ GET /api/v1/advisory-urls/current?network=mainnet
   "message": "Current advisory URL retrieved",
   "data": {
     "network": "testnet",
-    "current_url": "https://advisory-node-service.onrender.com",
+    "current_url": "https://testnet-pool.universe.rubix.net",
     "default_url": {
       "id": 1,
-      "url": "https://advisory-node-service.onrender.com",
+      "url": "https://testnet-pool.universe.rubix.net",
       "network_type": "testnet",
       "is_default": true,
       "is_active": true,
@@ -741,7 +741,7 @@ curl -X POST http://localhost:20000/api/v1/advisory-urls \
 curl -X POST http://localhost:20000/api/v1/advisory-urls \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://prod-advisory.com",
+    "url": "https://mainnet-pool.universe.rubix.net",
     "network_type": "mainnet",
     "is_default": true,
     "is_active": true,

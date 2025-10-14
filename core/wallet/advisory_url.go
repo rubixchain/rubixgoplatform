@@ -256,7 +256,7 @@ func (w *Wallet) InitializeDefaultAdvisoryURLs() error {
 	// Default URLs for both networks
 	defaultURLs := []model.AdvisoryURL{
 		{
-			URL:         "https://advisory-node-service.onrender.com",
+			URL:         "https://testnet-pool.universe.rubix.net",
 			NetworkType: "testnet",
 			IsDefault:   true,
 			IsActive:    true,
@@ -264,7 +264,7 @@ func (w *Wallet) InitializeDefaultAdvisoryURLs() error {
 			Description: "Official TestNet Advisory Node Service",
 		},
 		{
-			URL:         "https://advisory-node-service.onrender.com",
+			URL:         "https://mainnet-pool.universe.rubix.net",
 			NetworkType: "mainnet",
 			IsDefault:   true,
 			IsActive:    true,
