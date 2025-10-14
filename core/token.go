@@ -711,6 +711,18 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			latestBlockHeight, err = latestBlock.GetBlockNumber(detail.Token)
 			if err != nil {
 				c.log.Error("failed to get the latest Block Height", "error", err)
+				info := &model.FailedToSyncTokenDetailsInfo{
+					Token:     detail.Token,
+					TokenType: detail.TokenType,
+					AssetType: detail.AssetType,
+					Did:       detail.Did,
+				}
+
+				if err := c.w.AddFailedTokensToTable(info); err != nil {
+					c.log.Error("Failed to record failed token sync in DB", "token", detail.Token, "error", err)
+				} else {
+					c.log.Info("Recorded failed token sync in DB", "token", detail.Token)
+				}
 				continue
 			}
 			c.log.Debug("full node side latest block height", "height", latestBlockHeight, "token", detail.Token)
@@ -724,12 +736,31 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				TokenType: detail.TokenType,
 				AssetType: detail.AssetType,
 			})
+		} else {
+			genesisBlock := c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
+			latestBlockHash, err := latestBlock.GetHash()
+			if err != nil {
+				c.log.Error("failed to get latest block hash for the token", detail.Token)
+			}
+			txnID := latestBlock.GetTid()
+
+			eventData := model.PubSubTxnInfo{
+				BlockHash:     latestBlockHash,
+				TransactionID: txnID,
+				PublisherDID:  detail.Did,
+			}
+
+			c.AddTokenToRespectiveTable(detail.Token, detail.Did, genesisBlock, &eventData, wallet.SyncUnrequired)
 		}
 	}
 
 	var wg sync.WaitGroup
 
 	for addr, tokens := range tokenSyncMap {
+		_, did, ok := util.ParseAddress(addr)
+		if !ok {
+			c.log.Error("invalid address: %v", addr)
+		}
 		for _, token := range tokens {
 			wg.Add(1)
 			go func(addr string, token TokenSyncInfo) {
@@ -755,10 +786,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 
 				if peer == nil || err != nil {
 					c.log.Error("Failed to open peer after retries", "peer", addr, "error", err)
-					_, did, ok := util.ParseAddress(addr)
-					if !ok {
-						c.log.Error("invalid address: %v", addr)
-					}
+
 					info := &model.FailedToSyncTokenDetailsInfo{
 						Token:     token.TokenID,
 						TokenType: token.TokenType,
@@ -778,6 +806,18 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 
 				if err := c.SyncFullTokenChainForFullNode(peer, token); err != nil {
 					c.log.Error("Failed to sync chain", "token", token.TokenID, "err", err)
+					info := &model.FailedToSyncTokenDetailsInfo{
+						Token:     token.TokenID,
+						TokenType: token.TokenType,
+						AssetType: token.AssetType,
+						Did:       did,
+					}
+
+					if err := c.w.AddFailedTokensToTable(info); err != nil {
+						c.log.Error("Failed to record failed token sync in DB", "token", token.TokenID, "error", err)
+					} else {
+						c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
+					}
 				}
 			}(addr, token)
 		}
@@ -790,7 +830,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 	// Log batch sync time and details
 	c.log.Info("Completed token chain sync batch ",
 		"batch number", event.BatchNumber,
-		"num_peers", len(tokenSyncMap),
+		"num_peers to connect and sync tokenchain", len(tokenSyncMap),
+		"**********number_of_tokens_received_in the batch******** ", len(event.TokenDetails),
 		"total_duration_in_minutes", batchDuration.Minutes())
 
 }
@@ -1204,6 +1245,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		c.log.Debug("***latest block number for the token: ", tokenSyncInfo.TokenID, "is: ", blkHeight)
 	} else {
 		c.log.Debug("**latest block is nil**")
+
 	}
 
 	blkID := ""
