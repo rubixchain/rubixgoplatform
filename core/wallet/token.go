@@ -166,20 +166,22 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 }
 
 // This function fetches all rbt  tokens, which a node can have maximum token chain length(i.e Tokens with status as Free, Pledged, Burnt or TokenISBurntForFT)
-func (w *Wallet) GetRBTTokensWithMaxChainLength() ([]Token, error) {
+func (w *Wallet) GetRBTTokensWithMaxChainLength(did string) ([]Token, error) {
 	var tokens []Token
-	err := w.s.Read(TokenStorage, &tokens, "token_status=? OR token_status=? OR token_status=? OR token_status=?", TokenIsFree, TokenIsPledged, TokenIsBurnt, TokenIsBurntForFT)
+
+	err := w.s.Read(TokenStorage, &tokens, "(token_status=? OR token_status=? OR token_status=? OR token_status=?) AND did=?", TokenIsFree, TokenIsPledged, TokenIsBurnt, TokenIsBurntForFT, did)
 	if err != nil {
 		w.log.Error("Failed to get rbt tokens with maximum chain length ", "err", err)
 		return nil, err
 	}
+
 	return tokens, nil
 }
 
 // This function fetches FT Tokens, which a node can have maximum token chain length(i.e tokens with status Free)
-func (w *Wallet) GetFTTokensWithMaxChainLength() ([]FTToken, error) {
+func (w *Wallet) GetFTTokensWithMaxChainLength(did string) ([]FTToken, error) {
 	var FTTokens []FTToken
-	err := w.s.Read(FTTokenStorage, &FTTokens, "token_status=?", TokenIsFree)
+	err := w.s.Read(FTTokenStorage, &FTTokens, "token_status=? AND owner_did=?", TokenIsFree, did)
 	if err != nil {
 		w.log.Error("Failed to get FT tokens with maximum chain length ", "err", err)
 		return nil, err
@@ -188,9 +190,9 @@ func (w *Wallet) GetFTTokensWithMaxChainLength() ([]FTToken, error) {
 }
 
 // This function fetches NFT Tokens, which a node can have maximum token chain length(i.e tokens with status Free and TokenIsDeployed)
-func (w *Wallet) GetNFTTokensWithMaxChainLength() ([]NFT, error) {
+func (w *Wallet) GetNFTTokensWithMaxChainLength(did string) ([]NFT, error) {
 	var NFTTokens []NFT
-	err := w.s.Read(NFTTokenStorage, &NFTTokens, "token_status=? OR token_status=?", TokenIsDeployed, TokenIsFree)
+	err := w.s.Read(NFTTokenStorage, &NFTTokens, "(token_status=? OR token_status=?) AND did=?", TokenIsDeployed, TokenIsFree, did)
 	if err != nil {
 		w.log.Error("Failed to get NFT tokens with maximum chain length ", "err", err)
 		return nil, err
@@ -199,9 +201,9 @@ func (w *Wallet) GetNFTTokensWithMaxChainLength() ([]NFT, error) {
 }
 
 // This function fetches smart contract Tokens, which a node can have maximum token chain length(i.e tokens with status Free and TokenIsDeployed)
-func (w *Wallet) GetSmartContractTokensWithMaxChainLength() ([]SmartContract, error) {
+func (w *Wallet) GetSmartContractTokensWithMaxChainLength(did string) ([]SmartContract, error) {
 	var SmartContractTokens []SmartContract
-	err := w.s.Read(SmartContractStorage, &SmartContractTokens, "contract_status=? OR contract_status=?", TokenIsDeployed, TokenIsExecuted)
+	err := w.s.Read(SmartContractStorage, &SmartContractTokens, "(contract_status=? OR contract_status=?) AND deployer=?", TokenIsDeployed, TokenIsExecuted, did)
 	if err != nil {
 		w.log.Error("Failed to get smart contract tokens with maximum chain length ", "err", err)
 		return nil, err

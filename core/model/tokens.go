@@ -119,4 +119,5 @@ type FailedToSyncTokenDetailsInfo struct {
 type TokenChainDetailsEvent struct {
 	PublisherPeerID string                 `json:"publisher_peer_id"`
 	TokenDetails    []SendTokenDetailsInfo `json:"token_details"`
+	BatchNumber     int                    `json:"batch_number"`
 }

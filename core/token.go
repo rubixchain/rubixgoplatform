@@ -410,6 +410,7 @@ func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetai
 		event := model.TokenChainDetailsEvent{
 			PublisherPeerID: c.peerID,
 			TokenDetails:    batch,
+			BatchNumber:     i/defaultBatchSize + 1, // 1-based batch numbering
 		}
 		// payload, err := json.Marshal(event)
 		// if err != nil {
@@ -443,52 +444,67 @@ func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetai
 // First, It should read the sqlite DB and publish all those tokens details to a pub-sub event
 func (c *Core) publishTokenChainDetails() error {
 
+	allDIDs, err := c.w.GetAllDIDs()
+	if err != nil {
+		c.log.Error("failed to get all DID's of the folder")
+		return err
+	}
+
 	var rbtError error
-	rbtTokensWithMaxChainLength, rbtError := c.w.GetRBTTokensWithMaxChainLength()
-	if rbtError != nil {
-		if strings.Contains(rbtError.Error(), "no records found") {
-			c.log.Error("There are no rbt tokens to publish the tokenchain length details")
-			// return fmt.Errorf("no rbt tokens available for publishing")
-		}
-		// return fmt.Errorf("failed to get rbt tokens to publish: %w", err)
-	}
-	c.log.Debug("***publishing rbt tokens are**: ", rbtTokensWithMaxChainLength)
-	c.log.Debug("**number of rbt tokens published are**: ", len(rbtTokensWithMaxChainLength))
-	var ftError error
-	ftTokensWithMaxChainLength, ftError := c.w.GetFTTokensWithMaxChainLength()
-	if ftError != nil {
-		if strings.Contains(ftError.Error(), "no records found") {
-			c.log.Error("There are no FT tokens to publish the tokenchain length details")
-			// return fmt.Errorf("no FT tokens available for publishing")
-		}
-		// return fmt.Errorf("failed to get FT tokens to publish: %w", err)
-	}
-	c.log.Debug("***publishing FT tokens are:** ", ftTokensWithMaxChainLength)
-	c.log.Debug("**number of FT tokens published are:** ", len(ftTokensWithMaxChainLength))
-
+	var rbtTokensWithMaxChainLength []wallet.Token
+	var nftTokensWithMaxChainLength []wallet.NFT
+	var ftTokensWithMaxChainLength []wallet.FTToken
+	var smartContractTokensWithMaxChainLength []wallet.SmartContract
 	var nftError error
-	nftTokensWithMaxChainLength, nftError := c.w.GetNFTTokensWithMaxChainLength()
-	if nftError != nil {
-		if strings.Contains(nftError.Error(), "no records found") {
-			c.log.Error("There are no NFT tokens to publish the tokenchain length details")
-			// return fmt.Errorf("no NFT tokens available for publishing")
-		}
-		// return fmt.Errorf("failed to get NFT tokens to publish: %w", err)
-	}
-	c.log.Debug("***publishing NFT tokens are:** ", nftTokensWithMaxChainLength)
-	c.log.Debug("**number of NFT tokens published are:** ", len(nftTokensWithMaxChainLength))
-
+	var ftError error
 	var smartcontractErr error
-	smartContractTokensWithMaxChainLength, smartcontractErr := c.w.GetSmartContractTokensWithMaxChainLength()
-	if smartcontractErr != nil {
-		if strings.Contains(smartcontractErr.Error(), "no records found") {
-			c.log.Error("There are no smart contract tokens to publish the tokenchain length details")
-			// return fmt.Errorf("no smart contract tokens available for publishing")
+
+	for _, didStruct := range allDIDs {
+
+		rbtTokensWithMaxChainLength, rbtError = c.w.GetRBTTokensWithMaxChainLength(didStruct.DID)
+		if rbtError != nil {
+			if strings.Contains(rbtError.Error(), "no records found") {
+				c.log.Error("There are no rbt tokens to publish the tokenchain length details")
+				// return fmt.Errorf("no rbt tokens available for publishing")
+			}
+			// return fmt.Errorf("failed to get rbt tokens to publish: %w", err)
 		}
-		// return fmt.Errorf("failed to get smart contract tokens to publish: %w", err)
+		c.log.Debug("***publishing rbt tokens are**: ", rbtTokensWithMaxChainLength)
+		c.log.Debug("**number of rbt tokens published are**: ", len(rbtTokensWithMaxChainLength))
+
+		ftTokensWithMaxChainLength, ftError = c.w.GetFTTokensWithMaxChainLength(didStruct.DID)
+		if ftError != nil {
+			if strings.Contains(ftError.Error(), "no records found") {
+				c.log.Error("There are no FT tokens to publish the tokenchain length details")
+				// return fmt.Errorf("no FT tokens available for publishing")
+			}
+			// return fmt.Errorf("failed to get FT tokens to publish: %w", err)
+		}
+		c.log.Debug("***publishing FT tokens are:** ", ftTokensWithMaxChainLength)
+		c.log.Debug("**number of FT tokens published are:** ", len(ftTokensWithMaxChainLength))
+
+		nftTokensWithMaxChainLength, nftError = c.w.GetNFTTokensWithMaxChainLength(didStruct.DID)
+		if nftError != nil {
+			if strings.Contains(nftError.Error(), "no records found") {
+				c.log.Error("There are no NFT tokens to publish the tokenchain length details")
+				// return fmt.Errorf("no NFT tokens available for publishing")
+			}
+			// return fmt.Errorf("failed to get NFT tokens to publish: %w", err)
+		}
+		c.log.Debug("***publishing NFT tokens are:** ", nftTokensWithMaxChainLength)
+		c.log.Debug("**number of NFT tokens published are:** ", len(nftTokensWithMaxChainLength))
+
+		smartContractTokensWithMaxChainLength, smartcontractErr = c.w.GetSmartContractTokensWithMaxChainLength(didStruct.DID)
+		if smartcontractErr != nil {
+			if strings.Contains(smartcontractErr.Error(), "no records found") {
+				c.log.Error("There are no smart contract tokens to publish the tokenchain length details")
+				// return fmt.Errorf("no smart contract tokens available for publishing")
+			}
+			// return fmt.Errorf("failed to get smart contract tokens to publish: %w", err)
+		}
+		c.log.Debug("***publishing Smart contract tokens are:** ", smartContractTokensWithMaxChainLength)
+		c.log.Debug("**number of Smart contracttokens published are:** ", len(smartContractTokensWithMaxChainLength))
 	}
-	c.log.Debug("***publishing Smart contract tokens are:** ", smartContractTokensWithMaxChainLength)
-	c.log.Debug("**number of Smart contracttokens published are:** ", len(smartContractTokensWithMaxChainLength))
 
 	var tokenDetailsToPublish []model.SendTokenDetailsInfo
 	for _, token := range rbtTokensWithMaxChainLength {
@@ -639,15 +655,18 @@ func (c *Core) SubscribeToTokenChainDetails() error {
 	}
 
 	return c.ps.SubscribeTopic("token_chain_details", func(peerID, topic string, data []byte) {
-		c.log.Debug("Raw incoming pubsub data: ", string(data))
+		// c.log.Debug("Raw incoming pubsub data: ", string(data))
 		var event model.TokenChainDetailsEvent
 		if err := json.Unmarshal(data, &event); err != nil {
 			c.log.Error("Failed to unmarshal token chain details event", "err", err)
 			return
 		}
 
-		c.log.Info("Received token chain details event", "peerID", peerID, "tokenBatchSize", len(event.TokenDetails))
-
+		c.log.Info("Received token chain details event",
+			"peerID", peerID,
+			"batchNumber", event.BatchNumber,
+			"tokenBatchSize", len(event.TokenDetails),
+		)
 		// Use blocking send so no drop happens — be cautious of potential backpressure if workers are slow
 		eventCh <- event
 	})
@@ -664,6 +683,7 @@ func (c *Core) tokenDetailWorker(eventCh <-chan model.TokenChainDetailsEvent, wo
 func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 	tokenSyncMap := make(map[string][]TokenSyncInfo)
 
+	batchStart := time.Now()
 	for _, detail := range event.TokenDetails {
 		if detail.Did == "" {
 			continue
@@ -764,6 +784,14 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 	}
 
 	wg.Wait()
+	// End timer after all syncs are done
+	batchDuration := time.Since(batchStart)
+
+	// Log batch sync time and details
+	c.log.Info("Completed token chain sync batch",
+		"num_peers", len(tokenSyncMap),
+		"total_duration", batchDuration.Minutes())
+
 }
 
 // func (c *Core) TokenChainDetailsCallback(peerID string, topic string, data []byte) {
