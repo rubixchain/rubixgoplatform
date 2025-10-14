@@ -443,174 +443,150 @@ func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetai
 
 // First, It should read the sqlite DB and publish all those tokens details to a pub-sub event
 func (c *Core) publishTokenChainDetails() error {
-
 	allDIDs, err := c.w.GetAllDIDs()
 	if err != nil {
 		c.log.Error("failed to get all DID's of the folder")
 		return err
 	}
 
-	var rbtError error
-	var rbtTokensWithMaxChainLength []wallet.Token
-	var nftTokensWithMaxChainLength []wallet.NFT
-	var ftTokensWithMaxChainLength []wallet.FTToken
-	var smartContractTokensWithMaxChainLength []wallet.SmartContract
-	var nftError error
-	var ftError error
-	var smartcontractErr error
+	var aggregatedRBTTokens []wallet.Token
+	var aggregatedFTTokens []wallet.FTToken
+	var aggregatedNFTTokens []wallet.NFT
+	var aggregatedSmartContractTokens []wallet.SmartContract
 
 	for _, didStruct := range allDIDs {
-
-		rbtTokensWithMaxChainLength, rbtError = c.w.GetRBTTokensWithMaxChainLength(didStruct.DID)
-		if rbtError != nil {
-			if strings.Contains(rbtError.Error(), "no records found") {
-				c.log.Error("There are no rbt tokens to publish the tokenchain length details")
-				// return fmt.Errorf("no rbt tokens available for publishing")
-			}
-			// return fmt.Errorf("failed to get rbt tokens to publish: %w", err)
+		rbtTokens, rbtError := c.w.GetRBTTokensWithMaxChainLength(didStruct.DID)
+		if rbtError != nil && !strings.Contains(rbtError.Error(), "no records found") {
+			c.log.Error("failed to get rbt tokens for DID", "did", didStruct.DID, "err", rbtError)
+			return rbtError
 		}
-		c.log.Debug("***publishing rbt tokens are**: ", rbtTokensWithMaxChainLength)
-		c.log.Debug("**number of rbt tokens published are**: ", len(rbtTokensWithMaxChainLength))
+		aggregatedRBTTokens = append(aggregatedRBTTokens, rbtTokens...)
+		c.log.Debug("Current count of aggregated RBT tokens:", len(aggregatedRBTTokens))
 
-		ftTokensWithMaxChainLength, ftError = c.w.GetFTTokensWithMaxChainLength(didStruct.DID)
-		if ftError != nil {
-			if strings.Contains(ftError.Error(), "no records found") {
-				c.log.Error("There are no FT tokens to publish the tokenchain length details")
-				// return fmt.Errorf("no FT tokens available for publishing")
-			}
-			// return fmt.Errorf("failed to get FT tokens to publish: %w", err)
+		ftTokens, ftError := c.w.GetFTTokensWithMaxChainLength(didStruct.DID)
+		if ftError != nil && !strings.Contains(ftError.Error(), "no records found") {
+			c.log.Error("failed to get FT tokens for DID", "did", didStruct.DID, "err", ftError)
+			return ftError
 		}
-		c.log.Debug("***publishing FT tokens are:** ", ftTokensWithMaxChainLength)
-		c.log.Debug("**number of FT tokens published are:** ", len(ftTokensWithMaxChainLength))
+		aggregatedFTTokens = append(aggregatedFTTokens, ftTokens...)
+		c.log.Debug("Current count of aggregated FT tokens:", len(aggregatedFTTokens))
 
-		nftTokensWithMaxChainLength, nftError = c.w.GetNFTTokensWithMaxChainLength(didStruct.DID)
-		if nftError != nil {
-			if strings.Contains(nftError.Error(), "no records found") {
-				c.log.Error("There are no NFT tokens to publish the tokenchain length details")
-				// return fmt.Errorf("no NFT tokens available for publishing")
-			}
-			// return fmt.Errorf("failed to get NFT tokens to publish: %w", err)
+		nftTokens, nftError := c.w.GetNFTTokensWithMaxChainLength(didStruct.DID)
+		if nftError != nil && !strings.Contains(nftError.Error(), "no records found") {
+			c.log.Error("failed to get NFT tokens for DID", "did", didStruct.DID, "err", nftError)
+			return nftError
 		}
-		c.log.Debug("***publishing NFT tokens are:** ", nftTokensWithMaxChainLength)
-		c.log.Debug("**number of NFT tokens published are:** ", len(nftTokensWithMaxChainLength))
+		aggregatedNFTTokens = append(aggregatedNFTTokens, nftTokens...)
+		c.log.Debug("Current count of aggregated NFT tokens:", len(aggregatedNFTTokens))
 
-		smartContractTokensWithMaxChainLength, smartcontractErr = c.w.GetSmartContractTokensWithMaxChainLength(didStruct.DID)
-		if smartcontractErr != nil {
-			if strings.Contains(smartcontractErr.Error(), "no records found") {
-				c.log.Error("There are no smart contract tokens to publish the tokenchain length details")
-				// return fmt.Errorf("no smart contract tokens available for publishing")
-			}
-			// return fmt.Errorf("failed to get smart contract tokens to publish: %w", err)
+		smartContractTokens, scError := c.w.GetSmartContractTokensWithMaxChainLength(didStruct.DID)
+		if scError != nil && !strings.Contains(scError.Error(), "no records found") {
+			c.log.Error("failed to get smart contract tokens for DID", "did", didStruct.DID, "err", scError)
+			return scError
 		}
-		c.log.Debug("***publishing Smart contract tokens are:** ", smartContractTokensWithMaxChainLength)
-		c.log.Debug("**number of Smart contracttokens published are:** ", len(smartContractTokensWithMaxChainLength))
+		aggregatedSmartContractTokens = append(aggregatedSmartContractTokens, smartContractTokens...)
+		c.log.Debug("Current count of aggregated smart contract tokens:", len(aggregatedSmartContractTokens))
 	}
 
 	var tokenDetailsToPublish []model.SendTokenDetailsInfo
-	for _, token := range rbtTokensWithMaxChainLength {
-		var tokenType int
-		tokenType = c.TokenType(RBTString)
+
+	// Prepare RBT tokens for publishing
+	for _, token := range aggregatedRBTTokens {
+		tokenType := c.TokenType(RBTString)
 		if token.TokenValue != float64(1) {
 			tokenType = c.TokenType(PartString)
 		}
-
 		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
 		if latestBlock == nil {
 			c.log.Error("Failed to get latest block for token", "token", token)
-			return fmt.Errorf("Failed to get latest block for token", "token", token)
+			return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
 		}
-
-		// Get block height
 		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
 		if err != nil {
 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-			return fmt.Errorf("Failed to get latest block height of token", "token", token, "error", err)
+			return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
 		}
-		var tokenDetails model.SendTokenDetailsInfo
-		tokenDetails.Token = token.TokenID
-		tokenDetails.TokenChainLength = blockHeight
-		tokenDetails.TokenType = tokenType
-		tokenDetails.Did = token.DID
-		tokenDetails.AssetType = RBTTokenType
-		tokenDetailsToPublish = append(tokenDetailsToPublish, tokenDetails)
+		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
+			Token:            token.TokenID,
+			TokenChainLength: blockHeight,
+			TokenType:        tokenType,
+			Did:              token.DID,
+			AssetType:        RBTTokenType,
+		})
 	}
 
-	for _, token := range ftTokensWithMaxChainLength {
+	// Prepare FT tokens for publishing
+	for _, token := range aggregatedFTTokens {
 		tokenType := c.TokenType(FTString)
 		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
 		if latestBlock == nil {
 			c.log.Error("Failed to get latest block for token", "token", token)
-			return fmt.Errorf("Failed to get latest block for token", "token", token)
+			return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
 		}
-
-		// Get block height
 		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
 		if err != nil {
 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-			return fmt.Errorf("Failed to get latest block height of token", "token", token, "error", err)
+			return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
 		}
-		var tokenDetails model.SendTokenDetailsInfo
-		tokenDetails.Token = token.TokenID
-		tokenDetails.TokenChainLength = blockHeight
-		tokenDetails.TokenType = tokenType
-		tokenDetails.Did = token.DID
-		tokenDetails.AssetType = FTTokenType
-		tokenDetailsToPublish = append(tokenDetailsToPublish, tokenDetails)
-
+		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
+			Token:            token.TokenID,
+			TokenChainLength: blockHeight,
+			TokenType:        tokenType,
+			Did:              token.DID,
+			AssetType:        FTTokenType,
+		})
 	}
-	for _, token := range nftTokensWithMaxChainLength {
+
+	// Prepare NFT tokens for publishing
+	for _, token := range aggregatedNFTTokens {
 		tokenType := c.TokenType(NFTString)
 		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
 		if latestBlock == nil {
 			c.log.Error("Failed to get latest block for token", "token", token)
-			return fmt.Errorf("Failed to get latest block for token", "token", token)
+			return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
 		}
-
-		// Get block height
 		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
 		if err != nil {
 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-			return fmt.Errorf("Failed to get latest block height of token", "token", token, "error", err)
+			return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
 		}
-		var tokenDetails model.SendTokenDetailsInfo
-		tokenDetails.Token = token.TokenID
-		tokenDetails.TokenChainLength = blockHeight
-		tokenDetails.TokenType = tokenType
-		tokenDetails.Did = token.DID
-		tokenDetails.AssetType = NFTTokenType
-		tokenDetailsToPublish = append(tokenDetailsToPublish, tokenDetails)
-
+		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
+			Token:            token.TokenID,
+			TokenChainLength: blockHeight,
+			TokenType:        tokenType,
+			Did:              token.DID,
+			AssetType:        NFTTokenType,
+		})
 	}
-	for _, token := range smartContractTokensWithMaxChainLength {
+
+	// Prepare smart contract tokens for publishing
+	for _, token := range aggregatedSmartContractTokens {
 		tokenType := c.TokenType(SmartContractString)
 		latestBlock := c.w.GetLatestTokenBlock(token.SmartContractHash, tokenType)
 		if latestBlock == nil {
-			c.log.Error("Failed to get latest block for token", "token", token)
-			return fmt.Errorf("Failed to get latest block for token", "token", token)
+			c.log.Error("Failed to get latest block for smart contract token", "token", token)
+			return fmt.Errorf("Failed to get latest block for smart contract token: %v", token.SmartContractHash)
 		}
-
-		// Get block height
 		blockHeight, err := latestBlock.GetBlockNumber(token.SmartContractHash)
 		if err != nil {
-			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-			return fmt.Errorf("Failed to get latest block height of token", "token", token, "error", err)
+			c.log.Error("Failed to get latest block height of smart contract token", "token", token, "error", err)
+			return fmt.Errorf("Failed to get latest block height of smart contract token: %v, error: %w", token.SmartContractHash, err)
 		}
-		var tokenDetails model.SendTokenDetailsInfo
-		tokenDetails.Token = token.SmartContractHash
-		tokenDetails.TokenChainLength = blockHeight
-		tokenDetails.TokenType = tokenType
-		tokenDetails.Did = token.Deployer
-		tokenDetails.AssetType = SmartContractTokenType
-		tokenDetailsToPublish = append(tokenDetailsToPublish, tokenDetails)
-
+		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
+			Token:            token.SmartContractHash,
+			TokenChainLength: blockHeight,
+			TokenType:        tokenType,
+			Did:              token.Deployer,
+			AssetType:        SmartContractTokenType,
+		})
 	}
 
-	//call publishing function to pub-sub
+	// Publish all aggregated token details
 	c.PublishTokenChainDetailsEvent(tokenDetailsToPublish)
 	c.log.Info("**returning from publishTokenChainDetails function**")
 	return nil
-
 }
+
 func (c *Core) PublishTCDetails() {
 	if c.ps == nil || c.peerID == "" {
 		c.log.Warn("Cannot publish token chain details: pub-sub or peerID not initialized")
