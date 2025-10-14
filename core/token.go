@@ -788,9 +788,10 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 	batchDuration := time.Since(batchStart)
 
 	// Log batch sync time and details
-	c.log.Info("Completed token chain sync batch",
+	c.log.Info("Completed token chain sync batch ",
+		"batch number", event.BatchNumber,
 		"num_peers", len(tokenSyncMap),
-		"total_duration", batchDuration.Minutes())
+		"total_duration_in_minutes", batchDuration.Minutes())
 
 }
 
