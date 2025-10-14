@@ -168,6 +168,10 @@ func InitWallet(s storage.Storage, dir string, log logger.Logger) (*Wallet, erro
 	if err != nil {
 		w.log.Error("Failed to initialize FT Token storage", "err", err)
 	}
+	// Ensure FTIndexTable exists before FT operations (used for high-value FT numbering)
+	if err := w.s.Init(FTIndexStorage, &FTIndex{}, true); err != nil {
+		w.log.Error("Failed to initialize FTIndex storage", "err", err)
+	}
 	err = w.s.Init(FTStorage, &FT{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize FT storage", "err", err)

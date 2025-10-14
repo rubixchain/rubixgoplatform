@@ -66,7 +66,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, FTValue float6
 	var ftStartIndex int
 	if isHighValueFt {
 		var allocErr error
-		ftStartIndex, allocErr = c.allocateFTIndices(FTName, did, numFTs)
+		// Reserve exactly one index for HVFT
+		ftStartIndex, allocErr = c.allocateFTIndices(FTName, did, 1)
 		if allocErr != nil {
 			return fmt.Errorf("failed to allocate FT indices: %w", allocErr)
 		}
