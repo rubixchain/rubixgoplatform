@@ -999,7 +999,7 @@ func (w *Wallet) GetFullNodeGenesisTokenBlock(token string, tokenType int) *bloc
 // AddTokenBlock will write token block into storage
 func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
 
-	w.log.Debug("**entered into AddTokenBlock function**, block is: ", b)
+	// w.log.Debug("**entered into AddTokenBlock function**, block is: ", b)
 
 	return w.addBlock(token, b)
 }

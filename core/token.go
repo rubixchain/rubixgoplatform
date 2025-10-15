@@ -400,7 +400,7 @@ func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetai
 		c.log.Info("Nothing to publish")
 		return
 	}
-	c.log.Info(fmt.Sprintf("Publishing %d token details in %d-sized batches", total, defaultBatchSize))
+	c.log.Info(fmt.Sprintf("****Publishing %d token details in %d-sized batches**", total, defaultBatchSize))
 	for i := 0; i < total; i += defaultBatchSize {
 		end := i + defaultBatchSize
 		if end > total {
@@ -412,11 +412,7 @@ func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetai
 			TokenDetails:    batch,
 			BatchNumber:     i/defaultBatchSize + 1, // 1-based batch numbering
 		}
-		// payload, err := json.Marshal(event)
-		// if err != nil {
-		// 	c.log.Error("Failed to marshal batch", "err", err)
-		// 	continue
-		// }
+
 		if err := c.ps.Publish("token_chain_details", event); err != nil {
 			c.log.Error("Failed to publish batch", "idx", i, "err", err)
 			continue
@@ -721,9 +717,10 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			txnID := latestBlock.GetTid()
 
 			eventData := model.PubSubTxnInfo{
-				BlockHash:     latestBlockHash,
-				TransactionID: txnID,
-				PublisherDID:  detail.Did,
+				BlockHash:         latestBlockHash,
+				TransactionID:     txnID,
+				PublisherDID:      detail.Did,
+				LatestBlockHeight: latestBlockHeight,
 			}
 
 			c.AddTokenToRespectiveTable(detail.Token, detail.Did, genesisBlock, &eventData, wallet.SyncUnrequired)
@@ -2350,6 +2347,8 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			OwnerDID:      tokenOwner,
 			BlockHash:     event.BlockHash,
 			TransactionID: event.TransactionID,
+			PublisherDID:  event.PublisherDID,
+			BlockHeight:   int64(event.LatestBlockHeight),
 			SyncStaus:     syncStatus,
 		}
 
