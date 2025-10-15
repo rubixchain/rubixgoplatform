@@ -723,6 +723,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				LatestBlockHeight: latestBlockHeight,
 			}
 
+			c.log.Debug("**latest block in event data****", eventData.LatestBlockHeight)
+
 			c.AddTokenToRespectiveTable(detail.Token, detail.Did, genesisBlock, &eventData, wallet.SyncUnrequired)
 		}
 	}
@@ -2329,6 +2331,8 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			syncedRBT.TransactionID = event.TransactionID
 			syncedRBT.BlockHash = event.BlockHash
 			syncedRBT.SyncStaus = syncStatus
+			syncedRBT.BlockHeight = event.LatestBlockHeight
+			syncedRBT.PublisherDID = event.PublisherDID
 
 			err = c.w.UpdateSyncedRBTToTable(syncedRBT)
 			if err != nil {
@@ -2348,9 +2352,11 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			BlockHash:     event.BlockHash,
 			TransactionID: event.TransactionID,
 			PublisherDID:  event.PublisherDID,
-			BlockHeight:   int64(event.LatestBlockHeight),
+			BlockHeight:   event.LatestBlockHeight,
 			SyncStaus:     syncStatus,
 		}
+		c.log.Debug("***block height just before adding to FUllnodeRBT Table****", tokenInfo.BlockHeight)
+		c.log.Debug("***publisherDID just before adding to FUllnodeRBT Table****", tokenInfo.PublisherDID)
 
 		err = c.w.AddSyncedRBTToTable(tokenInfo)
 		if err != nil {

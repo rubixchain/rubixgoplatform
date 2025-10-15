@@ -76,7 +76,7 @@ type SyncedRBT struct {
 	PublisherDID  string  `gorm:"column:publisher_did"`
 	TransactionID string  `gorm:"column:transaction_id"`
 	BlockHash     string  `gorm:"column:block_hash"`
-	BlockHeight   int64   `gorm:"column:block_height"`
+	BlockHeight   uint64  `gorm:"column:block_height"`
 	SyncStaus     int     `gorm:"column:sync_status"`
 	// SenderAddress string  `gorm:"column:owner_address"`
 }
