@@ -107,10 +107,17 @@ type SendTokenDetailsInfo struct {
 	TokenType        int    `json:"token_type"`
 	Token            string `json:"token"`
 	Did              string `json:"did"`
-	AssetType       int     `json:"asset_type"`
+	AssetType        int    `json:"asset_type"`
+}
+type FailedToSyncTokenDetailsInfo struct {
+	TokenType int    `json:"token_type"`
+	Token     string `json:"token"`
+	Did       string `json:"did"`
+	AssetType int    `json:"asset_type"`
 }
 
 type TokenChainDetailsEvent struct {
 	PublisherPeerID string                 `json:"publisher_peer_id"`
 	TokenDetails    []SendTokenDetailsInfo `json:"token_details"`
+	BatchNumber     int                    `json:"batch_number"`
 }

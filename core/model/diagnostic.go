@@ -1,8 +1,10 @@
 package model
 
 type TCDumpRequest struct {
-	Token   string `json:"token"`
-	BlockID string `json:"block_id"`
+	Token         string `json:"token"`
+	BlockID       string `json:"block_id"`
+	FullnodeToken bool   `json:"fullnode_token"`
+	AssetType     string `json:"asset_type"`
 }
 
 type TCDumpReply struct {

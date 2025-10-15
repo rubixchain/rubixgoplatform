@@ -332,6 +332,28 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		c.log.Error("part token creation failed, failed to add token block", "err", err)
 		return nil, err
 	}
+
+	// publish the transaction in the network with topic : rubix_txns
+	blockHash, err := b.GetHash()
+	if err != nil {
+		blockHash = ""
+		c.log.Error("failed to get block hash")
+	}
+	publishingBurntBlock := &model.PubSubTxnInfo{
+		BlockHash:    blockHash,
+		TxnType:      tcb.TransactionType,
+		AssetType:    RBTTokenType,
+		PublisherDID: dc.GetDID(),
+		TxnBlock:     b.GetBlock(),
+	}
+
+	c.log.Debug("publishing burnt rbt block")
+	err = c.publishTxn(publishingBurntBlock)
+	if err != nil {
+		c.log.Error("Failed to publish burnt block", "err", err)
+		return nil, err
+	}
+
 	npt := make([]wallet.Token, 0)
 	for i := range parts {
 		ptkn := &wallet.Token{

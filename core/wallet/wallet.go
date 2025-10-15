@@ -42,6 +42,7 @@ const (
 	FullNodeNFTTable               string = "FullnodeNFTtable"
 	FullNodeSmartContractTable     string = "FullnodeSCtable"
 	FailedTxnsTable                string = "FailedTxns"
+	FullNodeFailedToSyncTokens     string = "FullnodeFailedTokensTable"
 )
 
 type WalletConfig struct {
@@ -252,23 +253,28 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, dir string, lo
 
 		err = w.fullNodeSQLDB.Init(FullNodeNFTTable, &SyncedNFT{}, true)
 		if err != nil {
-			w.log.Error("Failed to initialize whole token storage", "err", err)
+			w.log.Error("Failed to initialize NFT token storage", "err", err)
 			return nil, err
 		}
 
 		err = w.fullNodeSQLDB.Init(FullNodeSmartContractTable, &SyncedSmartContract{}, true)
 		if err != nil {
-			w.log.Error("Failed to initialize whole token storage", "err", err)
+			w.log.Error("Failed to initialize fullnode smart contract token storage", "err", err)
 			return nil, err
 		}
 
 		err = w.fullNodeSQLDB.Init(FailedTxnsTable, &model.FailedTransaction{}, true)
 		if err != nil {
-			w.log.Error("Failed to initialize whole token storage", "err", err)
+			w.log.Error("Failed to initialize fullnode failed transaction storage", "err", err)
+			return nil, err
+		}
+		err = w.fullNodeSQLDB.Init(FullNodeFailedToSyncTokens, &model.FailedToSyncTokenDetailsInfo{}, true)
+		if err != nil {
+			w.log.Error("failed to initialize FullNodeFailedToSyncTokens storage", "error", err)
 			return nil, err
 		}
 	}
-	
+
 	return w, nil
 }
 

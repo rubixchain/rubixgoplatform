@@ -71,12 +71,14 @@ type Token struct {
 type SyncedRBT struct {
 	TokenID string `gorm:"column:token_id;primaryKey"`
 	// ParentTokenID string  `gorm:"column:parent_token_id"`
-	TokenValue   float64 `gorm:"column:token_value"`
-	OwnerDID     string  `gorm:"column:owner_did"`
-	PublisherDID string  `gorm:"column:publisher_did"`
-	BlockHash    string  `gorm:"column:block_hash"`
-	SyncStaus    int     `gorm:"column:sync_status"`
-	// TokenStateHash string  `gorm:"column:token_state_hash"`
+	TokenValue    float64 `gorm:"column:token_value"`
+	OwnerDID      string  `gorm:"column:owner_did"`
+	PublisherDID  string  `gorm:"column:publisher_did"`
+	TransactionID string  `gorm:"column:transaction_id"`
+	BlockHash     string  `gorm:"column:block_hash"`
+	BlockHeight   int64   `gorm:"column:block_height"`
+	SyncStaus     int     `gorm:"column:sync_status"`
+	// SenderAddress string  `gorm:"column:owner_address"`
 }
 
 func (w *Wallet) CreateToken(t *Token) error {
@@ -164,20 +166,22 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 }
 
 // This function fetches all rbt  tokens, which a node can have maximum token chain length(i.e Tokens with status as Free, Pledged, Burnt or TokenISBurntForFT)
-func (w *Wallet) GetRBTTokensWithMaxChainLength() ([]Token, error) {
+func (w *Wallet) GetRBTTokensWithMaxChainLength(did string) ([]Token, error) {
 	var tokens []Token
-	err := w.s.Read(TokenStorage, &tokens, "token_status=? OR token_status=? OR token_status=? OR token_status=?", TokenIsFree, TokenIsPledged, TokenIsBurnt, TokenIsBurntForFT)
+
+	err := w.s.Read(TokenStorage, &tokens, "(token_status=? OR token_status=? OR token_status=? OR token_status=?) AND did=?", TokenIsFree, TokenIsPledged, TokenIsBurnt, TokenIsBurntForFT, did)
 	if err != nil {
 		w.log.Error("Failed to get rbt tokens with maximum chain length ", "err", err)
 		return nil, err
 	}
+
 	return tokens, nil
 }
 
 // This function fetches FT Tokens, which a node can have maximum token chain length(i.e tokens with status Free)
-func (w *Wallet) GetFTTokensWithMaxChainLength() ([]FTToken, error) {
+func (w *Wallet) GetFTTokensWithMaxChainLength(did string) ([]FTToken, error) {
 	var FTTokens []FTToken
-	err := w.s.Read(FTTokenStorage, &FTTokens, "token_status=?", TokenIsFree)
+	err := w.s.Read(FTTokenStorage, &FTTokens, "token_status=? AND owner_did=?", TokenIsFree, did)
 	if err != nil {
 		w.log.Error("Failed to get FT tokens with maximum chain length ", "err", err)
 		return nil, err
@@ -186,9 +190,9 @@ func (w *Wallet) GetFTTokensWithMaxChainLength() ([]FTToken, error) {
 }
 
 // This function fetches NFT Tokens, which a node can have maximum token chain length(i.e tokens with status Free and TokenIsDeployed)
-func (w *Wallet) GetNFTTokensWithMaxChainLength() ([]NFT, error) {
+func (w *Wallet) GetNFTTokensWithMaxChainLength(did string) ([]NFT, error) {
 	var NFTTokens []NFT
-	err := w.s.Read(NFTTokenStorage, &NFTTokens, "token_status=? OR token_status=?", TokenIsDeployed, TokenIsFree)
+	err := w.s.Read(NFTTokenStorage, &NFTTokens, "(token_status=? OR token_status=?) AND did=?", TokenIsDeployed, TokenIsFree, did)
 	if err != nil {
 		w.log.Error("Failed to get NFT tokens with maximum chain length ", "err", err)
 		return nil, err
@@ -197,9 +201,9 @@ func (w *Wallet) GetNFTTokensWithMaxChainLength() ([]NFT, error) {
 }
 
 // This function fetches smart contract Tokens, which a node can have maximum token chain length(i.e tokens with status Free and TokenIsDeployed)
-func (w *Wallet) GetSmartContractTokensWithMaxChainLength() ([]SmartContract, error) {
+func (w *Wallet) GetSmartContractTokensWithMaxChainLength(did string) ([]SmartContract, error) {
 	var SmartContractTokens []SmartContract
-	err := w.s.Read(SmartContractStorage, &SmartContractTokens, "contract_status=? OR contract_status=?", TokenIsDeployed, TokenIsExecuted)
+	err := w.s.Read(SmartContractStorage, &SmartContractTokens, "(contract_status=? OR contract_status=?) AND deployer=?", TokenIsDeployed, TokenIsExecuted, did)
 	if err != nil {
 		w.log.Error("Failed to get smart contract tokens with maximum chain length ", "err", err)
 		return nil, err
@@ -1471,6 +1475,11 @@ func (w *Wallet) AddSyncedSmartContractToTable(t *SyncedSmartContract) error {
 	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Write(FullNodeSmartContractTable, t)
 }
+func (w *Wallet) AddFailedTokensToTable(t *model.FailedToSyncTokenDetailsInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Write(FullNodeFailedToSyncTokens, t)
+}
 
 // This function is used by fullnode to read from the list of all synced RBTs
 func (w *Wallet) ReadSyncedRBTFromTable(tokenId string) (*SyncedRBT, error) {
@@ -1523,6 +1532,18 @@ func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedS
 		return nil, err
 	}
 	return &sc, nil
+}
+
+func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedToSyncTokenDetailsInfo, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var token model.FailedToSyncTokenDetailsInfo
+	err := w.fullNodeSQLDB.Read(FullNodeFailedToSyncTokens, &token, "token_id=?", tokenID)
+	if err != nil {
+		// w.log.Error("Failed to get sc", "err", err)
+		return nil, err
+	}
+	return &token, nil
 }
 
 // This function is used by fullnode to update synced RBTs
@@ -1668,6 +1689,12 @@ func (w *Wallet) GetAllSmartContractsbyDID(did string) ([]SyncedSmartContract, e
 		return nil, err
 	}
 	return t, nil
+}
+
+func (w *Wallet) UpdateFailedToSyncTokensFromTable(token *model.FailedToSyncTokenDetailsInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Update(FullNodeFailedToSyncTokens, &token, "token=?", token.Token)
 }
 
 // Store failed transactions in fullnode DB for later analysis and retry
