@@ -116,7 +116,7 @@ func (c *Core) GetRBTFullTokenchain(TokenID string) *model.GetTokenChainResponce
 
 	str, err := tcMarshal("", blocks)
 	if err != nil {
-		c.log.Error("Failed to marshal FT token chain", "err", err)
+		c.log.Error("Failed to marshal RBT token chain", "err", err)
 		return nil
 	}
 
@@ -125,7 +125,7 @@ func (c *Core) GetRBTFullTokenchain(TokenID string) *model.GetTokenChainResponce
 
 	err = json.Unmarshal(byteArray, &data)
 	if err != nil {
-		fmt.Println("Error unmarshal JSON for FT tokenchain :", err)
+		fmt.Println("Error unmarshal JSON for RBT tokenchain :", err)
 		return nil
 	}
 
@@ -136,12 +136,12 @@ func (c *Core) GetRBTFullTokenchain(TokenID string) *model.GetTokenChainResponce
 	}
 
 	getRBTChainReply.Status = true
-	getRBTChainReply.Message = "FT tokenchain data fetched successfully"
+	getRBTChainReply.Message = "RBT tokenchain data fetched successfully"
 	getRBTChainReply.TokenChainData = data
 
 	if len(getRBTChainReply.TokenChainData) == 0 {
 		getRBTChainReply.Status = true
-		getRBTChainReply.Message = "No FT tokenchain data available"
+		getRBTChainReply.Message = "No RBT tokenchain data available"
 		return getRBTChainReply
 	}
 
