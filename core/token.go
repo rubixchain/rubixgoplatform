@@ -400,7 +400,7 @@ func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetai
 		c.log.Info("Nothing to publish")
 		return
 	}
-	c.log.Info(fmt.Sprintf("Publishing %d token details in %d-sized batches", total, defaultBatchSize))
+	c.log.Info(fmt.Sprintf("****Publishing %d token details in %d-sized batches**", total, defaultBatchSize))
 	for i := 0; i < total; i += defaultBatchSize {
 		end := i + defaultBatchSize
 		if end > total {
@@ -412,11 +412,7 @@ func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetai
 			TokenDetails:    batch,
 			BatchNumber:     i/defaultBatchSize + 1, // 1-based batch numbering
 		}
-		// payload, err := json.Marshal(event)
-		// if err != nil {
-		// 	c.log.Error("Failed to marshal batch", "err", err)
-		// 	continue
-		// }
+
 		if err := c.ps.Publish("token_chain_details", event); err != nil {
 			c.log.Error("Failed to publish batch", "idx", i, "err", err)
 			continue
@@ -721,10 +717,13 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			txnID := latestBlock.GetTid()
 
 			eventData := model.PubSubTxnInfo{
-				BlockHash:     latestBlockHash,
-				TransactionID: txnID,
-				PublisherDID:  detail.Did,
+				BlockHash:         latestBlockHash,
+				TransactionID:     txnID,
+				PublisherDID:      detail.Did,
+				LatestBlockHeight: latestBlockHeight,
 			}
+
+			c.log.Debug("**latest block in event data****", eventData.LatestBlockHeight)
 
 			c.AddTokenToRespectiveTable(detail.Token, detail.Did, genesisBlock, &eventData, wallet.SyncUnrequired)
 		}
@@ -2332,6 +2331,8 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			syncedRBT.TransactionID = event.TransactionID
 			syncedRBT.BlockHash = event.BlockHash
 			syncedRBT.SyncStaus = syncStatus
+			syncedRBT.BlockHeight = event.LatestBlockHeight
+			syncedRBT.PublisherDID = event.PublisherDID
 
 			err = c.w.UpdateSyncedRBTToTable(syncedRBT)
 			if err != nil {
@@ -2350,8 +2351,12 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			OwnerDID:      tokenOwner,
 			BlockHash:     event.BlockHash,
 			TransactionID: event.TransactionID,
+			PublisherDID:  event.PublisherDID,
+			BlockHeight:   event.LatestBlockHeight,
 			SyncStaus:     syncStatus,
 		}
+		c.log.Debug("***block height just before adding to FUllnodeRBT Table****", tokenInfo.BlockHeight)
+		c.log.Debug("***publisherDID just before adding to FUllnodeRBT Table****", tokenInfo.PublisherDID)
 
 		err = c.w.AddSyncedRBTToTable(tokenInfo)
 		if err != nil {
@@ -2450,6 +2455,46 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// Get token's ipfs content from the provider and store it in the psql db
+func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
+	tokenContent, err := c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to get ipfs content of token : %v, err: %v", tokenId, err)
+		c.log.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	switch assetType {
+	case RBTTokenType:
+		rbtContent := &wallet.RBTContent{
+			TokenID:    tokenId,
+			RBTContent: tokenContent,
+		}
+		err = c.w.AddRBTContentToPSQl(rbtContent)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to add ipfs content of rbt : %v to fullnode psql db, err: %v", tokenId, err)
+			c.log.Error(errMsg)
+			return fmt.Errorf(errMsg)
+		}
+	case FTTokenType:
+		ftContent := &wallet.FTContent{
+			TokenID:   tokenId,
+			FTContent: tokenContent,
+		}
+		err = c.w.AddFTContentToPSQl(ftContent)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to add ipfs content of ft : %v to fullnode psql db, err: %v", tokenId, err)
+			c.log.Error(errMsg)
+			return fmt.Errorf(errMsg)
+		}
+	default:
+		errMsg := fmt.Sprintf("failed to add ipfs content, invalid asset type :%v of token : %v", assetType, tokenId)
+		c.log.Error(errMsg)
+		return fmt.Errorf(errMsg)
 	}
 	return nil
 }

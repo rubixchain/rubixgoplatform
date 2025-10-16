@@ -70,16 +70,19 @@ const (
 )
 
 const (
-	InvalidPasringErr string = "invalid json parsing"
-	RubixRootDir      string = "Rubix/"
-	DefaultMainNetDB  string = "rubix.db"
-	DefaultTestNetDB  string = "rubixtest.db"
-	FullNodeMainNetDB string = "fullnode-rubix.db"
-	FullNodeTestNetDB string = "fullnode-rubixtest.db"
-	MainNetDir        string = "MainNet"
-	TestNetDir        string = "TestNet"
-	TestNetDIDDir     string = "TestNetDID/"
-	MaxDecimalPlaces  int    = 3
+	InvalidPasringErr        string = "invalid json parsing"
+	RubixRootDir             string = "Rubix/"
+	DefaultMainNetDB         string = "rubix.db"
+	DefaultTestNetDB         string = "rubixtest.db"
+	FullNodeMainNetDB        string = "fullnode-rubix.db"
+	FullNodeTestNetDB        string = "fullnode-rubixtest.db"
+	FullNodeTokensDBName     string = "fullnode_tokens_storage"
+	FullNodeTestTokensDBName string = "fullnode_testtokens_storage"
+	FullNodeTokensDBPort     string = "5432"
+	MainNetDir               string = "MainNet"
+	TestNetDir               string = "TestNet"
+	TestNetDIDDir            string = "TestNetDID/"
+	MaxDecimalPlaces         int    = 3
 )
 
 const (
@@ -135,7 +138,8 @@ type Core struct {
 	pqc                  map[string]did.DIDCrypto
 	sd                   map[string]*ServiceDetials
 	s                    storage.Storage
-	fullNodeS            storage.Storage
+	fullNodeStorage      storage.Storage
+	fullNodeTokensDB     storage.Storage
 	as                   storage.Storage
 	srv                  *service.Service
 	arbitaryMode         bool
@@ -191,7 +195,7 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, fullnodeTokenDBUsername string, fullnodeTokenDBPassword string) (*Core, error) {
 	var err error
 	update := false
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
@@ -204,19 +208,6 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if cfg.CfgData.TestStorageConfig.StorageType == 0 {
 		cfg.CfgData.TestStorageConfig.StorageType = storage.StorageDBType
 		cfg.CfgData.TestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + DefaultTestNetDB
-		cfg.CfgData.TestStorageConfig.DBType = "Sqlite3"
-		update = true
-	}
-
-	if cfg.CfgData.StorageConfig.StorageType == 0 {
-		cfg.CfgData.StorageConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.StorageConfig.DBAddress = cfg.DirPath + RubixRootDir + FullNodeMainNetDB
-		cfg.CfgData.StorageConfig.DBType = "Sqlite3"
-		update = true
-	}
-	if cfg.CfgData.TestStorageConfig.StorageType == 0 {
-		cfg.CfgData.TestStorageConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.TestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + FullNodeTestNetDB
 		cfg.CfgData.TestStorageConfig.DBType = "Sqlite3"
 		update = true
 	}
@@ -239,6 +230,48 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		publishTokenChain: publishTokenChainDetails,
 		fullNode:          fullNode,
 	}
+
+	if c.fullNode {
+		if c.testNet {
+			if cfg.CfgData.FullnodeTestStorageConfig.StorageType == 0 {
+				cfg.CfgData.FullnodeTestStorageConfig.StorageType = storage.StorageDBType
+				cfg.CfgData.FullnodeTestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + FullNodeTestNetDB
+				cfg.CfgData.FullnodeTestStorageConfig.DBType = "Sqlite3"
+				update = true
+			}
+			if cfg.CfgData.FullnodeTestTokenStorageConfig.StorageType == 0 {
+				cfg.CfgData.FullnodeTestTokenStorageConfig.StorageType = storage.StorageDBType
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBAddress = "localhost"
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBType = "PostgressSQL"
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBPort = FullNodeTokensDBPort
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBName = FullNodeTokensDBName
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBUserName = fullnodeTokenDBUsername
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBPassword = fullnodeTokenDBPassword
+				update = true
+			}
+
+		} else {
+
+			if cfg.CfgData.FullnodeStorageConfig.StorageType == 0 {
+				cfg.CfgData.FullnodeStorageConfig.StorageType = storage.StorageDBType
+				cfg.CfgData.FullnodeStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + FullNodeMainNetDB
+				cfg.CfgData.FullnodeStorageConfig.DBType = "Sqlite3"
+				update = true
+			}
+
+			if cfg.CfgData.FullnodeTokenStorageConfig.StorageType == 0 {
+				cfg.CfgData.FullnodeTokenStorageConfig.StorageType = storage.StorageDBType
+				cfg.CfgData.FullnodeTokenStorageConfig.DBAddress = "localhost"
+				cfg.CfgData.FullnodeTokenStorageConfig.DBType = "PostgressSQL"
+				cfg.CfgData.FullnodeTokenStorageConfig.DBPort = FullNodeTokensDBPort
+				cfg.CfgData.FullnodeTokenStorageConfig.DBName = FullNodeTokensDBName
+				cfg.CfgData.FullnodeTokenStorageConfig.DBUserName = fullnodeTokenDBUsername
+				cfg.CfgData.FullnodeTokenStorageConfig.DBPassword = fullnodeTokenDBPassword
+				update = true
+			}
+		}
+	}
+
 	c.didDir = c.cfg.DirPath + RubixRootDir
 	if c.testNet {
 		c.didDir = c.cfg.DirPath + RubixRootDir + TestNetDIDDir
@@ -322,7 +355,26 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 				DBType:    "Sqlite3",
 				// Other fields like DBUserName, DBPassword, etc., can be copied from sc if needed, but defaults are fine for Sqlite3.
 			}
-			c.fullNodeS, err = storage.NewStorageDB(fullNodeStoragecfg)
+			c.fullNodeStorage, err = storage.NewStorageDB(fullNodeStoragecfg)
+			if err != nil {
+				c.log.Error("Failed to create full node storage DB", "err", err)
+				return nil, fmt.Errorf("failed to create full node storage DB")
+			}
+
+			// postgresql to store tokens
+			fullNodePostgressDBName := FullNodeTokensDBName
+			if c.testNet {
+				fullNodePostgressDBName = FullNodeTestTokensDBName
+			}
+			fullNodeTokenStoragecfg := &econfig.Config{
+				DBAddress:  "localhost",
+				DBPort:     FullNodeTokensDBPort,
+				DBName:     fullNodePostgressDBName,
+				DBUserName: fullnodeTokenDBUsername,
+				DBPassword: fullnodeTokenDBPassword,
+				DBType:     "PostgressSQL",
+			}
+			c.fullNodeTokensDB, err = storage.NewStorageDB(fullNodeTokenStoragecfg)
 			if err != nil {
 				c.log.Error("Failed to create full node storage DB", "err", err)
 				return nil, fmt.Errorf("failed to create full node storage DB")
@@ -334,7 +386,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
 	}
 
-	c.w, err = wallet.InitWallet(c.s, c.fullNodeS, tcDir, c.log, c.fullNode)
+	c.w, err = wallet.InitWallet(c.s, c.fullNodeStorage, c.fullNodeTokensDB, tcDir, c.log, c.fullNode)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
@@ -360,13 +412,13 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if c.testNet && c.defaultSetup {
 		c.AddFaucetQuorums()
 	}
-	
+
 	// Initialize token sync manager
 	c.tokenSyncManager = NewTokenSyncManager(c.log)
-	
+
 	// Initialize async pin manager with 4 workers by default
 	c.asyncPinManager = NewAsyncPinManager(c, 4)
-	
+
 	// Initialize performance tracker
 	perfConfig := &PerformanceConfig{
 		Enabled:        true, // TODO: Make this configurable
@@ -384,19 +436,19 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 
 	// Initialize transaction state manager
 	c.txStateMgr = NewTransactionStateManager(c)
-	
+
 	// Initialize rollback manager
 	c.rollbackMgr = NewRollbackManager(c, c.txStateMgr)
-	
+
 	// Initialize token pools for memory optimization
 	c.tokenPool = NewTokenInfoPool()
 	c.batchSyncTokenPool = NewBatchSyncTokenInfoPool()
 	c.tokenSlicePool = NewTokenSlicePool()
-	
+
 	// Initialize pending token monitor for self-healing
 	// Check every 5 minutes for tokens pending > 10 minutes
 	c.pendingTokenMonitor = NewPendingTokenMonitor(c, 5*time.Minute, 10*time.Minute)
-	
+
 	// Wrap storage with tracking if performance tracker is enabled
 	if c.perfTracker != nil && c.perfTracker.enabled && c.s != nil {
 		c.s = NewTrackedStorage(c.s, c)
@@ -404,7 +456,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			c.as = NewTrackedStorage(c.as, c)
 		}
 	}
-	
+
 	return c, nil
 }
 
@@ -455,10 +507,10 @@ func (c *Core) SetupCore() error {
 	// c.RestartIncompleteTokenChainSyncs()
 	//c.UnlockFTs()
 	// c.selfTransferService()
-	
+
 	// Start token sync cleanup routine
 	go c.tokenSyncCleanupRoutine()
-	
+
 	return nil
 }
 
@@ -529,19 +581,19 @@ func (c *Core) IPFSOperations() *IPFSOperations {
 // GetIPFSStats returns IPFS health and scalability statistics
 func (c *Core) GetIPFSStats() map[string]interface{} {
 	stats := make(map[string]interface{})
-	
+
 	if c.ipfsHealth != nil {
 		stats["health"] = c.ipfsHealth.GetStats()
 	}
-	
+
 	if c.ipfsScalability != nil {
 		stats["scalability"] = c.ipfsScalability.GetScalabilityStats()
 	}
-	
+
 	if c.ipfsRecovery != nil {
 		stats["recovery"] = c.ipfsRecovery.GetRecoveryStats()
 	}
-	
+
 	return stats
 }
 
@@ -550,7 +602,7 @@ func (c *Core) StopCore() {
 	if c.shutdownMgr == nil {
 		c.shutdownMgr = NewShutdownManager(c)
 	}
-	
+
 	// Perform graceful shutdown
 	if err := c.shutdownMgr.Shutdown(); err != nil {
 		c.log.Error("Shutdown completed with errors", "error", err)
@@ -643,7 +695,7 @@ func (c *Core) AddWebReq(req *ensweb.Request) {
 		Finish:  make(chan bool),
 		Req:     req,
 		Timeout: 3 * time.Minute,
-		
+
 		// Initialize password caching fields
 		CachedPassword: "",
 		PasswordSet:    false,
@@ -679,13 +731,13 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 	if !ok {
 		return nil
 	}
-	
+
 	// Clear cached password for security before removing request
 	req.PasswordMutex.Lock()
 	req.CachedPassword = ""
 	req.PasswordSet = false
 	req.PasswordMutex.Unlock()
-	
+
 	delete(c.webReq, reqID)
 	return req.Req
 }
@@ -884,7 +936,7 @@ func (c *Core) SetAsyncFTResponse(val bool) {
 func (c *Core) tokenSyncCleanupRoutine() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:

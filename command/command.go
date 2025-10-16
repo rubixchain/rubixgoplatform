@@ -117,7 +117,6 @@ const (
 	SetAsyncFTStatusCmd            string = "setasyncftstatus"
 	FixFTCreatorCmd                string = "fix-ft-creator"
 	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
-	DumpFullNodeTokenChainCmd      string = "fullnodedumptokenchain"
 )
 
 var commands = []string{VersionCmd,
@@ -193,7 +192,6 @@ var commands = []string{VersionCmd,
 	SetAsyncFTStatusCmd,
 	FixFTCreatorCmd,
 	GetFTCreatorStatsCmd,
-	DumpFullNodeTokenChainCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -571,7 +569,7 @@ func (cmd *Command) runApp() {
 	}
 
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.publishTokenChainDetails, cmd.fullNode)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.publishTokenChainDetails, cmd.fullNode, cmd.dbUserName, cmd.dbPassword)
 	if err != nil {
 		cmd.log.Error("failed to create core")
 		return

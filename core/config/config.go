@@ -36,32 +36,36 @@ type IPFSRecoveryConfig struct {
 
 // UnpledgePoolConfig defines unpledge worker pool configuration
 type UnpledgePoolConfig struct {
-	MaxWorkers        int           `json:"max_workers"`
-	QueueSize         int           `json:"queue_size"`
-	BatchSize         int           `json:"batch_size"`
-	TokenConcurrency  int           `json:"token_concurrency"`
-	ShutdownTimeout   time.Duration `json:"shutdown_timeout"`
-	EnableMetrics     bool          `json:"enable_metrics"`
+	MaxWorkers       int           `json:"max_workers"`
+	QueueSize        int           `json:"queue_size"`
+	BatchSize        int           `json:"batch_size"`
+	TokenConcurrency int           `json:"token_concurrency"`
+	ShutdownTimeout  time.Duration `json:"shutdown_timeout"`
+	EnableMetrics    bool          `json:"enable_metrics"`
 }
 
 // ConfigData defines configuration data
 type ConfigData struct {
-	Ports             Ports              `json:"ports"`
-	BootStrap         []string           `json:"bootstrap"`
-	TestBootStrap     []string           `json:"test_bootstrap"`
-	Services          map[string]string  `json:"services"`
-	StorageConfig     StorageConfig      `json:"storage_config"`
-	TestStorageConfig StorageConfig      `json:"test_storage_config"`
-	AsyncFTResponse   bool               `json:"async_ft_response"`
-	IPFSRecovery      *IPFSRecoveryConfig `json:"ipfs_recovery"`
-	TrustedNetwork    bool               `json:"trusted_network"` // Skip DHT/pin checks for trusted networks
-	UnpledgeConfig    *UnpledgePoolConfig `json:"unpledge_config"`
-	EnableOptimizedUnpledge bool         `json:"enable_optimized_unpledge"`
+	Ports                          Ports               `json:"ports"`
+	BootStrap                      []string            `json:"bootstrap"`
+	TestBootStrap                  []string            `json:"test_bootstrap"`
+	Services                       map[string]string   `json:"services"`
+	StorageConfig                  StorageConfig       `json:"storage_config"`
+	TestStorageConfig              StorageConfig       `json:"test_storage_config"`
+	AsyncFTResponse                bool                `json:"async_ft_response"`
+	IPFSRecovery                   *IPFSRecoveryConfig `json:"ipfs_recovery"`
+	TrustedNetwork                 bool                `json:"trusted_network"` // Skip DHT/pin checks for trusted networks
+	UnpledgeConfig                 *UnpledgePoolConfig `json:"unpledge_config"`
+	EnableOptimizedUnpledge        bool                `json:"enable_optimized_unpledge"`
+	FullnodeStorageConfig          StorageConfig       `json:"fullnode_storage_config"`
+	FullnodeTestStorageConfig      StorageConfig       `json:"fullnode_test_storage_config"`
+	FullnodeTokenStorageConfig     StorageConfig       `json:"fullnode_token_storage_config"`
+	FullnodeTestTokenStorageConfig StorageConfig       `json:"fullnode_testtoken_storage_config"`
 }
 
 func NewDefaultConfigData() ConfigData {
 	return ConfigData{
-		AsyncFTResponse: true,
+		AsyncFTResponse:         true,
 		EnableOptimizedUnpledge: true,
 	}
 }
