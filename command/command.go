@@ -569,7 +569,7 @@ func (cmd *Command) runApp() {
 	}
 
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.publishTokenChainDetails, cmd.fullNode)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.publishTokenChainDetails, cmd.fullNode, cmd.dbUserName, cmd.dbPassword)
 	if err != nil {
 		cmd.log.Error("failed to create core")
 		return
