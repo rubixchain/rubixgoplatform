@@ -724,7 +724,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			}
 
 			c.log.Debug("**latest block in event data****", eventData.LatestBlockHeight)
-
+			c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
 			c.AddTokenToRespectiveTable(detail.Token, detail.Did, genesisBlock, &eventData, wallet.SyncUnrequired)
 		}
 	}
@@ -2461,12 +2461,14 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 // Get token's ipfs content from the provider and store it in the psql db
 func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
-	tokenContent, err := c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID)
+	tokenContent, err := c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID) // TODO : pass fullnode DID instead of peer id
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to get ipfs content of token : %v, err: %v", tokenId, err)
 		c.log.Error(errMsg)
 		return fmt.Errorf(errMsg)
 	}
+
+	c.log.Debug("token id : ", tokenId, "token content : ", tokenContent)
 
 	switch assetType {
 	case RBTTokenType:
