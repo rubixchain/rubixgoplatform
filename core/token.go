@@ -2458,3 +2458,43 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 	}
 	return nil
 }
+
+// Get token's ipfs content from the provider and store it in the psql db
+func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
+	tokenContent, err := c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to get ipfs content of token : %v, err: %v", tokenId, err)
+		c.log.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	switch assetType {
+	case RBTTokenType:
+		rbtContent := &wallet.RBTContent{
+			TokenID:    tokenId,
+			RBTContent: tokenContent,
+		}
+		err = c.w.AddRBTContentToPSQl(rbtContent)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to add ipfs content of rbt : %v to fullnode psql db, err: %v", tokenId, err)
+			c.log.Error(errMsg)
+			return fmt.Errorf(errMsg)
+		}
+	case FTTokenType:
+		ftContent := &wallet.FTContent{
+			TokenID:   tokenId,
+			FTContent: tokenContent,
+		}
+		err = c.w.AddFTContentToPSQl(ftContent)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to add ipfs content of ft : %v to fullnode psql db, err: %v", tokenId, err)
+			c.log.Error(errMsg)
+			return fmt.Errorf(errMsg)
+		}
+	default:
+		errMsg := fmt.Sprintf("failed to add ipfs content, invalid asset type :%v of token : %v", assetType, tokenId)
+		c.log.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+	return nil
+}

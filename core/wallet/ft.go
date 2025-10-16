@@ -34,3 +34,8 @@ type SyncedFT struct {
 	BlockHash     string  `gorm:"column:block_hash"`
 	SyncStatus    int     `gorm:"column:sync_status"`
 }
+
+type FTContent struct {
+	TokenID   string `gorm:"column:token_id;primaryKey;autoIncrement"`
+	FTContent string `gorm:"column:ft_content"`
+}

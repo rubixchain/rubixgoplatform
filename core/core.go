@@ -374,7 +374,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 				DBPassword: fullnodeTokenDBPassword,
 				DBType:     "PostgressSQL",
 			}
-			c.fullNodeStorage, err = storage.NewStorageDB(fullNodeTokenStoragecfg)
+			c.fullNodeTokensDB, err = storage.NewStorageDB(fullNodeTokenStoragecfg)
 			if err != nil {
 				c.log.Error("Failed to create full node storage DB", "err", err)
 				return nil, fmt.Errorf("failed to create full node storage DB")
@@ -386,7 +386,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
 	}
 
-	c.w, err = wallet.InitWallet(c.s, c.fullNodeStorage, tcDir, c.log, c.fullNode)
+	c.w, err = wallet.InitWallet(c.s, c.fullNodeStorage, c.fullNodeTokensDB, tcDir, c.log, c.fullNode)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err

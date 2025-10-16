@@ -81,6 +81,11 @@ type SyncedRBT struct {
 	// SenderAddress string  `gorm:"column:owner_address"`
 }
 
+type RBTContent struct {
+	TokenID    string `gorm:"column:token_id;primaryKey"`
+	RBTContent string `gorm:"column:rbt_content"`
+}
+
 func (w *Wallet) CreateToken(t *Token) error {
 	return w.s.Write(TokenStorage, t)
 }
@@ -1586,3 +1591,60 @@ func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) erro
 	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Write(FailedTxnsTable, failedTxn)
 }
+
+// This function is used by fullnode to write all synced RBTs' IPFS content to sqlite table
+func (w *Wallet) AddRBTContentToPSQl(rbt *RBTContent) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodePSQLTokensDB.Write(FullNodeRBTContentTable, rbt)
+}
+
+// This function is used by fullnode to write all synced FTs' IPFS content to sqlite table
+func (w *Wallet) AddFTContentToPSQl(ft *FTContent) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodePSQLTokensDB.Write(FullNodeFTContentTable, ft)
+}
+
+// This function is used by fullnode to read from the list of all RBTs' IPFS content
+func (w *Wallet) ReadRBTContentFromTable(tokenId string) (*RBTContent, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var rbt RBTContent
+	err := w.fullNodePSQLTokensDB.Read(FullNodeRBTContentTable, &rbt, "token_id=?", tokenId)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
+		// w.log.Error(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+	return &rbt, nil
+}
+
+// This function is used by fullnode to read from the list of all FTs' IPFS content
+func (w *Wallet) ReadFTContentFromTable(tokenId string) (*FTContent, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var ft FTContent
+	err := w.fullNodePSQLTokensDB.Read(FullNodeFTContentTable, &ft, "token_id=?", tokenId)
+	if err != nil {
+		// w.log.Error("Failed to get ft", "err", err)
+		return nil, err
+	}
+	return &ft, nil
+}
+
+// // Get token's ipfs content from the provider and store it in the psql db
+// func (w *Wallet) AddTokenContentToPSQL(tokenId string, assetType int, fullnodeDID string) error {
+// 	tokenContent, err := w.Cat(tokenId, FullNodeRole, fullnodeDID)
+// 	if err != nil {
+// 		errMsg := fmt.Sprintf("failed to get ipfs content of token : %v, err: %v", tokenId, err)
+// 		w.log.Error(errMsg)
+// 		return fmt.Errorf(errMsg)
+// 	}
+
+// 	switch assetType {
+// 	case RBTTokenType:
+// 		err = w.AddRBTContentToPSQl()
+// 	}
+// 	return nil
+// }
