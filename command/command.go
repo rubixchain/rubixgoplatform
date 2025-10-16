@@ -117,7 +117,6 @@ const (
 	SetAsyncFTStatusCmd            string = "setasyncftstatus"
 	FixFTCreatorCmd                string = "fix-ft-creator"
 	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
-	DumpFullNodeTokenChainCmd      string = "fullnodedumptokenchain"
 )
 
 var commands = []string{VersionCmd,
@@ -193,7 +192,6 @@ var commands = []string{VersionCmd,
 	SetAsyncFTStatusCmd,
 	FixFTCreatorCmd,
 	GetFTCreatorStatsCmd,
-	DumpFullNodeTokenChainCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
