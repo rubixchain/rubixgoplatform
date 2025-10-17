@@ -234,8 +234,17 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to get rac block")
 			return err
 		}
+
+		c.log.Debug("****byte array of the test token***", tb)
+
 		tk := util.HexToStr(tb)
+
+		c.log.Debug("***test token in string****", tk)
+
 		nb := bytes.NewBuffer([]byte(tk))
+
+		c.log.Debug("**new buffer of the test token which is getting added to ipfs *****", nb)
+
 		id, err := c.w.Add(nb, did, wallet.OwnerRole)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
@@ -724,6 +733,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			}
 
 			c.log.Debug("**latest block in event data****", eventData.LatestBlockHeight)
+			//add content of the token to postgresqlDB
+			c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
 
 			c.AddTokenToRespectiveTable(detail.Token, detail.Did, genesisBlock, &eventData, wallet.SyncUnrequired)
 		}
@@ -2461,12 +2472,14 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 // Get token's ipfs content from the provider and store it in the psql db
 func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
-	tokenContent, err := c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID)
+	tokenContent, err := c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID) // TODO : pass fullnode DID instead of peer id
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to get ipfs content of token : %v, err: %v", tokenId, err)
 		c.log.Error(errMsg)
 		return fmt.Errorf(errMsg)
 	}
+
+	c.log.Debug("token id : ", tokenId, "token content : ", tokenContent)
 
 	switch assetType {
 	case RBTTokenType:
