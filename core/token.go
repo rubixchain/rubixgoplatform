@@ -234,8 +234,17 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to get rac block")
 			return err
 		}
+
+		c.log.Debug("****byte array of the test token***", tb)
+
 		tk := util.HexToStr(tb)
+
+		c.log.Debug("***test token in string****", tk)
+
 		nb := bytes.NewBuffer([]byte(tk))
+
+		c.log.Debug("**new buffer of the test token which is getting added to ipfs *****", nb)
+
 		id, err := c.w.Add(nb, did, wallet.OwnerRole)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
@@ -724,7 +733,9 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			}
 
 			c.log.Debug("**latest block in event data****", eventData.LatestBlockHeight)
+			//add content of the token to postgresqlDB
 			c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
+
 			c.AddTokenToRespectiveTable(detail.Token, detail.Did, genesisBlock, &eventData, wallet.SyncUnrequired)
 		}
 	}

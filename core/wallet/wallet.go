@@ -282,13 +282,13 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 
 		err = w.fullNodePSQLTokensDB.Init(FullNodeRBTContentTable, &RBTContent{}, true)
 		if err != nil {
-			w.log.Error("Failed to initialize RBT token storage", "err", err)
+			w.log.Error("Failed to initialize postgres RBT token storage", "err", err)
 			return nil, err
 		}
 
 		err = w.fullNodePSQLTokensDB.Init(FullNodeFTContentTable, &FTContent{}, true)
 		if err != nil {
-			w.log.Error("Failed to initialize FT token storage", "err", err)
+			w.log.Error("Failed to initialize postgres FT token storage", "err", err)
 			return nil, err
 		}
 
