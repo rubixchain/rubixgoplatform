@@ -1377,6 +1377,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	// }
 	var ownerDid string
 	var blockHash, transactionID string
+	var latestBlockHeight uint64
 
 	syncStatus := wallet.SyncCompleted
 	latestBlockAfterSync := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
@@ -1391,6 +1392,10 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		latestBlockID, err := latestBlockAfterSync.GetBlockID(tokenSyncInfo.TokenID)
 		if err != nil {
 			c.log.Error("failed to get latest blockID after syncing full tokenchain", "token: ", tokenSyncInfo.TokenID)
+		}
+		latestBlockHeight, err = latestBlockAfterSync.GetBlockNumber(tokenSyncInfo.TokenID)
+		if err != nil {
+			c.log.Error("failed to get latest block height after syncing full tokenchain", "token: ", tokenSyncInfo.TokenID)
 		}
 		if syncerLatestBlkID != latestBlockID {
 			c.log.Error("token is not synced completely, latest blockIDs are not matching at syncer side and peer's side")
@@ -1411,9 +1416,11 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		//add synced tokens to respective sqlite tables
 	}
 	event := &model.PubSubTxnInfo{
-		BlockHash:     blockHash,
-		TransactionID: transactionID,
-		AssetType:     tokenSyncInfo.AssetType,
+		BlockHash:         blockHash,
+		TransactionID:     transactionID,
+		AssetType:         tokenSyncInfo.AssetType,
+		LatestBlockHeight: latestBlockHeight,
+		PublisherDID:      p.GetPeerDID(),
 	}
 	if genesisBlock != nil {
 		err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, genesisBlock, event, syncStatus)
