@@ -2510,9 +2510,30 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 // Get token's ipfs content from the provider and store it in the psql db
 func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
-	tokenContent, err := c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID) // TODO : pass fullnode DID instead of peer id
+	maxRetries := 3
+	var tokenContent string
+	var err error
+
+	// re-attempt when ipfs cat fails
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		tokenContent, err = c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID)
+		if err == nil {
+			break
+		}
+
+		c.log.Warn(fmt.Sprintf(
+			"Attempt %d/%d failed to fetch IPFS content for token %s: %v",
+			attempt, maxRetries, tokenId, err,
+		))
+
+		// Exponential backoff: wait before retrying
+		backoff := time.Duration(attempt*2) * time.Second
+		time.Sleep(backoff)
+	}
+
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to get ipfs content of token : %v, err: %v", tokenId, err)
+		errMsg := fmt.Sprintf("failed to get IPFS content of token %v after %d attempts: %v",
+			tokenId, maxRetries, err)
 		c.log.Error(errMsg)
 		return fmt.Errorf(errMsg)
 	}
