@@ -11,7 +11,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
-
 // Enhanced subscription setup with error handling
 func (c *Core) SubscribeTxnSetup() {
 	// Initialize the transaction processor
@@ -418,4 +417,38 @@ func (c *Core) ShutdownTxnProcessor() {
 			c.log.Warn("Transaction workers shutdown timeout - forcing termination")
 		}
 	}
+}
+
+func (c *Core) RetryFailedTOSyncTokens() error {
+	failedToSyncTokens, err := c.w.GetAllFailedToSyncTokens()
+	if err != nil {
+		c.log.Error("failed to get tokens which are failed to sync ", "error", err)
+	}
+	if failedToSyncTokens == nil {
+		c.log.Info("There are NO failed to sync tokens which needs retry of syncing")
+	} else {
+		for _, failedToSyncToken := range failedToSyncTokens {
+			//call synctokenchain api to sync each token
+			//connect to publisher and fetch complete token chain
+			p, err := c.getPeer(failedToSyncToken.Did)
+			if err != nil {
+				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", failedToSyncToken.Did)
+				return fmt.Errorf("failed to open peer connection with publisher ", failedToSyncToken.Did)
+			}
+			defer p.Close()
+			tokenSyncInfo := &TokenSyncInfo{
+				TokenID:   failedToSyncToken.Token,
+				TokenType: failedToSyncToken.TokenType,
+				AssetType: failedToSyncToken.AssetType,
+			}
+			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
+			if err != nil {
+				c.log.Error("failed to sync token chain for token ", failedToSyncToken.Token, "error", err)
+				return fmt.Errorf("failed to get latest block for token %s - may need sync", failedToSyncToken.Token)
+
+			}
+		}
+	}
+
+	return nil
 }

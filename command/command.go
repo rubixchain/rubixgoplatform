@@ -613,6 +613,27 @@ func (cmd *Command) runApp() {
 	// Start the pending token monitor for self-healing
 	c.StartPendingTokenMonitor()
 
+	// Start background job: retry failed-to-sync tokens every 1 hour
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				cmd.log.Info("Running periodic RetryFailedTOSyncTokens task...")
+				err := c.RetryFailedTOSyncTokens()
+				if err != nil {
+					cmd.log.Error("RetryFailedTOSyncTokens execution failed", "err", err)
+				} else {
+					cmd.log.Info("RetryFailedTOSyncTokens executed successfully")
+				}
+			case <-sc:
+				cmd.log.Info("Stopping RetryFailedTOSyncTokens scheduler...")
+				return
+			}
+		}
+	}()
+
 	cmd.log.Info("Syncing Details...")
 	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
 	if len(dids) != 0 {

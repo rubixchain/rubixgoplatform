@@ -110,10 +110,10 @@ type SendTokenDetailsInfo struct {
 	AssetType        int    `json:"asset_type"`
 }
 type FailedToSyncTokenDetailsInfo struct {
-	TokenType int    `json:"token_type"`
-	Token     string `json:"token"`
-	Did       string `json:"did"`
-	AssetType int    `json:"asset_type"`
+	Token     string `gorm:"column:token;primaryKey"` // `gorm:"column:token;primaryKey"`
+	TokenType int    `gorm:"column:token_type"`
+	Did       string `gorm:"column:did"`
+	AssetType int    `gorm:"column:asset_type"`
 }
 
 type TokenChainDetailsEvent struct {
