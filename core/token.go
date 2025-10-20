@@ -564,6 +564,18 @@ func (c *Core) publishTokenChainDetails() error {
 		})
 	}
 
+	//TODO: Remove uncommented code berfore committing
+
+	// for _, aggregatedNFTToken := range aggregatedNFTTokens {
+	// 	tokencontent, err := c.w.Cat(aggregatedNFTToken.TokenID, 500, aggregatedNFTToken.DID)
+	// 	if err != nil {
+	// 		c.log.Error("failed to get the content of NFT Token", aggregatedNFTToken.TokenID)
+	// 	}
+
+	// 	c.log.Debug("**token content of the NFT Token*****", tokencontent)
+
+	// }
+
 	// Prepare smart contract tokens for publishing
 	for _, token := range aggregatedSmartContractTokens {
 		tokenType := c.TokenType(SmartContractString)
@@ -585,6 +597,16 @@ func (c *Core) publishTokenChainDetails() error {
 			AssetType:        SmartContractTokenType,
 		})
 	}
+
+	//TODO: Remove follwoing uncommented code berfore committing
+
+	// for _, aggregatedSmartContractToken := range aggregatedSmartContractTokens {
+	// 	tokencontent, err := c.w.Cat(aggregatedSmartContractToken.SmartContractHash, 500, aggregatedSmartContractToken.Deployer)
+	// 	if err != nil {
+	// 		c.log.Error("failed to get the content of NFT Token", aggregatedSmartContractToken.SmartContractHash)
+	// 	}
+	// 	c.log.Debug("**token content of the smartcontract Token*****", tokencontent)
+	// }
 
 	// Publish all aggregated token details
 	c.PublishTokenChainDetailsEvent(tokenDetailsToPublish)
@@ -1327,7 +1349,22 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 	if genesisBlock == nil {
 
-		c.log.Debug("****genesis block is NIL even after syncing********")
+		errMsg := fmt.Sprintf("genesis block is NIL even after syncing for the token: %v", tokenSyncInfo.TokenID)
+		c.log.Error(errMsg)
+		//add this failed to sync token,  to FullNodeFailedToSyncTokens sqlite table
+		tokenInfo := model.FailedToSyncTokenDetailsInfo{
+			Token:     tokenSyncInfo.TokenID,
+			TokenType: tokenSyncInfo.TokenType,
+			Did:       p.GetPeerDID(),
+			AssetType: tokenSyncInfo.AssetType,
+		}
+		err := c.w.AddFailedTokensToTable(&tokenInfo)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to add token to the failed-to-sync tokens table, token: %v, error: %v", tokenSyncInfo.TokenID, err)
+			c.log.Error(errMsg)
+			return fmt.Errorf(errMsg)
+		}
+
 	}
 	// var tokenValue float64
 	// // var parentTokenID string
@@ -1340,8 +1377,9 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	// }
 	var ownerDid string
 	var blockHash, transactionID string
-	var syncStatus int
-	syncStatus = wallet.SyncCompleted
+	var latestBlockHeight uint64
+
+	syncStatus := wallet.SyncCompleted
 	latestBlockAfterSync := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 	if latestBlockAfterSync != nil {
 		ownerDid = latestBlockAfterSync.GetOwner()
@@ -1355,40 +1393,47 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		if err != nil {
 			c.log.Error("failed to get latest blockID after syncing full tokenchain", "token: ", tokenSyncInfo.TokenID)
 		}
+		latestBlockHeight, err = latestBlockAfterSync.GetBlockNumber(tokenSyncInfo.TokenID)
+		if err != nil {
+			c.log.Error("failed to get latest block height after syncing full tokenchain", "token: ", tokenSyncInfo.TokenID)
+		}
 		if syncerLatestBlkID != latestBlockID {
 			c.log.Error("token is not synced completely, latest blockIDs are not matching at syncer side and peer's side")
-			syncStatus = wallet.SyncIncomplete
+			tokenInfo := model.FailedToSyncTokenDetailsInfo{
+				Token:     tokenSyncInfo.TokenID,
+				TokenType: tokenSyncInfo.TokenType,
+				Did:       p.GetPeerDID(),
+				AssetType: tokenSyncInfo.AssetType,
+			}
+			err := c.w.AddFailedTokensToTable(&tokenInfo)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to add token to the failed-to-sync tokens table, token: %v, error: %v", tokenSyncInfo.TokenID, err)
+				c.log.Error(errMsg)
+				return fmt.Errorf(errMsg)
+			}
 		}
-		// 	//concat tokenId and BlockID
-		// 	tokenStateData := tokenSyncInfo.TokenID + latestBlockID
-		// 	tokenStateBuffer := bytes.NewBuffer([]byte(tokenStateData))
-		// 	tokenStateHash, err = c.ipfs.Add(tokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-		// 	if err != nil {
-		// 		c.log.Error("unable to get previous token state hash for token: %v, err: %v", tokenSyncInfo.TokenID, err)
-		// 	}
-
-		// }
-
-		// var tokenDetails wallet.Token
-		// tokenDetails.TokenID = tokenSyncInfo.TokenID
-		// tokenDetails.TokenValue = tokenValue
-		// tokenDetails.ParentTokenID = parentTokenID
-		// tokenDetails.TokenStateHash = tokenStateHash
-		// tokenDetails.TransactionID = transactionID
-		// tokenDetails.DID = ownerDid
-		// tokenDetails.TokenStatus = wallet.TokenIsSyncedFromOtherNode
 
 		//add synced tokens to respective sqlite tables
 	}
 	event := &model.PubSubTxnInfo{
-		BlockHash:     blockHash,
-		TransactionID: transactionID,
-		AssetType:     tokenSyncInfo.AssetType,
+		BlockHash:         blockHash,
+		TransactionID:     transactionID,
+		AssetType:         tokenSyncInfo.AssetType,
+		LatestBlockHeight: latestBlockHeight,
+		PublisherDID:      p.GetPeerDID(),
 	}
 	if genesisBlock != nil {
 		err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, genesisBlock, event, syncStatus)
 		if err != nil {
 			c.log.Error("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
+			return err
+		}
+	}
+	//If sync is completed remove those tokens from the FullNodeFailedToSyncTokens table of the fullnode.
+	if syncStatus == wallet.SyncCompleted {
+		err := c.w.DeleteFailedToSyncTokenFromTable(tokenSyncInfo.TokenID)
+		if err != nil {
+			c.log.Error("Failed to Delete token details from the FullNodeFailedToSyncTokens table", "token", tokenSyncInfo.TokenID, "err", err)
 			return err
 		}
 	}
@@ -2472,9 +2517,30 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 // Get token's ipfs content from the provider and store it in the psql db
 func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
-	tokenContent, err := c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID) // TODO : pass fullnode DID instead of peer id
+	maxRetries := 3
+	var tokenContent string
+	var err error
+
+	// re-attempt when ipfs cat fails
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		tokenContent, err = c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID)
+		if err == nil {
+			break
+		}
+
+		c.log.Warn(fmt.Sprintf(
+			"Attempt %d/%d failed to fetch IPFS content for token %s: %v",
+			attempt, maxRetries, tokenId, err,
+		))
+
+		// Exponential backoff: wait before retrying
+		backoff := time.Duration(attempt*2) * time.Second
+		time.Sleep(backoff)
+	}
+
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to get ipfs content of token : %v, err: %v", tokenId, err)
+		errMsg := fmt.Sprintf("failed to get IPFS content of token %v after %d attempts: %v",
+			tokenId, maxRetries, err)
 		c.log.Error(errMsg)
 		return fmt.Errorf(errMsg)
 	}

@@ -35,7 +35,7 @@ type DynamicTxnProcessor struct {
 	// Metrics
 	queueLength        int64
 	averageProcessTime time.Duration
-	processedTxnCount  int64 // ← ADD ATOMIC COUNTER
+	processedTxnCount  int64 // ADD ATOMIC COUNTER
 
 	// Worker management
 	workerChannels  map[int]chan struct{}
@@ -62,15 +62,15 @@ func (c *Core) initDynamicTxnProcessor() {
 		minWorkers:      max(1, numCPU/4),
 		maxWorkers:      numCPU * 2,
 		currentWorkers:  max(1, numCPU/2),
-		cpuThreshold:    70.0, // ← MEMORY-BASED THRESHOLD
-		memoryThreshold: 75.0, // ← MEMORY-BASED THRESHOLD
+		cpuThreshold:    70.0, // MEMORY-BASED THRESHOLD
+		memoryThreshold: 75.0, // MEMORY-BASED THRESHOLD
 		queueThreshold:  100,
 		scaleUpDelay:    time.Second * 10,
 		scaleDownDelay:  time.Second * 30,
 		workerChannels:  make(map[int]chan struct{}),
 		maxRetries:      3,
 		retryDelay:      time.Second * 2,
-		resourceMonitor: &ResourceMonitor{}, // ← INITIALIZE YOUR MONITOR
+		resourceMonitor: &ResourceMonitor{}, // INITIALIZE YOUR MONITOR
 	}
 
 	// Start initial workers
@@ -81,10 +81,10 @@ func (c *Core) initDynamicTxnProcessor() {
 	// Start system monitor
 	go c.systemMonitor()
 
-	c.log.Info("Dynamic transaction processor initialized",
-		"initialWorkers", c.txnProcessor.currentWorkers,
-		"minWorkers", c.txnProcessor.minWorkers,
-		"maxWorkers", c.txnProcessor.maxWorkers)
+	// c.log.Info("Dynamic transaction processor initialized",
+	// 	"initialWorkers", c.txnProcessor.currentWorkers,
+	// 	"minWorkers", c.txnProcessor.minWorkers,
+	// 	"maxWorkers", c.txnProcessor.maxWorkers)
 }
 
 // Monitor system resources and adjust worker count
@@ -122,14 +122,14 @@ func (c *Core) evaluateAndScale(lastCPUStats map[string]uint64) {
 	currentWorkers := c.txnProcessor.currentWorkers
 	c.txnProcessor.workersMutex.RUnlock()
 
-	c.log.Debug("System metrics from ResourceMonitor",
-		"cpuUsage", cpuUsagePercent,
-		"memoryUsage", memoryUsagePercent,
-		"memoryTotalMB", resourceStats["memory_total_mb"],
-		"memoryAvailableMB", resourceStats["memory_available_mb"],
-		"queueLength", queueLen,
-		"workers", currentWorkers,
-		"goroutines", resourceStats["goroutines"])
+	// c.log.Debug("System metrics from ResourceMonitor",
+	// 	"cpuUsage", cpuUsagePercent,
+	// 	"memoryUsage", memoryUsagePercent,
+	// 	"memoryTotalMB", resourceStats["memory_total_mb"],
+	// 	"memoryAvailableMB", resourceStats["memory_available_mb"],
+	// 	"queueLength", queueLen,
+	// 	"workers", currentWorkers,
+	// 	"goroutines", resourceStats["goroutines"])
 
 	// Determine scaling action using your thresholds
 	scalingDecision := c.determineScalingAction(
@@ -186,25 +186,25 @@ func (c *Core) scaleUp() {
 	defer c.txnProcessor.workersMutex.Unlock()
 
 	if c.txnProcessor.currentWorkers >= c.txnProcessor.maxWorkers {
-		return // ← ALREADY AT MAXIMUM
+		return // ALREADY AT MAXIMUM
 	}
 
 	// Calculate how many workers to add (25% increase or minimum 1)
-	newWorkers := max(1, c.txnProcessor.currentWorkers/4)                                 // ← 25% INCREASE
-	newWorkers = min(newWorkers, c.txnProcessor.maxWorkers-c.txnProcessor.currentWorkers) // ← DON'T EXCEED MAX
+	newWorkers := max(1, c.txnProcessor.currentWorkers/4)                                 // 25% INCREASE
+	newWorkers = min(newWorkers, c.txnProcessor.maxWorkers-c.txnProcessor.currentWorkers) // DON'T EXCEED MAX
 
 	// Start new workers
 	for i := 0; i < newWorkers; i++ {
 		workerID := c.txnProcessor.currentWorkers + i
-		c.startWorker(workerID) // ← START NEW WORKER
+		c.startWorker(workerID) // START NEW WORKER
 	}
 
-	c.txnProcessor.currentWorkers += newWorkers // ← UPDATE COUNT
-	c.txnProcessor.lastScaleAction = time.Now() // ← UPDATE TIMESTAMP
+	c.txnProcessor.currentWorkers += newWorkers // UPDATE COUNT
+	c.txnProcessor.lastScaleAction = time.Now() // UPDATE TIMESTAMP
 
-	c.log.Info("Scaled up workers",
-		"newWorkers", newWorkers,
-		"totalWorkers", c.txnProcessor.currentWorkers)
+	// c.log.Info("Scaled up workers",
+	// 	"newWorkers", newWorkers,
+	// 	"totalWorkers", c.txnProcessor.currentWorkers)
 }
 
 // Scale down worker count
@@ -213,12 +213,12 @@ func (c *Core) scaleDown() {
 	defer c.txnProcessor.workersMutex.Unlock()
 
 	if c.txnProcessor.currentWorkers <= c.txnProcessor.minWorkers {
-		return // ← ALREADY AT MINIMUM
+		return // ALREADY AT MINIMUM
 	}
 
 	// Calculate how many workers to remove (25% decrease or minimum 1)
-	removeWorkers := max(1, c.txnProcessor.currentWorkers/4)                                    // ← 25% DECREASE
-	removeWorkers = min(removeWorkers, c.txnProcessor.currentWorkers-c.txnProcessor.minWorkers) // ← DON'T GO BELOW MIN
+	removeWorkers := max(1, c.txnProcessor.currentWorkers/4)                                    // 25% DECREASE
+	removeWorkers = min(removeWorkers, c.txnProcessor.currentWorkers-c.txnProcessor.minWorkers) // DON'T GO BELOW MIN
 
 	// Stop workers gracefully
 	c.txnProcessor.workerChanMutex.Lock()
@@ -227,56 +227,56 @@ func (c *Core) scaleDown() {
 	// Select workers to stop (LIFO - last in, first out)
 	for workerID := c.txnProcessor.currentWorkers - 1; len(workersToStop) < removeWorkers && workerID >= c.txnProcessor.minWorkers; workerID-- {
 		if stopChan, exists := c.txnProcessor.workerChannels[workerID]; exists {
-			close(stopChan) // ← SIGNAL WORKER TO STOP
+			close(stopChan) // SIGNAL WORKER TO STOP
 			delete(c.txnProcessor.workerChannels, workerID)
 			workersToStop = append(workersToStop, workerID)
 		}
 	}
 	c.txnProcessor.workerChanMutex.Unlock()
 
-	c.txnProcessor.currentWorkers -= len(workersToStop) // ← UPDATE COUNT
-	c.txnProcessor.lastScaleAction = time.Now()         // ← UPDATE TIMESTAMP
+	c.txnProcessor.currentWorkers -= len(workersToStop) // UPDATE COUNT
+	c.txnProcessor.lastScaleAction = time.Now()         // UPDATE TIMESTAMP
 
-	c.log.Info("Scaled down workers",
-		"removedWorkers", len(workersToStop),
-		"totalWorkers", c.txnProcessor.currentWorkers,
-		"stoppedWorkerIDs", workersToStop)
+	// c.log.Info("Scaled down workers",
+	// 	"removedWorkers", len(workersToStop),
+	// 	"totalWorkers", c.txnProcessor.currentWorkers,
+	// 	"stoppedWorkerIDs", workersToStop)
 }
 
 // Start a new worker
 func (c *Core) startWorker(workerID int) {
-	stopChan := make(chan struct{}) // ← INDIVIDUAL STOP CHANNEL
+	stopChan := make(chan struct{}) // INDIVIDUAL STOP CHANNEL
 
 	c.txnProcessor.workerChanMutex.Lock()
-	c.txnProcessor.workerChannels[workerID] = stopChan // ← STORE STOP CHANNEL
+	c.txnProcessor.workerChannels[workerID] = stopChan // STORE STOP CHANNEL
 	c.txnProcessor.workerChanMutex.Unlock()
 
 	c.txnProcessor.wg.Add(1)
-	go c.dynamicWorker(workerID, stopChan) // ← START WORKER WITH STOP CHANNEL
+	go c.dynamicWorker(workerID, stopChan) // START WORKER WITH STOP CHANNEL
 }
 
 // Dynamic worker that can be individually stopped
 func (c *Core) dynamicWorker(workerID int, stopChan chan struct{}) {
 	defer c.txnProcessor.wg.Done()
 
-	c.log.Debug("Worker started", "workerID", workerID)
+	// c.log.Debug("Worker started", "workerID", workerID)
 
 	for {
 		select {
-		case txnEvent := <-c.txnProcessor.txnQueue: // ← PROCESS TRANSACTION
+		case txnEvent := <-c.txnProcessor.txnQueue: // PROCESS TRANSACTION
 			startTime := time.Now()
 			c.processTxnWithRetry(txnEvent, workerID)
 			processingTime := time.Since(startTime)
 
 			// Update metrics
-			c.updateProcessingMetrics(processingTime) // ← UPDATE METRICS
+			c.updateProcessingMetrics(processingTime) // UPDATE METRICS
 
-		case <-stopChan: // ← INDIVIDUAL STOP SIGNAL
-			c.log.Debug("Worker stopping gracefully", "workerID", workerID)
+		case <-stopChan: // INDIVIDUAL STOP SIGNAL
+			// c.log.Debug("Worker stopping gracefully", "workerID", workerID)
 			return
 
-		case <-c.txnProcessor.ctx.Done(): // ← GLOBAL SHUTDOWN
-			c.log.Debug("Worker stopping - global shutdown", "workerID", workerID)
+		case <-c.txnProcessor.ctx.Done(): // GLOBAL SHUTDOWN
+			// c.log.Debug("Worker stopping - global shutdown", "workerID", workerID)
 			return
 		}
 	}
@@ -286,13 +286,13 @@ func (c *Core) dynamicWorker(workerID int, stopChan chan struct{}) {
 func (c *Core) updateProcessingMetrics(processingTime time.Duration) {
 	// Simple exponential moving average for processing time
 	if c.txnProcessor.averageProcessTime == 0 {
-		c.txnProcessor.averageProcessTime = processingTime // ← FIRST MEASUREMENT
+		c.txnProcessor.averageProcessTime = processingTime // FIRST MEASUREMENT
 	} else {
 		// EMA with alpha = 0.1 (90% old value, 10% new value)
 		alpha := 0.1
 		c.txnProcessor.averageProcessTime = time.Duration(
 			float64(c.txnProcessor.averageProcessTime)*(1-alpha) +
-				float64(processingTime)*alpha, // ← EXPONENTIAL MOVING AVERAGE
+				float64(processingTime)*alpha, // EXPONENTIAL MOVING AVERAGE
 		)
 	}
 }
@@ -319,7 +319,7 @@ func (c *Core) GetDynamicWorkerPoolStats() map[string]interface{} {
 		"minWorkers":     c.txnProcessor.minWorkers,
 		"maxWorkers":     c.txnProcessor.maxWorkers,
 		"queueLength":    len(c.txnProcessor.txnQueue),
-		"processedTxns":  processedCount, // ← FAST ATOMIC READ
+		"processedTxns":  processedCount, // FAST ATOMIC READ
 
 		// Resource stats from your ResourceMonitor
 		"memoryTotalMB":      resourceStats["memory_total_mb"],

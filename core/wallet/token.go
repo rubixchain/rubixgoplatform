@@ -1551,6 +1551,21 @@ func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedT
 	return &token, nil
 }
 
+func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	err := w.fullNodeSQLDB.Delete(FullNodeFailedToSyncTokens, "token_id=?", tokenID)
+	if err != nil {
+		w.log.Error("Failed to delete token from FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", err)
+		return err
+	}
+
+	w.log.Info("Successfully deleted token from FullNodeFailedToSyncTokens table", "token_id", tokenID)
+	return nil
+}
+
+
 // This function is used by fullnode to update synced RBTs
 func (w *Wallet) UpdateSyncedRBTToTable(rbt *SyncedRBT) error {
 	w.l.Lock()
@@ -1764,4 +1779,31 @@ func (w *Wallet) ReadFTContentFromTable(tokenId string) (*FTContent, error) {
 // 		err = w.AddRBTContentToPSQl()
 // 	}
 // 	return nil
+//
+
+//TODO: Remove if we don't use the below function
+// func (w *Wallet) GetTokensBySyncStatus(status int) ([]*model.FailedToSyncTokenDetailsInfo, error) {
+// 	w.l.Lock()
+// 	defer w.l.Unlock()
+
+// 	var tokens []*model.FailedToSyncTokenDetailsInfo
+// 	err := w.fullNodeSQLDB.Read(FullNodeFailedToSyncTokens, &tokens, "sync_status=?", status)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return tokens, nil
 // }
+
+func (w *Wallet) GetAllFailedToSyncTokens() ([]*model.FailedToSyncTokenDetailsInfo, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	var tokens []*model.FailedToSyncTokenDetailsInfo
+	err := w.fullNodeSQLDB.Read(FullNodeFailedToSyncTokens, &tokens, "1=1")
+	if err != nil {
+		return nil, err
+	}
+
+	return tokens, nil
+}
