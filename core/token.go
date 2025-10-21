@@ -1241,7 +1241,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	var err error
 	var blkHeight uint64
 
-	c.log.Debug("***entered into SyncFullTokenChain**")
+	c.log.Debug("***entered into SyncFullTokenChain for the token: **", tokenSyncInfo.TokenID)
 
 	blk := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 	if blk != nil {
@@ -1411,31 +1411,37 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				c.log.Error(errMsg)
 				return fmt.Errorf(errMsg)
 			}
+		} else {
+			event := &model.PubSubTxnInfo{
+				BlockHash:         blockHash,
+				TransactionID:     transactionID,
+				AssetType:         tokenSyncInfo.AssetType,
+				LatestBlockHeight: latestBlockHeight,
+				PublisherDID:      p.GetPeerDID(),
+			}
+			if genesisBlock != nil {
+				c.log.Debug("about to add token to Respective sqlite table, token: ", tokenSyncInfo.TokenID)
+				//add synced tokens to respective sqlite tables
+				err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, genesisBlock, event, syncStatus)
+				if err != nil {
+					c.log.Error("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
+					return err
+				}
+			}
+			//If sync is completed remove those tokens from the FullNodeFailedToSyncTokens table of the fullnode.
+			if syncStatus == wallet.SyncCompleted {
+
+				err := c.w.DeleteFailedToSyncTokenFromTable(tokenSyncInfo.TokenID)
+				if err != nil {
+					c.log.Error("Failed to Delete token details from the FullNodeFailedToSyncTokens table", "token", tokenSyncInfo.TokenID, "err", err)
+					return err
+				}
+			}
+
 		}
 
-		//add synced tokens to respective sqlite tables
-	}
-	event := &model.PubSubTxnInfo{
-		BlockHash:         blockHash,
-		TransactionID:     transactionID,
-		AssetType:         tokenSyncInfo.AssetType,
-		LatestBlockHeight: latestBlockHeight,
-		PublisherDID:      p.GetPeerDID(),
-	}
-	if genesisBlock != nil {
-		err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, genesisBlock, event, syncStatus)
-		if err != nil {
-			c.log.Error("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
-			return err
-		}
-	}
-	//If sync is completed remove those tokens from the FullNodeFailedToSyncTokens table of the fullnode.
-	if syncStatus == wallet.SyncCompleted {
-		err := c.w.DeleteFailedToSyncTokenFromTable(tokenSyncInfo.TokenID)
-		if err != nil {
-			c.log.Error("Failed to Delete token details from the FullNodeFailedToSyncTokens table", "token", tokenSyncInfo.TokenID, "err", err)
-			return err
-		}
+	} else {
+		c.log.Debug("****latest block after sync is still nil only****")
 	}
 
 	return nil
@@ -2374,13 +2380,18 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 
 // Extract token details from given genesis block and add synced tokens  to the respective tokens table of Fullnode, depending on the asset type
 func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, receivedBlock *block.Block, event *model.PubSubTxnInfo, syncStatus int) error {
+
+	c.log.Debug("****AddTokenToRespectiveTable function got called****")
 	// var err error
 	switch event.AssetType {
 	case RBTTokenType:
+		c.log.Debug("****Asset is RBT Token Type**")
 
 		// check if token already exists in db
 		syncedRBT, err := c.w.ReadSyncedRBTFromTable(tokenId)
-		if err == nil {
+		if err != nil {
+			c.log.Error("failed to read RBT from table", "tokenId", tokenId, "err", err)
+		} else {
 			c.log.Debug("rbt exists, need to update")
 			// if there is no error, meaning if token exists in table, then update token info
 			syncedRBT.OwnerDID = tokenOwner
@@ -2395,7 +2406,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				c.log.Error("failed to update token ", tokenId)
 				return err
 			}
-			return nil
 		}
 
 		c.log.Debug("rbt doesn't exist, need to add new rec")

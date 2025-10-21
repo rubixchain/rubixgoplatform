@@ -1552,6 +1552,7 @@ func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedT
 }
 
 func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
+	w.log.Debug("****Calling DeleteFailedToSyncTokenFromTable for the token: ******", tokenID)
 	w.l.Lock()
 	defer w.l.Unlock()
 
