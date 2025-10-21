@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -419,10 +420,63 @@ func (c *Core) ShutdownTxnProcessor() {
 	}
 }
 
+// func (c *Core) RetryFailedTOSyncTokens(ctx context.Context) error {
+// 	failedToSyncTokens, err := c.w.GetAllFailedToSyncTokens()
+// 	if err != nil {
+// 		c.log.Error("failed to get tokens which are failed to sync", "error", err)
+// 		return err
+// 	}
+// 	if failedToSyncTokens == nil {
+// 		c.log.Info("There are NO failed to sync tokens which needs retry of syncing")
+// 		return nil
+// 	}
+
+// 	for _, failedToSyncToken := range failedToSyncTokens {
+// 		select {
+// 		case <-ctx.Done():
+// 			c.log.Info("RetryFailedTOSyncTokens interrupted by shutdown")
+// 			return ctx.Err()
+// 		default:
+// 			// proceed
+// 		}
+
+// 		p, err := c.getPeer(failedToSyncToken.Did)
+// 		if err != nil {
+// 			c.log.Error("failed to sync full token chain, failed to open peer connection with publisher", failedToSyncToken.Did)
+// 			return fmt.Errorf("failed to open peer connection with publisher %v", failedToSyncToken.Did)
+// 		}
+// 		// Ensure p.Close() is deferred after resource acquisition
+// 		func() {
+// 			defer p.Close()
+// 			tokenSyncInfo := &TokenSyncInfo{
+// 				TokenID:   failedToSyncToken.TokenID,
+// 				TokenType: failedToSyncToken.TokenType,
+// 				AssetType: failedToSyncToken.AssetType,
+// 			}
+// 			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
+// 			if err != nil {
+// 				c.log.Error("failed to sync token chain for token", failedToSyncToken.TokenID, "error", err)
+// 			}
+// 		}()
+// 		if err != nil {
+// 			return fmt.Errorf("failed to get latest block for token %s - may need sync", failedToSyncToken.TokenID)
+// 		}
+// 	}
+
+// 	return nil
+// }
+
 func (c *Core) RetryFailedTOSyncTokens() error {
 	failedToSyncTokens, err := c.w.GetAllFailedToSyncTokens()
 	if err != nil {
-		c.log.Error("failed to get tokens which are failed to sync ", "error", err)
+		if strings.Contains(err.Error(), "no records found") {
+			c.log.Info("There are no failed tokens to sync")
+			return nil
+		} else {
+			c.log.Error("failed to get tokens which are failed to sync ", "error", err)
+			return err
+		}
+
 	}
 	if failedToSyncTokens == nil {
 		c.log.Info("There are NO failed to sync tokens which needs retry of syncing")
@@ -433,18 +487,18 @@ func (c *Core) RetryFailedTOSyncTokens() error {
 			p, err := c.getPeer(failedToSyncToken.Did)
 			if err != nil {
 				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", failedToSyncToken.Did)
-				return fmt.Errorf("failed to open peer connection with publisher ", failedToSyncToken.Did)
+				return fmt.Errorf("failed to open peer connection with publisher %v", failedToSyncToken.Did)
 			}
 			defer p.Close()
 			tokenSyncInfo := &TokenSyncInfo{
-				TokenID:   failedToSyncToken.Token,
+				TokenID:   failedToSyncToken.TokenID,
 				TokenType: failedToSyncToken.TokenType,
 				AssetType: failedToSyncToken.AssetType,
 			}
 			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
 			if err != nil {
-				c.log.Error("failed to sync token chain for token ", failedToSyncToken.Token, "error", err)
-				return fmt.Errorf("failed to get latest block for token %s - may need sync", failedToSyncToken.Token)
+				c.log.Error("failed to sync token chain for token ", failedToSyncToken.TokenID, "error", err)
+				return fmt.Errorf("failed to get latest block for token %s - may need sync", failedToSyncToken.TokenID)
 
 			}
 		}

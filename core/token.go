@@ -715,7 +715,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			if err != nil {
 				c.log.Error("failed to get the latest Block Height", "error", err)
 				info := &model.FailedToSyncTokenDetailsInfo{
-					Token:     detail.Token,
+					TokenID:   detail.Token,
 					TokenType: detail.TokenType,
 					AssetType: detail.AssetType,
 					Did:       detail.Did,
@@ -796,7 +796,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					c.log.Error("Failed to open peer after retries", "peer", addr, "error", err)
 
 					info := &model.FailedToSyncTokenDetailsInfo{
-						Token:     token.TokenID,
+						TokenID:   token.TokenID,
 						TokenType: token.TokenType,
 						AssetType: token.AssetType,
 						Did:       did,
@@ -815,7 +815,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				if err := c.SyncFullTokenChainForFullNode(peer, token); err != nil {
 					c.log.Error("Failed to sync chain", "token", token.TokenID, "err", err)
 					info := &model.FailedToSyncTokenDetailsInfo{
-						Token:     token.TokenID,
+						TokenID:   token.TokenID,
 						TokenType: token.TokenType,
 						AssetType: token.AssetType,
 						Did:       did,
@@ -1353,7 +1353,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		c.log.Error(errMsg)
 		//add this failed to sync token,  to FullNodeFailedToSyncTokens sqlite table
 		tokenInfo := model.FailedToSyncTokenDetailsInfo{
-			Token:     tokenSyncInfo.TokenID,
+			TokenID:   tokenSyncInfo.TokenID,
 			TokenType: tokenSyncInfo.TokenType,
 			Did:       p.GetPeerDID(),
 			AssetType: tokenSyncInfo.AssetType,
@@ -1400,7 +1400,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		if syncerLatestBlkID != latestBlockID {
 			c.log.Error("token is not synced completely, latest blockIDs are not matching at syncer side and peer's side")
 			tokenInfo := model.FailedToSyncTokenDetailsInfo{
-				Token:     tokenSyncInfo.TokenID,
+				TokenID:   tokenSyncInfo.TokenID,
 				TokenType: tokenSyncInfo.TokenType,
 				Did:       p.GetPeerDID(),
 				AssetType: tokenSyncInfo.AssetType,

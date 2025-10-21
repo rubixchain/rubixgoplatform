@@ -1555,16 +1555,20 @@ func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 
-	err := w.fullNodeSQLDB.Delete(FullNodeFailedToSyncTokens, "token_id=?", tokenID)
+	token, err := w.ReadFailedToSyncTokensFromTable(tokenID)
 	if err != nil {
-		w.log.Error("Failed to delete token from FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", err)
-		return err
+		w.log.Error("faile to read FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", err)
+	}
+
+	deleteErr := w.fullNodeSQLDB.Delete(FullNodeFailedToSyncTokens, &token, "token_id=?", tokenID)
+	if deleteErr != nil {
+		w.log.Error("Failed to delete token from FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", deleteErr)
+		return deleteErr
 	}
 
 	w.log.Info("Successfully deleted token from FullNodeFailedToSyncTokens table", "token_id", tokenID)
 	return nil
 }
-
 
 // This function is used by fullnode to update synced RBTs
 func (w *Wallet) UpdateSyncedRBTToTable(rbt *SyncedRBT) error {
@@ -1594,11 +1598,11 @@ func (w *Wallet) UpdateSyncedSmartContractToTable(sc *SyncedSmartContract) error
 	return w.fullNodeSQLDB.Update(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", sc.SmartContractHash)
 }
 
-func (w *Wallet) UpdateFailedToSyncTokensFromTable(token *model.FailedToSyncTokenDetailsInfo) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-	return w.fullNodeSQLDB.Update(FullNodeFailedToSyncTokens, &token, "token=?", token.Token)
-}
+// func (w *Wallet) UpdateFailedToSyncTokensFromTable(token *model.FailedToSyncTokenDetailsInfo) error {
+// 	w.l.Lock()
+// 	defer w.l.Unlock()
+// 	return w.fullNodeSQLDB.Update(FullNodeFailedToSyncTokens, &token, "token=?", token.TokenID)
+// }
 
 // Store failed transactions in fullnode DB for later analysis and retry
 func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) error {
