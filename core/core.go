@@ -955,7 +955,7 @@ func (c *Core) tokenSyncCleanupRoutine() {
 
 func (c *Core) RetryFailedTokenSync() {
 	go func() {
-		c.RetryTokenSyncTicker = time.NewTicker(1 * time.Minute)
+		c.RetryTokenSyncTicker = time.NewTicker(1 * time.Hour)
 		defer c.RetryTokenSyncTicker.Stop()
 
 		for range c.RetryTokenSyncTicker.C {
