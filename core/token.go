@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -858,9 +859,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // 		return
 // 	}
 // 	c.log.Info("Received token chain details from peer", "peerID", event.PublisherPeerID)
-
 // 	c.log.Debug("***Number of token details received at full node side***", len(event.TokenDetails))
-
 // 	// Initialize map to collect tokens needing sync
 // 	tokenSyncMap := make(map[string][]TokenSyncInfo)
 // 	for _, detail := range event.TokenDetails {
@@ -870,7 +869,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // 			continue
 // 		}
 // 		address := event.PublisherPeerID + "." + detail.Did
-
 // 		// Check if token chain exists locally
 // 		latestBlock := c.w.GetFullNodeLatestTokenBlock(detail.Token, detail.TokenType)
 // 		if latestBlock == nil {
@@ -882,7 +880,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // 			})
 // 			continue
 // 		}
-
 // 		// Get local block height
 // 		blockHeight, err := latestBlock.GetBlockNumber(detail.Token)
 // 		if err != nil {
@@ -891,7 +888,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // 		}
 // 		c.log.Debug("full node side latest block height is: ", blockHeight, "for the token: ", detail.Token)
 // 		c.log.Debug("subscriber side latest block height is: ", detail.TokenChainLength, "for the token: ", detail.Token)
-
 // 		// Compare publisher's chain length with local block height
 // 		if detail.TokenChainLength > blockHeight {
 // 			c.log.Debug("Publisher chain longer, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", blockHeight, "peerAddr", address, "AssetType", detail.AssetType)
@@ -902,7 +898,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // 			})
 // 		}
 // 	}
-
 // 	// Log tokens needing sync and start background syncing
 // 	if len(tokenSyncMap) > 0 {
 // 		for address, tokens := range tokenSyncMap {
@@ -917,13 +912,11 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // 		go func() {
 // 			defer c.lock.Unlock()
 // 			c.syncFullTokenChains(tokenSyncMap)
-
 // 		}()
 // 	} else {
 // 		c.log.Info("No tokens need syncing from peer", "peerID", event.PublisherPeerID)
 // 	}
 // }
-
 /* func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.Result {
 	fmt.Println("Handling role-based logic for token:", token)
 	list, err := c.GetDHTddrs(token)
@@ -2622,10 +2615,141 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 			c.log.Error(errMsg)
 			return fmt.Errorf(errMsg)
 		}
+	case NFTTokenType:
+		// unmarshall the json and convert into struct
+		var nft NFTIpfsInfo
+		err = json.Unmarshal([]byte(tokenContent), &nft)
+		if err != nil {
+			c.log.Error("Failed to parse nft", "err", err)
+			return err
+		}
+
+		fmt.Println("Artifact Folder CID:", nft.ArtifactHash, " deployer did : ", nft.DID)
+
+		outputDir := fmt.Sprintf("/tmp/nft/%s", tokenId)
+		err = os.MkdirAll(outputDir, 0755)
+		if err != nil {
+			c.log.Error("Failed to create binary code directory", "err", err)
+			return err
+		}
+		var err error
+
+		// re-attempt 3 times if ipfs get fails
+		for attempt := 1; attempt <= 3; attempt++ {
+			err = c.ipfsOps.Get(nft.ArtifactHash, outputDir)
+			if err == nil {
+				c.log.Info("Successfully fetched NFT folder", "attempt", attempt)
+				break
+			}
+			c.log.Warn("Retrying NFT fetch", "attempt", attempt, "err", err)
+			time.Sleep(time.Duration(attempt*2) * time.Second)
+		}
+
+		if err != nil {
+			c.log.Error("Failed to fetch NFT folder after retries", "hash", nft.ArtifactHash, "err", err)
+			return err
+		}
+
+		// store the files into PostgreSQL as blobs
+		err = c.w.StoreNFTFilesToPSQL(tokenId, nft.DID, nft.ArtifactHash, outputDir)
+		if err != nil {
+			c.log.Error("Failed to store NFT files to DB", "err", err)
+		}
+
+		// Clean up temp directory after storing in DB
+		if rmErr := os.RemoveAll(outputDir); rmErr != nil {
+			c.log.Warn("Failed to remove temp outputDir", "path", outputDir, "err", rmErr)
+		} else {
+			c.log.Info("Removed temporary directory", "path", outputDir)
+		}
+
+	case SmartContractTokenType:
+		// Parse smart contract token JSON into SmartContractToken struct
+		var smartContractIpfsInfo SmartContractToken
+		err = json.Unmarshal([]byte(tokenContent), &smartContractIpfsInfo)
+		if err != nil {
+			c.log.Error("Failed to parse smart contract token", "err", err)
+			return err
+		}
+
 	default:
 		errMsg := fmt.Sprintf("failed to add ipfs content, invalid asset type :%v of token : %v", assetType, tokenId)
 		c.log.Error(errMsg)
 		return fmt.Errorf(errMsg)
 	}
+	return nil
+}
+
+func (c *Core) StoreSmartContractFilesToPSQL(smartContractHash string, smartContractIpfsContent SmartContractToken) error {
+	// Fetch the binary code file
+	binaryCodeFile, err := c.ipfsOps.Cat(smartContractIpfsContent.BinaryCodeHash)
+	if err != nil {
+		c.log.Error("Failed to fetch binary code file from network", "err", err)
+		return err
+	}
+	defer binaryCodeFile.Close()
+
+	binaryCodeFileName := "binaryCodeFile.wasm"
+
+	// Read the content of binaryCodeFile
+	binaryCodeContent, err := io.ReadAll(binaryCodeFile)
+	if err != nil {
+		c.log.Error("Failed to read binary code file", "err", err)
+		return err
+	}
+
+	// Fetch and store the raw code file
+	rawCodeFile, err := c.ipfsOps.Cat(smartContractIpfsContent.RawCodeHash)
+	if err != nil {
+		c.log.Error("Failed to fetch raw code file from IPFS", "err", err)
+		return err
+	}
+	defer rawCodeFile.Close()
+
+	rawCodeFileName := "rawCodeFile"
+
+	// Read the content of rawCodeFile
+	rawCodeContent, err := io.ReadAll(rawCodeFile)
+	if err != nil {
+		c.log.Error("Failed to read raw code file", "err", err)
+		return err
+	}
+
+	// Fetch and store the Schema code file
+	schemaCodeFile, err := c.ipfsOps.Cat(smartContractIpfsContent.SchemaCodeHash)
+	if err != nil {
+		c.log.Error("Failed to fetch Schema code file from IPFS", "err", err)
+		return err
+	}
+	defer schemaCodeFile.Close()
+
+	schemaCodeFileName := "schemaCodeFile.json"
+
+	// Read the content of schemaCodeFile
+	schemaCodeContent, err := io.ReadAll(schemaCodeFile)
+	if err != nil {
+		c.log.Error("Failed to read Schema code file", "err", err)
+		return err
+	}
+
+	// Add smart contract IPFS content in PSQL db
+	smartContractContent := &wallet.SmartContractContent{
+		SmartContractHash:  smartContractHash,
+		DeployerDID:        smartContractIpfsContent.DID,
+		BinaryCodeFileName: binaryCodeFileName,
+		BinaryCode:         binaryCodeContent,
+		RawCodeFileName:    rawCodeFileName,
+		RawCode:            rawCodeContent,
+		SchemaCodeFileName: schemaCodeFileName,
+		SchemaCode:         schemaCodeContent,
+	}
+	err = c.w.AddSmartContractContentToPSQl(smartContractContent)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to add smart contract content to psql, smart contract hash : %v", smartContractHash)
+		c.log.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	c.log.Info("Successfully stored all smart contract files")
 	return nil
 }

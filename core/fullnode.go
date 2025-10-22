@@ -179,7 +179,10 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 		}
 
 		if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
-			return fmt.Errorf("failed to add generated block to token chain: %v", err)
+			return fmt.Errorf("failed to add generated block to token chain, err: %v", err)
+		}
+		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
+			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
 		}
 		syncStatus := wallet.SyncCompleted
 
@@ -287,6 +290,13 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		}
 	}
 
+	// if it is a genesis block, then fetch token's ipfs content and store in psql db
+	if currentBlockNumber == 0 {
+		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
+			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
+		}
+	}
+
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 		return fmt.Errorf("failed to add block to token chain: %v", err)
 	}
@@ -305,7 +315,7 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 	// Add token to database first
 
 	// Handle token generated type (new deployments)
-	if newEvent.TxnType == block.TokenGeneratedType {
+	if newEvent.TxnType == block.TokenGeneratedType || newEvent.TxnType == block.TokenDeployedType {
 		if currentOwner != newEvent.PublisherDID {
 			return fmt.Errorf("publisher DID mismatch for contract deployment: expected %s, got %s", currentOwner, newEvent.PublisherDID)
 		}
@@ -315,12 +325,17 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 			return fmt.Errorf("failed to add contract block to token chain: %v", err)
 		}
 
+		// if it is a genesis block, then fetch token's ipfs content and store in psql db
+		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
+			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
+		}
+
+		syncStatus := wallet.SyncCompleted
+		if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
+			return fmt.Errorf("failed to add contract token to table: %v", err)
+		}
 		c.log.Info("New contract deployment processed", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 		return nil
-	}
-	syncStatus := wallet.SyncCompleted
-	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
-		return fmt.Errorf("failed to add contract token to table: %v", err)
 	}
 
 	// Handle existing contract executions with validation
@@ -355,10 +370,13 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 
 	// Validate publisher ownership
 	previousOwner := latestTokenBlock.GetOwner()
-	if previousOwner != newEvent.PublisherDID {
-		return fmt.Errorf("contract publisher DID mismatch: expected %s, got %s",
-			previousOwner, newEvent.PublisherDID)
-	}
+
+	// deployer should be the contract owner for all smart contracts, but for NFTs, owners keep changing
+	if newEvent.AssetType == NFTTokenType {
+		if previousOwner != newEvent.PublisherDID {
+			return fmt.Errorf("NFT publisher DID mismatch: expected %s, got %s", previousOwner, newEvent.PublisherDID)
+		}
+	} 
 
 	// Add validated block to contract chain
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {

@@ -292,17 +292,17 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 			return nil, err
 		}
 
-		// err = w.fullNodeSQLDB.Init(FullNodeNFTContentTable, &NFTContent{}, true)
-		// if err != nil {
-		// 	w.log.Error("Failed to initialize NFT token storage", "err", err)
-		// 	return nil, err
-		// }
+		err = w.fullNodePSQLTokensDB.Init(FullNodeNFTContentTable, &NFTContent{}, true)
+		if err != nil {
+			w.log.Error("Failed to initialize NFT token storage", "err", err)
+			return nil, err
+		}
 
-		// err = w.fullNodeSQLDB.Init(FullNodeSCContentTable, &SmartContractContent{}, true)
-		// if err != nil {
-		// 	w.log.Error("Failed to initialize fullnode smart contract token storage", "err", err)
-		// 	return nil, err
-		// }
+		err = w.fullNodePSQLTokensDB.Init(FullNodeSCContentTable, &SmartContractContent{}, true)
+		if err != nil {
+			w.log.Error("Failed to initialize fullnode smart contract token storage", "err", err)
+			return nil, err
+		}
 	}
 
 	return w, nil
