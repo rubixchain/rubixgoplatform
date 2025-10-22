@@ -2397,31 +2397,34 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 		// check if token already exists in db
 		syncedRBT, err := c.w.ReadSyncedRBTFromTable(tokenId)
-		if strings.Contains(err.Error(), "no records found") {
-			c.log.Debug("rbt doesn't exist, need to add new rec")
+		if err != nil {
+			if strings.Contains(err.Error(), "no records found") {
+				c.log.Debug("rbt doesn't exist, need to add new rec")
 
-			tokenOwner := tokenOwner
-			tokenInfo := &wallet.SyncedRBT{
-				TokenID:       tokenId,
-				TokenValue:    receivedBlock.GetTokenValue(),
-				OwnerDID:      tokenOwner,
-				BlockHash:     event.BlockHash,
-				TransactionID: event.TransactionID,
-				PublisherDID:  event.PublisherDID,
-				BlockHeight:   event.LatestBlockHeight,
-				SyncStaus:     syncStatus,
+				tokenOwner := tokenOwner
+				tokenInfo := &wallet.SyncedRBT{
+					TokenID:       tokenId,
+					TokenValue:    receivedBlock.GetTokenValue(),
+					OwnerDID:      tokenOwner,
+					BlockHash:     event.BlockHash,
+					TransactionID: event.TransactionID,
+					PublisherDID:  event.PublisherDID,
+					BlockHeight:   event.LatestBlockHeight,
+					SyncStaus:     syncStatus,
+				}
+				c.log.Debug("***block height just before adding to FUllnodeRBT Table****", tokenInfo.BlockHeight)
+				c.log.Debug("***publisherDID just before adding to FUllnodeRBT Table****", tokenInfo.PublisherDID)
+
+				err = c.w.AddSyncedRBTToTable(tokenInfo)
+				if err != nil {
+					c.log.Error("failed to add synced token to fullnodeRBT table, token: ", tokenInfo.TokenID)
+					return err
+				}
+
+				return nil
 			}
-			c.log.Debug("***block height just before adding to FUllnodeRBT Table****", tokenInfo.BlockHeight)
-			c.log.Debug("***publisherDID just before adding to FUllnodeRBT Table****", tokenInfo.PublisherDID)
-
-			err = c.w.AddSyncedRBTToTable(tokenInfo)
-			if err != nil {
-				c.log.Error("failed to add synced token to fullnodeRBT table, token: ", tokenInfo.TokenID)
-				return err
-			}
-
-			return nil
 		}
+
 		c.log.Debug("rbt exists, need to update")
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedRBT.OwnerDID = tokenOwner
@@ -2441,24 +2444,26 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		// check if token already exists in db
 		syncedFT, err := c.w.ReadSyncedFTFromTable(tokenId)
 
-		if strings.Contains(err.Error(), "no records found") {
+		if err != nil {
+			if strings.Contains(err.Error(), "no records found") {
 
-			ftInfo := &wallet.SyncedFT{
-				TokenID:       tokenId,
-				TokenValue:    receivedBlock.GetTokenValue(),
-				CreatorDID:    tokenOwner,
-				OwnerDID:      tokenOwner,
-				BlockHash:     event.BlockHash,
-				TransactionID: event.TransactionID,
-				SyncStatus:    syncStatus,
-				FTName:        event.FTName,
+				ftInfo := &wallet.SyncedFT{
+					TokenID:       tokenId,
+					TokenValue:    receivedBlock.GetTokenValue(),
+					CreatorDID:    tokenOwner,
+					OwnerDID:      tokenOwner,
+					BlockHash:     event.BlockHash,
+					TransactionID: event.TransactionID,
+					SyncStatus:    syncStatus,
+					FTName:        event.FTName,
+				}
+				err = c.w.AddSyncedFTToTable(ftInfo)
+				if err != nil {
+					c.log.Error("failed to add syncedFT token to fullnode FT table, token: ", ftInfo.TokenID)
+					return err
+				}
+				return nil
 			}
-			err = c.w.AddSyncedFTToTable(ftInfo)
-			if err != nil {
-				c.log.Error("failed to add syncedFT token to fullnode FT table, token: ", ftInfo.TokenID)
-				return err
-			}
-			return nil
 		}
 
 		// if there is no error, meaning if token exists in table, then update token info
@@ -2477,21 +2482,23 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 	case SmartContractTokenType:
 		// check if token already exists in db
 		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
-		if strings.Contains(err.Error(), "no records found") {
-			scDeployer := receivedBlock.GetDeployerDID()
-			scInfo := &wallet.SyncedSmartContract{
-				SmartContractHash: tokenId,
-				Deployer:          scDeployer,
-				BlockHash:         event.BlockHash,
-				TransactionID:     event.TransactionID,
-				SyncStatus:        syncStatus,
-			} // TODO : add sc file details
-			err = c.w.AddSyncedSmartContractToTable(scInfo)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			if strings.Contains(err.Error(), "no records found") {
+				scDeployer := receivedBlock.GetDeployerDID()
+				scInfo := &wallet.SyncedSmartContract{
+					SmartContractHash: tokenId,
+					Deployer:          scDeployer,
+					BlockHash:         event.BlockHash,
+					TransactionID:     event.TransactionID,
+					SyncStatus:        syncStatus,
+				} // TODO : add sc file details
+				err = c.w.AddSyncedSmartContractToTable(scInfo)
+				if err != nil {
+					return err
+				}
 
-			return nil
+				return nil
+			}
 		}
 
 		// if there is no error, meaning if token exists in table, then update token info
@@ -2507,25 +2514,27 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 	case NFTTokenType:
 		// check if token already exists in db
 		syncedNFT, err := c.w.ReadSyncedNFTFromTable(tokenId)
-		if strings.Contains(err.Error(), "no records found") {
-			nftValue := receivedBlock.GetTokenValue()
-			nftOwner := receivedBlock.GetDeployerDID()
-			nftInfo := &wallet.SyncedNFT{
-				TokenID:       tokenId,
-				TokenValue:    nftValue,
-				OwnerDID:      nftOwner,
-				BlockHash:     event.BlockHash,
-				TransactionID: event.TransactionID,
-				SyncStatus:    syncStatus,
-			} // TODO : add metadata details
-			err = c.w.AddSyncedNFTToTable(nftInfo)
+		if err != nil {
+			if strings.Contains(err.Error(), "no records found") {
+				nftValue := receivedBlock.GetTokenValue()
+				nftOwner := receivedBlock.GetDeployerDID()
+				nftInfo := &wallet.SyncedNFT{
+					TokenID:       tokenId,
+					TokenValue:    nftValue,
+					OwnerDID:      nftOwner,
+					BlockHash:     event.BlockHash,
+					TransactionID: event.TransactionID,
+					SyncStatus:    syncStatus,
+				} // TODO : add metadata details
+				err = c.w.AddSyncedNFTToTable(nftInfo)
 
-			if err != nil {
-				c.log.Error("failed to add synced NFT Token to fullnode NFT Table, token: ", nftInfo.TokenID)
-				return err
+				if err != nil {
+					c.log.Error("failed to add synced NFT Token to fullnode NFT Table, token: ", nftInfo.TokenID)
+					return err
+				}
+
+				return nil
 			}
-
-			return nil
 		}
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedNFT.BlockHash = event.BlockHash
