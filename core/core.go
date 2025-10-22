@@ -161,6 +161,7 @@ type Core struct {
 	publishTokenChain    bool
 	fullNode             bool
 	txnProcessor         *DynamicTxnProcessor
+	RetryTokenSyncTicker *time.Ticker
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -603,6 +604,11 @@ func (c *Core) StopCore() {
 		c.shutdownMgr = NewShutdownManager(c)
 	}
 
+	// stop retry-token-sync-ticker in case of fullnode
+	if c.RetryTokenSyncTicker != nil {
+		c.RetryTokenSyncTicker.Stop()
+	}
+
 	// Perform graceful shutdown
 	if err := c.shutdownMgr.Shutdown(); err != nil {
 		c.log.Error("Shutdown completed with errors", "error", err)
@@ -945,4 +951,27 @@ func (c *Core) tokenSyncCleanupRoutine() {
 			}
 		}
 	}
+}
+
+func (c *Core) RetryFailedTokenSync() {
+	go func() {
+		c.RetryTokenSyncTicker = time.NewTicker(1 * time.Hour)
+		defer c.RetryTokenSyncTicker.Stop()
+
+		for range c.RetryTokenSyncTicker.C {
+			retryErrChan := make(chan error, 1)
+			go func() {
+				retryErrChan <- c.RetryFailedTOSyncTokens()
+			}()
+
+			err := <-retryErrChan
+			if err != nil {
+				c.log.Error("RetryFailedTOSyncTokens execution failed", "err", err)
+			} else {
+				c.log.Info("RetryFailedTOSyncTokens executed successfully")
+			}
+
+		}
+
+	}()
 }

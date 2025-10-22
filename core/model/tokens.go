@@ -110,7 +110,7 @@ type SendTokenDetailsInfo struct {
 	AssetType        int    `json:"asset_type"`
 }
 type FailedToSyncTokenDetailsInfo struct {
-	Token     string `gorm:"column:token;primaryKey"` // `gorm:"column:token;primaryKey"`
+	TokenID     string `gorm:"column:token_id;primaryKey"` // `gorm:"column:token;primaryKey"`
 	TokenType int    `gorm:"column:token_type"`
 	Did       string `gorm:"column:did"`
 	AssetType int    `gorm:"column:asset_type"`

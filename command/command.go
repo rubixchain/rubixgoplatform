@@ -614,25 +614,9 @@ func (cmd *Command) runApp() {
 	c.StartPendingTokenMonitor()
 
 	// Start background job: retry failed-to-sync tokens every 1 hour
-	go func() {
-		ticker := time.NewTicker(1 * time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				cmd.log.Info("Running periodic RetryFailedTOSyncTokens task...")
-				err := c.RetryFailedTOSyncTokens()
-				if err != nil {
-					cmd.log.Error("RetryFailedTOSyncTokens execution failed", "err", err)
-				} else {
-					cmd.log.Info("RetryFailedTOSyncTokens executed successfully")
-				}
-			case <-sc:
-				cmd.log.Info("Stopping RetryFailedTOSyncTokens scheduler...")
-				return
-			}
-		}
-	}()
+	if cmd.fullNode {
+		c.RetryFailedTokenSync()
+	}
 
 	cmd.log.Info("Syncing Details...")
 	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
@@ -649,6 +633,8 @@ func (cmd *Command) runApp() {
 	signal.Notify(ch, syscall.SIGINT)
 	select {
 	case <-ch:
+		// // signal ticker goroutine to stop
+		// close(sc) // closing sc will unblock the ticker goroutine's case <-sc:
 	case <-sc:
 	}
 	// Stop the pending token monitor

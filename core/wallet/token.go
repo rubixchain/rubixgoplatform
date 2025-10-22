@@ -1552,19 +1552,28 @@ func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedT
 }
 
 func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
+	w.log.Debug("****Calling DeleteFailedToSyncTokenFromTable for the token: ******", tokenID)
+
+	token, err := w.ReadFailedToSyncTokensFromTable(tokenID)
+	if strings.Contains(err.Error(), "no records found") {
+		return nil
+	} else if err != nil {
+		w.log.Error("faile to read FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", err)
+		return err
+	}
+
 	w.l.Lock()
 	defer w.l.Unlock()
 
-	err := w.fullNodeSQLDB.Delete(FullNodeFailedToSyncTokens, "token_id=?", tokenID)
-	if err != nil {
-		w.log.Error("Failed to delete token from FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", err)
-		return err
+	deleteErr := w.fullNodeSQLDB.Delete(FullNodeFailedToSyncTokens, &token, "token_id=?", tokenID)
+	if deleteErr != nil {
+		w.log.Error("Failed to delete token from FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", deleteErr)
+		return deleteErr
 	}
 
 	w.log.Info("Successfully deleted token from FullNodeFailedToSyncTokens table", "token_id", tokenID)
 	return nil
 }
-
 
 // This function is used by fullnode to update synced RBTs
 func (w *Wallet) UpdateSyncedRBTToTable(rbt *SyncedRBT) error {
@@ -1711,11 +1720,11 @@ func (w *Wallet) GetAllSmartContractsbyDID(did string) ([]SyncedSmartContract, e
 	return t, nil
 }
 
-func (w *Wallet) UpdateFailedToSyncTokensFromTable(token *model.FailedToSyncTokenDetailsInfo) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-	return w.fullNodeSQLDB.Update(FullNodeFailedToSyncTokens, &token, "token=?", token.Token)
-}
+// func (w *Wallet) UpdateFailedToSyncTokensFromTable(token *model.FailedToSyncTokenDetailsInfo) error {
+// 	w.l.Lock()
+// 	defer w.l.Unlock()
+// 	return w.fullNodeSQLDB.Update(FullNodeFailedToSyncTokens, &token, "token=?", token.Token)
+// }
 
 // Store failed transactions in fullnode DB for later analysis and retry
 func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) error {
