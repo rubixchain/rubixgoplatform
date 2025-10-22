@@ -1553,14 +1553,16 @@ func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedT
 
 func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
 	w.log.Debug("****Calling DeleteFailedToSyncTokenFromTable for the token: ******", tokenID)
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	token, err := w.ReadFailedToSyncTokensFromTable(tokenID)
 	if err != nil {
 		w.log.Error("faile to read FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", err)
+		return err
 	}
 
+	w.l.Lock()
+	defer w.l.Unlock()
+	
 	deleteErr := w.fullNodeSQLDB.Delete(FullNodeFailedToSyncTokens, &token, "token_id=?", tokenID)
 	if deleteErr != nil {
 		w.log.Error("Failed to delete token from FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", deleteErr)

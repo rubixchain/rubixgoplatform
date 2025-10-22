@@ -1379,7 +1379,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	var blockHash, transactionID string
 	var latestBlockHeight uint64
 
-	syncStatus := wallet.SyncCompleted
+	// syncStatus := wallet.SyncCompleted
 	latestBlockAfterSync := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 	if latestBlockAfterSync != nil {
 		ownerDid = latestBlockAfterSync.GetOwner()
@@ -1405,13 +1405,14 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				Did:       p.GetPeerDID(),
 				AssetType: tokenSyncInfo.AssetType,
 			}
+			// since the token sync failed, we are adding it to the failed tokens table, and no need to to add to rbt table
 			err := c.w.AddFailedTokensToTable(&tokenInfo)
 			if err != nil {
 				errMsg := fmt.Sprintf("failed to add token to the failed-to-sync tokens table, token: %v, error: %v", tokenSyncInfo.TokenID, err)
 				c.log.Error(errMsg)
 				return fmt.Errorf(errMsg)
 			}
-		} else {
+		} else { // meaning sync completed properly
 			event := &model.PubSubTxnInfo{
 				BlockHash:         blockHash,
 				TransactionID:     transactionID,
@@ -1419,6 +1420,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				LatestBlockHeight: latestBlockHeight,
 				PublisherDID:      p.GetPeerDID(),
 			}
+			syncStatus := wallet.SyncCompleted
 			if genesisBlock != nil {
 				c.log.Debug("about to add token to Respective sqlite table, token: ", tokenSyncInfo.TokenID)
 				//add synced tokens to respective sqlite tables
@@ -2406,6 +2408,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				c.log.Error("failed to update token ", tokenId)
 				return err
 			}
+			return nil
 		}
 
 		c.log.Debug("rbt doesn't exist, need to add new rec")
@@ -2426,6 +2429,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 		err = c.w.AddSyncedRBTToTable(tokenInfo)
 		if err != nil {
+			c.log.Error("failed to add synced token to fullnodeRBT table, token: ", tokenInfo.TokenID)
 			return err
 		}
 	case FTTokenType:
@@ -2441,7 +2445,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			err = c.w.UpdateSyncedFTToTable(syncedFT)
 			if err != nil {
 				c.log.Error("failed to update token ", tokenId)
-				return err
+
 			}
 			return nil
 		}
@@ -2458,6 +2462,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		}
 		err = c.w.AddSyncedFTToTable(ftInfo)
 		if err != nil {
+			c.log.Error("failed to add syncedFT token to fullnode FT table, token: ", ftInfo.TokenID)
 			return err
 		}
 	case SmartContractTokenType:
@@ -2519,6 +2524,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		err = c.w.AddSyncedNFTToTable(nftInfo)
 
 		if err != nil {
+			c.log.Error("failed to add synced NFT Token to fullnode NFT Table, token: ", nftInfo.TokenID)
 			return err
 		}
 	}
