@@ -733,7 +733,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			c.log.Debug("publisher side latest block height", "height", detail.TokenChainLength, "token", detail.Token)
 
 		}
-		//collecting all those tokens, for which latestblock is empty or publisher's side tokenchain length is more, 
+		//collecting all those tokens, for which latestblock is empty or publisher's side tokenchain length is more,
 		// Fullnode will use these collected tokens later to sync from the publisher
 		if latestBlock == nil || detail.TokenChainLength > latestBlockHeight {
 			c.log.Debug("Publisher chain longer or full node need entire chain, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", latestBlockHeight, "peerAddr", address, "AssetType", detail.AssetType)
@@ -2475,6 +2475,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedFT.OwnerDID = tokenOwner
 		syncedFT.BlockHash = event.BlockHash
+		syncedFT.BlockHeight = event.LatestBlockHeight
 		syncedFT.SyncStatus = syncStatus
 		syncedFT.TransactionID = event.TransactionID
 
@@ -2510,6 +2511,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedSC.BlockHash = event.BlockHash
+		syncedSC.BlockHeight = event.LatestBlockHeight
 		syncedSC.SyncStatus = syncStatus
 		syncedSC.TransactionID = event.TransactionID
 
@@ -2546,6 +2548,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		}
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedNFT.BlockHash = event.BlockHash
+		syncedNFT.BlockHeight = event.LatestBlockHeight
 		syncedNFT.OwnerDID = tokenOwner
 		syncedNFT.SyncStatus = syncStatus
 		syncedNFT.TransactionID = event.TransactionID
