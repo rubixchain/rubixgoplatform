@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -75,8 +76,8 @@ func (c *Core) GetSmartContractsbyDID(DID string) ([]wallet.SyncedSmartContract,
 	return SCs, nil
 }
 
-func (c *Core) GetRBTFullTokenchain(TokenID string) *model.GetTokenChainResponce {
-	getRBTChainReply := &model.GetTokenChainResponce{
+func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenChainResponce {
+	getTokenChainReply := &model.GetTokenChainResponce{
 		BasicResponse: model.BasicResponse{
 			Status: false,
 			Result: nil,
@@ -86,37 +87,50 @@ func (c *Core) GetRBTFullTokenchain(TokenID string) *model.GetTokenChainResponce
 
 	blocks := make([]map[string]interface{}, 0)
 	blockID := ""
-	tokenTypeString := RBTString
+	var tokenTypeString string
 
-	// Initialize blockID for fetching token blocks
+	switch strings.ToUpper(TokenType) {
+	case "RBT":
+		tokenTypeString = RBTString
+	case "FT":
+		tokenTypeString = FTString
+	case "NFT":
+		tokenTypeString = NFTString
+	case "SC":
+		tokenTypeString = SmartContractString
+	default:
+		getTokenChainReply.Message = fmt.Sprintf("Invalid token type: %s", TokenType)
+		c.log.Error(getTokenChainReply.Message)
+		return getTokenChainReply
+	}
+
+	// Fetch token chain blocks iteratively
 	for {
 		blks, nextID, err := c.w.GetAllFullNodeTokenBlocks(TokenID, c.TokenType(tokenTypeString), blockID)
 		if err != nil {
-			getRBTChainReply.Message = "Failed to get RBT token chain blocks"
-			c.log.Error(getRBTChainReply.Message, "err", err)
-			return getRBTChainReply
+			getTokenChainReply.Message = fmt.Sprintf("Failed to get %s token chain blocks", TokenType)
+			c.log.Error(getTokenChainReply.Message, "err", err)
+			return getTokenChainReply
 		}
 
-		// Process each block received
 		for _, blk := range blks {
 			b := block.InitBlock(blk, nil)
 			if b != nil {
 				blocks = append(blocks, b.GetBlockMap())
 			} else {
-				c.log.Error("Invalid RBT block")
+				c.log.Error(fmt.Sprintf("Invalid %s block", TokenType))
 			}
 		}
 
-		// Update blockID for the next iteration
 		blockID = nextID
 		if nextID == "" {
-			break // Exit loop if there are no more blocks to fetch
+			break
 		}
 	}
 
 	str, err := tcMarshal("", blocks)
 	if err != nil {
-		c.log.Error("Failed to marshal RBT token chain", "err", err)
+		c.log.Error(fmt.Sprintf("Failed to marshal %s token chain", TokenType), "err", err)
 		return nil
 	}
 
@@ -125,7 +139,7 @@ func (c *Core) GetRBTFullTokenchain(TokenID string) *model.GetTokenChainResponce
 
 	err = json.Unmarshal(byteArray, &data)
 	if err != nil {
-		fmt.Println("Error unmarshal JSON for RBT tokenchain :", err)
+		c.log.Error(fmt.Sprintf("Error unmarshalling JSON for %s tokenchain", TokenType), "err", err)
 		return nil
 	}
 
@@ -135,328 +149,399 @@ func (c *Core) GetRBTFullTokenchain(TokenID string) *model.GetTokenChainResponce
 		data[i] = mappedItem
 	}
 
-	getRBTChainReply.Status = true
-	getRBTChainReply.Message = "RBT tokenchain data fetched successfully"
-	getRBTChainReply.TokenChainData = data
+	getTokenChainReply.Status = true
+	getTokenChainReply.Message = fmt.Sprintf("%s tokenchain data fetched successfully", TokenType)
+	getTokenChainReply.TokenChainData = data
 
-	if len(getRBTChainReply.TokenChainData) == 0 {
-		getRBTChainReply.Status = true
-		getRBTChainReply.Message = "No RBT tokenchain data available"
-		return getRBTChainReply
+	if len(getTokenChainReply.TokenChainData) == 0 {
+		getTokenChainReply.Message = fmt.Sprintf("No %s tokenchain data available", TokenType)
 	}
 
-	return getRBTChainReply
+	return getTokenChainReply
 }
 
-func (c *Core) GetFTFullTokenchain(FTTokenID string) *model.GetTokenChainResponce {
-	getFTReply := &model.GetTokenChainResponce{
-		BasicResponse: model.BasicResponse{
-			Status: false,
-			Result: nil,
-		},
-		TokenChainData: nil,
-	}
+// func (c *Core) GetRBTFullTokenchain(TokenID string) *model.GetTokenChainResponce {
+// 	getRBTChainReply := &model.GetTokenChainResponce{
+// 		BasicResponse: model.BasicResponse{
+// 			Status: false,
+// 			Result: nil,
+// 		},
+// 		TokenChainData: nil,
+// 	}
 
-	blocks := make([]map[string]interface{}, 0)
-	blockID := ""
-	tokenTypeString := FTString
+// 	blocks := make([]map[string]interface{}, 0)
+// 	blockID := ""
+// 	tokenTypeString := RBTString
 
-	// Initialize blockID for fetching token blocks
-	for {
-		blks, nextID, err := c.w.GetAllFullNodeTokenBlocks(FTTokenID, c.TokenType(tokenTypeString), blockID)
-		if err != nil {
-			getFTReply.Message = "Failed to get FT token chain blocks"
-			c.log.Error(getFTReply.Message, "err", err)
-			return getFTReply
-		}
+// 	// Initialize blockID for fetching token blocks
+// 	for {
+// 		blks, nextID, err := c.w.GetAllFullNodeTokenBlocks(TokenID, c.TokenType(tokenTypeString), blockID)
+// 		if err != nil {
+// 			getRBTChainReply.Message = "Failed to get RBT token chain blocks"
+// 			c.log.Error(getRBTChainReply.Message, "err", err)
+// 			return getRBTChainReply
+// 		}
 
-		// Process each block received
-		for _, blk := range blks {
-			b := block.InitBlock(blk, nil)
-			if b != nil {
-				blocks = append(blocks, b.GetBlockMap())
-			} else {
-				c.log.Error("Invalid FT block")
-			}
-		}
+// 		// Process each block received
+// 		for _, blk := range blks {
+// 			b := block.InitBlock(blk, nil)
+// 			if b != nil {
+// 				blocks = append(blocks, b.GetBlockMap())
+// 			} else {
+// 				c.log.Error("Invalid RBT block")
+// 			}
+// 		}
 
-		// Update blockID for the next iteration
-		blockID = nextID
-		if nextID == "" {
-			break // Exit loop if there are no more blocks to fetch
-		}
-	}
+// 		// Update blockID for the next iteration
+// 		blockID = nextID
+// 		if nextID == "" {
+// 			break // Exit loop if there are no more blocks to fetch
+// 		}
+// 	}
 
-	str, err := tcMarshal("", blocks)
-	if err != nil {
-		c.log.Error("Failed to marshal FT token chain", "err", err)
-		return nil
-	}
+// 	str, err := tcMarshal("", blocks)
+// 	if err != nil {
+// 		c.log.Error("Failed to marshal RBT token chain", "err", err)
+// 		return nil
+// 	}
 
-	byteArray := []byte(str)
-	var data []interface{}
+// 	byteArray := []byte(str)
+// 	var data []interface{}
 
-	err = json.Unmarshal(byteArray, &data)
-	if err != nil {
-		fmt.Println("Error unmarshal JSON for FT tokenchain :", err)
-		return nil
-	}
+// 	err = json.Unmarshal(byteArray, &data)
+// 	if err != nil {
+// 		fmt.Println("Error unmarshal JSON for RBT tokenchain :", err)
+// 		return nil
+// 	}
 
-	for i, item := range data {
-		flattenedItem := flattenKeys("", item)
-		mappedItem := applyKeyMapping(flattenedItem)
-		data[i] = mappedItem
-	}
+// 	for i, item := range data {
+// 		flattenedItem := flattenKeys("", item)
+// 		mappedItem := applyKeyMapping(flattenedItem)
+// 		data[i] = mappedItem
+// 	}
 
-	getFTReply.Status = true
-	getFTReply.Message = "FT tokenchain data fetched successfully"
-	getFTReply.TokenChainData = data
+// 	getRBTChainReply.Status = true
+// 	getRBTChainReply.Message = "RBT tokenchain data fetched successfully"
+// 	getRBTChainReply.TokenChainData = data
 
-	if len(getFTReply.TokenChainData) == 0 {
-		getFTReply.Status = true
-		getFTReply.Message = "No FT tokenchain data available"
-		return getFTReply
-	}
+// 	if len(getRBTChainReply.TokenChainData) == 0 {
+// 		getRBTChainReply.Status = true
+// 		getRBTChainReply.Message = "No RBT tokenchain data available"
+// 		return getRBTChainReply
+// 	}
 
-	return getFTReply
-}
+// 	return getRBTChainReply
+// }
 
-func (c *Core) GetRBTTokenGenesisBlock(tokenID string) *model.FullNodeGenesisBlock {
-	var fnGB model.FullNodeGenesisBlock
-	tokenType := RBTString
+// func (c *Core) GetFTFullTokenchain(FTTokenID string) *model.GetTokenChainResponce {
+// 	getFTReply := &model.GetTokenChainResponce{
+// 		BasicResponse: model.BasicResponse{
+// 			Status: false,
+// 			Result: nil,
+// 		},
+// 		TokenChainData: nil,
+// 	}
 
-	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenID, c.TokenType(tokenType))
-	if genesisBlock == nil {
-		c.log.Error("genesis block not found", "tokenID", tokenID, "type", tokenType)
-		return nil
-	}
+// 	blocks := make([]map[string]interface{}, 0)
+// 	blockID := ""
+// 	tokenTypeString := FTString
 
-	tokenLevel, tokenNumber := genesisBlock.GetTokenLevel(tokenID)
-	parentID, grandParents, err := genesisBlock.GetParentDetials(tokenID)
-	if err != nil {
-		c.log.Error("Failed to get parentIDs or grandParentIDs for explorer service", "tokenID", tokenID, "err", err)
-	}
+// 	// Initialize blockID for fetching token blocks
+// 	for {
+// 		blks, nextID, err := c.w.GetAllFullNodeTokenBlocks(FTTokenID, c.TokenType(tokenTypeString), blockID)
+// 		if err != nil {
+// 			getFTReply.Message = "Failed to get FT token chain blocks"
+// 			c.log.Error(getFTReply.Message, "err", err)
+// 			return getFTReply
+// 		}
 
-	fnGB.Token = tokenID
-	fnGB.TokenType = tokenType
-	fnGB.TokenLevel = tokenLevel
-	fnGB.TokenNumber = tokenNumber
-	fnGB.ParentID = parentID
-	fnGB.GrandParentID = append(fnGB.GrandParentID, grandParents...)
+// 		// Process each block received
+// 		for _, blk := range blks {
+// 			b := block.InitBlock(blk, nil)
+// 			if b != nil {
+// 				blocks = append(blocks, b.GetBlockMap())
+// 			} else {
+// 				c.log.Error("Invalid FT block")
+// 			}
+// 		}
 
-	return &fnGB
-}
+// 		// Update blockID for the next iteration
+// 		blockID = nextID
+// 		if nextID == "" {
+// 			break // Exit loop if there are no more blocks to fetch
+// 		}
+// 	}
 
-func (c *Core) GetFTTokenGenesisBlock(tokenID string) *model.FullNodeGenesisBlock {
-	var fnGB model.FullNodeGenesisBlock
-	tokenType := FTString
+// 	str, err := tcMarshal("", blocks)
+// 	if err != nil {
+// 		c.log.Error("Failed to marshal FT token chain", "err", err)
+// 		return nil
+// 	}
 
-	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenID, c.TokenType(tokenType))
-	if genesisBlock == nil {
-		c.log.Error("genesis block not found", "tokenID", tokenID, "type", tokenType)
-		return nil
-	}
+// 	byteArray := []byte(str)
+// 	var data []interface{}
 
-	_, tokenNumber := genesisBlock.GetTokenLevel(tokenID)
-	parentID, _, err := genesisBlock.GetParentDetials(tokenID)
-	if err != nil {
-		c.log.Error("Failed to get parentIDs for explorer service", "tokenID", tokenID, "err", err)
-	}
+// 	err = json.Unmarshal(byteArray, &data)
+// 	if err != nil {
+// 		fmt.Println("Error unmarshal JSON for FT tokenchain :", err)
+// 		return nil
+// 	}
 
-	fnGB.Token = tokenID
-	fnGB.TokenType = tokenType
-	fnGB.TokenNumber = tokenNumber
-	fnGB.ParentID = parentID
+// 	for i, item := range data {
+// 		flattenedItem := flattenKeys("", item)
+// 		mappedItem := applyKeyMapping(flattenedItem)
+// 		data[i] = mappedItem
+// 	}
 
-	return &fnGB
-}
+// 	getFTReply.Status = true
+// 	getFTReply.Message = "FT tokenchain data fetched successfully"
+// 	getFTReply.TokenChainData = data
 
-func (c *Core) GetRBTLatestBlock(tokenID string) *model.FullNodeTokenChainBlock {
-	var fullNodeTokenBlock model.FullNodeTokenChainBlock
-	var fullNodeTransBlock model.TransInfo
+// 	if len(getFTReply.TokenChainData) == 0 {
+// 		getFTReply.Status = true
+// 		getFTReply.Message = "No FT tokenchain data available"
+// 		return getFTReply
+// 	}
 
-	tokenType := RBTString
-	latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenID, c.TokenType(tokenType))
+// 	return getFTReply
+// }
 
-	transType := latestBlock.GetTransType()
-	tokenOwner := latestBlock.GetOwner()
-	transBlockBytes := latestBlock.GetBlock()
+// func (c *Core) GetRBTTokenGenesisBlock(tokenID string) *model.FullNodeGenesisBlock {
+// 	var fnGB model.FullNodeGenesisBlock
+// 	tokenType := RBTString
 
-	// --- Convert TransTokens (from []string)
-	blockTransTokens := latestBlock.GetTransTokens() // []string
-	var transTokens []model.TransTokens
-	for _, t := range blockTransTokens {
-		transTokens = append(transTokens, model.TransTokens{
-			Token:       t,
-			TokenType:   0, // default
-			UnplededID:  "",
-			CommitedDID: "",
-		})
-	}
+// 	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenID, c.TokenType(tokenType))
+// 	if genesisBlock == nil {
+// 		c.log.Error("genesis block not found", "tokenID", tokenID, "type", tokenType)
+// 		return nil
+// 	}
 
-	// --- Convert PledgeDetails
-	blockPledgeDetails := latestBlock.GetPledgedTokens()
-	var pledgeDetails []model.PledgeDetail
-	for _, pd := range blockPledgeDetails {
-		pledgeDetails = append(pledgeDetails, model.PledgeDetail{
-			Token:        pd.Token,
-			TokenType:    pd.TokenType,
-			DID:          pd.DID,
-			TokenBlockID: pd.TokenBlockID,
-		})
-	}
+// 	tokenLevel, tokenNumber := genesisBlock.GetTokenLevel(tokenID)
+// 	parentID, grandParents, err := genesisBlock.GetParentDetials(tokenID)
+// 	if err != nil {
+// 		c.log.Error("Failed to get parentIDs or grandParentIDs for explorer service", "tokenID", tokenID, "err", err)
+// 	}
 
-	// --- Convert QuorumSignature
-	blockQuorumDetails, err := latestBlock.GetQuorumSignatureList()
-	if err != nil {
-		c.log.Error("Failed to get quorum signature list for RBT latest block for explorer")
-	}
-	var quorumDetails []model.CreditSignature
-	for _, qs := range blockQuorumDetails {
-		quorumDetails = append(quorumDetails, model.CreditSignature{
-			Signature:     qs.Signature,
-			PrivSignature: qs.PrivSignature,
-			DID:           qs.DID,
-			Hash:          qs.Hash,
-			SignType:      qs.SignType,
-		})
-	}
+// 	fnGB.Token = tokenID
+// 	fnGB.TokenType = tokenType
+// 	fnGB.TokenLevel = tokenLevel
+// 	fnGB.TokenNumber = tokenNumber
+// 	fnGB.ParentID = parentID
+// 	fnGB.GrandParentID = append(fnGB.GrandParentID, grandParents...)
 
-	// --- Convert InitiatorSignature
-	blockInitiatorDetails := latestBlock.GetInitiatorSignature()
-	var initiatorDetails *model.InitiatorSignature
-	if blockInitiatorDetails != nil {
-		initiatorDetails = &model.InitiatorSignature{
-			NLSSShare:   blockInitiatorDetails.NLSSShare,
-			PrivateSign: blockInitiatorDetails.PrivateSign,
-			DID:         blockInitiatorDetails.DID,
-			Hash:        blockInitiatorDetails.Hash,
-			SignType:    blockInitiatorDetails.SignType,
-		}
-	}
+// 	return &fnGB
+// }
 
-	tokenValue := latestBlock.GetTokenValue()
-	childTokens := latestBlock.GetChildTokens()
+// func (c *Core) GetFTTokenGenesisBlock(tokenID string) *model.FullNodeGenesisBlock {
+// 	var fnGB model.FullNodeGenesisBlock
+// 	tokenType := FTString
 
-	// Decode transaction block
-	transBlock := block.InitBlock(transBlockBytes, nil)
-	sender := transBlock.GetSenderDID()
-	receiver := transBlock.GetReceiverDID()
-	trxnComment := transBlock.GetComment()
-	trxnID := transBlock.GetTid()
+// 	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenID, c.TokenType(tokenType))
+// 	if genesisBlock == nil {
+// 		c.log.Error("genesis block not found", "tokenID", tokenID, "type", tokenType)
+// 		return nil
+// 	}
 
-	// Fill TransInfo
-	fullNodeTransBlock.SenderDID = sender
-	fullNodeTransBlock.ReceiverDID = receiver
-	fullNodeTransBlock.Comment = trxnComment
-	fullNodeTransBlock.TID = trxnID
-	fullNodeTransBlock.Block = transBlockBytes
-	fullNodeTransBlock.Tokens = transTokens
+// 	_, tokenNumber := genesisBlock.GetTokenLevel(tokenID)
+// 	parentID, _, err := genesisBlock.GetParentDetials(tokenID)
+// 	if err != nil {
+// 		c.log.Error("Failed to get parentIDs for explorer service", "tokenID", tokenID, "err", err)
+// 	}
 
-	// Fill FullNodeTokenChainBlock
-	fullNodeTokenBlock.TransactionType = transType
-	fullNodeTokenBlock.TokenOwner = tokenOwner
-	fullNodeTokenBlock.TransInfo = &fullNodeTransBlock
-	fullNodeTokenBlock.PledgeDetails = pledgeDetails
-	fullNodeTokenBlock.QuorumSignature = quorumDetails
-	fullNodeTokenBlock.TokenValue = tokenValue
-	fullNodeTokenBlock.ChildTokens = childTokens
-	fullNodeTokenBlock.InitiatorSignature = initiatorDetails
+// 	fnGB.Token = tokenID
+// 	fnGB.TokenType = tokenType
+// 	fnGB.TokenNumber = tokenNumber
+// 	fnGB.ParentID = parentID
 
-	return &fullNodeTokenBlock
-}
+// 	return &fnGB
+// }
 
-func (c *Core) GetFTLatestBlock(tokenID string) *model.FullNodeTokenChainBlock {
-	var fullNodeTokenBlock model.FullNodeTokenChainBlock
-	var fullNodeTransBlock model.TransInfo
+// func (c *Core) GetRBTLatestBlock(tokenID string) *model.FullNodeTokenChainBlock {
+// 	var fullNodeTokenBlock model.FullNodeTokenChainBlock
+// 	var fullNodeTransBlock model.TransInfo
 
-	tokenType := FTString
-	latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenID, c.TokenType(tokenType))
+// 	tokenType := RBTString
+// 	latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenID, c.TokenType(tokenType))
 
-	transType := latestBlock.GetTransType()
-	tokenOwner := latestBlock.GetOwner()
-	transBlockBytes := latestBlock.GetBlock()
+// 	transType := latestBlock.GetTransType()
+// 	tokenOwner := latestBlock.GetOwner()
+// 	transBlockBytes := latestBlock.GetBlock()
 
-	// --- Convert TransTokens (from []string)
-	blockTransTokens := latestBlock.GetTransTokens() // []string
-	var transTokens []model.TransTokens
-	for _, t := range blockTransTokens {
-		transTokens = append(transTokens, model.TransTokens{
-			Token:       t,
-			TokenType:   0, // default, adjust if needed
-			UnplededID:  "",
-			CommitedDID: "",
-		})
-	}
+// 	// --- Convert TransTokens (from []string)
+// 	blockTransTokens := latestBlock.GetTransTokens() // []string
+// 	var transTokens []model.TransTokens
+// 	for _, t := range blockTransTokens {
+// 		transTokens = append(transTokens, model.TransTokens{
+// 			Token:       t,
+// 			TokenType:   0, // default
+// 			UnplededID:  "",
+// 			CommitedDID: "",
+// 		})
+// 	}
 
-	// --- Convert PledgeDetails
-	blockPledgeDetails := latestBlock.GetPledgedTokens()
-	var pledgeDetails []model.PledgeDetail
-	for _, pd := range blockPledgeDetails {
-		pledgeDetails = append(pledgeDetails, model.PledgeDetail{
-			Token:        pd.Token,
-			TokenType:    pd.TokenType,
-			DID:          pd.DID,
-			TokenBlockID: pd.TokenBlockID,
-		})
-	}
+// 	// --- Convert PledgeDetails
+// 	blockPledgeDetails := latestBlock.GetPledgedTokens()
+// 	var pledgeDetails []model.PledgeDetail
+// 	for _, pd := range blockPledgeDetails {
+// 		pledgeDetails = append(pledgeDetails, model.PledgeDetail{
+// 			Token:        pd.Token,
+// 			TokenType:    pd.TokenType,
+// 			DID:          pd.DID,
+// 			TokenBlockID: pd.TokenBlockID,
+// 		})
+// 	}
 
-	// --- Convert QuorumSignature
-	blockQuorumDetails, err := latestBlock.GetQuorumSignatureList()
-	if err != nil {
-		c.log.Error("Failed to get quorum signature list for FT latest block for explorer")
-	}
-	var quorumDetails []model.CreditSignature
-	for _, qs := range blockQuorumDetails {
-		quorumDetails = append(quorumDetails, model.CreditSignature{
-			Signature:     qs.Signature,
-			PrivSignature: qs.PrivSignature,
-			DID:           qs.DID,
-			Hash:          qs.Hash,
-			SignType:      qs.SignType,
-		})
-	}
+// 	// --- Convert QuorumSignature
+// 	blockQuorumDetails, err := latestBlock.GetQuorumSignatureList()
+// 	if err != nil {
+// 		c.log.Error("Failed to get quorum signature list for RBT latest block for explorer")
+// 	}
+// 	var quorumDetails []model.CreditSignature
+// 	for _, qs := range blockQuorumDetails {
+// 		quorumDetails = append(quorumDetails, model.CreditSignature{
+// 			Signature:     qs.Signature,
+// 			PrivSignature: qs.PrivSignature,
+// 			DID:           qs.DID,
+// 			Hash:          qs.Hash,
+// 			SignType:      qs.SignType,
+// 		})
+// 	}
 
-	// --- Convert InitiatorSignature
-	blockInitiatorDetails := latestBlock.GetInitiatorSignature()
-	var initiatorDetails *model.InitiatorSignature
-	if blockInitiatorDetails != nil {
-		initiatorDetails = &model.InitiatorSignature{
-			NLSSShare:   blockInitiatorDetails.NLSSShare,
-			PrivateSign: blockInitiatorDetails.PrivateSign,
-			DID:         blockInitiatorDetails.DID,
-			Hash:        blockInitiatorDetails.Hash,
-			SignType:    blockInitiatorDetails.SignType,
-		}
-	}
+// 	// --- Convert InitiatorSignature
+// 	blockInitiatorDetails := latestBlock.GetInitiatorSignature()
+// 	var initiatorDetails *model.InitiatorSignature
+// 	if blockInitiatorDetails != nil {
+// 		initiatorDetails = &model.InitiatorSignature{
+// 			NLSSShare:   blockInitiatorDetails.NLSSShare,
+// 			PrivateSign: blockInitiatorDetails.PrivateSign,
+// 			DID:         blockInitiatorDetails.DID,
+// 			Hash:        blockInitiatorDetails.Hash,
+// 			SignType:    blockInitiatorDetails.SignType,
+// 		}
+// 	}
 
-	tokenValue := latestBlock.GetTokenValue()
-	childTokens := latestBlock.GetChildTokens()
+// 	tokenValue := latestBlock.GetTokenValue()
+// 	childTokens := latestBlock.GetChildTokens()
 
-	// Decode transaction block
-	transBlock := block.InitBlock(transBlockBytes, nil)
-	sender := transBlock.GetSenderDID()
-	receiver := transBlock.GetReceiverDID()
-	trxnComment := transBlock.GetComment()
-	trxnID := transBlock.GetTid()
+// 	// Decode transaction block
+// 	transBlock := block.InitBlock(transBlockBytes, nil)
+// 	sender := transBlock.GetSenderDID()
+// 	receiver := transBlock.GetReceiverDID()
+// 	trxnComment := transBlock.GetComment()
+// 	trxnID := transBlock.GetTid()
 
-	// Fill TransInfo
-	fullNodeTransBlock.SenderDID = sender
-	fullNodeTransBlock.ReceiverDID = receiver
-	fullNodeTransBlock.Comment = trxnComment
-	fullNodeTransBlock.TID = trxnID
-	fullNodeTransBlock.Block = transBlockBytes
-	fullNodeTransBlock.Tokens = transTokens
+// 	// Fill TransInfo
+// 	fullNodeTransBlock.SenderDID = sender
+// 	fullNodeTransBlock.ReceiverDID = receiver
+// 	fullNodeTransBlock.Comment = trxnComment
+// 	fullNodeTransBlock.TID = trxnID
+// 	fullNodeTransBlock.Block = transBlockBytes
+// 	fullNodeTransBlock.Tokens = transTokens
 
-	// Fill FullNodeTokenChainBlock
-	fullNodeTokenBlock.TransactionType = transType
-	fullNodeTokenBlock.TokenOwner = tokenOwner
-	fullNodeTokenBlock.TransInfo = &fullNodeTransBlock
-	fullNodeTokenBlock.PledgeDetails = pledgeDetails
-	fullNodeTokenBlock.QuorumSignature = quorumDetails
-	fullNodeTokenBlock.TokenValue = tokenValue
-	fullNodeTokenBlock.ChildTokens = childTokens
-	fullNodeTokenBlock.InitiatorSignature = initiatorDetails
+// 	// Fill FullNodeTokenChainBlock
+// 	fullNodeTokenBlock.TransactionType = transType
+// 	fullNodeTokenBlock.TokenOwner = tokenOwner
+// 	fullNodeTokenBlock.TransInfo = &fullNodeTransBlock
+// 	fullNodeTokenBlock.PledgeDetails = pledgeDetails
+// 	fullNodeTokenBlock.QuorumSignature = quorumDetails
+// 	fullNodeTokenBlock.TokenValue = tokenValue
+// 	fullNodeTokenBlock.ChildTokens = childTokens
+// 	fullNodeTokenBlock.InitiatorSignature = initiatorDetails
 
-	return &fullNodeTokenBlock
-}
+// 	return &fullNodeTokenBlock
+// }
+
+// func (c *Core) GetFTLatestBlock(tokenID string) *model.FullNodeTokenChainBlock {
+// 	var fullNodeTokenBlock model.FullNodeTokenChainBlock
+// 	var fullNodeTransBlock model.TransInfo
+
+// 	tokenType := FTString
+// 	latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenID, c.TokenType(tokenType))
+
+// 	transType := latestBlock.GetTransType()
+// 	tokenOwner := latestBlock.GetOwner()
+// 	transBlockBytes := latestBlock.GetBlock()
+
+// 	// --- Convert TransTokens (from []string)
+// 	blockTransTokens := latestBlock.GetTransTokens() // []string
+// 	var transTokens []model.TransTokens
+// 	for _, t := range blockTransTokens {
+// 		transTokens = append(transTokens, model.TransTokens{
+// 			Token:       t,
+// 			TokenType:   0, // default, adjust if needed
+// 			UnplededID:  "",
+// 			CommitedDID: "",
+// 		})
+// 	}
+
+// 	// --- Convert PledgeDetails
+// 	blockPledgeDetails := latestBlock.GetPledgedTokens()
+// 	var pledgeDetails []model.PledgeDetail
+// 	for _, pd := range blockPledgeDetails {
+// 		pledgeDetails = append(pledgeDetails, model.PledgeDetail{
+// 			Token:        pd.Token,
+// 			TokenType:    pd.TokenType,
+// 			DID:          pd.DID,
+// 			TokenBlockID: pd.TokenBlockID,
+// 		})
+// 	}
+
+// 	// --- Convert QuorumSignature
+// 	blockQuorumDetails, err := latestBlock.GetQuorumSignatureList()
+// 	if err != nil {
+// 		c.log.Error("Failed to get quorum signature list for FT latest block for explorer")
+// 	}
+// 	var quorumDetails []model.CreditSignature
+// 	for _, qs := range blockQuorumDetails {
+// 		quorumDetails = append(quorumDetails, model.CreditSignature{
+// 			Signature:     qs.Signature,
+// 			PrivSignature: qs.PrivSignature,
+// 			DID:           qs.DID,
+// 			Hash:          qs.Hash,
+// 			SignType:      qs.SignType,
+// 		})
+// 	}
+
+// 	// --- Convert InitiatorSignature
+// 	blockInitiatorDetails := latestBlock.GetInitiatorSignature()
+// 	var initiatorDetails *model.InitiatorSignature
+// 	if blockInitiatorDetails != nil {
+// 		initiatorDetails = &model.InitiatorSignature{
+// 			NLSSShare:   blockInitiatorDetails.NLSSShare,
+// 			PrivateSign: blockInitiatorDetails.PrivateSign,
+// 			DID:         blockInitiatorDetails.DID,
+// 			Hash:        blockInitiatorDetails.Hash,
+// 			SignType:    blockInitiatorDetails.SignType,
+// 		}
+// 	}
+
+// 	tokenValue := latestBlock.GetTokenValue()
+// 	childTokens := latestBlock.GetChildTokens()
+
+// 	// Decode transaction block
+// 	transBlock := block.InitBlock(transBlockBytes, nil)
+// 	sender := transBlock.GetSenderDID()
+// 	receiver := transBlock.GetReceiverDID()
+// 	trxnComment := transBlock.GetComment()
+// 	trxnID := transBlock.GetTid()
+
+// 	// Fill TransInfo
+// 	fullNodeTransBlock.SenderDID = sender
+// 	fullNodeTransBlock.ReceiverDID = receiver
+// 	fullNodeTransBlock.Comment = trxnComment
+// 	fullNodeTransBlock.TID = trxnID
+// 	fullNodeTransBlock.Block = transBlockBytes
+// 	fullNodeTransBlock.Tokens = transTokens
+
+// 	// Fill FullNodeTokenChainBlock
+// 	fullNodeTokenBlock.TransactionType = transType
+// 	fullNodeTokenBlock.TokenOwner = tokenOwner
+// 	fullNodeTokenBlock.TransInfo = &fullNodeTransBlock
+// 	fullNodeTokenBlock.PledgeDetails = pledgeDetails
+// 	fullNodeTokenBlock.QuorumSignature = quorumDetails
+// 	fullNodeTokenBlock.TokenValue = tokenValue
+// 	fullNodeTokenBlock.ChildTokens = childTokens
+// 	fullNodeTokenBlock.InitiatorSignature = initiatorDetails
+
+// 	return &fullNodeTokenBlock
+// }
