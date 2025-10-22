@@ -2465,7 +2465,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				if ftInfo.FTName == "" {
 					comment := receivedBlock.GetComment()
 					c.log.Debug("extracted comment from genesis block is :: ", comment)
-					parts := strings.Split(comment, "FT name : ")
+					parts := strings.Split(comment, "FT Name : ")
 					if len(parts) > 1 {
 						ftInfo.FTName = parts[1]
 					}
