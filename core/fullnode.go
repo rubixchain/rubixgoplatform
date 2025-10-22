@@ -184,8 +184,13 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
 			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
 		}
+		// update block height if required
+		latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)
+		if err != nil {
+			c.log.Error("failed to get block height")
+		}
+		newEvent.LatestBlockHeight = latestBlockHeight
 		syncStatus := wallet.SyncCompleted
-
 		return c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus)
 	}
 
@@ -300,6 +305,12 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 		return fmt.Errorf("failed to add block to token chain: %v", err)
 	}
+	// update block height if required
+	latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)
+	if err != nil {
+		c.log.Error("failed to get block height")
+	}
+	newEvent.LatestBlockHeight = latestBlockHeight
 	syncStatus := wallet.SyncCompleted
 	// Add to database and blockchain
 	if err := c.AddTokenToRespectiveTable(tokenId, receiverDid, txnBlock, newEvent, syncStatus); err != nil {
@@ -312,8 +323,6 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 
 // Process contract-related transactions (Smart Contract and NFT operations)
 func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId, currentOwner string) error {
-	// Add token to database first
-
 	// Handle token generated type (new deployments)
 	if newEvent.TxnType == block.TokenGeneratedType || newEvent.TxnType == block.TokenDeployedType {
 		if currentOwner != newEvent.PublisherDID {
@@ -330,6 +339,12 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
 		}
 
+		// update block height if required
+		latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)
+		if err != nil {
+			c.log.Error("failed to get block height")
+		}
+		newEvent.LatestBlockHeight = latestBlockHeight
 		syncStatus := wallet.SyncCompleted
 		if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
 			return fmt.Errorf("failed to add contract token to table: %v", err)
@@ -383,6 +398,12 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 		return fmt.Errorf("failed to add contract execution block to chain: %v", err)
 	}
 	currentOwner := txnBlock.GetOwner()
+	// update block height if required
+	latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)
+	if err != nil {
+		c.log.Error("failed to get block height")
+	}
+	newEvent.LatestBlockHeight = latestBlockHeight
 	syncStatus := wallet.SyncCompleted
 	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
 		return fmt.Errorf("failed to add contract token to table: %v", err)
