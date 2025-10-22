@@ -382,6 +382,11 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 		return fmt.Errorf("failed to add contract execution block to chain: %v", err)
 	}
+	currentOwner := txnBlock.GetOwner()
+	syncStatus := wallet.SyncCompleted
+	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
+		return fmt.Errorf("failed to add contract token to table: %v", err)
+	}
 
 	c.log.Info("Contract execution processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 	return nil
