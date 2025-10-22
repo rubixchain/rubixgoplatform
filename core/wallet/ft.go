@@ -32,6 +32,7 @@ type SyncedFT struct {
 	TokenValue    float64 `gorm:"column:token_value"`
 	TransactionID string  `gorm:"column:transaction_id"`
 	BlockHash     string  `gorm:"column:block_hash"`
+	BlockHeight   uint64  `gorm:"column:block_height"`
 	SyncStatus    int     `gorm:"column:sync_status"`
 }
 

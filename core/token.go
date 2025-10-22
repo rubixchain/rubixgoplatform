@@ -748,6 +748,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				c.log.Error("failed to get latest block hash for the token", detail.Token)
 			}
 			txnID := latestBlock.GetTid()
+			currentOwner := latestBlock.GetOwner()
 
 			eventData := model.PubSubTxnInfo{
 				BlockHash:         latestBlockHash,
@@ -760,7 +761,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			//add content of the token to postgresqlDB
 			c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
 
-			c.AddTokenToRespectiveTable(detail.Token, detail.Did, genesisBlock, &eventData, wallet.SyncUnrequired)
+			c.AddTokenToRespectiveTable(detail.Token, currentOwner, genesisBlock, &eventData, wallet.SyncUnrequired)
 		}
 	}
 
@@ -2453,9 +2454,18 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					CreatorDID:    tokenOwner,
 					OwnerDID:      tokenOwner,
 					BlockHash:     event.BlockHash,
+					BlockHeight:   event.LatestBlockHeight,
 					TransactionID: event.TransactionID,
 					SyncStatus:    syncStatus,
 					FTName:        event.FTName,
+				}
+				if ftInfo.FTName == "" {
+					comment := receivedBlock.GetComment()
+					c.log.Debug("extracted comment from genesis block is :: ", comment)
+					parts := strings.Split(comment, "FT name : ")
+					if len(parts) > 1 {
+						ftInfo.FTName = parts[1]
+					}
 				}
 				err = c.w.AddSyncedFTToTable(ftInfo)
 				if err != nil {
@@ -2489,6 +2499,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					SmartContractHash: tokenId,
 					Deployer:          scDeployer,
 					BlockHash:         event.BlockHash,
+					BlockHeight:       event.LatestBlockHeight,
 					TransactionID:     event.TransactionID,
 					SyncStatus:        syncStatus,
 				} // TODO : add sc file details
@@ -2523,6 +2534,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					TokenValue:    nftValue,
 					OwnerDID:      nftOwner,
 					BlockHash:     event.BlockHash,
+					BlockHeight:   event.LatestBlockHeight,
 					TransactionID: event.TransactionID,
 					SyncStatus:    syncStatus,
 				} // TODO : add metadata details
@@ -2538,6 +2550,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		}
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedNFT.BlockHash = event.BlockHash
+		syncedNFT.OwnerDID = tokenOwner
 		syncedNFT.SyncStatus = syncStatus
 		syncedNFT.TransactionID = event.TransactionID
 
