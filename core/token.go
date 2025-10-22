@@ -732,7 +732,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			c.log.Debug("publisher side latest block height", "height", detail.TokenChainLength, "token", detail.Token)
 
 		}
-
+		//collecting all those tokens, for which latestblock is empty or publisher's side tokenchain length is more, 
+		// Fullnode will use these collected tokens later to sync from the publisher
 		if latestBlock == nil || detail.TokenChainLength > latestBlockHeight {
 			c.log.Debug("Publisher chain longer or full node need entire chain, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", latestBlockHeight, "peerAddr", address, "AssetType", detail.AssetType)
 			c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
@@ -741,6 +742,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				TokenType: detail.TokenType,
 				AssetType: detail.AssetType,
 			})
+			//fullnode has either equal or more number of token chain length compared to publisher
 		} else {
 			genesisBlock := c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
 			latestBlockHash, err := latestBlock.GetHash()
@@ -755,6 +757,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				TransactionID:     txnID,
 				PublisherDID:      detail.Did,
 				LatestBlockHeight: latestBlockHeight,
+				AssetType:         detail.AssetType,
 			}
 
 			c.log.Debug("**latest block in event data****", eventData.LatestBlockHeight)
