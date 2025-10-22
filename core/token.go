@@ -734,6 +734,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 
 		if latestBlock == nil || detail.TokenChainLength > latestBlockHeight {
 			c.log.Debug("Publisher chain longer or full node need entire chain, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", latestBlockHeight, "peerAddr", address, "AssetType", detail.AssetType)
+			c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
 				TokenID:   detail.Token,
 				TokenType: detail.TokenType,
