@@ -1531,7 +1531,7 @@ func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedS
 	w.l.Lock()
 	defer w.l.Unlock()
 	var sc SyncedSmartContract
-	err := w.fullNodeSQLDB.Read(FullNodeSmartContractTable, &sc, "token_id=?", contractHash)
+	err := w.fullNodeSQLDB.Read(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", contractHash)
 	if err != nil {
 		w.log.Error("Failed to get sc", "err", err)
 		return nil, err
