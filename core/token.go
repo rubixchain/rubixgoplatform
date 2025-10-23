@@ -2521,10 +2521,12 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			return err
 		}
 	case NFTTokenType:
+		c.log.Debug("adding/ updating nft in table")
 		// check if token already exists in db
 		syncedNFT, err := c.w.ReadSyncedNFTFromTable(tokenId)
 		if err != nil {
 			if strings.Contains(err.Error(), "no records found") {
+				c.log.Debug("nft doesn't exist, creating new record")
 				nftValue := receivedBlock.GetTokenValue()
 				nftOwner := receivedBlock.GetDeployerDID()
 				nftInfo := &wallet.SyncedNFT{
@@ -2546,6 +2548,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				return nil
 			}
 		}
+		c.log.Debug("nft exists, updating info")
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedNFT.BlockHash = event.BlockHash
 		syncedNFT.BlockHeight = event.LatestBlockHeight

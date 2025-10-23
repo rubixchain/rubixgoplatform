@@ -139,6 +139,7 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 		return fmt.Errorf("no tokens found in transaction %s", newEvent.BlockHash)
 	}
 
+	c.log.Debug("^^^^^^^^^processing ASSET type : ", newEvent.AssetType, "block height : ", newEvent.LatestBlockHeight)
 	switch newEvent.AssetType {
 	case RBTTokenType, FTTokenType:
 		return c.processTransferTransaction(newEvent, txnBlock, tokensList, receiverDid, currentOwner)
