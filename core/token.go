@@ -745,14 +745,46 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			})
 			//fullnode has either equal or more number of token chain length compared to publisher
 		} else {
-			genesisBlock := c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
 			latestBlockHash, err := latestBlock.GetHash()
 			if err != nil {
 				c.log.Error("failed to get latest block hash for the token", detail.Token)
 			}
-			txnID := latestBlock.GetTid()
 			currentOwner := latestBlock.GetOwner()
+			txnID := latestBlock.GetTid()
+			genesisBlock := c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
+			// first read existing token info from the table
+			existingBlockHeight, existingBlockHash, existingOwnerDID, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
+			if err != nil {
+				if strings.Contains(err.Error(), "no records found") {
+					// add token info to sqlite if not there
+					eventData := model.PubSubTxnInfo{
+						BlockHash:         latestBlockHash,
+						TransactionID:     txnID,
+						PublisherDID:      detail.Did,
+						LatestBlockHeight: latestBlockHeight,
+						AssetType:         detail.AssetType,
+					}
 
+					c.log.Debug("**latest block in event data****", eventData.LatestBlockHeight)
+					//add content of the token to postgresqlDB
+					c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
+
+					c.AddTokenToRespectiveTable(detail.Token, currentOwner, genesisBlock, &eventData, wallet.SyncUnrequired)
+					continue
+				}
+				c.log.Error("failed to read token ", detail.Token, "err ", err)
+				continue
+			}
+			if latestBlockHeight == existingBlockHeight {
+				if latestBlockHash != existingBlockHash || currentOwner != existingOwnerDID {
+					// TODO : Challenger node should verify the correct owner and correct block and add the correct info
+					errMsg := fmt.Sprintf("double spending the token %v, eixting owner : %v, and incoming owner : %v", detail.Token, existingOwnerDID, currentOwner)
+					c.log.Error(errMsg)
+				}
+				continue
+
+			}
+			// when latestBlockHeight > existingBlockHeight
 			eventData := model.PubSubTxnInfo{
 				BlockHash:         latestBlockHash,
 				TransactionID:     txnID,
@@ -2427,13 +2459,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		}
 
 		c.log.Debug("rbt exists, need to update")
-		if syncedRBT.BlockHeight == event.LatestBlockHeight {
-			if syncedRBT.OwnerDID != tokenOwner {
-				errMsg := fmt.Sprintf("double spend detected, two different owners with same block height, token : %v, existing owner : %v, received owner : %v", tokenId, syncedRBT.OwnerDID, tokenOwner)
-				c.log.Error(errMsg)
-				return fmt.Errorf("%v", errMsg)
-			}
-		}
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedRBT.OwnerDID = tokenOwner
 		syncedRBT.TransactionID = event.TransactionID
@@ -2781,4 +2806,40 @@ func (c *Core) StoreSmartContractFilesToPSQL(smartContractHash string, smartCont
 
 	c.log.Info("Successfully stored all smart contract files")
 	return nil
+}
+
+func (c *Core) ReadTokenFromFullnodeTokensTable(assetType int, tokenId string) (uint64, string, string, error) {
+	switch assetType {
+	case RBTTokenType:
+		rbt, err := c.w.ReadSyncedRBTFromTable(tokenId)
+		if err != nil {
+			c.log.Error("failed to read RBT, err ", err)
+			return 0, "", "", err
+		}
+		return rbt.BlockHeight, rbt.BlockHash, rbt.OwnerDID, nil
+	case FTTokenType:
+		ft, err := c.w.ReadSyncedFTFromTable(tokenId)
+		if err != nil {
+			c.log.Error("failed to read FT, err ", err)
+			return 0, "", "", err
+		}
+		return ft.BlockHeight, ft.BlockHash, ft.OwnerDID, nil
+	case NFTTokenType:
+		nft, err := c.w.ReadSyncedNFTFromTable(tokenId)
+		if err != nil {
+			c.log.Error("failed to read NFT, err ", err)
+			return 0, "", "", err
+		}
+		return nft.BlockHeight, nft.BlockHash, nft.OwnerDID, nil
+	case SmartContractTokenType:
+		sc, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
+		if err != nil {
+			c.log.Error("failed to read smart contract, err ", err)
+			return 0, "", "", err
+		}
+		return sc.BlockHeight, sc.BlockHash, sc.Deployer, nil
+	default:
+		c.log.Error("invalid asset type")
+		return 0, "", "", fmt.Errorf("invalid asset type")
+	}
 }
