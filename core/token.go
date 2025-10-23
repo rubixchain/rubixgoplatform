@@ -2547,7 +2547,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 				return nil
 			} else {
-				errMsg := fmt.Sprintf("error reading fullnode smart contract table for token : %v", tokenId)
+				errMsg := fmt.Sprintf("error reading fullnode smart contract table for token : %v , err : %v", tokenId, err)
 				c.log.Error(errMsg)
 				return fmt.Errorf("%v", errMsg)
 			}
