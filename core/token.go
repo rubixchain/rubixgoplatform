@@ -2527,6 +2527,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		return nil
 
 	case SmartContractTokenType:
+		c.log.Debug("adding/ updating smart contract in table")
 		// check if token already exists in db
 		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
 		if err != nil {
@@ -2539,12 +2540,12 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					BlockHeight:       event.LatestBlockHeight,
 					TransactionID:     event.TransactionID,
 					SyncStatus:        syncStatus,
-				} // TODO : add sc file details
+				}
 				err = c.w.AddSyncedSmartContractToTable(scInfo)
 				if err != nil {
+					c.log.Error("failed to add smart contract to table, err ", err)
 					return err
 				}
-
 				return nil
 			} else {
 				errMsg := fmt.Sprintf("error reading fullnode smart contract table for token : %v , err : %v", tokenId, err)
@@ -2724,6 +2725,12 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 		if err != nil {
 			c.log.Error("Failed to parse smart contract token", "err", err)
 			return err
+		}
+
+		if err := c.StoreSmartContractFilesToPSQL(tokenId, smartContractIpfsInfo); err != nil {
+			errMsg := fmt.Sprintf("failed to add smart contract token to psql , smart contract hash : %v, err : %v", tokenId, err)
+			c.log.Error(errMsg)
+			return fmt.Errorf(errMsg)
 		}
 
 	default:

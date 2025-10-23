@@ -1533,7 +1533,7 @@ func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedS
 	var sc SyncedSmartContract
 	err := w.fullNodeSQLDB.Read(FullNodeSmartContractTable, &sc, "token_id=?", contractHash)
 	if err != nil {
-		// w.log.Error("Failed to get sc", "err", err)
+		w.log.Error("Failed to get sc", "err", err)
 		return nil, err
 	}
 	return &sc, nil
