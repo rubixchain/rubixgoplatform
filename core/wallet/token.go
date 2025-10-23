@@ -1494,7 +1494,7 @@ func (w *Wallet) ReadSyncedRBTFromTable(tokenId string) (*SyncedRBT, error) {
 	err := w.fullNodeSQLDB.Read(FullNodeRBTTable, &rbt, "token_id=?", tokenId)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
-		// w.log.Error(errMsg)
+		w.log.Warn(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
 	return &rbt, nil
@@ -1507,7 +1507,7 @@ func (w *Wallet) ReadSyncedFTFromTable(tokenId string) (*SyncedFT, error) {
 	var ft SyncedFT
 	err := w.fullNodeSQLDB.Read(FullNodeFTTable, &ft, "token_id=?", tokenId)
 	if err != nil {
-		// w.log.Error("Failed to get ft", "err", err)
+		w.log.Warn("Failed to get ft", "err", err)
 		return nil, err
 	}
 	return &ft, nil
@@ -1520,7 +1520,7 @@ func (w *Wallet) ReadSyncedNFTFromTable(tokenId string) (*SyncedNFT, error) {
 	var nft SyncedNFT
 	err := w.fullNodeSQLDB.Read(FullNodeNFTTable, &nft, "token_id=?", tokenId)
 	if err != nil {
-		// w.log.Error("Failed to get nft", "err", err)
+		w.log.Warn("Failed to get nft", "err", err)
 		return nil, err
 	}
 	return &nft, nil
@@ -1533,7 +1533,7 @@ func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedS
 	var sc SyncedSmartContract
 	err := w.fullNodeSQLDB.Read(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", contractHash)
 	if err != nil {
-		w.log.Error("Failed to get sc", "err", err)
+		w.log.Warn("Failed to get sc", "err", err)
 		return nil, err
 	}
 	return &sc, nil
@@ -1545,7 +1545,7 @@ func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedT
 	var token model.FailedToSyncTokenDetailsInfo
 	err := w.fullNodeSQLDB.Read(FullNodeFailedToSyncTokens, &token, "token_id=?", tokenID)
 	if err != nil {
-		// w.log.Error("Failed to get sc", "err", err)
+		w.log.Warn("Failed to get sc", "err", err)
 		return nil, err
 	}
 	return &token, nil
@@ -1690,7 +1690,7 @@ func (w *Wallet) ReadSmartContractContentFromTable(tokenId string) (*SmartContra
 	w.l.Lock()
 	defer w.l.Unlock()
 	var scContent SmartContractContent
-	err := w.fullNodePSQLTokensDB.Read(FullNodeSCContentTable, &scContent, "token_id=?", tokenId)
+	err := w.fullNodePSQLTokensDB.Read(FullNodeSCContentTable, &scContent, "smart_contract_hash=?", tokenId)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
 		// w.log.Error(errMsg)

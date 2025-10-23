@@ -2820,28 +2820,24 @@ func (c *Core) ReadTokenFromFullnodeTokensTable(assetType int, tokenId string) (
 	case RBTTokenType:
 		rbt, err := c.w.ReadSyncedRBTFromTable(tokenId)
 		if err != nil {
-			c.log.Error("failed to read RBT, err ", err)
 			return 0, "", "", err
 		}
 		return rbt.BlockHeight, rbt.BlockHash, rbt.OwnerDID, nil
 	case FTTokenType:
 		ft, err := c.w.ReadSyncedFTFromTable(tokenId)
 		if err != nil {
-			c.log.Error("failed to read FT, err ", err)
 			return 0, "", "", err
 		}
 		return ft.BlockHeight, ft.BlockHash, ft.OwnerDID, nil
 	case NFTTokenType:
 		nft, err := c.w.ReadSyncedNFTFromTable(tokenId)
 		if err != nil {
-			c.log.Error("failed to read NFT, err ", err)
 			return 0, "", "", err
 		}
 		return nft.BlockHeight, nft.BlockHash, nft.OwnerDID, nil
 	case SmartContractTokenType:
 		sc, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
 		if err != nil {
-			c.log.Error("failed to read smart contract, err ", err)
 			return 0, "", "", err
 		}
 		return sc.BlockHeight, sc.BlockHash, sc.Deployer, nil
