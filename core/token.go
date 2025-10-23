@@ -2419,10 +2419,21 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				}
 
 				return nil
+			} else {
+				errMsg := fmt.Sprintf("error reading fullnode RBT table for token : %v", tokenId)
+				c.log.Error(errMsg)
+				return fmt.Errorf("%v", errMsg)
 			}
 		}
 
 		c.log.Debug("rbt exists, need to update")
+		if syncedRBT.BlockHeight == event.LatestBlockHeight {
+			if syncedRBT.OwnerDID != tokenOwner {
+				errMsg := fmt.Sprintf("double spend detected, two different owners with same block height, token : %v, existing owner : %v, received owner : %v", tokenId, syncedRBT.OwnerDID, tokenOwner)
+				c.log.Error(errMsg)
+				return fmt.Errorf("%v", errMsg)
+			}
+		}
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedRBT.OwnerDID = tokenOwner
 		syncedRBT.TransactionID = event.TransactionID
@@ -2469,6 +2480,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					return err
 				}
 				return nil
+			} else {
+				errMsg := fmt.Sprintf("error reading fullnode FT table for token : %v", tokenId)
+				c.log.Error(errMsg)
+				return fmt.Errorf("%v", errMsg)
 			}
 		}
 
@@ -2506,6 +2521,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				}
 
 				return nil
+			} else {
+				errMsg := fmt.Sprintf("error reading fullnode smart contract table for token : %v", tokenId)
+				c.log.Error(errMsg)
+				return fmt.Errorf("%v", errMsg)
 			}
 		}
 
@@ -2546,6 +2565,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				}
 
 				return nil
+			} else {
+				errMsg := fmt.Sprintf("error reading fullnode NFT table for token : %v", tokenId)
+				c.log.Error(errMsg)
+				return fmt.Errorf("%v", errMsg)
 			}
 		}
 		c.log.Debug("nft exists, updating info")
