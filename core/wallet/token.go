@@ -1555,9 +1555,10 @@ func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
 	w.log.Debug("****Calling DeleteFailedToSyncTokenFromTable for the token: ******", tokenID)
 
 	token, err := w.ReadFailedToSyncTokensFromTable(tokenID)
-	if strings.Contains(err.Error(), "no records found") {
-		return nil
-	} else if err != nil {
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			return nil
+		}
 		w.log.Error("faile to read FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", err)
 		return err
 	}
