@@ -1617,6 +1617,33 @@ func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) erro
 	return w.fullNodeSQLDB.Write(FailedTxnsTable, failedTxn)
 }
 
+// Store double spent tokens in fullnode DB for later analysis
+func (w *Wallet) StoreDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpentTokenInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Write(FullnodeDoubleSpentTokensTable, doubleSpentTokenInfo)
+}
+
+// Store double spent tokens in fullnode DB for later analysis
+func (w *Wallet) UpdateDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpentTokenInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Update(FullnodeDoubleSpentTokensTable, &doubleSpentTokenInfo, "token_id=?", doubleSpentTokenInfo.TokenID)
+}
+
+// Store double spent tokens in fullnode DB for later analysis
+func (w *Wallet) ReadDoubleSpentTokenInfo(doubleSpentTokenID string) (*model.DoubleSpentTokenInfo, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var doubleSpentTokenInfo model.DoubleSpentTokenInfo
+	err := w.fullNodeSQLDB.Read(FullnodeDoubleSpentTokensTable, &doubleSpentTokenInfo, "token_id=?", doubleSpentTokenID)
+	if err != nil {
+		w.log.Warn("Failed to read double spent token from table", "err", err)
+		return nil, err
+	}
+	return &doubleSpentTokenInfo, nil
+}
+
 // This function is used by fullnode to write all synced RBTs' IPFS content to sqlite table
 func (w *Wallet) AddRBTContentToPSQl(rbt *RBTContent) error {
 	w.l.Lock()

@@ -780,6 +780,20 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					// TODO : Challenger node should verify the correct owner and correct block and add the correct info
 					errMsg := fmt.Sprintf("double spending the token %v, eixting owner : %v, and incoming owner : %v", detail.Token, existingOwnerDID, currentOwner)
 					c.log.Error(errMsg)
+					// add token to doublespent tokens table
+					doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+						TokenID:        detail.Token,
+						AssetType:      detail.AssetType,
+						TokenType:      detail.TokenType,
+						PublisherDID:   event.PublisherPeerID,
+						ClaimedOwnerI:  existingOwnerDID,
+						ClaimedOwnerII: currentOwner,
+					}
+					err = c.w.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+					if err != nil {
+						c.log.Error("failed to store double spending token ", detail.Token)
+					}
+
 				}
 				continue
 

@@ -47,6 +47,7 @@ const (
 	FullNodeFTContentTable         string = "ft_content_table"
 	FullNodeNFTContentTable        string = "nft_content_table"
 	FullNodeSCContentTable         string = "sc_content_table"
+	FullnodeDoubleSpentTokensTable string = "DoubleSpentTokensTable"
 )
 
 type WalletConfig struct {
@@ -277,6 +278,12 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 		err = w.fullNodeSQLDB.Init(FullNodeFailedToSyncTokens, &model.FailedToSyncTokenDetailsInfo{}, true)
 		if err != nil {
 			w.log.Error("failed to initialize FullNodeFailedToSyncTokens storage", "error", err)
+			return nil, err
+		}
+
+		err = w.fullNodeSQLDB.Init(FullnodeDoubleSpentTokensTable, &model.DoubleSpentTokenInfo{}, true)
+		if err != nil {
+			w.log.Error("failed to initialize FullnodeDoubleSpentTokensTable storage", "error", err)
 			return nil, err
 		}
 
