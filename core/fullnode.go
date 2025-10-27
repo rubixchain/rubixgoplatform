@@ -303,7 +303,6 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 // Process contract-related transactions (Smart Contract and NFT operations)
 func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId, currentOwner string) error {
 	// Add token to database first
-	deployerDID := txnBlock.GetDeployerDID()
 
 	// Handle token generated type (new deployments)
 	if newEvent.TxnType == block.TokenGeneratedType {
@@ -320,7 +319,7 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 		return nil
 	}
 	syncStatus := wallet.SyncCompleted
-	if err := c.AddTokenToRespectiveTable(tokenId, deployerDID, txnBlock, newEvent, syncStatus); err != nil {
+	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
 		return fmt.Errorf("failed to add contract token to table: %v", err)
 	}
 

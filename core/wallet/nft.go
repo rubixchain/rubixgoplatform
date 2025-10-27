@@ -17,6 +17,7 @@ type SyncedNFT struct {
 	OwnerDID      string  `gorm:"column:owner_did"`
 	TransactionID string  `gorm:"column:transaction_id"`
 	BlockHash     string  `gorm:"column:block_hash"`
+	BlockHeight   uint64  `gorm:"column:block_height"`
 	SyncStatus    int     `gorm:"column:sync_status"`
 	// Metadata    string  `gorm:"column:metadata;" json:"metadata"`
 	// Filename    string  `gorm:"column:filename;" json:"filename"`

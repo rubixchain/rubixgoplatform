@@ -21,6 +21,7 @@ type SyncedSmartContract struct {
 	Deployer          string `gorm:"column:deployer" json:"deployer"`
 	TransactionID     string `gorm:"column:transaction_id"`
 	BlockHash         string `gorm:"column:block_hash"`
+	BlockHeight       uint64 `gorm:"column:block_height"`
 	SyncStatus        int    `gorm:"column:sync_status"`
 	// BinaryCodeHash    string `gorm:"column:binary_code_hash" json:"binary_code_hash"`
 	// RawCodeHash       string `gorm:"column:raw_code_hash" json:"raw_code_hash"`
