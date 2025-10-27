@@ -56,9 +56,9 @@ type PubSubTxnInfo struct {
 }
 
 type FailedTransaction struct {
-	BlockHash    string    `json:"txn_id"`
-	PublisherDID string    `json:"publisher_did"`
-	Error        string    `json:"error"`
-	FailedAt     time.Time `json:"failed_at"`
-	RetryCount   int       `json:"retry_count"`
+	BlockHash    string    `gorm:"column:txn_id"`
+	PublisherDID string    `gorm:"column:publisher_did"`
+	Error        string    `gorm:"column:error"`
+	FailedAt     time.Time `gorm:"column:failed_at"`
+	RetryCount   int       `gorm:"column:retry_count"`
 }
