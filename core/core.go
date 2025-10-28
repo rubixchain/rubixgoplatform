@@ -196,7 +196,7 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, fullnodeTokenDBUsername string, fullnodeTokenDBPassword string) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, passedPSQLdbName string, passedPSQLdbUserName string, passedPSQLdbPassword string) (*Core, error) {
 	var err error
 	update := false
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
@@ -246,8 +246,8 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 				cfg.CfgData.FullnodeTestTokenStorageConfig.DBType = "PostgressSQL"
 				cfg.CfgData.FullnodeTestTokenStorageConfig.DBPort = FullNodeTokensDBPort
 				cfg.CfgData.FullnodeTestTokenStorageConfig.DBName = FullNodeTokensDBName
-				cfg.CfgData.FullnodeTestTokenStorageConfig.DBUserName = fullnodeTokenDBUsername
-				cfg.CfgData.FullnodeTestTokenStorageConfig.DBPassword = fullnodeTokenDBPassword
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBUserName = passedPSQLdbUserName
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBPassword = passedPSQLdbPassword
 				update = true
 			}
 
@@ -266,8 +266,8 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 				cfg.CfgData.FullnodeTokenStorageConfig.DBType = "PostgressSQL"
 				cfg.CfgData.FullnodeTokenStorageConfig.DBPort = FullNodeTokensDBPort
 				cfg.CfgData.FullnodeTokenStorageConfig.DBName = FullNodeTokensDBName
-				cfg.CfgData.FullnodeTokenStorageConfig.DBUserName = fullnodeTokenDBUsername
-				cfg.CfgData.FullnodeTokenStorageConfig.DBPassword = fullnodeTokenDBPassword
+				cfg.CfgData.FullnodeTokenStorageConfig.DBUserName = passedPSQLdbUserName
+				cfg.CfgData.FullnodeTokenStorageConfig.DBPassword = passedPSQLdbPassword
 				update = true
 			}
 		}
@@ -363,16 +363,21 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			}
 
 			// postgresql to store tokens
-			fullNodePostgressDBName := FullNodeTokensDBName
-			if c.testNet {
-				fullNodePostgressDBName = FullNodeTestTokensDBName
+			var fullNodePostgressDBName string
+			if passedPSQLdbName == "" {
+				fullNodePostgressDBName = FullNodeTokensDBName
+				if c.testNet {
+					fullNodePostgressDBName = FullNodeTestTokensDBName
+				}
+			} else {
+				fullNodePostgressDBName = passedPSQLdbName
 			}
 			fullNodeTokenStoragecfg := &econfig.Config{
 				DBAddress:  "localhost",
 				DBPort:     FullNodeTokensDBPort,
 				DBName:     fullNodePostgressDBName,
-				DBUserName: fullnodeTokenDBUsername,
-				DBPassword: fullnodeTokenDBPassword,
+				DBUserName: passedPSQLdbUserName,
+				DBPassword: passedPSQLdbPassword,
 				DBType:     "PostgressSQL",
 			}
 			c.fullNodeTokensDB, err = storage.NewStorageDB(fullNodeTokenStoragecfg)
