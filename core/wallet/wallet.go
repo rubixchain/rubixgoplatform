@@ -47,6 +47,7 @@ const (
 	FullNodeFTContentTable         string = "ft_content_table"
 	FullNodeNFTContentTable        string = "nft_content_table"
 	FullNodeSCContentTable         string = "sc_content_table"
+	FullnodeDoubleSpentTokensTable string = "DoubleSpentTokensTable"
 )
 
 type WalletConfig struct {
@@ -280,6 +281,12 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 			return nil, err
 		}
 
+		err = w.fullNodeSQLDB.Init(FullnodeDoubleSpentTokensTable, &model.DoubleSpentTokenInfo{}, true)
+		if err != nil {
+			w.log.Error("failed to initialize FullnodeDoubleSpentTokensTable storage", "error", err)
+			return nil, err
+		}
+
 		err = w.fullNodePSQLTokensDB.Init(FullNodeRBTContentTable, &RBTContent{}, true)
 		if err != nil {
 			w.log.Error("Failed to initialize postgres RBT token storage", "err", err)
@@ -292,17 +299,17 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 			return nil, err
 		}
 
-		// err = w.fullNodeSQLDB.Init(FullNodeNFTContentTable, &NFTContent{}, true)
-		// if err != nil {
-		// 	w.log.Error("Failed to initialize NFT token storage", "err", err)
-		// 	return nil, err
-		// }
+		err = w.fullNodePSQLTokensDB.Init(FullNodeNFTContentTable, &NFTContent{}, true)
+		if err != nil {
+			w.log.Error("Failed to initialize NFT token storage", "err", err)
+			return nil, err
+		}
 
-		// err = w.fullNodeSQLDB.Init(FullNodeSCContentTable, &SmartContractContent{}, true)
-		// if err != nil {
-		// 	w.log.Error("Failed to initialize fullnode smart contract token storage", "err", err)
-		// 	return nil, err
-		// }
+		err = w.fullNodePSQLTokensDB.Init(FullNodeSCContentTable, &SmartContractContent{}, true)
+		if err != nil {
+			w.log.Error("Failed to initialize fullnode smart contract token storage", "err", err)
+			return nil, err
+		}
 	}
 
 	return w, nil

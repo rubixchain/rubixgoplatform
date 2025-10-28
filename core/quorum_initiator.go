@@ -2159,6 +2159,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// publish txn
 		publishingTxn.AssetType = NFTTokenType
+		c.log.Error("publishing nft executed block : ", cr.NFT)
 		err = c.publishTxn(publishingTxn)
 		if err != nil {
 			c.log.Error("Failed to publish txn", "err", err)

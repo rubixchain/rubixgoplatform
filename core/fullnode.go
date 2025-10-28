@@ -139,6 +139,7 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 		return fmt.Errorf("no tokens found in transaction %s", newEvent.BlockHash)
 	}
 
+	c.log.Debug("^^^^^^^^^processing ASSET type : ", newEvent.AssetType, "block height : ", newEvent.LatestBlockHeight)
 	switch newEvent.AssetType {
 	case RBTTokenType, FTTokenType:
 		return c.processTransferTransaction(newEvent, txnBlock, tokensList, receiverDid, currentOwner)
@@ -179,10 +180,18 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 		}
 
 		if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
-			return fmt.Errorf("failed to add generated block to token chain: %v", err)
+			return fmt.Errorf("failed to add generated block to token chain, err: %v", err)
 		}
+		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
+			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
+		}
+		// update block height if required
+		latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)
+		if err != nil {
+			c.log.Error("failed to get block height")
+		}
+		newEvent.LatestBlockHeight = latestBlockHeight
 		syncStatus := wallet.SyncCompleted
-
 		return c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus)
 	}
 
@@ -287,9 +296,22 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		}
 	}
 
+	// if it is a genesis block, then fetch token's ipfs content and store in psql db
+	if currentBlockNumber == 0 {
+		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
+			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
+		}
+	}
+
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 		return fmt.Errorf("failed to add block to token chain: %v", err)
 	}
+	// update block height if required
+	latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)
+	if err != nil {
+		c.log.Error("failed to get block height")
+	}
+	newEvent.LatestBlockHeight = latestBlockHeight
 	syncStatus := wallet.SyncCompleted
 	// Add to database and blockchain
 	if err := c.AddTokenToRespectiveTable(tokenId, receiverDid, txnBlock, newEvent, syncStatus); err != nil {
@@ -302,10 +324,8 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 
 // Process contract-related transactions (Smart Contract and NFT operations)
 func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId, currentOwner string) error {
-	// Add token to database first
-
 	// Handle token generated type (new deployments)
-	if newEvent.TxnType == block.TokenGeneratedType {
+	if newEvent.TxnType == block.TokenGeneratedType || newEvent.TxnType == block.TokenDeployedType {
 		if currentOwner != newEvent.PublisherDID {
 			return fmt.Errorf("publisher DID mismatch for contract deployment: expected %s, got %s", currentOwner, newEvent.PublisherDID)
 		}
@@ -315,12 +335,23 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 			return fmt.Errorf("failed to add contract block to token chain: %v", err)
 		}
 
+		// if it is a genesis block, then fetch token's ipfs content and store in psql db
+		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
+			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
+		}
+
+		// update block height if required
+		latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)
+		if err != nil {
+			c.log.Error("failed to get block height")
+		}
+		newEvent.LatestBlockHeight = latestBlockHeight
+		syncStatus := wallet.SyncCompleted
+		if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
+			return fmt.Errorf("failed to add contract token to table: %v", err)
+		}
 		c.log.Info("New contract deployment processed", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 		return nil
-	}
-	syncStatus := wallet.SyncCompleted
-	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
-		return fmt.Errorf("failed to add contract token to table: %v", err)
 	}
 
 	// Handle existing contract executions with validation
@@ -355,14 +386,28 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 
 	// Validate publisher ownership
 	previousOwner := latestTokenBlock.GetOwner()
-	if previousOwner != newEvent.PublisherDID {
-		return fmt.Errorf("contract publisher DID mismatch: expected %s, got %s",
-			previousOwner, newEvent.PublisherDID)
-	}
+
+	// deployer should be the contract owner for all smart contracts, but for NFTs, owners keep changing
+	if newEvent.AssetType == NFTTokenType {
+		if previousOwner != newEvent.PublisherDID {
+			return fmt.Errorf("NFT publisher DID mismatch: expected %s, got %s", previousOwner, newEvent.PublisherDID)
+		}
+	} 
 
 	// Add validated block to contract chain
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 		return fmt.Errorf("failed to add contract execution block to chain: %v", err)
+	}
+	currentOwner := txnBlock.GetOwner()
+	// update block height if required
+	latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)
+	if err != nil {
+		c.log.Error("failed to get block height")
+	}
+	newEvent.LatestBlockHeight = latestBlockHeight
+	syncStatus := wallet.SyncCompleted
+	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
+		return fmt.Errorf("failed to add contract token to table: %v", err)
 	}
 
 	c.log.Info("Contract execution processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
@@ -418,52 +463,6 @@ func (c *Core) ShutdownTxnProcessor() {
 		}
 	}
 }
-
-// func (c *Core) RetryFailedTOSyncTokens(ctx context.Context) error {
-// 	failedToSyncTokens, err := c.w.GetAllFailedToSyncTokens()
-// 	if err != nil {
-// 		c.log.Error("failed to get tokens which are failed to sync", "error", err)
-// 		return err
-// 	}
-// 	if failedToSyncTokens == nil {
-// 		c.log.Info("There are NO failed to sync tokens which needs retry of syncing")
-// 		return nil
-// 	}
-
-// 	for _, failedToSyncToken := range failedToSyncTokens {
-// 		select {
-// 		case <-ctx.Done():
-// 			c.log.Info("RetryFailedTOSyncTokens interrupted by shutdown")
-// 			return ctx.Err()
-// 		default:
-// 			// proceed
-// 		}
-
-// 		p, err := c.getPeer(failedToSyncToken.Did)
-// 		if err != nil {
-// 			c.log.Error("failed to sync full token chain, failed to open peer connection with publisher", failedToSyncToken.Did)
-// 			return fmt.Errorf("failed to open peer connection with publisher %v", failedToSyncToken.Did)
-// 		}
-// 		// Ensure p.Close() is deferred after resource acquisition
-// 		func() {
-// 			defer p.Close()
-// 			tokenSyncInfo := &TokenSyncInfo{
-// 				TokenID:   failedToSyncToken.TokenID,
-// 				TokenType: failedToSyncToken.TokenType,
-// 				AssetType: failedToSyncToken.AssetType,
-// 			}
-// 			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
-// 			if err != nil {
-// 				c.log.Error("failed to sync token chain for token", failedToSyncToken.TokenID, "error", err)
-// 			}
-// 		}()
-// 		if err != nil {
-// 			return fmt.Errorf("failed to get latest block for token %s - may need sync", failedToSyncToken.TokenID)
-// 		}
-// 	}
-
-// 	return nil
-// }
 
 func (c *Core) RetryFailedTOSyncTokens() error {
 	failedToSyncTokens, err := c.w.GetAllFailedToSyncTokens()

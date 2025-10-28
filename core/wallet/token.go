@@ -1494,7 +1494,7 @@ func (w *Wallet) ReadSyncedRBTFromTable(tokenId string) (*SyncedRBT, error) {
 	err := w.fullNodeSQLDB.Read(FullNodeRBTTable, &rbt, "token_id=?", tokenId)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
-		// w.log.Error(errMsg)
+		w.log.Warn(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
 	return &rbt, nil
@@ -1507,7 +1507,7 @@ func (w *Wallet) ReadSyncedFTFromTable(tokenId string) (*SyncedFT, error) {
 	var ft SyncedFT
 	err := w.fullNodeSQLDB.Read(FullNodeFTTable, &ft, "token_id=?", tokenId)
 	if err != nil {
-		// w.log.Error("Failed to get ft", "err", err)
+		w.log.Warn("Failed to get ft", "err", err)
 		return nil, err
 	}
 	return &ft, nil
@@ -1520,7 +1520,7 @@ func (w *Wallet) ReadSyncedNFTFromTable(tokenId string) (*SyncedNFT, error) {
 	var nft SyncedNFT
 	err := w.fullNodeSQLDB.Read(FullNodeNFTTable, &nft, "token_id=?", tokenId)
 	if err != nil {
-		// w.log.Error("Failed to get nft", "err", err)
+		w.log.Warn("Failed to get nft", "err", err)
 		return nil, err
 	}
 	return &nft, nil
@@ -1531,9 +1531,9 @@ func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedS
 	w.l.Lock()
 	defer w.l.Unlock()
 	var sc SyncedSmartContract
-	err := w.fullNodeSQLDB.Read(FullNodeSmartContractTable, &sc, "token_id=?", contractHash)
+	err := w.fullNodeSQLDB.Read(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", contractHash)
 	if err != nil {
-		// w.log.Error("Failed to get sc", "err", err)
+		w.log.Warn("Failed to get sc", "err", err)
 		return nil, err
 	}
 	return &sc, nil
@@ -1545,7 +1545,7 @@ func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedT
 	var token model.FailedToSyncTokenDetailsInfo
 	err := w.fullNodeSQLDB.Read(FullNodeFailedToSyncTokens, &token, "token_id=?", tokenID)
 	if err != nil {
-		// w.log.Error("Failed to get sc", "err", err)
+		w.log.Warn("Failed to get sc", "err", err)
 		return nil, err
 	}
 	return &token, nil
@@ -1555,9 +1555,10 @@ func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
 	w.log.Debug("****Calling DeleteFailedToSyncTokenFromTable for the token: ******", tokenID)
 
 	token, err := w.ReadFailedToSyncTokensFromTable(tokenID)
-	if strings.Contains(err.Error(), "no records found") {
-		return nil
-	} else if err != nil {
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			return nil
+		}
 		w.log.Error("faile to read FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", err)
 		return err
 	}
@@ -1733,6 +1734,33 @@ func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) erro
 	return w.fullNodeSQLDB.Write(FailedTxnsTable, failedTxn)
 }
 
+// Store double spent tokens in fullnode DB for later analysis
+func (w *Wallet) StoreDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpentTokenInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Write(FullnodeDoubleSpentTokensTable, doubleSpentTokenInfo)
+}
+
+// Store double spent tokens in fullnode DB for later analysis
+func (w *Wallet) UpdateDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpentTokenInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Update(FullnodeDoubleSpentTokensTable, &doubleSpentTokenInfo, "token_id=?", doubleSpentTokenInfo.TokenID)
+}
+
+// Store double spent tokens in fullnode DB for later analysis
+func (w *Wallet) ReadDoubleSpentTokenInfo(doubleSpentTokenID string) (*model.DoubleSpentTokenInfo, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var doubleSpentTokenInfo model.DoubleSpentTokenInfo
+	err := w.fullNodeSQLDB.Read(FullnodeDoubleSpentTokensTable, &doubleSpentTokenInfo, "token_id=?", doubleSpentTokenID)
+	if err != nil {
+		w.log.Warn("Failed to read double spent token from table", "err", err)
+		return nil, err
+	}
+	return &doubleSpentTokenInfo, nil
+}
+
 // This function is used by fullnode to write all synced RBTs' IPFS content to sqlite table
 func (w *Wallet) AddRBTContentToPSQl(rbt *RBTContent) error {
 	w.l.Lock()
@@ -1745,6 +1773,20 @@ func (w *Wallet) AddFTContentToPSQl(ft *FTContent) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	return w.fullNodePSQLTokensDB.Write(FullNodeFTContentTable, ft)
+}
+
+// This function is used by fullnode to write all synced NFTs' IPFS content to sqlite table
+func (w *Wallet) AddNFTContentToPSQl(nft *NFTContent) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodePSQLTokensDB.Write(FullNodeNFTContentTable, nft)
+}
+
+// This function is used by fullnode to write all synced SmartContracts' IPFS content to sqlite table
+func (w *Wallet) AddSmartContractContentToPSQl(smartContract *SmartContractContent) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodePSQLTokensDB.Write(FullNodeSCContentTable, smartContract)
 }
 
 // This function is used by fullnode to read from the list of all RBTs' IPFS content
@@ -1774,35 +1816,33 @@ func (w *Wallet) ReadFTContentFromTable(tokenId string) (*FTContent, error) {
 	return &ft, nil
 }
 
-// // Get token's ipfs content from the provider and store it in the psql db
-// func (w *Wallet) AddTokenContentToPSQL(tokenId string, assetType int, fullnodeDID string) error {
-// 	tokenContent, err := w.Cat(tokenId, FullNodeRole, fullnodeDID)
-// 	if err != nil {
-// 		errMsg := fmt.Sprintf("failed to get ipfs content of token : %v, err: %v", tokenId, err)
-// 		w.log.Error(errMsg)
-// 		return fmt.Errorf(errMsg)
-// 	}
+// This function is used by fullnode to read from the list of all NFTs' IPFS content
+func (w *Wallet) ReadNFTContentFromTable(tokenId string) (*NFTContent, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var nft NFTContent
+	err := w.fullNodePSQLTokensDB.Read(FullNodeNFTContentTable, &nft, "token_id=?", tokenId)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
+		// w.log.Error(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+	return &nft, nil
+}
 
-// 	switch assetType {
-// 	case RBTTokenType:
-// 		err = w.AddRBTContentToPSQl()
-// 	}
-// 	return nil
-//
-
-//TODO: Remove if we don't use the below function
-// func (w *Wallet) GetTokensBySyncStatus(status int) ([]*model.FailedToSyncTokenDetailsInfo, error) {
-// 	w.l.Lock()
-// 	defer w.l.Unlock()
-
-// 	var tokens []*model.FailedToSyncTokenDetailsInfo
-// 	err := w.fullNodeSQLDB.Read(FullNodeFailedToSyncTokens, &tokens, "sync_status=?", status)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return tokens, nil
-// }
+// This function is used by fullnode to read from the list of all SmartContracts' IPFS content
+func (w *Wallet) ReadSmartContractContentFromTable(tokenId string) (*SmartContractContent, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var scContent SmartContractContent
+	err := w.fullNodePSQLTokensDB.Read(FullNodeSCContentTable, &scContent, "smart_contract_hash=?", tokenId)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
+		// w.log.Error(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+	return &scContent, nil
+}
 
 func (w *Wallet) GetAllFailedToSyncTokens() ([]*model.FailedToSyncTokenDetailsInfo, error) {
 	w.l.Lock()

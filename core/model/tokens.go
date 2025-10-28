@@ -110,10 +110,20 @@ type SendTokenDetailsInfo struct {
 	AssetType        int    `json:"asset_type"`
 }
 type FailedToSyncTokenDetailsInfo struct {
-	TokenID     string `gorm:"column:token_id;primaryKey"` // `gorm:"column:token;primaryKey"`
+	TokenID   string `gorm:"column:token_id;primaryKey"` // `gorm:"column:token;primaryKey"`
 	TokenType int    `gorm:"column:token_type"`
 	Did       string `gorm:"column:did"`
 	AssetType int    `gorm:"column:asset_type"`
+}
+
+type DoubleSpentTokenInfo struct {
+	TokenID        string `gorm:"column:token_id;primaryKey"` // `gorm:"column:token;primaryKey"`
+	AssetType      int    `gorm:"column:asset_type"`
+	TokenType      int    `gorm:"column:token_type"`
+	PublisherDID   string `gorm:"column:publisher_did"`
+	ClaimedOwnerI  string `gorm:"column:claimed_owner_I"`
+	ClaimedOwnerII string `gorm:"column:claimed_owner_II"`
+	ErrorMessage   string `gorm:"column:error"`
 }
 
 type TokenChainDetailsEvent struct {

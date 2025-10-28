@@ -23,9 +23,17 @@ type SyncedSmartContract struct {
 	BlockHash         string `gorm:"column:block_hash"`
 	BlockHeight       uint64 `gorm:"column:block_height"`
 	SyncStatus        int    `gorm:"column:sync_status"`
-	// BinaryCodeHash    string `gorm:"column:binary_code_hash" json:"binary_code_hash"`
-	// RawCodeHash       string `gorm:"column:raw_code_hash" json:"raw_code_hash"`
-	// SchemaCodeHash    string `gorm:"column:schema_code_hash" json:"schema_code_hash"`
+}
+
+type SmartContractContent struct {
+	SmartContractHash  string `gorm:"column:smart_contract_hash;primaryKey" json:"smart_contract_hash"`
+	DeployerDID        string `json:"deployer_did"`
+	BinaryCodeFileName string `json:"binarycode_file_name"`
+	RawCodeFileName    string `json:"rawcode_file_name"`
+	SchemaCodeFileName string `json:"schema_file_name"`
+	BinaryCode         []byte `json:"binarycode_data"`
+	RawCode            []byte `json:"rawcode_data"`
+	SchemaCode         []byte `json:"schema_data"`
 }
 
 type CallBackUrl struct {
