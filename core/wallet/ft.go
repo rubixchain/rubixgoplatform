@@ -13,13 +13,23 @@ type FTToken struct {
 	TokenValue     float64   `gorm:"column:token_value"`
 	TokenStateHash string    `gorm:"column:token_state_hash"`
 	TransactionID  string    `gorm:"column:transaction_id"`
+	RBTLockStatus  int       `gorm:"column:rbt_lock_status;default:1"`
 	CreatedAt      time.Time `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt      time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 type FT struct {
-	ID         string `gorm:"column:id;primaryKey;autoIncrement"`
+	ID          string `gorm:"column:id;primaryKey;autoIncrement"`
+	FTName      string `gorm:"column:ft_name"`
+	FTCount     int    `gorm:"column:ft_count"`
+	CreatorDID  string `gorm:"column:creator_did"`
+	HighValueFT bool   `gorm:"column:high_value_ft"`
+}
+
+// FTIndex tracks the next FT number per (ft_name, creator_did)
+type FTIndex struct {
+	FTIndexID  int    `gorm:"column:id;primaryKey;autoIncrement"`
 	FTName     string `gorm:"column:ft_name"`
-	FTCount    int    `gorm:"column:ft_count"`
 	CreatorDID string `gorm:"column:creator_did"`
+	FTIndex    int    `gorm:"column:ft_index"`
 }

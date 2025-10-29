@@ -20,14 +20,16 @@ type CreateFTReqSwaggoInput struct {
 }
 
 type TransferFTReqSwaggoInput struct {
-	Receiver   string `json:"receiver"`
-	Sender     string `json:"sender"`
-	FTName     string `json:"ft_name"`
-	FTCount    int    `json:"ft_count"`
-	Comment    string `json:"comment"`
-	QuorumType int    `json:"quorum_type"`
-	Password   string `json:"password"`
-	CreatorDID string `json:"creatorDID"`
+	Receiver        string  `json:"receiver"`
+	Sender          string  `json:"sender"`
+	FTName          string  `json:"ft_name"`
+	FTCount         int     `json:"ft_count"`
+	Comment         string  `json:"comment"`
+	QuorumType      int     `json:"quorum_type"`
+	Password        string  `json:"password"`
+	CreatorDID      string  `json:"creatorDID"`
+	IsHighValueFT   bool    `json:"is_high_value"`
+	FTTransferValue float64 `json:"ft_value"`
 }
 
 // ShowAccount godoc
@@ -36,7 +38,7 @@ type TransferFTReqSwaggoInput struct {
 // @Tags         FT
 // @Accept       json
 // @Produce      json
-// @Param        input body CreateFTReqSwaggoInput true "Create FT"
+// @Param        input body model.CreateFTReq true "Create FT"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/create-ft [post]
 func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
@@ -48,9 +50,16 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	if !s.validateDIDAccess(req, createFTReq.DID) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
+
+	// If high-value FT mode is enabled, override ftCount to 1
+	ftCount := createFTReq.FTCount
+	if createFTReq.IsHighValueFT {
+		ftCount = 1
+		s.log.Info("High-value FT mode enabled, setting ft_count to 1")
+	}
+
 	s.c.AddWebReq(req)
-	rbtAmount := int(createFTReq.TokenCount)
-	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, rbtAmount, createFTReq.FTNumStartIndex)
+	go s.c.CreateFTs(req.ID, createFTReq.DID, ftCount, createFTReq.FTName, createFTReq.FTValue, createFTReq.FTNumStartIndex, createFTReq.FromRBT, createFTReq.IsHighValueFT)
 	return s.didResponse(req, req.ID)
 }
 
@@ -78,6 +87,38 @@ func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 	}
 	s.c.AddWebReq(req)
 	go s.c.InitiateFTTransfer(req.ID, &rbtReq)
+	return s.didResponse(req, req.ID)
+}
+
+// BurnFTReqSwaggoInput represents the input for burning FTs
+type BurnFTReqSwaggoInput struct {
+	DID         string `json:"did"`
+	FTName      string `json:"ft_name"`
+	FTCount     int    `json:"ft_count"`
+	FromRBT     bool   `json:"from_rbt"`
+	HighValueFT bool   `json:"high_value_ft"`
+}
+
+// ShowAccount godoc
+// @Summary      Burn FTs
+// @Description  This API endpoint will burn FTs and optionally unlock parent RBTs.
+// @Tags         FT
+// @Accept       json
+// @Produce      json
+// @Param        input body BurnFTReqSwaggoInput true "Burn FT"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/burn-ft [post]
+func (s *Server) APIBurnFT(req *ensweb.Request) *ensweb.Result {
+	var burnReq model.BurnFTReq
+	err := s.ParseJSON(req, &burnReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	if !s.validateDIDAccess(req, burnReq.DID) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.BurnFT(req.ID, &burnReq)
 	return s.didResponse(req, req.ID)
 }
 
@@ -119,14 +160,14 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 
 func (s *Server) APIFixFTCreator(req *ensweb.Request) *ensweb.Result {
 	s.log.Info("Fixing FT tokens with peer ID as CreatorDID")
-	
+
 	// Run the fix utility
 	results, err := s.c.FixAllFTTokensWithPeerIDAsCreator()
 	if err != nil {
 		s.log.Error("Failed to fix FT creators", "err", err)
 		return s.BasicResponse(req, false, "Failed to fix FT creators: "+err.Error(), nil)
 	}
-	
+
 	// Convert results to a format suitable for JSON response
 	var responseResults []map[string]interface{}
 	successCount := 0
@@ -145,24 +186,24 @@ func (s *Server) APIFixFTCreator(req *ensweb.Request) *ensweb.Result {
 		}
 		responseResults = append(responseResults, r)
 	}
-	
+
 	message := fmt.Sprintf("Fixed %d of %d FT tokens", successCount, len(results))
 	if len(results) == 0 {
 		message = "No FT tokens found with peer ID as CreatorDID"
 	}
-	
+
 	return s.BasicResponse(req, true, message, responseResults)
 }
 
 func (s *Server) APIGetFTCreatorStats(req *ensweb.Request) *ensweb.Result {
 	s.log.Info("Getting FT creator statistics")
-	
+
 	// Get the statistics
 	stats, err := s.c.GetFTTokenCreatorStats()
 	if err != nil {
 		s.log.Error("Failed to get FT creator stats", "err", err)
 		return s.BasicResponse(req, false, "Failed to get FT creator statistics: "+err.Error(), nil)
 	}
-	
+
 	return s.BasicResponse(req, true, "FT creator statistics retrieved successfully", stats)
 }

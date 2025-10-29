@@ -7,13 +7,21 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
-func (c *Client) CreateFT(did string, ftName string, ftCount int, wholeToken int, ftNumStartIndex int) (*model.BasicResponse, error) {
+func (c *Client) CreateFT(did string, ftName string, ftCount int, ftValue float64, ftNumStartIndex int, fromRBT bool, isHighValueFt bool) (*model.BasicResponse, error) {
+	// If high-value FT mode is enabled, override ftCount to 1
+	if isHighValueFt {
+		ftCount = 1
+		c.log.Info("High-value FT mode enabled, setting ft_count to 1")
+	}
+
 	createFTReq := model.CreateFTReq{
 		DID:             did,
 		FTName:          ftName,
 		FTCount:         ftCount,
-		TokenCount:      wholeToken,
+		FTValue:         ftValue,
 		FTNumStartIndex: ftNumStartIndex,
+		FromRBT:         fromRBT,
+		IsHighValueFT:   isHighValueFt,
 	}
 	var basicresponse model.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APICreateFT, nil, &createFTReq, &basicresponse)
@@ -56,6 +64,16 @@ func (c *Client) FixFTCreator() (*model.BasicResponse, error) {
 func (c *Client) GetFTCreatorStats() (*model.BasicResponse, error) {
 	var basicresponse model.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APIGetFTCreatorStats, nil, nil, &basicresponse)
+	if err != nil {
+		return nil, err
+	}
+	return &basicresponse, nil
+}
+
+func (c *Client) BurnFT(burnFTReq *model.BurnFTReq) (*model.BasicResponse, error) {
+
+	var basicresponse model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIBurnFT, nil, &burnFTReq, &basicresponse)
 	if err != nil {
 		return nil, err
 	}

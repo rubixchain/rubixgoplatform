@@ -99,6 +99,7 @@ const (
 	CreateFTCmd                    string = "create-ft"
 	DumpFTTokenChainCmd            string = "dump-ft"
 	TransferFTCmd                  string = "transfer-ft"
+	BurnFTCmd                      string = "burn-ft"
 	GetFTInfoCmd                   string = "get-ft-info-by-did"
 	ValidateTokenCmd               string = "validatetoken"
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
@@ -192,6 +193,7 @@ var commands = []string{VersionCmd,
 	SetAsyncFTStatusCmd,
 	FixFTCreatorCmd,
 	GetFTCreatorStatsCmd,
+	BurnFTCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -264,6 +266,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will set the async FT response status",
 	"This command will fix FT tokens that have peer ID as CreatorDID",
 	"This command will get statistics about FT token creators",
+	"This command will burn FT",
 }
 
 type Command struct {
@@ -363,6 +366,9 @@ type Command struct {
 	enableTrustedNetwork         bool
 	disableTrustedNetwork        bool
 	backupDB                     bool
+	fromRBT                      bool
+	ftvalue                      float64
+	isHighValueFT                bool
 }
 
 func showVersion() {
@@ -747,6 +753,9 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.enableTrustedNetwork, "enableTrustedNetwork", true, "Enable trusted network mode (skips DHT checks) - enabled by default")
 	flag.BoolVar(&cmd.disableTrustedNetwork, "disableTrustedNetwork", false, "Disable trusted network mode to enable full DHT checks")
 	flag.BoolVar(&cmd.backupDB, "backupDB", false, "Create backup of database before starting node")
+	flag.BoolVar(&cmd.fromRBT, "fromRBT", false, "Create FT by locking RBT")
+	flag.Float64Var(&cmd.ftvalue, "ftValue", 0.0, "value of the ft to be minted or transferred")
+	flag.BoolVar(&cmd.isHighValueFT, "isHighValueFT", false, "Enable high-value FT transfer mode (uses ftValue for transfer amount)")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
@@ -934,6 +943,8 @@ func Run(args []string) {
 		cmd.dumpFTTokenchain()
 	case TransferFTCmd:
 		cmd.transferFT()
+	case BurnFTCmd:
+		cmd.burnFT()
 	case GetFTInfoCmd:
 		cmd.getFTinfo()
 	case ValidateTokenCmd:

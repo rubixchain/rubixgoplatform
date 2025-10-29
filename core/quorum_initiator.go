@@ -82,7 +82,7 @@ type ConensusRequest struct {
 	NFT                string       `json:"nft"`
 	FTinfo             model.FTInfo `json:"ft_info"`
 	// TransTokenSyncInfo map[string]GenesisAndLatestBlocks `json:"tokens_sync_info"`
-	ExplorerDone       chan struct{} `json:"-"` // Channel to signal explorer submission completion
+	ExplorerDone chan struct{} `json:"-"` // Channel to signal explorer submission completion
 }
 
 type ConensusReply struct {
@@ -451,9 +451,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	case SmartContractExecuteMode, NFTExecuteMode:
 		reqPledgeTokens = sc.GetTotalRBTs()
 	case FTTransferMode:
-		ti := sc.GetTransTokenInfo()
-		for i := range ti {
-			reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
+		// For high-value FT, enforce fixed pledge requirement of 10
+		if cr.FTinfo.HighValueFT {
+			reqPledgeTokens = 10
+		} else {
+			ti := sc.GetTransTokenInfo()
+			for i := range ti {
+				reqPledgeTokens = reqPledgeTokens + ti[i].TokenValue
+			}
 		}
 	}
 	minValue := MinDecimalValue(MaxDecimalPlaces)
@@ -1087,7 +1092,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				if cr.ExplorerDone != nil {
 					c.log.Info("Waiting for explorer submission to complete before sending confirmation",
 						"transaction_id", cr.TransactionID)
-					
+
 					select {
 					case <-cr.ExplorerDone:
 						c.log.Info("Explorer submission completed, proceeding with receiver confirmation",
@@ -1097,20 +1102,20 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 							"transaction_id", cr.TransactionID)
 					}
 				}
-				
+
 				// Calculate initial delay based on token count to allow receiver processing
 				tokenCount := len(ti)
 				var initialDelay time.Duration
-				
+
 				// Since we already waited for explorer submission, receiver has had time to start processing
 				// Use more realistic delays based on observed parallel performance
 				baseDelay := 2 * time.Second // Network latency + setup
-				
+
 				// Adjusted processing time based on parallel receiver performance
 				// Observed: ~12.5 tokens/second with parallel processing
 				// Use 15 tokens/sec for calculation since receiver started during explorer wait
 				processingTime := time.Duration(tokenCount/15) * time.Second
-				
+
 				// Reduced buffer since we already waited for explorer
 				var buffer time.Duration
 				switch {
@@ -1123,9 +1128,9 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				default:
 					buffer = 3 * time.Second
 				}
-				
+
 				initialDelay = baseDelay + processingTime + buffer
-				
+
 				// Cap maximum delay at 30 seconds since we already waited for explorer
 				maxDelay := 30 * time.Second
 				if initialDelay > maxDelay {
@@ -1135,13 +1140,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 						"token_count", tokenCount)
 					initialDelay = maxDelay
 				}
-				
+
 				// Sleep before first attempt to let receiver process
 				c.log.Info("Waiting for receiver to process tokens before confirmation",
 					"delay", initialDelay,
 					"token_count", tokenCount)
 				time.Sleep(initialDelay)
-				
+
 				// Adaptive retry parameters based on token count
 				var backoff time.Duration
 				switch {
@@ -1158,15 +1163,15 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 					// Very large transfers need significant retry spacing
 					backoff = 120 * time.Second
 				}
-				
+
 				maxBackoff := 5 * time.Minute
 				maxRetries := 10
 				totalTimeout := 30 * time.Minute
-				
+
 				// Create timeout context
 				ctx, cancel := context.WithTimeout(context.Background(), totalTimeout)
 				defer cancel()
-				
+
 				for currAttempt := 1; currAttempt <= maxRetries; currAttempt++ {
 					// Check if context is cancelled
 					select {
@@ -1186,7 +1191,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 							tid,
 							receiverAddr,
 						))
-						
+
 						// If this is the last attempt, log the final error
 						if currAttempt == maxRetries {
 							c.log.Error("Failed to send FT token confirmation after all retries",
@@ -1195,14 +1200,14 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 								"attempts", maxRetries,
 								"error", err)
 						}
-						
+
 						// Wait with context awareness
 						select {
 						case <-ctx.Done():
 							return
 						case <-time.After(backoff):
 						}
-						
+
 						backoff = time.Duration(float64(backoff) * 1.5)
 						if backoff > maxBackoff {
 							backoff = maxBackoff

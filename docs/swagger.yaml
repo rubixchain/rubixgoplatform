@@ -14,6 +14,23 @@ definitions:
       status:
         type: boolean
     type: object
+  model.CreateFTReq:
+    properties:
+      did:
+        type: string
+      from_rbt:
+        type: boolean
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
+      ft_num_start_index:
+        type: integer
+      ft_value:
+        type: number
+      is_high_value:
+        type: boolean
+    type: object
   model.DIDFromPubKeyResponse:
     properties:
       did:
@@ -27,6 +44,10 @@ definitions:
         type: integer
       ft_name:
         type: string
+      ft_total_value:
+        type: number
+      high_value_ft:
+        type: boolean
     type: object
   model.GetFTInfo:
     properties:
@@ -118,18 +139,18 @@ definitions:
           $ref: '#/definitions/model.TransactionCount'
         type: array
     type: object
-  server.CreateFTReqSwaggoInput:
+  server.BurnFTReqSwaggoInput:
     properties:
       did:
         type: string
+      from_rbt:
+        type: boolean
       ft_count:
         type: integer
       ft_name:
         type: string
-      ft_num_start_index:
-        type: integer
-      token_count:
-        type: integer
+      high_value_ft:
+        type: boolean
     type: object
   server.DIDFromPubKeySwaggoRequest:
     properties:
@@ -302,6 +323,10 @@ definitions:
         type: integer
       ft_name:
         type: string
+      ft_value:
+        type: number
+      is_high_value:
+        type: boolean
       password:
         type: string
       quorum_type:
@@ -341,6 +366,28 @@ paths:
       summary: Add Peer
       tags:
       - Account
+  /api/burn-ft:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint will burn FTs and optionally unlock parent RBTs.
+      parameters:
+      - description: Burn FT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.BurnFTReqSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Burn FTs
+      tags:
+      - FT
   /api/check-pinned-state:
     delete:
       consumes:
@@ -439,7 +486,7 @@ paths:
         name: input
         required: true
         schema:
-          $ref: '#/definitions/server.CreateFTReqSwaggoInput'
+          $ref: '#/definitions/model.CreateFTReq'
       produces:
       - application/json
       responses:

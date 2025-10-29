@@ -486,6 +486,8 @@ func (c *Core) ExplorerUserCreate() []string {
 								FTName:     item.FTName,
 								FTCount:    item.FTCount,
 								CreatorDID: item.CreatorDID,
+								// HighValueFT:  item.HighValueFT,
+								// FTTotalValue: item.FTTotalValue,
 							}
 						}
 						balance := float64(accInfo.RBTAmount) // Convert to float64 if necessary
@@ -563,6 +565,8 @@ func (c *Core) UpdateUserInfo(dids []string) {
 					FTName:     item.FTName,
 					FTCount:    item.FTCount,
 					CreatorDID: item.CreatorDID,
+					// HighValueFT:  item.HighValueFT,
+					// FTTotalValue: item.FTTotalValue,
 				}
 			}
 			_ = c.s.Read(wallet.DIDStorage, &didList, "did=?", did)

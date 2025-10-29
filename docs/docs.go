@@ -52,6 +52,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/burn-ft": {
+            "post": {
+                "description": "This API endpoint will burn FTs and optionally unlock parent RBTs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Burn FTs",
+                "parameters": [
+                    {
+                        "description": "Burn FT",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.BurnFTReqSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/check-pinned-state": {
             "delete": {
                 "description": "This API is used to check if the token state for which the token is pledged is exhausted or not.",
@@ -203,7 +237,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.CreateFTReqSwaggoInput"
+                            "$ref": "#/definitions/model.CreateFTReq"
                         }
                     }
                 ],
@@ -1688,6 +1722,32 @@ const docTemplate = `{
                 }
             }
         },
+        "model.CreateFTReq": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "from_rbt": {
+                    "type": "boolean"
+                },
+                "ft_count": {
+                    "type": "integer"
+                },
+                "ft_name": {
+                    "type": "string"
+                },
+                "ft_num_start_index": {
+                    "type": "integer"
+                },
+                "ft_value": {
+                    "type": "number"
+                },
+                "is_high_value": {
+                    "type": "boolean"
+                }
+            }
+        },
         "model.DIDFromPubKeyResponse": {
             "type": "object",
             "properties": {
@@ -1707,6 +1767,12 @@ const docTemplate = `{
                 },
                 "ft_name": {
                     "type": "string"
+                },
+                "ft_total_value": {
+                    "type": "number"
+                },
+                "high_value_ft": {
+                    "type": "boolean"
                 }
             }
         },
@@ -1846,11 +1912,14 @@ const docTemplate = `{
                 }
             }
         },
-        "server.CreateFTReqSwaggoInput": {
+        "server.BurnFTReqSwaggoInput": {
             "type": "object",
             "properties": {
                 "did": {
                     "type": "string"
+                },
+                "from_rbt": {
+                    "type": "boolean"
                 },
                 "ft_count": {
                     "type": "integer"
@@ -1858,11 +1927,8 @@ const docTemplate = `{
                 "ft_name": {
                     "type": "string"
                 },
-                "ft_num_start_index": {
-                    "type": "integer"
-                },
-                "token_count": {
-                    "type": "integer"
+                "high_value_ft": {
+                    "type": "boolean"
                 }
             }
         },
@@ -2130,6 +2196,12 @@ const docTemplate = `{
                 },
                 "ft_name": {
                     "type": "string"
+                },
+                "ft_value": {
+                    "type": "number"
+                },
+                "is_high_value": {
+                    "type": "boolean"
                 },
                 "password": {
                     "type": "string"

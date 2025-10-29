@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 
@@ -22,22 +23,26 @@ func (cmd *Command) createFT() {
 		cmd.log.Error("FT Name can't be empty")
 		return
 	}
+
+	// If high-value FT mode is enabled, set ftCount to 1
+	ftCount := cmd.ftCount
+	if cmd.isHighValueFT {
+		ftCount = 1
+		cmd.log.Info("High-value FT mode enabled, setting ft_count to 1")
+	}
+
 	switch {
-	case cmd.ftCount <= 0:
+	case ftCount <= 0:
 		cmd.log.Error("number of tokens to create must be greater than zero")
 		return
-	case cmd.rbtAmount <= 0:
-		cmd.log.Error("number of whole tokens must be a positive integer")
+	case cmd.ftvalue < 0.001:
+		cmd.log.Error("FT value must be at least 0.001")
 		return
-	case cmd.ftCount > int(cmd.rbtAmount*1000):
-		cmd.log.Error("max allowed FT count is 1000 for 1 RBT")
-		return
-	}
-	if cmd.rbtAmount != float64(int(cmd.rbtAmount)) {
-		cmd.log.Error("rbtAmount must be a positive integer")
+	case math.Round(cmd.ftvalue*1000) != cmd.ftvalue*1000:
+		cmd.log.Error("FT value cannot have more than 3 decimal places")
 		return
 	}
-	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, cmd.ftCount, int(cmd.rbtAmount), cmd.ftNumStartIndex)
+	br, err := cmd.c.CreateFT(cmd.did, cmd.ftName, ftCount, cmd.ftvalue, cmd.ftNumStartIndex, cmd.fromRBT, cmd.isHighValueFT)
 	if err != nil {
 		if strings.Contains(fmt.Sprint(err), "no records found") || strings.Contains(br.Message, "no records found") {
 			cmd.log.Error("Failed to create FT, No RBT available to create FT")
@@ -93,9 +98,19 @@ func (cmd *Command) transferFT() {
 			return
 		}
 	}
-	if cmd.ftCount < 1 {
-		cmd.log.Error("Input transaction amount is less than minimum FT transaction amount")
-		return
+	// Validate based on transfer mode
+	if cmd.isHighValueFT {
+		// High-value FT mode: validate transfer value
+		if cmd.ftvalue <= 0 {
+			cmd.log.Error("FT transfer value must be greater than 0 for high-value FT transfer")
+			return
+		}
+	} else {
+		// Standard mode: validate count
+		if cmd.ftCount < 1 {
+			cmd.log.Error("Input transaction amount is less than minimum FT transaction amount")
+			return
+		}
 	}
 	if cmd.ftName == "" {
 		cmd.log.Error("FT name cannot be empty")
@@ -105,13 +120,15 @@ func (cmd *Command) transferFT() {
 		return
 	}
 	transferFtReq := model.TransferFTReq{
-		Receiver:   cmd.receiverAddr,
-		Sender:     cmd.senderAddr,
-		FTName:     cmd.ftName,
-		FTCount:    cmd.ftCount,
-		QuorumType: cmd.transType,
-		Comment:    cmd.transComment,
-		CreatorDID: cmd.creatorDID,
+		Receiver:        cmd.receiverAddr,
+		Sender:          cmd.senderAddr,
+		FTName:          cmd.ftName,
+		FTCount:         cmd.ftCount,
+		QuorumType:      cmd.transType,
+		Comment:         cmd.transComment,
+		CreatorDID:      cmd.creatorDID,
+		IsHighValueFT:   cmd.isHighValueFT,
+		FTTransferValue: cmd.ftvalue,
 	}
 
 	br, err := cmd.c.TransferFT(&transferFtReq)
@@ -166,21 +183,21 @@ func (cmd *Command) getFTinfo() {
 
 func (cmd *Command) fixFTCreator() {
 	cmd.log.Info("Starting FT Creator fix utility...")
-	
+
 	// Call the fix FT creator API
 	br, err := cmd.c.FixFTCreator()
 	if err != nil {
 		cmd.log.Error("Failed to fix FT creators", "err", err)
 		return
 	}
-	
+
 	if !br.Status {
 		cmd.log.Error("Failed to fix FT creators", "message", br.Message)
 		return
 	}
-	
+
 	cmd.log.Info("FT Creator fix completed successfully", "message", br.Message)
-	
+
 	// Display results if any
 	if br.Result != nil {
 		if results, ok := br.Result.([]interface{}); ok && len(results) > 0 {
@@ -210,29 +227,29 @@ func (cmd *Command) fixFTCreator() {
 
 func (cmd *Command) getFTCreatorStats() {
 	cmd.log.Info("Getting FT Creator statistics...")
-	
+
 	// Call the get FT creator stats API
 	br, err := cmd.c.GetFTCreatorStats()
 	if err != nil {
 		cmd.log.Error("Failed to get FT creator stats", "err", err)
 		return
 	}
-	
+
 	if !br.Status {
 		cmd.log.Error("Failed to get FT creator stats", "message", br.Message)
 		return
 	}
-	
+
 	// Display statistics
 	if stats, ok := br.Result.(map[string]interface{}); ok {
 		fmt.Println("\n=== FT Creator Statistics ===")
 		fmt.Printf("Total FT Tokens: %v\n", stats["total_tokens"])
-		fmt.Printf("Tokens with Peer ID as Creator: %v (%v)\n", 
+		fmt.Printf("Tokens with Peer ID as Creator: %v (%v)\n",
 			stats["peer_id_creators"], stats["peer_id_percentage"])
 		fmt.Printf("Tokens with DID as Creator: %v\n", stats["did_creators"])
 		fmt.Printf("Tokens with Empty Creator: %v\n", stats["empty_creators"])
 		fmt.Printf("Unique Creators: %v\n", stats["unique_creators"])
-		
+
 		// Display top creators
 		if topCreators, ok := stats["top_creators"].([]interface{}); ok && len(topCreators) > 0 {
 			fmt.Println("\n=== Top Creators ===")
@@ -241,27 +258,114 @@ func (cmd *Command) getFTCreatorStats() {
 					creatorID := c["creator"].(string)
 					count := c["count"]
 					isPeerID := c["is_peer_id"].(bool)
-					
+
 					// Truncate long IDs for display
 					displayID := creatorID
 					if len(displayID) > 50 {
 						displayID = displayID[:47] + "..."
 					}
-					
+
 					typeStr := "DID"
 					if isPeerID {
 						typeStr = "PeerID"
 					}
-					
+
 					fmt.Printf("%d. %s (%s): %v tokens\n", i+1, displayID, typeStr, count)
 				}
 			}
 		}
-		
+
 		// Recommendation
 		if peerIDCount, ok := stats["peer_id_creators"].(float64); ok && peerIDCount > 0 {
 			fmt.Println("\n⚠️  Warning: Found", int(peerIDCount), "tokens with peer ID as creator.")
 			fmt.Println("Run 'rubixgoplatform fix-ft-creator' to fix these tokens.")
 		}
 	}
+}
+
+// func (cmd *Command) burnFT() {
+// 	if cmd.did == "" {
+// 		cmd.log.Info("DID cannot be empty")
+// 		return
+// 	}
+// 	if cmd.ftName == "" {
+// 		cmd.log.Info("FT name cannot be empty")
+// 		return
+// 	}
+// 	burnFtReq := model.BurnFTReq{
+// 		DID:     cmd.did,
+// 		FTName:  cmd.ftName,
+// 		FTCount: cmd.ftCount,
+// 		FromRBT: cmd.fromRBT,
+// 	}
+// 	br, err := cmd.c.BurnFT(&burnFtReq)
+// 	if err != nil {
+// 		cmd.log.Error("Failed to burn FT", "err", err)
+// 		return
+// 	}
+// 	msg, status := cmd.SignatureResponse(br)
+// 	if !status {
+// 		cmd.log.Error("Failed to burn FT", "msg", msg)
+// 		return
+// 	}
+// 	cmd.log.Info("FT burned successfully")
+
+// }
+
+func (cmd *Command) burnFT() {
+	// Validate DID
+	if cmd.did == "" {
+		cmd.log.Error("DID cannot be empty")
+		return
+	}
+	isAlphanumericDID := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !isAlphanumericDID {
+		cmd.log.Error("Invalid DID. Please provide valid DID")
+		return
+	}
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+
+	// Validate FT name
+	if cmd.ftName == "" {
+		cmd.log.Error("FT name cannot be empty")
+		return
+	}
+
+	// Validate based on burn mode
+	if cmd.fromRBT {
+		// FromRBT mode: burn all FTs, ftCount should be 0
+		if cmd.ftCount != 0 {
+			cmd.log.Error("FTCount should be 0 when fromRBT is true")
+			return
+		}
+	} else {
+		// Normal mode: ftCount is required
+		if cmd.ftCount <= 0 {
+			cmd.log.Error("FT count must be greater than 0 when fromRBT is false")
+			return
+		}
+	}
+
+	burnFTReq := model.BurnFTReq{
+		DID:         cmd.did,
+		FTName:      cmd.ftName,
+		FTCount:     cmd.ftCount,
+		FromRBT:     cmd.fromRBT,
+		HighValueFT: cmd.isHighValueFT,
+	}
+
+	br, err := cmd.c.BurnFT(&burnFTReq)
+	if err != nil {
+		cmd.log.Error("Failed to burn FT", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to burn FT", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
 }
