@@ -31,6 +31,8 @@ type NFTContent struct {
 	DeployerDID      string `json:"deployer_did"`
 	ArtifactFileName string `json:"artifact_filename"`
 	Artifact         []byte `json:"artifact"`
+	MetadataFileName string `json:"metadata_filename"`
+	Metadata         []byte `json:"metadata"`
 }
 
 // CreateNFT write NFT into db
@@ -132,6 +134,14 @@ func (w *Wallet) StoreNFTFilesToPSQL(nftID, deplaoyerDID, ArtifactHash, outputDi
 	start := time.Now()
 	w.log.Info("Starting to store NFT files from directory", "path", outputDir)
 
+	// Intialize nft content
+	nftContent := &NFTContent{
+		NFTId:       nftID,
+		DeployerDID: deplaoyerDID,
+	}
+
+	fileNames := make([]string, 0)
+	artifactsBytes := make([][]byte, 0)
 	// Walk recursively through the folder
 	err := filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -157,20 +167,9 @@ func (w *Wallet) StoreNFTFilesToPSQL(nftID, deplaoyerDID, ArtifactHash, outputDi
 			relPath = filepath.Base(path)
 		}
 
-		// Insert into PostgreSQL
-		nftContent := &NFTContent{
-			NFTId:            nftID,
-			DeployerDID:      deplaoyerDID,
-			ArtifactFileName: relPath,
-			Artifact:         fileBytes,
-		}
-		err = w.AddNFTContentToPSQl(nftContent)
-		if err != nil {
-			w.log.Error("Failed to insert NFT file into DB", "file", relPath, "err", err)
-			return err
-		}
+		fileNames = append(fileNames, relPath)
+		artifactsBytes = append(artifactsBytes, fileBytes)
 
-		w.log.Info("Stored NFT file", "filename", relPath, "size", len(fileBytes))
 		return nil
 	})
 
@@ -178,6 +177,25 @@ func (w *Wallet) StoreNFTFilesToPSQL(nftID, deplaoyerDID, ArtifactHash, outputDi
 		w.log.Error("Failed to walk NFT directory", "err", err)
 		return err
 	}
+
+	if len(fileNames) < 2 || len(artifactsBytes) < 2 {
+		return fmt.Errorf("expected at least two files (metadata + artifact), got %d, received file name : %v", len(fileNames), fileNames)
+	}
+
+	// Insert into PostgreSQL
+	nftContent.NFTId = nftID
+	nftContent.DeployerDID = deplaoyerDID
+	nftContent.MetadataFileName = fileNames[0]
+	nftContent.Metadata = artifactsBytes[0]
+	nftContent.ArtifactFileName = fileNames[1]
+	nftContent.Artifact = artifactsBytes[1]
+	err = w.AddNFTContentToPSQl(nftContent)
+	if err != nil {
+		w.log.Error("Failed to insert NFT file into DB, ", "files", fileNames, "err", err)
+		return err
+	}
+
+	w.log.Info("Stored NFT files, ", "filenames", fileNames, "size", len(artifactsBytes[0]), len(artifactsBytes[1]))
 
 	w.log.Info("Successfully stored all NFT files", "duration", time.Since(start))
 	return nil
