@@ -2457,14 +2457,11 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		switch txnBlockType {
 		case block.TokenBurntType:
 			tokenStatus = wallet.TokenIsBurnt
-		case block.TokenGeneratedType:
+		case block.TokenGeneratedType, block.TokenTransferredType,
+			block.TokenUnpledgedType, block.TokenMintedType, block.TokenMigratedType:
 			tokenStatus = wallet.TokenIsFree
-		case block.TokenTransferredType:
-			tokenStatus = wallet.TokenIsTransferred
 		case block.TokenPledgedType:
 			tokenStatus = wallet.TokenIsPledged
-		case block.TokenUnpledgedType:
-			tokenStatus = wallet.TokenIsFree
 		case block.TokenDeployedType:
 			tokenStatus = wallet.TokenIsDeployed
 		case block.TokenExecutedType:

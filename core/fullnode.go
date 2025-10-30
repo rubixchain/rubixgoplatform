@@ -193,7 +193,8 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 		newEvent.LatestBlockHeight = latestBlockHeight
 		syncStatus := wallet.SyncCompleted
 		receivedBlocks := ReceivedBlock{
-			LatestBlock: txnBlock,
+			GenesisBlock: txnBlock,
+			LatestBlock:  txnBlock,
 		}
 		return c.AddTokenToRespectiveTable(tokenId, currentOwner, receivedBlocks, newEvent, syncStatus)
 	}
@@ -337,11 +338,15 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		}
 	}
 
+	receivedBlock := ReceivedBlock{
+		LatestBlock: txnBlock,
+	}
 	// if it is a genesis block, then fetch token's ipfs content and store in psql db
 	if currentBlockNumber == 0 {
 		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
 			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
 		}
+		receivedBlock.GenesisBlock = txnBlock
 	}
 
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
@@ -355,9 +360,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 	newEvent.LatestBlockHeight = latestBlockHeight
 	syncStatus := wallet.SyncCompleted
 	// Add to database and blockchain
-	receivedBlock := ReceivedBlock{
-		LatestBlock: txnBlock,
-	}
+
 	if err := c.AddTokenToRespectiveTable(tokenId, receiverDid, receivedBlock, newEvent, syncStatus); err != nil {
 		return fmt.Errorf("failed to add token to table: %v", err)
 	}
@@ -392,7 +395,8 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 		newEvent.LatestBlockHeight = latestBlockHeight
 		syncStatus := wallet.SyncCompleted
 		receivedBlock := ReceivedBlock{
-			LatestBlock: txnBlock,
+			LatestBlock:  txnBlock,
+			GenesisBlock: txnBlock,
 		}
 		if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, receivedBlock, newEvent, syncStatus); err != nil {
 			return fmt.Errorf("failed to add contract token to table: %v", err)
