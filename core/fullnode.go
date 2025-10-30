@@ -279,13 +279,51 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		// Validate ownership
 		previousOwner := latestTokenBlock.GetOwner()
 		currentOwner := txnBlock.GetOwner()
-		if txnBlockType == block.TokenBurntType {
+		if txnBlockType == block.TokenBurntType || txnBlockType == block.TokenIsBurntForFT {
 			if currentOwner != newEvent.PublisherDID {
-				return fmt.Errorf("publisher DID mismatch with current owner in burnt block: expected %s, got %s", currentOwner, newEvent.PublisherDID)
+				errMsg := fmt.Sprintf("publisher DID mismatch with current owner in burnt block of token : %v, expected %s, got %s", tokenId, currentOwner, newEvent.PublisherDID)
+				c.log.Error(errMsg)
+				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+					TokenID:        tokenId,
+					AssetType:      newEvent.AssetType,
+					TokenType:      tokenType,
+					PublisherDID:   newEvent.PublisherDID,
+					ClaimedOwnerI:  previousOwner,
+					ClaimedOwnerII: newEvent.PublisherDID,
+					ErrorMessage:   "publisher DID mismatch with current owner in burnt block",
+				}
+				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+				if err != nil {
+					errMsg = errMsg + "failed to update double spent token in tables"
+					return fmt.Errorf("%v", errMsg)
+				}
+				c.log.Info("updated double spent token in tables : ", tokenId)
+
+				return nil
 			}
 		}
 		if previousOwner != newEvent.PublisherDID {
-			return fmt.Errorf("publisher DID mismatch with prev-owner: expected %s, got %s", previousOwner, newEvent.PublisherDID)
+			errMsg := fmt.Sprintf("publisher DID mismatch with prev-owner for token: %v, expected %s, got %s; ", previousOwner, newEvent.PublisherDID)
+			c.log.Error(errMsg)
+			// since we hace ensured above that fullnode does not have any missing blocks,
+			// so now if publisher is not the previous owner, we can safely assume that it is a double spent token
+			doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+				TokenID:        tokenId,
+				AssetType:      newEvent.AssetType,
+				TokenType:      tokenType,
+				PublisherDID:   newEvent.PublisherDID,
+				ClaimedOwnerI:  previousOwner,
+				ClaimedOwnerII: newEvent.PublisherDID,
+				ErrorMessage:   "publisher DID mismatch with prev-owner",
+			}
+			err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+			if err != nil {
+				errMsg = errMsg + "failed to update double spent token in tables"
+				return fmt.Errorf("%v", errMsg)
+			}
+			c.log.Info("updated double spent token in tables : ", tokenId)
+
+			return nil
 		}
 
 		// Validate receiver for transfers

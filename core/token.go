@@ -789,9 +789,12 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						ClaimedOwnerI:  existingOwnerDID,
 						ClaimedOwnerII: currentOwner,
 					}
-					err = c.w.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+					// store double spent token info in DoubleSpentTokens table
+					// and remove it from respective tokens table
+					err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
 					if err != nil {
-						c.log.Error("failed to store double spending token ", detail.Token)
+						errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
+						c.log.Error(errMsg)
 					}
 
 				}
@@ -2497,8 +2500,9 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				ftInfo := &wallet.SyncedFT{
 					TokenID:       tokenId,
 					TokenValue:    receivedBlock.GetTokenValue(),
-					CreatorDID:    tokenOwner,
+					CreatorDID:    event.CreatorDID,
 					OwnerDID:      tokenOwner,
+					PublisherDID:  event.PublisherDID,
 					BlockHash:     event.BlockHash,
 					BlockHeight:   event.LatestBlockHeight,
 					TransactionID: event.TransactionID,
@@ -2507,7 +2511,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				}
 				if ftInfo.FTName == "" {
 					comment := receivedBlock.GetComment()
-					c.log.Debug("extracted comment from genesis block is :: ", comment)
+					c.log.Debug("extracted comment from genesis block is : ", comment)
 					parts := strings.Split(comment, "FT Name : ")
 					if len(parts) > 1 {
 						ftInfo.FTName = parts[1]
@@ -2528,6 +2532,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedFT.OwnerDID = tokenOwner
+		syncedFT.PublisherDID = event.PublisherDID
 		syncedFT.BlockHash = event.BlockHash
 		syncedFT.BlockHeight = event.LatestBlockHeight
 		syncedFT.SyncStatus = syncStatus
@@ -2550,6 +2555,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				scInfo := &wallet.SyncedSmartContract{
 					SmartContractHash: tokenId,
 					Deployer:          scDeployer,
+					PublisherDID:      event.PublisherDID,
 					BlockHash:         event.BlockHash,
 					BlockHeight:       event.LatestBlockHeight,
 					TransactionID:     event.TransactionID,
@@ -2573,6 +2579,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedSC.BlockHeight = event.LatestBlockHeight
 		syncedSC.SyncStatus = syncStatus
 		syncedSC.TransactionID = event.TransactionID
+		syncedSC.PublisherDID = event.PublisherDID
 
 		err = c.w.UpdateSyncedSmartContractToTable(syncedSC)
 		if err != nil {
@@ -2592,6 +2599,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					TokenID:       tokenId,
 					TokenValue:    nftValue,
 					OwnerDID:      nftOwner,
+					PublisherDID:  event.PublisherDID,
 					BlockHash:     event.BlockHash,
 					BlockHeight:   event.LatestBlockHeight,
 					TransactionID: event.TransactionID,
@@ -2616,6 +2624,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedNFT.BlockHash = event.BlockHash
 		syncedNFT.BlockHeight = event.LatestBlockHeight
 		syncedNFT.OwnerDID = tokenOwner
+		syncedNFT.PublisherDID = event.PublisherDID
 		syncedNFT.SyncStatus = syncStatus
 		syncedNFT.TransactionID = event.TransactionID
 
@@ -2859,4 +2868,26 @@ func (c *Core) ReadTokenFromFullnodeTokensTable(assetType int, tokenId string) (
 		c.log.Error("invalid asset type")
 		return 0, "", "", fmt.Errorf("invalid asset type")
 	}
+}
+
+// Store double spent tokens in fullnode DB for later analysis
+func (c *Core) StoreDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpentTokenInfo) error {
+	err := c.w.AddDoubleSpentTokenInfo(doubleSpentTokenInfo)
+	if err != nil {
+		return err
+	}
+
+	switch doubleSpentTokenInfo.AssetType {
+	case RBTTokenType:
+		err = c.w.RemoveSyncedRBTFromTable(doubleSpentTokenInfo.TokenID)
+	case FTTokenType:
+		err = c.w.RemoveSyncedFTFromTable(doubleSpentTokenInfo.TokenID)
+	case NFTTokenType:
+		err = c.w.RemoveSyncedNFTFromTable(doubleSpentTokenInfo.TokenID)
+	case SmartContractTokenType:
+		err = c.w.RemoveSyncedSmartContractFromTable(doubleSpentTokenInfo.TokenID)
+	default:
+		err = fmt.Errorf("invalid asset type, failed to remove double spent token from table, token : %v", doubleSpentTokenInfo.TokenID)
+	}
+	return err
 }

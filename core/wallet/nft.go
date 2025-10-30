@@ -20,6 +20,7 @@ type SyncedNFT struct {
 	TokenID       string  `gorm:"column:token_id;primaryKey" json:"token_id"`
 	TokenValue    float64 `gorm:"column:token_value;" json:"token_value"`
 	OwnerDID      string  `gorm:"column:owner_did"`
+	PublisherDID  string  `gorm:"column:publisher_did"`
 	TransactionID string  `gorm:"column:transaction_id"`
 	BlockHash     string  `gorm:"column:block_hash"`
 	BlockHeight   uint64  `gorm:"column:block_height"`

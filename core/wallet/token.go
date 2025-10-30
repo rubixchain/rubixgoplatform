@@ -1604,6 +1604,34 @@ func (w *Wallet) UpdateSyncedSmartContractToTable(sc *SyncedSmartContract) error
 	return w.fullNodeSQLDB.Update(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", sc.SmartContractHash)
 }
 
+// This function is used by fullnode to delete synced RBTs
+func (w *Wallet) RemoveSyncedRBTFromTable(tokenID string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Delete(FullNodeRBTTable, &SyncedRBT{}, "token_id=?", tokenID)
+}
+
+// This function is used by fullnode to delete synced FTs
+func (w *Wallet) RemoveSyncedFTFromTable(tokenID string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Delete(FullNodeFTTable, &SyncedFT{}, "token_id=?", tokenID)
+}
+
+// This function is used by fullnode to delete synced NFTs
+func (w *Wallet) RemoveSyncedNFTFromTable(tokenID string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Delete(FullNodeNFTTable, &SyncedNFT{}, "token_id=?", tokenID)
+}
+
+// This function is used by fullnode to delete synced smart contracts
+func (w *Wallet) RemoveSyncedSmartContractFromTable(smartContractHash string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Delete(FullNodeSmartContractTable, &SyncedSmartContract{}, "smart_contract_hash=?", smartContractHash)
+}
+
 // func (w *Wallet) UpdateFailedToSyncTokensFromTable(token *model.FailedToSyncTokenDetailsInfo) error {
 // 	w.l.Lock()
 // 	defer w.l.Unlock()
@@ -1618,7 +1646,7 @@ func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) erro
 }
 
 // Store double spent tokens in fullnode DB for later analysis
-func (w *Wallet) StoreDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpentTokenInfo) error {
+func (w *Wallet) AddDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpentTokenInfo) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Write(FullnodeDoubleSpentTokensTable, doubleSpentTokenInfo)
@@ -1704,7 +1732,7 @@ func (w *Wallet) ReadNFTContentFromTable(tokenId string) (*NFTContent, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
 	var nft NFTContent
-	err := w.fullNodePSQLTokensDB.Read(FullNodeNFTContentTable, &nft, "token_id=?", tokenId)
+	err := w.fullNodePSQLTokensDB.Read(FullNodeNFTContentTable, &nft, "nft_id=?", tokenId)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
 		// w.log.Error(errMsg)
