@@ -415,7 +415,26 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	tokenType := txnBlock.GetTokenType(tokenId)
 	latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
 	if latestTokenBlock == nil {
-		return fmt.Errorf("failed to get latest block for contract token %s - may need sync", tokenId)
+		//connect to publisher and fetch complete token chain
+		p, err := c.getPeer(newEvent.PublisherDID)
+		if err != nil {
+			c.log.Error("failed to sync full sc chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
+			return fmt.Errorf("failed to open peer connection with publisher - %v ", newEvent.PublisherDID)
+		}
+		defer p.Close()
+		tokenSyncInfo := &TokenSyncInfo{
+			TokenID:   tokenId,
+			TokenType: tokenType,
+			AssetType: newEvent.AssetType,
+		}
+		err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
+		if err != nil {
+			c.log.Error("failed to sync sc chain for token ", tokenId, "error", err)
+			return fmt.Errorf("failed to get latest block for sc %s - may need sync", tokenId)
+
+		}
+		c.log.Info("execution block processed successfully", "sc hash ", tokenId, "blockHash ", newEvent.BlockHash)
+		return nil
 	}
 
 	// Validate block sequence continuity
