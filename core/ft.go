@@ -239,6 +239,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				AssetType:    FTTokenType,
 				FTName:       FTName,
 				PublisherDID: dc.GetDID(),
+				CreatorDID:   dc.GetDID(),
 				TxnBlock:     blockObj.GetBlock(),
 			}
 

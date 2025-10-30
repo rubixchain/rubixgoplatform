@@ -1389,9 +1389,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Status:          true,
 			Epoch:           int64(cr.TransactionEpoch),
 		}
-			// publish txn
+		// publish txn
 		publishingTxn.AssetType = FTTokenType
 		publishingTxn.FTName = sr.FTInfo.FTName
+		publishingTxn.CreatorDID = sr.FTInfo.CreatorDID
 		err = c.publishTxn(publishingTxn)
 		if err != nil {
 			c.log.Error("Failed to publish txn", "err", err)

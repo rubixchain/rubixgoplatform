@@ -19,10 +19,12 @@ type SmartContract struct {
 type SyncedSmartContract struct {
 	SmartContractHash string `gorm:"column:smart_contract_hash;primaryKey" json:"smart_contract_hash"`
 	Deployer          string `gorm:"column:deployer" json:"deployer"`
+	PublisherDID      string `gorm:"column:publisher_did"`
 	TransactionID     string `gorm:"column:transaction_id"`
 	BlockHash         string `gorm:"column:block_hash"`
 	BlockHeight       uint64 `gorm:"column:block_height"`
 	SyncStatus        int    `gorm:"column:sync_status"`
+	TokenStatus       int    `gorm:"column:token_status"`
 }
 
 type SmartContractContent struct {
