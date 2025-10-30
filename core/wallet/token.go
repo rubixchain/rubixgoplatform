@@ -78,6 +78,7 @@ type SyncedRBT struct {
 	BlockHash     string  `gorm:"column:block_hash"`
 	BlockHeight   uint64  `gorm:"column:block_height"`
 	SyncStaus     int     `gorm:"column:sync_status"`
+	TokenStatus   int     `gorm:"column:token_status"`
 	// SenderAddress string  `gorm:"column:owner_address"`
 }
 

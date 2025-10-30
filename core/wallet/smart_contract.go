@@ -24,6 +24,7 @@ type SyncedSmartContract struct {
 	BlockHash         string `gorm:"column:block_hash"`
 	BlockHeight       uint64 `gorm:"column:block_height"`
 	SyncStatus        int    `gorm:"column:sync_status"`
+	TokenStatus       int    `gorm:"column:token_status"`
 }
 
 type SmartContractContent struct {

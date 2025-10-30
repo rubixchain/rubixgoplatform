@@ -192,7 +192,10 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 		}
 		newEvent.LatestBlockHeight = latestBlockHeight
 		syncStatus := wallet.SyncCompleted
-		return c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus)
+		receivedBlocks := ReceivedBlock{
+			LatestBlock: txnBlock,
+		}
+		return c.AddTokenToRespectiveTable(tokenId, currentOwner, receivedBlocks, newEvent, syncStatus)
 	}
 
 	// Regular transfer processing with enhanced validation
@@ -352,7 +355,10 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 	newEvent.LatestBlockHeight = latestBlockHeight
 	syncStatus := wallet.SyncCompleted
 	// Add to database and blockchain
-	if err := c.AddTokenToRespectiveTable(tokenId, receiverDid, txnBlock, newEvent, syncStatus); err != nil {
+	receivedBlock := ReceivedBlock{
+		LatestBlock: txnBlock,
+	}
+	if err := c.AddTokenToRespectiveTable(tokenId, receiverDid, receivedBlock, newEvent, syncStatus); err != nil {
 		return fmt.Errorf("failed to add token to table: %v", err)
 	}
 
@@ -385,7 +391,10 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 		}
 		newEvent.LatestBlockHeight = latestBlockHeight
 		syncStatus := wallet.SyncCompleted
-		if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
+		receivedBlock := ReceivedBlock{
+			LatestBlock: txnBlock,
+		}
+		if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, receivedBlock, newEvent, syncStatus); err != nil {
 			return fmt.Errorf("failed to add contract token to table: %v", err)
 		}
 		c.log.Info("New contract deployment processed", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
@@ -430,7 +439,7 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 		if previousOwner != newEvent.PublisherDID {
 			return fmt.Errorf("NFT publisher DID mismatch: expected %s, got %s", previousOwner, newEvent.PublisherDID)
 		}
-	} 
+	}
 
 	// Add validated block to contract chain
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
@@ -444,7 +453,10 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	}
 	newEvent.LatestBlockHeight = latestBlockHeight
 	syncStatus := wallet.SyncCompleted
-	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, txnBlock, newEvent, syncStatus); err != nil {
+	receivedBlock := ReceivedBlock{
+		LatestBlock: txnBlock,
+	}
+	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, receivedBlock, newEvent, syncStatus); err != nil {
 		return fmt.Errorf("failed to add contract token to table: %v", err)
 	}
 
