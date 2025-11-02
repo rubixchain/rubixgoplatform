@@ -232,7 +232,7 @@ func (w *Wallet) getFullNodeBlock(tt int, t string, blockID string) ([]byte, err
 	return w.getRawBlock(db, []byte(tcsKey(tt, t, blockID)))
 }
 
-// getAllBlocks get the chain blocks 
+// getAllBlocks get the chain blocks
 func (w *Wallet) getAllBlocks(tt int, token string, blockID string) ([][]byte, string, error) {
 	db := w.getChainDB(tt)
 	if db == nil {
@@ -645,6 +645,7 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 
 // addFullNodeBlock will write block into fullnode-storage
 func (w *Wallet) addFullNodeBlock(token string, b *block.Block) error {
+	defer w.notifyExplorerServer(b)
 	opt := &opt.WriteOptions{
 		Sync: true,
 	}
@@ -848,7 +849,7 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 		w.log.Error("Failed to add block, invalid token type")
 		return fmt.Errorf("failed to get db")
 	}
-	
+
 	// Track how many tokens already have this block
 	skippedTokens := 0
 	for _, token := range tokens {
@@ -878,8 +879,8 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 					newBlockID, _ := b.GetBlockID(token)
 					if existingBlockID == newBlockID {
 						// Same block already exists, this is okay for idempotent operations
-						w.log.Debug("Block already exists for token, continuing", 
-							"token", token, 
+						w.log.Debug("Block already exists for token, continuing",
+							"token", token,
 							"blockID", newBlockID,
 							"blockNumber", bn)
 						skippedTokens++
@@ -906,7 +907,7 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 			}
 		}
 	}
-	
+
 	// If all tokens already have this block, it's an idempotent operation
 	if skippedTokens == len(tokens) {
 		w.log.Info("All tokens already have this block, operation is idempotent",
@@ -919,7 +920,7 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 			}())
 		return nil
 	}
-	
+
 	bs, err := b.GetHash()
 	if err != nil {
 		return err
