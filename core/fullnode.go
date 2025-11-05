@@ -557,8 +557,8 @@ func (c *Core) RetryFailedTOSyncTokens() error {
 			//connect to publisher and fetch complete token chain
 			p, err := c.getPeer(failedToSyncToken.Did)
 			if err != nil {
-				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", failedToSyncToken.Did)
-				return fmt.Errorf("failed to open peer connection with publisher %v", failedToSyncToken.Did)
+				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", failedToSyncToken.Did, "error: ", err)
+				return fmt.Errorf("failed to open peer connection with publisher %v, error: %v", failedToSyncToken.Did, err)
 			}
 			defer p.Close()
 			tokenSyncInfo := &TokenSyncInfo{
