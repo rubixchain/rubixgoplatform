@@ -41,6 +41,7 @@ const (
 	FullNodeFTTable                string = "FullnodeFTtable"
 	FullNodeNFTTable               string = "FullnodeNFTtable"
 	FullNodeSmartContractTable     string = "FullnodeSCtable"
+	FullNodeTxnHistoryTable        string = "FullnodeTxnHistoryTable"
 	FailedTxnsTable                string = "FailedTxns"
 	FullNodeFailedToSyncTokens     string = "FullnodeFailedTokensTable"
 	FullNodeRBTContentTable        string = "rbt_content_table"
@@ -285,6 +286,10 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 		if err != nil {
 			w.log.Error("failed to initialize FullnodeDoubleSpentTokensTable storage", "error", err)
 			return nil, err
+		}
+		err = w.fullNodeSQLDB.Init(FullNodeTxnHistoryTable, &model.FullNodeTxnHistoryInfo{}, true)
+		if err != nil {
+			w.log.Error("failed to initialize FullNodeTxnHistoryTable storage", "error", err)
 		}
 
 		err = w.fullNodePSQLTokensDB.Init(FullNodeRBTContentTable, &RBTContent{}, true)

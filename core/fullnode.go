@@ -131,6 +131,25 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 	if txnBlock == nil {
 		return fmt.Errorf("failed to initialize transaction block for txn %s", newEvent.BlockHash)
 	}
+	txnBlockType := txnBlock.GetTransType()
+	if txnBlockType == block.TokenTransferredType || txnBlockType == block.TokenDeployedType || txnBlockType == block.TokenExecutedType {
+		TransactionIDFromTheTransactionBlock := txnBlock.GetTid()
+		BlockHash, err := txnBlock.GetHash()
+		if err != nil {
+			c.log.Error("failed to get BlockHash, error: ", err)
+		}
+
+		transaction := model.FullNodeTxnHistoryInfo{
+			TransactionID:    TransactionIDFromTheTransactionBlock,
+			TransactionValue: newEvent.TransactionValue,
+			BlockHash:        BlockHash,
+		}
+		transactionHistErr := c.w.AddTransactionsToFullNodeTransactionHistoryTable(&transaction)
+		if transactionHistErr != nil {
+			c.log.Error("faile to add transaction details to Fullnode transaction history table for the transaction: ", transaction.TransactionID, "error", transactionHistErr)
+		}
+
+	}
 
 	currentOwner := txnBlock.GetOwner()
 	tokensList := txnBlock.GetTransTokens()
