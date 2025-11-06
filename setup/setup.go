@@ -119,6 +119,7 @@ const (
 	APIGetFTbyDID            string = "/api/de-exp/get-ft-list-by-did"
 	APIGetNFTbyDID           string = "/api/de-exp/get-nft-list-by-did"
 	APIGetSmartContractbyDID string = "/api/de-exp/get-smart-contract-list-by-did"
+	APIGetTxnAmount          string = "/api/de-exp/get-txn-amount-by-txnID"
 
 	APIGetTokenChain string = "/api/de-exp/get-token-chain"
 

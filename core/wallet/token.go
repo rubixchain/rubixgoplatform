@@ -1789,7 +1789,6 @@ func (w *Wallet) AddTransactionsToFullNodeTransactionHistoryTable(transaction *m
 	return w.fullNodeSQLDB.Write(FullNodeTxnHistoryTable, transaction)
 }
 
-
 // Store double spent tokens in fullnode DB for later analysis
 func (w *Wallet) AddDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpentTokenInfo) error {
 	w.l.Lock()
@@ -1911,4 +1910,23 @@ func (w *Wallet) GetAllFailedToSyncTokens() ([]*model.FailedToSyncTokenDetailsIn
 	}
 
 	return tokens, nil
+}
+
+func (w *Wallet) GetTxnAmountFromFullNode(txnID string) (*model.FullNodeTxnHistoryInfo, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	var txnAmountInfo *model.FullNodeTxnHistoryInfo
+	err := w.fullNodeSQLDB.Read(FullNodeTxnHistoryTable, &txnAmountInfo, "transaction_id=?", txnID)
+	if err != nil {
+		readErr := fmt.Sprint(err)
+		if strings.Contains(readErr, "no records found") {
+			w.log.Info("No record found")
+			return nil, err
+		}
+		w.log.Error("Failed to get txn amount", "err", err)
+		return nil, err
+	}
+
+	return txnAmountInfo, nil
 }

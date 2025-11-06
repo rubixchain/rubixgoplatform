@@ -160,6 +160,14 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 	return getTokenChainReply
 }
 
+func (c *Core) GettxnAmountFromFullNode(txnID string) (*model.FullNodeTxnHistoryInfo, error) {
+	RBTs, err := c.w.GetTxnAmountFromFullNode(txnID)
+	if err != nil {
+		return nil, err
+	}
+	return RBTs, nil
+}
+
 // func (c *Core) GetRBTFullTokenchain(TokenID string) *model.GetTokenChainResponce {
 // 	getRBTChainReply := &model.GetTokenChainResponce{
 // 		BasicResponse: model.BasicResponse{

@@ -214,6 +214,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetFTbyDID, "GET", s.AuthHandle(s.APIGetFTbyDID, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetNFTbyDID, "GET", s.AuthHandle(s.APIGetNFTbyDID, false, s.AuthError, false))
 	s.AddRoute(setup.APIGetSmartContractbyDID, "GET", s.AuthHandle(s.APIGetSmartContractbyDID, false, s.AuthError, false))
+	s.AddRoute(setup.APIGetTxnAmount, "GET", s.AuthHandle(s.APIGetTxnAmountFromFullNode, false, s.AuthError, false))
 
 	s.AddRoute(setup.APIGetTokenChain, "GET", s.AuthHandle(s.APIGetFullTokenChain, false, s.AuthError, false))
 

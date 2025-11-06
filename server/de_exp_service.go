@@ -110,6 +110,18 @@ func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, getResp, http.StatusOK)
 }
 
+func (s *Server) APIGetTxnAmountFromFullNode(req *ensweb.Request) *ensweb.Result {
+	txnID := s.GetQuerry(req, "txnID")
+	if txnID == "" {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	Tokens, err := s.c.GettxnAmountFromFullNode(txnID)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to get txnAmount from full node", nil)
+	}
+	return s.BasicResponse(req, true, "Got transaction amount successfully", Tokens)
+}
+
 // func (s *Server) APIGetRBTFullTokenChain(req *ensweb.Request) *ensweb.Result {
 // 	TokenID := s.GetQuerry(req, "tokenID")
 // 	if TokenID == "" {
