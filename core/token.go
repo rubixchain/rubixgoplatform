@@ -688,7 +688,7 @@ func (c *Core) tokenDetailWorker(eventCh <-chan model.TokenChainDetailsEvent, wo
 	}
 }
 
-// processing logic, parallel-safe (no global locks)
+// Once Fullnode receives the tokenchain details in batches, it process those tokenchain details using this function
 func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 	tokenSyncMap := make(map[string][]TokenSyncInfo)
 
