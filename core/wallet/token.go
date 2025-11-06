@@ -1458,33 +1458,53 @@ func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 func (w *Wallet) AddSyncedRBTToTable(t *SyncedRBT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.fullNodeSQLDB.Write(FullNodeRBTTable, t)
+	err := w.fullNodeSQLDB.Write(FullNodeRBTTable, t)
+	if err == nil {
+		go w.notifyTokenUpdate(FullNodeRBTTable, t)
+	}
+	return err
 }
 
 // This function is used by fullnode to write all synced FTs to sqlite table
 func (w *Wallet) AddSyncedFTToTable(t *SyncedFT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.fullNodeSQLDB.Write(FullNodeFTTable, t)
+	err := w.fullNodeSQLDB.Write(FullNodeFTTable, t)
+	if err == nil {
+		go w.notifyTokenUpdate(FullNodeFTTable, t)
+	}
+	return err
 }
 
 // This function is used by fullnode to write all synced NFTs to sqlite table
 func (w *Wallet) AddSyncedNFTToTable(t *SyncedNFT) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.fullNodeSQLDB.Write(FullNodeNFTTable, t)
+	err := w.fullNodeSQLDB.Write(FullNodeNFTTable, t)
+	if err == nil {
+		go w.notifyTokenUpdate(FullNodeNFTTable, t)
+	}
+	return err
 }
 
-// This function is used by fullnode to list all synced smart contracts
 func (w *Wallet) AddSyncedSmartContractToTable(t *SyncedSmartContract) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.fullNodeSQLDB.Write(FullNodeSmartContractTable, t)
+	err := w.fullNodeSQLDB.Write(FullNodeSmartContractTable, t)
+	if err == nil {
+		go w.notifyTokenUpdate(FullNodeSmartContractTable, t)
+	}
+	return err
 }
+
 func (w *Wallet) AddFailedTokensToTable(t *model.FailedToSyncTokenDetailsInfo) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	return w.fullNodeSQLDB.Write(FullNodeFailedToSyncTokens, t)
+	err := w.fullNodeSQLDB.Write(FullNodeFailedToSyncTokens, t)
+	if err == nil {
+		go w.notifyTokenUpdate(FullNodeFailedToSyncTokens, t)
+	}
+	return err
 }
 
 // This function is used by fullnode to read from the list of all synced RBTs

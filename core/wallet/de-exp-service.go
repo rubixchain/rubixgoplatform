@@ -63,3 +63,33 @@ func (w *Wallet) notifyExplorerServer(b *block.Block) {
 		fmt.Println("Block successfully sent to explorer.")
 	}
 }
+
+// notifyTokenUpdate sends a token update notification to the Explorer server
+func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}) {
+
+	explorerURL := "http://localhost:8080/api/token-update"
+
+	payload := map[string]interface{}{
+		"table": tableName,
+		"data":  tokenData,
+	}
+
+	jsonBytes, err := json.Marshal(payload)
+	if err != nil {
+		w.log.Error("Failed to marshal token update: %v", err)
+		return
+	}
+
+	resp, err := http.Post(explorerURL, "application/json", bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		w.log.Error("Failed to send token update to explorer: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		w.log.Error("Explorer server responded with status: %s", resp.Status)
+	} else {
+		fmt.Println("✅ Token update successfully sent to explorer.")
+	}
+}
