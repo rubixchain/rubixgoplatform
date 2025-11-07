@@ -115,19 +115,6 @@ func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error)
 			}
 			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
-	case model.DTType:
-		tkns, err := c.w.GetAllDataTokens(did)
-		if err != nil {
-			return tr, nil
-		}
-		tr.TokenDetails = make([]model.TokenDetail, 0)
-		for _, t := range tkns {
-			td := model.TokenDetail{
-				Token:  t.TokenID,
-				Status: t.TokenStatus,
-			}
-			tr.TokenDetails = append(tr.TokenDetails, td)
-		}
 	// case model.NFTType:
 	// 	tkns, err := c.w.GetAllNFT()
 	// 	if err != nil {
@@ -2864,23 +2851,6 @@ func (c *Core) StoreSmartContractFilesToPSQL(smartContractHash string, smartCont
 		return err
 	}
 
-	// Fetch and store the Schema code file
-	schemaCodeFile, err := c.ipfsOps.Cat(smartContractIpfsContent.SchemaCodeHash)
-	if err != nil {
-		c.log.Error("Failed to fetch Schema code file from IPFS", "err", err)
-		return err
-	}
-	defer schemaCodeFile.Close()
-
-	schemaCodeFileName := "schemaCodeFile.json"
-
-	// Read the content of schemaCodeFile
-	schemaCodeContent, err := io.ReadAll(schemaCodeFile)
-	if err != nil {
-		c.log.Error("Failed to read Schema code file", "err", err)
-		return err
-	}
-
 	// Add smart contract IPFS content in PSQL db
 	smartContractContent := &wallet.SmartContractContent{
 		SmartContractHash:  smartContractHash,
@@ -2889,8 +2859,6 @@ func (c *Core) StoreSmartContractFilesToPSQL(smartContractHash string, smartCont
 		BinaryCode:         binaryCodeContent,
 		RawCodeFileName:    rawCodeFileName,
 		RawCode:            rawCodeContent,
-		SchemaCodeFileName: schemaCodeFileName,
-		SchemaCode:         schemaCodeContent,
 	}
 	err = c.w.AddSmartContractContentToPSQl(smartContractContent)
 	if err != nil {

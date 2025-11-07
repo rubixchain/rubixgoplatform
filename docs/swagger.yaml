@@ -205,6 +205,11 @@ definitions:
       smartContractToken:
         type: string
     type: object
+  server.FailedFTDownloadStatusRequest:
+    properties:
+      did:
+        type: string
+    type: object
   server.GetSmartContractTokenChainDataSwaggoInput:
     properties:
       latest:
@@ -271,6 +276,11 @@ definitions:
       CallBackURL:
         type: string
       SmartContractToken:
+        type: string
+    type: object
+  server.RetryFailedFTDownloadsRequest:
+    properties:
+      did:
         type: string
     type: object
   server.SignatureResponseSwaggoInput:
@@ -353,71 +363,6 @@ paths:
       summary: Check for exhausted token state hash
       tags:
       - Account
-  /api/commit-data-token:
-    post:
-      consumes:
-      - application/json
-      description: This API will create data token
-      parameters:
-      - description: DID
-        in: query
-        name: did
-        required: true
-        type: string
-      - description: Batch ID
-        in: query
-        name: batchID
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Create Data Token
-      tags:
-      - Data Tokens
-  /api/create-data-token:
-    post:
-      consumes:
-      - multipart/form-data
-      description: This API will create data token
-      parameters:
-      - description: User/Entity ID
-        in: formData
-        name: UserID
-        type: string
-      - description: User/Entity Info
-        in: formData
-        name: UserInfo
-        type: string
-      - description: Committer DID
-        in: formData
-        name: CommitterDID
-        type: string
-      - description: Batch ID
-        in: formData
-        name: BacthID
-        type: string
-      - description: File Info is json string {
-        in: formData
-        name: FileInfo
-        type: string
-      - description: File to be committed
-        in: formData
-        name: FileContent
-        type: file
-      produces:
-      - multipart/form-data
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Create Data Token
-      tags:
-      - Data Tokens
   /api/create-ft:
     post:
       consumes:
@@ -624,11 +569,6 @@ paths:
         name: rawCodePath
         required: true
         type: file
-      - description: location of schema code hash
-        in: formData
-        name: schemaFilePath
-        required: true
-        type: file
       produces:
       - multipart/form-data
       responses:
@@ -755,17 +695,19 @@ paths:
       summary: Get transaction details by Transcation ID
       tags:
       - Account
-  /api/get-data-token:
-    get:
+  /api/get-failed-ft-download-status:
+    post:
       consumes:
       - application/json
-      description: This API will get all data token belong to the did
+      description: This API returns the status of failed FT downloads
+      operationId: get-failed-ft-download-status
       parameters:
       - description: DID
-        in: query
-        name: did
+        in: body
+        name: input
         required: true
-        type: string
+        schema:
+          $ref: '#/definitions/server.FailedFTDownloadStatusRequest'
       produces:
       - application/json
       responses:
@@ -773,9 +715,9 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/model.BasicResponse'
-      summary: Get Data Token
+      summary: Get Failed FT Download Status
       tags:
-      - Data Tokens
+      - FT
   /api/get-ft-info-by-did:
     get:
       consumes:
@@ -1042,6 +984,36 @@ paths:
       summary: Get ALL NFTs
       tags:
       - NFT
+  /api/recover-lost-tokens:
+    post:
+      consumes:
+      - application/json
+      description: Allows senders to recover tokens that were sent but not received
+        by the receiver
+      operationId: recover-lost-tokens
+      parameters:
+      - description: DID of the sender
+        in: body
+        name: sender_did
+        required: true
+        schema:
+          type: string
+      - description: Transaction ID to recover tokens from
+        in: body
+        name: transaction_id
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Recover lost tokens
+      tags:
+      - FT
   /api/recover-token:
     post:
       consumes:
@@ -1090,6 +1062,46 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
+  /api/remote-recover-tokens:
+    post:
+      consumes:
+      - application/json
+      description: Allows Node A to trigger token recovery on Node B
+      operationId: remote-recover-tokens
+      parameters:
+      - description: DID of the target node where recovery should happen
+        in: body
+        name: target_did
+        required: true
+        schema:
+          type: string
+      - description: Transaction ID to recover
+        in: body
+        name: transaction_id
+        required: true
+        schema:
+          type: string
+      - description: DID of the requesting node
+        in: body
+        name: requester_did
+        required: true
+        schema:
+          type: string
+      - description: Reason for remote recovery
+        in: body
+        name: reason
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiate remote token recovery
+      tags:
+      - FT
   /api/request-did-for-pubkey:
     post:
       consumes:
@@ -1113,6 +1125,29 @@ paths:
       summary: Returns DID for corresponding public key
       tags:
       - Account
+  /api/retry-failed-ft-downloads:
+    post:
+      consumes:
+      - application/json
+      description: This API retries downloading failed FT tokens
+      operationId: retry-failed-ft-downloads
+      parameters:
+      - description: DID
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.RetryFailedFTDownloadsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Retry Failed FT Downloads
+      tags:
+      - FT
   /api/run-unpledge:
     post:
       consumes:

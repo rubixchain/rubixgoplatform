@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/protos"
 )
@@ -34,38 +33,6 @@ func (rn *RubixNative) TransferRBT(ctx context.Context, in *protos.TransferRBTRe
 		Comment:    in.Comment,
 	}
 	br, err := c.TransferRBT(rt)
-	if err != nil {
-		return nil, err
-	}
-	return rn.basicResponse(br)
-}
-
-func (rn *RubixNative) CreateDataToken(ctx context.Context, in *protos.DataTokenReq) (*protos.BasicReponse, error) {
-	c, tkn, err := rn.getClient(ctx, true)
-	if err != nil {
-		return nil, err
-	}
-	rt := &client.DataTokenReq{
-		DID:          rn.c.GetTokenDID(tkn),
-		UserID:       in.UserID,
-		UserInfo:     in.UserInfo,
-		FileInfo:     in.FileInfo,
-		CommitterDID: in.CommitterDID,
-		BatchID:      in.BatchID,
-	}
-	br, err := c.CreateDataToken(rt)
-	if err != nil {
-		return nil, err
-	}
-	return rn.basicResponse(br)
-}
-
-func (rn *RubixNative) CommitDataToken(ctx context.Context, in *protos.CommitDataTokenReq) (*protos.BasicReponse, error) {
-	c, tkn, err := rn.getClient(ctx, true)
-	if err != nil {
-		return nil, err
-	}
-	br, err := c.CommitDataToken(rn.c.GetTokenDID(tkn), in.BatchID)
 	if err != nil {
 		return nil, err
 	}

@@ -26,7 +26,6 @@ const (
 	PartTokenType          string = "pt"
 	NFTType                string = "nt"
 	TestTokenType          string = "tt"
-	DataTokenType          string = "dt"
 	TestPartTokenType      string = "tp"
 	TestNFTType            string = "tn"
 	ReferenceType          string = "rf"
@@ -59,8 +58,6 @@ func tcsType(tokenType int) string {
 		tt = TestNFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
-	case tkn.DataTokenType:
-		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
@@ -84,8 +81,6 @@ func tcsPrefix(tokenType int, t string) string {
 		tt = TestNFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
-	case tkn.DataTokenType:
-		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
@@ -109,8 +104,6 @@ func tcsKey(tokenType int, t string, blockID string) string {
 		tt = TestNFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
-	case tkn.DataTokenType:
-		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
@@ -154,8 +147,6 @@ func oldtcsKey(tokenType int, t string, blockID string) string {
 		tt = NFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
-	case tkn.DataTokenType:
-		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
@@ -184,10 +175,6 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 		db = w.tcs
 	case tkn.TestPartTokenType:
 		db = w.tcs
-	case tkn.DataTokenType:
-		db = w.dtcs
-	case tkn.TestDataTokenType:
-		db = w.dtcs
 	case tkn.NFTTokenType:
 		db = w.ntcs
 	case tkn.TestNFTTokenType:
@@ -848,7 +835,7 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 		w.log.Error("Failed to add block, invalid token type")
 		return fmt.Errorf("failed to get db")
 	}
-	
+
 	// Track how many tokens already have this block
 	skippedTokens := 0
 	for _, token := range tokens {
@@ -878,8 +865,8 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 					newBlockID, _ := b.GetBlockID(token)
 					if existingBlockID == newBlockID {
 						// Same block already exists, this is okay for idempotent operations
-						w.log.Debug("Block already exists for token, continuing", 
-							"token", token, 
+						w.log.Debug("Block already exists for token, continuing",
+							"token", token,
 							"blockID", newBlockID,
 							"blockNumber", bn)
 						skippedTokens++
@@ -906,7 +893,7 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 			}
 		}
 	}
-	
+
 	// If all tokens already have this block, it's an idempotent operation
 	if skippedTokens == len(tokens) {
 		w.log.Info("All tokens already have this block, operation is idempotent",
@@ -919,7 +906,7 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 			}())
 		return nil
 	}
-	
+
 	bs, err := b.GetHash()
 	if err != nil {
 		return err

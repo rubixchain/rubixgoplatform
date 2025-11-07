@@ -76,105 +76,6 @@
                 }
             }
         },
-        "/api/commit-data-token": {
-            "post": {
-                "description": "This API will create data token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Data Tokens"
-                ],
-                "summary": "Create Data Token",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "DID",
-                        "name": "did",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Batch ID",
-                        "name": "batchID",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/create-data-token": {
-            "post": {
-                "description": "This API will create data token",
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "multipart/form-data"
-                ],
-                "tags": [
-                    "Data Tokens"
-                ],
-                "summary": "Create Data Token",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User/Entity ID",
-                        "name": "UserID",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "User/Entity Info",
-                        "name": "UserInfo",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Committer DID",
-                        "name": "CommitterDID",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Batch ID",
-                        "name": "BacthID",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "File Info is json string {",
-                        "name": "FileInfo",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "file",
-                        "description": "File to be committed",
-                        "name": "FileContent",
-                        "in": "formData"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/create-ft": {
             "post": {
                 "description": "This API endpoint will create FTs.",
@@ -489,13 +390,6 @@
                         "name": "rawCodePath",
                         "in": "formData",
                         "required": true
-                    },
-                    {
-                        "type": "file",
-                        "description": "location of schema code hash",
-                        "name": "schemaFilePath",
-                        "in": "formData",
-                        "required": true
                     }
                 ],
                 "responses": {
@@ -681,9 +575,9 @@
                 }
             }
         },
-        "/api/get-data-token": {
-            "get": {
-                "description": "This API will get all data token belong to the did",
+        "/api/get-failed-ft-download-status": {
+            "post": {
+                "description": "This API returns the status of failed FT downloads",
                 "consumes": [
                     "application/json"
                 ],
@@ -691,16 +585,19 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Data Tokens"
+                    "FT"
                 ],
-                "summary": "Get Data Token",
+                "summary": "Get Failed FT Download Status",
+                "operationId": "get-failed-ft-download-status",
                 "parameters": [
                     {
-                        "type": "string",
                         "description": "DID",
-                        "name": "did",
-                        "in": "query",
-                        "required": true
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.FailedFTDownloadStatusRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -1114,6 +1011,50 @@
                 }
             }
         },
+        "/api/recover-lost-tokens": {
+            "post": {
+                "description": "Allows senders to recover tokens that were sent but not received by the receiver",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Recover lost tokens",
+                "operationId": "recover-lost-tokens",
+                "parameters": [
+                    {
+                        "description": "DID of the sender",
+                        "name": "sender_did",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Transaction ID to recover tokens from",
+                        "name": "transaction_id",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/recover-token": {
             "post": {
                 "description": "This API will recover token and tokenchain from the Pinning node to the node which has pinned the token",
@@ -1184,6 +1125,67 @@
                 }
             }
         },
+        "/api/remote-recover-tokens": {
+            "post": {
+                "description": "Allows Node A to trigger token recovery on Node B",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Initiate remote token recovery",
+                "operationId": "remote-recover-tokens",
+                "parameters": [
+                    {
+                        "description": "DID of the target node where recovery should happen",
+                        "name": "target_did",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Transaction ID to recover",
+                        "name": "transaction_id",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "DID of the requesting node",
+                        "name": "requester_did",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Reason for remote recovery",
+                        "name": "reason",
+                        "in": "body",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/request-did-for-pubkey": {
             "post": {
                 "description": "This API will returns DID for corresponding public key",
@@ -1214,6 +1216,41 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/model.DIDFromPubKeyResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/retry-failed-ft-downloads": {
+            "post": {
+                "description": "This API retries downloading failed FT tokens",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Retry Failed FT Downloads",
+                "operationId": "retry-failed-ft-downloads",
+                "parameters": [
+                    {
+                        "description": "DID",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.RetryFailedFTDownloadsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
                         }
                     }
                 }
@@ -1804,6 +1841,14 @@
                 }
             }
         },
+        "server.FailedFTDownloadStatusRequest": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                }
+            }
+        },
         "server.GetSmartContractTokenChainDataSwaggoInput": {
             "type": "object",
             "properties": {
@@ -1906,6 +1951,14 @@
                     "type": "string"
                 },
                 "SmartContractToken": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.RetryFailedFTDownloadsRequest": {
+            "type": "object",
+            "properties": {
+                "did": {
                     "type": "string"
                 }
             }
