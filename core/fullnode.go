@@ -131,18 +131,15 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 	if txnBlock == nil {
 		return fmt.Errorf("failed to initialize transaction block for txn %s", newEvent.BlockHash)
 	}
-	txnBlockType := txnBlock.GetTransType()
+	txnBlockType := newEvent.TxnType
+	c.log.Debug("^^^^^^^^^^^^^^^txn type : ", txnBlockType, "txn id ", newEvent.TransactionID)
 	if txnBlockType == block.TokenTransferredType || txnBlockType == block.TokenDeployedType || txnBlockType == block.TokenExecutedType {
-		TransactionIDFromTheTransactionBlock := txnBlock.GetTid()
-		BlockHash, err := txnBlock.GetHash()
-		if err != nil {
-			c.log.Error("failed to get BlockHash, error: ", err)
-		}
+		TransactionIDFromTheTransactionBlock := newEvent.TransactionID
 
 		transaction := model.FullNodeTxnHistoryInfo{
 			TransactionID:    TransactionIDFromTheTransactionBlock,
 			TransactionValue: newEvent.TransactionValue,
-			BlockHash:        BlockHash,
+			BlockHash:        newEvent.BlockHash,
 		}
 		transactionHistErr := c.w.AddTransactionsToFullNodeTransactionHistoryTable(&transaction)
 		if transactionHistErr != nil {
@@ -158,7 +155,8 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 		return fmt.Errorf("no tokens found in transaction %s", newEvent.BlockHash)
 	}
 
-	c.log.Debug("^^^^^^^^^processing ASSET type : ", newEvent.AssetType, "block height : ", newEvent.LatestBlockHeight)
+	logmsg := fmt.Sprintf("^^^^^^^^^processing ASSET type : %d ; block height : %d", newEvent.AssetType, newEvent.LatestBlockHeight)
+	c.log.Debug(logmsg)
 	switch newEvent.AssetType {
 	case RBTTokenType, FTTokenType:
 		return c.processTransferTransaction(newEvent, txnBlock, tokensList, receiverDid, currentOwner)
