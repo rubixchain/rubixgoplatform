@@ -11,7 +11,6 @@ const (
 	RBTString           string = "rbt"
 	NFTString           string = "nft"
 	PartString          string = "part"
-	DataString          string = "data"
 	SmartContractString string = "sc"
 	FTString            string = "ft"
 )
@@ -39,7 +38,7 @@ func (c *Core) getTotalAmountFromTokenHashes(tokenHashes []string) (float64, err
 	}
 
 	return floatPrecision(totalAmount, MaxDecimalPlaces), nil
-} 
+}
 
 func (c *Core) RACPartTokenType() int {
 	if c.testNet {
@@ -71,11 +70,6 @@ func (c *Core) TokenType(tt string) int {
 			return token.TestPartTokenType
 		}
 		return token.PartTokenType
-	case DataString:
-		if c.testNet {
-			return token.TestDataTokenType
-		}
-		return token.DataTokenType
 	case SmartContractString:
 		return token.SmartContractTokenType
 	case FTString:

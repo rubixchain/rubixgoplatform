@@ -8,17 +8,17 @@ import (
 )
 
 const (
-	RBTTokenType int = iota
-	PartTokenType
-	NFTTokenType
-	TestTokenType
-	DataTokenType
-	TestPartTokenType
-	TestNFTTokenType
-	TestDataTokenType
-	SmartContractTokenType
-	TestSmartContractTokenType
-	FTTokenType
+	RBTTokenType  = 0
+	PartTokenType = 1
+	NFTTokenType  = 2
+	TestTokenType = 3
+	// Data Token Type Removed
+	TestPartTokenType = 5
+	TestNFTTokenType  = 6
+	// Test Data token type removed
+	SmartContractTokenType     = 8
+	TestSmartContractTokenType = 9
+	FTTokenType                = 10
 )
 
 func GetWholeTokenValue(tokenDetails string) (int, string, bool, error) {

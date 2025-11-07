@@ -14,13 +14,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-type InitSmartContractToken struct {
-	binaryCodeHash string
-	rawCodeHash    string
-	schemaCodeHash string
-	genesisBlock   string
-}
-
 type FetchSmartContractSwaggoInput struct {
 	SmartContractToken string `json:"smartContractToken"`
 }
@@ -95,7 +88,6 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 // @Param        did        	   formData      string  true   "DID"
 // @Param 		 binaryCodePath	   formData      file    true  "location of binary code hash"
 // @Param 		 rawCodePath	   formData      file    true  "location of raw code hash"
-// @Param 		 schemaFilePath	   formData      file    true  "location of schema code hash"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/generate-smart-contract [post]
 func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
@@ -124,6 +116,13 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve Binary File", nil)
 	}
 
+	// Validate binary code file extension - must be .wasm
+	if strings.ToLower(filepath.Ext(binaryHeader.Filename)) != ".wasm" {
+		binaryCodeFile.Close()
+		s.log.Error("Generate smart contract failed, binary file must have .wasm extension")
+		return s.BasicResponse(req, false, "Binary code file must be a .wasm file", nil)
+	}
+
 	binaryCodeDest := filepath.Join(deploySC.SCPath, binaryHeader.Filename)
 	binaryCodeDestFile, err := os.Create(binaryCodeDest)
 	if err != nil {
@@ -149,6 +148,14 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve Raw Code file", nil)
 	}
 
+	// Validate raw code file extension - must be .rs
+	if strings.ToLower(filepath.Ext(rawHeader.Filename)) != ".rs" {
+		rawCodeFile.Close()
+		binaryCodeDestFile.Close()
+		s.log.Error("Generate smart contract failed, raw code file must have .rs extension")
+		return s.BasicResponse(req, false, "Raw code file must be a .rs file", nil)
+	}
+
 	rawCodeDest := filepath.Join(deploySC.SCPath, rawHeader.Filename)
 	rawCodeDestFile, err := os.Create(rawCodeDest)
 	if err != nil {
@@ -169,47 +176,14 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move raw code file", nil)
 	}
 
-	schemaFile, schemaHeader, err := s.ParseMultiPartFormFile(req, "schemaFilePath")
-	if err != nil {
-		binaryCodeDestFile.Close()
-		rawCodeDestFile.Close()
-		s.log.Error("Generate smart contract failed, failed to retrieve Schema file", "err", err)
-		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve Schema file", nil)
-	}
-
-	schemaDest := filepath.Join(deploySC.SCPath, schemaHeader.Filename)
-	schemaDestFile, err := os.Create(schemaDest)
-	if err != nil {
-		binaryCodeDestFile.Close()
-		rawCodeDestFile.Close()
-		schemaFile.Close()
-		s.log.Error("Generate smart contract failed, failed to create Schema file", "err", err)
-		return s.BasicResponse(req, false, "Generate smart contract failed, failed to create Schema file", nil)
-	}
-
-	schemaFile.Close()
-	schemaDestFile.Close()
-
-	err = moveFile(schemaFile.Name(), schemaDest)
-	if err != nil {
-		binaryCodeDestFile.Close()
-		rawCodeDestFile.Close()
-		schemaDestFile.Close()
-		s.log.Error("Generate smart contract failed, failed to move Schema file", "err", err)
-		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move Schema file", nil)
-	}
-
 	// Close all files
 	binaryCodeDestFile.Close()
 	rawCodeDestFile.Close()
-	schemaDestFile.Close()
 	binaryCodeFile.Close()
 	rawCodeFile.Close()
-	schemaFile.Close()
 
 	deploySC.BinaryCode = binaryCodeDest
 	deploySC.RawCode = rawCodeDest
-	deploySC.SchemaCode = schemaDest
 
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(deploySC.DID)
 	if !strings.HasPrefix(deploySC.DID, "bafybmi") || len(deploySC.DID) != 59 || !is_alphanumeric {

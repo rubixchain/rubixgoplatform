@@ -35,7 +35,6 @@ var reqID string
 type GenerateSmartContractRequest struct {
 	BinaryCode string
 	RawCode    string
-	SchemaCode string
 	DID        string
 	SCPath     string
 }
@@ -43,7 +42,6 @@ type GenerateSmartContractRequest struct {
 type SmartContractToken struct {
 	BinaryCodeHash string `json:"binaryCodeHash"`
 	RawCodeHash    string `json:"rawCodeHash"`
-	SchemaCodeHash string `json:"schemaCodeHash"`
 	DID            string `json:"did"`
 	PeerID         string `json:"peerID"`
 }
@@ -105,25 +103,9 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		return basicResponse
 	}
 
-	// Open Schema code file
-	schemaCodeFile, err := os.Open(smartContractTokenRequest.SchemaCode)
-	if err != nil {
-		c.log.Error("Failed to open Schema code file", "err", err)
-		return basicResponse
-	}
-	defer schemaCodeFile.Close()
-
-	// Add Schema code file to IPFS
-	schemaCodeHash, err := IpfsAddWithBackoff(c.ipfs, schemaCodeFile)
-	if err != nil {
-		c.log.Error("Failed to add Schema code file to IPFS", "err", err)
-		return basicResponse
-	}
-
 	smartContractToken := SmartContractToken{
 		BinaryCodeHash: binaryCodeHash,
 		RawCodeHash:    rawCodeHash,
-		SchemaCodeHash: schemaCodeHash,
 		DID:            smartContractTokenRequest.DID,
 		PeerID:         c.peerID,
 	}
@@ -158,7 +140,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		c.log.Error("Failed to rename SC folder", "err", err)
 		return basicResponse
 	}
-	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, SchemaCodeHash: schemaCodeHash, ContractStatus: wallet.TokenIsGenerated})
+	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, ContractStatus: wallet.TokenIsGenerated})
 	if err != nil {
 		c.log.Error("Failed to create smart contract token", "err", err)
 		return basicResponse
@@ -264,38 +246,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		return basicResponse
 	}
 
-	// Fetch and store the Schema code file
-	schemaCodeFile, err := c.ipfsOps.Cat(smartContractToken.SchemaCodeHash)
-	if err != nil {
-		c.log.Error("Failed to fetch Schema code file from IPFS", "err", err)
-		return basicResponse
-	}
-	defer schemaCodeFile.Close()
-
-	schemaCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
-	err = os.MkdirAll(schemaCodeFilePath, 0755)
-	if err != nil {
-		c.log.Error("Failed to create Schema directory", "err", err)
-		return basicResponse
-	}
-
-	schemaCodeFileDestPath := filepath.Join(schemaCodeFilePath, "schemaCodeFile")
-
-	// Read the content of schemaCodeFile
-	schemaCodeContent, err := ioutil.ReadAll(schemaCodeFile)
-	if err != nil {
-		c.log.Error("Failed to read Schema code file", "err", err)
-		return basicResponse
-	}
-
-	// Write the content to schemaCodeFileDestPath
-	err = ioutil.WriteFile(schemaCodeFileDestPath+".json", schemaCodeContent, 0644)
-	if err != nil {
-		c.log.Error("Failed to write Schema code file", "err", err)
-		return basicResponse
-	}
-
-	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, SchemaCodeHash: smartContractToken.SchemaCodeHash, ContractStatus: wallet.TokenIsFetched})
+	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, ContractStatus: wallet.TokenIsFetched})
 	if err != nil {
 		basicResponse.Message = "unable to add Smart contract record to DB, err: " + err.Error()
 		return basicResponse

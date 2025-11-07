@@ -26,7 +26,6 @@ const (
 	PartTokenType          string = "pt"
 	NFTType                string = "nt"
 	TestTokenType          string = "tt"
-	DataTokenType          string = "dt"
 	TestPartTokenType      string = "tp"
 	TestNFTType            string = "tn"
 	ReferenceType          string = "rf"
@@ -59,8 +58,6 @@ func tcsType(tokenType int) string {
 		tt = TestNFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
-	case tkn.DataTokenType:
-		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
@@ -84,8 +81,6 @@ func tcsPrefix(tokenType int, t string) string {
 		tt = TestNFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
-	case tkn.DataTokenType:
-		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
@@ -109,8 +104,6 @@ func tcsKey(tokenType int, t string, blockID string) string {
 		tt = TestNFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
-	case tkn.DataTokenType:
-		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
@@ -154,8 +147,6 @@ func oldtcsKey(tokenType int, t string, blockID string) string {
 		tt = NFTType
 	case tkn.TestTokenType:
 		tt = TestTokenType
-	case tkn.DataTokenType:
-		tt = DataTokenType
 	case tkn.SmartContractTokenType:
 		tt = SmartContractTokenType
 	case tkn.FTTokenType:
@@ -184,10 +175,6 @@ func (w *Wallet) getChainDB(tt int) *ChainDB {
 		db = w.tcs
 	case tkn.TestPartTokenType:
 		db = w.tcs
-	case tkn.DataTokenType:
-		db = w.dtcs
-	case tkn.TestDataTokenType:
-		db = w.dtcs
 	case tkn.NFTTokenType:
 		db = w.ntcs
 	case tkn.TestNFTTokenType:

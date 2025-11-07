@@ -2,7 +2,6 @@ package model
 
 const (
 	RBTType string = "RBT"
-	DTType  string = "DT"
 	NFTType string = "NFT"
 )
 
