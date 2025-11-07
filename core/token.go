@@ -497,12 +497,14 @@ func (c *Core) publishTokenChainDetails() error {
 		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
 		if latestBlock == nil {
 			c.log.Error("Failed to get latest block for token", "token", token)
-			return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
+			// return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
+			continue
 		}
 		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
 		if err != nil {
 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-			return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
+			// return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
+			continue
 		}
 		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
 			Token:            token.TokenID,
@@ -519,12 +521,14 @@ func (c *Core) publishTokenChainDetails() error {
 		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
 		if latestBlock == nil {
 			c.log.Error("Failed to get latest block for token", "token", token)
-			return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
+			// return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
+			continue
 		}
 		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
 		if err != nil {
 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-			return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
+			// return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
+			continue
 		}
 		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
 			Token:            token.TokenID,
@@ -541,12 +545,14 @@ func (c *Core) publishTokenChainDetails() error {
 		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
 		if latestBlock == nil {
 			c.log.Error("Failed to get latest block for token", "token", token)
-			return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
+			// return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
+			continue
 		}
 		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
 		if err != nil {
 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-			return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
+			// return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
+			continue
 		}
 		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
 			Token:            token.TokenID,
@@ -575,12 +581,14 @@ func (c *Core) publishTokenChainDetails() error {
 		latestBlock := c.w.GetLatestTokenBlock(token.SmartContractHash, tokenType)
 		if latestBlock == nil {
 			c.log.Error("Failed to get latest block for smart contract token", "token", token)
-			return fmt.Errorf("Failed to get latest block for smart contract token: %v", token.SmartContractHash)
+			// return fmt.Errorf("Failed to get latest block for smart contract token: %v", token.SmartContractHash)
+			continue
 		}
 		blockHeight, err := latestBlock.GetBlockNumber(token.SmartContractHash)
 		if err != nil {
 			c.log.Error("Failed to get latest block height of smart contract token", "token", token, "error", err)
-			return fmt.Errorf("Failed to get latest block height of smart contract token: %v, error: %w", token.SmartContractHash, err)
+			// return fmt.Errorf("Failed to get latest block height of smart contract token: %v, error: %w", token.SmartContractHash, err)
+			continue
 		}
 		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
 			Token:            token.SmartContractHash,
