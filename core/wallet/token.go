@@ -1646,11 +1646,7 @@ func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) erro
 	return w.fullNodeSQLDB.Write(FailedTxnsTable, failedTxn)
 }
 
-func (w *Wallet) AddTransactionsToFullNodeTransactionHistoryTable(transaction *model.FullNodeTxnHistoryInfo) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-	return w.fullNodeSQLDB.Write(FullNodeTxnHistoryTable, transaction)
-}
+
 
 
 // Store double spent tokens in fullnode DB for later analysis
