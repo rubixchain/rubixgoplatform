@@ -57,13 +57,11 @@ func (c *Core) publishTransactionHistory() {
 	txns, err := c.w.GetAllTransactionHistory()
 	if err != nil {
 		c.log.Error("Failed to read TransactionHistory", "err", err)
-		return
 	}
 
 	fttxns, err := c.w.GetAllFTTransactionHistory()
 	if err != nil {
 		c.log.Error("Failed to read FTTransactionHistory", "err", err)
-		return
 	}
 
 	var records []model.FullNodeTxnHistoryInfo
@@ -83,6 +81,8 @@ func (c *Core) publishTransactionHistory() {
 			BlockHash:        t.BlockID,
 		})
 	}
+	
+	c.log.Debug("total number of transaction history details getting published are: ", len(records))
 
 	chunkSize := 500
 	for i := 0; i < len(records); i += chunkSize {

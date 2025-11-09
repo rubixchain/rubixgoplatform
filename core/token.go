@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -655,19 +656,94 @@ func (c *Core) SubscribeToTokenChainDetails() error {
 		return fmt.Errorf("pubsub not ready")
 	}
 
-	// Increase buffer size here if needed to avoid blocking/drops during bursts
+	// Token event worker pipeline
 	eventCh := make(chan model.TokenChainDetailsEvent, subscriberBufferSize)
-
 	// Start workers
 	for i := 0; i < workerCount; i++ {
 		go c.tokenDetailWorker(eventCh, i)
 	}
 
 	return c.ps.SubscribeTopic("token_chain_details", func(peerID, topic string, data []byte) {
+		raw := bytes.TrimSpace(data)
 
+		// --------------------------------------------------------------------
+		// 0. Drop empty messages
+		// --------------------------------------------------------------------
+		if len(raw) == 0 {
+			c.log.Warn("Empty pubsub payload; skipping")
+			return
+		}
+
+		// --------------------------------------------------------------------
+		// 1. Try Base64 decode (direct decode)
+		// --------------------------------------------------------------------
+		decoded, err := base64.StdEncoding.DecodeString(string(raw))
+		if err == nil && len(decoded) > 0 && (decoded[0] == '{' || decoded[0] == '"') {
+			c.log.Warn("PubSub: Base64 payload detected (direct); decoding")
+			raw = decoded
+		} else {
+			// ----------------------------------------------------------------
+			// 1b. Try Base64 after trimming surrounding quotes
+			// ----------------------------------------------------------------
+			trimmed := bytes.Trim(raw, "\"")
+			decoded2, err2 := base64.StdEncoding.DecodeString(string(trimmed))
+			if err2 == nil && len(decoded2) > 0 && (decoded2[0] == '{' || decoded2[0] == '"') {
+				c.log.Warn("PubSub: Base64 payload detected (quoted); decoding")
+				raw = decoded2
+			}
+		}
+
+		// Now raw may be JSON or still junk
+
+		// --------------------------------------------------------------------
+		// 2. Reject non-JSON beginnings
+		// --------------------------------------------------------------------
+		if raw[0] != '{' && raw[0] != '"' {
+			c.log.Warn("Non-JSON pubsub payload; dropping", "raw", string(raw))
+			return
+		}
+
+		// --------------------------------------------------------------------
+		// 3. If payload is a JSON string, unwrap it
+		// --------------------------------------------------------------------
+		if raw[0] == '"' {
+			var unwrapped string
+			if err := json.Unmarshal(raw, &unwrapped); err != nil {
+				c.log.Warn("Payload was a JSON string but could not unwrap; dropping",
+					"err", err, "raw", string(raw))
+				return
+			}
+
+			raw = []byte(unwrapped)
+
+			if len(raw) == 0 || raw[0] != '{' {
+				c.log.Warn("Unwrapped payload not a JSON object; dropping", "raw", string(raw))
+				return
+			}
+		}
+
+		// --------------------------------------------------------------------
+		// 4. Detect legacy messages (no type field in root)
+		// --------------------------------------------------------------------
+		if !bytes.Contains(raw, []byte(`"type"`)) {
+			var legacy model.TokenChainDetailsEvent
+			if err := json.Unmarshal(raw, &legacy); err != nil {
+				c.log.Warn("Legacy JSON but not token event; dropping",
+					"err", err, "raw", string(raw))
+				return
+			}
+
+			c.log.Warn("Legacy token event received; processing")
+			eventCh <- legacy
+			return
+		}
+
+		// --------------------------------------------------------------------
+		// 5. Envelope-based event (modern format)
+		// --------------------------------------------------------------------
 		var env PubSubEnvelope
-		if err := json.Unmarshal(data, &env); err != nil {
-			c.log.Error("Invalid envelope", "err", err)
+		if err := json.Unmarshal(raw, &env); err != nil {
+			c.log.Error("Invalid envelope JSON", "err", err, "raw", string(raw))
 			return
 		}
 
@@ -684,16 +760,14 @@ func (c *Core) SubscribeToTokenChainDetails() error {
 		case "txn":
 			var txns []model.FullNodeTxnHistoryInfo
 			if err := json.Unmarshal(env.Data, &txns); err != nil {
-				c.log.Error("Failed to decode txn history event", "err", err)
+				c.log.Error("Failed to decode txn event", "err", err)
 				return
 			}
-
 			go c.processIncomingTransactionHistory(txns)
 
 		default:
-			c.log.Warn("Unknown pubsub message type:", "type", env.Type)
+			c.log.Warn("Unknown envelope type", "type", env.Type)
 		}
-
 	})
 }
 
