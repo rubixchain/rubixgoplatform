@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -75,6 +76,11 @@ type TokenSyncInfo struct {
 type ReceivedBlock struct {
 	GenesisBlock *block.Block `json:"genesis_block"`
 	LatestBlock  *block.Block `json:"latest_block"`
+}
+
+type PubSubEnvelope struct {
+	Type string          `json:"type"` // "token" or "txn"
+	Data json.RawMessage `json:"data"`
 }
 
 //	type SendTokenDetailsInfo struct {
@@ -396,35 +402,35 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 
 //		}
 //	}
-func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetailsInfo) {
-	total := len(tokenDetails)
-	if total == 0 {
-		c.log.Info("Nothing to publish")
-		return
-	}
-	c.log.Info(fmt.Sprintf("****Publishing %d token details in %d-sized batches**", total, defaultBatchSize))
-	for i := 0; i < total; i += defaultBatchSize {
-		end := i + defaultBatchSize
-		if end > total {
-			end = total
-		}
-		batch := tokenDetails[i:end]
-		event := model.TokenChainDetailsEvent{
-			PublisherPeerID: c.peerID,
-			TokenDetails:    batch,
-			BatchNumber:     i/defaultBatchSize + 1, // 1-based batch numbering
-		}
+// func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetailsInfo) {
+// 	total := len(tokenDetails)
+// 	if total == 0 {
+// 		c.log.Info("Nothing to publish")
+// 		return
+// 	}
+// 	c.log.Info(fmt.Sprintf("****Publishing %d token details in %d-sized batches**", total, defaultBatchSize))
+// 	for i := 0; i < total; i += defaultBatchSize {
+// 		end := i + defaultBatchSize
+// 		if end > total {
+// 			end = total
+// 		}
+// 		batch := tokenDetails[i:end]
+// 		event := model.TokenChainDetailsEvent{
+// 			PublisherPeerID: c.peerID,
+// 			TokenDetails:    batch,
+// 			BatchNumber:     i/defaultBatchSize + 1, // 1-based batch numbering
+// 		}
 
-		if err := c.ps.Publish("token_chain_details", event); err != nil {
-			c.log.Error("Failed to publish batch", "idx", i, "err", err)
-			continue
-		}
-		c.log.Info(fmt.Sprintf("Published batch from %d to %d", i, end-1))
-		// Slight delay to avoid flooding
-		time.Sleep(publishDelay)
-	}
-	c.log.Info("All batches published")
-}
+// 		if err := c.ps.Publish("token_chain_details", event); err != nil {
+// 			c.log.Error("Failed to publish batch", "idx", i, "err", err)
+// 			continue
+// 		}
+// 		c.log.Info(fmt.Sprintf("Published batch from %d to %d", i, end-1))
+// 		// Slight delay to avoid flooding
+// 		time.Sleep(publishDelay)
+// 	}
+// 	c.log.Info("All batches published")
+// }
 
 // func (c *Core) publishTokenChainDetailsEvent(event *model.TokenChainDetailsEvent) error {
 // 	topic := "token_chain_details" // fixed pubsub topic
@@ -650,29 +656,118 @@ func (c *Core) SubscribeToTokenChainDetails() error {
 		return fmt.Errorf("pubsub not ready")
 	}
 
-	// Increase buffer size here if needed to avoid blocking/drops during bursts
+	// Token event worker pipeline
 	eventCh := make(chan model.TokenChainDetailsEvent, subscriberBufferSize)
-
 	// Start workers
 	for i := 0; i < workerCount; i++ {
 		go c.tokenDetailWorker(eventCh, i)
 	}
 
 	return c.ps.SubscribeTopic("token_chain_details", func(peerID, topic string, data []byte) {
-		// c.log.Debug("Raw incoming pubsub data: ", string(data))
-		var event model.TokenChainDetailsEvent
-		if err := json.Unmarshal(data, &event); err != nil {
-			c.log.Error("Failed to unmarshal token chain details event", "err", err)
+		raw := bytes.TrimSpace(data)
+
+		// --------------------------------------------------------------------
+		// 0. Drop empty messages
+		// --------------------------------------------------------------------
+		if len(raw) == 0 {
+			c.log.Warn("Empty pubsub payload; skipping")
 			return
 		}
 
-		c.log.Info("Received token chain details event",
-			"peerID", peerID,
-			"batchNumber", event.BatchNumber,
-			"tokenBatchSize", len(event.TokenDetails),
-		)
-		// Use blocking send so no drop happens — be cautious of potential backpressure if workers are slow
-		eventCh <- event
+		// --------------------------------------------------------------------
+		// 1. Try Base64 decode (direct decode)
+		// --------------------------------------------------------------------
+		decoded, err := base64.StdEncoding.DecodeString(string(raw))
+		if err == nil && len(decoded) > 0 && (decoded[0] == '{' || decoded[0] == '"') {
+			c.log.Warn("PubSub: Base64 payload detected (direct); decoding")
+			raw = decoded
+		} else {
+			// ----------------------------------------------------------------
+			// 1b. Try Base64 after trimming surrounding quotes
+			// ----------------------------------------------------------------
+			trimmed := bytes.Trim(raw, "\"")
+			decoded2, err2 := base64.StdEncoding.DecodeString(string(trimmed))
+			if err2 == nil && len(decoded2) > 0 && (decoded2[0] == '{' || decoded2[0] == '"') {
+				c.log.Warn("PubSub: Base64 payload detected (quoted); decoding")
+				raw = decoded2
+			}
+		}
+
+		// Now raw may be JSON or still junk
+
+		// --------------------------------------------------------------------
+		// 2. Reject non-JSON beginnings
+		// --------------------------------------------------------------------
+		if raw[0] != '{' && raw[0] != '"' {
+			c.log.Warn("Non-JSON pubsub payload; dropping", "raw", string(raw))
+			return
+		}
+
+		// --------------------------------------------------------------------
+		// 3. If payload is a JSON string, unwrap it
+		// --------------------------------------------------------------------
+		if raw[0] == '"' {
+			var unwrapped string
+			if err := json.Unmarshal(raw, &unwrapped); err != nil {
+				c.log.Warn("Payload was a JSON string but could not unwrap; dropping",
+					"err", err, "raw", string(raw))
+				return
+			}
+
+			raw = []byte(unwrapped)
+
+			if len(raw) == 0 || raw[0] != '{' {
+				c.log.Warn("Unwrapped payload not a JSON object; dropping", "raw", string(raw))
+				return
+			}
+		}
+
+		// --------------------------------------------------------------------
+		// 4. Detect legacy messages (no type field in root)
+		// --------------------------------------------------------------------
+		if !bytes.Contains(raw, []byte(`"type"`)) {
+			var legacy model.TokenChainDetailsEvent
+			if err := json.Unmarshal(raw, &legacy); err != nil {
+				c.log.Warn("Legacy JSON but not token event; dropping",
+					"err", err, "raw", string(raw))
+				return
+			}
+
+			c.log.Warn("Legacy token event received; processing")
+			eventCh <- legacy
+			return
+		}
+
+		// --------------------------------------------------------------------
+		// 5. Envelope-based event (modern format)
+		// --------------------------------------------------------------------
+		var env PubSubEnvelope
+		if err := json.Unmarshal(raw, &env); err != nil {
+			c.log.Error("Invalid envelope JSON", "err", err, "raw", string(raw))
+			return
+		}
+
+		switch env.Type {
+
+		case "token":
+			var event model.TokenChainDetailsEvent
+			if err := json.Unmarshal(env.Data, &event); err != nil {
+				c.log.Error("Failed to decode token event", "err", err)
+				return
+			}
+			eventCh <- event
+
+		case "txn":
+			var txns []model.FullNodeTxnHistoryInfo
+			if err := json.Unmarshal(env.Data, &txns); err != nil {
+				c.log.Error("Failed to decode txn event", "err", err)
+				return
+			}
+			go c.processIncomingTransactionHistory(txns)
+
+		default:
+			c.log.Warn("Unknown envelope type", "type", env.Type)
+		}
 	})
 }
 

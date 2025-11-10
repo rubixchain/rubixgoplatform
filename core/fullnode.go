@@ -594,3 +594,15 @@ func (c *Core) RetryFailedTOSyncTokens() error {
 
 	return nil
 }
+
+// This function process incoming transaction history details and add it to Fullnode transaction history table
+func (c *Core) processIncomingTransactionHistory(txns []model.FullNodeTxnHistoryInfo) {
+	for _, t := range txns {
+		err := c.w.AddTransactionsToFullNodeTransactionHistoryTable(&t)
+		if err != nil {
+			c.log.Error("Failed to store txn history", "txn", t.TransactionID, "err", err)
+		}
+	}
+
+	c.log.Info("Stored transaction history batch", "count", len(txns))
+}
