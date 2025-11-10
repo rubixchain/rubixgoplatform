@@ -602,6 +602,16 @@ func (c *Core) processIncomingTransactionHistory(txns []model.FullNodeTxnHistory
 		if err != nil {
 			c.log.Error("Failed to store txn history", "txn", t.TransactionID, "err", err)
 		}
+		// ensuring correct txn amount is stored with fullnode
+		storedTxn, err := c.w.ReadFullNodeTransactionHistoryTable(t.TransactionID)
+		if err == nil && storedTxn.TransactionValue != t.TransactionValue {
+			err = c.w.UpdateFullNodeTransactionHistoryTable(&t)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to update transaction amount for transaction id : %v, stored value is : %v and received value is : %v", t.TransactionID, storedTxn.TransactionValue, t.TransactionValue)
+				c.log.Error(errMsg)
+
+			}
+		}
 	}
 
 	c.log.Info("Stored transaction history batch", "count", len(txns))
