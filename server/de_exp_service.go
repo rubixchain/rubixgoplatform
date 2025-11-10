@@ -94,19 +94,31 @@ func (s *Server) APIGetSmartContractbyDID(req *ensweb.Request) *ensweb.Result {
 
 func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
 	TokenID := s.GetQuerry(req, "tokenID")
-	if TokenID == "" {
-		return s.BasicResponse(req, false, "Invalid input", nil)
-	}
 	TokenType := s.GetQuerry(req, "tokenType")
-	if TokenType == "" {
+
+	// Log entry point
+	s.log.Info("APIGetFullTokenChain called", "TokenID", TokenID, "TokenType", TokenType)
+
+	if TokenID == "" || TokenType == "" {
+		s.log.Error("Invalid input for APIGetFullTokenChain", "TokenID", TokenID, "TokenType", TokenType)
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
-	if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !is_alphanumeric {
-		s.log.Error("Invalid RBT token")
+
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
+	if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !isAlphanumeric {
+		s.log.Error("Invalid TokenID format", "TokenID", TokenID, "TokenType", TokenType)
 		return s.BasicResponse(req, false, "Invalid FT token ID", nil)
 	}
+
+	s.log.Info("Fetching token chain", "TokenID", TokenID, "TokenType", TokenType)
 	getResp := s.c.GetTokenchain(TokenID, TokenType)
+
+	if getResp == nil {
+		s.log.Error("GetTokenchain returned nil response", "TokenID", TokenID, "TokenType", TokenType)
+		return s.BasicResponse(req, false, "Failed to fetch token chain", nil)
+	}
+
+	s.log.Info("Tokenchain fetched successfully", "TokenID", TokenID, "TokenType", TokenType)
 	return s.RenderJSON(req, getResp, http.StatusOK)
 }
 
