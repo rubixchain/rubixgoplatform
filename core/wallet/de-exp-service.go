@@ -64,14 +64,14 @@ func (w *Wallet) notifyExplorerServer(b *block.Block) {
 	}
 }
 
-// notifyTokenUpdate sends a token update notification to the Explorer server
-func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}) {
-
+// notifyTokenUpdate sends token update notifications to the Explorer server with operation type
+func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}, operation string) {
 	explorerURL := "http://localhost:8080/api/token-update"
 
 	payload := map[string]interface{}{
-		"table": tableName,
-		"data":  tokenData,
+		"table":     tableName,
+		"data":      tokenData,
+		"operation": operation, // CREATE, UPDATE, or DELETE
 	}
 
 	jsonBytes, err := json.Marshal(payload)
@@ -90,6 +90,6 @@ func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}) {
 	if resp.StatusCode != http.StatusOK {
 		w.log.Error("Explorer server responded with status: %s", resp.Status)
 	} else {
-		fmt.Println("✅ Token update successfully sent to explorer.")
+		fmt.Printf("✅ Token %s successfully sent to explorer.\n", operation)
 	}
 }
