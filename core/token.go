@@ -2965,7 +2965,7 @@ func (c *Core) StoreSmartContractFilesToPSQL(smartContractHash string, smartCont
 	}
 	err = c.w.AddSmartContractContentToPSQl(smartContractContent)
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to add smart contract content to psql, smart contract hash : %v", smartContractHash)
+		errMsg := fmt.Sprintf("failed to add smart contract content to psql, smart contract hash : %v, error: %v", smartContractHash, err)
 		c.log.Error(errMsg)
 		return fmt.Errorf(errMsg)
 	}
