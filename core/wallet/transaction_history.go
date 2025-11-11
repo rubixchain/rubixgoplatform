@@ -34,6 +34,20 @@ func (w *Wallet) AddTransactionsToFullNodeTransactionHistoryTable(transaction *m
 	return w.fullNodeSQLDB.Write(FullNodeTxnHistoryTable, transaction)
 }
 
+func (w *Wallet) ReadFullNodeTransactionHistoryTable(transactionId string) (*model.FullNodeTxnHistoryInfo, error) {
+	var txn *model.FullNodeTxnHistoryInfo
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.fullNodeSQLDB.Read(FullNodeTxnHistoryTable, &txn, "transaction_id=?", transactionId)
+	return txn, err
+}
+
+func (w *Wallet) UpdateFullNodeTransactionHistoryTable(transaction *model.FullNodeTxnHistoryInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Update(FullNodeTxnHistoryTable, transaction, "transaction_id=?", transaction.TransactionID)
+}
+
 // AddFTTransactionTokens stores FT token metadata for a transaction
 func (w *Wallet) AddFTTransactionTokens(transactionID string, creatorDID string, ftName string, tokenCount int, direction string) error {
 	ftTxToken := &model.FTTransactionToken{
