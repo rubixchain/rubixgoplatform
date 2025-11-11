@@ -1580,6 +1580,9 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				}
 				c.log.Debug("about to add token to Respective sqlite table, token: ", tokenSyncInfo.TokenID)
 				//add synced tokens to respective sqlite tables
+				if err := c.AddTokenContentToPSQL(tokenSyncInfo.TokenID, tokenSyncInfo.AssetType); err != nil {
+					return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
+				}
 				err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, blocks, event, syncStatus)
 				if err != nil {
 					c.log.Error("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
@@ -2915,6 +2918,40 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 		errMsg := fmt.Sprintf("failed to add ipfs content, invalid asset type :%v of token : %v", assetType, tokenId)
 		c.log.Error(errMsg)
 		return fmt.Errorf(errMsg)
+	}
+	return nil
+}
+
+// check if token exists in postgres, throw error if it does not exist
+func (c *Core) ReadTokenContentFromPSQL(tokenId string, assetType int) error {
+	var err error
+
+	switch assetType {
+	case RBTTokenType:
+		_, err = c.w.ReadRBTContentFromTable(tokenId)
+		if err != nil {
+			return err
+		}
+	case FTTokenType:
+		_, err = c.w.ReadFTContentFromTable(tokenId)
+		if err != nil {
+			return err
+		}
+	case NFTTokenType:
+		_, err = c.w.ReadNFTContentFromTable(tokenId)
+		if err != nil {
+			return err
+		}
+	case SmartContractTokenType:
+		_, err = c.w.ReadSmartContractContentFromTable(tokenId)
+		if err != nil {
+			return err
+		}
+
+	default:
+		errMsg := fmt.Sprintf("failed to read ipfs content, invalid asset type :%v of token : %v", assetType, tokenId)
+		c.log.Error(errMsg)
+		return fmt.Errorf("%v", errMsg)
 	}
 	return nil
 }
