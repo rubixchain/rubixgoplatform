@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-
+    "context"
+	"time"
+	"io"
 	"github.com/rubixchain/rubixgoplatform/block"
 )
 
@@ -50,12 +52,36 @@ func (w *Wallet) notifyExplorerServer(b *block.Block) {
 		return
 	}
 
-	resp, err := http.Post(explorerURL, "application/json", bytes.NewBuffer(blockBytes))
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", explorerURL, bytes.NewBuffer(blockBytes))
+	if err != nil {
+		w.log.Error("Failed to create request: %v\n", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Use a client with timeout and connection pooling
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        10,
+			MaxIdleConnsPerHost: 5,
+			IdleConnTimeout:     30 * time.Second,
+		},
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		w.log.Error("Failed to send block to explorer: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
+
+	// Drain response body to allow connection reuse
+	io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		w.log.Error("Explorer server responded with status: %s\n", resp.Status)
@@ -71,7 +97,7 @@ func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}, oper
 	payload := map[string]interface{}{
 		"table":     tableName,
 		"data":      tokenData,
-		"operation": operation, // CREATE, UPDATE, or DELETE
+		"operation": operation,
 	}
 
 	jsonBytes, err := json.Marshal(payload)
@@ -80,12 +106,36 @@ func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}, oper
 		return
 	}
 
-	resp, err := http.Post(explorerURL, "application/json", bytes.NewBuffer(jsonBytes))
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", explorerURL, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		w.log.Error("Failed to create request: %v", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Use a client with timeout and connection pooling
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        10,
+			MaxIdleConnsPerHost: 5,
+			IdleConnTimeout:     30 * time.Second,
+		},
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		w.log.Error("Failed to send token update to explorer: %v", err)
 		return
 	}
 	defer resp.Body.Close()
+
+	// Drain response body to allow connection reuse
+	io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		w.log.Error("Explorer server responded with status: %s", resp.Status)
