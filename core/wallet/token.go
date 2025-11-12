@@ -1460,7 +1460,7 @@ func (w *Wallet) AddSyncedRBTToTable(t *SyncedRBT) error {
 	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Write(FullNodeRBTTable, t)
 	if err == nil {
-		go w.notifyTokenUpdate(FullNodeRBTTable, t, "CREATE")
+		w.notifyTokenUpdate(FullNodeRBTTable, t, "CREATE")
 	}
 	return err
 }
@@ -1471,7 +1471,7 @@ func (w *Wallet) AddSyncedFTToTable(t *SyncedFT) error {
 	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Write(FullNodeFTTable, t)
 	if err == nil {
-		go w.notifyTokenUpdate(FullNodeFTTable, t, "CREATE")
+		w.notifyTokenUpdate(FullNodeFTTable, t, "CREATE")
 	}
 	return err
 }
@@ -1482,7 +1482,7 @@ func (w *Wallet) AddSyncedNFTToTable(t *SyncedNFT) error {
 	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Write(FullNodeNFTTable, t)
 	if err == nil {
-		go w.notifyTokenUpdate(FullNodeNFTTable, t, "CREATE")
+		w.notifyTokenUpdate(FullNodeNFTTable, t, "CREATE")
 	}
 	return err
 }
@@ -1492,7 +1492,7 @@ func (w *Wallet) AddSyncedSmartContractToTable(t *SyncedSmartContract) error {
 	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Write(FullNodeSmartContractTable, t)
 	if err == nil {
-		go w.notifyTokenUpdate(FullNodeSmartContractTable, t, "CREATE")
+		w.notifyTokenUpdate(FullNodeSmartContractTable, t, "CREATE")
 	}
 	return err
 }
@@ -1502,7 +1502,7 @@ func (w *Wallet) AddFailedTokensToTable(t *model.FailedToSyncTokenDetailsInfo) e
 	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Write(FullNodeFailedToSyncTokens, t)
 	if err == nil {
-		go w.notifyTokenUpdate(FullNodeFailedToSyncTokens, t, "CREATE")
+		w.notifyTokenUpdate(FullNodeFailedToSyncTokens, t, "CREATE")
 	}
 	return err
 }
@@ -1597,7 +1597,7 @@ func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
 	deletePayload := map[string]interface{}{
 		"token_id": tokenID,
 	}
-	go w.notifyTokenUpdate(FullNodeFailedToSyncTokens, deletePayload, "DELETE")
+	w.notifyTokenUpdate(FullNodeFailedToSyncTokens, deletePayload, "DELETE")
 
 	w.log.Info("Successfully deleted token from FullNodeFailedToSyncTokens table", "token_id", tokenID)
 	return nil
@@ -1609,7 +1609,7 @@ func (w *Wallet) UpdateSyncedRBTToTable(rbt *SyncedRBT) error {
 	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Update(FullNodeRBTTable, &rbt, "token_id=?", rbt.TokenID)
 	if err == nil {
-		go w.notifyTokenUpdate(FullNodeRBTTable, rbt, "UPDATE")
+		w.notifyTokenUpdate(FullNodeRBTTable, rbt, "UPDATE")
 	}
 	return err
 }
@@ -1619,7 +1619,7 @@ func (w *Wallet) UpdateSyncedFTToTable(ft *SyncedFT) error {
 	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Update(FullNodeFTTable, &ft, "token_id=?", ft.TokenID)
 	if err == nil {
-		go w.notifyTokenUpdate(FullNodeFTTable, ft, "UPDATE")
+		w.notifyTokenUpdate(FullNodeFTTable, ft, "UPDATE")
 	}
 	return err
 }
@@ -1629,7 +1629,7 @@ func (w *Wallet) UpdateSyncedNFTToTable(nft *SyncedNFT) error {
 	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Update(FullNodeNFTTable, &nft, "token_id=?", nft.TokenID)
 	if err == nil {
-		go w.notifyTokenUpdate(FullNodeNFTTable, nft, "UPDATE")
+		w.notifyTokenUpdate(FullNodeNFTTable, nft, "UPDATE")
 	}
 	return err
 }
@@ -1639,7 +1639,7 @@ func (w *Wallet) UpdateSyncedSmartContractToTable(sc *SyncedSmartContract) error
 	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Update(FullNodeSmartContractTable, &sc, "smart_contract_hash=?", sc.SmartContractHash)
 	if err == nil {
-		go w.notifyTokenUpdate(FullNodeSmartContractTable, sc, "UPDATE")
+		w.notifyTokenUpdate(FullNodeSmartContractTable, sc, "UPDATE")
 	}
 	return err
 }
@@ -1652,7 +1652,7 @@ func (w *Wallet) RemoveSyncedRBTFromTable(tokenID string) error {
 		deletePayload := map[string]interface{}{
 			"token_id": tokenID,
 		}
-		go w.notifyTokenUpdate(FullNodeRBTTable, deletePayload, "DELETE")
+		w.notifyTokenUpdate(FullNodeRBTTable, deletePayload, "DELETE")
 	}
 	return err
 }
@@ -1665,7 +1665,7 @@ func (w *Wallet) RemoveSyncedFTFromTable(tokenID string) error {
 		deletePayload := map[string]interface{}{
 			"token_id": tokenID,
 		}
-		go w.notifyTokenUpdate(FullNodeFTTable, deletePayload, "DELETE")
+		w.notifyTokenUpdate(FullNodeFTTable, deletePayload, "DELETE")
 	}
 	return err
 }
@@ -1678,7 +1678,7 @@ func (w *Wallet) RemoveSyncedNFTFromTable(tokenID string) error {
 		deletePayload := map[string]interface{}{
 			"token_id": tokenID,
 		}
-		go w.notifyTokenUpdate(FullNodeNFTTable, deletePayload, "DELETE")
+		w.notifyTokenUpdate(FullNodeNFTTable, deletePayload, "DELETE")
 	}
 	return err
 }
@@ -1691,7 +1691,7 @@ func (w *Wallet) RemoveSyncedSmartContractFromTable(smartContractHash string) er
 		deletePayload := map[string]interface{}{
 			"smart_contract_hash": smartContractHash,
 		}
-		go w.notifyTokenUpdate(FullNodeSmartContractTable, deletePayload, "DELETE")
+		w.notifyTokenUpdate(FullNodeSmartContractTable, deletePayload, "DELETE")
 	}
 	return err
 }
