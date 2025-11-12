@@ -41,6 +41,7 @@ func convertToStringMap(i interface{}) interface{} {
 }
 
 func (w *Wallet) notifyExplorerServer(b *block.Block) {
+	start := time.Now()
 	explorerURL := "http://localhost:8080/api/block-update"
 
 	blockMap := b.GetBlockMap()
@@ -83,15 +84,17 @@ func (w *Wallet) notifyExplorerServer(b *block.Block) {
 	// Drain response body to allow connection reuse
 	io.Copy(io.Discard, resp.Body)
 
+	duration := time.Since(start)
 	if resp.StatusCode != http.StatusOK {
-		w.log.Error("Explorer server responded with status: %s\n", resp.Status)
+		w.log.Error("Explorer server responded with status: %s (took %v)\n", resp.Status, duration)
 	} else {
-		fmt.Println("Block successfully sent to explorer.")
+		fmt.Printf("✅ Block successfully sent to explorer (took %v)\n", duration)
 	}
 }
 
 // notifyTokenUpdate sends token update notifications to the Explorer server with operation type
 func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}, operation string) {
+	start := time.Now()
 	explorerURL := "http://localhost:8080/api/token-update"
 
 	payload := map[string]interface{}{
@@ -137,9 +140,10 @@ func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}, oper
 	// Drain response body to allow connection reuse
 	io.Copy(io.Discard, resp.Body)
 
+	duration := time.Since(start)
 	if resp.StatusCode != http.StatusOK {
-		w.log.Error("Explorer server responded with status: %s", resp.Status)
+		w.log.Error("Explorer server responded with status: %s (took %v)", resp.Status, duration)
 	} else {
-		fmt.Printf("✅ Token %s successfully sent to explorer.\n", operation)
+		fmt.Printf("✅ Token %s successfully sent to explorer (took %v)\n", operation, duration)
 	}
 }
