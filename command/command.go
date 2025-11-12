@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1"
+	version string = "0.1_fullnode"
 )
 const (
 	VersionCmd                     string = "-v"
