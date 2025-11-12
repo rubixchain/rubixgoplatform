@@ -396,6 +396,13 @@ func (s *Server) APIExecuteSmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.c.ExecuteSmartContractToken(req.ID, &executeReq)
+
+	// Enqueue execution instead of spawning goroutine directly
+	// This prevents race conditions when multiple executions for the same contract occur in parallel
+	err = s.c.EnqueueSmartContractExecution(req.ID, &executeReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to enqueue execution: "+err.Error(), nil)
+	}
+
 	return s.didResponse(req, req.ID)
 }
