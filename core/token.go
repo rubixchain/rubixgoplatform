@@ -1708,12 +1708,13 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				c.log.Debug("about to add token to Respective sqlite table, token: ", tokenSyncInfo.TokenID)
 				//add synced tokens to respective sqlite tables
 				if err := c.AddTokenContentToPSQL(tokenSyncInfo.TokenID, tokenSyncInfo.AssetType); err != nil {
-					return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
+					// return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
+					c.log.Info("failed to add token's ipfs content to psql db, err:", err)
 				}
 				err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, blocks, event, syncStatus)
 				if err != nil {
-					c.log.Error("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
-					return err
+					c.log.Info("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
+					// return err
 				}
 			}
 			//If sync is completed remove those tokens from the FullNodeFailedToSyncTokens table of the fullnode.
