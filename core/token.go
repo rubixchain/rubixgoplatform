@@ -24,8 +24,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-const defaultBatchSize = 500               // Tweak according to RAM/network
-const publishDelay = 30 * time.Millisecond // Throttle interval, tune further
+const defaultBatchSize = 500                             // Tweak according to RAM/network
+const delayInPublshingTxnHistory = 30 * time.Millisecond // Throttle interval, tune further
+const delayInPublishingTCDetails = 2 * time.Second
 
 const subscriberBufferSize = 1000 // process up to this many idle batches
 const workerCount = 8             // Tune according to hardware/network

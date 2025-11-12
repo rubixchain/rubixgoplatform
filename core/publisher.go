@@ -48,7 +48,7 @@ func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetai
 		}
 
 		c.log.Info("Published token batch", "range", fmt.Sprintf("%d-%d", i, end-1))
-		time.Sleep(publishDelay)
+		time.Sleep(delayInPublishingTCDetails)
 	}
 
 	// ----------------------------Publishing  TXN HISTORY to the same pubsub------------------------------
@@ -156,7 +156,7 @@ func (c *Core) PublishTransactionHistory() {
 		c.log.Info("Published RBT TransactionHistory batch",
 			"batchSize", len(records),
 			"offset", offset)
-		time.Sleep(publishDelay)
+		time.Sleep(delayInPublshingTxnHistory)
 	}
 
 	// -------------------- FT Transaction History --------------------
@@ -189,7 +189,7 @@ func (c *Core) PublishTransactionHistory() {
 		c.log.Info("Published FT TransactionHistory batch",
 			"batchSize", len(records),
 			"offset", offset)
-		time.Sleep(publishDelay)
+		time.Sleep(delayInPublshingTxnHistory)
 	}
 
 	c.log.Info("✅ Transaction history publishing completed",
