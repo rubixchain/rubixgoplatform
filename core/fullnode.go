@@ -256,6 +256,14 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			return nil
 		}
 
+		// check if token exists in postgres table, add if doesn't
+		err := c.ReadTokenContentFromPSQL(tokenId, newEvent.AssetType)
+		if err != nil {
+			if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
+				c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
+			}
+		}
+
 		latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
 		if err != nil {
 			return fmt.Errorf("failed to get latest block number: %v", err)
