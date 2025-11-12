@@ -217,6 +217,71 @@ func (w *Wallet) GetSmartContractTokensWithMaxChainLength(did string) ([]SmartCo
 	return SmartContractTokens, nil
 }
 
+func (w *Wallet) GetRBTTokensChunk(did string, limit, offset int) ([]Token, error) {
+	var tokens []Token
+	err := w.s.ReadWithOffset(
+		TokenStorage,
+		offset, limit,
+		&tokens,
+		"(token_status=? OR token_status=? OR token_status=? OR token_status=?) AND did=?",
+		TokenIsFree, TokenIsPledged, TokenIsBurnt, TokenIsBurntForFT, did,
+	)
+	return tokens, err
+}
+
+func (w *Wallet) GetFTTokensChunk(did string, limit, offset int) ([]FTToken, error) {
+	var tokens []FTToken
+	err := w.s.ReadWithOffset(
+		FTTokenStorage,
+		offset, limit,
+		&tokens,
+		"token_status=? AND owner_did=?",
+		TokenIsFree, did,
+	)
+	return tokens, err
+}
+
+func (w *Wallet) GetNFTTokensChunk(did string, limit, offset int) ([]NFT, error) {
+	var tokens []NFT
+	err := w.s.ReadWithOffset(
+		NFTTokenStorage,
+		offset, limit,
+		&tokens,
+		"(token_status=? OR token_status=?) AND did=?",
+		TokenIsDeployed, TokenIsFree, did,
+	)
+	return tokens, err
+}
+
+func (w *Wallet) GetSmartContractTokensChunk(did string, limit, offset int) ([]SmartContract, error) {
+	var tokens []SmartContract
+	err := w.s.ReadWithOffset(
+		SmartContractStorage,
+		offset, limit,
+		&tokens,
+		"(contract_status=? OR contract_status=?) AND deployer=?",
+		TokenIsDeployed, TokenIsExecuted, did,
+	)
+	return tokens, err
+}
+
+func (w *Wallet) GetTransactionHistoryChunk(limit, offset int) ([]model.TransactionDetails, error) {
+	var txns []model.TransactionDetails
+	err := w.s.ReadWithOffset(TransactionStorage, offset, limit, &txns, "transaction_id!=?", "")
+	if err != nil {
+		return nil, err
+	}
+	return txns, nil
+}
+func (w *Wallet) GetFTTransactionHistoryChunk(limit, offset int) ([]model.FTTransactionHistory, error) {
+	var txns []model.FTTransactionHistory
+	err := w.s.ReadWithOffset(FTTransactionHistoryStorage, offset, limit, &txns, "transaction_id!=?", "")
+	if err != nil {
+		return nil, err
+	}
+	return txns, nil
+}
+
 // This function will return all the FTs, their count and the creator DID in the node
 func (w *Wallet) GetAllFTsAndCount() ([]FT, error) {
 	fts, err := w.GetAllFreeFTs()
