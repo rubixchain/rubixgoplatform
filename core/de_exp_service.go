@@ -92,6 +92,8 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 	switch strings.ToUpper(TokenType) {
 	case "RBT":
 		tokenTypeString = RBTString
+	case "PART":
+		tokenTypeString = PartString
 	case "FT":
 		tokenTypeString = FTString
 	case "NFT":
