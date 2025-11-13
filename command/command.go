@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1"
+	version string = "0.1_fullnode"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -594,13 +594,7 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("Failed to create server")
 		return
 	}
-	if cmd.publishTokenChainDetails {
-		c.PublishTCDetails()
-	}
-	if cmd.fullNode {
-		cmd.log.Info("**calling SubscribeTCDetails function***")
-		c.SubscribeTCDetails()
-	}
+
 	s.EnableSWagger(cmd.getURL(s.GetServerURL()))
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
@@ -608,11 +602,6 @@ func (cmd *Command) runApp() {
 
 	// Start the pending token monitor for self-healing
 	c.StartPendingTokenMonitor()
-
-	// Start background job: retry failed-to-sync tokens every 1 hour
-	if cmd.fullNode {
-		c.RetryFailedTokenSync()
-	}
 
 	cmd.log.Info("Syncing Details...")
 	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
@@ -623,6 +612,19 @@ func (cmd *Command) runApp() {
 	}
 	// c.UpdateTokenInfo()
 	cmd.log.Info("Syncing Complete...")
+
+	if cmd.publishTokenChainDetails {
+		c.PublishTCDetails()
+	}
+	if cmd.fullNode {
+		cmd.log.Info("**calling SubscribeTCDetails function***")
+		c.SubscribeTCDetails()
+	}
+
+	// Start background job: retry failed-to-sync tokens every 1 hour
+	if cmd.fullNode {
+		c.RetryFailedTokenSync()
+	}
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
