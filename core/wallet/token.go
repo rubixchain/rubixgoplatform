@@ -223,8 +223,8 @@ func (w *Wallet) GetRBTTokensChunk(did string, limit, offset int) ([]Token, erro
 		TokenStorage,
 		offset, limit,
 		&tokens,
-		"(token_status=? OR token_status=? OR token_status=? OR token_status=?) AND did=?",
-		TokenIsFree, TokenIsPledged, TokenIsBurnt, TokenIsBurntForFT, did,
+		"(token_status=? OR token_status=? OR token_status=? OR token_status=?  OR token_status=? ) AND did=?",
+		TokenIsFree, TokenIsPledged, TokenIsBurnt, TokenIsBurntForFT, TokenIsCommitted, did,
 	)
 	return tokens, err
 }
