@@ -123,17 +123,8 @@ const (
 
 	APIGetTokenChain string = "/api/de-exp/get-token-chain"
 
-	// APIGetRBTFullTokenChain string = "/api/de-exp/get-rbt-token-chain"
-	// APIGetFTFullTokenChain  string = "/api/de-exp/get-ft-token-chain"
-
-	// APIGetRBTGenesisBlock string = "/api/de-exp/get-rbt-token-chain-genesis-block"
-	// APIGetFTGenesisBlock  string = "/api/de-exp/get-ft-token-chain-genesis-block"
-
-	// APIGetRBTLatestBlock string = "/api/de-exp/get-rbt-token-chain-latest-block"
-	// APIGetFTLatestBlock  string = "/api/de-exp/get-ft-token-chain-latest-block"
-
-	// APIGetRBTLatestValidators string = "/api/de-exp/get-rbt-token-chain-latest-block-validators"
-	// APIGetFTLatestValidators  string = "/api/de-exp/get-ft-token-chain-latest-block-validators"
+	APINotifyDeExpBlockUpdate string = "/api/block-update"
+	APINotifyDeExpTokenUpdate string = "/api/token-update"
 )
 
 // jwt.RegisteredClaims
