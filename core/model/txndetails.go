@@ -55,6 +55,7 @@ type PubSubTxnInfo struct {
 	TxnBlock          []byte  `gorm:"column:block"`
 	LatestBlockHeight uint64  `gorm:"column:block_height"`
 	TransactionValue  float64 `gorm:"column:transaction_value"`
+	TokenValue        float64 `gorm:"column:token_value"`
 }
 
 type FailedTransaction struct {

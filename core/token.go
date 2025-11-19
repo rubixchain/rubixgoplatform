@@ -69,9 +69,10 @@ type TokenVerificationResponse struct {
 
 // Token sync info associated with Background Syncing of tokens
 type TokenSyncInfo struct {
-	TokenID   string `gorm:"column:token_id;primaryKey"`
-	TokenType int    `gorm:"column:token_type"`
-	AssetType int    `gorm:"column:asset_type"`
+	TokenID    string  `gorm:"column:token_id;primaryKey"`
+	TokenType  int     `gorm:"column:token_type"`
+	AssetType  int     `gorm:"column:asset_type"`
+	TokenValue float64 `gorm:"column:token_value"`
 }
 
 type ReceivedBlock struct {
@@ -508,7 +509,8 @@ func (c *Core) SubscribeTCDetails() {
 		c.log.Error("Failed to subscribe to token chain details", "err", err)
 	}
 }
-//This function handles received token details or transaction history details through the pubsub
+
+// This function handles received token details or transaction history details through the pubsub
 func (c *Core) SubscribeToTokenChainDetails() error {
 	if c.ps == nil {
 		c.log.Warn("PubSub not initialized")
@@ -693,9 +695,10 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			c.log.Debug("Publisher chain longer or full node need entire chain, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", latestBlockHeight, "peerAddr", address, "AssetType", detail.AssetType)
 			c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
-				TokenID:   detail.Token,
-				TokenType: detail.TokenType,
-				AssetType: detail.AssetType,
+				TokenID:    detail.Token,
+				TokenType:  detail.TokenType,
+				AssetType:  detail.AssetType,
+				TokenValue: detail.TokenValue,
 			})
 			//fullnode has either equal or more number of token chain length compared to publisher
 		} else {
@@ -729,6 +732,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						PublisherDID:      detail.Did,
 						LatestBlockHeight: latestBlockHeight,
 						AssetType:         detail.AssetType,
+						TokenValue:        detail.TokenValue,
 					}
 
 					c.log.Debug("**latest block height in event data****", eventData.LatestBlockHeight)
@@ -778,6 +782,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				PublisherDID:      detail.Did,
 				LatestBlockHeight: latestBlockHeight,
 				AssetType:         detail.AssetType,
+				TokenValue:        detail.TokenValue,
 			}
 
 			c.log.Debug("**latest block block height in event data****", eventData.LatestBlockHeight)
@@ -790,6 +795,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 
 	var wg sync.WaitGroup
 
+	//In the case where tokensyncmap is not nil at last read the fullnode's token table if token value is 0, update it with pubsub token value
 	for addr, tokens := range tokenSyncMap {
 		_, did, ok := util.ParseAddress(addr)
 		if !ok {
@@ -858,6 +864,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 	}
 
 	wg.Wait()
+
 	// End timer after all syncs are done
 	batchDuration := time.Since(batchStart)
 
@@ -1441,6 +1448,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				AssetType:         tokenSyncInfo.AssetType,
 				LatestBlockHeight: latestBlockHeight,
 				PublisherDID:      p.GetPeerDID(),
+				TokenValue:        tokenSyncInfo.TokenValue,
 			}
 			syncStatus := wallet.SyncCompleted
 			if genesisBlock != nil {
@@ -2466,9 +2474,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					BlockHeight:   event.LatestBlockHeight,
 					SyncStaus:     syncStatus,
 					TokenStatus:   tokenStatus,
+					// TokenValue:    event.TokenValue,
 				}
-				if receivedBlock.GenesisBlock != nil {
-					tokenInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
+				if event.TokenValue != 0 {
+					tokenInfo.TokenValue = event.TokenValue
 				}
 				c.log.Debug("***block height just before adding to FUllnodeRBT Table****", tokenInfo.BlockHeight)
 				c.log.Debug("***publisherDID just before adding to FUllnodeRBT Table****", tokenInfo.PublisherDID)
@@ -2496,6 +2505,9 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedRBT.BlockHeight = event.LatestBlockHeight
 		syncedRBT.PublisherDID = event.PublisherDID
 		syncedRBT.TokenStatus = tokenStatus
+		if event.TokenValue != 0 {
+			syncedRBT.TokenValue = event.TokenValue
+		}
 
 		err = c.w.UpdateSyncedRBTToTable(syncedRBT)
 		if err != nil {
