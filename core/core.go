@@ -162,6 +162,7 @@ type Core struct {
 	fullNode             bool
 	txnProcessor         *DynamicTxnProcessor
 	RetryTokenSyncTicker *time.Ticker
+	DeExp                bool
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -196,9 +197,18 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, passedPSQLdbName string, passedPSQLdbUserName string, passedPSQLdbPassword string) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, passedPSQLdbName string, passedPSQLdbUserName string, passedPSQLdbPassword string, enableDeExp bool, deExpURL string) (*Core, error) {
 	var err error
 	update := false
+
+	if enableDeExp && deExpURL == "" {
+		return nil, fmt.Errorf("De-Exp URL required when De-Exp is enabled (-deexp), use `-deexpURL` flag to pass De-Exp URL")
+	}
+
+	if !enableDeExp && deExpURL != "" {
+		return nil, fmt.Errorf("De-Exp flag required when passing De-Exp URL (-deexpURL), use `-deexp` flag to enable De-Exp")
+	}
+
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
 		cfg.CfgData.StorageConfig.StorageType = storage.StorageDBType
 		cfg.CfgData.StorageConfig.DBAddress = cfg.DirPath + RubixRootDir + DefaultMainNetDB
@@ -230,9 +240,15 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		defaultSetup:      defaultSetup,
 		publishTokenChain: publishTokenChainDetails,
 		fullNode:          fullNode,
+		DeExp:             enableDeExp,
 	}
 
 	if c.fullNode {
+		if c.DeExp {
+			wallet.ExplorerHost = deExpURL
+		} else {
+			wallet.ExplorerHost = "No De-Explorer Host"
+		}
 		if c.testNet {
 			if cfg.CfgData.FullnodeTestStorageConfig.StorageType == 0 {
 				cfg.CfgData.FullnodeTestStorageConfig.StorageType = storage.StorageDBType

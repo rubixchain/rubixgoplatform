@@ -19,10 +19,7 @@ var (
 	clientOnce     sync.Once
 )
 
-// Explorer configuration
-const (
-	explorerHost = "http://localhost:8080"
-)
+var ExplorerHost string
 
 func initExplorerClient() *http.Client {
 	clientOnce.Do(func() {
@@ -71,9 +68,14 @@ func convertToStringMap(i interface{}) interface{} {
 	}
 }
 
+// Add this helper function to check if explorer is available
+func (w *Wallet) isExplorerAvailable() bool {
+	return ExplorerHost != "" && ExplorerHost != "No De-Explorer Host"
+}
+
 func (w *Wallet) notifyExplorerServer(b *block.Block) {
 	start := time.Now()
-	explorerURL := explorerHost + setup.APINotifyDeExpBlockUpdate
+	explorerURL := ExplorerHost + setup.APINotifyDeExpBlockUpdate
 
 	blockMap := b.GetBlockMap()
 	cleanedMap := convertToStringMap(blockMap)
@@ -115,7 +117,7 @@ func (w *Wallet) notifyExplorerServer(b *block.Block) {
 // notifyTokenUpdate sends token update notifications to the Explorer server with operation type
 func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}, operation string) {
 	start := time.Now()
-	explorerURL := explorerHost + setup.APINotifyDeExpTokenUpdate
+	explorerURL := ExplorerHost + setup.APINotifyDeExpTokenUpdate
 
 	payload := map[string]interface{}{
 		"table":     tableName,

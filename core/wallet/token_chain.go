@@ -632,7 +632,9 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 
 // addFullNodeBlock will write block into fullnode-storage
 func (w *Wallet) addFullNodeBlock(token string, b *block.Block) error {
-	defer w.notifyExplorerServer(b)
+	if w.isExplorerAvailable() {
+		defer w.notifyExplorerServer(b)
+	}
 	opt := &opt.WriteOptions{
 		Sync: true,
 	}
