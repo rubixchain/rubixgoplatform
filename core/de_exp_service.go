@@ -139,8 +139,6 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 	byteArray := []byte(str)
 	var data []interface{}
 
-	fmt.Println("Byte Array is", byteArray)
-
 	err = json.Unmarshal(byteArray, &data)
 	if err != nil {
 		c.log.Error(fmt.Sprintf("Error unmarshalling JSON for %s tokenchain", TokenType), "err", err)
