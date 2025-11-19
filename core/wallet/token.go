@@ -171,51 +171,7 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 	return t, nil
 }
 
-// This function fetches all rbt  tokens, which a node can have maximum token chain length(i.e Tokens with status as Free, Pledged, Burnt or TokenISBurntForFT)
-func (w *Wallet) GetRBTTokensWithMaxChainLength(did string) ([]Token, error) {
-	var tokens []Token
-
-	err := w.s.Read(TokenStorage, &tokens, "(token_status=? OR token_status=? OR token_status=? OR token_status=?) AND did=?", TokenIsFree, TokenIsPledged, TokenIsBurnt, TokenIsBurntForFT, did)
-	if err != nil {
-		w.log.Error("Failed to get rbt tokens with maximum chain length ", "err", err)
-		return nil, err
-	}
-
-	return tokens, nil
-}
-
-// This function fetches FT Tokens, which a node can have maximum token chain length(i.e tokens with status Free)
-func (w *Wallet) GetFTTokensWithMaxChainLength(did string) ([]FTToken, error) {
-	var FTTokens []FTToken
-	err := w.s.Read(FTTokenStorage, &FTTokens, "token_status=? AND owner_did=?", TokenIsFree, did)
-	if err != nil {
-		w.log.Error("Failed to get FT tokens with maximum chain length ", "err", err)
-		return nil, err
-	}
-	return FTTokens, nil
-}
-
-// This function fetches NFT Tokens, which a node can have maximum token chain length(i.e tokens with status Free and TokenIsDeployed)
-func (w *Wallet) GetNFTTokensWithMaxChainLength(did string) ([]NFT, error) {
-	var NFTTokens []NFT
-	err := w.s.Read(NFTTokenStorage, &NFTTokens, "(token_status=? OR token_status=?) AND did=?", TokenIsDeployed, TokenIsFree, did)
-	if err != nil {
-		w.log.Error("Failed to get NFT tokens with maximum chain length ", "err", err)
-		return nil, err
-	}
-	return NFTTokens, nil
-}
-
-// This function fetches smart contract Tokens, which a node can have maximum token chain length(i.e tokens with status Free and TokenIsDeployed)
-func (w *Wallet) GetSmartContractTokensWithMaxChainLength(did string) ([]SmartContract, error) {
-	var SmartContractTokens []SmartContract
-	err := w.s.Read(SmartContractStorage, &SmartContractTokens, "(contract_status=? OR contract_status=?) AND deployer=?", TokenIsDeployed, TokenIsExecuted, did)
-	if err != nil {
-		w.log.Error("Failed to get smart contract tokens with maximum chain length ", "err", err)
-		return nil, err
-	}
-	return SmartContractTokens, nil
-}
+// This function fetches all rbt  tokens, which a node can have maximum token chain length(i.e Tokens with status as Free, Pledged,committed, Burnt or TokenISBurntForFT) in a batch of size limit
 
 func (w *Wallet) GetRBTTokensChunk(did string, limit, offset int) ([]Token, error) {
 	var tokens []Token
@@ -229,6 +185,7 @@ func (w *Wallet) GetRBTTokensChunk(did string, limit, offset int) ([]Token, erro
 	return tokens, err
 }
 
+// This function fetches all FT tokens, which are in Free state in a batch of size limit
 func (w *Wallet) GetFTTokensChunk(did string, limit, offset int) ([]FTToken, error) {
 	var tokens []FTToken
 	err := w.s.ReadWithOffset(
@@ -241,6 +198,7 @@ func (w *Wallet) GetFTTokensChunk(did string, limit, offset int) ([]FTToken, err
 	return tokens, err
 }
 
+// This function fetches all NFT tokens, which are in Free, Deployed, state in a batch of size limit
 func (w *Wallet) GetNFTTokensChunk(did string, limit, offset int) ([]NFT, error) {
 	var tokens []NFT
 	err := w.s.ReadWithOffset(
@@ -253,6 +211,7 @@ func (w *Wallet) GetNFTTokensChunk(did string, limit, offset int) ([]NFT, error)
 	return tokens, err
 }
 
+// This function fetches all smartcontract tokens, which are in Deployed, Executed state in a batch of size limit
 func (w *Wallet) GetSmartContractTokensChunk(did string, limit, offset int) ([]SmartContract, error) {
 	var tokens []SmartContract
 	err := w.s.ReadWithOffset(
@@ -265,6 +224,7 @@ func (w *Wallet) GetSmartContractTokensChunk(did string, limit, offset int) ([]S
 	return tokens, err
 }
 
+// This function fetches all Transaction history records in a batch of size limit
 func (w *Wallet) GetTransactionHistoryChunk(limit, offset int) ([]model.TransactionDetails, error) {
 	var txns []model.TransactionDetails
 	err := w.s.ReadWithOffset(TransactionStorage, offset, limit, &txns, "transaction_id!=?", "")
@@ -273,6 +233,8 @@ func (w *Wallet) GetTransactionHistoryChunk(limit, offset int) ([]model.Transact
 	}
 	return txns, nil
 }
+
+// This function fetches all FTTransaction history records in a batch of size limit
 func (w *Wallet) GetFTTransactionHistoryChunk(limit, offset int) ([]model.FTTransactionHistory, error) {
 	var txns []model.FTTransactionHistory
 	err := w.s.ReadWithOffset(FTTransactionHistoryStorage, offset, limit, &txns, "transaction_id!=?", "")
