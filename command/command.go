@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1_fullnode"
+	version string = "0.1_fullnode&explorer_mainnet"
 )
 const (
 	VersionCmd                     string = "-v"
