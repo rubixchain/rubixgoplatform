@@ -646,21 +646,55 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 	batchStart := time.Now()
 	for _, detail := range event.TokenDetails {
 		if detail.Did == "" {
+			errMsg := fmt.Sprintf("PublisherDID is empty for the token: %v, simply skipping it, while processing reeived token details", detail.Token)
+			c.log.Error(errMsg)
 			continue
 		}
 
 		address := event.PublisherPeerID + "." + detail.Did
-		didType := -1 // -1 means that we doesn't know the DID Type but we need to pass some integer otherwise it will give nil pointer dereference error
-		didPeerDetails := wallet.DIDPeerMap{
-			DID:     detail.Did,
-			DIDType: &didType,
-			PeerID:  event.PublisherPeerID,
-		}
-		// Add peer to table (upsert logic should be inside AddPeerDetails)
-		if err := c.AddPeerDetails(didPeerDetails); err != nil {
-			c.log.Error("Failed to add peer details to table", "did", detail.Did, "err", err)
-			// Return peerInfo anyway, in case caller can proceed
-			continue
+
+		// unknownDIDType := -1 // -1 means that we doesn't know the DID Type but we need to pass some integer otherwise it will give nil pointer dereference error
+		// didPeerDetails := wallet.DIDPeerMap{
+		// 	DID: detail.Did,
+		// 	// DIDType: &didType,
+		// 	PeerID: event.PublisherPeerID,
+		// }
+		// // if publisher did type is already added in peerDIDTable,
+		// // then read and pass it, else pass -1
+		// publisherDIDType, didTypeErr := c.w.GetPeerDIDType(detail.Did)
+		// if didTypeErr != nil {
+		// 	didPeerDetails.DIDType = &unknownDIDType
+		// } else {
+		// 	didPeerDetails.DIDType = &publisherDIDType
+		// }
+		// // Add peer to table (upsert logic should be inside AddPeerDetails)
+		// if err := c.AddPeerDetails(didPeerDetails); err != nil {
+		// 	c.log.Error("Failed to add peer details to table", "did", detail.Did, "err", err)
+		// 	// Return peerInfo anyway, in case caller can proceed
+		// 	continue
+		// }
+
+		// add publisher to peer did table, if it is alredy NOT there in the PeerDIDTable
+		publisherPeerId := c.w.GetPeerID(detail.Did)
+		if publisherPeerId != event.PublisherPeerID {
+
+			unknownDIDType := -1 // -1 means that we doesn't know the DID Type but we need to pass some integer otherwise it will give nil pointer dereference error
+			publisherDetails := &wallet.DIDPeerMap{
+				DID:    detail.Did,
+				PeerID: event.PublisherPeerID,
+			}
+			// if publisher did type is already added in peerDIDTable,
+			// then read and pass it, else pass -1
+			publisherDIDType, err := c.w.GetPeerDIDType(detail.Did)
+			if err != nil {
+				publisherDetails.DIDType = &unknownDIDType
+			} else {
+				publisherDetails.DIDType = &publisherDIDType
+			}
+			err = c.AddPeerDetails(*publisherDetails)
+			if err != nil {
+				c.log.Error("failed to add publisher info to DB")
+			}
 		}
 
 		latestBlock := c.w.GetFullNodeLatestTokenBlock(detail.Token, detail.TokenType)
@@ -732,7 +766,19 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						PublisherDID:      detail.Did,
 						LatestBlockHeight: latestBlockHeight,
 						AssetType:         detail.AssetType,
-						TokenValue:        detail.TokenValue,
+						// TokenValue:        detail.TokenValue,
+					}
+					//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
+					// There is no token value in the Mainnet genesis block for migrated tokens.
+					//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
+					if genesisBlock != nil {
+						genesisBlockType := genesisBlock.GetTransType()
+						if genesisBlockType == block.TokenMigratedType {
+
+							eventData.TokenValue = detail.TokenValue
+						} else {
+							eventData.TokenValue = genesisBlock.GetTokenValue()
+						}
 					}
 
 					c.log.Debug("**latest block height in event data****", eventData.LatestBlockHeight)
@@ -769,20 +815,33 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
 						c.log.Error(errMsg)
 					}
+					continue
 
 				}
 
-				continue
-
 			}
-			// when latestBlockHeight > existingBlockHeight
+
 			eventData := model.PubSubTxnInfo{
 				BlockHash:         latestBlockHash,
 				TransactionID:     txnID,
 				PublisherDID:      detail.Did,
 				LatestBlockHeight: latestBlockHeight,
 				AssetType:         detail.AssetType,
-				TokenValue:        detail.TokenValue,
+				// TokenValue:        detail.TokenValue,
+			}
+			// when latestBlockHeight != existingBlockHeight OR (latestBlockHeight == existingBlockHeight && blockhashes also matches,
+			//  sqlite table should get updated with the values which are derived from the latest block.
+			//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
+			// There is no token value in the Mainnet genesis block for migrated tokens.
+			//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
+			if genesisBlock != nil {
+				genesisBlockType := genesisBlock.GetTransType()
+				if genesisBlockType == block.TokenMigratedType {
+
+					eventData.TokenValue = detail.TokenValue
+				} else {
+					eventData.TokenValue = genesisBlock.GetTokenValue()
+				}
 			}
 
 			c.log.Debug("**latest block block height in event data****", eventData.LatestBlockHeight)
@@ -2476,8 +2535,17 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					TokenStatus:   tokenStatus,
 					// TokenValue:    event.TokenValue,
 				}
-				if event.TokenValue != 0 {
-					tokenInfo.TokenValue = event.TokenValue
+				// if event.TokenValue != 0 {
+				// 	tokenInfo.TokenValue = event.TokenValue
+				// }
+				if receivedBlock.GenesisBlock != nil {
+					genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
+					if genesisBlockType == block.TokenMigratedType {
+						tokenInfo.TokenValue = event.TokenValue
+					} else {
+						tokenInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
+					}
+
 				}
 				c.log.Debug("***block height just before adding to FUllnodeRBT Table****", tokenInfo.BlockHeight)
 				c.log.Debug("***publisherDID just before adding to FUllnodeRBT Table****", tokenInfo.PublisherDID)
@@ -2505,8 +2573,20 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedRBT.BlockHeight = event.LatestBlockHeight
 		syncedRBT.PublisherDID = event.PublisherDID
 		syncedRBT.TokenStatus = tokenStatus
-		if event.TokenValue != 0 {
-			syncedRBT.TokenValue = event.TokenValue
+		// if event.TokenValue != 0 {
+		// 	syncedRBT.TokenValue = event.TokenValue
+		// }
+		// if receivedBlock.GenesisBlock != nil {
+		// 	tokenInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
+		// }
+		if receivedBlock.GenesisBlock != nil {
+			genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
+			if genesisBlockType == block.TokenMigratedType {
+				syncedRBT.TokenValue = event.TokenValue
+			} else {
+				syncedRBT.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
+			}
+
 		}
 
 		err = c.w.UpdateSyncedRBTToTable(syncedRBT)
