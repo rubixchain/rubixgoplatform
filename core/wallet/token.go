@@ -1915,7 +1915,7 @@ func (w *Wallet) ReadRBTContentFromTable(tokenId string) (*RBTContent, error) {
 	var rbt RBTContent
 	err := w.fullNodePSQLTokensDB.Read(FullNodeRBTContentTable, &rbt, "token_id=?", tokenId)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
+		errMsg := fmt.Sprintf("Failed to get rbt from the FullNodeRBTContentTable , err : %v", err)
 		// w.log.Error(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
@@ -1930,7 +1930,8 @@ func (w *Wallet) ReadFTContentFromTable(tokenId string) (*FTContent, error) {
 	err := w.fullNodePSQLTokensDB.Read(FullNodeFTContentTable, &ft, "token_id=?", tokenId)
 	if err != nil {
 		// w.log.Error("Failed to get ft", "err", err)
-		return nil, err
+		errMsg := fmt.Sprintf("Failed to get FT from the FullNodeFTContentTable , err : %v", err)
+		return nil, fmt.Errorf(errMsg)
 	}
 	return &ft, nil
 }
@@ -1942,8 +1943,8 @@ func (w *Wallet) ReadNFTContentFromTable(tokenId string) (*NFTContent, error) {
 	var nft NFTContent
 	err := w.fullNodePSQLTokensDB.Read(FullNodeNFTContentTable, &nft, "nft_id=?", tokenId)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
 		// w.log.Error(errMsg)
+		errMsg := fmt.Sprintf("Failed to get NFT from the FullNodeNFTContentTable , err : %v", err)
 		return nil, fmt.Errorf(errMsg)
 	}
 	return &nft, nil
@@ -1956,7 +1957,7 @@ func (w *Wallet) ReadSmartContractContentFromTable(tokenId string) (*SmartContra
 	var scContent SmartContractContent
 	err := w.fullNodePSQLTokensDB.Read(FullNodeSCContentTable, &scContent, "smart_contract_hash=?", tokenId)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
+		errMsg := fmt.Sprintf("Failed to get NFT from the FullNodeSmartContractContentTable , err : %v", err)
 		// w.log.Error(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
