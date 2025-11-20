@@ -1536,11 +1536,11 @@ func (w *Wallet) AddFailedTokensToTable(t *model.FailedToSyncTokenDetailsInfo) e
 	w.l.Lock()
 	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Write(FullNodeFailedToSyncTokens, t)
-	if err == nil {
-		if w.isExplorerAvailable() {
-			w.notifyTokenUpdate(FullNodeFailedToSyncTokens, t, "CREATE")
-		}
-	}
+	// if err == nil {
+	// 	if w.isExplorerAvailable() {
+	// 		w.notifyTokenUpdate(FullNodeFailedToSyncTokens, t, "CREATE")
+	// 	}
+	// }
 	return err
 }
 
@@ -1631,12 +1631,12 @@ func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
 		return deleteErr
 	}
 
-	if w.isExplorerAvailable() {
-		deletePayload := map[string]interface{}{
-			"token_id": tokenID,
-		}
-		w.notifyTokenUpdate(FullNodeFailedToSyncTokens, deletePayload, "DELETE")
-	}
+	// if w.isExplorerAvailable() {
+	// 	deletePayload := map[string]interface{}{
+	// 		"token_id": tokenID,
+	// 	}
+	// 	w.notifyTokenUpdate(FullNodeFailedToSyncTokens, deletePayload, "DELETE")
+	// }
 
 	w.log.Info("Successfully deleted token from FullNodeFailedToSyncTokens table", "token_id", tokenID)
 	return nil
