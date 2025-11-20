@@ -222,6 +222,7 @@ func (c *Core) prepareTokenDetailsForRBT(tokens []wallet.Token) []model.SendToke
 			TokenType:        tokenType,
 			Did:              token.DID,
 			AssetType:        RBTTokenType,
+			TokenValue:       token.TokenValue,
 		})
 	}
 	return result

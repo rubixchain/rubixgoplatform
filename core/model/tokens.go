@@ -107,6 +107,7 @@ type SendTokenDetailsInfo struct {
 	Token            string `json:"token"`
 	Did              string `json:"did"`
 	AssetType        int    `json:"asset_type"`
+	TokenValue      float64  `json:"token_value"`  //For some mainnet tokens, token value is not there in the genesis block so we need to pass it through the pubsub
 }
 type FailedToSyncTokenDetailsInfo struct {
 	TokenID   string `gorm:"column:token_id;primaryKey"` // `gorm:"column:token;primaryKey"`

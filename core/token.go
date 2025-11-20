@@ -69,9 +69,10 @@ type TokenVerificationResponse struct {
 
 // Token sync info associated with Background Syncing of tokens
 type TokenSyncInfo struct {
-	TokenID   string `gorm:"column:token_id;primaryKey"`
-	TokenType int    `gorm:"column:token_type"`
-	AssetType int    `gorm:"column:asset_type"`
+	TokenID    string  `gorm:"column:token_id;primaryKey"`
+	TokenType  int     `gorm:"column:token_type"`
+	AssetType  int     `gorm:"column:asset_type"`
+	TokenValue float64 `gorm:"column:token_value"`
 }
 
 type ReceivedBlock struct {
@@ -378,252 +379,8 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	}, http.StatusOK)
 }
 
-// func (c *Core) sendTokenChainDetails(req *ensweb.Request) {
-// 	var sendTCDetailsReq AllTokenChainDetails
-// 	// Parse request
-// 	if err := c.l.ParseJSON(req, &sendTCDetailsReq); err != nil {
-// 		c.log.Warn("Failed to parse request", "error", err)
-
-// 	}
-// 	// Iterate over all tokens
-// 	for token, tokeninfo := range sendTCDetailsReq.TokenTCLengthDetails {
-// 		// Get the latest token block
-// 		latestBlock := c.w.GetLatestTokenBlock(token, tokeninfo.TokenType)
-// 		if latestBlock == nil {
-// 			c.log.Error("Failed to get latest block for token", "token", token)
-// 			continue
-// 		}
-
-// 		// Get block height
-// 		_, err := latestBlock.GetBlockNumber(token)
-// 		if err != nil {
-// 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-// 			continue
-// 		}
-
-//		}
-//	}
-// func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetailsInfo) {
-// 	total := len(tokenDetails)
-// 	if total == 0 {
-// 		c.log.Info("Nothing to publish")
-// 		return
-// 	}
-// 	c.log.Info(fmt.Sprintf("****Publishing %d token details in %d-sized batches**", total, defaultBatchSize))
-// 	for i := 0; i < total; i += defaultBatchSize {
-// 		end := i + defaultBatchSize
-// 		if end > total {
-// 			end = total
-// 		}
-// 		batch := tokenDetails[i:end]
-// 		event := model.TokenChainDetailsEvent{
-// 			PublisherPeerID: c.peerID,
-// 			TokenDetails:    batch,
-// 			BatchNumber:     i/defaultBatchSize + 1, // 1-based batch numbering
-// 		}
-
-// 		if err := c.ps.Publish("token_chain_details", event); err != nil {
-// 			c.log.Error("Failed to publish batch", "idx", i, "err", err)
-// 			continue
-// 		}
-// 		c.log.Info(fmt.Sprintf("Published batch from %d to %d", i, end-1))
-// 		// Slight delay to avoid flooding
-// 		time.Sleep(publishDelay)
-// 	}
-// 	c.log.Info("All batches published")
-// }
-
-// func (c *Core) publishTokenChainDetailsEvent(event *model.TokenChainDetailsEvent) error {
-// 	topic := "token_chain_details" // fixed pubsub topic
-// 	if c.ps != nil {
-// 		err := c.ps.Publish(topic, event)
-// 		if err != nil {
-// 			c.log.Error("Failed to publish token chain details event", "err", err)
-// 			return err
-// 		}
-// 		c.log.Info("Published token chain details to topic " + topic)
-// 	}
-// 	return nil
-// }
-
-// First, It should read the sqlite DB and publish all those tokens details to a pub-sub event
-// func (c *Core) publishTokenChainDetails() error {
-// 	allDIDs, err := c.w.GetAllDIDs()
-// 	if err != nil {
-// 		c.log.Error("failed to get all DID's of the folder")
-// 		return err
-// 	}
-
-// 	var aggregatedRBTTokens []wallet.Token
-// 	var aggregatedFTTokens []wallet.FTToken
-// 	var aggregatedNFTTokens []wallet.NFT
-// 	var aggregatedSmartContractTokens []wallet.SmartContract
-
-// 	for _, didStruct := range allDIDs {
-// 		rbtTokens, rbtError := c.w.GetRBTTokensWithMaxChainLength(didStruct.DID)
-// 		if rbtError != nil && !strings.Contains(rbtError.Error(), "no records found") {
-// 			c.log.Error("failed to get rbt tokens for DID", "did", didStruct.DID, "err", rbtError)
-// 			return rbtError
-// 		}
-// 		aggregatedRBTTokens = append(aggregatedRBTTokens, rbtTokens...)
-// 		c.log.Debug("Current count of aggregated RBT tokens:", len(aggregatedRBTTokens))
-
-// 		ftTokens, ftError := c.w.GetFTTokensWithMaxChainLength(didStruct.DID)
-// 		if ftError != nil && !strings.Contains(ftError.Error(), "no records found") {
-// 			c.log.Error("failed to get FT tokens for DID", "did", didStruct.DID, "err", ftError)
-// 			return ftError
-// 		}
-// 		aggregatedFTTokens = append(aggregatedFTTokens, ftTokens...)
-// 		c.log.Debug("Current count of aggregated FT tokens:", len(aggregatedFTTokens))
-
-// 		nftTokens, nftError := c.w.GetNFTTokensWithMaxChainLength(didStruct.DID)
-// 		if nftError != nil && !strings.Contains(nftError.Error(), "no records found") {
-// 			c.log.Error("failed to get NFT tokens for DID", "did", didStruct.DID, "err", nftError)
-// 			return nftError
-// 		}
-// 		aggregatedNFTTokens = append(aggregatedNFTTokens, nftTokens...)
-// 		c.log.Debug("Current count of aggregated NFT tokens:", len(aggregatedNFTTokens))
-
-// 		smartContractTokens, scError := c.w.GetSmartContractTokensWithMaxChainLength(didStruct.DID)
-// 		if scError != nil && !strings.Contains(scError.Error(), "no records found") {
-// 			c.log.Error("failed to get smart contract tokens for DID", "did", didStruct.DID, "err", scError)
-// 			return scError
-// 		}
-// 		aggregatedSmartContractTokens = append(aggregatedSmartContractTokens, smartContractTokens...)
-// 		c.log.Debug("Current count of aggregated smart contract tokens:", len(aggregatedSmartContractTokens))
-// 	}
-
-// 	var tokenDetailsToPublish []model.SendTokenDetailsInfo
-
-// 	// Prepare RBT tokens for publishing
-// 	for _, token := range aggregatedRBTTokens {
-// 		tokenType := c.TokenType(RBTString)
-// 		if token.TokenValue != float64(1) {
-// 			tokenType = c.TokenType(PartString)
-// 		}
-// 		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
-// 		if latestBlock == nil {
-// 			c.log.Error("Failed to get latest block for token", "token", token)
-// 			// return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
-// 			continue
-// 		}
-// 		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
-// 		if err != nil {
-// 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-// 			// return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
-// 			continue
-// 		}
-// 		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
-// 			Token:            token.TokenID,
-// 			TokenChainLength: blockHeight,
-// 			TokenType:        tokenType,
-// 			Did:              token.DID,
-// 			AssetType:        RBTTokenType,
-// 		})
-// 	}
-
-// 	// Prepare FT tokens for publishing
-// 	for _, token := range aggregatedFTTokens {
-// 		tokenType := c.TokenType(FTString)
-// 		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
-// 		if latestBlock == nil {
-// 			c.log.Error("Failed to get latest block for token", "token", token)
-// 			// return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
-// 			continue
-// 		}
-// 		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
-// 		if err != nil {
-// 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-// 			// return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
-// 			continue
-// 		}
-// 		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
-// 			Token:            token.TokenID,
-// 			TokenChainLength: blockHeight,
-// 			TokenType:        tokenType,
-// 			Did:              token.DID,
-// 			AssetType:        FTTokenType,
-// 		})
-// 	}
-
-// 	// Prepare NFT tokens for publishing
-// 	for _, token := range aggregatedNFTTokens {
-// 		tokenType := c.TokenType(NFTString)
-// 		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
-// 		if latestBlock == nil {
-// 			c.log.Error("Failed to get latest block for token", "token", token)
-// 			// return fmt.Errorf("Failed to get latest block for token: %v", token.TokenID)
-// 			continue
-// 		}
-// 		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
-// 		if err != nil {
-// 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
-// 			// return fmt.Errorf("Failed to get latest block height of token: %v, error: %w", token.TokenID, err)
-// 			continue
-// 		}
-// 		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
-// 			Token:            token.TokenID,
-// 			TokenChainLength: blockHeight,
-// 			TokenType:        tokenType,
-// 			Did:              token.DID,
-// 			AssetType:        NFTTokenType,
-// 		})
-// 	}
-
-// 	//TODO: Remove uncommented code berfore committing
-
-// 	// for _, aggregatedNFTToken := range aggregatedNFTTokens {
-// 	// 	tokencontent, err := c.w.Cat(aggregatedNFTToken.TokenID, 500, aggregatedNFTToken.DID)
-// 	// 	if err != nil {
-// 	// 		c.log.Error("failed to get the content of NFT Token", aggregatedNFTToken.TokenID)
-// 	// 	}
-
-// 	// 	c.log.Debug("**token content of the NFT Token*****", tokencontent)
-
-// 	// }
-
-// 	// Prepare smart contract tokens for publishing
-// 	for _, token := range aggregatedSmartContractTokens {
-// 		tokenType := c.TokenType(SmartContractString)
-// 		latestBlock := c.w.GetLatestTokenBlock(token.SmartContractHash, tokenType)
-// 		if latestBlock == nil {
-// 			c.log.Error("Failed to get latest block for smart contract token", "token", token)
-// 			// return fmt.Errorf("Failed to get latest block for smart contract token: %v", token.SmartContractHash)
-// 			continue
-// 		}
-// 		blockHeight, err := latestBlock.GetBlockNumber(token.SmartContractHash)
-// 		if err != nil {
-// 			c.log.Error("Failed to get latest block height of smart contract token", "token", token, "error", err)
-// 			// return fmt.Errorf("Failed to get latest block height of smart contract token: %v, error: %w", token.SmartContractHash, err)
-// 			continue
-// 		}
-// 		tokenDetailsToPublish = append(tokenDetailsToPublish, model.SendTokenDetailsInfo{
-// 			Token:            token.SmartContractHash,
-// 			TokenChainLength: blockHeight,
-// 			TokenType:        tokenType,
-// 			Did:              token.Deployer,
-// 			AssetType:        SmartContractTokenType,
-// 		})
-// 	}
-
-// 	//TODO: Remove follwoing uncommented code berfore committing
-
-// 	// for _, aggregatedSmartContractToken := range aggregatedSmartContractTokens {
-// 	// 	tokencontent, err := c.w.Cat(aggregatedSmartContractToken.SmartContractHash, 500, aggregatedSmartContractToken.Deployer)
-// 	// 	if err != nil {
-// 	// 		c.log.Error("failed to get the content of NFT Token", aggregatedSmartContractToken.SmartContractHash)
-// 	// 	}
-// 	// 	c.log.Debug("**token content of the smartcontract Token*****", tokencontent)
-// 	// }
-
-// 	// Publish all aggregated token details
-// 	c.PublishTokenChainDetailsEvent(tokenDetailsToPublish)
-// 	c.log.Info("**returning from publishTokenChainDetails function and entering into the publish txn history function**")
-// 	c.PublishTransactionHistory()
-
-// 	return nil
-// }
-
+// This function fetches all DIDs from the DID table and it publishes RBT tokens, FT Tokens, NFT Tokens and smart contracts tokens in batches with batch size 500 corresponding to each DID.
+// After publishing token details it publishes transaction history details also to the same pubsub.
 func (c *Core) publishTokenChainDetailsAndTxnHistory() error {
 	allDIDs, err := c.w.GetAllDIDs()
 	if err != nil {
@@ -753,20 +510,7 @@ func (c *Core) SubscribeTCDetails() {
 	}
 }
 
-// func (c *Core) SubscribeToTokenChainDetails() error {
-// 	if c.ps == nil {
-// 		c.log.Error("Cannot subscribe to token_chain_details: pub-sub not initialized")
-// 		return fmt.Errorf("pub-sub not initialized")
-// 	}
-// 	err := c.ps.SubscribeTopic("token_chain_details", c.TokenChainDetailsCallback)
-// 	if err != nil {
-// 		c.log.Error("Unable to subscribe to token_chain_details", "topic", "token_chain_details", "err", err)
-// 		return err
-// 	}
-// 	c.log.Info("Subscribing to token_chain_details is successful")
-// 	return nil
-// }
-
+// This function handles received token details or transaction history details through the pubsub
 func (c *Core) SubscribeToTokenChainDetails() error {
 	if c.ps == nil {
 		c.log.Warn("PubSub not initialized")
@@ -951,9 +695,10 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			c.log.Debug("Publisher chain longer or full node need entire chain, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", latestBlockHeight, "peerAddr", address, "AssetType", detail.AssetType)
 			c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
-				TokenID:   detail.Token,
-				TokenType: detail.TokenType,
-				AssetType: detail.AssetType,
+				TokenID:    detail.Token,
+				TokenType:  detail.TokenType,
+				AssetType:  detail.AssetType,
+				TokenValue: detail.TokenValue,
 			})
 			//fullnode has either equal or more number of token chain length compared to publisher
 		} else {
@@ -987,6 +732,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						PublisherDID:      detail.Did,
 						LatestBlockHeight: latestBlockHeight,
 						AssetType:         detail.AssetType,
+						TokenValue:        detail.TokenValue,
 					}
 
 					c.log.Debug("**latest block height in event data****", eventData.LatestBlockHeight)
@@ -1036,6 +782,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				PublisherDID:      detail.Did,
 				LatestBlockHeight: latestBlockHeight,
 				AssetType:         detail.AssetType,
+				TokenValue:        detail.TokenValue,
 			}
 
 			c.log.Debug("**latest block block height in event data****", eventData.LatestBlockHeight)
@@ -1048,6 +795,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 
 	var wg sync.WaitGroup
 
+	//In the case where tokensyncmap is not nil at last read the fullnode's token table if token value is 0, update it with pubsub token value
 	for addr, tokens := range tokenSyncMap {
 		_, did, ok := util.ParseAddress(addr)
 		if !ok {
@@ -1116,6 +864,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 	}
 
 	wg.Wait()
+
 	// End timer after all syncs are done
 	batchDuration := time.Since(batchStart)
 
@@ -1699,6 +1448,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				AssetType:         tokenSyncInfo.AssetType,
 				LatestBlockHeight: latestBlockHeight,
 				PublisherDID:      p.GetPeerDID(),
+				TokenValue:        tokenSyncInfo.TokenValue,
 			}
 			syncStatus := wallet.SyncCompleted
 			if genesisBlock != nil {
@@ -2724,9 +2474,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					BlockHeight:   event.LatestBlockHeight,
 					SyncStaus:     syncStatus,
 					TokenStatus:   tokenStatus,
+					// TokenValue:    event.TokenValue,
 				}
-				if receivedBlock.GenesisBlock != nil {
-					tokenInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
+				if event.TokenValue != 0 {
+					tokenInfo.TokenValue = event.TokenValue
 				}
 				c.log.Debug("***block height just before adding to FUllnodeRBT Table****", tokenInfo.BlockHeight)
 				c.log.Debug("***publisherDID just before adding to FUllnodeRBT Table****", tokenInfo.PublisherDID)
@@ -2754,6 +2505,9 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedRBT.BlockHeight = event.LatestBlockHeight
 		syncedRBT.PublisherDID = event.PublisherDID
 		syncedRBT.TokenStatus = tokenStatus
+		if event.TokenValue != 0 {
+			syncedRBT.TokenValue = event.TokenValue
+		}
 
 		err = c.w.UpdateSyncedRBTToTable(syncedRBT)
 		if err != nil {
