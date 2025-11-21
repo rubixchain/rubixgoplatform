@@ -8,7 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -34,9 +35,16 @@ func NewShutdownManager(core *Core) *ShutdownManager {
 		log:  core.log.Named("ShutdownManager"),
 		core: core,
 	}
-	
+
 	// Define shutdown steps in order
 	sm.shutdownSteps = []ShutdownStep{
+		{
+			Name: "Shutdown Explorer Notifications",
+			Function: func() error {
+				return wallet.ShutdownExplorerNotifications()
+			},
+			Timeout: 30 * time.Second,
+		},
 		{
 			Name: "Stop IPFS Scalability Manager",
 			Function: func() error {
@@ -109,7 +117,7 @@ func NewShutdownManager(core *Core) *ShutdownManager {
 			Timeout: 2 * time.Second,
 		},
 	}
-	
+
 	return sm
 }
 
@@ -122,21 +130,21 @@ func (sm *ShutdownManager) Shutdown() error {
 	}
 	sm.isShuttingDown = true
 	sm.mu.Unlock()
-	
+
 	sm.log.Info("Starting graceful shutdown")
-	
+
 	var lastErr error
 	for _, step := range sm.shutdownSteps {
 		sm.log.Info("Executing shutdown step", "step", step.Name)
-		
+
 		ctx, cancel := context.WithTimeout(context.Background(), step.Timeout)
 		defer cancel()
-		
+
 		done := make(chan error, 1)
 		go func() {
 			done <- step.Function()
 		}()
-		
+
 		select {
 		case err := <-done:
 			if err != nil {
@@ -150,7 +158,7 @@ func (sm *ShutdownManager) Shutdown() error {
 			lastErr = fmt.Errorf("step %s timed out", step.Name)
 		}
 	}
-	
+
 	sm.log.Info("Graceful shutdown completed", "hadErrors", lastErr != nil)
 	return lastErr
 }
@@ -161,9 +169,9 @@ func (sm *ShutdownManager) stopIPFSDaemon() error {
 		sm.log.Debug("IPFS daemon not running, skip stop")
 		return nil
 	}
-	
+
 	sm.log.Info("Stopping IPFS daemon")
-	
+
 	// First try graceful shutdown via channel
 	select {
 	case sm.core.ipfsChan <- true:
@@ -171,12 +179,12 @@ func (sm *ShutdownManager) stopIPFSDaemon() error {
 	default:
 		sm.log.Warn("IPFS channel blocked, trying alternative methods")
 	}
-	
+
 	// Wait for graceful shutdown
 	gracefulTimeout := time.After(5 * time.Second)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-gracefulTimeout:
@@ -195,7 +203,7 @@ func (sm *ShutdownManager) stopIPFSDaemon() error {
 // forceStopIPFS forcefully stops IPFS using OS-specific methods
 func (sm *ShutdownManager) forceStopIPFS() error {
 	sm.log.Warn("Attempting to force stop IPFS daemon")
-	
+
 	// First try to use the stored command/PID if available
 	if sm.core.ipfsCmd != nil && sm.core.ipfsCmd.Process != nil {
 		sm.log.Info("Using stored process reference to kill IPFS", "pid", sm.core.ipfsPID)
@@ -207,7 +215,7 @@ func (sm *ShutdownManager) forceStopIPFS() error {
 			return nil
 		}
 	}
-	
+
 	// If we have a PID, try to kill that specific process
 	if sm.core.ipfsPID > 0 {
 		sm.log.Info("Attempting to kill IPFS by PID", "pid", sm.core.ipfsPID)
@@ -219,7 +227,7 @@ func (sm *ShutdownManager) forceStopIPFS() error {
 			return nil
 		}
 	}
-	
+
 	// Last resort: find and kill by process name (but be careful)
 	sm.log.Warn("No PID available, attempting to find IPFS process")
 	switch runtime.GOOS {
@@ -254,16 +262,16 @@ func (sm *ShutdownManager) killProcessByPID(pid int) error {
 // killIPFSWindows kills IPFS on Windows (last resort, be careful)
 func (sm *ShutdownManager) killIPFSWindows() error {
 	sm.log.Warn("Using generic IPFS kill method - this may affect other IPFS instances!")
-	
+
 	// Note: On Windows, we can't easily filter by repo path
 	// This may affect other IPFS instances - use stored PID when possible
-	
+
 	// First try taskkill with /T flag to kill process tree
 	cmd := exec.Command("taskkill", "/F", "/T", "/IM", "ipfs.exe")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		sm.log.Error("Failed to kill IPFS with taskkill", "error", err, "output", string(output))
-		
+
 		// Try PowerShell as fallback
 		psCmd := `Get-Process ipfs -ErrorAction SilentlyContinue | Stop-Process -Force`
 		cmd = exec.Command("powershell", "-Command", psCmd)
@@ -273,7 +281,7 @@ func (sm *ShutdownManager) killIPFSWindows() error {
 			return err
 		}
 	}
-	
+
 	sm.log.Info("IPFS process killed on Windows")
 	sm.core.SetIPFSState(false)
 	return nil
@@ -282,62 +290,62 @@ func (sm *ShutdownManager) killIPFSWindows() error {
 // killIPFSUnix kills IPFS on Unix-like systems (last resort)
 func (sm *ShutdownManager) killIPFSUnix() error {
 	sm.log.Warn("Using generic IPFS kill method - this may affect other IPFS instances!")
-	
+
 	// Try to be more specific by including the repo path in the search
 	ipfsRepo := sm.core.cfg.DirPath + ".ipfs"
-	
+
 	// First try pkill with more specific pattern
 	cmd := exec.Command("pkill", "-f", fmt.Sprintf("ipfs.*--repo=%s.*daemon", ipfsRepo))
 	if err := cmd.Run(); err != nil {
 		sm.log.Debug("Specific pkill failed, trying general pattern", "error", err)
-		
+
 		// Try general pattern
 		cmd = exec.Command("pkill", "-f", "ipfs daemon")
 		if err := cmd.Run(); err != nil {
 			sm.log.Debug("pkill failed, trying killall", "error", err)
-		
-		// Try killall as fallback
-		cmd = exec.Command("killall", "-9", "ipfs")
-		if err := cmd.Run(); err != nil {
-			sm.log.Debug("killall failed, trying pgrep/kill", "error", err)
-			
-			// Last resort: find PID and kill directly
-			// Try to find with repo path first
-			cmd = exec.Command("pgrep", "-f", fmt.Sprintf("ipfs.*--repo=%s.*daemon", ipfsRepo))
-			output, err := cmd.Output()
-			if err != nil || len(output) == 0 {
-				// Fallback to general search
-				cmd = exec.Command("pgrep", "-f", "ipfs daemon")
-				output, err = cmd.Output()
-			}
-			if err != nil {
-				sm.log.Error("Failed to find IPFS process", "error", err)
-				return err
-			}
-			
-			pids := string(output)
-			if pids == "" {
-				sm.log.Info("No IPFS process found")
-				sm.core.SetIPFSState(false)
-				return nil
-			}
-			
-			// Kill each PID
-			for _, pid := range splitLines(pids) {
-				if pid == "" {
-					continue
+
+			// Try killall as fallback
+			cmd = exec.Command("killall", "-9", "ipfs")
+			if err := cmd.Run(); err != nil {
+				sm.log.Debug("killall failed, trying pgrep/kill", "error", err)
+
+				// Last resort: find PID and kill directly
+				// Try to find with repo path first
+				cmd = exec.Command("pgrep", "-f", fmt.Sprintf("ipfs.*--repo=%s.*daemon", ipfsRepo))
+				output, err := cmd.Output()
+				if err != nil || len(output) == 0 {
+					// Fallback to general search
+					cmd = exec.Command("pgrep", "-f", "ipfs daemon")
+					output, err = cmd.Output()
 				}
-				killCmd := exec.Command("kill", "-9", pid)
-				if err := killCmd.Run(); err != nil {
-					sm.log.Error("Failed to kill PID", "pid", pid, "error", err)
-				} else {
-					sm.log.Info("Killed IPFS process", "pid", pid)
+				if err != nil {
+					sm.log.Error("Failed to find IPFS process", "error", err)
+					return err
+				}
+
+				pids := string(output)
+				if pids == "" {
+					sm.log.Info("No IPFS process found")
+					sm.core.SetIPFSState(false)
+					return nil
+				}
+
+				// Kill each PID
+				for _, pid := range splitLines(pids) {
+					if pid == "" {
+						continue
+					}
+					killCmd := exec.Command("kill", "-9", pid)
+					if err := killCmd.Run(); err != nil {
+						sm.log.Error("Failed to kill PID", "pid", pid, "error", err)
+					} else {
+						sm.log.Info("Killed IPFS process", "pid", pid)
+					}
 				}
 			}
 		}
 	}
-	}
-	
+
 	sm.log.Info("IPFS process killed on Unix")
 	sm.core.SetIPFSState(false)
 	return nil
@@ -366,10 +374,10 @@ func (sm *ShutdownManager) FindIPFSProcess() (bool, int) {
 		// PID is stale, clear it
 		sm.core.ipfsPID = 0
 	}
-	
+
 	// If no PID stored, try to find by repo path
 	ipfsRepo := sm.core.cfg.DirPath + ".ipfs"
-	
+
 	switch runtime.GOOS {
 	case "windows":
 		// On Windows, we can't easily filter by working directory
@@ -382,7 +390,7 @@ func (sm *ShutdownManager) FindIPFSProcess() (bool, int) {
 			}
 		}
 		return false, 0
-		
+
 	case "linux", "darwin":
 		// Try to find with specific repo path
 		cmd := exec.Command("pgrep", "-f", fmt.Sprintf("ipfs.*--repo=%s.*daemon", ipfsRepo))
@@ -395,7 +403,7 @@ func (sm *ShutdownManager) FindIPFSProcess() (bool, int) {
 				return false, 0
 			}
 		}
-		
+
 		pidStr := strings.TrimSpace(string(output))
 		if pidStr == "" {
 			return false, 0
@@ -408,7 +416,7 @@ func (sm *ShutdownManager) FindIPFSProcess() (bool, int) {
 			return true, pid
 		}
 		return false, 0
-		
+
 	default:
 		return false, 0
 	}
@@ -419,18 +427,18 @@ func (sm *ShutdownManager) isProcessRunning(pid int) bool {
 	if pid <= 0 {
 		return false
 	}
-	
+
 	switch runtime.GOOS {
 	case "windows":
 		cmd := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid))
 		output, err := cmd.Output()
 		return err == nil && strings.Contains(string(output), fmt.Sprintf("%d", pid))
-		
+
 	case "linux", "darwin":
 		// kill -0 checks if process exists without actually sending a signal
 		cmd := exec.Command("kill", "-0", fmt.Sprintf("%d", pid))
 		return cmd.Run() == nil
-		
+
 	default:
 		return false
 	}
