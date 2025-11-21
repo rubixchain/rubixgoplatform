@@ -2576,17 +2576,18 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		// if event.TokenValue != 0 {
 		// 	syncedRBT.TokenValue = event.TokenValue
 		// }
-		// if receivedBlock.GenesisBlock != nil {
-		// 	tokenInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
-		// }
-		if receivedBlock.GenesisBlock != nil {
-			genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
-			if genesisBlockType == block.TokenMigratedType {
-				syncedRBT.TokenValue = event.TokenValue
-			} else {
-				syncedRBT.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
-			}
 
+		//If the token value is  zero, need to update
+		if syncedRBT.TokenValue == 0 {
+			if receivedBlock.GenesisBlock != nil {
+				genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
+				if genesisBlockType == block.TokenMigratedType {
+					syncedRBT.TokenValue = event.TokenValue
+				} else {
+					syncedRBT.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
+				}
+
+			}
 		}
 
 		err = c.w.UpdateSyncedRBTToTable(syncedRBT)
