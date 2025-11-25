@@ -134,91 +134,18 @@ func (s *Server) APIGetTxnAmountFromFullNode(req *ensweb.Request) *ensweb.Result
 	return s.BasicResponse(req, true, "Got transaction amount successfully", Tokens)
 }
 
-// func (s *Server) APIGetRBTFullTokenChain(req *ensweb.Request) *ensweb.Result {
-// 	TokenID := s.GetQuerry(req, "tokenID")
-// 	if TokenID == "" {
-// 		return s.BasicResponse(req, false, "Invalid input", nil)
-// 	}
-// 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
-// 	if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !is_alphanumeric {
-// 		s.log.Error("Invalid RBT token")
-// 		return s.BasicResponse(req, false, "Invalid FT token ID", nil)
-// 	}
-// 	getResp := s.c.GetRBTFullTokenchain(TokenID)
-// 	return s.RenderJSON(req, getResp, http.StatusOK)
-// }
-
-// func (s *Server) APIGetFTFullTokenChain(req *ensweb.Request) *ensweb.Result {
-// 	TokenID := s.GetQuerry(req, "tokenID")
-// 	if TokenID == "" {
-// 		return s.BasicResponse(req, false, "Invalid input", nil)
-// 	}
-// 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
-// 	if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !is_alphanumeric {
-// 		s.log.Error("Invalid FT token")
-// 		return s.BasicResponse(req, false, "Invalid FT token ID", nil)
-// 	}
-// 	getResp := s.c.GetFTFullTokenchain(TokenID)
-// 	return s.RenderJSON(req, getResp, http.StatusOK)
-// }
-
-// func (s *Server) APIGetRBTGenesisBlock(req *ensweb.Request) *ensweb.Result {
-// 	TokenID := s.GetQuerry(req, "tokenID")
-// 	if TokenID == "" {
-// 		return s.BasicResponse(req, false, "Invalid input", nil)
-// 	}
-// 	genesisBlock := s.c.GetRBTTokenGenesisBlock(TokenID)
-// 	// if err != nil {
-// 	// 	return s.BasicResponse(req, false, "Failed to get tokens by DID", nil)
-// 	// }
-// 	return s.BasicResponse(req, true, "Free RBTs fetched successfully", genesisBlock)
-// }
-
-// func (s *Server) APIGetFTGenesisBlock(req *ensweb.Request) *ensweb.Result {
-// 	TokenID := s.GetQuerry(req, "tokenID")
-// 	if TokenID == "" {
-// 		return s.BasicResponse(req, false, "Invalid input", nil)
-// 	}
-// 	genesisBlock := s.c.GetFTTokenGenesisBlock(TokenID)
-// 	// if err != nil {
-// 	// 	return s.BasicResponse(req, false, "Failed to get tokens by DID", nil)
-// 	// }
-// 	return s.BasicResponse(req, true, "Free RBTs fetched successfully", genesisBlock)
-// }
-
-// func (s *Server) APIGetRBTLatestBlock(req *ensweb.Request) *ensweb.Result {
-// 	TokenID := s.GetQuerry(req, "tokenID")
-// 	if TokenID == "" {
-// 		return s.BasicResponse(req, false, "Invalid input", nil)
-// 	}
-// 	Tokens := s.c.GetRBTLatestBlock(TokenID)
-// 	return s.BasicResponse(req, true, "Free RBTs fetched successfully", Tokens)
-// }
-
-// func (s *Server) APIGetFTLatestBlock(req *ensweb.Request) *ensweb.Result {
-// 	TokenID := s.GetQuerry(req, "tokenID")
-// 	if TokenID == "" {
-// 		return s.BasicResponse(req, false, "Invalid input", nil)
-// 	}
-// 	Tokens := s.c.GetFTLatestBlock(TokenID)
-// 	// if err != nil {
-// 	// 	return s.BasicResponse(req, false, "Failed to get tokens by DID", nil)
-// 	// }
-// 	return s.BasicResponse(req, true, "Free RBTs fetched successfully", Tokens)
-// }
-
-// func (s *Server) APIGetRBTLatestValidators(req *ensweb.Request) *ensweb.Result {
-// 	Tokens, err := s.c.GetTokensbyDID(DID)
-// 	if err != nil {
-// 		return s.BasicResponse(req, false, "Failed to get tokens by DID", nil)
-// 	}
-// 	return s.BasicResponse(req, true, "Free RBTs fetched successfully", Tokens)
-// }
-
-// func (s *Server) APIGetFTLatestValidators(req *ensweb.Request) *ensweb.Result {
-// 	Tokens, err := s.c.GetTokensbyDID(DID)
-// 	if err != nil {
-// 		return s.BasicResponse(req, false, "Failed to get tokens by DID", nil)
-// 	}
-// 	return s.BasicResponse(req, true, "Free RBTs fetched successfully", Tokens)
-// }
+func (s *Server) APIGetFullTokenChainHeight(req *ensweb.Request) *ensweb.Result {
+	tokenID := s.GetQuerry(req, "tokenID")
+	if tokenID == "" {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	tokenType := s.GetQuerry(req, "tokenType")
+	if tokenType == "" {
+		return s.BasicResponse(req, false, "Invalid input token type", nil)
+	}
+	BlockHeight, err := s.c.GetFullTokenChainHeight(tokenID, tokenType)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to get token chain height", nil)
+	}
+	return s.BasicResponse(req, true, "Got token chain height", BlockHeight)
+}

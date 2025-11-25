@@ -86,6 +86,11 @@ type RBTContent struct {
 	TokenID    string `gorm:"column:token_id;primaryKey"`
 	RBTContent string `gorm:"column:rbt_content"`
 }
+type FullNodeTokenHeight struct {
+	TokenID      string `gorm:"column:token_id"`      // RBT, FT, NFT
+	ContractHash string `gorm:"column:contract_hash"` // SC
+	BlockHeight  int    `gorm:"column:block_height"`
+}
 
 func (w *Wallet) CreateToken(t *Token) error {
 	return w.s.Write(TokenStorage, t)
@@ -2010,4 +2015,43 @@ func (w *Wallet) GetTxnAmountFromFullNode(txnID string) (*model.FullNodeTxnHisto
 	}
 
 	return txnAmountInfo, nil
+}
+
+func (w *Wallet) GetBlockHeightFromFullNode(tokenID, tokenType string) (int, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	var table, idColumn string
+
+	switch strings.ToUpper(tokenType) {
+	case "RBT":
+		table = FullNodeRBTTable
+		idColumn = "token_id"
+	case "FT":
+		table = FullNodeFTTable
+		idColumn = "token_id"
+	case "NFT":
+		table = FullNodeNFTTable
+		idColumn = "token_id"
+	case "SC":
+		table = FullNodeSmartContractTable
+		idColumn = "contract_hash"
+	default:
+		return 0, fmt.Errorf("invalid token type: %s", tokenType)
+	}
+
+	// Universal struct result (pointer-to-pointer for Read)
+	var row *FullNodeTokenHeight
+
+	// Perform DB read
+	err := w.fullNodeSQLDB.Read(table, &row, idColumn+"=?", tokenID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read token height: %v", err)
+	}
+
+	if row == nil {
+		return 0, fmt.Errorf("no record found for token %s in %s", tokenID, table)
+	}
+
+	return row.BlockHeight, nil
 }
