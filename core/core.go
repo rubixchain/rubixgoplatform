@@ -699,6 +699,7 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 		return nil, err
 	}
 
+	fmt.Printf("SetupForienDID: didStr=%s, detected DIDType=%d\n", didStr, *peerInfo.DIDType)
 	return c.InitialiseDID(didStr, *peerInfo.DIDType)
 }
 

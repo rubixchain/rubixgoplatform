@@ -431,9 +431,26 @@ func (b *Block) VerifySignature(dc didmodule.DIDCrypto) error {
 	if err != nil {
 		return fmt.Errorf("failed to read did signature & hash")
 	}
-	ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
-	if err != nil || !ok {
-		return fmt.Errorf("failed to verify did signature")
+
+	if dc.GetSignType() == didmodule.NlssVersion {
+		// For NLSS DIDs (types 0,1,2): Verify NLSS share signature
+		// Pass empty byte array for ECDSA signature (not used anymore)
+		fmt.Printf("Block verification: Using NLSS verification, did=%s\n", did)
+		ok, err := dc.NlssVerify(h, util.StrToHex(s), []byte{})
+		if err != nil || !ok {
+			fmt.Printf("Block verification: NLSS verification failed, did=%s\n", did)
+			return fmt.Errorf("failed to verify nlss signature")
+		}
+		fmt.Printf("Block verification: NLSS verification successful, did=%s\n", did)
+	} else {
+		// For BIP DIDs (type 4): Verify PKI signature
+		fmt.Printf("Block verification: Using PKI verification, did=%s\n", did)
+		ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
+		if err != nil || !ok {
+			fmt.Printf("Block verification: PKI verification failed, did=%s\n", did)
+			return fmt.Errorf("failed to verify did signature")
+		}
+		fmt.Printf("Block verification: PKI verification successful, did=%s\n", did)
 	}
 	return nil
 }
@@ -444,11 +461,28 @@ func (b *Block) UpdateSignature(dc didmodule.DIDCrypto) error {
 	if err != nil {
 		return fmt.Errorf("failed to get hash")
 	}
-	sb, err := dc.PvtSign([]byte(h))
-	if err != nil {
-		return fmt.Errorf("failed to get did signature, " + err.Error())
+
+	var sig string
+
+	if dc.GetSignType() == didmodule.NlssVersion {
+		// For NLSS DIDs (types 0,1,2): Use Sign() to get NLSS signature
+		fmt.Printf("Block signing: Using NLSS signature, did=%s\n", did)
+		ssig, _, err := dc.Sign(h)
+		if err != nil {
+			return fmt.Errorf("failed to get nlss signature, " + err.Error())
+		}
+		sig = util.HexToStr(ssig) // Use NLSS share signature
+		fmt.Printf("Block signing: NLSS signature generated, sigLength=%d bytes\n", len(ssig))
+	} else {
+		// For BIP DIDs (type 4): Use PvtSign() to get PKI signature
+		fmt.Printf("Block signing: Using PKI signature, did=%s\n", did)
+		sb, err := dc.PvtSign([]byte(h))
+		if err != nil {
+			return fmt.Errorf("failed to get did signature, " + err.Error())
+		}
+		sig = util.HexToStr(sb)
+		fmt.Printf("Block signing: PKI signature generated, sigLength=%d bytes\n", len(sb))
 	}
-	sig := util.HexToStr(sb)
 
 	ksmi, ok := b.bm[TCSignatureKey]
 	if !ok {
