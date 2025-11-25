@@ -629,10 +629,6 @@ func (c *Core) StopCore() {
 	if c.RetryTokenSyncTicker != nil {
 		c.RetryTokenSyncTicker.Stop()
 	}
-	err := wallet.ShutdownExplorerNotifications()
-	if err != nil {
-		c.log.Error("Graceful shutdown of Explorer notification failed")
-	}
 	// Perform graceful shutdown
 	if err := c.shutdownMgr.Shutdown(); err != nil {
 		c.log.Error("Shutdown completed with errors", "error", err)
