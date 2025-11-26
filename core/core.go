@@ -799,16 +799,29 @@ func (c *Core) GetPeerID() string {
 
 // Initializes the did in it's corresponding did mode (basic/ lite)
 func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) {
+	fmt.Printf("InitialiseDID: didStr=%s, didType=%d\n", didStr, didType)
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err
 	}
 	switch didType {
-	case did.LiteDIDMode:
-		return did.InitDIDLite(didStr, c.didDir, nil), nil
 	case did.BasicDIDMode:
+		fmt.Printf("InitialiseDID: Initializing BasicDID for %s\n", didStr)
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
+	case did.StandardDIDMode:
+		fmt.Printf("InitialiseDID: Initializing StandardDID for %s\n", didStr)
+		return did.InitDIDStandard(didStr, c.didDir, nil), nil
+	case did.WalletDIDMode:
+		fmt.Printf("InitialiseDID: Initializing WalletDID for %s\n", didStr)
+		return did.InitDIDWallet(didStr, c.didDir, nil), nil
+	case did.ChildDIDMode:
+		fmt.Printf("InitialiseDID: Initializing ChildDID for %s\n", didStr)
+		return did.InitDIDChild(didStr, c.didDir, nil), nil
+	case did.LiteDIDMode:
+		fmt.Printf("InitialiseDID: Initializing LiteDID for %s\n", didStr)
+		return did.InitDIDLite(didStr, c.didDir, nil), nil
 	default:
+		fmt.Printf("InitialiseDID: WARNING - Unknown DID type %d, defaulting to BasicDID for %s\n", didType, didStr)
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	}
 }

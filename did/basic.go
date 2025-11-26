@@ -101,11 +101,66 @@ func (d *DIDBasic) GetSignType() int {
 	return NlssVersion
 }
 
+// getSignature requests signature from external source (wallet/mobile app) via channel
+func (d *DIDBasic) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte, error) {
+	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
+		return nil, nil, fmt.Errorf("Invalid configuration, channel not available for external signing")
+	}
+	fmt.Printf("BasicDID.getSignature: Requesting external signature via channel\n")
+	sr := &SignResponse{
+		Status:  true,
+		Message: "Signature needed",
+		Result: SignReqData{
+			ID:          d.ch.ID,
+			Mode:        BasicDIDMode,
+			Hash:        hash,
+			OnlyPrivKey: onlyPrivKey,
+		},
+	}
+	d.ch.OutChan <- sr
+	var ch interface{}
+	select {
+	case ch = <-d.ch.InChan:
+	case <-time.After(d.ch.Timeout):
+		return nil, nil, fmt.Errorf("Timeout, failed to get signature")
+	}
+
+	srd, ok := ch.(SignRespData)
+	if !ok {
+		return nil, nil, fmt.Errorf("Invalid data received on the channel")
+	}
+	fmt.Printf("BasicDID signature received from external source: Pixels=%d bytes, ECDSA=%d bytes\n", len(srd.Signature.Pixels), len(srd.Signature.Signature))
+	return srd.Signature.Pixels, srd.Signature.Signature, nil
+}
+
 // Sign will return the singature of the DID
 func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 	fmt.Printf("BasicDID.Sign called: hash=%s (len=%d)\n", hash, len(hash))
-	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
+	// Check if pvtShare.png exists
+	pvtSharePath := d.dir + PvtShareFileName
+	if _, err := ioutil.ReadFile(pvtSharePath); err != nil {
+		// File doesn't exist or can't be read
+		fmt.Printf("BasicDID.Sign: pvtShare.png not found or inaccessible, attempting external signing\n")
+
+		// Try external signing via channel (like WalletDID)
+		if d.ch != nil && d.ch.InChan != nil && d.ch.OutChan != nil {
+			fmt.Printf("BasicDID.Sign: Using external signing (channel-based)\n")
+			bs, pvtKeySign, err := d.getSignature([]byte(hash), false)
+			if err != nil {
+				return nil, nil, fmt.Errorf("External signing failed: %v", err)
+			}
+			fmt.Printf("BasicDID Sign (external): NLSS=%d bytes, ECDSA=%d bytes\n", len(bs), len(pvtKeySign))
+			return bs, pvtKeySign, nil
+		}
+
+		// Neither local file nor channel available
+		return nil, nil, fmt.Errorf("Cannot sign: pvtShare.png not found and no external signing channel available")
+	}
+
+	// File exists, use local signing
+	fmt.Printf("BasicDID.Sign: Using local signing (file-based)\n")
+	byteImg, err := util.GetPNGImagePixels(pvtSharePath)
 	if err != nil {
 		fmt.Println(err)
 		return nil, nil, err
@@ -143,7 +198,7 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	fmt.Printf("BasicDID Sign: NLSS=%d bytes, ECDSA=%d bytes\n", len(bs), len(pvtKeySign))
+	fmt.Printf("BasicDID Sign (local): NLSS=%d bytes, ECDSA=%d bytes\n", len(bs), len(pvtKeySign))
 	return bs, pvtKeySign, err
 }
 
@@ -208,10 +263,32 @@ func (d *DIDBasic) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte)
 }
 
 func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
-	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
+	fmt.Printf("BasicDID.PvtSign called: hashLen=%d\n", len(hash))
+
+	// Check if pvtKey.pem exists
+	pvtKeyPath := d.dir + PvtKeyFileName
+	privKey, err := ioutil.ReadFile(pvtKeyPath)
 	if err != nil {
-		return nil, err
+		// File doesn't exist or can't be read
+		fmt.Printf("BasicDID.PvtSign: pvtKey.pem not found or inaccessible, attempting external signing\n")
+
+		// Try external signing via channel (like WalletDID)
+		if d.ch != nil && d.ch.InChan != nil && d.ch.OutChan != nil {
+			fmt.Printf("BasicDID.PvtSign: Using external signing (channel-based)\n")
+			_, pvtKeySign, err := d.getSignature(hash, true) // onlyPrivKey = true
+			if err != nil {
+				return nil, fmt.Errorf("External PKI signing failed: %v", err)
+			}
+			fmt.Printf("BasicDID PvtSign (external): ECDSA=%d bytes\n", len(pvtKeySign))
+			return pvtKeySign, nil
+		}
+
+		// Neither local file nor channel available
+		return nil, fmt.Errorf("Cannot sign: pvtKey.pem not found and no external signing channel available")
 	}
+
+	// File exists, use local signing
+	fmt.Printf("BasicDID.PvtSign: Using local signing (file-based)\n")
 	pwd, err := d.getPassword()
 	if err != nil {
 		return nil, err
@@ -224,6 +301,7 @@ func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("BasicDID PvtSign (local): ECDSA=%d bytes\n", len(pvtKeySign))
 	return pvtKeySign, nil
 }
 func (d *DIDBasic) PvtVerify(hash []byte, sign []byte) (bool, error) {
