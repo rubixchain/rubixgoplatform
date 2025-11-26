@@ -110,7 +110,9 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 		}
 		err := b.VerifySignature(dc)
 		if err != nil {
+			fmt.Printf("Block verification failed: signer=%s, signType=%d, err=%v\n", signer, dc.GetSignType(), err)
 			if dc.GetSignType() == did.NlssVersion {
+				fmt.Printf("NLSS verification failed, attempting fallback to LiteDID for signer=%s\n", signer)
 				peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
 				if !peerUpdateResult || err != nil {
 					liteDID := did.LiteDIDMode
@@ -120,6 +122,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					}
 					c.AddPeerDetails(signerInfo)
 				}
+				fmt.Printf("Retrying block verification with LiteDID for signer=%s\n", signer)
 				dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 				if err != nil {
 					c.log.Error("failed to setup foreign DID quorum", "err", err)
@@ -130,6 +133,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					c.log.Error("Failed to verify signature", "err", err)
 					return false, fmt.Errorf("failed to verify signature, err: %v", err)
 				}
+				fmt.Printf("Block verification successful after retry for signer=%s\n", signer)
 			} else {
 				c.log.Error("Failed to verify signature", "err", err)
 				return false, fmt.Errorf("failed to verify signature, err: %v", err)

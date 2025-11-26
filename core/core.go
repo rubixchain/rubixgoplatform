@@ -726,12 +726,26 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 		return nil, err
 	}
 
+	fmt.Printf("SetupForienDIDQuorum: didStr=%s, detected DIDType=%d\n", didStr, *peerInfo.DIDType)
+
 	switch *peerInfo.DIDType {
 	case did.BasicDIDMode:
+		fmt.Printf("SetupForienDIDQuorum: Initializing DIDQuorum for %s\n", didStr)
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.StandardDIDMode:
+		fmt.Printf("SetupForienDIDQuorum: Initializing DIDQuorum for StandardDID %s\n", didStr)
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.WalletDIDMode:
+		fmt.Printf("SetupForienDIDQuorum: Initializing DIDQuorum for WalletDID %s\n", didStr)
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.ChildDIDMode:
+		fmt.Printf("SetupForienDIDQuorum: Initializing DIDQuorum for ChildDID %s\n", didStr)
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.LiteDIDMode:
+		fmt.Printf("SetupForienDIDQuorum: Initializing DIDQuorumLite for %s\n", didStr)
 		return did.InitDIDQuorumLite(didStr, c.didDir, ""), nil
 	default:
+		fmt.Printf("SetupForienDIDQuorum: WARNING - Unknown DID type %d, defaulting to DIDQuorum for %s\n", *peerInfo.DIDType, didStr)
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	}
 }
