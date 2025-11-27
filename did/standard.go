@@ -86,7 +86,6 @@ func (d *DIDStandard) Sign(hash string) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	fmt.Printf("StandardDID Sign: NLSS=%d bytes, ECDSA=%d bytes\n", len(bs), len(pvtKeySign))
 	return bs, pvtKeySign, err
 }
 
@@ -121,31 +120,9 @@ func (d *DIDStandard) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []by
 	cb := nlss.Combine2Shares(nlss.ConvertBitString(pSig), nlss.ConvertBitString(pubStr))
 
 	db := nlss.ConvertBitString(didStr)
-
-	fmt.Printf("NlssVerify: pSigLen=%d, pubStrLen=%d, didStrLen=%d, cbLen=%d, dbLen=%d\n",
-		len(pSig), len(pubStr), len(didStr), len(cb), len(db))
-	fmt.Printf("NlssVerify: cb=%x\n", cb)
-	fmt.Printf("NlssVerify: db=%x\n", db)
-	fmt.Printf("NlssVerify: bytes.Equal(cb, db)=%v\n", bytes.Equal(cb, db))
-
 	if !bytes.Equal(cb, db) {
 		return false, fmt.Errorf("failed to verify")
 	}
-
-	//create a signature using the private key
-	//1. read and extrqct the private key
-	// pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
-	// if err != nil {
-	// 	return false, err
-	// }
-	// _, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
-	// if err != nil {
-	// 	return false, err
-	// }
-	// hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	// if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
-	// 	return false, fmt.Errorf("failed to verify private key singature")
-	// }
 	return true, nil
 }
 

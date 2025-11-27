@@ -321,13 +321,13 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	if c.testNet && c.defaultSetup {
 		c.AddFaucetQuorums()
 	}
-	
+
 	// Initialize token sync manager
 	c.tokenSyncManager = NewTokenSyncManager(c.log)
-	
+
 	// Initialize async pin manager with 4 workers by default
 	c.asyncPinManager = NewAsyncPinManager(c, 4)
-	
+
 	// Initialize performance tracker
 	perfConfig := &PerformanceConfig{
 		Enabled:        true, // TODO: Make this configurable
@@ -345,19 +345,19 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 
 	// Initialize transaction state manager
 	c.txStateMgr = NewTransactionStateManager(c)
-	
+
 	// Initialize rollback manager
 	c.rollbackMgr = NewRollbackManager(c, c.txStateMgr)
-	
+
 	// Initialize token pools for memory optimization
 	c.tokenPool = NewTokenInfoPool()
 	c.batchSyncTokenPool = NewBatchSyncTokenInfoPool()
 	c.tokenSlicePool = NewTokenSlicePool()
-	
+
 	// Initialize pending token monitor for self-healing
 	// Check every 5 minutes for tokens pending > 10 minutes
 	c.pendingTokenMonitor = NewPendingTokenMonitor(c, 5*time.Minute, 10*time.Minute)
-	
+
 	// Wrap storage with tracking if performance tracker is enabled
 	if c.perfTracker != nil && c.perfTracker.enabled && c.s != nil {
 		c.s = NewTrackedStorage(c.s, c)
@@ -365,7 +365,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			c.as = NewTrackedStorage(c.as, c)
 		}
 	}
-	
+
 	return c, nil
 }
 
@@ -413,10 +413,10 @@ func (c *Core) SetupCore() error {
 	// c.RestartIncompleteTokenChainSyncs()
 	//c.UnlockFTs()
 	// c.selfTransferService()
-	
+
 	// Start token sync cleanup routine
 	go c.tokenSyncCleanupRoutine()
-	
+
 	return nil
 }
 
@@ -487,19 +487,19 @@ func (c *Core) IPFSOperations() *IPFSOperations {
 // GetIPFSStats returns IPFS health and scalability statistics
 func (c *Core) GetIPFSStats() map[string]interface{} {
 	stats := make(map[string]interface{})
-	
+
 	if c.ipfsHealth != nil {
 		stats["health"] = c.ipfsHealth.GetStats()
 	}
-	
+
 	if c.ipfsScalability != nil {
 		stats["scalability"] = c.ipfsScalability.GetScalabilityStats()
 	}
-	
+
 	if c.ipfsRecovery != nil {
 		stats["recovery"] = c.ipfsRecovery.GetRecoveryStats()
 	}
-	
+
 	return stats
 }
 
@@ -508,7 +508,7 @@ func (c *Core) StopCore() {
 	if c.shutdownMgr == nil {
 		c.shutdownMgr = NewShutdownManager(c)
 	}
-	
+
 	// Perform graceful shutdown
 	if err := c.shutdownMgr.Shutdown(); err != nil {
 		c.log.Error("Shutdown completed with errors", "error", err)
@@ -601,7 +601,7 @@ func (c *Core) AddWebReq(req *ensweb.Request) {
 		Finish:  make(chan bool),
 		Req:     req,
 		Timeout: 3 * time.Minute,
-		
+
 		// Initialize password caching fields
 		CachedPassword: "",
 		PasswordSet:    false,
@@ -637,13 +637,13 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 	if !ok {
 		return nil
 	}
-	
+
 	// Clear cached password for security before removing request
 	req.PasswordMutex.Lock()
 	req.CachedPassword = ""
 	req.PasswordSet = false
 	req.PasswordMutex.Unlock()
-	
+
 	delete(c.webReq, reqID)
 	return req.Req
 }
@@ -726,26 +726,18 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 		return nil, err
 	}
 
-	fmt.Printf("SetupForienDIDQuorum: didStr=%s, detected DIDType=%d\n", didStr, *peerInfo.DIDType)
-
 	switch *peerInfo.DIDType {
 	case did.BasicDIDMode:
-		fmt.Printf("SetupForienDIDQuorum: Initializing DIDQuorum for %s\n", didStr)
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.StandardDIDMode:
-		fmt.Printf("SetupForienDIDQuorum: Initializing DIDQuorum for StandardDID %s\n", didStr)
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.WalletDIDMode:
-		fmt.Printf("SetupForienDIDQuorum: Initializing DIDQuorum for WalletDID %s\n", didStr)
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.ChildDIDMode:
-		fmt.Printf("SetupForienDIDQuorum: Initializing DIDQuorum for ChildDID %s\n", didStr)
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.LiteDIDMode:
-		fmt.Printf("SetupForienDIDQuorum: Initializing DIDQuorumLite for %s\n", didStr)
 		return did.InitDIDQuorumLite(didStr, c.didDir, ""), nil
 	default:
-		fmt.Printf("SetupForienDIDQuorum: WARNING - Unknown DID type %d, defaulting to DIDQuorum for %s\n", *peerInfo.DIDType, didStr)
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	}
 }
@@ -820,22 +812,16 @@ func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) 
 	}
 	switch didType {
 	case did.BasicDIDMode:
-		fmt.Printf("InitialiseDID: Initializing BasicDID for %s\n", didStr)
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	case did.StandardDIDMode:
-		fmt.Printf("InitialiseDID: Initializing StandardDID for %s\n", didStr)
 		return did.InitDIDStandard(didStr, c.didDir, nil), nil
 	case did.WalletDIDMode:
-		fmt.Printf("InitialiseDID: Initializing WalletDID for %s\n", didStr)
 		return did.InitDIDWallet(didStr, c.didDir, nil), nil
 	case did.ChildDIDMode:
-		fmt.Printf("InitialiseDID: Initializing ChildDID for %s\n", didStr)
 		return did.InitDIDChild(didStr, c.didDir, nil), nil
 	case did.LiteDIDMode:
-		fmt.Printf("InitialiseDID: Initializing LiteDID for %s\n", didStr)
 		return did.InitDIDLite(didStr, c.didDir, nil), nil
 	default:
-		fmt.Printf("InitialiseDID: WARNING - Unknown DID type %d, defaulting to BasicDID for %s\n", didType, didStr)
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	}
 }
@@ -870,7 +856,7 @@ func (c *Core) SetAsyncFTResponse(val bool) {
 func (c *Core) tokenSyncCleanupRoutine() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:

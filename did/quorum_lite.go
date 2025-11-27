@@ -153,43 +153,31 @@ func (d *DIDQuorumLite) PvtSign(hash []byte) ([]byte, error) {
 	return pvtKeySign, nil
 }
 func (d *DIDQuorumLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	fmt.Printf("QuorumLite.PvtVerify: did=%s, hashLen=%d, signLen=%d\n", d.did, len(hash), len(sign))
 
 	pubKeyPath := d.dir + PubKeyFileName
-	fmt.Printf("QuorumLite.PvtVerify: Reading pubKey from %s\n", pubKeyPath)
 	pubKey, err := ioutil.ReadFile(pubKeyPath)
 	if err != nil {
-		fmt.Printf("QuorumLite.PvtVerify: Failed to read pubKey file: %v\n", err)
 		return false, err
 	}
-	fmt.Printf("QuorumLite.PvtVerify: Read %d bytes from pubKey file\n", len(pubKey))
 
 	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKey)
 	if err != nil {
-		fmt.Printf("QuorumLite.PvtVerify: Failed to decode BIP key pair: %v\n", err)
 		return false, err
 	}
-	fmt.Printf("QuorumLite.PvtVerify: Decoded pubKeyByte, len=%d\n", len(pubKeyByte))
 
 	pubkeyback, err := secp256k1.ParsePubKey(pubKeyByte)
 	if err != nil {
-		fmt.Printf("QuorumLite.PvtVerify: Failed to parse public key: %v\n", err)
 		return false, fmt.Errorf("failed to parse public key: %v", err)
 	}
 	if pubkeyback == nil {
-		fmt.Printf("QuorumLite.PvtVerify: ParsePubKey returned nil without error\n")
 		return false, fmt.Errorf("public key is nil after parsing")
 	}
-	fmt.Printf("QuorumLite.PvtVerify: Successfully parsed public key\n")
 
 	pubKeySer := pubkeyback.ToECDSA()
-	fmt.Printf("QuorumLite.PvtVerify: Converted to ECDSA key\n")
 
 	if !crypto.BIPVerify(pubKeySer, hash, sign) {
-		fmt.Printf("QuorumLite.PvtVerify: BIP verification failed\n")
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
-	fmt.Printf("QuorumLite.PvtVerify: BIP verification successful\n")
 	return true, nil
 }
 

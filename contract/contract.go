@@ -396,13 +396,10 @@ func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
 	if err != nil {
 		return fmt.Errorf("Failed to get hash of smart contract, " + err.Error())
 	}
-	fmt.Printf("Contract signing: hash=%s (len=%d)\n", hash, len(hash))
 	ssig, psig, err := dc.Sign(hash)
 	if err != nil {
 		return fmt.Errorf("Failed to get signature, " + err.Error())
 	}
-	fmt.Printf("Contract signing: did=%s, ssig=%d bytes, psig=%d bytes, ssigHex=%d chars\n",
-		did, len(ssig), len(psig), len(util.HexToStr(ssig)))
 
 	if c.sm[SCShareSignatureKey] == nil {
 		ksm := make(map[string]interface{})
@@ -454,41 +451,38 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	hs, ss, ps, err := c.GetHashSig(didstr)
 	if err != nil {
 		c.log.Error("GetHashSig failed", "err", err)
-		fmt.Printf("Contract verification: GetHashSig failed, did=%s, err=%v\n", didstr, err)
 		return err
 	}
 
 	//If the ss i.e., share signature is empty, then its a Pki sign, so call PvtVerify
 	//Else it is NLSS based sign, so call NlssVerify
 	didType := dc.GetSignType()
-	fmt.Printf("Contract verification: hash=%s (len=%d)\n", hs, len(hs))
-	fmt.Printf("Contract verification: did=%s, signType=%d, ssLen=%d, psLen=%d\n", didstr, didType, len(ss), len(ps))
 
 	if didType == did.BIPVersion {
-		fmt.Printf("Contract verification: Using PKI verification\n")
+		c.log.Info("Contract verification: Using PKI verification\n")
 		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
 
 		if err != nil {
-			fmt.Printf("Contract verification: PKI verification error: %v\n", err)
+			c.log.Error("Contract verification: PKI verification error: %v\n", err)
 			return err
 		}
 		if !ok {
-			fmt.Printf("Contract verification: PKI verification returned false\n")
+			c.log.Error("Contract verification: PKI verification returned false\n")
 			return fmt.Errorf("did Pki signature verification failed")
 		}
-		fmt.Printf("Contract verification: PKI verification successful\n")
+		c.log.Info("Contract verification: PKI verification successful\n")
 	} else {
-		fmt.Printf("Contract verification: Using NLSS verification\n")
+		c.log.Info("Contract verification: Using NLSS verification\n")
 		ok, err := dc.NlssVerify(hs, util.StrToHex(ss), util.StrToHex(ps))
 		if err != nil {
-			fmt.Printf("Contract verification: NLSS verification error: %v\n", err)
+			c.log.Error("Contract verification: NLSS verification error: %v\n", err)
 			return err
 		}
 		if !ok {
-			fmt.Printf("Contract verification: NLSS verification returned false\n")
+			c.log.Error("Contract verification: NLSS verification returned false\n")
 			return fmt.Errorf("did Nlss signature verification failed")
 		}
-		fmt.Printf("Contract verification: NLSS verification successful\n")
+		c.log.Info("Contract verification: NLSS verification successful\n")
 	}
 
 	return nil
