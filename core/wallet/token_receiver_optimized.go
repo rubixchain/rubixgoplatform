@@ -89,12 +89,13 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 		"count", len(ti),
 		"duration", time.Since(addStart))
 
-	// Phase 2: Identify tokens that need to be downloaded
+	// Phase 2: Identify tokens that need to be downloaded and update existing tokens
 	getRequests := make([]GetRequest, 0)
 	tokenIndexMap := make(map[string]int) // Map token ID to its index in ti
 	downloadDirs := make([]string, 0)
-	
+
 	checkStart := time.Now()
+	existingTokensUpdated := 0
 	for i, tokenInfo := range ti {
 		// Check if token already exists
 		var t Token
@@ -103,7 +104,7 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 			// Token doesn't exist, need to download
 			dir := util.GetRandString()
 			if err := util.CreateDir(dir); err != nil {
-				w.log.Error("Failed to create directory", 
+				w.log.Error("Failed to create directory",
 					"dir", dir,
 					"error", err)
 				// Cleanup previously created dirs
@@ -113,7 +114,7 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 				return nil, fmt.Errorf("failed to create directory: %v", err)
 			}
 			downloadDirs = append(downloadDirs, dir)
-			
+
 			getRequests = append(getRequests, GetRequest{
 				Hash:  tokenInfo.Token,
 				DID:   did,
@@ -122,11 +123,54 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 				Index: i,
 			})
 			tokenIndexMap[tokenInfo.Token] = i
+		} else {
+			// Token already exists (self-transfer case)
+			// Update it with new transaction details and set to pending
+			tokenStatus := TokenIsPending
+			role := OwnerRole
+			ownerdid := did
+			if pinningServiceMode {
+				tokenStatus = TokenIsPinnedAsService
+				role = PinningRole
+				ownerdid = b.GetOwner()
+			}
+
+			t.DID = ownerdid
+			t.TokenStatus = tokenStatus
+			t.TransactionID = b.GetTid()
+			t.TokenStateHash = tokenHashMap[tokenInfo.Token]
+			t.SyncStatus = SyncIncomplete
+
+			err = w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token)
+			if err != nil {
+				w.log.Error("Failed to update existing token",
+					"token", tokenInfo.Token,
+					"error", err)
+				// Cleanup previously created dirs
+				for _, d := range downloadDirs {
+					os.RemoveAll(d)
+				}
+				return nil, fmt.Errorf("failed to update existing token %s: %v", tokenInfo.Token, err)
+			}
+
+			// Pin the token with new transaction details
+			senderAddress := senderPeerId + "." + b.GetSenderDID()
+			receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
+			_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
+			if err != nil {
+				w.log.Error("Failed to pin existing token",
+					"token", tokenInfo.Token,
+					"error", err)
+				// Continue - pin failure shouldn't stop the transaction
+			}
+
+			existingTokensUpdated++
 		}
 	}
-	
-	w.log.Info("Token existence check completed", 
+
+	w.log.Info("Token existence check completed",
 		"existing_tokens", len(ti)-len(getRequests),
+		"existing_tokens_updated", existingTokensUpdated,
 		"tokens_to_download", len(getRequests),
 		"duration", time.Since(checkStart))
 
