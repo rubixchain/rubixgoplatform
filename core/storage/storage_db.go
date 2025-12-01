@@ -73,3 +73,7 @@ func (s *StorageDB) Close() error {
 func (s *StorageDB) Drop(storageName string, value interface{}) error {
 	return s.ad.DropTable(storageName, value)
 }
+
+func (s *StorageDB) RawDB() interface{} {
+	return s.ad.GetDB()
+}

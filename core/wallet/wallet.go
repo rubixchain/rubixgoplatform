@@ -39,6 +39,7 @@ const (
 	FullNodeFTTable                string = "FullnodeFTtable"
 	FullNodeNFTTable               string = "FullnodeNFTtable"
 	FullNodeSmartContractTable     string = "FullnodeSCtable"
+	FullNodeBlockHashTable         string = "FullnodeBlockHashTable"
 	FullNodeTxnHistoryTable        string = "FullnodeTxnHistoryTable"
 	FailedTxnsTable                string = "FailedTxns"
 	FullNodeFailedToSyncTokens     string = "FullnodeFailedTokensTable"
@@ -253,6 +254,17 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 		err = w.fullNodeSQLDB.Init(FullNodeSmartContractTable, &SyncedSmartContract{}, true)
 		if err != nil {
 			w.log.Error("Failed to initialize fullnode smart contract token storage", "err", err)
+			return nil, err
+		}
+
+		err = w.fullNodeSQLDB.Init(FullNodeBlockHashTable, &ReceivedBlockHash{}, true)
+		if err != nil {
+			w.log.Error("Failed to initialize RBT token storage", "err", err)
+			return nil, err
+		}
+		// Create triggers after tables exist
+		if err := w.setupTriggers(); err != nil {
+			w.log.Error("Failed to create triggers", "err", err)
 			return nil, err
 		}
 

@@ -1522,6 +1522,7 @@ func (w *Wallet) AddSyncedNFTToTable(t *SyncedNFT) error {
 	return err
 }
 
+// This function is used by fullnode to write all synced smart contract to sqlite table
 func (w *Wallet) AddSyncedSmartContractToTable(t *SyncedSmartContract) error {
 	w.l.Lock()
 	err := w.fullNodeSQLDB.Write(FullNodeSmartContractTable, t)
@@ -1531,6 +1532,17 @@ func (w *Wallet) AddSyncedSmartContractToTable(t *SyncedSmartContract) error {
 		w.notifyTokenUpdate(FullNodeSmartContractTable, t, "CREATE")
 	}
 	return err
+}
+
+func (w *Wallet) AddTokenToBlockHashTable(blockHashDetail *ReceivedBlockHash) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.fullNodeSQLDB.Write(FullNodeBlockHashTable, blockHashDetail)
+	if err != nil {
+		w.log.Error("Failed to add blockhash details to FullNodeBlockHashTable, error: ", err)
+	}
+	return err
+
 }
 
 func (w *Wallet) AddFailedTokensToTable(t *model.FailedToSyncTokenDetailsInfo) error {
@@ -1604,13 +1616,40 @@ func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedT
 	var token model.FailedToSyncTokenDetailsInfo
 	err := w.fullNodeSQLDB.Read(FullNodeFailedToSyncTokens, &token, "token_id=?", tokenID)
 	if err != nil {
-		w.log.Warn("Failed to get sc", "err", err)
+		w.log.Warn("Failed to get FailedToSyncTokenDetailsInfo", "err", err)
 		return nil, err
 	}
 	return &token, nil
 }
 
-// DeleteFailedToSyncTokenFromTable - Delete operation with notification to explorer
+// This function gives all the block hashes which are added into the table within the specified hour
+func (w *Wallet) ReadBlocksForEpoch(epoch string) ([]ReceivedBlockHash, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	var blockHashes []ReceivedBlockHash
+
+	// Epoch input format expected: "2006-01-02T15"
+	// Convert to start and end timestamps
+	start := epoch + ":00:00"
+	end := epoch + ":59:59"
+
+	// SQLite datetime format uses "YYYY-MM-DD HH:MM:SS"
+	// Replace "T" with space for valid comparison
+	start = strings.Replace(start, "T", " ", 1)
+	end = strings.Replace(end, "T", " ", 1)
+
+	query := fmt.Sprintf(`created_at BETWEEN '%s' AND '%s'`, start, end)
+
+	err := w.fullNodeSQLDB.Read(FullNodeBlockHashTable, &blockHashes, query)
+	if err != nil {
+		w.log.Warn("Failed to read entries from FullNodeBlockHashTable for epoch", "epoch", epoch, "err", err)
+		return nil, err
+	}
+
+	return blockHashes, nil
+}
+
 func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
 	w.log.Debug("Calling DeleteFailedToSyncTokenFromTable for token:", tokenID)
 

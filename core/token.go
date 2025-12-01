@@ -100,6 +100,7 @@ func (c *Core) SetupToken() {
 	c.l.AddRoute(APIUpdateStatus, "PUT", c.updateStatus)
 	c.l.AddRoute(APIGetTokenStatus, "GET", c.getTokenStatus)
 	c.l.AddRoute(setup.APIRecoverLostTokens, "POST", c.recoverLostTokensHandler)
+	c.l.AddRoute(APIGetAllRemoteChildrenBlockHashes,"GET",c.GetRemoteChildrenBlockHashes)
 }
 
 func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {

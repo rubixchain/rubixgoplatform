@@ -1,8 +1,13 @@
 package core
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -10,7 +15,27 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
+
+type MerkleRootPayload struct {
+	PublisherPeerID string `json:"peer_id"`
+	Epoch           string `json:"epoch"`       // hour-based timestamp for grouping
+	MerkleRoot      string `json:"merkle_root"` // computed root
+	Count           int    `json:"count"`       // number of block hashes included
+	Timestamp       int64  `json:"timestamp"`   // unix time when published
+}
+
+type GetRemoteChildrenReq struct {
+	Epoch string `json:"epoch"`
+	Level int    `json:"level"`
+	Index int    `json:"index"`
+}
+type GetRemoteChildrenReply struct {
+	Status      bool     `json:"status"`
+	Message     string   `json:"message"`
+	ChildHashes []string `json:"child_hashes"`
+}
 
 // Enhanced subscription setup with error handling
 func (c *Core) SubscribeTxnSetup() {
@@ -601,6 +626,310 @@ func (c *Core) RetryFailedTOSyncTokens() error {
 	}
 
 	return nil
+}
+
+// ---- Domain separated Hashing ----
+
+// Leaf: hash with prefix 0x00
+func hashLeaf(data []byte) []byte {
+	h := sha256.New()
+	h.Write([]byte{0x00})
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+// Internal node: hash with prefix 0x01 and up to 4 children
+func hashNode(children ...[]byte) []byte {
+	h := sha256.New()
+	h.Write([]byte{0x01})
+	for _, c := range children {
+		h.Write(c)
+	}
+	return h.Sum(nil)
+}
+
+// EMPTY value for padding children
+var EMPTY_HASH = hashLeaf(nil)
+
+// ---- Arity-4 Merkle Root Calculation ----
+
+func ComputeArity4MerkleRoot(blockHashes []string) (string, error) {
+
+	// Convert hex → raw bytes and normalize input
+	leaves := make([][]byte, 0, len(blockHashes))
+	for _, bh := range blockHashes {
+		b, err := hex.DecodeString(bh)
+		if err != nil {
+			return "", err
+		}
+		leaves = append(leaves, hashLeaf(b))
+	}
+
+	// If no blocks → return empty leaf hash
+	if len(leaves) == 0 {
+		return hex.EncodeToString(EMPTY_HASH), nil
+	}
+
+	// Sort lexicographically (VERY IMPORTANT for determinism)
+	sort.Slice(leaves, func(i, j int) bool {
+		return bytes.Compare(leaves[i], leaves[j]) < 0
+	})
+
+	// Build tree bottom-up in arity-4 layers
+	currentLevel := leaves
+
+	for len(currentLevel) > 1 {
+		nextLevel := [][]byte{}
+
+		for i := 0; i < len(currentLevel); i += 4 {
+			// Collect up to 4 children
+			c1 := currentLevel[i]
+
+			var c2, c3, c4 []byte = EMPTY_HASH, EMPTY_HASH, EMPTY_HASH
+
+			if i+1 < len(currentLevel) {
+				c2 = currentLevel[i+1]
+			}
+			if i+2 < len(currentLevel) {
+				c3 = currentLevel[i+2]
+			}
+			if i+3 < len(currentLevel) {
+				c4 = currentLevel[i+3]
+			}
+
+			parent := hashNode(c1, c2, c3, c4)
+			nextLevel = append(nextLevel, parent)
+		}
+
+		currentLevel = nextLevel
+	}
+
+	// Final element is the Merkle Root
+	return hex.EncodeToString(currentLevel[0]), nil
+}
+
+// This will compute the merkle root of all the block_hashes which it received in the last one hour
+func (c *Core) ComputeLatestMerkleRoot() (string, error) {
+	prevEpoch := time.Now().Add(-1 * time.Hour).Format("2006-01-02T15") //we need last one hour's block_hashes, so we are passing the previous hour's epoch
+	records, err := c.w.ReadBlocksForEpoch(prevEpoch)
+	if err != nil {
+		return "", err
+	}
+	blockHashes := make([]string, len(records))
+	for i, record := range records {
+		blockHashes[i] = record.BlockHash
+	}
+
+	return ComputeArity4MerkleRoot(blockHashes)
+
+}
+
+func (c *Core) PublishMerkleRoot() error {
+
+	// Step 1: Fetch previous 1hour blockhash entries
+	prevEpoch := time.Now().Add(-1 * time.Hour).Format("2006-01-02T15") //we need last one hour's block_hashes, so we are passing the previous hour's epoch
+	records, err := c.w.ReadBlocksForEpoch(prevEpoch)
+	if err != nil {
+		c.log.Error("Failed to read blocks for Merkle computation", "err", err)
+		return err
+	}
+
+	// Step 2: Extract blockhash strings
+	blockHashes := make([]string, len(records))
+	for i, r := range records {
+		blockHashes[i] = r.BlockHash
+	}
+
+	// Step 3: Compute Merkle Root
+	root, err := ComputeArity4MerkleRoot(blockHashes)
+	if err != nil {
+		c.log.Error("Failed computing Merkle root", "err", err)
+		return err
+	}
+
+	// Step 4: Prepare payload
+	payload := MerkleRootPayload{
+		PublisherPeerID: c.peerID,
+		Epoch:           prevEpoch, //Epoch for which we have computed the merkle root
+		MerkleRoot:      root,
+		Count:           len(blockHashes),
+		Timestamp:       time.Now().Unix(),
+	}
+
+	c.log.Info("Publishing Merkle root", "root", root, "count", len(blockHashes))
+
+	// Step 5: Publish to pubsub topic
+	return c.ps.Publish("merkle_root", payload)
+}
+
+// StartMerkleRootSubscriber subscribes to the "merkle_root" pubsub topic
+// and forwards decoded messages to handleMerkleRootMessage.
+func (c *Core) StartMerkleRootSubscriber() error {
+	return c.ps.SubscribeTopic("merkle_root", func(fromPeerID string, topic string, data []byte) {
+		var payload MerkleRootPayload
+
+		if err := json.Unmarshal(data, &payload); err != nil {
+			c.log.Error("Failed to unmarshal merkle_root payload", "err", err)
+			return
+		}
+
+		// If PublisherPeerID is not set in payload, fall back to pubsub sender
+		if payload.PublisherPeerID == "" {
+			payload.PublisherPeerID = fromPeerID
+		}
+
+		// Ignore messages published by myself (optional but usually desired)
+		if payload.PublisherPeerID == c.peerID {
+			return
+		}
+
+		c.handleMerkleRootMessage(payload)
+	})
+}
+
+func (c *Core) handleMerkleRootMessage(remote MerkleRootPayload) {
+	// Ignore if message from me
+	if remote.PublisherPeerID == c.peerID {
+		return
+	}
+
+	// Ensure epoch matches my working window
+	// myEpoch := time.Now().Format("2006-01-02T15")
+	// if remote.Epoch != myEpoch {
+	// 	c.log.Info("Ignoring Merkle root for different epoch", "remote", remote.Epoch, "local", myEpoch)
+	// 	return
+	// }
+
+	myRoot, err := c.ComputeLatestMerkleRoot()
+	if err != nil {
+		c.log.Error("Failed computing local Merkle root", "err", err)
+		return
+	}
+
+	if myRoot == remote.MerkleRoot {
+		c.log.Info("Merkle matched. Already in sync with peer", "peer", remote.PublisherPeerID)
+		return
+	}
+
+	c.log.Warn("Merkle mismatch — starting reconciliation from the peer: ", remote.PublisherPeerID)
+
+	//finding the missing block_hashes when compared to the remote publisher
+	missing := c.reconcileWithPeer(remote)
+	if len(missing) > 0 {
+		c.log.Warn("Missing hashes discovered", "count", len(missing))
+		// _ = c.fetchBlocks(remote.PublisherPeerID, missing)
+	}
+}
+
+// If remoteRoot doesn't match with localRoot for a particular hour the following function will get called
+func (c *Core) reconcileWithPeer(payload MerkleRootPayload) []string {
+	missing := []string{}
+	compareQueue := []struct {
+		level int
+		index int
+	}{{0, 0}} // start at root
+
+	// remoteRoot, err := c.remoteGetNode(payload.PublisherPeerID, , 0, 0)
+	// if err != nil {
+	// 	return missing
+	// }
+	remoteRoot := payload.MerkleRoot
+
+	// Compute local tree leaf + internal structure in memory ONCE
+	localTree := c.w.BuildMerkleStructForComparison(payload.Epoch)
+
+	if localTree.Root() == remoteRoot {
+		return missing
+	}
+
+	// BFS tree walk
+	for len(compareQueue) > 0 {
+		item := compareQueue[0]
+		compareQueue = compareQueue[1:]
+
+		localChildren := localTree.GetChildren(item.level, item.index)
+		remoteChildren, err := c.remoteGetNode(payload.PublisherPeerID, payload.Epoch, item.level, item.index)
+		if err != nil {
+			continue
+		}
+
+		// compare children in arity-4 manner
+		for i := 0; i < 4; i++ {
+			if remoteChildren[i] == "" {
+				continue
+			}
+
+			if localChildren[i] == remoteChildren[i] {
+				continue
+			}
+
+			// If next level is leaf level → collect missing
+			if localTree.IsLeaf(item.level - 1) {
+				missing = append(missing, remoteChildren[i])
+			} else {
+				compareQueue = append(compareQueue, struct{ level, index int }{item.level - 1, item.index*4 + i})
+			}
+		}
+	}
+
+	return missing
+}
+
+// func (c *Core) fetchBlocks(peerID string, leafHashes []string) error {
+// 	for _, h := range leafHashes {
+// 		// call existing block request API from peer
+// 		err := c.requestBlockFromPeer(peerID, h)
+// 		if err != nil {
+// 			c.log.Error("Failed fetching block", "hash", h, "from", peerID, "err", err)
+// 		}
+// 	}
+// 	return nil
+// }
+
+func (c *Core) remoteGetNode(peerID, epoch string, level, index int) ([]string, error) {
+	// url := fmt.Sprintf("/merkle/children?epoch=%s&level=%d&index=%d", epoch, level, index)
+	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
+	if err != nil {
+		c.log.Error("Failed to get peer connection", "err", err)
+		return nil, err
+	}
+	req := GetRemoteChildrenReq{
+		Epoch: epoch,
+		Level: level,
+		Index: index,
+	}
+	var rep GetRemoteChildrenReply
+	err = p.SendJSONRequest("GET", APIGetAllRemoteChildrenBlockHashes, nil, &req, &rep, false)
+	//c.log.Debug("syncTokenChainFrom: Sent sync request", "request", syncReq)
+	if err != nil {
+		c.log.Error("Failed to get remote children block hashes", "err", err)
+		return nil, err
+	}
+
+	return rep.ChildHashes, nil
+}
+
+func (c *Core) GetRemoteChildrenBlockHashes(req *ensweb.Request) *ensweb.Result {
+	var request GetRemoteChildrenReq
+
+	// Parse request
+	if err := c.l.ParseJSON(req, &request); err != nil {
+		c.log.Warn("Failed to parse request", "error", err)
+		return c.l.RenderJSON(req, &GetRemoteChildrenReply{
+			Status:  false,
+			Message: "Failed to parse request",
+		}, http.StatusBadRequest)
+	}
+	var response GetRemoteChildrenReply
+	localTree := c.w.BuildMerkleStructForComparison(request.Epoch)
+	localChildren := localTree.GetChildren(request.Level, request.Index)
+	response.Message = "sucessfully sent the child hashes"
+	return c.l.RenderJSON(req, &GetRemoteChildrenReply{
+		Status:      true,
+		Message:     response.Message,
+		ChildHashes: localChildren,
+	}, http.StatusOK)
+
 }
 
 // This function process incoming transaction history details and add it to Fullnode transaction history table
