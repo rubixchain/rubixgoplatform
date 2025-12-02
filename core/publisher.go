@@ -51,10 +51,7 @@ func (c *Core) PublishTokenChainDetailsEvent(tokenDetails []model.SendTokenDetai
 		time.Sleep(delayInPublishingTCDetails)
 	}
 
-	// ----------------------------Publishing  TXN HISTORY to the same pubsub------------------------------
-	// c.publishTransactionHistory()
-
-	c.log.Info("***All batches of token details got published****")
+	c.log.Info("All batches of token details got published")
 }
 
 func (c *Core) PublishTransactionHistory() {
