@@ -87,7 +87,8 @@ type ConensusRequest struct {
 	NFT                string       `json:"nft"`
 	FTinfo             model.FTInfo `json:"ft_info"`
 	// TransTokenSyncInfo map[string]GenesisAndLatestBlocks `json:"tokens_sync_info"`
-	ExplorerDone chan struct{} `json:"-"` // Channel to signal explorer submission completion
+	ExplorerDone      chan struct{} `json:"-"` // Channel to signal explorer submission completion
+	XellMigrationMode bool          `json:"xell_migration"`
 }
 
 type ConensusReply struct {
@@ -948,6 +949,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			Epoch:           int64(cr.TransactionEpoch),
 		}
 
+		// to filter out migration transactions in xell wallet
+		if cr.XellMigrationMode {
+			td.Mode = wallet.SelfTransferMode
+		}
+
 		go func() {
 			err = c.initiateUnpledgingProcess(cr, td.TransactionID, td.Epoch)
 			if err != nil {
@@ -1389,6 +1395,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			DateTime:        time.Now(),
 			Status:          true,
 			Epoch:           int64(cr.TransactionEpoch),
+		}
+
+		// xell migration
+		if cr.XellMigrationMode {
+			td.Mode = wallet.SelfTransferMode
 		}
 		// publish txn
 		publishingTxn.AssetType = FTTokenType
@@ -2844,6 +2855,12 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	if cr.Mode == DTCommitMode {
 		tcb.TransactionType = block.TokenCommittedType
 	}
+
+	// token being transferred from old DID to new DID of user
+	if cr.XellMigrationMode {
+		tcb.TransactionType = block.TokenSelfTransferredType
+	}
+
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
 		c.log.Error("Failed to create new token chain block - qrm init")

@@ -9,14 +9,15 @@ type CreateFTReq struct {
 }
 
 type TransferFTReq struct {
-	Receiver   string `json:"receiver"`
-	Sender     string `json:"sender"`
-	FTName     string `json:"ft_name"`
-	FTCount    int    `json:"ft_count"`
-	Comment    string `json:"comment"`
-	QuorumType int    `json:"quorum_type"`
-	Password   string `json:"password"`
-	CreatorDID string `json:"creatorDID"`
+	Receiver      string `json:"receiver"`
+	Sender        string `json:"sender"`
+	FTName        string `json:"ft_name"`
+	FTCount       int    `json:"ft_count"`
+	Comment       string `json:"comment"`
+	QuorumType    int    `json:"quorum_type"`
+	Password      string `json:"password"`
+	CreatorDID    string `json:"creatorDID"`
+	XellMigration bool   `json:"xell_migration"`
 }
 
 type GetFTInfo struct {

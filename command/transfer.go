@@ -65,6 +65,7 @@ func (cmd *Command) TransferRBT() {
 		TokenCount: cmd.rbtAmount,
 		Type:       cmd.transType,
 		Comment:    cmd.transComment,
+		XellMigration: cmd.xellMigration,
 	}
 
 	br, err := cmd.c.TransferRBT(&rt)

@@ -17,6 +17,7 @@ type RBTTransferRequest struct {
 	Comment    string  `json:"comment"`
 	Type       int     `json:"type"`
 	Password   string  `json:"password"`
+	XellMigration bool `json:"xell_migration"`
 }
 
 type RBTPinRequest struct {

@@ -364,6 +364,7 @@ type Command struct {
 	pgsqlDBName                  string
 	pgsqlDBUserName              string
 	pgsqlDBPassword              string
+	xellMigration                bool
 }
 
 func showVersion() {
@@ -771,6 +772,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pgsqlDBName, "pgsqlDBName", "", "Postgress Tokens database name")
 	flag.StringVar(&cmd.pgsqlDBUserName, "pgsqlDBUserName", "myuser", "Postgress Tokens Database username")
 	flag.StringVar(&cmd.pgsqlDBPassword, "pgsqlDBPassword", "mypassword", "Postgress Tokens Database password")
+	flag.BoolVar(&cmd.xellMigration, "xellmigration", false, "dump tokenchain from fullnode storage")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")
