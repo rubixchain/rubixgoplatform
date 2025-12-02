@@ -597,14 +597,7 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("Failed to create server")
 		return
 	}
-	if cmd.publishTokenChainDetails {
-		c.PublishTCDetails()
-	}
-	if cmd.fullNode {
-		cmd.log.Info("**calling SubscribeTCDetails & StartMerkleRootSubscriber functions***")
-		c.SubscribeTCDetails()
-		c.StartMerkleRootSubscriber()
-	}
+
 	s.EnableSWagger(cmd.getURL(s.GetServerURL()))
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
@@ -612,12 +605,6 @@ func (cmd *Command) runApp() {
 
 	// Start the pending token monitor for self-healing
 	c.StartPendingTokenMonitor()
-
-	// Start background job: retry failed-to-sync tokens every 1 hour
-	if cmd.fullNode {
-		c.RetryFailedTokenSync()
-		c.StartMerkleRootPublisher()
-	}
 
 	cmd.log.Info("Syncing Details...")
 	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
@@ -633,13 +620,14 @@ func (cmd *Command) runApp() {
 		c.PublishTCDetails()
 	}
 	if cmd.fullNode {
-		cmd.log.Info("**calling SubscribeTCDetails function***")
+		cmd.log.Info("**calling SubscribeTCDetails & StartMerkleRootSubscriber functions***")
 		c.SubscribeTCDetails()
+		c.StartMerkleRootSubscriber()
 	}
-
 	// Start background job: retry failed-to-sync tokens every 1 hour
 	if cmd.fullNode {
 		c.RetryFailedTokenSync()
+		c.StartMerkleRootPublisher()
 	}
 
 	ch := make(chan os.Signal, 1)
