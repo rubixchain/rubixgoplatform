@@ -1601,8 +1601,6 @@ func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedT
 
 // DeleteFailedToSyncTokenFromTable - Delete operation with notification to explorer
 func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
-	w.log.Debug("Calling DeleteFailedToSyncTokenFromTable for token:", tokenID)
-
 	token, err := w.ReadFailedToSyncTokensFromTable(tokenID)
 	if err != nil {
 		if strings.Contains(err.Error(), "no records found") {
@@ -1620,11 +1618,6 @@ func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
 		w.log.Error("Failed to delete token from FullNodeFailedToSyncTokens table", "token_id", tokenID, "error", deleteErr)
 		return deleteErr
 	}
-
-	// deletePayload := map[string]interface{}{
-	// 	"token_id": tokenID,
-	// }
-	// go w.notifyTokenUpdate(FullNodeFailedToSyncTokens, deletePayload, "DELETE")
 
 	w.log.Info("Successfully deleted token from FullNodeFailedToSyncTokens table", "token_id", tokenID)
 	return nil

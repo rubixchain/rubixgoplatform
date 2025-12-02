@@ -653,27 +653,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 
 		address := event.PublisherPeerID + "." + detail.Did
 
-		// unknownDIDType := -1 // -1 means that we doesn't know the DID Type but we need to pass some integer otherwise it will give nil pointer dereference error
-		// didPeerDetails := wallet.DIDPeerMap{
-		// 	DID: detail.Did,
-		// 	// DIDType: &didType,
-		// 	PeerID: event.PublisherPeerID,
-		// }
-		// // if publisher did type is already added in peerDIDTable,
-		// // then read and pass it, else pass -1
-		// publisherDIDType, didTypeErr := c.w.GetPeerDIDType(detail.Did)
-		// if didTypeErr != nil {
-		// 	didPeerDetails.DIDType = &unknownDIDType
-		// } else {
-		// 	didPeerDetails.DIDType = &publisherDIDType
-		// }
-		// // Add peer to table (upsert logic should be inside AddPeerDetails)
-		// if err := c.AddPeerDetails(didPeerDetails); err != nil {
-		// 	c.log.Error("Failed to add peer details to table", "did", detail.Did, "err", err)
-		// 	// Return peerInfo anyway, in case caller can proceed
-		// 	continue
-		// }
-
 		// add publisher to peer did table, if it is alredy NOT there in the PeerDIDTable
 		publisherPeerId := c.w.GetPeerID(detail.Did)
 		if publisherPeerId != event.PublisherPeerID {
@@ -719,9 +698,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				}
 				continue
 			}
-			c.log.Debug("full node side latest block height", "height", latestBlockHeight, "token", detail.Token)
-			c.log.Debug("publisher side latest block height", "height", detail.TokenChainLength, "token", detail.Token)
-
+			
 		}
 		//collecting all those tokens, for which latestblock is empty or publisher's side tokenchain length is more,
 		// Fullnode will use these collected tokens later to sync from the publisher
@@ -781,11 +758,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						}
 					}
 
-					c.log.Debug("**latest block height in event data****", eventData.LatestBlockHeight)
-					//add content of the token to postgresqlDB
-					// c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
-
-					c.log.Debug("***calling AddTokenToRespectiveTable function in  ****")
 					c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
 					continue
 				}
@@ -793,7 +765,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				c.log.Error("failed to read token ", detail.Token, "err ", err)
 				continue
 			}
-			c.log.Debug("**Token already exist in sqlite table***")
 			if latestBlockHeight == existingBlockHeight {
 				if latestBlockHash != existingBlockHash || currentOwner != existingOwnerDID {
 					// TODO : Challenger node should verify the correct owner and correct block and add the correct info
@@ -843,10 +814,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					eventData.TokenValue = genesisBlock.GetTokenValue()
 				}
 			}
-
-			c.log.Debug("**latest block block height in event data****", eventData.LatestBlockHeight)
-			//add content of the token to postgresqlDB
-			// c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
 
 			c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
 		}
@@ -1427,8 +1394,6 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		return fmt.Errorf(errMsg)
 	}
 
-	c.log.Debug("****Adding token details to sqlite DB********")
-
 	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 
 	if genesisBlock == nil {
@@ -1670,7 +1635,7 @@ func (c *Core) syncFullTokenChains(tokenSyncMap map[string][]TokenSyncInfo) {
 	}
 	timeTaken := time.Since(start)
 
-	c.log.Info("*****Time taken to sync all tokens is: ********", timeTaken)
+	c.log.Info("Time taken to sync all tokens is: ", timeTaken)
 
 }
 
@@ -2479,8 +2444,6 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 
 // Extract token details from given genesis block and add synced tokens  to the respective tokens table of Fullnode, depending on the asset type
 func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, receivedBlock ReceivedBlock, event *model.PubSubTxnInfo, syncStatus int) error {
-
-	c.log.Debug("****AddTokenToRespectiveTable function got called****")
 	// var err error
 	var tokenStatus int
 	txnBlockType := receivedBlock.LatestBlock.GetTransType()
@@ -2512,8 +2475,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 	switch event.AssetType {
 	case RBTTokenType:
-		c.log.Debug("****Asset is RBT Token Type**")
-
 		// check if token already exists in db
 		syncedRBT, err := c.w.ReadSyncedRBTFromTable(tokenId)
 		if err != nil {
@@ -2547,9 +2508,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					}
 
 				}
-				c.log.Debug("***block height just before adding to FUllnodeRBT Table****", tokenInfo.BlockHeight)
-				c.log.Debug("***publisherDID just before adding to FUllnodeRBT Table****", tokenInfo.PublisherDID)
-
+				
 				err = c.w.AddSyncedRBTToTable(tokenInfo)
 				if err != nil {
 					c.log.Error("failed to add synced token to fullnodeRBT table, token: ", tokenInfo.TokenID)
@@ -2661,7 +2620,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		return nil
 
 	case SmartContractTokenType:
-		c.log.Debug("adding/ updating smart contract in table")
 		// check if token already exists in db
 		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
 		if err != nil {
@@ -2704,7 +2662,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			return err
 		}
 	case NFTTokenType:
-		c.log.Debug("adding/ updating nft in table")
 		// check if token already exists in db
 		syncedNFT, err := c.w.ReadSyncedNFTFromTable(tokenId)
 		if err != nil {
@@ -2790,8 +2747,6 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 		return fmt.Errorf(errMsg)
 	}
 
-	c.log.Debug("token id : ", tokenId, "token content : ", tokenContent)
-
 	switch assetType {
 	case RBTTokenType:
 		rbtContent := &wallet.RBTContent{
@@ -2823,8 +2778,6 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 			c.log.Error("Failed to parse nft", "err", err)
 			return err
 		}
-
-		fmt.Println("Artifact Folder CID:", nft.ArtifactHash, " deployer did : ", nft.DID)
 
 		outputDir := fmt.Sprintf("/tmp/nft/%s", tokenId)
 		err = os.MkdirAll(outputDir, 0755)
