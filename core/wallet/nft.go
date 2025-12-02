@@ -1,6 +1,11 @@
 package wallet
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+)
 
 type NFT struct {
 	TokenID     string  `gorm:"column:token_id;primaryKey" json:"token_id"`
@@ -9,6 +14,27 @@ type NFT struct {
 	TokenValue  float64 `gorm:"column:token_value;" json:"token_value"`
 	Metadata    string  `gorm:"column:metadata;" json:"metadata"`
 	Filename    string  `gorm:"column:filename;" json:"filename"`
+}
+
+type SyncedNFT struct {
+	TokenID       string  `gorm:"column:token_id;primaryKey" json:"token_id"`
+	TokenValue    float64 `gorm:"column:token_value;" json:"token_value"`
+	OwnerDID      string  `gorm:"column:owner_did"`
+	PublisherDID  string  `gorm:"column:publisher_did"`
+	TransactionID string  `gorm:"column:transaction_id"`
+	BlockHash     string  `gorm:"column:block_hash"`
+	BlockHeight   uint64  `gorm:"column:block_height"`
+	SyncStatus    int     `gorm:"column:sync_status"`
+	TokenStatus   int     `gorm:"column:token_status"`
+}
+
+type NFTContent struct {
+	NFTId            string `json:"nft_id"`
+	DeployerDID      string `json:"deployer_did"`
+	ArtifactFileName string `json:"artifact_filename"`
+	Artifact         []byte `json:"artifact"`
+	MetadataFileName string `json:"metadata_filename"`
+	Metadata         []byte `json:"metadata"`
 }
 
 // CreateNFT write NFT into db
@@ -50,7 +76,6 @@ func (w *Wallet) GetNFTsByDid(did string) ([]NFT, error) {
 	}
 	return tkns, nil
 }
-
 
 func (w *Wallet) GetNFTToken(nftID string) (*NFT, error) {
 	w.dtl.Lock()
@@ -104,5 +129,76 @@ func (w *Wallet) UpdateNFTStatus(nft string, tokenStatus int, local bool, receiv
 			return err
 		}
 	}
+	return nil
+}
+
+func (w *Wallet) StoreNFTFilesToPSQL(nftID, deplaoyerDID, ArtifactHash, outputDir string) error {
+	start := time.Now()
+	w.log.Info("Starting to store NFT files from directory", "path", outputDir)
+
+	// Intialize nft content
+	nftContent := &NFTContent{
+		NFTId:       nftID,
+		DeployerDID: deplaoyerDID,
+	}
+
+	fileNames := make([]string, 0)
+	artifactsBytes := make([][]byte, 0)
+	// Walk recursively through the folder
+	err := filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			w.log.Error("Error accessing path", "path", path, "err", err)
+			return err
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Read file as bytes
+		fileBytes, err := os.ReadFile(path)
+		if err != nil {
+			w.log.Error("Failed to read file", "file", path, "err", err)
+			return err
+		}
+
+		// Extract relative filename (e.g., metadata.json, image.png)
+		relPath, err := filepath.Rel(outputDir, path)
+		if err != nil {
+			relPath = filepath.Base(path)
+		}
+
+		fileNames = append(fileNames, relPath)
+		artifactsBytes = append(artifactsBytes, fileBytes)
+
+		return nil
+	})
+
+	if err != nil {
+		w.log.Error("Failed to walk NFT directory", "err", err)
+		return err
+	}
+
+	if len(fileNames) < 2 || len(artifactsBytes) < 2 {
+		return fmt.Errorf("expected at least two files (metadata + artifact), got %d, received file name : %v", len(fileNames), fileNames)
+	}
+
+	// Insert into PostgreSQL
+	nftContent.NFTId = nftID
+	nftContent.DeployerDID = deplaoyerDID
+	nftContent.MetadataFileName = fileNames[0]
+	nftContent.Metadata = artifactsBytes[0]
+	nftContent.ArtifactFileName = fileNames[1]
+	nftContent.Artifact = artifactsBytes[1]
+	err = w.AddNFTContentToPSQl(nftContent)
+	if err != nil {
+		w.log.Error("Failed to insert NFT file into DB, ", "files", fileNames, "err", err)
+		return err
+	}
+
+	w.log.Info("Stored NFT files, ", "filenames", fileNames, "size", len(artifactsBytes[0]), len(artifactsBytes[1]))
+
+	w.log.Info("Successfully stored all NFT files", "duration", time.Since(start))
 	return nil
 }

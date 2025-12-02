@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1"
+	version string = "0.1_fullnode"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -357,6 +357,13 @@ type Command struct {
 	enableTrustedNetwork         bool
 	disableTrustedNetwork        bool
 	backupDB                     bool
+	fullNode                     bool
+	publishTokenChainDetails     bool
+	dumpFullnodeTokenChain       bool
+	assetType                    string
+	pgsqlDBName                  string
+	pgsqlDBUserName              string
+	pgsqlDBPassword              string
 }
 
 func showVersion() {
@@ -558,7 +565,7 @@ func (cmd *Command) runApp() {
 	}
 
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.publishTokenChainDetails, cmd.fullNode, cmd.pgsqlDBName, cmd.pgsqlDBUserName, cmd.pgsqlDBPassword)
 	if err != nil {
 		cmd.log.Error("failed to create core")
 		return
@@ -587,6 +594,7 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("Failed to create server")
 		return
 	}
+
 	s.EnableSWagger(cmd.getURL(s.GetServerURL()))
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
@@ -605,11 +613,26 @@ func (cmd *Command) runApp() {
 	// c.UpdateTokenInfo()
 	cmd.log.Info("Syncing Complete...")
 
+	if cmd.publishTokenChainDetails {
+		c.PublishTCDetails()
+	}
+	if cmd.fullNode {
+		cmd.log.Info("**calling SubscribeTCDetails function***")
+		c.SubscribeTCDetails()
+	}
+
+	// Start background job: retry failed-to-sync tokens every 1 hour
+	if cmd.fullNode {
+		c.RetryFailedTokenSync()
+	}
+
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
 	signal.Notify(ch, syscall.SIGINT)
 	select {
 	case <-ch:
+		// // signal ticker goroutine to stop
+		// close(sc) // closing sc will unblock the ticker goroutine's case <-sc:
 	case <-sc:
 	}
 	// Stop the pending token monitor
@@ -741,6 +764,13 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.enableTrustedNetwork, "enableTrustedNetwork", true, "Enable trusted network mode (skips DHT checks) - enabled by default")
 	flag.BoolVar(&cmd.disableTrustedNetwork, "disableTrustedNetwork", false, "Disable trusted network mode to enable full DHT checks")
 	flag.BoolVar(&cmd.backupDB, "backupDB", false, "Create backup of database before starting node")
+	flag.BoolVar(&cmd.publishTokenChainDetails, "publishTokenchain", false, "Publish tokenchain details to pubsub")
+	flag.BoolVar(&cmd.fullNode, "fullnode", false, "receive all published transactions and tokenchain details")
+	flag.BoolVar(&cmd.dumpFullnodeTokenChain, "fullnodetoken", false, "dump tokenchain from fullnode storage")
+	flag.StringVar(&cmd.assetType, "assettype", "rbt", "DID of the signer")
+	flag.StringVar(&cmd.pgsqlDBName, "pgsqlDBName", "", "Postgress Tokens database name")
+	flag.StringVar(&cmd.pgsqlDBUserName, "pgsqlDBUserName", "myuser", "Postgress Tokens Database username")
+	flag.StringVar(&cmd.pgsqlDBPassword, "pgsqlDBPassword", "mypassword", "Postgress Tokens Database password")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

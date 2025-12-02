@@ -28,6 +28,26 @@ func (w *Wallet) AddTransactionHistory(td *model.TransactionDetails) error {
 	return nil
 }
 
+func (w *Wallet) AddTransactionsToFullNodeTransactionHistoryTable(transaction *model.FullNodeTxnHistoryInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Write(FullNodeTxnHistoryTable, transaction)
+}
+
+func (w *Wallet) ReadFullNodeTransactionHistoryTable(transactionId string) (*model.FullNodeTxnHistoryInfo, error) {
+	var txn *model.FullNodeTxnHistoryInfo
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.fullNodeSQLDB.Read(FullNodeTxnHistoryTable, &txn, "transaction_id=?", transactionId)
+	return txn, err
+}
+
+func (w *Wallet) UpdateFullNodeTransactionHistoryTable(transaction *model.FullNodeTxnHistoryInfo) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.fullNodeSQLDB.Update(FullNodeTxnHistoryTable, transaction, "transaction_id=?", transaction.TransactionID)
+}
+
 // AddFTTransactionTokens stores FT token metadata for a transaction
 func (w *Wallet) AddFTTransactionTokens(transactionID string, creatorDID string, ftName string, tokenCount int, direction string) error {
 	ftTxToken := &model.FTTransactionToken{
@@ -38,7 +58,7 @@ func (w *Wallet) AddFTTransactionTokens(transactionID string, creatorDID string,
 		Direction:     direction,
 		CreatedAt:     time.Now(),
 	}
-	
+
 	err := w.s.Write(FTTransactionTokenStorage, ftTxToken)
 	if err != nil {
 		// Check if it's a table doesn't exist error
@@ -51,13 +71,13 @@ func (w *Wallet) AddFTTransactionTokens(transactionID string, creatorDID string,
 		// Still don't fail the transaction, just log the error
 		return nil
 	}
-	
-	w.log.Debug("FT transaction token metadata stored", 
+
+	w.log.Debug("FT transaction token metadata stored",
 		"transaction_id", transactionID,
 		"ft_name", ftName,
 		"token_count", tokenCount,
 		"direction", direction)
-	
+
 	return nil
 }
 
@@ -70,6 +90,19 @@ func (w *Wallet) GetTransactionDetailsbyTransactionId(transactionId string) (mod
 		w.log.Error("Failed to get transaction details", "err", err)
 		return th, err
 	}
+	return th, nil
+}
+
+func (w *Wallet) GetAllTransactionHistory() ([]model.TransactionDetails, error) {
+	var th []model.TransactionDetails
+
+	// Read all rows where transaction_id != ""
+	err := w.s.Read(TransactionStorage, &th, "transaction_id!=?", "")
+	if err != nil {
+		w.log.Error("Failed to get transaction details", "err", err)
+		return th, err
+	}
+
 	return th, nil
 }
 
@@ -189,7 +222,7 @@ func (w *Wallet) GetAllFTTransactionDetailsByDID(did string) ([]model.Transactio
 		}
 		return ftTransactions, nil
 	}
-	
+
 	// Fallback to old method
 	var ftTransactions []model.TransactionDetails
 	err = w.s.Read(TransactionStorage, &ftTransactions, "mode=? AND (sender_did=? OR receiver_did=?)", FTTransferMode, did, did)
@@ -255,7 +288,7 @@ func (w *Wallet) GetFTTransactionByReceiver(receiver string) ([]model.Transactio
 		}
 		return ftTransactions, nil
 	}
-	
+
 	// Fallback to old method
 	var ftTransactions []model.TransactionDetails
 	err = w.s.Read(TransactionStorage, &ftTransactions, "receiver_did=? AND mode=?", receiver, FTTransferMode)
@@ -321,7 +354,7 @@ func (w *Wallet) GetFTTransactionBySender(sender string) ([]model.TransactionDet
 		}
 		return ftTransactions, nil
 	}
-	
+
 	// Fallback to old method
 	var ftTransactions []model.TransactionDetails
 
@@ -359,7 +392,7 @@ func (w *Wallet) getFTTokenSummariesGroupedByTransactionID() (map[string][]model
 	// First try to read from the new FTTransactionTokenStorage (historical data)
 	var txTokens []model.FTTransactionToken
 	err := w.s.Read(FTTransactionTokenStorage, &txTokens, "1 = 1")
-	
+
 	if err != nil && !strings.Contains(err.Error(), "no such table") {
 		return nil, fmt.Errorf("failed to read FT transaction tokens: %w", err)
 	}
@@ -402,7 +435,7 @@ func (w *Wallet) getFTTokenSummariesGroupedByTransactionID() (map[string][]model
 
 	// Fall back to reading from FTTokenStorage for backward compatibility
 	w.log.Debug("Falling back to FTTokenStorage for backward compatibility")
-	
+
 	var allTokens []FTToken
 
 	err = w.s.Read(FTTokenStorage, &allTokens, "1 = 1")
@@ -423,7 +456,7 @@ func (w *Wallet) getFTTokenSummariesGroupedByTransactionID() (map[string][]model
 		if token.TransactionID == "" {
 			continue
 		}
-		
+
 		txID := token.TransactionID
 		key := token.CreatorDID + "|" + token.FTName
 

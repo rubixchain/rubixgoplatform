@@ -42,3 +42,26 @@ type TxnCountForDID struct {
 	BasicResponse
 	TxnCount []TransactionCount
 }
+
+type PubSubTxnInfo struct {
+	BlockHash         string  `gorm:"column:block_hash;primaryKey"`
+	TransactionID     string  `gorm:"column:transaction_id"`
+	TxnType           string  `gorm:"column:transaction_type"`
+	AssetType         int     `gorm:"column:asset_type"`
+	FTName            string  `gorm:"column:ft_name"`
+	CreatorDID        string  `gorm:"column:creator_did"`
+	PublisherDID      string  `gorm:"column:publisher_did"`
+	ReceiverDID       string  `gorm:"column:receiver_did"`
+	TxnBlock          []byte  `gorm:"column:block"`
+	LatestBlockHeight uint64  `gorm:"column:block_height"`
+	TransactionValue  float64 `gorm:"column:transaction_value"`
+	TokenValue        float64 `gorm:"column:token_value"`
+}
+
+type FailedTransaction struct {
+	BlockHash    string    `gorm:"column:txn_id"`
+	PublisherDID string    `gorm:"column:publisher_did"`
+	Error        string    `gorm:"column:error"`
+	FailedAt     time.Time `gorm:"column:failed_at"`
+	RetryCount   int       `gorm:"column:retry_count"`
+}

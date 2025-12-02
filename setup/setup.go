@@ -108,6 +108,32 @@ const (
 	APIGetFailedFTDownloadStatus        string = "/api/get-failed-ft-download-status"
 	APIRecoverLostTokens                string = "/api/recover-lost-tokens"
 	APIRemoteRecoverTokens              string = "/api/remote-recover-tokens"
+
+	//Below are Explorer-service API endpoints
+	APIGetAllRBTs           string = "/api/de-exp/get-rbt-list"
+	APIGetAllFTs            string = "/api/de-exp/get-ft-list"
+	APIGetAllNFTs           string = "/api/de-exp/get-nft-list"
+	APIGetAllSmartContracts string = "/api/de-exp/get-smart-contract-list"
+
+	APIGetRBTbyDID           string = "/api/de-exp/get-rbt-list-by-did"
+	APIGetFTbyDID            string = "/api/de-exp/get-ft-list-by-did"
+	APIGetNFTbyDID           string = "/api/de-exp/get-nft-list-by-did"
+	APIGetSmartContractbyDID string = "/api/de-exp/get-smart-contract-list-by-did"
+	APIGetTxnAmount          string = "/api/de-exp/get-txn-amount-by-txnID"
+
+	APIGetTokenChain string = "/api/de-exp/get-token-chain"
+
+	// APIGetRBTFullTokenChain string = "/api/de-exp/get-rbt-token-chain"
+	// APIGetFTFullTokenChain  string = "/api/de-exp/get-ft-token-chain"
+
+	// APIGetRBTGenesisBlock string = "/api/de-exp/get-rbt-token-chain-genesis-block"
+	// APIGetFTGenesisBlock  string = "/api/de-exp/get-ft-token-chain-genesis-block"
+
+	// APIGetRBTLatestBlock string = "/api/de-exp/get-rbt-token-chain-latest-block"
+	// APIGetFTLatestBlock  string = "/api/de-exp/get-ft-token-chain-latest-block"
+
+	// APIGetRBTLatestValidators string = "/api/de-exp/get-rbt-token-chain-latest-block-validators"
+	// APIGetFTLatestValidators  string = "/api/de-exp/get-ft-token-chain-latest-block-validators"
 )
 
 // jwt.RegisteredClaims

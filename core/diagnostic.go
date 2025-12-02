@@ -18,6 +18,12 @@ func (c *Core) DumpTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 			Status: false,
 		},
 	}
+
+	// if the boolian value - FullnodeToken - is true, then extract the chain from the fullnode db
+	if dr.FullnodeToken {
+		return c.DumpFullnodeTokenChain(dr)
+	}
+
 	t, err := c.w.ReadToken(dr.Token)
 	if err != nil {
 		ds.Message = "Failed to get token chain block, token does not exist"
@@ -27,11 +33,80 @@ func (c *Core) DumpTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	if t.TokenValue < 1.0 {
 		ts = PartString
 	}
-	blks, nextID, err := c.w.GetAllTokenBlocks(dr.Token, c.TokenType(ts), dr.BlockID)
+	blks := make([][]byte, 0)
+	var nextID string
+
+	blks, nextID, err = c.w.GetAllTokenBlocks(dr.Token, c.TokenType(ts), dr.BlockID)
 	if err != nil {
 		ds.Message = "Failed to get token chain block"
 		return ds
 	}
+	ds.Status = true
+	ds.Message = "Successfully got the token chain block"
+	ds.Blocks = blks
+	ds.NextBlockID = nextID
+	return ds
+}
+
+func (c *Core) DumpFullnodeTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
+	ds := &model.TCDumpReply{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+		},
+	}
+	// if it is not a fullnode, then return error msg
+	if !c.fullNode {
+		ds.Message = "not a fullnode, please remove the boolian param 'fullnodetoken'"
+		c.log.Error(ds.Message)
+		return ds
+	}
+
+	blks := make([][]byte, 0)
+	var nextID string
+	var err error
+
+	switch dr.AssetType {
+	case "rbt", "RBT":
+		t, err := c.w.ReadSyncedRBTFromTable(dr.Token)
+		if err != nil {
+			ds.Message = "Failed to get token chain block, token does not exist"
+			return ds
+		}
+		ts := RBTString
+		if t.TokenValue < 1.0 {
+			ts = PartString
+		}
+
+		blks, nextID, err = c.w.GetAllFullNodeTokenBlocks(dr.Token, c.TokenType(ts), dr.BlockID)
+		if err != nil {
+			ds.Message = "Failed to get token chain block"
+			return ds
+		}
+	case "ft", "FT":
+		blks, nextID, err = c.w.GetAllFullNodeTokenBlocks(dr.Token, c.TokenType(FTString), dr.BlockID)
+		if err != nil {
+			ds.Message = "Failed to get token chain block"
+			return ds
+		}
+	case "nft", "NFT":
+		blks, nextID, err = c.w.GetAllFullNodeTokenBlocks(dr.Token, c.TokenType(NFTString), dr.BlockID)
+		if err != nil {
+			ds.Message = "Failed to get token chain block"
+			return ds
+		}
+	case "sc", "SC", "smartcontract", "SmartContract":
+		blks, nextID, err = c.w.GetAllFullNodeTokenBlocks(dr.Token, c.TokenType(SmartContractString), dr.BlockID)
+		if err != nil {
+			ds.Message = "Failed to get token chain block"
+			return ds
+		}
+	default:
+		errMsg := fmt.Sprintf("invalid asset type, please choose among : %s, %s, %s, and %s", RBTString, FTString, NFTString, SmartContractString)
+		c.log.Error(errMsg)
+		ds.Message = errMsg
+		return ds
+	}
+
 	ds.Status = true
 	ds.Message = "Successfully got the token chain block"
 	ds.Blocks = blks
@@ -60,8 +135,8 @@ func (c *Core) DumpFTTokenChain(dr *model.TCDumpRequest) *model.TCDumpReply {
 	return ds
 }
 
-func (c *Core) GetFTTokenchain(FTTokenID string) *model.GetFTTokenChainReply {
-	getFTReply := &model.GetFTTokenChainReply{
+func (c *Core) GetFTTokenchain(FTTokenID string) *model.GetTokenChainResponce {
+	getFTReply := &model.GetTokenChainResponce{
 		BasicResponse: model.BasicResponse{
 			Status: false,
 			Result: nil,
