@@ -213,18 +213,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetTxnAmount, "GET", s.AuthHandle(s.APIGetTxnAmountFromFullNode, false, s.AuthError, false))
 
 	s.AddRoute(setup.APIGetTokenChain, "GET", s.AuthHandle(s.APIGetFullTokenChain, false, s.AuthError, false))
-
-	// s.AddRoute(setup.APIGetRBTFullTokenChain, "GET", s.AuthHandle(s.APIGetRBTFullTokenChain, false, s.AuthError, false))
-	// s.AddRoute(setup.APIGetFTFullTokenChain, "GET", s.AuthHandle(s.APIGetFTFullTokenChain, false, s.AuthError, false))
-
-	// s.AddRoute(setup.APIGetRBTGenesisBlock, "GET", s.AuthHandle(s.APIGetRBTGenesisBlock, false, s.AuthError, false))
-	// s.AddRoute(setup.APIGetFTGenesisBlock, "GET", s.AuthHandle(s.APIGetFTGenesisBlock, false, s.AuthError, false))
-
-	// s.AddRoute(setup.APIGetRBTLatestBlock, "GET", s.AuthHandle(s.APIGetRBTLatestBlock, false, s.AuthError, false))
-	// s.AddRoute(setup.APIGetFTLatestBlock, "GET", s.AuthHandle(s.APIGetFTLatestBlock, false, s.AuthError, false))
-
-	// s.AddRoute(setup.APIGetRBTLatestValidators, "GET", s.AuthHandle(s.APIGetRBTLatestValidators, false, s.AuthError, false))
-	// s.AddRoute(setup.APIGetFTLatestValidators, "GET", s.AuthHandle(s.APIGetFTLatestValidators, false, s.AuthError, false))
+	s.AddRoute(setup.APIRemoveStaleDID, "POST", s.AuthHandle(s.APIRemoveStaleDID, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {

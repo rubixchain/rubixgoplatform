@@ -115,6 +115,7 @@ const (
 	SetAsyncFTStatusCmd            string = "setasyncftstatus"
 	FixFTCreatorCmd                string = "fix-ft-creator"
 	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
+	RemoveStaleDIDCmd              string = "removedid"
 )
 
 var commands = []string{VersionCmd,
@@ -188,6 +189,7 @@ var commands = []string{VersionCmd,
 	SetAsyncFTStatusCmd,
 	FixFTCreatorCmd,
 	GetFTCreatorStatsCmd,
+	RemoveStaleDIDCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -1001,6 +1003,8 @@ func Run(args []string) {
 		cmd.fixFTCreator()
 	case GetFTCreatorStatsCmd:
 		cmd.getFTCreatorStats()
+	case RemoveStaleDIDCmd:
+		cmd.RemoveStaleDID()
 	default:
 		cmd.log.Error("Invalid command")
 	}
