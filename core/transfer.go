@@ -414,8 +414,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
 	resultChan := make(chan *model.BasicResponse, 1)
 
-	// xell migration
-	cr.XellMigrationMode = req.XellMigration
+	// to distinguish between transaction types
+	cr.OperationType = req.OperationType
 
 	// Start the transaction in a goroutine
 	go func() {

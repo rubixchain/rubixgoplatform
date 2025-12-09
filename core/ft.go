@@ -714,10 +714,8 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		ContractBlock:    sc.GetBlock(),
 		FTinfo:           FTData,
 		TransactionEpoch: txEpoch,
+		OperationType:    req.OperationType,
 	}
-
-	// xell migration
-	cr.XellMigrationMode = req.XellMigration
 
 	resultChan := make(chan *model.BasicResponse, 1)
 

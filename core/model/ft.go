@@ -17,7 +17,7 @@ type TransferFTReq struct {
 	QuorumType    int    `json:"quorum_type"`
 	Password      string `json:"password"`
 	CreatorDID    string `json:"creatorDID"`
-	XellMigration bool   `json:"xell_migration"`
+	OperationType int    `json:"operation_type"`
 }
 
 type GetFTInfo struct {

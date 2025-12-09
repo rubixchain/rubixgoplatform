@@ -70,6 +70,11 @@ const (
 	MinTokenTimeout         = 30 * time.Second       // Minimum timeout for token processing
 )
 
+// operation type in integer to define transaction type in string, to disstinguish between transactions
+const (
+	TokenSelfTransferredType int = 20
+)
+
 type ConensusRequest struct {
 	ReqID              string       `json:"req_id"`
 	Type               int          `json:"type"`
@@ -87,8 +92,8 @@ type ConensusRequest struct {
 	NFT                string       `json:"nft"`
 	FTinfo             model.FTInfo `json:"ft_info"`
 	// TransTokenSyncInfo map[string]GenesisAndLatestBlocks `json:"tokens_sync_info"`
-	ExplorerDone      chan struct{} `json:"-"` // Channel to signal explorer submission completion
-	XellMigrationMode bool          `json:"xell_migration"`
+	ExplorerDone  chan struct{} `json:"-"` // Channel to signal explorer submission completion
+	OperationType int           `json:"operation_type"`
 }
 
 type ConensusReply struct {
@@ -155,6 +160,7 @@ type SendTokenRequest struct {
 	TransactionEpoch   int                  `json:"transaction_epoch"`
 	PinningServiceMode bool                 `json:"pinning_service_mode"`
 	FTInfo             model.FTInfo         `json:"ft_info"`
+	OperationType      int                  `json:"operation_type"`
 	// TransTokenSyncInfo map[string]GenesisAndLatestBlocks `json:"token_chain_sync_info"`
 }
 
@@ -723,6 +729,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			QuorumList:         cr.QuorumList,
 			TransactionEpoch:   cr.TransactionEpoch,
 			PinningServiceMode: false,
+			OperationType:      cr.OperationType,
 			// TransTokenSyncInfo: cr.TransTokenSyncInfo,
 		}
 
@@ -950,8 +957,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		// to filter out migration transactions in xell wallet
-		if cr.XellMigrationMode {
-			td.Mode = wallet.SelfTransferMode
+		if cr.OperationType == TokenSelfTransferredType {
+			td.Mode = wallet.RBTSelfTransferMode
 		}
 
 		go func() {
@@ -1398,8 +1405,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 
 		// xell migration
-		if cr.XellMigrationMode {
-			td.Mode = wallet.SelfTransferMode
+		if cr.OperationType == TokenSelfTransferredType {
+			td.Mode = wallet.FTSelfTransferMode
 		}
 		// publish txn
 		publishingTxn.AssetType = FTTokenType
@@ -1428,6 +1435,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TokenChainBlock:    nb.GetBlock(),
 			QuorumList:         cr.QuorumList,
 			PinningServiceMode: true,
+			OperationType: cr.OperationType,
 		}
 		// fetching quorums' info from PeerDIDTable to share with the receiver
 		for _, qrm := range sr.QuorumList {
@@ -2857,7 +2865,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	}
 
 	// token being transferred from old DID to new DID of user
-	if cr.XellMigrationMode {
+	if cr.OperationType == TokenSelfTransferredType {
 		tcb.TransactionType = block.TokenSelfTransferredType
 	}
 

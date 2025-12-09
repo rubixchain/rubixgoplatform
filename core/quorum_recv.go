@@ -1441,6 +1441,10 @@ func (c *Core) updateReceiverToken(
 		if td.Epoch == 0 {
 			td.Epoch = time.Now().Unix()
 		}
+		// maintain transaction mode as per transaction type
+		if td.TransactionType == block.TokenSelfTransferredType {
+			td.Mode = wallet.RBTSelfTransferMode
+		}
 		err = c.w.AddTransactionHistory(td)
 		if err != nil {
 			c.log.Error("failed to add transaction history on the receiver", "err", err)
@@ -1671,6 +1675,10 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		}
 		if td.Epoch == 0 {
 			td.Epoch = time.Now().Unix()
+		}
+		// maintain transaction mode as per transaction type
+		if td.TransactionType == block.TokenSelfTransferredType {
+			td.Mode = wallet.FTSelfTransferMode
 		}
 		err = c.w.AddTransactionHistory(td)
 		if err != nil {
@@ -1938,7 +1946,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     nb.GetBlock(),
 		}
-	
+
 		c.log.Debug("quorum publishing pledge block : ", publishingTxn.BlockHash)
 		err = c.publishTxn(publishingTxn)
 		if err != nil {
@@ -1947,7 +1955,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return
 		}
 	}()
-
 
 	// return
 	crep.Status = true

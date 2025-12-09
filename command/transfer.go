@@ -55,17 +55,17 @@ func (cmd *Command) TransferRBT() {
 		cmd.log.Error("Invalid RBT amount. RBT amount should be atlease 0.001")
 		return
 	}
-	if cmd.transType < 1 || cmd.transType > 2 {
+	if cmd.quorumType < 1 || cmd.quorumType > 2 {
 		cmd.log.Error("Invalid trans type. TransType should be 1 or 2")
 		return
 	}
 	rt := model.RBTTransferRequest{
-		Receiver:   cmd.receiverAddr,
-		Sender:     cmd.senderAddr,
-		TokenCount: cmd.rbtAmount,
-		Type:       cmd.transType,
-		Comment:    cmd.transComment,
-		XellMigration: cmd.xellMigration,
+		Receiver:      cmd.receiverAddr,
+		Sender:        cmd.senderAddr,
+		TokenCount:    cmd.rbtAmount,
+		Type:          cmd.quorumType,
+		Comment:       cmd.transComment,
+		OperationType: cmd.operationType,
 	}
 
 	br, err := cmd.c.TransferRBT(&rt)
@@ -87,7 +87,7 @@ func (cmd *Command) PinRBT() {
 		PinningNode: cmd.pinningAddress,
 		Sender:      cmd.senderAddr,
 		TokenCount:  cmd.rbtAmount,
-		Type:        cmd.transType,
+		Type:        cmd.quorumType,
 		Comment:     cmd.transComment,
 	}
 
@@ -109,7 +109,7 @@ func (cmd *Command) SelfTransferRBT() {
 	rt := model.RBTTransferRequest{
 		Sender:   cmd.senderAddr,
 		Receiver: cmd.senderAddr,
-		Type:     cmd.transType,
+		Type:     cmd.quorumType,
 	}
 
 	br, err := cmd.c.SelfTransferRBT(&rt)

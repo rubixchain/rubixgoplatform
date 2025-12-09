@@ -305,7 +305,7 @@ type Command struct {
 	receiverAddr                 string
 	rbtAmount                    float64
 	transComment                 string
-	transType                    int
+	quorumType                   int
 	numTokens                    int
 	enableAuth                   bool
 	did                          string
@@ -366,7 +366,7 @@ type Command struct {
 	pgsqlDBName                  string
 	pgsqlDBUserName              string
 	pgsqlDBPassword              string
-	xellMigration                bool
+	operationType                int
 }
 
 func showVersion() {
@@ -716,7 +716,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.receiverAddr, "receiverAddr", "", "Receiver address")
 	flag.Float64Var(&cmd.rbtAmount, "rbtAmount", 0.0, "RBT amount")
 	flag.StringVar(&cmd.transComment, "transComment", "", "Transaction comment")
-	flag.IntVar(&cmd.transType, "transType", 2, "Transaction type")
+	flag.IntVar(&cmd.quorumType, "quorumType", 2, "Quorum type")
 	flag.IntVar(&cmd.numTokens, "numTokens", 1, "Number of tokens")
 	flag.StringVar(&cmd.did, "did", "", "DID")
 	flag.BoolVar(&cmd.enableAuth, "enableAuth", false, "Enable authentication")
@@ -774,7 +774,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pgsqlDBName, "pgsqlDBName", "", "Postgress Tokens database name")
 	flag.StringVar(&cmd.pgsqlDBUserName, "pgsqlDBUserName", "myuser", "Postgress Tokens Database username")
 	flag.StringVar(&cmd.pgsqlDBPassword, "pgsqlDBPassword", "mypassword", "Postgress Tokens Database password")
-	flag.BoolVar(&cmd.xellMigration, "xellmigration", false, "dump tokenchain from fullnode storage")
+	flag.IntVar(&cmd.operationType, "operationType", 0, "this defines the underlying transaction type")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

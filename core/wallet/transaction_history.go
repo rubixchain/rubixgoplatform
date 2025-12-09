@@ -15,7 +15,8 @@ const (
 	ExecuteMode
 	PinningServiceMode
 	FTTransferMode
-	SelfTransferMode // xell migration
+	RBTSelfTransferMode // xell DID migration
+	FTSelfTransferMode  // xell DID migration
 )
 
 func (w *Wallet) AddTransactionHistory(td *model.TransactionDetails) error {

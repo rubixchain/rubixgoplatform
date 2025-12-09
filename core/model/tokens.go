@@ -11,13 +11,13 @@ type RBTGenerateRequest struct {
 }
 
 type RBTTransferRequest struct {
-	Receiver   string  `json:"receiver"`
-	Sender     string  `json:"sender"`
-	TokenCount float64 `json:"tokenCOunt"`
-	Comment    string  `json:"comment"`
-	Type       int     `json:"type"`
-	Password   string  `json:"password"`
-	XellMigration bool `json:"xell_migration"`
+	Receiver      string  `json:"receiver"`
+	Sender        string  `json:"sender"`
+	TokenCount    float64 `json:"tokenCOunt"`
+	Comment       string  `json:"comment"`
+	Type          int     `json:"type"`
+	Password      string  `json:"password"`
+	OperationType int     `json:"operation_type"`
 }
 
 type RBTPinRequest struct {
@@ -103,12 +103,12 @@ type PinCheckReply struct {
 }
 
 type SendTokenDetailsInfo struct {
-	TokenChainLength uint64 `json:"tc_length"`
-	TokenType        int    `json:"token_type"`
-	Token            string `json:"token"`
-	Did              string `json:"did"`
-	AssetType        int    `json:"asset_type"`
-	TokenValue      float64  `json:"token_value"`  //For some mainnet tokens, token value is not there in the genesis block so we need to pass it through the pubsub
+	TokenChainLength uint64  `json:"tc_length"`
+	TokenType        int     `json:"token_type"`
+	Token            string  `json:"token"`
+	Did              string  `json:"did"`
+	AssetType        int     `json:"asset_type"`
+	TokenValue       float64 `json:"token_value"` //For some mainnet tokens, token value is not there in the genesis block so we need to pass it through the pubsub
 }
 type FailedToSyncTokenDetailsInfo struct {
 	TokenID   string `gorm:"column:token_id;primaryKey"` // `gorm:"column:token;primaryKey"`

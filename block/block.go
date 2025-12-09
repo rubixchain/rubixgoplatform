@@ -60,7 +60,7 @@ const (
 	TokenContractCommited    string = "11"
 	TokenPinnedAsService     string = "12"
 	TokenIsBurntForFT        string = "13"
-	TokenSelfTransferredType string = "14" // xell migration
+	TokenSelfTransferredType string = "20" // xell migration
 )
 
 const (
