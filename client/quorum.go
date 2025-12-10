@@ -28,7 +28,7 @@ func (c *Client) AddQuorum(quorumList string) (string, bool) {
 		c.log.Error("Invalid file, failed to add quorum list", "err", err)
 		return "Invalid file, failed to add quorum list", false
 	}
-	if len(ql) < 5 {
+	if len(ql) < core.MinQuorumRequired {
 		c.log.Error("Length of Quorum list should be atleast 5")
 		return "Length of Quorum list should be atleast 5", false
 	}
