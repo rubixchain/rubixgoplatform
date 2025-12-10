@@ -622,27 +622,42 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 		Status: false,
 	}
 
-	// // check if DID still holds tokens, prevent deletion if it does
-	// accInfo, err := c.GetAccountInfo(staleDID)
-	// if err != nil {
-	// 	c.log.Error("Failed to get account info for DID %v", staleDID)
-	// 	return response, err
-	// }
-	// if accInfo !=  {
-	// 	errMsg := fmt.Sprintf("cannot remove DID : %v, holds RBT amount : %v", staleDID, accInfo.RBTAmount)
-	// 	c.log.Error(errMsg)
-	// 	return response, fmt.Errorf(errMsg)
-	// }
-	// ftInfo, err := c.GetFTInfoByDID(staleDID)
-	// if err != nil {
-	// 	c.log.Error("Failed to get ft info for DID %v", staleDID)
-	// 	return response, err
-	// }
-	// if ftInfo != nil {
-	// 	errMsg := fmt.Sprintf("cannot remove DID : %v, holds RBT amount : %v", staleDID, accInfo.RBTAmount)
-	// 	c.log.Error(errMsg)
-	// 	return response, fmt.Errorf(errMsg)
-	// }
+	// check if DID still holds tokens, prevent deletion if it does
+	accInfo, err := c.GetAccountInfo(staleDID)
+	if err != nil {
+		c.log.Error("Failed to get account info for DID %v", staleDID)
+		return response, err
+	}
+	if accInfo.RBTAmount == 0 &&
+		accInfo.LockedRBT == 0 &&
+		accInfo.PledgedRBT == 0 &&
+		accInfo.PinnedRBT == 0 {
+
+		// DID has no tokens, safe to delete
+		c.log.Debug("*******did has no balance, safe to delete")
+	} else {
+		errMsg := fmt.Sprintf(
+			"cannot remove DID: %v, holds RBT [%f free, %f locked, %f pledged, %f pinned]",
+			staleDID,
+			accInfo.RBTAmount,
+			accInfo.LockedRBT,
+			accInfo.PledgedRBT,
+			accInfo.PinnedRBT,
+		)
+		c.log.Error(errMsg)
+		return response, fmt.Errorf(errMsg)
+	}
+
+	ftInfo, err := c.GetFTInfoByDID(staleDID)
+	if err != nil {
+		c.log.Error("Failed to get ft info for DID %v", staleDID)
+		return response, err
+	}
+	if len(ftInfo) != 0 {
+		errMsg := fmt.Sprintf("cannot remove DID : %v, holds FTs : %v", staleDID, ftInfo)
+		c.log.Error(errMsg)
+		return response, fmt.Errorf(errMsg)
+	}
 
 	// remove old-did from peers' DB :
 	// 1. sign on the information to be published
