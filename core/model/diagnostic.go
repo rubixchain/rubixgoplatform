@@ -1,8 +1,10 @@
 package model
 
 type TCDumpRequest struct {
-	Token   string `json:"token"`
-	BlockID string `json:"block_id"`
+	Token         string `json:"token"`
+	BlockID       string `json:"block_id"`
+	FullnodeToken bool   `json:"fullnode_token"`
+	AssetType     string `json:"asset_type"`
 }
 
 type TCDumpReply struct {
@@ -11,7 +13,7 @@ type TCDumpReply struct {
 	Blocks      [][]byte `json:"blocks"`
 }
 
-type GetFTTokenChainReply struct {
+type GetTokenChainResponce struct {
 	BasicResponse
 	TokenChainData []interface{}
 }

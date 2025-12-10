@@ -225,7 +225,32 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				UpdatedAt:   time.Now(),
 			}
 			results <- ftResult{FTToken: ft, FTID: ftID}
+
+			// publish the transaction in the network with topic : rubix_txns
+			blockHash, err := blockObj.GetHash()
+			if err != nil {
+				c.log.Error("failed to get block hash")
+				results <- ftResult{Err: err}
+				continue
+			}
+			publishingTxn := &model.PubSubTxnInfo{
+				BlockHash:    blockHash,
+				TxnType:      tcb.TransactionType,
+				AssetType:    FTTokenType,
+				FTName:       FTName,
+				PublisherDID: dc.GetDID(),
+				CreatorDID:   dc.GetDID(),
+				TxnBlock:     blockObj.GetBlock(),
+			}
+
+			err = c.publishTxn(publishingTxn)
+			if err != nil {
+				c.log.Error("Failed to publish txn", "err", err)
+				results <- ftResult{Err: err}
+				continue
+			}
 		}
+
 	}
 
 	// Start workers
@@ -304,13 +329,36 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			c.log.Error("FT creation failed, failed to add token block", "err", err)
 			return err
 		}
+		c.log.Debug("burnt token block added ")
 		wholeTokens[i].TokenStatus = wallet.TokenIsBurntForFT
 		err = c.w.UpdateToken(&wholeTokens[i])
 		if err != nil {
 			c.log.Error("FT token creation failed, failed to update token status", "err", err)
 			return err
 		}
+		c.log.Debug("burnt token block status updated ")
 		release = false
+
+		// publish the burnt block in the network with topic : rubix_txns
+		blockHash, err := block.GetHash()
+		if err != nil {
+			c.log.Error("failed to get burnt block hash")
+			return err
+		}
+		publishingTxn := &model.PubSubTxnInfo{
+			BlockHash:    blockHash,
+			TxnType:      tcb.TransactionType,
+			AssetType:    RBTTokenType,
+			PublisherDID: dc.GetDID(),
+			TxnBlock:     block.GetBlock(),
+		}
+
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return err
+		}
+		c.log.Debug("burnt token block published ")
 	}
 
 	// --- Batch Write FTs to Storage using WriteBatch ---
@@ -327,6 +375,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			}
 			FTOwner := blk.GetOwner()
 			newFTs[i].CreatorDID = FTOwner
+			c.log.Debug("adding new ft to table with count ", i)
 		}
 		batch = append(batch, &newFTs[i])
 	}
@@ -381,6 +430,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return err
 	}
 
+	c.log.Debug("updating ft table with new fts")
+	
 	updateFTTableErr := c.updateFTTable()
 	if updateFTTableErr != nil {
 		c.log.Error("Failed to update FT table after FT creation", "err", updateFTTableErr)
@@ -434,18 +485,18 @@ func (c *Core) InitiateFTTransfer(reqID string, req *model.TransferFTReq) {
 func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
-	
+
 	// Track overall FT transaction performance
 	var txErr error
 	defer func() {
 		c.TrackOperation("tx.ft_transfer.total", map[string]interface{}{
-			"sender": req.Sender,
+			"sender":   req.Sender,
 			"receiver": req.Receiver,
 			"ft_count": req.FTCount,
-			"ft_name": req.FTName,
+			"ft_name":  req.FTName,
 		})(txErr)
 	}()
-	
+
 	resp := &model.BasicResponse{
 		Status: false,
 	}
@@ -533,14 +584,14 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	var AllFTs []wallet.FTToken
 	var TokenInfo []contract.TokenInfo
 	var lockingErr error
-	
+
 	if req.CreatorDID != "" {
 		AllFTs, err = c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, req.CreatorDID)
 		creatorDID = req.CreatorDID
 	} else {
 		AllFTs, err = c.w.GetFreeFTsByNameAndDID(req.FTName, did)
 	}
-	
+
 	AvailableFTCount := len(AllFTs)
 	if err != nil {
 		c.log.Error("Failed to get FTs", "err", err)
@@ -553,9 +604,9 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			return resp
 		}
 	}
-	
+
 	FTsForTxn := AllFTs[:req.FTCount]
-	
+
 	// Fetching peer's peer id
 	if !c.w.IsDIDExist(req.Receiver) {
 		peerInfo, err := c.GetPeerDIDInfo(req.Receiver)
@@ -575,7 +626,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			return resp
 		}
 	}
-	
+
 	receiverPeerID, err := c.getPeer(req.Receiver)
 	if err != nil {
 		resp.Message = "Failed to get receiver peer, " + err.Error()
@@ -626,7 +677,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			TokenInfo = append(TokenInfo, ti)
 		}
 	}
-	
+
 	// Extract token IDs for later use
 	FTTokenIDs := make([]string, 0)
 	for i := range TokenInfo {
@@ -718,13 +769,13 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			resp.Message = errMsg
 			return
 		}
-		
+
 		// Store in new FT transaction history table
 		if err := c.w.AddFTTransactionHistory(td, req.FTName, creatorDID, req.FTCount); err != nil {
 			c.log.Error("Failed to store FT transaction history", "err", err)
 			// Don't fail the transaction, just log the error
 		}
-		
+
 		// Store FT token metadata for sent transactions
 		if err := c.w.AddFTTransactionTokens(td.TransactionID, creatorDID, req.FTName, req.FTCount, "sent"); err != nil {
 			c.log.Error("Failed to store FT transaction token metadata", "err", err)
@@ -733,15 +784,15 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 
 		// Create a channel to signal explorer submission completion
 		explorerDone := make(chan struct{})
-		
-		go func ()  {
+
+		go func() {
 			defer close(explorerDone) // Signal completion when done
-			
+
 			AllTokens := make([]AllToken, len(TokenInfo))
 			for i := range TokenInfo {
 				tokenDetail := AllToken{}
 				tokenDetail.TokenHash = TokenInfo[i].Token
-				
+
 				blockNoPart := strings.Split(TokenInfo[i].BlockID, "-")[0]
 				// Convert the string part to an int
 				blockNoInt, err := strconv.Atoi(blockNoPart)
@@ -751,7 +802,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				}
 				tokenDetail.BlockNumber = blockNoInt
 				tokenDetail.BlockHash = strings.Split(TokenInfo[i].BlockID, "-")[1]
-	
+
 				AllTokens[i] = tokenDetail
 			}
 
@@ -774,7 +825,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			c.ec.ExplorerFTTransaction(eTrans)
 			c.log.Info("Explorer submission completed", "transaction_id", td.TransactionID)
 		}()
-		
+
 		// Pass the explorerDone channel to consensus request
 		cr.ExplorerDone = explorerDone
 
@@ -793,7 +844,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			c.log.Error("Failed to update FT table after transfer ", "err", updateFTTableErr)
 			resp.Message = "Failed to update FT table after transfer"
 			return
-		}		
+		}
 		c.UpdateUserInfo([]string{did})
 		// Send final transaction completion response if not already timed out
 		select {

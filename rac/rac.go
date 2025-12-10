@@ -10,16 +10,16 @@ import (
 )
 
 const (
-	RacTestTokenType int = iota
-	RacOldNFTType
-	RacNFTType
-	RacDataTokenType
-	RacPartTokenType
-	RacTestNFTType
-	RacTestDataTokenType
-	RacTestPartTokenType
-	RacFTType
-	RacTestFTType
+	RacTestTokenType = 0
+	RacOldNFTType    = 1
+	RacNFTType       = 2
+	//Remove RACDataTokenType
+	RacPartTokenType = 4
+	RacTestNFTType   = 5
+	// Remove RACTestDataTokenType
+	RacTestPartTokenType = 7
+	RacFTType            = 8
+	RacTestFTType        = 9
 )
 
 const (
@@ -313,10 +313,6 @@ func RacType2TokenType(rt int) int {
 		return token.PartTokenType
 	case RacTestPartTokenType:
 		return token.TestPartTokenType
-	case RacDataTokenType:
-		return token.DataTokenType
-	case RacTestDataTokenType:
-		return token.TestDataTokenType
 	}
 	return token.RBTTokenType
 }

@@ -37,18 +37,18 @@ func (w *Wallet) AddFTTransactionHistory(td *model.TransactionDetails, ftName, c
 		CreatedAt:       time.Now(),
 		UpdatedAt:       time.Now(),
 	}
-	
+
 	err := w.s.Write(FTTransactionHistoryStorage, ftTx)
 	if err != nil {
 		w.log.Error("Failed to store FT transaction history", "err", err)
 		return err
 	}
-	
-	w.log.Debug("FT transaction history added", 
+
+	w.log.Debug("FT transaction history added",
 		"transaction_id", td.TransactionID,
 		"ft_name", ftName,
 		"token_count", tokenCount)
-	
+
 	return nil
 }
 
@@ -64,6 +64,18 @@ func (w *Wallet) GetAllFTTransactionsByDID(did string) ([]model.FTTransactionHis
 		w.log.Error("Failed to get FT transaction history", "did", did, "err", err)
 		return nil, err
 	}
+	return ftTransactions, nil
+}
+func (w *Wallet) GetAllFTTransactionHistory() ([]model.FTTransactionHistory, error) {
+	var ftTransactions []model.FTTransactionHistory
+
+	// Read all rows where transaction_id != ""
+	err := w.s.Read(FTTransactionHistoryStorage, &ftTransactions, "transaction_id!=?", "")
+	if err != nil {
+		w.log.Error("Failed to get FTtransaction details", "err", err)
+		return ftTransactions, err
+	}
+
 	return ftTransactions, nil
 }
 
@@ -100,14 +112,14 @@ func (w *Wallet) GetFTTransactionsByReceiver(receiver string) ([]model.FTTransac
 // MigrateFTTransactionsToNewTable migrates FT transactions from TransactionHistory to FTTransactionHistory
 func (w *Wallet) MigrateFTTransactionsToNewTable() error {
 	w.log.Info("Starting migration of FT transactions to new table")
-	
+
 	// Initialize the new table
 	err := w.InitFTTransactionHistory()
 	if err != nil {
 		w.log.Error("Failed to initialize FT transaction history table", "err", err)
 		return err
 	}
-	
+
 	// Get all FT transactions from TransactionHistory
 	var ftTransactions []model.TransactionDetails
 	err = w.s.Read(TransactionStorage, &ftTransactions, "mode=?", FTTransferMode)
@@ -119,9 +131,9 @@ func (w *Wallet) MigrateFTTransactionsToNewTable() error {
 		w.log.Error("Failed to read FT transactions", "err", err)
 		return err
 	}
-	
+
 	w.log.Info("Found FT transactions to migrate", "count", len(ftTransactions))
-	
+
 	migratedCount := 0
 	for _, tx := range ftTransactions {
 		// Check if already migrated
@@ -131,12 +143,12 @@ func (w *Wallet) MigrateFTTransactionsToNewTable() error {
 			w.log.Debug("Transaction already migrated", "txn_id", tx.TransactionID)
 			continue
 		}
-		
+
 		// Try to get FT info from current tokens
 		ftName := ""
 		creatorDID := ""
 		tokenCount := int(tx.Amount)
-		
+
 		// Check if we have tokens from this transaction
 		var ftTokens []FTToken
 		err = w.s.Read(FTTokenStorage, &ftTokens, "transaction_id=?", tx.TransactionID)
@@ -145,7 +157,7 @@ func (w *Wallet) MigrateFTTransactionsToNewTable() error {
 			creatorDID = ftTokens[0].CreatorDID
 			tokenCount = len(ftTokens)
 		}
-		
+
 		// Create FT transaction history entry
 		ftTx := &model.FTTransactionHistory{
 			TransactionID:   tx.TransactionID,
@@ -167,17 +179,17 @@ func (w *Wallet) MigrateFTTransactionsToNewTable() error {
 			CreatedAt:       tx.DateTime,
 			UpdatedAt:       time.Now(),
 		}
-		
+
 		err = w.s.Write(FTTransactionHistoryStorage, ftTx)
 		if err != nil {
 			w.log.Error("Failed to migrate transaction", "txn_id", tx.TransactionID, "err", err)
 			continue
 		}
-		
+
 		migratedCount++
 		w.log.Debug("Migrated FT transaction", "txn_id", tx.TransactionID)
 	}
-	
+
 	w.log.Info("FT transaction migration completed", "total", len(ftTransactions), "migrated", migratedCount)
 	return nil
 }

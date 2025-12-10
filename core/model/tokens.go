@@ -2,7 +2,6 @@ package model
 
 const (
 	RBTType string = "RBT"
-	DTType  string = "DT"
 	NFTType string = "NFT"
 )
 
@@ -100,4 +99,41 @@ type PinCheckReply struct {
 	Status     bool              `json:"status"`
 	Message    string            `json:"message"`
 	PinDetails *TokenProviderMap `json:"pin_details"`
+}
+
+type SendTokenDetailsInfo struct {
+	TokenChainLength uint64 `json:"tc_length"`
+	TokenType        int    `json:"token_type"`
+	Token            string `json:"token"`
+	Did              string `json:"did"`
+	AssetType        int    `json:"asset_type"`
+	TokenValue      float64  `json:"token_value"`  //For some mainnet tokens, token value is not there in the genesis block so we need to pass it through the pubsub
+}
+type FailedToSyncTokenDetailsInfo struct {
+	TokenID   string `gorm:"column:token_id;primaryKey"` // `gorm:"column:token;primaryKey"`
+	TokenType int    `gorm:"column:token_type"`
+	Did       string `gorm:"column:did"`
+	AssetType int    `gorm:"column:asset_type"`
+}
+
+type FullNodeTxnHistoryInfo struct {
+	TransactionID    string  `gorm:"column:transaction_id;primaryKey"`
+	TransactionValue float64 `gorm:"column:transaction_value"`
+	BlockHash        string  `gorm:"column:block_hash"`
+}
+
+type DoubleSpentTokenInfo struct {
+	TokenID        string `gorm:"column:token_id;primaryKey"` // `gorm:"column:token;primaryKey"`
+	AssetType      int    `gorm:"column:asset_type"`
+	TokenType      int    `gorm:"column:token_type"`
+	PublisherDID   string `gorm:"column:publisher_did"`
+	ClaimedOwnerI  string `gorm:"column:claimed_owner_I"`
+	ClaimedOwnerII string `gorm:"column:claimed_owner_II"`
+	ErrorMessage   string `gorm:"column:error"`
+}
+
+type TokenChainDetailsEvent struct {
+	PublisherPeerID string                 `json:"publisher_peer_id"`
+	TokenDetails    []SendTokenDetailsInfo `json:"token_details"`
+	BatchNumber     int                    `json:"batch_number"`
 }

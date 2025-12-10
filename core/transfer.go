@@ -14,6 +14,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
+const (
+	RubixTxnTopic string = "rubix_txns"
+)
+
 type ConsensusReturns struct {
 	TxnDetails    *model.TransactionDetails
 	PledgeDetails *PledgeDetails
@@ -740,4 +744,17 @@ func extractQuorumDID(quorumList []string) []string {
 		}
 	}
 	return quorumListDID
+}
+
+func (c *Core) publishTxn(newEvent *model.PubSubTxnInfo) error {
+	topic := RubixTxnTopic
+	if c.ps != nil {
+		err := c.ps.Publish(topic, newEvent)
+		if err != nil {
+			c.log.Error("Failed to publish new txn", "err", err)
+			return err
+		}
+		c.log.Info("New state published on topic " + topic)
+	}
+	return nil
 }

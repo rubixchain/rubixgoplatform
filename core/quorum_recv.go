@@ -96,57 +96,6 @@ func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *cont
 	return true, sc
 }
 
-func (c *Core) quorumDTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, cr *ConensusRequest) *ensweb.Result {
-	crep := ConensusReply{
-		ReqID:  cr.ReqID,
-		Status: false,
-	}
-	ok, sc := c.verifyContract(cr, "")
-	if !ok {
-		crep.Message = "Failed to verify sender signature"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	// check if token has multiple pins
-	dt := sc.GetTransTokenInfo()
-	if dt == nil {
-		c.log.Error("Consensus failed, data token missing")
-		crep.Message = "Consensus failed, data token missing"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	address := cr.SenderPeerID + "." + sc.GetSenderDID()
-	p, err := c.getPeer(address)
-	if err != nil {
-		c.log.Error("Failed to get peer", "err", err)
-		crep.Message = "Failed to get peer"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	defer p.Close()
-	for k := range dt {
-		err, _ := c.syncTokenChainFrom(p, dt[k].BlockID, dt[k].Token, dt[k].TokenType)
-		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
-			crep.Message = "Failed to sync token chain block"
-			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		}
-		if dt[k].TokenType == token.DataTokenType {
-			c.ipfsOps.Pin(dt[k].Token)
-		}
-	}
-	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
-	if err != nil {
-		c.log.Error("Failed to get quorum signature", "err", err)
-		crep.Message = "Failed to get quorum signature"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
-	}
-	c.log.Debug("Data Consensus finished")
-	crep.Status = true
-	crep.Message = "Conensus finished successfully"
-	crep.ShareSig = qsb
-	crep.PrivSig = ppb
-	return c.l.RenderJSON(req, &crep, http.StatusOK)
-}
-
 func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, cr *ConensusRequest) *ensweb.Result {
 	crep := ConensusReply{
 		ReqID:  cr.ReqID,
@@ -1223,9 +1172,6 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 	case RBTTransferMode, SelfTransferMode, PinningServiceMode:
 		c.log.Debug("RBT consensus started")
 		return c.quorumRBTConsensus(req, did, qdc, &cr)
-	case DTCommitMode:
-		c.log.Debug("Data consensus started")
-		return c.quorumDTConsensus(req, did, qdc, &cr)
 	case NFTSaleContractMode:
 		c.log.Debug("NFT sale contract started")
 		return c.quorumNFTSaleConsensus(req, did, qdc, &cr)
@@ -1574,7 +1520,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 	// tokenSyncMap[senderPeer.GetPeerID()+"."+senderPeer.GetPeerDID()] = tokensSyncInfo
 
 	// syncing starts in the background
-	// go c.syncFullTokenChains(tokenSyncMap)
+	// go c.syncMissingBlocksOfTokenChains(tokenSyncMap)
 
 	crep.Status = true
 	crep.Message = "Token received successfully"
@@ -1981,7 +1927,29 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 				return
 			}
 		}
+		// publish the transaction in the network with topic : rubix_txns
+		blockHash, err := nb.GetHash()
+		if err != nil {
+			blockHash = ""
+			c.log.Error("failed to get block hash")
+		}
+		publishingTxn := &model.PubSubTxnInfo{
+			BlockHash:    blockHash,
+			TxnType:      tcb.TransactionType,
+			AssetType:    RBTTokenType,
+			PublisherDID: dc.GetDID(),
+			TxnBlock:     nb.GetBlock(),
+		}
+	
+		c.log.Debug("quorum publishing pledge block : ", publishingTxn.BlockHash)
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			crep.Message = fmt.Sprintf("Failed to publish txn, err : %v", err)
+			return
+		}
 	}()
+
 
 	// return
 	crep.Status = true

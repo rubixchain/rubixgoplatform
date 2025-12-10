@@ -460,28 +460,12 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 			return peerInfo, nil
 		}
 
-		// Testnet: resolve from peer directly
-		p, err := c.getPeer(didStr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to peer: %w", err)
-		}
-		defer p.Close()
-
-		details, err := c.GetPeerInfo(p, didStr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get peer info: %w", err)
-		}
-
-		peerInfo := &wallet.DIDPeerMap{
-			DID:     didStr,
-			PeerID:  p.GetPeerID(),
-			DIDType: details.PeerInfo.DIDType,
-		}
-		// Save resolved info
-		if err := c.AddPeerDetails(*peerInfo); err != nil {
-			return nil, err
-		}
-		return peerInfo, nil
+		// Testnet: Cannot resolve peer without peerID
+		// Calling getPeer(didStr) here creates a circular dependency:
+		// GetPeerDIDInfo -> getPeer -> GetPeerDIDInfo -> ...
+		// In testnet mode, peer information must be available locally or provided explicitly
+		c.log.Error("PeerID not found in local storage", "did", didStr, "register the DID info")
+		return nil, fmt.Errorf("peerID of  DID %s not found in local storage. Peer information not registered. register did to continue", didStr)
 	}
 
 	// PeerID exists, but no DIDType — fetch from peer or explorer

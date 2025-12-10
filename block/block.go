@@ -879,8 +879,74 @@ func (b *Block) GetTokenLevel(token string) (int, int) {
 	return tokenLevel, tokenNum
 }
 
-func (b *Block) GetPledgedTokens() {
+func (b *Block) GetPledgedTokens() []PledgeDetail {
 	pledgedInfo := util.GetFromMap(b.bm, TCPledgeDetailsKey)
-	fmt.Println(pledgedInfo)
-	// return
+	if pledgedInfo == nil {
+		return nil
+	}
+
+	pledgedMap, ok := pledgedInfo.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	ptds := make([]PledgeDetail, 0)
+	for did, tokens := range pledgedMap {
+		switch tokenSlice := tokens.(type) {
+		case []map[string]interface{}:
+			for _, t := range tokenSlice {
+				ptds = append(ptds, PledgeDetail{
+					DID:   did,
+					Token: fmt.Sprint(t[PDTokenKey]),
+					TokenType: func(v interface{}) int {
+						switch val := v.(type) {
+						case int:
+							return val
+						case int32:
+							return int(val)
+						case int64:
+							return int(val)
+						case float64:
+							return int(val)
+						case string:
+							i, _ := strconv.Atoi(val)
+							return i
+						default:
+							return 0
+						}
+					}(t[PDTokenTypeKey]),
+					TokenBlockID: fmt.Sprint(t[PDTokenBlockIDKey]),
+				})
+			}
+		case []interface{}: // defensive: JSON unmarshal case
+			for _, raw := range tokenSlice {
+				if t, ok := raw.(map[string]interface{}); ok {
+					ptds = append(ptds, PledgeDetail{
+						DID:   did,
+						Token: fmt.Sprint(t[PDTokenKey]),
+						TokenType: func(v interface{}) int {
+							switch val := v.(type) {
+							case int:
+								return val
+							case int32:
+								return int(val)
+							case int64:
+								return int(val)
+							case float64:
+								return int(val)
+							case string:
+								i, _ := strconv.Atoi(val)
+								return i
+							default:
+								return 0
+							}
+						}(t[PDTokenTypeKey]),
+						TokenBlockID: fmt.Sprint(t[PDTokenBlockIDKey]),
+					})
+				}
+			}
+		}
+	}
+
+	return ptds
 }

@@ -66,17 +66,23 @@ const (
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
+	// APISendTokenChainDetails        string = "api/send-token-chain-details"
 )
 
 const (
-	InvalidPasringErr string = "invalid json parsing"
-	RubixRootDir      string = "Rubix/"
-	DefaultMainNetDB  string = "rubix.db"
-	DefaultTestNetDB  string = "rubixtest.db"
-	MainNetDir        string = "MainNet"
-	TestNetDir        string = "TestNet"
-	TestNetDIDDir     string = "TestNetDID/"
-	MaxDecimalPlaces  int    = 3
+	InvalidPasringErr        string = "invalid json parsing"
+	RubixRootDir             string = "Rubix/"
+	DefaultMainNetDB         string = "rubix.db"
+	DefaultTestNetDB         string = "rubixtest.db"
+	FullNodeMainNetDB        string = "fullnode-rubix.db"
+	FullNodeTestNetDB        string = "fullnode-rubixtest.db"
+	FullNodeTokensDBName     string = "fullnode_tokens_storage"
+	FullNodeTestTokensDBName string = "fullnode_testtokens_storage"
+	FullNodeTokensDBPort     string = "5432"
+	MainNetDir               string = "MainNet"
+	TestNetDir               string = "TestNet"
+	TestNetDIDDir            string = "TestNetDID/"
+	MaxDecimalPlaces         int    = 3
 )
 
 const (
@@ -132,6 +138,8 @@ type Core struct {
 	pqc                  map[string]did.DIDCrypto
 	sd                   map[string]*ServiceDetials
 	s                    storage.Storage
+	fullNodeStorage      storage.Storage
+	fullNodeTokensDB     storage.Storage
 	as                   storage.Storage
 	srv                  *service.Service
 	arbitaryMode         bool
@@ -150,6 +158,10 @@ type Core struct {
 	batchSyncTokenPool   *BatchSyncTokenInfoPool
 	tokenSlicePool       *TokenSlicePool
 	pendingTokenMonitor  *PendingTokenMonitor
+	publishTokenChain    bool
+	fullNode             bool
+	txnProcessor         *DynamicTxnProcessor
+	RetryTokenSyncTicker *time.Ticker
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -184,7 +196,7 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, passedPSQLdbName string, passedPSQLdbUserName string, passedPSQLdbPassword string) (*Core, error) {
 	var err error
 	update := false
 	if cfg.CfgData.StorageConfig.StorageType == 0 {
@@ -202,21 +214,65 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	}
 
 	c := &Core{
-		cfg:           cfg,
-		cfgFile:       cfgFile,
-		encKey:        encKey,
-		testNet:       testNet,
-		testNetKey:    testNetKey,
-		quorumRequest: make(map[string]*ConsensusStatus),
-		pd:            make(map[string]*PledgeDetails),
-		webReq:        make(map[string]*did.DIDChan),
-		qc:            make(map[string]did.DIDCrypto),
-		pqc:           make(map[string]did.DIDCrypto),
-		sd:            make(map[string]*ServiceDetials),
-		arbitaryMode:  am,
-		secret:        util.GetRandBytes(32),
-		defaultSetup:  defaultSetup,
+		cfg:               cfg,
+		cfgFile:           cfgFile,
+		encKey:            encKey,
+		testNet:           testNet,
+		testNetKey:        testNetKey,
+		quorumRequest:     make(map[string]*ConsensusStatus),
+		pd:                make(map[string]*PledgeDetails),
+		webReq:            make(map[string]*did.DIDChan),
+		qc:                make(map[string]did.DIDCrypto),
+		pqc:               make(map[string]did.DIDCrypto),
+		sd:                make(map[string]*ServiceDetials),
+		arbitaryMode:      am,
+		secret:            util.GetRandBytes(32),
+		defaultSetup:      defaultSetup,
+		publishTokenChain: publishTokenChainDetails,
+		fullNode:          fullNode,
 	}
+
+	if c.fullNode {
+		if c.testNet {
+			if cfg.CfgData.FullnodeTestStorageConfig.StorageType == 0 {
+				cfg.CfgData.FullnodeTestStorageConfig.StorageType = storage.StorageDBType
+				cfg.CfgData.FullnodeTestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + FullNodeTestNetDB
+				cfg.CfgData.FullnodeTestStorageConfig.DBType = "Sqlite3"
+				update = true
+			}
+			if cfg.CfgData.FullnodeTestTokenStorageConfig.StorageType == 0 {
+				cfg.CfgData.FullnodeTestTokenStorageConfig.StorageType = storage.StorageDBType
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBAddress = "localhost"
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBType = "PostgressSQL"
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBPort = FullNodeTokensDBPort
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBName = FullNodeTokensDBName
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBUserName = passedPSQLdbUserName
+				cfg.CfgData.FullnodeTestTokenStorageConfig.DBPassword = passedPSQLdbPassword
+				update = true
+			}
+
+		} else {
+
+			if cfg.CfgData.FullnodeStorageConfig.StorageType == 0 {
+				cfg.CfgData.FullnodeStorageConfig.StorageType = storage.StorageDBType
+				cfg.CfgData.FullnodeStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + FullNodeMainNetDB
+				cfg.CfgData.FullnodeStorageConfig.DBType = "Sqlite3"
+				update = true
+			}
+
+			if cfg.CfgData.FullnodeTokenStorageConfig.StorageType == 0 {
+				cfg.CfgData.FullnodeTokenStorageConfig.StorageType = storage.StorageDBType
+				cfg.CfgData.FullnodeTokenStorageConfig.DBAddress = "localhost"
+				cfg.CfgData.FullnodeTokenStorageConfig.DBType = "PostgressSQL"
+				cfg.CfgData.FullnodeTokenStorageConfig.DBPort = FullNodeTokensDBPort
+				cfg.CfgData.FullnodeTokenStorageConfig.DBName = FullNodeTokensDBName
+				cfg.CfgData.FullnodeTokenStorageConfig.DBUserName = passedPSQLdbUserName
+				cfg.CfgData.FullnodeTokenStorageConfig.DBPassword = passedPSQLdbPassword
+				update = true
+			}
+		}
+	}
+
 	c.didDir = c.cfg.DirPath + RubixRootDir
 	if c.testNet {
 		c.didDir = c.cfg.DirPath + RubixRootDir + TestNetDIDDir
@@ -290,12 +346,53 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 				return nil, fmt.Errorf("failed to create storage DB")
 			}
 		}
+		if c.fullNode {
+			fullNodeDBName := FullNodeMainNetDB
+			if c.testNet {
+				fullNodeDBName = FullNodeTestNetDB
+			}
+			fullNodeStoragecfg := &econfig.Config{
+				DBAddress: cfg.DirPath + RubixRootDir + fullNodeDBName,
+				DBType:    "Sqlite3",
+				// Other fields like DBUserName, DBPassword, etc., can be copied from sc if needed, but defaults are fine for Sqlite3.
+			}
+			c.fullNodeStorage, err = storage.NewStorageDB(fullNodeStoragecfg)
+			if err != nil {
+				c.log.Error("Failed to create full node storage DB", "err", err)
+				return nil, fmt.Errorf("failed to create full node storage DB")
+			}
+
+			// postgresql to store tokens
+			var fullNodePostgressDBName string
+			if passedPSQLdbName == "" {
+				fullNodePostgressDBName = FullNodeTokensDBName
+				if c.testNet {
+					fullNodePostgressDBName = FullNodeTestTokensDBName
+				}
+			} else {
+				fullNodePostgressDBName = passedPSQLdbName
+			}
+			fullNodeTokenStoragecfg := &econfig.Config{
+				DBAddress:  "localhost",
+				DBPort:     FullNodeTokensDBPort,
+				DBName:     fullNodePostgressDBName,
+				DBUserName: passedPSQLdbUserName,
+				DBPassword: passedPSQLdbPassword,
+				DBType:     "PostgressSQL",
+			}
+			c.fullNodeTokensDB, err = storage.NewStorageDB(fullNodeTokenStoragecfg)
+			if err != nil {
+				c.log.Error("Failed to create full node storage DB", "err", err)
+				return nil, fmt.Errorf("failed to create full node storage DB")
+			}
+		}
+
 	default:
 		c.log.Error("Unsupported DB type, please check the configuration", "type", sc.StorageType)
 		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
 	}
 
-	c.w, err = wallet.InitWallet(c.s, tcDir, c.log)
+	c.w, err = wallet.InitWallet(c.s, c.fullNodeStorage, c.fullNodeTokensDB, tcDir, c.log, c.fullNode)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
@@ -396,6 +493,9 @@ func (c *Core) SetupCore() error {
 	if err != nil {
 		c.log.Error("Failed to setup services", "err", err)
 		return err
+	}
+	if c.fullNode {
+		c.SubscribeTxnSetup()
 	}
 	c.w.SetupWallet(c.ipfs)
 	// Set health-managed IPFS operations for the wallet
@@ -507,6 +607,11 @@ func (c *Core) StopCore() {
 	// Initialize shutdown manager if not already done
 	if c.shutdownMgr == nil {
 		c.shutdownMgr = NewShutdownManager(c)
+	}
+
+	// stop retry-token-sync-ticker in case of fullnode
+	if c.RetryTokenSyncTicker != nil {
+		c.RetryTokenSyncTicker.Stop()
 	}
 
 	// Perform graceful shutdown
@@ -865,4 +970,27 @@ func (c *Core) tokenSyncCleanupRoutine() {
 			}
 		}
 	}
+}
+
+func (c *Core) RetryFailedTokenSync() {
+	go func() {
+		c.RetryTokenSyncTicker = time.NewTicker(1 * time.Hour)
+		defer c.RetryTokenSyncTicker.Stop()
+
+		for range c.RetryTokenSyncTicker.C {
+			retryErrChan := make(chan error, 1)
+			go func() {
+				retryErrChan <- c.RetryFailedTOSyncTokens()
+			}()
+
+			err := <-retryErrChan
+			if err != nil {
+				c.log.Error("RetryFailedTOSyncTokens execution failed", "err", err)
+			} else {
+				c.log.Info("RetryFailedTOSyncTokens executed successfully")
+			}
+
+		}
+
+	}()
 }
