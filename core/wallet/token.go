@@ -1557,7 +1557,7 @@ func (w *Wallet) AddFailedTokensToTable(t *model.FailedToSyncTokenDetailsInfo) e
 	return err
 }
 
-// This function is used by fullnode to read from the list of all synced RBTs
+// This function is used to fetch the synced rbt token details from the FullNodeRBTTable
 func (w *Wallet) ReadSyncedRBTFromTable(tokenId string) (*SyncedRBT, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -1610,6 +1610,58 @@ func (w *Wallet) ReadSyncedSmartContractFromTable(contractHash string) (*SyncedS
 	return &sc, nil
 }
 
+func (w *Wallet) ReadSyncedRBTByBlockHash(blockHash string) ([]SyncedRBT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var rbts []SyncedRBT
+	err := w.fullNodeSQLDB.Read(FullNodeRBTTable, &rbts, "block_hash=?", blockHash)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get rbt, err : %v", err)
+		w.log.Warn(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+	return rbts, nil
+}
+
+func (w *Wallet) ReadSyncedNFTByBlockHash(blockHash string) ([]SyncedNFT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var nfts []SyncedNFT
+	err := w.fullNodeSQLDB.Read(FullNodeRBTTable, &nfts, "block_hash=?", blockHash)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get NFTs, err : %v", err)
+		w.log.Warn(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+	return nfts, nil
+}
+
+func (w *Wallet) ReadSyncedFTByBlockHash(blockHash string) ([]SyncedFT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var fts []SyncedFT
+	err := w.fullNodeSQLDB.Read(FullNodeRBTTable, &fts, "block_hash=?", blockHash)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get FTs, err : %v", err)
+		w.log.Warn(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+	return fts, nil
+}
+
+func (w *Wallet) ReadSyncedSmartContractByBlockHash(blockHash string) ([]SyncedSmartContract, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var smartcontracts []SyncedSmartContract
+	err := w.fullNodeSQLDB.Read(FullNodeRBTTable, &smartcontracts, "block_hash=?", blockHash)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get FTs, err : %v", err)
+		w.log.Warn(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+	return smartcontracts, nil
+}
+
 func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedToSyncTokenDetailsInfo, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
@@ -1639,7 +1691,11 @@ func (w *Wallet) ReadBlocksForEpoch(epoch string) ([]ReceivedBlockHash, error) {
 	start = strings.Replace(start, "T", " ", 1)
 	end = strings.Replace(end, "T", " ", 1)
 
-	query := fmt.Sprintf(`created_at BETWEEN '%s' AND '%s'`, start, end)
+	// query := fmt.Sprintf(`created_at BETWEEN '%s' AND '%s'`, start, end)
+	query := fmt.Sprintf(
+		`datetime(created_at) BETWEEN datetime('%s') AND datetime('%s')`,
+		start, end,
+	)
 
 	err := w.fullNodeSQLDB.Read(FullNodeBlockHashTable, &blockHashes, query)
 	if err != nil {
@@ -1648,6 +1704,36 @@ func (w *Wallet) ReadBlocksForEpoch(epoch string) ([]ReceivedBlockHash, error) {
 	}
 
 	return blockHashes, nil
+}
+
+// This function gets all the block hashes which are added into the table within the last 5min
+func (w *Wallet) ReadBlocksForLastFiveMinutes() ([]ReceivedBlockHash, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	var blockHashes []ReceivedBlockHash
+
+	// Correct SQLite query for last 5 minutes
+	query := `created_at >= datetime('now', '-5 minutes')`
+
+	err := w.fullNodeSQLDB.Read(FullNodeBlockHashTable, &blockHashes, query)
+	if err != nil {
+		w.log.Warn("Failed to read entries from FullNodeBlockHashTable for last 5 minutes", "err", err)
+		return nil, err
+	}
+
+	return blockHashes, nil
+}
+
+func (w *Wallet) ReadFullNodeBlockHashTable(blockHash string) (ReceivedBlockHash, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var blockHashDetail ReceivedBlockHash
+	err := w.fullNodeSQLDB.Read(FullNodeBlockHashTable, &blockHashDetail, "block_hash = ?", blockHash)
+	if err != nil {
+		w.log.Error("Failed to read entries from FullNodeBlockHashTable for block_hash", blockHash)
+	}
+	return blockHashDetail, nil
 }
 
 func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {

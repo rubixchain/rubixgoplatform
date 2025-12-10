@@ -67,6 +67,7 @@ const (
 	APIUpdateStatus                    string = "/api/update-status"
 	APIGetTokenStatus                  string = "/api/get-token-status"
 	APIGetAllRemoteChildrenBlockHashes string = "/api/get-remote-children" //It fetches the remote children block hashes while recoinciling the block hashes using the merkle tree
+	APISyncTokenBlockFromFullNode      string = "/api/sync-token-block"    //It fetches the block from the remote peer using the block_hash
 )
 
 const (
@@ -999,7 +1000,7 @@ func (c *Core) RetryFailedTokenSync() {
 
 func (c *Core) StartMerkleRootPublisher() {
 	go func() {
-		c.MerkleRootTicker = time.NewTicker(10 * time.Minute)
+		c.MerkleRootTicker = time.NewTicker(5 * time.Minute)
 		defer c.MerkleRootTicker.Stop()
 
 		for range c.MerkleRootTicker.C {

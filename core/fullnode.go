@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -217,8 +218,10 @@ func (c *Core) processTransferTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId, receiverDid, currentOwner string) error {
 	// Token generated type handling
 	if newEvent.TxnType == block.TokenGeneratedType {
-		if currentOwner != newEvent.PublisherDID {
-			return fmt.Errorf("publisher DID mismatch for token generation: expected %s, got %s", currentOwner, newEvent.PublisherDID)
+		if newEvent.PublisherDID != "" {
+			if currentOwner != newEvent.PublisherDID {
+				return fmt.Errorf("publisher DID mismatch for token generation: expected %s, got %s", currentOwner, newEvent.PublisherDID)
+			}
 		}
 
 		if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
@@ -242,11 +245,11 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 	}
 
 	// Regular transfer processing with enhanced validation
-	return c.processRegularTransfer(newEvent, txnBlock, tokenId, receiverDid)
+	return c.processRegularTransfer(newEvent, txnBlock, tokenId, receiverDid, newEvent.FullNodeAsProviderPeerID)
 }
 
 // Process regular transfer with enhanced validation
-func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId, receiverDid string) error {
+func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId, receiverDid string, fullNodePubPeerID string) error {
 	// Get current and latest block numbers
 	currentBlockNumber, err := txnBlock.GetBlockNumber(tokenId)
 	if err != nil {
@@ -270,6 +273,12 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 				TokenID:   tokenId,
 				TokenType: tokenType,
 				AssetType: newEvent.AssetType,
+			}
+
+			//If fullnode has to sync it from other fullnode instead of a normal publisher node,
+			// Sync From FullNode has to be true
+			if fullNodePubPeerID != "" {
+				tokenSyncInfo.SyncFromFullnode = true
 			}
 			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
 			if err != nil {
@@ -307,16 +316,30 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 				return fmt.Errorf("invalid blocks detected: latest block number=%d, current block number=%d", latestBlockNumber, currentBlockNumber)
 			} else if latestBlockNumber < currentBlockNumber {
 				//connect to publisher and fetch complete token chain
-				p, err := c.getPeer(newEvent.PublisherDID)
-				if err != nil {
-					c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
-					return fmt.Errorf("failed to open peer connection with publisher ", newEvent.PublisherDID)
+				var p *ipfsport.Peer
+				//If fullnode has to sync it from other fullnode instead of a normal publisher node,
+				//It has to connect with FullNode using their PeerID, because they don't have DID
+				if fullNodePubPeerID != "" {
+					p, err = c.pm.OpenPeerConn(fullNodePubPeerID, "", c.getCoreAppName(fullNodePubPeerID))
+					if err != nil {
+						c.log.Error("Failed to get peer connection", "err", err)
+						return err
+					}
+				} else {
+					p, err = c.getPeer(newEvent.PublisherDID)
+					if err != nil {
+						c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
+						return fmt.Errorf("failed to open peer connection with publisher ", newEvent.PublisherDID)
+					}
 				}
 				defer p.Close()
 				tokenSyncInfo := &TokenSyncInfo{
 					TokenID:   tokenId,
 					TokenType: tokenType,
 					AssetType: newEvent.AssetType,
+				}
+				if fullNodePubPeerID != "" {
+					tokenSyncInfo.SyncFromFullnode = true
 				}
 				err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
 				if err != nil {
@@ -710,7 +733,7 @@ func ComputeArity4MerkleRoot(blockHashes []string) (string, error) {
 
 // This will compute the merkle root of all the block_hashes which it received in the last one hour
 func (c *Core) ComputeLatestMerkleRoot() (string, error) {
-	prevEpoch := time.Now().Add(-1 * time.Hour).Format("2006-01-02T15") //we need last one hour's block_hashes, so we are passing the previous hour's epoch
+	prevEpoch := time.Now().Add(-26 * time.Hour).Format("2006-01-02T15") //we need last one hour's block_hashes, so we are passing the previous hour's epoch
 	records, err := c.w.ReadBlocksForEpoch(prevEpoch)
 	if err != nil {
 		return "", err
@@ -727,12 +750,13 @@ func (c *Core) ComputeLatestMerkleRoot() (string, error) {
 func (c *Core) PublishMerkleRoot() error {
 
 	// Step 1: Fetch previous 1hour blockhash entries
-	prevEpoch := time.Now().Add(-1 * time.Hour).Format("2006-01-02T15") //we need last one hour's block_hashes, so we are passing the previous hour's epoch
+	prevEpoch := time.Now().Add(-26 * time.Hour).Format("2006-01-02T15") //we need last one hour's block_hashes, so we are passing the previous hour's epoch
 	records, err := c.w.ReadBlocksForEpoch(prevEpoch)
 	if err != nil {
 		c.log.Error("Failed to read blocks for Merkle computation", "err", err)
 		return err
 	}
+	c.log.Debug("no.of records read from FullnodeBlockHashTable", len(records))
 
 	// Step 2: Extract blockhash strings
 	blockHashes := make([]string, len(records))
@@ -740,12 +764,14 @@ func (c *Core) PublishMerkleRoot() error {
 		blockHashes[i] = r.BlockHash
 	}
 
+	c.log.Debug("Number of blockhashes used to compute merkle root", len(blockHashes))
 	// Step 3: Compute Merkle Root
 	root, err := ComputeArity4MerkleRoot(blockHashes)
 	if err != nil {
 		c.log.Error("Failed computing Merkle root", "err", err)
 		return err
 	}
+	// c.log.Debug("**computed merkle root is: ", root)
 
 	// Step 4: Prepare payload
 	payload := MerkleRootPayload{
@@ -756,7 +782,7 @@ func (c *Core) PublishMerkleRoot() error {
 		Timestamp:       time.Now().Unix(),
 	}
 
-	c.log.Info("Publishing Merkle root", "root", root, "count", len(blockHashes))
+	c.log.Info("Publishing Merkle root", "root", root, "count", len(blockHashes), "for the epoch", payload.Epoch)
 
 	// Step 5: Publish to pubsub topic
 	return c.ps.Publish("merkle_root", payload)
@@ -792,13 +818,14 @@ func (c *Core) handleMerkleRootMessage(remote MerkleRootPayload) {
 	if remote.PublisherPeerID == c.peerID {
 		return
 	}
-
+	debugMsg := fmt.Sprintf("remote epoch %s,  for which the root is %s,", remote.MerkleRoot, remote.Epoch)
+	c.log.Debug(debugMsg)
 	// Ensure epoch matches my working window
-	// myEpoch := time.Now().Format("2006-01-02T15")
-	// if remote.Epoch != myEpoch {
-	// 	c.log.Info("Ignoring Merkle root for different epoch", "remote", remote.Epoch, "local", myEpoch)
-	// 	return
-	// }
+	myEpoch := time.Now().Add(-26 * time.Hour).Format("2006-01-02T15")
+	if remote.Epoch != myEpoch {
+		c.log.Info("Ignoring Merkle root for different epoch", "remote", remote.Epoch, "local", myEpoch)
+		return
+	}
 
 	myRoot, err := c.ComputeLatestMerkleRoot()
 	if err != nil {
@@ -811,18 +838,25 @@ func (c *Core) handleMerkleRootMessage(remote MerkleRootPayload) {
 		return
 	}
 
-	c.log.Warn("Merkle mismatch — starting reconciliation from the peer: ", remote.PublisherPeerID)
+	c.log.Warn("Merkle mismatch — starting reconciliation from the peer: ", remote.PublisherPeerID, "myroot", myRoot, "RemoteRoot", remote.MerkleRoot)
 
 	//finding the missing block_hashes when compared to the remote publisher
 	missing := c.reconcileWithPeer(remote)
+
+	c.log.Debug("***no of missing blocks are: ******", len(missing))
+
 	if len(missing) > 0 {
 		c.log.Warn("Missing hashes discovered", "count", len(missing))
-		// _ = c.fetchBlocks(remote.PublisherPeerID, missing)
+		err := c.fetchBlocks(remote.PublisherPeerID, missing)
+		if err != nil {
+			c.log.Error("failed to fetch missing blocks the peer: ", remote.PublisherPeerID)
+		}
 	}
 }
 
 // If remoteRoot doesn't match with localRoot for a particular hour the following function will get called
 func (c *Core) reconcileWithPeer(payload MerkleRootPayload) []string {
+	c.log.Debug("***reconcileWithPeer function got called***")
 	missing := []string{}
 	compareQueue := []struct {
 		level int
@@ -835,39 +869,59 @@ func (c *Core) reconcileWithPeer(payload MerkleRootPayload) []string {
 	// }
 	remoteRoot := payload.MerkleRoot
 
+	c.log.Debug("**remoteRoot in reconcileWithPeer:  *****", remoteRoot)
+
 	// Compute local tree leaf + internal structure in memory ONCE
 	localTree := c.w.BuildMerkleStructForComparison(payload.Epoch)
+	if len(localTree.Levels) == 0 {
+		c.log.Debug("**not able to compute local merkle tree**")
+	}
 
 	if localTree.Root() == remoteRoot {
+		c.log.Debug("**No need for reconcile, local and remote roots are matching***")
 		return missing
 	}
 
+	c.log.Debug("length of the compareQue is: ", len(compareQueue))
 	// BFS tree walk
 	for len(compareQueue) > 0 {
 		item := compareQueue[0]
 		compareQueue = compareQueue[1:]
 
 		localChildren := localTree.GetChildren(item.level, item.index)
-		remoteChildren, err := c.remoteGetNode(payload.PublisherPeerID, payload.Epoch, item.level, item.index)
+		c.log.Debug("*length of the localchildren: ****", len(localChildren), "localchildren: ", localChildren)
+
+		c.log.Debug("comparison level: ", item.level, "comparison index", item.index, "epoch", payload.Epoch)
+		remoteChildren, err := c.getRemoteChildBlockHashes(payload.PublisherPeerID, payload.Epoch, item.level, item.index)
 		if err != nil {
+			c.log.Debug("failed to get remote fullnodes child block hashes, err: ", err)
 			continue
 		}
+		c.log.Debug("lenth of the remote children are: ", len(remoteChildren))
 
 		// compare children in arity-4 manner
 		for i := 0; i < 4; i++ {
 			if remoteChildren[i] == "" {
+				debugMsg := fmt.Sprintf("%dth blash hash is empty", i)
+				c.log.Debug(debugMsg)
 				continue
 			}
 
 			if localChildren[i] == remoteChildren[i] {
+				debugMsg := fmt.Sprintf("remote and local %d th blackHashes are same, block_hash is: %s ", i, localChildren[i])
+				c.log.Debug(debugMsg)
 				continue
 			}
 
-			// If next level is leaf level → collect missing
-			if localTree.IsLeaf(item.level - 1) {
+			// If level is leaf level → collect missing
+			if localTree.IsLeaf(item.level + 1) {
+				debugMsg := fmt.Sprintf("%dth remote children: %s, local children: %s", i, remoteChildren[i], localChildren[i])
+				c.log.Debug(debugMsg)
+				c.log.Debug("missing block hash is: ", remoteChildren[i])
 				missing = append(missing, remoteChildren[i])
 			} else {
-				compareQueue = append(compareQueue, struct{ level, index int }{item.level - 1, item.index*4 + i})
+				compareQueue = append(compareQueue, struct{ level, index int }{item.level + 1, item.index*4 + i})
+				c.log.Debug("length of the compareQue is: ", len(compareQueue))
 			}
 		}
 	}
@@ -875,19 +929,103 @@ func (c *Core) reconcileWithPeer(payload MerkleRootPayload) []string {
 	return missing
 }
 
-// func (c *Core) fetchBlocks(peerID string, leafHashes []string) error {
-// 	for _, h := range leafHashes {
-// 		// call existing block request API from peer
-// 		err := c.requestBlockFromPeer(peerID, h)
-// 		if err != nil {
-// 			c.log.Error("Failed fetching block", "hash", h, "from", peerID, "err", err)
-// 		}
-// 	}
-// 	return nil
-// }
+//Using this function, one fullnode can request a block from other fullnode, after getting the block it will add the details in sqlite tables also
+func (c *Core) requestBlockFromPeer(peerID string, blockHash string) error {
+	debugMsg := fmt.Sprintf("**requestBlockFromPeer function got called, fetching the block with hash %s***", blockHash)
+	c.log.Debug(debugMsg)
+	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
+	if err != nil {
+		c.log.Error("Failed to get peer connection", "err", err)
+		return err
+	}
+	req := SyncTokenBlockFromFullNodeRequest{
+		BlockHash: blockHash,
+	}
+	var resp SyncTokenBlockReply
+	err1 := p.SendJSONRequest("POST", APISyncTokenBlockFromFullNode, nil, &req, &resp, false)
+	if err1 != nil {
+		c.log.Error("failed to get token block from other remote fullnode, error: ", err1)
+		return err1
+	}
+	if !resp.Status {
+		c.log.Error("failed to get token block from other remote fullnode, msg: ", resp.Message)
+		return fmt.Errorf(resp.Message)
+	}
+	if strings.Contains(resp.Message, "Sent requested block sucessfully") {
+		//TODO: add received block to the tokenchin of all those tokens which are there in that block
+		blockBytes := resp.SyncTCBlock
+		c.log.Debug("**len of the block received from the remote fullnode***", len(resp.SyncTCBlock))
+		// Initialize block with error handling
+		blockMap := block.InitBlock(blockBytes, nil)
+		if blockMap == nil {
+			c.log.Error("failed to initialize the block in requestBlockFromPeer function")
+		}
+		transactionID := blockMap.GetTid()
+		transactionType := blockMap.GetTransType()
+		blockPublisherDID := resp.BlockPublisherDID //Ingeneral transaction senderDID
+		receiverDID := blockMap.GetReceiverDID()
+		currentOwner := blockMap.GetOwner()
+		assetType := resp.AssetType
 
-func (c *Core) remoteGetNode(peerID, epoch string, level, index int) ([]string, error) {
-	// url := fmt.Sprintf("/merkle/children?epoch=%s&level=%d&index=%d", epoch, level, index)
+		tokens := blockMap.GetTransTokens()
+		if len(tokens) > 0 {
+			for _, token := range tokens {
+				event := model.PubSubTxnInfo{
+					BlockHash:                blockHash,
+					TransactionID:            transactionID,
+					TxnType:                  transactionType,
+					AssetType:                assetType,
+					PublisherDID:             blockPublisherDID,
+					ReceiverDID:              receiverDID,
+					TxnBlock:                 blockBytes,
+					LatestBlockHeight:        resp.TokenDetails[token].LatestBlockHeight,
+					TokenValue:               resp.TokenDetails[token].TokenValue,
+					FullNodeAsProviderPeerID: peerID,
+					CreatorDID:               resp.TokenDetails[token].CreatorDID,
+				}
+				switch event.AssetType {
+				case RBTTokenType, FTTokenType:
+					err := c.processTransferToken(&event, blockMap, token, receiverDID, currentOwner)
+					if err != nil {
+						c.log.Error("failed to process transfer token: ", token, "error", err)
+						continue
+
+					}
+				case NFTTokenType, SmartContractTokenType:
+					err := c.processContractTransaction(&event, blockMap, token, currentOwner)
+					if err != nil {
+						c.log.Error("failed to process contract transaction: ", token, "error", err)
+
+					}
+				}
+
+			}
+		}
+
+	}
+
+	return nil
+
+}
+
+func (c *Core) fetchBlocks(peerID string, leafHashes []string) error {
+	debugMsg := fmt.Sprintf("**fetchBlocks function called, total no.of blocks to fetch are: %d****", len(leafHashes))
+	c.log.Debug(debugMsg)
+	for _, h := range leafHashes {
+		// call existing block request API from peer
+		err := c.requestBlockFromPeer(peerID, h)
+		if err != nil {
+			c.log.Error("Failed fetching block", "hash", h, "from", peerID, "err", err)
+			continue
+		}
+	}
+	return nil
+}
+
+// This function, connects with the remote peer and gets the child block hashes for given level and index of the merkle tree
+func (c *Core) getRemoteChildBlockHashes(peerID, epoch string, level, index int) ([]string, error) {
+	c.log.Debug("***getRemoteChildBlockHashes function got called******")
+
 	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
 	if err != nil {
 		c.log.Error("Failed to get peer connection", "err", err)
@@ -905,11 +1043,13 @@ func (c *Core) remoteGetNode(peerID, epoch string, level, index int) ([]string, 
 		c.log.Error("Failed to get remote children block hashes", "err", err)
 		return nil, err
 	}
+	c.log.Debug("just before returning from the getRemoteChildBlockHashes function, childblockhashes are ", rep.ChildHashes)
 
 	return rep.ChildHashes, nil
 }
 
 func (c *Core) GetRemoteChildrenBlockHashes(req *ensweb.Request) *ensweb.Result {
+	c.log.Debug("***GetRemoteChildrenBlockHashes API handler function got called***")
 	var request GetRemoteChildrenReq
 
 	// Parse request
@@ -923,6 +1063,7 @@ func (c *Core) GetRemoteChildrenBlockHashes(req *ensweb.Request) *ensweb.Result 
 	var response GetRemoteChildrenReply
 	localTree := c.w.BuildMerkleStructForComparison(request.Epoch)
 	localChildren := localTree.GetChildren(request.Level, request.Index)
+	c.log.Debug("Length of the local children at handler function side", len(localChildren), "for givenen level ", request.Level, "for index", request.Index, "local children are", localChildren)
 	response.Message = "sucessfully sent the child hashes"
 	return c.l.RenderJSON(req, &GetRemoteChildrenReply{
 		Status:      true,
@@ -953,3 +1094,29 @@ func (c *Core) processIncomingTransactionHistory(txns []model.FullNodeTxnHistory
 
 	c.log.Info("Stored transaction history batch", "count", len(txns))
 }
+
+// func (c *Core) ProcessReceivedBlockDetailsFromOtherFullNode(blockBytes []byte) error {
+// 	blockMap := block.InitBlock(blockBytes, nil)
+// 	if blockMap == nil {
+// 		errMsg := fmt.Sprintf("Failed to initialize the block which it received from the remote FullNode")
+// 		return fmt.Errorf(errMsg)
+// 	}
+// 	blockHash, err := blockMap.GetHash()
+// 	if err != nil {
+// 		c.log.Error("failed to get blockHash, error: ", err)
+// 	}
+// 	tokensList := blockMap.GetTransTokens()
+// 	if len(tokensList) == 0 {
+// 		return fmt.Errorf("no tokens found in the block %s", blockHash)
+// 	}
+
+// 	transactionID := blockMap.GetTid()
+// 	transactionType := blockMap.GetTransType()
+// 	for _, tokenID := range tokensList {
+// 		err := c.w.AddFullNodeTokenBlock(tokenID, blockMap)
+// 		if err != nil {
+
+// 		}
+// 	}
+// 	return nil
+// }

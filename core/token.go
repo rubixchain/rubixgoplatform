@@ -40,6 +40,11 @@ type TCBSyncRequest struct {
 	TokenType   int    `json:"token_type"`
 	BlockID     string `json:"block_id"`
 	BlockHeight uint64 `json:"block_height"`
+	FullNode    bool   `json:"fullnode"` //when we want to sync a tokenchain from a fullnode, it will be true.
+}
+
+type SyncTokenBlockFromFullNodeRequest struct {
+	BlockHash string `json:"block_hash"`
 }
 
 type TCBSyncReply struct {
@@ -47,6 +52,21 @@ type TCBSyncReply struct {
 	Message     string   `json:"message"`
 	NextBlockID string   `json:"next_block_id"`
 	TCBlock     [][]byte `json:"tc_block"`
+}
+
+type SyncTokenBlockReply struct {
+	Status            bool                              `json:"status"`
+	Message           string                            `json:"message"`
+	SyncTCBlock       []byte                            `json:"sync_tc_block"`
+	TokenDetails      map[string]wallet.TokenProperties `json:"token_details_map"`
+	TransactionID     string                            `json:"transaction_id"`
+	TransactionType   int                               `json:"transaction_type"`
+	BlockPublisherDID string                            `json:"block_publisher_did"` //DID of the publisher from whom FullNode got this block
+	AssetType         int                               `json:"asset_type"`
+	// SqliteTablesData    []wallet.FullNodeSqliteTableData           `json:"sqlite_table_data"`
+	// PostgresContentData []wallet.FullNodePostgresContentTablesData `json:"postgres_content_table_data"`
+	// ReceiverDID       string                            `json:"receiver_did"`
+
 }
 
 type TCBSyncGenesisAndLatestBlockReply struct {
@@ -69,10 +89,11 @@ type TokenVerificationResponse struct {
 
 // Token sync info associated with Background Syncing of tokens
 type TokenSyncInfo struct {
-	TokenID    string  `gorm:"column:token_id;primaryKey"`
-	TokenType  int     `gorm:"column:token_type"`
-	AssetType  int     `gorm:"column:asset_type"`
-	TokenValue float64 `gorm:"column:token_value"`
+	TokenID          string  `gorm:"column:token_id;primaryKey"`
+	TokenType        int     `gorm:"column:token_type"`
+	AssetType        int     `gorm:"column:asset_type"`
+	TokenValue       float64 `gorm:"column:token_value"`
+	SyncFromFullnode bool    `gorm:"column:sync_from_fullnode"` //If we need to sync the token from a fullnode, it will be true
 }
 
 type ReceivedBlock struct {
@@ -100,7 +121,9 @@ func (c *Core) SetupToken() {
 	c.l.AddRoute(APIUpdateStatus, "PUT", c.updateStatus)
 	c.l.AddRoute(APIGetTokenStatus, "GET", c.getTokenStatus)
 	c.l.AddRoute(setup.APIRecoverLostTokens, "POST", c.recoverLostTokensHandler)
-	c.l.AddRoute(APIGetAllRemoteChildrenBlockHashes,"GET",c.GetRemoteChildrenBlockHashes)
+	c.l.AddRoute(APIGetAllRemoteChildrenBlockHashes, "GET", c.GetRemoteChildrenBlockHashes)
+	c.l.AddRoute(APISyncTokenBlockFromFullNode, "POST", c.syncTokenBlockFromFullNode)
+
 }
 
 func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {
@@ -342,8 +365,11 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	var tcbr TCBSyncReply
 	tcbr.Message = "Sent all blocks"
 
+	var blks [][]byte
+	var nextID string
+	var err error
 	// Fetch token blocks
-	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
+	blks, nextID, err = c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
 	if err != nil {
 		c.log.Error("Error fetching token blocks", "error", err)
 		return c.l.RenderJSON(req, &TCBSyncReply{
@@ -356,6 +382,16 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 		// } else {
 		// 	tcbr.Message = "Sent all blocks"
 		// }
+	}
+	if tr.FullNode {
+		blks, nextID, err = c.w.GetAllFullNodeTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
+		if err != nil {
+			c.log.Error("Error fetching token blocks from Fullnode", "error", err)
+			return c.l.RenderJSON(req, &TCBSyncReply{
+				Status:  false,
+				Message: "Error fetching token blocks",
+			}, http.StatusInternalServerError)
+		}
 	}
 
 	c.log.Debug("**no.of blocks sending through sync token chain API**", len(blks))
@@ -1348,26 +1384,15 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 			c.log.Error("Failed to get block id", "err", err, "token", tokenSyncInfo.TokenID)
 			return err
 		}
-		// if blkID == pblkID {
-		// 	c.log.Debug("Token chain already synced with peer", "token", token, "blockID", pblkID)
-		// 	err = c.w.UpdateTokenSyncStatus(token, wallet.SyncCompleted)
-		// 	if err != nil {
-		// 		c.log.Error("Failed to update token sync status", "token", token, "err", err)
-		// 		return err
-		// 	}
-		// 	return nil
-		// }
-		// blkHeight, err = blk.GetBlockNumber(tokenSyncInfo.TokenID)
-		// if err != nil {
-		// 	c.log.Error("Invalid block, failed to get block number", "err", err, "token", tokenSyncInfo.TokenID)
-		// 	return err
-		// }
 	}
 
 	syncReq := TCBSyncRequest{
 		Token:     tokenSyncInfo.TokenID,
 		TokenType: tokenSyncInfo.TokenType,
 		BlockID:   blkID,
+	}
+	if tokenSyncInfo.SyncFromFullnode {
+		syncReq.FullNode = true
 	}
 
 	var syncerLatestBlkID string
@@ -3028,4 +3053,197 @@ func (c *Core) StoreDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpent
 		err = fmt.Errorf("invalid asset type, failed to remove double spent token from table, token : %v", doubleSpentTokenInfo.TokenID)
 	}
 	return err
+}
+
+// This is a handler function for APISyncTokenBlockFromFullNode
+func (c *Core) syncTokenBlockFromFullNode(req *ensweb.Request) *ensweb.Result {
+	var syncReq SyncTokenBlockFromFullNodeRequest
+	// Parse request
+	if err := c.l.ParseJSON(req, &syncReq); err != nil {
+		c.log.Warn("Failed to parse request", "error", err)
+		return c.l.RenderJSON(req, &SyncTokenBlockReply{
+			Status:  false,
+			Message: "Failed to parse request",
+		}, http.StatusBadRequest)
+	}
+	//Read the FullnodeBlockHashTable and get the tokenID corresposning to it
+	//get token_type corresponding to the tokenID,
+	blockHashDetail, err := c.w.ReadFullNodeBlockHashTable(syncReq.BlockHash)
+	if err != nil {
+		return c.l.RenderJSON(req, &SyncTokenBlockReply{
+			Status:  false,
+			Message: "Failed to get block hash details in FullNodeBlockHashTable",
+		}, http.StatusOK)
+
+	}
+	// blockID := string(blockHashDetail.BlockHeight) + "-" + blockHashDetail.BlockHash
+	blockID := fmt.Sprintf("%d-%s", blockHashDetail.BlockHeight, blockHashDetail.BlockHash)
+
+	var tokenType int
+
+	switch blockHashDetail.AssetType {
+	case RBTTokenType:
+		token, err := c.w.ReadSyncedRBTFromTable(blockHashDetail.TokenID)
+		if err != nil {
+			return c.l.RenderJSON(req, &SyncTokenBlockReply{
+				Status:  false,
+				Message: fmt.Sprintf("Failed to get block hash details From FullNodeRbtTable for the token: %s, error:%s", blockHashDetail.TokenID, err),
+			}, http.StatusOK)
+
+		}
+		typeString := RBTString
+		if token.TokenValue < 1.0 {
+			typeString = PartString
+		}
+		tokenType = c.TokenType(typeString)
+	case FTTokenType:
+		tokenType = c.TokenType(FTString)
+	case NFTTokenType:
+		tokenType = c.TokenType(NFTString)
+	case SmartContractTokenType:
+		tokenType = c.TokenType(SmartContractString)
+
+	}
+
+	var reply SyncTokenBlockReply
+	reply.Message = "Sent requested block sucessfully"
+	reply.Status = true
+	reply.AssetType = blockHashDetail.AssetType
+	blockBytes, err := c.w.GetFullNodeTokenBlock(blockHashDetail.TokenID, tokenType, blockID)
+	if err != nil {
+		c.log.Error("Error fetching Fullnode token block", "error", err)
+		return c.l.RenderJSON(req, &SyncTokenBlockReply{
+			Status:  false,
+			Message: fmt.Sprintf("Error fetching  Fullnode token block, error: %s", err),
+		}, http.StatusOK)
+	}
+
+	// Initialize block with error handling
+	blockMap := block.InitBlock(blockBytes, nil)
+	if blockMap == nil {
+		return c.l.RenderJSON(req, &SyncTokenBlockReply{
+			Status:  false,
+			Message: "Failed to initialize the block",
+		}, http.StatusOK)
+	}
+	reply.SyncTCBlock = blockBytes
+	// reply.TransactionID = blockMap.GetTid()
+
+	tokens := blockMap.GetTransTokens()
+	//get all those token details corresponding to this blockhash from the FullNode's sqlite table & postgres
+	if len(tokens) > 0 {
+		//get each token get asset type first, then get the information from the corresponding sqlite table and postgres table
+		// var tokenMap map[string]wallet.TokenProperties
+		tokenMap := make(map[string]wallet.TokenProperties)
+		for _, tokenID := range tokens {
+
+			// sqliteData := wallet.FullNodeSqliteTableData{}
+			// postgresData := wallet.FullNodePostgresContentTablesData{}
+
+			// switch blockHashDetail.AssetType {
+
+			// case RBTTokenType:
+			// 	if rbtSql, err := c.w.ReadSyncedRBTFromTable(tokenID); err == nil {
+			// 		sqliteData.RBTTableData = *rbtSql
+			// 	}
+
+			// 	if rbtContent, err := c.w.ReadRBTContentFromTable(tokenID); err == nil {
+			// 		postgresData.RBTContentData = *rbtContent
+			// 	}
+
+			// case FTTokenType:
+			// 	if ftSql, err := c.w.ReadSyncedFTFromTable(tokenID); err == nil {
+			// 		sqliteData.FTTableData = *ftSql
+			// 	}
+
+			// 	if ftContent, err := c.w.ReadFTContentFromTable(tokenID); err == nil {
+			// 		postgresData.FTContentData = *ftContent
+			// 	}
+
+			// case NFTTokenType:
+			// 	if nftSql, err := c.w.ReadSyncedNFTFromTable(tokenID); err == nil {
+			// 		sqliteData.NFTTableData = *nftSql
+			// 	}
+
+			// 	if nftContent, err := c.w.ReadNFTContentFromTable(tokenID); err == nil {
+			// 		postgresData.NFTContentData = *nftContent
+			// 	}
+
+			// case SmartContractTokenType:
+			// 	if scSql, err := c.w.ReadSyncedSmartContractFromTable(tokenID); err == nil {
+			// 		sqliteData.SmartContractData = *scSql
+			// 	}
+
+			// 	if scContent, err := c.w.ReadSmartContractContentFromTable(tokenID); err == nil {
+			// 		postgresData.SCContentData = *scContent
+			// 	}
+			// }
+
+			// // Append collected values
+			// reply.SqliteTablesData = append(reply.SqliteTablesData, sqliteData)
+			// reply.PostgresContentData = append(reply.PostgresContentData, postgresData)
+			var tokenProperties wallet.TokenProperties
+
+			switch blockHashDetail.AssetType {
+			case RBTTokenType:
+				token, err := c.w.ReadSyncedRBTFromTable(tokenID)
+				if err != nil {
+					c.log.Error("failed to read FullNodeRBT Table,error: ", err)
+					continue
+				}
+				typeString := RBTString
+				if token.TokenValue < 1.0 {
+					typeString = PartString
+				}
+				tokenType = c.TokenType(typeString)
+				tokenProperties.LatestBlockHeight = token.BlockHeight
+				tokenProperties.TokenType = tokenType
+				tokenProperties.TokenValue = token.TokenValue
+				tokenMap[tokenID] = tokenProperties
+
+			case FTTokenType:
+				tokenType = c.TokenType(FTString)
+				token, err := c.w.ReadSyncedFTFromTable(tokenID)
+				if err != nil {
+					c.log.Error("failed to read FullNodeFTTable, error: ", err)
+					continue
+				}
+				tokenProperties.LatestBlockHeight = token.BlockHeight
+				tokenProperties.TokenType = tokenType
+				tokenProperties.TokenValue = token.TokenValue
+				tokenProperties.CreatorDID = token.CreatorDID
+				tokenMap[tokenID] = tokenProperties
+
+			case NFTTokenType:
+				tokenType = c.TokenType(NFTString)
+				token, err := c.w.ReadSyncedNFTFromTable(tokenID)
+				if err != nil {
+					c.log.Error("failed to read FullNodeNFTTable, error: ", err)
+					continue
+				}
+				tokenProperties.LatestBlockHeight = token.BlockHeight
+				tokenProperties.TokenType = tokenType
+				tokenProperties.TokenValue = token.TokenValue
+				tokenMap[tokenID] = tokenProperties
+
+			case SmartContractTokenType:
+				tokenType = c.TokenType(SmartContractString)
+				token, err := c.w.ReadSyncedSmartContractFromTable(tokenID)
+				if err != nil {
+					c.log.Error("failed to read FullNodeNFTTable, error: ", err)
+					continue
+				}
+				tokenProperties.LatestBlockHeight = token.BlockHeight
+				tokenProperties.TokenType = tokenType
+				tokenMap[tokenID] = tokenProperties
+
+			}
+
+		}
+		reply.TokenDetails = tokenMap
+
+	}
+	c.log.Debug("syncTokenBlockFromFullNodeAPI handler is exiting with success response****")
+	// Success response
+	return c.l.RenderJSON(req, &reply, http.StatusOK)
 }
