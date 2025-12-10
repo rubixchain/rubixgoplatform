@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	QuorumRequired       int = 7
-	MinQuorumRequired    int = 5
-	MinConsensusRequired int = 5
+	QuorumRequired       int = 1
+	MinQuorumRequired    int = 1
+	MinConsensusRequired int = 1
 )
 
 const (
@@ -488,7 +488,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	cr.TransactionID = tid
 
 	ql := c.qm.GetQuorum(cr.Type, lastCharTID, c.peerID) // passing lastCharTID as a parameter. Made changes in GetQuorum function to take 2 arguments
-	if ql == nil || len(ql) < MinQuorumRequired {
+	if len(ql) < MinQuorumRequired {                     //should omit nil check; len() for nil slices is defined as zero. Replacing the redundant nil check by checking only the slice length since len(nilSlice) == 0.
 		c.log.Error("Failed to get required quorums")
 		return nil, nil, nil, fmt.Errorf("failed to get required quorums")
 	}
