@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -259,4 +260,7 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 		c.log.Debug("failed to remove peer", stalePeer.DID, "err", err)
 		return
 	}
+
+	// remove peer-did folder
+	os.RemoveAll(c.didDir + stalePeer.DID)
 }

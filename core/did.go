@@ -684,6 +684,9 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 		return response, err
 	}
 
+	// remove old-did folder
+	os.RemoveAll(c.didDir + staleDID)
+
 	response.Status = true
 	response.Message = "successfully erased staled did"
 	c.log.Info(response.Message)
