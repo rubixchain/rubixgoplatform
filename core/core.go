@@ -66,7 +66,6 @@ const (
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
-	// APISendTokenChainDetails        string = "api/send-token-chain-details"
 )
 
 const (
@@ -506,6 +505,7 @@ func (c *Core) SetupCore() error {
 	c.CheckQuorumStatusSetup()
 	c.GetPeerdidTypeSetup()
 	c.peerSetup()
+	c.removePeerSetup()
 	c.w.AddDIDLastChar()
 	c.SetupToken()
 	c.QuroumSetup()
