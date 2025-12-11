@@ -25,7 +25,7 @@ func InitDIDWallet(did string, baseDir string, ch *DIDChan) *DIDWallet {
 
 func (d *DIDWallet) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte, error) {
 	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
-		return nil, nil, fmt.Errorf("Invalid configuration")
+		return nil, nil, fmt.Errorf("invalid configuration")
 	}
 	sr := &SignResponse{
 		Status:  true,
@@ -42,14 +42,13 @@ func (d *DIDWallet) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte,
 	select {
 	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
-		return nil, nil, fmt.Errorf("Timeout, failed to get signature")
+		return nil, nil, fmt.Errorf("timeout, failed to get signature")
 	}
 
 	srd, ok := ch.(SignRespData)
 	if !ok {
-		return nil, nil, fmt.Errorf("Invalid data received on the channel")
+		return nil, nil, fmt.Errorf("invalid data received on the channel")
 	}
-	fmt.Printf("Wallet signature received: Pixels=%d bytes, ECDSA=%d bytes\n", len(srd.Signature.Pixels), len(srd.Signature.Signature))
 	return srd.Signature.Pixels, srd.Signature.Signature, nil
 }
 

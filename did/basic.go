@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/crypto"
@@ -101,55 +102,11 @@ func (d *DIDBasic) GetSignType() int {
 	return NlssVersion
 }
 
-// getSignature requests signature from external source (wallet/mobile app) via channel
-func (d *DIDBasic) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte, error) {
-	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
-		return nil, nil, fmt.Errorf("invalid configuration, channel not available for external signing")
-	}
-	sr := &SignResponse{
-		Status:  true,
-		Message: "Signature needed",
-		Result: SignReqData{
-			ID:          d.ch.ID,
-			Mode:        BasicDIDMode,
-			Hash:        hash,
-			OnlyPrivKey: onlyPrivKey,
-		},
-	}
-	d.ch.OutChan <- sr
-	var ch interface{}
-	select {
-	case ch = <-d.ch.InChan:
-	case <-time.After(d.ch.Timeout):
-		return nil, nil, fmt.Errorf("timeout, failed to get signature")
-	}
-
-	srd, ok := ch.(SignRespData)
-	if !ok {
-		return nil, nil, fmt.Errorf("invalid data received on the channel")
-	}
-	return srd.Signature.Pixels, srd.Signature.Signature, nil
-}
-
 // Sign will return the singature of the DID
 func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 
 	// Check if pvtShare.png exists
 	pvtSharePath := d.dir + PvtShareFileName
-	if _, err := ioutil.ReadFile(pvtSharePath); err != nil {
-		// File doesn't exist or can't be read
-		// Try external signing via channel (like WalletDID)
-		if d.ch != nil && d.ch.InChan != nil && d.ch.OutChan != nil {
-			bs, pvtKeySign, err := d.getSignature([]byte(hash), false)
-			if err != nil {
-				return nil, nil, fmt.Errorf("external signing failed: %v", err)
-			}
-			return bs, pvtKeySign, nil
-		}
-
-		// Neither local file nor channel available
-		return nil, nil, fmt.Errorf("cannot sign: pvtShare.png not found and no external signing channel available")
-	}
 	byteImg, err := util.GetPNGImagePixels(pvtSharePath)
 	if err != nil {
 		fmt.Println(err)
@@ -211,20 +168,9 @@ func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
 
 	// Check if pvtKey.pem exists
 	pvtKeyPath := d.dir + PvtKeyFileName
-	privKey, err := ioutil.ReadFile(pvtKeyPath)
+	privKey, err := os.ReadFile(pvtKeyPath)
 	if err != nil {
-		// File doesn't exist or can't be read
-		// Try external signing via channel (like WalletDID)
-		if d.ch != nil && d.ch.InChan != nil && d.ch.OutChan != nil {
-			_, pvtKeySign, err := d.getSignature(hash, true) // onlyPrivKey = true
-			if err != nil {
-				return nil, fmt.Errorf("External PKI signing failed: %v", err)
-			}
-			return pvtKeySign, nil
-		}
-
-		// Neither local file nor channel available
-		return nil, fmt.Errorf("Cannot sign: pvtKey.pem not found and no external signing channel available")
+		return nil, fmt.Errorf("failed to read private key: %v", err)
 	}
 
 	// File exists, use local signing

@@ -459,7 +459,6 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	didType := dc.GetSignType()
 
 	if didType == did.BIPVersion {
-		c.log.Info("Contract verification: Using PKI verification\n")
 		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
 
 		if err != nil {
@@ -470,9 +469,7 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 			c.log.Error("Contract verification: PKI verification returned false\n")
 			return fmt.Errorf("did Pki signature verification failed")
 		}
-		c.log.Info("Contract verification: PKI verification successful\n")
 	} else {
-		c.log.Info("Contract verification: Using NLSS verification\n")
 		ok, err := dc.NlssVerify(hs, util.StrToHex(ss), util.StrToHex(ps))
 		if err != nil {
 			c.log.Error("Contract verification: NLSS verification error: %v\n", err)
@@ -482,7 +479,6 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 			c.log.Error("Contract verification: NLSS verification returned false\n")
 			return fmt.Errorf("did Nlss signature verification failed")
 		}
-		c.log.Info("Contract verification: NLSS verification successful\n")
 	}
 
 	return nil
