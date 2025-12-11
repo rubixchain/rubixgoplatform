@@ -435,22 +435,16 @@ func (b *Block) VerifySignature(dc didmodule.DIDCrypto) error {
 	if dc.GetSignType() == didmodule.NlssVersion {
 		// For NLSS DIDs (types 0,1,2): Verify NLSS share signature
 		// Pass empty byte array for ECDSA signature (not used anymore)
-		fmt.Printf("Block verification: Using NLSS verification, did=%s\n", did)
 		ok, err := dc.NlssVerify(h, util.StrToHex(s), []byte{})
 		if err != nil || !ok {
-			fmt.Printf("Block verification: NLSS verification failed, did=%s\n", did)
 			return fmt.Errorf("failed to verify nlss signature")
 		}
-		fmt.Printf("Block verification: NLSS verification successful, did=%s\n", did)
 	} else {
 		// For BIP DIDs (type 4): Verify PKI signature
-		fmt.Printf("Block verification: Using PKI verification, did=%s\n", did)
 		ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
 		if err != nil || !ok {
-			fmt.Printf("Block verification: PKI verification failed, did=%s\n", did)
 			return fmt.Errorf("failed to verify did signature")
 		}
-		fmt.Printf("Block verification: PKI verification successful, did=%s\n", did)
 	}
 	return nil
 }

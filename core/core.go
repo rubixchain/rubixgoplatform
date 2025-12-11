@@ -803,8 +803,6 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 		c.log.Error("failed to get did type of peer did ", didStr, "error", err)
 		return nil, err
 	}
-
-	fmt.Printf("SetupForienDID: didStr=%s, detected DIDType=%d\n", didStr, *peerInfo.DIDType)
 	return c.InitialiseDID(didStr, *peerInfo.DIDType)
 }
 
@@ -910,7 +908,6 @@ func (c *Core) GetPeerID() string {
 
 // Initializes the did in it's corresponding did mode (basic/ lite)
 func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) {
-	fmt.Printf("InitialiseDID: didStr=%s, didType=%d\n", didStr, didType)
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err
