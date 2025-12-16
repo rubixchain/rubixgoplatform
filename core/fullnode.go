@@ -263,10 +263,26 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
 		if latestTokenBlock == nil {
 			//connect to publisher and fetch complete token chain
-			p, err := c.getPeer(newEvent.PublisherDID)
-			if err != nil {
-				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
-				return fmt.Errorf("failed to open peer connection with publisher ", newEvent.PublisherDID)
+			// p, err := c.getPeer(newEvent.PublisherDID)
+			// if err != nil {
+			// 	c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
+			// 	return fmt.Errorf("failed to open peer connection with publisher %s", newEvent.PublisherDID)
+			// }
+			var p *ipfsport.Peer
+			//If fullnode has to sync it from other fullnode instead of a normal publisher node,
+			//It has to connect with FullNode using their PeerID, because they don't have DID
+			if fullNodePubPeerID != "" {
+				p, err = c.pm.OpenPeerConn(fullNodePubPeerID, "", c.getCoreAppName(fullNodePubPeerID))
+				if err != nil {
+					c.log.Error("Failed to get peer connection", "err", err)
+					return err
+				}
+			} else {
+				p, err = c.getPeer(newEvent.PublisherDID)
+				if err != nil {
+					c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
+					return fmt.Errorf("failed to open peer connection with publisher %s", newEvent.PublisherDID)
+				}
 			}
 			defer p.Close()
 			tokenSyncInfo := &TokenSyncInfo{
@@ -329,7 +345,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 					p, err = c.getPeer(newEvent.PublisherDID)
 					if err != nil {
 						c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
-						return fmt.Errorf("failed to open peer connection with publisher ", newEvent.PublisherDID)
+						return fmt.Errorf("failed to open peer connection with publisher %s", newEvent.PublisherDID)
 					}
 				}
 				defer p.Close()
@@ -380,7 +396,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			}
 		}
 		if previousOwner != newEvent.PublisherDID {
-			errMsg := fmt.Sprintf("publisher DID mismatch with prev-owner for token: %v, expected %s, got %s; ", previousOwner, newEvent.PublisherDID)
+			errMsg := fmt.Sprintf("publisher DID mismatch with prev-owner for token: %v, expected %s, got %s; ", tokenId, previousOwner, newEvent.PublisherDID)
 			c.log.Error(errMsg)
 			// since we hace ensured above that fullnode does not have any missing blocks,
 			// so now if publisher is not the previous owner, we can safely assume that it is a double spent token
@@ -479,20 +495,37 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 	}
 
 	// Handle existing contract executions with validation
-	return c.processContractExecution(newEvent, txnBlock, tokenId)
+	return c.processContractExecution(newEvent, txnBlock, tokenId, newEvent.FullNodeAsProviderPeerID)
 }
 
 // Process execution of existing contracts with block validation
-func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId string) error {
+func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId string, fullNodePubPeerID string) error {
 	// Get token type and latest block for validation
 	tokenType := txnBlock.GetTokenType(tokenId)
 	latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
 	if latestTokenBlock == nil {
 		//connect to publisher and fetch complete token chain
-		p, err := c.getPeer(newEvent.PublisherDID)
-		if err != nil {
-			c.log.Error("failed to sync full sc chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
-			return fmt.Errorf("failed to open peer connection with publisher - %v ", newEvent.PublisherDID)
+		// p, err := c.getPeer(newEvent.PublisherDID)
+		// if err != nil {
+		// 	c.log.Error("failed to sync full sc chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
+		// 	return fmt.Errorf("failed to open peer connection with publisher - %v ", newEvent.PublisherDID)
+		// }
+		var p *ipfsport.Peer
+		var err error
+		//If fullnode has to sync it from other fullnode instead of a normal publisher node,
+		//It has to connect with FullNode using their PeerID, because they don't have DID
+		if fullNodePubPeerID != "" {
+			p, err = c.pm.OpenPeerConn(fullNodePubPeerID, "", c.getCoreAppName(fullNodePubPeerID))
+			if err != nil {
+				c.log.Error("Failed to get peer connection", "err", err)
+				return err
+			}
+		} else {
+			p, err = c.getPeer(newEvent.PublisherDID)
+			if err != nil {
+				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
+				return fmt.Errorf("failed to open peer connection with publisher %s", newEvent.PublisherDID)
+			}
 		}
 		defer p.Close()
 		tokenSyncInfo := &TokenSyncInfo{
@@ -733,7 +766,7 @@ func ComputeArity4MerkleRoot(blockHashes []string) (string, error) {
 
 // This will compute the merkle root of all the block_hashes which it received in the last one hour
 func (c *Core) ComputeLatestMerkleRoot() (string, error) {
-	prevEpoch := time.Now().Add(-26 * time.Hour).Format("2006-01-02T15") //we need last one hour's block_hashes, so we are passing the previous hour's epoch
+	prevEpoch := time.Now().Add(-9 * time.Hour).Format("2006-01-02T15") //we need last one hour's block_hashes, so we are passing the previous hour's epoch
 	records, err := c.w.ReadBlocksForEpoch(prevEpoch)
 	if err != nil {
 		return "", err
@@ -750,7 +783,7 @@ func (c *Core) ComputeLatestMerkleRoot() (string, error) {
 func (c *Core) PublishMerkleRoot() error {
 
 	// Step 1: Fetch previous 1hour blockhash entries
-	prevEpoch := time.Now().Add(-26 * time.Hour).Format("2006-01-02T15") //we need last one hour's block_hashes, so we are passing the previous hour's epoch
+	prevEpoch := time.Now().Add(-9 * time.Hour).Format("2006-01-02T15") //we need last one hour's block_hashes, so we are passing the previous hour's epoch
 	records, err := c.w.ReadBlocksForEpoch(prevEpoch)
 	if err != nil {
 		c.log.Error("Failed to read blocks for Merkle computation", "err", err)
@@ -821,7 +854,7 @@ func (c *Core) handleMerkleRootMessage(remote MerkleRootPayload) {
 	debugMsg := fmt.Sprintf("remote epoch %s,  for which the root is %s,", remote.MerkleRoot, remote.Epoch)
 	c.log.Debug(debugMsg)
 	// Ensure epoch matches my working window
-	myEpoch := time.Now().Add(-26 * time.Hour).Format("2006-01-02T15")
+	myEpoch := time.Now().Add(-9 * time.Hour).Format("2006-01-02T15")
 	if remote.Epoch != myEpoch {
 		c.log.Info("Ignoring Merkle root for different epoch", "remote", remote.Epoch, "local", myEpoch)
 		return
@@ -854,82 +887,277 @@ func (c *Core) handleMerkleRootMessage(remote MerkleRootPayload) {
 	}
 }
 
+// insertSortedUnique inserts val into the sorted slice `arr` preserving order.
+// If val already exists, it does not insert a duplicate.
+func (c *Core) insertSortedUnique(arr []string, val string) []string {
+	// simple binary search for insertion point
+	lo, hi := 0, len(arr)
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if arr[mid] < val {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	// if lo is within bounds and equals val, no-op
+	if lo < len(arr) && arr[lo] == val {
+		return arr
+	}
+	// insert at lo
+	arr = append(arr, "")      // extend
+	copy(arr[lo+1:], arr[lo:]) // shift
+	arr[lo] = val
+	return arr
+}
+
 // If remoteRoot doesn't match with localRoot for a particular hour the following function will get called
+// func (c *Core) reconcileWithPeer(payload MerkleRootPayload) []string {
+// 	c.log.Debug("***reconcileWithPeer function got called***")
+// 	missing := []string{}
+// 	compareQueue := []struct {
+// 		level int
+// 		index int
+// 	}{{0, 0}} // start at root
+
+// 	// remoteRoot, err := c.remoteGetNode(payload.PublisherPeerID, , 0, 0)
+// 	// if err != nil {
+// 	// 	return missing
+// 	// }
+// 	remoteRoot := payload.MerkleRoot
+
+// 	c.log.Debug("**remoteRoot in reconcileWithPeer:  *****", remoteRoot)
+
+// 	// Compute local tree leaf + internal structure in memory ONCE
+// 	localTree := c.w.BuildMerkleStructForComparison(payload.Epoch)
+// 	if len(localTree.Levels) == 0 {
+// 		c.log.Debug("**not able to compute local merkle tree**")
+// 	}
+
+// 	if localTree.Root() == remoteRoot {
+// 		c.log.Debug("**No need for reconcile, local and remote roots are matching***")
+// 		return missing
+// 	}
+
+// 	c.log.Debug("length of the compareQue is: ", len(compareQueue))
+// 	// BFS tree walk
+// 	for len(compareQueue) > 0 {
+// 		item := compareQueue[0]
+// 		compareQueue = compareQueue[1:]
+
+// 		localChildren := localTree.GetChildren(item.level, item.index)
+// 		c.log.Debug("*length of the localchildren: ****", len(localChildren), "localchildren: ", localChildren)
+
+// 		c.log.Debug("comparison level: ", item.level, "comparison index", item.index, "epoch", payload.Epoch)
+// 		remoteChildren, err := c.getRemoteChildBlockHashes(payload.PublisherPeerID, payload.Epoch, item.level, item.index)
+// 		if err != nil {
+// 			c.log.Debug("failed to get remote fullnodes child block hashes, err: ", err)
+// 			continue
+// 		}
+// 		c.log.Debug("lenth of the remote children are: ", len(remoteChildren))
+
+// 		// compare children in arity-4 manner
+// 		for i := 0; i < 4; i++ {
+// 			if remoteChildren[i] == "" {
+// 				debugMsg := fmt.Sprintf("%dth blash hash is empty", i)
+// 				c.log.Debug(debugMsg)
+// 				continue
+// 			}
+
+// 			if localChildren[i] == remoteChildren[i] {
+// 				debugMsg := fmt.Sprintf("remote and local %d th blackHashes are same, block_hash is: %s ", i, localChildren[i])
+// 				c.log.Debug(debugMsg)
+// 				continue
+// 			}
+
+// 			// If level is leaf level → collect missing
+// 			if localTree.IsLeaf(item.level + 1) {
+// 				debugMsg := fmt.Sprintf("%dth remote children: %s, local children: %s", i, remoteChildren[i], localChildren[i])
+// 				c.log.Debug(debugMsg)
+// 				c.log.Debug("missing block hash is: ", remoteChildren[i])
+// 				missing = append(missing, remoteChildren[i])
+// 			} else {
+// 				compareQueue = append(compareQueue, struct{ level, index int }{item.level + 1, item.index*4 + i})
+// 				c.log.Debug("length of the compareQue is: ", len(compareQueue))
+// 			}
+// 		}
+// 	}
+
+// 	return missing
+// }
+
+func removeString(arr []string, target string) []string {
+	out := arr[:0]
+	for _, v := range arr {
+		if v != target {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// reconcileWithPeer performs full Case1 + Case2 Merkle reconciliation
+// Case 1: NodeA missing blocks  → remote < local  → insert remote
+// Case 2: NodeA has extra blocks → local < remote → remove local
+// NEW RULE: If remote == "" and local != "", continue
 func (c *Core) reconcileWithPeer(payload MerkleRootPayload) []string {
-	c.log.Debug("***reconcileWithPeer function got called***")
+	c.log.Debug("*** reconcileWithPeer STARTED *** epoch:", payload.Epoch)
+
+	// -------------------------------------
+	// 1️⃣ Load AND sort current local hashes
+	// -------------------------------------
+	records, err := c.w.ReadBlocksForEpoch(payload.Epoch)
+	if err != nil {
+		c.log.Error("Failed reading local blocks for epoch", payload.Epoch, "err", err)
+		return nil
+	}
+
+	localHashes := make([]string, len(records))
+	for i, r := range records {
+		localHashes[i] = r.BlockHash
+	}
+	sort.Strings(localHashes)
+
+	// -------------------------------------
+	// 2️⃣ Build initial local Merkle tree
+	// -------------------------------------
+	localTree := c.w.BuildMerkleFromHashes(localHashes)
+
+	if localTree.Root() == payload.MerkleRoot {
+		c.log.Debug("Local and remote roots match — no sync needed.")
+		return nil
+	}
+
 	missing := []string{}
-	compareQueue := []struct {
-		level int
-		index int
-	}{{0, 0}} // start at root
+	extra := []string{} // you may or may not use this later
 
-	// remoteRoot, err := c.remoteGetNode(payload.PublisherPeerID, , 0, 0)
-	// if err != nil {
-	// 	return missing
-	// }
-	remoteRoot := payload.MerkleRoot
+	//--------------------------------------
+	// 3️⃣ BFS queue starting at root (0,0)
+	//--------------------------------------
+	type nodeRef struct{ level, index int }
+	queue := []nodeRef{{0, 0}}
 
-	c.log.Debug("**remoteRoot in reconcileWithPeer:  *****", remoteRoot)
-
-	// Compute local tree leaf + internal structure in memory ONCE
-	localTree := c.w.BuildMerkleStructForComparison(payload.Epoch)
-	if len(localTree.Levels) == 0 {
-		c.log.Debug("**not able to compute local merkle tree**")
-	}
-
-	if localTree.Root() == remoteRoot {
-		c.log.Debug("**No need for reconcile, local and remote roots are matching***")
-		return missing
-	}
-
-	c.log.Debug("length of the compareQue is: ", len(compareQueue))
-	// BFS tree walk
-	for len(compareQueue) > 0 {
-		item := compareQueue[0]
-		compareQueue = compareQueue[1:]
+	//--------------------------------------
+	// 4️⃣ BFS traversal
+	//--------------------------------------
+	for len(queue) > 0 {
+		item := queue[0]
+		queue = queue[1:]
 
 		localChildren := localTree.GetChildren(item.level, item.index)
-		c.log.Debug("*length of the localchildren: ****", len(localChildren), "localchildren: ", localChildren)
 
-		c.log.Debug("comparison level: ", item.level, "comparison index", item.index, "epoch", payload.Epoch)
-		remoteChildren, err := c.getRemoteChildBlockHashes(payload.PublisherPeerID, payload.Epoch, item.level, item.index)
+		remoteChildren, err := c.getRemoteChildBlockHashes(
+			payload.PublisherPeerID, payload.Epoch, item.level, item.index,
+		)
 		if err != nil {
-			c.log.Debug("failed to get remote fullnodes child block hashes, err: ", err)
+			c.log.Warn("Failed to get remote children blockHashes; skipping branch", "err", err)
 			continue
 		}
-		c.log.Debug("lenth of the remote children are: ", len(remoteChildren))
 
-		// compare children in arity-4 manner
+		//--------------------------------------
+		// 5️⃣ Compare arity-4 children
+		//--------------------------------------
 		for i := 0; i < 4; i++ {
-			if remoteChildren[i] == "" {
-				debugMsg := fmt.Sprintf("%dth blash hash is empty", i)
-				c.log.Debug(debugMsg)
+
+			var remote, local string
+			if i < len(remoteChildren) {
+				remote = remoteChildren[i]
+			}
+			if i < len(localChildren) {
+				local = localChildren[i]
+			}
+
+			// ------------------------------------------------------
+			// Case A: both empty → skip
+			// ------------------------------------------------------
+			if remote == "" && local == "" {
 				continue
 			}
 
-			if localChildren[i] == remoteChildren[i] {
-				debugMsg := fmt.Sprintf("remote and local %d th blackHashes are same, block_hash is: %s ", i, localChildren[i])
-				c.log.Debug(debugMsg)
+			// ------------------------------------------------------
+			// Case B: exact match → continue
+			// ------------------------------------------------------
+			if remote != "" && local != "" && remote == local {
 				continue
 			}
 
-			// If level is leaf level → collect missing
-			if localTree.IsLeaf(item.level + 1) {
-				debugMsg := fmt.Sprintf("%dth remote children: %s, local children: %s", i, remoteChildren[i], localChildren[i])
-				c.log.Debug(debugMsg)
-				c.log.Debug("missing block hash is: ", remoteChildren[i])
-				missing = append(missing, remoteChildren[i])
-			} else {
-				compareQueue = append(compareQueue, struct{ level, index int }{item.level + 1, item.index*4 + i})
-				c.log.Debug("length of the compareQue is: ", len(compareQueue))
+			// ======================================================
+			// SPECIAL NEW RULE
+			// ======================================================
+			// remote empty but local exists → STOP reconciliation.
+			// No delete. No insert. No rebuild.
+			if remote == "" && local != "" {
+				// c.log.Debug("STOP: remote empty, local exists. No more info to reconcile.")
+				// return missing
+				continue
 			}
+
+			// ======================================================
+			// DETERMINE IF THIS IS LEAF-LEVEL
+			// ======================================================
+			isLeaf := localTree.IsLeaf(item.level + 1)
+
+			if !isLeaf {
+				// deeper subtree mismatch → enqueue next level
+				queue = append(queue, nodeRef{item.level + 1, item.index*4 + i})
+				continue
+			}
+
+			// ======================================================
+			// LEAF-LEVEL LOGIC (Case1 + Case2)
+			// ======================================================
+
+			//------------------------------------------------------------------
+			// Case1: missing block → remote < local  → insert remote
+			//------------------------------------------------------------------
+			if remote != "" && (local == "" || remote < local) {
+				c.log.Debug("Case1: missing block detected:", remote)
+				missing = append(missing, remote)
+
+				// Insert remote into sorted localHashes
+				localHashes = c.insertSortedUnique(localHashes, remote)
+
+				// Rebuild Merkle tree
+				localTree = c.w.BuildMerkleFromHashes(localHashes)
+
+				// UPDATE localChildren after rebuild
+				localChildren = localTree.GetChildren(item.level, item.index)
+
+				// continue comparing next child
+				i--
+				continue
+			}
+
+			//------------------------------------------------------------------
+			// Case2: extra block → local < remote → remove local
+			//------------------------------------------------------------------
+			if local != "" && remote != "" && local < remote {
+				c.log.Debug("Case2: extra block detected:", local)
+				extra = append(extra, local)
+
+				// Remove local from localHashes
+				localHashes = removeString(localHashes, local)
+
+				// Rebuild Merkle tree
+				localTree = c.w.BuildMerkleFromHashes(localHashes)
+
+				// UPDATE localChildren
+				localChildren = localTree.GetChildren(item.level, item.index)
+
+				// continue comparing same child
+				i--
+				continue
+			}
+
+			// Should not reach here, but safe-guard
+			continue
 		}
 	}
 
 	return missing
 }
 
-//Using this function, one fullnode can request a block from other fullnode, after getting the block it will add the details in sqlite tables also
+// Using this function, one fullnode can request a block from other fullnode, after getting the block it will add the details in sqlite tables also
 func (c *Core) requestBlockFromPeer(peerID string, blockHash string) error {
 	debugMsg := fmt.Sprintf("**requestBlockFromPeer function got called, fetching the block with hash %s***", blockHash)
 	c.log.Debug(debugMsg)
@@ -938,6 +1166,7 @@ func (c *Core) requestBlockFromPeer(peerID string, blockHash string) error {
 		c.log.Error("Failed to get peer connection", "err", err)
 		return err
 	}
+	defer p.Close()
 	req := SyncTokenBlockFromFullNodeRequest{
 		BlockHash: blockHash,
 	}
@@ -1031,6 +1260,7 @@ func (c *Core) getRemoteChildBlockHashes(peerID, epoch string, level, index int)
 		c.log.Error("Failed to get peer connection", "err", err)
 		return nil, err
 	}
+	defer p.Close()
 	req := GetRemoteChildrenReq{
 		Epoch: epoch,
 		Level: level,

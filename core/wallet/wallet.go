@@ -259,7 +259,7 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 
 		err = w.fullNodeSQLDB.Init(FullNodeBlockHashTable, &ReceivedBlockHash{}, true)
 		if err != nil {
-			w.log.Error("Failed to initialize RBT token storage", "err", err)
+			w.log.Error("Failed to initialize FullNodeBlockHashTable", "err", err)
 			return nil, err
 		}
 		// Create triggers after tables exist

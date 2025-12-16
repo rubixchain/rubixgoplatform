@@ -21,8 +21,9 @@ const (
 
 type ReceivedBlockHash struct {
 	BlockHash   string    `gorm:"column:block_hash;primaryKey"`
-	TokenID     string    `gorm:"column:token_id"`
-	BlockHeight uint64    `gorm:"column:block_height"`
+	TokenID     string    `gorm:"column:token_id"`     //one of the token from the block will be added to fullnode block hash table,
+	BlockHeight uint64    `gorm:"column:block_height"` //this will be of same token which got added
+	TokenValue  float64   `gorm:"column:token_value"`  //this will be of same token which got added
 	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime"`
 	AssetType   int       `gorm:"column:asset_type"`
 }
@@ -159,12 +160,14 @@ func (w *Wallet) installTriggers(execFn func(query string) error) error {
 				block_hash,
 				token_id,
 				block_height,
+				token_value,
 				created_at,
 				asset_type
 			) VALUES (
 				NEW.block_hash,
 				NEW.token_id,
 				NEW.block_height,
+				NEW.token_value,
 				datetime('now'),
 				%d
 			);
@@ -185,12 +188,14 @@ func (w *Wallet) installTriggers(execFn func(query string) error) error {
 				block_hash,
 				token_id,
 				block_height,
+				token_value,
 				created_at,
 				asset_type
 			) VALUES (
 				NEW.block_hash,
 				NEW.token_id,
 				NEW.block_height,
+				NEW.token_value,
 				datetime('now'),
 				%d
 			);
@@ -203,6 +208,39 @@ func (w *Wallet) installTriggers(execFn func(query string) error) error {
 
 	w.log.Info("SQLite triggers for all token tables installed successfully")
 	return nil
+}
+
+// BuildMerkleFromHashes constructs MerkleComparisonTree with Levels:
+// Level 0 = root, Level N = leaves (leaves at last index)
+func (w *Wallet) BuildMerkleFromHashes(hashes []string) *MerkleComparisonTree {
+	if len(hashes) == 0 {
+		return &MerkleComparisonTree{Levels: [][]string{{}}}
+	}
+	// ensure deterministic order (caller should already have sorted)
+	// make a copy so we don't mutate caller slice
+	cur := make([]string, len(hashes))
+	copy(cur, hashes)
+
+	levels := [][]string{cur} // leaves at index 0 for now
+	// build parents until single root
+	for len(cur) > 1 {
+		next := []string{}
+		for i := 0; i < len(cur); i += 4 {
+			c1 := safeIndex(cur, i)
+			c2 := safeIndex(cur, i+1)
+			c3 := safeIndex(cur, i+2)
+			c4 := safeIndex(cur, i+3)
+			p := hashNode(c1, c2, c3, c4)
+			next = append(next, p)
+		}
+		levels = append(levels, next)
+		cur = next
+	}
+	// currently levels: [leaves, parents, ..., root]. Reverse to make Level0=root
+	for i, j := 0, len(levels)-1; i < j; i, j = i+1, j-1 {
+		levels[i], levels[j] = levels[j], levels[i]
+	}
+	return &MerkleComparisonTree{Levels: levels}
 }
 
 func (w *Wallet) BuildMerkleStructForComparison(epoch string) *MerkleComparisonTree {
@@ -219,38 +257,39 @@ func (w *Wallet) BuildMerkleStructForComparison(epoch string) *MerkleComparisonT
 	}
 	sort.Strings(hashes)
 
-	// 3️⃣ Start tree with leaf level
-	levels := [][]string{hashes} // leaves temporarily stored at index 0
+	return w.BuildMerkleFromHashes(hashes)
+	// // 3️⃣ Start tree with leaf level
+	// levels := [][]string{hashes} // leaves temporarily stored at index 0
 
-	// 4️⃣ Generate parent layers until root
-	current := hashes
-	for len(current) > 1 {
-		next := []string{}
+	// // 4️⃣ Generate parent layers until root
+	// current := hashes
+	// for len(current) > 1 {
+	// 	next := []string{}
 
-		for i := 0; i < len(current); i += 4 {
-			// up to 4 children per parent
-			c1 := safeIndex(current, i)
-			c2 := safeIndex(current, i+1)
-			c3 := safeIndex(current, i+2)
-			c4 := safeIndex(current, i+3)
+	// 	for i := 0; i < len(current); i += 4 {
+	// 		// up to 4 children per parent
+	// 		c1 := safeIndex(current, i)
+	// 		c2 := safeIndex(current, i+1)
+	// 		c3 := safeIndex(current, i+2)
+	// 		c4 := safeIndex(current, i+3)
 
-			parentHash := hashNode(c1, c2, c3, c4)
-			next = append(next, parentHash)
-		}
+	// 		parentHash := hashNode(c1, c2, c3, c4)
+	// 		next = append(next, parentHash)
+	// 	}
 
-		levels = append(levels, next)
-		current = next
-	}
+	// 	levels = append(levels, next)
+	// 	current = next
+	// }
 
-	// 5️⃣ Reverse the slice so the final ordering is:
-	//     Level 0 = root
-	//     ...
-	//     Last level = leaf hashes
-	for i, j := 0, len(levels)-1; i < j; i, j = i+1, j-1 {
-		levels[i], levels[j] = levels[j], levels[i]
-	}
+	// // 5️⃣ Reverse the slice so the final ordering is:
+	// //     Level 0 = root
+	// //     ...
+	// //     Last level = leaf hashes
+	// for i, j := 0, len(levels)-1; i < j; i, j = i+1, j-1 {
+	// 	levels[i], levels[j] = levels[j], levels[i]
+	// }
 
-	return &MerkleComparisonTree{Levels: levels}
+	// return &MerkleComparisonTree{Levels: levels}
 }
 
 func hashNode(values ...string) string {

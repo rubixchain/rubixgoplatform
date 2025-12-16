@@ -368,30 +368,33 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	var blks [][]byte
 	var nextID string
 	var err error
-	// Fetch token blocks
-	blks, nextID, err = c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
-	if err != nil {
-		c.log.Error("Error fetching token blocks", "error", err)
-		return c.l.RenderJSON(req, &TCBSyncReply{
-			Status:  false,
-			Message: "Error fetching token blocks",
-		}, http.StatusInternalServerError)
-		// blks, nextID, err = c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, "")
-		// if err != nil {
-
-		// } else {
-		// 	tcbr.Message = "Sent all blocks"
-		// }
-	}
+	// To Fetch token blocks from Fullnode, if condition will be true,
+	//If we want to fetch it from normal node, it will go to else condition
 	if tr.FullNode {
 		blks, nextID, err = c.w.GetAllFullNodeTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
 		if err != nil {
 			c.log.Error("Error fetching token blocks from Fullnode", "error", err)
 			return c.l.RenderJSON(req, &TCBSyncReply{
 				Status:  false,
+				Message: fmt.Sprintf("Error fetching token blocks from FullNode, error: %v", err),
+			}, http.StatusOK)
+		}
+	} else {
+		blks, nextID, err = c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
+		if err != nil {
+			c.log.Error("Error fetching token blocks", "error", err)
+			return c.l.RenderJSON(req, &TCBSyncReply{
+				Status:  false,
 				Message: "Error fetching token blocks",
 			}, http.StatusInternalServerError)
+			// blks, nextID, err = c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, "")
+			// if err != nil {
+
+			// } else {
+			// 	tcbr.Message = "Sent all blocks"
+			// }
 		}
+
 	}
 
 	c.log.Debug("**no.of blocks sending through sync token chain API**", len(blks))
@@ -2826,6 +2829,9 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 		}
 		err = c.w.AddRBTContentToPSQl(rbtContent)
 		if err != nil {
+			if strings.Contains(err.Error(), "duplicated key not allowed") {
+				return nil
+			}
 			errMsg := fmt.Sprintf("failed to add ipfs content of rbt : %v to fullnode psql db, err: %v", tokenId, err)
 			c.log.Error(errMsg)
 			return fmt.Errorf(errMsg)
@@ -2837,6 +2843,9 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 		}
 		err = c.w.AddFTContentToPSQl(ftContent)
 		if err != nil {
+			if strings.Contains(err.Error(), "duplicated key not allowed") {
+				return nil
+			}
 			errMsg := fmt.Sprintf("failed to add ipfs content of ft : %v to fullnode psql db, err: %v", tokenId, err)
 			c.log.Error(errMsg)
 			return fmt.Errorf(errMsg)
@@ -2879,6 +2888,9 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 		// store the files into PostgreSQL as blobs
 		err = c.w.StoreNFTFilesToPSQL(tokenId, nft.DID, nft.ArtifactHash, outputDir)
 		if err != nil {
+			if strings.Contains(err.Error(), "duplicated key not allowed") {
+				return nil
+			}
 			c.log.Error("Failed to store NFT files to DB", "err", err)
 		}
 
@@ -2899,6 +2911,9 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 		}
 
 		if err := c.StoreSmartContractFilesToPSQL(tokenId, smartContractIpfsInfo); err != nil {
+			if strings.Contains(err.Error(), "duplicated key not allowed") {
+				return nil
+			}
 			errMsg := fmt.Sprintf("failed to add smart contract token to psql , smart contract hash : %v, err : %v", tokenId, err)
 			c.log.Error(errMsg)
 			return fmt.Errorf(errMsg)
@@ -3078,24 +3093,25 @@ func (c *Core) syncTokenBlockFromFullNode(req *ensweb.Request) *ensweb.Result {
 	}
 	// blockID := string(blockHashDetail.BlockHeight) + "-" + blockHashDetail.BlockHash
 	blockID := fmt.Sprintf("%d-%s", blockHashDetail.BlockHeight, blockHashDetail.BlockHash)
+	tokenValue := blockHashDetail.TokenValue
 
 	var tokenType int
-
 	switch blockHashDetail.AssetType {
 	case RBTTokenType:
-		token, err := c.w.ReadSyncedRBTFromTable(blockHashDetail.TokenID)
-		if err != nil {
-			return c.l.RenderJSON(req, &SyncTokenBlockReply{
-				Status:  false,
-				Message: fmt.Sprintf("Failed to get block hash details From FullNodeRbtTable for the token: %s, error:%s", blockHashDetail.TokenID, err),
-			}, http.StatusOK)
+		// token, err := c.w.ReadSyncedRBTFromTable(blockHashDetail.TokenID)c
+		// if err != nil {
+		// 	return c.l.RenderJSON(req, &SyncTokenBlockReply{
+		// 		Status:  false,
+		// 		Message: fmt.Sprintf("Failed to get block hash details From FullNodeRbtTable for the token: %s, error:%s", blockHashDetail.TokenID, err),
+		// 	}, http.StatusOK)
 
-		}
+		// }
 		typeString := RBTString
-		if token.TokenValue < 1.0 {
+		if tokenValue < 1.0 {
 			typeString = PartString
 		}
 		tokenType = c.TokenType(typeString)
+
 	case FTTokenType:
 		tokenType = c.TokenType(FTString)
 	case NFTTokenType:
@@ -3126,7 +3142,42 @@ func (c *Core) syncTokenBlockFromFullNode(req *ensweb.Request) *ensweb.Result {
 			Message: "Failed to initialize the block",
 		}, http.StatusOK)
 	}
+	//send blockpublisherDID as a reply, i.e previous block's ownerDID (NOTE:PublisherDID is not going to be the current block's owner)
+	prevBlockID, err := blockMap.GetPrevBlockID(blockHashDetail.TokenID)
+	if err != nil {
+		c.log.Error("failed to get previous blockID from the block", "error", err)
+		return c.l.RenderJSON(req, &SyncTokenBlockReply{
+			Status:  false,
+			Message: fmt.Sprintf("failed to get previous blockID from the block,error: %v", err),
+		}, http.StatusOK)
+
+	}
+
+	reply.BlockPublisherDID = blockMap.GetOwner()
+	if prevBlockID != "" {
+		previousBlockBytes, err := c.w.GetFullNodeTokenBlock(blockHashDetail.TokenID, tokenType, prevBlockID)
+		if err != nil {
+			c.log.Error("Error fetching Fullnode previous token block", "error", err)
+			return c.l.RenderJSON(req, &SyncTokenBlockReply{
+				Status:  false,
+				Message: fmt.Sprintf("Error fetching  Fullnode previous token block, error: %s", err),
+			}, http.StatusOK)
+		}
+
+		// Initialize block with error handling
+		previousBlockMap := block.InitBlock(previousBlockBytes, nil)
+		if blockMap == nil {
+			return c.l.RenderJSON(req, &SyncTokenBlockReply{
+				Status:  false,
+				Message: "Failed to initialize the previous block",
+			}, http.StatusOK)
+		}
+		reply.BlockPublisherDID = previousBlockMap.GetOwner()
+
+	}
+
 	reply.SyncTCBlock = blockBytes
+
 	// reply.TransactionID = blockMap.GetTid()
 
 	tokens := blockMap.GetTransTokens()
