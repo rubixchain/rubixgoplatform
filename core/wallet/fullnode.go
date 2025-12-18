@@ -137,20 +137,21 @@ func (w *Wallet) setupTriggers() error {
 func (w *Wallet) installTriggers(execFn func(query string) error) error {
 
 	type trigSpec struct {
-		table     string
-		assetType int
+		table         string
+		assetType     int
+		idColumn      string // <-- NEW: lets us customize the ID column
 	}
 
 	specs := []trigSpec{
-		{"FullNodeRBTTable", RBTTokensType},
-		{"FullNodeSCTable", SmartContractTokensType},
-		{"FullNodeNFTTable", NFTTokensType},
-		{"FullNodeFTTable", FTTokensType},
+		{"FullNodeRBTTable", RBTTokensType, "token_id"},
+		{"FullNodeSCTable", SmartContractTokensType, "smart_contract_hash"}, // <-- FIX
+		{"FullNodeNFTTable", NFTTokensType, "token_id"},
+		{"FullNodeFTTable", FTTokensType, "token_id"},
 	}
 
 	for _, s := range specs {
 
-		// INSERT trigger
+		// INSERT TRIGGER
 		triggerInsert := fmt.Sprintf(`
 		CREATE TRIGGER IF NOT EXISTS trg_%s_after_insert
 		AFTER INSERT ON %s
@@ -165,19 +166,19 @@ func (w *Wallet) installTriggers(execFn func(query string) error) error {
 				asset_type
 			) VALUES (
 				NEW.block_hash,
-				NEW.token_id,
+				NEW.%s,
 				NEW.block_height,
 				NEW.token_value,
 				datetime('now'),
 				%d
 			);
-		END;`, s.table, s.table, s.assetType)
+		END;`, s.table, s.table, s.idColumn, s.assetType)
 
 		if err := execFn(triggerInsert); err != nil {
 			return fmt.Errorf("failed creating insert trigger for %s: %w", s.table, err)
 		}
 
-		// UPDATE trigger ‼️ only when block_hash changes
+		// UPDATE TRIGGER (only when block_hash changes)
 		triggerUpdate := fmt.Sprintf(`
 		CREATE TRIGGER IF NOT EXISTS trg_%s_after_update
 		AFTER UPDATE ON %s
@@ -193,13 +194,13 @@ func (w *Wallet) installTriggers(execFn func(query string) error) error {
 				asset_type
 			) VALUES (
 				NEW.block_hash,
-				NEW.token_id,
+				NEW.%s,
 				NEW.block_height,
 				NEW.token_value,
 				datetime('now'),
 				%d
 			);
-		END;`, s.table, s.table, s.assetType)
+		END;`, s.table, s.table, s.idColumn, s.assetType)
 
 		if err := execFn(triggerUpdate); err != nil {
 			return fmt.Errorf("failed creating update trigger for %s: %w", s.table, err)
@@ -209,6 +210,7 @@ func (w *Wallet) installTriggers(execFn func(query string) error) error {
 	w.log.Info("SQLite triggers for all token tables installed successfully")
 	return nil
 }
+
 
 // BuildMerkleFromHashes constructs MerkleComparisonTree with Levels:
 // Level 0 = root, Level N = leaves (leaves at last index)

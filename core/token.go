@@ -2695,7 +2695,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
 		if err != nil {
 			if strings.Contains(err.Error(), "no records found") {
-				scDeployer := receivedBlock.GenesisBlock.GetDeployerDID()
+				var scDeployer string
+				if receivedBlock.GenesisBlock != nil {
+					scDeployer = receivedBlock.GenesisBlock.GetDeployerDID()
+				}
 				scInfo := &wallet.SyncedSmartContract{
 					SmartContractHash: tokenId,
 					Deployer:          scDeployer,
