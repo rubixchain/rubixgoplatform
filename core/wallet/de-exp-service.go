@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
@@ -197,49 +198,46 @@ func (w *Wallet) isExplorerAvailable() bool {
 	return ExplorerHost != "" && ExplorerHost != "No De-Explorer Host"
 }
 
-func (w *Wallet) notifyExplorerServer(b *block.Block) {
+// NotifyExplorerServer sends block and transaction details to the explorer
+func (w *Wallet) NotifyExplorerServer(b *block.Block, evt *model.NotifyExplorer) {
 	if !w.isExplorerAvailable() {
+		return
+	}
+	if b == nil {
 		return
 	}
 
 	explorerURL := ExplorerHost + setup.APINotifyDeExpBlockUpdate
-	blockMap := b.GetBlockMap()
-	cleanedMap := convertToStringMap(blockMap)
 
-	blockBytes, err := json.Marshal(cleanedMap)
+	// Extract block map from Rubix block
+	raw := b.GetBlockMap()
+	blockMap := convertToStringMap(raw).(map[string]interface{})
+
+	push := model.NotifyExplorer{
+		BlockHash:         evt.BlockHash,
+		TransactionID:     evt.TransactionID,
+		TxnType:           evt.TxnType,
+		AssetType:         evt.AssetType,
+		PublisherDID:      evt.PublisherDID,
+		ReceiverDID:       evt.ReceiverDID,
+		CreatorDID:        evt.CreatorDID,
+		TokenValue:        evt.TokenValue,
+		TransactionValue:  evt.TransactionValue,
+		LatestBlockHeight: evt.LatestBlockHeight,
+		BlockMap:          blockMap,
+		TokenDetails:      evt.TokenDetails,
+		FTName:            evt.FTName,
+	}
+
+	body, err := json.Marshal(push)
 	if err != nil {
 		w.log.Error("notifyExplorerServer: marshal failed", "error", err)
 		return
 	}
 
-	// Queue async to avoid blocking
-	if err := notifQueue.Enqueue(explorerURL, blockBytes); err != nil {
-		w.log.Warn("Failed to queue block notification", "error", err)
-	}
-}
-
-func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}, operation string) {
-	if !w.isExplorerAvailable() {
-		return
-	}
-
-	explorerURL := ExplorerHost + setup.APINotifyDeExpTokenUpdate
-
-	payload := map[string]interface{}{
-		"table":     tableName,
-		"data":      tokenData,
-		"operation": operation,
-	}
-
-	jsonBytes, err := json.Marshal(payload)
-	if err != nil {
-		w.log.Error("notifyTokenUpdate: marshal failed", "error", err)
-		return
-	}
-
-	// Queue async to avoid blocking
-	if err := notifQueue.Enqueue(explorerURL, jsonBytes); err != nil {
-		w.log.Warn("Failed to queue token notification", "error", err)
+	// Queue as async job (non-blocking)
+	if err := notifQueue.Enqueue(explorerURL, body); err != nil {
+		w.log.Warn("Failed to queue explorer notification", "error", err)
 	}
 }
 

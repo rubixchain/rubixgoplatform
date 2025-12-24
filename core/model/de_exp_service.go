@@ -71,3 +71,29 @@ type InitiatorSignature struct {
 	Hash        string `json:"hash"`
 	SignType    int    `json:"sign_type"`
 }
+
+// TokenDetailsFromGenesis contains essential information about a token for explorer notification.
+type TokenDetailsFromGenesis struct {
+	TokenID    string  `json:"token_id"`
+	TokenType  int     `json:"token_type"`
+	TokenValue float64 `json:"token_value"`
+}
+
+// NotifyExplorer is the structure used to send transaction information to the explorer.
+// It combines fields from PubSubTxnInfo with detailed token information.
+type NotifyExplorer struct {
+	BlockHash         string                    `json:"block_hash"`
+	TransactionID     string                    `json:"transaction_id"`
+	TxnType           string                    `json:"transaction_type"`
+	AssetType         int                       `json:"asset_type"`
+	FTName            string                    `json:"ft_name"`
+	CreatorDID        string                    `json:"creator_did"`
+	PublisherDID      string                    `json:"publisher_did"`
+	ReceiverDID       string                    `json:"receiver_did"`
+	TxnBlock          []byte                    `json:"block"`
+	LatestBlockHeight uint64                    `json:"block_height"`
+	TransactionValue  float64                   `json:"transaction_value"`
+	TokenValue        float64                   `json:"token_value"`
+	BlockMap          map[string]interface{}    `json:"block_map"`
+	TokenDetails      []TokenDetailsFromGenesis `json:"token_Details"`
+}

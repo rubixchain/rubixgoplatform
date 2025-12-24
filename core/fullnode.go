@@ -89,6 +89,76 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 }
 
+func (c *Core) notifyExplorer(txnEvent *model.PubSubTxnInfo, txnBlock *block.Block) {
+	// --- DEBUG LOG START ---
+	c.log.Info("🚀 Preparing Explorer Notification",
+		"blockHash", txnEvent.BlockHash,
+		"txnType", txnEvent.TxnType,
+		"assetType", txnEvent.AssetType)
+	// --- DEBUG LOG END ---
+
+	// 1. Get all tokens from the current transaction block
+	tokens := txnBlock.GetTransTokens()
+	tokenDetails := make([]model.TokenDetailsFromGenesis, 0, len(tokens))
+
+	// 2. Iterate through tokens to build the TokenDetails slice
+	for _, tokenID := range tokens {
+		tokenType := txnBlock.GetTokenType(tokenID)
+
+		// 3. Fetch the genesis block (from local db) to get the token value
+		genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenID, tokenType)
+		if genesisBlock == nil {
+			c.log.Error("Failed to get genesis block for explorer notification", "tokenID", tokenID)
+			continue
+		}
+
+		tokenValue := genesisBlock.GetTokenValue()
+
+		// --- DEBUG LOG ---
+		c.log.Debug("🔍 Token Detail Gathered",
+			"tokenID", tokenID,
+			"val", tokenValue,
+			"type", tokenType)
+
+		// 4. Append the details
+		td := model.TokenDetailsFromGenesis{
+			TokenID:    tokenID,
+			TokenType:  tokenType,
+			TokenValue: tokenValue,
+		}
+		tokenDetails = append(tokenDetails, td)
+	}
+
+	// 5. Create the new NotifyExplorer event struct
+	explorerEvent := &model.NotifyExplorer{
+		BlockHash:         txnEvent.BlockHash,
+		TransactionID:     txnEvent.TransactionID,
+		TxnType:           txnEvent.TxnType,
+		AssetType:         txnEvent.AssetType,
+		PublisherDID:      txnEvent.PublisherDID,
+		ReceiverDID:       txnEvent.ReceiverDID,
+		TxnBlock:          txnEvent.TxnBlock,
+		LatestBlockHeight: txnEvent.LatestBlockHeight,
+		TransactionValue:  txnEvent.TransactionValue,
+		FTName:            txnEvent.FTName,
+		CreatorDID:        txnEvent.CreatorDID,
+		TokenValue:        txnEvent.TokenValue,
+		TokenDetails:      tokenDetails,
+	}
+
+	// --- FINAL PAYLOAD DEBUG ---
+	// This will print the actual JSON being sent so you can compare it with your explorer's IncomingBlockInfo struct
+	payloadJson, _ := json.MarshalIndent(explorerEvent, "", "  ")
+	fmt.Printf("\n==== SENDING TO EXPLORER ====\n%s\n=============================\n\n", string(payloadJson))
+
+	c.log.Info("📡 Dispatching to Explorer Server",
+		"tokenCount", len(tokenDetails),
+		"ftName", txnEvent.FTName)
+
+	// 6. Call NotifyExplorerServer
+	c.w.NotifyExplorerServer(txnBlock, explorerEvent)
+}
+
 // Process transaction with retry mechanism
 func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) {
 	var lastErr error
@@ -107,6 +177,16 @@ func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) 
 			c.log.Info("Transaction processed successfully",
 				"blockHash", txnEvent.BlockHash,
 				"workerID", workerID)
+
+			// Notify explorer
+			if c.w != nil && txnEvent.TxnBlock != nil {
+				txnBlock := block.InitBlock(txnEvent.TxnBlock, nil)
+				if txnBlock != nil {
+					// Call the new dedicated function for notification
+					c.notifyExplorer(txnEvent, txnBlock)
+				}
+			}
+
 			return
 		}
 
