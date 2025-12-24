@@ -420,8 +420,6 @@ func (w *Wallet) getFullNodeGenesisBlock(tt int, token string) *block.Block {
 	}
 	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
 
-	w.log.Debug("iter in getFullNodeGenesisBlock function is: ", iter)
-
 	defer iter.Release()
 	var err error
 	if iter.First() {
@@ -429,7 +427,7 @@ func (w *Wallet) getFullNodeGenesisBlock(tt int, token string) *block.Block {
 		if isOldKey(key) {
 			err = w.updateFullNodeNewKey(tt, token)
 			if err != nil {
-				w.log.Error("*****Failed to update new key***", "err", err)
+				w.log.Error("Failed to update new key", "err", err)
 				return nil
 			}
 			return w.getFullNodeGenesisBlock(tt, token)
@@ -440,7 +438,6 @@ func (w *Wallet) getFullNodeGenesisBlock(tt int, token string) *block.Block {
 		if string(blk[0:2]) == ReferenceType {
 			blk, err = w.getRawBlock(db, blk)
 			if err != nil {
-				w.log.Debug("***Error in getRawBlock function**")
 				return nil
 			}
 		}
@@ -553,7 +550,6 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 		w.log.Error("Failed to get block number", "err", err)
 		return err
 	}
-	w.log.Debug("block number and which is getting added is: ", bn)
 
 	// First block check block number start with zero
 	if lb == nil {
@@ -988,9 +984,6 @@ func (w *Wallet) GetFullNodeGenesisTokenBlock(token string, tokenType int) *bloc
 
 // AddTokenBlock will write token block into storage
 func (w *Wallet) AddTokenBlock(token string, b *block.Block) error {
-
-	// w.log.Debug("**entered into AddTokenBlock function**, block is: ", b)
-
 	return w.addBlock(token, b)
 }
 

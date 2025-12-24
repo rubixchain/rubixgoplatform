@@ -187,15 +187,15 @@ func getConsensusRequest(consensusRequestType int, senderPeerID string, receiver
 func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
-	
+
 	// Track overall transaction performance
 	var txErr error
 	defer func() {
 		c.TrackOperation("tx.rbt_transfer.total", map[string]interface{}{
-			"sender": req.Sender,
+			"sender":   req.Sender,
 			"receiver": req.Receiver,
-			"amount": req.TokenCount,
-			"type": req.Type,
+			"amount":   req.TokenCount,
+			"type":     req.Type,
 		})(txErr)
 	}()
 
@@ -413,6 +413,9 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
 	resultChan := make(chan *model.BasicResponse, 1)
+
+	// to distinguish between transaction types
+	cr.OperationType = req.OperationType
 
 	// Start the transaction in a goroutine
 	go func() {

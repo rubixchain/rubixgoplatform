@@ -116,7 +116,7 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string, selfPeer string) []st
 			qm.log.Error("Quorums not present")
 			return nil
 		}
-		if len(quorumList) < 5 {
+		if len(quorumList) < MinQuorumRequired { //Setting quorum count to 1, from 5
 			qm.log.Error("Not enough quorums present")
 			return nil
 		}
@@ -126,7 +126,7 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string, selfPeer string) []st
 			addr := string(q.PeerID + "." + q.DID)
 			quorumAddrList = append(quorumAddrList, addr)
 			quorumAddrCount = quorumAddrCount + 1
-			if quorumAddrCount == 7 {
+			if quorumAddrCount == QuorumRequired { //Setting quorum count to 1, from 7
 				break
 			}
 		}
@@ -139,7 +139,7 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string, selfPeer string) []st
 			addr := string(peerID + "." + q)
 			quorumAddrList = append(quorumAddrList, addr)
 			quorumAddrCount = quorumAddrCount + 1
-			if quorumAddrCount == 7 {
+			if quorumAddrCount == QuorumRequired { //Setting quorum count to 1, from 7
 				break
 			}
 		}
@@ -204,8 +204,8 @@ func (c *Core) AddFaucetQuorums() {
 		return
 	}
 
-	if len(faucetQuorumList) < 5 {
-		c.log.Error("Length of Quorum List is less than Min Quorum Count(5)")
+	if len(faucetQuorumList) < MinQuorumRequired {
+		c.log.Error("Length of Quorum List is less than Min Quorum Count")
 		return
 	}
 	var qds []QuorumData

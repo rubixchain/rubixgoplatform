@@ -126,6 +126,9 @@ const (
 
 	APINotifyDeExpBlockUpdate string = "/api/block-update"
 	APINotifyDeExpTokenUpdate string = "/api/token-update"
+  
+	APIGetTokenChain  string = "/api/de-exp/get-token-chain"
+	APIRemoveStaleDID string = "/api/remove-stale-did"
 )
 
 // jwt.RegisteredClaims

@@ -1612,8 +1612,6 @@ func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedT
 
 // DeleteFailedToSyncTokenFromTable - Delete operation with notification to explorer
 func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
-	w.log.Debug("Calling DeleteFailedToSyncTokenFromTable for token:", tokenID)
-
 	token, err := w.ReadFailedToSyncTokensFromTable(tokenID)
 	if err != nil {
 		if strings.Contains(err.Error(), "no records found") {
@@ -1860,12 +1858,6 @@ func (w *Wallet) GetAllSmartContractsbyDID(did string) ([]SyncedSmartContract, e
 	}
 	return t, nil
 }
-
-// func (w *Wallet) UpdateFailedToSyncTokensFromTable(token *model.FailedToSyncTokenDetailsInfo) error {
-// 	w.l.Lock()
-// 	defer w.l.Unlock()
-// 	return w.fullNodeSQLDB.Update(FullNodeFailedToSyncTokens, &token, "token=?", token.Token)
-// }
 
 // Store failed transactions in fullnode DB for later analysis and retry
 func (w *Wallet) StoreFailedTransaction(failedTxn *model.FailedTransaction) error {

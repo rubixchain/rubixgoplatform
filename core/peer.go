@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -16,6 +17,7 @@ import (
 
 const (
 	PeerService string = "peer_service"
+	RemovePeer  string = "remove_peer"
 )
 
 type PeerMap struct {
@@ -30,6 +32,11 @@ type PeerMap struct {
 func (c *Core) peerSetup() error {
 	c.l.AddRoute(APIPeerStatus, "GET", c.peerStatus)
 	return c.ps.SubscribeTopic(PeerService, c.peerCallback)
+}
+
+// removePeerSetup will setup the ping route
+func (c *Core) removePeerSetup() error {
+	return c.ps.SubscribeTopic(RemovePeer, c.removeStalePeerCallback)
 }
 
 func (c *Core) publishPeerMap(pm *PeerMap) error {
@@ -210,4 +217,50 @@ func (c *Core) isDIDInArbitaryAddr(peerDID string) (bool, *wallet.DIDPeerMap, er
 		}
 	}
 	return false, nil, nil
+}
+
+func (c *Core) publishStalePeer(pm *PeerMap) error {
+	if c.ps != nil {
+		err := c.ps.Publish(RemovePeer, pm)
+		if err != nil {
+			c.log.Error("Failed to publish peer map message", "err", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte) {
+	var stalePeer PeerMap
+	err := json.Unmarshal(data, &stalePeer)
+	c.log.Debug("Peer DID Removal")
+	if err != nil {
+		c.log.Error("failed to parse explorer data", "err", err)
+		return
+	}
+
+	// verify the signature
+	h := util.CalculateHashString(stalePeer.PeerID+stalePeer.DID+stalePeer.Time, "SHA3-256")
+	dc, err := c.InitialiseDID(stalePeer.DID, stalePeer.DIDType)
+	if err != nil {
+		c.log.Error("failed to initialise stale peer")
+		return
+	}
+	st, err := dc.PvtVerify([]byte(h), stalePeer.Signature)
+	if err != nil || !st {
+		c.log.Error("failed to remove stale peer, signature verification failed, err ", err)
+		return
+	}
+
+	c.log.Debug("removing peer ", stalePeer.DID, stalePeer.PeerID)
+
+	// remove provided peer did and peer-id from PeerDIDTable
+	err = c.w.RemoveStalePeerDID(stalePeer.DID, stalePeer.PeerID)
+	if err != nil {
+		c.log.Debug("failed to remove peer", stalePeer.DID, "err", err)
+		return
+	}
+
+	// remove peer-did folder
+	os.RemoveAll(c.didDir + stalePeer.DID)
 }
