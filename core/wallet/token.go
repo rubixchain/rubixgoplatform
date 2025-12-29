@@ -1827,7 +1827,7 @@ func (w *Wallet) GetAllRBTbyDID(did string) ([]SyncedRBT, error) {
 
 func (w *Wallet) GetAllFTsbyDID(did string) ([]FTToken, error) {
 	var t []FTToken
-	err := w.s.Read(FTTokenStorage, &t, "owner_did=?", did)
+	err := w.fullNodeSQLDB.Read(FullNodeFTTable, &t, "owner_did=?", did)
 	if err != nil {
 		w.log.Error("Failed to get tokens", "err", err)
 		return nil, err

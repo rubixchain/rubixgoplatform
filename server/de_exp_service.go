@@ -49,45 +49,45 @@ func (s *Server) APIGetRBTbyDID(req *ensweb.Request) *ensweb.Result {
 	}
 	tokens, err := s.c.GetRBTsbyDID(did)
 	if err != nil {
-		return s.BasicResponse(req, false, "Failed to get RBTs by DID", nil)
+		return s.BasicResponse(req, false, "Failed to get RBTs by did", nil)
 	}
 	return s.BasicResponse(req, true, "RBTs fetched successfully", tokens)
 }
 
 func (s *Server) APIGetFTbyDID(req *ensweb.Request) *ensweb.Result {
-	DID := strings.TrimSpace(s.GetQuerry(req, "did"))
-	if strings.Compare(DID, "") == 0 {
+	did := strings.TrimSpace(s.GetQuerry(req, "did"))
+	if strings.Compare(did, "") == 0 {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	Tokens, err := s.c.GetFTsbyDID(DID)
+	Tokens, err := s.c.GetFTsbyDID(did)
 	if err != nil {
-		return s.BasicResponse(req, false, "Failed to get FTs by DID", nil)
+		return s.BasicResponse(req, false, "Failed to get FTs by did", nil)
 	}
 	return s.BasicResponse(req, true, "FTs fetched successfully", Tokens)
 }
 
-// to fetch the NFTs(syncedNFT) by DID
+// to fetch the NFTs(syncedNFT) by did
 func (s *Server) APIGetNFTbyDID(req *ensweb.Request) *ensweb.Result {
-	DID := strings.TrimSpace(s.GetQuerry(req, "did"))
-	if strings.Compare(DID, "") == 0 {
+	did := strings.TrimSpace(s.GetQuerry(req, "did"))
+	if strings.Compare(did, "") == 0 {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	Tokens, err := s.c.GetNFTsbyDID(DID)
+	Tokens, err := s.c.GetNFTsbyDID(did)
 	if err != nil {
-		return s.BasicResponse(req, false, "Failed to get NFTs by DID", nil)
+		return s.BasicResponse(req, false, "Failed to get NFTs by did", nil)
 	}
 	return s.BasicResponse(req, true, "NFTs fetched successfully", Tokens)
 }
 
-// to fetch the SmartContracts(syncedSmartContract) by DID
+// to fetch the SmartContracts(syncedSmartContract) by did
 func (s *Server) APIGetSmartContractbyDID(req *ensweb.Request) *ensweb.Result {
-	DID := strings.TrimSpace(s.GetQuerry(req, "did"))
-	if strings.Compare(DID, "") == 0 {
+	did := strings.TrimSpace(s.GetQuerry(req, "did"))
+	if strings.Compare(did, "") == 0 {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	Tokens, err := s.c.GetSmartContractsbyDID(DID)
+	Tokens, err := s.c.GetSmartContractsbyDID(did)
 	if err != nil {
-		return s.BasicResponse(req, false, "Failed to get SmartContracts by DID", nil)
+		return s.BasicResponse(req, false, "Failed to get SmartContracts by did", nil)
 	}
 	return s.BasicResponse(req, true, "SmartContracts fetched successfully", Tokens)
 }
