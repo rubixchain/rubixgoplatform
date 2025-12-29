@@ -1217,14 +1217,14 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 		if strings.Contains(trep.Message, "Sent all blocks") {
 			if len(trep.TCBlock) > 0 {
-				syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
-				if syncerLatestBlk == nil {
+				peerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
+				if peerLatestBlk == nil {
 					c.log.Error("Failed to initialize peer's latest block", "token", tokenSyncInfo.TokenID)
 					return fmt.Errorf("failed to initialize peer's latest block")
 				}
-				syncerLatestBlkID, err = syncerLatestBlk.GetBlockID(tokenSyncInfo.TokenID)
+				syncerLatestBlkID, err = peerLatestBlk.GetBlockID(tokenSyncInfo.TokenID)
 				if err != nil {
-					c.log.Error("Failed to get block hash of synced block", "err", err, "token", tokenSyncInfo.TokenID)
+					c.log.Error("Failed to get blockID of synced block", "err", err, "token", tokenSyncInfo.TokenID)
 					return err
 				}
 			}
@@ -1236,7 +1236,37 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				c.log.Error("Failed to add token chain block, invalid block", "token", tokenSyncInfo.TokenID)
 				return fmt.Errorf("failed to add token chain block, invalid block")
 			}
+			//check previous blockID of the block,  which we are going to add, it should be same as the latestBlockID which is alredy there for all nongenesis blocks
+			latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
+			var latestBlockID string
+			if latestBlock != nil {
+				latestBlockID, err = latestBlock.GetBlockID(tokenSyncInfo.TokenID)
+				if err != nil {
+					c.log.Error("Failed to get block id", "err", err, "token", tokenSyncInfo.TokenID)
+					return err
+				}
+				prevBlkID, err := blk.GetPrevBlockID(tokenSyncInfo.TokenID)
+				if err != nil {
+					c.log.Error("Failed to get the previous block id", "err", err, "token", tokenSyncInfo.TokenID)
+					return err
+				}
+				if prevBlkID != latestBlockID {
+					c.log.Error("previous blockID of the blk which is getting added is not matching with the blockID which is present")
+					return fmt.Errorf("previous blockID of the blk which is getting added is not matching with the blockID which is present")
 
+				}
+
+			}
+
+			//if it is a transferred type, check that if receiver of the latest blockID should be same as the sender of the block which is going to get added.
+			if blk.GetTransType() == block.TokenTransferredType {
+				if blk.GetSenderDID() != latestBlock.GetReceiverDID() {
+					c.log.Error("receiver of the latest blockID is not matchig with the sender of the block which is going to be get added")
+					return fmt.Errorf("receiver of the latest blockID is not matchig with the sender of the block which is going to be get added")
+				}
+
+			}
+			//if all checks pass, add it to the levelDB.
 			err = c.w.AddFullNodeTokenBlock(tokenSyncInfo.TokenID, blk)
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err, "token", tokenSyncInfo.TokenID)
