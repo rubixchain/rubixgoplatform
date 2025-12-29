@@ -30,21 +30,32 @@ type NotificationQueue struct {
 }
 
 type notificationTask struct {
-	url     string
-	payload []byte
-	retries int
+	url            string
+	payload        []byte
+	totalTimeout   time.Duration
+	requestTimeout time.Duration
+	retrySchedule  []time.Duration
 }
 
 const (
-	maxRetries      = 3
-	retryBackoff    = 500 * time.Millisecond
-	queueSize       = 1000
-	numWorkers      = 4
-	requestTimeout  = 15 * time.Second
-	shutdownTimeout = 30 * time.Second
+	queueSize             = 1000
+	numWorkers            = 4
+	defaultRequestTimeout = 15 * time.Second
+	defaultTotalTimeout   = 3 * time.Minute
+	shutdownTimeout       = 30 * time.Second
+	enqueueTimeout        = 100 * time.Millisecond
 )
 
 var notifQueue *NotificationQueue
+
+// Dynamic retry schedule: 5s, 30s, 1m
+// Total: 5 + 30 + 60 = 95 seconds of waiting
+// Plus 4 requests × 15s = 60 seconds = 155 seconds total (~2.5 minutes within 3-minute budget)
+var defaultRetrySchedule = []time.Duration{
+	5 * time.Second,  // 1st retry after 5 seconds
+	30 * time.Second, // 2nd retry after 30 seconds
+	60 * time.Second, // 3rd retry after 1 minute
+}
 
 func init() {
 	notifQueue = NewNotificationQueue(numWorkers)
@@ -76,20 +87,35 @@ func (nq *NotificationQueue) worker() {
 		case <-nq.done:
 			return
 		case task := <-nq.queue:
-			nq.sendWithRetry(client, task)
+			nq.sendWithDynamicRetry(client, task)
 		}
 	}
 }
 
-func (nq *NotificationQueue) sendWithRetry(client *http.Client, task notificationTask) {
-	for attempt := 0; attempt <= task.retries; attempt++ {
-		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+func (nq *NotificationQueue) sendWithDynamicRetry(client *http.Client, task notificationTask) {
+	// Create overall context with total timeout
+	overallCtx, cancel := context.WithTimeout(context.Background(), task.totalTimeout)
+	defer cancel()
 
-		req, err := http.NewRequestWithContext(ctx, "POST", task.url, bytes.NewBuffer(task.payload))
+	numRetries := len(task.retrySchedule)
+	maxAttempts := numRetries + 1 // 1 initial + N retries
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		// Check if overall timeout exceeded
+		select {
+		case <-overallCtx.Done():
+			return // Total timeout exceeded
+		default:
+		}
+
+		// Create request-specific context with request timeout
+		reqCtx, reqCancel := context.WithTimeout(overallCtx, task.requestTimeout)
+
+		req, err := http.NewRequestWithContext(reqCtx, "POST", task.url, bytes.NewBuffer(task.payload))
 		if err != nil {
-			cancel()
-			if attempt < task.retries {
-				time.Sleep(retryBackoff * time.Duration(1+attempt))
+			reqCancel()
+			if attempt < numRetries {
+				nq.waitWithContext(overallCtx, task.retrySchedule[attempt], attempt+1)
 				continue
 			}
 			return
@@ -98,7 +124,7 @@ func (nq *NotificationQueue) sendWithRetry(client *http.Client, task notificatio
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.Do(req)
-		cancel()
+		reqCancel()
 
 		if err == nil {
 			io.Copy(io.Discard, resp.Body)
@@ -109,13 +135,48 @@ func (nq *NotificationQueue) sendWithRetry(client *http.Client, task notificatio
 			// Log non-OK status but continue retrying
 		}
 
-		if attempt < task.retries {
-			time.Sleep(retryBackoff * time.Duration(1+attempt))
+		// If more retries available and overall timeout not exceeded
+		if attempt < numRetries {
+			nq.waitWithContext(overallCtx, task.retrySchedule[attempt], attempt+1)
 		}
 	}
 }
 
+// waitWithContext waits for the specified duration or until context is done
+func (nq *NotificationQueue) waitWithContext(ctx context.Context, duration time.Duration, retryNum int) {
+	select {
+	case <-time.After(duration):
+		// Wait completed, proceed to next retry
+	case <-ctx.Done():
+		// Overall timeout exceeded
+	}
+}
+
 func (nq *NotificationQueue) Enqueue(url string, payload []byte) error {
+	return nq.EnqueueWithConfig(url, payload, defaultTotalTimeout, defaultRequestTimeout, defaultRetrySchedule)
+}
+
+// EnqueueWithConfig allows custom timeout and retry schedule
+func (nq *NotificationQueue) EnqueueWithConfig(url string, payload []byte, totalTimeout time.Duration, requestTimeout time.Duration, retrySchedule []time.Duration) error {
+	// Validate timeout configuration
+	if totalTimeout < requestTimeout {
+		return fmt.Errorf("total timeout (%v) must be >= request timeout (%v)", totalTimeout, requestTimeout)
+	}
+
+	// Calculate total retry wait time
+	totalRetryWait := time.Duration(0)
+	for _, delay := range retrySchedule {
+		totalRetryWait += delay
+	}
+
+	maxAttempts := len(retrySchedule) + 1
+	maxRequestTime := time.Duration(maxAttempts) * requestTimeout
+	totalRequired := maxRequestTime + totalRetryWait
+
+	if totalRequired > totalTimeout {
+		return fmt.Errorf("config impossible: requires %v but total timeout is only %v", totalRequired, totalTimeout)
+	}
+
 	// Recover from panic if queue is closed during shutdown
 	defer func() {
 		if r := recover(); r != nil {
@@ -124,9 +185,15 @@ func (nq *NotificationQueue) Enqueue(url string, payload []byte) error {
 	}()
 
 	select {
-	case nq.queue <- notificationTask{url: url, payload: payload, retries: maxRetries}:
+	case nq.queue <- notificationTask{
+		url:            url,
+		payload:        payload,
+		totalTimeout:   totalTimeout,
+		requestTimeout: requestTimeout,
+		retrySchedule:  retrySchedule,
+	}:
 		return nil
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(enqueueTimeout):
 		return fmt.Errorf("notification queue full")
 	default:
 		return fmt.Errorf("notification queue closed")
@@ -152,7 +219,7 @@ func (nq *NotificationQueue) Shutdown(ctx context.Context) error {
 func initExplorerClient() *http.Client {
 	clientOnce.Do(func() {
 		explorerClient = &http.Client{
-			Timeout: requestTimeout,
+			Timeout: defaultRequestTimeout,
 			Transport: &http.Transport{
 				MaxIdleConns:          100,
 				MaxIdleConnsPerHost:   25,
