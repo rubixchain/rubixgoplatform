@@ -1251,18 +1251,25 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 					return err
 				}
 				if prevBlkID != latestBlockID {
-					c.log.Error("previous blockID of the blk which is getting added is not matching with the blockID which is present")
-					return fmt.Errorf("previous blockID of the blk which is getting added is not matching with the blockID which is present")
-
+					return fmt.Errorf(
+						"previous blockID of the blk which is getting added is not matching with the blockID which is present: token=%s expected_prev=%s got_prev=%s",
+						tokenSyncInfo.TokenID,
+						latestBlockID,
+						prevBlkID,
+					)
 				}
 
 			}
 
 			//if it is a transferred type, check that if receiver of the latest blockID should be same as the sender of the block which is going to get added.
 			if blk.GetTransType() == block.TokenTransferredType {
-				if blk.GetSenderDID() != latestBlock.GetReceiverDID() {
+				if blk.GetSenderDID() != latestBlock.GetOwner() {
 					c.log.Error("receiver of the latest blockID is not matchig with the sender of the block which is going to be get added")
-					return fmt.Errorf("receiver of the latest blockID is not matchig with the sender of the block which is going to be get added")
+					return fmt.Errorf("receiver of the latest blockID is not matchig with the sender of the block which is going to be get added: token=%s,existingblockReceiverDID=%s,senderDID=%s",
+						tokenSyncInfo.TokenID,
+						latestBlock.GetOwner(),
+						blk.GetSenderDID(),
+					)
 				}
 
 			}
