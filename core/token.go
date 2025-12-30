@@ -688,6 +688,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					TokenType: detail.TokenType,
 					AssetType: detail.AssetType,
 					Did:       detail.Did,
+					Reason:    fmt.Sprintf("failed to get the latest Block Height, syncing full tokenchain, error%v", err),
 				}
 
 				if err := c.w.AddFailedTokensToTable(info); err != nil {
@@ -857,6 +858,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						TokenType: token.TokenType,
 						AssetType: token.AssetType,
 						Did:       did,
+						Reason:    fmt.Sprintf("Failed to open peer after retries,peer%v, error%v", addr, err),
 					}
 
 					if err := c.w.AddFailedTokensToTable(info); err != nil {
@@ -876,6 +878,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						TokenType: token.TokenType,
 						AssetType: token.AssetType,
 						Did:       did,
+						Reason:    fmt.Sprintf("failed to sync chain,err%v", err),
 					}
 
 					if err := c.w.AddFailedTokensToTable(info); err != nil {
@@ -1245,6 +1248,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 					c.log.Error("Failed to get block id", "err", err, "token", tokenSyncInfo.TokenID)
 					return err
 				}
+				c.log.Debug("***existing blockID in FullNode***", latestBlockID, "token:", tokenSyncInfo.TokenID)
 				prevBlkID, err := blk.GetPrevBlockID(tokenSyncInfo.TokenID)
 				if err != nil {
 					c.log.Error("Failed to get the previous block id", "err", err, "token", tokenSyncInfo.TokenID)
@@ -1262,17 +1266,21 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 			}
 
 			//if it is a transferred type, check that if receiver of the latest blockID should be same as the sender of the block which is going to get added.
-			if blk.GetTransType() == block.TokenTransferredType {
-				if blk.GetSenderDID() != latestBlock.GetOwner() {
-					c.log.Error("receiver of the latest blockID is not matchig with the sender of the block which is going to be get added")
-					return fmt.Errorf("receiver of the latest blockID is not matchig with the sender of the block which is going to be get added: token=%s,existingblockReceiverDID=%s,senderDID=%s",
-						tokenSyncInfo.TokenID,
-						latestBlock.GetOwner(),
-						blk.GetSenderDID(),
-					)
+			if latestBlock != nil {
+				if (blk.GetTransType() == block.TokenTransferredType) || (blk.GetTransType() == block.TokenGeneratedType) || (blk.GetTransType() == block.TokenSelfTransferredType) {
+					if blk.GetSenderDID() != latestBlock.GetOwner() {
+						c.log.Error("receiver of the latest blockID is not matchig with the sender of the block which is going to be get added")
+						return fmt.Errorf("receiver of the latest blockID is not matchig with the sender of the block which is going to be get added: token=%s,existingblockReceiverDID=%s,senderDID=%s",
+							tokenSyncInfo.TokenID,
+							latestBlock.GetOwner(),
+							blk.GetSenderDID(),
+						)
+					}
+
 				}
 
 			}
+
 			//if all checks pass, add it to the levelDB.
 			err = c.w.AddFullNodeTokenBlock(tokenSyncInfo.TokenID, blk)
 			if err != nil {

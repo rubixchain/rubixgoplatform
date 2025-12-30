@@ -115,6 +115,7 @@ type FailedToSyncTokenDetailsInfo struct {
 	TokenType int    `gorm:"column:token_type"`
 	Did       string `gorm:"column:did"`
 	AssetType int    `gorm:"column:asset_type"`
+	Reason    string `gorm:"column:reason"`
 }
 
 type FullNodeTxnHistoryInfo struct {
