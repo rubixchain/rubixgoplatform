@@ -803,7 +803,6 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 		c.log.Error("failed to get did type of peer did ", didStr, "error", err)
 		return nil, err
 	}
-
 	return c.InitialiseDID(didStr, *peerInfo.DIDType)
 }
 
@@ -832,6 +831,12 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 
 	switch *peerInfo.DIDType {
 	case did.BasicDIDMode:
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.StandardDIDMode:
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.WalletDIDMode:
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.ChildDIDMode:
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.LiteDIDMode:
 		return did.InitDIDQuorumLite(didStr, c.didDir, ""), nil
@@ -908,10 +913,16 @@ func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) 
 		return nil, err
 	}
 	switch didType {
-	case did.LiteDIDMode:
-		return did.InitDIDLite(didStr, c.didDir, nil), nil
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
+	case did.StandardDIDMode:
+		return did.InitDIDStandard(didStr, c.didDir, nil), nil
+	case did.WalletDIDMode:
+		return did.InitDIDWallet(didStr, c.didDir, nil), nil
+	case did.ChildDIDMode:
+		return did.InitDIDChild(didStr, c.didDir, nil), nil
+	case did.LiteDIDMode:
+		return did.InitDIDLite(didStr, c.didDir, nil), nil
 	default:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	}

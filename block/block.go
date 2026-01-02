@@ -432,9 +432,20 @@ func (b *Block) VerifySignature(dc didmodule.DIDCrypto) error {
 	if err != nil {
 		return fmt.Errorf("failed to read did signature & hash")
 	}
-	ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
-	if err != nil || !ok {
-		return fmt.Errorf("failed to verify did signature")
+
+	if dc.GetSignType() == didmodule.NlssVersion {
+		// For NLSS DIDs (types 0,1,2): Verify NLSS share signature
+		// Pass empty byte array for ECDSA signature (not used anymore)
+		ok, err := dc.NlssVerify(h, util.StrToHex(s), []byte{})
+		if err != nil || !ok {
+			return fmt.Errorf("failed to verify nlss signature")
+		}
+	} else {
+		// For BIP DIDs (type 4): Verify PKI signature
+		ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
+		if err != nil || !ok {
+			return fmt.Errorf("failed to verify did signature")
+		}
 	}
 	return nil
 }
@@ -445,11 +456,24 @@ func (b *Block) UpdateSignature(dc didmodule.DIDCrypto) error {
 	if err != nil {
 		return fmt.Errorf("failed to get hash")
 	}
-	sb, err := dc.PvtSign([]byte(h))
-	if err != nil {
-		return fmt.Errorf("failed to get did signature, " + err.Error())
+
+	var sig string
+
+	if dc.GetSignType() == didmodule.NlssVersion {
+		// For NLSS DIDs (types 0,1,2): Use Sign() to get NLSS signature
+		ssig, _, err := dc.Sign(h)
+		if err != nil {
+			return fmt.Errorf("failed to get nlss signature, " + err.Error())
+		}
+		sig = util.HexToStr(ssig) // Use NLSS share signature
+	} else {
+		// For BIP DIDs (type 4): Use PvtSign() to get PKI signature
+		sb, err := dc.PvtSign([]byte(h))
+		if err != nil {
+			return fmt.Errorf("failed to get did signature, " + err.Error())
+		}
+		sig = util.HexToStr(sb)
 	}
-	sig := util.HexToStr(sb)
 
 	ksmi, ok := b.bm[TCSignatureKey]
 	if !ok {
