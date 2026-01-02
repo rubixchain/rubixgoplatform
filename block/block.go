@@ -22,7 +22,7 @@ import (
 //   "7" : QuorumSignature  : []string
 //   "8" : PledgeDetails    : map[string][]PledgeDetail
 //   "9" : SmartContractData : string
-//
+// 
 // }
 
 const (
