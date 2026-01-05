@@ -112,16 +112,16 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 		if err != nil {
 			c.log.Error("Block verification failed: signer=%s, signType=%d, err=%v\n", signer, dc.GetSignType(), err)
 			if dc.GetSignType() == did.NlssVersion {
-				c.log.Error("NLSS verification failed, attempting fallback to LiteDID for signer=%s\n", signer)
-				peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
-				if !peerUpdateResult || err != nil {
-					liteDID := did.LiteDIDMode
-					signerInfo := wallet.DIDPeerMap{
-						DID:     signer,
-						DIDType: &liteDID,
-					}
-					c.AddPeerDetails(signerInfo)
-				}
+				// c.log.Error("NLSS verification failed, attempting fallback to LiteDID for signer=%s\n", signer)
+				// peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
+				// if !peerUpdateResult || err != nil {
+				// 	liteDID := did.LiteDIDMode
+				// 	signerInfo := wallet.DIDPeerMap{
+				// 		DID:     signer,
+				// 		DIDType: &liteDID,
+				// 	}
+				// 	c.AddPeerDetails(signerInfo)
+				// }
 				c.log.Info("Retrying block verification with LiteDID for signer=%s\n", signer)
 				dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 				if err != nil {
