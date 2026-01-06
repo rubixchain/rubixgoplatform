@@ -431,7 +431,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		return nil, err
 	}
 	if c.testNet && c.defaultSetup {
-		c.AddFaucetQuorums()
+		c.AddDefaulTestnetQuorums()
 	}
 
 	// Initialize token sync manager
