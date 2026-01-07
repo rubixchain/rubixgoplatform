@@ -310,7 +310,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 					PublisherDID:   newEvent.PublisherDID,
 					ClaimedOwnerI:  previousOwner,
 					ClaimedOwnerII: newEvent.PublisherDID,
-					ErrorMessage:   "publisher DID mismatch with current owner in burnt block",
+					ErrorMessage:   "publisher DID mismatch with current owner in burnt block, dual ownership issue",
 				}
 				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
 				if err != nil {
@@ -334,7 +334,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 				PublisherDID:   newEvent.PublisherDID,
 				ClaimedOwnerI:  previousOwner,
 				ClaimedOwnerII: newEvent.PublisherDID,
-				ErrorMessage:   "publisher DID mismatch with prev-owner",
+				ErrorMessage:   "publisher DID mismatch with prev-owner, dual ownership issue",
 			}
 			err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
 			if err != nil {

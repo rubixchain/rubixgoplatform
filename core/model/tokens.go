@@ -106,9 +106,10 @@ type SendTokenDetailsInfo struct {
 	TokenChainLength uint64  `json:"tc_length"`
 	TokenType        int     `json:"token_type"`
 	Token            string  `json:"token"`
-	Did              string  `json:"did"`
+	PublisherDid     string  `json:"publisher_did"`
 	AssetType        int     `json:"asset_type"`
 	TokenValue       float64 `json:"token_value"` //For some mainnet tokens, token value is not there in the genesis block so we need to pass it through the pubsub
+	LastBlockID      string  `json:"last_block_ID"`
 }
 type FailedToSyncTokenDetailsInfo struct {
 	TokenID   string `gorm:"column:token_id;primaryKey"` // `gorm:"column:token;primaryKey"`

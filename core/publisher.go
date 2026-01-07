@@ -158,7 +158,7 @@ func (c *Core) prepareTokenDetailsForRBT(tokens []wallet.Token) []model.SendToke
 			Token:            token.TokenID,
 			TokenChainLength: blockHeight,
 			TokenType:        tokenType,
-			Did:              token.DID,
+			PublisherDid:              token.DID,
 			AssetType:        RBTTokenType,
 			TokenValue:       token.TokenValue,
 		})
@@ -184,7 +184,7 @@ func (c *Core) prepareTokenDetailsForFT(tokens []wallet.FTToken) []model.SendTok
 			Token:            token.TokenID,
 			TokenChainLength: blockHeight,
 			TokenType:        tokenType,
-			Did:              token.DID,
+			PublisherDid:              token.DID,
 			AssetType:        FTTokenType,
 		})
 	}
@@ -209,7 +209,7 @@ func (c *Core) prepareTokenDetailsForNFT(tokens []wallet.NFT) []model.SendTokenD
 			Token:            token.TokenID,
 			TokenChainLength: blockHeight,
 			TokenType:        tokenType,
-			Did:              token.DID,
+			PublisherDid:              token.DID,
 			AssetType:        NFTTokenType,
 		})
 	}
@@ -234,7 +234,7 @@ func (c *Core) prepareTokenDetailsForSC(tokens []wallet.SmartContract) []model.S
 			Token:            token.SmartContractHash,
 			TokenChainLength: blockHeight,
 			TokenType:        tokenType,
-			Did:              token.Deployer,
+			PublisherDid:              token.Deployer,
 			AssetType:        SmartContractTokenType,
 		})
 	}

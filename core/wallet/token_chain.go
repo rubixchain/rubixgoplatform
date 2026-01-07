@@ -120,6 +120,31 @@ func tcsKey(tokenType int, t string, blockID string) string {
 	return tt + "-" + t + "-" + blockID
 }
 
+func tcsKeyBlkNum(tokenType int, t string, blockNum uint64) string {
+	tt := "wt"
+	switch tokenType {
+	case tkn.RBTTokenType:
+		tt = WholeTokenType
+	case tkn.PartTokenType:
+		tt = PartTokenType
+	case tkn.TestPartTokenType:
+		tt = TestPartTokenType
+	case tkn.NFTTokenType:
+		tt = NFTType
+	case tkn.TestNFTTokenType:
+		tt = TestNFTType
+	case tkn.TestTokenType:
+		tt = TestTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
+	case tkn.FTTokenType:
+		tt = FTTokenType
+	}
+
+	return tt + "-" + t + "-" + fmt.Sprintf("%016x", blockNum)
+
+}
+
 func old2NewKey(key string) string {
 	bs := strings.Split(key, "-")
 	if len(bs) == 4 {
@@ -208,6 +233,14 @@ func (w *Wallet) getBlock(tt int, t string, blockID string) ([]byte, error) {
 		return nil, fmt.Errorf("failed get block, invalid token type")
 	}
 	return w.getRawBlock(db, []byte(tcsKey(tt, t, blockID)))
+}
+
+func (w *Wallet) getBlockByNumber(tt int, t string, blockNum uint64) ([]byte, error) {
+	db := w.getChainDB(tt)
+	if db == nil {
+		return nil, fmt.Errorf("failed get block, invalid token type")
+	}
+	return w.getRawBlock(db, []byte(tcsKeyBlkNum(tt, t, blockNum)))
 }
 
 // getFullNodeBlock gets chain block from the FullNode storage
@@ -938,6 +971,11 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 		}
 	}
 	return nil
+}
+
+
+func (w *Wallet) GetTokenBlockByNumber(token string, tokenType int, blockNum uint64) ([]byte, error) {
+	return w.getBlockByNumber(tokenType, token, blockNum)
 }
 
 // GetTokenBlock get token chain block from the storage
