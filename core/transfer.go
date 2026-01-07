@@ -55,7 +55,7 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
 		} else {
 			if req.TokenCount > accountBalance.RBTAmount {
-				return nil, fmt.Errorf("insufficient balance, account balance is %v, trnx value is %v", accountBalance.RBTAmount, req.TokenCount)
+				return nil, fmt.Errorf("insufficient balance, of account %v balance is %v, trnx value is %v",senderDID, accountBalance.RBTAmount, req.TokenCount)
 			}
 		}
 
@@ -68,7 +68,7 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 		if len(reqTokens) != 0 {
 			tokensForTransfer = append(tokensForTransfer, reqTokens...)
 		}
-		//check if ther is enough tokens to do transfer
+		//check if there is enough tokens to do transfer
 		// Get the required tokens from the DID bank
 		// this method locks the token needs to be released or
 		// removed once it done with the transfer

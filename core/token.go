@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -1814,7 +1816,14 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		br.Message = br.Message + ",  " + err.Error()
 		return
 	}
-	resp, err := http.Post("http://103.209.145.177:3999/api/update-token-value", "application/json", bytes.NewBuffer(jsonData))
+
+	
+
+	u, _ := url.Parse(c.FaucetURL)
+	u.Path = path.Join(u.Path, "/api/update-token-value")
+	updatedTokenValueURL := u.String()
+
+	resp, err := http.Post(updatedTokenValueURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		c.log.Error("Failed to update latest token number in Faucet", "err", err)
 		br.Status = false
@@ -1846,8 +1855,12 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		return nil, fmt.Errorf("DID is not exist")
 	}
 
+	u, _ := url.Parse(c.FaucetURL)
+	u.Path = path.Join(u.Path, "/api/get-token-value")
+
+	getTokenValueURL := u.String()
 	// Get the current value from Faucet
-	resp, err := http.Get("http://103.209.145.177:3999/api/current-token-value")
+	resp, err := http.Get(getTokenValueURL)
 	if err != nil {
 		return nil, err
 	}
@@ -2007,8 +2020,12 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		return br
 	}
 
+    u, _ := url.Parse(c.FaucetURL)
+	u.Path = path.Join(u.Path, "/api/current-token-value")
+	currentTokenValueURL := u.String()
+
 	// Get the current value from Faucet
-	resp, err := http.Get("http://103.209.145.177:3999/api/current-token-value")
+	resp, err := http.Get(currentTokenValueURL)
 	if err != nil {
 		br.Status = false
 		br.Message = "Unable to fetch latest value"
