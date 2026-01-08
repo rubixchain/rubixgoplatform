@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/core/coin"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/crypto"
@@ -224,11 +225,16 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	if didCreate.Dir == "" {
 		didCreate.Dir = did
 	}
+
+	tokenDenomArr := wallet.CreateTokenDenomArr(coin.MaxSupportedDecimalPlaces)
+	tokenDenomStr := wallet.GetTokenDenomStrFromArr(tokenDenomArr)
+
 	dt := wallet.DIDType{
 		DID:    did,
 		DIDDir: didCreate.Dir,
 		Type:   didCreate.Type,
 		Config: didCreate.Config,
+		TokenDenom: tokenDenomStr,
 	}
 	if didCreate.RootDID {
 		dt.RootDID = 1
@@ -367,11 +373,16 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 	if didCreate.Dir == "" {
 		didCreate.Dir = did
 	}
+
+	tokenDenomArr := wallet.CreateTokenDenomArr(coin.MaxSupportedDecimalPlaces)
+	tokenDenomStr := wallet.GetTokenDenomStrFromArr(tokenDenomArr)
+	
 	dt := wallet.DIDType{
 		DID:    did,
 		DIDDir: didCreate.Dir,
 		Type:   didCreate.Type,
 		Config: didCreate.Config,
+		TokenDenom: tokenDenomStr,
 	}
 	if didCreate.RootDID {
 		dt.RootDID = 1
