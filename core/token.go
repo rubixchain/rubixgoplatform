@@ -677,8 +677,10 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 		}
 
 		latestBlock := c.w.GetFullNodeLatestTokenBlock(detail.Token, detail.TokenType)
+		existingBlockOwnerDID := latestBlock.GetOwner()
 		var latestBlockHeight uint64
-		var latestBlockID, txnID, latestBlockHash, currentOwner string
+		var latestBlockID, txnID, latestBlockHash string
+		// var latestBlockID string
 		var blocks ReceivedBlock
 		var genesisBlock *block.Block
 		var err error
@@ -722,7 +724,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 
 			}
 
-			currentOwner = latestBlock.GetOwner()
+			// currentOwner = latestBlock.GetOwner()
 			txnID = latestBlock.GetTid()
 			genesisBlock = c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
 			//if it is a part RBT Token, check how many child tokens exist for its parent token, if there are more than 2 add it in a table
@@ -774,18 +776,38 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			//fullnode has equal number of token chain length compared to publisher, check whether the same block is coming or not
 			//If the incoming block from the publisher is different than the block which the fullnode is having, add this token details to double spend tokens table
 		} else if detail.TokenChainLength == latestBlockHeight {
-			if detail.LastBlockID != latestBlockID {
-
-				// check if token exists in postgres table, add if doesn't
-				err := c.ReadTokenContentFromPSQL(detail.Token, detail.AssetType)
-				if err != nil {
-					if err := c.AddTokenContentToPSQL(detail.Token, detail.AssetType); err != nil {
-						c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
-					}
+			
+			// check if token exists in postgres table, add if doesn't
+			err := c.ReadTokenContentFromPSQL(detail.Token, detail.AssetType)
+			if err != nil {
+				if err := c.AddTokenContentToPSQL(detail.Token, detail.AssetType); err != nil {
+					c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
 				}
+			}
 
+			if detail.LastBlockID != latestBlockID {
+				//Add token into double spend tokens table
+				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+					TokenID:        detail.Token,
+					AssetType:      detail.AssetType,
+					TokenType:      detail.TokenType,
+					PublisherDID:   event.PublisherPeerID,
+					ClaimedOwnerI:  existingBlockOwnerDID,
+					ClaimedOwnerII: detail.PublisherDid,
+					ErrorMessage:   fmt.Sprintf("did%s, did%s both are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
+				}
+				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
+				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
+					c.log.Error(errMsg)
+				}
+				continue
+
+			} else {
+				// it should read the sqlite table, if already details exist
 				// first read existing token info from the table, if not exist we will add it.
-				_, _, existingOwnerDID, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
+				_, _, _, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
 				if err != nil {
 					if strings.Contains(err.Error(), "no records found") {
 						// add token info to sqlite if not there
@@ -810,33 +832,15 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 							}
 						}
 
-						c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
-						// continue
+						c.AddTokenToRespectiveTable(detail.Token, existingBlockOwnerDID, blocks, &eventData, wallet.SyncUnrequired)
+						continue
 					}
 
 					c.log.Error("failed to read token ", detail.Token, "err ", err)
-					// continue
+					continue
 				}
-
-				//Add token into double spend tokens table
-				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-					TokenID:        detail.Token,
-					AssetType:      detail.AssetType,
-					TokenType:      detail.TokenType,
-					PublisherDID:   event.PublisherPeerID,
-					ClaimedOwnerI:  existingOwnerDID,
-					ClaimedOwnerII: detail.PublisherDid,
-					ErrorMessage:   fmt.Sprintf("did%s, did%s both are claiming the same token,dual ownership issue", existingOwnerDID, detail.PublisherDid),
-				}
-				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
-				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-				if err != nil {
-					errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
-					c.log.Error(errMsg)
-				}
-				continue
-
 			}
+
 			//Fullnode already has token chain length more than what publisher is having.
 			//In this case, get incoming blockID, check whether it matches the same number's blockID at which it is there at Fullnode side.
 		} else {
@@ -862,8 +866,30 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				//add token to double spend tokens table, with an error saying
 				//that both DID1 or DID2 are claimming the same token.
 
+				//Add token into double spend tokens table
+				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+					TokenID:        detail.Token,
+					AssetType:      detail.AssetType,
+					TokenType:      detail.TokenType,
+					PublisherDID:   event.PublisherPeerID,
+					ClaimedOwnerI:  existingBlockOwnerDID,
+					ClaimedOwnerII: detail.PublisherDid,
+					ErrorMessage:   fmt.Sprintf("did%s, did%s both are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
+				}
+				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
+				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
+					c.log.Error(errMsg)
+				}
+				continue
+
+			} else {
+				//If incoming blkID matches with the fullnodeside blkID and fullnode already has
+				// bigger length tokenchain. so it doesn't need any sync from the publisher, fullnode checks whether token details are there in sqlite table, add if not exist.
+
 				// first read existing token info from the table, if not exist we will add it.
-				_, _, existingOwnerDID, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
+				_, _, _, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
 				if err != nil {
 					if strings.Contains(err.Error(), "no records found") {
 						// add token info to sqlite if not there
@@ -888,34 +914,13 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 							}
 						}
 
-						c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
+						c.AddTokenToRespectiveTable(detail.Token, existingBlockOwnerDID, blocks, &eventData, wallet.SyncUnrequired)
 						continue
 					}
 
 					c.log.Error("failed to read token ", detail.Token, "err ", err)
 					continue
 				}
-				//Add token into double spend tokens table
-				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-					TokenID:        detail.Token,
-					AssetType:      detail.AssetType,
-					TokenType:      detail.TokenType,
-					PublisherDID:   event.PublisherPeerID,
-					ClaimedOwnerI:  existingOwnerDID,
-					ClaimedOwnerII: detail.PublisherDid,
-					ErrorMessage:   fmt.Sprintf("did%s, did%s both are claiming the same token,dual ownership issue", existingOwnerDID, detail.PublisherDid),
-				}
-				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
-				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-				if err != nil {
-					errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
-					c.log.Error(errMsg)
-				}
-				continue
-
-			} else {
-				//If incoming blkID matches with the fullnodeside blkID and fullnode already has
-				// bigger length tokenchain. so it doesn't need any sync from the publisher,it will go to next token.
 				continue
 			}
 
@@ -1070,20 +1075,44 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					defer peer.Close()
 
 					if err := c.SyncFullTokenChainForFullNode(peer, token); err != nil {
-						c.log.Error("Failed to sync chain", "token", token.TokenID, "err", err)
-						info := &model.FailedToSyncTokenDetailsInfo{
-							TokenID:   token.TokenID,
-							TokenType: token.TokenType,
-							AssetType: token.AssetType,
-							Did:       did,
-							Reason:    fmt.Sprintf("failed to sync chain,err%v", err),
+						//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
+						//we should add it into double spend tokens table
+						if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
+							strings.Contains(err.Error(), "owner of the latest blockID is not matchig with") {
+							//Add token into double spend tokens table
+							doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+								TokenID:        detail.Token,
+								AssetType:      detail.AssetType,
+								TokenType:      detail.TokenType,
+								PublisherDID:   event.PublisherPeerID,
+								ClaimedOwnerI:  existingBlockOwnerDID,
+								ClaimedOwnerII: detail.PublisherDid,
+								ErrorMessage:   fmt.Sprintf("did%s, did%s both are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
+							}
+							// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
+							err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+							if err != nil {
+								errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
+								c.log.Error(errMsg)
+							}
+
+						} else {
+							c.log.Error("Failed to sync chain", "token", token.TokenID, "err", err)
+							info := &model.FailedToSyncTokenDetailsInfo{
+								TokenID:   token.TokenID,
+								TokenType: token.TokenType,
+								AssetType: token.AssetType,
+								Did:       did,
+								Reason:    fmt.Sprintf("failed to sync chain,err%v", err),
+							}
+
+							if err := c.w.AddFailedTokensToTable(info); err != nil {
+								c.log.Error("Failed to record failed token sync in DB", "token", token.TokenID, "error", err)
+							} else {
+								c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
+							}
 						}
 
-						if err := c.w.AddFailedTokensToTable(info); err != nil {
-							c.log.Error("Failed to record failed token sync in DB", "token", token.TokenID, "error", err)
-						} else {
-							c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
-						}
 					}
 					//if it is a part RBT Token, check how many child tokens exist for its parent token, if there are more than 2 add it in a table
 					if detail.AssetType == RBTTokenType {
@@ -1499,7 +1528,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				case block.TokenTransferredType, block.TokenSelfTransferredType:
 					if blk.GetSenderDID() != latestBlock.GetOwner() {
 						c.log.Error("owner of the latest blockID is not matchig with the sender of the block which is going to get added,token", tokenSyncInfo.TokenID, "existingblockOwnerDID", latestBlock.GetOwner(), "incomingblockSenderDID", blk.GetSenderDID())
-						return fmt.Errorf("receiver of the latest blockID is not matchig with the sender of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
+						return fmt.Errorf("Owner of the latest blockID is not matchig with the sender of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
 							tokenSyncInfo.TokenID,
 							latestBlock.GetOwner(),
 							blk.GetSenderDID(),
@@ -1524,7 +1553,10 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 			err = c.w.AddFullNodeTokenBlock(tokenSyncInfo.TokenID, blk)
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err, "token", tokenSyncInfo.TokenID)
-				return err
+				return fmt.Errorf("failed to add token chain block, syncing failed: err=%v, token=%s",
+					err,
+					tokenSyncInfo.TokenID,
+				)
 			}
 		}
 
