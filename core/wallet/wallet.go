@@ -13,40 +13,41 @@ import (
 )
 
 const (
-	TokenStorage                   string = "TokensTable"
-	NFTTokenStorage                string = "NFTTokensTable"
-	CreditStorage                  string = "CreditsTable"
-	DIDStorage                     string = "DIDTable"
-	DIDPeerStorage                 string = "DIDPeerTable"
-	TransactionStorage             string = "TransactionHistory"
-	TokensArrayStorage             string = "TokensTransferred"
-	TokenProvider                  string = "TokenProviderTable"
-	TokenChainStorage              string = "tokenchainstorage"
-	NFTChainStorage                string = "nftchainstorage"
-	SmartContractTokenChainStorage string = "smartcontractokenchainstorage"
-	SmartContractStorage           string = "smartcontract"
-	CallBackUrlStorage             string = "callbackurl"
-	TokenStateHash                 string = "TokenStateHashTable"
-	UnpledgeQueueTable             string = "unpledgequeue"
-	UnpledgeSequence               string = "UnpledgeSequence"
-	FTTokenStorage                 string = "FTTokenTable"
-	FTChainStorage                 string = "FTchainstorage"
-	FTStorage                      string = "FTTable"
-	FTTransactionTokenStorage      string = "FTTransactionTokens"
-	FailedFTDownloadStorage        string = "FailedFTDownloads"
-	FullNodeStorage                string = "Fullnodestorage"
-	FullNodeRBTTable               string = "FullnodeRBTtable"
-	FullNodeFTTable                string = "FullnodeFTtable"
-	FullNodeNFTTable               string = "FullnodeNFTtable"
-	FullNodeSmartContractTable     string = "FullnodeSCtable"
-	FullNodeTxnHistoryTable        string = "FullnodeTxnHistoryTable"
-	FailedTxnsTable                string = "FailedTxns"
-	FullNodeFailedToSyncTokens     string = "FullnodeFailedTokensTable"
-	FullNodeRBTContentTable        string = "rbt_content_table"
-	FullNodeFTContentTable         string = "ft_content_table"
-	FullNodeNFTContentTable        string = "nft_content_table"
-	FullNodeSCContentTable         string = "sc_content_table"
-	FullnodeDoubleSpentTokensTable string = "DoubleSpentTokensTable"
+	TokenStorage                     string = "TokensTable"
+	NFTTokenStorage                  string = "NFTTokensTable"
+	CreditStorage                    string = "CreditsTable"
+	DIDStorage                       string = "DIDTable"
+	DIDPeerStorage                   string = "DIDPeerTable"
+	TransactionStorage               string = "TransactionHistory"
+	TokensArrayStorage               string = "TokensTransferred"
+	TokenProvider                    string = "TokenProviderTable"
+	TokenChainStorage                string = "tokenchainstorage"
+	NFTChainStorage                  string = "nftchainstorage"
+	SmartContractTokenChainStorage   string = "smartcontractokenchainstorage"
+	SmartContractStorage             string = "smartcontract"
+	CallBackUrlStorage               string = "callbackurl"
+	TokenStateHash                   string = "TokenStateHashTable"
+	UnpledgeQueueTable               string = "unpledgequeue"
+	UnpledgeSequence                 string = "UnpledgeSequence"
+	FTTokenStorage                   string = "FTTokenTable"
+	FTChainStorage                   string = "FTchainstorage"
+	FTStorage                        string = "FTTable"
+	FTTransactionTokenStorage        string = "FTTransactionTokens"
+	FailedFTDownloadStorage          string = "FailedFTDownloads"
+	FullNodeStorage                  string = "Fullnodestorage"
+	FullNodeRBTTable                 string = "FullnodeRBTtable"
+	FullNodeFTTable                  string = "FullnodeFTtable"
+	FullNodeNFTTable                 string = "FullnodeNFTtable"
+	FullNodeSmartContractTable       string = "FullnodeSCtable"
+	FullNodeTxnHistoryTable          string = "FullnodeTxnHistoryTable"
+	FailedTxnsTable                  string = "FailedTxns"
+	FullNodeFailedToSyncTokens       string = "FullnodeFailedTokensTable"
+	FullNodeMultipleChildTokensTable string = "FullnodeMultipleChildTokensTable"
+	FullNodeRBTContentTable          string = "rbt_content_table"
+	FullNodeFTContentTable           string = "ft_content_table"
+	FullNodeNFTContentTable          string = "nft_content_table"
+	FullNodeSCContentTable           string = "sc_content_table"
+	FullnodeDoubleSpentTokensTable   string = "DoubleSpentTokensTable"
 )
 
 type WalletConfig struct {
@@ -276,6 +277,10 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 		if err != nil {
 			w.log.Error("failed to initialize FullNodeTxnHistoryTable storage", "error", err)
 		}
+		err = w.fullNodeSQLDB.Init(FullNodeMultipleChildTokensTable, &model.FullNodeMultipleChildTokens{}, true)
+		if err != nil {
+			w.log.Error("failed to initialize FullNodeMultipleChildTokensTable", "error", err)
+		}
 
 		err = w.fullNodePSQLTokensDB.Init(FullNodeRBTContentTable, &RBTContent{}, true)
 		if err != nil {
@@ -300,6 +305,7 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 			w.log.Error("Failed to initialize fullnode smart contract token storage", "err", err)
 			return nil, err
 		}
+
 	}
 
 	return w, nil

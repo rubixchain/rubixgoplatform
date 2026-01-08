@@ -30,6 +30,7 @@ const delayInPublishingTCDetails = 2 * time.Second
 
 const subscriberBufferSize = 1000 // process up to this many idle batches
 const workerCount = 8             // Tune according to hardware/network
+const MaxNumberOfChildTokensAllowed = 2
 
 type TokenPublish struct {
 	Token string `json:"token"`
@@ -720,9 +721,38 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				continue
 
 			}
+
 			currentOwner = latestBlock.GetOwner()
 			txnID = latestBlock.GetTid()
 			genesisBlock = c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
+			//if it is a part RBT Token, check how many child tokens exist for its parent token, if there are more than 2 add it in a table
+			if detail.AssetType == RBTTokenType {
+				if genesisBlock != nil {
+					parentTokenID, _, err := genesisBlock.GetParentDetials(detail.Token)
+					if err != nil {
+						c.log.Error("failed to get parent tokenID from the genesis block, token", detail.Token)
+					}
+					//ReadFullNode RBT Table, and count how many children it's parent tokenID is having
+					//if it is more than 2 add this parent tokenID along with its child tokens to another table
+					childTokens, err := c.w.GetChildTokensFromSyncedRBTTable(parentTokenID)
+					if len(childTokens) > MaxNumberOfChildTokensAllowed {
+						//add these child tokens and parent tokens into a new fullnode table.
+						for _, childToken := range childTokens {
+							token := model.FullNodeMultipleChildTokens{
+								ParentTokenID: childToken.ParentTokenID,
+								ChildTokenID:  childToken.TokenID,
+							}
+							err := c.w.AddTokenToMultipleParentsTable(&token)
+							if err != nil {
+								c.log.Error("failed to add a parent token to Fullnode's multiple child token table, parentToken", token.ParentTokenID)
+							}
+
+						}
+					}
+
+				}
+			}
+
 			blocks = ReceivedBlock{
 				GenesisBlock: genesisBlock,
 				LatestBlock:  latestBlock,
@@ -1055,6 +1085,34 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 							c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
 						}
 					}
+					//if it is a part RBT Token, check how many child tokens exist for its parent token, if there are more than 2 add it in a table
+					if detail.AssetType == RBTTokenType {
+						if genesisBlock != nil {
+							parentTokenID, _, err := genesisBlock.GetParentDetials(detail.Token)
+							if err != nil {
+								c.log.Error("failed to get parent tokenID from the genesis block, token", detail.Token)
+							}
+							//ReadFullNode RBT Table, and count how many children it's parent tokenID is having
+							//if it is more than 2 add this parent tokenID along with its child tokens to another table
+							childTokens, err := c.w.GetChildTokensFromSyncedRBTTable(parentTokenID)
+							if len(childTokens) > MaxNumberOfChildTokensAllowed {
+								//add these child tokens and parent tokens into a new fullnode table.
+								for _, childToken := range childTokens {
+									token := model.FullNodeMultipleChildTokens{
+										ParentTokenID: childToken.ParentTokenID,
+										ChildTokenID:  childToken.TokenID,
+									}
+									err := c.w.AddTokenToMultipleParentsTable(&token)
+									if err != nil {
+										c.log.Error("failed to add a parent token to Fullnode's multiple child token table, parentToken", token.ParentTokenID)
+									}
+
+								}
+							}
+
+						}
+					}
+
 				}(addr, token)
 			}
 		}
@@ -2554,11 +2612,17 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				// 	tokenInfo.TokenValue = event.TokenValue
 				// }
 				if receivedBlock.GenesisBlock != nil {
+					parentTokenID, _, err := receivedBlock.GenesisBlock.GetParentDetials(tokenId)
+					if err != nil {
+						c.log.Error("failed to get the parent tokenID for the token", tokenId)
+					}
+
 					genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
 					if genesisBlockType == block.TokenMigratedType {
-						tokenInfo.TokenValue = event.TokenValue
+						tokenInfo.TokenValue = event.TokenValue //No need to add parentTokenID in case of TokenMigratedType because all migrated tokens are whole tokens
 					} else {
 						tokenInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
+						tokenInfo.ParentTokenID = parentTokenID
 					}
 
 				}

@@ -69,8 +69,8 @@ type Token struct {
 }
 
 type SyncedRBT struct {
-	TokenID string `gorm:"column:token_id;primaryKey"`
-	// ParentTokenID string  `gorm:"column:parent_token_id"`
+	TokenID       string  `gorm:"column:token_id;primaryKey"`
+	ParentTokenID string  `gorm:"column:parent_token_id"`
 	TokenValue    float64 `gorm:"column:token_value"`
 	OwnerDID      string  `gorm:"column:owner_did"`
 	PublisherDID  string  `gorm:"column:publisher_did"`
@@ -79,7 +79,6 @@ type SyncedRBT struct {
 	BlockHeight   uint64  `gorm:"column:block_height"`
 	SyncStaus     int     `gorm:"column:sync_status"`
 	TokenStatus   int     `gorm:"column:token_status"`
-	// SenderAddress string  `gorm:"column:owner_address"`
 }
 
 type RBTContent struct {
@@ -1456,17 +1455,6 @@ func (w *Wallet) UpdateTokenSyncStatus(tokenID string, syncStatus int) error {
 	return nil
 }
 
-// func (w *Wallet) AddTokenDetailsToTokensTable(tokenDetails Token) error {
-// 	// w.l.Lock()
-// 	// defer w.l.Unlock()
-// 	err := w.s.Write(TokenStorage, tokenDetails)
-// 	if err != nil {
-// 		w.log.Error("failed to write to db, token ", tokenDetails.TokenID)
-// 		return err
-// 	}
-// 	return nil
-// }
-
 func (w *Wallet) GetLockedFTs() ([]FTToken, error) {
 	var ftTokens []FTToken
 	err := w.s.Read(FTTokenStorage, &ftTokens, "token_status = ?", TokenIsLocked)
@@ -1521,6 +1509,13 @@ func (w *Wallet) AddSyncedSmartContractToTable(t *SyncedSmartContract) error {
 	// if err == nil {
 	// 	go w.notifyTokenUpdate(FullNodeSmartContractTable, t, "CREATE")
 	// }
+	return err
+}
+
+func (w *Wallet) AddTokenToMultipleParentsTable(t *model.FullNodeMultipleChildTokens) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.fullNodeSQLDB.Write(FullNodeMultipleChildTokensTable, t)
 	return err
 }
 
@@ -1597,6 +1592,30 @@ func (w *Wallet) ReadFailedToSyncTokensFromTable(tokenID string) (*model.FailedT
 		return nil, err
 	}
 	return &token, nil
+}
+
+func (w *Wallet) GetChildTokensFromSyncedRBTTable(parentTokenID string) ([]SyncedRBT, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	var childTokens []SyncedRBT
+
+	err := w.fullNodeSQLDB.Read(
+		FullNodeRBTTable,
+		&childTokens,
+		"parent_token_id = ?",
+		parentTokenID,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// If no child tokens exist, return nil (as requested)
+	if len(childTokens) == 0 {
+		return nil, nil
+	}
+
+	return childTokens, nil
 }
 
 // DeleteFailedToSyncTokenFromTable - Delete operation with notification to explorer

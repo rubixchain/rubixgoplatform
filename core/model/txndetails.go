@@ -65,3 +65,8 @@ type FailedTransaction struct {
 	FailedAt     time.Time `gorm:"column:failed_at"`
 	RetryCount   int       `gorm:"column:retry_count"`
 }
+
+type FullNodeMultipleChildTokens struct {
+	ParentTokenID string `gorm:"column:parent_token_id"`
+	ChildTokenID  string `gorm:"column:child_token_id"`
+}
