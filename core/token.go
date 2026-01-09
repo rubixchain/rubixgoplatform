@@ -1595,7 +1595,8 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 			totalValue += t.TokenValue
 		}
 		totalValue = floatPrecision(totalValue, MaxDecimalPlaces)
-		remainingAmount := floatPrecision(totalValue-txnAmount, MaxDecimalPlaces)
+		remainingAmount := floatPrecision(txnAmount-totalValue, MaxDecimalPlaces)
+		c.log.Debug("remaining amt ", remainingAmount)
 		return tokens, remainingAmount, nil
 	}
 
