@@ -260,7 +260,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 		if br.Result == nil {
 			return br.Message, true
 		}
-		
+
 		// signature response for arbitrary signature
 		if strings.Contains(br.Message, "arbitrary sign") {
 			jsonbytes, err := json.Marshal(br.Result)
@@ -277,7 +277,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 			}
 			return signMap.Signature, true
 		}
-		
+
 		cmd.log.Info("Got the request for the signature")
 
 		switch res := br.Result.(type) {
@@ -376,7 +376,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 
 		case string:
 			// fallback: result is just transaction ID string
-			return "Transaction is still processing, Transaction ID: " + res, true
+			return "Transaction completed, Transaction ID: " + res, true
 
 		default:
 			return "Invalid response: unexpected format", false
@@ -443,7 +443,7 @@ func (cmd *Command) ArbitrarySign() {
 	} else {
 		result = fmt.Sprintf("Status : %v, message : %v", status, msg)
 	}
-	
+
 	cmd.log.Info(result)
 }
 
