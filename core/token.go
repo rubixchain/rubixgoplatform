@@ -319,13 +319,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		}
 	}
 
-	// Update DID 
-	errUpdate := c.w.UpdateTokenDenomWhole(num, did)
-	if errUpdate != nil {
-		errMsg := fmt.Sprintf("failed to update token denom array for did: %v", did)
-		c.log.Error(errMsg)
-		return fmt.Errorf(errMsg)
-	}
 	return nil
 }
 

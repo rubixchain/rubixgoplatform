@@ -16,9 +16,6 @@ func (w *Wallet) ConfirmPendingTokens(txID string, tokenIDs []string) error {
 
 	confirmedCount := 0
 
-	// err := w.GetTokenDenomStrForDID()
-	var didMap map[string][]string = make(map[string][]string)
-
 	for _, tokenID := range tokenIDs {
 		var t Token
 		err := w.s.Read(TokenStorage, &t, "token_id=? AND transaction_id=?", tokenID, txID)
@@ -56,39 +53,7 @@ func (w *Wallet) ConfirmPendingTokens(txID string, tokenIDs []string) error {
 			return err
 		}
 
-		if _, ok := didMap[t.DID]; !ok {
-			tokenDenomArr, err := w.GetTokenDenomArrForDID(t.DID)
-			if err != nil {
-				return fmt.Errorf("ConfirmPendingTokens: unable to fetch token denom for DID: %v", t.DID)
-			}
-
-			didMap[t.DID] = tokenDenomArr
-		}
-
-		didTokenDenomArr := didMap[t.DID]
-
-		idx, err := DenomToIdx(t.TokenValue)
-		if err != nil {
-			return err
-		}
-
-		if idx > len(didTokenDenomArr)-1 {
-			return fmt.Errorf("TokensTransferred: unexpected error: invalid token denom arr index value for denom: %v", t.TokenValue)
-		}
-
-		errIncrement := IncrementTokenDenomArrayAtIndex(didTokenDenomArr, idx, 1)
-		if errIncrement != nil {
-			return fmt.Errorf("TokensTransferred: error while incrementing denom count by 1, err: %v", errIncrement)
-		}
-
 		confirmedCount++
-	}
-
-	for did, denom := range didMap {
-		err := w.UpdateTokenDenomRaw(denom, did)
-		if err != nil {
-			return fmt.Errorf("unable to update token denom for DID: %v, err: %v", did, err)
-		}
 	}
 
 	w.log.Info("Successfully confirmed tokens",

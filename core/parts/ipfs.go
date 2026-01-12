@@ -130,15 +130,11 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, p
 	return nil
 }
 
-func createChildTokenForLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHash string, level int, ipfsOps IPFSOperation, isTestnet bool) ([]*wallet.Token, error) {
-	var createdPartTokens []*wallet.Token = make([]*wallet.Token, 0)
+func createChildTokenForLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHash string, level int, ipfsOps IPFSOperation, isTestnet bool) (map[int]wallet.Token, error) {
+	var createdPartTokensIndexMap map[int]wallet.Token = make(map[int]wallet.Token)
 	
 	quantity := SplitFactor(level)
 	childTokenValue, err := wallet.IdxToDenom(level)
-	if err != nil {
-		return nil, err
-	}
-	parentTokenValue, err := wallet.IdxToDenom(level - 1)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +206,7 @@ func createChildTokenForLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHas
 			return nil, err
 		}
 
-		childToken := &wallet.Token{
+		childToken := wallet.Token{
 			TokenID: childTokenID,
 			ParentTokenID: parentTokenHash,
 			TokenValue: childTokenValue,
@@ -218,24 +214,15 @@ func createChildTokenForLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHas
 			TokenStatus: wallet.TokenIsFree,
 		}
 
-		err = w.CreateToken(childToken)
+		err = w.CreateToken(&childToken)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add child token %v to DB, err: %v", childToken, err)
 		}
 
-		createdPartTokens = append(createdPartTokens, childToken)
+		createdPartTokensIndexMap[i] = childToken
 	}
 	
-	err = burnParentToken(dc, w, parentTokenHash, parentTokenValue, childTokenIDs,
-	did, isTestnet)
-	if err != nil {
-		return nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenHash, did, err)
-	}
-
-	//TODO: should the DB entry part tokens be added after or before
-	// the buring of parent token?
-
-	return createdPartTokens, nil
+	return createdPartTokensIndexMap, nil
 }
 
 

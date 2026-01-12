@@ -1,8 +1,15 @@
 package parts
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"math"
 	"strconv"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
+
+	"github.com/rubixchain/rubixgoplatform/core/coin"
 	"github.com/rubixchain/rubixgoplatform/token"
 )
 
@@ -49,3 +56,46 @@ func GetChildTokenType(isTestnet bool) int {
 	}
 	return token.PartTokenType
 }
+
+
+func IpfsAddString(heirarchicalID TokenID, ipfsClient IPFSOperation) (string, error) {
+	heirarchicalIDStr := heirarchicalID.String()
+	heirarchicalIDStrBuffer := bytes.NewBufferString(heirarchicalIDStr)
+
+	return ipfsClient.Add(heirarchicalIDStrBuffer, ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+}
+
+func IpfsCatString(id string, ipfsClient IPFSOperation) (TokenID, error) {
+	ipfsCatInfo, err := ipfsClient.Cat(id)
+	if err != nil {
+		return "", err
+	}
+
+	ipfsCatBytes, err := io.ReadAll(ipfsCatInfo)
+	if err != nil {
+		return "", err
+	}
+
+	return TokenID(ipfsCatBytes), nil
+}
+
+func floatModulo(a float64, b float64) (int, error) {
+	expVal := math.Pow10(coin.MaxSupportedDecimalPlaces)
+
+	aInt := int(math.Round(a * expVal))
+	bInt := int(math.Round(b * expVal))
+
+	if bInt == 0 {
+		return 0,
+			fmt.Errorf("floatModulo: right operand found to be zero")
+	}
+
+	modInt := aInt % bInt
+	return modInt, nil
+}
+
+func GetIPFSHashFromHeirarchicalID(ipfsOpfs IPFSOperation, heirarchicalID string) (string, error) {
+	heirarchicalIDBuffer := bytes.NewBufferString(heirarchicalID)
+	return ipfsOpfs.Add(heirarchicalIDBuffer, ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+}
+
