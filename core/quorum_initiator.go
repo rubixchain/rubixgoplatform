@@ -856,70 +856,84 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// 	return nil, nil, nil, pledgeFinalityError
 		// }
 
+		// concurrent unpledge request to avoid double spent issue due to failures
 		// Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
 		// Optimization: Local cache for previousQuorumDID -> PeerInfo
-		peerInfoCache := make(map[string]*wallet.DIDPeerMap)
-		for _, tokeninfo := range ti {
-			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
+		go func() {
+			peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+			for _, tokeninfo := range ti {
+				b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 
-			blockHeight, err := b.GetBlockNumber(tokeninfo.Token)
-			if err != nil {
-				c.log.Error("failed to get latest block height of token ", tokeninfo.Token)
-			}
+				blockHeight, err := b.GetBlockNumber(tokeninfo.Token)
+				if err != nil {
+					c.log.Error("failed to get latest block height of token ", tokeninfo.Token)
+					return
+				}
 
-			// if latest block is genesis block of a whole token, then the signer(s) is(are) advisory node(s), not quorum(s)
-			// this is the case of all migrated RBTs
-			if blockHeight == 0 && tokeninfo.TokenValue == 1.0 {
-				continue
-			}
-			previousQuorumDIDs, err := b.GetSigner()
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
-			}
+				// if latest block is genesis block of a whole token, then the signer(s) is(are) advisory node(s), not quorum(s)
+				// this is the case of all migrated RBTs
+				if blockHeight == 0 && tokeninfo.TokenValue == 1.0 {
+					continue
+				}
+				previousQuorumDIDs, err := b.GetSigner()
+				if err != nil {
+					c.log.Error("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
+					return
+					// return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", tokeninfo.Token, err)
+				}
 
-			// if signer is similar to sender did skip this token, as the block is the genesis block
-			if previousQuorumDIDs[0] == sc.GetSenderDID() {
-				continue
-			}
+				// if signer is similar to sender did skip this token, as the block is the genesis block
+				if previousQuorumDIDs[0] == sc.GetSenderDID() {
+					continue
+				}
 
-			// concat tokenId and BlockID
-			bid, errBlockID := b.GetBlockID(tokeninfo.Token)
-			if errBlockID != nil {
-				return nil, nil, nil, fmt.Errorf("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
-			}
-			prevtokenIDTokenStateData := tokeninfo.Token + bid
-			prevtokenIDTokenStateBuffer := bytes.NewBuffer([]byte(prevtokenIDTokenStateData))
+				// concat tokenId and BlockID
+				bid, errBlockID := b.GetBlockID(tokeninfo.Token)
+				if errBlockID != nil {
+					c.log.Error("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
+					return
+					// return nil, nil, nil, fmt.Errorf("unable to fetch current block id for Token %v, err: %v", tokeninfo.Token, err)
+				}
+				prevtokenIDTokenStateData := tokeninfo.Token + bid
+				prevtokenIDTokenStateBuffer := bytes.NewBuffer([]byte(prevtokenIDTokenStateData))
 
-			// add to ipfs get only the hash of the token+tokenstate. This is the hash just before transferring i.e. the exhausted token state hash, and updating in Sender side
-			prevtokenIDTokenStateHash, errIpfsAdd := IpfsAddWithBackoff(c.ipfs, prevtokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-			if errIpfsAdd != nil {
-				return nil, nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
-			}
-			// send this exhausted hash to old quorums to unpledge
-			for _, previousQuorumDID := range previousQuorumDIDs {
-				// fetch previous quorum's peer Id with local cache
-				var previousQuorumInfo *wallet.DIDPeerMap
-				var ok bool
-				if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
-					previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
-					if previousQuorumInfo.PeerID == "" || err != nil {
-						return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+				// add to ipfs get only the hash of the token+tokenstate. This is the hash just before transferring i.e. the exhausted token state hash, and updating in Sender side
+				prevtokenIDTokenStateHash, errIpfsAdd := IpfsAddWithBackoff(c.ipfs, prevtokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+				if errIpfsAdd != nil {
+					c.log.Error("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
+					return
+					// return nil, nil, nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, errIpfsAdd)
+				}
+				// send this exhausted hash to old quorums to unpledge
+				for _, previousQuorumDID := range previousQuorumDIDs {
+					// fetch previous quorum's peer Id with local cache
+					var previousQuorumInfo *wallet.DIDPeerMap
+					var ok bool
+					if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
+						previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
+						if previousQuorumInfo.PeerID == "" || err != nil {
+							c.log.Error("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+							return
+							// return nil, nil, nil, fmt.Errorf("unable to get peerID for signer DID: %v. It is likely that either the DID is not created anywhere or ", previousQuorumDID)
+						}
+						peerInfoCache[previousQuorumDID] = previousQuorumInfo
 					}
-					peerInfoCache[previousQuorumDID] = previousQuorumInfo
-				}
 
-				previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
-				previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
-				if errGetPeer != nil {
-					return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
-				}
+					previousQuorumAddress := previousQuorumInfo.PeerID + "." + previousQuorumDID
+					previousQuorumPeer, errGetPeer := c.getPeer(previousQuorumAddress)
+					if errGetPeer != nil {
+						c.log.Error("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
+						return
+						// return nil, nil, nil, fmt.Errorf("unable to retrieve peer information for %v, err: %v", previousQuorumInfo.PeerID, errGetPeer)
+					}
 
-				updateTokenHashDetailsQuery := make(map[string]string)
-				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
-				previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
-				previousQuorumPeer.Close()
+					updateTokenHashDetailsQuery := make(map[string]string)
+					updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = prevtokenIDTokenStateHash
+					previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, updateTokenHashDetailsQuery, nil, nil, true)
+					previousQuorumPeer.Close()
+				}
 			}
-		}
+		}()
 
 		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
 		if err != nil {
@@ -1435,7 +1449,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TokenChainBlock:    nb.GetBlock(),
 			QuorumList:         cr.QuorumList,
 			PinningServiceMode: true,
-			OperationType: cr.OperationType,
+			OperationType:      cr.OperationType,
 		}
 		// fetching quorums' info from PeerDIDTable to share with the receiver
 		for _, qrm := range sr.QuorumList {
