@@ -856,6 +856,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// 	return nil, nil, nil, pledgeFinalityError
 		// }
 
+		// concurrent unpledge request to avoid double spent issue due to failures
 		// Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
 		// Optimization: Local cache for previousQuorumDID -> PeerInfo
 		go func() {

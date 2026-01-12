@@ -215,12 +215,10 @@ func calculateTokensNeeded(availableTokens []Token, requiredAmount float64) []To
 		totalValue += token.TokenValue
 		if totalValue == requiredAmount {
 			selectedTokens = append(selectedTokens, token)
-			fmt.Println("token sum ", totalValue)
 			break
 		} else if totalValue > requiredAmount {
 			// do not add this token to the list
 			totalValue -= token.TokenValue
-			fmt.Println("total sum ", totalValue)
 			break
 		}
 		selectedTokens = append(selectedTokens, token)
