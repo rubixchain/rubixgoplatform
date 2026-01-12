@@ -376,7 +376,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 
 		case string:
 			// fallback: result is just transaction ID string
-			return "Transaction completed, Transaction ID: " + res, true
+			return br.Message, true
 
 		default:
 			return "Invalid response: unexpected format", false

@@ -505,15 +505,15 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// 	return resp
 	// }
 
-	c.log.Debug("transaction completed with txn id ", cr.TransactionID)
+	// c.log.Debug("transaction completed with txn id ", cr.TransactionID)
 
-	msg = fmt.Sprintf("Transaction completed with transaction id %v ", cr.TransactionID)
-	resp.Message = msg
-	if strings.Contains(resp.Message, "with transaction id") {
-		if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
-			resp.Result = txID
-		}
-	}
+	// msg = fmt.Sprintf("Transaction completed with transaction id %v ", cr.TransactionID)
+	// resp.Message = msg
+	// if strings.Contains(resp.Message, "with transaction id") {
+	// 	if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
+	// 		resp.Result = txID
+	// 	}
+	// }
 	resp.Status = true
 	return resp
 }
