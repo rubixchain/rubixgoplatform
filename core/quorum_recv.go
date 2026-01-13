@@ -19,6 +19,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
@@ -1243,7 +1244,8 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 
 	dc := c.pqc[did]
-	wt, err := c.GetTokens(dc, did, pr.TokensRequired, RBTTransferMode)
+	
+	wt, err := parts.CollectTokens(dc, c.w, dc.GetDID(), pr.TokensRequired, c.ipfsOps, c.testNet, c.log)
 	if err != nil {
 		crep.Message = "Failed to get tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -1254,6 +1256,17 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "No tokens left to pledge"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
+	for _, token := range wt {
+		err := c.w.LockToken(&token)
+		if err != nil {
+			errMsg := fmt.Sprintf("Unable to lock token %v meant for pledging, err: %v", token.TokenID, err)
+			c.log.Error(errMsg)
+			crep.Message = fmt.Sprintf("Unable to lock token %v meant for pledging, err: %v", token.TokenID, err)
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
+	
 	presp := PledgeReply{
 		BasicResponse: model.BasicResponse{
 			Status:  true,
