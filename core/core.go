@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -29,7 +29,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
-
 
 const (
 	APIPingPath                     string = "/api/ping"
@@ -163,7 +162,7 @@ type Core struct {
 	txnProcessor         *DynamicTxnProcessor
 	RetryTokenSyncTicker *time.Ticker
 	DeExp                bool
-	FaucetURL			 string // for faucet url
+	faucetURL            string // for faucet url
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -242,7 +241,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		publishTokenChain: publishTokenChainDetails,
 		fullNode:          fullNode,
 		DeExp:             enableDeExp,
-		FaucetURL:         faucetURL,
+		faucetURL:         faucetURL,
 	}
 
 	if c.fullNode {
@@ -1008,12 +1007,4 @@ func (c *Core) RetryFailedTokenSync() {
 		}
 
 	}()
-}
-
-func (c *Core) UpdateGenerateFaucetURL() error{
-	FaucetURL := c.FaucetURL 
-	if FaucetURL == "" {
-		return fmt.Errorf("Faucet URL is empty")
-	}
-	return nil
 }

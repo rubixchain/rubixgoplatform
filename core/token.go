@@ -1792,16 +1792,16 @@ func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
 }
 
 func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string) {
-	
+
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "",
 	}
 
 	tokenDetails, err := c.generateTestTokensFaucet(reqID, tokenCount, did)
-	
+
 	if err != nil {
-        c.log.Error("Failed to get token details from generateTestTokensFaucet", "err", err)
+		c.log.Error("Failed to get token details from generateTestTokensFaucet", "err", err)
 		br.Status = false
 		br.Message = br.Message + ",  " + err.Error()
 		return
@@ -1825,7 +1825,7 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		br.Message = br.Message + ",  " + err.Error()
 		return
 	}
-	u, _ := url.Parse(c.FaucetURL)
+	u, _ := url.Parse(c.faucetURL)
 	u.Path = path.Join(u.Path, "/api/update-token-value")
 	updatedTokenValueURL := u.String()
 
@@ -1853,7 +1853,7 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 }
 
 func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
-	
+
 	if !c.testNet {
 		return nil, fmt.Errorf("generate test token is available in test net")
 	}
@@ -1862,7 +1862,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		return nil, fmt.Errorf("DID does not exist")
 	}
 
-	u, _ := url.Parse(c.FaucetURL)
+	u, _ := url.Parse(c.faucetURL)
 
 	u.Path = path.Join(u.Path, "/api/current-token-value")
 
@@ -2029,7 +2029,7 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		return br
 	}
 
-    u, _ := url.Parse(c.FaucetURL)
+	u, _ := url.Parse(c.faucetURL)
 
 	u.Path = path.Join(u.Path, "/api/current-token-value")
 
