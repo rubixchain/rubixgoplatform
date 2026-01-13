@@ -30,8 +30,11 @@ func floatToInt(inputNum int) string {
 }
 
 func floatMultiply(floatVal float64, multiplier int) float64 {
+	fmt.Println("Multiplier: ", multiplier)
 	multiplierFloat := float64(multiplier)
+	fmt.Println("Multiplier Float: ", multiplierFloat)
 
+	fmt.Println("floatVal: ", floatVal)
 	return floatVal * multiplierFloat
 }
 
@@ -77,6 +80,21 @@ func IpfsCatString(id string, ipfsClient IPFSOperation) (TokenID, error) {
 	}
 
 	return TokenID(ipfsCatBytes), nil
+}
+
+func floatDiv(a float64, b float64) (int, error) {
+	expVal := math.Pow10(coin.MaxSupportedDecimalPlaces)
+
+	aInt := int(math.Round(a * expVal))
+	bInt := int(math.Round(b * expVal))
+
+	if bInt == 0 {
+		return 0,
+			fmt.Errorf("floatDiv: right operand found to be zero")
+	}
+
+	divInt := aInt / bInt
+	return divInt, nil
 }
 
 func floatModulo(a float64, b float64) (int, error) {

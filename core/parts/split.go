@@ -6,20 +6,28 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/coin"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-func planSplit(ipfsOps IPFSOperation, heirarchicalID TokenID, needed float64) ([]SplitOp, error) {
+func planSplit(ipfsOps IPFSOperation, heirarchicalID TokenID, needed float64, log logger.Logger) ([]SplitOp, error) {
 	var splits []SplitOp
 
 	currentTokenID := heirarchicalID
 	currentNeeded := needed
 	zeroFloat := floatPrecision(0, coin.MaxSupportedDecimalPlaces)
+	iter := 0
+	var currentLevel int
+	
+	log.Debug(fmt.Sprintf("Remaining Value: %v; Current Needed: %v", needed, currentNeeded))
+	for currentNeeded > zeroFloat {
+		log.Warn("\nIteration: %v", iter)		
+		currentLevel = currentTokenID.Level()
 
-	for currentNeeded > 0 {
-		currentLevel := currentTokenID.Level()
 		if currentLevel >= wallet.GetMaxLevel(coin.MaxSupportedDecimalPlaces)-1 {
 			return nil, fmt.Errorf("planSplit: invalid level for token: %v, got level: %v", string(heirarchicalID), currentLevel)
 		}
+
+		log.Warn(fmt.Sprintf("currentLevel: %v and currentNeeded: %v", currentLevel, currentNeeded))
 
 		childLevel := currentLevel + 1
 		childValue, err := wallet.IdxToDenom(childLevel)
@@ -28,25 +36,43 @@ func planSplit(ipfsOps IPFSOperation, heirarchicalID TokenID, needed float64) ([
 		}
 		splitFactor := SplitFactor(childLevel)
 
-		childrenNeeded := int(currentNeeded / childValue)
+		log.Warn(fmt.Sprintf("Some metrics: childLevel: %v, childValue: %v, splitFactor: %v", childLevel, childValue, splitFactor))
+
+		childrenNeeded, err := floatDiv(currentNeeded, childValue)
+		if err != nil {
+			return nil, fmt.Errorf("planSplit: div operation failed: %v", err)
+		}
+
+		log.Warn(fmt.Sprintf("Div: currentNeeded: %v, childValue: %v, remainder: %v", currentNeeded, childValue, childrenNeeded))
+
 		remainder, err := floatModulo(currentNeeded, childValue)
 		if err != nil {
 			return nil, fmt.Errorf("planSplit: module operation failed: %v", err)
 		}
-		if remainder != 0 {
-			childrenNeeded++
-		}
 
+		log.Warn(fmt.Sprintf("Modulo: currentNeeded: %v, childValue: %v, remainder: %v", currentNeeded, childValue, remainder))
+		
 		if childrenNeeded > splitFactor {
 			childrenNeeded = splitFactor
 		}
 
-		childrenToTransfer := make([]int, 0, childrenNeeded)
-		childrenToKeep := make([]int, 0, splitFactor-childrenNeeded)
+
+		childrenToTransfer := make([]int, 0)
+		childrenToKeep := make([]int, 0)
+
+		needToSplitChild := (remainder > 0)
+		childToSplit := 0
+		if needToSplitChild {
+			// We'll split the next child (after the whole children we transfer)
+			childToSplit = childrenNeeded + 1
+		}
+
 
 		for i := 1; i <= splitFactor; i++ {
 			if i <= childrenNeeded {
 				childrenToTransfer = append(childrenToTransfer, i)
+			} else if i == childToSplit {
+				childrenToKeep = append(childrenToKeep, i)
 			} else {
 				childrenToKeep = append(childrenToKeep, i)
 			}
@@ -58,15 +84,16 @@ func planSplit(ipfsOps IPFSOperation, heirarchicalID TokenID, needed float64) ([
 			ChildrenToKeep:     childrenToKeep,
 		})
 
-		wholeChildrenValue := floatMultiply(childValue, (childrenNeeded - 1))
-		remainingAfterWholeChildren := currentNeeded - wholeChildrenValue
-
-		if remainingAfterWholeChildren < childValue && remainingAfterWholeChildren > zeroFloat {
-			currentTokenID = heirarchicalID.Child(childrenNeeded)
-			currentNeeded = remainingAfterWholeChildren
+		if needToSplitChild {
+			currentTokenID = currentTokenID.Child(childToSplit)
+			currentNeeded = floatPrecision(float64(remainder), coin.MaxSupportedDecimalPlaces) * 0.001
 		} else {
 			break
 		}
+
+		iter += 1
+		log.Warn(fmt.Sprintf("currentNeeded: %v", currentNeeded))
+
 	}
 
 	return splits, nil

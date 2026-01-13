@@ -62,7 +62,7 @@ func CollectTokens(dc did.DIDCrypto, w *wallet.Wallet, did string, targetAmount 
 		} else if tokenValue > remaining {
 			log.Debug(fmt.Sprintf("token value > remaining"))
 
-			splitOp, err := planSplit(ipfsOps, heirarchicalID, remaining)
+			splitOp, err := planSplit(ipfsOps, heirarchicalID, remaining, log)
 			if err != nil {
 				return nil, fmt.Errorf("CollectTokens: failed to plan the token split, err: %v", err)
 			}
@@ -82,6 +82,7 @@ func CollectTokens(dc did.DIDCrypto, w *wallet.Wallet, did string, targetAmount 
 	tokenCache := make(map[string]*wallet.Token)
 
 	for _, splitOp := range plan.TokensToSplit {
+		
 		someSplittedTokensToTransfer, err := splitAtLevel(w, dc, ipfsOps, splitOp, tokenCache, isTestnet)
 		if err != nil {
 			return nil, nil
