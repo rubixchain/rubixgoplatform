@@ -1792,22 +1792,31 @@ func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
 }
 
 func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string) {
-	tokenDetails, err := c.generateTestTokensFaucet(reqID, tokenCount, did)
-
+	
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "",
 	}
 
-	//If an error occurs at any given time, and the tokens have been created for that, reduce the latest token number by 1
+	tokenDetails, err := c.generateTestTokensFaucet(reqID, tokenCount, did)
+	
 	if err != nil {
+        c.log.Error("Failed to get token details from generateTestTokensFaucet", "err", err)
 		br.Status = false
-		br.Message = err.Error()
-		tokenDetails.CurrentTokenNumber = tokenDetails.CurrentTokenNumber - 1
-		if tokenDetails.CurrentTokenNumber == 0 && tokenDetails.TokenLevel != 1 {
-			tokenDetails.TokenLevel = tokenDetails.TokenLevel - 1
-		}
+		br.Message = br.Message + ",  " + err.Error()
+		return
 	}
+
+	//If an error occurs at any given time, and the tokens have been created for that, reduce the latest token number by 1
+	// if err != nil {
+	// 	br.Status = false
+	// 	br.Message = err.Error()
+	// 	tokenDetails.CurrentTokenNumber = tokenDetails.CurrentTokenNumber - 1
+	// 	if tokenDetails.CurrentTokenNumber == 0 && tokenDetails.TokenLevel != 1 {
+	// 		tokenDetails.TokenLevel = tokenDetails.TokenLevel - 1
+	// 	}
+	// }
+
 	// Send a POST request to update the token details to the faucet server
 	jsonData, err := json.Marshal(tokenDetails)
 	if err != nil {
@@ -1816,9 +1825,6 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		br.Message = br.Message + ",  " + err.Error()
 		return
 	}
-
-	
-
 	u, _ := url.Parse(c.FaucetURL)
 	u.Path = path.Join(u.Path, "/api/update-token-value")
 	updatedTokenValueURL := u.String()
@@ -1847,16 +1853,18 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 }
 
 func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
+	
 	if !c.testNet {
 		return nil, fmt.Errorf("generate test token is available in test net")
 	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
-		return nil, fmt.Errorf("DID is not exist")
+		return nil, fmt.Errorf("DID does not exist")
 	}
 
 	u, _ := url.Parse(c.FaucetURL)
-	u.Path = path.Join(u.Path, "/api/get-token-value")
+
+	u.Path = path.Join(u.Path, "/api/current-token-value")
 
 	getTokenValueURL := u.String()
 	// Get the current value from Faucet
@@ -1985,6 +1993,7 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 	}
 	//Cheking if token is valid
 	b, err := c.getFromIPFS(tokenID)
+
 	if err != nil {
 		c.log.Error("failed to get token details from ipfs", "err", err, "token", tokenID)
 		br.Message = "Cannot find token details"
@@ -2021,7 +2030,9 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 	}
 
     u, _ := url.Parse(c.FaucetURL)
+
 	u.Path = path.Join(u.Path, "/api/current-token-value")
+
 	currentTokenValueURL := u.String()
 
 	// Get the current value from Faucet
