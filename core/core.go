@@ -162,6 +162,7 @@ type Core struct {
 	txnProcessor         *DynamicTxnProcessor
 	RetryTokenSyncTicker *time.Ticker
 	DeExp                bool
+	faucetURL            string // for faucet url
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -196,7 +197,7 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, passedPSQLdbName string, passedPSQLdbUserName string, passedPSQLdbPassword string, enableDeExp bool, deExpURL string) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, passedPSQLdbName string, passedPSQLdbUserName string, passedPSQLdbPassword string, enableDeExp bool, deExpURL string, faucetURL string) (*Core, error) {
 	var err error
 	update := false
 
@@ -240,6 +241,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		publishTokenChain: publishTokenChainDetails,
 		fullNode:          fullNode,
 		DeExp:             enableDeExp,
+		faucetURL:         faucetURL,
 	}
 
 	if c.fullNode {
