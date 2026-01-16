@@ -101,12 +101,15 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
+	c.log.Debug("Contract verification starting")
 	ok, sc := c.verifyContract(cr, did)
 	if !ok {
 		crep.Message = "Failed to verify sender signature"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+	c.log.Debug("Contract verification successful")
 	// check if token has multiple pins
+	c.log.Debug("Checking for token multiple pins")
 	ti := sc.GetTransTokenInfo()
 	results := make([]MultiPinCheckRes, len(ti))
 	var wg sync.WaitGroup
@@ -116,6 +119,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		receiverPeerId = cr.PinningNodePeerID
 		c.log.Debug("Pinning Node Peer Id", receiverPeerId)
 	}
+	c.log.Debug("Checking for token multiple pins completed")
 	for i := range ti {
 		wg.Add(1)
 		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
