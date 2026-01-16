@@ -93,29 +93,66 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				c.log.Debug("getting peer info from explorer", "signer", signer)
 				peerInfo, err := c.GetPeerFromExplorer(signer)
 				if err != nil {
-					c.log.Error("failed to get peer info", "err", err)
-					return false, fmt.Errorf("failed to get peer info", "err", err)
+					c.log.Error("failed to get peer info from explorer", "err", err)
+					return false, fmt.Errorf("failed to get peer info from explorer: %w", err)
 				}
-				c.log.Debug("peer info", "peerInfo", peerInfo)
-				c.log.Debug("getting peer info from peer", "signer", signer)
-				peerDetails, err := c.GetPeerInfo(p, signer)
-				if err != nil {
-					c.log.Error("failed to get peer info", "err", err)
-					continue
+				c.log.Debug("peer info from explorer", "peerInfo", peerInfo)
+
+				// Update signerInfo with peerInfo from explorer
+				if signerInfo == nil {
+					signerInfo = peerInfo
+				} else {
+					signerInfo.DIDType = peerInfo.DIDType
+					signerInfo.PeerID = peerInfo.PeerID
 				}
-				c.log.Debug("peer details", "peerDetails", peerDetails)
-				if peerDetails.PeerInfo.DIDType == nil {
-					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
+
+				// Use explorer info as primary source - it's more reliable than direct peer connection
+				// which may fail if peer is offline or peer ID changed
+				if peerInfo.DIDType != nil {
+					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerInfo.DIDType)
 					if !peerUpdateResult || err != nil {
-						*signerInfo.DIDType = did.BasicDIDMode
-						c.AddPeerDetails(*signerInfo)
+						c.log.Warn("failed to update peer DID type from explorer, using explorer value anyway", "err", err)
+					} else {
+						c.log.Debug("updated peer DID type from explorer", "signer", signer, "didType", *peerInfo.DIDType)
 					}
 				} else {
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
+					c.log.Debug("explorer did not provide DID type, using BasicDID as fallback", "signer", signer)
+					basicDID := did.BasicDIDMode
+					peerInfo.DIDType = &basicDID
+					signerInfo.DIDType = &basicDID
+					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
 					if !peerUpdateResult || err != nil {
-						*signerInfo.DIDType = did.BasicDIDMode
-						c.AddPeerDetails(*signerInfo)
+						c.log.Warn("failed to update peer DID type to BasicDID", "err", err)
+					}
+				}
+
+				// Optionally try to get peer info directly from peer for verification
+				// This is non-blocking - if it fails, we continue with explorer info
+				// Note: p might not be the signer's peer, so we may need to connect to signer's peer
+				if peerInfo.PeerID != "" {
+					c.log.Debug("attempting to verify peer info directly from peer", "signer", signer, "peerID", peerInfo.PeerID)
+					// Try to get peer connection to the signer's peer
+					signerPeer, err := c.getPeer(peerInfo.PeerID + "." + signer)
+					if err != nil {
+						c.log.Debug("could not connect to signer's peer for verification (peer may be offline or peer ID changed), using explorer info", "signer", signer, "err", err)
+					} else {
+						defer signerPeer.Close()
+						peerDetails, err := c.GetPeerInfo(signerPeer, signer)
+						if err != nil {
+							c.log.Debug("failed to get peer info from signer's peer, using explorer info", "signer", signer, "err", err)
+						} else {
+							c.log.Debug("peer details verified from signer's peer", "peerDetails", peerDetails)
+							// If peer provides DIDType, prefer it over explorer (more up-to-date)
+							if peerDetails.PeerInfo.DIDType != nil {
+								peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
+								if !peerUpdateResult || err != nil {
+									c.log.Warn("failed to update peer DID type from peer verification", "err", err)
+								} else {
+									signerInfo.DIDType = peerDetails.PeerInfo.DIDType
+									c.log.Debug("updated peer DID type from peer verification", "signer", signer, "didType", *peerDetails.PeerInfo.DIDType)
+								}
+							}
+						}
 					}
 				}
 			}
