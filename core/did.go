@@ -74,34 +74,33 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 
 	c.log.Debug("Explorer response parsed", "userDID", apiResp.Data.UserDID, "peerID", apiResp.Data.PeerID, "didType", apiResp.Data.DIDType)
 
-	// Fetch DID content to local node
-	c.log.Debug("Fetching DID", "did", apiResp.Data.UserDID)
-	if err := c.FetchDID(apiResp.Data.UserDID); err != nil {
-		c.log.Error("Failed to fetch DID", "did", apiResp.Data.UserDID, "err", err)
-		return nil, fmt.Errorf("failed to fetch DID from network: %w", err)
-	}
-	c.log.Debug("DID fetched")
-	// Determine if DID has .png file to identify BasicDID
-	hasPNG := false
-	didDir := filepath.Join(c.didDir, apiResp.Data.UserDID)
-	if files, err := os.ReadDir(didDir); err == nil {
-		for _, f := range files {
-			if !f.IsDir() && strings.HasSuffix(f.Name(), ".png") {
-				hasPNG = true
-				break
-			}
-		}
-	} else {
-		c.log.Warn("Failed to scan DID directory", "path", didDir, "err", err)
-	}
-
-	c.log.Debug("Determining DID type")
-	// Resolve DID type
+	// Resolve DID type from explorer response first (don't block on DID fetch)
+	c.log.Debug("Determining DID type from explorer")
 	var resolvedType int
 	switch apiResp.Data.DIDType {
 	case "BIP39":
 		resolvedType = did.LiteDIDMode
+	case "BASIC":
+		resolvedType = did.BasicDIDMode
+	case "STANDARD":
+		resolvedType = did.StandardDIDMode
+	case "WALLET":
+		resolvedType = did.WalletDIDMode
+	case "CHILD":
+		resolvedType = did.ChildDIDMode
 	default:
+		// Check if DID already exists locally first (quick check, no blocking)
+		hasPNG := false
+		didDir := filepath.Join(c.didDir, apiResp.Data.UserDID)
+		if files, err := os.ReadDir(didDir); err == nil {
+			for _, f := range files {
+				if !f.IsDir() && strings.HasSuffix(f.Name(), ".png") {
+					hasPNG = true
+					break
+				}
+			}
+		}
+
 		if hasPNG {
 			resolvedType = did.BasicDIDMode
 		} else {
@@ -115,6 +114,18 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		DIDType: &resolvedType,
 	}
 	c.log.Debug("Peer info", "peerInfo", peerInfo)
+
+	// Fetch DID asynchronously in background (non-blocking)
+	// This allows validation to proceed without waiting for IPFS, even if data is not available
+	go func() {
+		c.log.Debug("Fetching DID asynchronously in background", "did", apiResp.Data.UserDID)
+		if err := c.FetchDID(apiResp.Data.UserDID); err != nil {
+			c.log.Debug("Background DID fetch failed (non-critical)", "did", apiResp.Data.UserDID, "err", err)
+		} else {
+			c.log.Debug("Background DID fetch completed", "did", apiResp.Data.UserDID)
+		}
+	}()
+
 	// Add peer to table (upsert logic should be inside AddPeerDetails)
 	if err := c.AddPeerDetails(*peerInfo); err != nil {
 		c.log.Error("Failed to add peer details to table", "did", peerInfo.DID, "err", err)

@@ -81,80 +81,101 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 			}
 			c.log.Debug("foreign DID setup successful", "signer", signer)
 		default:
+			// Step 1: Try to get peer info from local DB first
 			signerInfo, err := c.GetPeerDIDInfo(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "retry") {
 					c.AddPeerDetails(*signerInfo)
 				}
 			}
+
+			// Step 2: If not in local DB or invalid, try explorer
 			if signerInfo == nil || *signerInfo.DIDType == -1 {
-				c.log.Debug("signer info", "signerInfo", signerInfo)
-				c.log.Debug("getting peer info", "signer", signer)
-				c.log.Debug("getting peer info from explorer", "signer", signer)
+				c.log.Debug("peer info not in local DB, trying explorer", "signer", signer)
 				peerInfo, err := c.GetPeerFromExplorer(signer)
 				if err != nil {
-					c.log.Error("failed to get peer info from explorer", "err", err)
-					return false, fmt.Errorf("failed to get peer info from explorer: %w", err)
-				}
-				c.log.Debug("peer info from explorer", "peerInfo", peerInfo)
-
-				// Update signerInfo with peerInfo from explorer
-				if signerInfo == nil {
-					signerInfo = peerInfo
-				} else {
-					signerInfo.DIDType = peerInfo.DIDType
-					signerInfo.PeerID = peerInfo.PeerID
-				}
-
-				// Use explorer info as primary source - it's more reliable than direct peer connection
-				// which may fail if peer is offline or peer ID changed
-				if peerInfo.DIDType != nil {
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerInfo.DIDType)
-					if !peerUpdateResult || err != nil {
-						c.log.Warn("failed to update peer DID type from explorer, using explorer value anyway", "err", err)
+					c.log.Warn("failed to get peer info from explorer", "signer", signer, "err", err)
+					// Step 3: Only if explorer also fails, try to get from peer directly
+					// This requires peerID, so we need to check if we have it
+					var peerIDToUse string
+					if signerInfo != nil && signerInfo.PeerID != "" {
+						peerIDToUse = signerInfo.PeerID
 					} else {
-						c.log.Debug("updated peer DID type from explorer", "signer", signer, "didType", *peerInfo.DIDType)
+						// Try to get peerID from local DB even if DIDType is missing
+						peerIDToUse = c.w.GetPeerID(signer)
 					}
-				} else {
-					c.log.Debug("explorer did not provide DID type, using BasicDID as fallback", "signer", signer)
-					basicDID := did.BasicDIDMode
-					peerInfo.DIDType = &basicDID
-					signerInfo.DIDType = &basicDID
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
-					if !peerUpdateResult || err != nil {
-						c.log.Warn("failed to update peer DID type to BasicDID", "err", err)
-					}
-				}
 
-				// Optionally try to get peer info directly from peer for verification
-				// This is non-blocking - if it fails, we continue with explorer info
-				// Note: p might not be the signer's peer, so we may need to connect to signer's peer
-				if peerInfo.PeerID != "" {
-					c.log.Debug("attempting to verify peer info directly from peer", "signer", signer, "peerID", peerInfo.PeerID)
-					// Try to get peer connection to the signer's peer
-					signerPeer, err := c.getPeer(peerInfo.PeerID + "." + signer)
-					if err != nil {
-						c.log.Debug("could not connect to signer's peer for verification (peer may be offline or peer ID changed), using explorer info", "signer", signer, "err", err)
-					} else {
+					if peerIDToUse != "" {
+						c.log.Debug("trying to get peer info directly from peer", "signer", signer, "peerID", peerIDToUse)
+						signerPeer, err := c.getPeer(peerIDToUse + "." + signer)
+						if err != nil {
+							c.log.Error("failed to connect to peer, cannot get peer info", "signer", signer, "err", err)
+							return false, fmt.Errorf("failed to get peer info: not in local DB, explorer failed, and peer connection failed: %w", err)
+						}
 						defer signerPeer.Close()
+
 						peerDetails, err := c.GetPeerInfo(signerPeer, signer)
 						if err != nil {
-							c.log.Debug("failed to get peer info from signer's peer, using explorer info", "signer", signer, "err", err)
-						} else {
-							c.log.Debug("peer details verified from signer's peer", "peerDetails", peerDetails)
-							// If peer provides DIDType, prefer it over explorer (more up-to-date)
-							if peerDetails.PeerInfo.DIDType != nil {
-								peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
-								if !peerUpdateResult || err != nil {
-									c.log.Warn("failed to update peer DID type from peer verification", "err", err)
-								} else {
-									signerInfo.DIDType = peerDetails.PeerInfo.DIDType
-									c.log.Debug("updated peer DID type from peer verification", "signer", signer, "didType", *peerDetails.PeerInfo.DIDType)
-								}
+							c.log.Error("failed to get peer info from peer", "signer", signer, "err", err)
+							return false, fmt.Errorf("failed to get peer info from peer: %w", err)
+						}
+
+						// Update signerInfo with peer info
+						if signerInfo == nil {
+							signerInfo = &wallet.DIDPeerMap{
+								DID:     signer,
+								PeerID:  peerIDToUse,
+								DIDType: peerDetails.PeerInfo.DIDType,
 							}
+						} else {
+							signerInfo.DIDType = peerDetails.PeerInfo.DIDType
+							if signerInfo.PeerID == "" {
+								signerInfo.PeerID = peerIDToUse
+							}
+						}
+
+						// Save to local DB for future use
+						if signerInfo.DIDType != nil {
+							c.w.UpdatePeerDIDType(signer, *signerInfo.DIDType)
+							c.AddPeerDetails(*signerInfo)
+						}
+					} else {
+						c.log.Error("cannot get peer info: not in local DB, explorer failed, and no peerID available", "signer", signer)
+						return false, fmt.Errorf("failed to get peer info: not in local DB, explorer failed, and no peerID available")
+					}
+				} else {
+					// Explorer succeeded - use its info
+					c.log.Debug("peer info retrieved from explorer", "peerInfo", peerInfo)
+
+					// Update signerInfo with peerInfo from explorer
+					if signerInfo == nil {
+						signerInfo = peerInfo
+					} else {
+						signerInfo.DIDType = peerInfo.DIDType
+						signerInfo.PeerID = peerInfo.PeerID
+					}
+
+					// Save explorer info to local DB for future use
+					if peerInfo.DIDType != nil {
+						peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerInfo.DIDType)
+						if !peerUpdateResult || err != nil {
+							c.log.Warn("failed to update peer DID type from explorer, using explorer value anyway", "err", err)
+						} else {
+							c.log.Debug("updated peer DID type from explorer", "signer", signer, "didType", *peerInfo.DIDType)
+						}
+					} else {
+						c.log.Debug("explorer did not provide DID type, using BasicDID as fallback", "signer", signer)
+						basicDID := did.BasicDIDMode
+						peerInfo.DIDType = &basicDID
+						signerInfo.DIDType = &basicDID
+						peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
+						if !peerUpdateResult || err != nil {
+							c.log.Warn("failed to update peer DID type to BasicDID", "err", err)
 						}
 					}
 				}
+			} else {
+				c.log.Debug("peer info found in local DB", "signer", signer, "peerID", signerInfo.PeerID, "didType", *signerInfo.DIDType)
 			}
 			c.log.Debug("setting up foreign DID quorum", "signer", signer)
 			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
