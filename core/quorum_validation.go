@@ -90,9 +90,21 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 			if signerInfo == nil || *signerInfo.DIDType == -1 {
 				c.log.Debug("signer info", "signerInfo", signerInfo)
 				c.log.Debug("getting peer info", "signer", signer)
+				c.log.Debug("getting peer info from explorer", "signer", signer)
+				peerInfo, err := c.GetPeerFromExplorer(signer)
+				if err != nil {
+					c.log.Error("failed to get peer info", "err", err)
+					return false, fmt.Errorf("failed to get peer info", "err", err)
+				}
+				c.log.Debug("peer info", "peerInfo", peerInfo)
+				c.log.Debug("getting peer info from peer", "signer", signer)
 				peerDetails, err := c.GetPeerInfo(p, signer)
+				if err != nil {
+					c.log.Error("failed to get peer info", "err", err)
+					continue
+				}
 				c.log.Debug("peer details", "peerDetails", peerDetails)
-				if err != nil || peerDetails.PeerInfo.DIDType == nil {
+				if peerDetails.PeerInfo.DIDType == nil {
 					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
 					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
 					if !peerUpdateResult || err != nil {
@@ -107,12 +119,15 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					}
 				}
 			}
+			c.log.Debug("setting up foreign DID quorum", "signer", signer)
 			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
 			}
+			c.log.Debug("foreign DID quorum setup successful", "signer", signer)
 		}
+		c.log.Debug("verifying signature", "signer", signer)
 		err := b.VerifySignature(dc)
 		if err != nil {
 			c.log.Error("Block verification failed: signer=%s, signType=%d, err=%v\n", signer, dc.GetSignType(), err)
