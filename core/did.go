@@ -75,11 +75,12 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 	c.log.Debug("Explorer response parsed", "userDID", apiResp.Data.UserDID, "peerID", apiResp.Data.PeerID, "didType", apiResp.Data.DIDType)
 
 	// Fetch DID content to local node
+	c.log.Debug("Fetching DID", "did", apiResp.Data.UserDID)
 	if err := c.FetchDID(apiResp.Data.UserDID); err != nil {
 		c.log.Error("Failed to fetch DID", "did", apiResp.Data.UserDID, "err", err)
 		return nil, fmt.Errorf("failed to fetch DID from network: %w", err)
 	}
-
+	c.log.Debug("DID fetched")
 	// Determine if DID has .png file to identify BasicDID
 	hasPNG := false
 	didDir := filepath.Join(c.didDir, apiResp.Data.UserDID)
@@ -94,6 +95,7 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		c.log.Warn("Failed to scan DID directory", "path", didDir, "err", err)
 	}
 
+	c.log.Debug("Determining DID type")
 	// Resolve DID type
 	var resolvedType int
 	switch apiResp.Data.DIDType {
@@ -106,20 +108,20 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 			resolvedType = did.LiteDIDMode // fallback default
 		}
 	}
-
+	c.log.Debug("DID type determined", "resolvedType", resolvedType)
 	peerInfo := &wallet.DIDPeerMap{
 		DID:     apiResp.Data.UserDID,
 		PeerID:  apiResp.Data.PeerID,
 		DIDType: &resolvedType,
 	}
-
+	c.log.Debug("Peer info", "peerInfo", peerInfo)
 	// Add peer to table (upsert logic should be inside AddPeerDetails)
 	if err := c.AddPeerDetails(*peerInfo); err != nil {
 		c.log.Error("Failed to add peer details to table", "did", peerInfo.DID, "err", err)
 		// Return peerInfo anyway, in case caller can proceed
 		return peerInfo, nil
 	}
-
+	c.log.Debug("Peer info added to table")
 	return peerInfo, nil
 }
 

@@ -71,6 +71,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 	c.log.Debug("Signers", signers)
 	for _, signer := range signers {
 		var dc did.DIDCrypto
+		c.log.Debug("trans type", "transType", b.GetTransType())
 		switch b.GetTransType() {
 		case block.TokenGeneratedType, block.TokenBurntType:
 			dc, err = c.SetupForienDID(signer, selfDID)
@@ -78,6 +79,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				c.log.Error("failed to setup foreign DID", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID : ", signer, "err", err)
 			}
+			c.log.Debug("foreign DID setup successful", "signer", signer)
 		default:
 			signerInfo, err := c.GetPeerDIDInfo(signer)
 			if err != nil {
@@ -86,7 +88,10 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				}
 			}
 			if signerInfo == nil || *signerInfo.DIDType == -1 {
+				c.log.Debug("signer info", "signerInfo", signerInfo)
+				c.log.Debug("getting peer info", "signer", signer)
 				peerDetails, err := c.GetPeerInfo(p, signer)
+				c.log.Debug("peer details", "peerDetails", peerDetails)
 				if err != nil || peerDetails.PeerInfo.DIDType == nil {
 					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
 					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)

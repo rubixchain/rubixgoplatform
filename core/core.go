@@ -867,6 +867,7 @@ func (c *Core) FetchDID(did string) error {
 	pubKeyPath := didDir + "/pubKey.pem"
 	_, dirErr := os.Stat(didDir)
 	_, pubKeyErr := os.Stat(pubKeyPath)
+	c.log.Debug("Fetching DID", "did", did, "didDir", didDir)
 
 	if os.IsNotExist(dirErr) || os.IsNotExist(pubKeyErr) {
 		// Directory or pubKey.pem missing, fetch from IPFS
