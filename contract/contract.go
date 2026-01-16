@@ -99,9 +99,9 @@ func (c *Contract) blkDecode() error {
 	if !ok {
 		return fmt.Errorf("invalid block, missing block content")
 	}
-	/* c.log.Debug("bc is %v", bc)
-	c.log.Debug("SCBlockContentPSigKey is %v", ksi)
-	c.log.Debug("SCBlockContentPSigKey is %v", ssi) */
+	/* fmt.println("bc is %v", bc)
+	fmt.println("SCBlockContentPSigKey is %v", ksi)
+	fmt.println("SCBlockContentPSigKey is %v", ssi) */
 
 	hb := util.CalculateHash(bc.([]byte), "SHA3-256")
 	var tcb map[string]interface{}
@@ -117,7 +117,7 @@ func (c *Contract) blkDecode() error {
 		if err != nil {
 			return err
 		}
-		//c.log.Debug("ksb is %v", ksb)
+		//fmt.println("ksb is %v", ksb)
 		tcb[SCShareSignatureKey] = ksb
 	}
 	if kok {
@@ -126,11 +126,11 @@ func (c *Contract) blkDecode() error {
 		if err != nil {
 			return err
 		}
-		//c.log.Debug("ksb is %v", ksb)
+		//fmt.println("ksb is %v", ksb)
 		tcb[SCKeySignatureKey] = ksb
 	}
 	c.sm = tcb
-	//c.log.Debug("tcb is %v", tcb)
+	//fmt.println("tcb is %v", tcb)
 	return nil
 }
 
@@ -445,31 +445,31 @@ func (c *Contract) UpdateSignature(dc did.DIDCrypto) error {
 // This function is used by the quorums to verify sender's signature
 func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	//fetch sender's did
-	c.log.Debug("Verifying signature")
+	fmt.Println("Verifying signature")
 	didstr := dc.GetDID()
 
 	//fetch sender's signature
-	c.log.Debug("Fetching hash signature")
+	fmt.Println("Fetching hash signature")
 	hs, ss, ps, err := c.GetHashSig(didstr)
 	if err != nil {
 		c.log.Error("GetHashSig failed", "err", err)
 		return err
 	}
-	c.log.Debug("Hash signature fetched")
+	fmt.Println("Hash signature fetched")
 	//If the ss i.e., share signature is empty, then its a Pki sign, so call PvtVerify
 	//Else it is NLSS based sign, so call NlssVerify
 	didType := dc.GetSignType()
-	c.log.Debug("Did type", "didType", didType)
+	fmt.Println("Did type", "didType", didType)
 	if didType == did.BIPVersion {
 		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
-		c.log.Debug("PKI verification", "ok", ok, "err", err)
+		fmt.Println("PKI verification", "ok", ok, "err", err)
 		if err != nil {
 			c.log.Error("Contract verification: PKI verification error: %v\n", err)
 			return err
 		}
 		if !ok {
 			c.log.Error("Contract verification: PKI verification returned false\n")
-			c.log.Debug("PKI verification failed")
+			fmt.Println("PKI verification failed")
 			return fmt.Errorf("did Pki signature verification failed")
 		}
 	} else {
