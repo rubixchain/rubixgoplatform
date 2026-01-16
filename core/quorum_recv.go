@@ -79,13 +79,17 @@ func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *contract.Contract) {
+	c.log.Debug("Contract verification starting")
 	sc := contract.InitContract(cr.ContractBlock, nil)
+	c.log.Debug("Contract initialization successful")
 	// setup the did to verify the signature
+	c.log.Debug("Setting up foreign DID")
 	dc, err := c.SetupForienDID(sc.GetSenderDID(), self_did)
 	if err != nil {
 		c.log.Error("Failed to get DID", "err", err)
 		return false, nil
 	}
+	c.log.Debug("Foreign DID setup successful")
 	c.log.Debug("Contract verification starting", "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
 	err = sc.VerifySignature(dc)
 	if err != nil {
