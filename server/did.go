@@ -350,3 +350,28 @@ func (s *Server) APISignVerification(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.RenderJSON(req, verificationResp, http.StatusOK)
 }
+
+func (s *Server) APIRemoveStaleDID(req *ensweb.Request) *ensweb.Result {
+	var m map[string]interface{}
+	err := s.ParseJSON(req, &m)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to parse input", nil)
+	}
+	di, ok := m["did"]
+	if !ok {
+		return s.BasicResponse(req, false, "Failed to parse input", nil)
+	}
+	didStr, ok := di.(string)
+	if !ok {
+		return s.BasicResponse(req, false, "Failed to parse input", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(didStr)
+	if !strings.HasPrefix(didStr, "bafybmi") || len(didStr) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+	s.c.AddWebReq(req)
+
+	go s.c.RemoveStaleDIDFromNetwork(req.ID, didStr)
+	return s.didResponse(req, req.ID)
+}

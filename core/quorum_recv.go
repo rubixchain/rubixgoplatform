@@ -86,11 +86,13 @@ func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *cont
 		c.log.Error("Failed to get DID", "err", err)
 		return false, nil
 	}
+	c.log.Debug("Contract verification starting", "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
 	err = sc.VerifySignature(dc)
 	if err != nil {
-		c.log.Error("Failed to verify sender signature in verifyContract", "err", err)
+		c.log.Error("Failed to verify sender signature in verifyContract", "err", err, "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
 		return false, nil
 	}
+	c.log.Debug("Contract verification successful", "senderDID", sc.GetSenderDID())
 	return true, sc
 }
 
@@ -1441,6 +1443,10 @@ func (c *Core) updateReceiverToken(
 		if td.Epoch == 0 {
 			td.Epoch = time.Now().Unix()
 		}
+		// maintain transaction mode as per transaction type
+		if td.TransactionType == block.TokenSelfTransferredType {
+			td.Mode = wallet.RBTSelfTransferMode
+		}
 		err = c.w.AddTransactionHistory(td)
 		if err != nil {
 			c.log.Error("failed to add transaction history on the receiver", "err", err)
@@ -1518,7 +1524,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 	// tokenSyncMap[senderPeer.GetPeerID()+"."+senderPeer.GetPeerDID()] = tokensSyncInfo
 
 	// syncing starts in the background
-	// go c.syncFullTokenChains(tokenSyncMap)
+	// go c.syncMissingBlocksOfTokenChains(tokenSyncMap)
 
 	crep.Status = true
 	crep.Message = "Token received successfully"
@@ -1671,6 +1677,10 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		}
 		if td.Epoch == 0 {
 			td.Epoch = time.Now().Unix()
+		}
+		// maintain transaction mode as per transaction type
+		if td.TransactionType == block.TokenSelfTransferredType {
+			td.Mode = wallet.FTSelfTransferMode
 		}
 		err = c.w.AddTransactionHistory(td)
 		if err != nil {
@@ -1924,6 +1934,27 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 				c.log.Error("Failed to add token state hash", "err", err)
 				return
 			}
+		}
+		// publish the transaction in the network with topic : rubix_txns
+		blockHash, err := nb.GetHash()
+		if err != nil {
+			blockHash = ""
+			c.log.Error("failed to get block hash")
+		}
+		publishingTxn := &model.PubSubTxnInfo{
+			BlockHash:    blockHash,
+			TxnType:      tcb.TransactionType,
+			AssetType:    RBTTokenType,
+			PublisherDID: dc.GetDID(),
+			TxnBlock:     nb.GetBlock(),
+		}
+
+		c.log.Debug("quorum publishing pledge block : ", publishingTxn.BlockHash)
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			crep.Message = fmt.Sprintf("Failed to publish txn, err : %v", err)
+			return
 		}
 	}()
 

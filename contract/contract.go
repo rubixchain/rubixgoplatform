@@ -237,9 +237,8 @@ func (c *Contract) GetHashSig(did string) (string, string, string, error) {
 
 	ss := util.GetStringFromMap(ssi, did)
 	ks := util.GetStringFromMap(ksi, did)
-	// ss == "" ||
-	if ks == "" {
-		return "", "", "", fmt.Errorf("invalid smart contract, share/key signature block is missing")
+	if ss == "" && ks == "" {
+		return "", "", "", fmt.Errorf("invalid smart contract, both signatures are missing")
 	}
 	return hi.(string), ss, ks, nil
 }
@@ -451,28 +450,33 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	//fetch sender's signature
 	hs, ss, ps, err := c.GetHashSig(didstr)
 	if err != nil {
-		c.log.Error("err", err)
+		c.log.Error("GetHashSig failed", "err", err)
 		return err
 	}
 
 	//If the ss i.e., share signature is empty, then its a Pki sign, so call PvtVerify
 	//Else it is NLSS based sign, so call NlssVerify
 	didType := dc.GetSignType()
+
 	if didType == did.BIPVersion {
 		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
 
 		if err != nil {
+			c.log.Error("Contract verification: PKI verification error: %v\n", err)
 			return err
 		}
 		if !ok {
+			c.log.Error("Contract verification: PKI verification returned false\n")
 			return fmt.Errorf("did Pki signature verification failed")
 		}
 	} else {
 		ok, err := dc.NlssVerify(hs, util.StrToHex(ss), util.StrToHex(ps))
 		if err != nil {
+			c.log.Error("Contract verification: NLSS verification error: %v\n", err)
 			return err
 		}
 		if !ok {
+			c.log.Error("Contract verification: NLSS verification returned false\n")
 			return fmt.Errorf("did Nlss signature verification failed")
 		}
 	}

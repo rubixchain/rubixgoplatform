@@ -205,7 +205,7 @@ func (cmd *Command) deploySmartcontract() {
 		cmd.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.001")
 		return
 	}
-	if cmd.transType < 1 || cmd.transType > 2 {
+	if cmd.quorumType < 1 || cmd.quorumType > 2 {
 		cmd.log.Error("Invalid trans type")
 		return
 	}
@@ -213,7 +213,7 @@ func (cmd *Command) deploySmartcontract() {
 		SmartContractToken: cmd.smartContractToken,
 		DeployerAddress:    cmd.deployerAddr,
 		RBTAmount:          cmd.rbtAmount,
-		QuorumType:         cmd.transType,
+		QuorumType:         cmd.quorumType,
 		Comment:            cmd.transComment,
 	}
 	response, err := cmd.c.DeploySmartContract(&deployRequest)
@@ -252,7 +252,7 @@ func (cmd *Command) executeSmartcontract() {
 		cmd.log.Error("Invalid executer DID")
 		return
 	}
-	if cmd.transType < 1 || cmd.transType > 2 {
+	if cmd.quorumType < 1 || cmd.quorumType > 2 {
 		cmd.log.Error("Invalid trans type")
 		return
 	}
@@ -267,7 +267,7 @@ func (cmd *Command) executeSmartcontract() {
 	executorRequest := model.ExecuteSmartContractRequest{
 		SmartContractToken: cmd.smartContractToken,
 		ExecutorAddress:    cmd.executorAddr,
-		QuorumType:         cmd.transType,
+		QuorumType:         cmd.quorumType,
 		Comment:            cmd.transComment,
 		SmartContractData:  cmd.smartContractData,
 	}

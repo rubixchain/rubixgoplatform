@@ -315,3 +315,14 @@ func (c *Client) SignVerification(signerDID, signedMsg, signature string) (strin
 	result := fmt.Sprintf("sign verification Status : %v, Message : %v", resp.Status, resp.Message)
 	return result, nil
 }
+
+func (c *Client) RemoveStaleDID(didStr string) (*model.BasicResponse, error) {
+	m := make(map[string]interface{})
+	m["did"] = didStr
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIRemoveStaleDID, nil, &m, &rm)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}

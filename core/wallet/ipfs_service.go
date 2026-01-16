@@ -28,6 +28,7 @@ const (
 	QuorumUnpinRole
 	ParentTokenPinByQuorumRole
 	PinningRole
+	FullNodeRole
 )
 
 // modified pin method that pins token and update in DB with role of the machine pinning

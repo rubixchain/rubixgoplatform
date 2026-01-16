@@ -108,6 +108,26 @@ const (
 	APIGetFailedFTDownloadStatus        string = "/api/get-failed-ft-download-status"
 	APIRecoverLostTokens                string = "/api/recover-lost-tokens"
 	APIRemoteRecoverTokens              string = "/api/remote-recover-tokens"
+
+	//Below are Explorer-service API endpoints
+	APIGetAllRBTs           string = "/api/de-exp/get-rbt-list"
+	APIGetAllFTs            string = "/api/de-exp/get-ft-list"
+	APIGetAllNFTs           string = "/api/de-exp/get-nft-list"
+	APIGetAllSmartContracts string = "/api/de-exp/get-smart-contract-list"
+
+	APIGetRBTbyDID           string = "/api/de-exp/get-rbt-list-by-did"
+	APIGetFTbyDID            string = "/api/de-exp/get-ft-list-by-did"
+	APIGetNFTbyDID           string = "/api/de-exp/get-nft-list-by-did"
+	APIGetSmartContractbyDID string = "/api/de-exp/get-smart-contract-list-by-did"
+	APIGetTxnAmount          string = "/api/de-exp/get-txn-amount-by-txnID"
+
+	APIGetTokenChain       string = "/api/de-exp/get-token-chain"
+	APIGetTokenChainHeight string = "/api/de-exp/get-token-chain-height"
+
+	APINotifyDeExpBlockUpdate string = "/api/block-update"
+	APINotifyDeExpTokenUpdate string = "/api/token-update"
+
+	APIRemoveStaleDID string = "/api/remove-stale-did"
 )
 
 // jwt.RegisteredClaims

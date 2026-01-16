@@ -260,7 +260,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 		if br.Result == nil {
 			return br.Message, true
 		}
-		
+
 		// signature response for arbitrary signature
 		if strings.Contains(br.Message, "arbitrary sign") {
 			jsonbytes, err := json.Marshal(br.Result)
@@ -277,7 +277,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 			}
 			return signMap.Signature, true
 		}
-		
+
 		cmd.log.Info("Got the request for the signature")
 
 		switch res := br.Result.(type) {
@@ -376,7 +376,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 
 		case string:
 			// fallback: result is just transaction ID string
-			return "Transaction is still processing, Transaction ID: " + res, true
+			return br.Message, true
 
 		default:
 			return "Invalid response: unexpected format", false
@@ -443,7 +443,7 @@ func (cmd *Command) ArbitrarySign() {
 	} else {
 		result = fmt.Sprintf("Status : %v, message : %v", status, msg)
 	}
-	
+
 	cmd.log.Info(result)
 }
 
@@ -454,4 +454,39 @@ func (cmd *Command) SignVerification() {
 		return
 	}
 	cmd.log.Info("signature verification result", result)
+}
+
+func (cmd *Command) RemoveStaleDID() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+	br, err := cmd.c.RemoveStaleDID(cmd.did)
+	if err != nil {
+		cmd.log.Error("Failed to remove DID from network", "err", err)
+		return
+	}
+
+	if !br.Status {
+		cmd.log.Error("Failed to remove DID from network", "msg", br.Message)
+		return
+	}
+
+	msg, status := cmd.SignatureResponse(br)
+
+	if !status {
+		cmd.log.Error("Failed to remove DID from network, " + msg)
+		return
+	}
+	cmd.log.Info("DID removed from network successfully")
 }

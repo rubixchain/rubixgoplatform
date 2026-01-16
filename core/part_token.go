@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/rac"
@@ -271,6 +272,27 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 			return nil, err
 		}
 		ChildTokenList = append(ChildTokenList, ChildToken{ChildTokenID: pt, TokenValue: parts[i]})
+
+		// publish the transaction in the network with topic : rubix_txns
+		blockHash, err := b.GetHash()
+		if err != nil {
+			blockHash = ""
+			c.log.Error("failed to get block hash")
+		}
+		publishingTxn := &model.PubSubTxnInfo{
+			BlockHash:    blockHash,
+			TxnType:      tcb.TransactionType,
+			AssetType:    RBTTokenType,
+			PublisherDID: dc.GetDID(),
+			TxnBlock:     b.GetBlock(),
+		}
+
+		c.log.Debug("publishing new part rbt")
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return nil, err
+		}
 	}
 	newPartToken := &ExplorerCreateTokenParts{
 		ChildTokenList: ChildTokenList,
@@ -310,6 +332,28 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		c.log.Error("part token creation failed, failed to add token block", "err", err)
 		return nil, err
 	}
+
+	// publish the transaction in the network with topic : rubix_txns
+	blockHash, err := b.GetHash()
+	if err != nil {
+		blockHash = ""
+		c.log.Error("failed to get block hash")
+	}
+	publishingBurntBlock := &model.PubSubTxnInfo{
+		BlockHash:    blockHash,
+		TxnType:      tcb.TransactionType,
+		AssetType:    RBTTokenType,
+		PublisherDID: dc.GetDID(),
+		TxnBlock:     b.GetBlock(),
+	}
+
+	c.log.Debug("publishing burnt rbt block")
+	err = c.publishTxn(publishingBurntBlock)
+	if err != nil {
+		c.log.Error("Failed to publish burnt block", "err", err)
+		return nil, err
+	}
+
 	npt := make([]wallet.Token, 0)
 	for i := range parts {
 		ptkn := &wallet.Token{

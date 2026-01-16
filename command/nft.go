@@ -71,14 +71,14 @@ func (cmd *Command) deployNFT() {
 		cmd.log.Error("Invalid deployer DID")
 		return
 	}
-	if cmd.transType < 1 || cmd.transType > 2 {
+	if cmd.quorumType < 1 || cmd.quorumType > 2 {
 		cmd.log.Error("Invalid trans type")
 		return
 	}
 	deployRequest := model.DeployNFTRequest{
 		NFT:        cmd.nft,
 		DID:        cmd.deployerAddr,
-		QuorumType: cmd.transType,
+		QuorumType: cmd.quorumType,
 		NFTValue:   cmd.nftValue,
 		NFTData:    cmd.nftData,
 	}
@@ -118,7 +118,7 @@ func (cmd *Command) executeNFT() {
 		cmd.log.Error("Invalid executer DID")
 		return
 	}
-	if cmd.transType < 1 || cmd.transType > 2 {
+	if cmd.quorumType < 1 || cmd.quorumType > 2 {
 		cmd.log.Error("Invalid trans type")
 		return
 	}
@@ -127,7 +127,7 @@ func (cmd *Command) executeNFT() {
 		NFT:        cmd.nft,
 		Executor:   cmd.executorAddr,
 		Receiver:   cmd.receiverAddr,
-		QuorumType: cmd.transType,
+		QuorumType: cmd.quorumType,
 		Comment:    cmd.transComment,
 		NFTValue:   cmd.rbtAmount,
 	}

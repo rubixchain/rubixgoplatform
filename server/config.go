@@ -103,8 +103,8 @@ func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
 	}
-	if len(ql) < 5 {
-		s.log.Error("Length of Quorum list should be atleast 5")
+	if len(ql) < core.MinQuorumRequired {
+		s.log.Error("Length of Quorum list should be atleast 1")
 		return s.BasicResponse(req, false, "Length of Quorum list should be atleast 5", nil)
 	}
 	for _, q := range ql {

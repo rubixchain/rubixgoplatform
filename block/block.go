@@ -47,19 +47,20 @@ const (
 )
 
 const (
-	TokenMintedType       string = "01"
-	TokenTransferredType  string = "02"
-	TokenMigratedType     string = "03"
-	TokenPledgedType      string = "04"
-	TokenGeneratedType    string = "05"
-	TokenUnpledgedType    string = "06"
-	TokenCommittedType    string = "07"
-	TokenBurntType        string = "08"
-	TokenDeployedType     string = "09"
-	TokenExecutedType     string = "10"
-	TokenContractCommited string = "11"
-	TokenPinnedAsService  string = "12"
-	TokenIsBurntForFT     string = "13"
+	TokenMintedType          string = "01"
+	TokenTransferredType     string = "02"
+	TokenMigratedType        string = "03"
+	TokenPledgedType         string = "04"
+	TokenGeneratedType       string = "05"
+	TokenUnpledgedType       string = "06"
+	TokenCommittedType       string = "07"
+	TokenBurntType           string = "08"
+	TokenDeployedType        string = "09"
+	TokenExecutedType        string = "10"
+	TokenContractCommited    string = "11"
+	TokenPinnedAsService     string = "12"
+	TokenIsBurntForFT        string = "13"
+	TokenSelfTransferredType string = "20" // xell migration
 )
 
 const (
@@ -444,11 +445,24 @@ func (b *Block) UpdateSignature(dc didmodule.DIDCrypto) error {
 	if err != nil {
 		return fmt.Errorf("failed to get hash")
 	}
-	sb, err := dc.PvtSign([]byte(h))
-	if err != nil {
-		return fmt.Errorf("failed to get did signature, " + err.Error())
+
+	var sig string
+
+	if dc.GetSignType() == didmodule.NlssVersion {
+		// For NLSS DIDs (types 0,1,2): Use Sign() to get NLSS signature
+		ssig, _, err := dc.Sign(h)
+		if err != nil {
+			return fmt.Errorf("failed to get nlss signature, " + err.Error())
+		}
+		sig = util.HexToStr(ssig) // Use NLSS share signature
+	} else {
+		// For BIP DIDs (type 4): Use PvtSign() to get PKI signature
+		sb, err := dc.PvtSign([]byte(h))
+		if err != nil {
+			return fmt.Errorf("failed to get did signature, " + err.Error())
+		}
+		sig = util.HexToStr(sb)
 	}
-	sig := util.HexToStr(sb)
 
 	ksmi, ok := b.bm[TCSignatureKey]
 	if !ok {
@@ -845,8 +859,74 @@ func (b *Block) GetTokenLevel(token string) (int, int) {
 	return tokenLevel, tokenNum
 }
 
-func (b *Block) GetPledgedTokens() {
+func (b *Block) GetPledgedTokens() []PledgeDetail {
 	pledgedInfo := util.GetFromMap(b.bm, TCPledgeDetailsKey)
-	fmt.Println(pledgedInfo)
-	// return
+	if pledgedInfo == nil {
+		return nil
+	}
+
+	pledgedMap, ok := pledgedInfo.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	ptds := make([]PledgeDetail, 0)
+	for did, tokens := range pledgedMap {
+		switch tokenSlice := tokens.(type) {
+		case []map[string]interface{}:
+			for _, t := range tokenSlice {
+				ptds = append(ptds, PledgeDetail{
+					DID:   did,
+					Token: fmt.Sprint(t[PDTokenKey]),
+					TokenType: func(v interface{}) int {
+						switch val := v.(type) {
+						case int:
+							return val
+						case int32:
+							return int(val)
+						case int64:
+							return int(val)
+						case float64:
+							return int(val)
+						case string:
+							i, _ := strconv.Atoi(val)
+							return i
+						default:
+							return 0
+						}
+					}(t[PDTokenTypeKey]),
+					TokenBlockID: fmt.Sprint(t[PDTokenBlockIDKey]),
+				})
+			}
+		case []interface{}: // defensive: JSON unmarshal case
+			for _, raw := range tokenSlice {
+				if t, ok := raw.(map[string]interface{}); ok {
+					ptds = append(ptds, PledgeDetail{
+						DID:   did,
+						Token: fmt.Sprint(t[PDTokenKey]),
+						TokenType: func(v interface{}) int {
+							switch val := v.(type) {
+							case int:
+								return val
+							case int32:
+								return int(val)
+							case int64:
+								return int(val)
+							case float64:
+								return int(val)
+							case string:
+								i, _ := strconv.Atoi(val)
+								return i
+							default:
+								return 0
+							}
+						}(t[PDTokenTypeKey]),
+						TokenBlockID: fmt.Sprint(t[PDTokenBlockIDKey]),
+					})
+				}
+			}
+		}
+	}
+
+	return ptds
 }
