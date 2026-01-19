@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/rubixchain/rubixgoplatform/core/coin"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
@@ -47,20 +46,4 @@ func BuildDenomTree(tokens []wallet.Token, ownerDID string, ipfsClient IPFSOpera
 	})
 
 	return denomTree, nil
-}
-
-func (t *DenomTree) GetLeavesLeftToRight() []wallet.Token {
-	tokens := make([]wallet.Token, len(t.Leaves))
-	for i, node := range t.Leaves {
-		tokens[i] = node.Token
-	}
-	return tokens
-}
-
-func (t *DenomTree) TotalValue() float64 {
-	sum := float64(0)
-	for _, node := range t.Leaves {
-		sum = sum + node.Token.TokenValue
-	}
-	return floatPrecision(sum, coin.MaxSupportedDecimalPlaces)
 }

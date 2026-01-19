@@ -1,13 +1,13 @@
 package parts
 
 import (
-	"errors"
+	"fmt"
 	"math"
 )
 
 func LevelToDenom(level int) (float64, error) {
 	if level < 0 {
-		return 0, errors.New("idx must be non-negative")
+		return 0, fmt.Errorf("LevelToDenom: level cannot be non negative, provided level: %v", level)
 	}
 
 	k := level / 2
@@ -19,7 +19,7 @@ func LevelToDenom(level int) (float64, error) {
 
 func DenomToLevel(denom float64) (int, error) {
 	if denom <= 0 {
-		return 0, errors.New("denom must be positive")
+		return 0, fmt.Errorf("DenomToLevel: denom must be positive, provided denom: %v", denom)
 	}
 
 	exp := math.Floor(math.Log10(denom))
@@ -33,9 +33,14 @@ func DenomToLevel(denom float64) (int, error) {
 		return int(-2*exp - 1), nil
 	}
 
-	return 0, errors.New("denom is not part of the supported denomination set")
+	return 0, fmt.Errorf("DenomToLevel: denom %v is not part of the supported denomination set", denom)
 }
 
-func GetMaxLevel(supportedDecimalPlaces int) int {
-	return (2 * supportedDecimalPlaces) + 1
+// GetMaxDenomTreeLevel gets the max level of a Denom Tree
+func GetMaxDenomTreeLevel() int {
+	return (2 * MaxSupportedDecimalPlaces) + 1
+}
+
+func getLowestPossibleDenom() float64 {
+	return FloatPrecision(math.Pow10(-MaxSupportedDecimalPlaces))
 }

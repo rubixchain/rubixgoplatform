@@ -8,7 +8,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
-	"github.com/rubixchain/rubixgoplatform/core/coin"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -41,28 +40,21 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 	_ = tokensForTransfer
 
 	senderDID := req.Sender
-	transferAmount := req.TokenCount
+	transferAmount := parts.FloatPrecision(req.TokenCount)
 
 	if !isSelfRBTTransfer {
-		transferAmountObj, err := coin.NewCoinFromFloat64(transferAmount)
-		if err != nil {
-			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
-		}
-
 		accountBalance, err := c.GetAccountInfo(senderDID)
 		if err != nil {
 			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
 		}
-		accountBalanceAmt, err := coin.NewCoinFromFloat64(accountBalance.RBTAmount)
-		if err != nil {
-			return nil, fmt.Errorf("error occured while parsing account balance amount %v, err: %v", accountBalance.RBTAmount, err)
-		}
 
-		if accountBalanceAmt.LessThan(*transferAmountObj) {
+		accountBalanceAmt := accountBalance.RBTAmount
+
+		if accountBalanceAmt < transferAmount {
 			return nil, fmt.Errorf(
 				"insufficient balance as the current balance is: %v, transfer amount: %v",
-				accountBalanceAmt.String(),
-				transferAmountObj.String(),
+				accountBalanceAmt,
+				transferAmount,
 			)
 		}
 	}

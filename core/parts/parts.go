@@ -3,7 +3,6 @@ package parts
 import (
 	"fmt"
 
-	"github.com/rubixchain/rubixgoplatform/core/coin"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -26,7 +25,7 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, targetAmount float64, 
 	}
 
 	remaining := targetAmount
-	zeroFloat := floatPrecision(0.0, coin.MaxSupportedDecimalPlaces)
+	zeroFloat := FloatPrecision(0.0)
 
 	for _, token := range tokenDenomTree.Leaves {
 		if remaining <= zeroFloat {
@@ -38,9 +37,9 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, targetAmount float64, 
 
 		if tokenValue <= remaining {
 			tokensTransfer = append(tokensTransfer, token.Token)
-			remaining = floatPrecision(remaining-tokenValue, coin.MaxSupportedDecimalPlaces)
+			remaining = FloatPrecision(remaining - tokenValue)
 		} else if tokenValue > remaining {
-			splitOp, err := planSplit(heirarchicalID, remaining, log)
+			splitOp, err := planTokenSplit(heirarchicalID, remaining, log)
 			if err != nil {
 				return nil, fmt.Errorf("CollectRBTTokens: failed to plan the token split, err: %v", err)
 			}
@@ -57,9 +56,9 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, targetAmount float64, 
 	tokenCache := make(map[string]*wallet.Token)
 
 	for _, splitOp := range splitOps {
-		partTokensToTransfer, err := performTokenSplitAtLevel(w, dc, ipfsOps, splitOp, tokenCache, isTestnet)
+		partTokensToTransfer, err := performTokenSplit(w, dc, ipfsOps, splitOp, tokenCache, isTestnet)
 		if err != nil {
-			return nil, nil
+			return nil, fmt.Errorf("CollectRBTTokens: could not perform split at Level: ")
 		}
 
 		tokensTransfer = append(tokensTransfer, partTokensToTransfer...)
