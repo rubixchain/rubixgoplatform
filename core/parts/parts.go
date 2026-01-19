@@ -9,9 +9,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, did string, targetAmount float64, ipfsOps IPFSOperation, isTestnet bool, log logger.Logger) ([]wallet.Token, error) {
+func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, targetAmount float64, ipfsOps IPFSOperation, isTestnet bool, log logger.Logger) ([]wallet.Token, error) {
 	var splitOps []SplitOp = make([]SplitOp, 0)
 	var tokensTransfer []wallet.Token = make([]wallet.Token, 0)
+	var did string = dc.GetDID()
 
 	tokens, err := w.GetFreeTokens(did)
 	if err != nil {

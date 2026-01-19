@@ -36,21 +36,6 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	dc.OutChan <- br
 }
 
-func (c *Core) GetRequiredTokens(dc did.DIDCrypto, amountNeededToTransfer float64, isTestnet bool) ([]wallet.Token, error) {
-	initialTime := time.Now()
-
-	did := dc.GetDID()
-
-	requiredTokens, errTokenSplit := parts.CollectRBTTokens(dc, c.w, did, amountNeededToTransfer, c.ipfsOps, isTestnet, c.log)
-	if errTokenSplit != nil {
-		return nil, errTokenSplit
-	}
-
-	duration := time.Since(initialTime)
-	c.log.Warn("It toook this many seconds: %v", duration.Seconds())
-	return requiredTokens, nil
-}
-
 func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.DIDCrypto, isSelfRBTTransfer bool) ([]wallet.Token, error) {
 	var tokensForTransfer []*wallet.Token
 	_ = tokensForTransfer
@@ -82,105 +67,8 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 		}
 	}
 
-	return c.GetRequiredTokens(dc, req.TokenCount, c.testNet)
+	return parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log)
 }
-
-// func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.DIDCrypto, isSelfRBTTransfer bool) ([]wallet.Token, error) {
-// 	var tokensForTransfer []wallet.Token
-
-// 	senderDID := req.Sender
-
-// 	if !isSelfRBTTransfer {
-// 		if req.TokenCount < MinDecimalValue(MaxDecimalPlaces) {
-// 			return nil, fmt.Errorf("input transaction amount is less than minimum transaction amount")
-// 		}
-
-// 		decimalPlaces := strconv.FormatFloat(req.TokenCount, 'f', -1, 64)
-// 		decimalPlacesStr := strings.Split(decimalPlaces, ".")
-// 		if len(decimalPlacesStr) == 2 && len(decimalPlacesStr[1]) > MaxDecimalPlaces {
-// 			return nil, fmt.Errorf("transaction amount exceeds %v decimal places", MaxDecimalPlaces)
-// 		}
-
-// 		accountBalance, err := c.GetAccountInfo(senderDID)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
-// 		} else {
-// 			if req.TokenCount > accountBalance.RBTAmount {
-// 				return nil, fmt.Errorf("insufficient balance, account balance is %v, trnx value is %v", accountBalance.RBTAmount, req.TokenCount)
-// 			}
-// 		}
-
-// 		reqTokens, remainingAmount, err := c.GetRequiredTokens(senderDID, req.TokenCount, RBTTransferMode)
-// 		if err != nil {
-// 			c.w.ReleaseTokens(reqTokens)
-// 			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
-// 		}
-
-// 		if len(reqTokens) != 0 {
-// 			tokensForTransfer = append(tokensForTransfer, reqTokens...)
-// 		}
-// 		//check if ther is enough tokens to do transfer
-// 		// Get the required tokens from the DID bank
-// 		// this method locks the token needs to be released or
-// 		// removed once it done with the transfer
-// 		if remainingAmount > 0 {
-// 			wt, err := c.GetTokens(dc, senderDID, remainingAmount, RBTTransferMode)
-// 			if err != nil {
-// 				return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
-// 			}
-// 			if len(wt) != 0 {
-// 				tokensForTransfer = append(tokensForTransfer, wt...)
-// 			}
-// 		}
-
-// 		var sumOfTokensForTxn float64
-// 		for _, tokenForTransfer := range tokensForTransfer {
-// 			sumOfTokensForTxn = sumOfTokensForTxn + tokenForTransfer.TokenValue
-// 			sumOfTokensForTxn = floatPrecision(sumOfTokensForTxn, MaxDecimalPlaces)
-// 		}
-
-// 		if sumOfTokensForTxn != req.TokenCount {
-// 			return nil, fmt.Errorf("sum of Selected Tokens sum : %v is not equal to trnx value : %v", sumOfTokensForTxn, req.TokenCount)
-// 		}
-
-// 		return tokensForTransfer, nil
-// 	} else {
-// 		// Get all free tokens
-// 		tokensOwnedBySender, err := c.w.GetFreeTokens(senderDID)
-// 		if err != nil {
-// 			if strings.Contains(err.Error(), "no records found") {
-// 				return []wallet.Token{}, nil
-// 			}
-// 			return nil, fmt.Errorf("failed to get free tokens of owner, error: %v", err.Error())
-// 		}
-
-// 		// Get the transaction epoch for every token and chec
-// 		for _, token := range tokensOwnedBySender {
-// 			// Nodes running old version of rubixgoplatform will not have their TransactionID column of Tokens's table populated
-// 			// And hence should be skipped from Self Transfer
-// 			if token.TransactionID == "" {
-// 				continue
-// 			}
-// 			tokenTransactionDetail, err := c.w.GetTransactionDetailsbyTransactionId(token.TransactionID)
-// 			if err != nil {
-// 				return nil, fmt.Errorf("failed to get transaction details for trx hash: %v, err: %v", token.TransactionID, err)
-// 			}
-
-// 			if time.Now().Unix()-tokenTransactionDetail.Epoch > int64(pledgePeriodInSeconds) {
-// 				if err := c.w.LockToken(&token); err != nil {
-// 					return nil, fmt.Errorf("failed to lock tokens %v, exiting selfTransfer routine with error: %v", token.TokenID, err.Error())
-// 				}
-
-// 				tokensForTransfer = append(tokensForTransfer, token)
-// 			}
-// 		}
-
-// 		if len(tokensForTransfer) > 0 {
-// 			c.log.Debug("Tokens acquired for self transfer")
-// 		}
-// 		return tokensForTransfer, nil
-// 	}
-// }
 
 func getContractType(reqID string, req *model.RBTTransferRequest, transTokenInfo []contract.TokenInfo, isSelfRBTTransfer bool) *contract.ContractType {
 	if !isSelfRBTTransfer {
@@ -656,7 +544,7 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 
 	tokensForTxn := make([]wallet.Token, 0)
 
-	reqTokens, err := c.GetRequiredTokens(dc, req.TokenCount, c.testNet)
+	reqTokens, err := parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log)
 	if err != nil {
 		c.w.ReleaseTokens(reqTokens)
 		c.log.Error("Failed to get tokens", "err", err)
