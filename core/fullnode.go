@@ -248,6 +248,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 			return nil
 		}
+		previousOwner := latestTokenBlock.GetOwner()
 
 		// check if token exists in postgres table, add if doesn't
 		err := c.ReadTokenContentFromPSQL(tokenId, newEvent.AssetType)
@@ -262,7 +263,6 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			return fmt.Errorf("failed to get latest block number: %v", err)
 		}
 
-
 		// Check for missing blocks
 		if latestBlockNumber+1 != currentBlockNumber {
 			if latestBlockNumber == currentBlockNumber {
@@ -270,6 +270,22 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 				if newEvent.BlockHash == latestBlockHash {
 					return nil
 				}
+				//add this token to double spend tokens table
+				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+					TokenID:        tokenId,
+					AssetType:      newEvent.AssetType,
+					TokenType:      tokenType,
+					PublisherDID:   newEvent.PublisherDID,
+					ClaimedOwnerI:  previousOwner,
+					ClaimedOwnerII: newEvent.PublisherDID,
+					ErrorMessage:   fmt.Sprintf("block with the same block number exist, dual ownership issue or same did would have double spent the token, tokenID:%s", tokenId),
+				}
+				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+				if err != nil {
+					errMsg := doubleSpentTokenInfo.ErrorMessage + "failed to update double spent token in tables"
+					return fmt.Errorf("%v", errMsg)
+				}
+
 				return fmt.Errorf("invalid blocks detected: latest block number=%d, current block number=%d", latestBlockNumber, currentBlockNumber)
 			} else if latestBlockNumber < currentBlockNumber {
 				//connect to publisher and fetch complete token chain
@@ -297,7 +313,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		}
 
 		// Validate ownership
-		previousOwner := latestTokenBlock.GetOwner()
+
 		currentOwner := txnBlock.GetOwner()
 		if txnBlockType == block.TokenBurntType || txnBlockType == block.TokenIsBurntForFT {
 			if currentOwner != newEvent.PublisherDID {
