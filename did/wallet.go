@@ -25,7 +25,7 @@ func InitDIDWallet(did string, baseDir string, ch *DIDChan) *DIDWallet {
 
 func (d *DIDWallet) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte, error) {
 	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
-		return nil, nil, fmt.Errorf("Invalid configuration")
+		return nil, nil, fmt.Errorf("invalid configuration")
 	}
 	sr := &SignResponse{
 		Status:  true,
@@ -42,12 +42,12 @@ func (d *DIDWallet) getSignature(hash []byte, onlyPrivKey bool) ([]byte, []byte,
 	select {
 	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
-		return nil, nil, fmt.Errorf("Timeout, failed to get signature")
+		return nil, nil, fmt.Errorf("timeout, failed to get signature")
 	}
 
 	srd, ok := ch.(SignRespData)
 	if !ok {
-		return nil, nil, fmt.Errorf("Invalid data received on the channel")
+		return nil, nil, fmt.Errorf("invalid data received on the channel")
 	}
 	return srd.Signature.Pixels, srd.Signature.Signature, nil
 }
@@ -105,21 +105,6 @@ func (d *DIDWallet) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte
 
 	if !bytes.Equal(cb, db) {
 		return false, fmt.Errorf("failed to verify")
-	}
-
-	//create a signature using the private key
-	//1. read and extrqct the private key
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
-	if err != nil {
-		return false, err
-	}
-	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
-	if err != nil {
-		return false, err
-	}
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
 }

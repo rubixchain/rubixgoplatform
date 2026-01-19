@@ -87,11 +87,13 @@ func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *cont
 		c.log.Error("Failed to get DID", "err", err)
 		return false, nil
 	}
+	c.log.Debug("Contract verification starting", "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
 	err = sc.VerifySignature(dc)
 	if err != nil {
-		c.log.Error("Failed to verify sender signature in verifyContract", "err", err)
+		c.log.Error("Failed to verify sender signature in verifyContract", "err", err, "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
 		return false, nil
 	}
+	c.log.Debug("Contract verification successful", "senderDID", sc.GetSenderDID())
 	return true, sc
 }
 

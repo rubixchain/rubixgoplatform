@@ -92,6 +92,8 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 	switch strings.ToUpper(TokenType) {
 	case "RBT":
 		tokenTypeString = RBTString
+	case "PART":
+		tokenTypeString = PartString
 	case "FT":
 		tokenTypeString = FTString
 	case "NFT":
@@ -166,4 +168,12 @@ func (c *Core) GettxnAmountFromFullNode(txnID string) (*model.FullNodeTxnHistory
 		return nil, err
 	}
 	return RBTs, nil
+}
+
+func (c *Core) GetFullTokenChainHeight(tokenID string, tokenType string) (int, error) {
+	BlockHeight, err := c.w.GetBlockHeightFromFullNode(tokenID, tokenType)
+	if err != nil {
+		return 0, err
+	}
+	return BlockHeight, err
 }

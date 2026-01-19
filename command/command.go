@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1_fullnode"
+	version string = "0.1_mig"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -366,7 +366,10 @@ type Command struct {
 	pgsqlDBName                  string
 	pgsqlDBUserName              string
 	pgsqlDBPassword              string
+	enableDeExp                  bool
+	deExpURL                     string
 	operationType                int
+	faucetURL                     string
 }
 
 func showVersion() {
@@ -544,7 +547,6 @@ func (cmd *Command) runApp() {
 		cmd.log.Error("Configfile is either currupted or cipher is wrong", "err", err)
 		return
 	}
-
 	// Override directory path
 	cmd.cfg.DirPath = cmd.runDir
 
@@ -568,8 +570,9 @@ func (cmd *Command) runApp() {
 	}
 
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.publishTokenChainDetails, cmd.fullNode, cmd.pgsqlDBName, cmd.pgsqlDBUserName, cmd.pgsqlDBPassword)
+	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.publishTokenChainDetails, cmd.fullNode, cmd.pgsqlDBName, cmd.pgsqlDBUserName, cmd.pgsqlDBPassword, cmd.enableDeExp, cmd.deExpURL, cmd.faucetURL)
 	if err != nil {
+		cmd.log.Error(err.Error())
 		cmd.log.Error("failed to create core")
 		return
 	}
@@ -774,7 +777,10 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pgsqlDBName, "pgsqlDBName", "", "Postgress Tokens database name")
 	flag.StringVar(&cmd.pgsqlDBUserName, "pgsqlDBUserName", "myuser", "Postgress Tokens Database username")
 	flag.StringVar(&cmd.pgsqlDBPassword, "pgsqlDBPassword", "mypassword", "Postgress Tokens Database password")
+	flag.BoolVar(&cmd.enableDeExp, "deexp", false, "Host a decentralized explorer from fullnode")
+	flag.StringVar(&cmd.deExpURL, "deexpURL", "", "Decentralized explorer Server URL")
 	flag.IntVar(&cmd.operationType, "operationType", 0, "this defines the underlying transaction type")
+	flag.StringVar(&cmd.faucetURL, "faucetURL", "", "Faucet Server URL")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Invalid Command")

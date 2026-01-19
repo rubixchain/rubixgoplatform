@@ -121,7 +121,12 @@ const (
 	APIGetSmartContractbyDID string = "/api/de-exp/get-smart-contract-list-by-did"
 	APIGetTxnAmount          string = "/api/de-exp/get-txn-amount-by-txnID"
 
-	APIGetTokenChain  string = "/api/de-exp/get-token-chain"
+	APIGetTokenChain       string = "/api/de-exp/get-token-chain"
+	APIGetTokenChainHeight string = "/api/de-exp/get-token-chain-height"
+
+	APINotifyDeExpBlockUpdate string = "/api/block-update"
+	APINotifyDeExpTokenUpdate string = "/api/token-update"
+
 	APIRemoveStaleDID string = "/api/remove-stale-did"
 )
 
