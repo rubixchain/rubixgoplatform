@@ -776,7 +776,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			//fullnode has equal number of token chain length compared to publisher, check whether the same block is coming or not
 			//If the incoming block from the publisher is different than the block which the fullnode is having, add this token details to double spend tokens table
 		} else if detail.TokenChainLength == latestBlockHeight {
-			
+
 			// check if token exists in postgres table, add if doesn't
 			err := c.ReadTokenContentFromPSQL(detail.Token, detail.AssetType)
 			if err != nil {
@@ -794,7 +794,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					PublisherDID:   event.PublisherPeerID,
 					ClaimedOwnerI:  existingBlockOwnerDID,
 					ClaimedOwnerII: detail.PublisherDid,
-					ErrorMessage:   fmt.Sprintf("did%s, did%s both are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
+					ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
 				}
 				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
 				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
@@ -874,7 +874,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					PublisherDID:   event.PublisherPeerID,
 					ClaimedOwnerI:  existingBlockOwnerDID,
 					ClaimedOwnerII: detail.PublisherDid,
-					ErrorMessage:   fmt.Sprintf("did%s, did%s both are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
+					ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
 				}
 				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
 				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
@@ -1087,7 +1087,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 								PublisherDID:   event.PublisherPeerID,
 								ClaimedOwnerI:  existingBlockOwnerDID,
 								ClaimedOwnerII: detail.PublisherDid,
-								ErrorMessage:   fmt.Sprintf("did%s, did%s both are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
+								ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
 							}
 							// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
 							err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
@@ -1103,7 +1103,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 								TokenType: token.TokenType,
 								AssetType: token.AssetType,
 								Did:       did,
-								Reason:    fmt.Sprintf("failed to sync chain,err%v", err),
+								Reason:    fmt.Sprintf("failed to sync chain,err: %v", err),
 							}
 
 							if err := c.w.AddFailedTokensToTable(info); err != nil {
@@ -1549,6 +1549,16 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 			}
 
+			//fullnode verifies signature of each block, if it doesn't pass through we will add token to failed to sync tokens table
+			//with error saying that, corrupted tokenchain.
+			incomingBlkID, err := blk.GetBlockID(tokenSyncInfo.TokenID)
+			c.log.Debug("**Entering into signature check for the blkID****", incomingBlkID)
+			valid, err := c.validateSigner(blk, "", p)
+			if !valid || err != nil {
+				c.log.Error("Failed to validate token signer for token", "token", tokenSyncInfo.TokenID, "err", err)
+				return fmt.Errorf("failed to validate token signer for %s", tokenSyncInfo.TokenID)
+			}
+
 			//if all checks pass, add it to the levelDB.
 			err = c.w.AddFullNodeTokenBlock(tokenSyncInfo.TokenID, blk)
 			if err != nil {
@@ -1629,6 +1639,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 					// return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
 					c.log.Info("failed to add token's ipfs content to psql db, err:", err)
 				}
+
 				err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, blocks, event, syncStatus)
 				if err != nil {
 					c.log.Info("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
