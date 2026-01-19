@@ -62,10 +62,6 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 		transferAmountObj, err := coin.NewCoinFromFloat64(transferAmount)
 		if err != nil {
 			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
-		} else {
-			if req.TokenCount > accountBalance.RBTAmount {
-				return nil, fmt.Errorf("insufficient balance, of account %v balance is %v, trnx value is %v",senderDID, accountBalance.RBTAmount, req.TokenCount)
-			}
 		}
 
 		accountBalance, err := c.GetAccountInfo(senderDID)
