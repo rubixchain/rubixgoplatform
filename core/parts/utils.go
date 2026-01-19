@@ -117,3 +117,12 @@ func GetIPFSHashFromHeirarchicalID(ipfsOpfs IPFSOperation, heirarchicalID string
 	return ipfsOpfs.Add(heirarchicalIDBuffer, ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
 }
 
+func round(num float64) int {
+	return int(num + math.Copysign(0.5, num))
+}
+
+func floatPrecision(num float64, precision int) float64 {
+	precision = coin.MaxSupportedDecimalPlaces
+	output := math.Pow(10, float64(precision))
+	return float64(round(num*output)) / output
+}

@@ -8,23 +8,22 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
-
 type DenomTreeNode struct {
 	HierarchicalID TokenID
-	Token wallet.Token
-	IsLeaf bool
+	Token          wallet.Token
+	IsLeaf         bool
 }
 
 type DenomTree struct {
-	Leaves []*DenomTreeNode
+	Leaves   []*DenomTreeNode
 	OwnerDID string
-	ipfsOps IPFSOperation
+	ipfsOps  IPFSOperation
 }
 
-func BuildTokenTree(tokens []wallet.Token, ownerDID string, ipfsClient IPFSOperation) (*DenomTree, error) {
+func BuildDenomTree(tokens []wallet.Token, ownerDID string, ipfsClient IPFSOperation) (*DenomTree, error) {
 	denomTree := &DenomTree{
 		OwnerDID: ownerDID,
-		ipfsOps: ipfsClient,
+		ipfsOps:  ipfsClient,
 	}
 
 	for i := range tokens {
@@ -34,8 +33,8 @@ func BuildTokenTree(tokens []wallet.Token, ownerDID string, ipfsClient IPFSOpera
 		}
 		node := &DenomTreeNode{
 			HierarchicalID: hierarchicalId,
-			Token: tokens[i],
-			IsLeaf: true,
+			Token:          tokens[i],
+			IsLeaf:         true,
 		}
 
 		denomTree.Leaves = append(denomTree.Leaves, node)
@@ -65,4 +64,3 @@ func (t *DenomTree) TotalValue() float64 {
 	}
 	return floatPrecision(sum, coin.MaxSupportedDecimalPlaces)
 }
-

@@ -38,10 +38,10 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 
 func (c *Core) GetRequiredTokens(dc did.DIDCrypto, amountNeededToTransfer float64, isTestnet bool) ([]wallet.Token, error) {
 	initialTime := time.Now()
-	
+
 	did := dc.GetDID()
 
-	requiredTokens, errTokenSplit := parts.CollectTokens(dc, c.w, did, amountNeededToTransfer, c.ipfsOps, isTestnet, c.log)
+	requiredTokens, errTokenSplit := parts.CollectRBTTokens(dc, c.w, did, amountNeededToTransfer, c.ipfsOps, isTestnet, c.log)
 	if errTokenSplit != nil {
 		return nil, errTokenSplit
 	}
@@ -249,15 +249,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			"amount":   req.TokenCount,
 			"type":     req.Type,
 		})(txErr)
-	}()
-
-	reconsileTokenDenomArry := true
-	defer func() {
-		if reconsileTokenDenomArry {
-			c.log.Warn("TODO: All the logic to reconsile")
-		}
-		// TODO: Add a reconsiliation logic to reflect the token denom
-		// similar to TokensTable
 	}()
 
 	resp := &model.BasicResponse{
@@ -551,7 +542,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	select {
 	case result := <-resultChan:
 		// Transaction completed within 40s or failed
-		reconsileTokenDenomArry = false
 		c.log.Debug("transaction completed before 20 secs")
 		return result
 
@@ -567,7 +557,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			}
 		}
 
-		reconsileTokenDenomArry = false
 		resp.Status = true
 		return resp
 	}

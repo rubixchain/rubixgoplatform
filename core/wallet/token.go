@@ -606,6 +606,25 @@ func (w *Wallet) LockToken(wt *Token) error {
 	return w.s.Update(TokenStorage, wt, "did=? AND token_id=?", wt.DID, wt.TokenID)
 }
 
+func (w *Wallet) LockTokens(tokens []Token) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	if len(tokens) == 0 {
+		return fmt.Errorf("LockTokens: received no tokens to lock")
+	}
+
+	var tokenIDs []string = make([]string, 0)
+	
+	for _, token := range tokens {
+		tokenIDs = append(tokenIDs, token.TokenID)
+	}
+
+	tokensStr := strings.Join(tokenIDs, ",")
+
+	return w.s.UpdateColumn(TokenStorage, "token_status", TokenIsLocked, "token_id IN (?)", tokensStr)
+}
+
 func (w *Wallet) ReleaseTokensByRef(wt []*Token) error {
 	w.l.Lock()
 	defer w.l.Unlock()

@@ -9,7 +9,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-func planSplit(ipfsOps IPFSOperation, heirarchicalID TokenID, needed float64, log logger.Logger) ([]SplitOp, error) {
+func planSplit(heirarchicalID TokenID, needed float64, log logger.Logger) ([]SplitOp, error) {
 	var splits []SplitOp
 
 	currentTokenID := heirarchicalID
@@ -17,24 +17,24 @@ func planSplit(ipfsOps IPFSOperation, heirarchicalID TokenID, needed float64, lo
 	zeroFloat := floatPrecision(0, coin.MaxSupportedDecimalPlaces)
 	iter := 0
 	var currentLevel int
-	
+
 	log.Debug(fmt.Sprintf("Remaining Value: %v; Current Needed: %v", needed, currentNeeded))
 	for currentNeeded > zeroFloat {
-		log.Warn("\nIteration: %v", iter)		
+		log.Warn("\nIteration: %v", iter)
 		currentLevel = currentTokenID.Level()
 
-		if currentLevel >= wallet.GetMaxLevel(coin.MaxSupportedDecimalPlaces)-1 {
+		if currentLevel >= GetMaxLevel(coin.MaxSupportedDecimalPlaces)-1 {
 			return nil, fmt.Errorf("planSplit: invalid level for token: %v, got level: %v", string(heirarchicalID), currentLevel)
 		}
 
 		log.Warn(fmt.Sprintf("currentLevel: %v and currentNeeded: %v", currentLevel, currentNeeded))
 
 		childLevel := currentLevel + 1
-		childValue, err := wallet.IdxToDenom(childLevel)
+		childValue, err := LevelToDenom(childLevel)
 		if err != nil {
 			return nil, fmt.Errorf("planSplit: err occured while getting current child value: %v", err)
 		}
-		splitFactor := SplitFactor(childLevel)
+		splitFactor := MaxTokensAtLevel(childLevel)
 
 		log.Warn(fmt.Sprintf("Some metrics: childLevel: %v, childValue: %v, splitFactor: %v", childLevel, childValue, splitFactor))
 
@@ -51,11 +51,10 @@ func planSplit(ipfsOps IPFSOperation, heirarchicalID TokenID, needed float64, lo
 		}
 
 		log.Warn(fmt.Sprintf("Modulo: currentNeeded: %v, childValue: %v, remainder: %v", currentNeeded, childValue, remainder))
-		
+
 		if childrenNeeded > splitFactor {
 			childrenNeeded = splitFactor
 		}
-
 
 		childrenToTransfer := make([]int, 0)
 		childrenToKeep := make([]int, 0)
@@ -66,7 +65,6 @@ func planSplit(ipfsOps IPFSOperation, heirarchicalID TokenID, needed float64, lo
 			// We'll split the next child (after the whole children we transfer)
 			childToSplit = childrenNeeded + 1
 		}
-
 
 		for i := 1; i <= splitFactor; i++ {
 			if i <= childrenNeeded {
@@ -99,7 +97,7 @@ func planSplit(ipfsOps IPFSOperation, heirarchicalID TokenID, needed float64, lo
 	return splits, nil
 }
 
-func splitAtLevel(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation, splitOp SplitOp, tokenCache map[string]*wallet.Token, isTestnet bool) ([]wallet.Token, error) {
+func performTokenSplitAtLevel(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation, splitOp SplitOp, tokenCache map[string]*wallet.Token, isTestnet bool) ([]wallet.Token, error) {
 	var parentToken *wallet.Token
 	parentTokenHeirarchicalID := splitOp.TokenID
 	parentTokenIFPSId, err := IpfsAddString(parentTokenHeirarchicalID, ipfsOps)
@@ -119,7 +117,7 @@ func splitAtLevel(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation, spl
 
 	childLevel := parentTokenHeirarchicalID.Level() + 1
 
-	childTokensCreatedMap, err := createChildTokenForLevel(dc, w, parentToken.TokenID, childLevel, ipfsOps, isTestnet)
+	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentToken.TokenID, childLevel, ipfsOps, isTestnet)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +151,7 @@ func splitAtLevel(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation, spl
 	return childTokensToTransfer, nil
 }
 
-func SplitFactor(level int) int {
+func MaxTokensAtLevel(level int) int {
 	if level%2 == 1 {
 		return 2
 	}

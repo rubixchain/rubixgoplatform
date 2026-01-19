@@ -1,23 +1,23 @@
-package wallet
+package parts
 
 import (
 	"errors"
 	"math"
 )
 
-func IdxToDenom(idx int) (float64, error) {
-	if idx < 0 {
+func LevelToDenom(level int) (float64, error) {
+	if level < 0 {
 		return 0, errors.New("idx must be non-negative")
 	}
 
-	k := idx / 2
-	if idx%2 == 0 {
+	k := level / 2
+	if level%2 == 0 {
 		return math.Pow(10, -float64(k)), nil
 	}
 	return 5 * math.Pow(10, -float64(k+1)), nil
 }
 
-func DenomToIdx(denom float64) (int, error) {
+func DenomToLevel(denom float64) (int, error) {
 	if denom <= 0 {
 		return 0, errors.New("denom must be positive")
 	}

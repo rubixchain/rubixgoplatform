@@ -3,8 +3,6 @@ package parts
 import (
 	"fmt"
 	"strings"
-
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
 type TokenID string
@@ -151,12 +149,6 @@ func (a TokenID) LexicalCompare(b TokenID) int {
 // String returns the string representation
 func (id TokenID) String() string {
 	return string(id)
-}
-
-type TransferPlan struct {
-	TokensToTransfer []wallet.Token // Leaf tokens to transfer as-is
-	TokensToSplit    []SplitOp      // Tokens that need splitting
-	TotalValue       float64        // Total value being transferred
 }
 
 type SplitOp struct {
