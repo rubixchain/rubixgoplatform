@@ -287,7 +287,6 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 			TxnBlock:     b.GetBlock(),
 		}
 
-		c.log.Debug("publishing new part rbt")
 		err = c.publishTxn(publishingTxn)
 		if err != nil {
 			c.log.Error("Failed to publish txn", "err", err)
@@ -347,7 +346,6 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		TxnBlock:     b.GetBlock(),
 	}
 
-	c.log.Debug("publishing burnt rbt block")
 	err = c.publishTxn(publishingBurntBlock)
 	if err != nil {
 		c.log.Error("Failed to publish burnt block", "err", err)

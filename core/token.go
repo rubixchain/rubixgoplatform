@@ -237,17 +237,8 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to get rac block")
 			return err
 		}
-
-		c.log.Debug("****byte array of the test token***", tb)
-
 		tk := util.HexToStr(tb)
-
-		c.log.Debug("***test token in string****", tk)
-
 		nb := bytes.NewBuffer([]byte(tk))
-
-		c.log.Debug("**new buffer of the test token which is getting added to ipfs *****", nb)
-
 		id, err := c.w.Add(nb, did, wallet.OwnerRole)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
@@ -522,7 +513,7 @@ func (c *Core) SubscribeToTokenChainDetails() error {
 	eventCh := make(chan model.TokenChainDetailsEvent, subscriberBufferSize)
 	// Start workers
 	for i := 0; i < workerCount; i++ {
-		go c.tokenDetailWorker(eventCh, i)
+		go c.tokenDetailWorker(eventCh)
 	}
 
 	return c.ps.SubscribeTopic("token_chain_details", func(peerID, topic string, data []byte) {
@@ -634,7 +625,7 @@ func (c *Core) SubscribeToTokenChainDetails() error {
 }
 
 // Dedicated worker for batch processing
-func (c *Core) tokenDetailWorker(eventCh <-chan model.TokenChainDetailsEvent, workerNum int) {
+func (c *Core) tokenDetailWorker(eventCh <-chan model.TokenChainDetailsEvent) {
 	for event := range eventCh {
 		c.processReceivedTokenDetails(event)
 	}
@@ -1351,7 +1342,7 @@ func (c *Core) syncMissingBlocks(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo) 
 	}
 
 	if minMissingBlockId == "" && maxMissingblockId == "" {
-		c.log.Debug("token chain is completely synced")
+		// c.log.Debug("token chain is completely synced")
 		// update token sync status
 		err = c.w.UpdateTokenSyncStatus(tokenSyncInfo.TokenID, wallet.SyncCompleted)
 		if err != nil {

@@ -50,7 +50,6 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		return nil, fmt.Errorf("failed to read explorer response: %w", err)
 	}
 
-	c.log.Debug("Explorer raw response", "body", string(body))
 
 	// First, parse basic structure
 	var genericResp struct {
@@ -634,7 +633,7 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 		accInfo.PinnedRBT == 0 {
 
 		// DID has no tokens, safe to delete
-		c.log.Debug("*******did has no balance, safe to delete")
+		
 	} else {
 		errMsg := fmt.Sprintf(
 			"cannot remove DID: %v, holds RBT [%f free, %f locked, %f pledged, %f pinned]",

@@ -329,14 +329,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			c.log.Error("FT creation failed, failed to add token block", "err", err)
 			return err
 		}
-		c.log.Debug("burnt token block added ")
+		
 		wholeTokens[i].TokenStatus = wallet.TokenIsBurntForFT
 		err = c.w.UpdateToken(&wholeTokens[i])
 		if err != nil {
 			c.log.Error("FT token creation failed, failed to update token status", "err", err)
 			return err
 		}
-		c.log.Debug("burnt token block status updated ")
+		
 		release = false
 
 		// publish the burnt block in the network with topic : rubix_txns
@@ -358,7 +358,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			c.log.Error("Failed to publish txn", "err", err)
 			return err
 		}
-		c.log.Debug("burnt token block published ")
+		
 	}
 
 	// --- Batch Write FTs to Storage using WriteBatch ---
@@ -375,7 +375,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			}
 			FTOwner := blk.GetOwner()
 			newFTs[i].CreatorDID = FTOwner
-			c.log.Debug("adding new ft to table with count ", i)
+			
 		}
 		batch = append(batch, &newFTs[i])
 	}
@@ -430,7 +430,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return err
 	}
 
-	c.log.Debug("updating ft table with new fts")
 
 	updateFTTableErr := c.updateFTTable()
 	if updateFTTableErr != nil {

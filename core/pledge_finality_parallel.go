@@ -13,7 +13,7 @@ import (
 
 // parallelQuorumPledgeFinality processes pledge finality updates in parallel
 func (c *Core) parallelQuorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, newTokenStateHashes []string, transactionId string) error {
-	c.log.Debug("Proceeding for pledge finality (parallel)")
+	
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
 	cs, ok2 := c.quorumRequest[cr.ReqID]
