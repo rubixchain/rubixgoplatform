@@ -222,9 +222,9 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		return fmt.Errorf("failed to get current block number: %v", err)
 	}
 	txnBlockType := txnBlock.GetTransType()
+	tokenType := txnBlock.GetTokenType(tokenId)
 
 	if currentBlockNumber != 0 {
-		tokenType := txnBlock.GetTokenType(tokenId)
 		latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
 		if latestTokenBlock == nil {
 			//connect to publisher and fetch complete token chain
@@ -373,6 +373,11 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 	receivedBlock := ReceivedBlock{
 		LatestBlock: txnBlock,
 	}
+
+	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenId, tokenType)
+	if genesisBlock != nil {
+		receivedBlock.GenesisBlock = genesisBlock
+	}
 	// if it is a genesis block, then fetch token's ipfs content and store in psql db
 	if currentBlockNumber == 0 {
 		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
@@ -511,6 +516,11 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	receivedBlock := ReceivedBlock{
 		LatestBlock: txnBlock,
 	}
+	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenId, tokenType)
+	if genesisBlock != nil {
+		receivedBlock.GenesisBlock = genesisBlock
+	}
+
 	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, receivedBlock, newEvent, syncStatus); err != nil {
 		return fmt.Errorf("failed to add contract token to table: %v", err)
 	}

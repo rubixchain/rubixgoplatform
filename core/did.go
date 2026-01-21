@@ -434,7 +434,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 		didType, _ = c.w.GetPeerDIDType(didStr)
 
 		if peerID != "" && didType != -1 {
-			//c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
+			c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
 			return &wallet.DIDPeerMap{
 				DID:     didStr,
 				PeerID:  peerID,

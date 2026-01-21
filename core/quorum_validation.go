@@ -85,6 +85,8 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					c.AddPeerDetails(*signerInfo)
 				}
 			}
+			c.log.Debug("***signerInfo in validateSigner is***", signerInfo)
+
 			if signerInfo == nil || *signerInfo.DIDType == -1 {
 				peerDetails, err := c.GetPeerInfo(p, signer)
 				if err != nil || peerDetails.PeerInfo.DIDType == nil {
@@ -102,12 +104,15 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					}
 				}
 			}
+			c.log.Debug("***Just before SetupForienDIDQuorum********")
 			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
 			}
+			c.log.Debug("**DIDCrypto **", dc)
 		}
+
 		err := b.VerifySignature(dc)
 		if err != nil {
 			if dc.GetSignType() == did.NlssVersion {
@@ -125,6 +130,9 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					c.log.Error("failed to setup foreign DID quorum", "err", err)
 					return false, fmt.Errorf("failed to setup foreign DID quorum : %v err: %v", signer, err)
 				}
+
+				c.log.Debug("**DC after updating did type with lite mode**", dc)
+
 				err = b.VerifySignature(dc)
 				if err != nil {
 					c.log.Error("Failed to verify signature", "err", err)
