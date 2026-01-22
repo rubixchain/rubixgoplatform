@@ -8,7 +8,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -144,35 +143,10 @@ func createChildTokenContent(parentTokenContent string, index int) string {
 	return parentTokenContent + "-" + fmt.Sprint(index)
 }
 
-// TODO: Current implementation references (c *Core).createPartToken
-// which uses RAC for construction of child token. In future, the implementation
-// will undergo change once its decided to move away from RAC.
 func createChildTokenAtIndex(
-	parentTokenID string, parentTokenContent string,
-	index int, ipfsOps IPFSOperation, userDID string,
-	denomValue float64,
+	parentTokenContent string,
+	index int, ipfsOps IPFSOperation,
 ) (string, error) {
-	racType := &rac.RacType{
-		Type:        7, // TODO: change this
-		DID:         userDID,
-		TotalSupply: 1,
-		TimeStamp:   time.Now().String(),
-		PartInfo: &rac.RacPartInfo{
-			Parent:  parentTokenID,
-			PartNum: index,
-			Value:   denomValue,
-		},
-	}
-
-	racBlock, err := rac.CreateRac(racType)
-	if err != nil {
-		return "", fmt.Errorf("createChildToken: error occured while creating RAC block, err: %v", err)
-	}
-
-	if len(racBlock) != 1 {
-		return "", fmt.Errorf("createChildToken: failed to create RAC genesis block for parentToken: %v and index: %v", parentTokenID, index)
-	}
-
 	childTokenContent := createChildTokenContent(parentTokenContent, index)
 	childTokenContentBuffer := bytes.NewBufferString(childTokenContent)
 	childTokenHash, err := ipfsOps.Add(childTokenContentBuffer)
@@ -203,6 +177,7 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, p
 		TransInfo:       bti,
 		TokenValue:      parentTokenValue,
 		ChildTokens:     partTokenIDs,
+		Epoch:           int(time.Now().Unix()),
 	}
 
 	ctcb := make(map[string]*block.Block)
@@ -256,14 +231,12 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID 
 	}
 
 	for i := 1; i <= maxTokenCount; i++ {
-		childTokenID, err := createChildTokenAtIndex(parentTokenID, parentTokenHeirarchicalID.String(), i,
-			ipfsOps, did, childTokenValue)
+		childTokenID, err := createChildTokenAtIndex(parentTokenHeirarchicalID.String(), i, ipfsOps)
 		if err != nil {
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to create child token with ID: %v, err: %v", childTokenID, err)
 		}
 
 		childTokenType := getTokenType(isTestnet, childTokenValue)
-
 		bti := &block.TransInfo{
 			Tokens: []block.TransTokens{
 				{
@@ -287,6 +260,7 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID 
 				},
 			},
 			TokenValue: childTokenValue,
+			Epoch:      int(time.Now().Unix()),
 		}
 
 		ctcb := make(map[string]*block.Block)
@@ -312,6 +286,8 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID 
 			TokenValue:    childTokenValue,
 			DID:           did,
 			TokenStatus:   wallet.TokenIsFree,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
 		}
 
 		err = w.CreateToken(&childToken)

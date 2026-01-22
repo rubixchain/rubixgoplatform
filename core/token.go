@@ -2832,3 +2832,9 @@ func (c *Core) StoreDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpent
 	}
 	return err
 }
+
+func (c *Core) relaseToken(release *bool, token string) {
+	if *release {
+		c.w.ReleaseToken(token)
+	}
+}

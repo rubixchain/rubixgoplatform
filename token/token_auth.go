@@ -39,27 +39,28 @@ func GetWholeTokenValue(tokenDetails string) (int, string, bool, error) {
 	return tokenLevelInt, tokenCountHash, needMigration, nil
 }
 
-func CheckWholeToken(tokenDetails string, testNet bool) (string, bool, error) {
-	isWholeToken := true
-	trimmedResult := strings.Split(strings.TrimSpace(tokenDetails), ",")
-	if testNet && len(trimmedResult) == 3 {
-		return "", !isWholeToken, nil
-	} else {
-		trimmedResultVal := trimmedResult[0]
-		tokenLevel := string(trimmedResultVal[:len(trimmedResultVal)-64])
-		// tokenCountHash := string(trimmedResultVal[len(trimmedResult)-64:])
-		tokenLevelInt, err := strconv.Atoi(tokenLevel) //It will always be 0
-		if err != nil {
-			return "", !isWholeToken, err
+func CheckWholeToken(tokenDetails string, testnet bool) (string, bool, error) {
+	elements := strings.Split(tokenDetails, "-")
+	
+	if testnet {
+		// Check for local test token 
+		if len(elements) == 1 {
+			return "", true, nil
 		}
-		if len(tokenLevel) < 3 {
-			if tokenLevelInt != 1 {
-				return "", !isWholeToken, fmt.Errorf("invalid token level format")
+
+		if len(elements) == 2 {
+			// Max Network Level being 999
+			if len(elements[0]) < 3 {
+				return "", true, nil
 			}
 		}
+	} else {
+		if len(elements) == 2 {
+			return "", true, nil
+		}
 	}
-	return "", isWholeToken, nil
 
+	return "", false, nil
 }
 
 func calcSHA256(targetHash string, maxNumber int) int {

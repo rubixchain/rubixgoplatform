@@ -18,6 +18,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -78,8 +79,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return fmt.Errorf("max allowed FT count is 1000 for 1 RBT")
 	}
 
-	// Fetch whole tokens using GetToken
-	wholeTokens, err := c.GetTokens(dc, did, float64(numWholeTokens), 0)
+	// Fetch whole tokens
+	wholeTokens, err := parts.CollectRBTTokens(dc, c.w, parts.FloatPrecision(float64(numWholeTokens)), c.ipfsOps, c.testNet, c.log)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err

@@ -69,3 +69,22 @@ func MaxTokensAtLevel(level int) int {
 
 	return 5
 }
+
+// GetTokenValueFromHierarchicalID fetches the token value by
+// looking at the IPFS content of a Token.
+//
+// Make sure to pass the IPFS content, and not the IPFS ID of the token
+func GetTokenValueFromHierarchicalID(heirarchicalID string) (float64, error) {
+	token := TokenID(heirarchicalID)
+	tokenLevel := token.Level()
+	tokenValue, err := LevelToDenom(tokenLevel)
+	if err != nil {
+		return 0.0, fmt.Errorf(
+			"GetTokenValueFromHierarchicalID: failed to get token value for level: %v, token: %v",
+			tokenLevel,
+			heirarchicalID,
+		)
+	}
+
+	return tokenValue, nil
+}

@@ -218,9 +218,8 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	wta := make([]string, 0)
-	c.log.Debug("TOKENS CHOSEN FOR TX")
+
 	for i := range tokensForTxn {
-		c.log.Warn(fmt.Sprintf("%v - val: %v", tokensForTxn[i].TokenID, tokensForTxn[i].TokenValue))
 		wta = append(wta, tokensForTxn[i].TokenID)
 	}
 

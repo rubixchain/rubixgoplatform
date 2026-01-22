@@ -13,6 +13,8 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, targetAmount float64, 
 	var tokensTransfer []wallet.Token = make([]wallet.Token, 0)
 	var did string = dc.GetDID()
 
+	// Denom check if already change exists
+
 	tokens, err := w.GetFreeTokens(did)
 	if err != nil {
 		return nil, fmt.Errorf("CollectRBTTokens: failed to get free tokens for did: %v, err: %v", did, err)
