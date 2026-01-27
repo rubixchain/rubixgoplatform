@@ -136,7 +136,9 @@ func (d *DIDQuorum) PvtSign(hash []byte) ([]byte, error) {
 	return ps, nil
 }
 func (d *DIDQuorum) PvtVerify(hash []byte, sign []byte) (bool, error) {
+	fmt.Println("pubkey in PvtVerify", d.pubKey, "len of sign", len(sign), "len of hash", len(hash))
 	if !crypto.Verify(d.pubKey, hash, sign) {
+		fmt.Println("purely signature verification failed for DIDQuorum")
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil

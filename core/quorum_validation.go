@@ -85,21 +85,23 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					c.AddPeerDetails(*signerInfo)
 				}
 			}
-			c.log.Debug("***signerInfo in validateSigner is***", signerInfo)
+			c.log.Debug("***signerInfo in validateSigner is***", signerInfo, "did type", *signerInfo.DIDType)
 
-			if signerInfo == nil || *signerInfo.DIDType == -1 {
+			if signerInfo.DIDType == nil || *signerInfo.DIDType == -1 {
+				c.log.Debug("don't have did type yet,signerDID", signerInfo.DID)
+				nlssDidType := did.BasicDIDMode
 				peerDetails, err := c.GetPeerInfo(p, signer)
 				if err != nil || peerDetails.PeerInfo.DIDType == nil {
 					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
 					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
 					if !peerUpdateResult || err != nil {
-						*signerInfo.DIDType = did.BasicDIDMode
+						signerInfo.DIDType = &nlssDidType
 						c.AddPeerDetails(*signerInfo)
 					}
 				} else {
 					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
 					if !peerUpdateResult || err != nil {
-						*signerInfo.DIDType = did.BasicDIDMode
+						signerInfo.DIDType = &nlssDidType
 						c.AddPeerDetails(*signerInfo)
 					}
 				}
@@ -110,7 +112,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
 			}
-			c.log.Debug("**DIDCrypto **", dc)
+			c.log.Debug("**DIDCrypto **", dc, "sign type ", dc.GetSignType())
 		}
 
 		err := b.VerifySignature(dc)
@@ -522,10 +524,10 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 	// Track overall validation time
 	defer c.TrackOperation("quorum.validate_token_ownership.total", map[string]interface{}{
 		"transaction_id": cr.TransactionID,
-		"mode": cr.Mode,
-		"token_count": len(sc.GetTransTokenInfo()),
+		"mode":           cr.Mode,
+		"token_count":    len(sc.GetTransTokenInfo()),
 	})(nil)
-	
+
 	var ti []contract.TokenInfo
 	var address string
 
@@ -554,16 +556,16 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 				partTokenCount++
 			}
 		}
-		
+
 		// Use batch genesis optimization if we have significant part tokens
 		if partTokenCount > 10 {
 			c.log.Info("Using batch genesis optimization for RBT validation",
 				"total_tokens", len(ti),
 				"part_tokens", partTokenCount)
-			
+
 			genesisBatchOptimizer := wallet.NewGenesisBatchOptimizer(c.w)
 			tokenCreatorCache = genesisBatchOptimizer.BatchProcessTokens(ti)
-			
+
 			c.log.Debug("Genesis batch optimization complete",
 				"cache_size", len(tokenCreatorCache))
 		}
@@ -615,7 +617,7 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 					"blockID", tokenInfo.BlockID)
 				return false, fmt.Errorf("empty token found in input at position %d", len(tokensNeedingSync)), nil
 			}
-			
+
 			// Create BatchSyncTokenInfo - don't use pool here as we need to store them
 			tokensNeedingSync = append(tokensNeedingSync, BatchSyncTokenInfo{
 				Token:     tokenInfo.Token,
@@ -627,7 +629,7 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 			// Quorum already signed - no sync needed
 			// Don't log for each token to reduce noise
 			syncSkipped++
-			
+
 			//Store the latest block we already have
 			blockHash, err := latestBlock.GetHash()
 			if err != nil {
@@ -648,23 +650,23 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 		}
 	}
 
-	c.log.Info("Sync analysis completed", 
+	c.log.Info("Sync analysis completed",
 		"totalTokens", len(ti),
 		"needSync", syncNeeded,
 		"skipSync", syncSkipped,
 		"uniqueBlocks", len(blockGroups))
-	
+
 	// Track collection phase time
 	c.TrackOperation("quorum.validate_token_ownership.collect_tokens", map[string]interface{}{
 		"total_tokens": len(ti),
-		"need_sync": syncNeeded,
-		"skip_sync": syncSkipped,
+		"need_sync":    syncNeeded,
+		"skip_sync":    syncSkipped,
 	})(nil)
 
 	// Step 2: Sync tokens that need it
 	if len(tokensNeedingSync) > 0 {
 		syncStartTime := time.Now()
-		
+
 		if len(tokensNeedingSync) > 10 {
 			// Use batch sync for large token sets
 			c.log.Info("Using batch sync for tokens", "count", len(tokensNeedingSync))
@@ -679,21 +681,21 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 		} else {
 			// Use parallel sync for small token sets (≤10 tokens)
 			c.log.Info("Using parallel sync for tokens", "count", len(tokensNeedingSync))
-			
+
 			// Limit concurrency to 10 (matching IPFS limits)
 			sem := make(chan struct{}, 10)
 			var syncWg sync.WaitGroup
 			var syncErr error
 			var syncMu sync.Mutex
-			
+
 			for _, syncInfo := range tokensNeedingSync {
 				syncWg.Add(1)
 				go func(si BatchSyncTokenInfo) {
 					defer syncWg.Done()
-					
+
 					sem <- struct{}{}
 					defer func() { <-sem }()
-					
+
 					c.log.Debug("Syncing token chain before validation", "token", si.Token)
 					err, syncResp := c.syncTokenChainFrom(p, si.BlockID, si.Token, si.TokenType)
 					if err != nil {
@@ -720,32 +722,32 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 					c.log.Debug("Syncing token chain completed for token", "token", si.Token)
 				}(syncInfo)
 			}
-			
+
 			syncWg.Wait()
 			if syncErr != nil {
 				return false, syncErr, nil
 			}
 		}
-		
-		c.log.Info("Token sync completed", 
+
+		c.log.Info("Token sync completed",
 			"duration", time.Since(syncStartTime),
 			"tokensSynced", len(tokensNeedingSync))
-		
+
 		// Process synced tokens and group by block hash
 		// IMPORTANT: We must process the tokens BEFORE returning them to the pool
 		for i := range tokensNeedingSync {
 			syncInfo := &tokensNeedingSync[i]
-			
+
 			// Validate token info before processing
 			if syncInfo.Token == "" {
-				c.log.Error("Empty token found in synced tokens", 
-					"index", i, 
+				c.log.Error("Empty token found in synced tokens",
+					"index", i,
 					"totalSynced", len(tokensNeedingSync),
 					"tokenType", syncInfo.TokenType,
 					"blockID", syncInfo.BlockID)
 				return false, fmt.Errorf("empty token found at index %d after sync", i), nil
 			}
-			
+
 			// Get the latest block after sync
 			latestBlock := c.w.GetLatestTokenBlock(syncInfo.Token, syncInfo.TokenType)
 			if latestBlock == nil {
@@ -755,13 +757,13 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 					c.log.Info("Using genesis block for token", "token", syncInfo.Token)
 				} else {
 					// Try to understand why the block is missing
-					c.log.Error("Failed to get latest token block after sync", 
+					c.log.Error("Failed to get latest token block after sync",
 						"token", syncInfo.Token,
 						"tokenType", syncInfo.TokenType,
 						"blockID", syncInfo.BlockID,
 						"index", i,
 						"totalTokens", len(tokensNeedingSync))
-					
+
 					// Check if token exists in wallet
 					tokenData, err := c.w.ReadToken(syncInfo.Token)
 					if err != nil {
@@ -769,7 +771,7 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 					} else {
 						c.log.Error("Token exists but no block found", "token", syncInfo.Token, "tokenData", tokenData)
 					}
-					
+
 					// In trusted network mode, this might be a genesis token
 					if c.cfg.CfgData.TrustedNetwork {
 						c.log.Warn("In trusted network mode - might be genesis token without chain", "token", syncInfo.Token)
@@ -777,7 +779,7 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 						c.log.Warn("Skipping token that has no block", "token", syncInfo.Token)
 						continue
 					}
-					
+
 					return false, fmt.Errorf("failed to get latest token block for token %s after sync", syncInfo.Token), nil
 				}
 			}
@@ -800,7 +802,7 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 				}
 			}
 		}
-		
+
 		// Note: We're not using pool for tokensNeedingSync anymore, so no need to return them
 	}
 
@@ -826,18 +828,18 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 	// Use dynamic worker allocation for block validation
 	rm := &ResourceMonitor{}
 	dynamicWorkers := rm.CalculateDynamicWorkers(len(blockGroups))
-	
+
 	// Apply CPU-based limits (numCores * 2)
 	numCores := runtime.NumCPU()
 	cpuLimit := numCores * 2
 	maxWorkers := min(dynamicWorkers, cpuLimit)
-	
+
 	c.log.Debug("Block validation worker configuration",
 		"uniqueBlocks", len(blockGroups),
 		"dynamicWorkers", dynamicWorkers,
 		"cpuLimit", cpuLimit,
 		"actualWorkers", maxWorkers)
-	
+
 	sem := make(chan struct{}, maxWorkers)
 
 	for _, blockResult := range blockGroups {
@@ -888,15 +890,15 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 				c.log.Debug("Block validation successful", "blockHash", result.BlockHash, "tokenCount", len(result.Tokens))
 			}
 		}
-	
+
 		// Step 4: Handle sync issues
 		if len(syncIssueTokens) > 0 {
 			return false, fmt.Errorf("failed to sync tokenchain Token: issueType: %v", TokenChainNotSynced), syncIssueTokens
 		}
 	}
 
-	c.log.Info("Optimized token validation completed successfully", 
-		"totalTokens", len(ti), 
+	c.log.Info("Optimized token validation completed successfully",
+		"totalTokens", len(ti),
 		"uniqueBlocks", len(blockGroups),
 		"tokensSkippedSync", syncSkipped,
 		"tokensBatchSynced", batchSynced,
@@ -923,7 +925,7 @@ func (c *Core) logOptimizationStats(totalTokens int, uniqueBlocks int, syncNeede
 	reduction := float64(totalTokens-uniqueBlocks) / float64(totalTokens) * 100
 	syncReduction := float64(syncSkipped) / float64(totalTokens) * 100
 	batchSyncPercent := float64(batchSynced) / float64(totalTokens) * 100
-	
+
 	c.log.Info("Token validation optimization stats",
 		"totalTokens", totalTokens,
 		"uniqueBlocks", uniqueBlocks,
@@ -980,16 +982,16 @@ func (c *Core) syncTokensInBatch(p *ipfsport.Peer, tokens []BatchSyncTokenInfo) 
 	// Use ResourceMonitor for dynamic worker allocation
 	rm := &ResourceMonitor{}
 	dynamicWorkers := rm.CalculateDynamicWorkers(len(tokens))
-	
+
 	// Cap at 10 workers due to IPFS connection limits
 	numWorkers := min(dynamicWorkers, 10)
-	
+
 	// Get memory stats for logging
 	totalMB, availableMB := rm.GetMemoryStats()
-	
+
 	// Use progressive batching for optimal performance
 	batchSize := TokenSyncBatchConfig.GetBatchSize(len(tokens))
-	
+
 	// Adjust based on memory pressure
 	if availableMB < 1000 { // Less than 1GB available
 		batchSize = batchSize / 2
@@ -997,9 +999,9 @@ func (c *Core) syncTokensInBatch(p *ipfsport.Peer, tokens []BatchSyncTokenInfo) 
 			batchSize = 50
 		}
 	}
-	
+
 	c.log.Debug("Using progressive batch size", "batch_size", batchSize, "total_tokens", len(tokens))
-	
+
 	c.log.Debug("Batch sync configuration",
 		"workers", numWorkers,
 		"dynamicWorkers", dynamicWorkers,
@@ -1018,18 +1020,18 @@ func (c *Core) syncTokensInBatch(p *ipfsport.Peer, tokens []BatchSyncTokenInfo) 
 	// Sync batches with controlled concurrency
 	errChan := make(chan error, len(batches))
 	sem := make(chan struct{}, numWorkers) // Limit to 10 concurrent operations
-	
+
 	var wg sync.WaitGroup
 	for batchIdx, batch := range batches {
 		wg.Add(1)
 		go func(idx int, tokenBatch []BatchSyncTokenInfo) {
 			defer wg.Done()
-			
-			sem <- struct{}{} // Acquire semaphore
+
+			sem <- struct{}{}        // Acquire semaphore
 			defer func() { <-sem }() // Release semaphore
-			
+
 			c.log.Debug("Processing batch", "batchIndex", idx, "batchSize", len(tokenBatch))
-			
+
 			// Sync each token in the batch
 			for _, tokenInfo := range tokenBatch {
 				err, syncResp := c.syncTokenChainFrom(p, tokenInfo.BlockID, tokenInfo.Token, tokenInfo.TokenType)
@@ -1043,28 +1045,28 @@ func (c *Core) syncTokensInBatch(p *ipfsport.Peer, tokens []BatchSyncTokenInfo) 
 					return
 				}
 			}
-			
+
 			c.log.Debug("Batch sync completed", "batchIndex", idx, "tokensProcessed", len(tokenBatch))
 		}(batchIdx, batch)
 	}
-	
+
 	wg.Wait()
 	close(errChan)
-	
+
 	// Check for errors
 	var errors []error
 	for err := range errChan {
 		errors = append(errors, err)
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("batch sync failed with %d errors: %v", len(errors), errors[0])
 	}
-	
+
 	duration := time.Since(startTime)
 	tokensPerSecond := float64(len(tokens)) / duration.Seconds()
 	avgBatchTime := duration.Milliseconds() / int64(len(batches))
-	
+
 	c.log.Info("Batch token sync completed successfully",
 		"totalTokens", len(tokens),
 		"batches", len(batches),
@@ -1073,11 +1075,9 @@ func (c *Core) syncTokensInBatch(p *ipfsport.Peer, tokens []BatchSyncTokenInfo) 
 		"tokensPerSecond", fmt.Sprintf("%.2f", tokensPerSecond),
 		"avgBatchTimeMs", avgBatchTime,
 		"memoryUsedMB", totalMB-availableMB)
-	
+
 	return nil
 }
-
-
 
 // func (c *Core) checkTokenIsPledged(wt string) bool {
 // 	tokenType := token.RBTTokenType
@@ -1121,11 +1121,11 @@ func (c *Core) getUnpledgeId(wt string, tokenType int) string {
 func (c *Core) checkTokenState(tokenId, did string, index int, resultArray []TokenStateCheckResult, quorumList []string, tokenType int) {
 	// Track individual token state check
 	defer c.TrackOperation("token.state_check.single_token", map[string]interface{}{
-		"token": tokenId,
+		"token":      tokenId,
 		"token_type": tokenType,
-		"index": index,
+		"index":      index,
 	})(nil)
-	
+
 	var result TokenStateCheckResult
 	result.Token = tokenId
 

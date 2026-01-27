@@ -33,33 +33,33 @@ func (d *DIDBasic) getPassword() (string, error) {
 	if d.pwd != "" {
 		return d.pwd, nil
 	}
-	
+
 	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
 		return "", fmt.Errorf("Invalid configuration")
 	}
-	
+
 	// Check request-scoped cache first (read lock)
 	d.ch.PasswordMutex.RLock()
 	if d.ch.PasswordSet && d.ch.CachedPassword != "" {
 		cachedPwd := d.ch.CachedPassword
 		d.ch.PasswordMutex.RUnlock()
-		
+
 		// Cache in DID object for faster access
 		d.pwd = cachedPwd
 		return d.pwd, nil
 	}
 	d.ch.PasswordMutex.RUnlock()
-	
+
 	// Acquire write lock to request password
 	d.ch.PasswordMutex.Lock()
 	defer d.ch.PasswordMutex.Unlock()
-	
+
 	// Double-check: another goroutine might have set password while waiting
 	if d.ch.PasswordSet && d.ch.CachedPassword != "" {
 		d.pwd = d.ch.CachedPassword
 		return d.pwd, nil
 	}
-	
+
 	// Request password from user
 	sr := &SignResponse{
 		Status:  true,
@@ -70,24 +70,24 @@ func (d *DIDBasic) getPassword() (string, error) {
 		},
 	}
 	d.ch.OutChan <- sr
-	
+
 	var ch interface{}
 	select {
 	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
 		return "", fmt.Errorf("Timeout, failed to get password")
 	}
-	
+
 	srd, ok := ch.(SignRespData)
 	if !ok {
 		return "", fmt.Errorf("Invalid data received on the channel")
 	}
-	
+
 	// Cache password for this request
 	d.ch.CachedPassword = srd.Password
 	d.ch.PasswordSet = true
 	d.pwd = srd.Password // Also cache in DID object
-	
+
 	return d.pwd, nil
 }
 
@@ -219,13 +219,16 @@ func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
 func (d *DIDBasic) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
+		fmt.Println("failed to read the pubkey file for DIDBasic ", d.dir+PubKeyFileName)
 		return false, err
 	}
 	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
 	if err != nil {
+		fmt.Println("failed to decode pubkeybyte for DIDBasic")
 		return false, err
 	}
 	if !crypto.Verify(pubKeyByte, hash, sign) {
+		fmt.Println("purely signature verification failed for DIDBasic")
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil

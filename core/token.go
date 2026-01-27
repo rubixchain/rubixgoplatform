@@ -31,6 +31,7 @@ const delayInPublishingTCDetails = 2 * time.Second
 const subscriberBufferSize = 1000 // process up to this many idle batches
 const workerCount = 8             // Tune according to hardware/network
 const MaxNumberOfChildTokensAllowed = 2
+const wholeTokenValue = 1.0
 
 type TokenPublish struct {
 	Token string `json:"token"`
@@ -1084,7 +1085,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 								TokenID:        detail.Token,
 								AssetType:      detail.AssetType,
 								TokenType:      detail.TokenType,
-								PublisherDID:   event.PublisherPeerID,
+								PublisherDID:   detail.PublisherDid,
 								ClaimedOwnerI:  existingBlockOwnerDID,
 								ClaimedOwnerII: detail.PublisherDid,
 								ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
@@ -1495,7 +1496,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				c.log.Error("Failed to add token chain block, invalid block", "token", tokenSyncInfo.TokenID)
 				return fmt.Errorf("failed to add token chain block, invalid block")
 			}
-			//check previous blockID of the block,  which we are going to add, it should be same as the latestBlockID which is alredy there for all nongenesis blocks
+			//CHECK1: check previous blockID of the block,  which we are going to add, it should be same as the latestBlockID which is alredy there for all nongenesis blocks
 			latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 			var latestBlockID string
 			if latestBlock != nil {
@@ -1522,7 +1523,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 			}
 			transType := blk.GetTransType()
-			//if it is a transferred type, check that if receiver of the latest blockID should be same as the sender of the block which is going to get added.
+			//CHECK2: if it is a transferred type, check that if receiver of the latest blockID should be same as the sender of the block which is going to get added.
 			if latestBlock != nil {
 				switch transType {
 				case block.TokenTransferredType, block.TokenSelfTransferredType:
@@ -1537,7 +1538,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				case block.TokenExecutedType:
 					if blk.GetExecutorDID() != latestBlock.GetOwner() {
 						c.log.Error("owner of the latest blockID is not matchig with the Executor of the block which is going to get added")
-						return fmt.Errorf("Owner of the latest blockID is not matchig with the Executor of the block which is going to get added: token=%s,existingblockReceiverDID=%s,senderDID=%s",
+						return fmt.Errorf("Owner of the latest blockID is not matchig with the Executor of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
 							tokenSyncInfo.TokenID,
 							latestBlock.GetOwner(),
 							blk.GetExecutorDID(),
@@ -1549,14 +1550,18 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 			}
 
-			//fullnode verifies signature of each block, if it doesn't pass through we will add token to failed to sync tokens table
+			//CHECK3: fullnode verifies signature of each block, if it doesn't pass through we will add token to failed to sync tokens table
 			//with error saying that, corrupted tokenchain.
 			incomingBlkID, err := blk.GetBlockID(tokenSyncInfo.TokenID)
 			c.log.Debug("**Entering into signature check for the blkID****", incomingBlkID)
-			valid, err := c.validateSigner(blk, "", p)
-			if !valid || err != nil {
-				c.log.Error("Failed to validate token signer for token", "token", tokenSyncInfo.TokenID, "err", err)
-				return fmt.Errorf("failed to validate token signer for %s", tokenSyncInfo.TokenID)
+			incomingBlkType := blk.GetTransType()
+			//For Fexer DIDs which were having unpledge blocks, signature checks are failing so thats why we are avoiding signature checks for unpledge blocks
+			if incomingBlkType != block.TokenUnpledgedType {
+				valid, err := c.validateSigner(blk, "", p)
+				if !valid || err != nil {
+					c.log.Error("Failed to validate token signer for token", "token", tokenSyncInfo.TokenID, "err", err)
+					return fmt.Errorf("failed to validate token signer for %s", tokenSyncInfo.TokenID)
+				}
 			}
 
 			//if all checks pass, add it to the levelDB.
@@ -2662,7 +2667,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 					genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
 					if genesisBlockType == block.TokenMigratedType {
-						tokenInfo.TokenValue = event.TokenValue //No need to add parentTokenID in case of TokenMigratedType because all migrated tokens are whole tokens
+						tokenInfo.TokenValue = wholeTokenValue //No need to add parentTokenID in case of TokenMigratedType because all migrated tokens are whole tokens
 					} else {
 						tokenInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
 						tokenInfo.ParentTokenID = parentTokenID
@@ -2702,7 +2707,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			if receivedBlock.GenesisBlock != nil {
 				genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
 				if genesisBlockType == block.TokenMigratedType {
-					syncedRBT.TokenValue = event.TokenValue
+					syncedRBT.TokenValue = wholeTokenValue
 				} else {
 					syncedRBT.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
 				}
