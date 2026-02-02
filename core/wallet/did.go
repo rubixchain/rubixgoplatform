@@ -100,6 +100,18 @@ func (w *Wallet) IsDIDExist(did string) bool {
 	return true
 }
 
+func (w *Wallet) RemoveDID(did string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+	err := w.s.Delete(DIDStorage, &DIDType{}, "did=?", did)
+	if err != nil {
+		errMsg := fmt.Sprintf("DID could not be removed from DIDTable, did : %v, err : %v", did, err)
+		w.log.Error(errMsg)
+		return fmt.Errorf("%v", errMsg)
+	}
+	return nil
+}
+
 func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
 	lastChar, err := w.GetLastChar(did)
 	if err != nil {
@@ -143,6 +155,20 @@ func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
 	existing.DIDLastChar = lastChar
 
 	return w.s.Update(DIDPeerStorage, &existing, "did=?", did)
+}
+
+// remove stale peer
+func (w *Wallet) RemoveStalePeerDID(peerDID, peerId string) error {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	err := w.s.Delete(DIDPeerStorage, &DIDPeerMap{}, "did=? AND peer_id=?", peerDID, peerId)
+	if err != nil {
+		errMsg := fmt.Sprintf("peer-DID could not be removed from DIDPeerTable, peer-did : %v, err : %v", peerDID, err)
+		w.log.Error(errMsg)
+		return fmt.Errorf("%v", errMsg)
+	}
+	return nil
 }
 
 func (w *Wallet) AddDIDLastChar() error {

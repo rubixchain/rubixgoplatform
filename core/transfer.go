@@ -55,7 +55,7 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
 		} else {
 			if req.TokenCount > accountBalance.RBTAmount {
-				return nil, fmt.Errorf("insufficient balance, account balance is %v, trnx value is %v", accountBalance.RBTAmount, req.TokenCount)
+				return nil, fmt.Errorf("insufficient balance, of account %v balance is %v, trnx value is %v",senderDID, accountBalance.RBTAmount, req.TokenCount)
 			}
 		}
 
@@ -68,7 +68,7 @@ func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.D
 		if len(reqTokens) != 0 {
 			tokensForTransfer = append(tokensForTransfer, reqTokens...)
 		}
-		//check if ther is enough tokens to do transfer
+		//check if there is enough tokens to do transfer
 		// Get the required tokens from the DID bank
 		// this method locks the token needs to be released or
 		// removed once it done with the transfer
@@ -187,15 +187,15 @@ func getConsensusRequest(consensusRequestType int, senderPeerID string, receiver
 func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) *model.BasicResponse {
 	st := time.Now()
 	txEpoch := int(st.Unix())
-	
+
 	// Track overall transaction performance
 	var txErr error
 	defer func() {
 		c.TrackOperation("tx.rbt_transfer.total", map[string]interface{}{
-			"sender": req.Sender,
+			"sender":   req.Sender,
 			"receiver": req.Receiver,
-			"amount": req.TokenCount,
-			"type": req.Type,
+			"amount":   req.TokenCount,
+			"type":     req.Type,
 		})(txErr)
 	}()
 
@@ -412,95 +412,110 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	}
 
 	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
-	resultChan := make(chan *model.BasicResponse, 1)
+	// resultChan := make(chan *model.BasicResponse, 1)
+
+	// to distinguish between transaction types
+	cr.OperationType = req.OperationType
 
 	// Start the transaction in a goroutine
-	go func() {
-		td, _, pds, consError := c.initiateConsensus(cr, sc, dc)
-		if consError != nil {
-			resp.Message = fmt.Sprintf("Consensus failed " + consError.Error())
-			resp.Status = false
-			resultChan <- resp
-			return
-		}
-		et := time.Now()
-		dif := et.Sub(st)
-		if isSelfRBTTransfer {
-			var amt float64 = 0
-			for _, tknInfo := range tis {
-				amt += tknInfo.TokenValue
-			}
-			td.Amount = amt
-		} else {
-			td.Amount = req.TokenCount
-		}
-		td.TotalTime = float64(dif.Milliseconds())
-
-		if td.TotalTime < 0.00 {
-			td.TotalTime = 0.00
-		}
-
-		if err := c.w.AddTransactionHistory(td); err != nil {
-			errMsg := fmt.Sprintf("Error occured while adding transaction details: %v", err)
-			c.log.Error(errMsg)
-			resp.Message = errMsg
-			return
-		}
-		etrans := &ExplorerRBTTrans{
-			TokenHashes:    wta,
-			TransactionID:  td.TransactionID,
-			BlockHash:      strings.Split(td.BlockID, "-")[1],
-			Network:        req.Type,
-			SenderDID:      senderDID,
-			ReceiverDID:    receiverdid,
-			Amount:         req.TokenCount,
-			QuorumList:     extractQuorumDID(cr.QuorumList),
-			PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
-			TransTokenList: tokenListForExplorer,
-			Comments:       req.Comment,
-		}
-
-		c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
-		resp.Status = true
-		msg := fmt.Sprintf("Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
-		resp.Message = msg
-		if strings.Contains(resp.Message, "with transaction id") {
-			if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
-				resp.Result = txID
-			}
-		}
-		c.ec.ExplorerRBTTransaction(etrans)
-
-		// Send final transaction completion response if not already timed out
-		select {
-		case resultChan <- resp:
-			// Successfully sent to resultChan
-		default:
-			// If no one is listening (already timed out), just log and exit
-			c.log.Debug("Transaction completed but resultChan is not being read anymore")
-		}
-	}()
-
-	select {
-	case result := <-resultChan:
-		// Transaction completed within 40s or failed
-		c.log.Debug("transaction completed before 20 secs")
-		return result
-
-	case <-time.After(20 * time.Second):
-		// Timeout occurred, return Transaction ID only
-		c.log.Debug("transaction still processing with txn id ", cr.TransactionID)
-
-		msg := fmt.Sprintf("Transaction is still processing, with transaction id %v ", cr.TransactionID)
-		resp.Message = msg
-		if strings.Contains(resp.Message, "with transaction id") {
-			if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
-				resp.Result = txID
-			}
-		}
-		resp.Status = true
+	// go func() {
+	td, _, pds, consError := c.initiateConsensus(cr, sc, dc)
+	if consError != nil {
+		resp.Message = fmt.Sprintf("Consensus failed " + consError.Error())
+		resp.Status = false
+		// resultChan <- resp
 		return resp
 	}
+	et := time.Now()
+	dif := et.Sub(st)
+	if isSelfRBTTransfer {
+		var amt float64 = 0
+		for _, tknInfo := range tis {
+			amt += tknInfo.TokenValue
+		}
+		td.Amount = amt
+	} else {
+		td.Amount = req.TokenCount
+	}
+	td.TotalTime = float64(dif.Milliseconds())
+
+	if td.TotalTime < 0.00 {
+		td.TotalTime = 0.00
+	}
+
+	if err := c.w.AddTransactionHistory(td); err != nil {
+		errMsg := fmt.Sprintf("Error occured while adding transaction details: %v", err)
+		c.log.Error(errMsg)
+		resp.Message = errMsg
+		return resp
+	}
+	etrans := &ExplorerRBTTrans{
+		TokenHashes:    wta,
+		TransactionID:  td.TransactionID,
+		BlockHash:      strings.Split(td.BlockID, "-")[1],
+		Network:        req.Type,
+		SenderDID:      senderDID,
+		ReceiverDID:    receiverdid,
+		Amount:         req.TokenCount,
+		QuorumList:     extractQuorumDID(cr.QuorumList),
+		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
+		TransTokenList: tokenListForExplorer,
+		Comments:       req.Comment,
+	}
+
+	c.log.Info("Transfer finished successfully", "duration", dif, " trnxid", td.TransactionID)
+	resp.Status = true
+	msg := fmt.Sprintf("Transfer finished successfully in %v with trnxid %v", dif, td.TransactionID)
+	resp.Message = msg
+	if strings.Contains(resp.Message, "with transaction id") {
+		if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
+			resp.Result = txID
+		}
+	}
+	c.ec.ExplorerRBTTransaction(etrans)
+
+	// Send final transaction completion response if not already timed out
+	// select {
+	// case resultChan <- resp:
+	// 	// Successfully sent to resultChan
+	// default:
+	// 	// If no one is listening (already timed out), just log and exit
+	// 	c.log.Debug("Transaction completed but resultChan is not being read anymore")
+	// }
+	// }()
+
+	// select {
+	// case result := <-resultChan:
+	// 	// Transaction completed within 40s or failed
+	// 	c.log.Debug("transaction completed before 20 secs")
+	// 	return result
+
+	// case <-time.After(20 * time.Second):
+	// 	// Timeout occurred, return Transaction ID only
+	// 	c.log.Debug("transaction still processing with txn id ", cr.TransactionID)
+
+	// 	msg := fmt.Sprintf("Transaction is still processing, with transaction id %v ", cr.TransactionID)
+	// 	resp.Message = msg
+	// 	if strings.Contains(resp.Message, "with transaction id") {
+	// 		if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
+	// 			resp.Result = txID
+	// 		}
+	// 	}
+	// 	resp.Status = true
+	// 	return resp
+	// }
+
+	// c.log.Debug("transaction completed with txn id ", cr.TransactionID)
+
+	// msg = fmt.Sprintf("Transaction completed with transaction id %v ", cr.TransactionID)
+	// resp.Message = msg
+	// if strings.Contains(resp.Message, "with transaction id") {
+	// 	if txID := extractTransactionIDFromMessage(resp.Message); txID != "" {
+	// 		resp.Result = txID
+	// 	}
+	// }
+	resp.Status = true
+	return resp
 }
 
 //Functions to initiate PinRBT

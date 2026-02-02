@@ -9,44 +9,44 @@ import (
 // OptimizedGetFreeTokens fetches and processes free tokens efficiently for any large amount
 func (w *Wallet) OptimizedGetFreeTokens(did string, requiredCount float64) ([]Token, error) {
 	startTime := time.Now()
-	
+
 	// Step 1: Batch fetch all free tokens
 	var allFreeTokens []Token
 	err := w.s.Read(TokenStorage, &allFreeTokens, "token_status=? AND did=?", TokenIsFree, did)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch free tokens: %v", err)
 	}
-	
-	w.log.Info("Fetched free tokens", 
-		"count", len(allFreeTokens), 
+
+	w.log.Info("Fetched free tokens",
+		"count", len(allFreeTokens),
 		"fetch_time", time.Since(startTime))
-	
+
 	if len(allFreeTokens) == 0 {
 		return []Token{}, nil
 	}
-	
+
 	// Step 2: Calculate how many tokens we need
 	tokensNeeded := calculateTokensNeeded(allFreeTokens, requiredCount)
 	if len(tokensNeeded) == 0 {
-		return nil, fmt.Errorf("insufficient free tokens: have %d, need %.2f", 
+		return nil, fmt.Errorf("insufficient free tokens: have %d, need %.2f",
 			len(allFreeTokens), requiredCount)
 	}
-	
-	w.log.Info("Tokens needed for transaction", 
+
+	w.log.Info("Tokens needed for transaction",
 		"required_value", requiredCount,
 		"token_count", len(tokensNeeded))
-	
+
 	// Step 3: Batch lock tokens (single UPDATE query)
 	lockStart := time.Now()
 	err = w.batchLockTokens(tokensNeeded, did)
 	if err != nil {
 		return nil, fmt.Errorf("failed to lock tokens: %v", err)
 	}
-	
-	w.log.Info("Locked tokens", 
+
+	w.log.Info("Locked tokens",
 		"count", len(tokensNeeded),
 		"lock_time", time.Since(lockStart))
-	
+
 	// Step 4: Parallel validation (if needed)
 	if len(tokensNeeded) > 1000 {
 		validationStart := time.Now()
@@ -56,15 +56,15 @@ func (w *Wallet) OptimizedGetFreeTokens(did string, requiredCount float64) ([]To
 			w.batchUnlockTokens(tokensNeeded, did)
 			return nil, fmt.Errorf("token validation failed: %v", err)
 		}
-		w.log.Info("Validated tokens", 
+		w.log.Info("Validated tokens",
 			"count", len(tokensNeeded),
 			"validation_time", time.Since(validationStart))
 	}
-	
-	w.log.Info("Total token fetch operation", 
+
+	w.log.Info("Total token fetch operation",
 		"token_count", len(tokensNeeded),
 		"total_time", time.Since(startTime))
-	
+
 	return tokensNeeded, nil
 }
 
@@ -73,7 +73,7 @@ func (w *Wallet) batchLockTokens(tokens []Token, did string) error {
 	if len(tokens) == 0 {
 		return nil
 	}
-	
+
 	// Process in chunks to avoid too many individual updates
 	chunkSize := 100
 	for i := 0; i < len(tokens); i += chunkSize {
@@ -81,12 +81,12 @@ func (w *Wallet) batchLockTokens(tokens []Token, did string) error {
 		if end > len(tokens) {
 			end = len(tokens)
 		}
-		
+
 		chunk := tokens[i:end]
 		// Lock tokens in parallel within chunk
 		var wg sync.WaitGroup
 		errChan := make(chan error, len(chunk))
-		
+
 		for j := range chunk {
 			wg.Add(1)
 			go func(idx int) {
@@ -99,10 +99,10 @@ func (w *Wallet) batchLockTokens(tokens []Token, did string) error {
 				}
 			}(j)
 		}
-		
+
 		wg.Wait()
 		close(errChan)
-		
+
 		// Check for errors
 		for err := range errChan {
 			if err != nil {
@@ -110,17 +110,16 @@ func (w *Wallet) batchLockTokens(tokens []Token, did string) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
-
 
 // batchUnlockTokens unlocks multiple tokens (for rollback)
 func (w *Wallet) batchUnlockTokens(tokens []Token, did string) error {
 	// Process in parallel for efficiency
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(tokens))
-	
+
 	for i := range tokens {
 		wg.Add(1)
 		go func(idx int) {
@@ -133,17 +132,17 @@ func (w *Wallet) batchUnlockTokens(tokens []Token, did string) error {
 			}
 		}(i)
 	}
-	
+
 	wg.Wait()
 	close(errChan)
-	
+
 	// Check for errors
 	for err := range errChan {
 		if err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -153,17 +152,17 @@ func (w *Wallet) parallelValidateTokens(tokens []Token) error {
 		// For smaller sets, sequential is fine
 		return nil
 	}
-	
+
 	numWorkers := 10
 	if len(tokens) > 10000 {
 		numWorkers = 20
 	}
-	
+
 	jobs := make(chan Token, len(tokens))
 	errors := make(chan error, numWorkers)
-	
+
 	var wg sync.WaitGroup
-	
+
 	// Start workers
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
@@ -178,24 +177,24 @@ func (w *Wallet) parallelValidateTokens(tokens []Token) error {
 			}
 		}()
 	}
-	
+
 	// Submit jobs
 	for _, token := range tokens {
 		jobs <- token
 	}
 	close(jobs)
-	
+
 	// Wait for completion
 	wg.Wait()
 	close(errors)
-	
+
 	// Check for errors
 	for err := range errors {
 		if err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -210,20 +209,25 @@ func (w *Wallet) validateToken(token Token) error {
 func calculateTokensNeeded(availableTokens []Token, requiredAmount float64) []Token {
 	var totalValue float64
 	var selectedTokens []Token
-	
+
 	// Simple greedy algorithm - select tokens until we have enough
 	for _, token := range availableTokens {
-		if totalValue >= requiredAmount {
+		totalValue += token.TokenValue
+		if totalValue == requiredAmount {
+			selectedTokens = append(selectedTokens, token)
+			break
+		} else if totalValue > requiredAmount {
+			// do not add this token to the list
+			totalValue -= token.TokenValue
 			break
 		}
 		selectedTokens = append(selectedTokens, token)
-		totalValue += token.TokenValue
 	}
-	
-	if totalValue < requiredAmount {
-		return nil // Insufficient tokens
-	}
-	
+
+	// if totalValue < requiredAmount {
+	// 	return nil // Insufficient tokens
+	// }
+
 	return selectedTokens
 }
 
@@ -231,42 +235,42 @@ func calculateTokensNeeded(availableTokens []Token, requiredAmount float64) []To
 func (w *Wallet) GetTokensForOptimizedTransfer(did string, amount float64, txnMode int) ([]Token, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
-	
+
 	startTime := time.Now()
-	
+
 	// Step 1: Batch fetch all free tokens
 	var allFreeTokens []Token
 	var err error
-	
+
 	if txnMode == 0 { // RBT Transfer mode
 		err = w.s.Read(TokenStorage, &allFreeTokens, "did=? AND (token_status=? OR token_status=?)", did, TokenIsFree, TokenIsPinnedAsService)
 	} else { // Pinning service mode
 		err = w.s.Read(TokenStorage, &allFreeTokens, "did=? AND token_status=?", did, TokenIsFree)
 	}
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch free tokens: %v", err)
 	}
-	
-	w.log.Info("Fetched free tokens for optimization", 
-		"count", len(allFreeTokens), 
+
+	w.log.Info("Fetched free tokens for optimization",
+		"count", len(allFreeTokens),
 		"fetch_time", time.Since(startTime))
-	
+
 	if len(allFreeTokens) == 0 {
 		return []Token{}, nil
 	}
-	
+
 	// Step 2: Calculate how many tokens we need
 	tokensNeeded := calculateTokensNeeded(allFreeTokens, amount)
 	if len(tokensNeeded) == 0 {
-		return nil, fmt.Errorf("insufficient free tokens: have %d tokens, need %.2f value", 
+		return nil, fmt.Errorf("insufficient free tokens: have %d tokens, need %.2f value",
 			len(allFreeTokens), amount)
 	}
-	
-	w.log.Info("Tokens needed for transaction", 
+
+	w.log.Info("Tokens needed for transaction",
 		"required_value", amount,
 		"token_count", len(tokensNeeded))
-	
+
 	// Step 3: Lock tokens sequentially (since we're already under wallet lock)
 	lockStart := time.Now()
 	for i := range tokensNeeded {
@@ -281,14 +285,14 @@ func (w *Wallet) GetTokensForOptimizedTransfer(did string, amount float64, txnMo
 			return nil, fmt.Errorf("failed to lock token %s: %v", tokensNeeded[i].TokenID, err)
 		}
 	}
-	
-	w.log.Info("Locked tokens", 
+
+	w.log.Info("Locked tokens",
 		"count", len(tokensNeeded),
 		"lock_time", time.Since(lockStart))
-	
-	w.log.Info("Total optimized token fetch operation", 
+
+	w.log.Info("Total optimized token fetch operation",
 		"token_count", len(tokensNeeded),
 		"total_time", time.Since(startTime))
-	
+
 	return tokensNeeded, nil
 }

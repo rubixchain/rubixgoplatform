@@ -80,11 +80,6 @@ func (c *Core) initDynamicTxnProcessor() {
 
 	// Start system monitor
 	go c.systemMonitor()
-
-	// c.log.Info("Dynamic transaction processor initialized",
-	// 	"initialWorkers", c.txnProcessor.currentWorkers,
-	// 	"minWorkers", c.txnProcessor.minWorkers,
-	// 	"maxWorkers", c.txnProcessor.maxWorkers)
 }
 
 // Monitor system resources and adjust worker count
@@ -121,15 +116,6 @@ func (c *Core) evaluateAndScale(lastCPUStats map[string]uint64) {
 	c.txnProcessor.workersMutex.RLock()
 	currentWorkers := c.txnProcessor.currentWorkers
 	c.txnProcessor.workersMutex.RUnlock()
-
-	// c.log.Debug("System metrics from ResourceMonitor",
-	// 	"cpuUsage", cpuUsagePercent,
-	// 	"memoryUsage", memoryUsagePercent,
-	// 	"memoryTotalMB", resourceStats["memory_total_mb"],
-	// 	"memoryAvailableMB", resourceStats["memory_available_mb"],
-	// 	"queueLength", queueLen,
-	// 	"workers", currentWorkers,
-	// 	"goroutines", resourceStats["goroutines"])
 
 	// Determine scaling action using your thresholds
 	scalingDecision := c.determineScalingAction(
@@ -201,10 +187,6 @@ func (c *Core) scaleUp() {
 
 	c.txnProcessor.currentWorkers += newWorkers // UPDATE COUNT
 	c.txnProcessor.lastScaleAction = time.Now() // UPDATE TIMESTAMP
-
-	// c.log.Info("Scaled up workers",
-	// 	"newWorkers", newWorkers,
-	// 	"totalWorkers", c.txnProcessor.currentWorkers)
 }
 
 // Scale down worker count
@@ -237,10 +219,6 @@ func (c *Core) scaleDown() {
 	c.txnProcessor.currentWorkers -= len(workersToStop) // UPDATE COUNT
 	c.txnProcessor.lastScaleAction = time.Now()         // UPDATE TIMESTAMP
 
-	// c.log.Info("Scaled down workers",
-	// 	"removedWorkers", len(workersToStop),
-	// 	"totalWorkers", c.txnProcessor.currentWorkers,
-	// 	"stoppedWorkerIDs", workersToStop)
 }
 
 // Start a new worker
@@ -259,8 +237,6 @@ func (c *Core) startWorker(workerID int) {
 func (c *Core) dynamicWorker(workerID int, stopChan chan struct{}) {
 	defer c.txnProcessor.wg.Done()
 
-	// c.log.Debug("Worker started", "workerID", workerID)
-
 	for {
 		select {
 		case txnEvent := <-c.txnProcessor.txnQueue: // PROCESS TRANSACTION
@@ -272,11 +248,9 @@ func (c *Core) dynamicWorker(workerID int, stopChan chan struct{}) {
 			c.updateProcessingMetrics(processingTime) // UPDATE METRICS
 
 		case <-stopChan: // INDIVIDUAL STOP SIGNAL
-			// c.log.Debug("Worker stopping gracefully", "workerID", workerID)
 			return
 
 		case <-c.txnProcessor.ctx.Done(): // GLOBAL SHUTDOWN
-			// c.log.Debug("Worker stopping - global shutdown", "workerID", workerID)
 			return
 		}
 	}

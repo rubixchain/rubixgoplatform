@@ -66,7 +66,6 @@ const (
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
-	// APISendTokenChainDetails        string = "api/send-token-chain-details"
 )
 
 const (
@@ -163,6 +162,7 @@ type Core struct {
 	txnProcessor         *DynamicTxnProcessor
 	RetryTokenSyncTicker *time.Ticker
 	DeExp                bool
+	faucetURL            string // for faucet url
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -197,7 +197,7 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, passedPSQLdbName string, passedPSQLdbUserName string, passedPSQLdbPassword string, enableDeExp bool, deExpURL string) (*Core, error) {
+func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, passedPSQLdbName string, passedPSQLdbUserName string, passedPSQLdbPassword string, enableDeExp bool, deExpURL string, faucetURL string) (*Core, error) {
 	var err error
 	update := false
 
@@ -241,6 +241,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		publishTokenChain: publishTokenChainDetails,
 		fullNode:          fullNode,
 		DeExp:             enableDeExp,
+		faucetURL:         faucetURL,
 	}
 
 	if c.fullNode {
@@ -432,7 +433,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		return nil, err
 	}
 	if c.testNet && c.defaultSetup {
-		c.AddFaucetQuorums()
+		c.AddDefaulTestnetQuorums()
 	}
 
 	// Initialize token sync manager
@@ -522,6 +523,7 @@ func (c *Core) SetupCore() error {
 	c.CheckQuorumStatusSetup()
 	c.GetPeerdidTypeSetup()
 	c.peerSetup()
+	c.removePeerSetup()
 	c.w.AddDIDLastChar()
 	c.SetupToken()
 	c.QuroumSetup()
@@ -818,7 +820,6 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 		c.log.Error("failed to get did type of peer did ", didStr, "error", err)
 		return nil, err
 	}
-
 	return c.InitialiseDID(didStr, *peerInfo.DIDType)
 }
 
@@ -847,6 +848,12 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 
 	switch *peerInfo.DIDType {
 	case did.BasicDIDMode:
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.StandardDIDMode:
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.WalletDIDMode:
+		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
+	case did.ChildDIDMode:
 		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
 	case did.LiteDIDMode:
 		return did.InitDIDQuorumLite(didStr, c.didDir, ""), nil
@@ -923,10 +930,16 @@ func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) 
 		return nil, err
 	}
 	switch didType {
-	case did.LiteDIDMode:
-		return did.InitDIDLite(didStr, c.didDir, nil), nil
 	case did.BasicDIDMode:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
+	case did.StandardDIDMode:
+		return did.InitDIDStandard(didStr, c.didDir, nil), nil
+	case did.WalletDIDMode:
+		return did.InitDIDWallet(didStr, c.didDir, nil), nil
+	case did.ChildDIDMode:
+		return did.InitDIDChild(didStr, c.didDir, nil), nil
+	case did.LiteDIDMode:
+		return did.InitDIDLite(didStr, c.didDir, nil), nil
 	default:
 		return did.InitDIDBasic(didStr, c.didDir, nil), nil
 	}

@@ -100,18 +100,19 @@ func (cmd *Command) transferFT() {
 	if cmd.ftName == "" {
 		cmd.log.Error("FT name cannot be empty")
 	}
-	if cmd.transType != 0 && cmd.transType != 1 && cmd.transType != 2 {
+	if cmd.quorumType != 0 && cmd.quorumType != 1 && cmd.quorumType != 2 {
 		cmd.log.Error("Quorum type should be either 1 or 2")
 		return
 	}
 	transferFtReq := model.TransferFTReq{
-		Receiver:   cmd.receiverAddr,
-		Sender:     cmd.senderAddr,
-		FTName:     cmd.ftName,
-		FTCount:    cmd.ftCount,
-		QuorumType: cmd.transType,
-		Comment:    cmd.transComment,
-		CreatorDID: cmd.creatorDID,
+		Receiver:      cmd.receiverAddr,
+		Sender:        cmd.senderAddr,
+		FTName:        cmd.ftName,
+		FTCount:       cmd.ftCount,
+		QuorumType:    cmd.quorumType,
+		Comment:       cmd.transComment,
+		CreatorDID:    cmd.creatorDID,
+		OperationType: cmd.operationType,
 	}
 
 	br, err := cmd.c.TransferFT(&transferFtReq)
@@ -166,21 +167,21 @@ func (cmd *Command) getFTinfo() {
 
 func (cmd *Command) fixFTCreator() {
 	cmd.log.Info("Starting FT Creator fix utility...")
-	
+
 	// Call the fix FT creator API
 	br, err := cmd.c.FixFTCreator()
 	if err != nil {
 		cmd.log.Error("Failed to fix FT creators", "err", err)
 		return
 	}
-	
+
 	if !br.Status {
 		cmd.log.Error("Failed to fix FT creators", "message", br.Message)
 		return
 	}
-	
+
 	cmd.log.Info("FT Creator fix completed successfully", "message", br.Message)
-	
+
 	// Display results if any
 	if br.Result != nil {
 		if results, ok := br.Result.([]interface{}); ok && len(results) > 0 {
@@ -210,29 +211,29 @@ func (cmd *Command) fixFTCreator() {
 
 func (cmd *Command) getFTCreatorStats() {
 	cmd.log.Info("Getting FT Creator statistics...")
-	
+
 	// Call the get FT creator stats API
 	br, err := cmd.c.GetFTCreatorStats()
 	if err != nil {
 		cmd.log.Error("Failed to get FT creator stats", "err", err)
 		return
 	}
-	
+
 	if !br.Status {
 		cmd.log.Error("Failed to get FT creator stats", "message", br.Message)
 		return
 	}
-	
+
 	// Display statistics
 	if stats, ok := br.Result.(map[string]interface{}); ok {
 		fmt.Println("\n=== FT Creator Statistics ===")
 		fmt.Printf("Total FT Tokens: %v\n", stats["total_tokens"])
-		fmt.Printf("Tokens with Peer ID as Creator: %v (%v)\n", 
+		fmt.Printf("Tokens with Peer ID as Creator: %v (%v)\n",
 			stats["peer_id_creators"], stats["peer_id_percentage"])
 		fmt.Printf("Tokens with DID as Creator: %v\n", stats["did_creators"])
 		fmt.Printf("Tokens with Empty Creator: %v\n", stats["empty_creators"])
 		fmt.Printf("Unique Creators: %v\n", stats["unique_creators"])
-		
+
 		// Display top creators
 		if topCreators, ok := stats["top_creators"].([]interface{}); ok && len(topCreators) > 0 {
 			fmt.Println("\n=== Top Creators ===")
@@ -241,23 +242,23 @@ func (cmd *Command) getFTCreatorStats() {
 					creatorID := c["creator"].(string)
 					count := c["count"]
 					isPeerID := c["is_peer_id"].(bool)
-					
+
 					// Truncate long IDs for display
 					displayID := creatorID
 					if len(displayID) > 50 {
 						displayID = displayID[:47] + "..."
 					}
-					
+
 					typeStr := "DID"
 					if isPeerID {
 						typeStr = "PeerID"
 					}
-					
+
 					fmt.Printf("%d. %s (%s): %v tokens\n", i+1, displayID, typeStr, count)
 				}
 			}
 		}
-		
+
 		// Recommendation
 		if peerIDCount, ok := stats["peer_id_creators"].(float64); ok && peerIDCount > 0 {
 			fmt.Println("\n⚠️  Warning: Found", int(peerIDCount), "tokens with peer ID as creator.")

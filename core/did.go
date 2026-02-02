@@ -600,3 +600,110 @@ func (c *Core) ArbitrarySignVerification(reqID string, verificationReq *model.Si
 	verificationResp.Status = verificationResult
 	return verificationResp, nil
 }
+
+func (c *Core) RemoveStaleDIDFromNetwork(reqID string, staleDID string) {
+	br, err := c.removeStaleDIDFromNetwork(reqID, staleDID)
+	if err != nil {
+		br.Status = false
+		br.Message = err.Error()
+	}
+
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- &br
+}
+
+// remove stale DIDs from DIDTable and from peers' PeerDIDTable
+func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicResponse, error) {
+	response := model.BasicResponse{
+		Status: false,
+	}
+
+	// check if DID still holds tokens, prevent deletion if it does
+	accInfo, err := c.GetAccountInfo(staleDID)
+	if err != nil {
+		c.log.Error("Failed to get account info for DID %v", staleDID)
+		return response, err
+	}
+	if accInfo.RBTAmount == 0 &&
+		accInfo.LockedRBT == 0 &&
+		accInfo.PledgedRBT == 0 &&
+		accInfo.PinnedRBT == 0 {
+
+		// DID has no tokens, safe to delete
+		c.log.Debug("*******did has no balance, safe to delete")
+	} else {
+		errMsg := fmt.Sprintf(
+			"cannot remove DID: %v, holds RBT [%f free, %f locked, %f pledged, %f pinned]",
+			staleDID,
+			accInfo.RBTAmount,
+			accInfo.LockedRBT,
+			accInfo.PledgedRBT,
+			accInfo.PinnedRBT,
+		)
+		c.log.Error(errMsg)
+		return response, fmt.Errorf(errMsg)
+	}
+
+	// ftInfo, err := c.GetFTInfoByDID(staleDID)
+	// if err != nil {
+	// 	c.log.Error("Failed to get ft info for DID %v", staleDID)
+	// 	return response, err
+	// }
+	// if len(ftInfo) != 0 {
+	// 	errMsg := fmt.Sprintf("cannot remove DID : %v, holds FTs : %v", staleDID, ftInfo)
+	// 	c.log.Error(errMsg)
+	// 	return response, fmt.Errorf(errMsg)
+	// }
+
+	// remove old-did from peers' DB :
+	// 1. sign on the information to be published
+	dc, err := c.SetupDID(reqID, staleDID)
+	if err != nil {
+		return response, fmt.Errorf("DID is not exist")
+	}
+	t := time.Now().String()
+	h := util.CalculateHashString(c.peerID+staleDID+t, "SHA3-256")
+	sig, err := dc.PvtSign([]byte(h))
+	if err != nil {
+		return response, fmt.Errorf("remove stale did, failed to do signature")
+	}
+
+	didInfo, err := c.w.GetDID(staleDID)
+	if err != nil {
+		return response, fmt.Errorf("DID does not exist")
+	}
+
+	// 2. publish the stale did and the signature
+	pm := &PeerMap{
+		PeerID:    c.peerID,
+		DID:       staleDID,
+		DIDType:   didInfo.Type,
+		Signature: sig,
+		Time:      t,
+	}
+
+	err = c.publishStalePeer(pm)
+	if err != nil {
+		c.log.Error("Remove DID from network, failed to publish peer did map", "err", err)
+		return response, err
+	}
+
+	// remove old-did from DIDTable
+	err = c.w.RemoveDID(staleDID)
+	if err != nil {
+		response.Message = err.Error()
+		return response, err
+	}
+
+	// remove old-did folder
+	os.RemoveAll(c.didDir + staleDID)
+
+	response.Status = true
+	response.Message = "successfully erased staled did"
+	c.log.Info(response.Message)
+	return response, nil
+}

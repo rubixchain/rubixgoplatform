@@ -86,11 +86,13 @@ func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *cont
 		c.log.Error("Failed to get DID", "err", err)
 		return false, nil
 	}
+	c.log.Debug("Contract verification starting", "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
 	err = sc.VerifySignature(dc)
 	if err != nil {
-		c.log.Error("Failed to verify sender signature in verifyContract", "err", err)
+		c.log.Error("Failed to verify sender signature in verifyContract", "err", err, "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
 		return false, nil
 	}
+	c.log.Debug("Contract verification successful", "senderDID", sc.GetSenderDID())
 	return true, sc
 }
 
@@ -1441,6 +1443,10 @@ func (c *Core) updateReceiverToken(
 		if td.Epoch == 0 {
 			td.Epoch = time.Now().Unix()
 		}
+		// maintain transaction mode as per transaction type
+		if td.TransactionType == block.TokenSelfTransferredType {
+			td.Mode = wallet.RBTSelfTransferMode
+		}
 		err = c.w.AddTransactionHistory(td)
 		if err != nil {
 			c.log.Error("failed to add transaction history on the receiver", "err", err)
@@ -1671,6 +1677,10 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		}
 		if td.Epoch == 0 {
 			td.Epoch = time.Now().Unix()
+		}
+		// maintain transaction mode as per transaction type
+		if td.TransactionType == block.TokenSelfTransferredType {
+			td.Mode = wallet.FTSelfTransferMode
 		}
 		err = c.w.AddTransactionHistory(td)
 		if err != nil {
@@ -1938,7 +1948,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     nb.GetBlock(),
 		}
-	
+
 		c.log.Debug("quorum publishing pledge block : ", publishingTxn.BlockHash)
 		err = c.publishTxn(publishingTxn)
 		if err != nil {
@@ -1947,7 +1957,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			return
 		}
 	}()
-
 
 	// return
 	crep.Status = true

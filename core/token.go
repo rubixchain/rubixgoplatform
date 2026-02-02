@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -357,7 +359,7 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 		// }
 	}
 
-	c.log.Debug("**no.of blocks sending through sync token chain API**", len(blks))
+	c.log.Debug("no.of blocks sending through sync token chain API ", len(blks))
 	/* // Handle case where both error occurred and blocks are nil
 	if err != nil && blks == nil {
 		c.log.Warn("Token blocks missing and error occurred, falling back to role-based logic", "token", tr.Token)
@@ -488,8 +490,7 @@ func (c *Core) publishTokenChainDetailsAndTxnHistory() error {
 		"TotalPublished", totalOverall,
 	)
 
-	// c.log.Info("Publishing tokenchain details ...")
-	c.log.Info("**tokenchain details got published and entering into the publish txn history function**")
+	c.log.Info("tokenchain details got published and entering into the publish txn history function")
 	c.PublishTransactionHistory()
 
 	return nil
@@ -653,27 +654,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 
 		address := event.PublisherPeerID + "." + detail.Did
 
-		// unknownDIDType := -1 // -1 means that we doesn't know the DID Type but we need to pass some integer otherwise it will give nil pointer dereference error
-		// didPeerDetails := wallet.DIDPeerMap{
-		// 	DID: detail.Did,
-		// 	// DIDType: &didType,
-		// 	PeerID: event.PublisherPeerID,
-		// }
-		// // if publisher did type is already added in peerDIDTable,
-		// // then read and pass it, else pass -1
-		// publisherDIDType, didTypeErr := c.w.GetPeerDIDType(detail.Did)
-		// if didTypeErr != nil {
-		// 	didPeerDetails.DIDType = &unknownDIDType
-		// } else {
-		// 	didPeerDetails.DIDType = &publisherDIDType
-		// }
-		// // Add peer to table (upsert logic should be inside AddPeerDetails)
-		// if err := c.AddPeerDetails(didPeerDetails); err != nil {
-		// 	c.log.Error("Failed to add peer details to table", "did", detail.Did, "err", err)
-		// 	// Return peerInfo anyway, in case caller can proceed
-		// 	continue
-		// }
-
 		// add publisher to peer did table, if it is alredy NOT there in the PeerDIDTable
 		publisherPeerId := c.w.GetPeerID(detail.Did)
 		if publisherPeerId != event.PublisherPeerID {
@@ -719,8 +699,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				}
 				continue
 			}
-			c.log.Debug("full node side latest block height", "height", latestBlockHeight, "token", detail.Token)
-			c.log.Debug("publisher side latest block height", "height", detail.TokenChainLength, "token", detail.Token)
 
 		}
 		//collecting all those tokens, for which latestblock is empty or publisher's side tokenchain length is more,
@@ -781,11 +759,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						}
 					}
 
-					c.log.Debug("**latest block height in event data****", eventData.LatestBlockHeight)
-					//add content of the token to postgresqlDB
-					// c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
-
-					c.log.Debug("***calling AddTokenToRespectiveTable function in  ****")
 					c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
 					continue
 				}
@@ -793,7 +766,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				c.log.Error("failed to read token ", detail.Token, "err ", err)
 				continue
 			}
-			c.log.Debug("**Token already exist in sqlite table***")
 			if latestBlockHeight == existingBlockHeight {
 				if latestBlockHash != existingBlockHash || currentOwner != existingOwnerDID {
 					// TODO : Challenger node should verify the correct owner and correct block and add the correct info
@@ -843,10 +815,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					eventData.TokenValue = genesisBlock.GetTokenValue()
 				}
 			}
-
-			c.log.Debug("**latest block block height in event data****", eventData.LatestBlockHeight)
-			//add content of the token to postgresqlDB
-			// c.AddTokenContentToPSQL(detail.Token, detail.AssetType)
 
 			c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
 		}
@@ -935,119 +903,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 		"total_duration_in_minutes", batchDuration.Minutes())
 
 }
-
-// func (c *Core) TokenChainDetailsCallback(peerID string, topic string, data []byte) {
-// 	var event model.TokenChainDetailsEvent
-// 	err := json.Unmarshal(data, &event)
-// 	if err != nil {
-// 		c.log.Error("Failed to unmarshal token chain details event", "err", err)
-// 		return
-// 	}
-// 	c.log.Info("Received token chain details from peer", "peerID", event.PublisherPeerID)
-// 	c.log.Debug("***Number of token details received at full node side***", len(event.TokenDetails))
-// 	// Initialize map to collect tokens needing sync
-// 	tokenSyncMap := make(map[string][]TokenSyncInfo)
-// 	for _, detail := range event.TokenDetails {
-// 		// Validate DID
-// 		if detail.Did == "" {
-// 			c.log.Error("token owner DID is Empty in token details", "token", detail.Token)
-// 			continue
-// 		}
-// 		address := event.PublisherPeerID + "." + detail.Did
-// 		// Check if token chain exists locally
-// 		latestBlock := c.w.GetFullNodeLatestTokenBlock(detail.Token, detail.TokenType)
-// 		if latestBlock == nil {
-// 			c.log.Error("No local token chain, queuing for sync from genesis", "token", detail.Token, "peerAddr", address)
-// 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
-// 				TokenID:   detail.Token,
-// 				TokenType: detail.TokenType,
-// 				AssetType: detail.AssetType,
-// 			})
-// 			continue
-// 		}
-// 		// Get local block height
-// 		blockHeight, err := latestBlock.GetBlockNumber(detail.Token)
-// 		if err != nil {
-// 			c.log.Error("Failed to get latest block height of token", "token", detail.Token, "error", err)
-// 			continue
-// 		}
-// 		c.log.Debug("full node side latest block height is: ", blockHeight, "for the token: ", detail.Token)
-// 		c.log.Debug("subscriber side latest block height is: ", detail.TokenChainLength, "for the token: ", detail.Token)
-// 		// Compare publisher's chain length with local block height
-// 		if detail.TokenChainLength > blockHeight {
-// 			c.log.Debug("Publisher chain longer, queuing for sync", "token", detail.Token, "publisherLength", detail.TokenChainLength, "localHeight", blockHeight, "peerAddr", address, "AssetType", detail.AssetType)
-// 			tokenSyncMap[address] = append(tokenSyncMap[address], TokenSyncInfo{
-// 				TokenID:   detail.Token,
-// 				TokenType: detail.TokenType,
-// 				AssetType: detail.AssetType,
-// 			})
-// 		}
-// 	}
-// 	// Log tokens needing sync and start background syncing
-// 	if len(tokenSyncMap) > 0 {
-// 		for address, tokens := range tokenSyncMap {
-// 			tokenIDs := make([]string, 0, len(tokens))
-// 			for _, t := range tokens {
-// 				tokenIDs = append(tokenIDs, t.TokenID)
-// 			}
-// 			c.log.Info("Tokens queued for sync", "peerAddr", address, "tokens", tokenIDs)
-// 		}
-// 		c.log.Info("Starting background sync for tokens", "peerID", event.PublisherPeerID)
-// 		c.lock.Lock()
-// 		go func() {
-// 			defer c.lock.Unlock()
-// 			c.syncFullTokenChains(tokenSyncMap)
-// 		}()
-// 	} else {
-// 		c.log.Info("No tokens need syncing from peer", "peerID", event.PublisherPeerID)
-// 	}
-// }
-/* func (c *Core) handleRoleBasedLogic(token string, req *ensweb.Request) *ensweb.Result {
-	fmt.Println("Handling role-based logic for token:", token)
-	list, err := c.GetDHTddrs(token)
-	if err != nil {
-		c.log.Error("Failed to get DHT addresses", "err", err)
-		return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Failed to get DHT addresses"}, http.StatusInternalServerError)
-	}
-
-	q := map[string]string{"token": token}
-	var response model.BasicResponse
-
-	for _, peerID := range list {
-		peerConn, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
-		if err != nil {
-			c.log.Warn("Failed to open peer connection", "peer", peerID, "err", err)
-			continue
-		}
-
-		if err := peerConn.SendJSONRequest("GET", APICheckPinRole, q, nil, &response, false); err != nil {
-			c.log.Warn("Failed to send JSON request", "peer", peerID, "err", err)
-			continue
-		}
-		fmt.Println("Response from peer:", response)
-		var result model.PinCheckReply
-		resultBytes, ok := response.Result.([]byte)
-		if !ok {
-			resultBytes, err = json.Marshal(response.Result)
-			if err != nil {
-				c.log.Error("Failed to marshal response.Result to JSON", "err", err)
-				continue
-			}
-		}
-
-		if err := json.Unmarshal(resultBytes, &result); err != nil {
-			c.log.Error("Failed to unmarshal response.Result", "err", err)
-			continue
-		}
-
-		message := c.processRole(result.PinDetails.Role)
-		if message != "" {
-			return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: message}, http.StatusNoContent)
-		}
-	}
-
-	return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "Unhandled error during role-based processing"}, http.StatusInternalServerError)
-} */
 
 // processRole handles specific roles (as integers) and returns a message
 func (c *Core) processRole(role int) string {
@@ -1323,21 +1178,14 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 // using this function, full node can sync entire token chain of the token
 func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo) error {
 	var err error
-	var blkHeight uint64
-
-	c.log.Debug("***entered into SyncFullTokenChain for the token: **", tokenSyncInfo.TokenID)
 
 	blk := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 	if blk != nil {
-		blkHeight, err = blk.GetBlockNumber(tokenSyncInfo.TokenID)
+		_, err = blk.GetBlockNumber(tokenSyncInfo.TokenID)
 		if err != nil {
 			c.log.Error("Failed to get block number while syncing", "err", err, "token", tokenSyncInfo.TokenID)
 			return err
 		}
-		c.log.Debug("***latest block number for the token: ", tokenSyncInfo.TokenID, "is: ", blkHeight)
-	} else {
-		c.log.Debug("**latest block is nil**")
-
 	}
 
 	blkID := ""
@@ -1347,20 +1195,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 			c.log.Error("Failed to get block id", "err", err, "token", tokenSyncInfo.TokenID)
 			return err
 		}
-		// if blkID == pblkID {
-		// 	c.log.Debug("Token chain already synced with peer", "token", token, "blockID", pblkID)
-		// 	err = c.w.UpdateTokenSyncStatus(token, wallet.SyncCompleted)
-		// 	if err != nil {
-		// 		c.log.Error("Failed to update token sync status", "token", token, "err", err)
-		// 		return err
-		// 	}
-		// 	return nil
-		// }
-		// blkHeight, err = blk.GetBlockNumber(tokenSyncInfo.TokenID)
-		// if err != nil {
-		// 	c.log.Error("Invalid block, failed to get block number", "err", err, "token", tokenSyncInfo.TokenID)
-		// 	return err
-		// }
+
 	}
 
 	syncReq := TCBSyncRequest{
@@ -1381,9 +1216,6 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 			c.log.Error("Failed to sync token chain block", "msg", trep.Message, "token", tokenSyncInfo.TokenID)
 			return fmt.Errorf("sync failed: %s", trep.Message)
 		}
-
-		c.log.Debug("***no.of token chain blocks in API sync token chain reply is: ", len(trep.TCBlock))
-		c.log.Debug("***message in token chain blocks in API sync token chain reply is: ", trep.Message)
 
 		if strings.Contains(trep.Message, "Sent all blocks") {
 			if len(trep.TCBlock) > 0 {
@@ -1427,8 +1259,6 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		return fmt.Errorf(errMsg)
 	}
 
-	c.log.Debug("****Adding token details to sqlite DB********")
-
 	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 
 	if genesisBlock == nil {
@@ -1437,30 +1267,8 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		c.log.Error(errMsg)
 		//return error and add this failed to sync token,  to FullNodeFailedToSyncTokens sqlite table
 		return fmt.Errorf(errMsg)
-
-		// tokenInfo := model.FailedToSyncTokenDetailsInfo{
-		// 	TokenID:   tokenSyncInfo.TokenID,
-		// 	TokenType: tokenSyncInfo.TokenType,
-		// 	Did:       p.GetPeerDID(),
-		// 	AssetType: tokenSyncInfo.AssetType,
-		// }
-		// err := c.w.AddFailedTokensToTable(&tokenInfo)
-		// if err != nil {
-		// 	errMsg := fmt.Sprintf("failed to add token to the failed-to-sync tokens table, token: %v, error: %v", tokenSyncInfo.TokenID, err)
-		// 	c.log.Error(errMsg)
-		// 	return fmt.Errorf(errMsg)
-		// }
-
 	}
-	// var tokenValue float64
-	// // var parentTokenID string
-	// if genesisBlock != nil {
-	// 	// tokenValue = genesisBlock.GetTokenValue()
-	// 	// parentTokenID, _, err = genesisBlock.GetParentDetials(tokenSyncInfo.TokenID)
-	// 	if err != nil {
-	// 		c.log.Error("failed to get parent tokenID of the token ", tokenSyncInfo.TokenID)
-	// 	}
-	// }
+
 	var ownerDid string
 	var blockHash, transactionID string
 	var latestBlockHeight uint64
@@ -1487,19 +1295,6 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 			c.log.Error("token is not synced completely, latest blockIDs are not matching at syncer side and peer's side")
 			return fmt.Errorf("token is not synced completely, latest blockIDs are not matching at syncer side and peer's side")
 
-			// tokenInfo := model.FailedToSyncTokenDetailsInfo{
-			// 	TokenID:   tokenSyncInfo.TokenID,
-			// 	TokenType: tokenSyncInfo.TokenType,
-			// 	Did:       p.GetPeerDID(),
-			// 	AssetType: tokenSyncInfo.AssetType,
-			// }
-			// // since the token sync failed, we are adding it to the failed tokens table, and no need to to add to rbt table
-			// err := c.w.AddFailedTokensToTable(&tokenInfo)
-			// if err != nil {
-			// 	errMsg := fmt.Sprintf("failed to add token to the failed-to-sync tokens table, token: %v, error: %v", tokenSyncInfo.TokenID, err)
-			// 	c.log.Error(errMsg)
-			// 	return fmt.Errorf(errMsg)
-			// }
 		} else { // meaning sync completed properly
 			event := &model.PubSubTxnInfo{
 				BlockHash:         blockHash,
@@ -1515,7 +1310,6 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 					GenesisBlock: genesisBlock,
 					LatestBlock:  latestBlockAfterSync,
 				}
-				c.log.Debug("about to add token to Respective sqlite table, token: ", tokenSyncInfo.TokenID)
 				//add synced tokens to respective sqlite tables
 				if err := c.AddTokenContentToPSQL(tokenSyncInfo.TokenID, tokenSyncInfo.AssetType); err != nil {
 					// return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
@@ -1540,7 +1334,8 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 		}
 
 	} else {
-		c.log.Debug("****latest block after sync is still nil only****")
+		c.log.Error("latest block after sync is still nil ")
+		return fmt.Errorf("latest block after sync is still nil, token", tokenSyncInfo.TokenID)
 	}
 
 	return nil
@@ -1670,7 +1465,7 @@ func (c *Core) syncFullTokenChains(tokenSyncMap map[string][]TokenSyncInfo) {
 	}
 	timeTaken := time.Since(start)
 
-	c.log.Info("*****Time taken to sync all tokens is: ********", timeTaken)
+	c.log.Info("Time taken to sync all tokens is: ", timeTaken)
 
 }
 
@@ -1802,7 +1597,7 @@ func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]
 			totalValue += t.TokenValue
 		}
 		totalValue = floatPrecision(totalValue, MaxDecimalPlaces)
-		remainingAmount := floatPrecision(totalValue-txnAmount, MaxDecimalPlaces)
+		remainingAmount := floatPrecision(txnAmount-totalValue, MaxDecimalPlaces)
 		return tokens, remainingAmount, nil
 	}
 
@@ -1997,22 +1792,31 @@ func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
 }
 
 func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string) {
-	tokenDetails, err := c.generateTestTokensFaucet(reqID, tokenCount, did)
 
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "",
 	}
 
-	//If an error occurs at any given time, and the tokens have been created for that, reduce the latest token number by 1
+	tokenDetails, err := c.generateTestTokensFaucet(reqID, tokenCount, did)
+
 	if err != nil {
+		c.log.Error("Failed to get token details from generateTestTokensFaucet", "err", err)
 		br.Status = false
-		br.Message = err.Error()
-		tokenDetails.CurrentTokenNumber = tokenDetails.CurrentTokenNumber - 1
-		if tokenDetails.CurrentTokenNumber == 0 && tokenDetails.TokenLevel != 1 {
-			tokenDetails.TokenLevel = tokenDetails.TokenLevel - 1
-		}
+		br.Message = br.Message + ",  " + err.Error()
+		return
 	}
+
+	//If an error occurs at any given time, and the tokens have been created for that, reduce the latest token number by 1
+	// if err != nil {
+	// 	br.Status = false
+	// 	br.Message = err.Error()
+	// 	tokenDetails.CurrentTokenNumber = tokenDetails.CurrentTokenNumber - 1
+	// 	if tokenDetails.CurrentTokenNumber == 0 && tokenDetails.TokenLevel != 1 {
+	// 		tokenDetails.TokenLevel = tokenDetails.TokenLevel - 1
+	// 	}
+	// }
+
 	// Send a POST request to update the token details to the faucet server
 	jsonData, err := json.Marshal(tokenDetails)
 	if err != nil {
@@ -2021,7 +1825,11 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		br.Message = br.Message + ",  " + err.Error()
 		return
 	}
-	resp, err := http.Post("http://103.209.145.177:3999/api/update-token-value", "application/json", bytes.NewBuffer(jsonData))
+	u, _ := url.Parse(c.faucetURL)
+	u.Path = path.Join(u.Path, "/api/update-token-value")
+	updatedTokenValueURL := u.String()
+
+	resp, err := http.Post(updatedTokenValueURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		c.log.Error("Failed to update latest token number in Faucet", "err", err)
 		br.Status = false
@@ -2045,16 +1853,22 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 }
 
 func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
+
 	if !c.testNet {
 		return nil, fmt.Errorf("generate test token is available in test net")
 	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
-		return nil, fmt.Errorf("DID is not exist")
+		return nil, fmt.Errorf("DID does not exist")
 	}
 
+	u, _ := url.Parse(c.faucetURL)
+
+	u.Path = path.Join(u.Path, "/api/current-token-value")
+
+	getTokenValueURL := u.String()
 	// Get the current value from Faucet
-	resp, err := http.Get("http://103.209.145.177:3999/api/current-token-value")
+	resp, err := http.Get(getTokenValueURL)
 	if err != nil {
 		return nil, err
 	}
@@ -2179,6 +1993,7 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 	}
 	//Cheking if token is valid
 	b, err := c.getFromIPFS(tokenID)
+
 	if err != nil {
 		c.log.Error("failed to get token details from ipfs", "err", err, "token", tokenID)
 		br.Message = "Cannot find token details"
@@ -2214,8 +2029,14 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		return br
 	}
 
+	u, _ := url.Parse(c.faucetURL)
+
+	u.Path = path.Join(u.Path, "/api/current-token-value")
+
+	currentTokenValueURL := u.String()
+
 	// Get the current value from Faucet
-	resp, err := http.Get("http://103.209.145.177:3999/api/current-token-value")
+	resp, err := http.Get(currentTokenValueURL)
 	if err != nil {
 		br.Status = false
 		br.Message = "Unable to fetch latest value"
@@ -2479,8 +2300,6 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 
 // Extract token details from given genesis block and add synced tokens  to the respective tokens table of Fullnode, depending on the asset type
 func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, receivedBlock ReceivedBlock, event *model.PubSubTxnInfo, syncStatus int) error {
-
-	c.log.Debug("****AddTokenToRespectiveTable function got called****")
 	// var err error
 	var tokenStatus int
 	txnBlockType := receivedBlock.LatestBlock.GetTransType()
@@ -2512,8 +2331,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 	switch event.AssetType {
 	case RBTTokenType:
-		c.log.Debug("****Asset is RBT Token Type**")
-
 		// check if token already exists in db
 		syncedRBT, err := c.w.ReadSyncedRBTFromTable(tokenId)
 		if err != nil {
@@ -2547,8 +2364,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					}
 
 				}
-				c.log.Debug("***block height just before adding to FUllnodeRBT Table****", tokenInfo.BlockHeight)
-				c.log.Debug("***publisherDID just before adding to FUllnodeRBT Table****", tokenInfo.PublisherDID)
 
 				err = c.w.AddSyncedRBTToTable(tokenInfo)
 				if err != nil {
@@ -2661,7 +2476,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		return nil
 
 	case SmartContractTokenType:
-		c.log.Debug("adding/ updating smart contract in table")
 		// check if token already exists in db
 		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
 		if err != nil {
@@ -2704,7 +2518,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			return err
 		}
 	case NFTTokenType:
-		c.log.Debug("adding/ updating nft in table")
 		// check if token already exists in db
 		syncedNFT, err := c.w.ReadSyncedNFTFromTable(tokenId)
 		if err != nil {
@@ -2790,8 +2603,6 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 		return fmt.Errorf(errMsg)
 	}
 
-	c.log.Debug("token id : ", tokenId, "token content : ", tokenContent)
-
 	switch assetType {
 	case RBTTokenType:
 		rbtContent := &wallet.RBTContent{
@@ -2823,8 +2634,6 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 			c.log.Error("Failed to parse nft", "err", err)
 			return err
 		}
-
-		fmt.Println("Artifact Folder CID:", nft.ArtifactHash, " deployer did : ", nft.DID)
 
 		outputDir := fmt.Sprintf("/tmp/nft/%s", tokenId)
 		err = os.MkdirAll(outputDir, 0755)

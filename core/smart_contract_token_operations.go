@@ -192,6 +192,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	resp.Status = true
 	msg := fmt.Sprintf("Smart Contract Token Deployed successfully in %v", dif)
 	resp.Message = msg
+	resp.Result = txnDetails.TransactionID
 	return resp
 }
 
@@ -354,5 +355,6 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	resp.Status = true
 	msg := fmt.Sprintf("Smart Contract Token Executed successfully in %v", dif)
 	resp.Message = msg
+	resp.Result = txnDetails.TransactionID
 	return resp
 }

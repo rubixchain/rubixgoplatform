@@ -22,7 +22,7 @@ import (
 //   "7" : QuorumSignature  : []string
 //   "8" : PledgeDetails    : map[string][]PledgeDetail
 //   "9" : SmartContractData : string
-// 
+//
 // }
 
 const (
@@ -47,19 +47,20 @@ const (
 )
 
 const (
-	TokenMintedType       string = "01"
-	TokenTransferredType  string = "02"  // needed
-	TokenMigratedType     string = "03" 
-	TokenPledgedType      string = "04"  // needed : have single table for pledge and unpledge block
-	TokenGeneratedType    string = "05"
-	TokenUnpledgedType    string = "06"
-	TokenCommittedType    string = "07"
-	TokenBurntType        string = "08"  // needed : have single table for burn and burn for ft
-	TokenDeployedType     string = "09"  // needed : for deployment and executor type we can hav single table
-	TokenExecutedType     string = "10"  //
-	TokenContractCommited string = "11"
-	TokenPinnedAsService  string = "12"
-	TokenIsBurntForFT     string = "13" 
+	TokenMintedType          string = "01"
+	TokenTransferredType     string = "02"
+	TokenMigratedType        string = "03"
+	TokenPledgedType         string = "04"
+	TokenGeneratedType       string = "05"
+	TokenUnpledgedType       string = "06"
+	TokenCommittedType       string = "07"
+	TokenBurntType           string = "08"
+	TokenDeployedType        string = "09"
+	TokenExecutedType        string = "10"
+	TokenContractCommited    string = "11"
+	TokenPinnedAsService     string = "12"
+	TokenIsBurntForFT        string = "13"
+	TokenSelfTransferredType string = "20" // xell migration
 )
 
 const (
@@ -444,11 +445,24 @@ func (b *Block) UpdateSignature(dc didmodule.DIDCrypto) error {
 	if err != nil {
 		return fmt.Errorf("failed to get hash")
 	}
-	sb, err := dc.PvtSign([]byte(h))
-	if err != nil {
-		return fmt.Errorf("failed to get did signature, " + err.Error())
+
+	var sig string
+
+	if dc.GetSignType() == didmodule.NlssVersion {
+		// For NLSS DIDs (types 0,1,2): Use Sign() to get NLSS signature
+		ssig, _, err := dc.Sign(h)
+		if err != nil {
+			return fmt.Errorf("failed to get nlss signature, " + err.Error())
+		}
+		sig = util.HexToStr(ssig) // Use NLSS share signature
+	} else {
+		// For BIP DIDs (type 4): Use PvtSign() to get PKI signature
+		sb, err := dc.PvtSign([]byte(h))
+		if err != nil {
+			return fmt.Errorf("failed to get did signature, " + err.Error())
+		}
+		sig = util.HexToStr(sb)
 	}
-	sig := util.HexToStr(sb)
 
 	ksmi, ok := b.bm[TCSignatureKey]
 	if !ok {

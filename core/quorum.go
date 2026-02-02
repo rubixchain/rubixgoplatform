@@ -3,9 +3,8 @@ package core
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/storage"
@@ -116,7 +115,7 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string, selfPeer string) []st
 			qm.log.Error("Quorums not present")
 			return nil
 		}
-		if len(quorumList) < 5 {
+		if len(quorumList) < MinQuorumRequired { //Setting quorum count to 1, from 5
 			qm.log.Error("Not enough quorums present")
 			return nil
 		}
@@ -126,7 +125,7 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string, selfPeer string) []st
 			addr := string(q.PeerID + "." + q.DID)
 			quorumAddrList = append(quorumAddrList, addr)
 			quorumAddrCount = quorumAddrCount + 1
-			if quorumAddrCount == 7 {
+			if quorumAddrCount == QuorumRequired { //Setting quorum count to 1, from 7
 				break
 			}
 		}
@@ -139,7 +138,7 @@ func (qm *QuorumManager) GetQuorum(t int, lastChar string, selfPeer string) []st
 			addr := string(peerID + "." + q)
 			quorumAddrList = append(quorumAddrList, addr)
 			quorumAddrCount = quorumAddrCount + 1
-			if quorumAddrCount == 7 {
+			if quorumAddrCount == QuorumRequired { //Setting quorum count to 1, from 7
 				break
 			}
 		}
@@ -187,27 +186,15 @@ func (qm *QuorumManager) GetPeerID(did string, selfPeer string) string {
 	}
 }
 
-func (c *Core) AddFaucetQuorums() {
-	resp, err := http.Get("http://103.209.145.177:3999/api/get-faucet-quorums")
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	var faucetQuorumList []string
-	// {"p1.d1", "p2.d2", "p3.d3", "p4.d4", "p5.d5"}
-
-	body, err := io.ReadAll(resp.Body)
-	// Populating the tokendetail with current token number and current token level received from Faucet.
-	json.Unmarshal(body, &faucetQuorumList)
-	if err != nil {
-		return
+func (c *Core) AddDefaulTestnetQuorums() {
+	var faucetQuorumList []string = []string{
+		"12D3KooWAoKtpBgQzBmt8sGB8RSn4RwSL2ZDp5rFz5jsDqgUJRuQ.bafybmibeoj772f5bvkoljeymipgzu7p4j32j73tc4detm4wpc5hebolvd4",
+		"12D3KooWD3ycXgTvx1s1nm9K3z3VAPnxvVCupA41EFDpDX2vhaNW.bafybmigemcjb6ivksuyiuf23geykag3tvw4jtuxqaesjpggrlnujmowx2i",
+		"12D3KooW9ukxuhMEE3jhyvdVC64Z1MbWUYYCpPiBv9uXCnW4wwHB.bafybmid6gcm6dcubsacyxpg7nmmpzo7czia5cs57s5l2xtn364ijqgqwhe",
+		"12D3KooWEA9Kko7YabDWdFzzVru6fZTfwUU7sBRUYhUeyPY3UP9B.bafybmicmngm6twtypkwebnzubwx6k2zl2r7inao3vhxjdl7c5mqa2avezm",
+		"12D3KooWHwDTwNCowHaJWZoDj3CtzhS6irAjyx3HVKLvFeZRwudL.bafybmihnveuzhv66t54r7s5oorwlhf2bwdxsshrjsmwgkdupcdhi2bqasa",
 	}
 
-	if len(faucetQuorumList) < 5 {
-		c.log.Error("Length of Quorum List is less than Min Quorum Count(5)")
-		return
-	}
 	var qds []QuorumData
 	for _, quorum := range faucetQuorumList {
 		peerID, did, _ := util.ParseAddress(quorum)
@@ -218,31 +205,60 @@ func (c *Core) AddFaucetQuorums() {
 		}
 		qds = append(qds, qd)
 	}
-	c.RemoveAllQuorum()
-	c.qm.AddQuorum(qds)
-	// Save to local JSON file
-	err = saveQuorumsToFile(qds, "faucet_quorumlist.json")
-	if err != nil {
+	if err := c.RemoveAllQuorum(); err != nil {
+		c.log.Error(fmt.Sprintf("AddDefaultTestnetQuorums: failed remove all existing quorums from quorummanger table, err: %v", err))
 		return
 	}
+
+	if err := c.qm.AddQuorum(qds); err != nil {
+		c.log.Error(fmt.Sprintf("AddDefaultTestnetQuorums: failed to add default quorums to the quorum manager table, err: %v", err))
+		return
+	}
+
+	defaultQuorumFile := "default_quorums.json"
+	err := saveQuorumsToFile(qds, defaultQuorumFile)
+	if err != nil {
+		c.log.Error(fmt.Sprintf("AddDefaultTestnetQuorums: failed to default testnet quorums to %v, err: %v", defaultQuorumFile, err))
+		return
+	}
+
+	currentDir, err := os.Getwd()
+	if err != nil {
+		c.log.Error(fmt.Sprintf("AddDefaultTestnetQuorums: unable to fetch current dir, err: %v", err))
+		return
+	}
+	completeDefaultQuorumFilePath := path.Join(currentDir, defaultQuorumFile)
+
+	c.log.Info("Default quorums have been added successfully and their info is save under %v", completeDefaultQuorumFilePath)
 }
+
 func saveQuorumsToFile(qds []QuorumData, fileName string) error {
-	// Get the current working directory
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current working directory: %w", err)
 	}
-	file, err := os.Create(fileName)
+
+	completeDefaultQuorumFilePath := path.Join(currentDir, fileName)
+
+	// If file already exists, do nothing
+	if _, err := os.Stat(completeDefaultQuorumFilePath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check file existence: %w", err)
+	}
+
+	file, err := os.Create(completeDefaultQuorumFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "    ") // Pretty print JSON
+	encoder.SetIndent("", "    ")
+
 	if err := encoder.Encode(qds); err != nil {
 		return fmt.Errorf("failed to write JSON to file: %w", err)
 	}
-	fmt.Printf("Quorum file saved successfully at %s\n", currentDir)
+
 	return nil
 }

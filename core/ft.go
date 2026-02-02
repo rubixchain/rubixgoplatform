@@ -431,7 +431,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 
 	c.log.Debug("updating ft table with new fts")
-	
+
 	updateFTTableErr := c.updateFTTable()
 	if updateFTTableErr != nil {
 		c.log.Error("Failed to update FT table after FT creation", "err", updateFTTableErr)
@@ -714,6 +714,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		ContractBlock:    sc.GetBlock(),
 		FTinfo:           FTData,
 		TransactionEpoch: txEpoch,
+		OperationType:    req.OperationType,
 	}
 
 	resultChan := make(chan *model.BasicResponse, 1)

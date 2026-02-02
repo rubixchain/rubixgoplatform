@@ -35,33 +35,33 @@ func (d *DIDLite) getPassword() (string, error) {
 	if d.pwd != "" {
 		return d.pwd, nil
 	}
-	
+
 	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
 		return "", fmt.Errorf("Invalid configuration")
 	}
-	
+
 	// Check request-scoped cache first (read lock)
 	d.ch.PasswordMutex.RLock()
 	if d.ch.PasswordSet && d.ch.CachedPassword != "" {
 		cachedPwd := d.ch.CachedPassword
 		d.ch.PasswordMutex.RUnlock()
-		
+
 		// Cache in DID object for faster access
 		d.pwd = cachedPwd
 		return d.pwd, nil
 	}
 	d.ch.PasswordMutex.RUnlock()
-	
+
 	// Acquire write lock to request password
 	d.ch.PasswordMutex.Lock()
 	defer d.ch.PasswordMutex.Unlock()
-	
+
 	// Double-check: another goroutine might have set password while waiting
 	if d.ch.PasswordSet && d.ch.CachedPassword != "" {
 		d.pwd = d.ch.CachedPassword
 		return d.pwd, nil
 	}
-	
+
 	// Request password from user
 	sr := &SignResponse{
 		Status:  true,
@@ -72,24 +72,24 @@ func (d *DIDLite) getPassword() (string, error) {
 		},
 	}
 	d.ch.OutChan <- sr
-	
+
 	var ch interface{}
 	select {
 	case ch = <-d.ch.InChan:
 	case <-time.After(d.ch.Timeout):
 		return "", fmt.Errorf("Timeout, failed to get password")
 	}
-	
+
 	srd, ok := ch.(SignRespData)
 	if !ok {
 		return "", fmt.Errorf("Invalid data received on the channel")
 	}
-	
+
 	// Cache password for this request
 	d.ch.CachedPassword = srd.Password
 	d.ch.PasswordSet = true
 	d.pwd = srd.Password // Also cache in DID object
-	
+
 	return d.pwd, nil
 }
 
@@ -147,23 +147,6 @@ func (d *DIDLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) 
 	if !bytes.Equal(cb, db) {
 		return false, fmt.Errorf("failed to verify")
 	}
-
-	//create a signature using the private key
-	//1. read and extrqct the private key
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
-	if err != nil {
-		return false, err
-	}
-
-	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
-	if err != nil {
-		return false, err
-	}
-
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify private key singature")
-	}
 	return true, nil
 
 }
@@ -171,17 +154,13 @@ func (d *DIDLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) 
 func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
 	privKey, err := os.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
-		fmt.Println("requesting signature from BIP wallet")
 		walletSignature, err := d.getSignature(hash)
 		if err != nil {
-			fmt.Println("failed sign request, err:", err)
 			return nil, err
 		}
-		fmt.Println("received signature:", walletSignature)
 
 		isValidSig, err := d.PvtVerify(hash, walletSignature)
 		if err != nil || !isValidSig {
-			fmt.Println("invalid sign data:", util.HexToStr(hash), "err:", err)
 			return nil, err
 		}
 		return walletSignature, nil

@@ -28,8 +28,6 @@ func (c *Core) SubscribeTxnSetup() {
 
 // Enhanced callback with dynamic scaling integration
 func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
-	c.log.Debug("piblisher peer id : ", peerID)
-
 	var newEvent model.PubSubTxnInfo
 	err := json.Unmarshal(data, &newEvent)
 	if err != nil {
@@ -202,7 +200,6 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 		return fmt.Errorf("failed to initialize transaction block for txn %s", newEvent.BlockHash)
 	}
 	txnBlockType := newEvent.TxnType
-	c.log.Debug("^^^^^^^^^^^^^^^txn type : ", txnBlockType, "txn id ", newEvent.TransactionID)
 	if txnBlockType == block.TokenTransferredType || txnBlockType == block.TokenDeployedType || txnBlockType == block.TokenExecutedType {
 		TransactionIDFromTheTransactionBlock := newEvent.TransactionID
 
@@ -225,8 +222,6 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 		return fmt.Errorf("no tokens found in transaction %s", newEvent.BlockHash)
 	}
 
-	logmsg := fmt.Sprintf("^^^^^^^^^processing ASSET type : %d ; block height : %d", newEvent.AssetType, newEvent.LatestBlockHeight)
-	c.log.Debug(logmsg)
 	switch newEvent.AssetType {
 	case RBTTokenType, FTTokenType:
 		return c.processTransferTransaction(newEvent, txnBlock, tokensList, receiverDid, currentOwner)
@@ -244,7 +239,6 @@ func (c *Core) processTransferTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 	var errors []string
 
 	for _, tokenId := range tokensList {
-		c.log.Debug("...... processing token ", tokenId)
 		if err := c.processTransferToken(newEvent, txnBlock, tokenId, receiverDid, currentOwner); err != nil {
 			errors = append(errors, fmt.Sprintf("token %s: %v", tokenId, err))
 			continue
@@ -297,7 +291,6 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 	if err != nil {
 		return fmt.Errorf("failed to get current block number: %v", err)
 	}
-	c.log.Debug("current block number is ", currentBlockNumber)
 	txnBlockType := txnBlock.GetTransType()
 
 	if currentBlockNumber != 0 {
@@ -339,14 +332,12 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			return fmt.Errorf("failed to get latest block number: %v", err)
 		}
 
-		c.log.Debug("latest block number is ", latestBlockNumber)
 
 		// Check for missing blocks
 		if latestBlockNumber+1 != currentBlockNumber {
 			if latestBlockNumber == currentBlockNumber {
 				latestBlockHash, _ := latestTokenBlock.GetHash()
 				if newEvent.BlockHash == latestBlockHash {
-					c.log.Debug("fullnode is updated with complete token chain of token ", tokenId)
 					return nil
 				}
 				return fmt.Errorf("invalid blocks detected: latest block number=%d, current block number=%d", latestBlockNumber, currentBlockNumber)
