@@ -137,7 +137,6 @@ func (c *Core) notifyExplorer(txnEvent *model.PubSubTxnInfo, txnBlock *block.Blo
 		AssetType:         txnEvent.AssetType,
 		PublisherDID:      txnEvent.PublisherDID,
 		ReceiverDID:       txnEvent.ReceiverDID,
-		TxnBlock:          txnEvent.TxnBlock,
 		LatestBlockHeight: txnEvent.LatestBlockHeight,
 		TransactionValue:  txnEvent.TransactionValue,
 		FTName:            txnEvent.FTName,
@@ -145,15 +144,6 @@ func (c *Core) notifyExplorer(txnEvent *model.PubSubTxnInfo, txnBlock *block.Blo
 		TokenValue:        txnEvent.TokenValue,
 		TokenDetails:      tokenDetails,
 	}
-
-	// --- FINAL PAYLOAD DEBUG ---
-	// This will print the actual JSON being sent so you can compare it with your explorer's IncomingBlockInfo struct
-	payloadJson, _ := json.MarshalIndent(explorerEvent, "", "  ")
-	fmt.Printf("\n==== SENDING TO EXPLORER ====\n%s\n=============================\n\n", string(payloadJson))
-
-	c.log.Info("📡 Dispatching to Explorer Server",
-		"tokenCount", len(tokenDetails),
-		"ftName", txnEvent.FTName)
 
 	// 6. Call NotifyExplorerServer
 	c.w.NotifyExplorerServer(txnBlock, explorerEvent)

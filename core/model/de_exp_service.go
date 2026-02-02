@@ -90,7 +90,6 @@ type NotifyExplorer struct {
 	CreatorDID        string                    `json:"creator_did"`
 	PublisherDID      string                    `json:"publisher_did"`
 	ReceiverDID       string                    `json:"receiver_did"`
-	TxnBlock          []byte                    `json:"block"`
 	LatestBlockHeight uint64                    `json:"block_height"`
 	TransactionValue  float64                   `json:"transaction_value"`
 	TokenValue        float64                   `json:"token_value"`
