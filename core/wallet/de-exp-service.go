@@ -198,10 +198,6 @@ func (w *Wallet) isExplorerAvailable() bool {
 	return ExplorerHost != "" && ExplorerHost != "No De-Explorer Host"
 }
 
-func (w *Wallet) isExplorerAvailable() bool {
-	return ExplorerHost != "" && ExplorerHost != "No De-Explorer Host"
-}
-
 // NotifyExplorerServer sends block and transaction details to the explorer
 func (w *Wallet) NotifyExplorerServer(b *block.Block, evt *model.NotifyExplorer) {
 	if !w.isExplorerAvailable() {
