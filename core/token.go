@@ -19,7 +19,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -201,54 +200,12 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 	}
 
 	for i := 0; i < num; i++ {
-
-		rt := &rac.RacType{
-			Type:        rac.RacTestTokenType,
-			DID:         did,
-			TotalSupply: 1,
-			TimeStamp:   time.Now().String(),
-		}
-
-		r, err := rac.CreateRac(rt)
-		if err != nil {
-			c.log.Error("Failed to create rac block", "err", err)
-			return fmt.Errorf("failed to create rac block")
-		}
-
-		// Assuming bo block token creation
-		// ha, err := r[0].GetHash()
-		// if err != nil {
-		// 	c.log.Error("Failed to calculate rac hash", "err", err)
-		// 	return err
-		// }
-		// sig, err := dc.PvtSign([]byte(ha))
-		// if err != nil {
-		// 	c.log.Error("Failed to get rac signature", "err", err)
-		// 	return err
-		// }
-		err = r[0].UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update rac signature", "err", err)
-			return err
-		}
-
-		tb := r[0].GetBlock()
-		if tb == nil {
-			c.log.Error("Failed to get rac block")
-			return err
-		}
-
-		c.log.Debug("****byte array of the test token***", tb)
-
-		tk := util.HexToStr(tb)
-
-		c.log.Debug("***test token in string****", tk)
-
-		nb := bytes.NewBuffer([]byte(tk))
-
-		c.log.Debug("**new buffer of the test token which is getting added to ipfs *****", nb)
-
-		id, err := c.w.Add(nb, did, wallet.OwnerRole)
+		st := time.Now()
+		epoch := int(st.Unix())
+		content := strconv.Itoa(epoch) + did
+		c.log.Warn("content:", content)
+		contentBuffer := bytes.NewBuffer([]byte(content))
+		id, err := c.w.Add(contentBuffer, did, wallet.OwnerRole)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
@@ -1893,28 +1850,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			tokendetail.CurrentTokenNumber = 1
 		}
 
-		// Creating tokens at that level
-		rt := &rac.RacType{
-			Type:        rac.RacTestTokenType,
-			DID:         did,
-			TotalSupply: 1,
-			TokenNumber: uint64(tokendetail.CurrentTokenNumber),
-			TokenLevel:  uint64(tokendetail.TokenLevel),
-			CreatorID:   tokendetail.FaucetID,
-		}
-
-		r, err := rac.CreateRacFaucet(rt)
-		if err != nil {
-			c.log.Error("Failed to create rac block", "err", err)
-			return &tokendetail, fmt.Errorf("failed to create rac block")
-		}
-		err = r.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update rac signature", "err", err)
-			return &tokendetail, err
-		}
-
-		tokenstr := fmt.Sprintf("Faucet Name : %s, Token Level : %d, Token Number : %d", rt.CreatorID, rt.TokenLevel, rt.TokenNumber)
+		tokenstr := fmt.Sprintf("Faucet Name : %s, Token Level : %d, Token Number : %d", tokendetail.FaucetID, uint64(tokendetail.TokenLevel), uint64(tokendetail.CurrentTokenNumber))
 
 		nb := bytes.NewBuffer([]byte(tokenstr))
 		id, err := c.w.Add(nb, did, wallet.OwnerRole)

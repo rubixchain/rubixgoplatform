@@ -19,7 +19,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
@@ -124,39 +123,10 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		defer wg.Done()
 		for job := range jobs {
 			i := job.Index
-			racType := &rac.RacType{
-				Type:        c.RACFTType(),
-				DID:         did,
-				TokenNumber: uint64(i),
-				TotalSupply: 1,
-				TimeStamp:   time.Now().String(),
-				FTInfo: &rac.RacFTInfo{
-					Parents: parentTokenIDs,
-					FTNum:   i,
-					FTName:  FTName,
-					FTValue: fractionalValue,
-				},
-			}
-
-			// Create the RAC block
-			racBlocks, err := rac.CreateRac(racType)
-			if err != nil {
-				results <- ftResult{Err: err}
-				continue
-			}
-			if len(racBlocks) != 1 {
-				results <- ftResult{Err: fmt.Errorf("failed to create RAC block")}
-				continue
-			}
-			err = racBlocks[0].UpdateSignature(dc)
-			if err != nil {
-				results <- ftResult{Err: err}
-				continue
-			}
-
 			ftnumString := strconv.Itoa(i)
 			parts := []string{FTName, ftnumString, did}
 			result := strings.Join(parts, " ")
+			c.log.Warn("result:", result)
 			byteArray := []byte(result)
 			ftBuffer := bytes.NewBuffer(byteArray)
 			ftID, tpm, err := c.w.AddWithProviderMap(ftBuffer, did, wallet.AddFunc)

@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/rac"
-	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (c *Core) relaseToken(release *bool, token string) {
@@ -196,35 +195,11 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	}
 	var ChildTokenList []ChildToken
 	for i := range parts {
-		rt := &rac.RacType{
-			Type:        c.RACPartTokenType(),
-			DID:         did,
-			TotalSupply: 1,
-			TimeStamp:   time.Now().String(),
-			PartInfo: &rac.RacPartInfo{
-				Parent:  tkn,
-				PartNum: i,
-				Value:   parts[i],
-			},
-		}
-
-		rb, err := rac.CreateRac(rt)
-		if err != nil {
-			c.log.Error("failed to create rac block", "err", err)
-			return nil, err
-		}
-		// expect one block
-		if len(rb) != 1 {
-			return nil, fmt.Errorf("failed to create rac block")
-		}
-		err = rb[0].UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("failed to update did signature", "err", err)
-			return nil, err
-		}
-		rtb := rb[0].GetBlock()
-		td := util.HexToStr(rtb)
-		fr := bytes.NewBuffer([]byte(td))
+		st := time.Now()
+		epoch := int(st.Unix())
+		content := strconv.Itoa(epoch) + did
+		c.log.Warn("content:", content)
+		fr := bytes.NewBuffer([]byte(content))
 		pt, err := c.w.Add(fr, did, wallet.AddFunc)
 		if err != nil {
 			c.log.Error("Failed to create part token, failed to add rac token to ipfs", "err", err)
