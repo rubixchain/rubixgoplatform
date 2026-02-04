@@ -177,6 +177,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					c.log.Info(fmt.Sprintf("FT creation progress: %d%% (%d/%d created)", currentPercent, newCount, numFTs))
 				}
 			}
+			currentTime := time.Now()
 
 			bti := &block.TransInfo{
 				Tokens: []block.TransTokens{{
@@ -197,6 +198,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					}},
 				},
 				TokenValue: fractionalValue,
+				Epoch:      int(currentTime.Unix()),
 			}
 			ctcb := make(map[string]*block.Block)
 			ctcb[ftID] = nil
@@ -296,6 +298,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			ptts = PartString
 		}
 		ptt := c.TokenType(ptts)
+		currentTime := time.Now()
 
 		bti := &block.TransInfo{
 			Tokens: []block.TransTokens{
@@ -312,6 +315,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			TransInfo:       bti,
 			TokenValue:      wholeTokens[i].TokenValue,
 			ChildTokens:     newFTTokenIDs,
+			Epoch:           int(currentTime.Unix()),
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)

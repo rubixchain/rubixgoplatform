@@ -1853,6 +1853,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// scenario is covered , but since the token block is also added on Quorum's end, we end up in a
 		// situation where update of same block happens twice. Hence the following check ensures that we
 		// skip the addition of block here, if either sender or receiver happen to be on a Quorum node.
+
+		var totalTokenValue float64 = 0
 		if !c.w.IsDIDExist(b.GetReceiverDID()) && !c.w.IsDIDExist(b.GetSenderDID()) {
 			for _, t := range tks {
 				err = c.w.AddTokenBlock(t, b)
@@ -1871,6 +1873,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 				crep.Message = "failed to read token from wallet"
 				return
 			}
+			totalTokenValue += tk.TokenValue
 			ts := RBTString
 			if tk.TokenValue != 1.0 {
 				ts = PartString
@@ -1894,10 +1897,11 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			TokenOwner:      did,
 			TransInfo: &block.TransInfo{
 				Comment: "Token is pledged at " + time.Now().String(),
-				// RefID:   refID,
-				Tokens: tsb,
+				RefID:   ur.TransactionID,
+				Tokens:  tsb,
 			},
-			Epoch: ur.TransactionEpoch,
+			TokenValue: totalTokenValue,
+			Epoch:      ur.TransactionEpoch,
 		}
 
 		nb := block.CreateNewBlock(ctcb, &tcb)
@@ -1958,7 +1962,6 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 	}()
 
-	// return
 	crep.Status = true
 	crep.Message = "Token pledge status updated"
 	return c.l.RenderJSON(req, &crep, http.StatusOK)

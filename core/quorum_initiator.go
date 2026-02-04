@@ -2729,6 +2729,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			GenesisBlock:       smartContractGensisBlock,
 			PledgeDetails:      ptds,
 			InitiatorSignature: deployerSign,
+			TokenValue:         sc.GetTotalRBTs(),
 			Epoch:              cr.TransactionEpoch,
 		}
 	} else if cr.Mode == SmartContractExecuteMode {
@@ -2758,6 +2759,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgeDetails:      ptds,
 			SmartContractData:  sc.GetSmartContractData(),
 			InitiatorSignature: executorSign,
+			TokenValue:         sc.GetTotalRBTs(),
 			Epoch:              cr.TransactionEpoch,
 		}
 
@@ -2842,6 +2844,8 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			QuorumSignature: credit,
 			SmartContract:   sc.GetBlock(),
 			PledgeDetails:   ptds,
+			TokenValue:      sc.GetTotalRBTs(),
+			Epoch:           int(sc.GetTotalRBTs()),
 		}
 	} else {
 		// Fetching sender signature to add it to transaction details
@@ -2871,6 +2875,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgeDetails:      ptds,
 			InitiatorSignature: senderSign,
 			Epoch:              cr.TransactionEpoch,
+			TokenValue:         sc.GetTotalRBTs(),
 		}
 	}
 
@@ -3117,6 +3122,8 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 
 	ctcb := make(map[string]*block.Block)
 	tsb := make([]block.TransTokens, 0)
+	var totalTokenValue float64 = 0
+	currentTime := time.Now()
 
 	for _, t := range commitedTokens {
 		tokenInfoFromDB, err := c.w.ReadToken(t)
@@ -3124,6 +3131,7 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 			c.log.Error("failed to read token from wallet")
 			return err
 		}
+		totalTokenValue += tokenInfoFromDB.TokenValue
 		ts := RBTString
 		if tokenInfoFromDB.TokenValue != 1.0 {
 			ts = PartString
@@ -3148,6 +3156,8 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 			RefID:   refID,
 			Tokens:  tsb,
 		},
+		TokenValue: totalTokenValue,
+		Epoch:      int(currentTime.Unix()),
 	}
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {

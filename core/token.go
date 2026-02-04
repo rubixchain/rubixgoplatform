@@ -274,6 +274,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			GenesisBlock:    gb,
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+			Epoch:           int(time.Now().Unix()),
 		}
 
 		ctcb := make(map[string]*block.Block)
@@ -1944,6 +1945,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			GenesisBlock:    gb,
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+			Epoch:           int(time.Now().Unix()),
 		}
 
 		ctcb := make(map[string]*block.Block)
