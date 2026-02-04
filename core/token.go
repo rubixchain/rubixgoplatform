@@ -193,11 +193,11 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
 
 // getTokenIDForLocalTestTokens retrieves the token ID for local test tokens based on the 
 // provided token level and token number.
-func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int) (string, error) {
+func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int, did string) (string, error) {
 	idValue :=  strconv.Itoa(tokenLevel) + "_" + strconv.Itoa(tokenNumber)
 	idValueBuffer := bytes.NewBufferString(idValue)
 	
-	id, err := c.ipfsOps.Add(idValueBuffer)
+	id, err := c.w.Add(idValueBuffer, did, wallet.OwnerRole)
 	if err != nil {
 		return "", fmt.Errorf("getTokenIDForLocalTestTokens: failed to generate token ID, err: %v", err)
 	}
@@ -233,7 +233,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 	finalTokenNumber = startTokenNumber + num
 
 	for tokenNumber := startTokenNumber; tokenNumber < finalTokenNumber; tokenNumber++ {
-		id, err := c.getTokenIDForLocalTestTokens(localTokenLevel, tokenNumber)
+		id, err := c.getTokenIDForLocalTestTokens(localTokenLevel, tokenNumber, did)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
