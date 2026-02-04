@@ -86,12 +86,10 @@ type TokenChainBlock struct {
 	TransInfo          *TransInfo          `json:"transInfo"`
 	PledgeDetails      []PledgeDetail      `json:"pledgeDetails"`
 	QuorumSignature    []CreditSignature   `json:"quorumSignature"`
-	SmartContract      []byte              `json:"smartContract"`
 	SmartContractData  string              `json:"smartContractData"`
 	TokenValue         float64             `json:"tokenValue"`
 	ChildTokens        []string            `json:"childTokens"`
 	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
-	NFT                []byte              `json:"nft"`
 	NFTData            string              `json:"nftData"`
 	Epoch              int                 `json:"epoch"`
 }
@@ -187,9 +185,6 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	}
 	if tcb.QuorumSignature != nil {
 		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
-	}
-	if tcb.SmartContract != nil {
-		ntcb[TCSmartContractKey] = tcb.SmartContract
 	}
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
