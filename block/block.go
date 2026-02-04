@@ -80,20 +80,20 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType    string              `json:"transactionType"`
-	TokenOwner         string              `json:"owner"`
-	GenesisBlock       *GenesisBlock       `json:"genesisBlock"`
-	TransInfo          *TransInfo          `json:"transInfo"`
-	PledgeDetails      []PledgeDetail      `json:"pledgeDetails"`
-	QuorumSignature    []CreditSignature   `json:"quorumSignature"`
-	SmartContract      []byte              `json:"smartContract"`
-	SmartContractData  string              `json:"smartContractData"`
-	TokenValue         float64             `json:"tokenValue"`
-	ChildTokens        []string            `json:"childTokens"`
-	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
-	NFT                []byte              `json:"nft"`
-	NFTData            string              `json:"nftData"`
-	Epoch              int                 `json:"epoch"`
+	TransactionType    string           `json:"transactionType"`
+	TokenOwner         string           `json:"owner"`
+	GenesisBlock       *GenesisBlock    `json:"genesisBlock"`
+	TransInfo          *TransInfo       `json:"transInfo"`
+	PledgeDetails      []PledgeDetail   `json:"pledgeDetails"`
+	QuorumSignature    []BlockSignature `json:"quorumSignature"`
+	SmartContract      []byte           `json:"smartContract"`
+	SmartContractData  string           `json:"smartContractData"`
+	TokenValue         float64          `json:"tokenValue"`
+	ChildTokens        []string         `json:"childTokens"`
+	InitiatorSignature *BlockSignature  `json:"initiatorSignature"`
+	NFT                []byte           `json:"nft"`
+	NFTData            string           `json:"nftData"`
+	Epoch              int              `json:"epoch"`
 }
 
 type PledgeDetail struct {
@@ -124,6 +124,14 @@ type InitiatorSignature struct {
 	DID         string `json:"InitiatorDID"`
 	Hash        string `json:"hash"`
 	SignType    int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
+}
+
+// unique signature format for all signatures on block
+type BlockSignature struct {
+	Signature string `json:"signature"`
+	DID       string `json:"did"`
+	Hash      string `json:"hash"`
+	SignType  int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
 }
 
 type BlockOption func(b *Block)

@@ -305,7 +305,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	c.log.Debug("Finished Tokenstate check")
 
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	_, ppb, err := qdc.Sign(util.HexToStr(qHash))
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
@@ -314,8 +314,8 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 
 	crep.Status = true
 	crep.Message = "Conensus finished successfully"
-	crep.ShareSig = qsb
-	crep.PrivSig = ppb
+	crep.Signature = ppb
+	crep.Hash = util.HexToStr(qHash)
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
@@ -386,7 +386,7 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 	}
 
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	_, ppb, err := qdc.Sign(util.HexToStr(qHash))
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
@@ -395,8 +395,8 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 
 	crep.Status = true
 	crep.Message = "Conensus finished successfully"
-	crep.ShareSig = qsb
-	crep.PrivSig = ppb
+	crep.Hash = util.HexToStr(qHash)
+	crep.Signature = ppb
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
@@ -599,7 +599,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	c.log.Debug("Finished Tokenstate check")
 
 	qHash := util.CalculateHash(consensusContract.GetBlock(), "SHA3-256")
-	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	_, ppb, err := qdc.Sign(util.HexToStr(qHash))
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		consensusReply.Message = "Failed to get quorum signature"
@@ -608,8 +608,8 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 
 	consensusReply.Status = true
 	consensusReply.Message = "Consensus finished successfully"
-	consensusReply.ShareSig = qsb
-	consensusReply.PrivSig = ppb
+	consensusReply.Hash = util.HexToStr(qHash)
+	consensusReply.Signature = ppb
 	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 }
 
@@ -853,7 +853,7 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	c.log.Debug("Finished Tokenstate check")
 
 	qHash := util.CalculateHash(consensusContract.GetBlock(), "SHA3-256")
-	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	_, ppb, err := qdc.Sign(util.HexToStr(qHash))
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		consensusReply.Message = "Failed to get quorum signature"
@@ -862,8 +862,8 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 
 	consensusReply.Status = true
 	consensusReply.Message = "Consensus finished successfully"
-	consensusReply.ShareSig = qsb
-	consensusReply.PrivSig = ppb
+	consensusReply.Hash = util.HexToStr(qHash)
+	consensusReply.Signature = ppb
 	return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 }
 
@@ -1075,7 +1075,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		c.log.Debug("Finished FT Tokenstate check for large token amount")
 
 		qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-		qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+		_, ppb, err := qdc.Sign(util.HexToStr(qHash))
 		if err != nil {
 			c.log.Error("Failed to get quorum signature", "err", err)
 			crep.Message = "Failed to get quorum signature"
@@ -1088,8 +1088,8 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 
 		crep.Status = true
 		crep.Message = "FT Consensus finished successfully"
-		crep.ShareSig = qsb
-		crep.PrivSig = ppb
+		crep.Hash = util.HexToStr(qHash)
+		crep.Signature = ppb
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	} else {
 		// For small transactions or non-trusted networks, use synchronous pinning
@@ -1135,7 +1135,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	c.log.Debug("Finished FT Tokenstate check")
 
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-	qsb, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	_, ppb, err := qdc.Sign(util.HexToStr(qHash))
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
@@ -1144,8 +1144,8 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 
 	crep.Status = true
 	crep.Message = "FT Conensus finished successfully"
-	crep.ShareSig = qsb
-	crep.PrivSig = ppb
+	crep.Hash = util.HexToStr(qHash)
+	crep.Signature = ppb
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
