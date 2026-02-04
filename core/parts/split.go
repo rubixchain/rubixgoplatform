@@ -9,6 +9,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
 func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) ([]SplitOp, error) {
@@ -16,7 +17,7 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 
 	currentTokenID := heirarchicalID
 	currentNeeded := needed
-	zeroFloat := FloatPrecision(0)
+	zeroFloat := rubixmath.FloatPrecision(0)
 
 	var currentLevel int
 
@@ -28,7 +29,7 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 		}
 
 		childLevel := currentLevel + 1
-		childValue, err := LevelToDenom(childLevel)
+		childValue, err := wallet.LevelToDenom(childLevel)
 		if err != nil {
 			return nil, fmt.Errorf("planSplit: err occured while getting current child value: %v", err)
 		}
@@ -76,7 +77,7 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 
 		if needToSplitChild {
 			currentTokenID = currentTokenID.Child(childToSplit)
-			currentNeeded = FloatPrecision(float64(remainder) * getLowestPossibleDenom())
+			currentNeeded = rubixmath.FloatPrecision(float64(remainder) * getLowestPossibleDenom())
 		} else {
 			break
 		}
@@ -85,12 +86,15 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 	return splits, nil
 }
 
-func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation, splitOp SplitOp, tokenCache map[string]*wallet.Token, isTestnet bool) ([]wallet.Token, error) {
+func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation, 
+	splitOp SplitOp, tokenCache map[string]*wallet.Token, isTestnet bool,
+	tokenDenomArr []string,
+) ([]wallet.Token, error) {
 	var parentToken *wallet.Token
 	parentTokenHeirarchicalID := splitOp.TokenID
 	parentTokenIFPSId, err := IpfsAddString(parentTokenHeirarchicalID, ipfsOps)
 	if err != nil {
-		return nil, fmt.Errorf("splitAtLevel: failed to get IPFS ID for Parent token: %v, err: %v", splitOp.TokenID.String(), err)
+		return nil, fmt.Errorf("performTokenSplit: failed to get IPFS ID for Parent token: %v, err: %v", splitOp.TokenID.String(), err)
 	}
 
 	if cachedToken, exists := tokenCache[parentTokenIFPSId]; exists {
@@ -99,7 +103,7 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 		var err error
 		parentToken, err = w.GetToken(parentTokenIFPSId, wallet.TokenIsFree)
 		if err != nil {
-			return nil, fmt.Errorf("splitAtLevel: unable to get parent token: %v, err: %v", splitOp.TokenID.String(), err)
+			return nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v, err: %v", splitOp.TokenID.String(), err)
 		}
 	}
 
@@ -108,17 +112,6 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentToken.TokenID, childLevel, ipfsOps, isTestnet)
 	if err != nil {
 		return nil, err
-	}
-
-	childTokensToTransfer := make([]wallet.Token, 0)
-
-	for _, transferIdx := range splitOp.ChildrenToTransfer {
-		childTokenToTransfer, exists := childTokensCreatedMap[transferIdx]
-		if !exists {
-			return nil, fmt.Errorf("splitAtLevel: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenIFPSId)
-		}
-
-		childTokensToTransfer = append(childTokensToTransfer, childTokenToTransfer)
 	}
 
 	childTokenIDs := func() []string {
@@ -131,16 +124,27 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 		return tokenList
 	}()
 
-	err = burnParentToken(dc, w, parentToken.TokenID, parentToken.TokenValue, childTokenIDs, dc.GetDID(), isTestnet)
+	err = burnParentToken(dc, w, parentToken.TokenID, parentToken.TokenValue, childTokenIDs, dc.GetDID(), isTestnet, tokenDenomArr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenIFPSId, dc.GetDID(), err)
+	}
+
+	childTokensToTransfer := make([]wallet.Token, 0)
+
+	for _, transferIdx := range splitOp.ChildrenToTransfer {
+		childTokenToTransfer, exists := childTokensCreatedMap[transferIdx]
+		if !exists {
+			return nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenIFPSId)
+		}
+
+		childTokensToTransfer = append(childTokensToTransfer, childTokenToTransfer)
 	}
 
 	return childTokensToTransfer, nil
 }
 
 func createChildTokenContent(parentTokenContent string, index int) string {
-	return parentTokenContent + "-" + fmt.Sprint(index)
+	return parentTokenContent + "_" + fmt.Sprint(index)
 }
 
 func createChildTokenAtIndex(
@@ -157,8 +161,16 @@ func createChildTokenAtIndex(
 	return childTokenHash, nil
 }
 
-func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, parentTokenValue float64, partTokenIDs []string, did string, isTestnet bool) error {
+func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, 
+	parentTokenValue float64, partTokenIDs []string, did string, isTestnet bool,
+	tokenDenomArr []string,
+) error {
 	parentTokenType := getTokenType(isTestnet, parentTokenValue)
+
+	parentTokenLevel, err := wallet.DenomToLevel(parentTokenValue)
+	if err != nil {
+		return err
+	}
 
 	// Burn the parent token
 	bti := &block.TransInfo{
@@ -187,7 +199,7 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, p
 		return fmt.Errorf("burnParentToken: failed to create new burnt block for parent token: %v", parentTokenID)
 	}
 
-	err := burntParentTokenBlock.UpdateSignature(dc)
+	err = burntParentTokenBlock.UpdateSignature(dc)
 	if err != nil {
 		return fmt.Errorf("burnParentToken: failed to sign the burnt block for parent token, err: %v", err)
 	}
@@ -210,14 +222,32 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, p
 		return fmt.Errorf("burnParentToken: failed while updating Parent token %v status to burnt, err: %v", parentTokenID, err)
 	}
 
+	// Immediate update of token denom array for the burnt token
+	err = wallet.DecrementTokenDenomCountAtIndex(tokenDenomArr, parentTokenLevel, 1)
+	if err != nil {
+		return fmt.Errorf(
+				"burnParentToken: unable to decrement token denom array index for level %v, token %v, err: %v",
+				parentTokenLevel,
+				parentTokenID,
+				err,
+			)
+	}
+
+	err = w.UpdateTokenDenomRaw(tokenDenomArr, did)
+	if err != nil {
+		return fmt.Errorf("createChildTokensAtLevel: unable to update Token denom arr, err: %v", err)
+	}
+
 	return nil
 }
 
-func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, level int, ipfsOps IPFSOperation, isTestnet bool) (map[int]wallet.Token, error) {
+func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, level int, 
+	ipfsOps IPFSOperation, isTestnet bool,
+) (map[int]wallet.Token, error) {
 	var childTokenIndexMap map[int]wallet.Token = make(map[int]wallet.Token)
 
 	maxTokenCount := MaxTokensAtLevel(level)
-	childTokenValue, err := LevelToDenom(level)
+	childTokenValue, err := wallet.LevelToDenom(level)
 	if err != nil {
 		return nil, fmt.Errorf("createChildTokensAtLevel: failed to fetch the denom for level: %v, err: %v", level, err)
 	}
@@ -230,8 +260,8 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID 
 		return nil, fmt.Errorf("createChildTokensAtLevel: failed to get the content for parent token: %v, err: %v", parentTokenID, err)
 	}
 
-	for i := 1; i <= maxTokenCount; i++ {
-		childTokenID, err := createChildTokenAtIndex(parentTokenHeirarchicalID.String(), i, ipfsOps)
+	for index := 1; index <= maxTokenCount; index++ {
+		childTokenID, err := createChildTokenAtIndex(parentTokenHeirarchicalID.String(), index, ipfsOps)
 		if err != nil {
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to create child token with ID: %v, err: %v", childTokenID, err)
 		}
@@ -295,8 +325,30 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID 
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to add child token %v to DB, err: %v", childToken, err)
 		}
 
-		childTokenIndexMap[i] = childToken
+		childTokenIndexMap[index] = childToken
 	}
 
+	// Immediate update of token denom array for the newly created tokens
+	tokenDenomArr, err := w.GetTokenDenomArrForDID(did)
+	if err != nil {
+		return nil, fmt.Errorf("createChildTokensAtLevel: failed to fetch token denom arr for did: %v, err: %v", did, err)
+	}
+
+	err = wallet.IncrementTokenDenomCountAtIndex(tokenDenomArr, level, maxTokenCount)
+	if err != nil {
+		return nil, 
+			fmt.Errorf(
+				"createChildTokensAtLevel: unable to increment token denom array index for level %v, parent token %v, err: %v",
+				level,
+				parentTokenID,
+				err,
+			)
+	}
+
+	err = w.UpdateTokenDenomRaw(tokenDenomArr, did)
+	if err != nil {
+		return nil,
+			fmt.Errorf("createChildTokensAtLevel: unable to update Token denom arr, err: %v", err)
+	}
 	return childTokenIndexMap, nil
 }

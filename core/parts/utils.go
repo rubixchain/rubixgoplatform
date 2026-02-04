@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
 func getTokenType(isTestnet bool, tokenValue float64) int {
@@ -48,19 +51,11 @@ func scaledMod(a float64, b float64) (int, error) {
 }
 
 func scaleFloat(f float64) int {
-	expVal := math.Pow10(MaxSupportedDecimalPlaces)
+	expVal := math.Pow10(constants.MaxSupportedDecimalPlaces)
 
-	return int(FloatPrecision(f * expVal))
+	return int(rubixmath.FloatPrecision(f * expVal))
 }
 
-func round(num float64) int {
-	return int(num + math.Copysign(0.5, num))
-}
-
-func FloatPrecision(num float64) float64 {
-	output := math.Pow(10, float64(MaxSupportedDecimalPlaces))
-	return float64(round(num*output)) / output
-}
 
 func MaxTokensAtLevel(level int) int {
 	if level%2 == 1 {
@@ -77,7 +72,7 @@ func MaxTokensAtLevel(level int) int {
 func GetTokenValueFromHierarchicalID(heirarchicalID string) (float64, error) {
 	token := TokenID(heirarchicalID)
 	tokenLevel := token.Level()
-	tokenValue, err := LevelToDenom(tokenLevel)
+	tokenValue, err := wallet.LevelToDenom(tokenLevel)
 	if err != nil {
 		return 0.0, fmt.Errorf(
 			"GetTokenValueFromHierarchicalID: failed to get token value for level: %v, token: %v",

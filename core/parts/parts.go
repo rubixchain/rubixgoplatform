@@ -6,70 +6,121 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
-func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, targetAmount float64, ipfsOps IPFSOperation, isTestnet bool, log logger.Logger) ([]wallet.Token, error) {
+func checkSufficientBalance(w *wallet.Wallet, did string, transferAmount float64) error {
+	userOwnedTokens, err := w.GetFreeTokens(did)
+	if err != nil {
+		return fmt.Errorf("checkSufficientBalance: unable to fetch balance for %v, err: %v", did, err)
+	}
+
+	var accountBalance float64 = rubixmath.ZeroFloat()
+	for _, token := range userOwnedTokens {
+		accountBalance += token.TokenValue
+	}
+
+	if accountBalance < transferAmount {
+		return fmt.Errorf(
+			"checkSufficientBalance: insufficient balance as the current balance is: %v, transfer amount: %v",
+			accountBalance,
+			transferAmount,
+		)
+	}
+
+	return nil
+}
+
+func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64, 
+	ipfsOps IPFSOperation, isTestnet bool, log logger.Logger,
+) ([]wallet.Token, []string, error) {
 	var splitOps []SplitOp = make([]SplitOp, 0)
 	var tokensTransfer []wallet.Token = make([]wallet.Token, 0)
 	var did string = dc.GetDID()
 
-	// Denom check if already change exists
-
-	tokens, err := w.GetFreeTokens(did)
+	// Check Balance
+	err := checkSufficientBalance(w, did, transferAmount)
 	if err != nil {
-		return nil, fmt.Errorf("CollectRBTTokens: failed to get free tokens for did: %v, err: %v", did, err)
+		return nil, nil, fmt.Errorf("CollectRBTTokens: failed while checking balance, err: %v", err)
 	}
 
-	// Build the tree
-	tokenDenomTree, err := BuildDenomTree(tokens, did, ipfsOps)
+	// Attempt to collect tokens which wouldn't require any splitting
+	// by looking at user's balance denom array
+	var nonSplitTokenTransfer []wallet.Token
+	
+	balanceDenomArr, err := w.GetTokenDenomArrForDID(did)
 	if err != nil {
-		return nil, fmt.Errorf("CollectRBTTokens: failed to get the denom tree for did: %v, err: %v", did, err)
+		return nil, nil, fmt.Errorf("CollectRBTTokens: failed to fetch token denom arr for did: %v, err: %v", did, err)
 	}
 
-	remaining := targetAmount
-	zeroFloat := FloatPrecision(0.0)
-
-	for _, token := range tokenDenomTree.Leaves {
-		if remaining <= zeroFloat {
-			break
-		}
-
-		heirarchicalID := token.HierarchicalID
-		tokenValue := token.Token.TokenValue
-
-		if tokenValue <= remaining {
-			tokensTransfer = append(tokensTransfer, token.Token)
-			remaining = FloatPrecision(remaining - tokenValue)
-		} else if tokenValue > remaining {
-			splitOp, err := planTokenSplit(heirarchicalID, remaining, log)
-			if err != nil {
-				return nil, fmt.Errorf("CollectRBTTokens: failed to plan the token split, err: %v", err)
-			}
-
-			splitOps = append(splitOps, splitOp...)
-			remaining = zeroFloat
-		}
+	nonSplitDenomArr, remainingBalanceDenomArr, remainingAmount, err := wallet.GetTokenDenomArrayWithoutSplit(balanceDenomArr, transferAmount)
+	if err != nil {
+		return nil, nil, fmt.Errorf("CollectRBTTokens: error occured while looking to fetch non-split token denom array for transfer, err: %v", err)
 	}
 
-	if remaining > zeroFloat {
-		return nil, fmt.Errorf("CollectRBTTokens: could not satisfy transfer amount, remaining: %v", remaining)
+	nonSplitTokenTransfer, err = w.GetTokensFromDenomArr(nonSplitDenomArr, did)
+	if err != nil {
+		return nil, nil, fmt.Errorf("CollectRBTTokens: error occured while fetching non-split tokens for transfer, err: %v", err)
 	}
 
-	tokenCache := make(map[string]*wallet.Token)
+	tokensTransfer = append(tokensTransfer, nonSplitTokenTransfer...)
 
-	for _, splitOp := range splitOps {
-		partTokensToTransfer, err := performTokenSplit(w, dc, ipfsOps, splitOp, tokenCache, isTestnet)
+
+	if remainingAmount > rubixmath.ZeroFloat() {
+		// For the remaining amount, proceed to build the denom tree
+		// and split accordingly
+		var remainingAvailableTokens []wallet.Token
+	
+		remainingAvailableTokens, err = w.GetFreeTokens(did)
 		if err != nil {
-			return nil, fmt.Errorf("CollectRBTTokens: could not perform split at Level: ")
+			return nil, nil, fmt.Errorf("CollectRBTTokens: failed to get free tokens for did: %v, err: %v", did, err)
 		}
-
-		tokensTransfer = append(tokensTransfer, partTokensToTransfer...)
+	
+		// Build the tree
+		tokenDenomTree, err := BuildDenomTree(remainingAvailableTokens, did, ipfsOps)
+		if err != nil {
+			return nil, nil, fmt.Errorf("CollectRBTTokens: failed to get the denom tree for did: %v, err: %v", did, err)
+		}
+	
+		for _, token := range tokenDenomTree.Leaves {
+			if remainingAmount <= rubixmath.ZeroFloat() {
+				break
+			}
+	
+			heirarchicalID := token.HierarchicalID
+			tokenValue := token.Token.TokenValue
+	
+			if tokenValue > remainingAmount {
+				splitOp, err := planTokenSplit(heirarchicalID, remainingAmount, log)
+				if err != nil {
+					return nil, nil, fmt.Errorf("CollectRBTTokens: failed to plan the token split, err: %v", err)
+				}
+	
+				splitOps = append(splitOps, splitOp...)
+				remainingAmount = rubixmath.ZeroFloat()
+			}
+		}
+	
+		if remainingAmount > rubixmath.ZeroFloat() {
+			return nil, nil, fmt.Errorf("CollectRBTTokens: could not satisfy transfer amount, remaining: %v", remainingAmount)
+		}
+	
+		tokenCache := make(map[string]*wallet.Token)
+	
+		for _, splitOp := range splitOps {
+			partTokensToTransfer, err := performTokenSplit(w, dc, ipfsOps, splitOp, tokenCache, isTestnet, remainingBalanceDenomArr)
+			if err != nil {
+				return nil, nil, fmt.Errorf("CollectRBTTokens: could not perform split at Level: ")
+			}
+	
+			tokensTransfer = append(tokensTransfer, partTokensToTransfer...)
+		}
 	}
 
 	err = w.LockTokens(tokensTransfer)
 	if err != nil {
-		return nil, fmt.Errorf("CollectRBTTokens: could not lock all transferrable tokens, err: %v", err)
+		return nil, nil, fmt.Errorf("CollectRBTTokens: could not lock all transferrable tokens, err: %v", err)
 	}
 
-	return tokensTransfer, nil
+	return tokensTransfer, remainingBalanceDenomArr, nil
 }

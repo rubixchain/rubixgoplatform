@@ -13,6 +13,7 @@ type DIDType struct {
 	DIDDir     string `gorm:"column:did_dir"`
 	RootDID    int    `gorm:"column:root_did"`
 	Config     string `gorm:"column:config"`
+	TokenDenom string `gorm:"column:token_denom"`
 }
 
 type DIDPeerMap struct {

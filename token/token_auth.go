@@ -40,19 +40,23 @@ func GetWholeTokenValue(tokenDetails string) (int, string, bool, error) {
 }
 
 func CheckWholeToken(tokenDetails string, testnet bool) (string, bool, error) {
-	elements := strings.Split(tokenDetails, "-")
+	elements := strings.Split(tokenDetails, "_")
 	
 	if testnet {
-		// Check for local test token 
-		if len(elements) == 1 {
+		// Check for local test token
+		switch len(elements) {
+		// Local test token
+		case 1:
 			return "", true, nil
-		}
-
-		if len(elements) == 2 {
-			// Max Network Level being 999
-			if len(elements[0]) < 3 {
+		case 2:
+			if strings.HasPrefix(elements[0], "local") {
 				return "", true, nil
+			} else {
+				// local test part token
+				return "", false, nil
 			}
+		default:
+			return "", false, nil
 		}
 	} else {
 		if len(elements) == 2 {

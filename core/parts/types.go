@@ -16,14 +16,14 @@ func ParseTokenID(id TokenID, wholeTokenID string) (root string, path []int, err
 	}
 
 	// Check if the ID starts with the whole token prefix
-	expectedPrefix := wholeTokenID + "-"
+	expectedPrefix := wholeTokenID + "_"
 	if !strings.HasPrefix(s, expectedPrefix) {
 		return "", nil, fmt.Errorf("token ID '%s' does not belong to whole token '%s'", s, wholeTokenID)
 	}
 
 	// Extract the part token hierarchy (everything after the whole token ID)
 	hierarchySuffix := s[len(expectedPrefix):]
-	parts := strings.Split(hierarchySuffix, "-")
+	parts := strings.Split(hierarchySuffix, "_")
 
 	// Parse each segment as an integer index
 	path = make([]int, len(parts))
@@ -71,7 +71,7 @@ func (id TokenID) Parent() *TokenID {
 	s := string(id)
 
 	// Find the last dash to get parent
-	lastDash := strings.LastIndex(s, "-")
+	lastDash := strings.LastIndex(s, "_")
 	if lastDash == -1 {
 		return nil // Whole token has no parent
 	}
@@ -99,7 +99,7 @@ func (id TokenID) Children(splitFactor int) []TokenID {
 
 // IsAncestorOf returns true if this token ID is an ancestor of other
 func (id TokenID) IsAncestorOf(other TokenID) bool {
-	return strings.HasPrefix(string(other), string(id)+"-")
+	return strings.HasPrefix(string(other), string(id)+"_")
 }
 
 // LexicalCompare compares two token IDs for left-to-right ordering

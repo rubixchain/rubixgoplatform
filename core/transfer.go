@@ -35,30 +35,7 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	dc.OutChan <- br
 }
 
-func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.DIDCrypto, isSelfRBTTransfer bool) ([]wallet.Token, error) {
-	var tokensForTransfer []*wallet.Token
-	_ = tokensForTransfer
-
-	senderDID := req.Sender
-	transferAmount := parts.FloatPrecision(req.TokenCount)
-
-	if !isSelfRBTTransfer {
-		accountBalance, err := c.GetAccountInfo(senderDID)
-		if err != nil {
-			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
-		}
-
-		accountBalanceAmt := accountBalance.RBTAmount
-
-		if accountBalanceAmt < transferAmount {
-			return nil, fmt.Errorf(
-				"insufficient balance as the current balance is: %v, transfer amount: %v",
-				accountBalanceAmt,
-				transferAmount,
-			)
-		}
-	}
-
+func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.DIDCrypto, isSelfRBTTransfer bool) ([]wallet.Token, []string, error) {
 	return parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log)
 }
 
@@ -99,7 +76,8 @@ func getContractType(reqID string, req *model.RBTTransferRequest, transTokenInfo
 }
 
 func getConsensusRequest(consensusRequestType int, senderPeerID string, receiverPeerID string,
-	contractBlock []byte, transactionEpoch int, isSelfTransfer bool) *ConensusRequest {
+	contractBlock []byte, transactionEpoch int, isSelfTransfer bool, tokenDenomArr []string,
+) *ConensusRequest {
 	var consensusRequest *ConensusRequest = &ConensusRequest{
 		ReqID:            uuid.New().String(),
 		Type:             consensusRequestType,
@@ -107,6 +85,7 @@ func getConsensusRequest(consensusRequestType int, senderPeerID string, receiver
 		ReceiverPeerID:   receiverPeerID,
 		ContractBlock:    contractBlock,
 		TransactionEpoch: transactionEpoch,
+		TokenDenomArr:    tokenDenomArr,
 	}
 
 	if isSelfTransfer {
@@ -153,7 +132,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 
-	tokensForTxn, err := gatherTokensForTransaction(c, req, dc, isSelfRBTTransfer)
+	tokensForTxn, updatedTokenDenomArr, err := gatherTokensForTransaction(c, req, dc, isSelfRBTTransfer)
 	if err != nil {
 		c.log.Error(err.Error())
 		resp.Message = err.Error()
@@ -345,7 +324,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 
-	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
+	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer, updatedTokenDenomArr)
 	// resultChan := make(chan *model.BasicResponse, 1)
 
 	// to distinguish between transaction types
@@ -448,6 +427,17 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// 		resp.Result = txID
 	// 	}
 	// }
+	
+	//NOTE: updating token denom array is local change.
+	// In case of any error in the following, instead of failing the 
+	// transaction, we can possible add it in some sort of Async queue,
+	// to be later picked up and updated.
+	if err := c.w.UpdateTokenDenomRaw(updatedTokenDenomArr, senderDID); err != nil {
+		c.log.Error("Failed to update token denom array", "err", err)
+		resp.Message = "Failed to update token denom array"
+		return resp
+	}
+
 	resp.Status = true
 	return resp
 }
@@ -535,7 +525,7 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 
 	tokensForTxn := make([]wallet.Token, 0)
 
-	reqTokens, err := parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log)
+	reqTokens, _, err := parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log)
 	if err != nil {
 		c.w.ReleaseTokens(reqTokens)
 		c.log.Error("Failed to get tokens", "err", err)
