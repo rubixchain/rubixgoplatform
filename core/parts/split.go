@@ -92,7 +92,12 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 ) ([]wallet.Token, error) {
 	var parentToken *wallet.Token
 	parentTokenHeirarchicalID := splitOp.TokenID
-	parentTokenIFPSId, err := IpfsAddString(parentTokenHeirarchicalID, ipfsOps)
+	parentTokenIndexedID, err := HeirarchicalToIndexed(parentTokenHeirarchicalID)
+	if err != nil {
+		return nil, fmt.Errorf("performTokenSplit: failed to convert parent token hierarchical ID to indexed ID: %v", err)
+	}
+
+	parentTokenIFPSId, err := IpfsAddString(parentTokenIndexedID, ipfsOps)
 	if err != nil {
 		return nil, fmt.Errorf("performTokenSplit: failed to get IPFS ID for Parent token: %v, err: %v", splitOp.TokenID.String(), err)
 	}
@@ -143,16 +148,22 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 	return childTokensToTransfer, nil
 }
 
-func createChildTokenContent(parentTokenContent string, index int) string {
-	return parentTokenContent + "_" + fmt.Sprint(index)
+func createHierarchicalChildTokenContent(hierarchicalParentTokenContent string, index int) string {
+	return hierarchicalParentTokenContent + "_" + fmt.Sprint(index)
 }
 
 func createChildTokenAtIndex(
 	parentTokenContent string,
 	index int, ipfsOps IPFSOperation,
 ) (string, error) {
-	childTokenContent := createChildTokenContent(parentTokenContent, index)
-	childTokenContentBuffer := bytes.NewBufferString(childTokenContent)
+	hierarchicalChildTokenContent := createHierarchicalChildTokenContent(parentTokenContent, index)
+
+	indexedChildTokenContent, err := HeirarchicalToIndexed(TokenID(hierarchicalChildTokenContent))
+	if err != nil {
+		return "", fmt.Errorf("createChildToken: failed to convert hierarchical child token content to indexed, err: %v", err)
+	}
+
+	childTokenContentBuffer := bytes.NewBufferString(indexedChildTokenContent)
 	childTokenHash, err := ipfsOps.Add(childTokenContentBuffer)
 	if err != nil {
 		return "", fmt.Errorf("createChildToken: failed to perform IPFS Add operation while fetching token hash, err: %v", err)
@@ -255,9 +266,14 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID 
 	did := dc.GetDID()
 
 	// Get Parent Token Details
-	parentTokenHeirarchicalID, err := IpfsCatString(parentTokenID, ipfsOps)
+	parentTokenIndex, err := IpfsCatString(parentTokenID, ipfsOps)
 	if err != nil {
 		return nil, fmt.Errorf("createChildTokensAtLevel: failed to get the content for parent token: %v, err: %v", parentTokenID, err)
+	}
+
+	parentTokenHeirarchicalID, err := IndexedToHierarchical(parentTokenIndex)
+	if err != nil {
+		return nil, fmt.Errorf("createChildTokensAtLevel: failed to convert parent token index to hierarchical ID: %v", err)
 	}
 
 	for index := 1; index <= maxTokenCount; index++ {

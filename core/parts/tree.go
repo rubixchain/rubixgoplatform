@@ -26,10 +26,16 @@ func BuildDenomTree(tokens []wallet.Token, ownerDID string, ipfsClient IPFSOpera
 	}
 
 	for i := range tokens {
-		hierarchicalId, err := IpfsCatString(tokens[i].TokenID, ipfsClient)
+		indexedId, err := IpfsCatString(tokens[i].TokenID, ipfsClient)
 		if err != nil {
 			return nil, fmt.Errorf("BuildTokenTree: failed to get the heirarchical IF")
 		}
+
+		hierarchicalId, err := IndexedToHierarchical(indexedId)
+		if err != nil {
+			return nil, fmt.Errorf("BuildTokenTree: failed to convert indexed ID to hierarchical ID: %v", err)
+		}
+
 		node := &DenomTreeNode{
 			HierarchicalID: hierarchicalId,
 			Token:          tokens[i],

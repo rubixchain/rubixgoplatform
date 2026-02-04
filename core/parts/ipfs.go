@@ -12,14 +12,13 @@ type IPFSOperation interface {
 	Cat(hash string) (io.ReadCloser, error)
 }
 
-func IpfsAddString(heirarchicalID TokenID, ipfsClient IPFSOperation) (string, error) {
-	heirarchicalIDStr := heirarchicalID.String()
-	heirarchicalIDStrBuffer := bytes.NewBufferString(heirarchicalIDStr)
+func IpfsAddString(indexedTokenID string, ipfsClient IPFSOperation) (string, error) {
+	indexedTokenIDStrBuffer := bytes.NewBufferString(indexedTokenID)
 
-	return ipfsClient.Add(heirarchicalIDStrBuffer, ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+	return ipfsClient.Add(indexedTokenIDStrBuffer, ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
 }
 
-func IpfsCatString(id string, ipfsClient IPFSOperation) (TokenID, error) {
+func IpfsCatString(id string, ipfsClient IPFSOperation) (string, error) {
 	ipfsCatInfo, err := ipfsClient.Cat(id)
 	if err != nil {
 		return "", err
@@ -30,5 +29,5 @@ func IpfsCatString(id string, ipfsClient IPFSOperation) (TokenID, error) {
 		return "", err
 	}
 
-	return TokenID(ipfsCatBytes), nil
+	return string(ipfsCatBytes), nil
 }
