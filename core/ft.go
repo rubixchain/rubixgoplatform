@@ -119,6 +119,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	// Mutex for providerMaps slice
 	var providerMapMutex sync.Mutex
 	c.log.Info("Initializing FT creation: progress logging")
+	currentTime := time.Now()
 
 	worker := func() {
 		defer wg.Done()
@@ -177,8 +178,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					c.log.Info(fmt.Sprintf("FT creation progress: %d%% (%d/%d created)", currentPercent, newCount, numFTs))
 				}
 			}
-			currentTime := time.Now()
-
 			bti := &block.TransInfo{
 				Tokens: []block.TransTokens{{
 					Token:     ftID,
@@ -288,7 +287,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	if firstErr != nil {
 		return firstErr
 	}
-
 	for i := range wholeTokens {
 
 		release := true
@@ -298,7 +296,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			ptts = PartString
 		}
 		ptt := c.TokenType(ptts)
-		currentTime := time.Now()
 
 		bti := &block.TransInfo{
 			Tokens: []block.TransTokens{
