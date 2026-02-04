@@ -32,6 +32,7 @@ const subscriberBufferSize = 1000 // process up to this many idle batches
 const workerCount = 8             // Tune according to hardware/network
 const MaxNumberOfChildTokensAllowed = 2
 const wholeTokenValue = 1.0
+const MaxPossiblePartTokenNumber = 1332
 
 type TokenPublish struct {
 	Token string `json:"token"`
@@ -1496,6 +1497,8 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				c.log.Error("Failed to add token chain block, invalid block", "token", tokenSyncInfo.TokenID)
 				return fmt.Errorf("failed to add token chain block, invalid block")
 			}
+
+			transType := blk.GetTransType()
 			//CHECK1: check previous blockID of the block,  which we are going to add, it should be same as the latestBlockID which is alredy there for all nongenesis blocks
 			latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 			var latestBlockID string
@@ -1512,17 +1515,19 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 					c.log.Error("Failed to get the previous block id", "err", err, "token", tokenSyncInfo.TokenID)
 					return err
 				}
-				if prevBlkID != latestBlockID {
-					return fmt.Errorf(
-						"previous blockID of the blk which is getting added is not matching with the blockID which is present: token=%s expected_prev=%s got_prev=%s",
-						tokenSyncInfo.TokenID,
-						latestBlockID,
-						prevBlkID,
-					)
+				if prevBlkID != "" {
+					if prevBlkID != latestBlockID {
+						return fmt.Errorf(
+							"previous blockID of the blk which is getting added is not matching with the blockID which is present: token=%s expected_prev=%s got_prev=%s",
+							tokenSyncInfo.TokenID,
+							latestBlockID,
+							prevBlkID,
+						)
+					}
 				}
 
 			}
-			transType := blk.GetTransType()
+
 			//CHECK2: if it is a transferred type, check that if receiver of the latest blockID should be same as the sender of the block which is going to get added.
 			if latestBlock != nil {
 				switch transType {
@@ -3146,4 +3151,99 @@ func (c *Core) StoreDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpent
 		err = fmt.Errorf("invalid asset type, failed to remove double spent token from table, token : %v", doubleSpentTokenInfo.TokenID)
 	}
 	return err
+}
+
+func ValidateNewTokenContent(tokenContent string) error {
+	parts := strings.Split(tokenContent, "-")
+
+	tokenType := "rbt"
+	if len(parts) == 3 {
+		tokenType = "part"
+	}
+
+	// parse level (e.g. "002")
+	level, err := strconv.Atoi(strings.TrimLeft(parts[0], "0"))
+	if err != nil {
+		return fmt.Errorf("invalid token level in token content: %s", tokenContent)
+	}
+
+	// parse token number (e.g. "1000")
+	tokenNo, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return fmt.Errorf("invalid token number in token content: %s", tokenContent)
+	}
+
+	maxAllowed, ok := token.TokenMap[level]
+	if !ok {
+		return fmt.Errorf("invalid token level %d not present in TokenMap", level)
+	}
+
+	if tokenNo < 0 || tokenNo >= maxAllowed {
+		return fmt.Errorf(
+			"token number %d exceeds max allowed %d for level %d",
+			tokenNo, maxAllowed, level,
+		)
+	}
+
+	if tokenType == "part" {
+		partTokenNumber, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return fmt.Errorf("invalid part number in token content: %s", tokenContent)
+		}
+		if partTokenNumber > MaxPossiblePartTokenNumber {
+			return fmt.Errorf(
+				"Parttoken number %d exceeds max allowed %d ",
+				partTokenNumber, MaxPossiblePartTokenNumber,
+			)
+
+		}
+
+	}
+
+	return nil
+}
+
+func (c *Core) GetTokenContentAndValidate(tokenId string, assetType int) error {
+	// ✅ Validation applies ONLY to RBT tokens
+	if assetType != RBTTokenType {
+		return nil
+	}
+
+	var tokenContent string
+	var err error
+
+	// 1️⃣ Try reading RBT content from PostgreSQL
+	rbt, err := c.w.ReadRBTContentFromTable(tokenId)
+	if err == nil {
+		tokenContent = rbt.RBTContent
+	}
+
+	// 2️⃣ If not found, fetch from IPFS and store
+	if tokenContent == "" {
+		c.log.Info("RBT content not found in PSQL, fetching from IPFS", "tokenId", tokenId)
+
+		if err := c.AddTokenContentToPSQL(tokenId, assetType); err != nil {
+			return err
+		}
+
+		// Read again after insert
+		rbt, err = c.w.ReadRBTContentFromTable(tokenId)
+		if err != nil {
+			return err
+		}
+		tokenContent = rbt.RBTContent
+	}
+
+	// 3️⃣ Validate RBT token content against TokenMap
+	if err := ValidateNewTokenContent(tokenContent); err != nil {
+		c.log.Error(
+			"Invalid RBT token content",
+			"tokenId", tokenId,
+			"content", tokenContent,
+			"err", err,
+		)
+		return err
+	}
+
+	return nil
 }
