@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -254,6 +255,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 				},
 			},
 			TokenValue: floatPrecision(parts[i], MaxDecimalPlaces),
+			Version : constants.Block_Version ,
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[pt] = nil
@@ -315,6 +317,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		TransInfo:       bti,
 		TokenValue:      floatPrecision(amount, MaxDecimalPlaces),
 		ChildTokens:     pts,
+		Version: constants.Block_Version,
 	}
 	ctcb := make(map[string]*block.Block)
 	ctcb[tkn] = c.w.GetLatestTokenBlock(tkn, ptt)

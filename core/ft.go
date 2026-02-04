@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -197,6 +198,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					}},
 				},
 				TokenValue: fractionalValue,
+				Version : constants.Block_Version,
 			}
 			ctcb := make(map[string]*block.Block)
 			ctcb[ftID] = nil
@@ -312,6 +314,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			TransInfo:       bti,
 			TokenValue:      wholeTokens[i].TokenValue,
 			ChildTokens:     newFTTokenIDs,
+			Version: constants.Block_Version,
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)

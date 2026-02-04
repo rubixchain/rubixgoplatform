@@ -16,6 +16,7 @@ import (
 	"time"
 
 	block "github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -274,6 +275,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			GenesisBlock:    gb,
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+			Version: constants.Block_Version,
 		}
 
 		ctcb := make(map[string]*block.Block)
@@ -1944,6 +1946,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			GenesisBlock:    gb,
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+			Version :        constants.Block_Version,
 		}
 
 		ctcb := make(map[string]*block.Block)

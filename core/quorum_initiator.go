@@ -12,6 +12,7 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -1800,6 +1801,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			DateTime:        time.Now(),
 			Status:          true,
 			Epoch:           int64(cr.TransactionEpoch),
+
 		}
 
 		err = c.initiateUnpledgingProcess(cr, td.TransactionID, td.Epoch)
@@ -2730,6 +2732,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgeDetails:      ptds,
 			InitiatorSignature: deployerSign,
 			Epoch:              cr.TransactionEpoch,
+			Version:            constants.Block_Version,
 		}
 	} else if cr.Mode == SmartContractExecuteMode {
 		bti.ExecutorDID = sc.GetExecutorDID()
@@ -2759,6 +2762,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SmartContractData:  sc.GetSmartContractData(),
 			InitiatorSignature: executorSign,
 			Epoch:              cr.TransactionEpoch,
+			Version:            constants.Block_Version,
 		}
 
 	} else if cr.Mode == NFTExecuteMode {
@@ -2790,6 +2794,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TokenValue:         sc.GetTotalRBTs(),
 			InitiatorSignature: executor_sign,
 			Epoch:              cr.TransactionEpoch,
+			Version:            constants.Block_Version,
 		}
 
 	} else if cr.Mode == NFTDeployMode {
@@ -2830,6 +2835,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgeDetails:      ptds,
 			InitiatorSignature: deployer_sign,
 			Epoch:              cr.TransactionEpoch,
+			Version:            constants.Block_Version,
 		}
 
 	} else if cr.Mode == PinningServiceMode {
@@ -2842,6 +2848,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			QuorumSignature: credit,
 			SmartContract:   sc.GetBlock(),
 			PledgeDetails:   ptds,
+			Version: constants.Block_Version,
 		}
 	} else {
 		// Fetching sender signature to add it to transaction details
@@ -2871,6 +2878,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgeDetails:      ptds,
 			InitiatorSignature: senderSign,
 			Epoch:              cr.TransactionEpoch,
+			Version :           constants.Block_Version,
 		}
 	}
 
@@ -3148,6 +3156,7 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 			RefID:   refID,
 			Tokens:  tsb,
 		},
+		Version : constants.Block_Version,
 	}
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
