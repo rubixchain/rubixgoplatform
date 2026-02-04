@@ -65,8 +65,19 @@ func MaxTokensAtLevel(level int) int {
 	return 5
 }
 
+// GetTokenValueFromIndexedID fetches the token value by
+// looking at the IPFS content
+func GetTokenValueFromIndexedID(indexedID string) (float64, error) {
+	hierarchicalID, err := IndexedToHierarchical(indexedID)
+	if err != nil {
+		return rubixmath.ZeroFloat(), fmt.Errorf("GetTokenValueFromIndexedID: failed to convert indexed ID to hierarchical ID, err: %v", err)
+	}
+	
+	return GetTokenValueFromHierarchicalID(string(hierarchicalID))
+}
+
 // GetTokenValueFromHierarchicalID fetches the token value by
-// looking at the IPFS content of a Token.
+// looking at its hierarchical structure.
 //
 // Make sure to pass the IPFS content, and not the IPFS ID of the token
 func GetTokenValueFromHierarchicalID(heirarchicalID string) (float64, error) {

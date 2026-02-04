@@ -192,10 +192,9 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
 }
 
 // getTokenIDForLocalTestTokens retrieves the token ID for local test tokens based on the 
-// provided unix timestamp and index.
-func (c *Core) getTokenIDForLocalTestTokens(unixTimestamp int, index int) (string, error) {
-	basePrefix := "local"
-	idValue :=  basePrefix + "-" + strconv.Itoa(unixTimestamp) + "-" + strconv.Itoa(index)
+// provided token level and token number.
+func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int) (string, error) {
+	idValue :=  strconv.Itoa(tokenLevel) + "_" + strconv.Itoa(tokenNumber)
 	idValueBuffer := bytes.NewBufferString(idValue)
 	
 	id, err := c.ipfsOps.Add(idValueBuffer)
@@ -215,10 +214,26 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		return fmt.Errorf("DID is not exist")
 	}
 
-	currentUnixTimestamp := int(time.Now().Unix())
+	currentTokenNumber, err := c.w.GetLocalTokenNumber()
+	if err != nil {
+		return fmt.Errorf("failed to get local test token info, err: %v", err)
+	}
 
-	for i := 0; i < num; i++ {
-		id, err := c.getTokenIDForLocalTestTokens(currentUnixTimestamp, i)
+	localTokenLevel := c.w.GetLocalTokenLevel()
+
+	var startTokenNumber int
+	var finalTokenNumber int
+
+	if currentTokenNumber == 0 {
+		startTokenNumber = 1
+	} else {
+		startTokenNumber = currentTokenNumber
+	}
+
+	finalTokenNumber = startTokenNumber + num
+
+	for tokenNumber := startTokenNumber; tokenNumber < finalTokenNumber; tokenNumber++ {
+		id, err := c.getTokenIDForLocalTestTokens(localTokenLevel, tokenNumber)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
@@ -297,6 +312,10 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		}
 	}
 
+	if err := c.w.SetLocalTokenNumber(finalTokenNumber); err != nil {
+		return fmt.Errorf("failed to set local test token number, err: %v", err)
+	}
+	
 	errUpdate := c.w.UpdateTokenDenomWhole(num, did)
 	if errUpdate != nil {
 		errMsg := fmt.Sprintf("failed to update token denom array for did: %v", did)

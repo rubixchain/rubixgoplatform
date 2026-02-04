@@ -150,7 +150,8 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
 		return -1, err
 	}
-	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+	
+	iswholeToken := token.CheckWholeToken(string(b))
 
 	var tt int
 	var tv float64
@@ -164,7 +165,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 		}
 	} else {
 		var err error
-		tv, err = parts.GetTokenValueFromHierarchicalID(string(b))
+		tv, err = parts.GetTokenValueFromIndexedID(string(b))
 		if err != nil {
 			return -1, fmt.Errorf("syncParentToken: failed while attempting fetch the value for part token: %v, err: %v", pt, err)
 		}

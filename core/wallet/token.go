@@ -2294,11 +2294,11 @@ func (w *Wallet) GetTokensFromDenomArr(denomArr []string, did string) ([]Token, 
 		}
 
 		if err := w.s.Read(TokenStorage, &denomTokenList, "did=? AND token_value=? LIMIT ?", did, denomValue, denomCount); err != nil {
-			return nil, 
+			return nil,
 				fmt.Errorf("GetTokensFromDenomArr: failed to get tokens for denom value: %v, did: %v, denomCount: %v, err: %v")
 		}
 
-		tokenList = append(tokenList, denomTokenList...)		
+		tokenList = append(tokenList, denomTokenList...)
 	}
 
 	err := w.LockTokens(tokenList)
@@ -2307,4 +2307,59 @@ func (w *Wallet) GetTokensFromDenomArr(denomArr []string, did string) ([]Token, 
 	}
 
 	return tokenList, nil
+}
+
+const LocalTestTokenInfo_TokenLevel_Attr = "token_level"
+const LocalTestTokenInfo_TokenNumber_Attr = "token_number"
+const LocalTestTokenInfo_TokenLevel_Value int = 10000
+
+func (w *Wallet) GetLocalTokenLevel() int {
+	return LocalTestTokenInfo_TokenLevel_Value
+}
+
+func (w *Wallet) GetLocalTokenNumber() (int, error) {
+	var localTestTokenInfo *model.LocalTestTokenInfo
+
+	err := w.s.Read(LocalTestTokenInfo, &localTestTokenInfo, "attribute=?", LocalTestTokenInfo_TokenNumber_Attr)
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			// Hard coded at 10000
+			tokenLevel := &model.LocalTestTokenInfo{
+				Attribute: LocalTestTokenInfo_TokenLevel_Attr,
+				Value:     10000,
+			}
+			err = w.s.Write(LocalTestTokenInfo, tokenLevel)
+			if err != nil {
+				return 0, fmt.Errorf("failed to set local test token info, err: %v", err)
+			}
+
+			initialTokenNumber := &model.LocalTestTokenInfo{
+				Attribute: LocalTestTokenInfo_TokenNumber_Attr,
+				Value:     0,
+			}
+			err = w.s.Write(LocalTestTokenInfo, initialTokenNumber)
+			if err != nil {
+				return 0, fmt.Errorf("failed to set local test token info, err: %v", err)
+			}
+
+			return 0, nil
+		}
+		return -1, fmt.Errorf("failed to get local test token info, err: %v", err)
+	}
+
+	return localTestTokenInfo.Value, nil
+}
+
+func (w *Wallet) SetLocalTokenNumber(tokenNumber int) error {
+	updatedLocalTestTokenInfo := &model.LocalTestTokenInfo{
+		Attribute: LocalTestTokenInfo_TokenNumber_Attr,
+		Value:     tokenNumber,
+	}
+
+	err := w.s.Update(LocalTestTokenInfo, updatedLocalTestTokenInfo, "attribute=?", LocalTestTokenInfo_TokenNumber_Attr)
+	if err != nil {
+		return fmt.Errorf("failed to set token number for local test token, err: %v", err)
+	}
+
+	return nil
 }

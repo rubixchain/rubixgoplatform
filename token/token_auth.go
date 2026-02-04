@@ -39,32 +39,9 @@ func GetWholeTokenValue(tokenDetails string) (int, string, bool, error) {
 	return tokenLevelInt, tokenCountHash, needMigration, nil
 }
 
-func CheckWholeToken(tokenDetails string, testnet bool) (string, bool, error) {
+func CheckWholeToken(tokenDetails string) bool {
 	elements := strings.Split(tokenDetails, "_")
-	
-	if testnet {
-		// Check for local test token
-		switch len(elements) {
-		// Local test token
-		case 1:
-			return "", true, nil
-		case 2:
-			if strings.HasPrefix(elements[0], "local") {
-				return "", true, nil
-			} else {
-				// local test part token
-				return "", false, nil
-			}
-		default:
-			return "", false, nil
-		}
-	} else {
-		if len(elements) == 2 {
-			return "", true, nil
-		}
-	}
-
-	return "", false, nil
+	return len(elements) == 2
 }
 
 func calcSHA256(targetHash string, maxNumber int) int {
