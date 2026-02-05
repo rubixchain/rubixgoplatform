@@ -170,9 +170,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.QuorumSignature != nil {
 		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
 	}
-	// if tcb.SmartContract != nil {
-	// 	ntcb[TCSmartContractKey] = tcb.SmartContract
-	// }
+	if tcb.SmartContract != nil {
+		ntcb[TCSmartContractKey] = tcb.SmartContract
+	}
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
