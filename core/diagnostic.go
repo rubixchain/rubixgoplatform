@@ -301,7 +301,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			reply.Message = "unable to fetch intiateor signature"
 			return reply
 		} else {
-			initiatorSignature = signObj.PrivateSign
+			initiatorSignature = signObj.Signature
 			initiatorSignData = signObj.Hash
 		}
 
@@ -361,7 +361,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			reply.Message = "unable to fetch intiateor signature"
 			return reply
 		} else {
-			executorSignature = signObj.PrivateSign
+			executorSignature = signObj.Signature
 			executorSignData = signObj.Hash
 		}
 

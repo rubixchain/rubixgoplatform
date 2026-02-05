@@ -1,7 +1,6 @@
 package block
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -64,19 +63,10 @@ const (
 )
 
 const (
-	InitiatorNLSSShare   string = "nlss_share_signature"
-	InitiatorPrivateSign string = "priv_signature"
-	InitiatorDID         string = "InitiatorDID"
-	InitiatorHash        string = "hash"
-	InitiatorSignType    string = "sign_type"
-)
-
-const (
-	CreditSigSignature     string = "signature"
-	CreditSigPrivSignature string = "priv_signature"
-	CreditSigDID           string = "did"
-	CreditSigHash          string = "hash"
-	CreditSigSignType      string = "sign_type"
+	BlockSignatureKey string = "signature"
+	BlockSigDIDKey    string = "did"
+	BlockSigHashKey   string = "hash"
+	BlockSignTypeKey  string = "sign_type"
 )
 
 type TokenChainBlock struct {
@@ -110,28 +100,12 @@ type Block struct {
 	log logger.Logger
 }
 
-type CreditSignature struct {
-	Signature     string `json:"signature"`
-	PrivSignature string `json:"priv_signature"`
-	DID           string `json:"did"`
-	Hash          string `json:"hash"`
-	SignType      string `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
-}
-
-type InitiatorSignature struct {
-	NLSSShare   string `json:"nlss_share_signature"`
-	PrivateSign string `json:"priv_signature"`
-	DID         string `json:"InitiatorDID"`
-	Hash        string `json:"hash"`
-	SignType    int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
-}
-
 // unique signature format for all signatures on block
 type BlockSignature struct {
 	Signature string `json:"signature"`
 	DID       string `json:"did"`
 	Hash      string `json:"hash"`
-	SignType  int    `json:"sign_type"` //represents sign type (PkiSign == 0 or NlssSign==1)
+	SignType  int    `json:"sign_type"` //represents sign type (BIPSign == 0)
 }
 
 type BlockOption func(b *Block)
@@ -775,34 +749,31 @@ func (b *Block) GetEpoch() int {
 }
 
 // Fetch initiator signature details from the given block
-func (b *Block) GetInitiatorSignature() *InitiatorSignature {
-	var initiatorSign InitiatorSignature
+func (b *Block) GetInitiatorSignature() *BlockSignature {
+	var initiatorSign BlockSignature
 	s, ok := b.bm[TCInitiatorSignatureKey]
 	if !ok || s == nil {
 		return nil
 	}
 	//fetch initiator did
-	did := util.GetFromMap(s, InitiatorDID)
+	did := util.GetFromMap(s, BlockSigDIDKey)
 	initiatorSign.DID = did.(string)
 	//fetch initiator sign type
-	signType := util.GetFromMap(s, InitiatorSignType)
+	signType := util.GetFromMap(s, BlockSignTypeKey)
 	initiatorSign.SignType = int(signType.(uint64))
-	//fetch initiator nlss share sign
-	nlssShare := util.GetFromMap(s, InitiatorNLSSShare)
-	initiatorSign.NLSSShare = nlssShare.(string)
-	//fetch initiator private sign
-	privSign := util.GetFromMap(s, InitiatorPrivateSign)
-	initiatorSign.PrivateSign = privSign.(string)
+	//fetch initiator sign
+	privSign := util.GetFromMap(s, BlockSignatureKey)
+	initiatorSign.Signature = privSign.(string)
 	//fetch initiator hash / signed data
-	signedData := util.GetFromMap(s, InitiatorHash)
+	signedData := util.GetFromMap(s, BlockSigHashKey)
 	initiatorSign.Hash = signedData.(string)
 
 	return &initiatorSign
 }
 
 // Fetch quorums' signature details from the given block
-func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
-	var quorumSignList []CreditSignature
+func (b *Block) GetQuorumSignatureList() ([]BlockSignature, error) {
+	var quorumSignList []BlockSignature
 	s := b.bm[TCQuorumSignatureKey]
 
 	qrmSignListMap, ok := s.([]interface{})
@@ -811,31 +782,17 @@ func (b *Block) GetQuorumSignatureList() ([]CreditSignature, error) {
 		return nil, fmt.Errorf("failed to fetch quorums' signature information from block map")
 	}
 	for _, qrmSignMap := range qrmSignListMap {
-		var quorumSig CreditSignature
-		// When qrmSignMap is a string (in older versions), qrmSign holds the value as a string
-		if qrmSign, ok := qrmSignMap.(string); ok {
-			// Unmarshal the JSON string into the struct
-			err := json.Unmarshal([]byte(qrmSign), &quorumSig)
-			if err != nil {
-				fmt.Println(err)
-			}
-			if quorumSig.SignType == "" {
-				quorumSig.SignType = "0"
-			}
-		} else {
-			//fetch quorum did
-			qrmDID := util.GetFromMap(qrmSignMap, CreditSigDID)
-			quorumSig.DID = qrmDID.(string)
-			// 	//fetch quorum sign type
-			signType := util.GetFromMap(qrmSignMap, CreditSigSignType)
-			quorumSig.SignType = signType.(string)
-			// 	//fetch quorum nlss share sign
-			nlssShare := util.GetFromMap(qrmSignMap, CreditSigSignature)
-			quorumSig.Signature = nlssShare.(string)
-			// 	//fetch quorum private sign
-			privSign := util.GetFromMap(qrmSignMap, CreditSigPrivSignature)
-			quorumSig.PrivSignature = privSign.(string)
-		}
+		var quorumSig BlockSignature
+		//fetch quorum did
+		qrmDID := util.GetFromMap(qrmSignMap, BlockSigDIDKey)
+		quorumSig.DID = qrmDID.(string)
+		//fetch quorum sign type
+		signType := util.GetFromMap(qrmSignMap, BlockSignTypeKey)
+		quorumSig.SignType = int(signType.(uint64))
+		//fetch quorum sign
+		privSign := util.GetFromMap(qrmSignMap, BlockSignatureKey)
+		quorumSig.Signature = privSign.(string)
+
 		quorumSignList = append(quorumSignList, quorumSig)
 	}
 

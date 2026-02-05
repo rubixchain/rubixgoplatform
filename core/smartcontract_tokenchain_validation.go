@@ -267,14 +267,14 @@ func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error
 
 	//initiator signature verification
 	if initiatorDIDType == did.LiteDIDMode {
-		response.Status, err = didCrypto.PvtVerify([]byte(initiatorSign.Hash), util.StrToHex(initiatorSign.PrivateSign))
+		response.Status, err = didCrypto.PvtVerify([]byte(initiatorSign.Hash), util.StrToHex(initiatorSign.Signature))
 		if err != nil {
 			c.log.Error("failed to verify initiator:", initiator, "err", err)
 			response.Message = "invalid initiator"
 			return response, err
 		}
 	} else {
-		response.Status, err = didCrypto.NlssVerify(initiatorSign.Hash, util.StrToHex(initiatorSign.NLSSShare), util.StrToHex(initiatorSign.PrivateSign))
+		response.Status, err = didCrypto.NlssVerify(initiatorSign.Hash, nil, util.StrToHex(initiatorSign.Signature))
 		if err != nil {
 			c.log.Error("failed to verify initiator:", initiator, "err", err)
 			response.Message = "invalid initiator"
