@@ -252,6 +252,10 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 		return fmt.Errorf("burnParentToken: failed while updating Parent token %v status to burnt, err: %v", parentTokenID, err)
 	}
 
+	if _, err := w.Pin(parentTokenID, wallet.OwnerRole, did, "NA", did, "NA", parentTokenValue); err != nil {
+		return fmt.Errorf("burnParentToken: failed to pin parent token: %v, err: %v", parentTokenID, err)
+	}
+
 	// Immediate update of token denom array for the burnt token
 	err = wallet.DecrementTokenDenomCountAtIndex(tokenDenomArr, parentTokenLevel, 1)
 	if err != nil {
@@ -361,6 +365,10 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID 
 		err = publishFn(partTokenWalletInfo)
 		if err != nil {
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to publish part token info for token: %v, err: %v", childTokenID, err)
+		}
+
+		if _, err := w.Pin(childTokenID, wallet.OwnerRole, did, "NA", did, "NA", childTokenValue); err != nil {
+			return nil, fmt.Errorf("createChildTokensAtLevel: failed to pin child token: %v, err: %v", childTokenID, err)
 		}
 
 		childToken := wallet.Token{
