@@ -242,7 +242,7 @@ func (c *Core) QuroumSetup() {
 	if c.arbitaryMode {
 		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
 		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
-		c.l.AddRoute(APITokenArbitration, "POST", c.tokenArbitration)
+		// c.l.AddRoute(APITokenArbitration, "POST", c.tokenArbitration)
 		c.l.AddRoute(APIGetTokenNumber, "POST", c.getTokenNumber)
 		c.l.AddRoute(APIGetMigratedTokenStatus, "POST", c.getMigratedTokenStatus)
 		c.l.AddRoute(APISyncDIDArbitration, "POST", c.syncDIDArbitration)
@@ -2754,7 +2754,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TransInfo:          bti,
 			QuorumSignature:    credit,
 			PledgeDetails:      ptds,
-			SmartContractData:  sc.GetSmartContractData(),
+			Data:               sc.GetSmartContractData(),
 			InitiatorSignature: executorSign,
 			Epoch:              cr.TransactionEpoch,
 		}
@@ -2782,7 +2782,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TokenOwner:         sc.GetReceiverDID(),
 			TransInfo:          bti,
 			QuorumSignature:    credit,
-			NFTData:            sc.GetNFTData(),
+			Data:               sc.GetNFTData(),
 			PledgeDetails:      ptds,
 			TokenValue:         sc.GetTotalRBTs(),
 			InitiatorSignature: executor_sign,
@@ -2820,7 +2820,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TokenOwner:         sc.GetDeployerDID(),
 			TransInfo:          bti,
 			QuorumSignature:    credit,
-			NFTData:            sc.GetNFTData(),
+			Data:               sc.GetNFTData(),
 			TokenValue:         sc.GetTotalRBTs(),
 			GenesisBlock:       nftGenesisBlock,
 			PledgeDetails:      ptds,
