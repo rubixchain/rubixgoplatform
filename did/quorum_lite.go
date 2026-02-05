@@ -153,7 +153,9 @@ func (d *DIDQuorumLite) PvtSign(hash []byte) ([]byte, error) {
 	return pvtKeySign, nil
 }
 func (d *DIDQuorumLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
+
+	pubKeyPath := d.dir + PubKeyFileName
+	pubKey, err := ioutil.ReadFile(pubKeyPath)
 	if err != nil {
 		return false, err
 	}
@@ -163,7 +165,14 @@ func (d *DIDQuorumLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
 		return false, err
 	}
 
-	pubkeyback, _ := secp256k1.ParsePubKey(pubKeyByte)
+	pubkeyback, err := secp256k1.ParsePubKey(pubKeyByte)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse public key: %v", err)
+	}
+	if pubkeyback == nil {
+		return false, fmt.Errorf("public key is nil after parsing")
+	}
+
 	pubKeySer := pubkeyback.ToECDSA()
 
 	if !crypto.BIPVerify(pubKeySer, hash, sign) {

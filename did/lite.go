@@ -147,23 +147,6 @@ func (d *DIDLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) 
 	if !bytes.Equal(cb, db) {
 		return false, fmt.Errorf("failed to verify")
 	}
-
-	//create a signature using the private key
-	//1. read and extrqct the private key
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
-	if err != nil {
-		return false, err
-	}
-
-	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
-	if err != nil {
-		return false, err
-	}
-
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify private key singature")
-	}
 	return true, nil
 
 }
@@ -171,17 +154,13 @@ func (d *DIDLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) 
 func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
 	privKey, err := os.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
-		fmt.Println("requesting signature from BIP wallet")
 		walletSignature, err := d.getSignature(hash)
 		if err != nil {
-			fmt.Println("failed sign request, err:", err)
 			return nil, err
 		}
-		fmt.Println("received signature:", walletSignature)
 
 		isValidSig, err := d.PvtVerify(hash, walletSignature)
 		if err != nil || !isValidSig {
-			fmt.Println("invalid sign data:", util.HexToStr(hash), "err:", err)
 			return nil, err
 		}
 		return walletSignature, nil

@@ -378,7 +378,6 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			deployerDID = deployerDIDFromFirstBlock
 		}
 
-		fmt.Println("The deployer did is :", deployerDID)
 		sctData := model.SCTDataReply{
 			BlockNo:            blockNo,
 			BlockId:            blockId,

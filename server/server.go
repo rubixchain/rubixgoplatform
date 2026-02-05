@@ -213,6 +213,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetTxnAmount, "GET", s.AuthHandle(s.APIGetTxnAmountFromFullNode, false, s.AuthError, false))
 
 	s.AddRoute(setup.APIGetTokenChain, "GET", s.AuthHandle(s.APIGetFullTokenChain, false, s.AuthError, false))
+	s.AddRoute(setup.APIGetTokenChainHeight, "GET", s.AuthHandle(s.APIGetFullTokenChainHeight, false, s.AuthError, false))
+
 	s.AddRoute(setup.APIRemoveStaleDID, "POST", s.AuthHandle(s.APIRemoveStaleDID, true, s.AuthError, false))
 }
 

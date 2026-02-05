@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/crypto"
@@ -80,7 +81,7 @@ func (d *DIDBasic) getPassword() (string, error) {
 
 	srd, ok := ch.(SignRespData)
 	if !ok {
-		return "", fmt.Errorf("Invalid data received on the channel")
+		return "", fmt.Errorf("invalid data received on the channel")
 	}
 
 	// Cache password for this request
@@ -103,8 +104,10 @@ func (d *DIDBasic) GetSignType() int {
 
 // Sign will return the singature of the DID
 func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
-	byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
 
+	// Check if pvtShare.png exists
+	pvtSharePath := d.dir + PvtShareFileName
+	byteImg, err := util.GetPNGImagePixels(pvtSharePath)
 	if err != nil {
 		fmt.Println(err)
 		return nil, nil, err
@@ -117,26 +120,7 @@ func (d *DIDBasic) Sign(hash string) ([]byte, []byte, error) {
 	finalPos := randPosObject.PosForSign
 	pvtPos := util.GetPrivatePositions(finalPos, ps)
 	pvtPosStr := util.IntArraytoStr(pvtPos)
-
-	//create a signature using the private key
-	//1. read and extrqct the private key
-	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
-	if err != nil {
-		return nil, nil, err
-	}
-	pwd, err := d.getPassword()
-	if err != nil {
-		return nil, nil, err
-	}
-	PrivateKey, _, err := crypto.DecodeKeyPair(pwd, privKey, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pvtPosStr), "SHA3-256"))
-	pvtKeySign, err := crypto.Sign(PrivateKey, []byte(hashPvtSign))
-	if err != nil {
-		return nil, nil, err
-	}
+	var pvtKeySign []byte
 	bs, err := util.BitstreamToBytes(pvtPosStr)
 	if err != nil {
 		return nil, nil, err
@@ -173,35 +157,23 @@ func (d *DIDBasic) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte)
 	didPosInt := util.GetPrivatePositions(orgPos, didBin)
 	didStr := util.IntArraytoStr(didPosInt)
 	cb := nlss.Combine2Shares(nlss.ConvertBitString(pSig), nlss.ConvertBitString(pubStr))
-
 	db := nlss.ConvertBitString(didStr)
-
 	if !bytes.Equal(cb, db) {
 		return false, fmt.Errorf("failed to verify")
-	}
-
-	//create a signature using the private key
-	//1. read and extrqct the private key
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
-	if err != nil {
-		return false, err
-	}
-	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
-	if err != nil {
-		return false, err
-	}
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify nlss private key singature")
 	}
 	return true, nil
 }
 
 func (d *DIDBasic) PvtSign(hash []byte) ([]byte, error) {
-	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
+
+	// Check if pvtKey.pem exists
+	pvtKeyPath := d.dir + PvtKeyFileName
+	privKey, err := os.ReadFile(pvtKeyPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read private key: %v", err)
 	}
+
+	// File exists, use local signing
 	pwd, err := d.getPassword()
 	if err != nil {
 		return nil, err

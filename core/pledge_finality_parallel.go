@@ -30,8 +30,6 @@ func (c *Core) parallelQuorumPledgeFinality(cr *ConensusRequest, newBlock *block
 		peer          *ipfsport.Peer
 		qAddress      string
 	}
-	fmt.Println("Quorumlist length :", len(cr.QuorumList))
-	fmt.Println("Quorum list :", cr.QuorumList)
 	jobs := make([]updateJob, 0)
 	for k, v := range pd.PledgedTokens {
 		p, ok := cs.P[k]

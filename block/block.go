@@ -44,6 +44,7 @@ const (
 	TCInitiatorSignatureKey string = "12"
 	TCEpochKey              string = "epoch"
 	TCNFTDataKey            string = "13"
+	TCVersionKey            string = "version"
 )
 
 const (
@@ -94,6 +95,7 @@ type TokenChainBlock struct {
 	NFT                []byte              `json:"nft"`
 	NFTData            string              `json:"nftData"`
 	Epoch              int                 `json:"epoch"`
+	Version            int                 `json:"version"`
 }
 
 type PledgeDetail struct {
@@ -213,6 +215,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 
 	if tcb.Epoch != 0 {
 		ntcb[TCEpochKey] = tcb.Epoch
+	}
+
+	if tcb.Version != 0 {
+		ntcb[TCVersionKey] = tcb.Version
 	}
 
 	blk := InitBlock(nil, ntcb)
@@ -448,11 +454,24 @@ func (b *Block) UpdateSignature(dc didmodule.DIDCrypto) error {
 	if err != nil {
 		return fmt.Errorf("failed to get hash")
 	}
-	sb, err := dc.PvtSign([]byte(h))
-	if err != nil {
-		return fmt.Errorf("failed to get did signature, " + err.Error())
+
+	var sig string
+
+	if dc.GetSignType() == didmodule.NlssVersion {
+		// For NLSS DIDs (types 0,1,2): Use Sign() to get NLSS signature
+		ssig, _, err := dc.Sign(h)
+		if err != nil {
+			return fmt.Errorf("failed to get nlss signature, " + err.Error())
+		}
+		sig = util.HexToStr(ssig) // Use NLSS share signature
+	} else {
+		// For BIP DIDs (type 4): Use PvtSign() to get PKI signature
+		sb, err := dc.PvtSign([]byte(h))
+		if err != nil {
+			return fmt.Errorf("failed to get did signature, " + err.Error())
+		}
+		sig = util.HexToStr(sb)
 	}
-	sig := util.HexToStr(sb)
 
 	ksmi, ok := b.bm[TCSignatureKey]
 	if !ok {
@@ -754,6 +773,10 @@ func (b *Block) GetChildTokens() []string {
 
 func (b *Block) GetEpoch() int {
 	return util.GetIntFromMap(b.bm, TCEpochKey)
+}
+
+func (b *Block) GetVersion() int {
+	return util.GetIntFromMap(b.bm, TCVersionKey)
 }
 
 // Fetch initiator signature details from the given block

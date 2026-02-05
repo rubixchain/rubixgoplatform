@@ -105,7 +105,6 @@ func (cmd *Command) GenerateFaucetTestRBT() {
 		cmd.log.Error("Invalid RBT amount, tokens generated should be a whole number and greater than 0")
 		return
 	}
-
 	br, err := cmd.c.GenerateFaucetTestRBT(cmd.numTokens, cmd.did)
 
 	if err != nil {

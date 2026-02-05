@@ -17,9 +17,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -117,16 +117,19 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 
 		err := b.VerifySignature(dc)
 		if err != nil {
+			c.log.Error("Block verification failed: signer=%s, signType=%d, err=%v\n", signer, dc.GetSignType(), err)
 			if dc.GetSignType() == did.NlssVersion {
-				peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
-				if !peerUpdateResult || err != nil {
-					liteDID := did.LiteDIDMode
-					signerInfo := wallet.DIDPeerMap{
-						DID:     signer,
-						DIDType: &liteDID,
-					}
-					c.AddPeerDetails(signerInfo)
-				}
+				// c.log.Error("NLSS verification failed, attempting fallback to LiteDID for signer=%s\n", signer)
+				// peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
+				// if !peerUpdateResult || err != nil {
+				// 	liteDID := did.LiteDIDMode
+				// 	signerInfo := wallet.DIDPeerMap{
+				// 		DID:     signer,
+				// 		DIDType: &liteDID,
+				// 	}
+				// 	c.AddPeerDetails(signerInfo)
+				// }
+				c.log.Info("Retrying block verification with LiteDID for signer=%s\n", signer)
 				dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 				if err != nil {
 					c.log.Error("failed to setup foreign DID quorum", "err", err)
@@ -140,6 +143,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					c.log.Error("Failed to verify signature", "err", err)
 					return false, fmt.Errorf("failed to verify signature, err: %v", err)
 				}
+				c.log.Info("Block verification successful after retry for signer=%s\n", signer)
 			} else {
 				c.log.Error("Failed to verify signature", "err", err)
 				return false, fmt.Errorf("failed to verify signature, err: %v", err)
@@ -156,22 +160,33 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
 		return -1, err
 	}
-	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+	
+	iswholeToken := token.CheckWholeToken(string(b))
 
-	tt := token.RBTTokenType
-	tv := float64(1)
-	if !iswholeToken {
-		blk := util.StrToHex(string(b))
-		rb, err := rac.InitRacBlock(blk, nil)
-		if err != nil {
-			c.log.Error("invalid token, invalid rac block", "err", err)
-			return -1, err
+	var tt int
+	var tv float64
+
+	if iswholeToken {
+		tv = float64(1)
+		if c.testNet {
+			tt = token.TestTokenType
+		} else {
+			tt = token.RBTTokenType
 		}
-		tt = rac.RacType2TokenType(rb.GetRacType())
-		if c.TokenType(PartString) == tt {
-			tv = rb.GetRacValue()
+	} else {
+		var err error
+		tv, err = parts.GetTokenValueFromIndexedID(string(b))
+		if err != nil {
+			return -1, fmt.Errorf("syncParentToken: failed while attempting fetch the value for part token: %v, err: %v", pt, err)
+		}
+
+		if c.testNet {
+			tt = token.TestPartTokenType
+		} else {
+			tt = token.PartTokenType
 		}
 	}
+
 	lbID := ""
 	// lb := c.w.GetLatestTokenBlock(pt, tt)
 	// if lb != nil {

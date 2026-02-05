@@ -14,6 +14,7 @@ type Storage interface {
 	ReadWithOffset(storageName string, offset int, limit int, vaule interface{}, querryString string, querryVaule ...interface{}) error
 	GetDataCount(stroageName string, querryString string, querryVaule ...interface{}) int64
 	Drop(storageName string, value interface{}) error
+	UpdateColumn(storageName string, columnName string, columnValue interface{}, conditionString string, conditionValue interface{}) error
 	Close() error
 }
 

@@ -661,7 +661,9 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 
 // addFullNodeBlock will write block into fullnode-storage
 func (w *Wallet) addFullNodeBlock(token string, b *block.Block) error {
-	// defer w.notifyExplorerServer(b)
+	if w.isExplorerAvailable() {
+		defer w.notifyExplorerServer(b)
+	}
 	opt := &opt.WriteOptions{
 		Sync: true,
 	}
@@ -973,7 +975,6 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 	return nil
 }
 
-
 func (w *Wallet) GetTokenBlockByNumber(token string, tokenType int, blockNum uint64) ([]byte, error) {
 	return w.getBlockByNumber(tokenType, token, blockNum)
 }
@@ -1089,6 +1090,37 @@ func (w *Wallet) removeFullNodeTokenChainBlockLatest(token string, tokenType int
 		}
 	} else {
 		return fmt.Errorf("no blocks found for the given token type and token")
+	}
+
+	return nil
+}
+func (w *Wallet) removeTokenChainBlock(
+	token string,
+	tokenType int,
+	blockID string,
+) error {
+	db := w.getChainDB(tokenType)
+	if db == nil {
+		return fmt.Errorf("failed get block, invalid token type")
+	}
+
+	key := []byte(tcsKey(tokenType, token, blockID))
+
+	// Optional but recommended: check if block exists
+	exists, err := db.Has(key, nil)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf(
+			"block not found for token=%s tokenType=%d blockID=%s",
+			token, tokenType, blockID,
+		)
+	}
+
+	// Delete the specific block
+	if err := db.Delete(key, nil); err != nil {
+		return err
 	}
 
 	return nil

@@ -140,3 +140,8 @@ type TokenChainDetailsEvent struct {
 	TokenDetails    []SendTokenDetailsInfo `json:"token_details"`
 	BatchNumber     int                    `json:"batch_number"`
 }
+
+type LocalTestTokenInfo struct {
+	Attribute string `gorm:"column:attribute;primaryKey"`
+	Value     int    `gorm:"column:value"`
+}

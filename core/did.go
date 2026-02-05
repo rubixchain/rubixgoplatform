@@ -224,11 +224,16 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	if didCreate.Dir == "" {
 		didCreate.Dir = did
 	}
+
+	tokenDenomArr := wallet.CreateTokenDenomArr()
+	tokenDenomStr := wallet.GetTokenDenomStrFromArr(tokenDenomArr)
+
 	dt := wallet.DIDType{
-		DID:    did,
-		DIDDir: didCreate.Dir,
-		Type:   didCreate.Type,
-		Config: didCreate.Config,
+		DID:        did,
+		DIDDir:     didCreate.Dir,
+		Type:       didCreate.Type,
+		Config:     didCreate.Config,
+		TokenDenom: tokenDenomStr,
 	}
 	if didCreate.RootDID {
 		dt.RootDID = 1
@@ -367,11 +372,16 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 	if didCreate.Dir == "" {
 		didCreate.Dir = did
 	}
+
+	tokenDenomArr := wallet.CreateTokenDenomArr()
+	tokenDenomStr := wallet.GetTokenDenomStrFromArr(tokenDenomArr)
+
 	dt := wallet.DIDType{
-		DID:    did,
-		DIDDir: didCreate.Dir,
-		Type:   didCreate.Type,
-		Config: didCreate.Config,
+		DID:        did,
+		DIDDir:     didCreate.Dir,
+		Type:       didCreate.Type,
+		Config:     didCreate.Config,
+		TokenDenom: tokenDenomStr,
 	}
 	if didCreate.RootDID {
 		dt.RootDID = 1
@@ -648,16 +658,16 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 		return response, fmt.Errorf(errMsg)
 	}
 
-	ftInfo, err := c.GetFTInfoByDID(staleDID)
-	if err != nil {
-		c.log.Error("Failed to get ft info for DID %v", staleDID)
-		return response, err
-	}
-	if len(ftInfo) != 0 {
-		errMsg := fmt.Sprintf("cannot remove DID : %v, holds FTs : %v", staleDID, ftInfo)
-		c.log.Error(errMsg)
-		return response, fmt.Errorf(errMsg)
-	}
+	// ftInfo, err := c.GetFTInfoByDID(staleDID)
+	// if err != nil {
+	// 	c.log.Error("Failed to get ft info for DID %v", staleDID)
+	// 	return response, err
+	// }
+	// if len(ftInfo) != 0 {
+	// 	errMsg := fmt.Sprintf("cannot remove DID : %v, holds FTs : %v", staleDID, ftInfo)
+	// 	c.log.Error(errMsg)
+	// 	return response, fmt.Errorf(errMsg)
+	// }
 
 	// remove old-did from peers' DB :
 	// 1. sign on the information to be published
