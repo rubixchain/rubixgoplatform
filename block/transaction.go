@@ -33,33 +33,33 @@ import (
 // }
 
 const (
-	TISenderDIDKey      string = "1"
-	TIReceiverDIDKey    string = "2"
-	TICommentKey        string = "3"
-	TITIDKey            string = "4"
-	TIBlockKey          string = "5"
-	TITokensKey         string = "6"
-	TIRefIDKey          string = "7"
-	TIDeployerDIDKey    string = "8"
-	TIExecutorDIDKey    string = "9"
-	TICommitedTokensKey string = "10"
-	TIPinningDIDKey     string = "11"
+	TISenderDIDKey      string = "senderDID"
+	TIReceiverDIDKey    string = "2" // remove
+	TICommentKey        string = "comment"
+	TITIDKey            string = "tid"
+	TIBlockKey          string = "block"
+	TITokensKey         string = "tokens"
+	TIRefIDKey          string = "refID"
+	TIDeployerDIDKey    string = "deployerDID"
+	TIExecutorDIDKey    string = "executorDID"
+	TICommitedTokensKey string = "commitedTokens"
+	TIPinningDIDKey     string = "pinningDID"
 )
 
 const (
-	TTTokenTypeKey       string = "1"
+	TTTokenTypeKey       string = "tokenType"
 	TTPledgedTokenKey    string = "2" // depreciated not used
 	TTPledgedDIDKey      string = "3" // depreciated not used
-	TTBlockNumberKey     string = "4"
-	TTPreviousBlockIDKey string = "5"
-	TTUnpledgedIDKey     string = "6"
-	TTCommitedDIDKey     string = "7"
+	TTBlockNumberKey     string = "blockNumber"
+	TTPreviousBlockIDKey string = "previousBlockID"
+	TTUnpledgedIDKey     string = "unpledgedID"
+	TTCommitedDIDKey     string = "commitedDID"
 )
 
 const (
-	PDTokenKey        string = "1"
-	PDTokenTypeKey    string = "2"
-	PDTokenBlockIDKey string = "3"
+	PDTokenKey        string = "pledgeToken"
+	PDTokenTypeKey    string = "tokenType"
+	PDTokenBlockIDKey string = "tokenBlockID"
 )
 
 type TransTokens struct {
@@ -71,7 +71,7 @@ type TransTokens struct {
 
 type TransInfo struct {
 	SenderDID      string        `json:"senderDID"`
-	ReceiverDID    string        `json:"receiverDID"`
+	ReceiverDID    string        `json:"receiverDID"` // remove
 	Comment        string        `json:"comment"`
 	TID            string        `json:"tid"`
 	Block          []byte        `json:"block"`

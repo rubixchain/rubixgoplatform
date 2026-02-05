@@ -25,22 +25,22 @@ import (
 // }
 
 const (
-	TCTokenTypeKey          string = "1"
-	TCTransTypeKey          string = "2"
-	TCTokenOwnerKey         string = "3"
-	TCGenesisBlockKey       string = "4"
-	TCTransInfoKey          string = "5"
-	TCSmartContractKey      string = "6"
-	TCQuorumSignatureKey    string = "7"
-	TCPledgeDetailsKey      string = "8"
-	TCBlockHashKey          string = "98"
-	TCSignatureKey          string = "99"
-	TCBlockContentKey       string = "1"
-	TCBlockContentSigKey    string = "2"
+	TCTokenTypeKey          string = "tokenType"
+	TCTransTypeKey          string = "blockType"
+	TCTokenOwnerKey         string = "tokenOwner"
+	TCGenesisBlockKey       string = "genesisBlock"
+	TCTransInfoKey          string = "transInfo"
+	TCSmartContractKey      string = "6" // remove
+	TCQuorumSignatureKey    string = "quorumSignature"
+	TCPledgeDetailsKey      string = "pledgeDetails"
+	TCBlockHashKey          string = "blockHash"
+	TCSignatureKey          string = "signature"
+	TCBlockContentKey       string = "blockContent"
+	TCBlockContentSigKey    string = "blockContentSig"
 	TCSmartContractDataKey  string = "9"
-	TCTokenValueKey         string = "10"
-	TCChildTokensKey        string = "11"
-	TCInitiatorSignatureKey string = "12"
+	TCTokenValueKey         string = "tokenValue"
+	TCChildTokensKey        string = "childTokens"
+	TCInitiatorSignatureKey string = "initiatorSignature"
 	TCEpochKey              string = "epoch"
 	TCNFTDataKey            string = "13"
 )
@@ -76,7 +76,7 @@ type TokenChainBlock struct {
 	TransInfo          *TransInfo       `json:"transInfo"`
 	PledgeDetails      []PledgeDetail   `json:"pledgeDetails"`
 	QuorumSignature    []BlockSignature `json:"quorumSignature"`
-	SmartContract      []byte           `json:"smartContract"`
+	SmartContract      []byte           `json:"smartContract"` // remove
 	SmartContractData  string           `json:"smartContractData"`
 	TokenValue         float64          `json:"tokenValue"`
 	ChildTokens        []string         `json:"childTokens"`
@@ -170,9 +170,9 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.QuorumSignature != nil {
 		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
 	}
-	if tcb.SmartContract != nil {
-		ntcb[TCSmartContractKey] = tcb.SmartContract
-	}
+	// if tcb.SmartContract != nil {
+	// 	ntcb[TCSmartContractKey] = tcb.SmartContract
+	// }
 	if tcb.SmartContractData != "" {
 		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
 	}
