@@ -15,8 +15,8 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
-	constants "github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/block"
+	constants "github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -1920,8 +1920,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 				// RefID:   refID,
 				Tokens: tsb,
 			},
-			Epoch: ur.TransactionEpoch,
-			Version: constants.Block_Version,
+			Epoch:   ur.TransactionEpoch,
+			Version: constants.BlockVersion,
 		}
 
 		nb := block.CreateNewBlock(ctcb, &tcb)

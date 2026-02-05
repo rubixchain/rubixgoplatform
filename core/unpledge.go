@@ -195,8 +195,8 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 			Comment: "Token is un pledged at " + currentTime.String(),
 			Tokens:  tsb,
 		},
-		Epoch: int(currentTime.Unix()),
-		Version : constants.Block_Version,
+		Epoch:   int(currentTime.Unix()),
+		Version: constants.BlockVersion,
 	}
 
 	nb := block.CreateNewBlock(ctcb, &tcb)

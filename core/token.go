@@ -192,12 +192,12 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
 	dc.OutChan <- &br
 }
 
-// getTokenIDForLocalTestTokens retrieves the token ID for local test tokens based on the 
+// getTokenIDForLocalTestTokens retrieves the token ID for local test tokens based on the
 // provided token level and token number.
 func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int, did string) (string, error) {
-	idValue :=  strconv.Itoa(tokenLevel) + "_" + strconv.Itoa(tokenNumber)
+	idValue := strconv.Itoa(tokenLevel) + "_" + strconv.Itoa(tokenNumber)
 	idValueBuffer := bytes.NewBufferString(idValue)
-	
+
 	id, err := c.w.Add(idValueBuffer, did, wallet.OwnerRole)
 	if err != nil {
 		return "", fmt.Errorf("getTokenIDForLocalTestTokens: failed to generate token ID, err: %v", err)
@@ -260,7 +260,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			GenesisBlock:    gb,
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
-			Version: constants.Block_Version,
+			Version:         constants.BlockVersion,
 		}
 
 		ctcb := make(map[string]*block.Block)
@@ -317,7 +317,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 	if err := c.w.SetLocalTokenNumber(finalTokenNumber); err != nil {
 		return fmt.Errorf("failed to set local test token number, err: %v", err)
 	}
-	
+
 	errUpdate := c.w.UpdateTokenDenomWhole(num, did)
 	if errUpdate != nil {
 		errMsg := fmt.Sprintf("failed to update token denom array for did: %v", did)
@@ -1859,7 +1859,7 @@ func (c *Core) getFaucetTestTokensID(tokenLevel int, tokenNumber int) (string, e
 	if err != nil {
 		return "", fmt.Errorf("getFaucetTestTokensID: failed to get token ID from IPFS: %v", err)
 	}
-	
+
 	return id, nil
 }
 
@@ -1930,7 +1930,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			c.log.Error("Failed to get token ID from IPFS", "err", err)
 			return &tokendetail, fmt.Errorf("failed to get token ID from IPFS")
 		}
-	
+
 		gb := &block.GenesisBlock{
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
@@ -1952,7 +1952,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			GenesisBlock:    gb,
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
-			Version :        constants.Block_Version,
+			Version:         constants.BlockVersion,
 		}
 
 		ctcb := make(map[string]*block.Block)
@@ -2000,7 +2000,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		c.log.Error(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-	
+
 	return &tokendetail, nil
 }
 

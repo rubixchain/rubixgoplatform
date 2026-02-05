@@ -84,7 +84,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 
 	// Fetch whole tokens
 	wholeTokens, updatedTokenDenomArr, err := parts.CollectRBTTokens(
-		dc, c.w, rubixmath.FloatPrecision(float64(numWholeTokens)), 
+		dc, c.w, rubixmath.FloatPrecision(float64(numWholeTokens)),
 		c.ipfsOps, c.testNet, c.log, c.publishTxn,
 	)
 	if err != nil || wholeTokens == nil {
@@ -205,7 +205,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					}},
 				},
 				TokenValue: fractionalValue,
-				Version : constants.Block_Version,
+				Version:    constants.BlockVersion,
 			}
 			ctcb := make(map[string]*block.Block)
 			ctcb[ftID] = nil
@@ -321,7 +321,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			TransInfo:       bti,
 			TokenValue:      wholeTokens[i].TokenValue,
 			ChildTokens:     newFTTokenIDs,
-			Version: constants.Block_Version,
+			Version:         constants.BlockVersion,
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
