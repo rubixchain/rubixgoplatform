@@ -40,8 +40,8 @@ type GenesisTokenInfo struct {
 	Token              string        `json:"token"`
 	TokenLevel         int           `json:"tokenLevel"`      // remove
 	TokenNumber        int           `json:"tokenNumber"`     // remove
-	MigratedBlockID    string        `json:"migratedBlockID"` // remove
-	PreviousID         string        `json:"previosuID"`      // remove
+	// MigratedBlockID    string        `json:"migratedBlockID"` // remove
+	// PreviousID         string        `json:"previosuID"`      // remove
 	ParentID           string        `json:"parentID"`
 	GrandParentID      []string      `json:"grandParentID"` // remove
 	CommitedTokens     []TransTokens `json:"commitedTokens"`

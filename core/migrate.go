@@ -434,33 +434,33 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 						continue
 					}
 
-					tk := ""
-					if migration {
-						dt := strings.Split(migrateDetials[t], ",")
-						tk = dt[0]
-					} else {
-						tk = t
-					}
-					fb, err := os.Open(rubixDir + "Wallet/TOKENCHAINS/" + tk + ".json")
-					if err != nil {
-						c.log.Error("Failed to migrate, failed to read token chain files", "err", err)
-						return fmt.Errorf("failed to migrate, failed to read token chain files")
-					}
-					tcid, err := c.ipfsOps.Add(fb)
-					if err != nil {
-						c.log.Error("Failed to migrate, failed to add token chain file", "err", err)
-						return fmt.Errorf("failed to migrate, failed to add token chain file")
-					}
+					// tk := ""
+					// if migration {
+					// 	dt := strings.Split(migrateDetials[t], ",")
+					// 	tk = dt[0]
+					// } else {
+					// 	tk = t
+					// }
+					// fb, err := os.Open(rubixDir + "Wallet/TOKENCHAINS/" + tk + ".json")
+					// if err != nil {
+					// 	c.log.Error("Failed to migrate, failed to read token chain files", "err", err)
+					// 	return fmt.Errorf("failed to migrate, failed to read token chain files")
+					// }
+					// tcid, err := c.ipfsOps.Add(fb)
+					// if err != nil {
+					// 	c.log.Error("Failed to migrate, failed to add token chain file", "err", err)
+					// 	return fmt.Errorf("failed to migrate, failed to add token chain file")
+					// }
 
 					gti := block.GenesisTokenInfo{
 						Token:           t,
 						TokenLevel:      tl,
 						TokenNumber:     tn,
-						MigratedBlockID: tcid,
+						// MigratedBlockID: tcid,
 					}
-					if migration {
-						gti.PreviousID = tk
-					}
+					// if migration {
+					// 	gti.PreviousID = tk
+					// }
 					ti := contract.TokenInfo{
 						Token:     t,
 						TokenType: token.RBTTokenType,
