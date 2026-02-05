@@ -69,12 +69,15 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64
 		return nil, nil, fmt.Errorf("CollectRBTTokens: error occured while looking to fetch non-split token denom array for transfer, err: %v", err)
 	}
 
-	nonSplitTokenTransfer, err = w.GetTokensFromDenomArr(nonSplitDenomArr, did)
-	if err != nil {
-		return nil, nil, fmt.Errorf("CollectRBTTokens: error occured while fetching non-split tokens for transfer, err: %v", err)
+	if !wallet.CheckEmptyTokenDenomArr(nonSplitDenomArr) {
+		nonSplitTokenTransfer, err = w.GetTokensFromDenomArr(nonSplitDenomArr, did)
+		if err != nil {
+			return nil, nil, fmt.Errorf("CollectRBTTokens: error occured while fetching non-split tokens for transfer, err: %v", err)
+		}
+	
+		tokensTransfer = append(tokensTransfer, nonSplitTokenTransfer...)
 	}
 
-	tokensTransfer = append(tokensTransfer, nonSplitTokenTransfer...)
 
 	if remainingAmount > rubixmath.ZeroFloat() {
 		// For the remaining amount, proceed to build the denom tree

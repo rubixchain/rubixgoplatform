@@ -56,11 +56,18 @@ func (id TokenID) Level() int {
 	// Count parent hops to determine level
 	level := 0
 	currentID := id
+	
+	idElems := strings.Split(currentID.String(), "_")
+	if len(idElems) == 2 {
+		return 0 // Case for whole token
+	}
+
 	for {
 		parent := currentID.Parent()
 		if parent == nil {
 			return level
 		}
+
 		level++
 		currentID = *parent
 	}

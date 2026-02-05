@@ -115,6 +115,7 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 
 	childLevel := parentTokenHeirarchicalID.Level() + 1
 
+	fmt.Printf("DEBUGGG: childLevel: %v, parentToken: %v, parentTokenToken heirarchical: %v\n", childLevel, parentTokenIFPSId, parentTokenHeirarchicalID.String())
 	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentToken.TokenID, childLevel, ipfsOps, isTestnet, publishFn)
 	if err != nil {
 		return nil, err
@@ -281,11 +282,12 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID 
 	var childTokenIndexMap map[int]wallet.Token = make(map[int]wallet.Token)
 
 	maxTokenCount := MaxTokensAtLevel(level)
+
 	childTokenValue, err := wallet.LevelToDenom(level)
 	if err != nil {
 		return nil, fmt.Errorf("createChildTokensAtLevel: failed to fetch the denom for level: %v, err: %v", level, err)
 	}
-
+	
 	did := dc.GetDID()
 
 	// Get Parent Token Details

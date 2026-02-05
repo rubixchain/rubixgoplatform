@@ -201,9 +201,6 @@ func GetTokenDenomArrayWithoutSplit(
 				fmt.Errorf("GetTokenDenomArrayWithoutSplit: failed to get denom for level: %v, err: %v", level, err)
 		}
 
-		// normalize before division
-		remaining = rubixmath.FloatPrecision(remaining)
-
 		maxByTarget := int(math.Floor(remaining / denomValue))
 
 		updatedDenomArrDenomCountAtLevel, err := GetTokenDenomCount(updatedDenomArr, level)
@@ -235,4 +232,26 @@ func GetTokenDenomArrayWithoutSplit(
 	}
 
 	return targetDenomArr, updatedDenomArr, remaining, nil
+}
+
+// Check if token denom array is empty
+// The following denom arrays qualifies as empty.
+//
+// - []
+//
+// - ["0","0","0".....n supported levels]
+func CheckEmptyTokenDenomArr(denomArr []string) bool {
+	if len(denomArr) == 0 {
+		return true
+	}
+
+	zeroCount := 0
+
+	for _, elem := range denomArr {
+		if elem == "0" {
+			zeroCount++
+		}
+	}
+
+	return zeroCount == len(denomArr)
 }

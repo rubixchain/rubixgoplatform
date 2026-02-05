@@ -260,6 +260,7 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 	err := w.s.Read(TokenStorage, &t, "token_status=? AND did=?", TokenIsFree, did)
 	if err != nil {
 		if strings.Contains(err.Error(), "no records found") {
+			w.log.Error(fmt.Sprintf("%v ", did))
 			return []Token{}, nil
 		} else {
 			return nil, err
@@ -2270,22 +2271,18 @@ func (w *Wallet) UpdateTokenDenomWhole(wholeTokenCount int, did string) error {
 }
 
 func (w *Wallet) GetTokensFromDenomArr(denomArr []string, did string) ([]Token, error) {
-	var didInfo DIDType
-	errRead := w.s.Read(DIDStorage, &didInfo, "did=?", did)
-	if errRead != nil {
-		return nil, fmt.Errorf("GetTokensFromDenomArr: failed to fetch info for did: %v", did)
-	}
-
-	tokenDenomArr := GetTokenDenomArrFromStr(didInfo.TokenDenom)
-
 	var tokenList []Token = make([]Token, 0)
 
-	for level, denomCountStr := range tokenDenomArr {
+	for level, denomCountStr := range denomArr {
 		var denomTokenList []Token = make([]Token, 0)
 
 		denomCount, err := strconv.ParseInt(denomCountStr, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("GetTokensFromDenomArr: failed to fetch denom count, err: %v", err)
+		}
+
+		if denomCount == 0 {
+			continue
 		}
 
 		denomValue, err := LevelToDenom(level)
@@ -2295,7 +2292,13 @@ func (w *Wallet) GetTokensFromDenomArr(denomArr []string, did string) ([]Token, 
 
 		if err := w.s.Read(TokenStorage, &denomTokenList, "did=? AND token_value=? LIMIT ?", did, denomValue, denomCount); err != nil {
 			return nil,
-				fmt.Errorf("GetTokensFromDenomArr: failed to get tokens for denom value: %v, did: %v, denomCount: %v, err: %v")
+				fmt.Errorf(
+					"GetTokensFromDenomArr: failed to get tokens for denom value: %v, did: %v, denomCount: %v, err: %v",
+					denomValue,
+					did,
+					denomCount,
+					err,
+				)
 		}
 
 		tokenList = append(tokenList, denomTokenList...)
