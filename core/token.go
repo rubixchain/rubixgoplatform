@@ -196,14 +196,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
 // provided token level and token number.
 func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int, did string) (string, error) {
 	idValue := strconv.Itoa(tokenLevel) + "_" + strconv.Itoa(tokenNumber)
-	idValueBuffer := bytes.NewBufferString(idValue)
-
-	id, err := c.w.Add(idValueBuffer, did, wallet.OwnerRole)
-	if err != nil {
-		return "", fmt.Errorf("getTokenIDForLocalTestTokens: failed to generate token ID, err: %v", err)
-	}
-
-	return id, nil
+	return idValue, nil
 }
 
 func (c *Core) generateTestTokens(reqID string, num int, did string) error {
@@ -1853,14 +1846,7 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 
 func (c *Core) getFaucetTestTokensID(tokenLevel int, tokenNumber int) (string, error) {
 	idStrVal := fmt.Sprintf("%d_%d", tokenLevel, tokenNumber)
-
-	idBuffer := bytes.NewBufferString(idStrVal)
-	id, err := c.ipfs.Add(idBuffer)
-	if err != nil {
-		return "", fmt.Errorf("getFaucetTestTokensID: failed to get token ID from IPFS: %v", err)
-	}
-
-	return id, nil
+	return idStrVal, nil
 }
 
 func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
