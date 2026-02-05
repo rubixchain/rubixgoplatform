@@ -21,7 +21,7 @@ const (
 )
 
 const (
-	GBTypeKey string = "1" // remove
+	// GBTypeKey string = "1" // remove
 	GBInfoKey string = "genesisInfo"
 )
 
@@ -51,7 +51,7 @@ type GenesisTokenInfo struct {
 }
 
 type GenesisBlock struct {
-	Type string             `json:"type"`
+	// Type string             `json:"type"`
 	Info []GenesisTokenInfo `json:"info"`
 }
 
@@ -92,7 +92,7 @@ func newGenesisBlock(gb *GenesisBlock) map[string]interface{} {
 		return nil
 	}
 	ngb := make(map[string]interface{})
-	ngb[GBTypeKey] = gb.Type
+	// ngb[GBTypeKey] = gb.Type
 	ngibs := make(map[string]interface{})
 	for _, gi := range gb.Info {
 		ngib := newGenesisInfo(&gi)

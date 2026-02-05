@@ -453,9 +453,9 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					// }
 
 					gti := block.GenesisTokenInfo{
-						Token:           t,
-						TokenLevel:      tl,
-						TokenNumber:     tn,
+						Token:       t,
+						TokenLevel:  tl,
+						TokenNumber: tn,
 						// MigratedBlockID: tcid,
 					}
 					// if migration {
@@ -496,15 +496,15 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 					/* dtime = etime.Sub(stime)
 					c.log.Info("Signature done", "duration", dtime) */
 					gb := &block.GenesisBlock{
-						Type: block.TokenMigratedType,
+						// Type: block.TokenMigratedType,
 						Info: gtis,
 					}
 					ctcb := make(map[string]*block.Block)
 					ntcb := &block.TokenChainBlock{
-						TransactionType: block.TokenMigratedType,
-						TokenOwner:      did,
-						GenesisBlock:    gb,
-						SmartContract:   sc.GetBlock(),
+						BlockType:     block.TokenMigratedType,
+						TokenOwner:    did,
+						GenesisBlock:  gb,
+						SmartContract: sc.GetBlock(),
 						TransInfo: &block.TransInfo{
 							Tokens: tts,
 						},

@@ -185,7 +185,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	b := c.w.GetGenesisTokenBlock(tkn, ptt)
 	// p, err := b.GetParentDetials(tkn)
 	// if gp == nil {
-		// gp := make([]string, 0)
+	// gp := make([]string, 0)
 	// }
 	// if p != "" {
 	// 	gp = append(gp, p)
@@ -241,14 +241,14 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 			Comment: "Part token generated at : " + time.Now().String(),
 		}
 		tcb := &block.TokenChainBlock{
-			TransactionType: block.TokenGeneratedType,
-			TokenOwner:      did,
-			TransInfo:       bti,
+			BlockType:  block.TokenGeneratedType,
+			TokenOwner: did,
+			TransInfo:  bti,
 			GenesisBlock: &block.GenesisBlock{
 				Info: []block.GenesisTokenInfo{
 					{
-						Token:         pt,
-						ParentID:      tkn,
+						Token:    pt,
+						ParentID: tkn,
 						// GrandParentID: gp,
 					},
 				},
@@ -281,7 +281,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		}
 		publishingTxn := &model.PubSubTxnInfo{
 			BlockHash:    blockHash,
-			TxnType:      tcb.TransactionType,
+			TxnType:      tcb.BlockType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     b.GetBlock(),
@@ -310,11 +310,11 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 		Comment: "Token burnt at : " + time.Now().String(),
 	}
 	tcb := &block.TokenChainBlock{
-		TransactionType: block.TokenBurntType,
-		TokenOwner:      did,
-		TransInfo:       bti,
-		TokenValue:      floatPrecision(amount, MaxDecimalPlaces),
-		ChildTokens:     pts,
+		BlockType:   block.TokenBurntType,
+		TokenOwner:  did,
+		TransInfo:   bti,
+		TokenValue:  floatPrecision(amount, MaxDecimalPlaces),
+		ChildTokens: pts,
 	}
 	ctcb := make(map[string]*block.Block)
 	ctcb[tkn] = c.w.GetLatestTokenBlock(tkn, ptt)
@@ -341,7 +341,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	}
 	publishingBurntBlock := &model.PubSubTxnInfo{
 		BlockHash:    blockHash,
-		TxnType:      tcb.TransactionType,
+		TxnType:      tcb.BlockType,
 		AssetType:    RBTTokenType,
 		PublisherDID: dc.GetDID(),
 		TxnBlock:     b.GetBlock(),

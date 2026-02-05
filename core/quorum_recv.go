@@ -1890,8 +1890,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 
 		tcb := block.TokenChainBlock{
-			TransactionType: block.TokenPledgedType,
-			TokenOwner:      did,
+			BlockType:  block.TokenPledgedType,
+			TokenOwner: did,
 			TransInfo: &block.TransInfo{
 				Comment: "Token is pledged at " + time.Now().String(),
 				// RefID:   refID,
@@ -1943,7 +1943,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		publishingTxn := &model.PubSubTxnInfo{
 			BlockHash:    blockHash,
-			TxnType:      tcb.TransactionType,
+			TxnType:      tcb.BlockType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     nb.GetBlock(),

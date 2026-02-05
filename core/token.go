@@ -254,7 +254,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			return err
 		}
 		gb := &block.GenesisBlock{
-			Type: block.TokenGeneratedType,
+			// Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
 				{Token: id},
 			},
@@ -269,11 +269,11 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		}
 
 		tcb := &block.TokenChainBlock{
-			TransactionType: block.TokenGeneratedType,
-			TokenOwner:      did,
-			GenesisBlock:    gb,
-			TransInfo:       ti,
-			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+			BlockType:    block.TokenGeneratedType,
+			TokenOwner:   did,
+			GenesisBlock: gb,
+			TransInfo:    ti,
+			TokenValue:   floatPrecision(1.0, MaxDecimalPlaces),
 		}
 
 		ctcb := make(map[string]*block.Block)
@@ -314,7 +314,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		}
 		publishingTxn := &model.PubSubTxnInfo{
 			BlockHash:    blockHash,
-			TxnType:      tcb.TransactionType,
+			TxnType:      tcb.BlockType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     blk.GetBlock(),
@@ -1924,7 +1924,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			return &tokendetail, err
 		}
 		gb := &block.GenesisBlock{
-			Type: block.TokenGeneratedType,
+			// Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
 				{Token: id},
 			},
@@ -1939,11 +1939,11 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		}
 
 		tcb := &block.TokenChainBlock{
-			TransactionType: block.TokenGeneratedType,
-			TokenOwner:      did,
-			GenesisBlock:    gb,
-			TransInfo:       ti,
-			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+			BlockType:    block.TokenGeneratedType,
+			TokenOwner:   did,
+			GenesisBlock: gb,
+			TransInfo:    ti,
+			TokenValue:   floatPrecision(1.0, MaxDecimalPlaces),
 		}
 
 		ctcb := make(map[string]*block.Block)

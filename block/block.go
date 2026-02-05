@@ -26,7 +26,7 @@ import (
 
 const (
 	TCTokenTypeKey          string = "tokenType"
-	TCTransTypeKey          string = "blockType"
+	TCBlockTypeKey          string = "blockType"
 	TCTokenOwnerKey         string = "tokenOwner"
 	TCGenesisBlockKey       string = "genesisBlock"
 	TCTransInfoKey          string = "transInfo"
@@ -70,7 +70,7 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType    string           `json:"transactionType"`
+	BlockType          string           `json:"blockType"`
 	TokenOwner         string           `json:"owner"`
 	GenesisBlock       *GenesisBlock    `json:"genesisBlock"`
 	TransInfo          *TransInfo       `json:"transInfo"`
@@ -150,7 +150,7 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		return nil
 	}
 	ntcb := make(map[string]interface{})
-	ntcb[TCTransTypeKey] = tcb.TransactionType
+	ntcb[TCBlockTypeKey] = tcb.BlockType
 	ntcb[TCTokenOwnerKey] = tcb.TokenOwner
 	if tcb.GenesisBlock != nil {
 		ntcb[TCGenesisBlockKey] = newGenesisBlock(tcb.GenesisBlock)
@@ -607,7 +607,7 @@ func (b *Block) GetTokenPledgedForDetails() string {
 }
 
 func (b *Block) GetTransType() string {
-	return b.getBlkString(TCTransTypeKey)
+	return b.getBlkString(TCBlockTypeKey)
 }
 
 func (b *Block) GetOwner() string {
@@ -618,9 +618,9 @@ func (b *Block) GetSenderDID() string {
 	return b.getTrasnInfoString(TISenderDIDKey)
 }
 
-// func (b *Block) GetReceiverDID() string {
-// 	return b.getBlkString(TCTokenOwnerKey)
-// }
+//	func (b *Block) GetReceiverDID() string {
+//		return b.getBlkString(TCTokenOwnerKey)
+//	}
 func (b *Block) GetDeployerDID() string {
 	return b.getTrasnInfoString(TIDeployerDIDKey)
 }
