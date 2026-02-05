@@ -620,7 +620,7 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 				item.Token.Token,
 				ftInfo.FTName,
 				b.GetSenderDID(),
-				b.GetReceiverDID(),
+				b.GetOwner(),
 				item.DownloadResult.Task.Dir,
 				item.DownloadResult.Error.Error(),
 			)
