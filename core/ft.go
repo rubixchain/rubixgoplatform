@@ -19,10 +19,13 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
+
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
 func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int, ftNumStartIndex int) {
@@ -79,12 +82,16 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return fmt.Errorf("max allowed FT count is 1000 for 1 RBT")
 	}
 
-	// Fetch whole tokens using GetToken
-	wholeTokens, err := c.GetTokens(dc, did, float64(numWholeTokens), 0)
+	// Fetch whole tokens
+	wholeTokens, updatedTokenDenomArr, err := parts.CollectRBTTokens(
+		dc, c.w, rubixmath.FloatPrecision(float64(numWholeTokens)), 
+		c.ipfsOps, c.testNet, c.log, c.publishTxn,
+	)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
 	}
+
 	defer c.w.ReleaseTokens(wholeTokens)
 	fractionalValue, err := c.GetPresiceFractionalValue(int(numWholeTokens), numFTs)
 	if err != nil {
@@ -424,6 +431,11 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			}
 		}
 		return fmt.Errorf("failed to batch add token blocks to LevelDB: %v", err)
+	}
+
+	if err := c.w.UpdateTokenDenomRaw(updatedTokenDenomArr, did); err != nil {
+		c.log.Error("Failed to update token denom array after FT creation", "err", err)
+		return fmt.Errorf("failed to update token denom array after FT creation: %v", err)
 	}
 
 	// After all workers finish, batch add provider details

@@ -758,3 +758,53 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 	c.log.Info("Migration done successfully")
 	return nil
 }
+
+func (c *Core) Migration_UpdateTokenDenomColumn() error {
+	dids, err := c.w.GetAllDIDs()
+	if err != nil {
+		c.log.Info("Skipping Migration for Token Denom Column since there are no DIDs")
+		return nil
+	}
+
+	for _, did := range dids {
+		wholeTokenCount := 0
+
+		// Only update those records in DIDTable where the
+		// token_denom column is empty
+		if did.TokenDenom == "" {
+			var didTokens = make([]wallet.Token, 0)
+
+			didTokens, err = c.w.GetAllTokens(did.DID)
+			if err != nil {
+				if !strings.Contains(err.Error(), "no records found") {
+					return fmt.Errorf("unable to fetch tokens for DID: %v", did)
+				}
+			}
+
+			for _, token := range didTokens {
+				// Skip old part tokens
+				// This assumption is valid considering the possibility
+				// of token_denom being empty is only when the node
+				// is following the old parts structure
+				if token.TokenValue != 1.0 {
+					continue
+				}
+
+				wholeTokenCount += 1
+			}
+
+			tokenDenomArr := wallet.CreateTokenDenomArr()
+			errUpdateTokenDenomArr := wallet.UpdateTokenDenomArrayIndex(tokenDenomArr, 0, wholeTokenCount)
+			if errUpdateTokenDenomArr != nil {
+				return fmt.Errorf("migration: updateTokenDenomColumn, unable to make token denom array, err: %v", errUpdateTokenDenomArr)
+			}
+
+			errDenomUpdate := c.w.UpdateTokenDenomRaw(tokenDenomArr, did.DID)
+			if errDenomUpdate != nil {
+				return fmt.Errorf("migration: updateTokenDenomColumn, unable to update token record, err: %v", errDenomUpdate)
+			}
+		}
+	}
+
+	return nil
+}

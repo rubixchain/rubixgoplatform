@@ -95,6 +95,7 @@ type ConensusRequest struct {
 	// TransTokenSyncInfo map[string]GenesisAndLatestBlocks `json:"tokens_sync_info"`
 	ExplorerDone  chan struct{} `json:"-"` // Channel to signal explorer submission completion
 	OperationType int           `json:"operation_type"`
+	TokenDenomArr []string      `json:"token_denom_arr"`
 }
 
 type ConensusReply struct {
@@ -936,7 +937,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 		}()
 
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode, cr.TokenDenomArr)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, nil, err
@@ -1617,7 +1618,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 		}
 
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode, cr.TokenDenomArr)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, nil, err

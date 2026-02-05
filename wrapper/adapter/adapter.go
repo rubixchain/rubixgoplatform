@@ -250,6 +250,17 @@ func (adapter *Adapter) Updates(tenantID interface{}, tableName string, format s
 	}
 }
 
+func (adapter *Adapter) UpdateColumn(tenantID interface{}, tableName string, format string, value interface{}, updateColumn string, updateColumnValue interface{}) error {
+	if tenantID != uuid.Nil {
+		formatStr := TenantIDStr + "=? AND " + format
+		err := adapter.db.Table(tableName).Where(formatStr, tenantID, value).Update(updateColumn, updateColumnValue).Error
+		return err
+	} else {
+		err := adapter.db.Table(tableName).Where(format, value).Update(updateColumn, updateColumnValue).Error
+		return err
+	}
+}
+
 // UpdateNew function updates the value in the table
 func (adapter *Adapter) UpdateNew(tenantID interface{}, tableName string, format string, item interface{}, value ...interface{}) error {
 	if tenantID != uuid.Nil {
