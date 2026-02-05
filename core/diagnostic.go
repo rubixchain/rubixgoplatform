@@ -505,6 +505,27 @@ func (c *Core) RemoveTokenChainBlock(removeReq *model.TCRemoveRequest) *model.TC
 	if c.testNet {
 		tt = token.TestTokenType
 	}
+	if removeReq.BlockID != "" {
+		err := c.w.RemoveTokenChainBlock(removeReq.Token, tt, removeReq.BlockID)
+		if err != nil {
+			tt = token.PartTokenType
+			if c.testNet {
+				tt = token.TestPartTokenType
+			}
+			err = c.w.RemoveTokenChainBlock(removeReq.Token, tt, removeReq.BlockID)
+			if err != nil {
+				removeReply.Message = "Failed to remove parts token chain block"
+				return removeReply
+			} else {
+				removeReply.Message = "Failed to remove whole token chain block"
+				return removeReply
+			}
+
+		}
+		removeReply.Status = true
+		removeReply.Message = "Successfully removed token chain block " + removeReq.Token
+		return removeReply
+	}
 	err := c.w.RemoveTokenChainBlocklatest(removeReq.Token, tt)
 	if err != nil {
 		tt = token.PartTokenType

@@ -239,8 +239,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			return err
 		}
 
-		c.log.Debug("****byte array of the test token***", tb)
-
 		tk := util.HexToStr(tb)
 
 		c.log.Debug("***test token in string****", tk)
@@ -1517,6 +1515,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				}
 				if prevBlkID != "" {
 					if prevBlkID != latestBlockID {
+						c.log.Error("previous blockID of the blk which is getting added is not matching with the blockID which is present: token", tokenSyncInfo.TokenID, "expected_prev", latestBlockID, "got_prev", prevBlkID)
 						return fmt.Errorf(
 							"previous blockID of the blk which is getting added is not matching with the blockID which is present: token=%s expected_prev=%s got_prev=%s",
 							tokenSyncInfo.TokenID,
@@ -1563,9 +1562,11 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 			//For Fexer DIDs which were having unpledge blocks, signature checks are failing so thats why we are avoiding signature checks for unpledge blocks
 			if incomingBlkType != block.TokenUnpledgedType {
 				valid, err := c.validateSigner(blk, "", p)
-				if !valid || err != nil {
-					c.log.Error("Failed to validate token signer for token", "token", tokenSyncInfo.TokenID, "err", err)
-					return fmt.Errorf("failed to validate token signer for %s", tokenSyncInfo.TokenID)
+				if err != nil {
+					return fmt.Errorf("signature validation error: %w", err)
+				}
+				if !valid {
+					return fmt.Errorf("invalid block signature for token=%s", tokenSyncInfo.TokenID)
 				}
 			}
 

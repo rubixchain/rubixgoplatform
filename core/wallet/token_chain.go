@@ -1046,6 +1046,10 @@ func (w *Wallet) RemoveTokenChainBlocklatest(token string, tokenType int) error 
 	return w.removeTokenChainBlockLatest(token, tokenType)
 }
 
+func (w *Wallet) RemoveTokenChainBlock(token string, tokenType int, blockID string) error {
+	return w.removeTokenChainBlock(token, tokenType, blockID)
+}
+
 // Remove Tokenchain for mentioned token
 func (w *Wallet) removeTokenChainBlockLatest(token string, tokenType int) error {
 	db := w.getChainDB(tokenType)

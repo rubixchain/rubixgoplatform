@@ -329,6 +329,7 @@ type Command struct {
 	rawCodePath                  string
 	smartContractToken           string
 	newContractBlock             string
+	BlockID                      string
 	publishType                  int
 	smartContractData            string
 	executorAddr                 string
