@@ -725,15 +725,15 @@ func (b *Block) GetNFTData() string {
 	return b.getBlkString(TCNFTDataKey)
 }
 
-func (b *Block) GetSmartContractValue(t string) (float64, error) {
-	var result float64
-	gtm := b.getGenesisTokenMap(t)
-	if gtm == nil {
-		return result, fmt.Errorf("invalid token chain block, missing genesis block")
-	}
-	result = util.GetFloatFromMap(gtm, GISmartContractValueKey)
-	return result, nil
-}
+// func (b *Block) GetSmartContractValue(t string) (float64, error) {
+// 	var result float64
+// 	gtm := b.getGenesisTokenMap(t)
+// 	if gtm == nil {
+// 		return result, fmt.Errorf("invalid token chain block, missing genesis block")
+// 	}
+// 	result = util.GetFloatFromMap(gtm, GISmartContractValueKey)
+// 	return result, nil
+// }
 
 func (b *Block) GetTokenValue() float64 {
 	tokenValue := util.GetFloatFromMap(b.bm, TCTokenValueKey)

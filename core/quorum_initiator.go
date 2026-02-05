@@ -2715,9 +2715,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
 				{
-					Token:              cr.SmartContractToken,
-					CommitedTokens:     commitedTokenInfoArray,
-					SmartContractValue: smartContractTokenValue,
+					Token:          cr.SmartContractToken,
+					CommitedTokens: commitedTokenInfoArray,
+					// SmartContractValue: smartContractTokenValue,
 				},
 			},
 		}
@@ -2726,6 +2726,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TransactionType:    block.TokenDeployedType,
 			TokenOwner:         sc.GetDeployerDID(),
 			TransInfo:          bti,
+			TokenValue:         smartContractTokenValue,
 			QuorumSignature:    Signature,
 			SmartContract:      sc.GetBlock(),
 			GenesisBlock:       smartContractGensisBlock,
@@ -2809,12 +2810,12 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SignType:  deployerSignType,
 		}
 
-		nftValue := sc.GetTotalRBTs()
+		// nftValue := sc.GetTotalRBTs()
 
 		nftGenesisBlock := &block.GenesisBlock{
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
-				{Token: cr.NFT, NFTValue: nftValue, NFTData: sc.GetNFTData()},
+				{Token: cr.NFT},
 			},
 		}
 		tcb = block.TokenChainBlock{

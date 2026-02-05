@@ -33,7 +33,7 @@ const (
 	GIParentIDKey string = "parentID"
 	// GIGrandParentIDKey      string = "6" // remove
 	GICommitedTokensKey string = "commitedTokens"
-	GISmartContractValueKey string = "8" // remove
+	// GISmartContractValueKey string = "8" // remove
 )
 
 type GenesisTokenInfo struct {
@@ -45,9 +45,9 @@ type GenesisTokenInfo struct {
 	ParentID           string        `json:"parentID"`
 	GrandParentID      []string      `json:"grandParentID"` // remove
 	CommitedTokens     []TransTokens `json:"commitedTokens"`
-	SmartContractValue float64       `json:"smartContractValue"` // remove
-	NFTValue           float64       `json:"nftValue"`           // remove
-	NFTData            string        `json:"nftData"`            // remove
+	// SmartContractValue float64       `json:"smartContractValue"` // remove
+	// NFTValue           float64       `json:"nftValue"`           // remove
+	// NFTData            string        `json:"nftData"`            // remove
 }
 
 type GenesisBlock struct {
@@ -81,9 +81,9 @@ func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 		newCommitedTokensBlock[tokensInfo.Token] = commitedTokenInfoMap
 	}
 	ngib[GICommitedTokensKey] = newCommitedTokensBlock
-	if gi.SmartContractValue != 0 {
-		ngib[GISmartContractValueKey] = gi.SmartContractValue
-	}
+	// if gi.SmartContractValue != 0 {
+	// 	ngib[GISmartContractValueKey] = gi.SmartContractValue
+	// }
 	return ngib
 }
 
