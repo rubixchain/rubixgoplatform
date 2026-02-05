@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -276,14 +277,17 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	}
 
 	if ti.TokenType == token.RBTTokenType {
-		tl, tn, err := genesisBlock.GetTokenDetials(ti.Token)
-		if err != nil {
-			c.log.Error("Failed to get token details for token", "token", ti.Token, "err", err)
-			return err, false
-		}
+		// tl, tn, err := genesisBlock.GetTokenDetials(ti.Token)
+		// if err != nil {
+		// 	c.log.Error("Failed to get token details for token", "token", ti.Token, "err", err)
+		// 	return err, false
+		// }
+		tokenInfo := strings.Split(ti.Token, "-") // tokenID = tokenLevel-tokenNumber
+		tl, err := strconv.Atoi(tokenInfo[0]) // token level
+		tn, err := strconv.Atoi(tokenInfo[1]) // token number
 		tid, err := IpfsAddWithBackoff(c.ipfs, bytes.NewBufferString(token.GetTokenString(tl, tn)), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 		if err != nil {
-			c.log.Error("Failed to pin token hash for token", "token", ti.Token, "err", err)
+			c.log.Error("Failed to get token hash for token", "token", ti.Token, "err", err)
 			return err, false
 		}
 		if tid != ti.Token {

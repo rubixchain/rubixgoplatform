@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -14,7 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -22,7 +20,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -2182,25 +2179,25 @@ func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
 	mflag := false
 	mmsg := "token is already migrated"
 	for i := range ti {
-		tl, tn, err := b.GetTokenDetials(ti[i].Token)
-		if err != nil {
-			c.log.Error("Failed to do token abitration, invalid token detials", "err", err)
-			srep.Message = "Failed to do token abitration, invalid token detials"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
-		}
-		str := token.GetTokenString(tl, tn)
-		tbr := bytes.NewBuffer([]byte(str))
-		thash, err := IpfsAddWithBackoff(c.ipfs, tbr, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-		if err != nil {
-			c.log.Error("Failed to do token abitration, failed to get ipfs hash", "err", err)
-			srep.Message = "Failed to do token abitration, failed to get ipfs hash"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
-		}
-		if thash != ti[i].Token {
-			c.log.Error("Failed to do token abitration, token hash not matching", "thash", thash, "token", ti[i].Token)
-			srep.Message = "Failed to do token abitration, token hash not matching"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
-		}
+		// tl, tn, err := b.GetTokenDetials(ti[i].Token)
+		// if err != nil {
+		// 	c.log.Error("Failed to do token abitration, invalid token detials", "err", err)
+		// 	srep.Message = "Failed to do token abitration, invalid token detials"
+		// 	return c.l.RenderJSON(req, &srep, http.StatusOK)
+		// }
+		// str := token.GetTokenString(tl, tn)
+		// tbr := bytes.NewBuffer([]byte(str))
+		// thash, err := IpfsAddWithBackoff(c.ipfs, tbr, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		// if err != nil {
+		// 	c.log.Error("Failed to do token abitration, failed to get ipfs hash", "err", err)
+		// 	srep.Message = "Failed to do token abitration, failed to get ipfs hash"
+		// 	return c.l.RenderJSON(req, &srep, http.StatusOK)
+		// }
+		// if thash != ti[i].Token {
+		// 	c.log.Error("Failed to do token abitration, token hash not matching", "thash", thash, "token", ti[i].Token)
+		// 	srep.Message = "Failed to do token abitration, token hash not matching"
+		// 	return c.l.RenderJSON(req, &srep, http.StatusOK)
+		// }
 
 		odid := ti[i].OwnerDID
 		if odid == "" {

@@ -26,8 +26,8 @@ const (
 )
 
 const (
-	GITokenLevelKey  string = "1" // remove
-	GITokenNumberKey string = "2" // remove
+	// GITokenLevelKey  string = "1" // remove
+	// GITokenNumberKey string = "2" // remove
 	// GIMigratedBlkIDKey      string = "3" // remove
 	// GIPreviousIDKey         string = "4" // remove
 	GIParentIDKey string = "parentID"
@@ -57,8 +57,8 @@ type GenesisBlock struct {
 
 func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 	ngib := make(map[string]interface{})
-	ngib[GITokenLevelKey] = gi.TokenLevel
-	ngib[GITokenNumberKey] = gi.TokenNumber
+	// ngib[GITokenLevelKey] = gi.TokenLevel
+	// ngib[GITokenNumberKey] = gi.TokenNumber
 	// if gi.MigratedBlockID != "" {
 	// 	ngib[GIMigratedBlkIDKey] = gi.MigratedBlockID
 	// }
