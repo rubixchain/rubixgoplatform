@@ -1903,27 +1903,6 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			tokendetail.CurrentTokenNumber = 1
 		}
 
-		// Creating tokens at that level
-		rt := &rac.RacType{
-			Type:        rac.RacTestTokenType,
-			DID:         did,
-			TotalSupply: 1,
-			TokenNumber: uint64(tokendetail.CurrentTokenNumber),
-			TokenLevel:  uint64(tokendetail.TokenLevel),
-			CreatorID:   tokendetail.FaucetID,
-		}
-
-		r, err := rac.CreateRacFaucet(rt)
-		if err != nil {
-			c.log.Error("Failed to create rac block", "err", err)
-			return &tokendetail, fmt.Errorf("failed to create rac block")
-		}
-		err = r.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update rac signature", "err", err)
-			return &tokendetail, err
-		}
-
 		id, err := c.getFaucetTestTokensID(tokendetail.TokenLevel, tokendetail.CurrentTokenNumber)
 		if err != nil {
 			c.log.Error("Failed to get token ID from IPFS", "err", err)
