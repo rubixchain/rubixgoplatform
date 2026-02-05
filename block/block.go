@@ -30,7 +30,7 @@ const (
 	TCTokenOwnerKey         string = "tokenOwner"
 	TCGenesisBlockKey       string = "genesisBlock"
 	TCTransInfoKey          string = "transInfo"
-	TCSmartContractKey      string = "6" // remove
+	TCSmartContractKey      string = "6"
 	TCQuorumSignatureKey    string = "quorumSignature"
 	TCPledgeDetailsKey      string = "pledgeDetails"
 	TCBlockHashKey          string = "blockHash"
@@ -76,7 +76,7 @@ type TokenChainBlock struct {
 	TransInfo          *TransInfo       `json:"transInfo"`
 	PledgeDetails      []PledgeDetail   `json:"pledgeDetails"`
 	QuorumSignature    []BlockSignature `json:"quorumSignature"`
-	SmartContract      []byte           `json:"smartContract"` // remove
+	SmartContract      []byte           `json:"smartContract"`
 	SmartContractData  string           `json:"smartContractData"`
 	TokenValue         float64          `json:"tokenValue"`
 	ChildTokens        []string         `json:"childTokens"`
@@ -618,9 +618,9 @@ func (b *Block) GetSenderDID() string {
 	return b.getTrasnInfoString(TISenderDIDKey)
 }
 
-func (b *Block) GetReceiverDID() string {
-	return b.getTrasnInfoString(TIReceiverDIDKey)
-}
+// func (b *Block) GetReceiverDID() string {
+// 	return b.getBlkString(TCTokenOwnerKey)
+// }
 func (b *Block) GetDeployerDID() string {
 	return b.getTrasnInfoString(TIDeployerDIDKey)
 }

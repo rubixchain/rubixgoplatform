@@ -264,7 +264,7 @@ func (pfr *ParallelFTReceiver) computeStateHashesParallel(
 					tpm.FuncID = PinFunc
 					tpm.TransactionID = b.GetTid()
 					tpm.Sender = senderPeerId + "." + b.GetSenderDID()
-					tpm.Receiver = receiverPeerId + "." + b.GetReceiverDID()
+					tpm.Receiver = receiverPeerId + "." + b.GetOwner()
 					tpm.TokenValue = token.TokenValue
 					
 					resultsMu.Lock()
@@ -739,8 +739,8 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 	
 	// Pin the token
 	senderAddress := senderPeerId + "." + b.GetSenderDID()
-	receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-	
+	receiverAddress := receiverPeerId + "." + b.GetOwner()
+
 	if senderPeerId != receiverPeerId {
 		_, err := pfr.w.Pin(
 			item.Token.Token,

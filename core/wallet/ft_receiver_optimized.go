@@ -124,7 +124,7 @@ func (w *Wallet) OptimizedFTTokensReceived(did string, ti []contract.TokenInfo, 
 				tpm.FuncID = PinFunc
 				tpm.TransactionID = b.GetTid()
 				tpm.Sender = senderPeerId + "." + b.GetSenderDID()
-				tpm.Receiver = receiverPeerId + "." + b.GetReceiverDID()
+				tpm.Receiver = receiverPeerId + "." + b.GetOwner()
 				tpm.TokenValue = info.TokenValue
 				localProviderMaps = append(localProviderMaps, tpm)
 			}
@@ -465,8 +465,8 @@ func (w *Wallet) OptimizedFTTokensReceived(did string, ti []contract.TokenInfo, 
 	if senderPeerId != receiverPeerId {
 		pinStart := time.Now()
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
-		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-		
+		receiverAddress := receiverPeerId + "." + b.GetOwner()
+
 		pinWg := sync.WaitGroup{}
 		pinSem := make(chan struct{}, dynamicWorkers)
 		pinnedCount := int32(0)

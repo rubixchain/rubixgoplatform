@@ -2859,7 +2859,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 
 		bti.SenderDID = sc.GetSenderDID()
-		bti.ReceiverDID = sc.GetReceiverDID()
+		// bti.ReceiverDID = sc.GetReceiverDID()
 		tcb = block.TokenChainBlock{
 			TransactionType:    block.TokenTransferredType,
 			TokenOwner:         sc.GetReceiverDID(),

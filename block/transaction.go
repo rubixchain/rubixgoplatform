@@ -34,7 +34,7 @@ import (
 
 const (
 	TISenderDIDKey      string = "senderDID"
-	TIReceiverDIDKey    string = "2" // remove
+	// TIReceiverDIDKey    string = "2" // remove
 	TICommentKey        string = "comment"
 	TITIDKey            string = "tid"
 	TIBlockKey          string = "block"
@@ -71,7 +71,7 @@ type TransTokens struct {
 
 type TransInfo struct {
 	SenderDID      string        `json:"senderDID"`
-	ReceiverDID    string        `json:"receiverDID"` // remove
+	// ReceiverDID    string        `json:"receiverDID"` // remove
 	Comment        string        `json:"comment"`
 	TID            string        `json:"tid"`
 	Block          []byte        `json:"block"`
@@ -122,9 +122,9 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	if ti.SenderDID != "" {
 		ntib[TISenderDIDKey] = ti.SenderDID
 	}
-	if ti.ReceiverDID != "" {
-		ntib[TIReceiverDIDKey] = ti.ReceiverDID
-	}
+	// if ti.ReceiverDID != "" {
+	// 	ntib[TIReceiverDIDKey] = ti.ReceiverDID
+	// }
 	if ti.PinningNodeDID != "" {
 		ntib[TIPinningDIDKey] = ti.PinningNodeDID
 	}
