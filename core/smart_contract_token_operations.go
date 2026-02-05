@@ -54,7 +54,15 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		return resp
 	}
 	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
-	rbtTokensToCommitDetails, updatedTokenDenomArr, err := parts.CollectRBTTokens(didCryptoLib, c.w, deployReq.RBTAmount, c.ipfsOps, c.testNet, c.log)
+	rbtTokensToCommitDetails, updatedTokenDenomArr, err := parts.CollectRBTTokens(
+		didCryptoLib, 
+		c.w, 
+		deployReq.RBTAmount, 
+		c.ipfsOps, 
+		c.testNet, 
+		c.log,
+		c.publishTxn,
+	)
 	if err != nil {
 		c.log.Error("Failed to retrieve Tokens to be committed", "err", err)
 		resp.Message = "Failed to retrieve Tokens to be committed , err : " + err.Error()
