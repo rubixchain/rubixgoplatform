@@ -1341,7 +1341,7 @@ func (c *Core) updateReceiverToken(
 				if gb == nil {
 					return nil, senderPeer, fmt.Errorf("failed to get genesis block for token %v, err: %v", t, err)
 				}
-				pt, _, err := gb.GetParentDetials(t)
+				pt, err := gb.GetParentDetials(t)
 				if err != nil {
 					return nil, senderPeer, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
 				}
@@ -1582,7 +1582,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 			if gb == nil {
 				return nil, fmt.Errorf("failed to get genesis block for token %v, err: %v", t, err)
 			}
-			pt, _, err := gb.GetParentDetials(t)
+			pt, err := gb.GetParentDetials(t)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
 			}

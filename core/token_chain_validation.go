@@ -449,7 +449,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 	if parentTokenType == c.TokenType(PartString) {
 		if parentTokenInfo.ParentTokenID == "" {
 			genesisBlock := c.w.GetGenesisTokenBlock(parentTokenId, parentTokenType)
-			grandParentToken, _, err := genesisBlock.GetParentDetials(parentTokenId)
+			grandParentToken, err := genesisBlock.GetParentDetials(parentTokenId)
 			if err != nil {
 				c.log.Error("failed to get grand parent tokens to validate")
 			}

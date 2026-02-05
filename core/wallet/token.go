@@ -901,7 +901,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			var parentTokenID string
 			gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
 			if gb != nil {
-				parentTokenID, _, _ = gb.GetParentDetials(tokenInfo.Token)
+				parentTokenID, _ = gb.GetParentDetials(tokenInfo.Token)
 			}
 
 			// Create new token entry

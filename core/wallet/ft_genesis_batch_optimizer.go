@@ -154,7 +154,7 @@ func (gbo *GenesisBatchOptimizer) lookupGenesisAndCreator(token contract.TokenIn
 	
 	// Get parent/genesis ID
 	genesisID := token.Token
-	parentID, _, err := genesisBlock.GetParentDetials(token.Token)
+	parentID, err := genesisBlock.GetParentDetials(token.Token)
 	if err == nil && parentID != "" {
 		genesisID = parentID
 	}

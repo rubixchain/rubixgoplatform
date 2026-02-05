@@ -200,7 +200,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 				c.log.Error("failed to get genesis token chain block", "token", pt)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
-			ppt, _, err := gb.GetParentDetials(pt)
+			ppt, err := gb.GetParentDetials(pt)
 			if err != nil {
 				c.log.Error("failed to get genesis token chain block", "token", pt, "err", err)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
@@ -258,7 +258,7 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	}
 
 	if c.TokenType(PartString) == ti.TokenType {
-		parentToken, _, err := genesisBlock.GetParentDetials(ti.Token)
+		parentToken, err := genesisBlock.GetParentDetials(ti.Token)
 		if err != nil {
 			c.log.Error("Failed to get parent token for token", "token", ti.Token, "err", err)
 			return err, false

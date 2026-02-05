@@ -183,13 +183,13 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 	}
 	pts := make([]string, len(parts))
 	b := c.w.GetGenesisTokenBlock(tkn, ptt)
-	p, gp, err := b.GetParentDetials(tkn)
-	if gp == nil {
-		gp = make([]string, 0)
-	}
-	if p != "" {
-		gp = append(gp, p)
-	}
+	// p, err := b.GetParentDetials(tkn)
+	// if gp == nil {
+		// gp := make([]string, 0)
+	// }
+	// if p != "" {
+	// 	gp = append(gp, p)
+	// }
 	if err != nil {
 		c.log.Error("failed to get parent detials", "err", err)
 		return nil, err
@@ -249,7 +249,7 @@ func (c *Core) createPartToken(dc did.DIDCrypto, did string, tkn string, parts [
 					{
 						Token:         pt,
 						ParentID:      tkn,
-						GrandParentID: gp,
+						// GrandParentID: gp,
 					},
 				},
 			},

@@ -640,14 +640,14 @@ func (b *Block) GetComment() string {
 	return b.getTrasnInfoString(TICommentKey)
 }
 
-func (b *Block) GetParentDetials(t string) (string, []string, error) {
+func (b *Block) GetParentDetials(t string) (string, error) {
 	gtm := b.getGenesisTokenMap(t)
 	if gtm == nil {
-		return "", nil, fmt.Errorf("invalid token chain block, missing genesis block")
+		return "", fmt.Errorf("invalid token chain block, missing genesis block")
 	}
 	p := util.GetStringFromMap(gtm, GIParentIDKey)
-	gp := util.GetStringSliceFromMap(gtm, GIGrandParentIDKey)
-	return p, gp, nil
+	// gp := util.GetStringSliceFromMap(gtm, GIGrandParentIDKey)
+	return p, nil
 }
 
 func (b *Block) GetTokenDetials(t string) (int, int, error) {
