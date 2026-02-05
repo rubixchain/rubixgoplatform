@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) ([]SplitOp, error) {
@@ -86,9 +87,9 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 	return splits, nil
 }
 
-func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation, 
+func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation,
 	splitOp SplitOp, tokenCache map[string]*wallet.Token, isTestnet bool,
-	tokenDenomArr []string,
+	tokenDenomArr []string, publishFn func(*model.PubSubTxnInfo) error,
 ) ([]wallet.Token, error) {
 	var parentToken *wallet.Token
 	parentTokenHeirarchicalID := splitOp.TokenID
@@ -114,7 +115,7 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 
 	childLevel := parentTokenHeirarchicalID.Level() + 1
 
-	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentToken.TokenID, childLevel, ipfsOps, isTestnet)
+	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentToken.TokenID, childLevel, ipfsOps, isTestnet, publishFn)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +130,7 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 		return tokenList
 	}()
 
-	err = burnParentToken(dc, w, parentToken.TokenID, parentToken.TokenValue, childTokenIDs, dc.GetDID(), isTestnet, tokenDenomArr)
+	err = burnParentToken(dc, w, parentToken.TokenID, parentToken.TokenValue, childTokenIDs, dc.GetDID(), isTestnet, tokenDenomArr, publishFn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenIFPSId, dc.GetDID(), err)
 	}
@@ -172,9 +173,9 @@ func createChildTokenAtIndex(
 	return childTokenHash, nil
 }
 
-func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, 
+func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 	parentTokenValue float64, partTokenIDs []string, did string, isTestnet bool,
-	tokenDenomArr []string,
+	tokenDenomArr []string, publishFn func(*model.PubSubTxnInfo) error,
 ) error {
 	parentTokenType := getTokenType(isTestnet, parentTokenValue)
 
@@ -220,6 +221,24 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 		return fmt.Errorf("burnParentToken: failed to token block, err: %v", err)
 	}
 
+	burntParentTokenBlockHash, err := burntParentTokenBlock.GetHash()
+	if err != nil {
+		return fmt.Errorf("burnParentToken: failed to get the hash of burnt block for parent token, err: %v", err)
+	}
+
+	burntBlockPublishInfo := &model.PubSubTxnInfo{
+		BlockHash:    burntParentTokenBlockHash,
+		TxnType:      parentTokenChainBlock.TransactionType,
+		AssetType:    RBTTokenType,
+		PublisherDID: dc.GetDID(),
+		TxnBlock:     burntParentTokenBlock.GetBlock(),
+	}
+
+	err = publishFn(burntBlockPublishInfo)
+	if err != nil {
+		return fmt.Errorf("burnParentToken: failed to publish burnt block info for token: %v, err: %v", parentTokenID, err)
+	}
+
 	parentTokenInfo, err := w.GetToken(parentTokenID, wallet.TokenIsLocked)
 	if err != nil {
 		return fmt.Errorf(`burnParentToken: unexpected error: failed to fetch parent token info from SQL, err: %v. If,
@@ -237,11 +256,11 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 	err = wallet.DecrementTokenDenomCountAtIndex(tokenDenomArr, parentTokenLevel, 1)
 	if err != nil {
 		return fmt.Errorf(
-				"burnParentToken: unable to decrement token denom array index for level %v, token %v, err: %v",
-				parentTokenLevel,
-				parentTokenID,
-				err,
-			)
+			"burnParentToken: unable to decrement token denom array index for level %v, token %v, err: %v",
+			parentTokenLevel,
+			parentTokenID,
+			err,
+		)
 	}
 
 	err = w.UpdateTokenDenomRaw(tokenDenomArr, did)
@@ -252,8 +271,8 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 	return nil
 }
 
-func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, level int, 
-	ipfsOps IPFSOperation, isTestnet bool,
+func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string, level int,
+	ipfsOps IPFSOperation, isTestnet bool, publishFn func(*model.PubSubTxnInfo) error,
 ) (map[int]wallet.Token, error) {
 	var childTokenIndexMap map[int]wallet.Token = make(map[int]wallet.Token)
 
@@ -326,6 +345,24 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID 
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to add token block for child token: %v, err: %v", childTokenID, err)
 		}
 
+		partTokenBlockHash, err := childTokenBlock.GetHash()
+		if err != nil {
+			return nil, fmt.Errorf("createChildTokensAtLevel: failed to get the hash of child block for child token: %v, err: %v", childTokenID, err)
+		}
+
+		partTokenWalletInfo := &model.PubSubTxnInfo{
+			BlockHash:    partTokenBlockHash,
+			TxnType:      tcb.TransactionType,
+			AssetType:    RBTTokenType,
+			PublisherDID: dc.GetDID(),
+			TxnBlock:     childTokenBlock.GetBlock(),
+		}
+
+		err = publishFn(partTokenWalletInfo)
+		if err != nil {
+			return nil, fmt.Errorf("createChildTokensAtLevel: failed to publish part token info for token: %v, err: %v", childTokenID, err)
+		}
+
 		childToken := wallet.Token{
 			TokenID:       childTokenID,
 			ParentTokenID: parentTokenID,
@@ -352,7 +389,7 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID 
 
 	err = wallet.IncrementTokenDenomCountAtIndex(tokenDenomArr, level, maxTokenCount)
 	if err != nil {
-		return nil, 
+		return nil,
 			fmt.Errorf(
 				"createChildTokensAtLevel: unable to increment token denom array index for level %v, parent token %v, err: %v",
 				level,

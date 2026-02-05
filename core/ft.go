@@ -82,7 +82,10 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 
 	// Fetch whole tokens
-	wholeTokens, updatedTokenDenomArr, err := parts.CollectRBTTokens(dc, c.w, rubixmath.FloatPrecision(float64(numWholeTokens)), c.ipfsOps, c.testNet, c.log)
+	wholeTokens, updatedTokenDenomArr, err := parts.CollectRBTTokens(
+		dc, c.w, rubixmath.FloatPrecision(float64(numWholeTokens)), 
+		c.ipfsOps, c.testNet, c.log, c.publishTxn,
+	)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err

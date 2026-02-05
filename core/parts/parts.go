@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
@@ -35,7 +36,7 @@ func checkSufficientBalance(w *wallet.Wallet, did string, transferAmount float64
 }
 
 func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64,
-	ipfsOps IPFSOperation, isTestnet bool, log logger.Logger,
+	ipfsOps IPFSOperation, isTestnet bool, log logger.Logger, publishFn func(*model.PubSubTxnInfo) error,
 ) ([]wallet.Token, []string, error) {
 	var splitOps []SplitOp = make([]SplitOp, 0)
 	var tokensTransfer []wallet.Token = make([]wallet.Token, 0)
@@ -117,9 +118,9 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64
 		tokenCache := make(map[string]*wallet.Token)
 
 		for _, splitOp := range splitOps {
-			partTokensToTransfer, err := performTokenSplit(w, dc, ipfsOps, splitOp, tokenCache, isTestnet, remainingBalanceDenomArr)
+			partTokensToTransfer, err := performTokenSplit(w, dc, ipfsOps, splitOp, tokenCache, isTestnet, remainingBalanceDenomArr, publishFn)
 			if err != nil {
-				return nil, nil, fmt.Errorf("CollectRBTTokens: could not perform split at Level: ")
+				return nil, nil, fmt.Errorf("CollectRBTTokens: could not perform split at Level: %v, err: %v", splitOp.TokenID.Level(), err)
 			}
 
 			tokensTransfer = append(tokensTransfer, partTokensToTransfer...)
