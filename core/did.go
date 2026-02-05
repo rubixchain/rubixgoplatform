@@ -224,11 +224,16 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	if didCreate.Dir == "" {
 		didCreate.Dir = did
 	}
+
+	tokenDenomArr := wallet.CreateTokenDenomArr()
+	tokenDenomStr := wallet.GetTokenDenomStrFromArr(tokenDenomArr)
+
 	dt := wallet.DIDType{
-		DID:    did,
-		DIDDir: didCreate.Dir,
-		Type:   didCreate.Type,
-		Config: didCreate.Config,
+		DID:        did,
+		DIDDir:     didCreate.Dir,
+		Type:       didCreate.Type,
+		Config:     didCreate.Config,
+		TokenDenom: tokenDenomStr,
 	}
 	if didCreate.RootDID {
 		dt.RootDID = 1
@@ -367,11 +372,16 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 	if didCreate.Dir == "" {
 		didCreate.Dir = did
 	}
+
+	tokenDenomArr := wallet.CreateTokenDenomArr()
+	tokenDenomStr := wallet.GetTokenDenomStrFromArr(tokenDenomArr)
+
 	dt := wallet.DIDType{
-		DID:    did,
-		DIDDir: didCreate.Dir,
-		Type:   didCreate.Type,
-		Config: didCreate.Config,
+		DID:        did,
+		DIDDir:     didCreate.Dir,
+		Type:       didCreate.Type,
+		Config:     didCreate.Config,
+		TokenDenom: tokenDenomStr,
 	}
 	if didCreate.RootDID {
 		dt.RootDID = 1

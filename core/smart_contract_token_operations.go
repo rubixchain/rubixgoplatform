@@ -8,6 +8,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -53,7 +54,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		return resp
 	}
 	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
-	rbtTokensToCommitDetails, err := c.GetTokens(didCryptoLib, did, deployReq.RBTAmount, SmartContractDeployMode)
+	rbtTokensToCommitDetails, updatedTokenDenomArr, err := parts.CollectRBTTokens(didCryptoLib, c.w, deployReq.RBTAmount, c.ipfsOps, c.testNet, c.log)
 	if err != nil {
 		c.log.Error("Failed to retrieve Tokens to be committed", "err", err)
 		resp.Message = "Failed to retrieve Tokens to be committed , err : " + err.Error()
@@ -187,6 +188,14 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		Comments:           deployReq.Comment,
 	}
 	c.ec.ExplorerSCDeploy(eTrans)
+
+	// Update Token Denom Array
+	// TODO: Could be pushed to an Async queue if failed
+	if err := c.w.UpdateTokenDenomRaw(updatedTokenDenomArr, did); err != nil {
+		c.log.Error("Failed to update token denom array", "err", err)
+		resp.Message = "Failed to update token denom array"
+		return resp
+	}
 
 	c.log.Info("Smart Contract Token Deployed successfully", "duration", dif)
 	resp.Status = true
