@@ -123,3 +123,11 @@ func (t *TrackedStorage) Close() error {
 	defer t.c.TrackOperation("db.close", nil)(nil)
 	return t.storage.Close()
 }
+
+func (t *TrackedStorage) UpdateColumn(storageName string, columnName string, columnValue interface{}, conditionString string, conditionValue interface{}) error {
+	defer t.c.TrackOperation("db.drop", map[string]interface{}{
+		"storage_name": storageName,
+	})(nil)
+	
+	return t.storage.UpdateColumn(storageName, columnName, columnValue, conditionString, conditionValue)
+}

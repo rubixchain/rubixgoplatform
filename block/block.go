@@ -42,6 +42,7 @@ const (
 	TCChildTokensKey        string = "11"
 	TCInitiatorSignatureKey string = "12"
 	TCEpochKey              string = "epoch"
+	TCVersionKey            string = "version"
 )
 
 const (
@@ -89,6 +90,7 @@ type TokenChainBlock struct {
 	InitiatorSignature *InitiatorSignature `json:"initiatorSignature"`
 	Epoch              int                 `json:"epoch"`
 	Data               string              `json:"data"`
+	Version            int                 `json:"version"`
 }
 
 type PledgeDetail struct {
@@ -202,6 +204,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 
 	if tcb.Epoch != 0 {
 		ntcb[TCEpochKey] = tcb.Epoch
+	}
+
+	if tcb.Version != 0 {
+		ntcb[TCVersionKey] = tcb.Version
 	}
 
 	blk := InitBlock(nil, ntcb)
@@ -737,6 +743,10 @@ func (b *Block) GetChildTokens() []string {
 
 func (b *Block) GetEpoch() int {
 	return util.GetIntFromMap(b.bm, TCEpochKey)
+}
+
+func (b *Block) GetVersion() int {
+	return util.GetIntFromMap(b.bm, TCVersionKey)
 }
 
 // Fetch initiator signature details from the given block
