@@ -12,6 +12,7 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -94,6 +95,7 @@ type ConensusRequest struct {
 	// TransTokenSyncInfo map[string]GenesisAndLatestBlocks `json:"tokens_sync_info"`
 	ExplorerDone  chan struct{} `json:"-"` // Channel to signal explorer submission completion
 	OperationType int           `json:"operation_type"`
+	TokenDenomArr []string      `json:"token_denom_arr"`
 }
 
 type ConensusReply struct {
@@ -935,7 +937,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 		}()
 
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode, cr.TokenDenomArr)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, nil, err
@@ -1616,7 +1618,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 		}
 
-		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode)
+		err = c.w.TokensTransferred(sc.GetSenderDID(), ti, nb, rp.IsLocal(), sr.PinningServiceMode, cr.TokenDenomArr)
 		if err != nil {
 			c.log.Error("Failed to transfer tokens", "err", err)
 			return nil, nil, nil, err
@@ -2731,6 +2733,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: deployerSign,
 			TokenValue:         sc.GetTotalRBTs(),
 			Epoch:              cr.TransactionEpoch,
+			Version:            constants.BlockVersion,
 		}
 	} else if cr.Mode == SmartContractExecuteMode {
 		bti.ExecutorDID = sc.GetExecutorDID()
@@ -2761,6 +2764,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: executorSign,
 			TokenValue:         sc.GetTotalRBTs(),
 			Epoch:              cr.TransactionEpoch,
+			Version:            constants.BlockVersion,
 		}
 
 	} else if cr.Mode == NFTExecuteMode {
@@ -2792,6 +2796,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TokenValue:         sc.GetTotalRBTs(),
 			InitiatorSignature: executor_sign,
 			Epoch:              cr.TransactionEpoch,
+			Version:            constants.BlockVersion,
 		}
 
 	} else if cr.Mode == NFTDeployMode {
@@ -2832,6 +2837,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgeDetails:      ptds,
 			InitiatorSignature: deployer_sign,
 			Epoch:              cr.TransactionEpoch,
+			Version:            constants.BlockVersion,
 		}
 
 	} else if cr.Mode == PinningServiceMode {
@@ -2844,8 +2850,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			QuorumSignature: credit,
 			SmartContract:   sc.GetBlock(),
 			PledgeDetails:   ptds,
+			Version:         constants.BlockVersion,
 			TokenValue:      sc.GetTotalRBTs(),
-			Epoch:           int(sc.GetTotalRBTs()),
+			Epoch:           cr.TransactionEpoch,
 		}
 	} else {
 		// Fetching sender signature to add it to transaction details
@@ -2875,6 +2882,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgeDetails:      ptds,
 			InitiatorSignature: senderSign,
 			Epoch:              cr.TransactionEpoch,
+			Version:            constants.BlockVersion,
 			TokenValue:         sc.GetTotalRBTs(),
 		}
 	}
@@ -3156,6 +3164,7 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 			RefID:   refID,
 			Tokens:  tsb,
 		},
+		Version:    constants.BlockVersion,
 		TokenValue: totalTokenValue,
 		Epoch:      int(currentTime.Unix()),
 	}

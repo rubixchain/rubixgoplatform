@@ -9,6 +9,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -34,101 +35,8 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	dc.OutChan <- br
 }
 
-func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.DIDCrypto, isSelfRBTTransfer bool) ([]wallet.Token, error) {
-	var tokensForTransfer []wallet.Token
-
-	senderDID := req.Sender
-
-	if !isSelfRBTTransfer {
-		if req.TokenCount < MinDecimalValue(MaxDecimalPlaces) {
-			return nil, fmt.Errorf("input transaction amount is less than minimum transaction amount")
-		}
-
-		decimalPlaces := strconv.FormatFloat(req.TokenCount, 'f', -1, 64)
-		decimalPlacesStr := strings.Split(decimalPlaces, ".")
-		if len(decimalPlacesStr) == 2 && len(decimalPlacesStr[1]) > MaxDecimalPlaces {
-			return nil, fmt.Errorf("transaction amount exceeds %v decimal places", MaxDecimalPlaces)
-		}
-
-		accountBalance, err := c.GetAccountInfo(senderDID)
-		if err != nil {
-			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
-		} else {
-			if req.TokenCount > accountBalance.RBTAmount {
-				return nil, fmt.Errorf("insufficient balance, of account %v balance is %v, trnx value is %v",senderDID, accountBalance.RBTAmount, req.TokenCount)
-			}
-		}
-
-		reqTokens, remainingAmount, err := c.GetRequiredTokens(senderDID, req.TokenCount, RBTTransferMode)
-		if err != nil {
-			c.w.ReleaseTokens(reqTokens)
-			return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
-		}
-
-		if len(reqTokens) != 0 {
-			tokensForTransfer = append(tokensForTransfer, reqTokens...)
-		}
-		//check if there is enough tokens to do transfer
-		// Get the required tokens from the DID bank
-		// this method locks the token needs to be released or
-		// removed once it done with the transfer
-		if remainingAmount > 0 {
-			wt, err := c.GetTokens(dc, senderDID, remainingAmount, RBTTransferMode)
-			if err != nil {
-				return nil, fmt.Errorf("insufficient tokens or tokens are locked or %v", err.Error())
-			}
-			if len(wt) != 0 {
-				tokensForTransfer = append(tokensForTransfer, wt...)
-			}
-		}
-
-		var sumOfTokensForTxn float64
-		for _, tokenForTransfer := range tokensForTransfer {
-			sumOfTokensForTxn = sumOfTokensForTxn + tokenForTransfer.TokenValue
-			sumOfTokensForTxn = floatPrecision(sumOfTokensForTxn, MaxDecimalPlaces)
-		}
-
-		if sumOfTokensForTxn != req.TokenCount {
-			return nil, fmt.Errorf("sum of Selected Tokens sum : %v is not equal to trnx value : %v", sumOfTokensForTxn, req.TokenCount)
-		}
-
-		return tokensForTransfer, nil
-	} else {
-		// Get all free tokens
-		tokensOwnedBySender, err := c.w.GetFreeTokens(senderDID)
-		if err != nil {
-			if strings.Contains(err.Error(), "no records found") {
-				return []wallet.Token{}, nil
-			}
-			return nil, fmt.Errorf("failed to get free tokens of owner, error: %v", err.Error())
-		}
-
-		// Get the transaction epoch for every token and chec
-		for _, token := range tokensOwnedBySender {
-			// Nodes running old version of rubixgoplatform will not have their TransactionID column of Tokens's table populated
-			// And hence should be skipped from Self Transfer
-			if token.TransactionID == "" {
-				continue
-			}
-			tokenTransactionDetail, err := c.w.GetTransactionDetailsbyTransactionId(token.TransactionID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get transaction details for trx hash: %v, err: %v", token.TransactionID, err)
-			}
-
-			if time.Now().Unix()-tokenTransactionDetail.Epoch > int64(pledgePeriodInSeconds) {
-				if err := c.w.LockToken(&token); err != nil {
-					return nil, fmt.Errorf("failed to lock tokens %v, exiting selfTransfer routine with error: %v", token.TokenID, err.Error())
-				}
-
-				tokensForTransfer = append(tokensForTransfer, token)
-			}
-		}
-
-		if len(tokensForTransfer) > 0 {
-			c.log.Debug("Tokens acquired for self transfer")
-		}
-		return tokensForTransfer, nil
-	}
+func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.DIDCrypto, isSelfRBTTransfer bool) ([]wallet.Token, []string, error) {
+	return parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log, c.publishTxn)
 }
 
 func getContractType(reqID string, req *model.RBTTransferRequest, transTokenInfo []contract.TokenInfo, isSelfRBTTransfer bool) *contract.ContractType {
@@ -167,7 +75,9 @@ func getContractType(reqID string, req *model.RBTTransferRequest, transTokenInfo
 	}
 }
 
-func getConsensusRequest(consensusRequestType int, senderPeerID string, receiverPeerID string, contractBlock []byte, transactionEpoch int, isSelfTransfer bool) *ConensusRequest {
+func getConsensusRequest(consensusRequestType int, senderPeerID string, receiverPeerID string,
+	contractBlock []byte, transactionEpoch int, isSelfTransfer bool, tokenDenomArr []string,
+) *ConensusRequest {
 	var consensusRequest *ConensusRequest = &ConensusRequest{
 		ReqID:            uuid.New().String(),
 		Type:             consensusRequestType,
@@ -175,6 +85,7 @@ func getConsensusRequest(consensusRequestType int, senderPeerID string, receiver
 		ReceiverPeerID:   receiverPeerID,
 		ContractBlock:    contractBlock,
 		TransactionEpoch: transactionEpoch,
+		TokenDenomArr:    tokenDenomArr,
 	}
 
 	if isSelfTransfer {
@@ -221,7 +132,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 
-	tokensForTxn, err := gatherTokensForTransaction(c, req, dc, isSelfRBTTransfer)
+	tokensForTxn, updatedTokenDenomArr, err := gatherTokensForTransaction(c, req, dc, isSelfRBTTransfer)
 	if err != nil {
 		c.log.Error(err.Error())
 		resp.Message = err.Error()
@@ -284,7 +195,9 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			}
 		}
 	}
+
 	wta := make([]string, 0)
+
 	for i := range tokensForTxn {
 		wta = append(wta, tokensForTxn[i].TokenID)
 	}
@@ -411,7 +324,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 
-	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
+	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer, updatedTokenDenomArr)
 	// resultChan := make(chan *model.BasicResponse, 1)
 
 	// to distinguish between transaction types
@@ -514,6 +427,17 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// 		resp.Result = txID
 	// 	}
 	// }
+	
+	//NOTE: updating token denom array is local change.
+	// In case of any error in the following, instead of failing the 
+	// transaction, we can possible add it in some sort of Async queue,
+	// to be later picked up and updated.
+	if err := c.w.UpdateTokenDenomRaw(updatedTokenDenomArr, senderDID); err != nil {
+		c.log.Error("Failed to update token denom array", "err", err)
+		resp.Message = "Failed to update token denom array"
+		return resp
+	}
+
 	resp.Status = true
 	return resp
 }
@@ -530,6 +454,8 @@ func (c *Core) InitiatePinRBT(reqID string, req *model.RBTPinRequest) {
 	dc.OutChan <- br
 }
 
+// TODO(parts): revert the changes made to match the current function signature of
+// new parts logic
 func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.BasicResponse {
 	st := time.Now()
 	resp := &model.BasicResponse{
@@ -599,7 +525,7 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 
 	tokensForTxn := make([]wallet.Token, 0)
 
-	reqTokens, remainingAmount, err := c.GetRequiredTokens(did, req.TokenCount, PinningServiceMode)
+	reqTokens, _, err := parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log, c.publishTxn)
 	if err != nil {
 		c.w.ReleaseTokens(reqTokens)
 		c.log.Error("Failed to get tokens", "err", err)
@@ -610,19 +536,22 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 		tokensForTxn = append(tokensForTxn, reqTokens...)
 	}
 
-	if remainingAmount > 0 {
-		wt, err := c.GetTokens(dc, did, remainingAmount, PinningServiceMode)
-		if err != nil {
-			c.log.Error("Failed to get tokens", "err", err)
-			resp.Message = "Insufficient tokens or tokens are locked"
-			return resp
-		}
-		if len(wt) != 0 {
-			tokensForTxn = append(tokensForTxn, wt...)
-		}
-	}
+	//TODO(parts): uncomment the following
+	// if remainingAmount > 0 {
+	// 	wt, err := c.GetTokens(dc, did, remainingAmount, PinningServiceMode)
+	// 	if err != nil {
+	// 		c.log.Error("Failed to get tokens", "err", err)
+	// 		resp.Message = "Insufficient tokens or tokens are locked"
+	// 		return resp
+	// 	}
+	// 	if len(wt) != 0 {
+	// 		tokensForTxn = append(tokensForTxn, wt...)
+	// 	}
+	// }
 
-	return c.completePinning(st, reqID, req, did, pinningNodeDID, pinningNodepeerid, tokensForTxn, resp, dc)
+	//TODO(parts): revert the following
+	//return c.completePinning(st, reqID, req, did, pinningNodeDID, pinningNodepeerid, tokensForTxn, resp, dc)
+	return c.completePinning(st, reqID, req, did, pinningNodeDID, pinningNodepeerid, nil, resp, dc)
 }
 
 func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequest, did, pinningNodeDID, pinningNodepeerid string, tokensForTxn []wallet.Token, resp *model.BasicResponse, dc did.DIDCrypto) *model.BasicResponse {
