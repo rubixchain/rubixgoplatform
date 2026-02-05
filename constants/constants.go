@@ -1,4 +1,4 @@
 package constants
 
-// MaxSupportedDecimalPlaces sets the maximum decimal places for Part RBT tokens
+const BlockVersion int = 1
 const MaxSupportedDecimalPlaces int = 3

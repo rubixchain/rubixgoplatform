@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -508,6 +509,7 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 						TransInfo: &block.TransInfo{
 							Tokens: tts,
 						},
+						Version: constants.BlockVersion,
 					}
 					//ctcb := make
 					blk := block.CreateNewBlock(ctcb, ntcb)
