@@ -17,9 +17,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -150,22 +150,33 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
 		return -1, err
 	}
-	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+	
+	iswholeToken := token.CheckWholeToken(string(b))
 
-	tt := token.RBTTokenType
-	tv := float64(1)
-	if !iswholeToken {
-		blk := util.StrToHex(string(b))
-		rb, err := rac.InitRacBlock(blk, nil)
-		if err != nil {
-			c.log.Error("invalid token, invalid rac block", "err", err)
-			return -1, err
+	var tt int
+	var tv float64
+
+	if iswholeToken {
+		tv = float64(1)
+		if c.testNet {
+			tt = token.TestTokenType
+		} else {
+			tt = token.RBTTokenType
 		}
-		tt = rac.RacType2TokenType(rb.GetRacType())
-		if c.TokenType(PartString) == tt {
-			tv = rb.GetRacValue()
+	} else {
+		var err error
+		tv, err = parts.GetTokenValueFromIndexedID(string(b))
+		if err != nil {
+			return -1, fmt.Errorf("syncParentToken: failed while attempting fetch the value for part token: %v, err: %v", pt, err)
+		}
+
+		if c.testNet {
+			tt = token.TestPartTokenType
+		} else {
+			tt = token.PartTokenType
 		}
 	}
+
 	lbID := ""
 	// lb := c.w.GetLatestTokenBlock(pt, tt)
 	// if lb != nil {
