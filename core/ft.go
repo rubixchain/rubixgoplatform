@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -16,12 +15,15 @@ import (
 	"sync/atomic"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
+
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
 func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int, ftNumStartIndex int) {
@@ -78,12 +80,16 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return fmt.Errorf("max allowed FT count is 1000 for 1 RBT")
 	}
 
-	// Fetch whole tokens using GetToken
-	wholeTokens, err := c.GetTokens(dc, did, float64(numWholeTokens), 0)
+	// Fetch whole tokens
+	wholeTokens, err := parts.CollectRBTTokens(
+		dc, c.w, rubixmath.FloatPrecision(float64(numWholeTokens)),
+		c.testNet, c.log, c.publishTxn,
+	)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
 	}
+
 	defer c.w.ReleaseTokens(wholeTokens)
 	fractionalValue, err := c.GetPresiceFractionalValue(int(numWholeTokens), numFTs)
 	if err != nil {
@@ -117,58 +123,24 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	// Prepare to collect provider details for batch write
 	providerMaps := make([]model.TokenProviderMap, 0, numFTs)
 	// Mutex for providerMaps slice
-	var providerMapMutex sync.Mutex
 	c.log.Info("Initializing FT creation: progress logging")
 
 	worker := func() {
 		defer wg.Done()
 		for job := range jobs {
 			i := job.Index
-			racType := &rac.RacType{
-				Type:        c.RACFTType(),
-				DID:         did,
-				TokenNumber: uint64(i),
-				TotalSupply: 1,
-				TimeStamp:   time.Now().String(),
-				FTInfo: &rac.RacFTInfo{
-					Parents: parentTokenIDs,
-					FTNum:   i,
-					FTName:  FTName,
-					FTValue: fractionalValue,
-				},
-			}
-
-			// Create the RAC block
-			racBlocks, err := rac.CreateRac(racType)
-			if err != nil {
-				results <- ftResult{Err: err}
-				continue
-			}
-			if len(racBlocks) != 1 {
-				results <- ftResult{Err: fmt.Errorf("failed to create RAC block")}
-				continue
-			}
-			err = racBlocks[0].UpdateSignature(dc)
-			if err != nil {
-				results <- ftResult{Err: err}
-				continue
-			}
 
 			ftnumString := strconv.Itoa(i)
 			parts := []string{FTName, ftnumString, did}
-			result := strings.Join(parts, " ")
-			byteArray := []byte(result)
-			ftBuffer := bytes.NewBuffer(byteArray)
-			ftID, tpm, err := c.w.AddWithProviderMap(ftBuffer, did, wallet.AddFunc)
-			if err != nil {
-				results <- ftResult{Err: err}
-				continue
-			}
+			ftID := strings.Join(parts, "_")
+			
+			
+			
 			// Collect provider map for batch
 			// Use mutex to avoid race condition
-			providerMapMutex.Lock()
-			providerMaps = append(providerMaps, tpm)
-			providerMapMutex.Unlock()
+			// providerMapMutex.Lock()
+			// providerMaps = append(providerMaps, tpm)
+			// providerMapMutex.Unlock()
 			// Progress logging (remove per-token log)
 			newCount := atomic.AddInt32(&completed, 1)
 			currentPercent := int32(math.Floor(float64(newCount*100) / float64(numFTs)))
@@ -197,6 +169,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					}},
 				},
 				TokenValue: fractionalValue,
+				Version:    constants.BlockVersion,
 			}
 			ctcb := make(map[string]*block.Block)
 			ctcb[ftID] = nil
@@ -312,6 +285,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			TransInfo:       bti,
 			TokenValue:      wholeTokens[i].TokenValue,
 			ChildTokens:     newFTTokenIDs,
+			Version:         constants.BlockVersion,
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)

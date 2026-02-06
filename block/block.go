@@ -30,19 +30,18 @@ const (
 	TCTokenOwnerKey         string = "3"
 	TCGenesisBlockKey       string = "4"
 	TCTransInfoKey          string = "5"
-	TCSmartContractKey      string = "6"
 	TCQuorumSignatureKey    string = "7"
 	TCPledgeDetailsKey      string = "8"
 	TCBlockHashKey          string = "98"
 	TCSignatureKey          string = "99"
 	TCBlockContentKey       string = "1"
 	TCBlockContentSigKey    string = "2"
-	TCSmartContractDataKey  string = "9"
+	TCDataKey               string = "9"
 	TCTokenValueKey         string = "10"
 	TCChildTokensKey        string = "11"
 	TCInitiatorSignatureKey string = "12"
 	TCEpochKey              string = "epoch"
-	TCNFTDataKey            string = "13"
+	TCVersionKey            string = "version"
 )
 
 const (
@@ -76,14 +75,12 @@ type TokenChainBlock struct {
 	TransInfo          *TransInfo       `json:"transInfo"`
 	PledgeDetails      []PledgeDetail   `json:"pledgeDetails"`
 	QuorumSignature    []BlockSignature `json:"quorumSignature"`
-	SmartContract      []byte           `json:"smartContract"`
-	SmartContractData  string           `json:"smartContractData"`
 	TokenValue         float64          `json:"tokenValue"`
 	ChildTokens        []string         `json:"childTokens"`
 	InitiatorSignature *BlockSignature  `json:"initiatorSignature"`
-	NFT                []byte           `json:"nft"`
-	NFTData            string           `json:"nftData"`
 	Epoch              int              `json:"epoch"`
+	Data               string           `json:"data"`
+	Version            int              `json:"version"`
 }
 
 type PledgeDetail struct {
@@ -170,14 +167,8 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.QuorumSignature != nil {
 		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
 	}
-	if tcb.SmartContract != nil {
-		ntcb[TCSmartContractKey] = tcb.SmartContract
-	}
-	if tcb.SmartContractData != "" {
-		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
-	}
-	if tcb.NFTData != "" {
-		ntcb[TCNFTDataKey] = tcb.NFTData
+	if tcb.Data != "" {
+		ntcb[TCDataKey] = tcb.Data
 	}
 	if tcb.InitiatorSignature != nil {
 		ntcb[TCInitiatorSignatureKey] = tcb.InitiatorSignature
@@ -195,6 +186,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 
 	if tcb.Epoch != 0 {
 		ntcb[TCEpochKey] = tcb.Epoch
+	}
+
+	if tcb.Version != 0 {
+		ntcb[TCVersionKey] = tcb.Version
 	}
 
 	blk := InitBlock(nil, ntcb)
@@ -660,18 +655,6 @@ func (b *Block) GetTokenDetials(t string) (int, int, error) {
 	return tl, tn, nil
 }
 
-func (b *Block) GetSmartContract() []byte {
-	ci, ok := b.bm[TCSmartContractKey]
-	if !ok {
-		return nil
-	}
-	c, ok := ci.([]byte)
-	if !ok {
-		return nil
-	}
-	return c
-}
-
 func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 	genesisTokenMap := b.getGenesisTokenMap(t)
 	if genesisTokenMap == nil {
@@ -717,12 +700,8 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 // 	return result
 // }
 
-func (b *Block) GetSmartContractData() string {
-	return b.getBlkString(TCSmartContractDataKey)
-}
-
-func (b *Block) GetNFTData() string {
-	return b.getBlkString(TCNFTDataKey)
+func (b *Block) GetDataFromTokenChain() string {
+	return b.getBlkString(TCDataKey)
 }
 
 func (b *Block) GetSmartContractValue(t string) (float64, error) {
@@ -746,6 +725,10 @@ func (b *Block) GetChildTokens() []string {
 
 func (b *Block) GetEpoch() int {
 	return util.GetIntFromMap(b.bm, TCEpochKey)
+}
+
+func (b *Block) GetVersion() int {
+	return util.GetIntFromMap(b.bm, TCVersionKey)
 }
 
 // Fetch initiator signature details from the given block
