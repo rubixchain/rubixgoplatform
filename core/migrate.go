@@ -505,7 +505,6 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 						TransactionType: block.TokenMigratedType,
 						TokenOwner:      did,
 						GenesisBlock:    gb,
-						SmartContract:   sc.GetBlock(),
 						TransInfo: &block.TransInfo{
 							Tokens: tts,
 						},
