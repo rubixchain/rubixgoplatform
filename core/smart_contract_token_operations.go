@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -53,7 +55,14 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		return resp
 	}
 	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
-	rbtTokensToCommitDetails, err := c.GetTokens(didCryptoLib, did, deployReq.RBTAmount, SmartContractDeployMode)
+	rbtTokensToCommitDetails, err := parts.CollectRBTTokens(
+		didCryptoLib,
+		c.w,
+		deployReq.RBTAmount,
+		c.testNet,
+		c.log,
+		c.publishTxn,
+	)
 	if err != nil {
 		c.log.Error("Failed to retrieve Tokens to be committed", "err", err)
 		resp.Message = "Failed to retrieve Tokens to be committed , err : " + err.Error()
@@ -64,7 +73,14 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	defer c.w.ReleaseTokens(rbtTokensToCommitDetails)
 
 	for i := range rbtTokensToCommitDetails {
-		c.w.Pin(rbtTokensToCommitDetails[i].TokenID, wallet.OwnerRole, did, "NA", "NA", "NA", float64(0)) //TODO: Ensure whether trnxId should be added ?
+		commitedTokenIdBuffer := bytes.NewBufferString(rbtTokensToCommitDetails[i].TokenID)
+		commitedTokenHash, err := c.w.Add(commitedTokenIdBuffer, did, wallet.OwnerRole)
+		if err != nil {
+			c.log.Error("Failed to add commited tokens to ipfs", "err", err)
+			resp.Message = "Failed to add commited tokens to ipfs , err : " + err.Error()
+			return resp
+		}
+		c.w.Pin(commitedTokenHash, wallet.OwnerRole, did, "NA", "NA", "NA", float64(0)) //TODO: Ensure whether trnxId should be added ?
 		rbtTokensToCommit = append(rbtTokensToCommit, rbtTokensToCommitDetails[i].TokenID)
 	}
 

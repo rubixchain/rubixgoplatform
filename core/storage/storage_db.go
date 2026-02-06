@@ -73,3 +73,8 @@ func (s *StorageDB) Close() error {
 func (s *StorageDB) Drop(storageName string, value interface{}) error {
 	return s.ad.DropTable(storageName, value)
 }
+
+// UpdateColumn will updates a column for a particular set of records
+func (s *StorageDB) UpdateColumn(storageName string, columnName string, columnValue interface{}, conditionString string, conditionValue interface{}) error {
+	return s.ad.UpdateColumn(uuid.Nil, storageName, conditionString, conditionValue, columnName, columnValue)
+}
