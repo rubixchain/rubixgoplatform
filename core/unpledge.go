@@ -164,6 +164,13 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 		}
 	}
 
+	tokenInfo, err := c.w.ReadToken(pledgeToken)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to read token value of token:%v", pledgeToken)
+		c.log.Error(errMsg)
+		return "", "", errors.New(errMsg)
+	}
+
 	pledgeID, err = b.GetBlockID(pledgeToken)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed while unpledging token %v, unable to fetch block ID", pledgeToken)
@@ -195,8 +202,9 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 			Comment: "Token is un pledged at " + currentTime.String(),
 			Tokens:  tsb,
 		},
-		Epoch:   int(currentTime.Unix()),
-		Version: constants.BlockVersion,
+		TokenValue: tokenInfo.TokenValue,
+		Epoch:      int(currentTime.Unix()),
+		Version:    constants.BlockVersion,
 	}
 
 	nb := block.CreateNewBlock(ctcb, &tcb)

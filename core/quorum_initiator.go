@@ -2760,6 +2760,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			PledgeDetails:      ptds,
 			Data:               sc.GetSmartContractData(),
 			InitiatorSignature: executorSign,
+			TokenValue:         sc.GetTotalRBTs(),
 			Epoch:              cr.TransactionEpoch,
 			Version:            constants.BlockVersion,
 		}
@@ -2843,6 +2844,8 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			QuorumSignature: Signature,
 			PledgeDetails:   ptds,
 			Version:         constants.BlockVersion,
+			TokenValue:      sc.GetTotalRBTs(),
+			Epoch:           cr.TransactionEpoch,
 		}
 	} else {
 		// Fetching sender signature to add it to transaction details
@@ -2871,6 +2874,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			InitiatorSignature: senderSign,
 			Epoch:              cr.TransactionEpoch,
 			Version:            constants.BlockVersion,
+			TokenValue:         sc.GetTotalRBTs(),
 		}
 	}
 
@@ -3117,6 +3121,8 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 
 	ctcb := make(map[string]*block.Block)
 	tsb := make([]block.TransTokens, 0)
+	var totalTokenValue float64 = 0
+	currentTime := time.Now()
 
 	for _, t := range commitedTokens {
 		tokenInfoFromDB, err := c.w.ReadToken(t)
@@ -3124,6 +3130,7 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 			c.log.Error("failed to read token from wallet")
 			return err
 		}
+		totalTokenValue += tokenInfoFromDB.TokenValue
 		ts := RBTString
 		if tokenInfoFromDB.TokenValue != 1.0 {
 			ts = PartString
@@ -3148,7 +3155,9 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 			RefID:   refID,
 			Tokens:  tsb,
 		},
-		Version: constants.BlockVersion,
+		Version:    constants.BlockVersion,
+		TokenValue: totalTokenValue,
+		Epoch:      int(currentTime.Unix()),
 	}
 	nb := block.CreateNewBlock(ctcb, &tcb)
 	if nb == nil {
