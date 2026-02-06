@@ -92,6 +92,7 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto,
 	tokenDenomArr []int, publishFn func(*model.PubSubTxnInfo) error,
 ) ([]wallet.Token, error) {
 	var parentToken *wallet.Token
+	var networkID string
 	parentTokenHeirarchicalID := splitOp.HierarchicalTokenID
 	parentTokenIndexedID, err := HeirarchicalToIndexed(parentTokenHeirarchicalID)
 	if err != nil {
@@ -106,11 +107,18 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto,
 		if err != nil {
 			return nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v with id: %v; indexid: %v, err: %v", splitOp.HierarchicalTokenID.String(), parentTokenIndexedID, parentTokenIndexedID, err)
 		}
+
+		parentTokenType := getTokenType(isTestnet, parentToken.TokenValue)
+		
+		networkID, err = w.GetTokenNetworkID(parentToken.TokenID, parentTokenType)
+		if err != nil {
+			return nil, fmt.Errorf("performTokenSplit: failed to get network ID for parent token: %v, err: %v", parentToken.TokenID, err)
+		}
 	}
 
 	childLevel := parentTokenHeirarchicalID.Level() + 1
 
-	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentTokenHeirarchicalID, parentTokenIndexedID, childLevel, isTestnet, publishFn, tokenDenomArr)
+	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentTokenHeirarchicalID, parentTokenIndexedID, childLevel, isTestnet, publishFn, tokenDenomArr, networkID)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +272,7 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 
 func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHierarchicalID TokenID, parenTokenIndexedID string,
 	level int, isTestnet bool, publishFn func(*model.PubSubTxnInfo) error,
-	tokenDenomArr []int,
+	tokenDenomArr []int, networkID string,
 ) (map[int]wallet.Token, error) {
 	var childTokenIndexMap map[int]wallet.Token = make(map[int]wallet.Token)
 
@@ -304,6 +312,7 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 					{
 						Token:    childTokenID,
 						ParentID: parenTokenIndexedID,
+						NetworkID: networkID,
 					},
 				},
 			},

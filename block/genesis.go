@@ -34,6 +34,7 @@ const (
 	GIGrandParentIDKey      string = "6"
 	GICommitedTokensKey     string = "7"
 	GISmartContractValueKey string = "8"
+	GINetworkIDKey          string = "networkID"
 )
 
 type GenesisTokenInfo struct {
@@ -48,6 +49,7 @@ type GenesisTokenInfo struct {
 	SmartContractValue float64       `json:"smartContractValue"`
 	NFTValue           float64       `json:"nftValue"`
 	NFTData            string        `json:"nftData"`
+	NetworkID          string        `json:"networkID"`
 }
 
 type GenesisBlock struct {
@@ -84,6 +86,11 @@ func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 	if gi.SmartContractValue != 0 {
 		ngib[GISmartContractValueKey] = gi.SmartContractValue
 	}
+
+	if gi.NetworkID != "" {
+		ngib[GINetworkIDKey] = gi.NetworkID
+	}
+
 	return ngib
 }
 

@@ -100,6 +100,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
+
 	ok, sc := c.verifyContract(cr, did)
 	if !ok {
 		crep.Message = "Failed to verify sender signature"

@@ -219,6 +219,19 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			return resp
 		}
 
+		genesisBlock := c.w.GetGenesisTokenBlock(tokensForTxn[i].TokenID, tt)
+		if genesisBlock == nil {
+			c.log.Error("failed to get genesis block, invalid token chain")
+			resp.Message = "failed to get genesis block, invalid token chain"
+			return resp
+		}
+	
+		if err := c.ValidateTokenNetworkID(genesisBlock, tokensForTxn[i].TokenID); err != nil {
+			c.log.Error("failed to validate token network ID", "err", err)
+			resp.Message = "failed to validate token network ID, " + err.Error()
+			return resp
+		}
+
 		bid, err := blk.GetBlockID(tokensForTxn[i].TokenID)
 		if err != nil {
 			c.log.Error("failed to get block id", "err", err)
@@ -427,7 +440,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// 		resp.Result = txID
 	// 	}
 	// }
-	
+
 	resp.Status = true
 	return resp
 }

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/fxamacker/cbor"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -877,4 +878,27 @@ func (b *Block) GetPledgedTokens() []PledgeDetail {
 	}
 
 	return ptds
+}
+
+func (b *Block) GetGenesisNetworkType(t string) (string, error) {
+	genesisInfoMap := b.getGenesisTokenMap(t)
+
+	networkID := util.GetFromMap(genesisInfoMap, GINetworkIDKey)
+	if networkID == nil {
+		return "", fmt.Errorf("network ID not found in genesis info")
+	}
+
+	networkIDStr, ok := networkID.(string)
+	if !ok {
+		return "", fmt.Errorf("network ID is not a string")
+	}
+
+	switch networkIDStr {
+		case constants.NetworkID_RBT_Local, constants.NetworkID_RBT_Testnet, constants.NetworkID_RBT_Mainnet:
+		// valid network IDs
+	default:
+		return "", fmt.Errorf("invalid network ID: %s", networkIDStr)
+	}
+
+	return networkIDStr, nil
 }
