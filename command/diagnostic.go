@@ -146,10 +146,10 @@ func (cmd *Command) dumpTokenChain() {
 			return
 		}
 	}
-	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.token)
 
-	if len(cmd.token) != 46 || !strings.HasPrefix(cmd.token, "Qm") || !isAlphanumeric {
-		cmd.log.Error("Invalid token")
+	elems :=strings.Split(cmd.token, "_")
+	if len(elems) < 2 {
+		cmd.log.Error(fmt.Sprintf("Invalid token: %v", cmd.token))
 		return
 	}
 

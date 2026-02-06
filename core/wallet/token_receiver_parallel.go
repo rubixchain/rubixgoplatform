@@ -166,7 +166,10 @@ func (w *Wallet) tokenProcessWorker(did string, b *block.Block, senderPeerId, re
 			defer os.RemoveAll(dir)
 
 			// Get the token from IPFS
-			if err := w.Get(tokenInfo.Token, did, OwnerRole, dir); err != nil {
+			tokenHash, _ := w.ipfsOps.Add(
+				bytes.NewBufferString(tokenInfo.Token),
+			)
+			if err := w.Get(tokenHash, did, OwnerRole, dir); err != nil {
 				result.err = fmt.Errorf("failed to get token %s: %v", tokenInfo.Token, err)
 				results <- result
 				continue

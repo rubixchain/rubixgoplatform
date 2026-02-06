@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -82,9 +81,9 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 
 	// Fetch whole tokens
-	wholeTokens, updatedTokenDenomArr, err := parts.CollectRBTTokens(
+	wholeTokens, err := parts.CollectRBTTokens(
 		dc, c.w, rubixmath.FloatPrecision(float64(numWholeTokens)),
-		c.ipfsOps, c.testNet, c.log, c.publishTxn,
+		c.testNet, c.log, c.publishTxn,
 	)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
@@ -124,29 +123,22 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	// Prepare to collect provider details for batch write
 	providerMaps := make([]model.TokenProviderMap, 0, numFTs)
 	// Mutex for providerMaps slice
-	var providerMapMutex sync.Mutex
 	c.log.Info("Initializing FT creation: progress logging")
 
 	worker := func() {
 		defer wg.Done()
 		for job := range jobs {
 			i := job.Index
+
 			ftnumString := strconv.Itoa(i)
 			parts := []string{FTName, ftnumString, did}
-			result := strings.Join(parts, " ")
-			c.log.Warn("result:", result)
-			byteArray := []byte(result)
-			ftBuffer := bytes.NewBuffer(byteArray)
-			ftID, tpm, err := c.w.AddWithProviderMap(ftBuffer, did, wallet.AddFunc)
-			if err != nil {
-				results <- ftResult{Err: err}
-				continue
-			}
+			ftID := strings.Join(parts, "_")
+
 			// Collect provider map for batch
 			// Use mutex to avoid race condition
-			providerMapMutex.Lock()
-			providerMaps = append(providerMaps, tpm)
-			providerMapMutex.Unlock()
+			// providerMapMutex.Lock()
+			// providerMaps = append(providerMaps, tpm)
+			// providerMapMutex.Unlock()
 			// Progress logging (remove per-token log)
 			newCount := atomic.AddInt32(&completed, 1)
 			currentPercent := int32(math.Floor(float64(newCount*100) / float64(numFTs)))
@@ -401,11 +393,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			}
 		}
 		return fmt.Errorf("failed to batch add token blocks to LevelDB: %v", err)
-	}
-
-	if err := c.w.UpdateTokenDenomRaw(updatedTokenDenomArr, did); err != nil {
-		c.log.Error("Failed to update token denom array after FT creation", "err", err)
-		return fmt.Errorf("failed to update token denom array after FT creation: %v", err)
 	}
 
 	// After all workers finish, batch add provider details

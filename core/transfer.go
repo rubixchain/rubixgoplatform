@@ -35,8 +35,8 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	dc.OutChan <- br
 }
 
-func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.DIDCrypto, isSelfRBTTransfer bool) ([]wallet.Token, []string, error) {
-	return parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log, c.publishTxn)
+func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.DIDCrypto, isSelfRBTTransfer bool) ([]wallet.Token, error) {
+	return parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.testNet, c.log, c.publishTxn)
 }
 
 func getContractType(reqID string, req *model.RBTTransferRequest, transTokenInfo []contract.TokenInfo, isSelfRBTTransfer bool) *contract.ContractType {
@@ -76,7 +76,7 @@ func getContractType(reqID string, req *model.RBTTransferRequest, transTokenInfo
 }
 
 func getConsensusRequest(consensusRequestType int, senderPeerID string, receiverPeerID string,
-	contractBlock []byte, transactionEpoch int, isSelfTransfer bool, tokenDenomArr []string,
+	contractBlock []byte, transactionEpoch int, isSelfTransfer bool,
 ) *ConensusRequest {
 	var consensusRequest *ConensusRequest = &ConensusRequest{
 		ReqID:            uuid.New().String(),
@@ -85,7 +85,6 @@ func getConsensusRequest(consensusRequestType int, senderPeerID string, receiver
 		ReceiverPeerID:   receiverPeerID,
 		ContractBlock:    contractBlock,
 		TransactionEpoch: transactionEpoch,
-		TokenDenomArr:    tokenDenomArr,
 	}
 
 	if isSelfTransfer {
@@ -132,7 +131,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 
-	tokensForTxn, updatedTokenDenomArr, err := gatherTokensForTransaction(c, req, dc, isSelfRBTTransfer)
+	tokensForTxn, err := gatherTokensForTransaction(c, req, dc, isSelfRBTTransfer)
 	if err != nil {
 		c.log.Error(err.Error())
 		resp.Message = err.Error()
@@ -207,6 +206,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// transTokensSyncInfo := make(map[string]GenesisAndLatestBlocks, len(tokensForTxn))
 
 	for i := range tokensForTxn {
+		c.log.Warn(fmt.Sprintf("Tokens being selected for transfer: %v", tokensForTxn[i]))
 		tts := "rbt"
 		if tokensForTxn[i].TokenValue != 1 {
 			tts = "part"
@@ -216,6 +216,19 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		if blk == nil {
 			c.log.Error("failed to get latest block, invalid token chain")
 			resp.Message = "failed to get latest block, invalid token chain"
+			return resp
+		}
+
+		genesisBlock := c.w.GetGenesisTokenBlock(tokensForTxn[i].TokenID, tt)
+		if genesisBlock == nil {
+			c.log.Error("failed to get genesis block, invalid token chain")
+			resp.Message = "failed to get genesis block, invalid token chain"
+			return resp
+		}
+	
+		if err := c.ValidateTokenNetworkID(genesisBlock, tokensForTxn[i].TokenID); err != nil {
+			c.log.Error("failed to validate token network ID", "err", err)
+			resp.Message = "failed to validate token network ID, " + err.Error()
 			return resp
 		}
 
@@ -324,7 +337,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		return resp
 	}
 
-	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer, updatedTokenDenomArr)
+	cr := getConsensusRequest(req.Type, c.peerID, rpeerid, sc.GetBlock(), txEpoch, isSelfRBTTransfer)
 	// resultChan := make(chan *model.BasicResponse, 1)
 
 	// to distinguish between transaction types
@@ -427,16 +440,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// 		resp.Result = txID
 	// 	}
 	// }
-	
-	//NOTE: updating token denom array is local change.
-	// In case of any error in the following, instead of failing the 
-	// transaction, we can possible add it in some sort of Async queue,
-	// to be later picked up and updated.
-	if err := c.w.UpdateTokenDenomRaw(updatedTokenDenomArr, senderDID); err != nil {
-		c.log.Error("Failed to update token denom array", "err", err)
-		resp.Message = "Failed to update token denom array"
-		return resp
-	}
 
 	resp.Status = true
 	return resp
@@ -525,7 +528,7 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 
 	tokensForTxn := make([]wallet.Token, 0)
 
-	reqTokens, _, err := parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log, c.publishTxn)
+	reqTokens, err := parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.testNet, c.log, c.publishTxn)
 	if err != nil {
 		c.w.ReleaseTokens(reqTokens)
 		c.log.Error("Failed to get tokens", "err", err)

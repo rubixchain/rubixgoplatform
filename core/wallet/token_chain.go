@@ -133,7 +133,9 @@ func old2NewKey(key string) string {
 }
 
 func isOldKey(key string) bool {
-	return len(key) != DefaultKeyLength
+	return false
+	
+	//return len(key) != DefaultKeyLength
 }
 
 func oldtcsKey(tokenType int, t string, blockID string) string {
@@ -459,6 +461,7 @@ func (w *Wallet) getLatestBlock(tt int, token string) *block.Block {
 	var err error
 	if iter.Last() {
 		key := string(iter.Key())
+
 		if isOldKey(key) {
 			err = w.updateNewKey(tt, token)
 			if err != nil {
