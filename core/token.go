@@ -1634,10 +1634,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 					LatestBlock:  latestBlockAfterSync,
 				}
 				//add synced tokens to respective sqlite tables
-				if err := c.AddTokenContentToPSQL(tokenSyncInfo.TokenID, tokenSyncInfo.AssetType); err != nil {
-					// return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
-					c.log.Info("failed to add token's ipfs content to psql db, err:", err)
-				}
+		
 
 				err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, blocks, event, syncStatus)
 				if err != nil {
@@ -3193,6 +3190,7 @@ func (c *Core) ValidateNewTokenContent(tokenContent string) error {
 				)
 			}
 		}
+		c.log.Debug("token content validated for the testtoken", tokenContent)
 	case token.RBTTokenType, token.PartTokenType:
 		// maxAllowed, ok := token.TokenMap[level]
 
@@ -3213,6 +3211,8 @@ func (c *Core) ValidateNewTokenContent(tokenContent string) error {
 			}
 		}
 
+		c.log.Debug("token content validated for the MainNet token", tokenContent)
+
 	}
 
 	if tokenTypeString == PartString {
@@ -3227,6 +3227,7 @@ func (c *Core) ValidateNewTokenContent(tokenContent string) error {
 			)
 
 		}
+		c.log.Debug("token content validated for the part token", tokenContent)
 
 	}
 
@@ -3239,40 +3240,43 @@ func (c *Core) GetTokenContentAndValidate(tokenId string, assetType int) error {
 		return nil
 	}
 
-	tokenContent := ""
-	if c.fullNode {
-		// 1️⃣ If fullnode calls this function, Try reading RBT content from PostgreSQL
-		rbt, err := c.w.ReadRBTContentFromTable(tokenId)
-		if err == nil {
-			tokenContent = rbt.RBTContent
+	// tokenContent := ""
+	// if c.fullNode {
+	// 	// 1️⃣ If fullnode calls this function, Try reading RBT content from PostgreSQL
+	// 	rbt, err := c.w.ReadRBTContentFromTable(tokenId)
+	// 	if err == nil {
+	// 		tokenContent = rbt.RBTContent
+	// 	}
+
+	// }
+
+	// // 2️⃣ If not found, fetch from IPFS and store
+	// if tokenContent == "" {
+	// 	c.log.Info("RBT content not found in PSQL, fetching from IPFS", "tokenId", tokenId)
+	// 	//do ipfs cat and get the token content,
+	// 	tokenData, err := c.w.IpfsCat(tokenId)
+	// 	if err != nil {
+	// 		errMsg := fmt.Sprintf("failed to get ipfs content of the token%s", tokenId)
+	// 		c.log.Error(errMsg)
+	// 		return fmt.Errorf("failed to validate the token content, error%s", errMsg)
+	// 	}
+
+	// 	tokenContent = tokenData
+	// }
+	if tokenId != "" {
+		// 3️⃣ Validate RBT token content against TokenMap
+		if err := c.ValidateNewTokenContent(tokenId); err != nil {
+			c.log.Error(
+				"Invalid RBT token content",
+				"tokenId", tokenId,
+				"err", err,
+			)
+			return err
 		}
 
 	}
 
-	// 2️⃣ If not found, fetch from IPFS and store
-	if tokenContent == "" {
-		c.log.Info("RBT content not found in PSQL, fetching from IPFS", "tokenId", tokenId)
-		//do ipfs cat and get the token content,
-		tokenData, err := c.w.IpfsCat(tokenId)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to get ipfs content of the token%s", tokenId)
-			c.log.Error(errMsg)
-			return fmt.Errorf("failed to validate the token content, error%s", errMsg)
-		}
-
-		tokenContent = tokenData
-	}
-
-	// 3️⃣ Validate RBT token content against TokenMap
-	if err := c.ValidateNewTokenContent(tokenContent); err != nil {
-		c.log.Error(
-			"Invalid RBT token content",
-			"tokenId", tokenId,
-			"content", tokenContent,
-			"err", err,
-		)
-		return err
-	}
+	c.log.Debug("Token content validated successfully for the token", tokenId)
 
 	return nil
 }

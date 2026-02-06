@@ -212,9 +212,7 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 		if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 			return fmt.Errorf("failed to add generated block to token chain, err: %v", err)
 		}
-		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
-			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
-		}
+
 		// update block height if required
 		latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)
 		if err != nil {
@@ -301,13 +299,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			return fmt.Errorf("failed to get the latest block hash: %v", err)
 		}
 
-		// check if token exists in postgres table, add if doesn't
-		err = c.ReadTokenContentFromPSQL(tokenId, newEvent.AssetType)
-		if err != nil {
-			if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
-				c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
-			}
-		}
+
 
 		latestBlockNumber, err := latestTokenBlock.GetBlockNumber(tokenId)
 		if err != nil {
@@ -489,9 +481,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		}
 		// if it is a genesis block, then fetch token's ipfs content and store in psql db
 		if currentBlockNumber == 0 {
-			if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
-				return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
-			}
+		
 			receivedBlock.GenesisBlock = txnBlock
 		}
 		// Do all 3 checks, If any check fails, handle the failure here also just before adding the block to leveldb.
@@ -557,10 +547,7 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 			return fmt.Errorf("failed to add contract block to token chain: %v", err)
 		}
 
-		// if it is a genesis block, then fetch token's ipfs content and store in psql db
-		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
-			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
-		}
+	
 
 		// update block height if required
 		latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)

@@ -784,6 +784,11 @@ func (c *Core) ValidateIncomingTokenBlock(
 			}
 			if prevBlkID != "" {
 				if prevBlkID != latestBlockID {
+					errMsg := fmt.Sprintf("previous blockID of the blk which is getting added is not matching with the blockID which is present: token=%s expected_prev=%s got_prev=%s",
+						tokenID,
+						latestBlockID,
+						prevBlkID)
+					c.log.Error(errMsg)
 					return fmt.Errorf(
 						"previous blockID of the blk which is getting added is not matching with the blockID which is present: token=%s expected_prev=%s got_prev=%s",
 						tokenID,
@@ -809,7 +814,12 @@ func (c *Core) ValidateIncomingTokenBlock(
 			switch transType {
 			case block.TokenTransferredType, block.TokenSelfTransferredType:
 				if blk.GetSenderDID() != latestOwner {
-					c.log.Error("owner of the latest blockID is not matchig with the sender of the block which is going to get added,token", tokenID, "existingblockOwnerDID", latestBlock.GetOwner(), "incomingblockSenderDID", blk.GetSenderDID())
+					errMsg := fmt.Sprintf("Owner of the latest blockID is not matchig with the sender of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
+						tokenID,
+						latestOwner,
+						sender,
+					)
+					c.log.Error(errMsg)
 					return fmt.Errorf("Owner of the latest blockID is not matchig with the sender of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
 						tokenID,
 						latestOwner,
@@ -819,6 +829,11 @@ func (c *Core) ValidateIncomingTokenBlock(
 
 			case block.TokenExecutedType:
 				if blk.GetExecutorDID() != latestOwner {
+					errMsg := fmt.Sprintf("Owner of the latest blockID is not matchig with the Executor of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
+						tokenID,
+						latestOwner,
+						blk.GetExecutorDID())
+					c.log.Error(errMsg)
 					c.log.Error("owner of the latest blockID is not matchig with the Executor of the block which is going to get added")
 					return fmt.Errorf(
 						"Owner of the latest blockID is not matchig with the Executor of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
@@ -841,9 +856,13 @@ func (c *Core) ValidateIncomingTokenBlock(
 	if incomingBlkType != block.TokenUnpledgedType {
 		valid, err := c.validateSigner(&blk, "", p)
 		if err != nil {
+			errMsg := fmt.Sprintf("signature validation error: %w", err)
+			c.log.Error(errMsg)
 			return fmt.Errorf("signature validation error: %w", err)
 		}
 		if !valid {
+			errMsg := fmt.Sprintf("invalid block signature for token=%s", tokenID)
+			c.log.Error(errMsg)
 			return fmt.Errorf("invalid block signature for token=%s", tokenID)
 		}
 	}
