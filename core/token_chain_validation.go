@@ -561,14 +561,14 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 
 	//sender signature verification
 	if senderDIDType == did.LiteDIDMode {
-		response.Status, err = didCrypto.PvtVerify([]byte(senderSign.Hash), util.StrToHex(senderSign.PrivateSign))
+		response.Status, err = didCrypto.PvtVerify([]byte(senderSign.Hash), util.StrToHex(senderSign.Signature))
 		if err != nil {
 			c.log.Error("failed to verify sender:", sender, "err", err)
 			response.Message = "invalid sender"
 			return response, err
 		}
 	} else {
-		response.Status, err = didCrypto.NlssVerify(senderSign.Hash, util.StrToHex(senderSign.NLSSShare), util.StrToHex(senderSign.PrivateSign))
+		response.Status, err = didCrypto.NlssVerify(senderSign.Hash, nil, util.StrToHex(senderSign.Signature))
 		if err != nil {
 			c.log.Error("failed to verify sender:", sender, "err", err)
 			response.Message = "invalid sender"
@@ -642,13 +642,13 @@ func (c *Core) ValidateQuorums(b *block.Block, userDID string) (*model.BasicResp
 			continue
 		}
 		var verificationStatus bool
-		if qrm.SignType == "0" { //qrm sign type = 0, means qrm signature is BIP sign and DID is created in Lite mode
-			verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(signedData), util.StrToHex(qrm.PrivSignature))
+		if qrm.SignType == did.BIPVersion { //qrm sign type = 0, means qrm signature is BIP sign and DID is created in Lite mode
+			verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(signedData), util.StrToHex(qrm.Signature))
 			if err != nil {
 				c.log.Error("failed signature verification for quorum:", qrm.DID)
 			}
 		} else {
-			verificationStatus, err = qrmDIDCrypto.NlssVerify((signedData), util.StrToHex(qrm.Signature), util.StrToHex(qrm.PrivSignature))
+			verificationStatus, err = qrmDIDCrypto.NlssVerify((signedData), util.StrToHex(qrm.Signature), util.StrToHex(qrm.Signature))
 			if err != nil {
 				c.log.Error("failed signature verification for quorum:", qrm.DID)
 			}

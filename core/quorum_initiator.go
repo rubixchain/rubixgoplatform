@@ -98,13 +98,12 @@ type ConensusRequest struct {
 }
 
 type ConensusReply struct {
-	ReqID    string   `json:"req_id"`
-	Status   bool     `json:"status"`
-	Message  string   `json:"message"`
-	Result   []string `json:"result"`
-	Hash     string   `json:"hash"`
-	ShareSig []byte   `json:"share_sig"`
-	PrivSig  []byte   `json:"priv_sig"`
+	ReqID     string   `json:"req_id"`
+	Status    bool     `json:"status"`
+	Message   string   `json:"message"`
+	Result    []string `json:"result"`
+	Hash      string   `json:"hash"`
+	Signature []byte   `json:"signature"`
 }
 
 type ConsensusResult struct {
@@ -115,10 +114,11 @@ type ConsensusResult struct {
 }
 
 type ConsensusStatus struct {
-	Credit     CreditScore
-	PledgeLock sync.Mutex
-	P          map[string]*ipfsport.Peer
-	Result     ConsensusResult
+	Credit          CreditScore
+	QuorumSignature QuorumSignature // replace Credit struct with QuorumSignature struct
+	PledgeLock      sync.Mutex
+	P               map[string]*ipfsport.Peer
+	Result          ConsensusResult
 }
 
 type PledgeDetails struct {
@@ -192,6 +192,11 @@ type PledgeReply struct {
 type PledgeToken struct {
 	Token string
 	DID   string
+}
+
+// to replace CreditScore by QuorumSignature wherever required
+type QuorumSignature struct {
+	Signature []block.BlockSignature
 }
 
 type CreditScore struct {
@@ -427,8 +432,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	})(nil)
 
 	cs := ConsensusStatus{
-		Credit: CreditScore{
-			Credit: make([]CreditSignature, 0),
+		QuorumSignature: QuorumSignature{
+			Signature: make([]block.BlockSignature, 0),
 		},
 		P: make(map[string]*ipfsport.Peer),
 		Result: ConsensusResult{
@@ -2368,13 +2373,13 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 		}
 		return
 	}
-	var signType string
+	var signType int
 	// signType = 0 => Pki based sign in lite mode
 	// signType = 1 => Nlss based sign in basic mode
 	if util.HexToStr(ss) == "" {
-		signType = "0"
+		signType = 0
 	} else {
-		signType = "1"
+		signType = 1
 	}
 
 	switch qt {
@@ -2382,17 +2387,16 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 		cs.Result.RunningCount--
 		if status {
 			did := p.GetPeerDID()
-			csig := CreditSignature{
-				Signature:     util.HexToStr(ss),
-				PrivSignature: util.HexToStr(ps),
-				DID:           did,
-				Hash:          hash,
-				SignType:      signType,
+			csig := block.BlockSignature{
+				Signature: util.HexToStr(ps),
+				DID:       did,
+				Hash:      hash,
+				SignType:  signType,
 			}
 			if cs.Result.SuccessCount < MinConsensusRequired {
 				if _, ok := pd.PledgedTokens[did]; ok {
 					cs.P[did] = p
-					cs.Credit.Credit = append(cs.Credit.Credit, csig)
+					cs.QuorumSignature.Signature = append(cs.QuorumSignature.Signature, csig)
 					cs.Result.SuccessCount++
 				}
 			}
@@ -2586,7 +2590,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
-	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, cresp.ShareSig, cresp.PrivSig)
+	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, nil, cresp.Signature)
 }
 
 func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid string, dc did.DIDCrypto) (*block.Block, error) {
@@ -2599,16 +2603,15 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		return nil, fmt.Errorf("invalid pledge request")
 	}
 	ti := sc.GetTransTokenInfo()
-	credit := make([]block.CreditSignature, 0)
-	for _, csig := range cs.Credit.Credit {
-		credit_ := block.CreditSignature{
-			Signature:     csig.Signature,
-			PrivSignature: csig.PrivSignature,
-			DID:           csig.DID,
-			Hash:          csig.Hash,
-			SignType:      csig.SignType,
+	Signature := make([]block.BlockSignature, 0)
+	for _, csig := range cs.QuorumSignature.Signature {
+		sign := block.BlockSignature{
+			Signature: csig.Signature,
+			DID:       csig.DID,
+			Hash:      csig.Hash,
+			SignType:  csig.SignType,
 		}
-		credit = append(credit, credit_)
+		Signature = append(Signature, sign)
 	}
 	ptds := make([]block.PledgeDetail, 0)
 	for k, v := range pd.PledgedTokens {
@@ -2682,18 +2685,17 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		bti.DeployerDID = sc.GetDeployerDID()
 
 		// Fetching deployer signature to add it to transaction details
-		signData, deployerNLSSShare, deployerPrivSign, err := sc.GetHashSig(bti.DeployerDID)
+		signData, _, deployerPrivSign, err := sc.GetHashSig(bti.DeployerDID)
 		if err != nil {
 			c.log.Error("failed to fetch deployer sign", "err", err)
 			return nil, fmt.Errorf("failed to fetch deployer sign")
 		}
 		deployerSignType := dc.GetSignType()
-		deployerSign := &block.InitiatorSignature{
-			NLSSShare:   deployerNLSSShare,
-			PrivateSign: deployerPrivSign,
-			DID:         bti.DeployerDID,
-			Hash:        signData,
-			SignType:    deployerSignType,
+		deployerSign := &block.BlockSignature{
+			Signature: deployerPrivSign,
+			DID:       bti.DeployerDID,
+			Hash:      signData,
+			SignType:  deployerSignType,
 		}
 
 		var smartContractTokenValue float64
@@ -2725,7 +2727,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TransactionType:    block.TokenDeployedType,
 			TokenOwner:         sc.GetDeployerDID(),
 			TransInfo:          bti,
-			QuorumSignature:    credit,
+			QuorumSignature:    Signature,
 			GenesisBlock:       smartContractGensisBlock,
 			PledgeDetails:      ptds,
 			InitiatorSignature: deployerSign,
@@ -2736,25 +2738,24 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		bti.ExecutorDID = sc.GetExecutorDID()
 
 		// Fetching executor signature to add it to transaction details
-		signData, executorNLSSShare, executorPrivSign, err := sc.GetHashSig(bti.ExecutorDID)
+		signData, _, executorPrivSign, err := sc.GetHashSig(bti.ExecutorDID)
 		if err != nil {
 			c.log.Error("failed to fetch executor sign", "err", err)
 			return nil, fmt.Errorf("failed to fetch executor sign")
 		}
 		executorSignType := dc.GetSignType()
-		executorSign := &block.InitiatorSignature{
-			NLSSShare:   executorNLSSShare,
-			PrivateSign: executorPrivSign,
-			DID:         bti.ExecutorDID,
-			Hash:        signData,
-			SignType:    executorSignType,
+		executorSign := &block.BlockSignature{
+			Signature: executorPrivSign,
+			DID:       bti.ExecutorDID,
+			Hash:      signData,
+			SignType:  executorSignType,
 		}
 
 		tcb = block.TokenChainBlock{
 			TransactionType:    block.TokenExecutedType,
 			TokenOwner:         sc.GetExecutorDID(),
 			TransInfo:          bti,
-			QuorumSignature:    credit,
+			QuorumSignature:    Signature,
 			PledgeDetails:      ptds,
 			Data:               sc.GetSmartContractData(),
 			InitiatorSignature: executorSign,
@@ -2766,25 +2767,24 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		bti.ExecutorDID = sc.GetExecutorDID()
 
 		// Fetching executor signature to add it to transaction details
-		signData, executorNLSSsign, executorPrivSign, err := sc.GetHashSig(bti.ExecutorDID)
+		signData, _, executorPrivSign, err := sc.GetHashSig(bti.ExecutorDID)
 		if err != nil {
 			c.log.Error("failed to fetch executor sign", "err", err)
 			return nil, fmt.Errorf("failed to fetch executor sign")
 		}
 		executorSignType := dc.GetSignType()
-		executor_sign := &block.InitiatorSignature{
-			NLSSShare:   executorNLSSsign,
-			PrivateSign: executorPrivSign,
-			DID:         bti.ExecutorDID,
-			Hash:        signData,
-			SignType:    executorSignType,
+		executor_sign := &block.BlockSignature{
+			Signature: executorPrivSign,
+			DID:       bti.ExecutorDID,
+			Hash:      signData,
+			SignType:  executorSignType,
 		}
 
 		tcb = block.TokenChainBlock{
 			TransactionType:    block.TokenExecutedType,
 			TokenOwner:         sc.GetReceiverDID(),
 			TransInfo:          bti,
-			QuorumSignature:    credit,
+			QuorumSignature:    Signature,
 			Data:               sc.GetNFTData(),
 			PledgeDetails:      ptds,
 			TokenValue:         sc.GetTotalRBTs(),
@@ -2797,18 +2797,17 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		bti.DeployerDID = sc.GetDeployerDID()
 
 		// Fetching deployer signature to add it to transaction details
-		signData, deployerShareSign, deployerPrivSign, err := sc.GetHashSig(bti.DeployerDID)
+		signData, _, deployerPrivSign, err := sc.GetHashSig(bti.DeployerDID)
 		if err != nil {
 			c.log.Error("failed to fetch deployer sign", "err", err)
 			return nil, fmt.Errorf("failed to fetch deployer sign")
 		}
 		deployerSignType := dc.GetSignType()
-		deployer_sign := &block.InitiatorSignature{
-			NLSSShare:   deployerShareSign,
-			PrivateSign: deployerPrivSign,
-			DID:         bti.DeployerDID,
-			Hash:        signData,
-			SignType:    deployerSignType,
+		deployer_sign := &block.BlockSignature{
+			Signature: deployerPrivSign,
+			DID:       bti.DeployerDID,
+			Hash:      signData,
+			SignType:  deployerSignType,
 		}
 
 		nftValue := sc.GetTotalRBTs()
@@ -2823,7 +2822,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TransactionType:    block.TokenDeployedType,
 			TokenOwner:         sc.GetDeployerDID(),
 			TransInfo:          bti,
-			QuorumSignature:    credit,
+			QuorumSignature:    Signature,
 			Data:               sc.GetNFTData(),
 			TokenValue:         sc.GetTotalRBTs(),
 			GenesisBlock:       nftGenesisBlock,
@@ -2840,25 +2839,24 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TransactionType: block.TokenPinnedAsService,
 			TokenOwner:      sc.GetSenderDID(),
 			TransInfo:       bti,
-			QuorumSignature: credit,
+			QuorumSignature: Signature,
 			PledgeDetails:   ptds,
 			Version:         constants.BlockVersion,
 		}
 	} else {
 		// Fetching sender signature to add it to transaction details
 		senderdid := sc.GetSenderDID()
-		signData, senderNLSSShare, senderPrivSign, err := sc.GetHashSig(senderdid)
+		signData, _, senderPrivSign, err := sc.GetHashSig(senderdid)
 		if err != nil {
 			c.log.Error("failed to fetch sender sign", "err", err)
 			return nil, fmt.Errorf("failed to fetch sender sign")
 		}
 		senderSignType := dc.GetSignType()
-		senderSign := &block.InitiatorSignature{
-			NLSSShare:   senderNLSSShare,
-			PrivateSign: senderPrivSign,
-			DID:         senderdid,
-			Hash:        signData,
-			SignType:    senderSignType,
+		senderSign := &block.BlockSignature{
+			Signature: senderPrivSign,
+			DID:       senderdid,
+			Hash:      signData,
+			SignType:  senderSignType,
 		}
 
 		bti.SenderDID = sc.GetSenderDID()
@@ -2867,7 +2865,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			TransactionType:    block.TokenTransferredType,
 			TokenOwner:         sc.GetReceiverDID(),
 			TransInfo:          bti,
-			QuorumSignature:    credit,
+			QuorumSignature:    Signature,
 			PledgeDetails:      ptds,
 			InitiatorSignature: senderSign,
 			Epoch:              cr.TransactionEpoch,
