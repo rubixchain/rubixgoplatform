@@ -224,6 +224,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 	}
 
 	finalTokenNumber = startTokenNumber + num
+	currentTime := time.Now()
 
 	for tokenNumber := startTokenNumber; tokenNumber < finalTokenNumber; tokenNumber++ {
 		id, err := c.getTokenIDForLocalTestTokens(localTokenLevel, tokenNumber, did)
@@ -253,7 +254,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
 			Version:         constants.BlockVersion,
-			Epoch:           int(time.Now().Unix()),
+			Epoch:           int(currentTime.Unix()),
 		}
 
 		ctcb := make(map[string]*block.Block)
