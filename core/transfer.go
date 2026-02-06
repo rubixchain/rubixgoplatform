@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -150,14 +149,14 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	defer c.w.ReleaseTokens(tokensForTxn)
 
 	for i := range tokensForTxn {
-		tokenIdBuffer := bytes.NewBufferString(tokensForTxn[i].TokenID)
-		tokenIdHash, err := c.w.Add(tokenIdBuffer, senderDID, wallet.OwnerRole)
-		if err != nil {
-			c.log.Error("Failed to add commited tokens to ipfs", "err", err)
-			resp.Message = "Failed to add commited tokens to ipfs , err : " + err.Error()
-			return resp
-		}
-		c.w.Pin(tokenIdHash, wallet.OwnerRole, senderDID, "TID-Not Generated", req.Sender, req.Receiver, tokensForTxn[i].TokenValue)
+		// tokenIdBuffer := bytes.NewBufferString(tokensForTxn[i].TokenID)
+		// tokenIdHash, err := c.w.Add(tokenIdBuffer, senderDID, wallet.OwnerRole)
+		// if err != nil {
+		// 	c.log.Error("Failed to add commited tokens to ipfs", "err", err)
+		// 	resp.Message = "Failed to add commited tokens to ipfs , err : " + err.Error()
+		// 	return resp
+		// }
+		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, senderDID, "TID-Not Generated", req.Sender, req.Receiver, tokensForTxn[i].TokenValue)
 	}
 
 	// Get the receiver & do sanity check
@@ -233,7 +232,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			resp.Message = "failed to get genesis block, invalid token chain"
 			return resp
 		}
-	
+
 		if err := c.ValidateTokenNetworkID(genesisBlock, tokensForTxn[i].TokenID); err != nil {
 			c.log.Error("failed to validate token network ID", "err", err)
 			resp.Message = "failed to validate token network ID, " + err.Error()
@@ -575,14 +574,14 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 	defer c.w.ReleaseTokens(tokensForTxn)
 
 	for i := range tokensForTxn {
-		tokenIdBuffer := bytes.NewBufferString(tokensForTxn[i].TokenID)
-		tokenIdHash, err := c.w.Add(tokenIdBuffer, did, wallet.OwnerRole)
-		if err != nil {
-			c.log.Error("Failed to add commited tokens to ipfs", "err", err)
-			resp.Message = "Failed to add commited tokens to ipfs , err : " + err.Error()
-			return resp
-		}
-		c.w.Pin(tokenIdHash, wallet.PinningRole, did, "TID-Not Generated", req.Sender, req.PinningNode, tokensForTxn[i].TokenValue)
+		// tokenIdBuffer := bytes.NewBufferString(tokensForTxn[i].TokenID)
+		// tokenIdHash, err := c.w.Add(tokenIdBuffer, did, wallet.OwnerRole)
+		// if err != nil {
+		// 	c.log.Error("Failed to add commited tokens to ipfs", "err", err)
+		// 	resp.Message = "Failed to add commited tokens to ipfs , err : " + err.Error()
+		// 	return resp
+		// }
+		c.w.Pin(tokensForTxn[i].TokenID, wallet.PinningRole, did, "TID-Not Generated", req.Sender, req.PinningNode, tokensForTxn[i].TokenValue)
 	}
 	p, err := c.getPeer(req.PinningNode)
 	if err != nil {
