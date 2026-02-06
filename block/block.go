@@ -650,16 +650,6 @@ func (b *Block) GetParentDetials(t string) (string, error) {
 	return p, nil
 }
 
-// func (b *Block) GetTokenDetials(t string) (int, int, error) {
-// 	gtm := b.getGenesisTokenMap(t)
-// 	if gtm == nil {
-// 		return 0, 0, fmt.Errorf("invalid token chain block, missing genesis block")
-// 	}
-// 	tl := util.GetIntFromMap(gtm, GITokenLevelKey)
-// 	tn := util.GetIntFromMap(gtm, GITokenNumberKey)
-// 	return tl, tn, nil
-// }
-
 func (b *Block) GetSmartContract() []byte {
 	ci, ok := b.bm[TCSmartContractKey]
 	if !ok {
@@ -724,16 +714,6 @@ func (b *Block) GetSmartContractData() string {
 func (b *Block) GetNFTData() string {
 	return b.getBlkString(TCNFTDataKey)
 }
-
-// func (b *Block) GetSmartContractValue(t string) (float64, error) {
-// 	var result float64
-// 	gtm := b.getGenesisTokenMap(t)
-// 	if gtm == nil {
-// 		return result, fmt.Errorf("invalid token chain block, missing genesis block")
-// 	}
-// 	result = util.GetFloatFromMap(gtm, GISmartContractValueKey)
-// 	return result, nil
-// }
 
 func (b *Block) GetTokenValue() float64 {
 	tokenValue := util.GetFloatFromMap(b.bm, TCTokenValueKey)
@@ -816,13 +796,6 @@ func (b *Block) CalculateBlockHash() (string, error) {
 
 	return blockHash, nil
 }
-
-// func (b *Block) GetTokenLevel(token string) (int, int) {
-// 	gtm := b.getGenesisTokenMap(token)
-// 	tokenLevel := util.GetIntFromMap(gtm, GITokenLevelKey)
-// 	tokenNum := util.GetIntFromMap(gtm, GITokenNumberKey)
-// 	return tokenLevel, tokenNum
-// }
 
 func (b *Block) GetPledgedTokens() []PledgeDetail {
 	pledgedInfo := util.GetFromMap(b.bm, TCPledgeDetailsKey)

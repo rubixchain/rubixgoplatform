@@ -106,15 +106,3 @@ func GetTokenString(tl int, tn int) string {
 	str = str + fmt.Sprintf("%x", hash)
 	return str
 }
-
-// func GetLevelOneTokenString(tl int, tn int) string {
-// 	str := ""
-// 	if tl == 1 {
-// 		str = fmt.Sprintf("%d", tl)
-// 	} else {
-// 		str = fmt.Sprintf("%d", tl)
-// 	}
-// 	hash := sha256.Sum256([]byte(strconv.Itoa(tn)))
-// 	str = str + fmt.Sprintf("%x", hash)
-// 	return str
-// }

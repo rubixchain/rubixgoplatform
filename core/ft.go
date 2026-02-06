@@ -193,7 +193,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					Info: []block.GenesisTokenInfo{{
 						Token:       ftID,
 						ParentID:    parentTokenIDs,
-						TokenNumber: i,
 					}},
 				},
 				TokenValue: fractionalValue,

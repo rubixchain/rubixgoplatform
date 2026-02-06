@@ -34,11 +34,10 @@ import (
 
 const (
 	TISenderDIDKey      string = "senderDID"
-	// TIReceiverDIDKey    string = "2" // remove
 	TICommentKey        string = "comment"
-	TITIDKey            string = "tid"
+	TITIDKey            string = "txnID"
 	TIBlockKey          string = "block"
-	TITokensKey         string = "tokens"
+	TITokensKey         string = "transTokens"
 	TIRefIDKey          string = "refID"
 	TIDeployerDIDKey    string = "deployerDID"
 	TIExecutorDIDKey    string = "executorDID"
@@ -48,8 +47,6 @@ const (
 
 const (
 	TTTokenTypeKey       string = "tokenType"
-	TTPledgedTokenKey    string = "2" // depreciated not used
-	TTPledgedDIDKey      string = "3" // depreciated not used
 	TTBlockNumberKey     string = "blockNumber"
 	TTPreviousBlockIDKey string = "previousBlockID"
 	TTUnpledgedIDKey     string = "unpledgedID"
@@ -71,12 +68,11 @@ type TransTokens struct {
 
 type TransInfo struct {
 	SenderDID      string        `json:"senderDID"`
-	// ReceiverDID    string        `json:"receiverDID"` // remove
 	Comment        string        `json:"comment"`
-	TID            string        `json:"tid"`
+	TID            string        `json:"txnID"`
 	Block          []byte        `json:"block"`
 	RefID          string        `json:"refID"`
-	Tokens         []TransTokens `json:"tokens"`
+	Tokens         []TransTokens `json:"transTokens"`
 	DeployerDID    string        `json:"deployerDID"`
 	ExecutorDID    string        `json:"executorDID"`
 	PinningNodeDID string        `json:"pinningNodeDID"`
@@ -122,9 +118,6 @@ func newTransInfo(ctcb map[string]*Block, ti *TransInfo) map[string]interface{} 
 	if ti.SenderDID != "" {
 		ntib[TISenderDIDKey] = ti.SenderDID
 	}
-	// if ti.ReceiverDID != "" {
-	// 	ntib[TIReceiverDIDKey] = ti.ReceiverDID
-	// }
 	if ti.PinningNodeDID != "" {
 		ntib[TIPinningDIDKey] = ti.PinningNodeDID
 	}

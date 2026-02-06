@@ -454,8 +454,8 @@ func (c *Core) migrateNode(reqID string, m *MigrateRequest, didDir string) error
 
 					gti := block.GenesisTokenInfo{
 						Token:       t,
-						TokenLevel:  tl,
-						TokenNumber: tn,
+						// TokenLevel:  tl,
+						// TokenNumber: tn,
 						// MigratedBlockID: tcid,
 					}
 					// if migration {

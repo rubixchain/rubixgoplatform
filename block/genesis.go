@@ -21,56 +21,29 @@ const (
 )
 
 const (
-	// GBTypeKey string = "1" // remove
 	GBInfoKey string = "genesisInfo"
 )
 
 const (
-	// GITokenLevelKey  string = "1" // remove
-	// GITokenNumberKey string = "2" // remove
-	// GIMigratedBlkIDKey      string = "3" // remove
-	// GIPreviousIDKey         string = "4" // remove
-	GIParentIDKey string = "parentID"
-	// GIGrandParentIDKey      string = "6" // remove
+	GIParentIDKey       string = "parentID"
 	GICommitedTokensKey string = "commitedTokens"
-	// GISmartContractValueKey string = "8" // remove
 )
 
 type GenesisTokenInfo struct {
-	Token              string        `json:"token"`
-	TokenLevel         int           `json:"tokenLevel"`      // remove
-	TokenNumber        int           `json:"tokenNumber"`     // remove
-	// MigratedBlockID    string        `json:"migratedBlockID"` // remove
-	// PreviousID         string        `json:"previosuID"`      // remove
-	ParentID           string        `json:"parentID"`
-	GrandParentID      []string      `json:"grandParentID"` // remove
-	CommitedTokens     []TransTokens `json:"commitedTokens"`
-	// SmartContractValue float64       `json:"smartContractValue"` // remove
-	// NFTValue           float64       `json:"nftValue"`           // remove
-	// NFTData            string        `json:"nftData"`            // remove
+	Token          string        `json:"token"`
+	ParentID       string        `json:"parentID"`
+	CommitedTokens []TransTokens `json:"commitedTokens"`
 }
 
 type GenesisBlock struct {
-	// Type string             `json:"type"`
 	Info []GenesisTokenInfo `json:"info"`
 }
 
 func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 	ngib := make(map[string]interface{})
-	// ngib[GITokenLevelKey] = gi.TokenLevel
-	// ngib[GITokenNumberKey] = gi.TokenNumber
-	// if gi.MigratedBlockID != "" {
-	// 	ngib[GIMigratedBlkIDKey] = gi.MigratedBlockID
-	// }
-	// if gi.PreviousID != "" {
-	// 	ngib[GIPreviousIDKey] = gi.PreviousID
-	// }
 	if gi.ParentID != "" {
 		ngib[GIParentIDKey] = gi.ParentID
 	}
-	// if gi.GrandParentID != nil {
-	// 	ngib[GIGrandParentIDKey] = gi.GrandParentID
-	// }
 	//To add commited tokeninfo
 	newCommitedTokensBlock := make(map[string]interface{})
 	for _, tokensInfo := range gi.CommitedTokens {
@@ -81,9 +54,6 @@ func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 		newCommitedTokensBlock[tokensInfo.Token] = commitedTokenInfoMap
 	}
 	ngib[GICommitedTokensKey] = newCommitedTokensBlock
-	// if gi.SmartContractValue != 0 {
-	// 	ngib[GISmartContractValueKey] = gi.SmartContractValue
-	// }
 	return ngib
 }
 
@@ -92,7 +62,6 @@ func newGenesisBlock(gb *GenesisBlock) map[string]interface{} {
 		return nil
 	}
 	ngb := make(map[string]interface{})
-	// ngb[GBTypeKey] = gb.Type
 	ngibs := make(map[string]interface{})
 	for _, gi := range gb.Info {
 		ngib := newGenesisInfo(&gi)
