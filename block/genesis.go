@@ -27,12 +27,14 @@ const (
 const (
 	GIParentIDKey       string = "parentID"
 	GICommitedTokensKey string = "commitedTokens"
+	GINetworkIDKey          string = "networkID"
 )
 
 type GenesisTokenInfo struct {
 	Token          string        `json:"token"`
 	ParentID       string        `json:"parentID"`
 	CommitedTokens []TransTokens `json:"commitedTokens"`
+	NetworkID          string        `json:"networkID"`
 }
 
 type GenesisBlock struct {
@@ -54,6 +56,11 @@ func newGenesisInfo(gi *GenesisTokenInfo) map[string]interface{} {
 		newCommitedTokensBlock[tokensInfo.Token] = commitedTokenInfoMap
 	}
 	ngib[GICommitedTokensKey] = newCommitedTokensBlock
+
+	if gi.NetworkID != "" {
+		ngib[GINetworkIDKey] = gi.NetworkID
+	}
+
 	return ngib
 }
 

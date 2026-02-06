@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/fxamacker/cbor"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	didmodule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -30,19 +31,18 @@ const (
 	TCTokenOwnerKey         string = "tokenOwner"
 	TCGenesisBlockKey       string = "genesisBlock"
 	TCTransInfoKey          string = "transInfo"
-	TCSmartContractKey      string = "6"
 	TCQuorumSignatureKey    string = "quorumSignature"
 	TCPledgeDetailsKey      string = "pledgeDetails"
 	TCBlockHashKey          string = "blockHash"
 	TCSignatureKey          string = "signature"
 	TCBlockContentKey       string = "blockContent"
 	TCBlockContentSigKey    string = "blockContentSig"
-	TCSmartContractDataKey  string = "9"
+	TCDataKey               string = "data"
 	TCTokenValueKey         string = "tokenValue"
 	TCChildTokensKey        string = "childTokens"
 	TCInitiatorSignatureKey string = "initiatorSignature"
 	TCEpochKey              string = "epoch"
-	TCNFTDataKey            string = "13"
+	TCVersionKey            string = "version"
 )
 
 const (
@@ -76,14 +76,12 @@ type TokenChainBlock struct {
 	TransInfo          *TransInfo       `json:"transInfo"`
 	PledgeDetails      []PledgeDetail   `json:"pledgeDetails"`
 	QuorumSignature    []BlockSignature `json:"quorumSignature"`
-	SmartContract      []byte           `json:"smartContract"`
-	SmartContractData  string           `json:"smartContractData"`
 	TokenValue         float64          `json:"tokenValue"`
 	ChildTokens        []string         `json:"childTokens"`
 	InitiatorSignature *BlockSignature  `json:"initiatorSignature"`
-	NFT                []byte           `json:"nft"`
-	NFTData            string           `json:"nftData"`
 	Epoch              int              `json:"epoch"`
+	Data               string           `json:"data"`
+	Version            int              `json:"version"`
 }
 
 type PledgeDetail struct {
@@ -170,14 +168,8 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 	if tcb.QuorumSignature != nil {
 		ntcb[TCQuorumSignatureKey] = tcb.QuorumSignature
 	}
-	if tcb.SmartContract != nil {
-		ntcb[TCSmartContractKey] = tcb.SmartContract
-	}
-	if tcb.SmartContractData != "" {
-		ntcb[TCSmartContractDataKey] = tcb.SmartContractData
-	}
-	if tcb.NFTData != "" {
-		ntcb[TCNFTDataKey] = tcb.NFTData
+	if tcb.Data != "" {
+		ntcb[TCDataKey] = tcb.Data
 	}
 	if tcb.InitiatorSignature != nil {
 		ntcb[TCInitiatorSignatureKey] = tcb.InitiatorSignature
@@ -195,6 +187,10 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 
 	if tcb.Epoch != 0 {
 		ntcb[TCEpochKey] = tcb.Epoch
+	}
+
+	if tcb.Version != 0 {
+		ntcb[TCVersionKey] = tcb.Version
 	}
 
 	blk := InitBlock(nil, ntcb)
@@ -646,20 +642,7 @@ func (b *Block) GetParentDetials(t string) (string, error) {
 		return "", fmt.Errorf("invalid token chain block, missing genesis block")
 	}
 	p := util.GetStringFromMap(gtm, GIParentIDKey)
-	// gp := util.GetStringSliceFromMap(gtm, GIGrandParentIDKey)
 	return p, nil
-}
-
-func (b *Block) GetSmartContract() []byte {
-	ci, ok := b.bm[TCSmartContractKey]
-	if !ok {
-		return nil
-	}
-	c, ok := ci.([]byte)
-	if !ok {
-		return nil
-	}
-	return c
 }
 
 func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
@@ -707,12 +690,8 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 // 	return result
 // }
 
-func (b *Block) GetSmartContractData() string {
-	return b.getBlkString(TCSmartContractDataKey)
-}
-
-func (b *Block) GetNFTData() string {
-	return b.getBlkString(TCNFTDataKey)
+func (b *Block) GetDataFromTokenChain() string {
+	return b.getBlkString(TCDataKey)
 }
 
 func (b *Block) GetTokenValue() float64 {
@@ -726,6 +705,10 @@ func (b *Block) GetChildTokens() []string {
 
 func (b *Block) GetEpoch() int {
 	return util.GetIntFromMap(b.bm, TCEpochKey)
+}
+
+func (b *Block) GetVersion() int {
+	return util.GetIntFromMap(b.bm, TCVersionKey)
 }
 
 // Fetch initiator signature details from the given block
@@ -867,4 +850,27 @@ func (b *Block) GetPledgedTokens() []PledgeDetail {
 	}
 
 	return ptds
+}
+
+func (b *Block) GetGenesisNetworkType(t string) (string, error) {
+	genesisInfoMap := b.getGenesisTokenMap(t)
+
+	networkID := util.GetFromMap(genesisInfoMap, GINetworkIDKey)
+	if networkID == nil {
+		return "", fmt.Errorf("network ID not found in genesis info")
+	}
+
+	networkIDStr, ok := networkID.(string)
+	if !ok {
+		return "", fmt.Errorf("network ID is not a string")
+	}
+
+	switch networkIDStr {
+		case constants.NetworkID_RBT_Local, constants.NetworkID_RBT_Testnet, constants.NetworkID_RBT_Mainnet:
+		// valid network IDs
+	default:
+		return "", fmt.Errorf("invalid network ID: %s", networkIDStr)
+	}
+
+	return networkIDStr, nil
 }

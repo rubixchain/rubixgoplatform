@@ -17,9 +17,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -143,29 +143,49 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 	return true, nil
 }
 
-func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
+func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, error) {
 	var issueType int
-	b, err := c.getFromIPFS(pt)
+	parentTokenHash, err := c.ipfsOps.Add(
+		bytes.NewBufferString(parentTokenID),
+	)
 	if err != nil {
-		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
+		errMsg := fmt.Sprintf("failed to add parent token to ipfs for syncing, err: %v, token: %v", err, parentTokenID)
+		c.log.Error(errMsg)
+		return -1, fmt.Errorf(errMsg)
+	}
+
+	b, err := c.getFromIPFS(parentTokenHash)
+	if err != nil {
+		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", parentTokenID)
 		return -1, err
 	}
-	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+	
+	iswholeToken := token.CheckWholeToken(string(b))
 
-	tt := token.RBTTokenType
-	tv := float64(1)
-	if !iswholeToken {
-		blk := util.StrToHex(string(b))
-		rb, err := rac.InitRacBlock(blk, nil)
-		if err != nil {
-			c.log.Error("invalid token, invalid rac block", "err", err)
-			return -1, err
+	var tt int
+	var tv float64
+
+	if iswholeToken {
+		tv = float64(1)
+		if c.testNet {
+			tt = token.TestTokenType
+		} else {
+			tt = token.RBTTokenType
 		}
-		tt = rac.RacType2TokenType(rb.GetRacType())
-		if c.TokenType(PartString) == tt {
-			tv = rb.GetRacValue()
+	} else {
+		var err error
+		tv, err = parts.GetTokenValueFromIndexedID(string(b))
+		if err != nil {
+			return -1, fmt.Errorf("syncParentToken: failed while attempting fetch the value for part token: %v, err: %v", parentTokenID, err)
+		}
+
+		if c.testNet {
+			tt = token.TestPartTokenType
+		} else {
+			tt = token.PartTokenType
 		}
 	}
+
 	lbID := ""
 	// lb := c.w.GetLatestTokenBlock(pt, tt)
 	// if lb != nil {
@@ -174,20 +194,20 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	// 		lbID = ""
 	// 	}
 	// }
-	err, syncResponse := c.syncTokenChainFrom(p, lbID, pt, tt)
+	err, syncResponse := c.syncTokenChainFrom(p, lbID, parentTokenID, tt)
 	if err != nil {
 		c.log.Error("failed to sync token chain block", "err", err, "syncResponse", syncResponse)
-		return -1, fmt.Errorf(" failed to sync tokenchain Parent Token: %v, issueType: %v", pt, TokenChainNotSynced)
+		return -1, fmt.Errorf(" failed to sync tokenchain Parent Token: %v, issueType: %v", parentTokenID, TokenChainNotSynced)
 	}
-	ptb := c.w.GetLatestTokenBlock(pt, tt)
+	ptb := c.w.GetLatestTokenBlock(parentTokenID, tt)
 	if ptb == nil {
-		c.log.Error("Failed to get latest token chain block", "token", pt)
+		c.log.Error("Failed to get latest token chain block", "token", parentTokenID)
 		return -1, fmt.Errorf("failed to get latest block")
 	}
-	td, err := c.w.ReadToken(pt)
+	td, err := c.w.ReadToken(parentTokenID)
 	if err != nil {
 		td = &wallet.Token{
-			TokenID:     pt,
+			TokenID:     parentTokenID,
 			TokenValue:  tv,
 			DID:         p.GetPeerDID(),
 			TokenStatus: wallet.TokenIsBurnt,
@@ -195,14 +215,14 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 			UpdatedAt:   time.Now(),
 		}
 		if c.TokenType(PartString) == tt {
-			gb := c.w.GetGenesisTokenBlock(pt, tt)
+			gb := c.w.GetGenesisTokenBlock(parentTokenID, tt)
 			if gb == nil {
-				c.log.Error("failed to get genesis token chain block", "token", pt)
+				c.log.Error("failed to get genesis token chain block", "token", parentTokenID)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
-			ppt, err := gb.GetParentDetials(pt)
+			ppt, err := gb.GetParentDetials(parentTokenID)
 			if err != nil {
-				c.log.Error("failed to get genesis token chain block", "token", pt, "err", err)
+				c.log.Error("failed to get genesis token chain block", "token", parentTokenID, "err", err)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
 			td.ParentTokenID = ppt
@@ -214,10 +234,10 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	}
 	// update sync status to incomplete
 	if td.SyncStatus == wallet.SyncUnrequired {
-		err = c.w.UpdateTokenSyncStatus(pt, wallet.SyncIncomplete)
+		err = c.w.UpdateTokenSyncStatus(parentTokenID, wallet.SyncIncomplete)
 		if err != nil {
 			if !strings.Contains(err.Error(), "no records found") {
-				c.log.Error("failed to update parent token sync status as incomplete, token ", pt)
+				c.log.Error("failed to update parent token sync status as incomplete, token ", parentTokenID)
 			}
 		}
 
@@ -226,8 +246,8 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 		issueType = ParentTokenNotBurned // parent token is not in burnt stage
 		//Commenting gps
 		//fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
-		c.log.Error("parent token is not in burnt stage", "token", pt)
-		return -1, fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", pt, issueType)
+		c.log.Error("parent token is not in burnt stage", "token", parentTokenID)
+		return -1, fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", parentTokenID, issueType)
 	}
 	return tt, nil
 }
@@ -425,6 +445,21 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 						localBlockHash, _ := localBlk.GetHash()
 						c.log.Debug("Local latest block", "token", t.Token, "blockID", localBlockID, "blockHash", localBlockHash, "owner", localBlk.GetOwner())
 					}
+
+					genesisBlock := c.w.GetGenesisTokenBlock(t.Token, t.TokenType)
+					if genesisBlock != nil {
+						genesisBlockID, _ := genesisBlock.GetBlockID(t.Token)
+						genesisBlockHash, _ := genesisBlock.GetHash()
+						c.log.Debug("Genesis block", "token", t.Token, "blockID", genesisBlockID, "blockHash", genesisBlockHash, "owner", genesisBlock.GetOwner())
+						
+						// validate network id
+						if err := c.ValidateTokenNetworkID(genesisBlock, t.Token); err != nil {
+							c.log.Error("failed to validate token network ID", "err", err)
+							results <- tokenValidationResult{Token: t.Token, Err: fmt.Errorf("failed to validate token network ID: %v", err), SyncIssue: false}
+							return
+						}
+					}
+
 					// Fetch remote block if possible (from all token blocks)
 					blocks, _, _ := c.w.GetAllTokenBlocks(t.Token, t.TokenType, "")
 					if len(blocks) > 0 && blockID != "" {
@@ -594,6 +629,11 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 				signersForExistingBlock, err = latestBlock.GetSigner()
 				if err != nil {
 					return false, fmt.Errorf("failed to extract Quorums from genesis block: %v", err), nil
+				}
+
+				if err := c.ValidateTokenNetworkID(latestBlock, tokenInfo.Token); err != nil {
+					c.log.Error("failed to validate token network ID", "err", err)
+					return false, fmt.Errorf("failed to validate token network ID: %v", err), nil
 				}
 			}
 		} else {

@@ -14,9 +14,11 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	constants "github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
@@ -98,6 +100,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
+
 	ok, sc := c.verifyContract(cr, did)
 	if !ok {
 		crep.Message = "Failed to verify sender signature"
@@ -1242,17 +1245,30 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 
 	dc := c.pqc[did]
-	wt, err := c.GetTokens(dc, did, pr.TokensRequired, RBTTransferMode)
+
+	wt, err := parts.CollectRBTTokens(dc, c.w, pr.TokensRequired, c.testNet, c.log, c.publishTxn)
 	if err != nil {
 		crep.Message = "Failed to get tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
 	tl := len(wt)
 	if tl == 0 {
 		c.log.Error("No tokens left to pledge", "err", err)
 		crep.Message = "No tokens left to pledge"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
+	for _, token := range wt {
+		err := c.w.LockToken(&token)
+		if err != nil {
+			errMsg := fmt.Sprintf("Unable to lock token %v meant for pledging, err: %v", token.TokenID, err)
+			c.log.Error(errMsg)
+			crep.Message = fmt.Sprintf("Unable to lock token %v meant for pledging, err: %v", token.TokenID, err)
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
+
 	presp := PledgeReply{
 		BasicResponse: model.BasicResponse{
 			Status:  true,
@@ -1278,6 +1294,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		presp.TokenChainBlock = append(presp.TokenChainBlock, tc.GetBlock())
 	}
+
 	return c.l.RenderJSON(req, &presp, http.StatusOK)
 }
 
@@ -1410,10 +1427,6 @@ func (c *Core) updateReceiverToken(
 	if err != nil {
 		return nil, senderPeer, fmt.Errorf("failed to update token status, error: %v", err)
 	}
-	sc := contract.InitContract(b.GetSmartContract(), nil)
-	if sc == nil {
-		return nil, senderPeer, fmt.Errorf("failed to update token status, missing smart contract")
-	}
 
 	bid, err := b.GetBlockID(tokenInfo[0].Token)
 	if err != nil {
@@ -1423,16 +1436,16 @@ func (c *Core) updateReceiverToken(
 	// Store the transaction info only when we are dealing with RBT transfer between
 	// two DIDs that are situated on different nodes, as this avoid Unique Constraint
 	// issue while adding to Transaction History table from the Sender's end
-	if sc.GetSenderDID() != sc.GetReceiverDID() && senderPeerId != receiverPeerId {
+	if b.GetSenderDID() != b.GetOwner() && senderPeerId != receiverPeerId {
 		td := &model.TransactionDetails{
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
 			BlockID:         bid,
 			Mode:            wallet.RecvMode,
-			Amount:          sc.GetTotalRBTs(),
-			SenderDID:       sc.GetSenderDID(),
-			ReceiverDID:     sc.GetReceiverDID(),
-			Comment:         sc.GetComment(),
+			Amount:          b.GetTokenValue(),
+			SenderDID:       b.GetSenderDID(),
+			ReceiverDID:     b.GetOwner(),
+			Comment:         b.GetComment(),
 			DateTime:        time.Now(),
 			Status:          true,
 			Epoch:           int64(transactionEpoch),
@@ -1650,24 +1663,20 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		return nil, fmt.Errorf("Failed to update FT table, error: %v", updateFTTableErr)
 	}
 
-	sc := contract.InitContract(b.GetSmartContract(), nil)
-	if sc == nil {
-		return nil, fmt.Errorf("Failed to update token status, missing smart contract")
-	}
 	bid, err := b.GetBlockID(tokenInfo[0].Token)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
 	}
-	if sc.GetSenderDID() != sc.GetReceiverDID() && senderPeerId != receiverPeerId {
+	if b.GetSenderDID() != b.GetOwner() && senderPeerId != receiverPeerId {
 		td := &model.TransactionDetails{
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
 			BlockID:         bid,
 			Mode:            wallet.FTTransferMode,
 			Amount:          float64(len(b.GetTransTokens())),
-			SenderDID:       sc.GetSenderDID(),
-			ReceiverDID:     sc.GetReceiverDID(),
-			Comment:         sc.GetComment(),
+			SenderDID:       b.GetSenderDID(),
+			ReceiverDID:     b.GetOwner(),
+			Comment:         b.GetComment(),
 			DateTime:        time.Now(),
 			Status:          true,
 			Epoch:           int64(transactionEpoch),
@@ -1695,7 +1704,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		}
 		if creatorDID == "" {
 			// Fallback to sender DID if we can't get creator DID
-			creatorDID = sc.GetSenderDID()
+			creatorDID = b.GetSenderDID()
 		}
 
 		// Store in new FT transaction history table
@@ -1894,7 +1903,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 				// RefID:   refID,
 				Tokens: tsb,
 			},
-			Epoch: ur.TransactionEpoch,
+			Epoch:   ur.TransactionEpoch,
+			Version: constants.BlockVersion,
 		}
 
 		nb := block.CreateNewBlock(ctcb, &tcb)
@@ -2137,125 +2147,125 @@ func (c *Core) syncDIDArbitration(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &br, http.StatusOK)
 }
 
-func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuerry(req, "did")
-	var sr SignatureRequest
-	err := c.l.ParseJSON(req, &sr)
-	srep := SignatureReply{
-		BasicResponse: model.BasicResponse{
-			Status: false,
-		},
-	}
-	if err != nil {
-		c.log.Error("Failed to parse json request", "err", err)
-		srep.Message = "Failed to parse json request"
-		return c.l.RenderJSON(req, &srep, http.StatusOK)
-	}
+// func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
+// 	did := c.l.GetQuerry(req, "did")
+// 	var sr SignatureRequest
+// 	err := c.l.ParseJSON(req, &sr)
+// 	srep := SignatureReply{
+// 		BasicResponse: model.BasicResponse{
+// 			Status: false,
+// 		},
+// 	}
+// 	if err != nil {
+// 		c.log.Error("Failed to parse json request", "err", err)
+// 		srep.Message = "Failed to parse json request"
+// 		return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 	}
 
-	b := block.InitBlock(sr.TokenChainBlock, nil, block.NoSignature())
-	if b == nil {
-		c.log.Error("Failed to do token abitration, invalid token chain block")
-		srep.Message = "Failed to do token abitration, invalid token chanin block"
-		return c.l.RenderJSON(req, &srep, http.StatusOK)
-	}
-	scb := b.GetSmartContract()
-	if scb == nil {
-		c.log.Error("Failed to do token abitration, invalid token chain block, missing smart contract")
-		srep.Message = "Failed to do token abitration, invalid token chain block, missing smart contract"
-		return c.l.RenderJSON(req, &srep, http.StatusOK)
-	}
-	sc := contract.InitContract(scb, nil)
-	if sc == nil {
-		c.log.Error("Failed to do token abitration, invalid smart contract")
-		srep.Message = "Failed to do token abitration, invalid smart contract"
-		return c.l.RenderJSON(req, &srep, http.StatusOK)
-	}
-	ti := sc.GetTransTokenInfo()
-	if ti == nil {
-		c.log.Error("Failed to do token abitration, invalid token")
-		srep.Message = "Failed to do token abitration, invalid token"
-		return c.l.RenderJSON(req, &srep, http.StatusOK)
-	}
-	mflag := false
-	mmsg := "token is already migrated"
-	for i := range ti {
-		// tl, tn, err := b.GetTokenDetials(ti[i].Token)
-		// if err != nil {
-		// 	c.log.Error("Failed to do token abitration, invalid token detials", "err", err)
-		// 	srep.Message = "Failed to do token abitration, invalid token detials"
-		// 	return c.l.RenderJSON(req, &srep, http.StatusOK)
-		// }
-		// str := token.GetTokenString(tl, tn)
-		// tbr := bytes.NewBuffer([]byte(str))
-		// thash, err := IpfsAddWithBackoff(c.ipfs, tbr, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-		// if err != nil {
-		// 	c.log.Error("Failed to do token abitration, failed to get ipfs hash", "err", err)
-		// 	srep.Message = "Failed to do token abitration, failed to get ipfs hash"
-		// 	return c.l.RenderJSON(req, &srep, http.StatusOK)
-		// }
-		// if thash != ti[i].Token {
-		// 	c.log.Error("Failed to do token abitration, token hash not matching", "thash", thash, "token", ti[i].Token)
-		// 	srep.Message = "Failed to do token abitration, token hash not matching"
-		// 	return c.l.RenderJSON(req, &srep, http.StatusOK)
-		// }
+// 	b := block.InitBlock(sr.TokenChainBlock, nil, block.NoSignature())
+// 	if b == nil {
+// 		c.log.Error("Failed to do token abitration, invalid token chain block")
+// 		srep.Message = "Failed to do token abitration, invalid token chanin block"
+// 		return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 	}
+// 	scb := b.GetSmartContract()
+// 	if scb == nil {
+// 		c.log.Error("Failed to do token abitration, invalid token chain block, missing smart contract")
+// 		srep.Message = "Failed to do token abitration, invalid token chain block, missing smart contract"
+// 		return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 	}
+// 	sc := contract.InitContract(scb, nil)
+// 	if sc == nil {
+// 		c.log.Error("Failed to do token abitration, invalid smart contract")
+// 		srep.Message = "Failed to do token abitration, invalid smart contract"
+// 		return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 	}
+// 	ti := sc.GetTransTokenInfo()
+// 	if ti == nil {
+// 		c.log.Error("Failed to do token abitration, invalid token")
+// 		srep.Message = "Failed to do token abitration, invalid token"
+// 		return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 	}
+// 	mflag := false
+// 	mmsg := "token is already migrated"
+// 	for i := range ti {
+// 		tl, tn, err := b.GetTokenDetials(ti[i].Token)
+// 		if err != nil {
+// 			c.log.Error("Failed to do token abitration, invalid token detials", "err", err)
+// 			srep.Message = "Failed to do token abitration, invalid token detials"
+// 			return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 		}
+// 		str := token.GetTokenString(tl, tn)
+// 		tbr := bytes.NewBuffer([]byte(str))
+// 		thash, err := IpfsAddWithBackoff(c.ipfs, tbr, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+// 		if err != nil {
+// 			c.log.Error("Failed to do token abitration, failed to get ipfs hash", "err", err)
+// 			srep.Message = "Failed to do token abitration, failed to get ipfs hash"
+// 			return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 		}
+// 		if thash != ti[i].Token {
+// 			c.log.Error("Failed to do token abitration, token hash not matching", "thash", thash, "token", ti[i].Token)
+// 			srep.Message = "Failed to do token abitration, token hash not matching"
+// 			return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 		}
 
-		odid := ti[i].OwnerDID
-		if odid == "" {
-			c.log.Error("Failed to do token abitration, invalid owner did")
-			srep.Message = "Failed to do token abitration, invalid owner did"
-			return c.l.RenderJSON(req, &srep, http.StatusOK)
-		}
-		td, err := c.srv.GetTokenDetials(ti[i].Token)
-		if err == nil && td.Token == ti[i].Token {
-			nm, _ := c.srv.GetNewDIDMap(td.DID)
-			c.log.Error("Failed to do token abitration, token is already migrated", "token", ti[i].Token, "old_did", nm.OldDID, "new_did", td.DID)
-			mflag = true
-			mmsg = mmsg + "," + ti[i].Token
-			// srep.Message = "token is already migrated," + ti[i].Token
-			// return c.l.RenderJSON(req, &srep, http.StatusOK)
-		}
-		if !mflag {
-			dc, err := c.SetupForienDID(odid, "")
-			if err != nil {
-				c.log.Error("Failed to do token abitration, failed to setup did crypto", "token", ti[i].Token, "did", odid)
-				srep.Message = "Failed to do token abitration, failed to setup did crypto"
-				return c.l.RenderJSON(req, &srep, http.StatusOK)
-			}
-			err = sc.VerifySignature(dc)
-			if err != nil {
-				c.log.Error("Failed to do token abitration, signature verification failed", "err", err)
-				srep.Message = "Failed to do token abitration, signature verification failed"
-				return c.l.RenderJSON(req, &srep, http.StatusOK)
-			}
-			err = c.srv.UpdateTempTokenDetials(&service.TokenDetials{Token: ti[i].Token, DID: odid})
-			if err != nil {
-				c.log.Error("Failed to do token abitration, failed update token detials", "err", err)
-				srep.Message = "Failed to do token abitration, failed update token detials"
-				return c.l.RenderJSON(req, &srep, http.StatusOK)
-			}
-		}
-	}
-	if mflag {
-		srep.Message = mmsg
-		return c.l.RenderJSON(req, &srep, http.StatusOK)
-	}
-	dc, ok := c.qc[did]
-	if !ok {
-		c.log.Error("Failed to setup quorum crypto")
-		srep.Message = "Failed to setup quorum crypto"
-		return c.l.RenderJSON(req, &srep, http.StatusOK)
-	}
-	sig, err := b.GetSignature(dc)
-	if err != nil {
-		c.log.Error("Failed to do token abitration, failed to get signature", "err", err)
-		srep.Message = "Failed to do token abitration, failed to get signature"
-		return c.l.RenderJSON(req, &srep, http.StatusOK)
-	}
-	srep.Signature = sig
-	srep.Status = true
-	srep.Message = "Signature done"
-	return c.l.RenderJSON(req, &srep, http.StatusOK)
-}
+// 		odid := ti[i].OwnerDID
+// 		if odid == "" {
+// 			c.log.Error("Failed to do token abitration, invalid owner did")
+// 			srep.Message = "Failed to do token abitration, invalid owner did"
+// 			return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 		}
+// 		td, err := c.srv.GetTokenDetials(ti[i].Token)
+// 		if err == nil && td.Token == ti[i].Token {
+// 			nm, _ := c.srv.GetNewDIDMap(td.DID)
+// 			c.log.Error("Failed to do token abitration, token is already migrated", "token", ti[i].Token, "old_did", nm.OldDID, "new_did", td.DID)
+// 			mflag = true
+// 			mmsg = mmsg + "," + ti[i].Token
+// 			// srep.Message = "token is already migrated," + ti[i].Token
+// 			// return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 		}
+// 		if !mflag {
+// 			dc, err := c.SetupForienDID(odid, "")
+// 			if err != nil {
+// 				c.log.Error("Failed to do token abitration, failed to setup did crypto", "token", ti[i].Token, "did", odid)
+// 				srep.Message = "Failed to do token abitration, failed to setup did crypto"
+// 				return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 			}
+// 			err = sc.VerifySignature(dc)
+// 			if err != nil {
+// 				c.log.Error("Failed to do token abitration, signature verification failed", "err", err)
+// 				srep.Message = "Failed to do token abitration, signature verification failed"
+// 				return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 			}
+// 			err = c.srv.UpdateTempTokenDetials(&service.TokenDetials{Token: ti[i].Token, DID: odid})
+// 			if err != nil {
+// 				c.log.Error("Failed to do token abitration, failed update token detials", "err", err)
+// 				srep.Message = "Failed to do token abitration, failed update token detials"
+// 				return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 			}
+// 		}
+// 	}
+// 	if mflag {
+// 		srep.Message = mmsg
+// 		return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 	}
+// 	dc, ok := c.qc[did]
+// 	if !ok {
+// 		c.log.Error("Failed to setup quorum crypto")
+// 		srep.Message = "Failed to setup quorum crypto"
+// 		return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 	}
+// 	sig, err := b.GetSignature(dc)
+// 	if err != nil {
+// 		c.log.Error("Failed to do token abitration, failed to get signature", "err", err)
+// 		srep.Message = "Failed to do token abitration, failed to get signature"
+// 		return c.l.RenderJSON(req, &srep, http.StatusOK)
+// 	}
+// 	srep.Signature = sig
+// 	srep.Status = true
+// 	srep.Message = "Signature done"
+// 	return c.l.RenderJSON(req, &srep, http.StatusOK)
+// }
 
 func (c *Core) unlockTokens(req *ensweb.Request) *ensweb.Result {
 	var tokenList TokenList

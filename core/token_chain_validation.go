@@ -398,7 +398,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 			return response, err
 		}
 
-		_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
+		iswholeToken := token.CheckWholeToken(string(b))
 		tokenType := token.RBTTokenType
 		tokenValue := float64(1)
 		tokenOwner := ""

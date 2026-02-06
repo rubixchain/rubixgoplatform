@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 
@@ -194,7 +195,8 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 			Comment: "Token is un pledged at " + currentTime.String(),
 			Tokens:  tsb,
 		},
-		Epoch: int(currentTime.Unix()),
+		Epoch:   int(currentTime.Unix()),
+		Version: constants.BlockVersion,
 	}
 
 	nb := block.CreateNewBlock(ctcb, &tcb)
