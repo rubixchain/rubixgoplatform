@@ -224,6 +224,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 	}
 
 	finalTokenNumber = startTokenNumber + num
+	currentTime := time.Now()
 
 	for tokenNumber := startTokenNumber; tokenNumber < finalTokenNumber; tokenNumber++ {
 		id, err := c.getTokenIDForLocalTestTokens(localTokenLevel, tokenNumber, did)
@@ -253,6 +254,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
 			Version:         constants.BlockVersion,
+			Epoch:           int(currentTime.Unix()),
 		}
 
 		ctcb := make(map[string]*block.Block)
@@ -1889,6 +1891,8 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			return &tokendetail, fmt.Errorf("failed to get token ID from IPFS")
 		}
 
+		currentTime := time.Now()
+
 		gb := &block.GenesisBlock{
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
@@ -1911,6 +1915,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			TransInfo:       ti,
 			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
 			Version:         constants.BlockVersion,
+			Epoch:           int(currentTime.Unix()),
 		}
 
 		ctcb := make(map[string]*block.Block)
