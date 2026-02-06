@@ -153,11 +153,20 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 	return true, nil
 }
 
-func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
+func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, error) {
 	var issueType int
-	b, err := c.getFromIPFS(pt)
+	parentTokenHash, err := c.ipfsOps.Add(
+		bytes.NewBufferString(parentTokenID),
+	)
 	if err != nil {
-		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
+		errMsg := fmt.Sprintf("failed to add parent token to ipfs for syncing, err: %v, token: %v", err, parentTokenID)
+		c.log.Error(errMsg)
+		return -1, fmt.Errorf(errMsg)
+	}
+
+	b, err := c.getFromIPFS(parentTokenHash)
+	if err != nil {
+		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", parentTokenID)
 		return -1, err
 	}
 	
@@ -177,7 +186,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 		var err error
 		tv, err = parts.GetTokenValueFromIndexedID(string(b))
 		if err != nil {
-			return -1, fmt.Errorf("syncParentToken: failed while attempting fetch the value for part token: %v, err: %v", pt, err)
+			return -1, fmt.Errorf("syncParentToken: failed while attempting fetch the value for part token: %v, err: %v", parentTokenID, err)
 		}
 
 		if c.testNet {
@@ -195,20 +204,20 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	// 		lbID = ""
 	// 	}
 	// }
-	err, syncResponse := c.syncTokenChainFrom(p, lbID, pt, tt)
+	err, syncResponse := c.syncTokenChainFrom(p, lbID, parentTokenID, tt)
 	if err != nil {
 		c.log.Error("failed to sync token chain block", "err", err, "syncResponse", syncResponse)
-		return -1, fmt.Errorf(" failed to sync tokenchain Parent Token: %v, issueType: %v", pt, TokenChainNotSynced)
+		return -1, fmt.Errorf(" failed to sync tokenchain Parent Token: %v, issueType: %v", parentTokenID, TokenChainNotSynced)
 	}
-	ptb := c.w.GetLatestTokenBlock(pt, tt)
+	ptb := c.w.GetLatestTokenBlock(parentTokenID, tt)
 	if ptb == nil {
-		c.log.Error("Failed to get latest token chain block", "token", pt)
+		c.log.Error("Failed to get latest token chain block", "token", parentTokenID)
 		return -1, fmt.Errorf("failed to get latest block")
 	}
-	td, err := c.w.ReadToken(pt)
+	td, err := c.w.ReadToken(parentTokenID)
 	if err != nil {
 		td = &wallet.Token{
-			TokenID:     pt,
+			TokenID:     parentTokenID,
 			TokenValue:  tv,
 			DID:         p.GetPeerDID(),
 			TokenStatus: wallet.TokenIsBurnt,
@@ -216,14 +225,14 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 			UpdatedAt:   time.Now(),
 		}
 		if c.TokenType(PartString) == tt {
-			gb := c.w.GetGenesisTokenBlock(pt, tt)
+			gb := c.w.GetGenesisTokenBlock(parentTokenID, tt)
 			if gb == nil {
-				c.log.Error("failed to get genesis token chain block", "token", pt)
+				c.log.Error("failed to get genesis token chain block", "token", parentTokenID)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
-			ppt, _, err := gb.GetParentDetials(pt)
+			ppt, _, err := gb.GetParentDetials(parentTokenID)
 			if err != nil {
-				c.log.Error("failed to get genesis token chain block", "token", pt, "err", err)
+				c.log.Error("failed to get genesis token chain block", "token", parentTokenID, "err", err)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
 			td.ParentTokenID = ppt
@@ -235,10 +244,10 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	}
 	// update sync status to incomplete
 	if td.SyncStatus == wallet.SyncUnrequired {
-		err = c.w.UpdateTokenSyncStatus(pt, wallet.SyncIncomplete)
+		err = c.w.UpdateTokenSyncStatus(parentTokenID, wallet.SyncIncomplete)
 		if err != nil {
 			if !strings.Contains(err.Error(), "no records found") {
-				c.log.Error("failed to update parent token sync status as incomplete, token ", pt)
+				c.log.Error("failed to update parent token sync status as incomplete, token ", parentTokenID)
 			}
 		}
 
@@ -247,8 +256,8 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 		issueType = ParentTokenNotBurned // parent token is not in burnt stage
 		//Commenting gps
 		//fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
-		c.log.Error("parent token is not in burnt stage", "token", pt)
-		return -1, fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", pt, issueType)
+		c.log.Error("parent token is not in burnt stage", "token", parentTokenID)
+		return -1, fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", parentTokenID, issueType)
 	}
 	return tt, nil
 }
