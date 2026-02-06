@@ -288,7 +288,7 @@ func (b *Block) getGenesisTokenMap(t string) interface{} {
 	if gbm == nil {
 		return nil
 	}
-	im := util.GetFromMap(gbm, GBInfoKey)
+	im := util.GetFromMap(gbm, GenesisInfoKey)
 	if im == nil {
 		return nil
 	}
@@ -641,7 +641,7 @@ func (b *Block) GetParentDetials(t string) (string, error) {
 	if gtm == nil {
 		return "", fmt.Errorf("invalid token chain block, missing genesis block")
 	}
-	p := util.GetStringFromMap(gtm, GIParentIDKey)
+	p := util.GetStringFromMap(gtm, GenesisParentIDKey)
 	return p, nil
 }
 
@@ -650,7 +650,7 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 	if genesisTokenMap == nil {
 		return nil, fmt.Errorf("invalid token chain block, missing genesis block")
 	}
-	commitedTokensMap := util.GetFromMap(genesisTokenMap, GICommitedTokensKey)
+	commitedTokensMap := util.GetFromMap(genesisTokenMap, GenesisCommitedTokensKey)
 	if commitedTokensMap == nil {
 		return nil, fmt.Errorf("invalid token chain block, missing commited tokens block")
 	}
@@ -855,7 +855,7 @@ func (b *Block) GetPledgedTokens() []PledgeDetail {
 func (b *Block) GetGenesisNetworkType(t string) (string, error) {
 	genesisInfoMap := b.getGenesisTokenMap(t)
 
-	networkID := util.GetFromMap(genesisInfoMap, GINetworkIDKey)
+	networkID := util.GetFromMap(genesisInfoMap, GenesisNetworkIDKey)
 	if networkID == nil {
 		return "", fmt.Errorf("network ID not found in genesis info")
 	}
@@ -866,7 +866,7 @@ func (b *Block) GetGenesisNetworkType(t string) (string, error) {
 	}
 
 	switch networkIDStr {
-		case constants.NetworkID_RBT_Local, constants.NetworkID_RBT_Testnet, constants.NetworkID_RBT_Mainnet:
+	case constants.NetworkID_RBT_Local, constants.NetworkID_RBT_Testnet, constants.NetworkID_RBT_Mainnet:
 		// valid network IDs
 	default:
 		return "", fmt.Errorf("invalid network ID: %s", networkIDStr)
