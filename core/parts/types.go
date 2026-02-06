@@ -56,7 +56,7 @@ func (id TokenID) Level() int {
 	// Count parent hops to determine level
 	level := 0
 	currentID := id
-	
+
 	idElems := strings.Split(currentID.String(), "_")
 	if len(idElems) == 2 {
 		return 0 // Case for whole token
@@ -77,6 +77,11 @@ func (id TokenID) Level() int {
 func (id TokenID) Parent() *TokenID {
 	s := string(id)
 
+	elems := strings.Split(s, "_")
+	if len(elems) == 2 {
+		return nil // This is a whole token, no parent
+	}
+
 	// Find the last dash to get parent
 	lastDash := strings.LastIndex(s, "_")
 	if lastDash == -1 {
@@ -92,7 +97,7 @@ func (id TokenID) Parent() *TokenID {
 // Child returns the token ID for a child at the given index (1-based)
 func (id TokenID) Child(index int) TokenID {
 	// Create child hierarchical string by appending index
-	return TokenID(fmt.Sprintf("%s-%d", string(id), index))
+	return TokenID(fmt.Sprintf("%s_%d", string(id), index))
 }
 
 // Children returns all child token IDs for a given split factor
@@ -159,7 +164,7 @@ func (id TokenID) String() string {
 }
 
 type SplitOp struct {
-	TokenID            TokenID
-	ChildrenToTransfer []int // Which child indices (1-based) go to recipient
-	ChildrenToKeep     []int // Which child indices stay with sender
+	HierarchicalTokenID TokenID
+	ChildrenToTransfer  []int // Which child indices (1-based) go to recipient
+	ChildrenToKeep      []int // Which child indices stay with sender
 }

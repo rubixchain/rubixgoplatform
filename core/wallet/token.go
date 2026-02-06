@@ -7,7 +7,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -172,26 +171,6 @@ func (w *Wallet) PledgeWholeToken(did string, token string, b *block.Block) erro
 		return err
 	}
 
-	tokenDenomArr, err := w.GetTokenDenomArrForDID(did)
-	if err != nil {
-		return fmt.Errorf("failed to get token denom arr for did : %v, err: %v", did, err)
-	}
-
-	idx, err := DenomToLevel(t.TokenValue)
-	if err != nil {
-		return fmt.Errorf("UpdateUnpledgedTokenStatus: unable to get token denom array index, err: %v", err)
-	}
-
-	errDecrement := DecrementTokenDenomCountAtIndex(tokenDenomArr, idx, 1)
-	if errDecrement != nil {
-		return fmt.Errorf("UpdateUnpledgedTokenStatus: unable to decrement token denom by 1, err: %v", errDecrement)
-	}
-
-	errUpdate := w.UpdateTokenDenomRaw(tokenDenomArr, did)
-	if errUpdate != nil {
-		return fmt.Errorf("UpdateUnpledgedTokenStatus: unable to update token denom arr, err: %v", errUpdate)
-	}
-
 	return nil
 }
 
@@ -222,26 +201,6 @@ func (w *Wallet) UnpledgeWholeToken(did string, token string, tt int) error {
 		return err
 	}
 
-	tokenDenomArr, err := w.GetTokenDenomArrForDID(did)
-	if err != nil {
-		return fmt.Errorf("failed to get token denom arr for did : %v, err: %v", did, err)
-	}
-
-	idx, err := DenomToLevel(t.TokenValue)
-	if err != nil {
-		return fmt.Errorf("UpdateUnpledgedTokenStatus: unable to get token denom array index, err: %v", err)
-	}
-
-	errIncrement := IncrementTokenDenomCountAtIndex(tokenDenomArr, idx, 1)
-	if errIncrement != nil {
-		return fmt.Errorf("UpdateUnpledgedTokenStatus: unable to increment token denom by 1, err: %v", errIncrement)
-	}
-
-	errUpdate := w.UpdateTokenDenomRaw(tokenDenomArr, did)
-	if errUpdate != nil {
-		return fmt.Errorf("UpdateUnpledgedTokenStatus: unable to update token denom arr, err: %v", errUpdate)
-	}
-
 	return nil
 }
 
@@ -255,6 +214,24 @@ func (w *Wallet) GetAllTokens(did string) ([]Token, error) {
 	return t, nil
 }
 
+func (w *Wallet) GetFreeTokensWithLockedState(did string) ([]Token, error) {
+	tokens, err := w.GetFreeTokens(did)
+	if err != nil {
+		return nil, fmt.Errorf("GetFreeTokensWithLockedState: failed to get free tokens for did: %v, err: %v", did, err)
+	}
+
+	for _, token := range tokens {
+		token.TokenStatus = TokenIsLocked
+		err = w.s.Update(TokenStorage, &token, "did=? AND token_id=?", did, token.TokenID)
+		if err != nil {
+			w.log.Error("Failed to update token status to locked", "token", token, "err", err)
+			return nil, fmt.Errorf("GetFreeTokensWithLockedState: failed to update token status to locked for token: %v, err: %v", token.TokenID, err)
+		}
+	}
+
+	return tokens, nil
+}
+
 func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 	var t []Token
 	err := w.s.Read(TokenStorage, &t, "token_status=? AND did=?", TokenIsFree, did)
@@ -266,6 +243,7 @@ func (w *Wallet) GetFreeTokens(did string) ([]Token, error) {
 			return nil, err
 		}
 	}
+
 	return t, nil
 }
 
@@ -697,6 +675,7 @@ func (w *Wallet) ReleaseTokensByRef(wt []*Token) error {
 func (w *Wallet) ReleaseTokens(wt []Token) error {
 	w.l.Lock()
 	defer w.l.Unlock()
+
 	for i := range wt {
 		var t Token
 		err := w.s.Read(TokenStorage, &t, "token_id=?", wt[i].TokenID)
@@ -883,7 +862,7 @@ func populateTokenResponse(did, tokenID string, tokenType, tokenStatus int, tran
 	}
 }
 
-func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block, local bool, pinningServiceMode bool, tokenDenomArr []string) error {
+func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block.Block, local bool, pinningServiceMode bool) error {
 	w.l.Lock()
 	defer w.l.Unlock()
 	// ::TODO:: need to address part & other tokens
@@ -913,11 +892,6 @@ func (w *Wallet) TokensTransferred(did string, ti []contract.TokenInfo, b *block
 				return err
 			}
 		}
-	}
-
-	err := w.UpdateTokenDenomRaw(tokenDenomArr, did)
-	if err != nil {
-		return fmt.Errorf("TokenTransferred: error while updating token denom for did %v, err: %v", did, err)
 	}
 
 	return nil
@@ -1537,26 +1511,6 @@ func (w *Wallet) UpdateUnpledgedTokenStatus(did string, token string, tt int) er
 	if err != nil {
 		w.log.Error("Failed to update token", "token", token, "err", err)
 		return err
-	}
-
-	tokenDenomArr, err := w.GetTokenDenomArrForDID(did)
-	if err != nil {
-		return fmt.Errorf("UpdateUnpledgedTokenStatus: failed to get token denom arr for did : %v, err: %v, token: %v", did, err, token)
-	}
-
-	idx, err := DenomToLevel(t.TokenValue)
-	if err != nil {
-		return fmt.Errorf("UpdateUnpledgedTokenStatus: unable to get token denom level, err: %v, token: %v", err, token)
-	}
-
-	errIncrement := IncrementTokenDenomCountAtIndex(tokenDenomArr, idx, 1)
-	if errIncrement != nil {
-		return fmt.Errorf("UpdateUnpledgedTokenStatus: unable to increment token denom count by 1, err: %v, token: %v", errIncrement, token)
-	}
-
-	errUpdate := w.UpdateTokenDenomRaw(tokenDenomArr, did)
-	if errUpdate != nil {
-		return fmt.Errorf("UpdateUnpledgedTokenStatus: unable to update token denom arr, err: %v, token: %v", errUpdate, token)
 	}
 
 	return nil
@@ -2189,97 +2143,35 @@ func (w *Wallet) GetBlockHeightFromFullNode(tokenID, tokenType string) (int, err
 	return row.BlockHeight, nil
 }
 
-func (w *Wallet) GetTokenDenomStrForDID(did string) (string, error) {
-	var didInfo DIDType
-	errRead := w.s.Read(DIDStorage, &didInfo, "did=?", did)
-	if errRead != nil {
-		return "", fmt.Errorf("failed to fetch info for did: %v", did)
-	}
-
-	return didInfo.TokenDenom, nil
-}
-
-func (w *Wallet) GetTokenDenomArrForDID(did string) ([]string, error) {
-	tokenDenomStr, err := w.GetTokenDenomStrForDID(did)
+func (w *Wallet) GetTokenDenomArrForDID(did string) ([]int, []Token, error) {
+	tokensOwnedByDid, err := w.GetFreeTokensWithLockedState(did)
 	if err != nil {
-		return []string{}, fmt.Errorf("unable to fetch token denom for DID: %v, err: %v", did, err)
+		return nil, nil, fmt.Errorf("unable to fetch token denom for DID: %v, err: %v", did, err)
 	}
 
-	return GetTokenDenomArrFromStr(tokenDenomStr), nil
-}
-
-func (w *Wallet) UpdateTokenDenomRaw(arr []string, did string) error {
-	if len(arr) == 0 {
-		return fmt.Errorf("invalid token denom as the array is empty")
-	}
-
-	var didInfo DIDType
-	errRead := w.s.Read(DIDStorage, &didInfo, "did=?", did)
-	if errRead != nil {
-		return fmt.Errorf("failed to fetch info for did: %v", did)
-	}
-
-	tokenDenomStr := strings.Join(arr, ",")
-	didInfo.TokenDenom = tokenDenomStr
-
-	errUpdate := w.s.Update(DIDStorage, didInfo, "did=?", did)
-	if errUpdate != nil {
-		return fmt.Errorf("failed to update token denom for did: %v", did)
-	}
-
-	return nil
-}
-
-func (w *Wallet) UpdateTokenDenomWhole(wholeTokenCount int, did string) error {
-	var didInfo DIDType
-	errRead := w.s.Read(DIDStorage, &didInfo, "did=?", did)
-	if errRead != nil {
-		return fmt.Errorf("failed to fetch info for did: %v", did)
-	}
-
-	existingDenom := didInfo.TokenDenom
-	wholeTokenDenomIndex := 0
-
-	// If existingDenom is empty, it indicates a newly created DID which hasn't
-	// been part of any transactions yet
-	if existingDenom == "" {
-		tokenDenomArr := CreateTokenDenomArr()
-
-		err := UpdateTokenDenomArrayIndex(tokenDenomArr, wholeTokenDenomIndex, wholeTokenCount)
+	var tokenDenomArr []int = make([]int, GetMaxLevel())
+	var tokenIDs []string = make([]string, 0)
+	for _, tokenObj := range tokensOwnedByDid {
+		tokenTreeLevel, err := DenomToLevel(tokenObj.TokenValue)
 		if err != nil {
-			return err
+			return nil, nil, fmt.Errorf("GetTokenDenomArrForDID: unable to get token denom level, err: %v, token: %v", err, tokenObj.TokenID)
 		}
-
-		didInfo.TokenDenom = GetTokenDenomStrFromArr(tokenDenomArr)
-	} else {
-		existingDenomArr := GetTokenDenomArrFromStr(existingDenom)
-
-		err := IncrementTokenDenomCountAtIndex(existingDenomArr, wholeTokenDenomIndex, wholeTokenCount)
-		if err != nil {
-			return err
-		}
-
-		didInfo.TokenDenom = GetTokenDenomStrFromArr(existingDenomArr)
+		tokenDenomArr[tokenTreeLevel] += 1
+		tokenIDs = append(tokenIDs, tokenObj.TokenID)
 	}
 
-	errUpdate := w.s.Update(DIDStorage, didInfo, "did=?", did)
-	if errUpdate != nil {
-		return fmt.Errorf("failed to update token denom for did: %v", did)
+	if err := w.UnlockLockedTokens(did, tokenIDs); err != nil {
+		return nil, nil, fmt.Errorf("GetTokenDenomArrForDID: unable to unlock tokens for did: %v, tokenIDs: %v, err: %v", did, tokenIDs, err)
 	}
 
-	return nil
+	return tokenDenomArr, tokensOwnedByDid, nil
 }
 
-func (w *Wallet) GetTokensFromDenomArr(denomArr []string, did string) ([]Token, error) {
+func (w *Wallet) GetTokensFromDenomArr(denomArr []int, did string) ([]Token, error) {
 	var tokenList []Token = make([]Token, 0)
 
-	for level, denomCountStr := range denomArr {
+	for level, denomCount := range denomArr {
 		var denomTokenList []Token = make([]Token, 0)
-
-		denomCount, err := strconv.ParseInt(denomCountStr, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("GetTokensFromDenomArr: failed to fetch denom count, err: %v", err)
-		}
 
 		if denomCount == 0 {
 			continue

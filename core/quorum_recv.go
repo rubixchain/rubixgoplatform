@@ -1248,7 +1248,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 
 	dc := c.pqc[did]
 
-	wt, updatedDenomArr, err := parts.CollectRBTTokens(dc, c.w, pr.TokensRequired, c.ipfsOps, c.testNet, c.log, c.publishTxn)
+	wt, err := parts.CollectRBTTokens(dc, c.w, pr.TokensRequired, c.ipfsOps, c.testNet, c.log, c.publishTxn)
 	if err != nil {
 		crep.Message = "Failed to get tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
@@ -1295,13 +1295,6 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
 		presp.TokenChainBlock = append(presp.TokenChainBlock, tc.GetBlock())
-	}
-
-	// Updated Token Denom Array
-	if err := c.w.UpdateTokenDenomRaw(updatedDenomArr, did); err != nil {
-		c.log.Error("Failed to update token denom array", "err", err)
-		crep.Message = "Failed to update token denom array"
-		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 
 	return c.l.RenderJSON(req, &presp, http.StatusOK)

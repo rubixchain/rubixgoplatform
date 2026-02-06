@@ -83,7 +83,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 
 	// Fetch whole tokens
-	wholeTokens, updatedTokenDenomArr, err := parts.CollectRBTTokens(
+	wholeTokens, err := parts.CollectRBTTokens(
 		dc, c.w, rubixmath.FloatPrecision(float64(numWholeTokens)),
 		c.ipfsOps, c.testNet, c.log, c.publishTxn,
 	)
@@ -431,11 +431,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			}
 		}
 		return fmt.Errorf("failed to batch add token blocks to LevelDB: %v", err)
-	}
-
-	if err := c.w.UpdateTokenDenomRaw(updatedTokenDenomArr, did); err != nil {
-		c.log.Error("Failed to update token denom array after FT creation", "err", err)
-		return fmt.Errorf("failed to update token denom array after FT creation: %v", err)
 	}
 
 	// After all workers finish, batch add provider details

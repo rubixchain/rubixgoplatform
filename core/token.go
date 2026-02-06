@@ -318,13 +318,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		return fmt.Errorf("failed to set local test token number, err: %v", err)
 	}
 
-	errUpdate := c.w.UpdateTokenDenomWhole(num, did)
-	if errUpdate != nil {
-		errMsg := fmt.Sprintf("failed to update token denom array for did: %v", did)
-		c.log.Error(errMsg)
-		return fmt.Errorf(errMsg)
-	}
-
 	return nil
 }
 
@@ -1992,13 +1985,6 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			return &tokendetail, err
 		}
 		tokendetail.TotalCount += 1
-	}
-
-	errUpdate := c.w.UpdateTokenDenomWhole(numTokens, did)
-	if errUpdate != nil {
-		errMsg := fmt.Sprintf("failed to update token denom array for did: %v", did)
-		c.log.Error(errMsg)
-		return nil, fmt.Errorf(errMsg)
 	}
 
 	return &tokendetail, nil
