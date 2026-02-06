@@ -310,13 +310,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		return fmt.Errorf("failed to set local test token number, err: %v", err)
 	}
 
-	errUpdate := c.w.UpdateTokenDenomWhole(num, did)
-	if errUpdate != nil {
-		errMsg := fmt.Sprintf("failed to update token denom array for did: %v", did)
-		c.log.Error(errMsg)
-		return fmt.Errorf(errMsg)
-	}
-
 	return nil
 }
 
@@ -1945,13 +1938,6 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		}
 	}
 
-	errUpdate := c.w.UpdateTokenDenomWhole(numTokens, did)
-	if errUpdate != nil {
-		errMsg := fmt.Sprintf("failed to update token denom array for did: %v", did)
-		c.log.Error(errMsg)
-		return nil, fmt.Errorf(errMsg)
-	}
-
 	return &tokendetail, nil
 }
 
@@ -2549,7 +2535,11 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 
 	// re-attempt when ipfs cat fails
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		tokenContent, err = c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID)
+		tokenHash, _ := c.ipfs.Add(
+			bytes.NewBufferString(tokenId),
+		)
+
+		tokenContent, err = c.w.Cat(tokenHash, wallet.FullNodeRole, c.peerID)
 		if err == nil {
 			break
 		}
