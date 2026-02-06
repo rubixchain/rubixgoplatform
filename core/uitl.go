@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 )
 
@@ -38,19 +37,6 @@ func (c *Core) getTotalAmountFromTokenHashes(tokenHashes []string) (float64, err
 	}
 
 	return floatPrecision(totalAmount, MaxDecimalPlaces), nil
-}
-
-func (c *Core) RACPartTokenType() int {
-	if c.testNet {
-		return rac.RacTestPartTokenType
-	}
-	return rac.RacPartTokenType
-}
-func (c *Core) RACFTType() int {
-	if c.testNet {
-		return rac.RacTestFTType
-	}
-	return rac.RacFTType
 }
 
 func (c *Core) TokenType(tt string) int {

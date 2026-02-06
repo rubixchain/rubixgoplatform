@@ -134,9 +134,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			ftnumString := strconv.Itoa(i)
 			parts := []string{FTName, ftnumString, did}
 			ftID := strings.Join(parts, "_")
-			
-			
-			
+
 			// Collect provider map for batch
 			// Use mutex to avoid race condition
 			// providerMapMutex.Lock()
