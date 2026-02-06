@@ -161,8 +161,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				TransInfo:  bti,
 				GenesisBlock: &block.GenesisBlock{
 					Info: []block.GenesisTokenInfo{{
-						Token:       ftID,
-						ParentID:    parentTokenIDs,
+						Token:    ftID,
+						ParentID: parentTokenIDs,
 					}},
 				},
 				TokenValue: fractionalValue,
@@ -206,7 +206,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			}
 			publishingTxn := &model.PubSubTxnInfo{
 				BlockHash:    blockHash,
-				TxnType:      tcb.BlockType,
+				BlockType:    tcb.BlockType,
 				AssetType:    FTTokenType,
 				FTName:       FTName,
 				PublisherDID: dc.GetDID(),
@@ -282,8 +282,8 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			TransInfo:   bti,
 			TokenValue:  wholeTokens[i].TokenValue,
 			ChildTokens: newFTTokenIDs,
-			Version:         constants.BlockVersion,
-			Epoch:           int(currentTime.Unix()),
+			Version:     constants.BlockVersion,
+			Epoch:       int(currentTime.Unix()),
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
@@ -319,7 +319,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		}
 		publishingTxn := &model.PubSubTxnInfo{
 			BlockHash:    blockHash,
-			TxnType:      tcb.BlockType,
+			BlockType:    tcb.BlockType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     block.GetBlock(),

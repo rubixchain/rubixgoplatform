@@ -222,7 +222,7 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 
 	burntBlockPublishInfo := &model.PubSubTxnInfo{
 		BlockHash:    burntParentTokenBlockHash,
-		TxnType:      parentTokenChainBlock.BlockType,
+		BlockType:    parentTokenChainBlock.BlockType,
 		AssetType:    RBTTokenType,
 		PublisherDID: dc.GetDID(),
 		TxnBlock:     burntParentTokenBlock.GetBlock(),
@@ -304,9 +304,9 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 		}
 
 		tcb := &block.TokenChainBlock{
-			BlockType: block.TokenGeneratedType,
-			TokenOwner:      did,
-			TransInfo:       bti,
+			BlockType:  block.TokenGeneratedType,
+			TokenOwner: did,
+			TransInfo:  bti,
 			GenesisBlock: &block.GenesisBlock{
 				Info: []block.GenesisTokenInfo{
 					{
@@ -344,7 +344,7 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 
 		partTokenWalletInfo := &model.PubSubTxnInfo{
 			BlockHash:    partTokenBlockHash,
-			TxnType:      tcb.BlockType,
+			BlockType:    tcb.BlockType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     childTokenBlock.GetBlock(),

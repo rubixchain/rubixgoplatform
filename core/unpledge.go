@@ -239,7 +239,7 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 	}
 	publishingTxn := &model.PubSubTxnInfo{
 		BlockHash:    blockHash,
-		TxnType:      tcb.BlockType,
+		BlockType:    tcb.BlockType,
 		AssetType:    RBTTokenType,
 		PublisherDID: dc.GetDID(),
 		TxnBlock:     nb.GetBlock(),

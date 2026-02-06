@@ -682,7 +682,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	publishingTxn := &model.PubSubTxnInfo{
 		BlockHash:        blockHash,
 		TransactionID:    tid,
-		TxnType:          nb.GetTransType(),
+		BlockType:        nb.GetTransType(),
 		PublisherDID:     dc.GetDID(),
 		ReceiverDID:      sc.GetReceiverDID(),
 		TxnBlock:         nb.GetBlock(),

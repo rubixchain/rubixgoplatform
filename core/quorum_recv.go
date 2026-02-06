@@ -1954,7 +1954,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		publishingTxn := &model.PubSubTxnInfo{
 			BlockHash:    blockHash,
-			TxnType:      tcb.BlockType,
+			BlockType:    tcb.BlockType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     nb.GetBlock(),
