@@ -54,11 +54,10 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		return resp
 	}
 	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
-	rbtTokensToCommitDetails, updatedTokenDenomArr, err := parts.CollectRBTTokens(
+	rbtTokensToCommitDetails, err := parts.CollectRBTTokens(
 		didCryptoLib, 
 		c.w, 
-		deployReq.RBTAmount, 
-		c.ipfsOps, 
+		deployReq.RBTAmount,
 		c.testNet, 
 		c.log,
 		c.publishTxn,
@@ -197,13 +196,6 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	}
 	c.ec.ExplorerSCDeploy(eTrans)
 
-	// Update Token Denom Array
-	// TODO: Could be pushed to an Async queue if failed
-	if err := c.w.UpdateTokenDenomRaw(updatedTokenDenomArr, did); err != nil {
-		c.log.Error("Failed to update token denom array", "err", err)
-		resp.Message = "Failed to update token denom array"
-		return resp
-	}
 
 	c.log.Info("Smart Contract Token Deployed successfully", "duration", dif)
 	resp.Status = true

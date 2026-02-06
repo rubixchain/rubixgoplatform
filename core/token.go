@@ -20,7 +20,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -196,14 +195,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
 // provided token level and token number.
 func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int, did string) (string, error) {
 	idValue := strconv.Itoa(tokenLevel) + "_" + strconv.Itoa(tokenNumber)
-	idValueBuffer := bytes.NewBufferString(idValue)
-
-	id, err := c.w.Add(idValueBuffer, did, wallet.OwnerRole)
-	if err != nil {
-		return "", fmt.Errorf("getTokenIDForLocalTestTokens: failed to generate token ID, err: %v", err)
-	}
-
-	return id, nil
+	return idValue, nil
 }
 
 func (c *Core) generateTestTokens(reqID string, num int, did string) error {
@@ -242,7 +234,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		gb := &block.GenesisBlock{
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
-				{Token: id},
+				{Token: id, NetworkID: constants.NetworkID_RBT_Local},
 			},
 		}
 		ti := &block.TransInfo{
@@ -302,7 +294,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		}
 		publishingTxn := &model.PubSubTxnInfo{
 			BlockHash:    blockHash,
-			TxnType:      tcb.TransactionType,
+			TxnType:      block.TokenGeneratedType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     blk.GetBlock(),
@@ -317,13 +309,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 
 	if err := c.w.SetLocalTokenNumber(finalTokenNumber); err != nil {
 		return fmt.Errorf("failed to set local test token number, err: %v", err)
-	}
-
-	errUpdate := c.w.UpdateTokenDenomWhole(num, did)
-	if errUpdate != nil {
-		errMsg := fmt.Sprintf("failed to update token denom array for did: %v", did)
-		c.log.Error(errMsg)
-		return fmt.Errorf(errMsg)
 	}
 
 	return nil
@@ -1854,14 +1839,7 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 
 func (c *Core) getFaucetTestTokensID(tokenLevel int, tokenNumber int) (string, error) {
 	idStrVal := fmt.Sprintf("%d_%d", tokenLevel, tokenNumber)
-
-	idBuffer := bytes.NewBufferString(idStrVal)
-	id, err := c.ipfs.Add(idBuffer)
-	if err != nil {
-		return "", fmt.Errorf("getFaucetTestTokensID: failed to get token ID from IPFS: %v", err)
-	}
-
-	return id, nil
+	return idStrVal, nil
 }
 
 func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
@@ -1899,31 +1877,11 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		tokendetail.CurrentTokenNumber += 1
 
 		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
-		maxTokens := token.TokenMap[tokendetail.TokenLevel]
+		levelOffset := tokendetail.TokenLevel - constants.FaucetRBT_Level_Offset
+		maxTokens := token.TokenMap[levelOffset]
 		if tokendetail.CurrentTokenNumber == maxTokens+1 {
 			tokendetail.TokenLevel += 1
 			tokendetail.CurrentTokenNumber = 1
-		}
-
-		// Creating tokens at that level
-		rt := &rac.RacType{
-			Type:        rac.RacTestTokenType,
-			DID:         did,
-			TotalSupply: 1,
-			TokenNumber: uint64(tokendetail.CurrentTokenNumber),
-			TokenLevel:  uint64(tokendetail.TokenLevel),
-			CreatorID:   tokendetail.FaucetID,
-		}
-
-		r, err := rac.CreateRacFaucet(rt)
-		if err != nil {
-			c.log.Error("Failed to create rac block", "err", err)
-			return &tokendetail, fmt.Errorf("failed to create rac block")
-		}
-		err = r.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update rac signature", "err", err)
-			return &tokendetail, err
 		}
 
 		id, err := c.getFaucetTestTokensID(tokendetail.TokenLevel, tokendetail.CurrentTokenNumber)
@@ -1937,7 +1895,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		gb := &block.GenesisBlock{
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
-				{Token: id},
+				{Token: id, NetworkID: constants.NetworkID_RBT_Testnet},
 			},
 		}
 		ti := &block.TransInfo{
@@ -1976,18 +1934,21 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			c.w.UnPin(id, wallet.OwnerRole, did)
 			return &tokendetail, fmt.Errorf("failed to update did signature")
 		}
+
 		t := &wallet.Token{
 			TokenID:     id,
 			DID:         did,
 			TokenValue:  1,
 			TokenStatus: wallet.TokenIsFree,
 		}
+
 		err = c.w.CreateTokenBlock(blk)
 		if err != nil {
 			c.log.Error("Failed to add token chain", "err", err)
 			c.w.UnPin(id, wallet.OwnerRole, did)
 			return &tokendetail, err
 		}
+
 		err = c.w.CreateToken(t)
 		if err != nil {
 			c.log.Error("Failed to create token", "err", err)
@@ -1995,14 +1956,19 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			c.w.UnPin(id, wallet.OwnerRole, did)
 			return &tokendetail, err
 		}
-		tokendetail.TotalCount += 1
-	}
 
-	errUpdate := c.w.UpdateTokenDenomWhole(numTokens, did)
-	if errUpdate != nil {
-		errMsg := fmt.Sprintf("failed to update token denom array for did: %v", did)
-		c.log.Error(errMsg)
-		return nil, fmt.Errorf(errMsg)
+		tokendetail.TotalCount += 1
+		publishingTxn := &model.PubSubTxnInfo{
+			TxnType:      block.TokenGeneratedType,
+			AssetType:    RBTTokenType,
+			PublisherDID: dc.GetDID(),
+		}
+
+		err = c.publishTxn(publishingTxn)
+		if err != nil {
+			c.log.Error("Failed to publish txn", "err", err)
+			return &tokendetail, err
+		}
 	}
 
 	return &tokendetail, nil
@@ -2602,7 +2568,11 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 
 	// re-attempt when ipfs cat fails
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		tokenContent, err = c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID)
+		tokenHash, _ := c.ipfs.Add(
+			bytes.NewBufferString(tokenId),
+		)
+
+		tokenContent, err = c.w.Cat(tokenHash, wallet.FullNodeRole, c.peerID)
 		if err == nil {
 			break
 		}

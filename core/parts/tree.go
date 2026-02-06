@@ -16,22 +16,15 @@ type DenomTreeNode struct {
 type DenomTree struct {
 	Leaves   []*DenomTreeNode
 	OwnerDID string
-	ipfsOps  IPFSOperation
 }
 
-func BuildDenomTree(tokens []wallet.Token, ownerDID string, ipfsClient IPFSOperation) (*DenomTree, error) {
+func BuildDenomTree(tokens []wallet.Token, ownerDID string) (*DenomTree, error) {
 	denomTree := &DenomTree{
 		OwnerDID: ownerDID,
-		ipfsOps:  ipfsClient,
 	}
 
 	for i := range tokens {
-		indexedId, err := IpfsCatString(tokens[i].TokenID, ipfsClient)
-		if err != nil {
-			return nil, fmt.Errorf("BuildTokenTree: failed to get the heirarchical IF")
-		}
-
-		hierarchicalId, err := IndexedToHierarchical(indexedId)
+		hierarchicalId, err := IndexedToHierarchical(tokens[i].TokenID)
 		if err != nil {
 			return nil, fmt.Errorf("BuildTokenTree: failed to convert indexed ID to hierarchical ID: %v", err)
 		}

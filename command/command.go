@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1_mig"
+	version string = "0.1_sig"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -618,17 +618,6 @@ func (cmd *Command) runApp() {
 	}
 	// c.UpdateTokenInfo()
 	cmd.log.Info("Syncing Complete...")
-
-	// Process DB Migrations
-	cmd.log.Info("Applying Migrations...")
-
-	var errMigration error
-	errMigration = c.Migration_UpdateTokenDenomColumn()
-	if errMigration != nil {
-		cmd.log.Error(fmt.Sprintf("migration failed: %v", errMigration))
-	}
-
-	cmd.log.Info("Migration complete")
 
 	if cmd.publishTokenChainDetails {
 		c.PublishTCDetails()

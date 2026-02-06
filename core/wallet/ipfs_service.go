@@ -104,18 +104,21 @@ func (w *Wallet) Get(hash string, did string, role int, path string) error {
 	return err
 }
 
-func (w *Wallet) Add(r io.Reader, did string, role int) (string, error) {
+func (w *Wallet) Add(r io.Reader, did string, role int, skipProvider ...bool) (string, error) {
 	result, err := w.ipfsOps.Add(r)
 	if err != nil {
 		w.log.Error("Error adding file to ipfs", "error", err)
 		return "", err
 	}
-	err = w.AddProviderDetails(model.TokenProviderMap{Token: result, Role: role, DID: did, FuncID: AddFunc})
-	if err != nil {
-		w.log.Error("Error adding provider details", "error", err)
-		return "", err
-	} else {
-		w.log.Info("Provider details added to DB as Add -", " Token ", result)
+
+	if len(skipProvider) == 0 || !skipProvider[0] {
+		err = w.AddProviderDetails(model.TokenProviderMap{Token: result, Role: role, DID: did, FuncID: AddFunc})
+		if err != nil {
+			w.log.Error("Error adding provider details", "error", err)
+			return "", err
+		} else {
+			w.log.Info("Provider details added to DB as Add -", " Token ", result)
+		}
 	}
 	return result, err
 }

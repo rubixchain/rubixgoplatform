@@ -94,3 +94,24 @@ func GetTokenValueFromHierarchicalID(heirarchicalID string) (float64, error) {
 
 	return tokenValue, nil
 }
+
+
+func removeTokensFromList(tokens []wallet.Token, tokenIDsToRemove []wallet.Token) []wallet.Token {
+	if len(tokenIDsToRemove) == 0 {
+		return tokens
+	}
+
+	tokenIDSet := make(map[string]struct{})
+	for _, token := range tokenIDsToRemove {
+		tokenIDSet[token.TokenID] = struct{}{}
+	}
+
+	var filteredTokens []wallet.Token
+	for _, token := range tokens {
+		if _, found := tokenIDSet[token.TokenID]; !found {
+			filteredTokens = append(filteredTokens, token)
+		}
+	}
+
+	return filteredTokens
+}
