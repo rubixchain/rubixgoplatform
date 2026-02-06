@@ -36,7 +36,7 @@ func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 }
 
 func gatherTokensForTransaction(c *Core, req *model.RBTTransferRequest, dc did.DIDCrypto, isSelfRBTTransfer bool) ([]wallet.Token, error) {
-	return parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log, c.publishTxn)
+	return parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.testNet, c.log, c.publishTxn)
 }
 
 func getContractType(reqID string, req *model.RBTTransferRequest, transTokenInfo []contract.TokenInfo, isSelfRBTTransfer bool) *contract.ContractType {
@@ -515,7 +515,7 @@ func (c *Core) initiatePinRBT(reqID string, req *model.RBTPinRequest) *model.Bas
 
 	tokensForTxn := make([]wallet.Token, 0)
 
-	reqTokens, err := parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.ipfsOps, c.testNet, c.log, c.publishTxn)
+	reqTokens, err := parts.CollectRBTTokens(dc, c.w, req.TokenCount, c.testNet, c.log, c.publishTxn)
 	if err != nil {
 		c.w.ReleaseTokens(reqTokens)
 		c.log.Error("Failed to get tokens", "err", err)

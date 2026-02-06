@@ -87,7 +87,7 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 	return splits, nil
 }
 
-func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation,
+func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto,
 	splitOp SplitOp, tokenCache map[string]*wallet.Token, isTestnet bool,
 	tokenDenomArr []int, publishFn func(*model.PubSubTxnInfo) error,
 ) ([]wallet.Token, error) {
@@ -97,25 +97,20 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 	if err != nil {
 		return nil, fmt.Errorf("performTokenSplit: failed to convert parent token hierarchical ID to indexed ID: %v", err)
 	}
-	
-	parentTokenIFPSId, err := IpfsAddString(parentTokenIndexedID, ipfsOps)
-	if err != nil {
-		return nil, fmt.Errorf("performTokenSplit: failed to get IPFS ID for Parent token: %v, err: %v", splitOp.HierarchicalTokenID.String(), err)
-	}
 
-	if cachedToken, exists := tokenCache[parentTokenIFPSId]; exists {
+	if cachedToken, exists := tokenCache[parentTokenIndexedID]; exists {
 		parentToken = cachedToken
 	} else {
 		var err error
-		parentToken, err = w.GetToken(parentTokenIFPSId, wallet.TokenIsFree)
+		parentToken, err = w.GetToken(parentTokenIndexedID, wallet.TokenIsFree)
 		if err != nil {
-			return nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v with id: %v; indexid: %v, err: %v", splitOp.HierarchicalTokenID.String(), parentTokenIFPSId, parentTokenIndexedID, err)
+			return nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v with id: %v; indexid: %v, err: %v", splitOp.HierarchicalTokenID.String(), parentTokenIndexedID, parentTokenIndexedID, err)
 		}
 	}
 
 	childLevel := parentTokenHeirarchicalID.Level() + 1
 
-	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentTokenHeirarchicalID, parentTokenIndexedID, childLevel, ipfsOps, isTestnet, publishFn, tokenDenomArr)
+	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentTokenHeirarchicalID, parentTokenIndexedID, childLevel, isTestnet, publishFn, tokenDenomArr)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +127,7 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 
 	err = burnParentToken(dc, w, parentToken.TokenID, parentToken.TokenValue, childTokenIDs, dc.GetDID(), isTestnet, tokenDenomArr, publishFn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenIFPSId, dc.GetDID(), err)
+		return nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenIndexedID, dc.GetDID(), err)
 	}
 
 	childTokensToTransfer := make([]wallet.Token, 0)
@@ -140,7 +135,7 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto, ipfsOps IPFSOperation
 	for _, transferIdx := range splitOp.ChildrenToTransfer {
 		childTokenToTransfer, exists := childTokensCreatedMap[transferIdx]
 		if !exists {
-			return nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenIFPSId)
+			return nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenIndexedID)
 		}
 
 		childTokensToTransfer = append(childTokensToTransfer, childTokenToTransfer)
@@ -153,24 +148,15 @@ func createHierarchicalChildTokenContent(hierarchicalParentTokenContent string, 
 	return hierarchicalParentTokenContent + "_" + fmt.Sprint(index)
 }
 
-func createChildTokenAtIndex(
-	parentTokenContent string,
-	index int, ipfsOps IPFSOperation,
-) (string, error) {
-	hierarchicalChildTokenContent := createHierarchicalChildTokenContent(parentTokenContent, index)
+func createChildTokenAtIndex(parentTokenHierarchicalID string, index int) (string, error) {
+	hierarchicalChildTokenContent := createHierarchicalChildTokenContent(parentTokenHierarchicalID, index)
 
 	indexedChildTokenContent, err := HeirarchicalToIndexed(TokenID(hierarchicalChildTokenContent))
 	if err != nil {
 		return "", fmt.Errorf("createChildToken: failed to convert hierarchical child token content to indexed, err: %v", err)
 	}
 
-	childTokenContentBuffer := bytes.NewBufferString(indexedChildTokenContent)
-	childTokenHash, err := ipfsOps.Add(childTokenContentBuffer)
-	if err != nil {
-		return "", fmt.Errorf("createChildToken: failed to perform IPFS Add operation while fetching token hash, err: %v", err)
-	}
-
-	return childTokenHash, nil
+	return indexedChildTokenContent, nil
 }
 
 func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
@@ -252,7 +238,13 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 		return fmt.Errorf("burnParentToken: failed while updating Parent token %v status to burnt, err: %v", parentTokenID, err)
 	}
 
-	if _, err := w.Pin(parentTokenID, wallet.OwnerRole, did, "NA", did, "NA", parentTokenValue); err != nil {
+	parentTokenIDBuffer := bytes.NewBufferString(parentTokenID)
+	parentTokenHash, err := w.Add(parentTokenIDBuffer, did, wallet.AddFunc, true)
+	if err != nil {
+		return fmt.Errorf("burnParentToken: failed to add parent token to ipfs: %v, err: %v", parentTokenID, err)
+	}
+
+	if _, err := w.Pin(parentTokenHash, wallet.OwnerRole, did, "NA", did, "NA", parentTokenValue); err != nil {
 		return fmt.Errorf("burnParentToken: failed to pin parent token: %v, err: %v", parentTokenID, err)
 	}
 
@@ -271,14 +263,10 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 }
 
 func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHierarchicalID TokenID, parenTokenIndexedID string,
-	level int, ipfsOps IPFSOperation, isTestnet bool, publishFn func(*model.PubSubTxnInfo) error, 
+	level int, isTestnet bool, publishFn func(*model.PubSubTxnInfo) error,
 	tokenDenomArr []int,
 ) (map[int]wallet.Token, error) {
 	var childTokenIndexMap map[int]wallet.Token = make(map[int]wallet.Token)
-	parentTokenHash, err := IpfsAddString(parenTokenIndexedID, ipfsOps)
-	if err != nil {
-		return nil, fmt.Errorf("createChildTokensAtLevel: failed to add parent token indexed ID to IPFS, err: %v", err)
-	}
 
 	maxTokenCount := MaxTokensAtLevel(level)
 
@@ -291,7 +279,7 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 
 	// Get Parent Token Details
 	for index := 1; index <= maxTokenCount; index++ {
-		childTokenID, err := createChildTokenAtIndex(parentTokenHierarchicalID.String(), index, ipfsOps)
+		childTokenID, err := createChildTokenAtIndex(parentTokenHierarchicalID.String(), index)
 		if err != nil {
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to create child token with ID: %v, err: %v", childTokenID, err)
 		}
@@ -315,7 +303,7 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 				Info: []block.GenesisTokenInfo{
 					{
 						Token:    childTokenID,
-						ParentID: parentTokenHash,
+						ParentID: parenTokenIndexedID,
 					},
 				},
 			},
@@ -358,13 +346,19 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to publish part token info for token: %v, err: %v", childTokenID, err)
 		}
 
-		if _, err := w.Pin(childTokenID, wallet.OwnerRole, did, "NA", did, "NA", childTokenValue); err != nil {
+		childTokenIDBuffer := bytes.NewBufferString(childTokenID)
+		childTokenHash, err := w.Add(childTokenIDBuffer, did, wallet.AddFunc, true)
+		if err != nil {
+			return nil, fmt.Errorf("createChildTokensAtLevel: failed to add child token to ipfs: %v, err: %v", childTokenID, err)
+		} 
+
+		if _, err := w.Pin(childTokenHash, wallet.OwnerRole, did, "NA", did, "NA", childTokenValue); err != nil {
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to pin child token: %v, err: %v", childTokenID, err)
 		}
 
 		childToken := wallet.Token{
 			TokenID:       childTokenID,
-			ParentTokenID: parentTokenHash,
+			ParentTokenID: parenTokenIndexedID,
 			TokenValue:    childTokenValue,
 			DID:           did,
 			TokenStatus:   wallet.TokenIsFree,

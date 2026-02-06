@@ -2535,7 +2535,11 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 
 	// re-attempt when ipfs cat fails
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		tokenContent, err = c.w.Cat(tokenId, wallet.FullNodeRole, c.peerID)
+		tokenHash, _ := c.ipfs.Add(
+			bytes.NewBufferString(tokenId),
+		)
+
+		tokenContent, err = c.w.Cat(tokenHash, wallet.FullNodeRole, c.peerID)
 		if err == nil {
 			break
 		}

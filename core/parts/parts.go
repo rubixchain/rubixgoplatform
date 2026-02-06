@@ -36,7 +36,7 @@ func checkSufficientBalance(w *wallet.Wallet, did string, transferAmount float64
 }
 
 func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64,
-	ipfsOps IPFSOperation, isTestnet bool, log logger.Logger, publishFn func(*model.PubSubTxnInfo) error,
+	 isTestnet bool, log logger.Logger, publishFn func(*model.PubSubTxnInfo) error,
 ) ([]wallet.Token, error) {
 	var splitOps []SplitOp = make([]SplitOp, 0)
 	var tokensTransfer []wallet.Token = make([]wallet.Token, 0)
@@ -83,18 +83,8 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64
 		// and split accordingly
 		var remainingAvailableTokens []wallet.Token = removeTokensFromList(leadTokenList, nonSplitTokenTransfer)
 
-		// The recipient tokens should be in locked status before building the denom tree
-		// for _, t := range remainingAvailableTokens {
-		// 	t.TokenStatus = wallet.TokenIsLocked
-
-		// 	err := w.UpdateToken(&t)
-		// 	if err != nil {
-		// 		return nil, fmt.Errorf("CollectRBTTokens: failed to update token: %v, err: %v", t.TokenID, err)
-		// 	}
-		// }
-
 		// Build the tree
-		tokenDenomTree, err := BuildDenomTree(remainingAvailableTokens, did, ipfsOps)
+		tokenDenomTree, err := BuildDenomTree(remainingAvailableTokens, did)
 		if err != nil {
 			return nil, fmt.Errorf("CollectRBTTokens: failed to get the denom tree for did: %v, err: %v", did, err)
 		}
@@ -125,7 +115,7 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64
 		tokenCache := make(map[string]*wallet.Token)
 
 		for _, splitOp := range splitOps {
-			partTokensToTransfer, err := performTokenSplit(w, dc, ipfsOps, splitOp, tokenCache, isTestnet, remainingBalanceDenomArr, publishFn)
+			partTokensToTransfer, err := performTokenSplit(w, dc, splitOp, tokenCache, isTestnet, remainingBalanceDenomArr, publishFn)
 			if err != nil {
 				return nil, fmt.Errorf("CollectRBTTokens: could not perform split at Level: %v, err: %v", splitOp.HierarchicalTokenID.Level(), err)
 			}

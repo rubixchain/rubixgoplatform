@@ -57,8 +57,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	rbtTokensToCommitDetails, err := parts.CollectRBTTokens(
 		didCryptoLib, 
 		c.w, 
-		deployReq.RBTAmount, 
-		c.ipfsOps, 
+		deployReq.RBTAmount,
 		c.testNet, 
 		c.log,
 		c.publishTxn,

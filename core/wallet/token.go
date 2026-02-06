@@ -974,6 +974,11 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	for _, tokenInfo := range ti {
 		// Check if token already exists
 		var t Token
+
+		// Get the token
+		tokenHash, _ := w.ipfsOps.Add(
+			bytes.NewBufferString(tokenInfo.Token),
+		)
 		err := w.s.Read(TokenStorage, &t, "token_id=?", tokenInfo.Token)
 		if err != nil || t.TokenID == "" {
 			// Token doesn't exist, proceed to handle it
@@ -984,8 +989,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			}
 			defer os.RemoveAll(dir)
 
-			// Get the token
-			if err := w.Get(tokenInfo.Token, did, OwnerRole, dir); err != nil {
+			if err := w.Get(tokenHash, did, OwnerRole, dir); err != nil {
 				w.log.Error("Failed to get token", "err", err)
 				return nil, err
 			}
@@ -1032,15 +1036,16 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 
 		err = w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token)
 		if err != nil {
-			fmt.Println("failed to update to db, token ", tokenInfo.Token)
+			w.log.Info(fmt.Sprintf("failed to update to db, token %s\n", tokenInfo.Token))
 			return nil, err
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
 		//Pinnig the whole tokens and pat tokens (skip AddProviderDetails)
-		_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
+		
+		_, err = w.Pin(tokenHash, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 		if err != nil {
-			fmt.Println("failed to pin token ", tokenInfo.Token)
+			w.log.Info(fmt.Sprintf("failed to pin token %s\n", tokenInfo.Token))
 			return nil, err
 		}
 	}
@@ -1135,7 +1140,11 @@ func (w *Wallet) FTTokensReceivedLegacy(did string, ti []contract.TokenInfo, b *
 			defer os.RemoveAll(dir)
 
 			// Get the token
-			if err := w.Get(tokenInfo.Token, did, OwnerRole, dir); err != nil {
+			tokenHash, _ := w.ipfsOps.Add(
+				bytes.NewBufferString(tokenInfo.Token),
+			)
+
+			if err := w.Get(tokenHash, did, OwnerRole, dir); err != nil {
 				w.log.Error("Failed to get token", "err", err)
 				return nil, err
 			}
@@ -2182,7 +2191,7 @@ func (w *Wallet) GetTokensFromDenomArr(denomArr []int, did string) ([]Token, err
 			return nil, fmt.Errorf("GetTokensFromDenomArr: failed to get denom for level: %v, err: %v", level, err)
 		}
 
-		if err := w.s.Read(TokenStorage, &denomTokenList, "did=? AND token_value=? LIMIT ?", did, denomValue, denomCount); err != nil {
+		if err := w.s.Read(TokenStorage, &denomTokenList, "did=? AND token_value=? AND token_status=? LIMIT ?", did, denomValue, TokenIsFree, denomCount); err != nil {
 			return nil,
 				fmt.Errorf(
 					"GetTokensFromDenomArr: failed to get tokens for denom value: %v, did: %v, denomCount: %v, err: %v",
