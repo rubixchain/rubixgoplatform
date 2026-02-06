@@ -159,7 +159,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", parentTokenID)
 		return -1, err
 	}
-	
+
 	iswholeToken := token.CheckWholeToken(string(b))
 
 	var tt int
@@ -288,6 +288,8 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 			c.log.Error("Failed to sync parent token for token", "token", ti.Token, "err", err)
 			return err, false
 		}
+		// The parent token passed in the pin function is the ipfs Hash itself.
+		// We are adding the parent token details to ipfs in the syncParentToken function above.
 		_, err = c.w.Pin(parentToken, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
 		if err != nil {
 			c.log.Error("Failed to pin parent token for token", "token", ti.Token, "err", err)

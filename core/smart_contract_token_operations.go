@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -55,10 +56,10 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	}
 	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
 	rbtTokensToCommitDetails, err := parts.CollectRBTTokens(
-		didCryptoLib, 
-		c.w, 
+		didCryptoLib,
+		c.w,
 		deployReq.RBTAmount,
-		c.testNet, 
+		c.testNet,
 		c.log,
 		c.publishTxn,
 	)
@@ -72,7 +73,14 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	defer c.w.ReleaseTokens(rbtTokensToCommitDetails)
 
 	for i := range rbtTokensToCommitDetails {
-		c.w.Pin(rbtTokensToCommitDetails[i].TokenID, wallet.OwnerRole, did, "NA", "NA", "NA", float64(0)) //TODO: Ensure whether trnxId should be added ?
+		commitedTokenIdBuffer := bytes.NewBufferString(rbtTokensToCommitDetails[i].TokenID)
+		commitedTokenHash, err := c.w.Add(commitedTokenIdBuffer, did, wallet.OwnerRole)
+		if err != nil {
+			c.log.Error("Failed to add commited tokens to ipfs", "err", err)
+			resp.Message = "Failed to add commited tokens to ipfs , err : " + err.Error()
+			return resp
+		}
+		c.w.Pin(commitedTokenHash, wallet.OwnerRole, did, "NA", "NA", "NA", float64(0)) //TODO: Ensure whether trnxId should be added ?
 		rbtTokensToCommit = append(rbtTokensToCommit, rbtTokensToCommitDetails[i].TokenID)
 	}
 
@@ -195,7 +203,6 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		Comments:           deployReq.Comment,
 	}
 	c.ec.ExplorerSCDeploy(eTrans)
-
 
 	c.log.Info("Smart Contract Token Deployed successfully", "duration", dif)
 	resp.Status = true
