@@ -3207,13 +3207,14 @@ func (c *Core) relaseToken(release *bool, token string) {
 	}
 }
 
-func ValidateNewTokenContent(tokenContent string) error {
-	parts := strings.Split(tokenContent, "-")
+func (c *Core) ValidateNewTokenContent(tokenContent string) error {
+	parts := strings.Split(tokenContent, "_")
 
-	tokenType := "rbt"
+	tokenTypeString := RBTString
 	if len(parts) == 3 {
-		tokenType = "part"
+		tokenTypeString = PartString
 	}
+	tokenType := c.TokenType(tokenTypeString)
 
 	// parse level (e.g. "002")
 	level, err := strconv.Atoi(strings.TrimLeft(parts[0], "0"))
@@ -3226,20 +3227,54 @@ func ValidateNewTokenContent(tokenContent string) error {
 	if err != nil {
 		return fmt.Errorf("invalid token number in token content: %s", tokenContent)
 	}
-
 	maxAllowed, ok := token.TokenMap[level]
-	if !ok {
-		return fmt.Errorf("invalid token level %d not present in TokenMap", level)
+
+	switch tokenType {
+	case token.TestTokenType, token.TestPartTokenType:
+		//check level is there in the tokenmapping.go or level has to be equl to 10,000 if not it has to return
+
+		// Testnet-specific validation
+
+		// level must exist in TokenMap OR be exactly 10000
+		if !ok && level != 10000 {
+			return fmt.Errorf(
+				"invalid testnet token level %d: not present in TokenMap and not equal to 10000",
+				level,
+			)
+		}
+
+		// if level exists in TokenMap, validate token number
+		if ok {
+			if tokenNo < 0 || tokenNo > maxAllowed {
+				return fmt.Errorf(
+					"testnet token number %d exceeds max allowed %d for level %d",
+					tokenNo, maxAllowed, level,
+				)
+			}
+		}
+	case token.RBTTokenType, token.PartTokenType:
+		// maxAllowed, ok := token.TokenMap[level]
+
+		// level must exist in TokenMap OR be exactly 10000
+		if !ok {
+			return fmt.Errorf(
+				"invalid testnet token level %d: not present in TokenMap and not equal to 10000",
+				level,
+			)
+		}
+		// if level exists in TokenMap, validate token number
+		if ok {
+			if tokenNo < 0 || tokenNo > maxAllowed {
+				return fmt.Errorf(
+					"mainnet token number %d exceeds max allowed %d for level %d",
+					tokenNo, maxAllowed, level,
+				)
+			}
+		}
+
 	}
 
-	if tokenNo < 0 || tokenNo >= maxAllowed {
-		return fmt.Errorf(
-			"token number %d exceeds max allowed %d for level %d",
-			tokenNo, maxAllowed, level,
-		)
-	}
-
-	if tokenType == "part" {
+	if tokenTypeString == PartString {
 		partTokenNumber, err := strconv.Atoi(parts[2])
 		if err != nil {
 			return fmt.Errorf("invalid part number in token content: %s", tokenContent)
@@ -3263,33 +3298,32 @@ func (c *Core) GetTokenContentAndValidate(tokenId string, assetType int) error {
 		return nil
 	}
 
-	var tokenContent string
-	var err error
+	tokenContent := ""
+	if c.fullNode {
+		// 1️⃣ If fullnode calls this function, Try reading RBT content from PostgreSQL
+		rbt, err := c.w.ReadRBTContentFromTable(tokenId)
+		if err == nil {
+			tokenContent = rbt.RBTContent
+		}
 
-	// 1️⃣ Try reading RBT content from PostgreSQL
-	rbt, err := c.w.ReadRBTContentFromTable(tokenId)
-	if err == nil {
-		tokenContent = rbt.RBTContent
 	}
 
 	// 2️⃣ If not found, fetch from IPFS and store
 	if tokenContent == "" {
 		c.log.Info("RBT content not found in PSQL, fetching from IPFS", "tokenId", tokenId)
-
-		if err := c.AddTokenContentToPSQL(tokenId, assetType); err != nil {
-			return err
-		}
-
-		// Read again after insert
-		rbt, err = c.w.ReadRBTContentFromTable(tokenId)
+		//do ipfs cat and get the token content,
+		tokenData, err := c.w.IpfsCat(tokenId)
 		if err != nil {
-			return err
+			errMsg := fmt.Sprintf("failed to get ipfs content of the token%s", tokenId)
+			c.log.Error(errMsg)
+			return fmt.Errorf("failed to validate the token content, error%s", errMsg)
 		}
-		tokenContent = rbt.RBTContent
+
+		tokenContent = tokenData
 	}
 
 	// 3️⃣ Validate RBT token content against TokenMap
-	if err := ValidateNewTokenContent(tokenContent); err != nil {
+	if err := c.ValidateNewTokenContent(tokenContent); err != nil {
 		c.log.Error(
 			"Invalid RBT token content",
 			"tokenId", tokenId,

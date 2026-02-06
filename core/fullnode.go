@@ -185,7 +185,17 @@ func (c *Core) processTransferTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 
 // Process individual transfer token
 func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId, receiverDid, currentOwner string) error {
-	//TODO: CallTokenGenuinity check function
+	// CallTokenGenuinity check function
+	err := c.GetTokenContentAndValidate(tokenId, newEvent.AssetType)
+	if err != nil {
+		wrappedErr := fmt.Errorf(
+			"failed to validate token content, token %s: %w",
+			tokenId,
+			err,
+		)
+		c.log.Error(wrappedErr.Error())
+		return wrappedErr
+	}
 
 	// Token generated type handling
 	if newEvent.TxnType == block.TokenGeneratedType {
