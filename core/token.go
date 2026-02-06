@@ -20,7 +20,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -235,7 +234,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 		gb := &block.GenesisBlock{
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
-				{Token: id},
+				{Token: id, NetworkID: constants.NetworkID_RBT_Local},
 			},
 		}
 		ti := &block.TransInfo{
@@ -1877,31 +1876,11 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		tokendetail.CurrentTokenNumber += 1
 
 		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
-		maxTokens := token.TokenMap[tokendetail.TokenLevel]
+		levelOffset := tokendetail.TokenLevel - constants.FaucetRBT_Level_Offset
+		maxTokens := token.TokenMap[levelOffset]
 		if tokendetail.CurrentTokenNumber == maxTokens+1 {
 			tokendetail.TokenLevel += 1
 			tokendetail.CurrentTokenNumber = 1
-		}
-
-		// Creating tokens at that level
-		rt := &rac.RacType{
-			Type:        rac.RacTestTokenType,
-			DID:         did,
-			TotalSupply: 1,
-			TokenNumber: uint64(tokendetail.CurrentTokenNumber),
-			TokenLevel:  uint64(tokendetail.TokenLevel),
-			CreatorID:   tokendetail.FaucetID,
-		}
-
-		r, err := rac.CreateRacFaucet(rt)
-		if err != nil {
-			c.log.Error("Failed to create rac block", "err", err)
-			return &tokendetail, fmt.Errorf("failed to create rac block")
-		}
-		err = r.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update rac signature", "err", err)
-			return &tokendetail, err
 		}
 
 		id, err := c.getFaucetTestTokensID(tokendetail.TokenLevel, tokendetail.CurrentTokenNumber)
@@ -1913,7 +1892,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		gb := &block.GenesisBlock{
 			Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
-				{Token: id},
+				{Token: id, NetworkID: constants.NetworkID_RBT_Testnet},
 			},
 		}
 		ti := &block.TransInfo{
@@ -1980,7 +1959,6 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 		}
-
 
 		err = c.publishTxn(publishingTxn)
 		if err != nil {

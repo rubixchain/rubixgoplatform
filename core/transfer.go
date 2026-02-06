@@ -218,6 +218,14 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			resp.Message = "failed to get latest block, invalid token chain"
 			return resp
 		}
+		
+		// Internally, we validate whether the token belongs to RBT network
+		_, err := blk.GetGenesisNetworkType(tokensForTxn[i].TokenID)
+		if err != nil {
+			c.log.Error("failed to get genesis network type", "err", err)
+			resp.Message = "failed to get genesis network type, " + err.Error()
+			return resp
+		}
 
 		bid, err := blk.GetBlockID(tokensForTxn[i].TokenID)
 		if err != nil {
