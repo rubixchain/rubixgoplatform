@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -159,7 +160,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", parentTokenID)
 		return -1, err
 	}
-	
+
 	iswholeToken := token.CheckWholeToken(string(b))
 
 	var tt int
@@ -295,25 +296,20 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 		}
 	}
 
-	// if ti.TokenType == token.RBTTokenType {
-	// 	// tl, tn, err := genesisBlock.GetTokenDetials(ti.Token)
-	// 	// if err != nil {
-	// 	// 	c.log.Error("Failed to get token details for token", "token", ti.Token, "err", err)
-	// 	// 	return err, false
-	// 	// }
-	// 	tokenInfo := strings.Split(ti.Token, "-") // new tokenID = tokenLevel-tokenNumber
-	// 	tl, err := strconv.Atoi(tokenInfo[0]) // token level
-	// 	tn, err := strconv.Atoi(tokenInfo[1]) // token number
-	// 	tid, err := IpfsAddWithBackoff(c.ipfs, bytes.NewBufferString(token.GetTokenString(tl, tn)), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-	// 	if err != nil {
-	// 		c.log.Error("Failed to get token hash for token", "token", ti.Token, "err", err)
-	// 		return err, false
-	// 	}
-	// 	if tid != ti.Token {
-	// 		c.log.Error("Invalid token hash for token", "token", ti.Token, "expected", tid, "actual", ti.Token)
-	// 		return fmt.Errorf("Invalid token hash for %s", ti.Token), false
-	// 	}
-	// }
+	if ti.TokenType == token.RBTTokenType {
+		tokenInfo := strings.Split(ti.Token, "_") // tokenID = tokenLevel_tokenNumber
+		tl, err := strconv.Atoi(tokenInfo[0])     // token level
+		tn, err := strconv.Atoi(tokenInfo[1])     // token number
+		tid, err := IpfsAddWithBackoff(c.ipfs, bytes.NewBufferString(token.GetTokenString(tl, tn)), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		if err != nil {
+			c.log.Error("Failed to get token hash for token", "token", ti.Token, "err", err)
+			return err, false
+		}
+		if tid != ti.Token {
+			c.log.Error("Invalid token hash for token", "token", ti.Token, "expected", tid, "actual", ti.Token)
+			return fmt.Errorf("Invalid token hash for %s", ti.Token), false
+		}
+	}
 
 	b := c.w.GetLatestTokenBlock(ti.Token, ti.TokenType)
 	if b == nil {
@@ -451,7 +447,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 						genesisBlockID, _ := genesisBlock.GetBlockID(t.Token)
 						genesisBlockHash, _ := genesisBlock.GetHash()
 						c.log.Debug("Genesis block", "token", t.Token, "blockID", genesisBlockID, "blockHash", genesisBlockHash, "owner", genesisBlock.GetOwner())
-						
+
 						// validate network id
 						if err := c.ValidateTokenNetworkID(genesisBlock, t.Token); err != nil {
 							c.log.Error("failed to validate token network ID", "err", err)
