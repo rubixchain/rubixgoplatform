@@ -14,9 +14,11 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	constants "github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
@@ -1242,17 +1244,30 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 
 	dc := c.pqc[did]
-	wt, err := c.GetTokens(dc, did, pr.TokensRequired, RBTTransferMode)
+
+	wt, err := parts.CollectRBTTokens(dc, c.w, pr.TokensRequired, c.testNet, c.log, c.publishTxn)
 	if err != nil {
 		crep.Message = "Failed to get tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
 	tl := len(wt)
 	if tl == 0 {
 		c.log.Error("No tokens left to pledge", "err", err)
 		crep.Message = "No tokens left to pledge"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
+
+	for _, token := range wt {
+		err := c.w.LockToken(&token)
+		if err != nil {
+			errMsg := fmt.Sprintf("Unable to lock token %v meant for pledging, err: %v", token.TokenID, err)
+			c.log.Error(errMsg)
+			crep.Message = fmt.Sprintf("Unable to lock token %v meant for pledging, err: %v", token.TokenID, err)
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
+
 	presp := PledgeReply{
 		BasicResponse: model.BasicResponse{
 			Status:  true,
@@ -1278,6 +1293,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		presp.TokenChainBlock = append(presp.TokenChainBlock, tc.GetBlock())
 	}
+
 	return c.l.RenderJSON(req, &presp, http.StatusOK)
 }
 
@@ -1886,7 +1902,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 				// RefID:   refID,
 				Tokens: tsb,
 			},
-			Epoch: ur.TransactionEpoch,
+			Epoch:   ur.TransactionEpoch,
+			Version: constants.BlockVersion,
 		}
 
 		nb := block.CreateNewBlock(ctcb, &tcb)
