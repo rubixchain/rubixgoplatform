@@ -218,12 +218,17 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 			resp.Message = "failed to get latest block, invalid token chain"
 			return resp
 		}
-		
-		// Internally, we validate whether the token belongs to RBT network
-		_, err := blk.GetGenesisNetworkType(tokensForTxn[i].TokenID)
-		if err != nil {
-			c.log.Error("failed to get genesis network type", "err", err)
-			resp.Message = "failed to get genesis network type, " + err.Error()
+
+		genesisBlock := c.w.GetGenesisTokenBlock(tokensForTxn[i].TokenID, tt)
+		if genesisBlock == nil {
+			c.log.Error("failed to get genesis block, invalid token chain")
+			resp.Message = "failed to get genesis block, invalid token chain"
+			return resp
+		}
+	
+		if err := c.ValidateTokenNetworkID(genesisBlock, tokensForTxn[i].TokenID); err != nil {
+			c.log.Error("failed to validate token network ID", "err", err)
+			resp.Message = "failed to validate token network ID, " + err.Error()
 			return resp
 		}
 
@@ -435,7 +440,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// 		resp.Result = txID
 	// 	}
 	// }
-	
+
 	resp.Status = true
 	return resp
 }
