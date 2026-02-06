@@ -2079,6 +2079,8 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 
 	return br
 }
+
+// This function might not be needed since we are going from the tokenHash structure.
 func (c *Core) ValidateToken(token string) (*model.BasicResponse, error) {
 
 	response := &model.BasicResponse{
