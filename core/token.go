@@ -24,6 +24,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
 const defaultBatchSize = 500                             // Tweak according to RAM/network
@@ -1925,14 +1926,22 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		//If error comes after adding in IPFS, removing the pin from that token.
 		if blk == nil {
 			c.log.Error("Failed to create new token chain block")
-			c.w.UnPin(id, wallet.OwnerRole, did)
+			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			if err != nil {
+				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
+			}
+			c.w.UnPin(tokenHash, wallet.OwnerRole, did)
 			return &tokendetail, fmt.Errorf("failed to create new token chain block")
 		}
 
 		err = blk.UpdateSignature(dc)
 		if err != nil {
 			c.log.Error("Failed to update did signature", "err", err)
-			c.w.UnPin(id, wallet.OwnerRole, did)
+			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			if err != nil {
+				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
+			}
+			c.w.UnPin(tokenHash, wallet.OwnerRole, did)
 			return &tokendetail, fmt.Errorf("failed to update did signature")
 		}
 
@@ -1946,7 +1955,11 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		err = c.w.CreateTokenBlock(blk)
 		if err != nil {
 			c.log.Error("Failed to add token chain", "err", err)
-			c.w.UnPin(id, wallet.OwnerRole, did)
+			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			if err != nil {
+				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
+			}
+			c.w.UnPin(tokenHash, wallet.OwnerRole, did)
 			return &tokendetail, err
 		}
 
@@ -1954,7 +1967,11 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		if err != nil {
 			c.log.Error("Failed to create token", "err", err)
 			c.w.RemoveTokenChainBlocklatest(t.TokenID, token.TestTokenType)
-			c.w.UnPin(id, wallet.OwnerRole, did)
+			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			if err != nil {
+				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
+			}
+			c.w.UnPin(tokenHash, wallet.OwnerRole, did)
 			return &tokendetail, err
 		}
 

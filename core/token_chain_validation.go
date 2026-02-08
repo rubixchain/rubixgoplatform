@@ -1,10 +1,12 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"time"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
@@ -393,7 +395,12 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 	var parentTokenType int
 
 	if err != nil {
-		b, err := c.getFromIPFS(parentTokenId)
+		parentTokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(parentTokenId), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		if err != nil {
+			return response, fmt.Errorf("Unable to do IPFS Add operation on Token: %v", err)
+		}
+
+		b, err := c.getFromIPFS(parentTokenHash)
 		if err != nil {
 			c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parentTokenId)
 			response.Message = "failed to get parent token detials from ipfs"
