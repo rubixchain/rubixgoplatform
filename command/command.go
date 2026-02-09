@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1_mig"
+	version string = "0.1_sig"
 )
 const (
 	VersionCmd                     string = "-v"

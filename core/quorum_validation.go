@@ -169,7 +169,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", parentTokenID)
 		return -1, err
 	}
-	
+
 	iswholeToken := token.CheckWholeToken(string(b))
 
 	var tt int
@@ -298,6 +298,8 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 			c.log.Error("Failed to sync parent token for token", "token", ti.Token, "err", err)
 			return err, false
 		}
+		// The parent token passed in the pin function is the ipfs Hash itself.
+		// We are adding the parent token details to ipfs in the syncParentToken function above.
 		_, err = c.w.Pin(parentToken, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
 		if err != nil {
 			c.log.Error("Failed to pin parent token for token", "token", ti.Token, "err", err)
@@ -452,6 +454,21 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 						localBlockHash, _ := localBlk.GetHash()
 						c.log.Debug("Local latest block", "token", t.Token, "blockID", localBlockID, "blockHash", localBlockHash, "owner", localBlk.GetOwner())
 					}
+
+					genesisBlock := c.w.GetGenesisTokenBlock(t.Token, t.TokenType)
+					if genesisBlock != nil {
+						genesisBlockID, _ := genesisBlock.GetBlockID(t.Token)
+						genesisBlockHash, _ := genesisBlock.GetHash()
+						c.log.Debug("Genesis block", "token", t.Token, "blockID", genesisBlockID, "blockHash", genesisBlockHash, "owner", genesisBlock.GetOwner())
+						
+						// validate network id
+						if err := c.ValidateTokenNetworkID(genesisBlock, t.Token); err != nil {
+							c.log.Error("failed to validate token network ID", "err", err)
+							results <- tokenValidationResult{Token: t.Token, Err: fmt.Errorf("failed to validate token network ID: %v", err), SyncIssue: false}
+							return
+						}
+					}
+
 					// Fetch remote block if possible (from all token blocks)
 					blocks, _, _ := c.w.GetAllTokenBlocks(t.Token, t.TokenType, "")
 					if len(blocks) > 0 && blockID != "" {
@@ -621,6 +638,11 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 				signersForExistingBlock, err = latestBlock.GetSigner()
 				if err != nil {
 					return false, fmt.Errorf("failed to extract Quorums from genesis block: %v", err), nil
+				}
+
+				if err := c.ValidateTokenNetworkID(latestBlock, tokenInfo.Token); err != nil {
+					c.log.Error("failed to validate token network ID", "err", err)
+					return false, fmt.Errorf("failed to validate token network ID: %v", err), nil
 				}
 			}
 		} else {

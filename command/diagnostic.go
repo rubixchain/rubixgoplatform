@@ -174,7 +174,6 @@ func (cmd *Command) dumpTokenChain() {
 			}
 		}
 		blockID = ds.NextBlockID
-		cmd.log.Info(fmt.Sprintf("Next Block: %s", ds.NextBlockID))
 		if ds.NextBlockID == "" {
 			break
 		}

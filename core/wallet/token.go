@@ -2286,3 +2286,17 @@ func (w *Wallet) SetLocalTokenNumber(tokenNumber int) error {
 
 	return nil
 }
+
+func (w *Wallet) GetTokenNetworkID(tokenID string, tokenType int) (string, error) {
+	genesisBlock := w.getGenesisBlock(tokenType, tokenID)
+	if genesisBlock == nil {
+		return "", fmt.Errorf("GetTokenNetworkID: failed to get genesis block for tokenID: %v", tokenID)
+	}
+
+	networkID, err := genesisBlock.GetGenesisNetworkType(tokenID)
+	if err != nil {
+		return "", fmt.Errorf("GetTokenNetworkID: failed to get networkID from genesis block for tokenID: %v, err: %v", tokenID, err)	
+	}
+	
+	return networkID, err
+}

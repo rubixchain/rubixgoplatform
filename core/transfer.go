@@ -148,9 +148,16 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// release the locked tokens before exit
 	defer c.w.ReleaseTokens(tokensForTxn)
 
-	for i := range tokensForTxn {
-		c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, senderDID, "TID-Not Generated", req.Sender, req.Receiver, tokensForTxn[i].TokenValue)
-	}
+	// for i := range tokensForTxn {
+	// tokenIdBuffer := bytes.NewBufferString(tokensForTxn[i].TokenID)
+	// tokenIdHash, err := c.w.Add(tokenIdBuffer, senderDID, wallet.OwnerRole)
+	// if err != nil {
+	// 	c.log.Error("Failed to add commited tokens to ipfs", "err", err)
+	// 	resp.Message = "Failed to add commited tokens to ipfs , err : " + err.Error()
+	// 	return resp
+	// }
+	// c.w.Pin(tokensForTxn[i].TokenID, wallet.OwnerRole, senderDID, "TID-Not Generated", req.Sender, req.Receiver, tokensForTxn[i].TokenValue)
+	// }
 
 	// Get the receiver & do sanity check
 	var rpeerid string = ""
@@ -216,6 +223,19 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 		if blk == nil {
 			c.log.Error("failed to get latest block, invalid token chain")
 			resp.Message = "failed to get latest block, invalid token chain"
+			return resp
+		}
+
+		genesisBlock := c.w.GetGenesisTokenBlock(tokensForTxn[i].TokenID, tt)
+		if genesisBlock == nil {
+			c.log.Error("failed to get genesis block, invalid token chain")
+			resp.Message = "failed to get genesis block, invalid token chain"
+			return resp
+		}
+
+		if err := c.ValidateTokenNetworkID(genesisBlock, tokensForTxn[i].TokenID); err != nil {
+			c.log.Error("failed to validate token network ID", "err", err)
+			resp.Message = "failed to validate token network ID, " + err.Error()
 			return resp
 		}
 
@@ -427,7 +447,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// 		resp.Result = txID
 	// 	}
 	// }
-	
+
 	resp.Status = true
 	return resp
 }
@@ -553,9 +573,16 @@ func (c *Core) completePinning(st time.Time, reqID string, req *model.RBTPinRequ
 	// release the locked tokens before exit
 	defer c.w.ReleaseTokens(tokensForTxn)
 
-	for i := range tokensForTxn {
-		c.w.Pin(tokensForTxn[i].TokenID, wallet.PinningRole, did, "TID-Not Generated", req.Sender, req.PinningNode, tokensForTxn[i].TokenValue)
-	}
+	// for i := range tokensForTxn {
+	// tokenIdBuffer := bytes.NewBufferString(tokensForTxn[i].TokenID)
+	// tokenIdHash, err := c.w.Add(tokenIdBuffer, did, wallet.OwnerRole)
+	// if err != nil {
+	// 	c.log.Error("Failed to add commited tokens to ipfs", "err", err)
+	// 	resp.Message = "Failed to add commited tokens to ipfs , err : " + err.Error()
+	// 	return resp
+	// }
+	// 	c.w.Pin(tokensForTxn[i].TokenID, wallet.PinningRole, did, "TID-Not Generated", req.Sender, req.PinningNode, tokensForTxn[i].TokenValue)
+	// }
 	p, err := c.getPeer(req.PinningNode)
 	if err != nil {
 		resp.Message = "Failed to get pinning peer, " + err.Error()

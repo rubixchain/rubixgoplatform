@@ -291,7 +291,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 		}
 
 		epoch := latestBlock.GetEpoch()
-		scData := latestBlock.GetSmartContractData()
+		scData := latestBlock.GetDataFromTokenChain()
 
 		var initiatorSignature string
 		var initiatorSignData string
@@ -301,7 +301,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			reply.Message = "unable to fetch intiateor signature"
 			return reply
 		} else {
-			initiatorSignature = signObj.PrivateSign
+			initiatorSignature = signObj.Signature
 			initiatorSignData = signObj.Hash
 		}
 
@@ -350,7 +350,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			reply.Message = "Failed to get smart contract token latest block number"
 			return reply
 		}
-		scData := block.GetSmartContractData()
+		scData := block.GetDataFromTokenChain()
 
 		epoch := block.GetEpoch()
 
@@ -361,7 +361,7 @@ func (c *Core) GetSmartContractTokenChainData(getReq *model.SmartContractTokenCh
 			reply.Message = "unable to fetch intiateor signature"
 			return reply
 		} else {
-			executorSignature = signObj.PrivateSign
+			executorSignature = signObj.Signature
 			executorSignData = signObj.Hash
 		}
 
@@ -428,7 +428,7 @@ func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq
 		nftDataArray = append(nftDataArray, model.NFTData{
 			BlockNo:       blockNo,
 			BlockId:       blockId,
-			NFTData:       latestBlock.GetNFTData(),
+			NFTData:       latestBlock.GetDataFromTokenChain(),
 			NFTOwner:      latestBlock.GetOwner(),
 			NFTValue:      latestBlock.GetTokenValue(),
 			Epoch:         latestBlock.GetEpoch(),
@@ -458,7 +458,7 @@ func (c *Core) GetNFTTokenChainData(getReq *model.SmartContractTokenChainDataReq
 			nftDataArray = append(nftDataArray, model.NFTData{
 				BlockNo:       blockNo,
 				BlockId:       blockId,
-				NFTData:       block.GetNFTData(),
+				NFTData:       block.GetDataFromTokenChain(),
 				NFTOwner:      block.GetOwner(),
 				NFTValue:      block.GetTokenValue(),
 				Epoch:         block.GetEpoch(), // Fixed the missing Epoch value

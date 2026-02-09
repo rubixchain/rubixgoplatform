@@ -16,10 +16,10 @@ import (
 	"time"
 
 	block "github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -227,6 +227,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 	}
 
 	finalTokenNumber = startTokenNumber + num
+	currentTime := time.Now()
 
 	for tokenNumber := startTokenNumber; tokenNumber < finalTokenNumber; tokenNumber++ {
 		id, err := c.getTokenIDForLocalTestTokens(localTokenLevel, tokenNumber, did)
@@ -234,72 +235,73 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
 		}
-		// gb := &block.GenesisBlock{
-		// 	Type: block.TokenGeneratedType,
-		// 	Info: []block.GenesisTokenInfo{
-		// 		{Token: id},
-		// 	},
-		// }
-		// ti := &block.TransInfo{
-		// 	Tokens: []block.TransTokens{
-		// 		{
-		// 			Token:     id,
-		// 			TokenType: token.TestTokenType,
-		// 		},
-		// 	},
-		// }
+		gb := &block.GenesisBlock{
+			Type: block.TokenGeneratedType,
+			Info: []block.GenesisTokenInfo{
+				{Token: id, NetworkID: constants.NetworkID_RBT_Local},
+			},
+		}
+		ti := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     id,
+					TokenType: token.TestTokenType,
+				},
+			},
+		}
 
-		// tcb := &block.TokenChainBlock{
-		// 	TransactionType: block.TokenGeneratedType,
-		// 	TokenOwner:      did,
-		// 	GenesisBlock:    gb,
-		// 	TransInfo:       ti,
-		// 	TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
-		// 	Version:         constants.BlockVersion,
-		// }
+		tcb := &block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner:      did,
+			GenesisBlock:    gb,
+			TransInfo:       ti,
+			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+			Version:         constants.BlockVersion,
+			Epoch:           int(currentTime.Unix()),
+		}
 
-		// ctcb := make(map[string]*block.Block)
-		// ctcb[id] = nil
+		ctcb := make(map[string]*block.Block)
+		ctcb[id] = nil
 
-		// blk := block.CreateNewBlock(ctcb, tcb)
+		blk := block.CreateNewBlock(ctcb, tcb)
 
-		// if blk == nil {
-		// 	c.log.Error("Failed to create new token chain block")
-		// 	return fmt.Errorf("failed to create new token chain block")
-		// }
-		// err = blk.UpdateSignature(dc)
-		// if err != nil {
-		// 	c.log.Error("Failed to update did signature", "err", err)
-		// 	return fmt.Errorf("failed to update did signature")
-		// }
+		if blk == nil {
+			c.log.Error("Failed to create new token chain block")
+			return fmt.Errorf("failed to create new token chain block")
+		}
+		err = blk.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to update did signature", "err", err)
+			return fmt.Errorf("failed to update did signature")
+		}
 		t := &wallet.Token{
 			TokenID:     id,
 			DID:         did,
 			TokenValue:  1,
 			TokenStatus: wallet.TokenIsFree,
 		}
-		// err = c.w.CreateTokenBlock(blk)
-		// if err != nil {
-		// 	c.log.Error("Failed to add token chain", "err", err)
-		// 	return err
-		// }
+		err = c.w.CreateTokenBlock(blk)
+		if err != nil {
+			c.log.Error("Failed to add token chain", "err", err)
+			return err
+		}
 		err = c.w.CreateToken(t)
 		if err != nil {
 			c.log.Error("Failed to create token", "err", err)
 			return err
 		}
 		// publish the transaction in the network with topic : rubix_txns
-		// blockHash, err := blk.GetHash()
-		// if err != nil {
-		// 	blockHash = ""
-		// 	c.log.Error("failed to get block hash")
-		// }
+		blockHash, err := blk.GetHash()
+		if err != nil {
+			blockHash = ""
+			c.log.Error("failed to get block hash")
+		}
 		publishingTxn := &model.PubSubTxnInfo{
-			// BlockHash:    blockHash,
+			BlockHash:    blockHash,
 			TxnType:      block.TokenGeneratedType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
-			// TxnBlock:     blk.GetBlock(),
+			TxnBlock:     blk.GetBlock(),
 		}
 
 		err = c.publishTxn(publishingTxn)
@@ -2213,31 +2215,11 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		tokendetail.CurrentTokenNumber += 1
 
 		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
-		maxTokens := token.TokenMap[tokendetail.TokenLevel]
+		levelOffset := tokendetail.TokenLevel - constants.FaucetRBT_Level_Offset
+		maxTokens := token.TokenMap[levelOffset]
 		if tokendetail.CurrentTokenNumber == maxTokens+1 {
 			tokendetail.TokenLevel += 1
 			tokendetail.CurrentTokenNumber = 1
-		}
-
-		// Creating tokens at that level
-		rt := &rac.RacType{
-			Type:        rac.RacTestTokenType,
-			DID:         did,
-			TotalSupply: 1,
-			TokenNumber: uint64(tokendetail.CurrentTokenNumber),
-			TokenLevel:  uint64(tokendetail.TokenLevel),
-			CreatorID:   tokendetail.FaucetID,
-		}
-
-		r, err := rac.CreateRacFaucet(rt)
-		if err != nil {
-			c.log.Error("Failed to create rac block", "err", err)
-			return &tokendetail, fmt.Errorf("failed to create rac block")
-		}
-		err = r.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update rac signature", "err", err)
-			return &tokendetail, err
 		}
 
 		id, err := c.getFaucetTestTokensID(tokendetail.TokenLevel, tokendetail.CurrentTokenNumber)
@@ -2246,11 +2228,63 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			return &tokendetail, fmt.Errorf("failed to get token ID from IPFS")
 		}
 
+		currentTime := time.Now()
+
+		gb := &block.GenesisBlock{
+			Type: block.TokenGeneratedType,
+			Info: []block.GenesisTokenInfo{
+				{Token: id, NetworkID: constants.NetworkID_RBT_Testnet},
+			},
+		}
+		ti := &block.TransInfo{
+			Tokens: []block.TransTokens{
+				{
+					Token:     id,
+					TokenType: token.TestTokenType,
+				},
+			},
+		}
+
+		tcb := &block.TokenChainBlock{
+			TransactionType: block.TokenGeneratedType,
+			TokenOwner:      did,
+			GenesisBlock:    gb,
+			TransInfo:       ti,
+			TokenValue:      floatPrecision(1.0, MaxDecimalPlaces),
+			Version:         constants.BlockVersion,
+			Epoch:           int(currentTime.Unix()),
+		}
+
+		ctcb := make(map[string]*block.Block)
+		ctcb[id] = nil
+
+		blk := block.CreateNewBlock(ctcb, tcb)
+		//If error comes after adding in IPFS, removing the pin from that token.
+		if blk == nil {
+			c.log.Error("Failed to create new token chain block")
+			c.w.UnPin(id, wallet.OwnerRole, did)
+			return &tokendetail, fmt.Errorf("failed to create new token chain block")
+		}
+
+		err = blk.UpdateSignature(dc)
+		if err != nil {
+			c.log.Error("Failed to update did signature", "err", err)
+			c.w.UnPin(id, wallet.OwnerRole, did)
+			return &tokendetail, fmt.Errorf("failed to update did signature")
+		}
+
 		t := &wallet.Token{
 			TokenID:     id,
 			DID:         did,
 			TokenValue:  1,
 			TokenStatus: wallet.TokenIsFree,
+		}
+
+		err = c.w.CreateTokenBlock(blk)
+		if err != nil {
+			c.log.Error("Failed to add token chain", "err", err)
+			c.w.UnPin(id, wallet.OwnerRole, did)
+			return &tokendetail, err
 		}
 
 		err = c.w.CreateToken(t)
@@ -2387,6 +2421,8 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 
 	return br
 }
+
+// This function might not be needed since we are going from the tokenHash structure.
 func (c *Core) ValidateToken(token string) (*model.BasicResponse, error) {
 
 	response := &model.BasicResponse{

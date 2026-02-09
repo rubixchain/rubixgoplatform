@@ -124,6 +124,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	providerMaps := make([]model.TokenProviderMap, 0, numFTs)
 	// Mutex for providerMaps slice
 	c.log.Info("Initializing FT creation: progress logging")
+	currentTime := time.Now()
 
 	worker := func() {
 		defer wg.Done()
@@ -133,9 +134,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			ftnumString := strconv.Itoa(i)
 			parts := []string{FTName, ftnumString, did}
 			ftID := strings.Join(parts, "_")
-			
-			
-			
+
 			// Collect provider map for batch
 			// Use mutex to avoid race condition
 			// providerMapMutex.Lock()
@@ -149,7 +148,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					c.log.Info(fmt.Sprintf("FT creation progress: %d%% (%d/%d created)", currentPercent, newCount, numFTs))
 				}
 			}
-
 			bti := &block.TransInfo{
 				Tokens: []block.TransTokens{{
 					Token:     ftID,
@@ -170,6 +168,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				},
 				TokenValue: fractionalValue,
 				Version:    constants.BlockVersion,
+				Epoch:      int(currentTime.Unix()),
 			}
 			ctcb := make(map[string]*block.Block)
 			ctcb[ftID] = nil
@@ -259,7 +258,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	if firstErr != nil {
 		return firstErr
 	}
-
 	for i := range wholeTokens {
 
 		release := true
@@ -286,6 +284,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			TokenValue:      wholeTokens[i].TokenValue,
 			ChildTokens:     newFTTokenIDs,
 			Version:         constants.BlockVersion,
+			Epoch:           int(currentTime.Unix()),
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
