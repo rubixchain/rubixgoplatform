@@ -896,8 +896,6 @@ func Run(args []string) {
 		cmd.SetupDIDCmd()
 	case ShutDownCmd:
 		cmd.ShutDownCmd()
-	case MirgateNodeCmd:
-		cmd.MigrateNodeCmd()
 	case SetupDBCmd:
 		cmd.setupDB()
 	case GetTxnDetailsCmd:
