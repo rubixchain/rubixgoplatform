@@ -6,6 +6,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 )
 
+const MaxDecimalPlaces = 3
+
 func round(f float64) int {
 	return int(f + math.Copysign(0.5, f))
 }
