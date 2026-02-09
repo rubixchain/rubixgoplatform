@@ -179,7 +179,14 @@ func (w *Wallet) tokenProcessWorker(did string, b *block.Block, senderPeerId, re
 			var parentTokenID string
 			gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
 			if gb != nil {
-				parentTokenID, _ = gb.GetParentDetials(tokenInfo.Token)
+				parentTokenID, err = gb.GetParentDetials(tokenInfo.Token)
+				if err != nil {
+					errMsg := fmt.Errorf("Failed to get parent token of token : %s; err : %v", tokenInfo.Token, err)
+					w.log.Error(errMsg.Error())
+					result.err = errMsg
+					results <- result
+					continue
+				}
 			}
 
 			// Create new token entry

@@ -224,7 +224,11 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 		var parentTokenID string
 		gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
 		if gb != nil {
-			parentTokenID, _ = gb.GetParentDetials(tokenInfo.Token)
+			parentTokenID, err = gb.GetParentDetials(tokenInfo.Token)
+			if err != nil {
+				w.log.Error("Failed to get parent token of token", tokenInfo.Token, "err", err)
+				continue
+			}
 		}
 
 		// Create new token entry
