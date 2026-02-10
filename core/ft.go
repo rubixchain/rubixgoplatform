@@ -156,14 +156,13 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				Comment: "FT generated at : " + time.Now().String() + " for FT Name : " + FTName,
 			}
 			tcb := &block.TokenChainBlock{
-				TransactionType: block.TokenGeneratedType,
-				TokenOwner:      did,
-				TransInfo:       bti,
+				BlockType:  block.TokenGeneratedType,
+				TokenOwner: did,
+				TransInfo:  bti,
 				GenesisBlock: &block.GenesisBlock{
 					Info: []block.GenesisTokenInfo{{
-						Token:       ftID,
-						ParentID:    parentTokenIDs,
-						TokenNumber: i,
+						Token:    ftID,
+						ParentID: parentTokenIDs,
 					}},
 				},
 				TokenValue: fractionalValue,
@@ -207,7 +206,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			}
 			publishingTxn := &model.PubSubTxnInfo{
 				BlockHash:    blockHash,
-				TxnType:      tcb.TransactionType,
+				BlockType:    tcb.BlockType,
 				AssetType:    FTTokenType,
 				FTName:       FTName,
 				PublisherDID: dc.GetDID(),
@@ -278,13 +277,13 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			Comment: "Token burnt at : " + time.Now().String(),
 		}
 		tcb := &block.TokenChainBlock{
-			TransactionType: block.TokenIsBurntForFT,
-			TokenOwner:      did,
-			TransInfo:       bti,
-			TokenValue:      wholeTokens[i].TokenValue,
-			ChildTokens:     newFTTokenIDs,
-			Version:         constants.BlockVersion,
-			Epoch:           int(currentTime.Unix()),
+			BlockType:   block.TokenIsBurntForFT,
+			TokenOwner:  did,
+			TransInfo:   bti,
+			TokenValue:  wholeTokens[i].TokenValue,
+			ChildTokens: newFTTokenIDs,
+			Version:     constants.BlockVersion,
+			Epoch:       int(currentTime.Unix()),
 		}
 		ctcb := make(map[string]*block.Block)
 		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
@@ -320,7 +319,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		}
 		publishingTxn := &model.PubSubTxnInfo{
 			BlockHash:    blockHash,
-			TxnType:      tcb.TransactionType,
+			BlockType:    tcb.BlockType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     block.GetBlock(),

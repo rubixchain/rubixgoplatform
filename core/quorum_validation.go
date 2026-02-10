@@ -220,7 +220,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 				c.log.Error("failed to get genesis token chain block", "token", parentTokenID)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
-			ppt, _, err := gb.GetParentDetials(parentTokenID)
+			ppt, err := gb.GetParentDetials(parentTokenID)
 			if err != nil {
 				c.log.Error("failed to get genesis token chain block", "token", parentTokenID, "err", err)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
@@ -284,7 +284,7 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	}
 
 	if c.TokenType(PartString) == ti.TokenType {
-		parentToken, _, err := genesisBlock.GetParentDetials(ti.Token)
+		parentToken, err := genesisBlock.GetParentDetials(ti.Token)
 		if err != nil {
 			c.log.Error("Failed to get parent token for token", "token", ti.Token, "err", err)
 			return err, false
@@ -301,7 +301,6 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 			c.log.Error(fmt.Sprintf("Unable to do IPFS Add operation on Token: %v", err))
 			return nil, false
 		}
-
 		_, err = c.w.Pin(parentTokenHash, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
 		if err != nil {
 			c.log.Error("Failed to pin parent token for token", "token", ti.Token, "err", err)
@@ -466,7 +465,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 						genesisBlockID, _ := genesisBlock.GetBlockID(t.Token)
 						genesisBlockHash, _ := genesisBlock.GetHash()
 						c.log.Debug("Genesis block", "token", t.Token, "blockID", genesisBlockID, "blockHash", genesisBlockHash, "owner", genesisBlock.GetOwner())
-						
+
 						// validate network id
 						if err := c.ValidateTokenNetworkID(genesisBlock, t.Token); err != nil {
 							c.log.Error("failed to validate token network ID", "err", err)

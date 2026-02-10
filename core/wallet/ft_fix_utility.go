@@ -207,7 +207,7 @@ func (w *Wallet) getCorrectCreatorForToken(ftToken FTToken, genesisOptimizer *Ge
 		
 		// If owner is also peer ID, try other fields
 		// Check if there's a valid DID in the block
-		did := genesisBlock.GetReceiverDID()
+		did := genesisBlock.GetOwner()
 		if did != "" && !strings.HasPrefix(did, "12D3KooW") {
 			return did
 		}
@@ -249,7 +249,7 @@ func (w *Wallet) findCreatorFromTokenChain(tokenID string) string {
 		}
 		
 		// Check receiver/sender DIDs
-		did := block.GetReceiverDID()
+		did := block.GetOwner()
 		if did != "" && !strings.HasPrefix(did, "12D3KooW") {
 			return did
 		}
