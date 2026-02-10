@@ -109,7 +109,7 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto,
 		}
 
 		parentTokenType := getTokenType(isTestnet, parentToken.TokenValue)
-		
+
 		networkID, err = w.GetTokenNetworkID(parentToken.TokenID, parentTokenType)
 		if err != nil {
 			return nil, fmt.Errorf("performTokenSplit: failed to get network ID for parent token: %v, err: %v", parentToken.TokenID, err)
@@ -190,12 +190,12 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 	}
 
 	parentTokenChainBlock := &block.TokenChainBlock{
-		TransactionType: block.TokenBurntType,
-		TokenOwner:      did,
-		TransInfo:       bti,
-		TokenValue:      parentTokenValue,
-		ChildTokens:     partTokenIDs,
-		Epoch:           int(time.Now().Unix()),
+		BlockType:   block.TokenBurntType,
+		TokenOwner:  did,
+		TransInfo:   bti,
+		TokenValue:  parentTokenValue,
+		ChildTokens: partTokenIDs,
+		Epoch:       int(time.Now().Unix()),
 	}
 
 	ctcb := make(map[string]*block.Block)
@@ -222,7 +222,7 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 
 	burntBlockPublishInfo := &model.PubSubTxnInfo{
 		BlockHash:    burntParentTokenBlockHash,
-		TxnType:      parentTokenChainBlock.TransactionType,
+		BlockType:    parentTokenChainBlock.BlockType,
 		AssetType:    RBTTokenType,
 		PublisherDID: dc.GetDID(),
 		TxnBlock:     burntParentTokenBlock.GetBlock(),
@@ -304,14 +304,14 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 		}
 
 		tcb := &block.TokenChainBlock{
-			TransactionType: block.TokenGeneratedType,
-			TokenOwner:      did,
-			TransInfo:       bti,
+			BlockType:  block.TokenGeneratedType,
+			TokenOwner: did,
+			TransInfo:  bti,
 			GenesisBlock: &block.GenesisBlock{
 				Info: []block.GenesisTokenInfo{
 					{
-						Token:    childTokenID,
-						ParentID: parenTokenIndexedID,
+						Token:     childTokenID,
+						ParentID:  parenTokenIndexedID,
 						NetworkID: networkID,
 					},
 				},
@@ -344,7 +344,7 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 
 		partTokenWalletInfo := &model.PubSubTxnInfo{
 			BlockHash:    partTokenBlockHash,
-			TxnType:      tcb.TransactionType,
+			BlockType:    tcb.BlockType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     childTokenBlock.GetBlock(),
@@ -359,7 +359,7 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 		childTokenHash, err := w.Add(childTokenIDBuffer, did, wallet.AddFunc, true)
 		if err != nil {
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to add child token to ipfs: %v, err: %v", childTokenID, err)
-		} 
+		}
 
 		if _, err := w.Pin(childTokenHash, wallet.OwnerRole, did, "NA", did, "NA", childTokenValue); err != nil {
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to pin child token: %v, err: %v", childTokenID, err)

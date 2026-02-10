@@ -1355,7 +1355,7 @@ func (c *Core) updateReceiverToken(
 				if gb == nil {
 					return nil, senderPeer, fmt.Errorf("failed to get genesis block for token %v, err: %v", t, err)
 				}
-				pt, _, err := gb.GetParentDetials(t)
+				pt, err := gb.GetParentDetials(t)
 				if err != nil {
 					return nil, senderPeer, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
 				}
@@ -1436,7 +1436,7 @@ func (c *Core) updateReceiverToken(
 	// Store the transaction info only when we are dealing with RBT transfer between
 	// two DIDs that are situated on different nodes, as this avoid Unique Constraint
 	// issue while adding to Transaction History table from the Sender's end
-	if b.GetSenderDID() != b.GetReceiverDID() && senderPeerId != receiverPeerId {
+	if b.GetSenderDID() != b.GetOwner() && senderPeerId != receiverPeerId {
 		td := &model.TransactionDetails{
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
@@ -1444,7 +1444,7 @@ func (c *Core) updateReceiverToken(
 			Mode:            wallet.RecvMode,
 			Amount:          b.GetTokenValue(),
 			SenderDID:       b.GetSenderDID(),
-			ReceiverDID:     b.GetReceiverDID(),
+			ReceiverDID:     b.GetOwner(),
 			Comment:         b.GetComment(),
 			DateTime:        time.Now(),
 			Status:          true,
@@ -1592,7 +1592,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 			if gb == nil {
 				return nil, fmt.Errorf("failed to get genesis block for token %v, err: %v", t, err)
 			}
-			pt, _, err := gb.GetParentDetials(t)
+			pt, err := gb.GetParentDetials(t)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get parent details for token %v, err: %v", t, err)
 			}
@@ -1667,7 +1667,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update token status, failed to get block ID, err: %v", err)
 	}
-	if b.GetSenderDID() != b.GetReceiverDID() && senderPeerId != receiverPeerId {
+	if b.GetSenderDID() != b.GetOwner() && senderPeerId != receiverPeerId {
 		td := &model.TransactionDetails{
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
@@ -1675,7 +1675,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 			Mode:            wallet.FTTransferMode,
 			Amount:          float64(len(b.GetTransTokens())),
 			SenderDID:       b.GetSenderDID(),
-			ReceiverDID:     b.GetReceiverDID(),
+			ReceiverDID:     b.GetOwner(),
 			Comment:         b.GetComment(),
 			DateTime:        time.Now(),
 			Status:          true,
@@ -1861,7 +1861,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		// skip the addition of block here, if either sender or receiver happen to be on a Quorum node.
 
 		var totalTokenValue float64 = 0
-		if !c.w.IsDIDExist(b.GetReceiverDID()) && !c.w.IsDIDExist(b.GetSenderDID()) {
+		if !c.w.IsDIDExist(b.GetOwner()) && !c.w.IsDIDExist(b.GetSenderDID()) {
 			for _, t := range tks {
 				err = c.w.AddTokenBlock(t, b)
 				if err != nil {
@@ -1899,8 +1899,8 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 
 		tcb := block.TokenChainBlock{
-			TransactionType: block.TokenPledgedType,
-			TokenOwner:      did,
+			BlockType:  block.TokenPledgedType,
+			TokenOwner: did,
 			TransInfo: &block.TransInfo{
 				Comment: "Token is pledged at " + time.Now().String(),
 				RefID:   ur.TransactionID,
@@ -1954,7 +1954,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		publishingTxn := &model.PubSubTxnInfo{
 			BlockHash:    blockHash,
-			TxnType:      tcb.TransactionType,
+			BlockType:    tcb.BlockType,
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 			TxnBlock:     nb.GetBlock(),

@@ -196,8 +196,8 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 	currentTime := time.Now()
 
 	tcb := block.TokenChainBlock{
-		TransactionType: block.TokenUnpledgedType,
-		TokenOwner:      quorumDID,
+		BlockType:  block.TokenUnpledgedType,
+		TokenOwner: quorumDID,
 		TransInfo: &block.TransInfo{
 			Comment: "Token is un pledged at " + currentTime.String(),
 			Tokens:  tsb,
@@ -239,7 +239,7 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 	}
 	publishingTxn := &model.PubSubTxnInfo{
 		BlockHash:    blockHash,
-		TxnType:      tcb.TransactionType,
+		BlockType:    tcb.BlockType,
 		AssetType:    RBTTokenType,
 		PublisherDID: dc.GetDID(),
 		TxnBlock:     nb.GetBlock(),

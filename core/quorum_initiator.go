@@ -682,7 +682,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 	publishingTxn := &model.PubSubTxnInfo{
 		BlockHash:        blockHash,
 		TransactionID:    tid,
-		TxnType:          nb.GetTransType(),
+		BlockType:        nb.GetTransType(),
 		PublisherDID:     dc.GetDID(),
 		ReceiverDID:      sc.GetReceiverDID(),
 		TxnBlock:         nb.GetBlock(),
@@ -2713,25 +2713,25 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 
 		smartContractGensisBlock := &block.GenesisBlock{
-			Type: block.TokenGeneratedType,
+			// Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
 				{
-					Token:              cr.SmartContractToken,
-					CommitedTokens:     commitedTokenInfoArray,
-					SmartContractValue: smartContractTokenValue,
+					Token:          cr.SmartContractToken,
+					CommitedTokens: commitedTokenInfoArray,
+					// SmartContractValue: smartContractTokenValue,
 				},
 			},
 		}
 
 		tcb = block.TokenChainBlock{
-			TransactionType:    block.TokenDeployedType,
+			BlockType:          block.TokenDeployedType,
 			TokenOwner:         sc.GetDeployerDID(),
 			TransInfo:          bti,
+			TokenValue:         smartContractTokenValue,
 			QuorumSignature:    Signature,
 			GenesisBlock:       smartContractGensisBlock,
 			PledgeDetails:      ptds,
 			InitiatorSignature: deployerSign,
-			TokenValue:         sc.GetTotalRBTs(),
 			Epoch:              cr.TransactionEpoch,
 			Version:            constants.BlockVersion,
 		}
@@ -2753,7 +2753,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 
 		tcb = block.TokenChainBlock{
-			TransactionType:    block.TokenExecutedType,
+			BlockType:          block.TokenExecutedType,
 			TokenOwner:         sc.GetExecutorDID(),
 			TransInfo:          bti,
 			QuorumSignature:    Signature,
@@ -2783,7 +2783,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 
 		tcb = block.TokenChainBlock{
-			TransactionType:    block.TokenExecutedType,
+			BlockType:          block.TokenExecutedType,
 			TokenOwner:         sc.GetReceiverDID(),
 			TransInfo:          bti,
 			QuorumSignature:    Signature,
@@ -2812,16 +2812,16 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			SignType:  deployerSignType,
 		}
 
-		nftValue := sc.GetTotalRBTs()
+		// nftValue := sc.GetTotalRBTs()
 
 		nftGenesisBlock := &block.GenesisBlock{
-			Type: block.TokenGeneratedType,
+			// Type: block.TokenGeneratedType,
 			Info: []block.GenesisTokenInfo{
-				{Token: cr.NFT, NFTValue: nftValue, NFTData: sc.GetNFTData()},
+				{Token: cr.NFT},
 			},
 		}
 		tcb = block.TokenChainBlock{
-			TransactionType:    block.TokenDeployedType,
+			BlockType:          block.TokenDeployedType,
 			TokenOwner:         sc.GetDeployerDID(),
 			TransInfo:          bti,
 			QuorumSignature:    Signature,
@@ -2838,7 +2838,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		bti.SenderDID = sc.GetSenderDID()
 		bti.PinningNodeDID = sc.GetPinningServiceDID()
 		tcb = block.TokenChainBlock{
-			TransactionType: block.TokenPinnedAsService,
+			BlockType:       block.TokenPinnedAsService,
 			TokenOwner:      sc.GetSenderDID(),
 			TransInfo:       bti,
 			QuorumSignature: Signature,
@@ -2864,9 +2864,9 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 		}
 
 		bti.SenderDID = sc.GetSenderDID()
-		bti.ReceiverDID = sc.GetReceiverDID()
+		// bti.ReceiverDID = sc.GetReceiverDID()
 		tcb = block.TokenChainBlock{
-			TransactionType:    block.TokenTransferredType,
+			BlockType:          block.TokenTransferredType,
 			TokenOwner:         sc.GetReceiverDID(),
 			TransInfo:          bti,
 			QuorumSignature:    Signature,
@@ -2879,12 +2879,12 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 	}
 
 	if cr.Mode == DTCommitMode {
-		tcb.TransactionType = block.TokenCommittedType
+		tcb.BlockType = block.TokenCommittedType
 	}
 
 	// token being transferred from old DID to new DID of user
 	if cr.OperationType == TokenSelfTransferredType {
-		tcb.TransactionType = block.TokenSelfTransferredType
+		tcb.BlockType = block.TokenSelfTransferredType
 	}
 
 	nb := block.CreateNewBlock(ctcb, &tcb)
@@ -3148,8 +3148,8 @@ func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractTok
 		ctcb[t] = lb
 	}
 	tcb := block.TokenChainBlock{
-		TransactionType: block.TokenContractCommited,
-		TokenOwner:      newBlock.GetDeployerDID(),
+		BlockType:  block.TokenContractCommited,
+		TokenOwner: newBlock.GetDeployerDID(),
 		TransInfo: &block.TransInfo{
 			Comment: "Token is Commited at " + time.Now().String() + " for SmartContract Token : " + smartContractToken,
 			RefID:   refID,
