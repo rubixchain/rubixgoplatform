@@ -8,6 +8,7 @@ const (
 type RBTGenerateRequest struct {
 	NumberOfTokens int    `json:"number_of_tokens"`
 	DID            string `json:"did"`
+	StartIndex     int    `json:"start_index"`
 }
 
 type RBTTransferRequest struct {
