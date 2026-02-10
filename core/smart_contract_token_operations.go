@@ -258,12 +258,8 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	}
 
 	//fetch smartcontract value from the gensys block
-	smartContractValue, err := gensysBlock.GetSmartContractValue(executeReq.SmartContractToken)
-	if err != nil {
-		c.log.Error("Failed to retrieve smart contract Token Value , ", err)
-		resp.Message = err.Error()
-		return resp
-	}
+	smartContractValue := gensysBlock.GetTokenValue()
+
 	if smartContractValue == 0 {
 		c.log.Error("smart contract Token Value cannot be 0, ")
 		resp.Message = "smart contract Token Value cannot be 0, "

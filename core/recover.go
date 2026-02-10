@@ -154,7 +154,7 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 			if gb == nil {
 				c.log.Error("failed to get genesis block for token ", token)
 			} else {
-				pt, _, err = gb.GetParentDetials(token)
+				pt, err = gb.GetParentDetials(token)
 				if err != nil {
 					c.log.Error("failed to get parent details for token ", token, "err : ", err)
 					pt = "" // Ensure pt is reset to empty string if an error occurs

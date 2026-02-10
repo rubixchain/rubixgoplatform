@@ -77,7 +77,7 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 			tpm.FuncID = PinFunc
 			tpm.TransactionID = b.GetTid()
 			tpm.Sender = senderPeerId + "." + b.GetSenderDID()
-			tpm.Receiver = receiverPeerId + "." + b.GetReceiverDID()
+			tpm.Receiver = receiverPeerId + "." + b.GetOwner()
 			tpm.TokenValue = tokenInfo.TokenValue
 			providerMaps = append(providerMaps, tpm)
 			mu.Unlock()
@@ -155,7 +155,7 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 
 			// Pin the token with new transaction details
 			senderAddress := senderPeerId + "." + b.GetSenderDID()
-			receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
+			receiverAddress := receiverPeerId + "." + b.GetOwner()
 			_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 			if err != nil {
 				w.log.Error("Failed to pin existing token",
@@ -224,7 +224,11 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 		var parentTokenID string
 		gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
 		if gb != nil {
-			parentTokenID, _, _ = gb.GetParentDetials(tokenInfo.Token)
+			parentTokenID, err = gb.GetParentDetials(tokenInfo.Token)
+			if err != nil {
+				w.log.Error("Failed to get parent token of token", tokenInfo.Token, "err", err)
+				continue
+			}
 		}
 
 		// Create new token entry
@@ -269,8 +273,8 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 		}
 		
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
-		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-		
+		receiverAddress := receiverPeerId + "." + b.GetOwner()
+
 		// Pin the token
 		_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 		if err != nil {

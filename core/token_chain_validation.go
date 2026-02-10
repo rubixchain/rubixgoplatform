@@ -1,10 +1,12 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"time"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -394,7 +396,12 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 	var parentTokenType int
 
 	if err != nil {
-		b, err := c.getFromIPFS(parentTokenId)
+		parentTokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(parentTokenId), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		if err != nil {
+			return response, fmt.Errorf("Unable to do IPFS Add operation on Token: %v", err)
+		}
+
+		b, err := c.getFromIPFS(parentTokenHash)
 		if err != nil {
 			c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parentTokenId)
 			response.Message = "failed to get parent token detials from ipfs"
@@ -469,12 +476,12 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 	if parentTokenType == c.TokenType(PartString) {
 		if parentTokenInfo.ParentTokenID == "" {
 			genesisBlock := c.w.GetGenesisTokenBlock(parentTokenId, parentTokenType)
-			grandParentToken, _, err := genesisBlock.GetParentDetials(parentTokenId)
+			parentToken, err := genesisBlock.GetParentDetials(parentTokenId)
 			if err != nil {
 				c.log.Error("failed to get grand parent tokens to validate")
 			}
-			c.log.Debug("grand parent token:", grandParentToken)
-			parentTokenInfo.ParentTokenID = grandParentToken
+			c.log.Debug("grand parent token:", parentToken)
+			parentTokenInfo.ParentTokenID = parentToken
 		}
 		response, err = c.ValidateParentTokenLatestBlock(parentTokenInfo.ParentTokenID, userDID)
 		if err != nil {

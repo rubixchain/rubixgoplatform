@@ -26,21 +26,21 @@ import (
 // }
 
 const (
-	TCTokenTypeKey          string = "1"
-	TCTransTypeKey          string = "2"
-	TCTokenOwnerKey         string = "3"
-	TCGenesisBlockKey       string = "4"
-	TCTransInfoKey          string = "5"
-	TCQuorumSignatureKey    string = "7"
-	TCPledgeDetailsKey      string = "8"
-	TCBlockHashKey          string = "98"
-	TCSignatureKey          string = "99"
-	TCBlockContentKey       string = "1"
-	TCBlockContentSigKey    string = "2"
-	TCDataKey               string = "9"
-	TCTokenValueKey         string = "10"
-	TCChildTokensKey        string = "11"
-	TCInitiatorSignatureKey string = "12"
+	TCTokenTypeKey          string = "tokenType"
+	TCBlockTypeKey          string = "blockType"
+	TCTokenOwnerKey         string = "tokenOwner"
+	TCGenesisBlockKey       string = "genesisBlock"
+	TCTransInfoKey          string = "transInfo"
+	TCQuorumSignatureKey    string = "quorumSignature"
+	TCPledgeDetailsKey      string = "pledgeDetails"
+	TCBlockHashKey          string = "blockHash"
+	TCSignatureKey          string = "signature"
+	TCBlockContentKey       string = "blockContent"
+	TCBlockContentSigKey    string = "blockContentSig"
+	TCDataKey               string = "data"
+	TCTokenValueKey         string = "tokenValue"
+	TCChildTokensKey        string = "childTokens"
+	TCInitiatorSignatureKey string = "initiatorSignature"
 	TCEpochKey              string = "epoch"
 	TCVersionKey            string = "version"
 )
@@ -70,7 +70,7 @@ const (
 )
 
 type TokenChainBlock struct {
-	TransactionType    string           `json:"transactionType"`
+	BlockType          string           `json:"blockType"`
 	TokenOwner         string           `json:"owner"`
 	GenesisBlock       *GenesisBlock    `json:"genesisBlock"`
 	TransInfo          *TransInfo       `json:"transInfo"`
@@ -148,7 +148,7 @@ func CreateNewBlock(ctcb map[string]*Block, tcb *TokenChainBlock) *Block {
 		return nil
 	}
 	ntcb := make(map[string]interface{})
-	ntcb[TCTransTypeKey] = tcb.TransactionType
+	ntcb[TCBlockTypeKey] = tcb.BlockType
 	ntcb[TCTokenOwnerKey] = tcb.TokenOwner
 	if tcb.GenesisBlock != nil {
 		ntcb[TCGenesisBlockKey] = newGenesisBlock(tcb.GenesisBlock)
@@ -288,7 +288,7 @@ func (b *Block) getGenesisTokenMap(t string) interface{} {
 	if gbm == nil {
 		return nil
 	}
-	im := util.GetFromMap(gbm, GBInfoKey)
+	im := util.GetFromMap(gbm, GenesisInfoKey)
 	if im == nil {
 		return nil
 	}
@@ -606,7 +606,7 @@ func (b *Block) GetTokenPledgedForDetails() string {
 }
 
 func (b *Block) GetTransType() string {
-	return b.getBlkString(TCTransTypeKey)
+	return b.getBlkString(TCBlockTypeKey)
 }
 
 func (b *Block) GetOwner() string {
@@ -617,9 +617,9 @@ func (b *Block) GetSenderDID() string {
 	return b.getTrasnInfoString(TISenderDIDKey)
 }
 
-func (b *Block) GetReceiverDID() string {
-	return b.getTrasnInfoString(TIReceiverDIDKey)
-}
+//	func (b *Block) GetReceiverDID() string {
+//		return b.getBlkString(TCTokenOwnerKey)
+//	}
 func (b *Block) GetDeployerDID() string {
 	return b.getTrasnInfoString(TIDeployerDIDKey)
 }
@@ -639,24 +639,13 @@ func (b *Block) GetComment() string {
 	return b.getTrasnInfoString(TICommentKey)
 }
 
-func (b *Block) GetParentDetials(t string) (string, []string, error) {
+func (b *Block) GetParentDetials(t string) (string, error) {
 	gtm := b.getGenesisTokenMap(t)
 	if gtm == nil {
-		return "", nil, fmt.Errorf("invalid token chain block, missing genesis block")
+		return "", fmt.Errorf("invalid token chain block, missing genesis block")
 	}
-	p := util.GetStringFromMap(gtm, GIParentIDKey)
-	gp := util.GetStringSliceFromMap(gtm, GIGrandParentIDKey)
-	return p, gp, nil
-}
-
-func (b *Block) GetTokenDetials(t string) (int, int, error) {
-	gtm := b.getGenesisTokenMap(t)
-	if gtm == nil {
-		return 0, 0, fmt.Errorf("invalid token chain block, missing genesis block")
-	}
-	tl := util.GetIntFromMap(gtm, GITokenLevelKey)
-	tn := util.GetIntFromMap(gtm, GITokenNumberKey)
-	return tl, tn, nil
+	p := util.GetStringFromMap(gtm, GenesisParentIDKey)
+	return p, nil
 }
 
 func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
@@ -664,7 +653,7 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 	if genesisTokenMap == nil {
 		return nil, fmt.Errorf("invalid token chain block, missing genesis block")
 	}
-	commitedTokensMap := util.GetFromMap(genesisTokenMap, GICommitedTokensKey)
+	commitedTokensMap := util.GetFromMap(genesisTokenMap, GenesisCommitedTokensKey)
 	if commitedTokensMap == nil {
 		return nil, fmt.Errorf("invalid token chain block, missing commited tokens block")
 	}
@@ -706,16 +695,6 @@ func (b *Block) GetCommitedTokenDetials(t string) ([]string, error) {
 
 func (b *Block) GetDataFromTokenChain() string {
 	return b.getBlkString(TCDataKey)
-}
-
-func (b *Block) GetSmartContractValue(t string) (float64, error) {
-	var result float64
-	gtm := b.getGenesisTokenMap(t)
-	if gtm == nil {
-		return result, fmt.Errorf("invalid token chain block, missing genesis block")
-	}
-	result = util.GetFloatFromMap(gtm, GISmartContractValueKey)
-	return result, nil
 }
 
 func (b *Block) GetTokenValue() float64 {
@@ -804,13 +783,6 @@ func (b *Block) CalculateBlockHash() (string, error) {
 	return blockHash, nil
 }
 
-func (b *Block) GetTokenLevel(token string) (int, int) {
-	gtm := b.getGenesisTokenMap(token)
-	tokenLevel := util.GetIntFromMap(gtm, GITokenLevelKey)
-	tokenNum := util.GetIntFromMap(gtm, GITokenNumberKey)
-	return tokenLevel, tokenNum
-}
-
 func (b *Block) GetPledgedTokens() []PledgeDetail {
 	pledgedInfo := util.GetFromMap(b.bm, TCPledgeDetailsKey)
 	if pledgedInfo == nil {
@@ -886,7 +858,7 @@ func (b *Block) GetPledgedTokens() []PledgeDetail {
 func (b *Block) GetGenesisNetworkType(t string) (string, error) {
 	genesisInfoMap := b.getGenesisTokenMap(t)
 
-	networkID := util.GetFromMap(genesisInfoMap, GINetworkIDKey)
+	networkID := util.GetFromMap(genesisInfoMap, GenesisNetworkIDKey)
 	if networkID == nil {
 		return "", fmt.Errorf("network ID not found in genesis info")
 	}
@@ -897,7 +869,7 @@ func (b *Block) GetGenesisNetworkType(t string) (string, error) {
 	}
 
 	switch networkIDStr {
-		case constants.NetworkID_RBT_Local, constants.NetworkID_RBT_Testnet, constants.NetworkID_RBT_Mainnet:
+	case constants.NetworkID_RBT_Local, constants.NetworkID_RBT_Testnet, constants.NetworkID_RBT_Mainnet:
 		// valid network IDs
 	default:
 		return "", fmt.Errorf("invalid network ID: %s", networkIDStr)

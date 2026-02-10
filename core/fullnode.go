@@ -130,7 +130,7 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 	if txnBlock == nil {
 		return fmt.Errorf("failed to initialize transaction block for txn %s", newEvent.BlockHash)
 	}
-	txnBlockType := newEvent.TxnType
+	txnBlockType := newEvent.BlockType
 	if txnBlockType == block.TokenTransferredType || txnBlockType == block.TokenDeployedType || txnBlockType == block.TokenExecutedType {
 		TransactionIDFromTheTransactionBlock := newEvent.TransactionID
 
@@ -198,7 +198,7 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 	}
 
 	// Token generated type handling
-	if newEvent.TxnType == block.TokenGeneratedType {
+	if newEvent.BlockType == block.TokenGeneratedType {
 		if currentOwner != newEvent.PublisherDID {
 			return fmt.Errorf("publisher DID mismatch for token generation: expected %s, got %s", currentOwner, newEvent.PublisherDID)
 		}
@@ -537,7 +537,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 // Process contract-related transactions (Smart Contract and NFT operations)
 func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId, currentOwner string) error {
 	// Handle token generated type (new deployments)
-	if newEvent.TxnType == block.TokenGeneratedType || newEvent.TxnType == block.TokenDeployedType {
+	if newEvent.BlockType == block.TokenGeneratedType || newEvent.BlockType == block.TokenDeployedType {
 		if currentOwner != newEvent.PublisherDID {
 			return fmt.Errorf("publisher DID mismatch for contract deployment: expected %s, got %s", currentOwner, newEvent.PublisherDID)
 		}

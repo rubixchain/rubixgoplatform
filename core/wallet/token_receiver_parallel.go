@@ -60,7 +60,7 @@ func (w *Wallet) ParallelTokensReceived(did string, ti []contract.TokenInfo, b *
 			tpm.FuncID = PinFunc
 			tpm.TransactionID = b.GetTid()
 			tpm.Sender = senderPeerId + "." + b.GetSenderDID()
-			tpm.Receiver = receiverPeerId + "." + b.GetReceiverDID()
+			tpm.Receiver = receiverPeerId + "." + b.GetOwner()
 			tpm.TokenValue = tokenInfo.TokenValue
 			providerMaps[i] = tpm
 			mu.Unlock()
@@ -179,7 +179,14 @@ func (w *Wallet) tokenProcessWorker(did string, b *block.Block, senderPeerId, re
 			var parentTokenID string
 			gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
 			if gb != nil {
-				parentTokenID, _, _ = gb.GetParentDetials(tokenInfo.Token)
+				parentTokenID, err = gb.GetParentDetials(tokenInfo.Token)
+				if err != nil {
+					errMsg := fmt.Errorf("Failed to get parent token of token : %s; err : %v", tokenInfo.Token, err)
+					w.log.Error(errMsg.Error())
+					result.err = errMsg
+					results <- result
+					continue
+				}
 			}
 
 			// Create new token entry
@@ -222,7 +229,7 @@ func (w *Wallet) tokenProcessWorker(did string, b *block.Block, senderPeerId, re
 		}
 
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
-		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
+		receiverAddress := receiverPeerId + "." + b.GetOwner()
 
 		// Pin the token (skip AddProviderDetails as we'll batch them later)
 		tokenIdBuffer := bytes.NewBufferString(tokenInfo.Token)

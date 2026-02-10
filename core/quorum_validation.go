@@ -230,7 +230,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 				c.log.Error("failed to get genesis token chain block", "token", parentTokenID)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
-			ppt, _, err := gb.GetParentDetials(parentTokenID)
+			ppt, err := gb.GetParentDetials(parentTokenID)
 			if err != nil {
 				c.log.Error("failed to get genesis token chain block", "token", parentTokenID, "err", err)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
@@ -264,7 +264,13 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, quorumDID string, ti contract.TokenInfo, p *ipfsport.Peer, address, receiverAddress string) (error, bool) {
 	// Skip DHT check in trusted network mode
 	if !c.cfg.CfgData.TrustedNetwork {
-		if ids, err := c.GetDHTddrs(ti.Token); err != nil || len(ids) == 0 {
+		
+		tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(ti.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		if err != nil {
+			c.log.Debug(fmt.Sprintf("validateSingleToken: unable to create IPFS hash of token: %v, err: %v", ti.Token, err))
+			return nil, false
+		}
+		if ids, err := c.GetDHTddrs(tokenHash); err != nil || len(ids) == 0 {
 			c.log.Debug("Skipping token", "token", ti.Token, "reason", "no DHT entries found")
 			return nil, false // skip token if no DHT entries found
 		}
@@ -288,7 +294,7 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	}
 
 	if c.TokenType(PartString) == ti.TokenType {
-		parentToken, _, err := genesisBlock.GetParentDetials(ti.Token)
+		parentToken, err := genesisBlock.GetParentDetials(ti.Token)
 		if err != nil {
 			c.log.Error("Failed to get parent token for token", "token", ti.Token, "err", err)
 			return err, false
@@ -300,29 +306,38 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 		}
 		// The parent token passed in the pin function is the ipfs Hash itself.
 		// We are adding the parent token details to ipfs in the syncParentToken function above.
-		_, err = c.w.Pin(parentToken, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
+		parentTokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(parentToken), ipfsnode.Pin(false))
+		if err != nil {
+			c.log.Error(fmt.Sprintf("Unable to do IPFS Add operation on Token: %v", err))
+			return nil, false
+		}
+		_, err = c.w.Pin(parentTokenHash, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
 		if err != nil {
 			c.log.Error("Failed to pin parent token for token", "token", ti.Token, "err", err)
 			return err, false
 		}
 	}
 
-	if ti.TokenType == token.RBTTokenType {
-		tl, tn, err := genesisBlock.GetTokenDetials(ti.Token)
-		if err != nil {
-			c.log.Error("Failed to get token details for token", "token", ti.Token, "err", err)
-			return err, false
-		}
-		tid, err := IpfsAddWithBackoff(c.ipfs, bytes.NewBufferString(token.GetTokenString(tl, tn)), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-		if err != nil {
-			c.log.Error("Failed to pin token hash for token", "token", ti.Token, "err", err)
-			return err, false
-		}
-		if tid != ti.Token {
-			c.log.Error("Invalid token hash for token", "token", ti.Token, "expected", tid, "actual", ti.Token)
-			return fmt.Errorf("Invalid token hash for %s", ti.Token), false
-		}
-	}
+	// NOTE: Commented the following as the Token was as created using the 
+	// old Level + hash(token_number) approach
+	//
+	//
+	// if ti.TokenType == token.RBTTokenType {
+	// 	tl, tn, err := genesisBlock.GetTokenDetials(ti.Token)
+	// 	if err != nil {
+	// 		c.log.Error("Failed to get token details for token", "token", ti.Token, "err", err)
+	// 		return err, false
+	// 	}
+	// 	tid, err := c.ipfsOps.Add(bytes.NewBufferString(token.GetTokenString(tl, tn)), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	// 	if err != nil {
+	// 		c.log.Error("Failed to pin token hash for token", "token", ti.Token, "err", err)
+	// 		return err, false
+	// 	}
+	// 	if tid != ti.Token {
+	// 		c.log.Error("Invalid token hash for token", "token", ti.Token, "expected", tid, "actual", ti.Token)
+	// 		return fmt.Errorf("Invalid token hash for %s", ti.Token), false
+	// 	}
+	// }
 
 	b := c.w.GetLatestTokenBlock(ti.Token, ti.TokenType)
 	if b == nil {
@@ -460,7 +475,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 						genesisBlockID, _ := genesisBlock.GetBlockID(t.Token)
 						genesisBlockHash, _ := genesisBlock.GetHash()
 						c.log.Debug("Genesis block", "token", t.Token, "blockID", genesisBlockID, "blockHash", genesisBlockHash, "owner", genesisBlock.GetOwner())
-						
+
 						// validate network id
 						if err := c.ValidateTokenNetworkID(genesisBlock, t.Token); err != nil {
 							c.log.Error("failed to validate token network ID", "err", err)

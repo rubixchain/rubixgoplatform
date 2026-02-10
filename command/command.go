@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1_sig"
+	version string = "0.1_keys"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -371,7 +371,7 @@ type Command struct {
 	enableDeExp                  bool
 	deExpURL                     string
 	operationType                int
-	faucetURL                     string
+	faucetURL                    string
 }
 
 func showVersion() {
@@ -899,8 +899,6 @@ func Run(args []string) {
 		cmd.SetupDIDCmd()
 	case ShutDownCmd:
 		cmd.ShutDownCmd()
-	case MirgateNodeCmd:
-		cmd.MigrateNodeCmd()
 	case SetupDBCmd:
 		cmd.setupDB()
 	case GetTxnDetailsCmd:

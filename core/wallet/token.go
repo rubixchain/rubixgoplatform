@@ -964,7 +964,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		tpm.FuncID = PinFunc
 		tpm.TransactionID = b.GetTid()
 		tpm.Sender = senderPeerId + "." + b.GetSenderDID()
-		tpm.Receiver = receiverPeerId + "." + b.GetReceiverDID()
+		tpm.Receiver = receiverPeerId + "." + b.GetOwner()
 		tpm.TokenValue = info.TokenValue
 		providerMaps = append(providerMaps, tpm)
 	}
@@ -997,7 +997,11 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			var parentTokenID string
 			gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
 			if gb != nil {
-				parentTokenID, _, _ = gb.GetParentDetials(tokenInfo.Token)
+				parentTokenID, err = gb.GetParentDetials(tokenInfo.Token)
+				if err != nil {
+					w.log.Error("Failed to get parent token of token", tokenInfo.Token, "err", err)
+					return nil, err
+				}
 			}
 
 			// Create new token entry
@@ -1039,7 +1043,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 			return nil, err
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
-		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
+		receiverAddress := receiverPeerId + "." + b.GetOwner()
 		//Pinnig the whole tokens and pat tokens (skip AddProviderDetails)
 		
 		_, err = w.Pin(tokenHash, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
@@ -1120,7 +1124,7 @@ func (w *Wallet) FTTokensReceivedLegacy(did string, ti []contract.TokenInfo, b *
 		tpm.FuncID = PinFunc
 		tpm.TransactionID = b.GetTid()
 		tpm.Sender = senderPeerId + "." + b.GetSenderDID()
-		tpm.Receiver = receiverPeerId + "." + b.GetReceiverDID()
+		tpm.Receiver = receiverPeerId + "." + b.GetOwner()
 		tpm.TokenValue = info.TokenValue
 		providerMaps = append(providerMaps, tpm)
 	}
@@ -1190,7 +1194,7 @@ func (w *Wallet) FTTokensReceivedLegacy(did string, ti []contract.TokenInfo, b *
 			return nil, err
 		}
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
-		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
+		receiverAddress := receiverPeerId + "." + b.GetOwner()
 		//Pinnig the whole tokens and pat tokens (skip AddProviderDetails)
 		if senderPeerId != receiverPeerId {
 			_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
