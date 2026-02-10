@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	block "github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -25,7 +26,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
 const defaultBatchSize = 500                             // Tweak according to RAM/network
@@ -92,7 +92,6 @@ type PubSubEnvelope struct {
 	Type string          `json:"type"` // "token" or "txn"
 	Data json.RawMessage `json:"data"`
 }
-
 
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
@@ -171,7 +170,7 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	return info, nil
 }
 
-func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int ) {
+func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int) {
 	err := c.generateTestTokens(reqID, num, did, startIndex)
 	br := model.BasicResponse{
 		Status:  true,
@@ -721,7 +720,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			//if it is a part RBT Token, check how many child tokens exist for its parent token, if there are more than 2 add it in a table
 			if detail.AssetType == RBTTokenType {
 				if genesisBlock != nil {
-					parentTokenID, _, err := genesisBlock.GetParentDetials(detail.Token)
+					parentTokenID, err := genesisBlock.GetParentDetials(detail.Token)
 					if err != nil {
 						c.log.Error("failed to get parent tokenID from the genesis block, token", detail.Token)
 					}
@@ -1108,7 +1107,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					//if it is a part RBT Token, check how many child tokens exist for its parent token, if there are more than 2 add it in a table
 					if detail.AssetType == RBTTokenType {
 						if genesisBlock != nil {
-							parentTokenID, _, err := genesisBlock.GetParentDetials(detail.Token)
+							parentTokenID, err := genesisBlock.GetParentDetials(detail.Token)
 							if err != nil {
 								c.log.Error("failed to get parent tokenID from the genesis block, token", detail.Token)
 							}
@@ -2699,7 +2698,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				// 	tokenInfo.TokenValue = event.TokenValue
 				// }
 				if receivedBlock.GenesisBlock != nil {
-					parentTokenID, _, err := receivedBlock.GenesisBlock.GetParentDetials(tokenId)
+					parentTokenID, err := receivedBlock.GenesisBlock.GetParentDetials(tokenId)
 					if err != nil {
 						c.log.Error("failed to get the parent tokenID for the token", tokenId)
 					}
@@ -3293,31 +3292,8 @@ func (c *Core) GetTokenContentAndValidate(tokenId string, assetType int) error {
 		return nil
 	}
 
-	// tokenContent := ""
-	// if c.fullNode {
-	// 	// 1️⃣ If fullnode calls this function, Try reading RBT content from PostgreSQL
-	// 	rbt, err := c.w.ReadRBTContentFromTable(tokenId)
-	// 	if err == nil {
-	// 		tokenContent = rbt.RBTContent
-	// 	}
-
-	// }
-
-	// // 2️⃣ If not found, fetch from IPFS and store
-	// if tokenContent == "" {
-	// 	c.log.Info("RBT content not found in PSQL, fetching from IPFS", "tokenId", tokenId)
-	// 	//do ipfs cat and get the token content,
-	// 	tokenData, err := c.w.IpfsCat(tokenId)
-	// 	if err != nil {
-	// 		errMsg := fmt.Sprintf("failed to get ipfs content of the token%s", tokenId)
-	// 		c.log.Error(errMsg)
-	// 		return fmt.Errorf("failed to validate the token content, error%s", errMsg)
-	// 	}
-
-	// 	tokenContent = tokenData
-	// }
 	if tokenId != "" {
-		// 3️⃣ Validate RBT token content against TokenMap
+		// Validate RBT token content against TokenMap
 		if err := c.ValidateNewTokenContent(tokenId); err != nil {
 			c.log.Error(
 				"Invalid RBT token content",
