@@ -19,6 +19,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	parts "github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
@@ -34,7 +35,8 @@ const subscriberBufferSize = 1000 // process up to this many idle batches
 const workerCount = 8             // Tune according to hardware/network
 const MaxNumberOfChildTokensAllowed = 2
 const wholeTokenValue = 1.0
-const MaxPossiblePartTokenNumber = 1332
+
+// const MaxPossiblePartTokenNumber = 1332
 
 type TokenPublish struct {
 	Token string `json:"token"`
@@ -1636,7 +1638,6 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 					LatestBlock:  latestBlockAfterSync,
 				}
 				//add synced tokens to respective sqlite tables
-		
 
 				err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, blocks, event, syncStatus)
 				if err != nil {
@@ -3182,22 +3183,22 @@ func (c *Core) relaseToken(release *bool, token string) {
 }
 
 func (c *Core) ValidateNewTokenContent(tokenContent string) error {
-	parts := strings.Split(tokenContent, "_")
+	devidedParts := strings.Split(tokenContent, "_")
 
 	tokenTypeString := RBTString
-	if len(parts) == 3 {
+	if len(devidedParts) == 3 {
 		tokenTypeString = PartString
 	}
 	tokenType := c.TokenType(tokenTypeString)
 
 	// parse level (e.g. "002")
-	level, err := strconv.Atoi(strings.TrimLeft(parts[0], "0"))
+	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
 	if err != nil {
 		return fmt.Errorf("invalid token level in token content: %s", tokenContent)
 	}
 
 	// parse token number (e.g. "1000")
-	tokenNo, err := strconv.Atoi(parts[1])
+	tokenNo, err := strconv.Atoi(devidedParts[1])
 	if err != nil {
 		return fmt.Errorf("invalid token number in token content: %s", tokenContent)
 	}
@@ -3251,8 +3252,9 @@ func (c *Core) ValidateNewTokenContent(tokenContent string) error {
 
 	}
 
+	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces(uint(MaxDecimalPlaces))
 	if tokenTypeString == PartString {
-		partTokenNumber, err := strconv.Atoi(parts[2])
+		partTokenNumber, err := strconv.Atoi(devidedParts[2])
 		if err != nil {
 			return fmt.Errorf("invalid part number in token content: %s", tokenContent)
 		}
