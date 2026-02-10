@@ -949,9 +949,13 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// Skip unpinning if senderPeerID and receiverPeerID are same, as reciever
 		// already pinned it
-		if cr.SenderPeerID != c.peerID {
+		if cr.SenderPeerID != cr.ReceiverPeerID {
 			for _, t := range ti {
-				c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+				tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(t.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("Unable to do IPFS Add operation on Token: %v", err)
+				}
+				c.w.UnPin(tokenHash, wallet.PrevSenderRole, sc.GetSenderDID())
 			}
 			//call ipfs repo gc after unpinnning
 			c.ipfsRepoGc()
@@ -1399,7 +1403,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		if !rp.IsLocal() {
 			for _, t := range ti {
-				c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+				tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(t.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("unable to do IPFS Add operation on Token: %v", err)
+				}
+				c.w.UnPin(tokenHash, wallet.PrevSenderRole, sc.GetSenderDID())
 			}
 			// call ipfs repo gc after unpinnning
 			c.ipfsRepoGc()
