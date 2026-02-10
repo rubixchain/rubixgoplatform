@@ -26,7 +26,7 @@ func (cmd *Command) GenerateTestRBT() {
 		return
 	}
 
-	br, err := cmd.c.GenerateTestRBT(cmd.numTokens, cmd.did)
+	br, err := cmd.c.GenerateTestRBT(cmd.numTokens, cmd.did, cmd.startIndex)
 
 	if err != nil {
 		cmd.log.Error("Failed to generate RBT", "err", err)

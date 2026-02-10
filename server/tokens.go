@@ -48,7 +48,7 @@ func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.c.GenerateTestTokens(req.ID, tr.NumberOfTokens, tr.DID)
+	go s.c.GenerateTestTokens(req.ID, tr.NumberOfTokens, tr.DID, tr.StartIndex)
 	return s.didResponse(req, req.ID)
 }
 
