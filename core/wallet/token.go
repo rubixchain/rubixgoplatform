@@ -955,9 +955,8 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 	for _, info := range ti {
 		t := info.Token
 		b := w.GetLatestTokenBlock(info.Token, info.TokenType)
-		blockId, _ := b.GetBlockID(t)
-		tokenIDTokenStateData := t + blockId
-		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
+		// add token hash to token provider map
+		tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(t))
 		tokenIDTokenStateHash, tpm, _ := w.AddWithProviderMap(tokenIDTokenStateBuffer, did, OwnerRole)
 		updatedtokenhashes = append(updatedtokenhashes, tokenIDTokenStateHash)
 		tokenHashMap[t] = tokenIDTokenStateHash
