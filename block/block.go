@@ -426,7 +426,6 @@ func (b *Block) UpdateSignature(dc didmodule.DIDCrypto) error {
 
 	var sig string
 
-	// For BIP DIDs (type 4): Use PvtSign() to get PKI signature
 	sb, err := dc.PvtSign([]byte(h))
 	if err != nil {
 		return fmt.Errorf("failed to get did signature, " + err.Error())
