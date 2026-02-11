@@ -955,11 +955,8 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("Unable to do IPFS Add operation on Token: %v", err)
 				}
-				unpinStatus, err := c.w.UnPin(tokenHash, wallet.PrevSenderRole, sc.GetSenderDID())
-				if err != nil || !unpinStatus {
-					c.log.Error("failed to unpin token ", t.Token, "token hash ", tokenHash, "err ", err)
-					return nil, nil, nil, fmt.Errorf("Unable to do IPFS unpin operation on Token: %v, err : %v", t.Token, err)
-				}
+				c.w.UnPin(tokenHash, wallet.PrevSenderRole, sc.GetSenderDID())
+				
 			}
 			//call ipfs repo gc after unpinnning
 			c.ipfsRepoGc()
