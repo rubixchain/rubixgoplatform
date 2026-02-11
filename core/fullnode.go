@@ -245,7 +245,10 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 	// txnBlockType := txnBlock.GetTransType()
 	tokenType := txnBlock.GetTokenType(tokenId)
 	txnBlockOwner := txnBlock.GetOwner()
-	txnBlokID, err := txnBlock.GetBlockID(tokenId)
+	txnBlockID, err := txnBlock.GetBlockID(tokenId)
+	if err != nil {
+		return fmt.Errorf("failed to get the transaction blockID for the token%s", tokenId)
+	}
 
 	var p *ipfsport.Peer
 	if currentBlockNumber != 0 {
@@ -393,7 +396,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 				return nil
 				// return fmt.Errorf("mismatch of blocks detected: latest block number=%d, current block number=%d", latestBlockNumber, currentBlockNumber)
 			} else {
-				incomingBlockID := txnBlokID
+				incomingBlockID := txnBlockID
 				publishersLatestBlockNumber := currentBlockNumber
 				//get Fullnode block whose block number is publisher side latest blockID
 				fullnodesideBlockBytes, err := c.w.GetFullNodeTokenBlockByNumber(tokenId, tokenType, publishersLatestBlockNumber)
@@ -425,7 +428,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 					return nil
 
 				} else {
-					c.log.Info("current transaction blk %salready exist with fullnode", txnBlokID)
+					c.log.Info("current transaction blk %salready exist with fullnode", txnBlockID)
 					return nil
 				}
 
@@ -460,7 +463,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 					PublisherDID:   newEvent.PublisherDID,
 					ClaimedOwnerI:  previousOwner,
 					ClaimedOwnerII: txnBlockOwner,
-					ErrorMessage:   fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlokID, err),
+					ErrorMessage:   fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlockID, err),
 				}
 				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
 				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
@@ -539,6 +542,10 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	tokenType := txnBlock.GetTokenType(tokenId)
 	latestTokenBlock := c.w.GetFullNodeLatestTokenBlock(tokenId, tokenType)
 	txnBlockOwner := txnBlock.GetOwner()
+	txnBlockID, err := txnBlock.GetBlockID(tokenId)
+	if err != nil {
+		return fmt.Errorf("failed to get the transaction blockID for the token%s", tokenId)
+	}
 	if latestTokenBlock == nil {
 		//connect to publisher and fetch complete token chain
 		p, err := c.getPeer(newEvent.PublisherDID)
@@ -592,20 +599,137 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	if err != nil {
 		return fmt.Errorf("failed to get latest block number for contract: %v", err)
 	}
+	previousOwner := latestTokenBlock.GetOwner()
 
 	currentBlockNumber, err := txnBlock.GetBlockNumber(tokenId)
 	if err != nil {
 		return fmt.Errorf("failed to get current block number for contract: %v", err)
 	}
+	p, err := c.getPeer(newEvent.PublisherDID)
+	if err != nil {
+		c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
+		return fmt.Errorf("failed to open peer connection with publisher %s", newEvent.PublisherDID)
+	}
+	defer p.Close()
 
 	// Check for missing blocks in contract chain
 	if latestBlockNumber+1 != currentBlockNumber {
-		return fmt.Errorf("missing blocks in contract chain %s: latest=%d, current=%d",
-			tokenId, latestBlockNumber, currentBlockNumber)
-	}
+		if latestBlockNumber == currentBlockNumber {
+			latestBlockHash, _ := latestTokenBlock.GetHash()
+			if newEvent.BlockHash == latestBlockHash {
+				return nil
+			}
+			//add this token to double spend tokens table
+			doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+				TokenID:        tokenId,
+				AssetType:      newEvent.AssetType,
+				TokenType:      tokenType,
+				PublisherDID:   newEvent.PublisherDID,
+				ClaimedOwnerI:  previousOwner,
+				ClaimedOwnerII: txnBlockOwner,
+				ErrorMessage:   fmt.Sprintf("block with the same block number exist, dual ownership issue or same did would have double spent the token, tokenID:%s", tokenId),
+			}
+			err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+			if err != nil {
+				errMsg := doubleSpentTokenInfo.ErrorMessage + "failed to update double spent token in tables"
+				return fmt.Errorf("%v", errMsg)
+			}
 
-	// Validate publisher ownership
-	previousOwner := latestTokenBlock.GetOwner()
+			return fmt.Errorf("block with the same block number exist, dual ownership issue or same did would have double spent the token, tokenID:%s", tokenId)
+		} else if latestBlockNumber < currentBlockNumber {
+			//connect to publisher and fetch complete token chain
+
+			tokenSyncInfo := &TokenSyncInfo{
+				TokenID:   tokenId,
+				TokenType: tokenType,
+				AssetType: newEvent.AssetType,
+			}
+			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
+			if err != nil {
+				//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
+				//we should add it into double spend tokens table
+				if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
+					strings.Contains(err.Error(), "owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
+					//Add token into double spend tokens table
+					doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+						TokenID:        tokenId,
+						AssetType:      newEvent.AssetType,
+						TokenType:      tokenType,
+						PublisherDID:   newEvent.PublisherDID,
+						ClaimedOwnerI:  previousOwner,
+						ClaimedOwnerII: txnBlockOwner,
+						ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token or same did would have double spent the token,dual ownership issue", previousOwner, txnBlockOwner),
+					}
+					// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
+					err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+					if err != nil {
+						errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", tokenId, err)
+						c.log.Error(errMsg)
+					}
+					c.log.Error("token has been added to double spend tokens table, tokenID", tokenId)
+					return nil
+
+				} else {
+					c.log.Error("Failed to sync chain", "token", tokenId, "err", err)
+					info := &model.FailedToSyncTokenDetailsInfo{
+						TokenID:   tokenId,
+						TokenType: tokenType,
+						AssetType: newEvent.AssetType,
+						Did:       newEvent.PublisherDID,
+						Reason:    fmt.Sprintf("failed to sync chain,err: %v", err),
+					}
+
+					if err := c.w.AddFailedTokensToTable(info); err != nil {
+						c.log.Error("Failed to record failed token sync in DB", "token", tokenId, "error", err)
+					} else {
+						c.log.Info("Recorded failed token sync in DB", "token", tokenId)
+						return nil
+					}
+				}
+
+			}
+			c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
+			return nil
+			// return fmt.Errorf("mismatch of blocks detected: latest block number=%d, current block number=%d", latestBlockNumber, currentBlockNumber)
+		} else {
+			incomingBlockID := txnBlockID
+			publishersLatestBlockNumber := currentBlockNumber
+			//get Fullnode block whose block number is publisher side latest blockID
+			fullnodesideBlockBytes, err := c.w.GetFullNodeTokenBlockByNumber(tokenId, tokenType, publishersLatestBlockNumber)
+			fullnodesideBlock := block.InitBlock(fullnodesideBlockBytes, nil)
+			fullnodesideBlockID, err := fullnodesideBlock.GetBlockID(tokenId)
+			if err != nil {
+				c.log.Error("failed to get blockID of the fullnode side block", "error", err)
+			}
+			fullnodesideBlockOwner := fullnodesideBlock.GetOwner()
+			if incomingBlockID != fullnodesideBlockID {
+				//add token to double spend tokens table, with an error saying
+				//that both DID1 or DID2 are claimming the same token.
+				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+					TokenID:        tokenId,
+					AssetType:      newEvent.AssetType,
+					TokenType:      tokenType,
+					PublisherDID:   newEvent.PublisherDID,
+					ClaimedOwnerI:  fullnodesideBlockOwner,
+					ClaimedOwnerII: txnBlockOwner,
+					ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", fullnodesideBlockOwner, txnBlockOwner),
+				}
+				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
+				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", tokenId, err)
+					c.log.Error(errMsg)
+				}
+				c.log.Error("token has been added to double spend tokens table, tokenID", tokenId)
+				return nil
+
+			} else {
+				c.log.Info("current transaction blk %salready exist with fullnode", txnBlockID)
+				return nil
+			}
+
+		}
+	}
 
 	// deployer should be the contract owner for all smart contracts, but for NFTs, owners keep changing
 	if newEvent.AssetType == NFTTokenType {
@@ -614,6 +738,35 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 		}
 	}
 
+	// Do all 3 checks, If any check fails, handle the failure here also just before adding the block to leveldb.
+	err = c.ValidateIncomingTokenBlock(*txnBlock, latestTokenBlock, tokenId, p)
+	if err != nil {
+		//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
+		//we should add it into double spend tokens table
+		if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
+			strings.Contains(err.Error(), "owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
+			//Add token into double spend tokens table
+			doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+				TokenID:        tokenId,
+				AssetType:      newEvent.AssetType,
+				TokenType:      tokenType,
+				PublisherDID:   newEvent.PublisherDID,
+				ClaimedOwnerI:  previousOwner,
+				ClaimedOwnerII: txnBlockOwner,
+				ErrorMessage:   fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlockID, err),
+			}
+			// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
+			err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", tokenId, err)
+				c.log.Error(errMsg)
+			}
+			c.log.Info("token has been added to double spend token's table", tokenId, "error", err)
+			return nil
+
+		}
+
+	}
 	// Add validated block to contract chain
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 		return fmt.Errorf("failed to add contract execution block to chain: %v", err)
