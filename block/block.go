@@ -426,21 +426,12 @@ func (b *Block) UpdateSignature(dc didmodule.DIDCrypto) error {
 
 	var sig string
 
-	if dc.GetSignType() == didmodule.NlssVersion {
-		// For NLSS DIDs (types 0,1,2): Use Sign() to get NLSS signature
-		ssig, _, err := dc.Sign(h)
-		if err != nil {
-			return fmt.Errorf("failed to get nlss signature, " + err.Error())
-		}
-		sig = util.HexToStr(ssig) // Use NLSS share signature
-	} else {
-		// For BIP DIDs (type 4): Use PvtSign() to get PKI signature
-		sb, err := dc.PvtSign([]byte(h))
-		if err != nil {
-			return fmt.Errorf("failed to get did signature, " + err.Error())
-		}
-		sig = util.HexToStr(sb)
+	// For BIP DIDs (type 4): Use PvtSign() to get PKI signature
+	sb, err := dc.PvtSign([]byte(h))
+	if err != nil {
+		return fmt.Errorf("failed to get did signature, " + err.Error())
 	}
+	sig = util.HexToStr(sb)
 
 	ksmi, ok := b.bm[TCSignatureKey]
 	if !ok {

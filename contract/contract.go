@@ -448,37 +448,27 @@ func (c *Contract) VerifySignature(dc did.DIDCrypto) error {
 	didstr := dc.GetDID()
 
 	//fetch sender's signature
-	hs, ss, ps, err := c.GetHashSig(didstr)
+	hs, _, ps, err := c.GetHashSig(didstr)
 	if err != nil {
-		c.log.Error("GetHashSig failed", "err", err)
+		if c.log != nil {
+			c.log.Error("failed to get signature at verify signature", "err", err)
+		}
 		return err
 	}
 
-	//If the ss i.e., share signature is empty, then its a Pki sign, so call PvtVerify
-	//Else it is NLSS based sign, so call NlssVerify
-	didType := dc.GetSignType()
+	ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
 
-	if didType == did.BIPVersion {
-		ok, err := dc.PvtVerify([]byte(hs), util.StrToHex(ps))
-
-		if err != nil {
+	if err != nil {
+		if c.log != nil {
 			c.log.Error("Contract verification: PKI verification error: %v\n", err)
-			return err
 		}
-		if !ok {
+		return err
+	}
+	if !ok {
+		if c.log != nil {
 			c.log.Error("Contract verification: PKI verification returned false\n")
-			return fmt.Errorf("did Pki signature verification failed")
 		}
-	} else {
-		ok, err := dc.NlssVerify(hs, util.StrToHex(ss), util.StrToHex(ps))
-		if err != nil {
-			c.log.Error("Contract verification: NLSS verification error: %v\n", err)
-			return err
-		}
-		if !ok {
-			c.log.Error("Contract verification: NLSS verification returned false\n")
-			return fmt.Errorf("did Nlss signature verification failed")
-		}
+		return fmt.Errorf("did Pki signature verification failed")
 	}
 
 	return nil

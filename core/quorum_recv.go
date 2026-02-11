@@ -77,22 +77,31 @@ func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &cs, http.StatusOK)
 }
 
-func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *contract.Contract) {
+func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *contract.Contract, string) {
 	sc := contract.InitContract(cr.ContractBlock, nil)
 	// setup the did to verify the signature
 	dc, err := c.SetupForienDID(sc.GetSenderDID(), self_did)
 	if err != nil {
 		c.log.Error("Failed to get DID", "err", err)
-		return false, nil
+		return false, nil, "Failed to get DID: " + err.Error()
 	}
 	c.log.Debug("Contract verification starting", "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
 	err = sc.VerifySignature(dc)
 	if err != nil {
-		c.log.Error("Failed to verify sender signature in verifyContract", "err", err, "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
-		return false, nil
+		msg := "Failed to verify sender signature"
+		// Check if this is an NLSS incompatibility error
+		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
+			msg = "NLSS DID detected at SENDER role. NLSS DIDs are DEPRECATED. Please use BIP DID"
+			c.log.Error(msg,
+				"senderDID", sc.GetSenderDID(),
+				"error", err)
+		} else {
+			c.log.Error("Failed to verify sender signature in verifyContract", "err", err, "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
+		}
+		return false, nil, msg
 	}
 	c.log.Debug("Contract verification successful", "senderDID", sc.GetSenderDID())
-	return true, sc
+	return true, sc, ""
 }
 
 func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto.DIDCrypto, cr *ConensusRequest) *ensweb.Result {
@@ -101,9 +110,9 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		Status: false,
 	}
 
-	ok, sc := c.verifyContract(cr, did)
+	ok, sc, msg := c.verifyContract(cr, did)
 	if !ok {
-		crep.Message = "Failed to verify sender signature"
+		crep.Message = msg
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	// check if token has multiple pins
@@ -324,9 +333,9 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
-	ok, sc := c.verifyContract(cr, "")
+	ok, sc, msg := c.verifyContract(cr, "")
 	if !ok {
-		crep.Message = "Failed to verify sender signature"
+		crep.Message = msg
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	// check if token has multiple pins
@@ -426,8 +435,22 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
 	if err := consensusContract.VerifySignature(dc); err != nil {
-		c.log.Error("Failed to verify signature", "err", err)
-		consensusReply.Message = "Failed to verify signature"
+		// Check if this is an NLSS incompatibility error
+		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
+			role := "DEPLOYER"
+			if consensusRequest.Mode != SmartContractDeployMode {
+				role = "EXECUTOR"
+			}
+			c.log.Error("NLSS DID detected at SmartContract role. NLSS DIDs are DEPRECATED.",
+				"role", role,
+				"did", verifyDID,
+				"message", "Please use BIP DID",
+				"error", err)
+			consensusReply.Message = fmt.Sprintf("NLSS DID detected at %s role. Please use BIP DID", role)
+		} else {
+			c.log.Error("Failed to verify signature", "err", err)
+			consensusReply.Message = "Failed to verify signature"
+		}
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
 
@@ -647,8 +670,22 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	}
 	err = consensusContract.VerifySignature(dc)
 	if err != nil {
-		c.log.Error("Failed to verify signature", "err", err)
-		consensusReply.Message = "Failed to verify signature"
+		// Check if this is an NLSS incompatibility error
+		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
+			role := "DEPLOYER"
+			if consensusRequest.Mode != NFTDeployMode {
+				role = "EXECUTOR"
+			}
+			c.log.Error("NLSS DID detected at NFT role. NLSS DIDs are DEPRECATED.",
+				"role", role,
+				"did", verifyDID,
+				"message", "Please use BIP DID",
+				"error", err)
+			consensusReply.Message = fmt.Sprintf("NLSS DID detected at %s role. Please use BIP DID", role)
+		} else {
+			c.log.Error("Failed to verify signature", "err", err)
+			consensusReply.Message = "Failed to verify signature"
+		}
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
 
@@ -872,9 +909,9 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		ReqID:  cr.ReqID,
 		Status: false,
 	}
-	ok, sc := c.verifyContract(cr, did)
+	ok, sc, msg := c.verifyContract(cr, did)
 	if !ok {
-		crep.Message = "Failed to verify sender signature"
+		crep.Message = msg
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
 	// check if token has multiple pins
@@ -1465,7 +1502,7 @@ func (c *Core) updateReceiverToken(
 
 	// Adding quorums to DIDPeerTable of receiver
 	for _, qrm := range quorumInfo {
-		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID, *qrm.DIDType)
+		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID)
 	}
 	return updatedTokenStateHashes, senderPeer, nil
 }
@@ -1721,7 +1758,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 	}
 	// Adding quorums to DIDPeerTable of receiver
 	for _, qrm := range quorumInfo {
-		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID, *qrm.DIDType)
+		c.w.AddDIDPeerMap(qrm.DID, qrm.PeerID)
 	}
 	return nil, nil
 }

@@ -668,7 +668,7 @@
                     "200": {
                         "description": "Successful response with token chain data",
                         "schema": {
-                            "$ref": "#/definitions/model.GetFTTokenChainReply"
+                            "$ref": "#/definitions/model.GetTokenChainResponce"
                         }
                     }
                 }
@@ -1589,7 +1589,7 @@
                 }
             }
         },
-        "model.GetFTTokenChainReply": {
+        "model.GetTokenChainResponce": {
             "type": "object",
             "properties": {
                 "message": {
@@ -1740,9 +1740,6 @@
             "properties": {
                 "did": {
                     "type": "string"
-                },
-                "didtype": {
-                    "type": "integer"
                 },
                 "peerID": {
                     "type": "string"

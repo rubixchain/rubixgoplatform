@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,7 +26,6 @@ type APIResponse struct {
 
 type DIDInfo struct {
 	UserDID string `json:"user_did"`
-	DIDType string `json:"did_type"`
 	PeerID  string `json:"peer_id"`
 }
 
@@ -72,7 +70,7 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		return nil, fmt.Errorf("failed to parse DID data: %w", err)
 	}
 
-	c.log.Debug("Explorer response parsed", "userDID", apiResp.Data.UserDID, "peerID", apiResp.Data.PeerID, "didType", apiResp.Data.DIDType)
+	c.log.Debug("Explorer response parsed", "userDID", apiResp.Data.UserDID, "peerID", apiResp.Data.PeerID)
 
 	// Fetch DID content to local node
 	if err := c.FetchDID(apiResp.Data.UserDID); err != nil {
@@ -80,37 +78,9 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		return nil, fmt.Errorf("failed to fetch DID from network: %w", err)
 	}
 
-	// Determine if DID has .png file to identify BasicDID
-	hasPNG := false
-	didDir := filepath.Join(c.didDir, apiResp.Data.UserDID)
-	if files, err := os.ReadDir(didDir); err == nil {
-		for _, f := range files {
-			if !f.IsDir() && strings.HasSuffix(f.Name(), ".png") {
-				hasPNG = true
-				break
-			}
-		}
-	} else {
-		c.log.Warn("Failed to scan DID directory", "path", didDir, "err", err)
-	}
-
-	// Resolve DID type
-	var resolvedType int
-	switch apiResp.Data.DIDType {
-	case "BIP39":
-		resolvedType = did.LiteDIDMode
-	default:
-		if hasPNG {
-			resolvedType = did.BasicDIDMode
-		} else {
-			resolvedType = did.LiteDIDMode // fallback default
-		}
-	}
-
 	peerInfo := &wallet.DIDPeerMap{
-		DID:     apiResp.Data.UserDID,
-		PeerID:  apiResp.Data.PeerID,
-		DIDType: &resolvedType,
+		DID:    apiResp.Data.UserDID,
+		PeerID: apiResp.Data.PeerID,
 	}
 
 	// Add peer to table (upsert logic should be inside AddPeerDetails)
@@ -129,54 +99,29 @@ func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
 			Status: false,
 		},
 	}
-	dt, err := c.w.GetDID(req.DID)
-	if err != nil {
-		c.log.Error("DID does not exist", "err", err)
-		resp.Message = "DID does not exist"
+	_, ok := c.ValidateDIDToken(req.Token, setup.ChanllegeTokenType, req.DID)
+	if !ok {
+		resp.Message = "Invalid token"
 		return resp
 	}
-	if dt.Type == did.BasicDIDMode || dt.Type == did.ChildDIDMode {
-		if !c.checkPassword(req.DID, req.Password) {
-			resp.Message = "Password does not match"
-			return resp
-		}
-	} else if dt.Type == did.LiteDIDMode {
-		_, ok := c.ValidateDIDToken(req.Token, setup.ChanllegeTokenType, req.DID)
-		if !ok {
-			resp.Message = "Invalid token"
-			return resp
-		}
-		dc := did.InitDIDLite(req.DID, c.didDir, nil)
-		ok, err := dc.PvtVerify([]byte(req.Token), req.Signature)
-		if err != nil {
+	dc := did.InitDIDLite(req.DID, c.didDir, nil)
+	ok, err := dc.PvtVerify([]byte(req.Token), req.Signature)
+	if err != nil {
+		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
+			c.log.Error("NLSS DID detected during authentication. NLSS DIDs are DEPRECATED. Please use BIP DID", "did", req.DID, "error", err)
+			resp.Message = "NLSS DID detected. Please use BIP DID"
+		} else {
 			c.log.Error("Failed to verify DID signature", "err", err)
 			resp.Message = "Failed to verify DID signature"
-			return resp
 		}
-		if !ok {
-			resp.Message = "Invalid signature"
-			return resp
-		}
-	} else {
-		_, ok := c.ValidateDIDToken(req.Token, setup.ChanllegeTokenType, req.DID)
-		if !ok {
-			resp.Message = "Invalid token"
-			return resp
-		}
-		dc := did.InitDIDBasic(req.DID, c.didDir, nil)
-		ok, err := dc.PvtVerify([]byte(req.Token), req.Signature)
-		if err != nil {
-			c.log.Error("Failed to verify DID signature", "err", err)
-			resp.Message = "Failed to verify DID signature"
-			return resp
-		}
-		if !ok {
-			resp.Message = "Invalid signature"
-			return resp
-		}
+		return resp
+	}
+	if !ok {
+		resp.Message = "Invalid signature"
+		return resp
 	}
 	expiresAt := time.Now().Add(time.Minute * 10)
-	tkn := c.generateDIDToken(setup.AccessTokenType, req.DID, dt.RootDID == 1, expiresAt)
+	tkn := c.generateDIDToken(setup.AccessTokenType, req.DID, true, expiresAt)
 	resp.Status = true
 	resp.Message = "Access granted"
 	resp.Token = tkn
@@ -209,10 +154,6 @@ func (c *Core) checkPassword(didStr string, pwd string) bool {
 }
 
 func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
-	if didCreate.RootDID && didCreate.Type != did.BasicDIDMode {
-		c.log.Error("only basic mode is allowed for root did")
-		return "", fmt.Errorf("only basic mode is allowed for root did")
-	}
 	if didCreate.RootDID && c.w.IsRootDIDExist() {
 		c.log.Error("root did is already exist")
 		return "", fmt.Errorf("root did is already exist")
@@ -225,11 +166,10 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		didCreate.Dir = did
 	}
 
-	dt := wallet.DIDType{
-		DID:        did,
-		DIDDir:     didCreate.Dir,
-		Type:       didCreate.Type,
-		Config:     didCreate.Config,
+	dt := wallet.DID{
+		DID:    did,
+		DIDDir: didCreate.Dir,
+		Config: didCreate.Config,
 	}
 	if didCreate.RootDID {
 		dt.RootDID = 1
@@ -243,13 +183,12 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		PeerID:  c.peerID,
 		DID:     did,
 		Balance: 0,
-		DIDType: didCreate.Type,
 	}
 	c.ec.ExplorerUserCreate(newDID)
 	return did, nil
 }
 
-func (c *Core) GetDIDs(dir string) []wallet.DIDType {
+func (c *Core) GetDIDs(dir string) []wallet.DID {
 	dt, err := c.w.GetDIDs(dir)
 	if err != nil {
 		return nil
@@ -271,10 +210,9 @@ func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
 		br.Message = err.Error()
 		return br
 	}
-	dt := wallet.DIDType{
+	dt := wallet.DID{
 		DID:    ds,
 		DIDDir: dc.Dir,
-		Type:   dc.Type,
 		Config: dc.Config,
 	}
 	err = c.w.CreateDID(&dt)
@@ -284,9 +222,8 @@ func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
 		return br
 	}
 	newDID := &ExplorerDID{
-		PeerID:  c.peerID,
-		DID:     ds,
-		DIDType: dc.Type,
+		PeerID: c.peerID,
+		DID:    ds,
 	}
 	c.ec.ExplorerUserCreate(newDID)
 	br.Status = true
@@ -326,16 +263,11 @@ func (c *Core) registerDID(reqID string, did string) error {
 		return fmt.Errorf("register did, failed to do signature")
 	}
 
-	dt, err := c.w.GetDID(did)
-	if err != nil {
-		return fmt.Errorf("DID does not exist")
-	}
 	pm := &PeerMap{
 		PeerID:    c.peerID,
 		DID:       did,
 		Signature: sig,
 		Time:      t,
-		DIDType:   dt.Type,
 	}
 	err = c.publishPeerMap(pm)
 	if err != nil {
@@ -347,10 +279,6 @@ func (c *Core) registerDID(reqID string, did string) error {
 
 // CreateDIDFromPubKey creates a DID from the provided public key
 func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (string, error) {
-	if didCreate.RootDID && didCreate.Type != did.BasicDIDMode {
-		c.log.Error("only basic mode is allowed for root did")
-		return "", fmt.Errorf("only basic mode is allowed for root did")
-	}
 	if didCreate.RootDID && c.w.IsRootDIDExist() {
 		c.log.Error("root did is already exist")
 		return "", fmt.Errorf("root did is already exist")
@@ -369,11 +297,10 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 		didCreate.Dir = did
 	}
 
-	dt := wallet.DIDType{
-		DID:        did,
-		DIDDir:     didCreate.Dir,
-		Type:       didCreate.Type,
-		Config:     didCreate.Config,
+	dt := wallet.DID{
+		DID:    did,
+		DIDDir: didCreate.Dir,
+		Config: didCreate.Config,
 	}
 	if didCreate.RootDID {
 		dt.RootDID = 1
@@ -390,7 +317,6 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 		PeerID:  c.peerID,
 		DID:     did,
 		Balance: 0,
-		DIDType: didCreate.Type,
 	}
 	c.ec.ExplorerUserCreate(newDID)
 	return did, nil
@@ -404,51 +330,36 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 	c.log.Debug("Resolving peer info", "did", didStr)
 
 	var peerID string
-	var didType int
 
 	// In case of xell wallet, TRIE testnet and Rubix testnet have same swarm key but different peerIDs.
 	// So, an user should find another user's Rubix testnet DID-info in DIDTable and TRIE testnet DID-info in PeerDIDTable.
 	if c.testNet {
 		// 1. try DID table first
-		if didInfo, err := c.w.GetDID(didStr); err == nil {
+		if _, err := c.w.GetDID(didStr); err == nil {
 			return &wallet.DIDPeerMap{
-				DID:     didStr,
-				PeerID:  c.peerID,
-				DIDType: &didInfo.Type,
+				DID:    didStr,
+				PeerID: c.peerID,
 			}, nil
 		}
 
 		// 2. If missing, try peer table
 		peerID = c.w.GetPeerID(didStr)
-		didType, _ = c.w.GetPeerDIDType(didStr)
 
-		if peerID != "" && didType != -1 {
-			//c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
+		if peerID != "" {
 			return &wallet.DIDPeerMap{
-				DID:     didStr,
-				PeerID:  peerID,
-				DIDType: &didType,
+				DID:    didStr,
+				PeerID: peerID,
 			}, nil
 		}
 	} else {
 		// 1. Try peer table first
 		peerID = c.w.GetPeerID(didStr)
-		didType, _ = c.w.GetPeerDIDType(didStr)
 
-		if peerID != "" && didType != -1 {
-			//c.log.Debug("Found peer info in local storage", "peerID", peerID, "didType", didType)
+		if peerID != "" {
 			return &wallet.DIDPeerMap{
-				DID:     didStr,
-				PeerID:  peerID,
-				DIDType: &didType,
+				DID:    didStr,
+				PeerID: peerID,
 			}, nil
-		}
-
-		// 2. If missing, try DID table
-		if didType == -1 {
-			if didInfo, err := c.w.GetDID(didStr); err == nil {
-				didType = didInfo.Type
-			}
 		}
 	}
 
@@ -470,43 +381,9 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 		return nil, fmt.Errorf("peerID of  DID %s not found in local storage. Peer information not registered. register did to continue", didStr)
 	}
 
-	// PeerID exists, but no DIDType — fetch from peer or explorer
-	if didType == -1 {
-		var peerInfo *wallet.DIDPeerMap
-		if !c.testNet {
-			peerInfo, err := c.GetPeerFromExplorer(didStr)
-			if err != nil {
-				return nil, fmt.Errorf("explorer fetch failed: %w", err)
-			}
-			return peerInfo, nil
-		}
-
-		p, err := c.getPeer(peerID + "." + didStr)
-		if err != nil {
-			return nil, fmt.Errorf("peer connection failed: %w", err)
-		}
-		defer p.Close()
-
-		peerDetails, err := c.GetPeerInfo(p, didStr)
-		if err != nil {
-			return nil, fmt.Errorf("peer info fetch failed: %w", err)
-		}
-
-		peerInfo = &wallet.DIDPeerMap{
-			DID:     didStr,
-			PeerID:  peerID,
-			DIDType: peerDetails.PeerInfo.DIDType,
-		}
-		if err := c.AddPeerDetails(*peerInfo); err != nil {
-			return nil, err
-		}
-		return peerInfo, nil
-	}
-
 	return &wallet.DIDPeerMap{
-		DID:     didStr,
-		PeerID:  peerID,
-		DIDType: &didType,
+		DID:    didStr,
+		PeerID: peerID,
 	}, nil
 }
 
@@ -674,16 +551,10 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 		return response, fmt.Errorf("remove stale did, failed to do signature")
 	}
 
-	didInfo, err := c.w.GetDID(staleDID)
-	if err != nil {
-		return response, fmt.Errorf("DID does not exist")
-	}
-
 	// 2. publish the stale did and the signature
 	pm := &PeerMap{
 		PeerID:    c.peerID,
 		DID:       staleDID,
-		DIDType:   didInfo.Type,
 		Signature: sig,
 		Time:      t,
 	}

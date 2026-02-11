@@ -36,11 +36,9 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 
 	// add publisher to peer did table
-	unknownDIDType := -1
 	publisherDetails := &wallet.DIDPeerMap{
-		DID:     newEvent.PublisherDID,
-		PeerID:  peerID,
-		DIDType: &unknownDIDType,
+		DID:    newEvent.PublisherDID,
+		PeerID: peerID,
 	}
 	err = c.AddPeerDetails(*publisherDetails)
 	if err != nil {
