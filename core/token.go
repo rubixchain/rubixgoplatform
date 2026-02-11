@@ -283,6 +283,17 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to add token chain", "err", err)
 			return err
 		}
+
+		tokenIDBuffer := bytes.NewBufferString(id)
+		tokenHash, err := c.w.Add(tokenIDBuffer, did, wallet.AddFunc, true)
+		if err != nil {
+			return fmt.Errorf("createTokensAtLevel: failed to add token to ipfs: %v, err: %v", id, err)
+		}
+
+		if _, err := c.w.Pin(tokenHash, wallet.OwnerRole, did, "NA", did, "NA", t.TokenValue); err != nil {
+			return fmt.Errorf("createChildTokensAtLevel: failed to pin child token: %v, err: %v", id, err)
+		}
+
 		err = c.w.CreateToken(t)
 		if err != nil {
 			c.log.Error("Failed to create token", "err", err)
