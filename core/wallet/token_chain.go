@@ -237,8 +237,8 @@ func (w *Wallet) getBlock(tt int, t string, blockID string) ([]byte, error) {
 	return w.getRawBlock(db, []byte(tcsKey(tt, t, blockID)))
 }
 
-func (w *Wallet) getBlockByNumber(tt int, t string, blockNum uint64) ([]byte, error) {
-	db := w.getChainDB(tt)
+func (w *Wallet) getFullNodeBlockByNumber(tt int, t string, blockNum uint64) ([]byte, error) {
+	db := w.fullNodeStorage
 	if db == nil {
 		return nil, fmt.Errorf("failed get block, invalid token type")
 	}
@@ -978,8 +978,8 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 	return nil
 }
 
-func (w *Wallet) GetTokenBlockByNumber(token string, tokenType int, blockNum uint64) ([]byte, error) {
-	return w.getBlockByNumber(tokenType, token, blockNum)
+func (w *Wallet) GetFullNodeTokenBlockByNumber(token string, tokenType int, blockNum uint64) ([]byte, error) {
+	return w.getFullNodeBlockByNumber(tokenType, token, blockNum)
 }
 
 // GetTokenBlock get token chain block from the storage

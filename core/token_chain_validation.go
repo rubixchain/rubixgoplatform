@@ -873,8 +873,7 @@ func (c *Core) ValidateIncomingTokenBlock(
 	}
 
 	// =========================
-	//CHECK3: fullnode verifies signature of each block, if it doesn't pass through we will add token to failed to sync tokens table
-	//with error saying that, corrupted tokenchain.
+	//CHECK3: fullnode verifies signature of each block, if it doesn't pass through it will return an error
 	// =========================
 
 	incomingBlkType := blk.GetTransType()
@@ -882,7 +881,7 @@ func (c *Core) ValidateIncomingTokenBlock(
 	if incomingBlkType != block.TokenUnpledgedType {
 		valid, err := c.validateSigner(&blk, "", p)
 		if err != nil {
-			errMsg := fmt.Sprintf("signature validation error: %w", err)
+			errMsg := fmt.Sprintf("signature validation error: %v", err)
 			c.log.Error(errMsg)
 			return fmt.Errorf("signature validation error: %w", err)
 		}
