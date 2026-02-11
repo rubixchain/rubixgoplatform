@@ -36,12 +36,15 @@ func (s *Server) APIGetDIDChallenge(req *ensweb.Request) *ensweb.Result {
 
 // APICreateDID will create new DID
 func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
+	s.log.Info("========== APICreateDID Request Started ==========")
+	s.log.Info("Request Method", "method", req.Method)
 
 	folderName, err := s.c.CreateTempFolder()
 	if err != nil {
 		s.log.Error("failed to create folder")
 		return s.BasicResponse(req, false, "failed to create folder", nil)
 	}
+	s.log.Info("Temp folder created", "path", folderName)
 	defer os.RemoveAll(folderName)
 
 	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
@@ -50,11 +53,19 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to parse request", "err", err)
 		return s.BasicResponse(req, false, "failed to create DID", nil)
 	}
+
+	s.log.Info("Parsed multipart form", "fileCount", len(fileNames), "fieldCount", len(fieldNames))
+	s.log.Info("File names received", "files", fileNames)
+	s.log.Info("Field names received", "fields", fieldNames)
+
 	fields := fieldNames[setup.DIDConfigField]
 	if len(fields) == 0 {
 		s.log.Error("missing did configuration")
 		return s.BasicResponse(req, false, "missing did configuration", nil)
 	}
+
+	s.log.Info("DID config field raw JSON", "json", fields[0])
+
 	var didCreate did.DIDCreate
 	err = json.Unmarshal([]byte(fields[0]), &didCreate)
 	if err != nil {
@@ -62,29 +73,53 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
 	}
 
+	s.log.Info("Parsed DID configuration",
+		"Type", didCreate.Type,
+		"Secret", didCreate.Secret,
+		"RootDID", didCreate.RootDID,
+		"PrivPWD", "***",
+		"QuorumPWD", "***",
+		"ImgFile", didCreate.ImgFile,
+		"DIDImgFileName", didCreate.DIDImgFileName,
+		"PubImgFile", didCreate.PubImgFile,
+		"PubKeyFile", didCreate.PubKeyFile,
+		"ChildPath", didCreate.ChildPath)
+
 	if didCreate.Type < 0 || didCreate.Type > 4 {
-		s.log.Error("DID Type should be between 0 and 4")
+		s.log.Error("DID Type should be between 0 and 4", "receivedType", didCreate.Type)
 		return s.BasicResponse(req, false, "DID Type should be between 0 and 4", nil)
 	}
 
+	s.log.Info("Processing uploaded files", "count", len(fileNames))
 	for _, fileName := range fileNames {
+		s.log.Info("Checking file", "fileName", fileName)
 
 		if strings.Contains(fileName, did.PubKeyFileName) {
 			didCreate.PubKeyFile = fileName
+			s.log.Info("Matched PubKeyFile", "file", fileName)
 		}
 
 		if didCreate.Type != did.LiteDIDMode {
 			if strings.Contains(fileName, did.ImgFileName) {
 				didCreate.ImgFile = fileName
+				s.log.Info("Matched ImgFile", "file", fileName)
 			}
 			if strings.Contains(fileName, did.DIDImgFileName) {
 				didCreate.DIDImgFileName = fileName
+				s.log.Info("Matched DIDImgFileName", "file", fileName)
 			}
 			if strings.Contains(fileName, did.PubShareFileName) {
 				didCreate.PubImgFile = fileName
+				s.log.Info("Matched PubImgFile", "file", fileName)
 			}
 		}
 	}
+
+	s.log.Info("Final DID config after file mapping",
+		"PubKeyFile", didCreate.PubKeyFile,
+		"ImgFile", didCreate.ImgFile,
+		"DIDImgFileName", didCreate.DIDImgFileName,
+		"PubImgFile", didCreate.PubImgFile)
 	if !s.cfg.EnableAuth {
 		didCreate.Dir = DIDRootDir
 	}

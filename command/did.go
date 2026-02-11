@@ -162,6 +162,7 @@ func (cmd *Command) CreateDID() {
 		MnemonicFile:   cmd.mnemonicFile,
 		ChildPath:      cmd.ChildPath,
 	}
+	fmt.Println("cfg:", cfg)
 	msg, status := cmd.c.CreateDID(&cfg)
 	if !status {
 		cmd.log.Error("Failed to create DID", "message", msg)

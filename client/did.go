@@ -142,6 +142,9 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 		files["pub_key"] = cfg.PubKeyFile
 	}
 	var dr model.DIDResponse
+	fmt.Println("files:", files)
+	fmt.Println("fields:", fields)
+
 	err = c.sendMutiFormRequest("POST", setup.APICreateDID, nil, fields, files, &dr)
 	if err != nil {
 		c.log.Error("Invalid response from the node", "err", err)
@@ -290,7 +293,7 @@ func (c *Client) CreateDIDFromPubKey(pubKey string) (string, error) {
 // Arbitrary signature
 func (c *Client) ArbitrarySignature(didStr, msg string) (*model.BasicResponse, error) {
 	signData := &model.ArbitrarySignRequest{
-		SignerDID:       didStr,
+		SignerDID: didStr,
 		MsgToSign: msg,
 	}
 	var resp model.BasicResponse
