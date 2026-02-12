@@ -73,8 +73,8 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 		results[index] = result
 		return
 	}
-	
-	provList, err := c.GetDHTddrs(tokenID)
+
+	provList, err := c.GetDHTddrs(tokenHash)
 	if err != nil {
 		c.log.Error("Error triggered while fetching providers ", "error", err)
 		result.Status = false
