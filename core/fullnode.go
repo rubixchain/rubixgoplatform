@@ -258,7 +258,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			p, err = c.getPeer(newEvent.PublisherDID)
 			if err != nil {
 				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", newEvent.PublisherDID)
-				return fmt.Errorf("failed to open peer connection with publisher ", newEvent.PublisherDID)
+				return fmt.Errorf("failed to open peer connection with publisher %s", newEvent.PublisherDID)
 			}
 			defer p.Close()
 			tokenSyncInfo := &TokenSyncInfo{
@@ -514,6 +514,10 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 			return fmt.Errorf("failed to add contract block to token chain: %v", err)
 		}
 
+		// if it is a genesis block, then fetch token's ipfs content and store in psql db
+		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
+			return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
+		}
 		// update block height if required
 		latestBlockHeight, err := txnBlock.GetBlockNumber(tokenId)
 		if err != nil {
@@ -688,6 +692,14 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 				}
 
 			}
+			// check if token exists in postgres table, add if doesn't
+			err := c.ReadTokenContentFromPSQL(tokenId, newEvent.AssetType)
+			if err != nil {
+				if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
+					c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
+				}
+			}
+
 			c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 			return nil
 			// return fmt.Errorf("mismatch of blocks detected: latest block number=%d, current block number=%d", latestBlockNumber, currentBlockNumber)
@@ -789,6 +801,14 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 
 	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, receivedBlock, newEvent, syncStatus); err != nil {
 		return fmt.Errorf("failed to add contract token to table: %v", err)
+	}
+
+	// check if token exists in postgres table, add if doesn't
+	err = c.ReadTokenContentFromPSQL(tokenId, newEvent.AssetType)
+	if err != nil {
+		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
+			c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
+		}
 	}
 
 	c.log.Info("Contract execution processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
