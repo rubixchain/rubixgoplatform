@@ -780,12 +780,7 @@ func (c *Core) CurrentQuorumStatePinCheck(b *block.Block, tokenId string, tokenT
 	return response, nil
 }
 
-func (c *Core) ValidateIncomingTokenBlock(
-	blk block.Block,
-	latestBlock *block.Block,
-	tokenID string,
-	p *ipfsport.Peer,
-) error {
+func (c *Core) ValidateIncomingTokenBlock(blk block.Block, latestBlock *block.Block, tokenID string, p *ipfsport.Peer, assetType int) error {
 
 	// =========================
 	//CHECK1: check previous blockID of the block,  which we are going to add, it should be same as the latestBlockID which is alredy there for all nongenesis blocks
@@ -854,20 +849,23 @@ func (c *Core) ValidateIncomingTokenBlock(
 				}
 
 			case block.TokenExecutedType:
-				if blk.GetExecutorDID() != latestOwner {
-					errMsg := fmt.Sprintf("Owner of the latest blockID is not matchig with the Executor of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
-						tokenID,
-						latestOwner,
-						blk.GetExecutorDID())
-					c.log.Error(errMsg)
-					c.log.Error("owner of the latest blockID is not matchig with the Executor of the block which is going to get added")
-					return fmt.Errorf(
-						"Owner of the latest blockID is not matchig with the Executor of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
-						tokenID,
-						latestOwner,
-						blk.GetExecutorDID(),
-					)
+				if assetType == NFTTokenType {
+					if blk.GetExecutorDID() != latestOwner {
+						errMsg := fmt.Sprintf("Owner of the latest blockID is not matchig with the Executor of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
+							tokenID,
+							latestOwner,
+							blk.GetExecutorDID())
+						c.log.Error(errMsg)
+						c.log.Error("owner of the latest blockID is not matchig with the Executor of the block which is going to get added")
+						return fmt.Errorf(
+							"Owner of the latest blockID is not matchig with the Executor of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
+							tokenID,
+							latestOwner,
+							blk.GetExecutorDID(),
+						)
+					}
 				}
+
 			}
 		}
 	}

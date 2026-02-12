@@ -1560,7 +1560,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 			// 	}
 			// }
 
-			err = c.ValidateIncomingTokenBlock(*blk, latestBlock, tokenSyncInfo.TokenID, p)
+			err = c.ValidateIncomingTokenBlock(*blk, latestBlock, tokenSyncInfo.TokenID, p, tokenSyncInfo.AssetType)
 			if err != nil {
 				return err
 			}

@@ -449,7 +449,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			receivedBlock.GenesisBlock = txnBlock
 		}
 		// Do all 3 checks, If any check fails, handle the failure here also just before adding the block to leveldb.
-		err = c.ValidateIncomingTokenBlock(*txnBlock, latestTokenBlock, tokenId, p)
+		err = c.ValidateIncomingTokenBlock(*txnBlock, latestTokenBlock, tokenId, p, newEvent.AssetType)
 		if err != nil {
 			//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
 			//we should add it into double spend tokens table
@@ -739,7 +739,7 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	}
 
 	// Do all 3 checks, If any check fails, handle the failure here also just before adding the block to leveldb.
-	err = c.ValidateIncomingTokenBlock(*txnBlock, latestTokenBlock, tokenId, p)
+	err = c.ValidateIncomingTokenBlock(*txnBlock, latestTokenBlock, tokenId, p, newEvent.AssetType)
 	if err != nil {
 		//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
 		//we should add it into double spend tokens table

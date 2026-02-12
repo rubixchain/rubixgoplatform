@@ -17,12 +17,16 @@ func (s *Server) APIDumpTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	
-	elems := strings.Split(dr.Token, "_")
-	if len(elems) < 2 {
-		s.log.Error(fmt.Sprintf("Invalid token: %v", dr.Token))
-		return s.BasicResponse(req, false, "Invalid token", nil)
+
+	if dr.AssetType == "rbt" || dr.AssetType == "RBT" {
+		elems := strings.Split(dr.Token, "_")
+		if len(elems) < 2 {
+			s.log.Error(fmt.Sprintf("Invalid token: %v", dr.Token))
+			return s.BasicResponse(req, false, "Invalid token", nil)
+		}
+
 	}
+
 	drep := s.c.DumpTokenChain(&dr)
 	return s.RenderJSON(req, drep, http.StatusOK)
 }
