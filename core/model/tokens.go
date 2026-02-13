@@ -87,7 +87,7 @@ type FaucetRBTGenerateRequest struct {
 }
 
 type TokenProviderMap struct {
-	Token         string  `gorm:"column:token;primaryKey"`
+	TokenHash     string  `gorm:"column:token_hash;primaryKey"`
 	DID           string  `gorm:"column:did"`
 	FuncID        int     `gorm:"column:func_id"`
 	Role          int     `gorm:"column:role"`

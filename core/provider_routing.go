@@ -7,15 +7,15 @@ import (
 )
 
 type PinStatusReq struct {
-	Token string `json:"token"`
+	TokenHash string `json:"token_hash"`
 }
 
 type PinStatusRes struct {
-	Status bool   `json:"status"`
-	Token  string `json:"token"`
-	DID    string `json:"did"`
-	FuncID int    `json:"funcid"`
-	Role   int    `json:"role"`
+	Status    bool   `json:"status"`
+	TokenHash string `json:"token_hash"`
+	DID       string `json:"did"`
+	FuncID    int    `json:"funcid"`
+	Role      int    `json:"role"`
 }
 
 func (c *Core) PinService() {
@@ -32,12 +32,13 @@ func (c *Core) checkProviderStatus(req *ensweb.Request) *ensweb.Result {
 		c.log.Error("error parsing incoming request", "error", err)
 		return c.l.RenderJSON(req, &res, http.StatusOK)
 	}
-	providerMap, err := c.w.GetProviderDetails(reqObj.Token)
+	providerMap, err := c.w.GetProviderDetails(reqObj.TokenHash)
 	if err != nil {
+		c.log.Error("eror getting provider info", "error", err)
 		return c.l.RenderJSON(req, &res, http.StatusOK)
 	}
 	res.Status = true
-	res.Token = providerMap.Token
+	res.TokenHash = providerMap.TokenHash
 	res.DID = providerMap.DID
 	res.FuncID = providerMap.FuncID
 	res.Role = providerMap.Role

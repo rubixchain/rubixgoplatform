@@ -10,9 +10,10 @@ import (
 // struct definition for Mapping token and reason the did is a provider
 
 // Method takes token hash as input and returns the Provider details
-func (w *Wallet) GetProviderDetails(token string) (*model.TokenProviderMap, error) {
+func (w *Wallet) GetProviderDetails(tokenHash string) (*model.TokenProviderMap, error) {
 	var tokenMap model.TokenProviderMap
-	err := w.s.Read(TokenProvider, &tokenMap, "token=?", token)
+
+	err := w.s.Read(TokenProvider, &tokenMap, "token_hash=?", tokenHash)
 	if err != nil {
 		if err.Error() == "no records found" {
 			//w.log.Debug("Data Not avilable in DB")
@@ -30,18 +31,18 @@ func (w *Wallet) GetProviderDetails(token string) (*model.TokenProviderMap, erro
 
 func (w *Wallet) AddProviderDetails(tokenProviderMap model.TokenProviderMap) error {
 	var tpm model.TokenProviderMap
-	err := w.s.Read(TokenProvider, &tpm, "token=?", tokenProviderMap.Token)
-	if err != nil || tpm.Token == "" {
+	err := w.s.Read(TokenProvider, &tpm, "token_hash=?", tokenProviderMap.TokenHash)
+	if err != nil || tpm.TokenHash == "" {
 		w.log.Debug("Token Details not found: Creating new Record")
 		// create new entry, but handle unique constraint error
 		writeErr := w.s.Write(TokenProvider, tokenProviderMap)
 		if writeErr != nil && strings.Contains(writeErr.Error(), "UNIQUE constraint failed") {
 			// Someone else inserted, so update instead
-			return w.s.Update(TokenProvider, tokenProviderMap, "token=?", tokenProviderMap.Token)
+			return w.s.Update(TokenProvider, tokenProviderMap, "token_hash=?", tokenProviderMap.TokenHash)
 		}
 		return writeErr
 	}
-	return w.s.Update(TokenProvider, tokenProviderMap, "token=?", tokenProviderMap.Token)
+	return w.s.Update(TokenProvider, tokenProviderMap, "token_hash=?", tokenProviderMap.TokenHash)
 }
 
 // Method to add provider details to DB in batch during ipfs ops
@@ -60,7 +61,7 @@ func (w *Wallet) AddProviderDetailsBatch(tokenProviderMaps []model.TokenProvider
 		err := w.AddProviderDetails(tpm)
 		if err != nil {
 			// Log the error but continue processing other entries
-			w.log.Warn("Failed to add provider details in batch", "token", tpm.Token, "did", tpm.DID, "err", err)
+			w.log.Warn("Failed to add provider details in batch", "token hash", tpm.TokenHash, "did", tpm.DID, "err", err)
 			lastErr = err
 			// If it's not a UNIQUE constraint error, it might be more serious
 			if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
