@@ -271,7 +271,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 				//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
 				//we should add it into double spend tokens table
 				if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-					strings.Contains(err.Error(), "owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
+					strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
 					//Add token into double spend tokens table
 					doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
 						TokenID:        tokenId,
@@ -353,7 +353,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 					//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
 					//we should add it into double spend tokens table
 					if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-						strings.Contains(err.Error(), "owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
+						strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
 						//Add token into double spend tokens table
 						doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
 							TokenID:        tokenId,
@@ -454,7 +454,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
 			//we should add it into double spend tokens table
 			if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-				strings.Contains(err.Error(), "owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
+				strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
 				//Add token into double spend tokens table
 				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
 					TokenID:        tokenId,
@@ -568,7 +568,7 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 			//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
 			//we should add it into double spend tokens table
 			if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-				strings.Contains(err.Error(), "owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
+				strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
 				//Add token into double spend tokens table
 				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
 					TokenID:        tokenId,
@@ -653,7 +653,7 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 				//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
 				//we should add it into double spend tokens table
 				if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-					strings.Contains(err.Error(), "owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
+					strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
 					//Add token into double spend tokens table
 					doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
 						TokenID:        tokenId,
@@ -756,7 +756,7 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 		//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
 		//we should add it into double spend tokens table
 		if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-			strings.Contains(err.Error(), "owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
+			strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
 			//Add token into double spend tokens table
 			doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
 				TokenID:        tokenId,

@@ -1068,7 +1068,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
 						//we should add it into double spend tokens table
 						if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-							strings.Contains(err.Error(), "owner of the latest blockID is not matchig with") {
+							strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") {
 							//Add token into double spend tokens table
 							doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
 								TokenID:        detail.Token,
