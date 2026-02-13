@@ -62,7 +62,7 @@ func recordFirstError(errPtr *error, err error, once *sync.Once) {
 	})
 }
 
-func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) (bool, error) {
+func (c *Core) validateSigner(b *block.Block, selfDID string) (bool, error) {
 	signers, err := b.GetSigner()
 	if err != nil {
 		c.log.Error("failed to get signers", "err", err)
@@ -211,7 +211,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, quorumDID string, ti contract.TokenInfo, p *ipfsport.Peer, address, receiverAddress string) (error, bool) {
 	// Skip DHT check in trusted network mode
 	if !c.cfg.CfgData.TrustedNetwork {
-		
+
 		tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(ti.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 		if err != nil {
 			c.log.Debug(fmt.Sprintf("validateSingleToken: unable to create IPFS hash of token: %v, err: %v", ti.Token, err))
@@ -265,7 +265,7 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 		}
 	}
 
-	// NOTE: Commented the following as the Token was as created using the 
+	// NOTE: Commented the following as the Token was as created using the
 	// old Level + hash(token_number) approach
 	//
 	//
@@ -315,7 +315,7 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 		return fmt.Errorf("invalid token owner: token pinned as service, token %s", ti.Token), false
 	}
 
-	valid, err := c.validateSigner(b, quorumDID, p)
+	valid, err := c.validateSigner(b, quorumDID)
 	if !valid || err != nil {
 		c.log.Error("Failed to validate token signer for token", "token", ti.Token, "err", err)
 		return fmt.Errorf("failed to validate token signer for %s", ti.Token), false
@@ -861,7 +861,7 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 			c.log.Debug("Validating unique block", "blockHash", br.BlockHash, "tokenCount", len(br.Tokens))
 
 			// Validate this block
-			valid, err := c.validateSigner(br.Block, quorumDID, p)
+			valid, err := c.validateSigner(br.Block, quorumDID)
 			br.IsValid = valid
 			br.Error = err
 
