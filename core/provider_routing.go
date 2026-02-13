@@ -34,7 +34,7 @@ func (c *Core) checkProviderStatus(req *ensweb.Request) *ensweb.Result {
 	}
 	providerMap, err := c.w.GetProviderDetails(reqObj.TokenHash)
 	if err != nil {
-		c.log.Error("eror getting provider info", "error", err)
+		c.log.Error("eror getting provider info for token hash ", reqObj.TokenHash, "error", err)
 		return c.l.RenderJSON(req, &res, http.StatusOK)
 	}
 	res.Status = true

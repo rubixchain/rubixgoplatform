@@ -13,7 +13,7 @@ import (
 func (w *Wallet) GetProviderDetails(tokenHash string) (*model.TokenProviderMap, error) {
 	var tokenMap model.TokenProviderMap
 
-	err := w.s.Read(TokenProvider, &tokenMap, "token_hash=?", tokenHash)
+	err := w.s.Read(TokenProvider, &tokenMap, "token=?", tokenHash)
 	if err != nil {
 		if err.Error() == "no records found" {
 			//w.log.Debug("Data Not avilable in DB")
@@ -31,18 +31,18 @@ func (w *Wallet) GetProviderDetails(tokenHash string) (*model.TokenProviderMap, 
 
 func (w *Wallet) AddProviderDetails(tokenProviderMap model.TokenProviderMap) error {
 	var tpm model.TokenProviderMap
-	err := w.s.Read(TokenProvider, &tpm, "token_hash=?", tokenProviderMap.TokenHash)
+	err := w.s.Read(TokenProvider, &tpm, "token=?", tokenProviderMap.TokenHash)
 	if err != nil || tpm.TokenHash == "" {
 		w.log.Debug("Token Details not found: Creating new Record")
 		// create new entry, but handle unique constraint error
 		writeErr := w.s.Write(TokenProvider, tokenProviderMap)
 		if writeErr != nil && strings.Contains(writeErr.Error(), "UNIQUE constraint failed") {
 			// Someone else inserted, so update instead
-			return w.s.Update(TokenProvider, tokenProviderMap, "token_hash=?", tokenProviderMap.TokenHash)
+			return w.s.Update(TokenProvider, tokenProviderMap, "token=?", tokenProviderMap.TokenHash)
 		}
 		return writeErr
 	}
-	return w.s.Update(TokenProvider, tokenProviderMap, "token_hash=?", tokenProviderMap.TokenHash)
+	return w.s.Update(TokenProvider, tokenProviderMap, "token=?", tokenProviderMap.TokenHash)
 }
 
 // Method to add provider details to DB in batch during ipfs ops

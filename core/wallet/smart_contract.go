@@ -107,7 +107,7 @@ func (w *Wallet) UpdateSmartContractStatus(smartContractToken string, tokenStatu
 // retrive state pin info if it exists
 func (w *Wallet) GetStatePinnedInfo(token string) (*model.TokenProviderMap, error) {
 	var tokenMap model.TokenProviderMap
-	err := w.s.Read(TokenProvider, &tokenMap, "token_hash=?", token)
+	err := w.s.Read(TokenProvider, &tokenMap, "token=?", token)
 	if err != nil {
 		if err.Error() == "no records found" {
 			//w.log.Debug("Data Not avilable in DB")
