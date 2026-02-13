@@ -324,7 +324,7 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 						c.AddPeerDetails(*prevQuorumInfo)
 					}
 				}
-				if prevQuorumInfo == nil || *prevQuorumInfo.DIDType == -1 {
+				if prevQuorumInfo == nil {
 					//if a signle pledged quorum is also not found, we can assume that other pledged quorums will also be not found,
 					//and request prev sender to share details of all the pledged quorums, and thus breaking the for loop
 					break

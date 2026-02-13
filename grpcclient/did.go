@@ -10,7 +10,7 @@ import (
 
 func (cmd *Command) CreateDID() {
 
-	resp, err := cmd.c.CreateDID(cmd.ctx, &protos.CreateDIDReq{DidMode: int32(cmd.didType), MasterDid: cmd.did, PrivKeyPwd: cmd.privPWD, Secret: cmd.didSecret})
+	resp, err := cmd.c.CreateDID(cmd.ctx, &protos.CreateDIDReq{MasterDid: cmd.did, PrivKeyPwd: cmd.privPWD, Secret: cmd.didSecret})
 
 	if err != nil {
 		fmt.Printf("faield to create did, %s\n", err.Error())

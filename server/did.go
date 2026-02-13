@@ -73,23 +73,6 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
 	}
 
-	s.log.Info("Parsed DID configuration",
-		"Type", didCreate.Type,
-		"Secret", didCreate.Secret,
-		"RootDID", didCreate.RootDID,
-		"PrivPWD", "***",
-		"QuorumPWD", "***",
-		"ImgFile", didCreate.ImgFile,
-		"DIDImgFileName", didCreate.DIDImgFileName,
-		"PubImgFile", didCreate.PubImgFile,
-		"PubKeyFile", didCreate.PubKeyFile,
-		"ChildPath", didCreate.ChildPath)
-
-	if didCreate.Type < 0 || didCreate.Type > 4 {
-		s.log.Error("DID Type should be between 0 and 4", "receivedType", didCreate.Type)
-		return s.BasicResponse(req, false, "DID Type should be between 0 and 4", nil)
-	}
-
 	s.log.Info("Processing uploaded files", "count", len(fileNames))
 	for _, fileName := range fileNames {
 		s.log.Info("Checking file", "fileName", fileName)
@@ -98,28 +81,10 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 			didCreate.PubKeyFile = fileName
 			s.log.Info("Matched PubKeyFile", "file", fileName)
 		}
-
-		if didCreate.Type != did.LiteDIDMode {
-			if strings.Contains(fileName, did.ImgFileName) {
-				didCreate.ImgFile = fileName
-				s.log.Info("Matched ImgFile", "file", fileName)
-			}
-			if strings.Contains(fileName, did.DIDImgFileName) {
-				didCreate.DIDImgFileName = fileName
-				s.log.Info("Matched DIDImgFileName", "file", fileName)
-			}
-			if strings.Contains(fileName, did.PubShareFileName) {
-				didCreate.PubImgFile = fileName
-				s.log.Info("Matched PubImgFile", "file", fileName)
-			}
-		}
 	}
 
 	s.log.Info("Final DID config after file mapping",
-		"PubKeyFile", didCreate.PubKeyFile,
-		"ImgFile", didCreate.ImgFile,
-		"DIDImgFileName", didCreate.DIDImgFileName,
-		"PubImgFile", didCreate.PubImgFile)
+		"PubKeyFile", didCreate.PubKeyFile)
 	if !s.cfg.EnableAuth {
 		didCreate.Dir = DIDRootDir
 	}
@@ -163,10 +128,8 @@ func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 	for _, d := range dt {
 		a, err := s.c.GetAccountInfo(d.DID)
 		if err == nil {
-			a.DIDType = d.Type
 			ai.AccountInfo = append(ai.AccountInfo, a)
 		} else {
-			a.DIDType = d.Type
 			ai.AccountInfo = append(ai.AccountInfo, model.DIDAccountInfo{DID: d.DID})
 		}
 	}
@@ -248,11 +211,6 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
 	}
 
-	if didCreate.Type < 0 || didCreate.Type > 4 {
-		s.log.Error("DID Type should be between 0 and 4")
-		return s.BasicResponse(req, false, "DID Type should be between 0 and 4", nil)
-	}
-
 	for _, fileName := range fileNames {
 
 		if strings.Contains(fileName, did.PvtKeyFileName) {
@@ -260,24 +218,6 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 		}
 		if strings.Contains(fileName, did.PubKeyFileName) {
 			didCreate.PubKeyFile = fileName
-		}
-
-		if didCreate.Type != did.LiteDIDMode {
-			if strings.Contains(fileName, did.DIDImgFileName) {
-				didCreate.DIDImgFileName = fileName
-			}
-			if strings.Contains(fileName, did.PubShareFileName) {
-				didCreate.PubImgFile = fileName
-			}
-			if strings.Contains(fileName, did.PvtShareFileName) {
-				didCreate.PrivImgFile = fileName
-			}
-			if strings.Contains(fileName, did.QuorumPvtKeyFileName) {
-				didCreate.QuorumPrivKeyFile = fileName
-			}
-			if strings.Contains(fileName, did.QuorumPubKeyFileName) {
-				didCreate.QuorumPubKeyFile = fileName
-			}
 		}
 	}
 	dir, ok := s.validateAccess(req)
@@ -313,7 +253,6 @@ func (s *Server) APICreateDIDFromPubKey(req *ensweb.Request) *ensweb.Result {
 
 	//provide required data to create a new lite mode did
 	didCreate := did.DIDCreate{
-		Type:       did.LiteDIDMode,
 		PubKeyFile: "",
 	}
 

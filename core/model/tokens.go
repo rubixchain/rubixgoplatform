@@ -52,7 +52,6 @@ type GetAccountInfo struct {
 
 type DIDAccountInfo struct {
 	DID        string  `json:"did"`
-	DIDType    int     `json:"did_type"`
 	RBTAmount  float64 `json:"rbt_amount"`
 	PledgedRBT float64 `json:"pledged_rbt"`
 	LockedRBT  float64 `json:"locked_rbt"`

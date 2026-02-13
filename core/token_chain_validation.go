@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -567,18 +568,8 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 		return response, fmt.Errorf("invalid sender, sender did does not match")
 	}
 
-	var senderDIDType int
-	//sign type = 0, means it is a BIP signature and the did was created in light mode
-	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
-	//and thus the did could be initialised in basic mode to fetch the public key
-	if senderSign.SignType == 0 {
-		senderDIDType = did.LiteDIDMode
-	} else {
-		senderDIDType = did.BasicDIDMode
-	}
-
 	//Initialise sender did
-	didCrypto, err := c.InitialiseDID(sender, senderDIDType)
+	didCrypto, err := c.InitialiseDID(sender)
 	if err != nil {
 		c.log.Error("failed to initialise sender did:", sender)
 		response.Message = "failed to initialise sender did"
@@ -586,20 +577,16 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 	}
 
 	//sender signature verification
-	if senderDIDType == did.LiteDIDMode {
-		response.Status, err = didCrypto.PvtVerify([]byte(senderSign.Hash), util.StrToHex(senderSign.Signature))
-		if err != nil {
+	response.Status, err = didCrypto.PvtVerify([]byte(senderSign.Hash), util.StrToHex(senderSign.Signature))
+	if err != nil {
+		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
+			c.log.Error("NLSS DID detected at SENDER role during validation. NLSS DIDs are DEPRECATED.", "sender", sender, "error", err)
+			response.Message = "NLSS DID detected at SENDER role. Please use BIP DID"
+		} else {
 			c.log.Error("failed to verify sender:", sender, "err", err)
 			response.Message = "invalid sender"
-			return response, err
 		}
-	} else {
-		response.Status, err = didCrypto.NlssVerify(senderSign.Hash, nil, util.StrToHex(senderSign.Signature))
-		if err != nil {
-			c.log.Error("failed to verify sender:", sender, "err", err)
-			response.Message = "invalid sender"
-			return response, err
-		}
+		return response, err
 	}
 
 	response.Message = "sender validated successfully"
@@ -668,17 +655,15 @@ func (c *Core) ValidateQuorums(b *block.Block, userDID string) (*model.BasicResp
 			continue
 		}
 		var verificationStatus bool
-		if qrm.SignType == did.BIPVersion { //qrm sign type = 0, means qrm signature is BIP sign and DID is created in Lite mode
-			verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(signedData), util.StrToHex(qrm.Signature))
-			if err != nil {
-				c.log.Error("failed signature verification for quorum:", qrm.DID)
-			}
-		} else {
-			verificationStatus, err = qrmDIDCrypto.NlssVerify((signedData), util.StrToHex(qrm.Signature), util.StrToHex(qrm.Signature))
-			if err != nil {
-				c.log.Error("failed signature verification for quorum:", qrm.DID)
+		verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(signedData), util.StrToHex(qrm.Signature))
+		if err != nil {
+			if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
+				c.log.Error("NLSS DID detected at QUORUM role during validation. NLSS DIDs are DEPRECATED.", "quorum", qrm.DID, "error", err)
+			} else {
+				c.log.Error("failed signature verification for quorum:", qrm.DID, "err", err)
 			}
 		}
+
 		response.Status = response.Status && verificationStatus
 	}
 

@@ -85,23 +85,6 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					c.AddPeerDetails(*signerInfo)
 				}
 			}
-			if signerInfo == nil || *signerInfo.DIDType == -1 {
-				peerDetails, err := c.GetPeerInfo(p, signer)
-				if err != nil || peerDetails.PeerInfo.DIDType == nil {
-					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
-					if !peerUpdateResult || err != nil {
-						*signerInfo.DIDType = did.BasicDIDMode
-						c.AddPeerDetails(*signerInfo)
-					}
-				} else {
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
-					if !peerUpdateResult || err != nil {
-						*signerInfo.DIDType = did.BasicDIDMode
-						c.AddPeerDetails(*signerInfo)
-					}
-				}
-			}
 			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
@@ -110,34 +93,8 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 		}
 		err := b.VerifySignature(dc)
 		if err != nil {
-			c.log.Error("Block verification failed: signer=%s, signType=%d, err=%v\n", signer, dc.GetSignType(), err)
-			if dc.GetSignType() == did.NlssVersion {
-				// c.log.Error("NLSS verification failed, attempting fallback to LiteDID for signer=%s\n", signer)
-				// peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
-				// if !peerUpdateResult || err != nil {
-				// 	liteDID := did.LiteDIDMode
-				// 	signerInfo := wallet.DIDPeerMap{
-				// 		DID:     signer,
-				// 		DIDType: &liteDID,
-				// 	}
-				// 	c.AddPeerDetails(signerInfo)
-				// }
-				c.log.Info("Retrying block verification with LiteDID for signer=%s\n", signer)
-				dc, err = c.SetupForienDIDQuorum(signer, selfDID)
-				if err != nil {
-					c.log.Error("failed to setup foreign DID quorum", "err", err)
-					return false, fmt.Errorf("failed to setup foreign DID quorum : %v err: %v", signer, err)
-				}
-				err = b.VerifySignature(dc)
-				if err != nil {
-					c.log.Error("Failed to verify signature", "err", err)
-					return false, fmt.Errorf("failed to verify signature, err: %v", err)
-				}
-				c.log.Info("Block verification successful after retry for signer=%s\n", signer)
-			} else {
-				c.log.Error("Failed to verify signature", "err", err)
-				return false, fmt.Errorf("failed to verify signature, err: %v", err)
-			}
+			c.log.Error("Failed to verify signature: signer=%s, signType=%d, err=%v\n", signer, dc.GetSignType(), err)
+			return false, fmt.Errorf("failed to verify signature, err: %v", err)
 		}
 	}
 	return true, nil

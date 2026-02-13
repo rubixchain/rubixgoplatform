@@ -1,7 +1,6 @@
 package did
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -9,7 +8,6 @@ import (
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/rubixchain/rubixgoplatform/crypto"
-	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -21,7 +19,7 @@ type DIDLite struct {
 	pwd string
 }
 
-// InitDIDLite will return the Light did handle
+// InitDIDLite will return the Lite did handle
 func InitDIDLite(did string, baseDir string, ch *DIDChan) *DIDLite {
 	return &DIDLite{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
 }
@@ -112,45 +110,6 @@ func (d *DIDLite) Sign(hash string) ([]byte, []byte, error) {
 	return bs, pvtKeySign, err
 }
 
-// verify nlss based signatures
-func (d *DIDLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
-	//read senderDID
-	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
-	if err != nil {
-		return false, err
-	}
-	pubImg, err := util.GetPNGImagePixels(d.dir + PubShareFileName)
-
-	if err != nil {
-		return false, err
-	}
-
-	pSig := util.BytesToBitstream(pvtShareSig)
-
-	ps := util.StringToIntArray(pSig)
-
-	didBin := util.ByteArraytoIntArray(didImg)
-	pubBin := util.ByteArraytoIntArray(pubImg)
-	pubPos := util.RandomPositions("verifier", hash, 32, ps)
-	pubPosInt := util.GetPrivatePositions(pubPos.PosForSign, pubBin)
-	pubStr := util.IntArraytoStr(pubPosInt)
-	orgPos := make([]int, len(pubPos.OriginalPos))
-	for i := range pubPos.OriginalPos {
-		orgPos[i] = pubPos.OriginalPos[i] / 8
-	}
-	didPosInt := util.GetPrivatePositions(orgPos, didBin)
-	didStr := util.IntArraytoStr(didPosInt)
-	cb := nlss.Combine2Shares(nlss.ConvertBitString(pSig), nlss.ConvertBitString(pubStr))
-
-	db := nlss.ConvertBitString(didStr)
-
-	if !bytes.Equal(cb, db) {
-		return false, fmt.Errorf("failed to verify")
-	}
-	return true, nil
-
-}
-
 func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
 	privKey, err := os.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
@@ -197,10 +156,17 @@ func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
 		return false, err
 	}
 
-	pubkeyback, _ := secp256k1.ParsePubKey(pubKeyByte)
+	pubkeyback, err := secp256k1.ParsePubKey(pubKeyByte)
+	if err != nil {
+		return false, fmt.Errorf("NLSS DID detected (incompatible key format). NLSS DIDs are DEPRECATED. Please use BIP DID instead. DID: %s, Error: %w", d.did, err)
+	}
+	if pubkeyback == nil {
+		return false, fmt.Errorf("NLSS DID detected (public key parsing returned nil). NLSS DIDs are DEPRECATED. Please use BIP DID instead. DID: %s", d.did)
+	}
+
 	pubKeySer := pubkeyback.ToECDSA()
 	if !crypto.BIPVerify(pubKeySer, hash, sign) {
-		return false, fmt.Errorf("failed to verify private key singature")
+		return false, fmt.Errorf("failed to verify private key signature")
 	}
 	return true, nil
 }
