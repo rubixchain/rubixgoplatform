@@ -6,7 +6,6 @@ type FullNodeGenesisBlock struct {
 	TokenLevel         int           `json:"tokenLevel"`
 	TokenNumber        int           `json:"tokenNumber"`
 	ParentID           string        `json:"parentID"`
-	GrandParentID      []string      `json:"grandParentID"`
 	CommitedTokens     []TransTokens `json:"commitedTokens"`
 	SmartContractValue float64       `json:"smartContractValue"`
 	NFTValue           float64       `json:"nftValue"`

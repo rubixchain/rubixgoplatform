@@ -17,9 +17,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -85,23 +85,6 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 					c.AddPeerDetails(*signerInfo)
 				}
 			}
-			if signerInfo == nil || *signerInfo.DIDType == -1 {
-				peerDetails, err := c.GetPeerInfo(p, signer)
-				if err != nil || peerDetails.PeerInfo.DIDType == nil {
-					c.log.Debug("quorum does not have did type of prev-block signer ", signer)
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.BasicDIDMode)
-					if !peerUpdateResult || err != nil {
-						*signerInfo.DIDType = did.BasicDIDMode
-						c.AddPeerDetails(*signerInfo)
-					}
-				} else {
-					peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, *peerDetails.PeerInfo.DIDType)
-					if !peerUpdateResult || err != nil {
-						*signerInfo.DIDType = did.BasicDIDMode
-						c.AddPeerDetails(*signerInfo)
-					}
-				}
-			}
 			dc, err = c.SetupForienDIDQuorum(signer, selfDID)
 			if err != nil {
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
@@ -110,62 +93,56 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 		}
 		err := b.VerifySignature(dc)
 		if err != nil {
-			c.log.Error("Block verification failed: signer=%s, signType=%d, err=%v\n", signer, dc.GetSignType(), err)
-			if dc.GetSignType() == did.NlssVersion {
-				// c.log.Error("NLSS verification failed, attempting fallback to LiteDID for signer=%s\n", signer)
-				// peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
-				// if !peerUpdateResult || err != nil {
-				// 	liteDID := did.LiteDIDMode
-				// 	signerInfo := wallet.DIDPeerMap{
-				// 		DID:     signer,
-				// 		DIDType: &liteDID,
-				// 	}
-				// 	c.AddPeerDetails(signerInfo)
-				// }
-				c.log.Info("Retrying block verification with LiteDID for signer=%s\n", signer)
-				dc, err = c.SetupForienDIDQuorum(signer, selfDID)
-				if err != nil {
-					c.log.Error("failed to setup foreign DID quorum", "err", err)
-					return false, fmt.Errorf("failed to setup foreign DID quorum : %v err: %v", signer, err)
-				}
-				err = b.VerifySignature(dc)
-				if err != nil {
-					c.log.Error("Failed to verify signature", "err", err)
-					return false, fmt.Errorf("failed to verify signature, err: %v", err)
-				}
-				c.log.Info("Block verification successful after retry for signer=%s\n", signer)
-			} else {
-				c.log.Error("Failed to verify signature", "err", err)
-				return false, fmt.Errorf("failed to verify signature, err: %v", err)
-			}
+			c.log.Error("Failed to verify signature: signer=%s, signType=%d, err=%v\n", signer, dc.GetSignType(), err)
+			return false, fmt.Errorf("failed to verify signature, err: %v", err)
 		}
 	}
 	return true, nil
 }
 
-func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
+func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, error) {
 	var issueType int
-	b, err := c.getFromIPFS(pt)
+	parentTokenHash, err := c.ipfsOps.Add(
+		bytes.NewBufferString(parentTokenID),
+	)
 	if err != nil {
-		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", pt)
+		errMsg := fmt.Sprintf("failed to add parent token to ipfs for syncing, err: %v, token: %v", err, parentTokenID)
+		c.log.Error(errMsg)
+		return -1, fmt.Errorf(errMsg)
+	}
+
+	b, err := c.getFromIPFS(parentTokenHash)
+	if err != nil {
+		c.log.Error("failed to get parent token details from ipfs", "err", err, "token", parentTokenID)
 		return -1, err
 	}
-	_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
 
-	tt := token.RBTTokenType
-	tv := float64(1)
-	if !iswholeToken {
-		blk := util.StrToHex(string(b))
-		rb, err := rac.InitRacBlock(blk, nil)
-		if err != nil {
-			c.log.Error("invalid token, invalid rac block", "err", err)
-			return -1, err
+	iswholeToken := token.CheckWholeToken(string(b))
+
+	var tt int
+	var tv float64
+
+	if iswholeToken {
+		tv = float64(1)
+		if c.testNet {
+			tt = token.TestTokenType
+		} else {
+			tt = token.RBTTokenType
 		}
-		tt = rac.RacType2TokenType(rb.GetRacType())
-		if c.TokenType(PartString) == tt {
-			tv = rb.GetRacValue()
+	} else {
+		var err error
+		tv, err = parts.GetTokenValueFromIndexedID(string(b))
+		if err != nil {
+			return -1, fmt.Errorf("syncParentToken: failed while attempting fetch the value for part token: %v, err: %v", parentTokenID, err)
+		}
+
+		if c.testNet {
+			tt = token.TestPartTokenType
+		} else {
+			tt = token.PartTokenType
 		}
 	}
+
 	lbID := ""
 	// lb := c.w.GetLatestTokenBlock(pt, tt)
 	// if lb != nil {
@@ -174,20 +151,20 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	// 		lbID = ""
 	// 	}
 	// }
-	err, syncResponse := c.syncTokenChainFrom(p, lbID, pt, tt)
+	err, syncResponse := c.syncTokenChainFrom(p, lbID, parentTokenID, tt)
 	if err != nil {
 		c.log.Error("failed to sync token chain block", "err", err, "syncResponse", syncResponse)
-		return -1, fmt.Errorf(" failed to sync tokenchain Parent Token: %v, issueType: %v", pt, TokenChainNotSynced)
+		return -1, fmt.Errorf(" failed to sync tokenchain Parent Token: %v, issueType: %v", parentTokenID, TokenChainNotSynced)
 	}
-	ptb := c.w.GetLatestTokenBlock(pt, tt)
+	ptb := c.w.GetLatestTokenBlock(parentTokenID, tt)
 	if ptb == nil {
-		c.log.Error("Failed to get latest token chain block", "token", pt)
+		c.log.Error("Failed to get latest token chain block", "token", parentTokenID)
 		return -1, fmt.Errorf("failed to get latest block")
 	}
-	td, err := c.w.ReadToken(pt)
+	td, err := c.w.ReadToken(parentTokenID)
 	if err != nil {
 		td = &wallet.Token{
-			TokenID:     pt,
+			TokenID:     parentTokenID,
 			TokenValue:  tv,
 			DID:         p.GetPeerDID(),
 			TokenStatus: wallet.TokenIsBurnt,
@@ -195,14 +172,14 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 			UpdatedAt:   time.Now(),
 		}
 		if c.TokenType(PartString) == tt {
-			gb := c.w.GetGenesisTokenBlock(pt, tt)
+			gb := c.w.GetGenesisTokenBlock(parentTokenID, tt)
 			if gb == nil {
-				c.log.Error("failed to get genesis token chain block", "token", pt)
+				c.log.Error("failed to get genesis token chain block", "token", parentTokenID)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
-			ppt, _, err := gb.GetParentDetials(pt)
+			ppt, err := gb.GetParentDetials(parentTokenID)
 			if err != nil {
-				c.log.Error("failed to get genesis token chain block", "token", pt, "err", err)
+				c.log.Error("failed to get genesis token chain block", "token", parentTokenID, "err", err)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
 			td.ParentTokenID = ppt
@@ -214,10 +191,10 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 	}
 	// update sync status to incomplete
 	if td.SyncStatus == wallet.SyncUnrequired {
-		err = c.w.UpdateTokenSyncStatus(pt, wallet.SyncIncomplete)
+		err = c.w.UpdateTokenSyncStatus(parentTokenID, wallet.SyncIncomplete)
 		if err != nil {
 			if !strings.Contains(err.Error(), "no records found") {
-				c.log.Error("failed to update parent token sync status as incomplete, token ", pt)
+				c.log.Error("failed to update parent token sync status as incomplete, token ", parentTokenID)
 			}
 		}
 
@@ -226,15 +203,21 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, pt string) (int, error) {
 		issueType = ParentTokenNotBurned // parent token is not in burnt stage
 		//Commenting gps
 		//fmt.Println("block state is ", ptb.GetTransTokens(), " expected value is ", block.TokenBurntType)
-		c.log.Error("parent token is not in burnt stage", "token", pt)
-		return -1, fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", pt, issueType)
+		c.log.Error("parent token is not in burnt stage", "token", parentTokenID)
+		return -1, fmt.Errorf("parent token is not in burnt stage. pt: %v, issueType: %v", parentTokenID, issueType)
 	}
 	return tt, nil
 }
 func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, quorumDID string, ti contract.TokenInfo, p *ipfsport.Peer, address, receiverAddress string) (error, bool) {
 	// Skip DHT check in trusted network mode
 	if !c.cfg.CfgData.TrustedNetwork {
-		if ids, err := c.GetDHTddrs(ti.Token); err != nil || len(ids) == 0 {
+		
+		tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(ti.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		if err != nil {
+			c.log.Debug(fmt.Sprintf("validateSingleToken: unable to create IPFS hash of token: %v, err: %v", ti.Token, err))
+			return nil, false
+		}
+		if ids, err := c.GetDHTddrs(tokenHash); err != nil || len(ids) == 0 {
 			c.log.Debug("Skipping token", "token", ti.Token, "reason", "no DHT entries found")
 			return nil, false // skip token if no DHT entries found
 		}
@@ -258,7 +241,7 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	}
 
 	if c.TokenType(PartString) == ti.TokenType {
-		parentToken, _, err := genesisBlock.GetParentDetials(ti.Token)
+		parentToken, err := genesisBlock.GetParentDetials(ti.Token)
 		if err != nil {
 			c.log.Error("Failed to get parent token for token", "token", ti.Token, "err", err)
 			return err, false
@@ -268,29 +251,40 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 			c.log.Error("Failed to sync parent token for token", "token", ti.Token, "err", err)
 			return err, false
 		}
-		_, err = c.w.Pin(parentToken, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
+		// The parent token passed in the pin function is the ipfs Hash itself.
+		// We are adding the parent token details to ipfs in the syncParentToken function above.
+		parentTokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(parentToken), ipfsnode.Pin(false))
+		if err != nil {
+			c.log.Error(fmt.Sprintf("Unable to do IPFS Add operation on Token: %v", err))
+			return nil, false
+		}
+		_, err = c.w.Pin(parentTokenHash, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
 		if err != nil {
 			c.log.Error("Failed to pin parent token for token", "token", ti.Token, "err", err)
 			return err, false
 		}
 	}
 
-	if ti.TokenType == token.RBTTokenType {
-		tl, tn, err := genesisBlock.GetTokenDetials(ti.Token)
-		if err != nil {
-			c.log.Error("Failed to get token details for token", "token", ti.Token, "err", err)
-			return err, false
-		}
-		tid, err := IpfsAddWithBackoff(c.ipfs, bytes.NewBufferString(token.GetTokenString(tl, tn)), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-		if err != nil {
-			c.log.Error("Failed to pin token hash for token", "token", ti.Token, "err", err)
-			return err, false
-		}
-		if tid != ti.Token {
-			c.log.Error("Invalid token hash for token", "token", ti.Token, "expected", tid, "actual", ti.Token)
-			return fmt.Errorf("Invalid token hash for %s", ti.Token), false
-		}
-	}
+	// NOTE: Commented the following as the Token was as created using the 
+	// old Level + hash(token_number) approach
+	//
+	//
+	// if ti.TokenType == token.RBTTokenType {
+	// 	tl, tn, err := genesisBlock.GetTokenDetials(ti.Token)
+	// 	if err != nil {
+	// 		c.log.Error("Failed to get token details for token", "token", ti.Token, "err", err)
+	// 		return err, false
+	// 	}
+	// 	tid, err := c.ipfsOps.Add(bytes.NewBufferString(token.GetTokenString(tl, tn)), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	// 	if err != nil {
+	// 		c.log.Error("Failed to pin token hash for token", "token", ti.Token, "err", err)
+	// 		return err, false
+	// 	}
+	// 	if tid != ti.Token {
+	// 		c.log.Error("Invalid token hash for token", "token", ti.Token, "expected", tid, "actual", ti.Token)
+	// 		return fmt.Errorf("Invalid token hash for %s", ti.Token), false
+	// 	}
+	// }
 
 	b := c.w.GetLatestTokenBlock(ti.Token, ti.TokenType)
 	if b == nil {
@@ -422,6 +416,21 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 						localBlockHash, _ := localBlk.GetHash()
 						c.log.Debug("Local latest block", "token", t.Token, "blockID", localBlockID, "blockHash", localBlockHash, "owner", localBlk.GetOwner())
 					}
+
+					genesisBlock := c.w.GetGenesisTokenBlock(t.Token, t.TokenType)
+					if genesisBlock != nil {
+						genesisBlockID, _ := genesisBlock.GetBlockID(t.Token)
+						genesisBlockHash, _ := genesisBlock.GetHash()
+						c.log.Debug("Genesis block", "token", t.Token, "blockID", genesisBlockID, "blockHash", genesisBlockHash, "owner", genesisBlock.GetOwner())
+
+						// validate network id
+						if err := c.ValidateTokenNetworkID(genesisBlock, t.Token); err != nil {
+							c.log.Error("failed to validate token network ID", "err", err)
+							results <- tokenValidationResult{Token: t.Token, Err: fmt.Errorf("failed to validate token network ID: %v", err), SyncIssue: false}
+							return
+						}
+					}
+
 					// Fetch remote block if possible (from all token blocks)
 					blocks, _, _ := c.w.GetAllTokenBlocks(t.Token, t.TokenType, "")
 					if len(blocks) > 0 && blockID != "" {
@@ -591,6 +600,11 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 				signersForExistingBlock, err = latestBlock.GetSigner()
 				if err != nil {
 					return false, fmt.Errorf("failed to extract Quorums from genesis block: %v", err), nil
+				}
+
+				if err := c.ValidateTokenNetworkID(latestBlock, tokenInfo.Token); err != nil {
+					c.log.Error("failed to validate token network ID", "err", err)
+					return false, fmt.Errorf("failed to validate token network ID: %v", err), nil
 				}
 			}
 		} else {

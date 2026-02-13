@@ -47,6 +47,7 @@ const (
 	FullNodeNFTContentTable        string = "nft_content_table"
 	FullNodeSCContentTable         string = "sc_content_table"
 	FullnodeDoubleSpentTokensTable string = "DoubleSpentTokensTable"
+	LocalTestTokenInfo             string = "LocalTestTokenInfo"
 )
 
 type WalletConfig struct {
@@ -125,7 +126,7 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 	}
 	w.ntcs.DB = ntdb
 
-	err = w.s.Init(DIDStorage, &DIDType{}, true)
+	err = w.s.Init(DIDStorage, &DID{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID storage", "err", err)
 		return nil, err
@@ -173,23 +174,34 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 	err = w.s.Init(FTTokenStorage, FTToken{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize FT Token storage", "err", err)
+		return nil, err
 	}
 	err = w.s.Init(FTStorage, &FT{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize FT storage", "err", err)
+		return nil, err
 	}
 	err = w.s.Init(FTTransactionTokenStorage, &model.FTTransactionToken{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize FT transaction token storage", "err", err)
+		return nil, err
 	}
 	err = w.s.Init(FTTransactionHistoryStorage, &model.FTTransactionHistory{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize FT transaction history storage", "err", err)
+		return nil, err
 	}
 	// Initialize token recovery tracking table
 	err = w.s.Init("TokenRecovery", &model.TokenRecovery{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize token recovery storage", "err", err)
+		return nil, err
+	}
+
+	err = w.s.Init(LocalTestTokenInfo, &model.LocalTestTokenInfo{}, true)
+	if err != nil {
+		w.log.Error("Failed to initialize local test token tracking storage", "err", err)
+		return nil, err
 	}
 
 	smartcontracTokenchainstorageDB, err := leveldb.OpenFile(dir+SmartContractTokenChainStorage, op)

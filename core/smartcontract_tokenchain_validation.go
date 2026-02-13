@@ -2,11 +2,11 @@ package core
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -247,18 +247,8 @@ func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error
 		return response, fmt.Errorf("invalid initiator, initiator did does not match")
 	}
 
-	var initiatorDIDType int
-	//sign type = 0, means it is a BIP signature and the did was created in light mode
-	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
-	//and thus the did could be initialised in basic mode to fetch the public key
-	if initiatorSign.SignType == 0 {
-		initiatorDIDType = did.LiteDIDMode
-	} else {
-		initiatorDIDType = did.BasicDIDMode
-	}
-
 	//Initialise initiator did
-	didCrypto, err := c.InitialiseDID(initiator, initiatorDIDType)
+	didCrypto, err := c.InitialiseDID(initiator)
 	if err != nil {
 		c.log.Error("failed to initialise initiator did:", initiator)
 		response.Message = "failed to initialise initiator did"
@@ -266,20 +256,16 @@ func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error
 	}
 
 	//initiator signature verification
-	if initiatorDIDType == did.LiteDIDMode {
-		response.Status, err = didCrypto.PvtVerify([]byte(initiatorSign.Hash), util.StrToHex(initiatorSign.PrivateSign))
-		if err != nil {
+	response.Status, err = didCrypto.PvtVerify([]byte(initiatorSign.Hash), util.StrToHex(initiatorSign.Signature))
+	if err != nil {
+		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
+			c.log.Error("NLSS DID detected at INITIATOR role during validation. NLSS DIDs are DEPRECATED.", "initiator", initiator, "error", err)
+			response.Message = "NLSS DID detected at INITIATOR role. Please use BIP DID"
+		} else {
 			c.log.Error("failed to verify initiator:", initiator, "err", err)
 			response.Message = "invalid initiator"
-			return response, err
 		}
-	} else {
-		response.Status, err = didCrypto.NlssVerify(initiatorSign.Hash, util.StrToHex(initiatorSign.NLSSShare), util.StrToHex(initiatorSign.PrivateSign))
-		if err != nil {
-			c.log.Error("failed to verify initiator:", initiator, "err", err)
-			response.Message = "invalid initiator"
-			return response, err
-		}
+		return response, err
 	}
 
 	response.Message = "initiator validated successfully"

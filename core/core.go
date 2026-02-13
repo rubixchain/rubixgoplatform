@@ -52,7 +52,6 @@ const (
 	APISyncDIDArbitration           string = "/api/sync-did-arbitration"
 	APIUnlockTokens                 string = "/api/unlock-tokens"
 	APICheckQuorumStatusPath        string = "/api/check-quorum-status"
-	APIGetPeerDIDTypePath           string = "/api/get-peer-didType"
 	APIGetPeerInfoPath              string = "/api/get-peer-info"
 	APIUpdateTokenHashDetails       string = "/api/update-tokenhash-details"
 	APIAddUnpledgeDetails           string = "/api/initiate-unpledge"
@@ -521,7 +520,6 @@ func (c *Core) SetupCore() error {
 	}
 	c.PingSetup()
 	c.CheckQuorumStatusSetup()
-	c.GetPeerdidTypeSetup()
 	c.peerSetup()
 	c.removePeerSetup()
 	c.w.AddDIDLastChar()
@@ -771,30 +769,12 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 }
 
 func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
-	dt, err := c.w.GetDID(didStr)
-	if err != nil {
-		c.log.Error("DID does not exist", "did", didStr)
-		return nil, fmt.Errorf("DID does not exist")
-	}
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")
 		return nil, fmt.Errorf("faield to get did channel")
 	}
-	switch dt.Type {
-	case did.LiteDIDMode:
-		return did.InitDIDLite(didStr, c.didDir, dc), nil
-	case did.BasicDIDMode:
-		return did.InitDIDBasic(didStr, c.didDir, dc), nil
-	case did.StandardDIDMode:
-		return did.InitDIDStandard(didStr, c.didDir, dc), nil
-	case did.WalletDIDMode:
-		return did.InitDIDWallet(didStr, c.didDir, dc), nil
-	case did.ChildDIDMode:
-		return did.InitDIDChild(didStr, c.didDir, dc), nil
-	default:
-		return nil, fmt.Errorf("DID Type is not supported")
-	}
+	return did.InitDIDLite(didStr, c.didDir, dc), nil
 }
 
 // Initializes the did in it's corresponding did mode (basic/ lite)
@@ -816,11 +796,7 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 			c.AddPeerDetails(*peerInfo)
 		}
 	}
-	if peerInfo.DIDType == nil || *peerInfo.DIDType == -1 {
-		c.log.Error("failed to get did type of peer did ", didStr, "error", err)
-		return nil, err
-	}
-	return c.InitialiseDID(didStr, *peerInfo.DIDType)
+	return c.InitialiseDID(didStr)
 }
 
 // Initializes the quorum in it's corresponding did mode (basic/ lite)
@@ -829,37 +805,7 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypt
 	if err != nil {
 		return nil, err
 	}
-
-	// Fetching peer's did type
-	peerInfo, err := c.GetPeerDIDInfo(didStr)
-	if err != nil {
-		if peerInfo == nil {
-			c.log.Error("failed to get did type of peer did ", didStr, "error", err)
-			return nil, err
-		}
-		if strings.Contains(err.Error(), "retry") {
-			c.AddPeerDetails(*peerInfo)
-		}
-	}
-	if *peerInfo.DIDType == -1 {
-		c.log.Error("failed to get did type of peer did ", didStr, "error", err)
-		return nil, err
-	}
-
-	switch *peerInfo.DIDType {
-	case did.BasicDIDMode:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	case did.StandardDIDMode:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	case did.WalletDIDMode:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	case did.ChildDIDMode:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	case did.LiteDIDMode:
-		return did.InitDIDQuorumLite(didStr, c.didDir, ""), nil
-	default:
-		return did.InitDIDQuorumc(didStr, c.didDir, ""), nil
-	}
+	return did.InitDIDQuorumLite(didStr, c.didDir, ""), nil
 }
 
 func (c *Core) FetchDID(did string) error {
@@ -923,26 +869,13 @@ func (c *Core) GetPeerID() string {
 	return c.peerID
 }
 
-// Initializes the did in it's corresponding did mode (basic/ lite)
-func (c *Core) InitialiseDID(didStr string, didType int) (did.DIDCrypto, error) {
+// Initializes the DID in it's corresponding did mode
+func (c *Core) InitialiseDID(didStr string) (did.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err
 	}
-	switch didType {
-	case did.BasicDIDMode:
-		return did.InitDIDBasic(didStr, c.didDir, nil), nil
-	case did.StandardDIDMode:
-		return did.InitDIDStandard(didStr, c.didDir, nil), nil
-	case did.WalletDIDMode:
-		return did.InitDIDWallet(didStr, c.didDir, nil), nil
-	case did.ChildDIDMode:
-		return did.InitDIDChild(didStr, c.didDir, nil), nil
-	case did.LiteDIDMode:
-		return did.InitDIDLite(didStr, c.didDir, nil), nil
-	default:
-		return did.InitDIDBasic(didStr, c.didDir, nil), nil
-	}
+	return did.InitDIDLite(didStr, c.didDir, nil), nil
 }
 
 // StartPendingTokenMonitor starts the self-healing monitor for pending tokens

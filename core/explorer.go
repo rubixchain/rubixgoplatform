@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -51,7 +50,6 @@ type ExplorerDID struct {
 	PeerID    string                    `json:"peer_id"`
 	DID       string                    `json:"user_did"`
 	Balance   float64                   `json:"balance"`
-	DIDType   int                       `json:"did_type"`
 	FTDetails []model.FTInfoForExplorer `json:"ft_detials"`
 }
 
@@ -431,7 +429,7 @@ func (ec *ExplorerClient) GetAPIKeyFromExplorer(url string, didReq string) (stri
 }
 
 func (c *Core) ExplorerUserCreate() []string {
-	didList := []wallet.DIDType{}
+	didList := []wallet.DID{}
 	dids := []string{}
 
 	//Read all DIDs from the DB.
@@ -454,7 +452,7 @@ func (c *Core) ExplorerUserCreate() []string {
 		}
 		// Increment the overall WaitGroup for each batch
 		overallWG.Add(1)
-		go func(batch []wallet.DIDType) {
+		go func(batch []wallet.DID) {
 			defer overallWG.Done()
 
 			var batchWG sync.WaitGroup
@@ -463,7 +461,7 @@ func (c *Core) ExplorerUserCreate() []string {
 			// Launch goroutines for the batch
 			for _, d := range batch {
 				batchWG.Add(1)
-				go func(d wallet.DIDType) {
+				go func(d wallet.DID) {
 					defer batchWG.Done()
 					<-startSignal // Wait for the signal to start
 
@@ -493,7 +491,6 @@ func (c *Core) ExplorerUserCreate() []string {
 							DID:       d.DID,
 							Balance:   balance,
 							PeerID:    c.peerID,
-							DIDType:   d.Type,
 							FTDetails: ftInfoForExplorer,
 						}
 						err = c.ec.ExplorerUserCreate(&ed)
@@ -543,7 +540,7 @@ func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 func (c *Core) UpdateUserInfo(dids []string) {
 	for _, did := range dids {
 		go func(did string) {
-			didList := wallet.DIDType{}
+			didList := wallet.DID{}
 
 			accInfo, err := c.GetAccountInfo(did)
 			if err != nil {
@@ -570,7 +567,6 @@ func (c *Core) UpdateUserInfo(dids []string) {
 			ed := ExplorerDID{
 				PeerID:    c.peerID,
 				Balance:   accInfo.RBTAmount,
-				DIDType:   didList.Type,
 				FTDetails: ftInfoForExplorer,
 			}
 
@@ -587,143 +583,6 @@ func (c *Core) UpdateUserInfo(dids []string) {
 			}
 		}(did)
 	}
-}
-
-func (c *Core) UpdateTokenInfo() {
-	tokenList := []wallet.Token{}
-	// dids := []string{}
-
-	err := c.s.Read(wallet.TokenStorage, &tokenList, "token_id!=?", "")
-	if err != nil {
-		c.log.Error("Error reading the DID Storage or DID Storage empty")
-		return
-	}
-	tokensToSend := []TokenDetails{}
-	count := 0
-	l := len(tokenList)
-	for i, token := range tokenList {
-		if token.Added {
-			continue
-		}
-		td := c.populateTokenDetail(token)
-		//populate td
-		tokensToSend = append(tokensToSend, td)
-		count += 1
-
-		if count != 10 && i != (l-1) {
-			continue
-		}
-		var er ExplorerResponse
-		err = c.ec.SendExplorerJSONRequest("POST", ExplorerUpdateTokenInfoAPI, &tokensToSend, &er)
-		if err != nil {
-			c.log.Error("Failed to update token info, " + err.Error())
-		}
-		if !er.Status {
-			c.log.Error("Failed to update token info, ", "msg", er.Message)
-			return
-		}
-
-		tokensUpdated := strings.Split(er.Message, ",")
-		for _, t := range tokensUpdated {
-			t1 := wallet.Token{}
-			err := c.s.Read(wallet.TokenStorage, &t1, "token_id=?", t)
-			if err != nil {
-				c.log.Error("Error reading the DID Storage or DID Storage empty")
-				return
-			}
-			t1.Added = true
-			err = c.s.Update(wallet.TokenStorage, &t1, "token_id=?", t)
-			if err != nil {
-				c.log.Error("Error reading the DID Storage or DID Storage empty")
-				return
-			}
-		}
-		count = 0
-		tokensToSend = []TokenDetails{}
-	}
-}
-
-func (c *Core) populateTokenDetail(token wallet.Token) TokenDetails {
-	td := TokenDetails{}
-	td.TokenHash = token.TokenID
-	td.TokenValue = token.TokenValue
-	td.TokenStatus = token.TokenStatus
-	td.CurrentOwner = ""
-	td.Miner = ""
-	td.PreviousOwner = ""
-	td.BlockIDs = []string{}
-	td.PledgeDetails = PledgeInfo{}
-	td.TokenLevel = -1
-	td.TokenNumber = -1
-	//Get token type
-	typeString := RBTString
-	if token.TokenValue < 1.0 {
-		typeString = PartString
-	}
-	td.TokenType = c.TokenType(typeString)
-	var blocks [][]byte
-	var nextBlockID string
-	blockId := ""
-	var err error
-	//This for loop ensures that we fetch all the blocks in the token chain
-	//starting from genesis block to latest block
-	for {
-		//GetAllTokenBlocks returns next 100 blocks and nextBlockID of the 100th block, starting from the given block Id, in the direction: genesis to latest block
-		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(token.TokenID, td.TokenType, blockId)
-		if err != nil {
-			return TokenDetails{}
-		}
-		//the nextBlockID of the latest block is empty string
-		blockId = nextBlockID
-		if nextBlockID == "" {
-			break
-		}
-	}
-
-	//Once we have all the blocks, we traverse each block and get the details from each block. If there is a next block after the current block
-	//which is of type transaction block, then we get the pledge details from next one. We update the details as we go forward in traversing the
-	//token chain blocks 0,1,2,3,4 - 4
-
-	for i := 0; i < len(blocks); i++ {
-		b := block.InitBlock(blocks[i], nil)
-		var nb *block.Block
-		nb = nil
-		if i < len(blocks)-1 {
-			nb = block.InitBlock(blocks[i+1], nil)
-		}
-
-		if b != nil {
-			txnType := b.GetTransType()
-			switch txnType {
-			case block.TokenGeneratedType:
-				td.Miner = b.GetOwner()
-				bid, _ := b.GetBlockID(token.TokenID)
-				td.BlockIDs = append(td.BlockIDs, bid)
-				td.TokenLevel, td.TokenNumber = b.GetTokenLevel(token.TokenID)
-				if nb != nil && nb.GetTransType() == block.TokenTransferredType {
-					continue
-				}
-				td.CurrentOwner = b.GetOwner()
-				fmt.Printf("TD Genesys %+v: ", td)
-				//TODO : add pledge details for mined tokens
-			case block.TokenTransferredType:
-				bid, _ := b.GetBlockID(token.TokenID)
-				td.BlockIDs = append(td.BlockIDs, bid)
-				if nb != nil && nb.GetTransType() == block.TokenTransferredType {
-					continue
-				}
-				td.CurrentOwner = b.GetOwner()
-				td.PreviousOwner = b.GetSenderDID()
-				b.GetPledgedTokens()
-				fmt.Printf("TD Else %+v: ", td)
-				// 	// td.PledgeDetails = b.
-			}
-
-		} else {
-			c.log.Error("Invalid block")
-		}
-	}
-	return td
 }
 
 func (c *Core) GenerateUserAPIKey(dids []string) {

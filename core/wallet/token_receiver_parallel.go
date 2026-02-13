@@ -7,18 +7,18 @@ import (
 	"sync"
 	"time"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/util"
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
 // ParallelTokensReceived processes received tokens in parallel for better performance
 func (w *Wallet) ParallelTokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell) ([]string, error) {
 	w.l.Lock()
 	defer w.l.Unlock()
-	
+
 	// Create token block first
 	err := w.CreateTokenBlock(b)
 	if err != nil {
@@ -31,28 +31,28 @@ func (w *Wallet) ParallelTokensReceived(did string, ti []contract.TokenInfo, b *
 	updatedtokenhashes := make([]string, len(ti))
 	tokenHashMap := make(map[string]string)
 	providerMaps := make([]model.TokenProviderMap, len(ti))
-	
+
 	// First pass: Add token states to IPFS (can be parallelized)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	semaphore := make(chan struct{}, 10) // Limit concurrent IPFS operations
-	
+
 	for idx, info := range ti {
 		wg.Add(1)
 		go func(i int, tokenInfo contract.TokenInfo) {
 			defer wg.Done()
-			
+
 			// Rate limiting
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
-			
+
 			t := tokenInfo.Token
 			b := w.GetLatestTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
 			blockId, _ := b.GetBlockID(t)
 			tokenIDTokenStateData := t + blockId
 			tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
 			tokenIDTokenStateHash, tpm, _ := w.AddWithProviderMap(tokenIDTokenStateBuffer, did, OwnerRole)
-			
+
 			mu.Lock()
 			updatedtokenhashes[i] = tokenIDTokenStateHash
 			tokenHashMap[t] = tokenIDTokenStateHash
@@ -60,7 +60,7 @@ func (w *Wallet) ParallelTokensReceived(did string, ti []contract.TokenInfo, b *
 			tpm.FuncID = PinFunc
 			tpm.TransactionID = b.GetTid()
 			tpm.Sender = senderPeerId + "." + b.GetSenderDID()
-			tpm.Receiver = receiverPeerId + "." + b.GetReceiverDID()
+			tpm.Receiver = receiverPeerId + "." + b.GetOwner()
 			tpm.TokenValue = tokenInfo.TokenValue
 			providerMaps[i] = tpm
 			mu.Unlock()
@@ -71,28 +71,28 @@ func (w *Wallet) ParallelTokensReceived(did string, ti []contract.TokenInfo, b *
 	// Second pass: Process tokens in parallel batches
 	tokenJobs := make(chan tokenProcessJob, len(ti))
 	results := make(chan tokenProcessResult, len(ti))
-	
+
 	// Start workers
 	numWorkers := 5
 	if len(ti) > 100 {
 		numWorkers = 10
 	}
-	
+
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go w.tokenProcessWorker(did, b, senderPeerId, receiverPeerId, pinningServiceMode, tokenHashMap, tokenJobs, results, &wg)
 	}
-	
+
 	// Submit jobs
 	for _, tokenInfo := range ti {
 		tokenJobs <- tokenProcessJob{tokenInfo: tokenInfo}
 	}
 	close(tokenJobs)
-	
+
 	// Wait for workers to complete
 	wg.Wait()
 	close(results)
-	
+
 	// Check for errors
 	var firstErr error
 	for result := range results {
@@ -100,7 +100,7 @@ func (w *Wallet) ParallelTokensReceived(did string, ti []contract.TokenInfo, b *
 			firstErr = result.err
 		}
 	}
-	
+
 	if firstErr != nil {
 		return nil, firstErr
 	}
@@ -112,7 +112,7 @@ func (w *Wallet) ParallelTokensReceived(did string, ti []contract.TokenInfo, b *
 			w.log.Error("Failed to submit provider details to async queue, falling back to sync", "err", err)
 			goto syncProcessing
 		}
-		w.log.Info("Provider details submitted for async processing", 
+		w.log.Info("Provider details submitted for async processing",
 			"transaction_id", b.GetTid(),
 			"token_count", len(providerMaps))
 		return updatedtokenhashes, nil
@@ -142,16 +142,16 @@ type tokenProcessResult struct {
 }
 
 // tokenProcessWorker processes individual tokens
-func (w *Wallet) tokenProcessWorker(did string, b *block.Block, senderPeerId, receiverPeerId string, 
-	pinningServiceMode bool, tokenHashMap map[string]string, 
+func (w *Wallet) tokenProcessWorker(did string, b *block.Block, senderPeerId, receiverPeerId string,
+	pinningServiceMode bool, tokenHashMap map[string]string,
 	jobs <-chan tokenProcessJob, results chan<- tokenProcessResult, wg *sync.WaitGroup) {
-	
+
 	defer wg.Done()
-	
+
 	for job := range jobs {
 		tokenInfo := job.tokenInfo
 		result := tokenProcessResult{token: tokenInfo.Token}
-		
+
 		// Check if token already exists
 		var t Token
 		err := w.s.Read(TokenStorage, &t, "token_id=?", tokenInfo.Token)
@@ -166,7 +166,10 @@ func (w *Wallet) tokenProcessWorker(did string, b *block.Block, senderPeerId, re
 			defer os.RemoveAll(dir)
 
 			// Get the token from IPFS
-			if err := w.Get(tokenInfo.Token, did, OwnerRole, dir); err != nil {
+			tokenHash, _ := w.ipfsOps.Add(
+				bytes.NewBufferString(tokenInfo.Token),
+			)
+			if err := w.Get(tokenHash, did, OwnerRole, dir); err != nil {
 				result.err = fmt.Errorf("failed to get token %s: %v", tokenInfo.Token, err)
 				results <- result
 				continue
@@ -176,7 +179,14 @@ func (w *Wallet) tokenProcessWorker(did string, b *block.Block, senderPeerId, re
 			var parentTokenID string
 			gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
 			if gb != nil {
-				parentTokenID, _, _ = gb.GetParentDetials(tokenInfo.Token)
+				parentTokenID, err = gb.GetParentDetials(tokenInfo.Token)
+				if err != nil {
+					errMsg := fmt.Errorf("Failed to get parent token of token : %s; err : %v", tokenInfo.Token, err)
+					w.log.Error(errMsg.Error())
+					result.err = errMsg
+					results <- result
+					continue
+				}
 			}
 
 			// Create new token entry
@@ -194,7 +204,7 @@ func (w *Wallet) tokenProcessWorker(did string, b *block.Block, senderPeerId, re
 				continue
 			}
 		}
-		
+
 		// Update token status
 		tokenStatus := TokenIsPending // Changed from TokenIsFree to prevent premature spending
 		role := OwnerRole
@@ -217,18 +227,26 @@ func (w *Wallet) tokenProcessWorker(did string, b *block.Block, senderPeerId, re
 			results <- result
 			continue
 		}
-		
+
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
-		receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-		
+		receiverAddress := receiverPeerId + "." + b.GetOwner()
+
 		// Pin the token (skip AddProviderDetails as we'll batch them later)
-		_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
+		tokenIdBuffer := bytes.NewBufferString(tokenInfo.Token)
+		tokenIdHash, err := w.Add(tokenIdBuffer, did, role)
+		if err != nil {
+			w.log.Error("Failed to add tokens to ipfs", "err", err)
+			result.err = fmt.Errorf("failed to add token %s: %v", tokenInfo.Token, err)
+			results <- result
+			continue
+		}
+		_, err = w.Pin(tokenIdHash, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 		if err != nil {
 			result.err = fmt.Errorf("failed to pin token %s: %v", tokenInfo.Token, err)
 			results <- result
 			continue
 		}
-		
+
 		results <- result
 	}
 }

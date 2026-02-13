@@ -7,9 +7,8 @@ import (
 	"github.com/ipfs/go-cid"
 )
 
-type DIDType struct {
+type DID struct {
 	DID     string `gorm:"column:did;primaryKey"`
-	Type    int    `gorm:"column:type"`
 	DIDDir  string `gorm:"column:did_dir"`
 	RootDID int    `gorm:"column:root_did"`
 	Config  string `gorm:"column:config"`
@@ -17,13 +16,12 @@ type DIDType struct {
 
 type DIDPeerMap struct {
 	DID         string `gorm:"column:did;primaryKey"`
-	DIDType     *int   `gorm:"column:did_type"`
 	PeerID      string `gorm:"column:peer_id"`
 	DIDLastChar string `gorm:"column:did_last_char"`
 }
 
 func (w *Wallet) IsRootDIDExist() bool {
-	var dt DIDType
+	var dt DID
 	err := w.s.Read(DIDStorage, &dt, "root_did =?", 1)
 	if err != nil {
 		return false
@@ -31,7 +29,7 @@ func (w *Wallet) IsRootDIDExist() bool {
 	return dt.RootDID == 1
 }
 
-func (w *Wallet) CreateDID(dt *DIDType) error {
+func (w *Wallet) CreateDID(dt *DID) error {
 	err := w.s.Write(DIDStorage, &dt)
 	if err != nil {
 		w.log.Error("Failed to create DID", "err", err)
@@ -40,8 +38,8 @@ func (w *Wallet) CreateDID(dt *DIDType) error {
 	return nil
 }
 
-func (w *Wallet) GetAllDIDs() ([]DIDType, error) {
-	var dt []DIDType
+func (w *Wallet) GetAllDIDs() ([]DID, error) {
+	var dt []DID
 	err := w.s.Read(DIDStorage, &dt, "did!=?", "")
 	if err != nil {
 		w.log.Error("Failed to get DID", "err", err)
@@ -50,8 +48,8 @@ func (w *Wallet) GetAllDIDs() ([]DIDType, error) {
 	return dt, nil
 }
 
-func (w *Wallet) GetDIDs(dir string) ([]DIDType, error) {
-	var dt []DIDType
+func (w *Wallet) GetDIDs(dir string) ([]DID, error) {
+	var dt []DID
 	err := w.s.Read(DIDStorage, &dt, "did_dir=?", dir)
 	if err != nil {
 		w.log.Error("Failed to get DID", "err", err)
@@ -60,8 +58,8 @@ func (w *Wallet) GetDIDs(dir string) ([]DIDType, error) {
 	return dt, nil
 }
 
-func (w *Wallet) GetDIDDir(dir string, did string) (*DIDType, error) {
-	var dt DIDType
+func (w *Wallet) GetDIDDir(dir string, did string) (*DID, error) {
+	var dt DID
 
 	if dir == "" {
 		err := w.s.Read(DIDStorage, &dt, "did=?", did)
@@ -80,8 +78,8 @@ func (w *Wallet) GetDIDDir(dir string, did string) (*DIDType, error) {
 	return &dt, nil
 }
 
-func (w *Wallet) GetDID(did string) (*DIDType, error) {
-	var dt DIDType
+func (w *Wallet) GetDID(did string) (*DID, error) {
+	var dt DID
 	err := w.s.Read(DIDStorage, &dt, "did=?", did)
 	if err != nil {
 		w.log.Error("Failed to get DID", "err", err)
@@ -91,7 +89,7 @@ func (w *Wallet) GetDID(did string) (*DIDType, error) {
 }
 
 func (w *Wallet) IsDIDExist(did string) bool {
-	var dt DIDType
+	var dt DID
 	err := w.s.Read(DIDStorage, &dt, "did=?", did)
 	if err != nil {
 		w.log.Error("DID does nto exist", "did", did)
@@ -103,7 +101,7 @@ func (w *Wallet) IsDIDExist(did string) bool {
 func (w *Wallet) RemoveDID(did string) error {
 	w.l.Lock()
 	defer w.l.Unlock()
-	err := w.s.Delete(DIDStorage, &DIDType{}, "did=?", did)
+	err := w.s.Delete(DIDStorage, &DID{}, "did=?", did)
 	if err != nil {
 		errMsg := fmt.Sprintf("DID could not be removed from DIDTable, did : %v, err : %v", did, err)
 		w.log.Error(errMsg)
@@ -112,7 +110,7 @@ func (w *Wallet) RemoveDID(did string) error {
 	return nil
 }
 
-func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
+func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
 	lastChar, err := w.GetLastChar(did)
 	if err != nil {
 		return err
@@ -134,24 +132,21 @@ func (w *Wallet) AddDIDPeerMap(did string, peerID string, didType int) error {
 			DID:         did,
 			PeerID:      peerID,
 			DIDLastChar: lastChar,
-			DIDType:     &didType,
 		}
 		return w.s.Write(DIDPeerStorage, &newRecord)
 	}
 
 	//Record exists — compare values
 	samePeerID := existing.PeerID == peerID
-	sameDIDType := (existing.DIDType != nil && *existing.DIDType == didType)
 	sameLastChar := existing.DIDLastChar == lastChar
 
 	// If all match, nothing to update
-	if samePeerID && sameDIDType && sameLastChar {
+	if samePeerID && sameLastChar {
 		return nil
 	}
 
 	//Update changed fields
 	existing.PeerID = peerID
-	existing.DIDType = &didType
 	existing.DIDLastChar = lastChar
 
 	return w.s.Update(DIDPeerStorage, &existing, "did=?", did)
@@ -216,37 +211,4 @@ func (w *Wallet) GetPeerID(did string) string {
 		return ""
 	}
 	return dm.PeerID
-}
-
-// Fetches did type of the given did from PeerDIDTable
-func (w *Wallet) GetPeerDIDType(did string) (int, error) {
-	var dm DIDPeerMap
-	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
-	if err != nil {
-		return -1, err
-	}
-	if dm.DIDType == nil {
-		return -1, nil
-	}
-
-	return *dm.DIDType, nil
-}
-
-// Updates did type of the given did in PeerDIDTable
-func (w *Wallet) UpdatePeerDIDType(did string, didtype int) (bool, error) {
-	var dm DIDPeerMap
-	err := w.s.Read(DIDPeerStorage, &dm, "did=?", did)
-	if err != nil {
-		w.log.Error("couldn't read from peer did table UpdatePeerDIDType", "err", err)
-		return false, err
-	}
-
-	dm.DIDType = &didtype
-
-	err1 := w.s.Update(DIDPeerStorage, &dm, "did=?", did)
-	if err1 != nil {
-		w.log.Error("couldn't update did type in peer did table for:", did)
-		return false, err1
-	}
-	return true, nil
 }

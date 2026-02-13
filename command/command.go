@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	version string = "0.1_mig"
+	version string = "0.1_keys"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -281,15 +281,10 @@ type Command struct {
 	peers                        []string
 	log                          logger.Logger
 	didRoot                      bool
-	didType                      int
 	didSecret                    string
 	forcePWD                     bool
 	privPWD                      string
 	quorumPWD                    string
-	imgFile                      string
-	didImgFile                   string
-	privImgFile                  string
-	pubImgFile                   string
 	privKeyFile                  string
 	pubKeyFile                   string
 	quorumList                   string
@@ -693,16 +688,11 @@ func Run(args []string) {
 	flag.StringVar(&cmd.peerID, "peerID", "", "Peerd ID")
 	flag.StringVar(&peers, "peers", "", "Bootstrap peers, mutiple peers will be seprated by comma")
 	flag.BoolVar(&cmd.didRoot, "didRoot", false, "Root DID")
-	flag.IntVar(&cmd.didType, "didType", 0, "DID Creation type")
 	flag.IntVar(&cmd.ChildPath, "ChildPath", 0, "BIP child Path")
 	flag.StringVar(&cmd.didSecret, "didSecret", "My DID Secret", "DID creation secret")
 	flag.BoolVar(&cmd.forcePWD, "fp", false, "Force password entry")
 	flag.StringVar(&cmd.privPWD, "privPWD", "mypassword", "Private key password")
 	flag.StringVar(&cmd.quorumPWD, "quorumPWD", "mypassword", "Quorum key password")
-	flag.StringVar(&cmd.imgFile, "imgFile", did.ImgFileName, "DID creation image")
-	flag.StringVar(&cmd.didImgFile, "didImgFile", did.DIDImgFileName, "DID image")
-	flag.StringVar(&cmd.privImgFile, "privImgFile", did.PvtShareFileName, "DID public share image")
-	flag.StringVar(&cmd.pubImgFile, "pubImgFile", did.PubShareFileName, "DID public share image")
 	flag.StringVar(&cmd.mnemonicFile, "mnemonicKeyFile", "", "Mnemonic key file")
 	flag.StringVar(&cmd.privKeyFile, "privKeyFile", did.PvtKeyFileName, "Private key file")
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
@@ -896,8 +886,6 @@ func Run(args []string) {
 		cmd.SetupDIDCmd()
 	case ShutDownCmd:
 		cmd.ShutDownCmd()
-	case MirgateNodeCmd:
-		cmd.MigrateNodeCmd()
 	case SetupDBCmd:
 		cmd.setupDB()
 	case GetTxnDetailsCmd:

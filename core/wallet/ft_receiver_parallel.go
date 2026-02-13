@@ -21,14 +21,14 @@ import (
 // ParallelFTReceiver handles FT tokens without global locks
 type ParallelFTReceiver struct {
 	w                 *Wallet
-	tokenStates       sync.Map  // Lock-free concurrent map for token states
+	tokenStates       sync.Map // Lock-free concurrent map for token states
 	batchWorkers      int
 	log               logger.Logger
 	genesisOptimizer  *GenesisGroupOptimizer
 	downloadBatchSize int
 	batchDelay        int // milliseconds
 	maxConcurrentIPFS int
-	creatorCache      sync.Map  // Cache for creator DIDs by genesis
+	creatorCache      sync.Map // Cache for creator DIDs by genesis
 }
 
 // TokenProcessingState tracks processing state for each token
@@ -42,30 +42,30 @@ type TokenProcessingState struct {
 
 // TokenBatch represents a group of tokens to process together
 type TokenBatch struct {
-	Tokens      []contract.TokenInfo
-	StartIndex  int
-	EndIndex    int
+	Tokens     []contract.TokenInfo
+	StartIndex int
+	EndIndex   int
 }
 
 // NewParallelFTReceiver creates a new parallel FT receiver
 func NewParallelFTReceiver(w *Wallet) *ParallelFTReceiver {
 	cpuCount := runtime.NumCPU()
-	
+
 	// Start with conservative defaults
 	// Will be dynamically adjusted based on token count
-	initialWorkers := min(16, cpuCount * 2)
-	
+	initialWorkers := min(16, cpuCount*2)
+
 	w.log.Info("Initializing parallel FT receiver",
 		"cpu_cores", cpuCount,
 		"initial_workers", initialWorkers)
-	
+
 	pfr := &ParallelFTReceiver{
-		w:                 w,
-		batchWorkers:      initialWorkers,
-		log:               w.log.Named("ParallelFTReceiver"),
-		genesisOptimizer:  NewGenesisGroupOptimizer(w),
+		w:                w,
+		batchWorkers:     initialWorkers,
+		log:              w.log.Named("ParallelFTReceiver"),
+		genesisOptimizer: NewGenesisGroupOptimizer(w),
 	}
-	
+
 	return pfr
 }
 
@@ -81,12 +81,12 @@ func (pfr *ParallelFTReceiver) ParallelFTTokensReceived(
 ) ([]string, error) {
 	startTime := time.Now()
 	totalTokens := len(ti)
-	
+
 	// Validate mainnet limits
 	if err := pfr.validateMainnetLimits(totalTokens); err != nil {
 		return nil, err
 	}
-	
+
 	// Use dynamic worker calculation with hardware awareness
 	dynamicWorkers := pfr.calculateDynamicWorkers(totalTokens)
 	if dynamicWorkers != pfr.batchWorkers {
@@ -96,13 +96,13 @@ func (pfr *ParallelFTReceiver) ParallelFTTokensReceived(
 			"token_count", totalTokens)
 		pfr.batchWorkers = dynamicWorkers
 	}
-	
+
 	pfr.log.Info("Starting parallel FT token receive",
 		"ft_count", totalTokens,
 		"ft_name", ftInfo.FTName,
 		"transaction_id", b.GetTid(),
 		"workers", pfr.batchWorkers)
-	
+
 	// Create token block first (still needs wallet lock for this)
 	pfr.w.l.Lock()
 	err := pfr.w.CreateTokenBlock(b)
@@ -111,7 +111,7 @@ func (pfr *ParallelFTReceiver) ParallelFTTokensReceived(
 		pfr.log.Error("Failed to create token block", "error", err)
 		return nil, err
 	}
-	
+
 	// Initialize processing states
 	states := make(map[string]*TokenProcessingState)
 	for _, token := range ti {
@@ -120,47 +120,47 @@ func (pfr *ParallelFTReceiver) ParallelFTTokensReceived(
 			State: "pending",
 		}
 	}
-	
+
 	// Process tokens in parallel
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	
+
 	// Phase 1: Parallel state hash computation
 	hashResults := pfr.computeStateHashesParallel(ctx, ti, did, b, senderPeerId, receiverPeerId)
-	
+
 	// Phase 2: Check existing tokens and prepare downloads
 	downloadTasks, existingTokens := pfr.prepareTokenTasks(ti, hashResults)
-	
+
 	// Phase 3: Parallel token downloads (if needed)
 	var downloadResults []DownloadResult
 	if len(downloadTasks) > 0 {
 		downloadResults = pfr.parallelBatchDownload(ctx, downloadTasks, did)
 	}
-	
+
 	// Create batch genesis optimizer
 	genesisBatchOptimizer := NewGenesisBatchOptimizer(pfr.w)
-	
+
 	// Preload creator info from downloads if available
 	genesisBatchOptimizer.PreloadFromDownloads(downloadResults)
-	
+
 	// Batch process all tokens to get creator mappings efficiently
 	tokenCreatorMap := genesisBatchOptimizer.BatchProcessTokens(ti)
-	
+
 	// Phase 4: Process all tokens in parallel (update DB, pin, etc.)
 	// Use enhanced processing with retry for mainnet stability
-	processResults := pfr.processTokensParallelWithRetry(ctx, ti, hashResults, downloadResults, 
+	processResults := pfr.processTokensParallelWithRetry(ctx, ti, hashResults, downloadResults,
 		existingTokens, b, ftInfo, did, senderPeerId, receiverPeerId, tokenCreatorMap)
-	
+
 	// Debug logging for mainnet issues
 	pfr.debugTokenProcessing(ti, processResults)
-	
+
 	// Phase 5: Handle provider details asynchronously
 	allProviderMaps := pfr.collectProviderMaps(processResults)
 	if err := pfr.handleProviderDetailsAsync(allProviderMaps, b.GetTid()); err != nil {
 		pfr.log.Error("Failed to handle provider details", "error", err)
 		// Don't fail the entire operation for provider detail errors
 	}
-	
+
 	// Collect successful token hashes
 	updatedTokenHashes := make([]string, 0, totalTokens)
 	successCount := 0
@@ -170,21 +170,21 @@ func (pfr *ParallelFTReceiver) ParallelFTTokensReceived(
 			successCount++
 		}
 	}
-	
+
 	duration := time.Since(startTime)
 	tokensPerSecond := float64(totalTokens) / duration.Seconds()
-	
+
 	pfr.log.Info("Parallel FT token receive completed",
 		"total_tokens", totalTokens,
 		"successful", successCount,
 		"duration", duration,
 		"tokens_per_second", fmt.Sprintf("%.2f", tokensPerSecond))
-	
+
 	if successCount < totalTokens {
-		return updatedTokenHashes, fmt.Errorf("processed %d of %d tokens successfully", 
+		return updatedTokenHashes, fmt.Errorf("processed %d of %d tokens successfully",
 			successCount, totalTokens)
 	}
-	
+
 	return updatedTokenHashes, nil
 }
 
@@ -208,22 +208,22 @@ func (pfr *ParallelFTReceiver) computeStateHashesParallel(
 ) map[string]HashResult {
 	results := make(map[string]HashResult)
 	resultsMu := sync.Mutex{}
-	
+
 	// Create work channel
 	workChan := make(chan contract.TokenInfo, len(tokens))
-	
+
 	// Start workers
 	var wg sync.WaitGroup
 	numWorkers := pfr.batchWorkers
 	if numWorkers > len(tokens) {
 		numWorkers = len(tokens)
 	}
-	
+
 	for w := 0; w < numWorkers; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			
+
 			for token := range workChan {
 				select {
 				case <-ctx.Done():
@@ -240,18 +240,18 @@ func (pfr *ParallelFTReceiver) computeStateHashesParallel(
 						blockID = id
 						return err
 					})
-					
+
 					if err != nil {
 						resultsMu.Lock()
 						results[token.Token] = HashResult{Error: err}
 						resultsMu.Unlock()
 						continue
 					}
-					
+
 					// Compute hash (no lock needed)
 					tokenStateData := token.Token + blockID
 					buffer := bytes.NewBuffer([]byte(tokenStateData))
-					
+
 					hash, tpm, err := pfr.w.AddWithProviderMap(buffer, did, OwnerRole)
 					if err != nil {
 						resultsMu.Lock()
@@ -259,14 +259,14 @@ func (pfr *ParallelFTReceiver) computeStateHashesParallel(
 						resultsMu.Unlock()
 						continue
 					}
-					
+
 					// Fill provider map details
 					tpm.FuncID = PinFunc
 					tpm.TransactionID = b.GetTid()
 					tpm.Sender = senderPeerId + "." + b.GetSenderDID()
-					tpm.Receiver = receiverPeerId + "." + b.GetReceiverDID()
+					tpm.Receiver = receiverPeerId + "." + b.GetOwner()
 					tpm.TokenValue = token.TokenValue
-					
+
 					resultsMu.Lock()
 					results[token.Token] = HashResult{
 						Hash:        hash,
@@ -277,13 +277,13 @@ func (pfr *ParallelFTReceiver) computeStateHashesParallel(
 			}
 		}()
 	}
-	
+
 	// Queue work
 	for _, token := range tokens {
 		workChan <- token
 	}
 	close(workChan)
-	
+
 	wg.Wait()
 	return results
 }
@@ -302,20 +302,20 @@ func (pfr *ParallelFTReceiver) prepareTokenTasks(
 ) ([]DownloadTask, []int) {
 	downloadTasks := make([]DownloadTask, 0)
 	existingTokens := make([]int, 0)
-	
+
 	// Check tokens in parallel using lock-free operations
 	checkResults := make(chan struct {
 		Index  int
 		Exists bool
 		Token  contract.TokenInfo
 	}, len(tokens))
-	
+
 	var wg sync.WaitGroup
 	for i, token := range tokens {
 		wg.Add(1)
 		go func(idx int, tok contract.TokenInfo) {
 			defer wg.Done()
-			
+
 			// Check if token exists using minimal locking
 			exists := false
 			pfr.withMinimalLock(func() error {
@@ -324,7 +324,7 @@ func (pfr *ParallelFTReceiver) prepareTokenTasks(
 				exists = (err == nil && ftInfo.TokenID != "")
 				return nil
 			})
-			
+
 			checkResults <- struct {
 				Index  int
 				Exists bool
@@ -332,12 +332,12 @@ func (pfr *ParallelFTReceiver) prepareTokenTasks(
 			}{idx, exists, tok}
 		}(i, token)
 	}
-	
+
 	go func() {
 		wg.Wait()
 		close(checkResults)
 	}()
-	
+
 	// Collect results
 	for result := range checkResults {
 		if result.Exists {
@@ -351,7 +351,7 @@ func (pfr *ParallelFTReceiver) prepareTokenTasks(
 			})
 		}
 	}
-	
+
 	return downloadTasks, existingTokens
 }
 
@@ -378,7 +378,7 @@ func (pfr *ParallelFTReceiver) parallelBatchDownload(
 	did string,
 ) []DownloadResult {
 	results := make([]DownloadResult, len(tasks))
-	
+
 	// Create directories
 	for i, task := range tasks {
 		if err := util.CreateDir(task.Dir); err != nil {
@@ -388,17 +388,17 @@ func (pfr *ParallelFTReceiver) parallelBatchDownload(
 			}
 		}
 	}
-	
+
 	// Prepare batch requests
 	batchSize := 50 // Process 50 tokens per batch
 	batches := make([][]GetRequest, 0)
-	
+
 	for i := 0; i < len(tasks); i += batchSize {
 		end := i + batchSize
 		if end > len(tasks) {
 			end = len(tasks)
 		}
-		
+
 		batch := make([]GetRequest, 0, end-i)
 		for j := i; j < end; j++ {
 			if results[j].Error == nil { // Skip failed directory creations
@@ -411,12 +411,12 @@ func (pfr *ParallelFTReceiver) parallelBatchDownload(
 				})
 			}
 		}
-		
+
 		if len(batch) > 0 {
 			batches = append(batches, batch)
 		}
 	}
-	
+
 	// Process batches in parallel
 	var wg sync.WaitGroup
 	resultsChan := make(chan struct {
@@ -424,12 +424,12 @@ func (pfr *ParallelFTReceiver) parallelBatchDownload(
 		Results    []model.TokenProviderMap
 		Error      error
 	}, len(batches))
-	
+
 	for i, batch := range batches {
 		wg.Add(1)
 		go func(batchIdx int, requests []GetRequest) {
 			defer wg.Done()
-			
+
 			providerMaps, err := pfr.w.BatchGetWithProviderMaps(requests)
 			resultsChan <- struct {
 				BatchIndex int
@@ -438,29 +438,29 @@ func (pfr *ParallelFTReceiver) parallelBatchDownload(
 			}{batchIdx, providerMaps, err}
 		}(i, batch)
 	}
-	
+
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 	}()
-	
+
 	// Collect results
 	batchResults := make(map[int]struct {
 		Results []model.TokenProviderMap
 		Error   error
 	})
-	
+
 	for result := range resultsChan {
 		batchResults[result.BatchIndex] = struct {
 			Results []model.TokenProviderMap
 			Error   error
 		}{result.Results, result.Error}
 	}
-	
+
 	// Map results back to tasks
 	for batchIdx, batch := range batches {
 		batchResult := batchResults[batchIdx]
-		
+
 		for i, req := range batch {
 			taskIdx := req.Index
 			if batchResult.Error != nil {
@@ -477,7 +477,7 @@ func (pfr *ParallelFTReceiver) parallelBatchDownload(
 			}
 		}
 	}
-	
+
 	return results
 }
 
@@ -504,21 +504,21 @@ func (pfr *ParallelFTReceiver) processTokensParallel(
 	tokenCreatorMap map[string]string,
 ) []TokenProcessingResult {
 	results := make([]TokenProcessingResult, len(tokens))
-	
+
 	workItems := make([]workItem, 0, len(tokens))
-	
+
 	// Add downloaded tokens
 	downloadMap := make(map[int]*DownloadResult)
 	for i := range downloadResults {
 		downloadMap[downloadResults[i].Task.Index] = &downloadResults[i]
 	}
-	
+
 	// Create work items for all tokens
 	existingMap := make(map[int]bool)
 	for _, idx := range existingTokenIndices {
 		existingMap[idx] = true
 	}
-	
+
 	for i, token := range tokens {
 		item := workItem{
 			Index:      i,
@@ -530,22 +530,22 @@ func (pfr *ParallelFTReceiver) processTokensParallel(
 		}
 		workItems = append(workItems, item)
 	}
-	
+
 	// Process in parallel
 	workChan := make(chan workItem, len(workItems))
 	resultsChan := make(chan TokenProcessingResult, len(workItems))
-	
+
 	var wg sync.WaitGroup
 	numWorkers := pfr.batchWorkers
 	if numWorkers > len(workItems) {
 		numWorkers = len(workItems)
 	}
-	
+
 	for w := 0; w < numWorkers; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			
+
 			for item := range workChan {
 				result := pfr.processSingleToken(
 					item,
@@ -561,19 +561,19 @@ func (pfr *ParallelFTReceiver) processTokensParallel(
 			}
 		}()
 	}
-	
+
 	// Queue work
 	for _, item := range workItems {
 		workChan <- item
 	}
 	close(workChan)
-	
+
 	// Wait and collect
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 	}()
-	
+
 	for result := range resultsChan {
 		// Find the index from the token
 		for i, token := range tokens {
@@ -583,7 +583,7 @@ func (pfr *ParallelFTReceiver) processTokensParallel(
 			}
 		}
 	}
-	
+
 	return results
 }
 
@@ -603,48 +603,48 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 		TokenStateHash: hashResult.Hash,
 		ProviderMap:    hashResult.ProviderMap,
 	}
-	
+
 	if hashResult.Error != nil {
 		result.Error = fmt.Errorf("hash computation failed: %w", hashResult.Error)
 		return result
 	}
-	
+
 	// Handle new token
 	if item.IsNewToken && item.DownloadResult != nil {
 		if item.DownloadResult.Error != nil {
 			result.Error = fmt.Errorf("download failed: %w", item.DownloadResult.Error)
-			
+
 			// Record failed download for retry
 			pfr.w.RecordFailedFTDownload(
 				b.GetTid(),
 				item.Token.Token,
 				ftInfo.FTName,
 				b.GetSenderDID(),
-				b.GetReceiverDID(),
+				b.GetOwner(),
 				item.DownloadResult.Task.Dir,
 				item.DownloadResult.Error.Error(),
 			)
-			
+
 			return result
 		}
-		
+
 		// Get owner from pre-computed creator map
 		ftOwner, found := tokenCreatorMap[item.Token.Token]
-		
+
 		// If not found in map, use sender's DID as fallback
 		if !found || ftOwner == "" {
-			pfr.log.Debug("Creator not found in batch map, using sender DID as fallback", 
+			pfr.log.Debug("Creator not found in batch map, using sender DID as fallback",
 				"token", item.Token.Token)
 			// Get sender's DID from the block
 			ftOwner = b.GetSenderDID()
 		}
-		
+
 		if ftOwner == "" {
 			result.Error = fmt.Errorf("owner not found - genesis lookup, downloaded data, and fallback all failed")
 			os.RemoveAll(item.DownloadResult.Task.Dir)
 			return result
 		}
-		
+
 		// Create FT token entry
 		ftEntry := FTToken{
 			TokenID:        item.Token.Token,
@@ -658,19 +658,19 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 		}
-		
+
 		// Write to database with minimal locking and retry
 		err := pfr.enhancedDatabaseWrite(FTTokenStorage, &ftEntry)
-		
+
 		if err != nil {
 			result.Error = fmt.Errorf("failed to write token: %w", err)
 			os.RemoveAll(item.DownloadResult.Task.Dir)
 			return result
 		}
-		
+
 		// Cleanup download directory
 		os.RemoveAll(item.DownloadResult.Task.Dir)
-		
+
 		// Merge provider maps if available
 		if item.DownloadResult.Success {
 			result.ProviderMap = item.DownloadResult.ProviderMap
@@ -689,25 +689,25 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 				creatorToUse = gb.GetOwner()
 			}
 		}
-		
+
 		err := pfr.withMinimalLock(func() error {
 			var ftEntry FTToken
 			if err := pfr.w.s.Read(FTTokenStorage, &ftEntry, "token_id=?", item.Token.Token); err != nil {
 				return err
 			}
-			
+
 			// Fix CreatorDID if it's a peer ID (temporary fix for existing bad data)
 			if strings.HasPrefix(ftEntry.CreatorDID, "12D3KooW") && creatorToUse != "" {
-				pfr.log.Info("Fixing CreatorDID from peer ID to DID", 
+				pfr.log.Info("Fixing CreatorDID from peer ID to DID",
 					"token", item.Token.Token,
 					"old_creator", ftEntry.CreatorDID,
 					"new_creator", creatorToUse)
 				ftEntry.CreatorDID = creatorToUse
 			}
-			
+
 			ftEntry.FTName = ftInfo.FTName
 			ftEntry.DID = did
-			
+
 			if senderPeerId != receiverPeerId {
 				ftEntry.TokenStatus = TokenIsPending
 			} else {
@@ -715,7 +715,7 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 			}
 			ftEntry.TransactionID = b.GetTid()
 			ftEntry.TokenStateHash = hashResult.Hash
-			
+
 			// Use retry logic for updates too
 			const maxRetries = 3
 			var updateErr error
@@ -730,20 +730,26 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 			}
 			return updateErr
 		})
-		
+
 		if err != nil {
 			result.Error = fmt.Errorf("failed to update token: %w", err)
 			return result
 		}
 	}
-	
+
 	// Pin the token
 	senderAddress := senderPeerId + "." + b.GetSenderDID()
-	receiverAddress := receiverPeerId + "." + b.GetReceiverDID()
-	
+	receiverAddress := receiverPeerId + "." + b.GetOwner()
+
 	if senderPeerId != receiverPeerId {
-		_, err := pfr.w.Pin(
-			item.Token.Token,
+		tokenIdBuffer := bytes.NewBufferString(item.Token.Token)
+		tokenIdHash, err := pfr.w.Add(tokenIdBuffer, did, OwnerRole)
+		if err != nil {
+			result.Error = fmt.Errorf("failed to add token: %w", err)
+			return result
+		}
+		_, err = pfr.w.Pin(
+			tokenIdHash,
 			OwnerRole,
 			did,
 			b.GetTid(),
@@ -757,8 +763,7 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 			return result
 		}
 	}
-	
-	
+
 	result.Success = true
 	return result
 }
@@ -774,31 +779,31 @@ func (pfr *ParallelFTReceiver) withMinimalLock(fn func() error) error {
 // calculateDynamicWorkers determines optimal workers based on token count and hardware
 func (pfr *ParallelFTReceiver) calculateDynamicWorkers(tokenCount int) int {
 	cpuCount := runtime.NumCPU()
-	
+
 	// Detect if running in virtualized environment (conservative approach)
 	// In virtualized environments, we should be more conservative with concurrency
 	isVirtualized := cpuCount <= 8 // Most VMs have 8 or fewer vCPUs
-	
+
 	// Base calculation for workers
 	var workers int
-	
+
 	switch {
 	case tokenCount < 100:
 		workers = min(8, cpuCount)
 	case tokenCount < 250:
-		workers = min(12, cpuCount * 2)
+		workers = min(12, cpuCount*2)
 	case tokenCount < 500:
-		workers = min(16, cpuCount * 2)
+		workers = min(16, cpuCount*2)
 	case tokenCount < 1000:
-		workers = min(32, cpuCount * 3)
+		workers = min(32, cpuCount*3)
 	case tokenCount < 5000:
-		workers = min(64, cpuCount * 4)
+		workers = min(64, cpuCount*4)
 	case tokenCount < 10000:
-		workers = min(96, cpuCount * 6)
+		workers = min(96, cpuCount*6)
 	default:
-		workers = min(128, cpuCount * 8)
+		workers = min(128, cpuCount*8)
 	}
-	
+
 	// Apply constraints based on environment
 	if isVirtualized {
 		// For virtualized environments (like EC2), be more conservative
@@ -808,7 +813,7 @@ func (pfr *ParallelFTReceiver) calculateDynamicWorkers(tokenCount int) int {
 			// Special case for your 8 vCPU system with 250 tokens
 			maxVirtualizedWorkers = 16
 		}
-		
+
 		if workers > maxVirtualizedWorkers {
 			pfr.log.Debug("Limiting workers for virtualized environment",
 				"cpu_count", cpuCount,
@@ -826,18 +831,18 @@ func (pfr *ParallelFTReceiver) calculateDynamicWorkers(tokenCount int) int {
 			workers = maxWorkers
 		}
 	}
-	
+
 	// Ensure minimum workers for efficiency
 	minWorkers := max(8, tokenCount/100) // At least 1 worker per 100 tokens
 	if workers < minWorkers {
 		workers = minWorkers
 	}
-	
+
 	// Final safety check
 	if workers > 128 {
 		workers = 128 // Absolute maximum to prevent resource exhaustion
 	}
-	
+
 	return workers
 }
 
@@ -849,7 +854,7 @@ func min(a, b int) int {
 	return b
 }
 
-// max returns the maximum of two integers  
+// max returns the maximum of two integers
 func max(a, b int) int {
 	if a > b {
 		return a
@@ -874,12 +879,12 @@ func (pfr *ParallelFTReceiver) handleProviderDetailsAsync(
 	if len(providerMaps) == 0 {
 		return nil
 	}
-	
+
 	// Use async processing for large batches
 	if len(providerMaps) >= 100 && pfr.w.asyncProviderMgr != nil {
 		return pfr.w.asyncProviderMgr.SubmitProviderDetails(providerMaps, transactionID)
 	}
-	
+
 	// Fallback to synchronous batch write
 	return pfr.w.AddProviderDetailsBatch(providerMaps)
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -122,7 +123,7 @@ func tcMarshal(str string, m interface{}) (string, error) {
 	case float64:
 		// TokenValue (key: "10") is a float value and needs to have a precision of 5
 		// in the output dump file
-		str = str + fmt.Sprintf("%.5f", mt)
+		str = str + fmt.Sprintf("%.*f", math.MaxDecimalPlaces, mt)
 	case interface{}:
 		str, err = tcMarshal(str, mt)
 		if err != nil {
@@ -146,10 +147,10 @@ func (cmd *Command) dumpTokenChain() {
 			return
 		}
 	}
-	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.token)
 
-	if len(cmd.token) != 46 || !strings.HasPrefix(cmd.token, "Qm") || !isAlphanumeric {
-		cmd.log.Error("Invalid token")
+	elems := strings.Split(cmd.token, "_")
+	if len(elems) < 2 {
+		cmd.log.Error(fmt.Sprintf("Invalid token: %v", cmd.token))
 		return
 	}
 

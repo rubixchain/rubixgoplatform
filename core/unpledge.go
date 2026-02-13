@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 
@@ -163,6 +164,13 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 		}
 	}
 
+	tokenInfo, err := c.w.ReadToken(pledgeToken)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to read token value of token:%v", pledgeToken)
+		c.log.Error(errMsg)
+		return "", "", errors.New(errMsg)
+	}
+
 	pledgeID, err = b.GetBlockID(pledgeToken)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed while unpledging token %v, unable to fetch block ID", pledgeToken)
@@ -188,13 +196,15 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 	currentTime := time.Now()
 
 	tcb := block.TokenChainBlock{
-		TransactionType: block.TokenUnpledgedType,
-		TokenOwner:      quorumDID,
+		BlockType:  block.TokenUnpledgedType,
+		TokenOwner: quorumDID,
 		TransInfo: &block.TransInfo{
 			Comment: "Token is un pledged at " + currentTime.String(),
 			Tokens:  tsb,
 		},
-		Epoch: int(currentTime.Unix()),
+		TokenValue: tokenInfo.TokenValue,
+		Epoch:      int(currentTime.Unix()),
+		Version:    constants.BlockVersion,
 	}
 
 	nb := block.CreateNewBlock(ctcb, &tcb)
@@ -229,7 +239,7 @@ func unpledgeToken(c *Core, pledgeToken string, pledgeTokenType int, quorumDID s
 	}
 	publishingTxn := &model.PubSubTxnInfo{
 		BlockHash:    blockHash,
-		TxnType:      tcb.TransactionType,
+		BlockType:    tcb.BlockType,
 		AssetType:    RBTTokenType,
 		PublisherDID: dc.GetDID(),
 		TxnBlock:     nb.GetBlock(),

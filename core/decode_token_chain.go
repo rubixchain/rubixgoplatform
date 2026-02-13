@@ -14,10 +14,9 @@ var keyMapping = map[string]string{
 	"3":     "TCTokenOwnerKey",
 	"4":     "TCGenesisBlockKey",
 	"5":     "TCTransInfoKey",
-	"6":     "TCSmartContractKey",
 	"7":     "TCQuorumSignatureKey",
 	"8":     "TCPledgeDetailsKey",
-	"9":     "TCSmartContractDataKey",
+	"9":     "TCDataKey",
 	"10":    "TCTokenValueKey",
 	"11":    "TCChildTokensKey",
 	"12":    "TCSenderSignatureKey",
@@ -231,7 +230,7 @@ func tcMarshal(str string, m interface{}) (string, error) {
 	case float64:
 		// TokenValue (key: "10") is a float value and needs to have a precision of 5
 		// in the output dump file
-		str = str + fmt.Sprintf("%.5f", mt)
+		str = str + fmt.Sprintf("%.*f", MaxDecimalPlaces, mt)
 	case interface{}:
 		str, err = tcMarshal(str, mt)
 		if err != nil {

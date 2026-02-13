@@ -1,12 +1,17 @@
 package core
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
 type MultiPinCheckRes struct {
@@ -34,16 +39,34 @@ func (c *Core) removeStrings(strings []string, targets []string) []string {
 
 // Method checks for multiple Pins on token
 // if there are multiple owners the list of owners is returned back
-func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPeerId string, results []MultiPinCheckRes, wg *sync.WaitGroup) {
-
+// IMPORTANT: tokenID represents the "<token level>_<token number>" structure here.
+// It shouldn't be confused with token hash
+func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiverPeerId string, results []MultiPinCheckRes, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var result MultiPinCheckRes
-	result.Token = token
+
+	// Convert tokenID to token hash
+	tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(tokenID), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	if err != nil {
+		errMsg := fmt.Sprintf(
+			"pinCheck: unable to get IPFS hash for tokenID: %v, ensure tokenID being passed has correct structure, err: %v",
+			tokenID,
+			err,
+		)
+		c.log.Debug("Skipping multi-pin check in trusted network mode", "token", tokenID)
+		result.Status = false
+		result.Owners = nil
+		result.Error = errors.New(errMsg)
+		results[index] = result
+		return
+	}
+
+	result.Token = tokenHash
 	var owners []string
 	
 	// Skip DHT check in trusted network mode
 	if c.cfg.CfgData.TrustedNetwork {
-		c.log.Debug("Skipping multi-pin check in trusted network mode", "token", token)
+		c.log.Debug("Skipping multi-pin check in trusted network mode", "token", tokenID)
 		result.Status = false
 		result.Owners = []string{senderPeerId} // Assume sender owns it
 		result.Error = nil
@@ -51,7 +74,7 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 		return
 	}
 	
-	provList, err := c.GetDHTddrs(token)
+	provList, err := c.GetDHTddrs(tokenID)
 	if err != nil {
 		c.log.Error("Error triggered while fetching providers ", "error", err)
 		result.Status = false
@@ -112,7 +135,7 @@ func (c *Core) pinCheck(token string, index int, senderPeerId string, receiverPe
 					continue
 				}
 				req := PinStatusReq{
-					Token: token,
+					Token: tokenID,
 				}
 				var psr PinStatusRes
 				err = p.SendJSONRequest("POST", APIDhtProviderCheck, nil, &req, &psr, true)

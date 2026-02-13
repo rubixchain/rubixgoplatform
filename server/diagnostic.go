@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -16,9 +17,10 @@ func (s *Server) APIDumpTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(dr.Token)
-	if len(dr.Token) != 46 || !strings.HasPrefix(dr.Token, "Qm") || !is_alphanumeric {
-		s.log.Error("Invalid token")
+
+	elems := strings.Split(dr.Token, "_")
+	if len(elems) < 2 {
+		s.log.Error(fmt.Sprintf("Invalid token: %v", dr.Token))
 		return s.BasicResponse(req, false, "Invalid token", nil)
 	}
 	drep := s.c.DumpTokenChain(&dr)
@@ -42,7 +44,7 @@ func (s *Server) APIDumpFTTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 // @Accept       json
 // @Produce      json
 // @Param        tokenID	query	string	true	"FT Token ID"
-// @Success      200  {object}  model.GetFTTokenChainReply "Successful response with token chain data"
+// @Success      200  {object}  model.GetTokenChainResponce "Successful response with token chain data"
 // @Router       /api/get-ft-token-chain [get]
 func (s *Server) APIGetFTTokenchain(req *ensweb.Request) *ensweb.Result {
 	TokenID := s.GetQuerry(req, "tokenID")

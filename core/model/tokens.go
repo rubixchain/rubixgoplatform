@@ -52,7 +52,6 @@ type GetAccountInfo struct {
 
 type DIDAccountInfo struct {
 	DID        string  `json:"did"`
-	DIDType    int     `json:"did_type"`
 	RBTAmount  float64 `json:"rbt_amount"`
 	PledgedRBT float64 `json:"pledged_rbt"`
 	LockedRBT  float64 `json:"locked_rbt"`
@@ -137,4 +136,9 @@ type TokenChainDetailsEvent struct {
 	PublisherPeerID string                 `json:"publisher_peer_id"`
 	TokenDetails    []SendTokenDetailsInfo `json:"token_details"`
 	BatchNumber     int                    `json:"batch_number"`
+}
+
+type LocalTestTokenInfo struct {
+	Attribute string `gorm:"column:attribute;primaryKey"`
+	Value     int    `gorm:"column:value"`
 }

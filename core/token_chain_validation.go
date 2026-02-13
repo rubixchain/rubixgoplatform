@@ -1,15 +1,18 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/rac"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -390,40 +393,69 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 	}
 
 	parentTokenInfo, err := c.w.ReadToken(parentTokenId)
+	var parentTokenType int
+
 	if err != nil {
-		b, err := c.getFromIPFS(parentTokenId)
+		parentTokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(parentTokenId), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		if err != nil {
+			return response, fmt.Errorf("Unable to do IPFS Add operation on Token: %v", err)
+		}
+
+		b, err := c.getFromIPFS(parentTokenHash)
 		if err != nil {
 			c.log.Error("failed to get parent token detials from ipfs", "err", err, "token", parentTokenId)
 			response.Message = "failed to get parent token detials from ipfs"
 			return response, err
 		}
 
-		_, iswholeToken, _ := token.CheckWholeToken(string(b), c.testNet)
-		tokenType := token.RBTTokenType
-		tokenValue := float64(1)
-		tokenOwner := ""
-		if !iswholeToken {
-			blk := util.StrToHex(string(b))
-			rb, err := rac.InitRacBlock(blk, nil)
+		iswholeToken := token.CheckWholeToken(string(b))
+
+		var tt int
+		var tv float64
+		var ownerDID string
+
+		if iswholeToken {
+			tv = float64(1)
+			if c.testNet {
+				tt = token.TestTokenType
+			} else {
+				tt = token.RBTTokenType
+			}
+		} else {
+			var err error
+			tv, err = parts.GetTokenValueFromIndexedID(string(b))
 			if err != nil {
-				c.log.Error("invalid token, invalid rac block", "err", err)
-				response.Message = "invalid token, invalid rac block"
+				c.log.Error("failed while attempting fetch the value for part token", "err", err)
+				response.Message = "failed to fetch part token value"
 				return response, err
 			}
-			tokenType = rac.RacType2TokenType(rb.GetRacType())
-			if c.TokenType(PartString) == tokenType {
-				tokenValue = rb.GetRacValue()
+			if c.testNet {
+				tt = token.TestPartTokenType
+			} else {
+				tt = token.PartTokenType
 			}
-			tokenOwner = rb.GetDID()
 		}
+
+		genesisBlock := c.w.GetGenesisTokenBlock(parentTokenId, tt)
+		if genesisBlock != nil {
+			ownerDID = genesisBlock.GetOwner()
+		}
+
 		parentTokenInfo = &wallet.Token{
 			TokenID:     parentTokenId,
-			TokenValue:  tokenValue,
+			TokenValue:  tv,
 			TokenStatus: wallet.TokenIsBurnt,
-			DID:         tokenOwner,
+			DID:         ownerDID,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}
+		parentTokenType = tt
+	} else {
+		typeString := RBTString
+		if parentTokenInfo.TokenValue < 1.0 {
+			typeString = PartString
+		}
+		parentTokenType = c.TokenType(typeString)
 	}
 
 	if parentTokenInfo.TokenStatus != wallet.TokenIsBurnt {
@@ -431,11 +463,6 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 		c.log.Error("msg", response.Message)
 		return response, err
 	}
-	typeString := RBTString
-	if parentTokenInfo.TokenValue < 1.0 {
-		typeString = PartString
-	}
-	parentTokenType := c.TokenType(typeString)
 
 	//Get latest block in the token chain
 	parentTokenLatestBlock := c.w.GetLatestTokenBlock(parentTokenId, parentTokenType)
@@ -449,12 +476,12 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 	if parentTokenType == c.TokenType(PartString) {
 		if parentTokenInfo.ParentTokenID == "" {
 			genesisBlock := c.w.GetGenesisTokenBlock(parentTokenId, parentTokenType)
-			grandParentToken, _, err := genesisBlock.GetParentDetials(parentTokenId)
+			parentToken, err := genesisBlock.GetParentDetials(parentTokenId)
 			if err != nil {
 				c.log.Error("failed to get grand parent tokens to validate")
 			}
-			c.log.Debug("grand parent token:", grandParentToken)
-			parentTokenInfo.ParentTokenID = grandParentToken
+			c.log.Debug("grand parent token:", parentToken)
+			parentTokenInfo.ParentTokenID = parentToken
 		}
 		response, err = c.ValidateParentTokenLatestBlock(parentTokenInfo.ParentTokenID, userDID)
 		if err != nil {
@@ -541,18 +568,8 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 		return response, fmt.Errorf("invalid sender, sender did does not match")
 	}
 
-	var senderDIDType int
-	//sign type = 0, means it is a BIP signature and the did was created in light mode
-	//sign type = 1, means it is an NLSS-based signature and the did was created using NLSS scheme
-	//and thus the did could be initialised in basic mode to fetch the public key
-	if senderSign.SignType == 0 {
-		senderDIDType = did.LiteDIDMode
-	} else {
-		senderDIDType = did.BasicDIDMode
-	}
-
 	//Initialise sender did
-	didCrypto, err := c.InitialiseDID(sender, senderDIDType)
+	didCrypto, err := c.InitialiseDID(sender)
 	if err != nil {
 		c.log.Error("failed to initialise sender did:", sender)
 		response.Message = "failed to initialise sender did"
@@ -560,20 +577,16 @@ func (c *Core) ValidateSender(b *block.Block) (*model.BasicResponse, error) {
 	}
 
 	//sender signature verification
-	if senderDIDType == did.LiteDIDMode {
-		response.Status, err = didCrypto.PvtVerify([]byte(senderSign.Hash), util.StrToHex(senderSign.PrivateSign))
-		if err != nil {
+	response.Status, err = didCrypto.PvtVerify([]byte(senderSign.Hash), util.StrToHex(senderSign.Signature))
+	if err != nil {
+		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
+			c.log.Error("NLSS DID detected at SENDER role during validation. NLSS DIDs are DEPRECATED.", "sender", sender, "error", err)
+			response.Message = "NLSS DID detected at SENDER role. Please use BIP DID"
+		} else {
 			c.log.Error("failed to verify sender:", sender, "err", err)
 			response.Message = "invalid sender"
-			return response, err
 		}
-	} else {
-		response.Status, err = didCrypto.NlssVerify(senderSign.Hash, util.StrToHex(senderSign.NLSSShare), util.StrToHex(senderSign.PrivateSign))
-		if err != nil {
-			c.log.Error("failed to verify sender:", sender, "err", err)
-			response.Message = "invalid sender"
-			return response, err
-		}
+		return response, err
 	}
 
 	response.Message = "sender validated successfully"
@@ -642,17 +655,15 @@ func (c *Core) ValidateQuorums(b *block.Block, userDID string) (*model.BasicResp
 			continue
 		}
 		var verificationStatus bool
-		if qrm.SignType == "0" { //qrm sign type = 0, means qrm signature is BIP sign and DID is created in Lite mode
-			verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(signedData), util.StrToHex(qrm.PrivSignature))
-			if err != nil {
-				c.log.Error("failed signature verification for quorum:", qrm.DID)
-			}
-		} else {
-			verificationStatus, err = qrmDIDCrypto.NlssVerify((signedData), util.StrToHex(qrm.Signature), util.StrToHex(qrm.PrivSignature))
-			if err != nil {
-				c.log.Error("failed signature verification for quorum:", qrm.DID)
+		verificationStatus, err = qrmDIDCrypto.PvtVerify([]byte(signedData), util.StrToHex(qrm.Signature))
+		if err != nil {
+			if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
+				c.log.Error("NLSS DID detected at QUORUM role during validation. NLSS DIDs are DEPRECATED.", "quorum", qrm.DID, "error", err)
+			} else {
+				c.log.Error("failed signature verification for quorum:", qrm.DID, "err", err)
 			}
 		}
+
 		response.Status = response.Status && verificationStatus
 	}
 

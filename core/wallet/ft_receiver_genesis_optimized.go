@@ -70,7 +70,7 @@ func (ggo *GenesisGroupOptimizer) GroupTokensByGenesis(tokens []contract.TokenIn
 		genesisTokenID := tokenID // Default to self
 		
 		// Check if this token has a parent (is a part token)
-		parentID, _, err := genesisBlock.GetParentDetials(tokenID)
+		parentID, err := genesisBlock.GetParentDetials(tokenID)
 		if err == nil && parentID != "" {
 			genesisTokenID = parentID
 		}

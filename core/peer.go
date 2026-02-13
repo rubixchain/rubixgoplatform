@@ -10,7 +10,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -23,7 +22,6 @@ const (
 type PeerMap struct {
 	PeerID    string `json:"peer_id"`
 	DID       string `json:"did"`
-	DIDType   int    `json:"did_type"`
 	Signature []byte `json:"signature"`
 	Time      string `json:"time"`
 }
@@ -59,15 +57,23 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 		return
 	}
 	h := util.CalculateHashString(m.PeerID+m.DID+m.Time, "SHA3-256")
-	dc, err := c.InitialiseDID(m.DID, m.DIDType)
+	dc, err := c.InitialiseDID(m.DID)
 	if err != nil {
 		return
 	}
 	st, err := dc.PvtVerify([]byte(h), m.Signature)
-	if err != nil || !st {
+	if err != nil {
+		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
+			c.log.Error("NLSS DID detected during peer update. NLSS DIDs are DEPRECATED.", "did", m.DID, "error", err)
+		} else {
+			c.log.Error("failed signature verification for peer update", "did", m.DID, "err", err)
+		}
 		return
 	}
-	c.w.AddDIDPeerMap(m.DID, m.PeerID, m.DIDType)
+	if !st {
+		return
+	}
+	c.w.AddDIDPeerMap(m.DID, m.PeerID)
 }
 
 func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
@@ -173,11 +179,7 @@ func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
 }
 
 func (c *Core) AddPeerDetails(peerDetail wallet.DIDPeerMap) error {
-	if peerDetail.DIDType == nil {
-		c.log.Error("DIDType is nil in peerDetail", "did", peerDetail.DID)
-		return fmt.Errorf("DIDType cannot be nil")
-	}
-	err := c.w.AddDIDPeerMap(peerDetail.DID, peerDetail.PeerID, *peerDetail.DIDType)
+	err := c.w.AddDIDPeerMap(peerDetail.DID, peerDetail.PeerID)
 	if err != nil {
 		c.log.Error("Failed to add PeerDetails to DIDPeerTable", "err", err)
 		return err
@@ -193,7 +195,6 @@ func (c *Core) isDIDInArbitaryAddr(peerDID string) (bool, *wallet.DIDPeerMap, er
 		"12D3KooWC5fHUg2yzAHydgenodN52MYPKhpK4DKRfS8TSm3idSUV.bafybmif5qnkfnkkrffxvoofah3fjzkmieohjbgyte35rrjrn3goufaiykq",
 		"12D3KooWDd7c7DAVb38a9vfCFpqxh5nHbDQ4CYjMJuFfBgzpiagK.bafybmie4iynumz2v3obbtkqirxrejjoljjs3l76frvl43wgalqqgprze6q"}
 
-	basicDID := did.BasicDIDMode
 	for _, addr := range arbitaryAddr {
 		// Split into two parts: [PeerID, DID]
 		arbPeerID, arbDID, ok := util.ParseAddress(addr)
@@ -204,9 +205,8 @@ func (c *Core) isDIDInArbitaryAddr(peerDID string) (bool, *wallet.DIDPeerMap, er
 		// Compare the arbitrary DID (second part) with the peerDID
 		if arbDID == peerDID {
 			peer := wallet.DIDPeerMap{
-				DID:     arbDID,
-				PeerID:  arbPeerID,
-				DIDType: &basicDID,
+				DID:    arbDID,
+				PeerID: arbPeerID,
 			}
 			err := c.AddPeerDetails(peer)
 			if err != nil {
@@ -241,14 +241,18 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 
 	// verify the signature
 	h := util.CalculateHashString(stalePeer.PeerID+stalePeer.DID+stalePeer.Time, "SHA3-256")
-	dc, err := c.InitialiseDID(stalePeer.DID, stalePeer.DIDType)
+	dc, err := c.InitialiseDID(stalePeer.DID)
 	if err != nil {
 		c.log.Error("failed to initialise stale peer")
 		return
 	}
 	st, err := dc.PvtVerify([]byte(h), stalePeer.Signature)
 	if err != nil || !st {
-		c.log.Error("failed to remove stale peer, signature verification failed, err ", err)
+		if err != nil && (strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format")) {
+			c.log.Error("NLSS DID detected during stale peer removal. NLSS DIDs are DEPRECATED.", "did", stalePeer.DID, "error", err)
+		} else {
+			c.log.Error("failed to remove stale peer, signature verification failed, err ", err)
+		}
 		return
 	}
 
