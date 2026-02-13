@@ -268,34 +268,14 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 			}
 			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
 			if err != nil {
-				//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
-				//we should add it into double spend tokens table
-				if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-					strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
-					//Add token into double spend tokens table
-					doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-						TokenID:        tokenId,
-						AssetType:      newEvent.AssetType,
-						TokenType:      tokenType,
-						PublisherDID:   newEvent.PublisherDID,
-						ClaimedOwnerI:  "",
-						ClaimedOwnerII: txnBlockOwner,
-						ErrorMessage:   fmt.Sprintf("tokenchian is wrong for the token%s is wrong,error %v", tokenId, err),
+				handled, handleErr := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, "", txnBlockOwner, fmt.Sprintf("tokenchian is wrong for the token%s is wrong,error %v", tokenId, err))
+				if handled {
+					if handleErr != nil {
+						return handleErr
 					}
-					// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
-					err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-					if err != nil {
-						errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", tokenId, err)
-						c.log.Error(errMsg)
-						return err
-					}
-					errMsg := fmt.Sprintf("token%s has been added to double spent token's table,error%v", tokenId, err)
-					c.log.Error(errMsg)
 					return nil
-
 				}
 				return fmt.Errorf("failed to sync the token chain for the token%s", tokenId)
-
 			}
 			c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 			return nil
@@ -350,47 +330,25 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 				}
 				err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
 				if err != nil {
-					//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
-					//we should add it into double spend tokens table
-					if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-						strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
-						//Add token into double spend tokens table
-						doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-							TokenID:        tokenId,
-							AssetType:      newEvent.AssetType,
-							TokenType:      tokenType,
-							PublisherDID:   newEvent.PublisherDID,
-							ClaimedOwnerI:  previousOwner,
-							ClaimedOwnerII: txnBlockOwner,
-							ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token or same did would have double spent the token,dual ownership issue", previousOwner, txnBlockOwner),
-						}
-						// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
-						err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-						if err != nil {
-							errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", tokenId, err)
-							c.log.Error(errMsg)
-						}
-						c.log.Error("token has been added to double spend tokens table, tokenID", tokenId)
+					handled, _ := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("%s, %s both dids are claiming the same token or same did would have double spent the token,dual ownership issue", previousOwner, txnBlockOwner))
+					if handled {
 						return nil
-
-					} else {
-						c.log.Error("Failed to sync chain", "token", tokenId, "err", err)
-						info := &model.FailedToSyncTokenDetailsInfo{
-							TokenID:   tokenId,
-							TokenType: tokenType,
-							AssetType: newEvent.AssetType,
-							Did:       newEvent.PublisherDID,
-							Reason:    fmt.Sprintf("failed to sync chain,err: %v", err),
-						}
-
-						if err := c.w.AddFailedTokensToTable(info); err != nil {
-							c.log.Error("Failed to record failed token sync in DB", "token", tokenId, "error", err)
-						} else {
-							c.log.Info("Recorded failed token sync in DB", "token", tokenId)
-							return nil
-						}
+					}
+					c.log.Error("Failed to sync chain", "token", tokenId, "err", err)
+					info := &model.FailedToSyncTokenDetailsInfo{
+						TokenID:   tokenId,
+						TokenType: tokenType,
+						AssetType: newEvent.AssetType,
+						Did:       newEvent.PublisherDID,
+						Reason:    fmt.Sprintf("failed to sync chain,err: %v", err),
 					}
 
+					if err := c.w.AddFailedTokensToTable(info); err != nil {
+						c.log.Error("Failed to record failed token sync in DB", "token", tokenId, "error", err)
+					} else {
+						c.log.Info("Recorded failed token sync in DB", "token", tokenId)
+						return nil
+					}
 				}
 				c.log.Info("Transfer transaction processed successfully", "tokenId", tokenId, "blockHash", newEvent.BlockHash)
 				return nil
@@ -451,31 +409,10 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		// Do all 3 checks, If any check fails, handle the failure here also just before adding the block to leveldb.
 		err = c.ValidateIncomingTokenBlock(*txnBlock, latestTokenBlock, tokenId, p, newEvent.AssetType)
 		if err != nil {
-			//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
-			//we should add it into double spend tokens table
-			if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-				strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
-				//Add token into double spend tokens table
-				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-					TokenID:        tokenId,
-					AssetType:      newEvent.AssetType,
-					TokenType:      tokenType,
-					PublisherDID:   newEvent.PublisherDID,
-					ClaimedOwnerI:  previousOwner,
-					ClaimedOwnerII: txnBlockOwner,
-					ErrorMessage:   fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlockID, err),
-				}
-				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
-				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-				if err != nil {
-					errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", tokenId, err)
-					c.log.Error(errMsg)
-				}
-				c.log.Info("token has been added to double spend token's table", tokenId, "error", err)
+			handled, _ := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlockID, err))
+			if handled {
 				return nil
-
 			}
-
 		}
 
 		if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
@@ -565,34 +502,14 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 		}
 		err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
 		if err != nil {
-			//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
-			//we should add it into double spend tokens table
-			if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-				strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
-				//Add token into double spend tokens table
-				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-					TokenID:        tokenId,
-					AssetType:      newEvent.AssetType,
-					TokenType:      tokenType,
-					PublisherDID:   newEvent.PublisherDID,
-					ClaimedOwnerI:  "",
-					ClaimedOwnerII: txnBlockOwner,
-					ErrorMessage:   fmt.Sprintf("tokenchian is wrong for the token%s is wrong,error %v", tokenId, err),
+			handled, handleErr := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, "", txnBlockOwner, fmt.Sprintf("tokenchian is wrong for the token%s is wrong,error %v", tokenId, err))
+			if handled {
+				if handleErr != nil {
+					return handleErr
 				}
-				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
-				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-				if err != nil {
-					errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", tokenId, err)
-					c.log.Error(errMsg)
-					return err
-				}
-				errMsg := fmt.Sprintf("token%s has been added to double spent token's table,error%v", tokenId, err)
-				c.log.Error(errMsg)
 				return nil
-
 			}
 			return fmt.Errorf("failed to sync the token chain for the token%s", tokenId)
-
 		}
 		c.log.Info("execution block processed successfully", "sc hash ", tokenId, "blockHash ", newEvent.BlockHash)
 		return nil
@@ -650,47 +567,25 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 			}
 			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
 			if err != nil {
-				//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
-				//we should add it into double spend tokens table
-				if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-					strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
-					//Add token into double spend tokens table
-					doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-						TokenID:        tokenId,
-						AssetType:      newEvent.AssetType,
-						TokenType:      tokenType,
-						PublisherDID:   newEvent.PublisherDID,
-						ClaimedOwnerI:  previousOwner,
-						ClaimedOwnerII: txnBlockOwner,
-						ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token or same did would have double spent the token,dual ownership issue", previousOwner, txnBlockOwner),
-					}
-					// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
-					err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-					if err != nil {
-						errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", tokenId, err)
-						c.log.Error(errMsg)
-					}
-					c.log.Error("token has been added to double spend tokens table, tokenID", tokenId)
+				handled, _ := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("%s, %s both dids are claiming the same token or same did would have double spent the token,dual ownership issue", previousOwner, txnBlockOwner))
+				if handled {
 					return nil
-
-				} else {
-					c.log.Error("Failed to sync chain", "token", tokenId, "err", err)
-					info := &model.FailedToSyncTokenDetailsInfo{
-						TokenID:   tokenId,
-						TokenType: tokenType,
-						AssetType: newEvent.AssetType,
-						Did:       newEvent.PublisherDID,
-						Reason:    fmt.Sprintf("failed to sync chain,err: %v", err),
-					}
-
-					if err := c.w.AddFailedTokensToTable(info); err != nil {
-						c.log.Error("Failed to record failed token sync in DB", "token", tokenId, "error", err)
-					} else {
-						c.log.Info("Recorded failed token sync in DB", "token", tokenId)
-						return nil
-					}
+				}
+				c.log.Error("Failed to sync chain", "token", tokenId, "err", err)
+				info := &model.FailedToSyncTokenDetailsInfo{
+					TokenID:   tokenId,
+					TokenType: tokenType,
+					AssetType: newEvent.AssetType,
+					Did:       newEvent.PublisherDID,
+					Reason:    fmt.Sprintf("failed to sync chain,err: %v", err),
 				}
 
+				if err := c.w.AddFailedTokensToTable(info); err != nil {
+					c.log.Error("Failed to record failed token sync in DB", "token", tokenId, "error", err)
+				} else {
+					c.log.Info("Recorded failed token sync in DB", "token", tokenId)
+					return nil
+				}
 			}
 			// check if token exists in postgres table, add if doesn't
 			err := c.ReadTokenContentFromPSQL(tokenId, newEvent.AssetType)
@@ -753,31 +648,10 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	// Do all 3 checks, If any check fails, handle the failure here also just before adding the block to leveldb.
 	err = c.ValidateIncomingTokenBlock(*txnBlock, latestTokenBlock, tokenId, p, newEvent.AssetType)
 	if err != nil {
-		//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
-		//we should add it into double spend tokens table
-		if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-			strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") || strings.Contains(err.Error(), "signature validation error") || strings.Contains(err.Error(), "invalid block signature for token") {
-			//Add token into double spend tokens table
-			doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-				TokenID:        tokenId,
-				AssetType:      newEvent.AssetType,
-				TokenType:      tokenType,
-				PublisherDID:   newEvent.PublisherDID,
-				ClaimedOwnerI:  previousOwner,
-				ClaimedOwnerII: txnBlockOwner,
-				ErrorMessage:   fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlockID, err),
-			}
-			// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
-			err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-			if err != nil {
-				errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", tokenId, err)
-				c.log.Error(errMsg)
-			}
-			c.log.Info("token has been added to double spend token's table", tokenId, "error", err)
+		handled, _ := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlockID, err))
+		if handled {
 			return nil
-
 		}
-
 	}
 	// Add validated block to contract chain
 	if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {

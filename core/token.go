@@ -1065,27 +1065,9 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					defer peer.Close()
 
 					if err := c.SyncFullTokenChainForFullNode(peer, token); err != nil {
-						//if err contains, previous blockID of the blk which is getting added is not matching with the blockID which is present,
-						//we should add it into double spend tokens table
-						if strings.Contains(err.Error(), "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
-							strings.Contains(err.Error(), "Owner of the latest blockID is not matchig with") {
-							//Add token into double spend tokens table
-							doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-								TokenID:        detail.Token,
-								AssetType:      detail.AssetType,
-								TokenType:      detail.TokenType,
-								PublisherDID:   detail.PublisherDid,
-								ClaimedOwnerI:  existingBlockOwnerDID,
-								ClaimedOwnerII: detail.PublisherDid,
-								ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
-							}
-							// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
-							err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-							if err != nil {
-								errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
-								c.log.Error(errMsg)
-							}
-
+						handled, _ := c.HandleSyncErrorAsDoubleSpent(err, detail.Token, detail.AssetType, detail.TokenType, detail.PublisherDid, existingBlockOwnerDID, detail.PublisherDid, fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid))
+						if handled {
+							// double-spend case already logged and stored in HandleSyncErrorAsDoubleSpent
 						} else {
 							c.log.Error("Failed to sync chain", "token", token.TokenID, "err", err)
 							info := &model.FailedToSyncTokenDetailsInfo{
@@ -1102,7 +1084,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 								c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
 							}
 						}
-
 					}
 					//if it is a part RBT Token, check how many child tokens exist for its parent token, if there are more than 2 add it in a table
 					if detail.AssetType == RBTTokenType {
@@ -1487,7 +1468,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 			}
 
 			latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
-		
+
 			err = c.ValidateIncomingTokenBlock(*blk, latestBlock, tokenSyncInfo.TokenID, p, tokenSyncInfo.AssetType)
 			if err != nil {
 				return err
@@ -3099,6 +3080,44 @@ func (c *Core) ReadTokenFromFullnodeTokensTable(assetType int, tokenId string) (
 		c.log.Error("invalid asset type")
 		return 0, "", "", fmt.Errorf("invalid asset type")
 	}
+}
+
+// IsDoubleSpendOrValidationError returns true if err indicates a double-spend or block validation
+// failure (chain mismatch, owner mismatch, or signature error).
+func IsDoubleSpendOrValidationError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
+		strings.Contains(s, "Owner of the latest blockID is not matchig with") ||
+		strings.Contains(s, "signature validation error") ||
+		strings.Contains(s, "invalid block signature for token")
+}
+
+// HandleSyncErrorAsDoubleSpent stores double-spent token info and logs when syncOrValidationErr
+// is a double-spend/validation error. Returns (true, nil) when handled and stored, (true, storeErr)
+// when storage failed, and (false, syncOrValidationErr) when the error is not a double-spend type.
+func (c *Core) HandleSyncErrorAsDoubleSpent(syncOrValidationErr error, tokenId string, assetType, tokenType int, publisherDID, claimedOwnerI, claimedOwnerII, errMessage string) (handled bool, retErr error) {
+	if !IsDoubleSpendOrValidationError(syncOrValidationErr) {
+		return false, syncOrValidationErr
+	}
+	info := &model.DoubleSpentTokenInfo{
+		TokenID:        tokenId,
+		AssetType:      assetType,
+		TokenType:      tokenType,
+		PublisherDID:   publisherDID,
+		ClaimedOwnerI:  claimedOwnerI,
+		ClaimedOwnerII: claimedOwnerII,
+		ErrorMessage:   errMessage,
+	}
+	storeErr := c.StoreDoubleSpentTokenInfo(info)
+	if storeErr != nil {
+		c.log.Error("failed to update double spent token", "token", tokenId, "err", storeErr)
+		return true, storeErr
+	}
+	c.log.Error("token has been added to double spent token's table", "token", tokenId, "error", syncOrValidationErr)
+	return true, nil
 }
 
 // Store double spent tokens in fullnode DB for later analysis
