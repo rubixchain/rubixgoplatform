@@ -89,7 +89,6 @@ func (c *Core) notifyExplorer(txnEvent *model.PubSubTxnInfo, txnBlock *block.Blo
 	// --- DEBUG LOG START ---
 	c.log.Info("🚀 Preparing Explorer Notification",
 		"blockHash", txnEvent.BlockHash,
-		"txnType", txnEvent.TxnType,
 		"assetType", txnEvent.AssetType)
 	// --- DEBUG LOG END ---
 
@@ -129,7 +128,6 @@ func (c *Core) notifyExplorer(txnEvent *model.PubSubTxnInfo, txnBlock *block.Blo
 	explorerEvent := &model.NotifyExplorer{
 		BlockHash:         txnEvent.BlockHash,
 		TransactionID:     txnEvent.TransactionID,
-		TxnType:           txnEvent.TxnType,
 		AssetType:         txnEvent.AssetType,
 		PublisherDID:      txnEvent.PublisherDID,
 		ReceiverDID:       txnEvent.ReceiverDID,
