@@ -211,8 +211,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 
 	}
 
-	localTokenLevel := c.w.GetLocalTokenLevel()
-
 	var startTokenNumber int
 	var finalTokenNumber int
 
@@ -225,8 +223,14 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 	finalTokenNumber = startTokenNumber + num
 	currentTime := time.Now()
 
-	for tokenNumber := startTokenNumber; tokenNumber < finalTokenNumber; tokenNumber++ {
-		id, err := c.getTokenIDForLocalTestTokens(localTokenLevel, tokenNumber, did)
+	// Each global index maps to (tokenLevel, numInLevel) per TokenMap: level 10000 = TokenMap 0 (56 tokens), 10001 = TokenMap 1 (4300000), etc.
+	for globalIndex := startTokenNumber; globalIndex < finalTokenNumber; globalIndex++ {
+		tokenLevel, numInLevel, err := token.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
+		if err != nil {
+			c.log.Error("Failed to get token level and number for global index", "globalIndex", globalIndex, "err", err)
+			return err
+		}
+		id, err := c.getTokenIDForLocalTestTokens(tokenLevel, numInLevel, did)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
