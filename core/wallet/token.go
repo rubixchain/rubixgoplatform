@@ -2220,10 +2220,6 @@ const LocalTestTokenInfo_TokenLevel_Attr = "token_level"
 const LocalTestTokenInfo_TokenNumber_Attr = "token_number"
 const LocalTestTokenInfo_TokenLevel_Value int = 10000
 
-func (w *Wallet) GetLocalTokenLevel() int {
-	return LocalTestTokenInfo_TokenLevel_Value
-}
-
 func (w *Wallet) GetLocalTokenNumber() (int, error) {
 	var localTestTokenInfo *model.LocalTestTokenInfo
 
