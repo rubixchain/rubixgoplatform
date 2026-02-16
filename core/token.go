@@ -88,14 +88,6 @@ type PubSubEnvelope struct {
 	Data json.RawMessage `json:"data"`
 }
 
-//	type SendTokenDetailsInfo struct {
-//		TokenChainLength uint64 `json:"tc_length"`
-//		TokenType        int    `json:"token_type"`
-//		Token            string `json:"token"`
-//	}
-// type AllTokenChainDetails struct {
-// 	TokenTCLengthDetails map[string]model.SendTokenDetailsInfo `json:"token_tc_details"`
-// }
 
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
@@ -174,8 +166,8 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	return info, nil
 }
 
-func (c *Core) GenerateTestTokens(reqID string, num int, did string) {
-	err := c.generateTestTokens(reqID, num, did)
+func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int ) {
+	err := c.generateTestTokens(reqID, num, did, startIndex)
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "Test tokens generated successfully",
@@ -199,7 +191,7 @@ func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int, did
 	return idValue, nil
 }
 
-func (c *Core) generateTestTokens(reqID string, num int, did string) error {
+func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex int) error {
 	if !c.testNet {
 		return fmt.Errorf("generate test token is available in test net")
 	}
@@ -207,10 +199,16 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 	if err != nil {
 		return fmt.Errorf("DID is not exist")
 	}
+	var currentTokenNumber int
 
-	currentTokenNumber, err := c.w.GetLocalTokenNumber()
-	if err != nil {
-		return fmt.Errorf("failed to get local test token info, err: %v", err)
+	if startIndex >= 0 {
+		currentTokenNumber = startIndex
+	} else {
+		currentTokenNumber, err = c.w.GetLocalTokenNumber()
+		if err != nil {
+			return fmt.Errorf("failed to get local test token info, err: %v", err)
+		}
+
 	}
 
 	localTokenLevel := c.w.GetLocalTokenLevel()
@@ -283,6 +281,17 @@ func (c *Core) generateTestTokens(reqID string, num int, did string) error {
 			c.log.Error("Failed to add token chain", "err", err)
 			return err
 		}
+
+		tokenIDBuffer := bytes.NewBufferString(id)
+		tokenHash, err := c.w.Add(tokenIDBuffer, did, wallet.AddFunc, true)
+		if err != nil {
+			return fmt.Errorf("createTokensAtLevel: failed to add token to ipfs: %v, err: %v", id, err)
+		}
+
+		if _, err := c.w.Pin(tokenHash, wallet.OwnerRole, did, "NA", did, "NA", t.TokenValue); err != nil {
+			return fmt.Errorf("createChildTokensAtLevel: failed to pin child token: %v, err: %v", id, err)
+		}
+
 		err = c.w.CreateToken(t)
 		if err != nil {
 			c.log.Error("Failed to create token", "err", err)

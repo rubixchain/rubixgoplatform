@@ -9,10 +9,11 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
-func (c *Client) GenerateTestRBT(numTokens int, didStr string) (*model.BasicResponse, error) {
+func (c *Client) GenerateTestRBT(numTokens int, didStr string, startIndex int) (*model.BasicResponse, error) {
 	m := model.RBTGenerateRequest{
 		NumberOfTokens: numTokens,
 		DID:            didStr,
+		StartIndex:     startIndex,
 	}
 	var rm model.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APIGenerateTestToken, nil, &m, &rm)
