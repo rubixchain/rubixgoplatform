@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"bytes"
 	"log"
 	"math"
 	"regexp"
@@ -24,6 +25,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
 func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int, ftNumStartIndex int) {
@@ -220,8 +222,14 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				results <- ftResult{Err: err}
 				continue
 			}
-		}
 
+			_, err = c.ipfs.Add(bytes.NewBufferString(ftID), ipfsnode.OnlyHash(false), ipfsnode.Pin(true))
+			if err != nil {
+				c.log.Error(fmt.Sprintf("createFts: failed to get IPFS token hash for token: %v, err: %v", ftID, err))
+				results <- ftResult{Err: err}
+				continue
+			}
+		}
 	}
 
 	// Start workers
@@ -652,7 +660,10 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 
 	// Extract token IDs for later use
 	FTTokenIDs := make([]string, 0)
+	fTTokenValue := rubixmath.ZeroFloat()
+
 	for i := range TokenInfo {
+		fTTokenValue = TokenInfo[i].TokenValue
 		FTTokenIDs = append(FTTokenIDs, TokenInfo[i].Token)
 	}
 	sct := &contract.ContractType{
@@ -664,6 +675,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			Comment:     req.Comment,
 			TransTokens: TokenInfo,
 		},
+		TotalRBTs: fTTokenValue,
 		ReqID: reqID,
 	}
 	FTData := model.FTInfo{

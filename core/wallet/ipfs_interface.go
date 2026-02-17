@@ -1,7 +1,9 @@
 package wallet
 
 import (
+	"bytes"
 	"io"
+	"strings"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
@@ -31,17 +33,57 @@ func (d *DirectIPFSOperations) Add(data io.Reader, opts ...ipfsnode.AddOpts) (st
 }
 
 func (d *DirectIPFSOperations) Cat(hash string) (io.ReadCloser, error) {
+	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
+		var err error
+		hash, err = d.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		if err != nil {
+			return nil, err
+		}
+
+		return d.ipfs.Cat(hash)
+	}
+
 	return d.ipfs.Cat(hash)
 }
 
 func (d *DirectIPFSOperations) Get(hash, path string) error {
+	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
+		var err error
+		hash, err = d.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		if err != nil {
+			return err
+		}
+
+		return d.ipfs.Get(hash, path)
+	}
+
 	return d.ipfs.Get(hash, path)
 }
 
 func (d *DirectIPFSOperations) Pin(hash string) error {
+	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
+		var err error
+		hash, err = d.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		if err != nil {
+			return err
+		}
+
+		return d.ipfs.Pin(hash)
+	}
+
 	return d.ipfs.Pin(hash)
 }
 
 func (d *DirectIPFSOperations) Unpin(hash string) error {
+	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
+		var err error
+		hash, err = d.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		if err != nil {
+			return err
+		}
+
+		return d.ipfs.Unpin(hash)
+	}
+
 	return d.ipfs.Unpin(hash)
 }
