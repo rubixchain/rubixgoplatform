@@ -302,6 +302,7 @@ type Command struct {
 	transComment                 string
 	quorumType                   int
 	numTokens                    int
+	startIndex                   int
 	enableAuth                   bool
 	did                          string
 	token                        string
@@ -711,6 +712,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.transComment, "transComment", "", "Transaction comment")
 	flag.IntVar(&cmd.quorumType, "quorumType", 2, "Quorum type")
 	flag.IntVar(&cmd.numTokens, "numTokens", 1, "Number of tokens")
+	flag.IntVar(&cmd.startIndex, "startIndex", -1, "startIndex to generate test rbt tokens locally")
 	flag.StringVar(&cmd.did, "did", "", "DID")
 	flag.BoolVar(&cmd.enableAuth, "enableAuth", false, "Enable authentication")
 	flag.BoolVar(&cmd.arbitaryMode, "arbitaryMode", false, "Enable arbitary mode")

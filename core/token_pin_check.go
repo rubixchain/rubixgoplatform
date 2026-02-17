@@ -73,14 +73,15 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 		results[index] = result
 		return
 	}
-	
-	provList, err := c.GetDHTddrs(tokenID)
+
+	provList, err := c.GetDHTddrs(tokenHash)
 	if err != nil {
 		c.log.Error("Error triggered while fetching providers ", "error", err)
 		result.Status = false
 		result.Owners = nil
 		result.Error = err
 		results[index] = result
+		return
 	}
 
 	if len(provList) == 0 {
@@ -88,23 +89,24 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 		result.Owners = provList
 		result.Error = nil
 		results[index] = result
+		return
 	}
 
 	if len(provList) == 1 {
-		for _, peerId := range provList {
-			if peerId != senderPeerId {
-				c.log.Error("Sender peer not exist in provider list", "peerID", peerId)
-				result.Status = true
-				result.Owners = provList
-				result.Error = nil
-				results[index] = result
-			} else {
-				result.Status = false
-				result.Owners = nil
-				result.Error = nil
-				results[index] = result
-			}
+		peerId := provList[0]
+		if peerId != senderPeerId {
+			c.log.Error("Sender peer not exist in provider list", "peerID", peerId)
+			result.Status = true
+			result.Owners = provList
+			result.Error = nil
+			results[index] = result
+		} else {
+			result.Status = false
+			result.Owners = nil
+			result.Error = nil
+			results[index] = result
 		}
+		return
 	}
 
 	var knownPeer []string
@@ -122,6 +124,7 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 			result.Owners = nil
 			result.Error = nil
 			results[index] = result
+			return
 		} else {
 			peerIdRolemap := make(map[string]int)
 			for _, peerId := range t {
@@ -132,10 +135,10 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 					result.Owners = nil
 					result.Error = err
 					results[index] = result
-					continue
+					return
 				}
 				req := PinStatusReq{
-					Token: tokenID,
+					TokenHash: tokenHash,
 				}
 				var psr PinStatusRes
 				err = p.SendJSONRequest("POST", APIDhtProviderCheck, nil, &req, &psr, true)
@@ -145,19 +148,21 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 					result.Owners = nil
 					result.Error = err
 					results[index] = result
+					return
 				}
 				if psr.Status {
 					peerIdRolemap[peerId] = psr.Role
 				}
 			}
 
-			for peerId, _ := range peerIdRolemap {
+			for peerId := range peerIdRolemap {
 				if peerIdRolemap[peerId] == wallet.OwnerRole {
 					// c.log.Error("Token has multiple Pins")
 					result.Status = true
 					result.Owners = provList
 					result.Error = nil
 					results[index] = result
+					return
 				}
 			}
 		}
