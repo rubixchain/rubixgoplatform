@@ -3,7 +3,6 @@ package core
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -739,46 +738,46 @@ func (c *Core) ShutdownTxnProcessor() {
 	}
 }
 
-func (c *Core) RetryFailedTOSyncTokens() error {
-	failedToSyncTokens, err := c.w.GetAllFailedToSyncTokens()
-	if err != nil {
-		if strings.Contains(err.Error(), "no records found") {
-			c.log.Info("There are no failed tokens to sync")
-			return nil
-		} else {
-			c.log.Error("failed to get tokens which are failed to sync ", "error", err)
-			return err
-		}
+// func (c *Core) RetryFailedTOSyncTokens() error {
+// 	failedToSyncTokens, err := c.w.GetAllFailedToSyncTokens()
+// 	if err != nil {
+// 		if strings.Contains(err.Error(), "no records found") {
+// 			c.log.Info("There are no failed tokens to sync")
+// 			return nil
+// 		} else {
+// 			c.log.Error("failed to get tokens which are failed to sync ", "error", err)
+// 			return err
+// 		}
 
-	}
-	if failedToSyncTokens == nil {
-		c.log.Info("There are NO failed to sync tokens which needs retry of syncing")
-	} else {
-		for _, failedToSyncToken := range failedToSyncTokens {
-			//call synctokenchain api to sync each token
-			//connect to publisher and fetch complete token chain
-			p, err := c.getPeer(failedToSyncToken.Did)
-			if err != nil {
-				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", failedToSyncToken.Did, "error: ", err)
-				return fmt.Errorf("failed to open peer connection with publisher %v, error: %v", failedToSyncToken.Did, err)
-			}
-			defer p.Close()
-			tokenSyncInfo := &TokenSyncInfo{
-				TokenID:   failedToSyncToken.TokenID,
-				TokenType: failedToSyncToken.TokenType,
-				AssetType: failedToSyncToken.AssetType,
-			}
-			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
-			if err != nil {
-				c.log.Error("failed to sync token chain for token ", failedToSyncToken.TokenID, "error", err)
-				return fmt.Errorf("failed to get latest block for token %s - may need sync", failedToSyncToken.TokenID)
+// 	}
+// 	if failedToSyncTokens == nil {
+// 		c.log.Info("There are NO failed to sync tokens which needs retry of syncing")
+// 	} else {
+// 		for _, failedToSyncToken := range failedToSyncTokens {
+// 			//call synctokenchain api to sync each token
+// 			//connect to publisher and fetch complete token chain
+// 			p, err := c.getPeer(failedToSyncToken.Did)
+// 			if err != nil {
+// 				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", failedToSyncToken.Did, "error: ", err)
+// 				return fmt.Errorf("failed to open peer connection with publisher %v, error: %v", failedToSyncToken.Did, err)
+// 			}
+// 			defer p.Close()
+// 			tokenSyncInfo := &TokenSyncInfo{
+// 				TokenID:   failedToSyncToken.TokenID,
+// 				TokenType: failedToSyncToken.TokenType,
+// 				AssetType: failedToSyncToken.AssetType,
+// 			}
+// 			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
+// 			if err != nil {
+// 				c.log.Error("failed to sync token chain for token ", failedToSyncToken.TokenID, "error", err)
+// 				return fmt.Errorf("failed to get latest block for token %s - may need sync", failedToSyncToken.TokenID)
 
-			}
-		}
-	}
+// 			}
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // This function process incoming transaction history details and add it to Fullnode transaction history table
 func (c *Core) processIncomingTransactionHistory(txns []model.FullNodeTxnHistoryInfo) {
