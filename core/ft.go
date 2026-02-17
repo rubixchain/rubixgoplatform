@@ -1,9 +1,9 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"bytes"
 	"log"
 	"math"
 	"regexp"
@@ -24,8 +24,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 
-	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
 func (c *Core) CreateFTs(reqID string, did string, ftcount int, ftname string, wholeToken int, ftNumStartIndex int) {
@@ -660,10 +660,8 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 
 	// Extract token IDs for later use
 	FTTokenIDs := make([]string, 0)
-	fTTokenValue := rubixmath.ZeroFloat()
 
 	for i := range TokenInfo {
-		fTTokenValue = TokenInfo[i].TokenValue
 		FTTokenIDs = append(FTTokenIDs, TokenInfo[i].Token)
 	}
 	sct := &contract.ContractType{
@@ -675,7 +673,6 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			Comment:     req.Comment,
 			TransTokens: TokenInfo,
 		},
-		TotalRBTs: fTTokenValue,
 		ReqID: reqID,
 	}
 	FTData := model.FTInfo{
