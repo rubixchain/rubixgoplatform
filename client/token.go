@@ -23,6 +23,20 @@ func (c *Client) GenerateTestRBT(numTokens int, didStr string, startIndex int) (
 	return &rm, nil
 }
 
+func (c *Client) MintRBT(numTokens int, didStr string, startIndex int) (*model.BasicResponse, error) {
+	m := model.RBTGenerateRequest{
+		NumberOfTokens: numTokens,
+		DID:            didStr,
+		StartIndex:     startIndex,
+	}
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIMintRBT, nil, &m, &rm)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}
+
 func (c *Client) GetAllTokens(didStr string, tokenType string) (*model.TokenResponse, error) {
 	q := make(map[string]string)
 	q["type"] = tokenType

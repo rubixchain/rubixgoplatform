@@ -92,10 +92,8 @@ var TokenMap = map[int]int{
 	78: 17602,
 }
 
-// GetTokenLevelAndNumberForGlobalIndex maps a global token index to the
-// token level (10000 + TokenMap level) and the token number within that level.
-// E.g. global index 1-56 → level 10000, numbers 1-56; 57-4300056 → level 10001, numbers 1-4300000.
-func GetTokenLevelAndNumberForGlobalIndex(globalIndex int) (tokenLevel int, numInLevel int, err error) {
+// internal shared logic
+func getTokenLevelAndNumber(globalIndex int, levelBase int) (tokenLevel int, numInLevel int, err error) {
 	if globalIndex < 1 {
 		return 0, 0, fmt.Errorf("global index must be >= 1, got %d", globalIndex)
 	}
@@ -106,12 +104,22 @@ func GetTokenLevelAndNumberForGlobalIndex(globalIndex int) (tokenLevel int, numI
 			return 0, 0, fmt.Errorf("global index %d exceeds max token levels", globalIndex)
 		}
 		if globalIndex <= cumulative+maxCount {
-			tokenLevel = LocalTestTokenLevelBase + mapLevel
-			numInLevel = globalIndex - cumulative
-			return tokenLevel, numInLevel, nil
+			return levelBase + mapLevel, globalIndex - cumulative, nil
 		}
 		cumulative += maxCount
 	}
+}
+
+// GetTokenLevelAndNumberForGlobalIndex maps a global token index to the
+// token level (10000 + TokenMap level) and the token number within that level.
+// E.g. global index 1-56 → level 10000, numbers 1-56; 57-4300056 → level 10001, numbers 1-4300000.
+func GetTokenLevelAndNumberForGlobalIndex(globalIndex int) (int, int, error) {
+	return getTokenLevelAndNumber(globalIndex, LocalTestTokenLevelBase) // base = 10000
+}
+
+// mainnet tokens
+func GetMainnetTokenLevelAndNumberForGlobalIndex(globalIndex int) (int, int, error) {
+	return getTokenLevelAndNumber(globalIndex, 0) // base = 0, levels 0..78
 }
 
 type FaucetToken struct {

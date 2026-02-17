@@ -143,3 +143,10 @@ type LocalTestTokenInfo struct {
 	Attribute string `gorm:"column:attribute;primaryKey"`
 	Value     int    `gorm:"column:value"`
 }
+
+// MintedTokenInfo tracks the last successfully minted global token index
+// on this node during mainnet token minting, enabling crash recovery.
+type MintedTokenInfo struct {
+	Attribute string `gorm:"column:attribute;primaryKey"`
+	Value     int    `gorm:"column:value"`
+}

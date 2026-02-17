@@ -47,6 +47,44 @@ func (cmd *Command) GenerateTestRBT() {
 	cmd.log.Info("Test RBT generated successfully")
 }
 
+func (cmd *Command) MintRBT() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+	if cmd.numTokens <= 0 {
+		cmd.log.Error("Invalid RBT amount, tokens should be a whole number greater than 0")
+		return
+	}
+
+	br, err := cmd.c.MintRBT(cmd.numTokens, cmd.did, cmd.startIndex)
+	if err != nil {
+		cmd.log.Error("Failed to mint RBT", "err", err)
+		return
+	}
+	if !br.Status {
+		cmd.log.Error("Failed to mint RBT", "msg", br.Message)
+		return
+	}
+
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to mint RBT, " + msg)
+		return
+	}
+	cmd.log.Info("RBT minted successfully")
+}
+
 func (cmd *Command) ValidateTokenchain() {
 	if cmd.did == "" {
 		cmd.log.Info("Tokenchain-validator did cannot be empty")

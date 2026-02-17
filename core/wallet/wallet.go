@@ -48,6 +48,7 @@ const (
 	FullNodeSCContentTable         string = "sc_content_table"
 	FullnodeDoubleSpentTokensTable string = "DoubleSpentTokensTable"
 	LocalTestTokenInfo             string = "LocalTestTokenInfo"
+	MintedTokenInfoTable           string = "MintedTokenInfo"
 )
 
 type WalletConfig struct {

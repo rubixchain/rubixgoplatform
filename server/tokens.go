@@ -28,6 +28,31 @@ func (s *Server) APIGetAllTokens(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, tr, http.StatusOK)
 }
 
+func (s *Server) APIMintTokens(req *ensweb.Request) *ensweb.Result {
+	var tr model.RBTGenerateRequest
+	err := s.ParseJSON(req, &tr)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	// DID validation (same as test token handler)
+	if !regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(tr.DID) ||
+		!strings.HasPrefix(tr.DID, "bafybmi") || len(tr.DID) != 59 {
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+	if tr.NumberOfTokens <= 0 {
+		return s.BasicResponse(req, false, "Invalid token count", nil)
+	}
+	if tr.StartIndex < 0 {
+		return s.BasicResponse(req, false, "start_index is required for mainnet token generation", nil)
+	}
+	if !s.validateDIDAccess(req, tr.DID) {
+		return s.BasicResponse(req, false, "DID does not have access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.MintTokens(req.ID, tr.NumberOfTokens, tr.DID, tr.StartIndex)
+	return s.didResponse(req, req.ID)
+}
+
 func (s *Server) APIGenerateTestToken(req *ensweb.Request) *ensweb.Result {
 	var tr model.RBTGenerateRequest
 	err := s.ParseJSON(req, &tr)

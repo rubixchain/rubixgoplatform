@@ -116,6 +116,7 @@ const (
 	FixFTCreatorCmd                string = "fix-ft-creator"
 	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
 	RemoveStaleDIDCmd              string = "removedid"
+	MintRBTCmd                     string = "mintrbt"
 )
 
 var commands = []string{VersionCmd,
@@ -190,6 +191,7 @@ var commands = []string{VersionCmd,
 	FixFTCreatorCmd,
 	GetFTCreatorStatsCmd,
 	RemoveStaleDIDCmd,
+	MintRBTCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -1001,6 +1003,8 @@ func Run(args []string) {
 		cmd.getFTCreatorStats()
 	case RemoveStaleDIDCmd:
 		cmd.RemoveStaleDID()
+	case MintRBTCmd:
+		cmd.MintRBT()
 	default:
 		cmd.log.Error("Invalid command")
 	}
