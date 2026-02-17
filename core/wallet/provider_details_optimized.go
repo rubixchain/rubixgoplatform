@@ -62,13 +62,13 @@ func (w *Wallet) processProviderDetailsChunk(chunk []model.TokenProviderMap) err
 		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 				// Already exists, update instead
-				err = w.s.Update(TokenProvider, tpm, "token=?", tpm.Token)
+				err = w.s.Update(TokenProvider, tpm, "token=?", tpm.TokenHash)
 				if err != nil {
-					w.log.Warn("Failed to update provider details", "token", tpm.Token, "err", err)
+					w.log.Warn("Failed to update provider details", "token hash", tpm.TokenHash, "err", err)
 					continue
 				}
 			} else {
-				w.log.Warn("Failed to add provider details", "token", tpm.Token, "err", err)
+				w.log.Warn("Failed to add provider details", "token hash", tpm.TokenHash, "err", err)
 				continue
 			}
 		}

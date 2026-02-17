@@ -93,6 +93,7 @@ type PubSubEnvelope struct {
 	Data json.RawMessage `json:"data"`
 }
 
+
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
 	c.l.AddRoute(APISyncGenesisAndLatestBlock, "POST", c.syncGenesisAndLatestBlock)
@@ -170,7 +171,7 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	return info, nil
 }
 
-func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int) {
+func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int ) {
 	err := c.generateTestTokens(reqID, num, did, startIndex)
 	br := model.BasicResponse{
 		Status:  true,
@@ -215,8 +216,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 
 	}
 
-	localTokenLevel := c.w.GetLocalTokenLevel()
-
 	var startTokenNumber int
 	var finalTokenNumber int
 
@@ -229,8 +228,14 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 	finalTokenNumber = startTokenNumber + num
 	currentTime := time.Now()
 
-	for tokenNumber := startTokenNumber; tokenNumber < finalTokenNumber; tokenNumber++ {
-		id, err := c.getTokenIDForLocalTestTokens(localTokenLevel, tokenNumber, did)
+	// Each global index maps to (tokenLevel, numInLevel) per TokenMap: level 10000 = TokenMap 0 (56 tokens), 10001 = TokenMap 1 (4300000), etc.
+	for globalIndex := startTokenNumber; globalIndex < finalTokenNumber; globalIndex++ {
+		tokenLevel, numInLevel, err := token.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
+		if err != nil {
+			c.log.Error("Failed to get token level and number for global index", "globalIndex", globalIndex, "err", err)
+			return err
+		}
+		id, err := c.getTokenIDForLocalTestTokens(tokenLevel, numInLevel, did)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
@@ -285,6 +290,17 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 			c.log.Error("Failed to add token chain", "err", err)
 			return err
 		}
+
+		tokenIDBuffer := bytes.NewBufferString(id)
+		tokenHash, err := c.w.Add(tokenIDBuffer, did, wallet.AddFunc, true)
+		if err != nil {
+			return fmt.Errorf("createTokensAtLevel: failed to add token to ipfs: %v, err: %v", id, err)
+		}
+
+		if _, err := c.w.Pin(tokenHash, wallet.OwnerRole, did, "NA", did, "NA", t.TokenValue); err != nil {
+			return fmt.Errorf("createChildTokensAtLevel: failed to pin child token: %v, err: %v", id, err)
+		}
+
 		err = c.w.CreateToken(t)
 		if err != nil {
 			c.log.Error("Failed to create token", "err", err)
