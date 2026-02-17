@@ -8,6 +8,7 @@ const (
 type RBTGenerateRequest struct {
 	NumberOfTokens int    `json:"number_of_tokens"`
 	DID            string `json:"did"`
+	StartIndex     int    `json:"start_index"`
 }
 
 type RBTTransferRequest struct {
@@ -85,7 +86,7 @@ type FaucetRBTGenerateRequest struct {
 }
 
 type TokenProviderMap struct {
-	Token         string  `gorm:"column:token;primaryKey"`
+	TokenHash     string  `gorm:"column:token;primaryKey"`
 	DID           string  `gorm:"column:did"`
 	FuncID        int     `gorm:"column:func_id"`
 	Role          int     `gorm:"column:role"`

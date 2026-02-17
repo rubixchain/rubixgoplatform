@@ -156,7 +156,13 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 			// Pin the token with new transaction details
 			senderAddress := senderPeerId + "." + b.GetSenderDID()
 			receiverAddress := receiverPeerId + "." + b.GetOwner()
-			_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
+			tokenHash, err := w.ipfsOps.Add(
+				bytes.NewBufferString(tokenInfo.Token),
+			)
+			if err != nil {
+				w.log.Error("Failed to add ft tokens to ipfs", "err", err)
+			}
+			_, err = w.Pin(tokenHash, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 			if err != nil {
 				w.log.Error("Failed to pin existing token",
 					"token", tokenInfo.Token,
@@ -276,7 +282,13 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 		receiverAddress := receiverPeerId + "." + b.GetOwner()
 
 		// Pin the token
-		_, err = w.Pin(tokenInfo.Token, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
+		tokenHash, err := w.ipfsOps.Add(
+			bytes.NewBufferString(tokenInfo.Token),
+		)
+		if err != nil {
+			w.log.Error("Failed to get rbt token hash", "err", err)
+		}
+		_, err = w.Pin(tokenHash, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 		if err != nil {
 			w.log.Error("Failed to pin token", 
 				"token", tokenInfo.Token,
