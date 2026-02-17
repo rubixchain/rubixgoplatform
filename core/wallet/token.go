@@ -1045,7 +1045,7 @@ func (w *Wallet) TokensReceived(did string, ti []contract.TokenInfo, b *block.Bl
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetOwner()
 		//Pinnig the whole tokens and pat tokens (skip AddProviderDetails)
-		
+
 		_, err = w.Pin(tokenHash, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 		if err != nil {
 			w.log.Info(fmt.Sprintf("failed to pin token %s\n", tokenInfo.Token))
@@ -2272,6 +2272,50 @@ func (w *Wallet) SetLocalTokenlevelAndNumber(tokenLevel int, tokenNumber int) er
 		return fmt.Errorf("failed to set token level for local test token, err: %v", err)
 	}
 
+	return nil
+}
+
+const MintedTokenCount_Attr = "minted_token_count"
+
+// InitMintedTokenTable initializes the MintedTokenInfo table on demand.
+// Called only by minting nodes at the start of mintTokens — regular nodes
+// never create this table.
+func (w *Wallet) InitMintedTokenTable() error {
+	return w.s.Init(MintedTokenInfoTable, &model.MintedTokenInfo{}, true)
+}
+
+// GetMintedTokenCount returns the last successfully minted global token index
+// on this node. Returns 0 if no tokens have been minted yet (first run).
+func (w *Wallet) GetMintedTokenCount() (int, error) {
+	var info *model.MintedTokenInfo
+	err := w.s.Read(MintedTokenInfoTable, &info, "attribute=?", MintedTokenCount_Attr)
+	if err != nil {
+		if strings.Contains(err.Error(), "no records found") {
+			initial := &model.MintedTokenInfo{
+				Attribute: MintedTokenCount_Attr,
+				Value:     0,
+			}
+			if err = w.s.Write(MintedTokenInfoTable, initial); err != nil {
+				return 0, fmt.Errorf("failed to initialize minted token count, err: %v", err)
+			}
+			return 0, nil
+		}
+		return -1, fmt.Errorf("failed to get minted token count, err: %v", err)
+	}
+	return info.Value, nil
+}
+
+// SetMintedTokenCount updates the last successfully minted global token index.
+// Called after each token is minted so a crash can be recovered from.
+func (w *Wallet) SetMintedTokenCount(count int) error {
+	updated := &model.MintedTokenInfo{
+		Attribute: MintedTokenCount_Attr,
+		Value:     count,
+	}
+	err := w.s.Update(MintedTokenInfoTable, updated, "attribute=?", MintedTokenCount_Attr)
+	if err != nil {
+		return fmt.Errorf("failed to set minted token count, err: %v", err)
+	}
 	return nil
 }
 

@@ -192,6 +192,16 @@ func (c *Core) mintTokens(reqID string, num int, did string, startIndex int) err
 		return fmt.Errorf("DID does not exist")
 	}
 
+	// Initialize the minted token tracking table on this node (idempotent).
+	// Only minting nodes ever call this — regular nodes never create this table.
+	if err := c.w.InitMintedTokenTable(); err != nil {
+		return fmt.Errorf("failed to initialize minted token table: %v", err)
+	}
+	// Seed the counter row so SetMintedTokenCount (which uses Update) has a row to update.
+	if _, err := c.w.GetMintedTokenCount(); err != nil {
+		return fmt.Errorf("failed to initialize minted token count: %v", err)
+	}
+
 	startTokenNumber := startIndex
 	if startIndex == 0 {
 		startTokenNumber = 1
@@ -267,6 +277,13 @@ func (c *Core) mintTokens(reqID string, num int, did string, startIndex int) err
 			c.log.Error("Failed to create token", "err", err)
 			return err
 		}
+
+		// Record the last successfully minted global index for crash recovery.
+		if err := c.w.SetMintedTokenCount(globalIndex); err != nil {
+			c.log.Error("Failed to update minted token count", "globalIndex", globalIndex, "err", err)
+			// non-fatal: token is minted; only the cursor update failed
+		}
+
 		// publish the transaction in the network with topic : rubix_txns
 		blockHash, err := blk.GetHash()
 		if err != nil {
