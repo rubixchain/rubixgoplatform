@@ -1,20 +1,12 @@
 package token
 
-import "fmt"
-
 const FaucetName = "faucettestrbt"
 
-// LocalTestTokenLevelBase is the starting level for local test tokens. Level 10000
-// corresponds to TokenMap level 0 (56 tokens), 10001 to level 1 (4300000 tokens), etc.
-const LocalTestTokenLevelBase = 10000
-
-// TokenMap maps RBT token level to Tokens Awarded per the official RBT Tokenomics sheet.
-// Ref: https://learn.rubix.net/docs/tools-downloads/tokenomics
 var TokenMap = map[int]int{
-	0:  56,
-	1:  4300000,
+	0:  0,
+	1:  5000000,
 	2:  2425000,
-	3:  2303750,
+	3:  2188563,
 	4:  2188563,
 	5:  2079134,
 	6:  1975178,
@@ -90,28 +82,6 @@ var TokenMap = map[int]int{
 	76: 21731,
 	77: 19558,
 	78: 17602,
-}
-
-// GetTokenLevelAndNumberForGlobalIndex maps a global token index to the
-// token level (10000 + TokenMap level) and the token number within that level.
-// E.g. global index 1-56 → level 10000, numbers 1-56; 57-4300056 → level 10001, numbers 1-4300000.
-func GetTokenLevelAndNumberForGlobalIndex(globalIndex int) (tokenLevel int, numInLevel int, err error) {
-	if globalIndex < 1 {
-		return 0, 0, fmt.Errorf("global index must be >= 1, got %d", globalIndex)
-	}
-	cumulative := 0
-	for mapLevel := 0; ; mapLevel++ {
-		maxCount, ok := TokenMap[mapLevel]
-		if !ok {
-			return 0, 0, fmt.Errorf("global index %d exceeds max token levels", globalIndex)
-		}
-		if globalIndex <= cumulative+maxCount {
-			tokenLevel = LocalTestTokenLevelBase + mapLevel
-			numInLevel = globalIndex - cumulative
-			return tokenLevel, numInLevel, nil
-		}
-		cumulative += maxCount
-	}
 }
 
 type FaucetToken struct {
