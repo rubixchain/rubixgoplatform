@@ -93,7 +93,6 @@ type PubSubEnvelope struct {
 	Data json.RawMessage `json:"data"`
 }
 
-
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
 	c.l.AddRoute(APISyncGenesisAndLatestBlock, "POST", c.syncGenesisAndLatestBlock)
@@ -171,7 +170,7 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	return info, nil
 }
 
-func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int ) {
+func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int) {
 	err := c.generateTestTokens(reqID, num, did, startIndex)
 	br := model.BasicResponse{
 		Status:  true,
@@ -3184,54 +3183,48 @@ func (c *Core) ValidateNewTokenContent(tokenContent string) error {
 	if err != nil {
 		return fmt.Errorf("invalid token number in token content: %s", tokenContent)
 	}
-	maxAllowed, ok := token.TokenMap[level]
 
 	switch tokenType {
 	case token.TestTokenType, token.TestPartTokenType:
-		//check level is there in the tokenmapping.go or level has to be equl to 10,000 if not it has to return
-
-		// Testnet-specific validation
-
-		// level must exist in TokenMap OR be exactly 10000
-		if !ok && level != 10000 {
+		// Testnet: level is 10000+ (10000 = TokenMap level 0, 10001 = level 1, ...)
+		if level < token.LocalTestTokenLevelBase {
 			return fmt.Errorf(
-				"invalid testnet token level %d: not present in TokenMap and not equal to 10000",
-				level,
+				"invalid testnet token level %d: testnet level must be >= %d",
+				level, token.LocalTestTokenLevelBase,
 			)
 		}
-
-		// if level exists in TokenMap, validate token number
-		if ok {
-			if tokenNo < 0 || tokenNo > maxAllowed {
-				return fmt.Errorf(
-					"testnet token number %d exceeds max allowed %d for level %d",
-					tokenNo, maxAllowed, level,
-				)
-			}
+		mapLevel := level - token.LocalTestTokenLevelBase
+		maxAllowed, ok := token.TokenMap[mapLevel]
+		if !ok {
+			return fmt.Errorf(
+				"invalid testnet token level %d: (level-%d=%d) not present in TokenMap",
+				level, token.LocalTestTokenLevelBase, mapLevel,
+			)
+		}
+		if tokenNo < 0 || tokenNo > maxAllowed {
+			return fmt.Errorf(
+				"testnet token number %d exceeds max allowed %d for level %d",
+				tokenNo, maxAllowed, level,
+			)
 		}
 		c.log.Debug("token content validated for the testtoken", tokenContent)
 	case token.RBTTokenType, token.PartTokenType:
-		// maxAllowed, ok := token.TokenMap[level]
-
-		// level must exist in TokenMap OR be exactly 10000
+		// Mainnet: level is used directly as TokenMap key (0, 1, ... 78)
+		maxAllowed, ok := token.TokenMap[level]
 		if !ok {
 			return fmt.Errorf(
-				"invalid testnet token level %d: not present in TokenMap and not equal to 10000",
+				"invalid mainnet token level %d: not present in TokenMap",
 				level,
 			)
 		}
 		// if level exists in TokenMap, validate token number
-		if ok {
-			if tokenNo < 0 || tokenNo > maxAllowed {
-				return fmt.Errorf(
-					"mainnet token number %d exceeds max allowed %d for level %d",
-					tokenNo, maxAllowed, level,
-				)
-			}
+		if tokenNo < 0 || tokenNo > maxAllowed {
+			return fmt.Errorf(
+				"mainnet token number %d exceeds max allowed %d for level %d",
+				tokenNo, maxAllowed, level,
+			)
 		}
-
 		c.log.Debug("token content validated for the MainNet token", tokenContent)
-
 	}
 
 	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces(uint(MaxDecimalPlaces))
