@@ -184,9 +184,6 @@ func (c *Core) MintTokens(reqID string, num int, did string, startIndex int) {
 }
 
 func (c *Core) mintTokens(reqID string, num int, did string, startIndex int) error {
-	if startIndex < 0 {
-		return fmt.Errorf("startIndex must be >= 0 for mainnet token generation")
-	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		return fmt.Errorf("DID does not exist")
@@ -197,13 +194,28 @@ func (c *Core) mintTokens(reqID string, num int, did string, startIndex int) err
 	if err := c.w.InitMintedTokenTable(); err != nil {
 		return fmt.Errorf("failed to initialize minted token table: %v", err)
 	}
-	// Seed the counter row so SetMintedTokenCount (which uses Update) has a row to update.
-	if _, err := c.w.GetMintedTokenCount(); err != nil {
-		return fmt.Errorf("failed to initialize minted token count: %v", err)
+
+	var currentTokenNumber int
+	if startIndex >= 0 {
+		// Explicit range provided — use it directly (multi-node pre-assigned range).
+		// Seed the counter row so subsequent SetMintedTokenCount (Update) calls work.
+		currentTokenNumber = startIndex
+		if _, err := c.w.GetMintedTokenCount(); err != nil {
+			return fmt.Errorf("failed to initialize minted token count: %v", err)
+		}
+	} else {
+		// Auto-resume: DB stores the last successfully minted globalIndex.
+		// Start from the *next* one to avoid re-minting.
+		lastMinted, err := c.w.GetMintedTokenCount()
+		if err != nil {
+			return fmt.Errorf("failed to get minted token count: %v", err)
+		}
+		currentTokenNumber = lastMinted + 1
 	}
 
-	startTokenNumber := startIndex
-	if startIndex == 0 {
+	startTokenNumber := currentTokenNumber
+	if currentTokenNumber == 0 {
+		// startIndex was 0 → begin from token 1 (first ever mint on this node)
 		startTokenNumber = 1
 	}
 	finalTokenNumber := startTokenNumber + num

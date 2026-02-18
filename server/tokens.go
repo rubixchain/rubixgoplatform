@@ -42,9 +42,6 @@ func (s *Server) APIMintTokens(req *ensweb.Request) *ensweb.Result {
 	if tr.NumberOfTokens <= 0 {
 		return s.BasicResponse(req, false, "Invalid token count", nil)
 	}
-	if tr.StartIndex < 0 {
-		return s.BasicResponse(req, false, "start_index is required for mainnet token generation", nil)
-	}
 	if !s.validateDIDAccess(req, tr.DID) {
 		return s.BasicResponse(req, false, "DID does not have access", nil)
 	}
