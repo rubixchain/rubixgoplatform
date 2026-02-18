@@ -39,8 +39,8 @@ type notificationTask struct {
 const (
 	maxRetries      = 3
 	retryBackoff    = 500 * time.Millisecond
-	queueSize       = 1000
-	numWorkers      = 4
+	queueSize       = 5000
+	numWorkers      = 8
 	requestTimeout  = 15 * time.Second
 	shutdownTimeout = 30 * time.Second
 )
@@ -127,9 +127,9 @@ func (nq *NotificationQueue) Enqueue(url string, payload []byte) error {
 	select {
 	case nq.queue <- notificationTask{url: url, payload: payload, retries: maxRetries}:
 		return nil
-	case <-time.After(100 * time.Millisecond):
-		return fmt.Errorf("notification queue full")
-	default:
+	case <-time.After(2 * time.Second):
+		return fmt.Errorf("notification queue full, could not enqueue within timeout")
+	case <-nq.done:
 		return fmt.Errorf("notification queue closed")
 	}
 }
