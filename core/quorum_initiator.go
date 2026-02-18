@@ -2808,6 +2808,7 @@ func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid
 			Version:            constants.BlockVersion,
 			TokenValue:         sc.GetTotalRBTs(),
 		}
+		c.log.Warn("tcb is:", tcb)
 	}
 
 	if cr.Mode == DTCommitMode {
