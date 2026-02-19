@@ -15,16 +15,17 @@ import (
 	"sync"
 	"time"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	block "github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	parts "github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
 const defaultBatchSize = 500                             // Tweak according to RAM/network
@@ -33,6 +34,10 @@ const delayInPublishingTCDetails = 2 * time.Second
 
 const subscriberBufferSize = 1000 // process up to this many idle batches
 const workerCount = 8             // Tune according to hardware/network
+const MaxNumberOfChildTokensAllowed = 2
+const wholeTokenValue = 1.0
+
+// const MaxPossiblePartTokenNumber = 1332
 
 type TokenPublish struct {
 	Token string `json:"token"`
@@ -87,7 +92,6 @@ type PubSubEnvelope struct {
 	Type string          `json:"type"` // "token" or "txn"
 	Data json.RawMessage `json:"data"`
 }
-
 
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
@@ -166,7 +170,7 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	return info, nil
 }
 
-func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int ) {
+func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int) {
 	err := c.generateTestTokens(reqID, num, did, startIndex)
 	br := model.BasicResponse{
 		Status:  true,
@@ -646,20 +650,20 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 
 	batchStart := time.Now()
 	for _, detail := range event.TokenDetails {
-		if detail.Did == "" {
+		if detail.PublisherDid == "" {
 			errMsg := fmt.Sprintf("PublisherDID is empty for the token: %v, simply skipping it, while processing reeived token details", detail.Token)
 			c.log.Error(errMsg)
 			continue
 		}
 
-		address := event.PublisherPeerID + "." + detail.Did
+		address := event.PublisherPeerID + "." + detail.PublisherDid
 
 		// add publisher to peer did table, if it is alredy NOT there in the PeerDIDTable
-		publisherPeerId := c.w.GetPeerID(detail.Did)
+		publisherPeerId := c.w.GetPeerID(detail.PublisherDid)
 		if publisherPeerId != event.PublisherPeerID {
 
 			publisherDetails := &wallet.DIDPeerMap{
-				DID:    detail.Did,
+				DID:    detail.PublisherDid,
 				PeerID: event.PublisherPeerID,
 			}
 			err := c.AddPeerDetails(*publisherDetails)
@@ -669,7 +673,12 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 		}
 
 		latestBlock := c.w.GetFullNodeLatestTokenBlock(detail.Token, detail.TokenType)
+		existingBlockOwnerDID := latestBlock.GetOwner()
 		var latestBlockHeight uint64
+		var latestBlockID, txnID, latestBlockHash string
+		// var latestBlockID string
+		var blocks ReceivedBlock
+		var genesisBlock *block.Block
 		var err error
 
 		if latestBlock != nil {
@@ -680,7 +689,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					TokenID:   detail.Token,
 					TokenType: detail.TokenType,
 					AssetType: detail.AssetType,
-					Did:       detail.Did,
+					Did:       detail.PublisherDid,
+					Reason:    fmt.Sprintf("failed to get the latest Block Height, syncing full tokenchain, error%v", err),
 				}
 
 				if err := c.w.AddFailedTokensToTable(info); err != nil {
@@ -690,8 +700,64 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				}
 				continue
 			}
+			latestBlockID, err = latestBlock.GetBlockID(detail.Token)
+			if err != nil {
+				c.log.Warn("failed to get the latest BlockID, syncing full tokenchain", "error", err)
+				info := &model.FailedToSyncTokenDetailsInfo{
+					TokenID:   detail.Token,
+					TokenType: detail.TokenType,
+					AssetType: detail.AssetType,
+					Did:       detail.PublisherDid,
+					Reason:    fmt.Sprintf("failed to get the latest BlockID, syncing full tokenchain, error%v", err),
+				}
+
+				if err := c.w.AddFailedTokensToTable(info); err != nil {
+					c.log.Error("Failed to record failed token sync in DB", "token", detail.Token, "error", err)
+				} else {
+					c.log.Info("Recorded failed token sync in DB", "token", detail.Token)
+				}
+				continue
+
+			}
+
+			// currentOwner = latestBlock.GetOwner()
+			txnID = latestBlock.GetTid()
+			genesisBlock = c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
+			//if it is a part RBT Token, check how many child tokens exist for its parent token, if there are more than 2 add it in a table
+			if detail.AssetType == RBTTokenType {
+				if genesisBlock != nil {
+					parentTokenID, err := genesisBlock.GetParentDetials(detail.Token)
+					if err != nil {
+						c.log.Error("failed to get parent tokenID from the genesis block, token", detail.Token)
+					}
+					//ReadFullNode RBT Table, and count how many children it's parent tokenID is having
+					//if it is more than 2 add this parent tokenID along with its child tokens to another table
+					childTokens, err := c.w.GetChildTokensFromSyncedRBTTable(parentTokenID)
+					if len(childTokens) > MaxNumberOfChildTokensAllowed {
+						//add these child tokens and parent tokens into a new fullnode table.
+						for _, childToken := range childTokens {
+							token := model.FullNodeMultipleChildTokens{
+								ParentTokenID: childToken.ParentTokenID,
+								ChildTokenID:  childToken.TokenID,
+							}
+							err := c.w.AddTokenToMultipleParentsTable(&token)
+							if err != nil {
+								c.log.Error("failed to add a parent token to Fullnode's multiple child token table, parentToken", token.ParentTokenID)
+							}
+
+						}
+					}
+
+				}
+			}
+
+			blocks = ReceivedBlock{
+				GenesisBlock: genesisBlock,
+				LatestBlock:  latestBlock,
+			}
 
 		}
+
 		//collecting all those tokens, for which latestblock is empty or publisher's side tokenchain length is more,
 		// Fullnode will use these collected tokens later to sync from the publisher
 		if latestBlock == nil || detail.TokenChainLength > latestBlockHeight {
@@ -703,7 +769,76 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				AssetType:  detail.AssetType,
 				TokenValue: detail.TokenValue,
 			})
-			//fullnode has either equal or more number of token chain length compared to publisher
+			//fullnode has equal number of token chain length compared to publisher, check whether the same block is coming or not
+			//If the incoming block from the publisher is different than the block which the fullnode is having, add this token details to double spend tokens table
+		} else if detail.TokenChainLength == latestBlockHeight {
+
+			// check if token exists in postgres table, add if doesn't
+			err := c.ReadTokenContentFromPSQL(detail.Token, detail.AssetType)
+			if err != nil {
+				if err := c.AddTokenContentToPSQL(detail.Token, detail.AssetType); err != nil {
+					c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
+				}
+			}
+
+			if detail.LastBlockID != latestBlockID {
+				//Add token into double spend tokens table
+				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+					TokenID:        detail.Token,
+					AssetType:      detail.AssetType,
+					TokenType:      detail.TokenType,
+					PublisherDID:   event.PublisherPeerID,
+					ClaimedOwnerI:  existingBlockOwnerDID,
+					ClaimedOwnerII: detail.PublisherDid,
+					ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
+				}
+				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
+				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
+					c.log.Error(errMsg)
+				}
+				continue
+
+			} else {
+				// it should read the sqlite table, if already details exist
+				// first read existing token info from the table, if not exist we will add it.
+				_, _, _, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
+				if err != nil {
+					if strings.Contains(err.Error(), "no records found") {
+						// add token info to sqlite if not there
+						eventData := model.PubSubTxnInfo{
+							BlockHash:         latestBlockHash,
+							TransactionID:     txnID,
+							PublisherDID:      detail.PublisherDid,
+							LatestBlockHeight: latestBlockHeight,
+							AssetType:         detail.AssetType,
+							// TokenValue:        detail.TokenValue,
+						}
+						//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
+						// There is no token value in the Mainnet genesis block for migrated tokens.
+						//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
+						if genesisBlock != nil {
+							genesisBlockType := genesisBlock.GetTransType()
+							if genesisBlockType == block.TokenMigratedType {
+
+								eventData.TokenValue = detail.TokenValue
+							} else {
+								eventData.TokenValue = genesisBlock.GetTokenValue()
+							}
+						}
+
+						c.AddTokenToRespectiveTable(detail.Token, existingBlockOwnerDID, blocks, &eventData, wallet.SyncUnrequired)
+						continue
+					}
+
+					c.log.Error("failed to read token ", detail.Token, "err ", err)
+					continue
+				}
+			}
+
+			//Fullnode already has token chain length more than what publisher is having.
+			//In this case, get incoming blockID, check whether it matches the same number's blockID at which it is there at Fullnode side.
 		} else {
 
 			// check if token exists in postgres table, add if doesn't
@@ -713,186 +848,294 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
 				}
 			}
-			latestBlockHash, err := latestBlock.GetHash()
-			if err != nil {
-				c.log.Error("failed to get latest block hash for the token", detail.Token)
-			}
-			currentOwner := latestBlock.GetOwner()
-			txnID := latestBlock.GetTid()
-			genesisBlock := c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
-			blocks := ReceivedBlock{
-				GenesisBlock: genesisBlock,
-				LatestBlock:  latestBlock,
-			}
-			// first read existing token info from the table
-			existingBlockHeight, existingBlockHash, existingOwnerDID, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
-			if err != nil {
-				if strings.Contains(err.Error(), "no records found") {
-					// add token info to sqlite if not there
-					eventData := model.PubSubTxnInfo{
-						BlockHash:         latestBlockHash,
-						TransactionID:     txnID,
-						PublisherDID:      detail.Did,
-						LatestBlockHeight: latestBlockHeight,
-						AssetType:         detail.AssetType,
-						// TokenValue:        detail.TokenValue,
-					}
-					//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
-					// There is no token value in the Mainnet genesis block for migrated tokens.
-					//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
-					if genesisBlock != nil {
-						genesisBlockType := genesisBlock.GetTransType()
-						if genesisBlockType == block.TokenMigratedType {
 
-							eventData.TokenValue = detail.TokenValue
+			incomingBlockID := detail.LastBlockID
+			publishersLatestBlockNumber := detail.TokenChainLength
+			//get Fullnode block whose block number is publisher side latest blockID
+			fullnodesideBlockBytes, err := c.w.GetFullNodeTokenBlockByNumber(detail.Token, detail.TokenType, publishersLatestBlockNumber)
+			fullnodesideBlock := block.InitBlock(fullnodesideBlockBytes, nil)
+			fullnodesideBlockID, err := fullnodesideBlock.GetBlockID(detail.Token)
+			if err != nil {
+				c.log.Error("failed to get blockID of the fullnode side block", "error", err)
+			}
+			if incomingBlockID != fullnodesideBlockID {
+				//add token to double spend tokens table, with an error saying
+				//that both DID1 or DID2 are claimming the same token.
+
+				//Add token into double spend tokens table
+				doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+					TokenID:        detail.Token,
+					AssetType:      detail.AssetType,
+					TokenType:      detail.TokenType,
+					PublisherDID:   event.PublisherPeerID,
+					ClaimedOwnerI:  existingBlockOwnerDID,
+					ClaimedOwnerII: detail.PublisherDid,
+					ErrorMessage:   fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid),
+				}
+				// store double spent token info in DoubleSpentTokens table, and remove it from respective tokens table
+				err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
+					c.log.Error(errMsg)
+				}
+				continue
+
+			} else {
+				//If incoming blkID matches with the fullnodeside blkID and fullnode already has
+				// bigger length tokenchain. so it doesn't need any sync from the publisher, fullnode checks whether token details are there in sqlite table, add if not exist.
+
+				// first read existing token info from the table, if not exist we will add it.
+				_, _, _, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
+				if err != nil {
+					if strings.Contains(err.Error(), "no records found") {
+						// add token info to sqlite if not there
+						eventData := model.PubSubTxnInfo{
+							BlockHash:         latestBlockHash,
+							TransactionID:     txnID,
+							PublisherDID:      detail.PublisherDid,
+							LatestBlockHeight: latestBlockHeight,
+							AssetType:         detail.AssetType,
+							// TokenValue:        detail.TokenValue,
+						}
+						//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
+						// There is no token value in the Mainnet genesis block for migrated tokens.
+						//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
+						if genesisBlock != nil {
+							genesisBlockType := genesisBlock.GetTransType()
+							if genesisBlockType == block.TokenMigratedType {
+
+								eventData.TokenValue = detail.TokenValue
+							} else {
+								eventData.TokenValue = genesisBlock.GetTokenValue()
+							}
+						}
+
+						c.AddTokenToRespectiveTable(detail.Token, existingBlockOwnerDID, blocks, &eventData, wallet.SyncUnrequired)
+						continue
+					}
+
+					c.log.Error("failed to read token ", detail.Token, "err ", err)
+					continue
+				}
+				continue
+			}
+
+			// 	latestBlockHash, err := latestBlock.GetHash()
+			// 	if err != nil {
+			// 		c.log.Error("failed to get latest block hash for the token", detail.Token)
+			// 	}
+			// 	currentOwner := latestBlock.GetOwner()
+			// 	txnID := latestBlock.GetTid()
+			// 	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
+			// 	blocks := ReceivedBlock{
+			// 		GenesisBlock: genesisBlock,
+			// 		LatestBlock:  latestBlock,
+			// 	}
+			// 	// first read existing token info from the table
+			// 	_, existingBlockHash, existingOwnerDID, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
+			// 	if err != nil {
+			// 		if strings.Contains(err.Error(), "no records found") {
+			// 			// add token info to sqlite if not there
+			// 			eventData := model.PubSubTxnInfo{
+			// 				BlockHash:         latestBlockHash,
+			// 				TransactionID:     txnID,
+			// 				PublisherDID:      detail.PublisherDid,
+			// 				LatestBlockHeight: latestBlockHeight,
+			// 				AssetType:         detail.AssetType,
+			// 				// TokenValue:        detail.TokenValue,
+			// 			}
+			// 			//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
+			// 			// There is no token value in the Mainnet genesis block for migrated tokens.
+			// 			//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
+			// 			if genesisBlock != nil {
+			// 				genesisBlockType := genesisBlock.GetTransType()
+			// 				if genesisBlockType == block.TokenMigratedType {
+
+			// 					eventData.TokenValue = detail.TokenValue
+			// 				} else {
+			// 					eventData.TokenValue = genesisBlock.GetTokenValue()
+			// 				}
+			// 			}
+
+			// 			c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
+			// 			continue
+			// 		}
+
+			// 		c.log.Error("failed to read token ", detail.Token, "err ", err)
+			// 		continue
+			// 	}
+			// 	// if latestBlockHeight == detail.TokenChainLength {
+			// 	// 	if latestBlockHash != existingBlockHash || currentOwner != existingOwnerDID {
+			// 	// 		// TODO : Challenger node should verify the correct owner and correct block and add the correct info
+			// 	// 		errMsg := fmt.Sprintf("double spending the token %v, eixting owner : %v, and incoming owner : %v", detail.Token, existingOwnerDID, currentOwner)
+			// 	// 		c.log.Error(errMsg)
+			// 	// 		// add token to doublespent tokens table
+			// 	// 		doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
+			// 	// 			TokenID:        detail.Token,
+			// 	// 			AssetType:      detail.AssetType,
+			// 	// 			TokenType:      detail.TokenType,
+			// 	// 			PublisherDID:   event.PublisherPeerID,
+			// 	// 			ClaimedOwnerI:  existingOwnerDID,
+			// 	// 			ClaimedOwnerII: currentOwner,
+			// 	// 		}
+			// 	// 		// store double spent token info in DoubleSpentTokens table
+			// 	// 		// and remove it from respective tokens table
+			// 	// 		err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
+			// 	// 		if err != nil {
+			// 	// 			errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
+			// 	// 			c.log.Error(errMsg)
+			// 	// 		}
+			// 	// 		continue
+
+			// 	// 	}
+
+			// 	// }
+
+			// 	eventData := model.PubSubTxnInfo{
+			// 		BlockHash:         latestBlockHash,
+			// 		TransactionID:     txnID,
+			// 		PublisherDID:      detail.PublisherDid,
+			// 		LatestBlockHeight: latestBlockHeight,
+			// 		AssetType:         detail.AssetType,
+			// 		// TokenValue:        detail.TokenValue,
+			// 	}
+			// 	// when latestBlockHeight != existingBlockHeight OR (latestBlockHeight == existingBlockHeight && blockhashes also matches,
+			// 	//  sqlite table should get updated with the values which are derived from the latest block.
+			// 	//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
+			// 	// There is no token value in the Mainnet genesis block for migrated tokens.
+			// 	//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
+			// 	if genesisBlock != nil {
+			// 		genesisBlockType := genesisBlock.GetTransType()
+			// 		if genesisBlockType == block.TokenMigratedType {
+
+			// 			eventData.TokenValue = detail.TokenValue
+			// 		} else {
+			// 			eventData.TokenValue = genesisBlock.GetTokenValue()
+			// 		}
+			// 	}
+
+			// 	c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
+			// }
+		}
+
+		var wg sync.WaitGroup
+
+		//In the case where tokensyncmap is not nil at last read the fullnode's token table if token value is 0, update it with pubsub token value
+		for addr, tokens := range tokenSyncMap {
+			_, did, ok := util.ParseAddress(addr)
+			if !ok {
+				c.log.Error("invalid address: %v", addr)
+			}
+			for _, token := range tokens {
+				wg.Add(1)
+				go func(addr string, token TokenSyncInfo) {
+					defer wg.Done()
+
+					const maxRetries = 3
+					const retryDelay = 2 * time.Second
+
+					var peer *ipfsport.Peer
+					var err error
+
+					for attempt := 1; attempt <= maxRetries; attempt++ {
+						peer, err = c.getPeer(addr)
+						if err == nil && peer != nil {
+							break
+						}
+						c.log.Warn("Failed to open peer connection, retrying...",
+							"peer", addr,
+							"attempt", attempt,
+							"error", err)
+						time.Sleep(retryDelay)
+					}
+
+					if peer == nil || err != nil {
+						c.log.Error("Failed to open peer after retries", "peer", addr, "error", err)
+
+						info := &model.FailedToSyncTokenDetailsInfo{
+							TokenID:   token.TokenID,
+							TokenType: token.TokenType,
+							AssetType: token.AssetType,
+							Did:       did,
+							Reason:    fmt.Sprintf("Failed to open peer after retries,peer%v, error%v", addr, err),
+						}
+
+						if err := c.w.AddFailedTokensToTable(info); err != nil {
+							c.log.Error("Failed to record failed token sync in DB", "token", token.TokenID, "error", err)
 						} else {
-							eventData.TokenValue = genesisBlock.GetTokenValue()
+							c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
+						}
+						return
+					}
+
+					defer peer.Close()
+
+					if err := c.SyncFullTokenChainForFullNode(peer, token); err != nil {
+						handled, _ := c.HandleSyncErrorAsDoubleSpent(err, detail.Token, detail.AssetType, detail.TokenType, detail.PublisherDid, existingBlockOwnerDID, detail.PublisherDid, fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid))
+						if handled {
+							// double-spend case already logged and stored in HandleSyncErrorAsDoubleSpent
+						} else {
+							c.log.Error("Failed to sync chain", "token", token.TokenID, "err", err)
+							info := &model.FailedToSyncTokenDetailsInfo{
+								TokenID:   token.TokenID,
+								TokenType: token.TokenType,
+								AssetType: token.AssetType,
+								Did:       did,
+								Reason:    fmt.Sprintf("failed to sync chain,err: %v", err),
+							}
+
+							if err := c.w.AddFailedTokensToTable(info); err != nil {
+								c.log.Error("Failed to record failed token sync in DB", "token", token.TokenID, "error", err)
+							} else {
+								c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
+							}
+						}
+					}
+					//if it is a part RBT Token, check how many child tokens exist for its parent token, if there are more than 2 add it in a table
+					if detail.AssetType == RBTTokenType {
+						if genesisBlock != nil {
+							parentTokenID, err := genesisBlock.GetParentDetials(detail.Token)
+							if err != nil {
+								c.log.Error("failed to get parent tokenID from the genesis block, token", detail.Token)
+							}
+							//ReadFullNode RBT Table, and count how many children it's parent tokenID is having
+							//if it is more than 2 add this parent tokenID along with its child tokens to another table
+							childTokens, err := c.w.GetChildTokensFromSyncedRBTTable(parentTokenID)
+							if len(childTokens) > MaxNumberOfChildTokensAllowed {
+								//add these child tokens and parent tokens into a new fullnode table.
+								for _, childToken := range childTokens {
+									token := model.FullNodeMultipleChildTokens{
+										ParentTokenID: childToken.ParentTokenID,
+										ChildTokenID:  childToken.TokenID,
+									}
+									err := c.w.AddTokenToMultipleParentsTable(&token)
+									if err != nil {
+										c.log.Error("failed to add a parent token to Fullnode's multiple child token table, parentToken", token.ParentTokenID)
+									}
+
+								}
+							}
+
 						}
 					}
 
-					c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
-					continue
-				}
-
-				c.log.Error("failed to read token ", detail.Token, "err ", err)
-				continue
+				}(addr, token)
 			}
-			if latestBlockHeight == existingBlockHeight {
-				if latestBlockHash != existingBlockHash || currentOwner != existingOwnerDID {
-					// TODO : Challenger node should verify the correct owner and correct block and add the correct info
-					errMsg := fmt.Sprintf("double spending the token %v, eixting owner : %v, and incoming owner : %v", detail.Token, existingOwnerDID, currentOwner)
-					c.log.Error(errMsg)
-					// add token to doublespent tokens table
-					doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-						TokenID:        detail.Token,
-						AssetType:      detail.AssetType,
-						TokenType:      detail.TokenType,
-						PublisherDID:   event.PublisherPeerID,
-						ClaimedOwnerI:  existingOwnerDID,
-						ClaimedOwnerII: currentOwner,
-					}
-					// store double spent token info in DoubleSpentTokens table
-					// and remove it from respective tokens table
-					err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-					if err != nil {
-						errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
-						c.log.Error(errMsg)
-					}
-					continue
-
-				}
-
-			}
-
-			eventData := model.PubSubTxnInfo{
-				BlockHash:         latestBlockHash,
-				TransactionID:     txnID,
-				PublisherDID:      detail.Did,
-				LatestBlockHeight: latestBlockHeight,
-				AssetType:         detail.AssetType,
-				// TokenValue:        detail.TokenValue,
-			}
-			// when latestBlockHeight != existingBlockHeight OR (latestBlockHeight == existingBlockHeight && blockhashes also matches,
-			//  sqlite table should get updated with the values which are derived from the latest block.
-			//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
-			// There is no token value in the Mainnet genesis block for migrated tokens.
-			//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
-			if genesisBlock != nil {
-				genesisBlockType := genesisBlock.GetTransType()
-				if genesisBlockType == block.TokenMigratedType {
-
-					eventData.TokenValue = detail.TokenValue
-				} else {
-					eventData.TokenValue = genesisBlock.GetTokenValue()
-				}
-			}
-
-			c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
 		}
+
+		wg.Wait()
+
+		// End timer after all syncs are done
+		batchDuration := time.Since(batchStart)
+
+		// Log batch sync time and details
+		c.log.Info("Completed token chain sync batch ",
+			"batch number", event.BatchNumber,
+			"num_peers to connect and sync tokenchain", len(tokenSyncMap),
+			"**********number_of_tokens_received_in the batch******** ", len(event.TokenDetails),
+			"total_duration_in_minutes", batchDuration.Minutes())
+
 	}
-
-	var wg sync.WaitGroup
-
-	//In the case where tokensyncmap is not nil at last read the fullnode's token table if token value is 0, update it with pubsub token value
-	for addr, tokens := range tokenSyncMap {
-		_, did, ok := util.ParseAddress(addr)
-		if !ok {
-			c.log.Error("invalid address: %v", addr)
-		}
-		for _, token := range tokens {
-			wg.Add(1)
-			go func(addr string, token TokenSyncInfo) {
-				defer wg.Done()
-
-				const maxRetries = 3
-				const retryDelay = 2 * time.Second
-
-				var peer *ipfsport.Peer
-				var err error
-
-				for attempt := 1; attempt <= maxRetries; attempt++ {
-					peer, err = c.getPeer(addr)
-					if err == nil && peer != nil {
-						break
-					}
-					c.log.Warn("Failed to open peer connection, retrying...",
-						"peer", addr,
-						"attempt", attempt,
-						"error", err)
-					time.Sleep(retryDelay)
-				}
-
-				if peer == nil || err != nil {
-					c.log.Error("Failed to open peer after retries", "peer", addr, "error", err)
-
-					info := &model.FailedToSyncTokenDetailsInfo{
-						TokenID:   token.TokenID,
-						TokenType: token.TokenType,
-						AssetType: token.AssetType,
-						Did:       did,
-					}
-
-					if err := c.w.AddFailedTokensToTable(info); err != nil {
-						c.log.Error("Failed to record failed token sync in DB", "token", token.TokenID, "error", err)
-					} else {
-						c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
-					}
-					return
-				}
-
-				defer peer.Close()
-
-				if err := c.SyncFullTokenChainForFullNode(peer, token); err != nil {
-					c.log.Error("Failed to sync chain", "token", token.TokenID, "err", err)
-					info := &model.FailedToSyncTokenDetailsInfo{
-						TokenID:   token.TokenID,
-						TokenType: token.TokenType,
-						AssetType: token.AssetType,
-						Did:       did,
-					}
-
-					if err := c.w.AddFailedTokensToTable(info); err != nil {
-						c.log.Error("Failed to record failed token sync in DB", "token", token.TokenID, "error", err)
-					} else {
-						c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
-					}
-				}
-			}(addr, token)
-		}
-	}
-
-	wg.Wait()
-
-	// End timer after all syncs are done
-	batchDuration := time.Since(batchStart)
-
-	// Log batch sync time and details
-	c.log.Info("Completed token chain sync batch ",
-		"batch number", event.BatchNumber,
-		"num_peers to connect and sync tokenchain", len(tokenSyncMap),
-		"**********number_of_tokens_received_in the batch******** ", len(event.TokenDetails),
-		"total_duration_in_minutes", batchDuration.Minutes())
-
 }
 
 // processRole handles specific roles (as integers) and returns a message
@@ -1210,14 +1453,14 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 		if strings.Contains(trep.Message, "Sent all blocks") {
 			if len(trep.TCBlock) > 0 {
-				syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
-				if syncerLatestBlk == nil {
+				peerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
+				if peerLatestBlk == nil {
 					c.log.Error("Failed to initialize peer's latest block", "token", tokenSyncInfo.TokenID)
 					return fmt.Errorf("failed to initialize peer's latest block")
 				}
-				syncerLatestBlkID, err = syncerLatestBlk.GetBlockID(tokenSyncInfo.TokenID)
+				syncerLatestBlkID, err = peerLatestBlk.GetBlockID(tokenSyncInfo.TokenID)
 				if err != nil {
-					c.log.Error("Failed to get block hash of synced block", "err", err, "token", tokenSyncInfo.TokenID)
+					c.log.Error("Failed to get blockID of synced block", "err", err, "token", tokenSyncInfo.TokenID)
 					return err
 				}
 			}
@@ -1230,10 +1473,21 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				return fmt.Errorf("failed to add token chain block, invalid block")
 			}
 
+			latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
+
+			err = c.ValidateIncomingTokenBlock(*blk, latestBlock, tokenSyncInfo.TokenID, p, tokenSyncInfo.AssetType)
+			if err != nil {
+				return err
+			}
+
+			//if all checks pass, add it to the levelDB.
 			err = c.w.AddFullNodeTokenBlock(tokenSyncInfo.TokenID, blk)
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err, "token", tokenSyncInfo.TokenID)
-				return err
+				return fmt.Errorf("failed to add token chain block, syncing failed: err=%v, token=%s",
+					err,
+					tokenSyncInfo.TokenID,
+				)
 			}
 		}
 
@@ -1302,10 +1556,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 					LatestBlock:  latestBlockAfterSync,
 				}
 				//add synced tokens to respective sqlite tables
-				if err := c.AddTokenContentToPSQL(tokenSyncInfo.TokenID, tokenSyncInfo.AssetType); err != nil {
-					// return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
-					c.log.Info("failed to add token's ipfs content to psql db, err:", err)
-				}
+
 				err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, blocks, event, syncStatus)
 				if err != nil {
 					c.log.Info("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
@@ -1326,7 +1577,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 	} else {
 		c.log.Error("latest block after sync is still nil ")
-		return fmt.Errorf("latest block after sync is still nil, token", tokenSyncInfo.TokenID)
+		return fmt.Errorf("latest block after sync is still nil, token%s", tokenSyncInfo.TokenID)
 	}
 
 	return nil
@@ -2367,11 +2618,17 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				// 	tokenInfo.TokenValue = event.TokenValue
 				// }
 				if receivedBlock.GenesisBlock != nil {
+					parentTokenID, err := receivedBlock.GenesisBlock.GetParentDetials(tokenId)
+					if err != nil {
+						c.log.Error("failed to get the parent tokenID for the token", tokenId)
+					}
+
 					genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
 					if genesisBlockType == block.TokenMigratedType {
-						tokenInfo.TokenValue = event.TokenValue
+						tokenInfo.TokenValue = wholeTokenValue //No need to add parentTokenID in case of TokenMigratedType because all migrated tokens are whole tokens
 					} else {
 						tokenInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
+						tokenInfo.ParentTokenID = parentTokenID
 					}
 
 				}
@@ -2408,7 +2665,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			if receivedBlock.GenesisBlock != nil {
 				genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
 				if genesisBlockType == block.TokenMigratedType {
-					syncedRBT.TokenValue = event.TokenValue
+					syncedRBT.TokenValue = wholeTokenValue
 				} else {
 					syncedRBT.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
 				}
@@ -2831,6 +3088,44 @@ func (c *Core) ReadTokenFromFullnodeTokensTable(assetType int, tokenId string) (
 	}
 }
 
+// IsDoubleSpendOrValidationError returns true if err indicates a double-spend or block validation
+// failure (chain mismatch, owner mismatch, or signature error).
+func IsDoubleSpendOrValidationError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "previous blockID of the blk which is getting added is not matching with the blockID which is present") ||
+		strings.Contains(s, "Owner of the latest blockID is not matchig with") ||
+		strings.Contains(s, "signature validation error") ||
+		strings.Contains(s, "invalid block signature for token")
+}
+
+// HandleSyncErrorAsDoubleSpent stores double-spent token info and logs when syncOrValidationErr
+// is a double-spend/validation error. Returns (true, nil) when handled and stored, (true, storeErr)
+// when storage failed, and (false, syncOrValidationErr) when the error is not a double-spend type.
+func (c *Core) HandleSyncErrorAsDoubleSpent(syncOrValidationErr error, tokenId string, assetType, tokenType int, publisherDID, claimedOwnerI, claimedOwnerII, errMessage string) (handled bool, retErr error) {
+	if !IsDoubleSpendOrValidationError(syncOrValidationErr) {
+		return false, syncOrValidationErr
+	}
+	info := &model.DoubleSpentTokenInfo{
+		TokenID:        tokenId,
+		AssetType:      assetType,
+		TokenType:      tokenType,
+		PublisherDID:   publisherDID,
+		ClaimedOwnerI:  claimedOwnerI,
+		ClaimedOwnerII: claimedOwnerII,
+		ErrorMessage:   errMessage,
+	}
+	storeErr := c.StoreDoubleSpentTokenInfo(info)
+	if storeErr != nil {
+		c.log.Error("failed to update double spent token", "token", tokenId, "err", storeErr)
+		return true, storeErr
+	}
+	c.log.Error("token has been added to double spent token's table", "token", tokenId, "error", syncOrValidationErr)
+	return true, nil
+}
+
 // Store double spent tokens in fullnode DB for later analysis
 func (c *Core) StoreDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpentTokenInfo) error {
 	err := c.w.AddDoubleSpentTokenInfo(doubleSpentTokenInfo)
@@ -2857,4 +3152,112 @@ func (c *Core) relaseToken(release *bool, token string) {
 	if *release {
 		c.w.ReleaseToken(token)
 	}
+}
+
+func (c *Core) ValidateNewTokenContent(tokenContent string) error {
+	devidedParts := strings.Split(tokenContent, "_")
+
+	tokenTypeString := RBTString
+	if len(devidedParts) == 3 {
+		tokenTypeString = PartString
+	}
+	tokenType := c.TokenType(tokenTypeString)
+
+	// parse level (e.g. "002")
+	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
+	if err != nil {
+		return fmt.Errorf("invalid token level in token content: %s", tokenContent)
+	}
+
+	// parse token number (e.g. "1000")
+	tokenNo, err := strconv.Atoi(devidedParts[1])
+	if err != nil {
+		return fmt.Errorf("invalid token number in token content: %s", tokenContent)
+	}
+
+	switch tokenType {
+	case token.TestTokenType, token.TestPartTokenType:
+		// Testnet: level is 10000+ (10000 = TokenMap level 0, 10001 = level 1, ...)
+		if level < token.LocalTestTokenLevelBase {
+			return fmt.Errorf(
+				"invalid testnet token level %d: testnet level must be >= %d",
+				level, token.LocalTestTokenLevelBase,
+			)
+		}
+		mapLevel := level - token.LocalTestTokenLevelBase
+		maxAllowed, ok := token.TokenMap[mapLevel]
+		if !ok {
+			return fmt.Errorf(
+				"invalid testnet token level %d: (level-%d=%d) not present in TokenMap",
+				level, token.LocalTestTokenLevelBase, mapLevel,
+			)
+		}
+		if tokenNo < 0 || tokenNo > maxAllowed {
+			return fmt.Errorf(
+				"testnet token number %d exceeds max allowed %d for level %d",
+				tokenNo, maxAllowed, level,
+			)
+		}
+		c.log.Debug("token content validated for the testtoken", tokenContent)
+	case token.RBTTokenType, token.PartTokenType:
+		// Mainnet: level is used directly as TokenMap key (0, 1, ... 78)
+		maxAllowed, ok := token.TokenMap[level]
+		if !ok {
+			return fmt.Errorf(
+				"invalid mainnet token level %d: not present in TokenMap",
+				level,
+			)
+		}
+		// if level exists in TokenMap, validate token number
+		if tokenNo < 0 || tokenNo > maxAllowed {
+			return fmt.Errorf(
+				"mainnet token number %d exceeds max allowed %d for level %d",
+				tokenNo, maxAllowed, level,
+			)
+		}
+		c.log.Debug("token content validated for the MainNet token", tokenContent)
+	}
+
+	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces(uint(MaxDecimalPlaces))
+	if tokenTypeString == PartString {
+		partTokenNumber, err := strconv.Atoi(devidedParts[2])
+		if err != nil {
+			return fmt.Errorf("invalid part number in token content: %s", tokenContent)
+		}
+		if partTokenNumber > MaxPossiblePartTokenNumber {
+			return fmt.Errorf(
+				"Parttoken number %d exceeds max allowed %d ",
+				partTokenNumber, MaxPossiblePartTokenNumber,
+			)
+
+		}
+		c.log.Debug("token content validated for the part token", tokenContent)
+
+	}
+
+	return nil
+}
+
+func (c *Core) GetTokenContentAndValidate(tokenId string, assetType int) error {
+	// ✅ Validation applies ONLY to RBT tokens
+	if assetType != RBTTokenType {
+		return nil
+	}
+
+	if tokenId != "" {
+		// Validate RBT token content against TokenMap
+		if err := c.ValidateNewTokenContent(tokenId); err != nil {
+			c.log.Error(
+				"Invalid RBT token content",
+				"tokenId", tokenId,
+				"err", err,
+			)
+			return err
+		}
+
+	}
+
+	c.log.Debug("Token content validated successfully for the token", tokenId)
+
+	return nil
 }

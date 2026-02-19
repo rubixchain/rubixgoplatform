@@ -919,25 +919,25 @@ func (c *Core) tokenSyncCleanupRoutine() {
 	}
 }
 
-func (c *Core) RetryFailedTokenSync() {
-	go func() {
-		c.RetryTokenSyncTicker = time.NewTicker(1 * time.Hour)
-		defer c.RetryTokenSyncTicker.Stop()
+// func (c *Core) RetryFailedTokenSync() {
+// 	go func() {
+// 		c.RetryTokenSyncTicker = time.NewTicker(1 * time.Hour)
+// 		defer c.RetryTokenSyncTicker.Stop()
 
-		for range c.RetryTokenSyncTicker.C {
-			retryErrChan := make(chan error, 1)
-			go func() {
-				retryErrChan <- c.RetryFailedTOSyncTokens()
-			}()
+// 		for range c.RetryTokenSyncTicker.C {
+// 			retryErrChan := make(chan error, 1)
+// 			go func() {
+// 				retryErrChan <- c.RetryFailedTOSyncTokens()
+// 			}()
 
-			err := <-retryErrChan
-			if err != nil {
-				c.log.Error("RetryFailedTOSyncTokens execution failed", "err", err)
-			} else {
-				c.log.Info("RetryFailedTOSyncTokens executed successfully")
-			}
+// 			err := <-retryErrChan
+// 			if err != nil {
+// 				c.log.Error("RetryFailedTOSyncTokens execution failed", "err", err)
+// 			} else {
+// 				c.log.Info("RetryFailedTOSyncTokens executed successfully")
+// 			}
 
-		}
+// 		}
 
-	}()
-}
+// 	}()
+// }

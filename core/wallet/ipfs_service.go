@@ -88,6 +88,21 @@ func (w *Wallet) Cat(hash string, role int, did string) (string, error) {
 	return string(result), nil
 }
 
+func (w *Wallet) IpfsCat(hash string) (string, error) {
+	data1, err := w.ipfsOps.Cat(hash)
+	if err != nil {
+		w.log.Error("Error fetching details from ipfs", "error", err)
+		return "", err
+	}
+	result, err := ioutil.ReadAll(data1)
+	if err != nil {
+		w.log.Error("Error formatting ipfs content", "error", err)
+		return "", err
+	}
+	return string(result), err
+
+}
+
 func (w *Wallet) Get(hash string, did string, role int, path string) error {
 	err := w.ipfsOps.Get(hash, path)
 	if err != nil {

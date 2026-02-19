@@ -62,6 +62,7 @@ type RegisterCallBackUrlReq struct {
 type TCRemoveRequest struct {
 	Token  string
 	Latest bool
+	BlockID string
 }
 
 type TCRemoveReply struct {

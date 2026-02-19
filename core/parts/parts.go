@@ -131,3 +131,21 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64
 
 	return tokensTransfer, nil
 }
+
+func MaxPossiblePartsIndexByMaxDecimalPlaces(maxDecimalPlaces uint) int {
+	totalPossibleLevels := 2 * maxDecimalPlaces //Actually 2*maxDecimalPlaces+1 will be the total possible levels but 1st level is about whole token so we are ignoring
+	sum := 0
+	nodesInLevel := make([]int, totalPossibleLevels+1)
+	nodesInLevel[0] = 1 // level 0 has 1 node
+	for i := uint(1); i <= totalPossibleLevels; i++ {
+		if i%2 == 1 {
+			nodesInLevel[i] = 2 * nodesInLevel[i-1]
+		} else {
+			nodesInLevel[i] = 5 * nodesInLevel[i-1]
+		}
+		sum += nodesInLevel[i]
+
+	}
+	return sum
+
+}

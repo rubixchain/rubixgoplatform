@@ -120,6 +120,31 @@ func tcsKey(tokenType int, t string, blockID string) string {
 	return tt + "-" + t + "-" + blockID
 }
 
+func tcsKeyBlkNum(tokenType int, t string, blockNum uint64) string {
+	tt := "wt"
+	switch tokenType {
+	case tkn.RBTTokenType:
+		tt = WholeTokenType
+	case tkn.PartTokenType:
+		tt = PartTokenType
+	case tkn.TestPartTokenType:
+		tt = TestPartTokenType
+	case tkn.NFTTokenType:
+		tt = NFTType
+	case tkn.TestNFTTokenType:
+		tt = TestNFTType
+	case tkn.TestTokenType:
+		tt = TestTokenType
+	case tkn.SmartContractTokenType:
+		tt = SmartContractTokenType
+	case tkn.FTTokenType:
+		tt = FTTokenType
+	}
+
+	return tt + "-" + t + "-" + fmt.Sprintf("%016x", blockNum)
+
+}
+
 func old2NewKey(key string) string {
 	bs := strings.Split(key, "-")
 	if len(bs) == 4 {
@@ -210,6 +235,14 @@ func (w *Wallet) getBlock(tt int, t string, blockID string) ([]byte, error) {
 		return nil, fmt.Errorf("failed get block, invalid token type")
 	}
 	return w.getRawBlock(db, []byte(tcsKey(tt, t, blockID)))
+}
+
+func (w *Wallet) getFullNodeBlockByNumber(tt int, t string, blockNum uint64) ([]byte, error) {
+	db := w.fullNodeStorage
+	if db == nil {
+		return nil, fmt.Errorf("failed get block, invalid token type")
+	}
+	return w.getRawBlock(db, []byte(tcsKeyBlkNum(tt, t, blockNum)))
 }
 
 // getFullNodeBlock gets chain block from the FullNode storage
@@ -942,6 +975,10 @@ func (w *Wallet) addBlocks(b *block.Block) error {
 	return nil
 }
 
+func (w *Wallet) GetFullNodeTokenBlockByNumber(token string, tokenType int, blockNum uint64) ([]byte, error) {
+	return w.getFullNodeBlockByNumber(tokenType, token, blockNum)
+}
+
 // GetTokenBlock get token chain block from the storage
 func (w *Wallet) GetTokenBlock(token string, tokenType int, blockID string) ([]byte, error) {
 	return w.getBlock(tokenType, token, blockID)
@@ -1010,6 +1047,10 @@ func (w *Wallet) RemoveTokenChainBlocklatest(token string, tokenType int) error 
 	return w.removeTokenChainBlockLatest(token, tokenType)
 }
 
+func (w *Wallet) RemoveTokenChainBlock(token string, tokenType int, blockID string) error {
+	return w.removeTokenChainBlock(token, tokenType, blockID)
+}
+
 // Remove Tokenchain for mentioned token
 func (w *Wallet) removeTokenChainBlockLatest(token string, tokenType int) error {
 	db := w.getChainDB(tokenType)
@@ -1049,6 +1090,37 @@ func (w *Wallet) removeFullNodeTokenChainBlockLatest(token string, tokenType int
 		}
 	} else {
 		return fmt.Errorf("no blocks found for the given token type and token")
+	}
+
+	return nil
+}
+func (w *Wallet) removeTokenChainBlock(
+	token string,
+	tokenType int,
+	blockID string,
+) error {
+	db := w.getChainDB(tokenType)
+	if db == nil {
+		return fmt.Errorf("failed get block, invalid token type")
+	}
+
+	key := []byte(tcsKey(tokenType, token, blockID))
+
+	// Optional but recommended: check if block exists
+	exists, err := db.Has(key, nil)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf(
+			"block not found for token=%s tokenType=%d blockID=%s",
+			token, tokenType, blockID,
+		)
+	}
+
+	// Delete the specific block
+	if err := db.Delete(key, nil); err != nil {
+		return err
 	}
 
 	return nil

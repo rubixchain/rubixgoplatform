@@ -1327,7 +1327,7 @@ func (c *Core) reqPledgeToken(req *ensweb.Request) *ensweb.Result {
 		}
 		tc := c.w.GetLatestTokenBlock(wt[i].TokenID, c.TokenType(ts))
 		if tc == nil {
-			c.log.Error("Failed to get latest token chain block")
+			c.log.Error("Failed to get latest token chain block for the token", wt[i].TokenID)
 			crep.Message = "Failed to get latest token chain block"
 			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}

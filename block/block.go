@@ -411,6 +411,9 @@ func (b *Block) VerifySignature(dc didmodule.DIDCrypto) error {
 		return fmt.Errorf("failed to read did signature & hash")
 	}
 	ok, err := dc.PvtVerify([]byte(h), util.StrToHex(s))
+	if !ok {
+		fmt.Println("*****signature verification failed***")
+	}
 	if err != nil || !ok {
 		return fmt.Errorf("failed to verify did signature")
 	}

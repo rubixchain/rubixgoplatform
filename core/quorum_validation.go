@@ -90,7 +90,9 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				c.log.Error("failed to setup foreign DID quorum", "err", err)
 				return false, fmt.Errorf("failed to setup foreign DID quorum : %v, err : %v ", signer, err)
 			}
+			c.log.Debug("**DIDCrypto **", dc, "sign type ", dc.GetSignType())
 		}
+
 		err := b.VerifySignature(dc)
 		if err != nil {
 			c.log.Error("Failed to verify signature: signer=%s, signType=%d, err=%v\n", signer, dc.GetSignType(), err)
@@ -211,7 +213,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, quorumDID string, ti contract.TokenInfo, p *ipfsport.Peer, address, receiverAddress string) (error, bool) {
 	// Skip DHT check in trusted network mode
 	if !c.cfg.CfgData.TrustedNetwork {
-		
+
 		tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(ti.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 		if err != nil {
 			c.log.Debug(fmt.Sprintf("validateSingleToken: unable to create IPFS hash of token: %v, err: %v", ti.Token, err))
@@ -265,7 +267,7 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 		}
 	}
 
-	// NOTE: Commented the following as the Token was as created using the 
+	// NOTE: Commented the following as the Token was as created using the
 	// old Level + hash(token_number) approach
 	//
 	//

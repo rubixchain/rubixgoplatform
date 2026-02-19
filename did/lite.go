@@ -148,11 +148,13 @@ func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
 func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
+		fmt.Println("failed to read the pubkey file for DIDLite", d.dir+PubKeyFileName)
 		return false, err
 	}
 
 	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKey)
 	if err != nil {
+		fmt.Println("failed to decode pubkeybyte for DIDLite")
 		return false, err
 	}
 
@@ -166,7 +168,8 @@ func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
 
 	pubKeySer := pubkeyback.ToECDSA()
 	if !crypto.BIPVerify(pubKeySer, hash, sign) {
-		return false, fmt.Errorf("failed to verify private key signature")
+		fmt.Println("purely signature verification failed for DID Lite")
+		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil
 }

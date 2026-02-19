@@ -148,10 +148,13 @@ func (cmd *Command) dumpTokenChain() {
 		}
 	}
 
-	elems := strings.Split(cmd.token, "_")
-	if len(elems) < 2 {
-		cmd.log.Error(fmt.Sprintf("Invalid token: %v", cmd.token))
-		return
+	if cmd.assetType == "rbt" || cmd.assetType == "RBT" {
+		elems := strings.Split(cmd.token, "_")
+		if len(elems) < 2 {
+			cmd.log.Error(fmt.Sprintf("Invalid token: %v", cmd.token))
+			return
+		}
+
 	}
 
 	blocks := make([]map[string]interface{}, 0)
@@ -414,7 +417,7 @@ func (cmd *Command) getSmartContractData() {
 }
 
 func (cmd *Command) removeTokenChainBlock() {
-	response, err := cmd.c.RemoveTokenChainBlock(cmd.token, cmd.latest)
+	response, err := cmd.c.RemoveTokenChainBlock(cmd.token, cmd.latest, cmd.BlockID)
 	if err != nil {
 		cmd.log.Error("Failed to remove token chain", "err", err)
 		return
