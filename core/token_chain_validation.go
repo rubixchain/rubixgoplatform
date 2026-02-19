@@ -778,3 +778,89 @@ func (c *Core) CurrentQuorumStatePinCheck(b *block.Block, tokenId string, tokenT
 
 	return response, nil
 }
+
+// ValidateIncomingTokenBlockChainIntegrity runs CHECK1 and CHECK2 only (prev block ID and owner/sender consistency).
+// Use this at quorum side. For fullnode, use ValidateIncomingTokenBlock which also does signature verification (CHECK3).
+func (c *Core) ValidateIncomingTokenBlockChainIntegrity(blk block.Block, latestBlock *block.Block, tokenID string, assetType int) error {
+	//CHECK1: check previous blockID of the block,  which we are going to add, it should be same as the latestBlockID which is alredy there for all nongenesis blocks
+	incomingBlkNumber, err := blk.GetBlockNumber(tokenID)
+	if err != nil {
+		c.log.Error("failed to get the blockNumber of the blk", "error", err, "token", tokenID)
+		return err
+	}
+	if incomingBlkNumber > 0 {
+		if latestBlock != nil {
+			latestBlockID, err := latestBlock.GetBlockID(tokenID)
+			if err != nil {
+				c.log.Error("Failed to get block id", "err", err, "token", tokenID)
+				return err
+			}
+			prevBlkID, err := blk.GetPrevBlockID(tokenID)
+			if err != nil {
+				return fmt.Errorf("failed to get previous block id: %w", err)
+			}
+			if prevBlkID != "" {
+				if prevBlkID != latestBlockID {
+					errMsg := fmt.Sprintf("previous blockID of the blk which is getting added is not matching with the blockID which is present: token=%s expected_prev=%s got_prev=%s",
+						tokenID,
+						latestBlockID,
+						prevBlkID)
+					c.log.Error(errMsg)
+					return fmt.Errorf(
+						"previous blockID of the blk which is getting added is not matching with the blockID which is present: token=%s expected_prev=%s got_prev=%s",
+						tokenID,
+						latestBlockID,
+						prevBlkID,
+					)
+				}
+			}
+		}
+	}
+
+	// CHECK2: for transferred/executed types, latest block owner must match sender/executor of incoming block
+	if incomingBlkNumber > 0 {
+		if latestBlock != nil {
+			transType := blk.GetTransType()
+			latestOwner := latestBlock.GetOwner()
+			sender := blk.GetSenderDID()
+
+			switch transType {
+			case block.TokenTransferredType, block.TokenSelfTransferredType:
+				if blk.GetSenderDID() != latestOwner {
+					errMsg := fmt.Sprintf("Owner of the latest blockID is not matchig with the sender of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
+						tokenID,
+						latestOwner,
+						sender,
+					)
+					c.log.Error(errMsg)
+					return fmt.Errorf("Owner of the latest blockID is not matchig with the sender of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
+						tokenID,
+						latestOwner,
+						sender,
+					)
+				}
+
+			case block.TokenExecutedType:
+				if assetType == NFTTokenType {
+					if blk.GetExecutorDID() != latestOwner {
+						errMsg := fmt.Sprintf("Owner of the latest blockID is not matchig with the Executor of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
+							tokenID,
+							latestOwner,
+							blk.GetExecutorDID())
+						c.log.Error(errMsg)
+						c.log.Error("owner of the latest blockID is not matchig with the Executor of the block which is going to get added")
+						return fmt.Errorf(
+							"Owner of the latest blockID is not matchig with the Executor of the block which is going to get added: token=%s,existingblockOwnerDID=%s,incomingblockSenderDID=%s",
+							tokenID,
+							latestOwner,
+							blk.GetExecutorDID(),
+						)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
