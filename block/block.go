@@ -122,6 +122,7 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 		op: false,
 	}
 	if b.bb == nil && b.bm == nil {
+		fmt.Println("failed to init block, bb and bm are nil")
 		return nil
 	}
 	for _, opt := range opts {
@@ -131,12 +132,14 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 	if b.bb == nil {
 		err = b.blkEncode()
 		if err != nil {
+			fmt.Println("failed to encode block", err.Error(), err)
 			return nil
 		}
 	}
 	if b.bm == nil {
 		err = b.blkDecode()
 		if err != nil {
+			fmt.Println("failed to decode block", err.Error(), err)
 			return nil
 		}
 	}

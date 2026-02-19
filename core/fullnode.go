@@ -146,6 +146,15 @@ func (c *Core) notifyExplorer(txnEvent *model.PubSubTxnInfo, txnBlock *block.Blo
 // Process transaction with retry mechanism
 func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) {
 	fmt.Println("Processing transaction with retry mechanism, txn:", txnEvent)
+	fmt.Println("BlockHash:", txnEvent.BlockHash)
+	fmt.Println("AssetType:", txnEvent.AssetType)
+	fmt.Println("PublisherDID:", txnEvent.PublisherDID)
+	fmt.Println("ReceiverDID:", txnEvent.ReceiverDID)
+	fmt.Println("LatestBlockHeight:", txnEvent.LatestBlockHeight)
+	fmt.Println("TransactionValue:", txnEvent.TransactionValue)
+	fmt.Println("FTName:", txnEvent.FTName)
+	fmt.Println("CreatorDID:", txnEvent.CreatorDID)
+	fmt.Println("TokenValue:", txnEvent.TokenValue)
 	var lastErr error
 
 	for attempt := 0; attempt < c.txnProcessor.maxRetries; attempt++ {
@@ -190,7 +199,9 @@ func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) 
 // Enhanced single transaction processing with better error handling
 func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 	receiverDid := newEvent.ReceiverDID
-
+	if newEvent.TxnBlock == nil {
+		return fmt.Errorf("transaction block is nil for txn %s", newEvent.BlockHash)
+	}
 	// Initialize block with error handling
 	txnBlock := block.InitBlock(newEvent.TxnBlock, nil)
 	if txnBlock == nil {
