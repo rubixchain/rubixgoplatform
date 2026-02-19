@@ -1453,14 +1453,14 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 		if strings.Contains(trep.Message, "Sent all blocks") {
 			if len(trep.TCBlock) > 0 {
-				peerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
-				if peerLatestBlk == nil {
+				syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
+				if syncerLatestBlk == nil {
 					c.log.Error("Failed to initialize peer's latest block", "token", tokenSyncInfo.TokenID)
 					return fmt.Errorf("failed to initialize peer's latest block")
 				}
-				syncerLatestBlkID, err = peerLatestBlk.GetBlockID(tokenSyncInfo.TokenID)
+				syncerLatestBlkID, err = syncerLatestBlk.GetBlockID(tokenSyncInfo.TokenID)
 				if err != nil {
-					c.log.Error("Failed to get blockID of synced block", "err", err, "token", tokenSyncInfo.TokenID)
+					c.log.Error("Failed to get block hash of synced block", "err", err, "token", tokenSyncInfo.TokenID)
 					return err
 				}
 			}
@@ -1473,21 +1473,10 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				return fmt.Errorf("failed to add token chain block, invalid block")
 			}
 
-			latestBlock := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
-
-			err = c.ValidateIncomingTokenBlock(*blk, latestBlock, tokenSyncInfo.TokenID, p, tokenSyncInfo.AssetType)
-			if err != nil {
-				return err
-			}
-
-			//if all checks pass, add it to the levelDB.
 			err = c.w.AddFullNodeTokenBlock(tokenSyncInfo.TokenID, blk)
 			if err != nil {
 				c.log.Error("Failed to add token chain block, syncing failed", "err", err, "token", tokenSyncInfo.TokenID)
-				return fmt.Errorf("failed to add token chain block, syncing failed: err=%v, token=%s",
-					err,
-					tokenSyncInfo.TokenID,
-				)
+				return err
 			}
 		}
 
@@ -1556,7 +1545,10 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 					LatestBlock:  latestBlockAfterSync,
 				}
 				//add synced tokens to respective sqlite tables
-
+				if err := c.AddTokenContentToPSQL(tokenSyncInfo.TokenID, tokenSyncInfo.AssetType); err != nil {
+					// return fmt.Errorf("failed to add token's ipfs content to psql db, err: %v", err)
+					c.log.Info("failed to add token's ipfs content to psql db, err:", err)
+				}
 				err = c.AddTokenToRespectiveTable(tokenSyncInfo.TokenID, ownerDid, blocks, event, syncStatus)
 				if err != nil {
 					c.log.Info("Failed to add token details to respective tables", "token", tokenSyncInfo.TokenID, "err", err)
@@ -1577,7 +1569,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 	} else {
 		c.log.Error("latest block after sync is still nil ")
-		return fmt.Errorf("latest block after sync is still nil, token%s", tokenSyncInfo.TokenID)
+		return fmt.Errorf("latest block after sync is still nil, token", tokenSyncInfo.TokenID)
 	}
 
 	return nil
