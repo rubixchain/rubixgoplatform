@@ -2262,11 +2262,11 @@ func (c *Core) quorumPledgeFinality(cr *ConensusRequest, newBlock *block.Block, 
 		err = qPeer.SendJSONRequest("POST", APIUpdatePledgeToken, nil, &ur, &br, true)
 		if err != nil {
 			c.log.Error("Failed to update pledge token status", "err", err)
-			return fmt.Errorf("failed to update pledge token status")
+			return fmt.Errorf("failed to update pledge token status,err%v", err)
 		}
 		if !br.Status {
 			c.log.Error("Failed to update pledge token status", "msg", br.Message)
-			return fmt.Errorf("failed to update pledge token status")
+			return fmt.Errorf("failed to update pledge token status, response status from APIUpdatePledgeToken: %t", br.Status)
 		}
 	}
 	return nil

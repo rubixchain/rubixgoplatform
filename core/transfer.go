@@ -213,7 +213,6 @@ func (c *Core) initiateRBTTransfer(reqID string, req *model.RBTTransferRequest) 
 	// transTokensSyncInfo := make(map[string]GenesisAndLatestBlocks, len(tokensForTxn))
 
 	for i := range tokensForTxn {
-		c.log.Warn(fmt.Sprintf("Tokens being selected for transfer: %v", tokensForTxn[i]))
 		tts := "rbt"
 		if tokensForTxn[i].TokenValue != 1 {
 			tts = "part"
