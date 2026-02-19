@@ -795,8 +795,6 @@ func (c *Core) ValidateIncomingTokenBlockChainIntegrity(blk block.Block, latestB
 				c.log.Error("Failed to get block id", "err", err, "token", tokenID)
 				return err
 			}
-			c.log.Debug("***existing blockID in ValidateIncomingTokenBlockChainIntegrity***", latestBlockID, "token:", tokenID)
-
 			prevBlkID, err := blk.GetPrevBlockID(tokenID)
 			if err != nil {
 				return fmt.Errorf("failed to get previous block id: %w", err)
