@@ -77,6 +77,10 @@ func (c *Core) GetSmartContractsbyDID(DID string) ([]wallet.SyncedSmartContract,
 }
 
 func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenChainResponce {
+	fmt.Println("*****************************************************")
+	fmt.Println("TokenID: ", TokenID)
+	fmt.Println("TokenType: ", TokenType)
+	fmt.Println("*****************************************************")
 	getTokenChainReply := &model.GetTokenChainResponce{
 		BasicResponse: model.BasicResponse{
 			Status: false,
@@ -111,6 +115,11 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 	blockID := ""
 	for {
 		blks, nextID, err := c.w.GetAllFullNodeTokenBlocks(TokenID, tokenTypeInt, blockID)
+		fmt.Println("*****************************************************")
+		fmt.Println("blks: ", blks)
+		fmt.Println("nextID: ", nextID)
+		fmt.Println("err: ", err)
+		fmt.Println("*****************************************************")
 		if err != nil {
 			c.log.Error(fmt.Sprintf("Failed to get %s token chain blocks", TokenType), "err", err)
 			break
