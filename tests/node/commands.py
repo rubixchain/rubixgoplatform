@@ -146,11 +146,11 @@ def cmd_add_peer_details(peer_id, did_id, did_type, server_port, grpc_port):
     os.chdir("../tests")
     return output
 
-def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port, priv_pwd = "mypassword"):
+def cmd_generate_rbt(did_id, numTokens, server_port, grpc_port, start_index=0, priv_pwd = "mypassword"):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -grpcPort {grpc_port} -privPWD {priv_pwd}"
+    cmd_string = f"./rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -startIndex {start_index} -grpcPort {grpc_port} -privPWD {priv_pwd}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -grpcPort {grpc_port} -privPWD {priv_pwd}"
+        cmd_string = f".\\rubixgoplatform generatetestrbt -did {did_id} -numTokens {numTokens} -port {server_port} -startIndex {start_index} -grpcPort {grpc_port} -privPWD {priv_pwd}"
     output, code = run_command(cmd_string, True)
     
     if code != 0:

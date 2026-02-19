@@ -161,8 +161,8 @@ def create_and_register_did(config: dict, did_alias: str, did_type: int = 4, reg
 
         return did
 
-def fund_did_with_rbt(node_config: dict, did: str,  rbt_amount: int = 70, priv_pwd="mypassword"):
-    cmd_generate_rbt(did, rbt_amount, node_config["server"], node_config["grpcPort"], priv_pwd)
+def fund_did_with_rbt(node_config: dict, did: str,  rbt_amount: int = 70, start_index=0, priv_pwd="mypassword"):
+    cmd_generate_rbt(did, rbt_amount, node_config["server"], node_config["grpcPort"], priv_pwd=priv_pwd, start_index=start_index)
     print("DID ", did, f" is funded with {rbt_amount} RBT")
 
 def rbt_transfer(

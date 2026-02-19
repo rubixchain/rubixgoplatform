@@ -61,7 +61,7 @@ def tests():
     didB_grpc = rbt_transfer_node_config["node40"]["grpcPort"]
 
     print("\n1. Generating 2 whole RBT for A")
-    expect_success(fund_did_with_rbt)(rbt_transfer_node_config["node39"], didA, 2)
+    expect_success(fund_did_with_rbt)(rbt_transfer_node_config["node39"], didA, 2, 71)
     print("Funded node A with 2 RBT")
 
     print("\n2. Transferring 0.5 RBT from A to A1....")
