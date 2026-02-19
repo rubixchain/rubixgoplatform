@@ -7,129 +7,58 @@ on:
         - main
 
 jobs:
-    test-linux:
-        name: "Test - Linux Environment"
-        runs-on: ubuntu-latest
+    run-tests:
+        name: "Test - ${{ matrix.os }} - ${{ matrix.suite.name }}"
+        runs-on: ${{ matrix.os }}
+        strategy:
+          fail-fast: false
+          matrix:
+            os: [ubuntu-latest, macos-latest, windows-latest]
+            suite:
+              - { script: "asset_ft_tests.py",             name: "FT" }
+              - { script: "asset_nft_tests.py",            name: "NFT" }
+              - { script: "asset_rbt_tests.py",            name: "RBT" }
+              - { script: "asset_smart_contract_tests.py", name: "SmartContract" }
+
         steps:
             - name: Checkout
               uses: actions/checkout@v4
               with:
                 fetch-depth: 0
-            
+
             - name: Setup Golang v1.21.9
               uses: actions/setup-go@v5
               with:
                 go-version: '1.21.9'
-            
+
             - name: Setup Python v3.11
               uses: actions/setup-python@v5
               with:
                 python-version: '3.11'
 
             - name: Install test dependency
-              run: |
-                pip3 install requests
-            
-            - name: Run tests
-              run: |
-                cd tests && ls && python3 -u run.py
+              run: pip3 install requests
 
-            - name: Packing Quorum and Non-Quorum node logs
-              if: always()
-              run: |
-                cd tests && python3 -u pack_node_logs.py
-            
-            - name: Set Timestamp for Node Logs 
-              if: always()
-              run: echo "TIMESTAMP=$(date -u +'%Y-%m-%dT%H-%M-%SZ' | sed 's/:/-/g')" >> $GITHUB_ENV
-
-            - name: Uploading Quorum and Non-Quorum node logs as Artifacts
-              if: always()
-              uses: actions/upload-artifact@v4
-              with:
-                name: node-logs-linux-${{ env.TIMESTAMP }}
-                path: tests/node_logs
-  
-    test-macos:
-        name: "Test - MacOS Environment"
-        runs-on: macos-latest
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-              with:
-                fetch-depth: 0
-            
-            - name: Setup Golang v1.21.9
-              uses: actions/setup-go@v5
-              with:
-                go-version: '1.21.9'
-            
-            - name: Setup Python v3.11
-              uses: actions/setup-python@v5
-              with:
-                python-version: '3.11'
-            
-            - name: Install test dependency
-              run: |
-                pip3 install requests
-            
-            - name: MacOS install tmux
+            - name: Install tmux (macOS only)
+              if: matrix.os == 'macos-latest'
               run: brew install tmux
 
+            - name: Install prerequisites
+              run: cd tests && python3 -u install_prerequisites.py
+
             - name: Run tests
-              run: |
-                cd tests && ls && python3 -u run.py
+              run: ls && python3 -u ${{ matrix.suite.script }}
 
             - name: Packing Quorum and Non-Quorum node logs
               if: always()
-              run: |
-                cd tests && python3 -u pack_node_logs.py
+              run: cd tests && python3 -u pack_node_logs.py
 
-            - name: Set Timestamp for Node Logs 
-              if: always()
+            - name: Set Timestamp for Node Logs (Unix)
+              if: always() && runner.os != 'Windows'
               run: echo "TIMESTAMP=$(date -u +'%Y-%m-%dT%H-%M-%SZ' | sed 's/:/-/g')" >> $GITHUB_ENV
 
-            - name: Uploading Quorum and Non-Quorum node logs as Artifacts
-              if: always()
-              uses: actions/upload-artifact@v4
-              with:
-                name: node-logs-macos-${{ env.TIMESTAMP }}
-                path: tests/node_logs
-
-    test-windows:
-        name: "Test - Windows Environment"
-        runs-on: windows-latest
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-              with:
-                fetch-depth: 0
-
-            - name: Setup Golang v1.21.9
-              uses: actions/setup-go@v5
-              with:
-                go-version: '1.21.9'
-
-            - name: Setup Python v3.11
-              uses: actions/setup-python@v5
-              with:
-                python-version: '3.11'
-            
-            - name: Install test dependency
-              run: |
-                pip3 install requests
-            
-            - name: Run tests
-              run: |
-                cd tests && ls && python3 -u run.py
-
-            - name: Packing Quorum and Non-Quorum node logs
-              if: always()
-              run: |
-                cd tests && python3 -u pack_node_logs.py
-            
-            - name: Set Timestamp for Node Logs 
-              if: always()
+            - name: Set Timestamp for Node Logs (Windows)
+              if: always() && runner.os == 'Windows'
               shell: pwsh
               run: |
                 $timestamp = Get-Date -Format "yyyy-MM-ddTHH-mm-ssZ"
@@ -139,5 +68,5 @@ jobs:
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                name: node-logs-windows-${{ env.TIMESTAMP }}
+                name: node-logs-${{ runner.os }}-${{ matrix.suite.name }}-${{ env.TIMESTAMP }}
                 path: tests/node_logs
