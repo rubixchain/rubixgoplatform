@@ -104,10 +104,13 @@ func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
 
-	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
-	if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !isAlphanumeric {
-		s.log.Error("Invalid TokenID format", "TokenID", TokenID, "TokenType", TokenType)
-		return s.BasicResponse(req, false, "Invalid FT token ID", nil)
+	// Validation for NFT and Smart Contract tokens
+	if strings.ToUpper(TokenType) != "RBT" && strings.ToUpper(TokenType) != "FT" && strings.ToUpper(TokenType) != "PART" {
+		isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
+		if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !isAlphanumeric {
+			s.log.Error("Invalid TokenID format", "TokenID", TokenID, "TokenType", TokenType)
+			return s.BasicResponse(req, false, "Invalid token ID format", nil)
+		}
 	}
 
 	s.log.Info("Fetching token chain", "TokenID", TokenID, "TokenType", TokenType)

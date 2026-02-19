@@ -51,11 +51,6 @@ func (s *Server) APIGetFTTokenchain(req *ensweb.Request) *ensweb.Result {
 	if TokenID == "" {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
-	if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !is_alphanumeric {
-		s.log.Error("Invalid FT token")
-		return s.BasicResponse(req, false, "Invalid FT token ID", nil)
-	}
 	getResp := s.c.GetFTTokenchain(TokenID)
 	return s.RenderJSON(req, getResp, http.StatusOK)
 }
