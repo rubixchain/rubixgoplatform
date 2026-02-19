@@ -124,6 +124,11 @@ func tcMarshal(str string, m interface{}) (string, error) {
 		// TokenValue (key: "10") is a float value and needs to have a precision of 5
 		// in the output dump file
 		str = str + fmt.Sprintf("%.*f", math.MaxDecimalPlaces, mt)
+	case interface{}:
+		str, err = tcMarshal(str, mt)
+		if err != nil {
+			return "", err
+		}
 	case nil:
 		str = str + "\"" + "\""
 	default:
