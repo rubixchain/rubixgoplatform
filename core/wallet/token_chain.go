@@ -159,7 +159,7 @@ func old2NewKey(key string) string {
 
 func isOldKey(key string) bool {
 	return false
-	
+
 	//return len(key) != DefaultKeyLength
 }
 

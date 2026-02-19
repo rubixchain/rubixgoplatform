@@ -85,8 +85,6 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 		TokenChainData: nil,
 	}
 
-	blocks := make([]map[string]interface{}, 0)
-	blockID := ""
 	var tokenTypeString string
 
 	switch strings.ToUpper(TokenType) {
@@ -106,28 +104,33 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 		return getTokenChainReply
 	}
 
-	// Fetch token chain blocks iteratively
-	for {
-		blks, nextID, err := c.w.GetAllFullNodeTokenBlocks(TokenID, c.TokenType(tokenTypeString), blockID)
-		if err != nil {
-			getTokenChainReply.Message = fmt.Sprintf("Failed to get %s token chain blocks", TokenType)
-			c.log.Error(getTokenChainReply.Message, "err", err)
-			return getTokenChainReply
-		}
+	tokenTypeInt := c.TokenType(tokenTypeString)
 
+	// Read blocks from local fullNodeStorage
+	blocks := make([]map[string]interface{}, 0)
+	blockID := ""
+	for {
+		blks, nextID, err := c.w.GetAllFullNodeTokenBlocks(TokenID, tokenTypeInt, blockID)
+		if err != nil {
+			c.log.Error(fmt.Sprintf("Failed to get %s token chain blocks", TokenType), "err", err)
+			break
+		}
 		for _, blk := range blks {
 			b := block.InitBlock(blk, nil)
 			if b != nil {
 				blocks = append(blocks, b.GetBlockMap())
-			} else {
-				c.log.Error(fmt.Sprintf("Invalid %s block", TokenType))
 			}
 		}
-
 		blockID = nextID
 		if nextID == "" {
 			break
 		}
+	}
+
+	if len(blocks) == 0 {
+		getTokenChainReply.Status = true
+		getTokenChainReply.Message = fmt.Sprintf("No %s tokenchain data available", TokenType)
+		return getTokenChainReply
 	}
 
 	str, err := tcMarshal("", blocks)
@@ -154,10 +157,6 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 	getTokenChainReply.Status = true
 	getTokenChainReply.Message = fmt.Sprintf("%s tokenchain data fetched successfully", TokenType)
 	getTokenChainReply.TokenChainData = data
-
-	if len(getTokenChainReply.TokenChainData) == 0 {
-		getTokenChainReply.Message = fmt.Sprintf("No %s tokenchain data available", TokenType)
-	}
 
 	return getTokenChainReply
 }
