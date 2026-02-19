@@ -55,12 +55,15 @@ def get_os_info():
 def download_ipfs_binary(os_name, version, build_dir):
     download_url = ""
     
+    machine = platform.machine().lower()
+    mac_arch = "arm64" if machine == "arm64" else "amd64"
+
     if os_name == "Linux":
         download_url = f"https://dist.ipfs.tech/kubo/{version}/kubo_{version}_linux-amd64.tar.gz"
     elif os_name == "Windows":
         download_url = f"https://dist.ipfs.tech/kubo/{version}/kubo_{version}_windows-amd64.zip"
     elif os_name == "Darwin":  # MacOS
-        download_url = f"https://dist.ipfs.tech/kubo/{version}/kubo_{version}_darwin-amd64.tar.gz"
+        download_url = f"https://dist.ipfs.tech/kubo/{version}/kubo_{version}_darwin-{mac_arch}.tar.gz"
     else:
         raise ValueError("Unsupported operating system")
 
@@ -82,7 +85,7 @@ def download_ipfs_binary(os_name, version, build_dir):
     else:
         # For Linux and MacOS, we use tar
         import tarfile
-        with tarfile.open(download_path, "r:gz" if os_name != "Darwin" else "r") as tar_ref:
+        with tarfile.open(download_path, "r:gz") as tar_ref:
             tar_ref.extractall("kubo")
     print("Extraction completed.")
 
