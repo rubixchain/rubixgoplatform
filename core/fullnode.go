@@ -145,6 +145,7 @@ func (c *Core) notifyExplorer(txnEvent *model.PubSubTxnInfo, txnBlock *block.Blo
 
 // Process transaction with retry mechanism
 func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) {
+	fmt.Println("Processing transaction with retry mechanism, txn:", txnEvent)
 	var lastErr error
 
 	for attempt := 0; attempt < c.txnProcessor.maxRetries; attempt++ {
