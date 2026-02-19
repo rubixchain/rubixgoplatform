@@ -240,9 +240,6 @@ func (w *Wallet) NotifyExplorerServer(b *block.Block, evt *model.NotifyExplorer)
 	payloadJson, _ := json.MarshalIndent(push, "", "  ")
 	fmt.Printf("\n==== SENDING TO EXPLORER ====\n%s\n=============================\n\n", string(payloadJson))
 
-	fmt.Println("📡 Dispatching to Explorer Server",
-		"tokenCount", len(evt.TokenDetails))
-
 	// Queue as async job (non-blocking)
 	if err := notifQueue.Enqueue(explorerURL, body); err != nil {
 		w.log.Warn("Failed to queue explorer notification", "error", err)

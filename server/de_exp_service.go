@@ -96,9 +96,6 @@ func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
 	TokenID := strings.TrimSpace(s.GetQuerry(req, "tokenID"))
 	TokenType := strings.TrimSpace(s.GetQuerry(req, "tokenType"))
 
-	// Log entry point
-	s.log.Info("APIGetFullTokenChain called", "TokenID", TokenID, "TokenType", TokenType)
-
 	if strings.Compare(TokenID, "") == 0 || strings.Compare(TokenType, "") == 0 {
 		s.log.Error("Invalid input for APIGetFullTokenChain", "TokenID", TokenID, "TokenType", TokenType)
 		return s.BasicResponse(req, false, "Invalid input", nil)
@@ -118,7 +115,6 @@ func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
-	s.log.Info("Fetching token chain", "TokenID", TokenID, "TokenType", TokenType)
 	getResp := s.c.GetTokenchain(TokenID, TokenType)
 
 	if getResp == nil {
@@ -126,7 +122,6 @@ func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to fetch token chain", nil)
 	}
 
-	s.log.Info("Tokenchain fetched successfully", "TokenID", TokenID, "TokenType", TokenType)
 	return s.RenderJSON(req, getResp, http.StatusOK)
 }
 
