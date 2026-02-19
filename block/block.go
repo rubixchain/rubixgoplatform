@@ -143,6 +143,12 @@ func InitBlock(bb []byte, bm map[string]interface{}, opts ...BlockOption) *Block
 			return nil
 		}
 	}
+	fmt.Println("Block map:", b.bm)
+	fmt.Println("Block bytes:", b.bb)
+	fmt.Println("Block op:", b.op)
+	fmt.Println("Block log:", b.log)
+	fmt.Println("Block err:", err)
+	fmt.Println("Block init done")
 	return b
 }
 
