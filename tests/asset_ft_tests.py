@@ -5,42 +5,12 @@ from node.actions import rbt_transfer, fund_did_with_rbt, setup_rubix_nodes, \
     transfer_ft, register_quorums_from_config
 from node.utils import get_did_by_alias
 from config.utils import save_to_config_file, load_from_config_file
-from helper.utils import expect_failure, expect_success
+from helper.utils import expect_failure, expect_success, expect_success_within_retries
 from node.quorum import get_quorum_config, run_quorum_nodes
-from constants import IPFS_KUBO_VERSION
-from prerequisite import get_testnet_ipfs_swarm_key, get_os_info, download_ipfs_binary, copy_fixtures_to_build_dir
 from node.commands import run_command
 
 __quorum_list_file_name = "quorumlist_ft.json"
 __quorum_config_file_name = "quorum_config_ft.json"
-
-def load_prerequisite():
-    os_name, build_folder = get_os_info()
-    if os_name is None:
-        exit(1)
-
-    os.chdir("../")
-    print(f"Building Rubix binary for {os_name}\n")
-    build_command = ""
-    if os_name == "Linux":
-        build_command = "make compile-linux"
-    elif os_name == "Windows":
-        build_command = "make compile-windows"
-    elif os_name == "Darwin":
-        build_command = "make compile-mac"
-    
-    output, code = run_command(build_command)
-    if code != 0:
-        print("build failed with error:", output)
-        exit(1)
-    else:
-        print("\nBuild successful\n")
-
-    get_testnet_ipfs_swarm_key(build_folder)
-    download_ipfs_binary(os_name, IPFS_KUBO_VERSION, build_folder)
-    copy_fixtures_to_build_dir(build_folder)
-   
-    os.chdir("./tests") 
 
 
 def boot_quorums():
@@ -96,20 +66,14 @@ def tests():
     print("\n2. Minting 10000 ABC FTs to DID of node11 (didA)")
     expect_success(mint_ft)(ft_transfer_node_config["node11"], didA, "ABC", 10000, 10)
 
-    time.sleep(30)
-
     print("\n3. Transferring 300 ABC FTs from DID of node11 (didA) to DID of node12 (didB)")
-    expect_success(transfer_ft)(didA, didB, ft_creator_did_ABC, "ABC", 300, didA_port)
-
-    time.sleep(20)
+    expect_success_within_retries(transfer_ft)(didA, didB, ft_creator_did_ABC, "ABC", 300, didA_port)
 
     print("\n4. Transferring 300 ABC FTs from DID of node12 (didB) to DID of node11 (didA)")
-    expect_success(transfer_ft)(didB, didA, ft_creator_did_ABC, "ABC", 300, didB_port)
-    
-    time.sleep(20)
+    expect_success_within_retries(transfer_ft)(didB, didA, ft_creator_did_ABC, "ABC", 300, didB_port)
 
     print("\n5. Transferring 1000 ABC FTs from DID of node11 (didA) to DID of node12 (didB)")
-    expect_success(transfer_ft)(didA, didB, ft_creator_did_ABC, "ABC", 1000, didA_port)
+    expect_success_within_retries(transfer_ft)(didA, didB, ft_creator_did_ABC, "ABC", 1000, didA_port)
     
 
     print("\n6. Transferring 100000 ABC FTs (inssufficient funds) from DID of node11 (didA) to DID of node12 (didB)")
@@ -117,8 +81,6 @@ def tests():
     print("done")
 
 if __name__=='__main__':
-    # load_prerequisite()
-
     boot_quorums()
 
     setup()

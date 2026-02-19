@@ -7,42 +7,10 @@ from node.utils import get_did_by_alias, update_sample_artifact_file
 from config.utils import save_to_config_file, load_from_config_file
 from helper.utils import expect_success
 from node.quorum import run_quorum_nodes
-from constants import IPFS_KUBO_VERSION
-from prerequisite import get_testnet_ipfs_swarm_key, get_os_info, download_ipfs_binary, copy_fixtures_to_build_dir
 from node.commands import run_command
-
 
 __quorum_list_file_name = "quorumlist_nft.json"
 __quorum_config_file_name = "quorum_config_nft.json"
-
-def load_prerequisite():
-    os_name, build_folder = get_os_info()
-    if os_name is None:
-        exit(1)
-
-    os.chdir("../")
-    print(f"Building Rubix binary for {os_name}\n")
-    build_command = ""
-    if os_name == "Linux":
-        build_command = "make compile-linux"
-    elif os_name == "Windows":
-        build_command = "make compile-windows"
-    elif os_name == "Darwin":
-        build_command = "make compile-mac"
-    
-    output, code = run_command(build_command)
-    if code != 0:
-        print("build failed with error:", output)
-        exit(1)
-    else:
-        print("\nBuild successful\n")
-
-    get_testnet_ipfs_swarm_key(build_folder)
-    download_ipfs_binary(os_name, IPFS_KUBO_VERSION, build_folder)
-    copy_fixtures_to_build_dir(build_folder)
-   
-    os.chdir("./tests") 
-
 
 def boot_quorums():
     run_quorum_nodes(
@@ -121,8 +89,6 @@ def tests():
     assert current_owner == didA2, f"expected current owner of NFT to be {didA2}, found {current_owner}"
 
 if __name__=='__main__':
-    # load_prerequisite()
-
     boot_quorums()
 
     setup()

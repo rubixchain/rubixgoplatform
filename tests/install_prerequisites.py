@@ -22,7 +22,7 @@ if __name__=='__main__':
         build_name = "windows"
     elif os_name == "Darwin":
         build_command = "make compile-mac"
-        build_name = "darwin"
+        build_name = "mac"
     
     output, code = run_command(build_command)
     if code != 0:
@@ -33,7 +33,7 @@ if __name__=='__main__':
 
     get_testnet_ipfs_swarm_key(build_folder)
     download_ipfs_binary(os_name, IPFS_KUBO_VERSION, build_folder)
-    generate_ipfs_swarm_key(build_name)
+    generate_ipfs_swarm_key(build_folder)
     copy_fixtures_to_build_dir(build_folder)
    
     os.chdir("./tests") 
