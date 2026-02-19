@@ -77,10 +77,6 @@ func (c *Core) GetSmartContractsbyDID(DID string) ([]wallet.SyncedSmartContract,
 }
 
 func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenChainResponce {
-	fmt.Println("*****************************************************")
-	fmt.Println("TokenID: ", TokenID)
-	fmt.Println("TokenType: ", TokenType)
-	fmt.Println("*****************************************************")
 	getTokenChainReply := &model.GetTokenChainResponce{
 		BasicResponse: model.BasicResponse{
 			Status: false,
@@ -93,7 +89,13 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 
 	switch strings.ToUpper(TokenType) {
 	case "RBT":
+		// Check if it's a part token (value < 1.0), same as DumpFullnodeTokenChain
 		tokenTypeString = RBTString
+		if rbt, err := c.w.ReadSyncedRBTFromTable(TokenID); err == nil && rbt != nil {
+			if rbt.TokenValue < 1.0 {
+				tokenTypeString = PartString
+			}
+		}
 	case "PART":
 		tokenTypeString = PartString
 	case "FT":
@@ -115,11 +117,6 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 	blockID := ""
 	for {
 		blks, nextID, err := c.w.GetAllFullNodeTokenBlocks(TokenID, tokenTypeInt, blockID)
-		fmt.Println("*****************************************************")
-		fmt.Println("blks: ", blks)
-		fmt.Println("nextID: ", nextID)
-		fmt.Println("err: ", err)
-		fmt.Println("*****************************************************")
 		if err != nil {
 			c.log.Error(fmt.Sprintf("Failed to get %s token chain blocks", TokenType), "err", err)
 			break
@@ -148,19 +145,11 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 		return nil
 	}
 
-	byteArray := []byte(str)
 	var data []interface{}
-
-	err = json.Unmarshal(byteArray, &data)
+	err = json.Unmarshal([]byte(str), &data)
 	if err != nil {
 		c.log.Error(fmt.Sprintf("Error unmarshalling JSON for %s tokenchain", TokenType), "err", err)
 		return nil
-	}
-
-	for i, item := range data {
-		flattenedItem := flattenKeys("", item)
-		mappedItem := applyKeyMapping(flattenedItem)
-		data[i] = mappedItem
 	}
 
 	getTokenChainReply.Status = true
