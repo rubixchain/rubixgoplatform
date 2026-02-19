@@ -25,8 +25,8 @@ def generate_ipfs_swarm_key(build_name):
 
     output = "/key/swarm/psk/1.0.0/\n/base16/\n" + binascii.hexlify(key).decode()
 
-    directory = "./test_swarm_key"
-    filename = f"{directory}/testswarm_{build_name}.key"
+    directory = os.path.join(os.getcwd(), "tests", "test_swarm_key")
+    filename = os.path.join(directory, f"testswarm_{build_name}.key")
 
     if not os.path.exists(directory):
         os.makedirs(directory)
