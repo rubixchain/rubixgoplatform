@@ -48,9 +48,12 @@ func (s *Server) APIDumpFTTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 // @Router       /api/get-ft-token-chain [get]
 func (s *Server) APIGetFTTokenchain(req *ensweb.Request) *ensweb.Result {
 	TokenID := s.GetQuerry(req, "tokenID")
-	if TokenID == "" {
-		return s.BasicResponse(req, false, "Invalid input", nil)
+	isValidID := regexp.MustCompile(`^[a-zA-Z0-9_]*$`).MatchString(TokenID)
+	if len(TokenID) < 4 || !isValidID {
+		s.log.Error("Invalid TokenID format", "TokenID", TokenID)
+		return s.BasicResponse(req, false, "Invalid token ID format", nil)
 	}
+
 	getResp := s.c.GetFTTokenchain(TokenID)
 	return s.RenderJSON(req, getResp, http.StatusOK)
 }

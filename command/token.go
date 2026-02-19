@@ -127,6 +127,12 @@ func (cmd *Command) GenerateFaucetTestRBT() {
 }
 
 func (cmd *Command) FaucetTokenCheck() {
+	isValidID := regexp.MustCompile(`^[a-zA-Z0-9_]*$`).MatchString(cmd.token)
+	if len(cmd.token) < 4 || !isValidID {
+		cmd.log.Error("Invalid token ID format")
+		return
+	}
+
 	br, err := cmd.c.FaucetTokenCheck(cmd.token, cmd.did)
 	if err != nil {
 		cmd.log.Info("Cannot get token details")

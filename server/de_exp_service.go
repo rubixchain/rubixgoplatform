@@ -104,11 +104,16 @@ func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
 
-	// Validation for NFT and Smart Contract tokens
+	isValidID := regexp.MustCompile(`^[a-zA-Z0-9_]*$`).MatchString(TokenID)
+	if len(TokenID) < 4 || !isValidID {
+		s.log.Error("Invalid TokenID format", "TokenID", TokenID, "TokenType", TokenType)
+		return s.BasicResponse(req, false, "Invalid token ID format", nil)
+	}
+
+	// Strict validation for NFT and Smart Contract tokens
 	if strings.ToUpper(TokenType) != "RBT" && strings.ToUpper(TokenType) != "FT" && strings.ToUpper(TokenType) != "PART" {
-		isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
-		if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !isAlphanumeric {
-			s.log.Error("Invalid TokenID format", "TokenID", TokenID, "TokenType", TokenType)
+		if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") {
+			s.log.Error("Invalid TokenID format for NFT/SC", "TokenID", TokenID, "TokenType", TokenType)
 			return s.BasicResponse(req, false, "Invalid token ID format", nil)
 		}
 	}
