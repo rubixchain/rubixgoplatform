@@ -47,7 +47,7 @@ jobs:
               run: cd tests && python3 -u install_prerequisites.py
 
             - name: Run tests
-              run: ls && python3 -u ${{ matrix.suite.script }}
+              run: cd tests && python3 -u ${{ matrix.suite.script }}
 
             - name: Packing Quorum and Non-Quorum node logs
               if: always()
