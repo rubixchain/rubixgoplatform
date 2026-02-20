@@ -39,7 +39,7 @@ def setup(is_mac_os=False):
             for _, node_config in quorum_config.items():
                 add_peer_details(
                     node_config["peerId"],
-                    node_config["dids"]["did_quorum"],
+                    node_config["dids"]["did_quorum"]["did"],
                     4,
                     nq_config["server"],
                     nq_config["grpcPort"]
