@@ -1,0 +1,1 @@
+IPFS_KUBO_VERSION = "v0.19.0"
