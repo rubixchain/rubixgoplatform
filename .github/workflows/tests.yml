@@ -10,7 +10,6 @@ jobs:
     run-tests:
         name: "Test - ${{ matrix.os }} - ${{ matrix.suite.name }}"
         runs-on: ${{ matrix.os }}
-        continue-on-error: ${{ matrix.os == 'macos-latest' }}
         strategy:
           fail-fast: false
           matrix:
@@ -20,6 +19,8 @@ jobs:
               - { script: "asset_nft_tests.py",            name: "NFT" }
               - { script: "asset_rbt_tests.py",            name: "RBT" }
               - { script: "asset_smart_contract_tests.py", name: "SmartContract" }
+            exclude:
+              - os: macos-latest
 
         steps:
             - name: Checkout
