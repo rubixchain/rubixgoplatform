@@ -134,7 +134,7 @@ func old2NewKey(key string) string {
 
 func isOldKey(key string) bool {
 	return false
-	
+
 	//return len(key) != DefaultKeyLength
 }
 
@@ -631,9 +631,6 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 
 // addFullNodeBlock will write block into fullnode-storage
 func (w *Wallet) addFullNodeBlock(token string, b *block.Block) error {
-	if w.isExplorerAvailable() {
-		defer w.notifyExplorerServer(b)
-	}
 	opt := &opt.WriteOptions{
 		Sync: true,
 	}

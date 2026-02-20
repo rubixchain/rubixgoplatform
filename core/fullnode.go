@@ -87,6 +87,62 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 }
 
+func (c *Core) notifyExplorer(txnEvent *model.PubSubTxnInfo, txnBlock *block.Block) {
+	c.log.Info("Preparing Explorer Notification",
+		"blockHash", txnEvent.BlockHash,
+		"assetType", txnEvent.AssetType)
+
+	// 1. Get all tokens from the current transaction block
+	tokens := txnBlock.GetTransTokens()
+	tokenDetails := make([]model.TokenDetailsFromGenesis, 0, len(tokens))
+
+	// 2. Iterate through tokens to build the TokenDetails slice
+	for _, tokenID := range tokens {
+		tokenType := txnBlock.GetTokenType(tokenID)
+
+		// 3. Fetch the genesis block (from local db) to get the token value
+		genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenID, tokenType)
+		if genesisBlock == nil {
+			c.log.Error("Failed to get genesis block for explorer notification", "tokenID", tokenID)
+			continue
+		}
+
+		tokenValue := genesisBlock.GetTokenValue()
+
+		// --- DEBUG LOG ---
+		c.log.Debug("🔍 Token Detail Gathered",
+			"tokenID", tokenID,
+			"val", tokenValue,
+			"type", tokenType)
+
+		// 4. Append the details
+		td := model.TokenDetailsFromGenesis{
+			TokenID:    tokenID,
+			TokenType:  tokenType,
+			TokenValue: tokenValue,
+		}
+		tokenDetails = append(tokenDetails, td)
+	}
+
+	// 5. Create the new NotifyExplorer event struct
+	explorerEvent := &model.NotifyExplorer{
+		BlockHash:         txnEvent.BlockHash,
+		TransactionID:     txnEvent.TransactionID,
+		AssetType:         txnEvent.AssetType,
+		PublisherDID:      txnEvent.PublisherDID,
+		ReceiverDID:       txnEvent.ReceiverDID,
+		LatestBlockHeight: txnEvent.LatestBlockHeight,
+		TransactionValue:  txnEvent.TransactionValue,
+		FTName:            txnEvent.FTName,
+		CreatorDID:        txnEvent.CreatorDID,
+		TokenValue:        txnEvent.TokenValue,
+		TokenDetails:      tokenDetails,
+	}
+
+	// 6. Call NotifyExplorerServer
+	c.w.NotifyExplorerServer(txnBlock, explorerEvent)
+}
+
 // Process transaction with retry mechanism
 func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) {
 	var lastErr error
@@ -105,6 +161,16 @@ func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) 
 			c.log.Info("Transaction processed successfully",
 				"blockHash", txnEvent.BlockHash,
 				"workerID", workerID)
+
+			// Notify explorer
+			if c.w != nil && txnEvent.TxnBlock != nil {
+				txnBlock := block.InitBlock(txnEvent.TxnBlock, nil)
+				if txnBlock != nil {
+					// Call the new dedicated function for notification
+					c.notifyExplorer(txnEvent, txnBlock)
+				}
+			}
+
 			return
 		}
 
@@ -123,7 +189,9 @@ func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) 
 // Enhanced single transaction processing with better error handling
 func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 	receiverDid := newEvent.ReceiverDID
-
+	if newEvent.TxnBlock == nil {
+		return fmt.Errorf("transaction block is nil for txn %s", newEvent.BlockHash)
+	}
 	// Initialize block with error handling
 	txnBlock := block.InitBlock(newEvent.TxnBlock, nil)
 	if txnBlock == nil {

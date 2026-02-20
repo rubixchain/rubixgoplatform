@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -96,21 +95,11 @@ func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
 	TokenID := strings.TrimSpace(s.GetQuerry(req, "tokenID"))
 	TokenType := strings.TrimSpace(s.GetQuerry(req, "tokenType"))
 
-	// Log entry point
-	s.log.Info("APIGetFullTokenChain called", "TokenID", TokenID, "TokenType", TokenType)
-
 	if strings.Compare(TokenID, "") == 0 || strings.Compare(TokenType, "") == 0 {
 		s.log.Error("Invalid input for APIGetFullTokenChain", "TokenID", TokenID, "TokenType", TokenType)
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
 
-	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
-	if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !isAlphanumeric {
-		s.log.Error("Invalid TokenID format", "TokenID", TokenID, "TokenType", TokenType)
-		return s.BasicResponse(req, false, "Invalid FT token ID", nil)
-	}
-
-	s.log.Info("Fetching token chain", "TokenID", TokenID, "TokenType", TokenType)
 	getResp := s.c.GetTokenchain(TokenID, TokenType)
 
 	if getResp == nil {
@@ -118,7 +107,6 @@ func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to fetch token chain", nil)
 	}
 
-	s.log.Info("Tokenchain fetched successfully", "TokenID", TokenID, "TokenType", TokenType)
 	return s.RenderJSON(req, getResp, http.StatusOK)
 }
 
@@ -135,20 +123,17 @@ func (s *Server) APIGetTxnAmountFromFullNode(req *ensweb.Request) *ensweb.Result
 }
 
 func (s *Server) APIGetFullTokenChainHeight(req *ensweb.Request) *ensweb.Result {
-	tokenID := strings.TrimSpace(s.GetQuerry(req, "tokenID"))
-	if strings.Compare(tokenID, "") == 0 {
+	tokenID := s.GetQuerry(req, "tokenID")
+	if tokenID == "" {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-
-	tokenType := strings.TrimSpace(s.GetQuerry(req, "tokenType"))
-	if strings.Compare(tokenType, "") == 0 {
+	tokenType := s.GetQuerry(req, "tokenType")
+	if tokenType == "" {
 		return s.BasicResponse(req, false, "Invalid input token type", nil)
 	}
-
-	blockHeight, err := s.c.GetFullTokenChainHeight(tokenID, tokenType)
+	BlockHeight, err := s.c.GetFullTokenChainHeight(tokenID, tokenType)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to get token chain height", nil)
 	}
-
-	return s.BasicResponse(req, true, "Got token chain height", blockHeight)
+	return s.BasicResponse(req, true, "Got token chain height", BlockHeight)
 }

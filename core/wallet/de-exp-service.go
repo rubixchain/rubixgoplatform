@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
@@ -30,32 +31,21 @@ type NotificationQueue struct {
 }
 
 type notificationTask struct {
-	url            string
-	payload        []byte
-	totalTimeout   time.Duration
-	requestTimeout time.Duration
-	retrySchedule  []time.Duration
+	url     string
+	payload []byte
+	retries int
 }
 
 const (
-	queueSize             = 1000
-	numWorkers            = 4
-	defaultRequestTimeout = 15 * time.Second
-	defaultTotalTimeout   = 3 * time.Minute
-	shutdownTimeout       = 30 * time.Second
-	enqueueTimeout        = 100 * time.Millisecond
+	maxRetries      = 3
+	retryBackoff    = 500 * time.Millisecond
+	queueSize       = 5000
+	numWorkers      = 8
+	requestTimeout  = 15 * time.Second
+	shutdownTimeout = 30 * time.Second
 )
 
 var notifQueue *NotificationQueue
-
-// Dynamic retry schedule: 5s, 30s, 1m
-// Total: 5 + 30 + 60 = 95 seconds of waiting
-// Plus 4 requests × 15s = 60 seconds = 155 seconds total (~2.5 minutes within 3-minute budget)
-var defaultRetrySchedule = []time.Duration{
-	5 * time.Second,  // 1st retry after 5 seconds
-	30 * time.Second, // 2nd retry after 30 seconds
-	60 * time.Second, // 3rd retry after 1 minute
-}
 
 func init() {
 	notifQueue = NewNotificationQueue(numWorkers)
@@ -87,35 +77,20 @@ func (nq *NotificationQueue) worker() {
 		case <-nq.done:
 			return
 		case task := <-nq.queue:
-			nq.sendWithDynamicRetry(client, task)
+			nq.sendWithRetry(client, task)
 		}
 	}
 }
 
-func (nq *NotificationQueue) sendWithDynamicRetry(client *http.Client, task notificationTask) {
-	// Create overall context with total timeout
-	overallCtx, cancel := context.WithTimeout(context.Background(), task.totalTimeout)
-	defer cancel()
+func (nq *NotificationQueue) sendWithRetry(client *http.Client, task notificationTask) {
+	for attempt := 0; attempt <= task.retries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 
-	numRetries := len(task.retrySchedule)
-	maxAttempts := numRetries + 1 // 1 initial + N retries
-
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		// Check if overall timeout exceeded
-		select {
-		case <-overallCtx.Done():
-			return // Total timeout exceeded
-		default:
-		}
-
-		// Create request-specific context with request timeout
-		reqCtx, reqCancel := context.WithTimeout(overallCtx, task.requestTimeout)
-
-		req, err := http.NewRequestWithContext(reqCtx, "POST", task.url, bytes.NewBuffer(task.payload))
+		req, err := http.NewRequestWithContext(ctx, "POST", task.url, bytes.NewBuffer(task.payload))
 		if err != nil {
-			reqCancel()
-			if attempt < numRetries {
-				nq.waitWithContext(overallCtx, task.retrySchedule[attempt], attempt+1)
+			cancel()
+			if attempt < task.retries {
+				time.Sleep(retryBackoff * time.Duration(1+attempt))
 				continue
 			}
 			return
@@ -124,7 +99,7 @@ func (nq *NotificationQueue) sendWithDynamicRetry(client *http.Client, task noti
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.Do(req)
-		reqCancel()
+		cancel()
 
 		if err == nil {
 			io.Copy(io.Discard, resp.Body)
@@ -135,48 +110,13 @@ func (nq *NotificationQueue) sendWithDynamicRetry(client *http.Client, task noti
 			// Log non-OK status but continue retrying
 		}
 
-		// If more retries available and overall timeout not exceeded
-		if attempt < numRetries {
-			nq.waitWithContext(overallCtx, task.retrySchedule[attempt], attempt+1)
+		if attempt < task.retries {
+			time.Sleep(retryBackoff * time.Duration(1+attempt))
 		}
 	}
 }
 
-// waitWithContext waits for the specified duration or until context is done
-func (nq *NotificationQueue) waitWithContext(ctx context.Context, duration time.Duration, retryNum int) {
-	select {
-	case <-time.After(duration):
-		// Wait completed, proceed to next retry
-	case <-ctx.Done():
-		// Overall timeout exceeded
-	}
-}
-
 func (nq *NotificationQueue) Enqueue(url string, payload []byte) error {
-	return nq.EnqueueWithConfig(url, payload, defaultTotalTimeout, defaultRequestTimeout, defaultRetrySchedule)
-}
-
-// EnqueueWithConfig allows custom timeout and retry schedule
-func (nq *NotificationQueue) EnqueueWithConfig(url string, payload []byte, totalTimeout time.Duration, requestTimeout time.Duration, retrySchedule []time.Duration) error {
-	// Validate timeout configuration
-	if totalTimeout < requestTimeout {
-		return fmt.Errorf("total timeout (%v) must be >= request timeout (%v)", totalTimeout, requestTimeout)
-	}
-
-	// Calculate total retry wait time
-	totalRetryWait := time.Duration(0)
-	for _, delay := range retrySchedule {
-		totalRetryWait += delay
-	}
-
-	maxAttempts := len(retrySchedule) + 1
-	maxRequestTime := time.Duration(maxAttempts) * requestTimeout
-	totalRequired := maxRequestTime + totalRetryWait
-
-	if totalRequired > totalTimeout {
-		return fmt.Errorf("config impossible: requires %v but total timeout is only %v", totalRequired, totalTimeout)
-	}
-
 	// Recover from panic if queue is closed during shutdown
 	defer func() {
 		if r := recover(); r != nil {
@@ -185,17 +125,11 @@ func (nq *NotificationQueue) EnqueueWithConfig(url string, payload []byte, total
 	}()
 
 	select {
-	case nq.queue <- notificationTask{
-		url:            url,
-		payload:        payload,
-		totalTimeout:   totalTimeout,
-		requestTimeout: requestTimeout,
-		retrySchedule:  retrySchedule,
-	}:
+	case nq.queue <- notificationTask{url: url, payload: payload, retries: maxRetries}:
 		return nil
-	case <-time.After(enqueueTimeout):
-		return fmt.Errorf("notification queue full")
-	default:
+	case <-time.After(2 * time.Second):
+		return fmt.Errorf("notification queue full, could not enqueue within timeout")
+	case <-nq.done:
 		return fmt.Errorf("notification queue closed")
 	}
 }
@@ -219,7 +153,7 @@ func (nq *NotificationQueue) Shutdown(ctx context.Context) error {
 func initExplorerClient() *http.Client {
 	clientOnce.Do(func() {
 		explorerClient = &http.Client{
-			Timeout: defaultRequestTimeout,
+			Timeout: requestTimeout,
 			Transport: &http.Transport{
 				MaxIdleConns:          100,
 				MaxIdleConnsPerHost:   25,
@@ -264,49 +198,51 @@ func (w *Wallet) isExplorerAvailable() bool {
 	return ExplorerHost != "" && ExplorerHost != "No De-Explorer Host"
 }
 
-func (w *Wallet) notifyExplorerServer(b *block.Block) {
+// NotifyExplorerServer sends block and transaction details to the explorer
+func (w *Wallet) NotifyExplorerServer(b *block.Block, evt *model.NotifyExplorer) {
 	if !w.isExplorerAvailable() {
+		return
+	}
+	if b == nil {
 		return
 	}
 
 	explorerURL := ExplorerHost + setup.APINotifyDeExpBlockUpdate
-	blockMap := b.GetBlockMap()
-	cleanedMap := convertToStringMap(blockMap)
 
-	blockBytes, err := json.Marshal(cleanedMap)
+	// Extract block map from Rubix block
+	raw := b.GetBlockMap()
+	blockMap := convertToStringMap(raw).(map[string]interface{})
+
+	push := model.NotifyExplorer{
+		BlockHash:         evt.BlockHash,
+		TransactionID:     evt.TransactionID,
+		TxnType:           evt.TxnType,
+		AssetType:         evt.AssetType,
+		PublisherDID:      evt.PublisherDID,
+		ReceiverDID:       evt.ReceiverDID,
+		CreatorDID:        evt.CreatorDID,
+		TokenValue:        evt.TokenValue,
+		TransactionValue:  evt.TransactionValue,
+		LatestBlockHeight: evt.LatestBlockHeight,
+		BlockMap:          blockMap,
+		TokenDetails:      evt.TokenDetails,
+		FTName:            evt.FTName,
+	}
+
+	body, err := json.Marshal(push)
 	if err != nil {
 		w.log.Error("notifyExplorerServer: marshal failed", "error", err)
 		return
 	}
 
-	// Queue async to avoid blocking
-	if err := notifQueue.Enqueue(explorerURL, blockBytes); err != nil {
-		w.log.Warn("Failed to queue block notification", "error", err)
-	}
-}
+	// --- FINAL PAYLOAD DEBUG ---
+	// This will print the actual JSON being sent so you can compare it with your explorer's IncomingBlockInfo struct
+	payloadJson, _ := json.MarshalIndent(push, "", "  ")
+	fmt.Printf("\n==== SENDING TO EXPLORER ====\n%s\n=============================\n\n", string(payloadJson))
 
-func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}, operation string) {
-	if !w.isExplorerAvailable() {
-		return
-	}
-
-	explorerURL := ExplorerHost + setup.APINotifyDeExpTokenUpdate
-
-	payload := map[string]interface{}{
-		"table":     tableName,
-		"data":      tokenData,
-		"operation": operation,
-	}
-
-	jsonBytes, err := json.Marshal(payload)
-	if err != nil {
-		w.log.Error("notifyTokenUpdate: marshal failed", "error", err)
-		return
-	}
-
-	// Queue async to avoid blocking
-	if err := notifQueue.Enqueue(explorerURL, jsonBytes); err != nil {
-		w.log.Warn("Failed to queue token notification", "error", err)
+	// Queue as async job (non-blocking)
+	if err := notifQueue.Enqueue(explorerURL, body); err != nil {
+		w.log.Warn("Failed to queue explorer notification", "error", err)
 	}
 }
 
