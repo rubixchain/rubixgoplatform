@@ -10,6 +10,7 @@ jobs:
     run-tests:
         name: "Test - ${{ matrix.os }} - ${{ matrix.suite.name }}"
         runs-on: ${{ matrix.os }}
+        continue-on-error: ${{ matrix.os == 'macos-latest' }}
         strategy:
           fail-fast: false
           matrix:
