@@ -26,6 +26,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
+const unKnownAssetType = -1
+
 func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
 	resp := model.BasicResponse{
 		Status: false,
@@ -1863,148 +1865,145 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	}
 
 	// TODO: Verifying the info about quorums
-	go func() {
-		b := block.InitBlock(ur.TokenChainBlock, nil)
-		tks := b.GetTransTokens()
+	b := block.InitBlock(ur.TokenChainBlock, nil)
+	tks := b.GetTransTokens()
 
-		// refID := ""
-		// var refIDArr []string = make([]string, 0)
-		// if len(tks) > 0 {
-		// 	for _, tkn := range tks {
-		// 		id, err := b.GetBlockID(tkn)
-		// 		if err != nil {
-		// 			c.log.Error("Failed to get block ID")
-		// 			crep.Message = "Failed to get block ID"
-		// 			return c.l.RenderJSON(req, &crep, http.StatusOK)
-		// 		}
-		// 		refIDArr = append(refIDArr, fmt.Sprintf("%v_%v_%v", tkn, b.GetTokenType(tkn), id))
-		// 	}
-		// }
-		// refID = strings.Join(refIDArr, ",")
+	ctcb := make(map[string]*block.Block)
+	tsb := make([]block.TransTokens, 0)
+	// Generally, addition of a token block happens on Sender, Receiver
+	// and Quorum's end.
+	//
+	// If both sender and receiver happen to be on a Non-Quorum server, this is
+	// not an issue since we skip TokensTable and Token chain update, if the reciever
+	// and sender peer as seem. Thus, multiple update of same block to the Token's tokenchain
+	// is avoided
+	//
+	// However in case either sender or receiver happen to be a Quorum server, even though the above
+	// scenario is covered , but since the token block is also added on Quorum's end, we end up in a
+	// situation where update of same block happens twice. Hence the following check ensures that we
+	// skip the addition of block here, if either sender or receiver happen to be on a Quorum node.
 
-		ctcb := make(map[string]*block.Block)
-		tsb := make([]block.TransTokens, 0)
-		// Generally, addition of a token block happens on Sender, Receiver
-		// and Quorum's end.
-		//
-		// If both sender and receiver happen to be on a Non-Quorum server, this is
-		// not an issue since we skip TokensTable and Token chain update, if the reciever
-		// and sender peer as seem. Thus, multiple update of same block to the Token's tokenchain
-		// is avoided
-		//
-		// However in case either sender or receiver happen to be a Quorum server, even though the above
-		// scenario is covered , but since the token block is also added on Quorum's end, we end up in a
-		// situation where update of same block happens twice. Hence the following check ensures that we
-		// skip the addition of block here, if either sender or receiver happen to be on a Quorum node.
-
-		var totalTokenValue float64 = 0
-		if !c.w.IsDIDExist(b.GetOwner()) && !c.w.IsDIDExist(b.GetSenderDID()) {
-			for _, t := range tks {
-				err = c.w.AddTokenBlock(t, b)
-				if err != nil {
-					c.log.Error("Failed to add token block", "token", t)
-					crep.Message = "Failed to add token block"
-					return
-				}
+	var totalTokenValue float64 = 0
+	if !c.w.IsDIDExist(b.GetOwner()) && !c.w.IsDIDExist(b.GetSenderDID()) {
+		for _, t := range tks {
+			// validate incoming transaction block (before response is sent)
+			latestBlock := c.w.GetLatestTokenBlock(t, b.GetTokenType(t))
+			assetType := unKnownAssetType
+			if ur.Mode == NFTDeployMode || ur.Mode == NFTExecuteMode {
+				assetType = NFTTokenType
 			}
-		}
-
-		for _, t := range ur.PledgedTokens {
-			tk, err := c.w.ReadToken(t)
+			err = c.ValidateIncomingTokenBlockChainIntegrity(*b, latestBlock, t, assetType)
 			if err != nil {
-				c.log.Error("failed to read token from wallet")
-				crep.Message = "failed to read token from wallet"
-				return
+				errMsg := fmt.Sprintf("failed to validate incoming transaction block for the token%s, error:%v", t, err)
+				c.log.Error(errMsg)
+				crep.Message = errMsg
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
-			totalTokenValue += tk.TokenValue
-			ts := RBTString
-			if tk.TokenValue != 1.0 {
-				ts = PartString
-			}
-			tt := block.TransTokens{
-				Token:     t,
-				TokenType: c.TokenType(ts),
-			}
-			tsb = append(tsb, tt)
-			lb := c.w.GetLatestTokenBlock(t, c.TokenType(ts))
-			if lb == nil {
-				c.log.Error("Failed to get token chain block")
-				crep.Message = "Failed to get token chain block"
-				return
-			}
-			ctcb[t] = lb
-		}
-
-		tcb := block.TokenChainBlock{
-			BlockType:  block.TokenPledgedType,
-			TokenOwner: did,
-			TransInfo: &block.TransInfo{
-				Comment: "Token is pledged at " + time.Now().String(),
-				RefID:   ur.TransactionID,
-				Tokens:  tsb,
-			},
-			TokenValue: totalTokenValue,
-			Epoch:      ur.TransactionEpoch,
-			Version:    constants.BlockVersion,
-		}
-
-		nb := block.CreateNewBlock(ctcb, &tcb)
-		if nb == nil {
-			c.log.Error("Failed to create new token chain block - qrm rec")
-			crep.Message = "Failed to create new token chain block -qrm rec"
-			return
-		}
-		err = nb.UpdateSignature(dc)
-		if err != nil {
-			c.log.Error("Failed to update signature to block", "err", err)
-			crep.Message = "Failed to update signature to block"
-			return
-		}
-		err = c.w.CreateTokenBlock(nb)
-		if err != nil {
-			c.log.Error("Failed to update token chain block", "err", err)
-			crep.Message = "Failed to update token chain block"
-			return
-		}
-		for _, t := range ur.PledgedTokens {
-			err = c.w.PledgeWholeToken(did, t, nb)
+			err = c.w.AddTokenBlock(t, b)
 			if err != nil {
-				c.log.Error("Failed to update pledge token", "err", err)
-				crep.Message = "Failed to update pledge token"
-				return
+				c.log.Error("Failed to add token block", "token", t)
+				crep.Message = fmt.Sprintf("Failed to add token block fot the token%s", t)
+				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 		}
+	}
 
-		// Adding to the Token State Hash Table
-		if ur.TransferredTokenStateHashes != nil {
-			err = c.w.AddTokenStateHash(did, ur.TransferredTokenStateHashes, ur.PledgedTokens, ur.TransactionID)
-			if err != nil {
-				c.log.Error("Failed to add token state hash", "err", err)
-				return
-			}
-		}
-		// publish the transaction in the network with topic : rubix_txns
-		blockHash, err := nb.GetHash()
+	for _, t := range ur.PledgedTokens {
+		tk, err := c.w.ReadToken(t)
 		if err != nil {
-			blockHash = ""
-			c.log.Error("failed to get block hash")
+			c.log.Error("failed to read token from wallet")
+			crep.Message = fmt.Sprintf("failed to read token from wallet, token%s", t)
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-		publishingTxn := &model.PubSubTxnInfo{
-			BlockHash:    blockHash,
-			BlockType:    tcb.BlockType,
-			AssetType:    RBTTokenType,
-			PublisherDID: dc.GetDID(),
-			TxnBlock:     nb.GetBlock(),
+		totalTokenValue += tk.TokenValue
+		ts := RBTString
+		if tk.TokenValue != 1.0 {
+			ts = PartString
 		}
+		tt := block.TransTokens{
+			Token:     t,
+			TokenType: c.TokenType(ts),
+		}
+		tsb = append(tsb, tt)
+		lb := c.w.GetLatestTokenBlock(t, c.TokenType(ts))
+		if lb == nil {
+			c.log.Error("Failed to get token chain block")
+			crep.Message = fmt.Sprintf("Failed to get token chain block for the token%s", t)
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+		ctcb[t] = lb
+	}
 
-		c.log.Debug("quorum publishing pledge block : ", publishingTxn.BlockHash)
-		err = c.publishTxn(publishingTxn)
+	tcb := block.TokenChainBlock{
+		BlockType:  block.TokenPledgedType,
+		TokenOwner: did,
+		TransInfo: &block.TransInfo{
+			Comment: "Token is pledged at " + time.Now().String(),
+			RefID:   ur.TransactionID,
+			Tokens:  tsb,
+		},
+		TokenValue: totalTokenValue,
+		Epoch:      ur.TransactionEpoch,
+		Version:    constants.BlockVersion,
+	}
+
+	nb := block.CreateNewBlock(ctcb, &tcb)
+	if nb == nil {
+		c.log.Error("Failed to create new token chain block - qrm rec")
+		crep.Message = "Failed to create new token chain block -qrm rec"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	err = nb.UpdateSignature(dc)
+	if err != nil {
+		c.log.Error("Failed to update signature to block", "err", err)
+		crep.Message = "Failed to update signature to block"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	err = c.w.CreateTokenBlock(nb)
+	if err != nil {
+		c.log.Error("Failed to update token chain block", "err", err)
+		crep.Message = "Failed to update token chain block"
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
+	for _, t := range ur.PledgedTokens {
+		err = c.w.PledgeWholeToken(did, t, nb)
 		if err != nil {
-			c.log.Error("Failed to publish txn", "err", err)
-			crep.Message = fmt.Sprintf("Failed to publish txn, err : %v", err)
-			return
+			c.log.Error("Failed to update pledge token", "err", err)
+			crep.Message = fmt.Sprintf("Failed to update pledge token%s", t)
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
 		}
-	}()
+	}
+
+	// Adding to the Token State Hash Table
+	if ur.TransferredTokenStateHashes != nil {
+		err = c.w.AddTokenStateHash(did, ur.TransferredTokenStateHashes, ur.PledgedTokens, ur.TransactionID)
+		if err != nil {
+			c.log.Error("Failed to add token state hash", "err", err)
+			crep.Message = fmt.Sprintf("Failed to add token state hash, error%v", err)
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
+	}
+	// publish the transaction in the network with topic : rubix_txns
+	blockHash, err := nb.GetHash()
+	if err != nil {
+		blockHash = ""
+		c.log.Error("failed to get block hash")
+	}
+	publishingTxn := &model.PubSubTxnInfo{
+		BlockHash:    blockHash,
+		BlockType:    tcb.BlockType,
+		AssetType:    RBTTokenType,
+		PublisherDID: dc.GetDID(),
+		TxnBlock:     nb.GetBlock(),
+	}
+
+	c.log.Debug("quorum publishing pledge block : ", publishingTxn.BlockHash)
+	err = c.publishTxn(publishingTxn)
+	if err != nil {
+		c.log.Error("Failed to publish txn", "err", err)
+		crep.Message = fmt.Sprintf("Failed to publish txn, err : %v", err)
+		return c.l.RenderJSON(req, &crep, http.StatusOK)
+	}
 
 	crep.Status = true
 	crep.Message = "Token pledge status updated"

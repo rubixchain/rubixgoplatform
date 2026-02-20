@@ -1,8 +1,10 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"io"
+	"strings"
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
@@ -21,23 +23,23 @@ func NewIPFSOperations(core *Core) *IPFSOperations {
 // executeWithMetrics executes an operation with health checks and performance metrics
 func (ops *IPFSOperations) executeWithMetrics(ctx context.Context, operationName string, metadata map[string]interface{}, operation func() error) error {
 	start := time.Now()
-	
+
 	err := ops.core.ipfsHealth.ExecuteWithHealthCheck(ctx, operation)
-	
+
 	// Update metrics if scalability manager exists
 	if ops.core.ipfsScalability != nil {
 		responseTime := time.Since(start)
 		success := err == nil
 		ops.core.ipfsScalability.UpdateMetrics(responseTime, success)
 	}
-	
+
 	// Track operation performance
 	if metadata == nil {
 		metadata = make(map[string]interface{})
 	}
 	metadata["duration_ms"] = time.Since(start).Milliseconds()
 	ops.core.TrackOperation(operationName, metadata)(err)
-	
+
 	return err
 }
 
@@ -45,7 +47,7 @@ func (ops *IPFSOperations) executeWithMetrics(ctx context.Context, operationName
 func (ops *IPFSOperations) Add(data io.Reader, opts ...ipfsnode.AddOpts) (string, error) {
 	var result string
 	var operationErr error
-	
+
 	// Check if pinning is enabled
 	// Note: This is a simplified check - actual pinning detection would need
 	// to inspect the options differently
@@ -83,7 +85,7 @@ func (ops *IPFSOperations) AddDir(path string) (string, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
-	
+
 	metadata := map[string]interface{}{
 		"path": path,
 	}
@@ -113,13 +115,22 @@ func (ops *IPFSOperations) Cat(hash string) (io.ReadCloser, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	
+
+	inputHash := hash
+	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
+		var err error
+		inputHash, err = ops.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	metadata := map[string]interface{}{
-		"hash": hash,
+		"hash": inputHash,
 	}
 
 	err := ops.executeWithMetrics(ctx, "ipfs.cat", metadata, func() error {
-		reader, err := ops.core.ipfs.Cat(hash)
+		reader, err := ops.core.ipfs.Cat(inputHash)
 		if err != nil {
 			operationErr = err
 			return err
@@ -139,14 +150,23 @@ func (ops *IPFSOperations) Cat(hash string) (io.ReadCloser, error) {
 func (ops *IPFSOperations) Get(hash, path string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	
+
+	inputHash := hash
+	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
+		var err error
+		inputHash, err = ops.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		if err != nil {
+			return err
+		}
+	}
+
 	metadata := map[string]interface{}{
-		"hash": hash,
+		"hash": inputHash,
 		"path": path,
 	}
 
 	return ops.executeWithMetrics(ctx, "ipfs.get", metadata, func() error {
-		return ops.core.ipfs.Get(hash, path)
+		return ops.core.ipfs.Get(inputHash, path)
 	})
 }
 
@@ -154,13 +174,22 @@ func (ops *IPFSOperations) Get(hash, path string) error {
 func (ops *IPFSOperations) Pin(hash string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	
+
+	inputHash := hash
+	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
+		var err error
+		inputHash, err = ops.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		if err != nil {
+			return err
+		}
+	}
+
 	metadata := map[string]interface{}{
-		"hash": hash,
+		"hash": inputHash,
 	}
 
 	return ops.executeWithMetrics(ctx, "ipfs.pin", metadata, func() error {
-		return ops.core.ipfs.Pin(hash)
+		return ops.core.ipfs.Pin(inputHash)
 	})
 }
 
@@ -168,13 +197,22 @@ func (ops *IPFSOperations) Pin(hash string) error {
 func (ops *IPFSOperations) Unpin(hash string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	
+
+	inputHash := hash
+	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
+		var err error
+		inputHash, err = ops.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		if err != nil {
+			return err
+		}
+	}
+
 	metadata := map[string]interface{}{
-		"hash": hash,
+		"hash": inputHash,
 	}
 
 	return ops.executeWithMetrics(ctx, "ipfs.unpin", metadata, func() error {
-		return ops.core.ipfs.Unpin(hash)
+		return ops.core.ipfs.Unpin(inputHash)
 	})
 }
 

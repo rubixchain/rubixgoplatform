@@ -48,10 +48,10 @@ func (w *Wallet) GetWithProviderMap(hash string, did string, role int, path stri
 		if err == nil {
 			// Success - create provider map and return
 			tpm := model.TokenProviderMap{
-				Token:  hash,
-				Role:   role,
-				DID:    did,
-				FuncID: GetFunc,
+				TokenHash: hash,
+				Role:      role,
+				DID:       did,
+				FuncID:    GetFunc,
 			}
 			
 			w.log.Info("IPFS Get successful", 

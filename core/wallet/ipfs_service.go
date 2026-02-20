@@ -42,7 +42,7 @@ func (w *Wallet) Pin(hash string, role int, did string, transactionId string, se
 	if len(skipProviderDetails) > 0 && skipProviderDetails[0] {
 		return true, nil
 	}
-	err = w.AddProviderDetails(model.TokenProviderMap{Token: hash, Role: role, DID: did, FuncID: PinFunc, TransactionID: transactionId, Sender: sender, Receiver: receiver, TokenValue: tokenValue})
+	err = w.AddProviderDetails(model.TokenProviderMap{TokenHash: hash, Role: role, DID: did, FuncID: PinFunc, TransactionID: transactionId, Sender: sender, Receiver: receiver, TokenValue: tokenValue})
 	if err != nil {
 		w.log.Info("Error addding provider details to DB", "error", err)
 		return false, err
@@ -78,7 +78,7 @@ func (w *Wallet) Cat(hash string, role int, did string) (string, error) {
 		w.log.Error("Error formatting ipfs content", "error", err)
 		return "", err
 	}
-	err1 := w.AddProviderDetails(model.TokenProviderMap{Token: hash, Role: role, DID: did, FuncID: CatFunc})
+	err1 := w.AddProviderDetails(model.TokenProviderMap{TokenHash: hash, Role: role, DID: did, FuncID: CatFunc})
 	if err1 != nil {
 		w.log.Info("Error addding provider details to DB", "error", err)
 		return "", err
@@ -94,7 +94,7 @@ func (w *Wallet) Get(hash string, did string, role int, path string) error {
 		w.log.Error("Error while getting file from ipfs", "error", err)
 		return err
 	}
-	err = w.AddProviderDetails(model.TokenProviderMap{Token: hash, Role: role, DID: did, FuncID: GetFunc})
+	err = w.AddProviderDetails(model.TokenProviderMap{TokenHash: hash, Role: role, DID: did, FuncID: GetFunc})
 	if err != nil {
 		w.log.Info("Error addding provider details to DB", "error", err)
 		//return err
@@ -112,7 +112,7 @@ func (w *Wallet) Add(r io.Reader, did string, role int, skipProvider ...bool) (s
 	}
 
 	if len(skipProvider) == 0 || !skipProvider[0] {
-		err = w.AddProviderDetails(model.TokenProviderMap{Token: result, Role: role, DID: did, FuncID: AddFunc})
+		err = w.AddProviderDetails(model.TokenProviderMap{TokenHash: result, Role: role, DID: did, FuncID: AddFunc})
 		if err != nil {
 			w.log.Error("Error adding provider details", "error", err)
 			return "", err
@@ -131,10 +131,10 @@ func (w *Wallet) AddWithProviderMap(r io.Reader, did string, role int) (string, 
 		return "", model.TokenProviderMap{}, err
 	}
 	tpm := model.TokenProviderMap{
-		Token:  result,
-		Role:   role,
-		DID:    did,
-		FuncID: AddFunc,
+		TokenHash: result,
+		Role:      role,
+		DID:       did,
+		FuncID:    AddFunc,
 	}
 	return result, tpm, nil
 }

@@ -20,7 +20,6 @@ def setup():
     config_quorum_node4 = config_quorum["node4"]
     config_quorum_node5 = config_quorum["node5"]
 
-
     run_quorum_nodes(False, False, "quorum2", "./quorum_config2.json", "quorumlist2.json")
 
     create_and_register_did(config_A, "did_a", register_did=True)
