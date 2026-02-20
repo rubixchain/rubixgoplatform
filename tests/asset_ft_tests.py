@@ -8,6 +8,7 @@ from config.utils import save_to_config_file, load_from_config_file
 from helper.utils import expect_failure, expect_success, expect_success_within_retries
 from node.quorum import get_quorum_config, run_quorum_nodes
 from node.commands import run_command
+from prerequisite import get_os_info
 
 __quorum_list_file_name = "quorumlist_ft.json"
 __quorum_config_file_name = "quorum_config_ft.json"
@@ -24,13 +25,25 @@ def boot_quorums():
         concurrent=True
     )
 
-def setup():
+def setup(is_mac_os=False):
     ft_transfer_node_config = setup_rubix_nodes("nodes_ft", concurrent=True)
 
     for node, config in ft_transfer_node_config.items():
         if not check_if_node_is_running(int(node.lstrip("node"))):
             raise Exception(f"{node} is NOT running. Exiting...")
         print(f"{node} is running.")
+
+    if is_mac_os:
+        quorum_config = load_from_config_file(__quorum_config_file_name)
+        for node, nq_config in ft_transfer_node_config.items():
+            for _, node_config in quorum_config.items():
+                add_peer_details(
+                    node_config["peerId"],
+                    node_config["dids"]["did_quorum"],
+                    4,
+                    nq_config["server"],
+                    nq_config["grpcPort"]
+                )
 
     create_and_register_did(ft_transfer_node_config["node11"], "didA", register_did=True)
     create_and_register_did(ft_transfer_node_config["node12"], "didB", register_did=True)
@@ -83,6 +96,11 @@ def tests():
 if __name__=='__main__':
     boot_quorums()
 
-    setup()
+    _, os_name = get_os_info()
+
+    if os_name == 'mac':
+        setup(is_mac_os=True)
+    else:
+        setup(is_mac_os=False)
 
     tests()

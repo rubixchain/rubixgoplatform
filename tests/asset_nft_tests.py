@@ -2,12 +2,14 @@ import os
 import time
 from node.actions import fund_did_with_rbt, setup_rubix_nodes, \
     create_and_register_did, add_quorums, check_if_node_is_running, \
-    register_quorums_from_config, generate_nft, deploy_nft, self_execute_nft, transfer_nft, get_nft_chain
+    register_quorums_from_config, generate_nft, deploy_nft, self_execute_nft, transfer_nft, get_nft_chain, \
+    add_peer_details
 from node.utils import get_did_by_alias, update_sample_artifact_file
 from config.utils import save_to_config_file, load_from_config_file
 from helper.utils import expect_success
 from node.quorum import run_quorum_nodes
 from node.commands import run_command
+from prerequisite import get_os_info
 
 __quorum_list_file_name = "quorumlist_nft.json"
 __quorum_config_file_name = "quorum_config_nft.json"
@@ -23,13 +25,25 @@ def boot_quorums():
         concurrent=True
     )
 
-def setup():
+def setup(is_mac_os=False):
     nft_node_config = setup_rubix_nodes("nodes_nft", concurrent=True)
 
     for node, config in nft_node_config.items():
         if not check_if_node_is_running(int(node.lstrip("node"))):
             raise Exception(f"{node} is NOT running. Exiting...")
         print(f"{node} is running.")
+
+    if is_mac_os:
+        quorum_config = load_from_config_file(__quorum_config_file_name)
+        for node, nq_config in nft_node_config.items():
+            for _, node_config in quorum_config.items():
+                add_peer_details(
+                    node_config["peerId"],
+                    node_config["dids"]["did_quorum"],
+                    4,
+                    nq_config["server"],
+                    nq_config["grpcPort"]
+                )
 
     create_and_register_did(nft_node_config["node31"], "didA", register_did=True)
     create_and_register_did(nft_node_config["node31"], "didA2", register_did=True)
@@ -91,6 +105,11 @@ def tests():
 if __name__=='__main__':
     boot_quorums()
 
-    setup()
+    _, os_name = get_os_info()
+
+    if os_name == 'mac':
+        setup(is_mac_os=True)
+    else:
+        setup(is_mac_os=False)
 
     tests()
