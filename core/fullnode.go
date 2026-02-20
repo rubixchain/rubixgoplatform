@@ -559,8 +559,16 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	}
 	newEvent.LatestBlockHeight = latestBlockHeight
 	syncStatus := wallet.SyncCompleted
+	// Fetch Genesis Block
+	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(tokenId, tokenType)
+	if genesisBlock == nil {
+		c.log.Error("Failed to get genesis block for contract execution", "tokenId", tokenId)
+		return fmt.Errorf("failed to get genesis block for contract %s", tokenId)
+	}
+
 	receivedBlock := ReceivedBlock{
-		LatestBlock: txnBlock,
+		LatestBlock:  txnBlock,
+		GenesisBlock: genesisBlock,
 	}
 	if err := c.AddTokenToRespectiveTable(tokenId, currentOwner, receivedBlock, newEvent, syncStatus); err != nil {
 		return fmt.Errorf("failed to add contract token to table: %v", err)
