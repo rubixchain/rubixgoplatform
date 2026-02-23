@@ -9,6 +9,7 @@ from helper.utils import expect_failure, expect_success
 from node.quorum import get_quorum_config, run_quorum_nodes
 from node.commands import run_command
 from prerequisite import get_os_info
+from node.api import api_get_available_rbt_balance
 
 __quorum_list_file_name = "quorumlist_rbt.json"
 __quorum_config_file_name = "quorum_config_rbt.json"
@@ -80,28 +81,48 @@ def tests():
     print("\n2. Transferring 0.5 RBT from A to A1....")
     expect_success(rbt_transfer)(didA, didA1, 0.5, didA_port, didA_grpc)
 
-    
+    print("\nChecking available RBT balance for A and A1....")
+
+    assert api_get_available_rbt_balance(didA, didA_port) == 1.5, f"Expected available RBT balance for {didA} is 1.5 but got {api_get_available_rbt_balance(didA, didA_port)}"
+    assert api_get_available_rbt_balance(didA1, didA_port) == 0.5, f"Expected available RBT balance for {didA1} is 0.5 but got {api_get_available_rbt_balance(didA1, didA_port)}"
 
     print("\n3. Transferring 1.499 RBT from A1 to A....")
     expect_success(rbt_transfer)(didA, didA1, 1.499, didA_port, didA_grpc)
 
+    assert api_get_available_rbt_balance(didA, didA_port) == 0.001, f"Expected available RBT balance for {didA} is 0.001 but got {api_get_available_rbt_balance(didA, didA_port)}"
+    assert api_get_available_rbt_balance(didA1, didA_port) == 1.999, f"Expected available RBT balance for {didA1} is 0 but got {api_get_available_rbt_balance(didA1, didA_port)}"
+
     print("\n4. Transferring 0.25 RBT from A1 to A....")
     expect_success(rbt_transfer)(didA1, didA, 0.25, didA_port, didA_grpc)
+
+    assert api_get_available_rbt_balance(didA, didA_port) == 0.251, f"Expected available RBT balance for {didA} is 0.251 but got {api_get_available_rbt_balance(didA, didA_port)}"
+    assert api_get_available_rbt_balance(didA1, didA_port) == 1.749, f"Expected available RBT balance for {didA1} is 1.749 but got {api_get_available_rbt_balance(didA1, didA_port)}"
 
     print("\n5. Transferring 0.25 RBT from A1 to A....")
     expect_success(rbt_transfer)(didA1, didA, 0.25, didA_port, didA_grpc)
 
+    assert api_get_available_rbt_balance(didA, didA_port) == 0.501, f"Expected available RBT balance for {didA} is 0.501 but got {api_get_available_rbt_balance(didA, didA_port)}"
+    assert api_get_available_rbt_balance(didA1, didA_port) == 1.499, f"Expected available RBT balance for {didA1} is 1.499 but got {api_get_available_rbt_balance(didA1, didA_port)}"
+
     print("\n6. Transferring 0.25 RBT from A1 to A....")
     expect_success(rbt_transfer)(didA1, didA, 0.25, didA_port, didA_grpc)
+
+    assert api_get_available_rbt_balance(didA, didA_port) == 0.751, f"Expected available RBT balance for {didA} is 0.751 but got {api_get_available_rbt_balance(didA, didA_port)}"
+    assert api_get_available_rbt_balance(didA1, didA_port) == 1.249, f"Expected available RBT balance for {didA1} is 1.249 but got {api_get_available_rbt_balance(didA1, didA_port)}"
 
     print("\n7. Transferring 0.25 RBT from A1 to A....")
     expect_success(rbt_transfer)(didA1, didA, 0.25, didA_port, didA_grpc)
 
+    assert api_get_available_rbt_balance(didA, didA_port) == 1.001, f"Expected available RBT balance for {didA} is 1.001 but got {api_get_available_rbt_balance(didA, didA_port)}"
+    assert api_get_available_rbt_balance(didA1, didA_port) == 0.999, f"Expected available RBT balance for {didA1} is 0.999 but got {api_get_available_rbt_balance(didA1, didA_port)}"
+
     print("\n8. Transferring 1 RBT from A to A1....")
     expect_success(rbt_transfer)(didA, didA1, 1, didA_port, didA_grpc)
+    
+    assert api_get_available_rbt_balance(didA, didA_port) == 0.001, f"Expected available RBT balance for {didA} is 0.001 but got {api_get_available_rbt_balance(didA, didA_port)}"
+    assert api_get_available_rbt_balance(didA1, didA_port) == 1.999, f"Expected available RBT balance for {didA1} is 1.999 but got {api_get_available_rbt_balance(didA1, didA_port)}"
+    
     print("Transfer Complete")
-
-
 
 if __name__=='__main__':
     boot_quorums()

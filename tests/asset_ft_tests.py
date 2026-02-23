@@ -9,6 +9,7 @@ from helper.utils import expect_failure, expect_success, expect_success_within_r
 from node.quorum import get_quorum_config, run_quorum_nodes
 from node.commands import run_command
 from prerequisite import get_os_info
+from node.api import api_get_ft_balance
 
 __quorum_list_file_name = "quorumlist_ft.json"
 __quorum_config_file_name = "quorum_config_ft.json"
@@ -79,15 +80,22 @@ def tests():
     print("\n2. Minting 10000 ABC FTs to DID of node11 (didA)")
     expect_success(mint_ft)(ft_transfer_node_config["node11"], didA, "ABC", 10000, 10)
 
+    assert api_get_ft_balance(didA, didA_port) == 10000
+    
     print("\n3. Transferring 300 ABC FTs from DID of node11 (didA) to DID of node12 (didB)")
     expect_success_within_retries(transfer_ft)(didA, didB, ft_creator_did_ABC, "ABC", 300, didA_port)
+
+    assert api_get_ft_balance(didA, didA_port) == 9700, f"Expected FT balance of DID A to be 9700 but got {api_get_ft_balance(didA, didA_port)}"
 
     print("\n4. Transferring 300 ABC FTs from DID of node12 (didB) to DID of node11 (didA)")
     expect_success_within_retries(transfer_ft)(didB, didA, ft_creator_did_ABC, "ABC", 300, didB_port)
 
+    assert api_get_ft_balance(didB, didB_port) == 0, f"Expected FT balance of DID B to be 0 but got {api_get_ft_balance(didB, didB_port)}"
+
     print("\n5. Transferring 1000 ABC FTs from DID of node11 (didA) to DID of node12 (didB)")
     expect_success_within_retries(transfer_ft)(didA, didB, ft_creator_did_ABC, "ABC", 1000, didA_port)
-    
+
+    assert api_get_ft_balance(didA, didA_port) == 9000, f"Expected FT balance of DID A to be 9000 but got {api_get_ft_balance(didA, didA_port)}"
 
     print("\n6. Transferring 100000 ABC FTs (inssufficient funds) from DID of node11 (didA) to DID of node12 (didB)")
     expect_failure(transfer_ft)(didA, didB, ft_creator_did_ABC, "ABC", 100000, didA_port)

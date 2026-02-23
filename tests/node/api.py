@@ -111,7 +111,7 @@ class RBTAccountInfoReq:
     did: str
 
 @dataclass
-class AccountInfo:
+class RBTAccountInfo:
     did: str
     did_type: str
     rbt_amount: str
@@ -124,29 +124,85 @@ class RBTAccountInfoResp:
     status: bool
     message: str
     result: str
-    account_info: AccountInfo
+    account_info: List[RBTAccountInfo]
 
 @dataclass
 class RBTAccountInfoErr:
-    error: str
+    status: bool
+    message: str
+    result: object
 
 def api_rbt_account_info(req: RBTAccountInfoReq, server_port: str) -> RBTAccountInfoResp | RBTAccountInfoErr:
-    request_url = f"http://localhost:{server_port}/api/get-smart-contract-token-chain-data"
+    request_url = f"http://localhost:{server_port}/api/get-account-info"
     
     response = requests.get(request_url, params=req.__dict__)
 
     if response.status_code == 200:
         import json
-        response_body: RBTAccountInfoResp = json.loads(response.text)
-        return response_body
+        response_body_success: RBTAccountInfoResp = json.loads(response.text)
+        return response_body_success
     else:
-        return RBTAccountInfoErr(error=response.text)
+        import json
+        response_body_err: RBTAccountInfoErr = json.loads(response.text)
+        return response_body_err
     
 def api_get_available_rbt_balance(did: str, server_port: str) -> float | ValueError:
     req = RBTAccountInfoReq(did=did)
     resp = api_rbt_account_info(req=req, server_port=server_port)
-
-    if isinstance(resp, RBTAccountInfoResp):
-        return float(resp.account_info.rbt_amount)
+    
+    if resp["status"]:
+        if len(resp["account_info"]) == 0:
+            return 0.0
+        
+        return float(resp["account_info"][0]["rbt_amount"])
     else:
-        return ValueError(resp.error)
+        return ValueError(resp.message)
+    
+@dataclass
+class FTAccountInfo:
+    ft_name: str
+    ft_count: str
+    creator_did: str
+
+@dataclass
+class FTAccountInfoResp:
+    status: bool
+    message: str
+    result: str
+    ft_info: List[FTAccountInfo]
+
+@dataclass
+class FTAccountInfoErr:
+    status: bool
+    message: str
+    result: object
+
+@dataclass
+class FTAccountInfoReq:
+    did: str
+
+def api_ft_account_info(req: FTAccountInfoReq, server_port: str) -> FTAccountInfoResp | FTAccountInfoErr:
+    request_url = f"http://localhost:{server_port}/api/get-ft-info-by-did"
+    
+    response = requests.get(request_url, params=req.__dict__)
+
+    if response.status_code == 200:
+        import json
+        response_body_success: FTAccountInfoResp = json.loads(response.text)
+        return response_body_success
+    else:
+        import json
+        response_body_err: FTAccountInfoErr = json.loads(response.text)
+        return response_body_err
+
+def api_get_ft_balance(did: str, server_port: str) -> int | ValueError:
+    req = FTAccountInfoReq(did=did)
+    resp = api_ft_account_info(req=req, server_port=server_port)
+    
+    if resp["status"]:
+        if len(resp["ft_info"]) == 0:
+            return 0
+    
+        return int(resp["ft_info"][0]["ft_count"])
+    else:
+        return ValueError(resp.message)
