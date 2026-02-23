@@ -17,7 +17,7 @@ func (s *Server) APIDumpTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
-	
+
 	elems := strings.Split(dr.Token, "_")
 	if len(elems) < 2 {
 		s.log.Error(fmt.Sprintf("Invalid token: %v", dr.Token))
@@ -50,11 +50,6 @@ func (s *Server) APIGetFTTokenchain(req *ensweb.Request) *ensweb.Result {
 	TokenID := s.GetQuerry(req, "tokenID")
 	if TokenID == "" {
 		return s.BasicResponse(req, false, "Invalid input", nil)
-	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(TokenID)
-	if len(TokenID) != 46 || !strings.HasPrefix(TokenID, "Qm") || !is_alphanumeric {
-		s.log.Error("Invalid FT token")
-		return s.BasicResponse(req, false, "Invalid FT token ID", nil)
 	}
 	getResp := s.c.GetFTTokenchain(TokenID)
 	return s.RenderJSON(req, getResp, http.StatusOK)
