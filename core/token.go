@@ -363,7 +363,6 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 		// }
 	}
 
-	c.log.Debug("no.of blocks sending through sync token chain API ", len(blks))
 	/* // Handle case where both error occurred and blocks are nil
 	if err != nil && blks == nil {
 		c.log.Warn("Token blocks missing and error occurred, falling back to role-based logic", "token", tr.Token)
@@ -929,102 +928,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				continue
 			}
 
-			// 	latestBlockHash, err := latestBlock.GetHash()
-			// 	if err != nil {
-			// 		c.log.Error("failed to get latest block hash for the token", detail.Token)
-			// 	}
-			// 	currentOwner := latestBlock.GetOwner()
-			// 	txnID := latestBlock.GetTid()
-			// 	genesisBlock := c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
-			// 	blocks := ReceivedBlock{
-			// 		GenesisBlock: genesisBlock,
-			// 		LatestBlock:  latestBlock,
-			// 	}
-			// 	// first read existing token info from the table
-			// 	_, existingBlockHash, existingOwnerDID, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
-			// 	if err != nil {
-			// 		if strings.Contains(err.Error(), "no records found") {
-			// 			// add token info to sqlite if not there
-			// 			eventData := model.PubSubTxnInfo{
-			// 				BlockHash:         latestBlockHash,
-			// 				TransactionID:     txnID,
-			// 				PublisherDID:      detail.PublisherDid,
-			// 				LatestBlockHeight: latestBlockHeight,
-			// 				AssetType:         detail.AssetType,
-			// 				// TokenValue:        detail.TokenValue,
-			// 			}
-			// 			//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
-			// 			// There is no token value in the Mainnet genesis block for migrated tokens.
-			// 			//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
-			// 			if genesisBlock != nil {
-			// 				genesisBlockType := genesisBlock.GetTransType()
-			// 				if genesisBlockType == block.TokenMigratedType {
-
-			// 					eventData.TokenValue = detail.TokenValue
-			// 				} else {
-			// 					eventData.TokenValue = genesisBlock.GetTokenValue()
-			// 				}
-			// 			}
-
-			// 			c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
-			// 			continue
-			// 		}
-
-			// 		c.log.Error("failed to read token ", detail.Token, "err ", err)
-			// 		continue
-			// 	}
-			// 	// if latestBlockHeight == detail.TokenChainLength {
-			// 	// 	if latestBlockHash != existingBlockHash || currentOwner != existingOwnerDID {
-			// 	// 		// TODO : Challenger node should verify the correct owner and correct block and add the correct info
-			// 	// 		errMsg := fmt.Sprintf("double spending the token %v, eixting owner : %v, and incoming owner : %v", detail.Token, existingOwnerDID, currentOwner)
-			// 	// 		c.log.Error(errMsg)
-			// 	// 		// add token to doublespent tokens table
-			// 	// 		doubleSpentTokenInfo := &model.DoubleSpentTokenInfo{
-			// 	// 			TokenID:        detail.Token,
-			// 	// 			AssetType:      detail.AssetType,
-			// 	// 			TokenType:      detail.TokenType,
-			// 	// 			PublisherDID:   event.PublisherPeerID,
-			// 	// 			ClaimedOwnerI:  existingOwnerDID,
-			// 	// 			ClaimedOwnerII: currentOwner,
-			// 	// 		}
-			// 	// 		// store double spent token info in DoubleSpentTokens table
-			// 	// 		// and remove it from respective tokens table
-			// 	// 		err = c.StoreDoubleSpentTokenInfo(doubleSpentTokenInfo)
-			// 	// 		if err != nil {
-			// 	// 			errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", detail.Token, err)
-			// 	// 			c.log.Error(errMsg)
-			// 	// 		}
-			// 	// 		continue
-
-			// 	// 	}
-
-			// 	// }
-
-			// 	eventData := model.PubSubTxnInfo{
-			// 		BlockHash:         latestBlockHash,
-			// 		TransactionID:     txnID,
-			// 		PublisherDID:      detail.PublisherDid,
-			// 		LatestBlockHeight: latestBlockHeight,
-			// 		AssetType:         detail.AssetType,
-			// 		// TokenValue:        detail.TokenValue,
-			// 	}
-			// 	// when latestBlockHeight != existingBlockHeight OR (latestBlockHeight == existingBlockHeight && blockhashes also matches,
-			// 	//  sqlite table should get updated with the values which are derived from the latest block.
-			// 	//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
-			// 	// There is no token value in the Mainnet genesis block for migrated tokens.
-			// 	//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
-			// 	if genesisBlock != nil {
-			// 		genesisBlockType := genesisBlock.GetTransType()
-			// 		if genesisBlockType == block.TokenMigratedType {
-
-			// 			eventData.TokenValue = detail.TokenValue
-			// 		} else {
-			// 			eventData.TokenValue = genesisBlock.GetTokenValue()
-			// 		}
-			// 	}
-
-			// 	c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
-			// }
+		
 		}
 
 		var wg sync.WaitGroup
@@ -1080,8 +984,12 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					defer peer.Close()
 
 					if err := c.SyncFullTokenChainForFullNode(peer, token); err != nil {
-						handled, _ := c.HandleSyncErrorAsDoubleSpent(err, detail.Token, detail.AssetType, detail.TokenType, detail.PublisherDid, existingBlockOwnerDID, detail.PublisherDid, fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid))
+						handled, handleErr := c.HandleSyncErrorAsDoubleSpent(err, detail.Token, detail.AssetType, detail.TokenType, detail.PublisherDid, existingBlockOwnerDID, detail.PublisherDid, fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid))
 						if handled {
+							if handleErr != nil {
+								return 
+							}
+
 							// double-spend case already logged and stored in HandleSyncErrorAsDoubleSpent
 						} else {
 							c.log.Error("Failed to sync chain", "token", token.TokenID, "err", err)
@@ -1094,7 +1002,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 							}
 
 							if err := c.w.AddFailedTokensToTable(info); err != nil {
-								c.log.Error("Failed to record failed token sync in DB", "token", token.TokenID, "error", err)
+								c.log.Error("Failed to record token into failed to sync token table in DB", "token", token.TokenID, "error", err)
 							} else {
 								c.log.Info("Recorded failed token sync in DB", "token", token.TokenID)
 							}
@@ -1141,7 +1049,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 		c.log.Info("Completed token chain sync batch ",
 			"batch number", event.BatchNumber,
 			"num_peers to connect and sync tokenchain", len(tokenSyncMap),
-			"**********number_of_tokens_received_in the batch******** ", len(event.TokenDetails),
+			"number_of_tokens_received_in the batch ", len(event.TokenDetails),
 			"total_duration_in_minutes", batchDuration.Minutes())
 
 	}

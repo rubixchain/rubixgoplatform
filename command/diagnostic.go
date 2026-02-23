@@ -148,7 +148,7 @@ func (cmd *Command) dumpTokenChain() {
 		}
 	}
 
-	if cmd.assetType == "rbt" || cmd.assetType == "RBT" {
+	if cmd.assetType == "rbt"  {
 		elems := strings.Split(cmd.token, "_")
 		if len(elems) < 2 {
 			cmd.log.Error(fmt.Sprintf("Invalid token: %v", cmd.token))

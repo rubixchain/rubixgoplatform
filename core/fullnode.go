@@ -329,8 +329,11 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 				}
 				err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
 				if err != nil {
-					handled, _ := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("%s, %s both dids are claiming the same token or same did would have double spent the token,dual ownership issue", previousOwner, txnBlockOwner))
+					handled, handleErr := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("%s, %s both dids are claiming the same token or same did would have double spent the token,dual ownership issue", previousOwner, txnBlockOwner))
 					if handled {
+						if handleErr != nil {
+							return handleErr
+						}
 						return nil
 					}
 					c.log.Error("Failed to sync chain", "token", tokenId, "err", err)
@@ -344,6 +347,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 
 					if err := c.w.AddFailedTokensToTable(info); err != nil {
 						c.log.Error("Failed to record failed token sync in DB", "token", tokenId, "error", err)
+						return fmt.Errorf("failed to add token to Failed to sync tokens table: %v", err)
 					} else {
 						c.log.Info("Recorded failed token sync in DB", "token", tokenId)
 						return nil
@@ -361,6 +365,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 				fullnodesideBlockID, err := fullnodesideBlock.GetBlockID(tokenId)
 				if err != nil {
 					c.log.Error("failed to get blockID of the fullnode side block", "error", err)
+					return fmt.Errorf("failed to get blockID of the fullnode side block,error%v", err)
 				}
 				fullnodesideBlockOwner := fullnodesideBlock.GetOwner()
 				if incomingBlockID != fullnodesideBlockID {
@@ -380,6 +385,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 					if err != nil {
 						errMsg := fmt.Sprintf("failed to update double spent token : %v, err: %v", tokenId, err)
 						c.log.Error(errMsg)
+						return fmt.Errorf("failed to update double spent token : %v, err: %v", tokenId, err)
 					}
 					c.log.Error("token has been added to double spend tokens table, tokenID", tokenId)
 					return nil
@@ -408,8 +414,11 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		// Do all 3 checks, If any check fails, handle the failure here also just before adding the block to leveldb.
 		err = c.ValidateIncomingTokenBlock(*txnBlock, latestTokenBlock, tokenId, p, newEvent.AssetType)
 		if err != nil {
-			handled, _ := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlockID, err))
+			handled, handleErr := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlockID, err))
 			if handled {
+				if handleErr != nil {
+					return handleErr
+				}
 				return nil
 			}
 		}
@@ -566,8 +575,11 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 			}
 			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
 			if err != nil {
-				handled, _ := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("%s, %s both dids are claiming the same token or same did would have double spent the token,dual ownership issue", previousOwner, txnBlockOwner))
+				handled, handleErr := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("%s, %s both dids are claiming the same token or same did would have double spent the token,dual ownership issue", previousOwner, txnBlockOwner))
 				if handled {
+					if handleErr != nil {
+						return handleErr
+					}
 					return nil
 				}
 				c.log.Error("Failed to sync chain", "token", tokenId, "err", err)
@@ -647,8 +659,11 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	// Do all 3 checks, If any check fails, handle the failure here also just before adding the block to leveldb.
 	err = c.ValidateIncomingTokenBlock(*txnBlock, latestTokenBlock, tokenId, p, newEvent.AssetType)
 	if err != nil {
-		handled, _ := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlockID, err))
+		handled, handleErr := c.HandleSyncErrorAsDoubleSpent(err, tokenId, newEvent.AssetType, tokenType, newEvent.PublisherDID, previousOwner, txnBlockOwner, fmt.Sprintf("Incoming block %s is wrong,error %v", txnBlockID, err))
 		if handled {
+			if handleErr != nil {
+				return handleErr
+			}
 			return nil
 		}
 	}
@@ -681,6 +696,7 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 	if err != nil {
 		if err := c.AddTokenContentToPSQL(tokenId, newEvent.AssetType); err != nil {
 			c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
+			return fmt.Errorf("failed to add ipfs content of the token%s to psql db,err:%v", tokenId, err)
 		}
 	}
 
@@ -738,46 +754,7 @@ func (c *Core) ShutdownTxnProcessor() {
 	}
 }
 
-// func (c *Core) RetryFailedTOSyncTokens() error {
-// 	failedToSyncTokens, err := c.w.GetAllFailedToSyncTokens()
-// 	if err != nil {
-// 		if strings.Contains(err.Error(), "no records found") {
-// 			c.log.Info("There are no failed tokens to sync")
-// 			return nil
-// 		} else {
-// 			c.log.Error("failed to get tokens which are failed to sync ", "error", err)
-// 			return err
-// 		}
 
-// 	}
-// 	if failedToSyncTokens == nil {
-// 		c.log.Info("There are NO failed to sync tokens which needs retry of syncing")
-// 	} else {
-// 		for _, failedToSyncToken := range failedToSyncTokens {
-// 			//call synctokenchain api to sync each token
-// 			//connect to publisher and fetch complete token chain
-// 			p, err := c.getPeer(failedToSyncToken.Did)
-// 			if err != nil {
-// 				c.log.Error("failed to sync full token chain, failed to open peer connection with publisher ", failedToSyncToken.Did, "error: ", err)
-// 				return fmt.Errorf("failed to open peer connection with publisher %v, error: %v", failedToSyncToken.Did, err)
-// 			}
-// 			defer p.Close()
-// 			tokenSyncInfo := &TokenSyncInfo{
-// 				TokenID:   failedToSyncToken.TokenID,
-// 				TokenType: failedToSyncToken.TokenType,
-// 				AssetType: failedToSyncToken.AssetType,
-// 			}
-// 			err = c.SyncFullTokenChainForFullNode(p, *tokenSyncInfo)
-// 			if err != nil {
-// 				c.log.Error("failed to sync token chain for token ", failedToSyncToken.TokenID, "error", err)
-// 				return fmt.Errorf("failed to get latest block for token %s - may need sync", failedToSyncToken.TokenID)
-
-// 			}
-// 		}
-// 	}
-
-// 	return nil
-// }
 
 // This function process incoming transaction history details and add it to Fullnode transaction history table
 func (c *Core) processIncomingTransactionHistory(txns []model.FullNodeTxnHistoryInfo) {
