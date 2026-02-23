@@ -162,6 +162,84 @@ func (c *Core) GetTokenchain(TokenID string, TokenType string) *model.GetTokenCh
 	return getTokenChainReply
 }
 
+func (c *Core) GetTokenchainLatest(TokenID string, TokenType string) *model.GetTokenChainResponce {
+	getTokenChainReply := &model.GetTokenChainResponce{
+		BasicResponse: model.BasicResponse{
+			Status: false,
+			Result: nil,
+		},
+		TokenChainData: nil,
+	}
+
+	var tokenTypeString string
+
+	switch strings.ToUpper(TokenType) {
+	case "RBT":
+		tokenTypeString = RBTString
+	case "PART":
+		tokenTypeString = PartString
+	case "FT":
+		tokenTypeString = FTString
+	case "NFT":
+		tokenTypeString = NFTString
+	case "SC":
+		tokenTypeString = SmartContractString
+	default:
+		getTokenChainReply.Message = fmt.Sprintf("Invalid token type: %s", TokenType)
+		c.log.Error(getTokenChainReply.Message)
+		return getTokenChainReply
+	}
+
+	// Fetch only the latest 10 blocks
+	blks, err := c.w.GetLatestFullNodeTokenBlocks(c.TokenType(tokenTypeString), TokenID, 10)
+	if err != nil {
+		getTokenChainReply.Message = fmt.Sprintf("Failed to get %s token chain blocks", TokenType)
+		c.log.Error(getTokenChainReply.Message, "err", err)
+		return getTokenChainReply
+	}
+
+	blocks := make([]map[string]interface{}, 0)
+	for _, blk := range blks {
+		b := block.InitBlock(blk, nil)
+		if b != nil {
+			blocks = append(blocks, b.GetBlockMap())
+		} else {
+			c.log.Error(fmt.Sprintf("Invalid %s block", TokenType))
+		}
+	}
+
+	str, err := tcMarshal("", blocks)
+	if err != nil {
+		c.log.Error(fmt.Sprintf("Failed to marshal %s token chain", TokenType), "err", err)
+		return nil
+	}
+
+	byteArray := []byte(str)
+	var data []interface{}
+
+	err = json.Unmarshal(byteArray, &data)
+	if err != nil {
+		c.log.Error(fmt.Sprintf("Error unmarshalling JSON for %s tokenchain", TokenType), "err", err)
+		return nil
+	}
+
+	for i, item := range data {
+		flattenedItem := flattenKeys("", item)
+		mappedItem := applyKeyMapping(flattenedItem)
+		data[i] = mappedItem
+	}
+
+	getTokenChainReply.Status = true
+	getTokenChainReply.Message = fmt.Sprintf("%s latest tokenchain data fetched successfully", TokenType)
+	getTokenChainReply.TokenChainData = data
+
+	if len(getTokenChainReply.TokenChainData) == 0 {
+		getTokenChainReply.Message = fmt.Sprintf("No %s tokenchain data available", TokenType)
+	}
+
+	return getTokenChainReply
+}
+
 func (c *Core) GettxnAmountFromFullNode(txnID string) (*model.FullNodeTxnHistoryInfo, error) {
 	RBTs, err := c.w.GetTxnAmountFromFullNode(txnID)
 	if err != nil {

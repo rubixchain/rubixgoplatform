@@ -322,6 +322,47 @@ func (w *Wallet) getAllFullNodeBlocks(tt int, token string, blockID string) ([][
 	return blks, nextBlkID, nil
 }
 
+// GetLatestFullNodeTokenBlocks gets the latest n chain blocks from the FullNode storage
+func (w *Wallet) GetLatestFullNodeTokenBlocks(tt int, token string, count int) ([][]byte, error) {
+	db := w.fullNodeStorage
+	if db == nil {
+		return nil, fmt.Errorf("failed get latest blocks, invalid token type")
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(tcsPrefix(tt, token))), nil)
+	defer iter.Release()
+	blks := make([][]byte, 0)
+	c := 0
+	if iter.Last() {
+		for {
+			key := string(iter.Key())
+			if isOldKey(key) {
+				err := w.updateFullNodeNewKey(tt, token)
+				if err != nil {
+					w.log.Error("Failed to update new key", "err", err)
+					return nil, err
+				}
+				return w.GetLatestFullNodeTokenBlocks(tt, token, count)
+			}
+			v := iter.Value()
+			blk := make([]byte, len(v))
+			copy(blk, v)
+			var err error
+			if string(blk[0:2]) == ReferenceType {
+				blk, err = w.getRawBlock(db, blk)
+				if err != nil {
+					return nil, err
+				}
+			}
+			blks = append(blks, blk)
+			c++
+			if c == count || !iter.Prev() {
+				break
+			}
+		}
+	}
+	return blks, nil
+}
+
 func (w *Wallet) updateNewKey(tt int, token string) error {
 	db := w.getChainDB(tt)
 	if db == nil {

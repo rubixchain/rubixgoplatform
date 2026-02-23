@@ -137,3 +137,22 @@ func (s *Server) APIGetFullTokenChainHeight(req *ensweb.Request) *ensweb.Result 
 	}
 	return s.BasicResponse(req, true, "Got token chain height", BlockHeight)
 }
+
+func (s *Server) APIGetFullTokenChainLatest(req *ensweb.Request) *ensweb.Result {
+	TokenID := strings.TrimSpace(s.GetQuerry(req, "tokenID"))
+	TokenType := strings.TrimSpace(s.GetQuerry(req, "tokenType"))
+
+	if strings.Compare(TokenID, "") == 0 || strings.Compare(TokenType, "") == 0 {
+		s.log.Error("Invalid input for APIGetFullTokenChainLatest", "TokenID", TokenID, "TokenType", TokenType)
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+
+	getResp := s.c.GetTokenchainLatest(TokenID, TokenType)
+
+	if getResp == nil {
+		s.log.Error("GetTokenchainLatest returned nil response", "TokenID", TokenID, "TokenType", TokenType)
+		return s.BasicResponse(req, false, "Failed to fetch token chain", nil)
+	}
+
+	return s.RenderJSON(req, getResp, http.StatusOK)
+}

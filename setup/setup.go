@@ -122,6 +122,7 @@ const (
 	APIGetTxnAmount          string = "/api/de-exp/get-txn-amount-by-txnID"
 
 	APIGetTokenChain       string = "/api/de-exp/get-token-chain"
+	APIGetTokenChainLatest string = "/api/de-exp/get-token-chain-latest"
 	APIGetTokenChainHeight string = "/api/de-exp/get-token-chain-height"
 
 	APINotifyDeExpBlockUpdate string = "/api/block-update"
