@@ -1,6 +1,13 @@
 {
-    "quorum": [4, 5, 6, 7, 8],
-    "rbt_transfer": [9, 10],
-    "bip39_nlss": [11, 12],
-    "quorum2": [13, 14, 15, 16, 17]
+    "quorum_ft": [4],
+    "nodes_ft": [11, 12],
+
+    "quorum_smart_contract": [15],
+    "nodes_smart_contract": [22],
+
+    "quorum_nft": [24],
+    "nodes_nft": [31],
+
+    "quorum_rbt": [32],
+    "nodes_rbt": [39, 40]
 }

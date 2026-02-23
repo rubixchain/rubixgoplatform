@@ -780,11 +780,10 @@ func (c *Core) CurrentQuorumStatePinCheck(b *block.Block, tokenId string, tokenT
 	return response, nil
 }
 
-func (c *Core) ValidateIncomingTokenBlock(blk block.Block, latestBlock *block.Block, tokenID string, p *ipfsport.Peer, assetType int) error {
-
-	// =========================
+// ValidateIncomingTokenBlockChainIntegrity runs CHECK1 and CHECK2 only (prev block ID and owner/sender consistency).
+// Use this at quorum side. For fullnode, use ValidateIncomingTokenBlock which also does signature verification (CHECK3).
+func (c *Core) ValidateIncomingTokenBlockChainIntegrity(blk block.Block, latestBlock *block.Block, tokenID string, assetType int) error {
 	//CHECK1: check previous blockID of the block,  which we are going to add, it should be same as the latestBlockID which is alredy there for all nongenesis blocks
-	// =========================
 	incomingBlkNumber, err := blk.GetBlockNumber(tokenID)
 	if err != nil {
 		c.log.Error("failed to get the blockNumber of the blk", "error", err, "token", tokenID)
@@ -797,8 +796,6 @@ func (c *Core) ValidateIncomingTokenBlock(blk block.Block, latestBlock *block.Bl
 				c.log.Error("Failed to get block id", "err", err, "token", tokenID)
 				return err
 			}
-			c.log.Debug("***existing blockID in FullNode***", latestBlockID, "token:", tokenID)
-
 			prevBlkID, err := blk.GetPrevBlockID(tokenID)
 			if err != nil {
 				return fmt.Errorf("failed to get previous block id: %w", err)
@@ -818,14 +815,10 @@ func (c *Core) ValidateIncomingTokenBlock(blk block.Block, latestBlock *block.Bl
 					)
 				}
 			}
-
 		}
-
 	}
 
-	// =========================
-	//CHECK2: if it is a transferred type, check that if receiver of the latest blockID should be same as the sender of the block which is going to get added.
-	// =========================
+	// CHECK2: for transferred/executed types, latest block owner must match sender/executor of incoming block
 	if incomingBlkNumber > 0 {
 		if latestBlock != nil {
 			transType := blk.GetTransType()
@@ -865,15 +858,22 @@ func (c *Core) ValidateIncomingTokenBlock(blk block.Block, latestBlock *block.Bl
 						)
 					}
 				}
-
 			}
 		}
 	}
 
-	// =========================
-	//CHECK3: fullnode verifies signature of each block, if it doesn't pass through it will return an error
-	// =========================
+	return nil
+}
 
+
+// ValidateIncomingTokenBlock runs all validations: chain integrity (CHECK1+CHECK2) and fullnode signature verification (CHECK3).
+// Use at fullnode. For quorum, use ValidateIncomingTokenBlockChainIntegrity for CHECK1+CHECK2 only.
+func (c *Core) ValidateIncomingTokenBlock(blk block.Block, latestBlock *block.Block, tokenID string, p *ipfsport.Peer, assetType int) error {
+	if err := c.ValidateIncomingTokenBlockChainIntegrity(blk, latestBlock, tokenID, assetType); err != nil {
+		return err
+	}
+
+	// CHECK3: fullnode verifies signature of each block, if it doesn't pass through it will return an error
 	incomingBlkType := blk.GetTransType()
 	//For Fexer DIDs which were having unpledge blocks, signature checks are failing so thats why we are avoiding signature checks for unpledge blocks
 	if incomingBlkType != block.TokenUnpledgedType {
