@@ -230,16 +230,13 @@ func (d *DIDChild) PvtSign(hash []byte) ([]byte, error) {
 func (d *DIDChild) PvtVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
 	if err != nil {
-		fmt.Println("failed to read the pubkey file for DIDChild", d.dir+PubKeyFileName)
 		return false, err
 	}
 	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
 	if err != nil {
-		fmt.Println("failed to decode pubkeybyte for DIDChild")
 		return false, err
 	}
 	if !crypto.Verify(pubKeyByte, hash, sign) {
-		fmt.Println("purely signature verification failed for DIDChild")
 		return false, fmt.Errorf("failed to verify private key singature")
 	}
 	return true, nil

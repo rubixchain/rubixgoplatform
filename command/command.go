@@ -629,11 +629,6 @@ func (cmd *Command) runApp() {
 		c.SubscribeTCDetails()
 	}
 
-	// // Start background job: retry failed-to-sync tokens every 1 hour
-	// if cmd.fullNode {
-	// 	c.RetryFailedTokenSync()
-	// }
-
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
 	signal.Notify(ch, syscall.SIGINT)
