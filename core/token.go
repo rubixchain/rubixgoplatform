@@ -928,7 +928,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				continue
 			}
 
-		
 		}
 
 		var wg sync.WaitGroup
@@ -987,7 +986,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						handled, handleErr := c.HandleSyncErrorAsDoubleSpent(err, detail.Token, detail.AssetType, detail.TokenType, detail.PublisherDid, existingBlockOwnerDID, detail.PublisherDid, fmt.Sprintf("%s, %s both dids are claiming the same token,dual ownership issue", existingBlockOwnerDID, detail.PublisherDid))
 						if handled {
 							if handleErr != nil {
-								return 
+								return
 							}
 
 							// double-spend case already logged and stored in HandleSyncErrorAsDoubleSpent

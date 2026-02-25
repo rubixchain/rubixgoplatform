@@ -119,6 +119,12 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		c.log.Debug("Pinning Node Peer Id", receiverPeerId)
 	}
 	for i := range ti {
+		// Validate token content for RBT and Part tokens before pin check
+		if err := c.GetTokenContentAndValidate(ti[i].Token, ti[i].TokenType); err != nil {
+			c.log.Error("Invalid token content at quorum", "token", ti[i].Token, "err", err)
+			crep.Message = fmt.Sprintf("Invalid token content: %s", err.Error())
+			return c.l.RenderJSON(req, &crep, http.StatusOK)
+		}
 		wg.Add(1)
 		go c.pinCheck(ti[i].Token, i, cr.SenderPeerID, cr.ReceiverPeerID, results, &wg)
 	}

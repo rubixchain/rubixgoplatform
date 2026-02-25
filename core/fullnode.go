@@ -207,7 +207,14 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 		// 	c.log.Error("Failed to validate token signer for token", "token", tokenSyncInfo.TokenID, "err", err)
 		// 	return fmt.Errorf("failed to validate token signer for %s", tokenSyncInfo.TokenID)
 		// }
-
+		//check that blockNumber which we are going to add is genesis block
+		txnBlockNumber, err := txnBlock.GetBlockNumber(tokenId)
+		if err != nil {
+			return fmt.Errorf("failed to get the transaction block number for the token%s, err: %v", tokenId, err)
+		}
+		if txnBlockNumber != 0 {
+			return fmt.Errorf("Incoming transaction block number is not zero, in case of genesis block: %v", err)
+		}
 		if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 			return fmt.Errorf("failed to add generated block to token chain, err: %v", err)
 		}
@@ -406,9 +413,8 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		if genesisBlock != nil {
 			receivedBlock.GenesisBlock = genesisBlock
 		}
-		// if it is a genesis block, then fetch token's ipfs content and store in psql db
-		if currentBlockNumber == 0 {
 
+		if currentBlockNumber == 0 {
 			receivedBlock.GenesisBlock = txnBlock
 		}
 		// Do all 3 checks, If any check fails, handle the failure here also just before adding the block to leveldb.
@@ -448,12 +454,20 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 // Process contract-related transactions (Smart Contract and NFT operations)
 func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBlock *block.Block, tokenId, currentOwner string) error {
 	// Handle token generated type (new deployments)
-	if newEvent.BlockType == block.TokenGeneratedType || newEvent.BlockType == block.TokenDeployedType {
+	if newEvent.BlockType == block.TokenDeployedType {
 		if currentOwner != newEvent.PublisherDID {
 			return fmt.Errorf("publisher DID mismatch for contract deployment: expected %s, got %s", currentOwner, newEvent.PublisherDID)
 		}
 		//TODO: Add signature check here after taking the pull of vaishnav's changes from the development
 
+		//check that blockNumber which we are going to add is zero for the genesis block		
+		txnBlockNumber, err := txnBlock.GetBlockNumber(tokenId)
+		if err != nil {
+			return fmt.Errorf("failed to get the transaction block number for the token%s, err: %v", tokenId, err)
+		}
+		if txnBlockNumber != 0 {
+			return fmt.Errorf("Incoming transaction block number is not zero, in case of genesis block: %v", err)
+		}
 		// Add block directly to token chain for new deployments
 		if err := c.w.AddFullNodeTokenBlock(tokenId, txnBlock); err != nil {
 			return fmt.Errorf("failed to add contract block to token chain: %v", err)
@@ -753,8 +767,6 @@ func (c *Core) ShutdownTxnProcessor() {
 		}
 	}
 }
-
-
 
 // This function process incoming transaction history details and add it to Fullnode transaction history table
 func (c *Core) processIncomingTransactionHistory(txns []model.FullNodeTxnHistoryInfo) {
