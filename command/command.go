@@ -358,7 +358,6 @@ type Command struct {
 	signature                    string
 	signerDID                    string
 	enableTrustedNetwork         bool
-	disableTrustedNetwork        bool
 	backupDB                     bool
 	fullNode                     bool
 	publishTokenChainDetails     bool
@@ -559,15 +558,16 @@ func (cmd *Command) runApp() {
 		}
 	}
 
-	// Apply trusted network setting (enabled by default)
-	// Check if user explicitly wants to disable trusted network
-	if cmd.disableTrustedNetwork {
-		cmd.cfg.CfgData.TrustedNetwork = false
-		cmd.log.Info("Trusted network mode explicitly disabled via -disableTrustedNetwork flag")
-	} else {
+	// Apply trusted network setting (disabled by default)
+	// Check if user explicitly wants to enable trusted network
+
+	if cmd.enableTrustedNetwork {
 		// Trusted network is enabled by default
 		cmd.cfg.CfgData.TrustedNetwork = true
-		cmd.log.Info("Trusted network mode enabled (default)")
+		cmd.log.Info("Trusted network mode explicitly enabled via -enableTrustedNetwork flag")
+	} else {
+		cmd.cfg.CfgData.TrustedNetwork = false
+		cmd.log.Info("Trusted network mode disabled (default)")
 	}
 
 	sc := make(chan bool, 1)
@@ -769,8 +769,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.message, "message", "", "Value to be signed on")
 	flag.StringVar(&cmd.signature, "signature", "", "signature to be verified")
 	flag.StringVar(&cmd.signerDID, "signerdid", "", "DID of the signer")
-	flag.BoolVar(&cmd.enableTrustedNetwork, "enableTrustedNetwork", true, "Enable trusted network mode (skips DHT checks) - enabled by default")
-	flag.BoolVar(&cmd.disableTrustedNetwork, "disableTrustedNetwork", false, "Disable trusted network mode to enable full DHT checks")
+	flag.BoolVar(&cmd.enableTrustedNetwork, "enableTrustedNetwork", false, "Enable trusted network mode (skips DHT checks) - enabled by default")
 	flag.BoolVar(&cmd.backupDB, "backupDB", false, "Create backup of database before starting node")
 	flag.BoolVar(&cmd.publishTokenChainDetails, "publishTokenchain", false, "Publish tokenchain details to pubsub")
 	flag.BoolVar(&cmd.fullNode, "fullnode", false, "receive all published transactions and tokenchain details")
