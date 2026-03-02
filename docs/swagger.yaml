@@ -40,7 +40,7 @@ definitions:
       status:
         type: boolean
     type: object
-  model.GetFTTokenChainReply:
+  model.GetTokenChainResponce:
     properties:
       message:
         type: string
@@ -140,8 +140,6 @@ definitions:
     properties:
       did:
         type: string
-      didtype:
-        type: integer
       peerID:
         type: string
     type: object
@@ -757,7 +755,7 @@ paths:
         "200":
           description: Successful response with token chain data
           schema:
-            $ref: '#/definitions/model.GetFTTokenChainReply'
+            $ref: '#/definitions/model.GetTokenChainResponce'
       summary: Get FT Token Chain Data
       tags:
       - FT

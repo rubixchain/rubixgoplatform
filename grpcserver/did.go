@@ -72,11 +72,9 @@ func createFile(fileName string, data string, decode bool) error {
 
 func (rn *RubixNative) CreateDID(ctx context.Context, req *protos.CreateDIDReq) (*protos.CreateDIDRes, error) {
 	dc := &did.DIDCreate{
-		Type:      int(req.DidMode),
 		Secret:    req.Secret,
 		MasterDID: req.MasterDid,
 		PrivPWD:   req.PrivKeyPwd,
-		QuorumPWD: req.QuorumKeyPwd,
 	}
 	folderName, err := rn.c.CreateTempFolder()
 	if err != nil {
@@ -84,25 +82,6 @@ func (rn *RubixNative) CreateDID(ctx context.Context, req *protos.CreateDIDReq) 
 		return nil, status.Errorf(codes.Internal, "failed to create folder")
 	}
 	defer os.RemoveAll(folderName)
-
-	if dc.Type != did.LiteDIDMode {
-		if req.DidImage != "" {
-			err = createFile(folderName+"/"+did.DIDImgFileName, req.DidImage, true)
-			if err != nil {
-				rn.log.Error(err.Error())
-				return nil, status.Errorf(codes.Internal, err.Error())
-			}
-			dc.ImgFile = folderName + "/" + did.DIDImgFileName
-		}
-		if req.PublicShare != "" {
-			err = createFile(folderName+"/"+did.PubShareFileName, req.PublicShare, true)
-			if err != nil {
-				rn.log.Error(err.Error())
-				return nil, status.Errorf(codes.Internal, err.Error())
-			}
-			dc.PubImgFile = folderName + "/" + did.PubShareFileName
-		}
-	}
 
 	if req.PublicKey != "" {
 		err = createFile(folderName+"/"+did.PubKeyFileName, req.PublicKey, false)

@@ -22,7 +22,7 @@ type FTTransactionMigrationStatus struct {
 
 // getDefaultDID gets the wallet's default DID
 func (w *Wallet) getDefaultDID() (string, error) {
-	var dids []DIDType
+	var dids []DID
 	err := w.s.Read(DIDStorage, &dids, "did_dir=?", "Default")
 	if err != nil {
 		return "", err
@@ -36,14 +36,14 @@ func (w *Wallet) getDefaultDID() (string, error) {
 // MigrateFTTransactionTokens migrates historical FT transaction data to populate token metadata
 func (w *Wallet) MigrateFTTransactionTokens() (*FTTransactionMigrationStatus, error) {
 	w.log.Info("Starting FT transaction token migration")
-	
+
 	// Check if migration table exists, create if not
 	err := w.s.Init("FTMigrationStatus", &FTTransactionMigrationStatus{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize migration status table", "err", err)
 		return nil, err
 	}
-	
+
 	// Check if a migration is already running
 	var existingStatus FTTransactionMigrationStatus
 	err = w.s.Read("FTMigrationStatus", &existingStatus, "status=?", "running")
@@ -51,20 +51,20 @@ func (w *Wallet) MigrateFTTransactionTokens() (*FTTransactionMigrationStatus, er
 		w.log.Warn("Migration already in progress", "started_at", existingStatus.StartTime)
 		return &existingStatus, fmt.Errorf("migration already in progress since %v", existingStatus.StartTime)
 	}
-	
+
 	// Initialize migration status
 	status := &FTTransactionMigrationStatus{
 		StartTime: time.Now(),
 		Status:    "running",
 	}
-	
+
 	// Save initial status
 	err = w.s.Write("FTMigrationStatus", status)
 	if err != nil {
 		w.log.Error("Failed to save migration status", "err", err)
 		return nil, err
 	}
-	
+
 	// Get all FT transactions
 	var ftTransactions []model.TransactionDetails
 	err = w.s.Read(TransactionStorage, &ftTransactions, "mode=?", FTTransferMode)
@@ -82,15 +82,15 @@ func (w *Wallet) MigrateFTTransactionTokens() (*FTTransactionMigrationStatus, er
 		w.s.Update("FTMigrationStatus", status, "start_time=?", status.StartTime)
 		return status, err
 	}
-	
+
 	status.TotalTransactions = len(ftTransactions)
 	w.log.Info("Found FT transactions to migrate", "count", status.TotalTransactions)
-	
+
 	// Process each transaction
 	for _, tx := range ftTransactions {
 		status.ProcessedCount++
 		status.LastProcessedTxnID = tx.TransactionID
-		
+
 		// Skip if metadata already exists
 		var existingMetadata []model.FTTransactionToken
 		err = w.s.Read(FTTransactionTokenStorage, &existingMetadata, "transaction_id=?", tx.TransactionID)
@@ -99,7 +99,7 @@ func (w *Wallet) MigrateFTTransactionTokens() (*FTTransactionMigrationStatus, er
 			status.SuccessCount++
 			continue
 		}
-		
+
 		// Determine if this node was sender or receiver
 		myDID, err := w.getDefaultDID()
 		if err != nil {
@@ -107,25 +107,25 @@ func (w *Wallet) MigrateFTTransactionTokens() (*FTTransactionMigrationStatus, er
 			status.FailureCount++
 			continue
 		}
-		
+
 		isSender := tx.SenderDID == myDID
 		isReceiver := tx.ReceiverDID == myDID
-		
+
 		if !isSender && !isReceiver {
 			w.log.Debug("Transaction not related to this node", "txn_id", tx.TransactionID)
 			continue
 		}
-		
+
 		// Try to extract token information from various sources
 		tokenMetadata, err := w.extractFTTokenMetadata(tx, isSender)
 		if err != nil {
-			w.log.Error("Failed to extract token metadata", 
+			w.log.Error("Failed to extract token metadata",
 				"txn_id", tx.TransactionID,
 				"err", err)
 			status.FailureCount++
 			continue
 		}
-		
+
 		// Store the metadata
 		for _, metadata := range tokenMetadata {
 			err = w.s.Write(FTTransactionTokenStorage, &metadata)
@@ -137,14 +137,14 @@ func (w *Wallet) MigrateFTTransactionTokens() (*FTTransactionMigrationStatus, er
 				break
 			}
 		}
-		
+
 		if err == nil {
 			status.SuccessCount++
 			w.log.Debug("Successfully migrated transaction",
 				"txn_id", tx.TransactionID,
 				"token_count", len(tokenMetadata))
 		}
-		
+
 		// Update status periodically
 		if status.ProcessedCount%100 == 0 {
 			w.s.Update("FTMigrationStatus", status, "start_time=?", status.StartTime)
@@ -155,7 +155,7 @@ func (w *Wallet) MigrateFTTransactionTokens() (*FTTransactionMigrationStatus, er
 				"failure", status.FailureCount)
 		}
 	}
-	
+
 	// Finalize migration
 	status.Status = "completed"
 	status.EndTime = time.Now()
@@ -163,21 +163,21 @@ func (w *Wallet) MigrateFTTransactionTokens() (*FTTransactionMigrationStatus, er
 	if err != nil {
 		w.log.Error("Failed to update final migration status", "err", err)
 	}
-	
+
 	w.log.Info("FT transaction token migration completed",
 		"total", status.TotalTransactions,
 		"processed", status.ProcessedCount,
 		"success", status.SuccessCount,
 		"failure", status.FailureCount,
 		"duration", status.EndTime.Sub(status.StartTime))
-	
+
 	return status, nil
 }
 
 // extractFTTokenMetadata attempts to extract FT token metadata from transaction
 func (w *Wallet) extractFTTokenMetadata(tx model.TransactionDetails, isSender bool) ([]model.FTTransactionToken, error) {
 	var metadata []model.FTTransactionToken
-	
+
 	// Method 1: Check if tokens are still in wallet (for received transactions)
 	if !isSender {
 		var currentTokens []FTToken
@@ -199,14 +199,14 @@ func (w *Wallet) extractFTTokenMetadata(tx model.TransactionDetails, isSender bo
 					}
 				}
 			}
-			
+
 			for _, tokenMeta := range tokenGroups {
 				metadata = append(metadata, *tokenMeta)
 			}
 			return metadata, nil
 		}
 	}
-	
+
 	// Method 2: Try to parse from transaction comment or other fields
 	// This is a best-effort approach since we don't have the original token details
 	if strings.Contains(tx.Comment, "FT Transfer") || strings.Contains(tx.Comment, "FT:") {
@@ -221,7 +221,7 @@ func (w *Wallet) extractFTTokenMetadata(tx model.TransactionDetails, isSender bo
 				if !isSender {
 					direction = "received"
 				}
-				
+
 				metadata = append(metadata, model.FTTransactionToken{
 					TransactionID: tx.TransactionID,
 					CreatorDID:    tx.SenderDID, // Best guess for historical data
@@ -232,7 +232,7 @@ func (w *Wallet) extractFTTokenMetadata(tx model.TransactionDetails, isSender bo
 			}
 		}
 	}
-	
+
 	// Method 3: Check TokensTransferred table if available
 	var transferredTokens []struct {
 		TransactionID string `gorm:"column:transaction_id"`
@@ -264,16 +264,16 @@ func (w *Wallet) extractFTTokenMetadata(tx model.TransactionDetails, isSender bo
 				}
 			}
 		}
-		
+
 		for _, tokenMeta := range tokenGroups {
 			metadata = append(metadata, *tokenMeta)
 		}
 	}
-	
+
 	if len(metadata) == 0 {
 		return nil, fmt.Errorf("could not extract token metadata for transaction %s", tx.TransactionID)
 	}
-	
+
 	return metadata, nil
 }
 
@@ -283,13 +283,13 @@ func extractFTNameFromComment(comment string) string {
 	patterns := []string{
 		"FT:", "FT Transfer:", "FT Name:", "FT-", "FungibleToken:",
 	}
-	
+
 	for _, pattern := range patterns {
 		if idx := strings.Index(comment, pattern); idx != -1 {
 			// Extract the word after the pattern
 			remaining := comment[idx+len(pattern):]
 			remaining = strings.TrimSpace(remaining)
-			
+
 			// Take the first word (until space or special char)
 			for i, ch := range remaining {
 				if ch == ' ' || ch == ',' || ch == ';' || ch == '-' {
@@ -299,14 +299,14 @@ func extractFTNameFromComment(comment string) string {
 					break
 				}
 			}
-			
+
 			// If no delimiter found, take up to 10 chars
 			if len(remaining) > 0 && len(remaining) <= 10 {
 				return remaining
 			}
 		}
 	}
-	
+
 	return ""
 }
 
@@ -320,38 +320,38 @@ func (w *Wallet) getFTInfoFromTokenChain(tokenID string) (*struct {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Parse the block data to extract FT info
 	// This is a simplified implementation - you may need to adjust based on actual data structure
 	if len(data) > 0 {
 		// For now, return error as we need more info about the data structure
 		return nil, fmt.Errorf("token chain data parsing not implemented")
 	}
-	
+
 	return nil, fmt.Errorf("no token chain data found")
 }
 
 // GetFTMigrationStatus returns the current or last migration status
 func (w *Wallet) GetFTMigrationStatus() (*FTTransactionMigrationStatus, error) {
 	var status FTTransactionMigrationStatus
-	
+
 	// First try to get running status
 	err := w.s.Read("FTMigrationStatus", &status, "status=?", "running")
 	if err == nil {
 		return &status, nil
 	}
-	
+
 	// Then get the most recent completed status
 	var allStatuses []FTTransactionMigrationStatus
 	err = w.s.Read("FTMigrationStatus", &allStatuses, "status=?", "completed")
 	if err != nil {
 		return nil, fmt.Errorf("no migration status found")
 	}
-	
+
 	if len(allStatuses) == 0 {
 		return nil, fmt.Errorf("no migration status found")
 	}
-	
+
 	// Return the most recent one
 	mostRecent := allStatuses[0]
 	for _, s := range allStatuses {
@@ -359,6 +359,6 @@ func (w *Wallet) GetFTMigrationStatus() (*FTTransactionMigrationStatus, error) {
 			mostRecent = s
 		}
 	}
-	
+
 	return &mostRecent, nil
 }

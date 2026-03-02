@@ -1,13 +1,11 @@
 package did
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/rubixchain/rubixgoplatform/crypto"
-	"github.com/rubixchain/rubixgoplatform/nlss"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -68,59 +66,6 @@ func (d *DIDQuorumLite) Sign(hash string) ([]byte, []byte, error) {
 	return bs, pvtKeySign, err
 }
 
-// verify the quorum's nlss based signature
-func (d *DIDQuorumLite) NlssVerify(hash string, pvtShareSig []byte, pvtKeySIg []byte) (bool, error) {
-	// read senderDID
-	didImg, err := util.GetPNGImagePixels(d.dir + DIDImgFileName)
-	if err != nil {
-		return false, err
-	}
-	pubImg, err := util.GetPNGImagePixels(d.dir + PubShareFileName)
-
-	if err != nil {
-		return false, err
-	}
-
-	pSig := util.BytesToBitstream(pvtShareSig)
-
-	ps := util.StringToIntArray(pSig)
-
-	didBin := util.ByteArraytoIntArray(didImg)
-	pubBin := util.ByteArraytoIntArray(pubImg)
-	pubPos := util.RandomPositions("verifier", hash, 32, ps)
-	pubPosInt := util.GetPrivatePositions(pubPos.PosForSign, pubBin)
-	pubStr := util.IntArraytoStr(pubPosInt)
-	orgPos := make([]int, len(pubPos.OriginalPos))
-	for i := range pubPos.OriginalPos {
-		orgPos[i] = pubPos.OriginalPos[i] / 8
-	}
-	didPosInt := util.GetPrivatePositions(orgPos, didBin)
-	didStr := util.IntArraytoStr(didPosInt)
-	cb := nlss.Combine2Shares(nlss.ConvertBitString(pSig), nlss.ConvertBitString(pubStr))
-
-	db := nlss.ConvertBitString(didStr)
-
-	if !bytes.Equal(cb, db) {
-		return false, fmt.Errorf("failed to verify")
-	}
-
-	hashPvtSign := util.HexToStr(util.CalculateHash([]byte(pSig), "SHA3-256"))
-
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
-	if err != nil {
-		return false, err
-	}
-
-	_, pubKeyByte, err := crypto.DecodeKeyPair("", nil, pubKey)
-	if err != nil {
-		return false, err
-	}
-
-	if !crypto.Verify(pubKeyByte, []byte(hashPvtSign), pvtKeySIg) {
-		return false, fmt.Errorf("failed to verify private key singature")
-	}
-	return true, nil
-}
 func (d *DIDQuorumLite) PvtSign(hash []byte) ([]byte, error) {
 	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
 	if err != nil {
@@ -167,10 +112,10 @@ func (d *DIDQuorumLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
 
 	pubkeyback, err := secp256k1.ParsePubKey(pubKeyByte)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse public key: %v", err)
+		return false, fmt.Errorf("NLSS DID detected at QUORUM role (incompatible key format). NLSS DIDs are DEPRECATED. Please use BIP DID for quorum. DID: %s, Error: %v", d.did, err)
 	}
 	if pubkeyback == nil {
-		return false, fmt.Errorf("public key is nil after parsing")
+		return false, fmt.Errorf("NLSS DID detected at QUORUM role (public key parsing returned nil). NLSS DIDs are DEPRECATED. Please use BIP DID for quorum. DID: %s", d.did)
 	}
 
 	pubKeySer := pubkeyback.ToECDSA()

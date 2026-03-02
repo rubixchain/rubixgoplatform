@@ -208,7 +208,7 @@ type CreditSignature struct {
 	PrivSignature string `json:"priv_signature"`
 	DID           string `json:"did"`
 	Hash          string `json:"hash"`
-	SignType      string `json:"sign_type"` // represents sign type (PkiSign == 0 or NlssSign==1)
+	SignType      string `json:"sign_type"` // represents sign type (PkiSign == 0)
 }
 
 type TokenArbitrationReq struct {
@@ -315,66 +315,22 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 		c.log.Error("DID does not exist", "did", didStr)
 		return fmt.Errorf("DID does not exist")
 	}
-
-	dt, err := c.w.GetDID(didStr)
-	if err != nil {
-		c.log.Error("DID could not fetch", "did", didStr)
-		return fmt.Errorf("DID does not exist")
+	if pvtKeyPwd == "" {
+		c.log.Error("Failed to setup lite quorum as privPWD is not privided")
+		return fmt.Errorf("failed to setup lite quorum, as privPWD is not provided")
 	}
-
-	// To support NLSS backward compatibility,
-	// If the Quorum's did is created in lite mode,
-	// it will initiate DIDQuorum_Lt, and if  it is in basic mode,
-	// it will initiate DIDQuorumc
-	switch dt.Type {
-	case did.LiteDIDMode:
-		if pvtKeyPwd == "" {
-			c.log.Error("Failed to setup lite quorum as privPWD is not privided")
-			return fmt.Errorf("failed to setup lite quorum, as privPWD is not provided")
-		}
-		quorum_dc := did.InitDIDQuorumLite(didStr, c.didDir, pvtKeyPwd)
-		if quorum_dc == nil {
-			c.log.Error("Failed to setup lite mode quorum")
-			return fmt.Errorf("failed to setup quorum")
-		}
-		c.qc[didStr] = quorum_dc
-		dc := did.InitDIDLiteWithPassword(didStr, c.didDir, pvtKeyPwd)
-		if dc == nil {
-			c.log.Error("Failed to setup quorum as dc is nil")
-			return fmt.Errorf("failed to setup quorum")
-		}
-		c.pqc[didStr] = dc
-	case did.BasicDIDMode:
-		dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
-		if dc == nil {
-			c.log.Error("Failed to setup basic mode quorum")
-			return fmt.Errorf("failed to setup quorum")
-		}
-		c.qc[didStr] = dc
-		if pvtKeyPwd != "" {
-			dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
-			if dc == nil {
-				c.log.Error("Failed to setup quorum")
-				return fmt.Errorf("failed to setup quorum")
-			}
-			c.pqc[didStr] = dc
-		}
-	default:
-		dc := did.InitDIDQuorumc(didStr, c.didDir, pwd)
-		if dc == nil {
-			c.log.Error("Failed to setup quorum")
-			return fmt.Errorf("failed to setup quorum")
-		}
-		c.qc[didStr] = dc
-		if pvtKeyPwd != "" {
-			dc := did.InitDIDBasicWithPassword(didStr, c.didDir, pvtKeyPwd)
-			if dc == nil {
-				c.log.Error("Failed to setup quorum")
-				return fmt.Errorf("failed to setup quorum")
-			}
-			c.pqc[didStr] = dc
-		}
+	quorum_dc := did.InitDIDQuorumLite(didStr, c.didDir, pvtKeyPwd)
+	if quorum_dc == nil {
+		c.log.Error("Failed to setup lite mode quorum")
+		return fmt.Errorf("failed to setup quorum")
 	}
+	c.qc[didStr] = quorum_dc
+	dc := did.InitDIDLiteWithPassword(didStr, c.didDir, pvtKeyPwd)
+	if dc == nil {
+		c.log.Error("Failed to setup quorum as dc is nil")
+		return fmt.Errorf("failed to setup quorum")
+	}
+	c.pqc[didStr] = dc
 
 	return nil
 }
@@ -755,23 +711,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 					c.AddPeerDetails(*qDidInfo)
 				}
 			}
-			if qDidInfo.DIDType == nil {
-				qdidPeerMap, err := c.GetPeerDIDInfo(qdid)
-				if err != nil {
-					c.log.Error("could not fetch did type of quorum", qdid, "err", err)
-					qrmInfo.DIDType = nil
-				} else {
-					qrmInfo.DIDType = qdidPeerMap.DIDType
-					c.log.Debug("DID type of quorum is fetched from explorer", qdid, "DID type", qrmInfo.DIDType)
-				}
-			}
 
-			if qDidInfo == nil || *qDidInfo.DIDType == -1 {
-				c.log.Error("could not fetch did type of quorum", qdid, "err", err)
-				qrmInfo.DIDType = nil
-			} else {
-				qrmInfo.DIDType = qDidInfo.DIDType
-			}
 			if qpid == "" {
 				qpid = qDidInfo.PeerID
 			}
@@ -1079,12 +1019,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				if strings.Contains(err.Error(), "retry") {
 					c.AddPeerDetails(*qDidInfo)
 				}
-			}
-			if qDidInfo == nil || *qDidInfo.DIDType == -1 {
-				c.log.Error("could not fetch did type of quorum", qdid, "err", err)
-				qrmInfo.DIDType = nil
-			} else {
-				qrmInfo.DIDType = qDidInfo.DIDType
 			}
 			if qpid == "" {
 				qpid = qDidInfo.PeerID
@@ -1481,12 +1415,6 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 					c.AddPeerDetails(*qDidInfo)
 				}
 			}
-			if qDidInfo == nil || *qDidInfo.DIDType == -1 {
-				c.log.Error("could not fetch did type of quorum", qdid, "err", err)
-				qrmInfo.DIDType = nil
-			} else {
-				qrmInfo.DIDType = qDidInfo.DIDType
-			}
 			if qpid == "" {
 				qpid = qDidInfo.PeerID
 			}
@@ -1691,17 +1619,10 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			if err != nil {
 				if qDidInfo == nil {
 					c.log.Error("could not fetch did info of quorum", qdid, "err", err)
-					qrmInfo.DIDType = nil
 				}
 				if strings.Contains(err.Error(), "retry") {
 					c.AddPeerDetails(*qDidInfo)
 				}
-			}
-			if *qDidInfo.DIDType == -1 {
-				c.log.Error("could not fetch did type of quorum", qdid, "err", err)
-				qrmInfo.DIDType = nil
-			} else {
-				qrmInfo.DIDType = qDidInfo.DIDType
 			}
 			if qpid == "" {
 				qpid = qDidInfo.PeerID
@@ -2383,7 +2304,6 @@ func (c *Core) finishConsensus(id string, qt int, p *ipfsport.Peer, status bool,
 	}
 	var signType int
 	// signType = 0 => Pki based sign in lite mode
-	// signType = 1 => Nlss based sign in basic mode
 	if util.HexToStr(ss) == "" {
 		signType = 0
 	} else {
@@ -2594,7 +2514,11 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	}
 
 	if !cresp.Status {
-		c.log.Error("Failed to get consensus", "msg", cresp.Message, "|| crep is ", cresp)
+		if strings.Contains(cresp.Message, "NLSS DID detected") || strings.Contains(cresp.Message, "incompatible key format") {
+			c.log.Error("Consensus failed: NLSS DID detected. NLSS DIDs are DEPRECATED. Please use BIP DID", "msg", cresp.Message)
+		} else {
+			c.log.Error("Failed to get consensus", "msg", cresp.Message, "|| crep is ", cresp)
+		}
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
 		return
 	}
