@@ -71,7 +71,7 @@ def tests():
     didA_port = sc_node_config["node22"]["server"]
 
     print("\n1. Generating 1 whole RBT for A1")
-    expect_success(fund_did_with_rbt)(sc_node_config["node22"], didA, 1)
+    expect_success(fund_did_with_rbt)(sc_node_config["node22"], didA, 1, 100)    # passing start index to avoid confilcts
     print("Funded node A with 1 RBT")
     
     print("\n1. Generate a Smart Contract")
