@@ -658,20 +658,11 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 		publisherPeerId := c.w.GetPeerID(detail.Did)
 		if publisherPeerId != event.PublisherPeerID {
 
-			unknownDIDType := -1 // -1 means that we doesn't know the DID Type but we need to pass some integer otherwise it will give nil pointer dereference error
 			publisherDetails := &wallet.DIDPeerMap{
 				DID:    detail.Did,
 				PeerID: event.PublisherPeerID,
 			}
-			// if publisher did type is already added in peerDIDTable,
-			// then read and pass it, else pass -1
-			publisherDIDType, err := c.w.GetPeerDIDType(detail.Did)
-			if err != nil {
-				publisherDetails.DIDType = &unknownDIDType
-			} else {
-				publisherDetails.DIDType = &publisherDIDType
-			}
-			err = c.AddPeerDetails(*publisherDetails)
+			err := c.AddPeerDetails(*publisherDetails)
 			if err != nil {
 				c.log.Error("failed to add publisher info to DB")
 			}

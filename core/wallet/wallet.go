@@ -126,7 +126,7 @@ func InitWallet(s storage.Storage, fullNodeSQLDB storage.Storage, fullNodePSQLTo
 	}
 	w.ntcs.DB = ntdb
 
-	err = w.s.Init(DIDStorage, &DIDType{}, true)
+	err = w.s.Init(DIDStorage, &DID{}, true)
 	if err != nil {
 		w.log.Error("Failed to initialize DID storage", "err", err)
 		return nil, err

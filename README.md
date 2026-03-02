@@ -101,8 +101,6 @@ Create DID Command
 This following options are used for this command
   -port string
         Server/Host port (default "20000")
-  -didType int
-        DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode, 3-Child Mode, 4-Light Mode) (default 0)
   -didSecret string
         DID secret (default "My DID Secret")
   -privPWD string
@@ -201,7 +199,6 @@ This following options are used for this command
         Server/Host port (default "20000")
   -quorumPWD string
         Quroum key password (default "mypassword")
-        Not required for lite mode (didType : 4) did
   -privPWD string
         Private key password (default "mypassword")
   -fp forcepassword
@@ -363,7 +360,7 @@ This following options are used for this command
         Server/Host port (default "20000")
 ```
 To add the peer details manually
-: To add the peer details by providing peerID, did and didType of the peer
+: To add the peer details by providing peerID & DID of the peer
 
 ```
 ./rubixgoplatform addpeerdetails
@@ -377,9 +374,6 @@ This following options are used for this command
       
   -did string
         DID address (default "")
-
-  -didType int
-        DID type (0-Basic Mode, 1-Standard Mode, 2-Wallet Mode, 3-Child Mode, 4-Light Mode) (default 0)
 ```
 
 To check details about the token states for which pledging has been done

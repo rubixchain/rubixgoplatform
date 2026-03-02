@@ -133,14 +133,13 @@ def fetch_peer_id(config):
     peer_id = cmd_get_peer_id(config["server"], config["grpcPort"])
     config["peerId"] = peer_id
 
-def create_and_register_did(config: dict, did_alias: str, did_type: int = 4, register_did: bool = True, fp: bool = False):
+def create_and_register_did(config: dict, did_alias: str, register_did: bool = True, fp: bool = False):
     if fp:
         print(f"creating did with fp flag")
-        did = cmd_create_did(config["server"], config["grpcPort"], did_type, "p123", "q123")
+        did = cmd_create_did(config["server"], config["grpcPort"], "p123", "q123")
         print(f"DID {did} has been created successfully")
         config["dids"][did_alias] = {}
         config["dids"][did_alias]["did"] = did
-        config["dids"][did_alias]["did_type"] = did_type
 
         if register_did:
             cmd_register_did(did, config["server"], config["grpcPort"], "p123")
@@ -148,12 +147,11 @@ def create_and_register_did(config: dict, did_alias: str, did_type: int = 4, reg
 
         return did
     else:
-        did = cmd_create_did(config["server"], config["grpcPort"], did_type)
+        did = cmd_create_did(config["server"], config["grpcPort"])
         print(f"DID {did} has been created successfully")
 
         config["dids"][did_alias] = {}
         config["dids"][did_alias]["did"] = did
-        config["dids"][did_alias]["did_type"] = did_type
 
         if register_did:
             cmd_register_did(did, config["server"], config["grpcPort"])
@@ -174,8 +172,8 @@ def rbt_transfer(
         priv_pwd="mypassword"):
     cmd_rbt_transfer(sender_address, receiver_address, transfer_rbt, sender_server_port, sender_grpc_port, priv_pwd)
 
-def add_peer_details(peer_id: str, did_id: str, did_type: int, server_port: int, grpc_port: int):
-    cmd_add_peer_details(peer_id, did_id, did_type, server_port, grpc_port)
+def add_peer_details(peer_id: str, did_id: str, server_port: int, grpc_port: int):
+    cmd_add_peer_details(peer_id, did_id, server_port, grpc_port)
 
 
 ## FT

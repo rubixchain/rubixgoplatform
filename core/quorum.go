@@ -30,7 +30,6 @@ const (
 
 type QuorumDIDPeerMap struct {
 	DID         string `gorm:"column:did;primaryKey"`
-	DIDType     *int   `gorm:"column:did_type"`
 	PeerID      string `gorm:"column:peer_id"`
 	DIDLastChar string `gorm:"column:did_last_char"`
 }
@@ -174,7 +173,7 @@ func (qm *QuorumManager) GetPeerID(did string, selfPeer string) string {
 	err := qm.s.Read(wallet.DIDPeerStorage, &dm, "did=?", did)
 	if err != nil && strings.Contains(err.Error(), "no records found") {
 		// Check if the Quorum DID is part of the same node by looking in DIDTable
-		var dt wallet.DIDType
+		var dt wallet.DID
 		err2 := qm.s.Read(wallet.DIDStorage, &dt, "did=?", did)
 		if err2 != nil {
 			return ""
@@ -198,7 +197,7 @@ func (c *Core) AddDefaulTestnetQuorums() {
 	var qds []QuorumData
 	for _, quorum := range faucetQuorumList {
 		peerID, did, _ := util.ParseAddress(quorum)
-		c.w.AddDIDPeerMap(did, peerID, 4)
+		c.w.AddDIDPeerMap(did, peerID)
 		qd := QuorumData{
 			Type:    2,
 			Address: did,

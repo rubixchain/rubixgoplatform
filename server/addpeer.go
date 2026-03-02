@@ -9,9 +9,8 @@ import (
 )
 
 type DIDPeerMapTemp struct {
-	DID     string
-	DIDType int
-	PeerID  string
+	DID    string
+	PeerID string
 }
 
 // APIAddPeerDetails godoc
@@ -30,9 +29,6 @@ func (s *Server) APIAddPeerDetails(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "invalid input request", nil)
 	}
-	if pd.DIDType < 0 || pd.DIDType > 4 {
-		return s.BasicResponse(req, false, "Invalid DID Type", nil)
-	}
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(pd.PeerID)
 	if !strings.HasPrefix(pd.PeerID, "12D3KooW") || len(pd.PeerID) != 52 || !is_alphanumeric {
 		return s.BasicResponse(req, false, "Invalid Peer ID", nil)
@@ -43,7 +39,6 @@ func (s *Server) APIAddPeerDetails(req *ensweb.Request) *ensweb.Result {
 	}
 	peer_detail.DID = pd.DID
 	peer_detail.PeerID = pd.PeerID
-	peer_detail.DIDType = &pd.DIDType
 	err = s.c.AddPeerDetails(peer_detail)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to add peers in DB, "+err.Error(), nil)

@@ -94,12 +94,12 @@ def check_if_node_is_running(server_idx):
     except:
         raise Exception(f"ConnectionError | Server with port {port} is NOT running successfully")
 
-def cmd_create_did(server_port, grpc_port, did_type = 4, priv_pwd = "mypassword", quorum_pwd = "mypassword"):
+def cmd_create_did(server_port, grpc_port, priv_pwd = "mypassword", quorum_pwd = "mypassword"):
     os.chdir("../" + get_build_dir())
-    did_type = 4 # TODO: temporaray change until -didType flag is removed
-    cmd_string = f"./rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port} -didType {did_type} -privPWD {priv_pwd} -quorumPWD {quorum_pwd}"
+
+    cmd_string = f"./rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port} -privPWD {priv_pwd} -quorumPWD {quorum_pwd}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port} -didType {did_type} -privPWD {priv_pwd} -quorumPWD {quorum_pwd}"
+        cmd_string = f".\\rubixgoplatform createdid -port {server_port} -grpcPort {grpc_port} -privPWD {priv_pwd} -quorumPWD {quorum_pwd}"
     output, code = run_command(cmd_string, True)
     print(output)
     
@@ -132,11 +132,11 @@ def cmd_register_did(did_id, server_port, grpc_port, priv_pwd = "mypassword"):
     os.chdir("../tests")
     return output
 
-def cmd_add_peer_details(peer_id, did_id, did_type, server_port, grpc_port):
+def cmd_add_peer_details(peer_id, did_id, server_port, grpc_port):
     os.chdir("../" + get_build_dir())
-    cmd_string = f"./rubixgoplatform addpeerdetails -peerID {peer_id} -did {did_id} -didType {did_type} -port {server_port} -grpcPort {grpc_port}"
+    cmd_string = f"./rubixgoplatform addpeerdetails -peerID {peer_id} -did {did_id} -port {server_port} -grpcPort {grpc_port}"
     if is_windows_os():
-        cmd_string = f".\\rubixgoplatform addpeerdetails -peerID {peer_id} -did {did_id} -didType {did_type} -port {server_port} -grpcPort {grpc_port}"
+        cmd_string = f".\\rubixgoplatform addpeerdetails -peerID {peer_id} -did {did_id} -port {server_port} -grpcPort {grpc_port}"
     output, code = run_command(cmd_string, True)
     print(output)
 
