@@ -2221,12 +2221,11 @@ const LocalTestTokenInfo_TokenNumber_Attr = "token_number"
 const LocalTestTokenInfo_TokenLevel_Value int = 10000
 
 func (w *Wallet) GetLocalTokenNumber() (int, error) {
-	var localTestTokenInfo *model.LocalTestTokenInfo
-
-	err := w.s.Read(LocalTestTokenInfo, &localTestTokenInfo, "attribute=?", LocalTestTokenInfo_TokenNumber_Attr)
+	var tokenNumberRecord *model.LocalTestTokenInfo
+	err := w.s.Read(LocalTestTokenInfo, &tokenNumberRecord, "attribute=?", LocalTestTokenInfo_TokenNumber_Attr)
 	if err != nil {
 		if strings.Contains(err.Error(), "no records found") {
-			// Hard coded at 10000
+			// Initialize: token_level=10000 (level 0), token_number=0 (next will be 1)
 			tokenLevel := &model.LocalTestTokenInfo{
 				Attribute: LocalTestTokenInfo_TokenLevel_Attr,
 				Value:     10000,
@@ -2250,18 +2249,27 @@ func (w *Wallet) GetLocalTokenNumber() (int, error) {
 		return -1, fmt.Errorf("failed to get local test token info, err: %v", err)
 	}
 
-	return localTestTokenInfo.Value, nil
+	return tokenNumberRecord.Value, nil
 }
 
-func (w *Wallet) SetLocalTokenNumber(tokenNumber int) error {
-	updatedLocalTestTokenInfo := &model.LocalTestTokenInfo{
+func (w *Wallet) SetLocalTokenlevelAndNumber(tokenLevel int, tokenNumber int) error {
+	updatedTokenNumber := &model.LocalTestTokenInfo{
 		Attribute: LocalTestTokenInfo_TokenNumber_Attr,
 		Value:     tokenNumber,
 	}
-
-	err := w.s.Update(LocalTestTokenInfo, updatedLocalTestTokenInfo, "attribute=?", LocalTestTokenInfo_TokenNumber_Attr)
+	err := w.s.Update(LocalTestTokenInfo, updatedTokenNumber, "attribute=?", LocalTestTokenInfo_TokenNumber_Attr)
 	if err != nil {
 		return fmt.Errorf("failed to set token number for local test token, err: %v", err)
+	}
+
+	// Update token level record
+	updatedTokenLevel := &model.LocalTestTokenInfo{
+		Attribute: LocalTestTokenInfo_TokenLevel_Attr,
+		Value:     tokenLevel,
+	}
+	err = w.s.Update(LocalTestTokenInfo, updatedTokenLevel, "attribute=?", LocalTestTokenInfo_TokenLevel_Attr)
+	if err != nil {
+		return fmt.Errorf("failed to set token level for local test token, err: %v", err)
 	}
 
 	return nil
@@ -2275,8 +2283,8 @@ func (w *Wallet) GetTokenNetworkID(tokenID string, tokenType int) (string, error
 
 	networkID, err := genesisBlock.GetGenesisNetworkType(tokenID)
 	if err != nil {
-		return "", fmt.Errorf("GetTokenNetworkID: failed to get networkID from genesis block for tokenID: %v, err: %v", tokenID, err)	
+		return "", fmt.Errorf("GetTokenNetworkID: failed to get networkID from genesis block for tokenID: %v, err: %v", tokenID, err)
 	}
-	
+
 	return networkID, err
 }
