@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	block "github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -24,7 +25,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
 const defaultBatchSize = 500                             // Tweak according to RAM/network
@@ -87,7 +87,6 @@ type PubSubEnvelope struct {
 	Type string          `json:"type"` // "token" or "txn"
 	Data json.RawMessage `json:"data"`
 }
-
 
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
@@ -166,7 +165,7 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	return info, nil
 }
 
-func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int ) {
+func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int) {
 	err := c.generateTestTokens(reqID, num, did, startIndex)
 	br := model.BasicResponse{
 		Status:  true,
@@ -186,7 +185,7 @@ func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex 
 
 // getTokenIDForLocalTestTokens retrieves the token ID for local test tokens based on the
 // provided token level and token number.
-func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int, did string) (string, error) {
+func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int) (string, error) {
 	idValue := strconv.Itoa(tokenLevel) + "_" + strconv.Itoa(tokenNumber)
 	return idValue, nil
 }
@@ -230,7 +229,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 			c.log.Error("Failed to get token level and number for global index", "globalIndex", globalIndex, "err", err)
 			return err
 		}
-		id, err := c.getTokenIDForLocalTestTokens(tokenLevel, numInLevel, did)
+		id, err := c.getTokenIDForLocalTestTokens(tokenLevel, numInLevel)
 		if err != nil {
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
@@ -322,7 +321,12 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 		}
 	}
 
-	if err := c.w.SetLocalTokenNumber(finalTokenNumber); err != nil {
+	// Store (tokenLevel, numInLevel) for NEXT token; e.g. after 100 tokens → level 10001, number 45
+	tokenLevel, numInLevel, err := token.GetTokenLevelAndNumberForGlobalIndex(finalTokenNumber)
+	if err != nil {
+		return fmt.Errorf("failed to get token level for global index %d, err: %v", finalTokenNumber, err)
+	}
+	if err := c.w.SetLocalTokenlevelAndNumber(tokenLevel, numInLevel); err != nil {
 		return fmt.Errorf("failed to set local test token number, err: %v", err)
 	}
 
