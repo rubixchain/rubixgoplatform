@@ -18,24 +18,34 @@ func getLowestPossibleDenom() float64 {
 	return rubixmath.FloatPrecision(math.Pow10(-constants.MaxSupportedDecimalPlaces))
 }
 
-// getSubtreeSize calculates the total number of nodes in a subtree starting at the given depth
-// Includes the node itself plus all its descendants
-func getSubtreeSize(depth int) int {
-	maxDepthWithoutRoot := GetMaxDenomTreeLevel() - 1
-	if depth >= maxDepthWithoutRoot {
-		return 1 // Leaf node
+// getLevelStart returns the BFS start index for the given level.
+// Level 0 (root/whole token) starts at 0. Level 1 starts at 1, etc.
+func getLevelStart(level int) int {
+	start := 0
+	count := 1 // nodes at level 0
+	for l := 0; l < level; l++ {
+		start += count
+		if l%2 == 0 {
+			count *= 2
+		} else {
+			count *= 5
+		}
 	}
+	return start
+}
 
-	// Alternating pattern: even depths divide by 2, odd depths divide by 5
-	var numChildren int
-	if depth%2 == 0 {
-		numChildren = 2
-	} else {
-		numChildren = 5
+// getSuffixProduct returns the product of numChildren(j) for j in [from, to).
+// numChildren(j) = 2 if j is even, 5 if j is odd.
+func getSuffixProduct(from, to int) int {
+	product := 1
+	for j := from; j < to; j++ {
+		if j%2 == 0 {
+			product *= 2
+		} else {
+			product *= 5
+		}
 	}
-
-	childSize := getSubtreeSize(depth+1)
-	return 1 + numChildren*childSize
+	return product
 }
 
 func IndexedToHierarchical(indexedToken string) (TokenID, error) {
@@ -58,68 +68,54 @@ func IndexedToHierarchical(indexedToken string) (TokenID, error) {
 		return "", fmt.Errorf("invalid indexed number: %s", parts[2])
 	}
 
-	// Convert to hierarchical path
 	path := GetTokenPath(tokenId)
+	// If path is empty, return just the prefix (whole token)
+	if path == "" {
+		return TokenID(prefix), nil
+	}
 
 	// Return full hierarchical form
 	return TokenID(prefix + "_" + path), nil
 }
 
-// GetTokenPath converts a tokenId to its path representation
-// Returns a string like "1_2" (just the hierarchical path portion)
+// GetTokenPath converts a BFS tokenId to its hierarchical path representation.
+// Returns a string like "1_2" (just the path portion, without the token prefix).
 func GetTokenPath(tokenId int) string {
-	maxDepthWithoutRoot := GetMaxDenomTreeLevel() - 1
-	// Root node
+	maxLevel := GetMaxDenomTreeLevel() - 1
+
+	// Root node (whole token)
 	if tokenId == 0 {
-		return "0"
+		return ""
 	}
 
-	path := make([]int, maxDepthWithoutRoot)
-	remaining := tokenId
-
-	for depth := 0; depth < maxDepthWithoutRoot; depth++ {
-		// Determine number of children at this depth
-		var numChildren int
-		if depth%2 == 0 {
-			numChildren = 2
-		} else {
-			numChildren = 5
-		}
-
-		childSubtreeSize := getSubtreeSize(depth+1)
-
-		// Find which child this tokenId belongs to
-		for child := 1; child <= numChildren; child++ {
-			if remaining <= childSubtreeSize {
-				path[depth] = child
-				remaining -= 1 // Account for the child node itself
-				break
-			}
-			remaining -= childSubtreeSize
-		}
-
-		if remaining == 0 {
+	// Find which level this tokenId belongs to
+	level := 0
+	for level < maxLevel {
+		if tokenId < getLevelStart(level+1) {
 			break
 		}
+		level++
 	}
 
-	// Find the last non-zero element to trim trailing zeros
-	lastNonZero := 0
-	for i := 0; i < maxDepthWithoutRoot; i++ {
-		if path[i] != 0 {
-			lastNonZero = i
-		}
+	// Position within this level (0-indexed)
+	pos := tokenId - getLevelStart(level)
+
+	// Decode the path using mixed-radix arithmetic
+	path := make([]int, level)
+	for i := 0; i < level; i++ {
+		sp := getSuffixProduct(i+1, level)
+		path[i] = pos/sp + 1
+		pos = pos % sp
 	}
 
-	// Convert path to string (only up to last non-zero element)
-	pathStr := make([]string, lastNonZero+1)
-	for i := 0; i <= lastNonZero; i++ {
+	// Convert path to string
+	pathStr := make([]string, level)
+	for i := 0; i < level; i++ {
 		pathStr[i] = fmt.Sprintf("%d", path[i])
 	}
 
 	return strings.Join(pathStr, "_")
 }
-
 
 func HeirarchicalToIndexed(heirarchicalID TokenID) (string, error) {
 	parts := strings.Split(heirarchicalID.String(), "_")
@@ -146,9 +142,8 @@ func HeirarchicalToIndexed(heirarchicalID TokenID) (string, error) {
 	return fmt.Sprintf("%s_%d", prefix, indexedToken), nil
 }
 
-// GetTokenIdFromPath converts a path string back to its tokenId
-// Takes a path like "34_2345_1_2" (with prefix) or "1_2" (without prefix)
-// Auto-detects and strips the prefix if present (first 2 parts if first part > 2)
+// GetTokenIdFromPath converts a hierarchical path string to its BFS tokenId.
+// Takes a path like "34_2345_1_2" (with prefix) or "1_2" (without prefix).
 func GetTokenIdFromPath(pathStr string) (int, error) {
 	maxDepthWithoutRoot := GetMaxDenomTreeLevel() - 1
 
@@ -183,30 +178,28 @@ func GetTokenIdFromPath(pathStr string) (int, error) {
 		}
 	}
 
-	tokenId := 0
+	n := len(path)
 
-	for depth := 0; depth < len(path); depth++ {
-		child := path[depth]
+	// BFS index = level_start(n) + position_within_level
+	levelStart := getLevelStart(n)
+	pos := 0
+	for i := 0; i < n; i++ {
+		child := path[i]
 
 		var numChildren int
-		if depth%2 == 0 {
+		if i%2 == 0 {
 			numChildren = 2
 		} else {
 			numChildren = 5
 		}
 
 		if child < 1 || child > numChildren {
-			return 0, fmt.Errorf("invalid child %d at depth %d", child, depth)
+			return 0, fmt.Errorf("invalid child %d at depth %d", child, i)
 		}
 
-		childSubtreeSize := getSubtreeSize(depth+1)
-
-		// preorder visit of this node
-		tokenId += 1
-
-		// skip previous siblings
-		tokenId += (child - 1) * childSubtreeSize
+		sp := getSuffixProduct(i+1, n)
+		pos += (child - 1) * sp
 	}
 
-	return tokenId, nil
+	return levelStart + pos, nil
 }
