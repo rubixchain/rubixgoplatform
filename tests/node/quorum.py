@@ -26,7 +26,7 @@ def run_quorum_nodes(
     print("Rubix Quorum nodes are now running")
 
     did_alias = "did_quorum"
-    did_type = 4
+
     node_did_alias_map = {}
     for node, config in node_config.items():
         if concurrent and not check_if_node_is_running(int(node.lstrip("node"))):
@@ -36,7 +36,7 @@ def run_quorum_nodes(
     if not only_run_nodes:
         print("Creating, Registering and Funding Quorum DIDs\n")
         for node, config in node_config.items():
-            did = create_and_register_did(config, did_alias, did_type, register_did=True)
+            did = create_and_register_did(config, did_alias, register_did=True)
             fund_did_with_rbt(config, did)
 
 

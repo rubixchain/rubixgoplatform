@@ -44,16 +44,9 @@ func (cmd *Command) AddPeerDetails() {
 		return
 	}
 
-	// didType = cmd.didType
-	if cmd.didType < 0 || cmd.didType > 4 {
-		cmd.log.Error("DID Type should be between 0 and 4")
-		return
-	}
-
 	peerDetail := wallet.DIDPeerMap{
-		PeerID:  peerID,
-		DID:     did,
-		DIDType: &cmd.didType,
+		PeerID: peerID,
+		DID:    did,
 	}
 	msg, status := cmd.c.AddPeer(&peerDetail)
 	if !status {

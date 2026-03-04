@@ -44,7 +44,7 @@ func (s *Server) APIDumpFTTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 // @Accept       json
 // @Produce      json
 // @Param        tokenID	query	string	true	"FT Token ID"
-// @Success      200  {object}  model.GetFTTokenChainReply "Successful response with token chain data"
+// @Success      200  {object}  model.GetTokenChainResponce "Successful response with token chain data"
 // @Router       /api/get-ft-token-chain [get]
 func (s *Server) APIGetFTTokenchain(req *ensweb.Request) *ensweb.Result {
 	TokenID := s.GetQuerry(req, "tokenID")

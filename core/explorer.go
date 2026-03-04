@@ -50,7 +50,6 @@ type ExplorerDID struct {
 	PeerID    string                    `json:"peer_id"`
 	DID       string                    `json:"user_did"`
 	Balance   float64                   `json:"balance"`
-	DIDType   int                       `json:"did_type"`
 	FTDetails []model.FTInfoForExplorer `json:"ft_detials"`
 }
 
@@ -430,7 +429,7 @@ func (ec *ExplorerClient) GetAPIKeyFromExplorer(url string, didReq string) (stri
 }
 
 func (c *Core) ExplorerUserCreate() []string {
-	didList := []wallet.DIDType{}
+	didList := []wallet.DID{}
 	dids := []string{}
 
 	//Read all DIDs from the DB.
@@ -453,7 +452,7 @@ func (c *Core) ExplorerUserCreate() []string {
 		}
 		// Increment the overall WaitGroup for each batch
 		overallWG.Add(1)
-		go func(batch []wallet.DIDType) {
+		go func(batch []wallet.DID) {
 			defer overallWG.Done()
 
 			var batchWG sync.WaitGroup
@@ -462,7 +461,7 @@ func (c *Core) ExplorerUserCreate() []string {
 			// Launch goroutines for the batch
 			for _, d := range batch {
 				batchWG.Add(1)
-				go func(d wallet.DIDType) {
+				go func(d wallet.DID) {
 					defer batchWG.Done()
 					<-startSignal // Wait for the signal to start
 
@@ -492,7 +491,6 @@ func (c *Core) ExplorerUserCreate() []string {
 							DID:       d.DID,
 							Balance:   balance,
 							PeerID:    c.peerID,
-							DIDType:   d.Type,
 							FTDetails: ftInfoForExplorer,
 						}
 						err = c.ec.ExplorerUserCreate(&ed)
@@ -542,7 +540,7 @@ func (ec *ExplorerClient) ExplorerUserCreate(ed *ExplorerDID) error {
 func (c *Core) UpdateUserInfo(dids []string) {
 	for _, did := range dids {
 		go func(did string) {
-			didList := wallet.DIDType{}
+			didList := wallet.DID{}
 
 			accInfo, err := c.GetAccountInfo(did)
 			if err != nil {
@@ -569,7 +567,6 @@ func (c *Core) UpdateUserInfo(dids []string) {
 			ed := ExplorerDID{
 				PeerID:    c.peerID,
 				Balance:   accInfo.RBTAmount,
-				DIDType:   didList.Type,
 				FTDetails: ftInfoForExplorer,
 			}
 
