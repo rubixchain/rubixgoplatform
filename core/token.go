@@ -219,6 +219,35 @@ func (c *Core) mintTokens(reqID string, num int, did string, startIndex int) err
 		startTokenNumber = 1
 	}
 	finalTokenNumber := startTokenNumber + num
+
+	// Validate DID authorization: Convert global indices to Level 1 token numbers and validate range
+	// Get first token's level and number
+	firstTokenLevel, firstTokenNum, err := token.GetMainnetTokenLevelAndNumberForGlobalIndex(startTokenNumber)
+	if err != nil {
+		c.log.Error("Failed to get token level and number for start", "globalIndex", startTokenNumber, "err", err)
+		return fmt.Errorf("failed to get token info for start index %d: %v", startTokenNumber, err)
+	}
+	// Get last token's level and number
+	lastTokenLevel, lastTokenNum, err := token.GetMainnetTokenLevelAndNumberForGlobalIndex(finalTokenNumber - 1)
+	if err != nil {
+		c.log.Error("Failed to get token level and number for end", "globalIndex", finalTokenNumber-1, "err", err)
+		return fmt.Errorf("failed to get token info for end index %d: %v", finalTokenNumber-1, err)
+	}
+
+	// Ensure all tokens are Level 1 (this minting process only handles Level 1 tokens)
+	if firstTokenLevel != 1 || lastTokenLevel != 1 {
+		c.log.Error("Attempting to mint non-Level-1 tokens", "startLevel", firstTokenLevel, "endLevel", lastTokenLevel)
+		return fmt.Errorf("this minting process only supports Level 1 tokens. Attempted to mint level %d to %d", firstTokenLevel, lastTokenLevel)
+	}
+
+	// Validate that the DID is authorized to mint this token number range
+	if err := ValidateDIDOwnsTokenRange(did, firstTokenNum, lastTokenNum); err != nil {
+		c.log.Error("Mint access denied", "did", did, "tokenRange", fmt.Sprintf("[%d, %d]", firstTokenNum, lastTokenNum), "error", err)
+		return err
+	}
+
+	c.log.Info("Mint access validated", "did", did, "tokenRange", fmt.Sprintf("[%d, %d]", firstTokenNum, lastTokenNum), "count", num)
+
 	currentTime := time.Now()
 
 	for globalIndex := startTokenNumber; globalIndex < finalTokenNumber; globalIndex++ {
