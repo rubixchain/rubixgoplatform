@@ -42,17 +42,17 @@ func (c *Core) getTotalAmountFromTokenHashes(tokenHashes []string) (float64, err
 func (c *Core) TokenType(tt string) int {
 	switch tt {
 	case RBTString:
-		if c.testNet {
+		if c.testnet {
 			return token.TestTokenType
 		}
 		return token.RBTTokenType
 	case NFTString:
-		if c.testNet {
+		if c.testnet {
 			return token.TestNFTTokenType
 		}
 		return token.NFTTokenType
 	case PartString:
-		if c.testNet {
+		if c.testnet {
 			return token.TestPartTokenType
 		}
 		return token.PartTokenType

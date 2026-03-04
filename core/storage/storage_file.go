@@ -11,7 +11,7 @@ type StorageFile struct {
 }
 
 func NewStorageFile(cfg *config.Config) (*StorageFile, error) {
-	ad, err := adapter.NewAdapter(cfg)
+	ad, err := adapter.NewAdapter(nil)
 	if err != nil {
 		return nil, err
 	}

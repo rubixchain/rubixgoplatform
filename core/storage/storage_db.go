@@ -2,15 +2,16 @@ package storage
 
 import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/adapter"
-	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
+
+	"github.com/rubixchain/rubixgoplatform/types"
 )
 
 type StorageDB struct {
 	ad *adapter.Adapter
 }
 
-func NewStorageDB(cfg *config.Config) (*StorageDB, error) {
+func NewStorageDB(cfg *types.DBConfig) (*StorageDB, error) {
 	ad, err := adapter.NewAdapter(cfg)
 	if err != nil {
 		return nil, err

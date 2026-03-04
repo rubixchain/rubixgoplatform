@@ -57,10 +57,10 @@ func (c *Core) initIPFS(ipfsdir string) error {
 		// Replace ports more precisely to avoid unintended replacements
 		swarmPort := fmt.Sprintf("%d", c.cfg.CfgData.Ports.SwarmPort)
 		configData = []byte(strings.Replace(string(configData), "/tcp/4001", "/tcp/"+swarmPort, -1))
-		
+
 		apiPort := fmt.Sprintf("%d", c.cfg.CfgData.Ports.IPFSPort)
 		configData = []byte(strings.Replace(string(configData), "/tcp/5001", "/tcp/"+apiPort, -1))
-		
+
 		gatewayPort := fmt.Sprintf("%d", c.cfg.CfgData.Ports.IPFSAPIPort)
 		configData = []byte(strings.Replace(string(configData), "/tcp/8080", "/tcp/"+gatewayPort, -1))
 		f, err := os.OpenFile(ipfsConfigFile,
@@ -73,7 +73,7 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			return err
 		}
 		f.Close()
-		if c.testNet {
+		if c.testnet || c.localnet {
 			_, err = util.Filecopy(c.testNetKey, ipfsdir+"/"+SwarmKeyFilename)
 		} else {
 			_, err = util.Filecopy(SwarmKeyFilename, ipfsdir+"/"+SwarmKeyFilename)
@@ -93,7 +93,7 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			c.log.Error("unable to remove bootstrap", "err", err)
 			return err
 		}
-		if c.testNet {
+		if c.testnet || c.localnet {
 			_, err = c.ipfs.BootstrapAdd(c.cfg.CfgData.TestBootStrap)
 		} else {
 			_, err = c.ipfs.BootstrapAdd(c.cfg.CfgData.BootStrap)
@@ -113,7 +113,7 @@ func (c *Core) initIPFS(ipfsdir string) error {
 		c.log.Info("IPFS Initialized")
 		return nil
 	} else {
-		if c.testNet {
+		if c.testnet || c.localnet {
 			_, err = util.Filecopy(c.testNetKey, ipfsdir+"/"+SwarmKeyFilename)
 			time.Sleep(2 * time.Second)
 		} else {
@@ -164,17 +164,17 @@ func (c *Core) runIPFS() {
 		c.log.Error("failed to start command", "err", err)
 		panic(err)
 	}
-	
+
 	// Store the process PID
 	if cmd.Process != nil {
 		c.ipfsPID = cmd.Process.Pid
-		c.log.Info("IPFS daemon started", "pid", c.ipfsPID, "repo", c.cfg.DirPath+".ipfs")
+		c.log.Info("IPFS daemon started", "pid", c.ipfsPID, "repo", c.cfg.NodeConfigDir+".ipfs")
 	}
 
 	go func() {
 		<-c.ipfsChan
 		c.log.Info("IPFS daemon shutdown requested")
-		
+
 		// Try graceful shutdown first with interrupt signal
 		if runtime.GOOS == "windows" {
 			// Windows: Kill only this specific process
@@ -192,13 +192,13 @@ func (c *Core) runIPFS() {
 				c.log.Info("Sending interrupt to IPFS process", "pid", c.ipfsPID)
 				cmd.Process.Signal(os.Interrupt)
 			}
-			
+
 			// Give it 5 seconds to shutdown gracefully
 			done := make(chan error, 1)
 			go func() {
 				done <- cmd.Wait()
 			}()
-			
+
 			select {
 			case <-done:
 				// Process exited gracefully
@@ -215,10 +215,10 @@ func (c *Core) runIPFS() {
 				}
 			}
 		}
-		
+
 		c.log.Info("IPFS daemon process terminated")
 		c.SetIPFSState(false)
-		
+
 		// Close stdin/stdout to release any blocked reads
 		stdin.Close()
 		stdout.Close()
@@ -247,9 +247,9 @@ func (c *Core) runIPFS() {
 
 // RunIPFS will run the IPFS daemon
 func (c *Core) RunIPFS() error {
-	os.Setenv("IPFS_PATH", c.cfg.DirPath+".ipfs")
+	os.Setenv("IPFS_PATH", c.cfg.NodeConfigDir+".ipfs")
 	os.Setenv("LIBP2P_FORCE_PNET", "1")
-	err := c.initIPFS(c.cfg.DirPath + ".ipfs")
+	err := c.initIPFS(c.cfg.NodeConfigDir + ".ipfs")
 	if err != nil {
 		c.log.Error("failed to initialize IPFS", "err", err)
 		return err
@@ -278,10 +278,10 @@ func (c *Core) RunIPFS() error {
 
 	// Initialize IPFS scalability manager
 	c.ipfsScalability = NewIPFSScalabilityManager(c)
-	
+
 	// Initialize connection recovery manager
 	c.connRecovery = NewConnectionRecovery(c.log)
-	
+
 	// Initialize P2P reconnect manager
 	c.p2pReconnect = NewP2PReconnectManager(c)
 
@@ -335,7 +335,7 @@ func (c *Core) stopIPFS() {
 	timeout := time.After(10 * time.Second)
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-timeout:
@@ -351,7 +351,7 @@ func (c *Core) stopIPFS() {
 }
 
 func (c *Core) AddBootStrap(peers []string) error {
-	if c.testNet {
+	if c.testnet || c.localnet {
 		for _, p := range peers {
 			alreadyExists := false
 			for _, existing := range c.cfg.CfgData.TestBootStrap {
@@ -434,7 +434,7 @@ func (c *Core) RemoveAllBootStrap() error {
 }
 
 func (c *Core) GetAllBootStrap() []string {
-	if c.testNet {
+	if c.testnet || c.localnet {
 		return c.cfg.CfgData.TestBootStrap
 	}
 	return c.cfg.CfgData.BootStrap

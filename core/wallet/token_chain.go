@@ -531,15 +531,10 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 	}
 	tt := b.GetTokenType(token)
 
-	var db *ChainDB
-	if w.IsFullNode {
-		db = w.fullNodeStorage
-	} else {
-		db = w.getChainDB(tt)
-		if db == nil {
-			w.log.Error("Failed to add block, invalid token type")
-			return fmt.Errorf("failed to get db")
-		}
+	var db *ChainDB = w.getChainDB(tt)
+	if db == nil {
+		w.log.Error("Failed to add block, invalid token type")
+		return fmt.Errorf("failed to get db")
 	}
 
 	bid, err := b.GetBlockID(token)
@@ -631,21 +626,15 @@ func (w *Wallet) addBlock(token string, b *block.Block) error {
 
 // addFullNodeBlock will write block into fullnode-storage
 func (w *Wallet) addFullNodeBlock(token string, b *block.Block) error {
-	if w.isExplorerAvailable() {
-		defer w.notifyExplorerServer(b)
-	}
+	// if w.isExplorerAvailable() {
+	// 	defer w.notifyExplorerServer(b)
+	// }
 	opt := &opt.WriteOptions{
 		Sync: true,
 	}
 	tt := b.GetTokenType(token)
 
 	var db *ChainDB
-	if w.IsFullNode {
-		db = w.fullNodeStorage
-	} else {
-		w.log.Error("Not a fullnode, fullnode storage does not exist")
-		return fmt.Errorf("not a fullnode, fullnode storage does not exist")
-	}
 
 	bid, err := b.GetBlockID(token)
 	if err != nil {

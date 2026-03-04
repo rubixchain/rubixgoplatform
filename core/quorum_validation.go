@@ -124,7 +124,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 
 	if iswholeToken {
 		tv = float64(1)
-		if c.testNet {
+		if c.testnet {
 			tt = token.TestTokenType
 		} else {
 			tt = token.RBTTokenType
@@ -136,7 +136,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 			return -1, fmt.Errorf("syncParentToken: failed while attempting fetch the value for part token: %v, err: %v", parentTokenID, err)
 		}
 
-		if c.testNet {
+		if c.testnet {
 			tt = token.TestPartTokenType
 		} else {
 			tt = token.PartTokenType

@@ -28,7 +28,7 @@ func TestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to parse config file")
 	}
-	ad, err := NewAdapter(&cfg)
+	ad, err := NewAdapter(nil)
 	if err != nil {
 		t.Fatal("Failed to initialize adapter")
 	}

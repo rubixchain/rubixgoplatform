@@ -416,7 +416,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 
 		if iswholeToken {
 			tv = float64(1)
-			if c.testNet {
+			if c.testnet {
 				tt = token.TestTokenType
 			} else {
 				tt = token.RBTTokenType
@@ -429,7 +429,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 				response.Message = "failed to fetch part token value"
 				return response, err
 			}
-			if c.testNet {
+			if c.testnet {
 				tt = token.TestPartTokenType
 			} else {
 				tt = token.PartTokenType
@@ -848,4 +848,3 @@ func (c *Core) ValidateIncomingTokenBlockChainIntegrity(blk block.Block, latestB
 
 	return nil
 }
-

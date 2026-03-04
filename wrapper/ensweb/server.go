@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/adapter"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -109,8 +110,18 @@ func NewServer(cfg *config.Config, serverCfg *ServerConfig, log logger.Logger, o
 	slog := log.Named("enswebserver")
 	var db *adapter.Adapter
 	var err error
+
+	adaptorConfig := &types.DBConfig{
+		DBName:     cfg.DBName,
+		DBType:     cfg.DBType,
+		DBAddress:  cfg.DBAddress,
+		DBUserName: cfg.DBUserName,
+		DBPassword: cfg.DBPassword,
+		DBPort:     cfg.DBPort,
+	}
+
 	if cfg.DBType != "" {
-		db, err = adapter.NewAdapter(cfg)
+		db, err = adapter.NewAdapter(adaptorConfig)
 		if err != nil {
 			slog.Error("failed to DB adapter", "err", err)
 			return Server{}, err

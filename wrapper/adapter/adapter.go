@@ -2,23 +2,13 @@ package adapter
 
 import (
 	"fmt"
-	"net/url"
 
-	"github.com/rubixchain/rubixgoplatform/wrapper/config"
+	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
-	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
-	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-)
-
-const (
-	postgressDB string = "PostgressSQL"
-	sqlDB       string = "SQLServer"
-	mysqlDB     string = "MySQL"
-	sqlite3     string = "Sqlite3"
 )
 
 // TenantIDStr ...
@@ -31,25 +21,20 @@ type Adapter struct {
 }
 
 // NewAdapter create new adapter
-func NewAdapter(cfg *config.Config) (*Adapter, error) {
-
+func NewAdapter(cfg *types.DBConfig) (*Adapter, error) {
 	var db *gorm.DB
 	var err error
+
 	switch cfg.DBType {
-	case sqlDB:
-		userPwd := url.UserPassword(cfg.DBUserName, cfg.DBPassword)
-		dsn := fmt.Sprintf("sqlserver://%s@%s:%s?database=%s", userPwd, cfg.DBAddress, cfg.DBPort, cfg.DBName)
-		db, err = gorm.Open(sqlserver.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	case postgressDB:
+	case constants.DBType_PostgreSQL:
 		dsn := fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable", cfg.DBAddress, cfg.DBPort, cfg.DBUserName, cfg.DBName, cfg.DBPassword)
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	case sqlite3:
-		// Enable WAL mode for better concurrent access
-		// This is safe for existing databases - SQLite will automatically migrate
-		db, err = gorm.Open(sqlite.Open(cfg.DBAddress+"?_journal_mode=WAL&_busy_timeout=5000"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	// case sqlite3:
+	// 	// Enable WAL mode for better concurrent access
+	// 	// This is safe for existing databases - SQLite will automatically migrate
+	// 	db, err = gorm.Open(sqlite.Open(cfg.DBAddress+"?_journal_mode=WAL&_busy_timeout=5000"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	default:
-		dsn := fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s", cfg.DBUserName, cfg.DBPassword, cfg.DBAddress, cfg.DBPort, cfg.DBName)
-		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		return nil, fmt.Errorf("unsupported database type: %s", cfg.DBType)
 	}
 
 	if err != nil {

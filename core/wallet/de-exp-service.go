@@ -3,23 +3,17 @@ package wallet
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/rubixchain/rubixgoplatform/block"
-	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
 var (
 	explorerClient *http.Client
 	clientOnce     sync.Once
 )
-
-var ExplorerHost string
 
 // Notification queue to prevent blocking
 type NotificationQueue struct {
@@ -260,55 +254,51 @@ func convertToStringMap(i interface{}) interface{} {
 	}
 }
 
-func (w *Wallet) isExplorerAvailable() bool {
-	return ExplorerHost != "" && ExplorerHost != "No De-Explorer Host"
-}
+// func (w *Wallet) notifyExplorerServer(b *block.Block) {
+// 	if !w.isExplorerAvailable() {
+// 		return
+// 	}
 
-func (w *Wallet) notifyExplorerServer(b *block.Block) {
-	if !w.isExplorerAvailable() {
-		return
-	}
+// 	explorerURL := ExplorerHost + setup.APINotifyDeExpBlockUpdate
+// 	blockMap := b.GetBlockMap()
+// 	cleanedMap := convertToStringMap(blockMap)
 
-	explorerURL := ExplorerHost + setup.APINotifyDeExpBlockUpdate
-	blockMap := b.GetBlockMap()
-	cleanedMap := convertToStringMap(blockMap)
+// 	blockBytes, err := json.Marshal(cleanedMap)
+// 	if err != nil {
+// 		w.log.Error("notifyExplorerServer: marshal failed", "error", err)
+// 		return
+// 	}
 
-	blockBytes, err := json.Marshal(cleanedMap)
-	if err != nil {
-		w.log.Error("notifyExplorerServer: marshal failed", "error", err)
-		return
-	}
+// 	// Queue async to avoid blocking
+// 	if err := notifQueue.Enqueue(explorerURL, blockBytes); err != nil {
+// 		w.log.Warn("Failed to queue block notification", "error", err)
+// 	}
+// }
 
-	// Queue async to avoid blocking
-	if err := notifQueue.Enqueue(explorerURL, blockBytes); err != nil {
-		w.log.Warn("Failed to queue block notification", "error", err)
-	}
-}
+// func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}, operation string) {
+// 	if !w.isExplorerAvailable() {
+// 		return
+// 	}
 
-func (w *Wallet) notifyTokenUpdate(tableName string, tokenData interface{}, operation string) {
-	if !w.isExplorerAvailable() {
-		return
-	}
+// 	explorerURL := ExplorerHost + setup.APINotifyDeExpTokenUpdate
 
-	explorerURL := ExplorerHost + setup.APINotifyDeExpTokenUpdate
+// 	payload := map[string]interface{}{
+// 		"table":     tableName,
+// 		"data":      tokenData,
+// 		"operation": operation,
+// 	}
 
-	payload := map[string]interface{}{
-		"table":     tableName,
-		"data":      tokenData,
-		"operation": operation,
-	}
+// 	jsonBytes, err := json.Marshal(payload)
+// 	if err != nil {
+// 		w.log.Error("notifyTokenUpdate: marshal failed", "error", err)
+// 		return
+// 	}
 
-	jsonBytes, err := json.Marshal(payload)
-	if err != nil {
-		w.log.Error("notifyTokenUpdate: marshal failed", "error", err)
-		return
-	}
-
-	// Queue async to avoid blocking
-	if err := notifQueue.Enqueue(explorerURL, jsonBytes); err != nil {
-		w.log.Warn("Failed to queue token notification", "error", err)
-	}
-}
+// 	// Queue async to avoid blocking
+// 	if err := notifQueue.Enqueue(explorerURL, jsonBytes); err != nil {
+// 		w.log.Warn("Failed to queue token notification", "error", err)
+// 	}
+// }
 
 // Add to your shutdown/cleanup code
 func ShutdownExplorerNotifications() error {

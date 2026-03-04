@@ -1272,23 +1272,6 @@ paths:
       summary: Subscribe to Smart Contract
       tags:
       - Smart Contract
-  /api/unpledge-pow-unpledge-tokens:
-    post:
-      consumes:
-      - application/json
-      description: This API will unpledge all PoW based pledge tokens and drop the
-        unpledgequeue table
-      operationId: unpledge-pow-unpledge-tokens
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Unpledge POW Based pledge Tokens
-      tags:
-      - Account
   /api/verify-signature:
     get:
       consumes:

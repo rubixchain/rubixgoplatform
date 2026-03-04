@@ -11,7 +11,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/grpcserver"
 	"github.com/rubixchain/rubixgoplatform/setup"
-	ccfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
@@ -35,12 +34,7 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 		s.log.Error("failed to create core", "err", err)
 		return nil, err
 	}
-	if cfg.EnableAuth {
-		if cfg.DBType == "" {
-			cfg.DBType = "Sqlite3"
-			cfg.DBAddress = "rubix.db"
-		}
-	}
+
 	s.Server, err = ensweb.NewServer(&cfg.Config, nil, log, ensweb.SetServerTimeout(timeout))
 	if err != nil {
 		s.log.Error("failed to create server", "err", err)
@@ -64,7 +58,7 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 			rand.Read(rb)
 			cfg.SessionKey = base64.StdEncoding.EncodeToString(rb)
 		}
-		s.CreateSessionStore(cfg.SessionName, "HaiHello", sessions.Options{Path: "/api", HttpOnly: true})
+		s.CreateSessionStore(cfg.SessionName, "hello", sessions.Options{Path: "/api", HttpOnly: true})
 	}
 
 	s.SetShutdown(s.ExitFunc)
@@ -81,23 +75,12 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 		return nil, err
 	}
 	//s.CreateSessionStore(sessionStore, cfg.ClientSecret, sessions.Options{})
-	if start {
-		ok, _ := s.c.Start()
-		if !ok {
-			s.log.Error("failed to start core")
-			return nil, fmt.Errorf("failed to start core")
-		}
+	ok, _ := s.c.Start()
+	if !ok {
+		s.log.Error("failed to start core")
+		return nil, fmt.Errorf("failed to start core")
 	}
-	cc := &ccfg.Config{
-		ServerAddress: cfg.Config.HostAddress,
-		ServerPort:    cfg.Config.HostPort,
-	}
-	s.grpc, err = grpcserver.NewServerGRPC(c, cc, log, cfg.GRPCAddr, cfg.GRPCSecure)
-	if err != nil {
-		s.log.Error("Failed to create GRPC server", "err", err)
-		return nil, err
-	}
-	go s.grpc.Run()
+
 	s.RegisterRoutes()
 	return s, nil
 }
@@ -153,15 +136,11 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIPeerID, "GET", s.AuthHandle(s.APIPeerID, false, s.AuthError, false))
 	s.AddRoute(setup.APIReleaseAllLockedTokens, "GET", s.AuthHandle(s.APIReleaseAllLockedTokens, true, s.AuthError, false))
 	s.AddRoute(setup.APICheckQuorumStatus, "GET", s.AuthHandle(s.APICheckQuorumStatus, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetAllExplorer, "GET", s.AuthHandle(s.APIGetAllExplorer, false, s.AuthError, true))
-	s.AddRoute(setup.APIAddExplorer, "POST", s.AuthHandle(s.APIAddExplorer, false, s.AuthError, true))
-	s.AddRoute(setup.APIRemoveExplorer, "POST", s.AuthHandle(s.APIRemoveExplorer, false, s.AuthError, true))
 	s.AddRoute(setup.APIAddPeerDetails, "POST", s.AuthHandle(s.APIAddPeerDetails, false, s.AuthError, true))
 	s.AddRoute(setup.APIGetPledgedTokenDetails, "GET", s.AuthHandle(s.APIGetPledgedTokenDetails, false, s.AuthError, true))
 	s.AddRoute(setup.APICheckPinnedState, "DELETE", s.AuthHandle(s.APICheckPinnedState, false, s.AuthError, true))
 	s.AddRoute(setup.APISelfTransfer, "POST", s.AuthHandle(s.SelfTransferHandle, false, s.AuthError, true))
 	s.AddRoute(setup.APIRunUnpledge, "POST", s.AuthHandle(s.RunUnpledgeHandle, false, s.AuthError, true))
-	s.AddRoute(setup.APIUnpledgePOWPledgeTokens, "POST", s.AuthHandle(s.UnpledgePoWBasedPledgedTokens, false, s.AuthError, true))
 	s.AddRoute(setup.APIInitiatePinRBT, "POST", s.AuthHandle(s.APIInitiatePinRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIRecoverRBT, "POST", s.AuthHandle(s.APIRecoverRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateTokenChain, "GET", s.AuthHandle(s.APIValidateTokenChain, false, s.AuthError, false))
@@ -183,7 +162,6 @@ func (s *Server) RegisterRoutes() {
 
 	s.AddRoute(setup.APIRequestDIDForPubKey, "POST", s.APICreateDIDFromPubKey)
 	s.AddRoute(setup.APISendJWTFromWallet, "POST", s.APIAuthenticateWalletJWT)
-	s.AddRoute(setup.APIAddUserAPIKey, "POST", s.AuthHandle(s.APIAddUserAPIKey, false, s.AuthError, true))
 	s.AddRoute(setup.APIAddPeerDetailsFromExplorer, "POST", s.AuthHandle(s.APIAddPeerDetailsFromExplorer, false, s.AuthError, true))
 	s.AddRoute(setup.APIGetFTTxnByDID, "GET", s.AuthHandle(s.APIGetFTTxnByDID, true, s.AuthError, false))
 	s.AddRoute(setup.APIUpdateTokenStatus, "PUT", s.AuthHandle(s.APIUpdateTokenStatus, false, s.AuthError, false))

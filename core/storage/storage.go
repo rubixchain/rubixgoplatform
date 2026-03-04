@@ -1,9 +1,5 @@
 package storage
 
-const (
-	StorageDBType int = iota + 1
-)
-
 type Storage interface {
 	Init(storageName string, vaule interface{}, force bool) error
 	Write(storageName string, vaule interface{}) error

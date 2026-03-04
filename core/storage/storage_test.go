@@ -14,11 +14,11 @@ import (
 )
 
 func initStorageDB() (*StorageDB, error) {
-	cfg := &config.Config{
+	_ = &config.Config{
 		DBAddress: "test.db",
 		DBType:    "Sqlite3",
 	}
-	return NewStorageDB(cfg)
+	return NewStorageDB(nil)
 }
 
 func remoteStorageDB() error {
