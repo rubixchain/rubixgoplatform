@@ -18,9 +18,8 @@ type Transactions struct {
 type TokenChain struct {
 	TokenID       string    `db:"token_id"`
 	TransactionID string    `db:"transaction_id"`
-	Role          string    `db:"role"`
-	Type          string    `db:"type"`
-	Position      int64     `db:"position"`
+	Role          int16     `db:"role"`
+	Height        int64     `db:"height"`
 	CreatedAt     time.Time `db:"created_at"`
 	UpdatedAt     time.Time `db:"updated_at"`
 }
