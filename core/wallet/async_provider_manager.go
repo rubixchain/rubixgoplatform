@@ -9,7 +9,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-// AsyncProviderDetailsManager handles background provider details updates
 type AsyncProviderDetailsManager struct {
 	wallet    *Wallet
 	log       logger.Logger

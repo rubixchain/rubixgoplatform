@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -328,11 +329,19 @@ func NewCore(cfg *config.Config, dbConfig *types.DBConfig, cfgFile string, encKe
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	c.w, err = wallet.InitWallet(c.s, tcDir, c.log)
+	rubixContext := context.Background()
+
+	rubixDB, err := storage.NewRubixDB(rubixContext, dbConfig, storage.DefaultPoolOptions())
+	if err != nil {
+		return nil, fmt.Errorf("failed to define Rubix DB: %v", err)
+	}
+
+	c.w, err = wallet.NewWallet(rubixContext, rubixDB, c.log)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
 	}
+
 	c.qm, err = NewQuorumManager(c.s, c.log)
 	if err != nil {
 		c.log.Error("Failed to setup quorum manager", "err", err)

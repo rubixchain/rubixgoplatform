@@ -1,4 +1,4 @@
-package wallet
+package types
 
 import (
 	"bytes"
@@ -8,8 +8,6 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
-// IPFSOperations defines the interface for IPFS operations
-// This allows the wallet to use either direct IPFS or health-managed operations
 type IPFSOperations interface {
 	Add(data io.Reader, opts ...ipfsnode.AddOpts) (string, error)
 	Cat(hash string) (io.ReadCloser, error)
