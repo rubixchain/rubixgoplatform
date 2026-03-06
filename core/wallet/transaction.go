@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -10,8 +9,8 @@ import (
 )
 
 // CreateTransaction inserts a new transaction into the transactions table.
-func (w *Wallet) CreateTransaction(ctx context.Context, tx *models.Transactions) error {
-	_, err := w.db.Pool().Exec(ctx,
+func (w *Wallet) CreateTransaction(tx *models.Transactions) error {
+	_, err := w.db.Pool().Exec(w.Ctx,
 		`INSERT INTO transactions (id, info, signature, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5)`,
 		tx.ID, tx.Info, tx.Signature, time.Now(), time.Now(),
@@ -23,9 +22,9 @@ func (w *Wallet) CreateTransaction(ctx context.Context, tx *models.Transactions)
 }
 
 // GetTransactionByID retrieves a single transaction by its ID.
-func (w *Wallet) GetTransactionByID(ctx context.Context, id string) (*models.Transactions, error) {
+func (w *Wallet) GetTransactionByID(id string) (*models.Transactions, error) {
 	var tx models.Transactions
-	err := w.db.Pool().QueryRow(ctx,
+	err := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT id, info, signature, created_at, updated_at
 		 FROM transactions WHERE id = $1`,
 		id,
@@ -40,8 +39,8 @@ func (w *Wallet) GetTransactionByID(ctx context.Context, id string) (*models.Tra
 }
 
 // GetAllTransactions retrieves all transactions with optional limit and offset.
-func (w *Wallet) GetAllTransactions(ctx context.Context) ([]models.Transactions, error) {
-	rows, err := w.db.Pool().Query(ctx,
+func (w *Wallet) GetAllTransactions() ([]models.Transactions, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT id, info, signature, created_at, updated_at FROM transactions`,
 	)
 	if err != nil {
@@ -63,8 +62,8 @@ func (w *Wallet) GetAllTransactions(ctx context.Context) ([]models.Transactions,
 
 
 // GetAllTransactions retrieves all transactions with optional limit and offset.
-func (w *Wallet) GetAllTransactionsByOffset(ctx context.Context, limit, offset int) ([]models.Transactions, error) {
-	rows, err := w.db.Pool().Query(ctx,
+func (w *Wallet) GetAllTransactionsByOffset(limit, offset int) ([]models.Transactions, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT id, info, signature, created_at, updated_at
 		 FROM transactions LIMIT $1 OFFSET $2`,
 		limit, offset,
