@@ -320,7 +320,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 			return
 		}
 		// oldScFolder is set to path of the smartcontract folder
-		oldScFolder := c.cfg.DirPath + "SmartContract/" + fetchSC.SmartContractToken
+		oldScFolder := c.cfg.NodeConfigDir + "SmartContract/" + fetchSC.SmartContractToken
 		var isPathExist bool
 		//info is set to FileInfo describing the oldScFolder
 		info, err := os.Stat(oldScFolder)
@@ -345,7 +345,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetching succesful")
 	}
 	smartContractToken := newEvent.SmartContractToken
-	scFolderPath := c.cfg.DirPath + "SmartContract/" + smartContractToken
+	scFolderPath := c.cfg.NodeConfigDir + "SmartContract/" + smartContractToken
 	if _, err := os.Stat(scFolderPath); os.IsNotExist(err) {
 		fetchSC.SmartContractToken = smartContractToken
 		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()

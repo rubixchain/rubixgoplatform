@@ -149,17 +149,6 @@ func (s *Server) APISetupDB(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "DB setup done successfully", nil)
 }
 
-// APIGetAllExplorer will get all explorer URLs from the db
-func (s *Server) APIGetAllExplorer(req *ensweb.Request) *ensweb.Result {
-	links, err := s.c.GetAllExplorer()
-	if err != nil {
-		return s.BasicResponse(req, false, "Failed to get explorer urls"+err.Error(), nil)
-	}
-	m := model.ExplorerLinks{
-		Links: links,
-	}
-	return s.BasicResponse(req, true, "Got all the explorer URLs successfully", m)
-}
 
 // APIAddPeerDetailsFromExplorer will add peer details from explorer
 func (s *Server) APIAddPeerDetailsFromExplorer(req *ensweb.Request) *ensweb.Result {
@@ -180,49 +169,3 @@ func (s *Server) APIAddPeerDetailsFromExplorer(req *ensweb.Request) *ensweb.Resu
 	return s.BasicResponse(req, true, "Peer details added successfully", nil)
 }
 
-// APIAddExplorer will add bootstrap peers to the configuration
-func (s *Server) APIAddExplorer(req *ensweb.Request) *ensweb.Result {
-	var m model.ExplorerLinks
-	err := s.ParseJSON(req, &m)
-	if err != nil {
-		return s.BasicResponse(req, false, "invlid input request", nil)
-	}
-	if len(m.Links) == 0 {
-		s.log.Error("explorer links required to add")
-		return s.BasicResponse(req, false, "explorer links required to add", nil)
-	}
-	err = s.c.AddExplorer(m.Links)
-	if err != nil {
-		return s.BasicResponse(req, false, "failed to add explorer, "+err.Error(), nil)
-	}
-	return s.BasicResponse(req, true, "explorer added successfully", nil)
-}
-
-// APIRemoveExplorer will remove bootstrap peers from the configuration
-func (s *Server) APIRemoveExplorer(req *ensweb.Request) *ensweb.Result {
-	var m model.ExplorerLinks
-	err := s.ParseJSON(req, &m)
-	if err != nil {
-		return s.BasicResponse(req, false, "invlid input request", nil)
-	}
-	if len(m.Links) == 0 {
-		s.log.Error("explorer links required to remove")
-		return s.BasicResponse(req, false, "explorer links required to remove", nil)
-	}
-	err = s.c.RemoveExplorer(m.Links)
-	if err != nil {
-		return s.BasicResponse(req, false, "failed to remove explorer, "+err.Error(), nil)
-	}
-	return s.BasicResponse(req, true, "explorer removed successfully", nil)
-}
-
-func (s *Server) APIAddUserAPIKey(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuerry(req, "did")
-	apiKey := s.GetQuerry(req, "apiKey")
-
-	err := s.c.AddDIDKey(did, apiKey)
-	if err != nil {
-		return s.BasicResponse(req, false, "failed to add to table, "+err.Error(), nil)
-	}
-	return s.BasicResponse(req, true, "Api Key added successfully", nil)
-}

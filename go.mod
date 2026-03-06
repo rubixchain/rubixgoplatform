@@ -8,7 +8,6 @@ require (
 	github.com/ipfs/go-ipfs-api v0.3.0
 	github.com/ipfs/go-ipfs-files v0.1.1
 	github.com/swaggo/swag v1.16.1
-	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	golang.org/x/crypto v0.9.0
 	golang.org/x/term v0.8.0
 	google.golang.org/grpc v1.54.0
@@ -19,7 +18,6 @@ require (
 	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e
 	github.com/btcsuite/btcd v0.23.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
-	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.15.0
 	github.com/frankban/quicktest v1.14.0 // indirect
@@ -31,15 +29,12 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.0
-	github.com/ipfs/go-cid v0.2.0
-	github.com/jackc/pgx/v5 v5.3.1 // indirect
-	github.com/jinzhu/gorm v1.9.16
+	github.com/ipfs/go-cid v0.2.0 // indirect
+	github.com/jackc/pgx/v5 v5.3.1
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/libp2p/go-libp2p-core v0.16.1 // indirect
 	github.com/mattn/go-colorable v0.1.13
 	github.com/mattn/go-isatty v0.0.19
-	github.com/mattn/go-sqlite3 v1.14.16 // indirect
-	github.com/microsoft/go-mssqldb v0.20.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/multiformats/go-base32 v0.0.4 // indirect
@@ -56,9 +51,4 @@ require (
 	golang.org/x/net v0.10.0
 	golang.org/x/tools v0.9.3 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
-	gorm.io/driver/mysql v1.4.7
-	gorm.io/driver/postgres v1.5.0
-	gorm.io/driver/sqlite v1.4.4
-	gorm.io/driver/sqlserver v1.4.2
-	gorm.io/gorm v1.24.7-0.20230306060331-85eaf9eeda11
 )

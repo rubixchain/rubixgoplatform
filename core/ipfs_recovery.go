@@ -244,7 +244,7 @@ func (rm *IPFSRecoveryManager) restartIPFS() error {
 	rm.log.Info("Restarting IPFS daemon")
 
 	// Set environment variables
-	os.Setenv("IPFS_PATH", rm.cfg.DirPath+".ipfs")
+	os.Setenv("IPFS_PATH", rm.cfg.NodeConfigDir+".ipfs")
 	os.Setenv("LIBP2P_FORCE_PNET", "1")
 
 	// Create command
@@ -271,10 +271,10 @@ func (rm *IPFSRecoveryManager) restartIPFS() error {
 	rm.core.ipfsLock.Unlock()
 
 	rm.log.Info("IPFS daemon started, waiting for readiness")
-	
+
 	// Wait for IPFS daemon to initialize
 	time.Sleep(5 * time.Second)
-	
+
 	return nil
 }
 
@@ -315,19 +315,19 @@ func (rm *IPFSRecoveryManager) reinitializeIPFS() error {
 		rm.core.ipfsHealth.Stop()
 	}
 	rm.core.ipfsHealth = NewIPFSHealthManager(newShell, rm.cfg, rm.core.log)
-	
+
 	// Reinitialize IPFS operations wrapper
 	rm.core.ipfsOps = NewIPFSOperations(rm.core)
-	
+
 	// Reinitialize scalability manager
 	if rm.core.ipfsScalability != nil {
 		rm.core.ipfsScalability.Stop()
 	}
 	rm.core.ipfsScalability = NewIPFSScalabilityManager(rm.core)
-	
+
 	// Reinitialize connection recovery manager
 	rm.core.connRecovery = NewConnectionRecovery(rm.core.log)
-	
+
 	// Reinitialize P2P reconnect manager
 	rm.core.p2pReconnect = NewP2PReconnectManager(rm.core)
 
@@ -349,7 +349,7 @@ func (rm *IPFSRecoveryManager) restoreBootstrapPeers() error {
 	rm.log.Info("Restoring bootstrap peers")
 
 	bootstrapPeers := rm.cfg.CfgData.BootStrap
-	if rm.core.testNet {
+	if rm.core.testnet {
 		bootstrapPeers = rm.cfg.CfgData.TestBootStrap
 	}
 

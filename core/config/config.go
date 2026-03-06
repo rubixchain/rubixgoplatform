@@ -17,10 +17,10 @@ type DIDConfigType struct {
 }
 
 type StorageConfig struct {
-	StorageType int    `json:"stroage_type"`
+	StorageType string `json:"stroage_type"`
 	DBName      string `json:"db_name"`
 	DBAddress   string `json:"db_address"`
-	DBPort      string `json:"db_port"`
+	DBPort      uint64 `json:"db_port"`
 	DBType      string `json:"db_type"`
 	DBUserName  string `json:"db_user_name"`
 	DBPassword  string `json:"db_password"`
@@ -46,21 +46,18 @@ type UnpledgePoolConfig struct {
 
 // ConfigData defines configuration data
 type ConfigData struct {
-	Ports                          Ports               `json:"ports"`
-	BootStrap                      []string            `json:"bootstrap"`
-	TestBootStrap                  []string            `json:"test_bootstrap"`
-	Services                       map[string]string   `json:"services"`
-	StorageConfig                  StorageConfig       `json:"storage_config"`
-	TestStorageConfig              StorageConfig       `json:"test_storage_config"`
-	AsyncFTResponse                bool                `json:"async_ft_response"`
-	IPFSRecovery                   *IPFSRecoveryConfig `json:"ipfs_recovery"`
-	TrustedNetwork                 bool                `json:"trusted_network"` // Skip DHT/pin checks for trusted networks
-	UnpledgeConfig                 *UnpledgePoolConfig `json:"unpledge_config"`
-	EnableOptimizedUnpledge        bool                `json:"enable_optimized_unpledge"`
-	FullnodeStorageConfig          StorageConfig       `json:"fullnode_storage_config"`
-	FullnodeTestStorageConfig      StorageConfig       `json:"fullnode_test_storage_config"`
-	FullnodeTokenStorageConfig     StorageConfig       `json:"fullnode_token_storage_config"`
-	FullnodeTestTokenStorageConfig StorageConfig       `json:"fullnode_testtoken_storage_config"`
+	Ports                   Ports               `json:"ports"`
+	BootStrap               []string            `json:"bootstrap"`
+	TestBootStrap           []string            `json:"test_bootstrap"`
+	Services                map[string]string   `json:"services"`
+	StorageConfig           StorageConfig       `json:"storage_config"`
+	TestStorageConfig       StorageConfig       `json:"test_storage_config"`
+	LocalStorageConfig      StorageConfig       `json:"local_storage_config"`
+	AsyncFTResponse         bool                `json:"async_ft_response"`
+	IPFSRecovery            *IPFSRecoveryConfig `json:"ipfs_recovery"`
+	TrustedNetwork          bool                `json:"trusted_network"` // Skip DHT/pin checks for trusted networks
+	UnpledgeConfig          *UnpledgePoolConfig `json:"unpledge_config"`
+	EnableOptimizedUnpledge bool                `json:"enable_optimized_unpledge"`
 }
 
 func NewDefaultConfigData() ConfigData {
@@ -71,10 +68,10 @@ func NewDefaultConfigData() ConfigData {
 }
 
 type Config struct {
-	NodeAddress string     `json:"node_address"`
-	NodePort    string     `json:"node_port"`
-	DirPath     string     `json:"dir_path"`
-	CfgData     ConfigData `json:"cfg_data"`
+	NodeAddress   string     `json:"node_address"`
+	NodePort      string     `json:"node_port"`
+	NodeConfigDir string     `json:"dir_path"`
+	CfgData       ConfigData `json:"cfg_data"`
 }
 
 type ServiceConfig struct {
@@ -82,7 +79,7 @@ type ServiceConfig struct {
 	ServiceName     string `json:"service_name"`     // ServiceName name of the service
 	DBName          string `json:"db_name"`          // DBName is the name of the db.
 	DBAddress       string `json:"db_address"`       // DBPath is the name of the database itself.
-	DBPort          string `json:"db_port"`          // DBPath is the name of the database itself.
+	DBPort          uint64 `json:"db_port"`          // DBPath is the name of the database itself.
 	DBType          string `json:"db_type"`          // DBType is type of database to use
 	DBUserName      string `json:"db_user_name"`     // DBUserName is the user name for the DB
 	DBPassword      string `json:"db_password"`      // DBPassword is the password  for the user

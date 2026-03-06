@@ -251,11 +251,6 @@ func (p *UnpledgeWorkerPool) processTask(task *UnpledgeTask) {
 	result.Success = true
 	result.UnpledgeAmount = amount
 	result.ProcessingTime = time.Since(start)
-
-	// Update pledge status asynchronously
-	go func() {
-		task.Core.UpdatePledgeStatus(tokenStringToSlice(task.Info.PledgeTokens), task.Info.QuorumDID)
-	}()
 }
 
 // unpledgeTransaction handles the actual unpledging logic
@@ -303,7 +298,7 @@ func (p *UnpledgeWorkerPool) unpledgeTokensParallel(c *Core, transactionID strin
 			}
 
 			// Get token type
-			tokenType, err := getTokenType(c.w, pledgeToken, c.testNet)
+			tokenType, err := getTokenType(c.w, pledgeToken, c.testnet)
 			if err != nil {
 				errChan <- fmt.Errorf("token %s: %w", pledgeToken, err)
 				return
@@ -437,4 +432,3 @@ func tokenStringToSlice(tokens string) []string {
 	}
 	return strings.Split(tokens, ",")
 }
-

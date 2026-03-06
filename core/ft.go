@@ -85,7 +85,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	// Fetch whole tokens
 	wholeTokens, err := parts.CollectRBTTokens(
 		dc, c.w, rubixmath.FloatPrecision(float64(numWholeTokens)),
-		c.testNet, c.log, c.publishTxn,
+		c.testnet, c.log, c.publishTxn,
 	)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
@@ -702,7 +702,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 
 	// start transaction in go routine
 	go func() {
-		td, _, pds, FTconsErr := c.initiateConsensus(cr, sc, dc)
+		td, _, _, FTconsErr := c.initiateConsensus(cr, sc, dc)
 		if FTconsErr != nil {
 			resp.Message = fmt.Sprintf("Consensus failed: %s", FTconsErr.Error())
 			tokens := sc.GetTransTokenInfo()
@@ -733,7 +733,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 					}
 				}
 			}
-			c.UpdateUserInfo([]string{did})
+
 			resp.Status = false
 			resultChan <- resp
 			return
@@ -770,7 +770,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		go func() {
 			defer close(explorerDone) // Signal completion when done
 
-			AllTokens := make([]AllToken, len(TokenInfo))
+			allTokens := make([]AllToken, len(TokenInfo))
 			for i := range TokenInfo {
 				tokenDetail := AllToken{}
 				tokenDetail.TokenHash = TokenInfo[i].Token
@@ -785,26 +785,8 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				tokenDetail.BlockNumber = blockNoInt
 				tokenDetail.BlockHash = strings.Split(TokenInfo[i].BlockID, "-")[1]
 
-				AllTokens[i] = tokenDetail
+				allTokens[i] = tokenDetail
 			}
-
-			eTrans := &ExplorerFTTrans{
-				FTBlockHash:     AllTokens,
-				CreatorDID:      creatorDID,
-				SenderDID:       did,
-				ReceiverDID:     rdid,
-				FTName:          req.FTName,
-				FTTransferCount: req.FTCount,
-				Network:         req.QuorumType,
-				FTSymbol:        "N/A",
-				Comments:        req.Comment,
-				TransactionID:   td.TransactionID,
-				PledgeInfo:      PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
-				QuorumList:      extractQuorumDID(cr.QuorumList),
-				Amount:          TokenInfo[0].TokenValue * float64(req.FTCount),
-				FTTokenList:     FTTokenIDs,
-			}
-			c.ec.ExplorerFTTransaction(eTrans)
 			c.log.Info("Explorer submission completed", "transaction_id", td.TransactionID)
 		}()
 
@@ -827,7 +809,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			resp.Message = "Failed to update FT table after transfer"
 			return
 		}
-		c.UpdateUserInfo([]string{did})
+
 		// Send final transaction completion response if not already timed out
 		select {
 		case resultChan <- resp:

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/rubixchain/rubixgoplatform/wrapper/adapter"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -46,7 +45,6 @@ type Server struct {
 	mux             *mux.Router
 	log             logger.Logger
 	auditLog        logger.Logger
-	db              *adapter.Adapter
 	url             string
 	jwtSecret       string
 	rootPath        string
@@ -56,8 +54,6 @@ type Server struct {
 	ss              map[string]*SessionStore
 	debugMode       bool
 	sf              ShutdownFunc
-	entities        map[string]Entity
-	entityConfig    EntityConfig
 	defaultTenantID uuid.UUID
 	tcb             GetTenantCBFunc
 }
@@ -107,15 +103,8 @@ func NewServer(cfg *config.Config, serverCfg *ServerConfig, log logger.Logger, o
 		serverURL = "https://" + addr
 	}
 	slog := log.Named("enswebserver")
-	var db *adapter.Adapter
+
 	var err error
-	if cfg.DBType != "" {
-		db, err = adapter.NewAdapter(cfg)
-		if err != nil {
-			slog.Error("failed to DB adapter", "err", err)
-			return Server{}, err
-		}
-	}
 
 	ts := Server{
 		s:          s,
@@ -123,21 +112,10 @@ func NewServer(cfg *config.Config, serverCfg *ServerConfig, log logger.Logger, o
 		serverCfg:  serverCfg,
 		mux:        mux.NewRouter(),
 		log:        slog,
-		db:         db,
 		url:        serverURL,
 		rootPath:   "views/",
 		publicPath: "public/",
 		ss:         make(map[string]*SessionStore),
-		entities:   make(map[string]Entity),
-		entityConfig: EntityConfig{
-			DefaultTenantName:    "ensweb",
-			DefaultAdminName:     "Admin",
-			DefaultAdminPassword: "admin@123",
-			TenantTableName:      "TenantTable",
-			UserTableName:        "UserTable",
-			RoleTableName:        "RoleTable",
-			UserRoleTableName:    "UserRoleTable",
-		},
 	}
 
 	for _, op := range options {
@@ -220,11 +198,6 @@ func (s *Server) SetDefaultTenant(id uuid.UUID) {
 
 func (s *Server) SetTenantCBFunc(tcb GetTenantCBFunc) {
 	s.tcb = tcb
-}
-
-// GetDB will return DB
-func (s *Server) GetDB() *adapter.Adapter {
-	return s.db
 }
 
 // GetDB will return DB

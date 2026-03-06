@@ -19,7 +19,7 @@ func (c *Core) ValidateTokenNetworkID(blk *block.Block, tokenID string) error {
 			return fmt.Errorf("ValidateTokenNetworkID: failed to get genesis network type for token %s, err: %v", tokenID, err)
 		}
 
-		if c.testNet {
+		if c.testnet {
 			switch networkID {
 			case constants.NetworkID_RBT_Testnet, constants.NetworkID_RBT_Local:
 				// valid testnet network IDs

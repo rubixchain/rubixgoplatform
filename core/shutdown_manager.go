@@ -292,7 +292,7 @@ func (sm *ShutdownManager) killIPFSUnix() error {
 	sm.log.Warn("Using generic IPFS kill method - this may affect other IPFS instances!")
 
 	// Try to be more specific by including the repo path in the search
-	ipfsRepo := sm.core.cfg.DirPath + ".ipfs"
+	ipfsRepo := sm.core.cfg.NodeConfigDir + ".ipfs"
 
 	// First try pkill with more specific pattern
 	cmd := exec.Command("pkill", "-f", fmt.Sprintf("ipfs.*--repo=%s.*daemon", ipfsRepo))
@@ -376,7 +376,7 @@ func (sm *ShutdownManager) FindIPFSProcess() (bool, int) {
 	}
 
 	// If no PID stored, try to find by repo path
-	ipfsRepo := sm.core.cfg.DirPath + ".ipfs"
+	ipfsRepo := sm.core.cfg.NodeConfigDir + ".ipfs"
 
 	switch runtime.GOOS {
 	case "windows":

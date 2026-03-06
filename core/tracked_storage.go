@@ -8,14 +8,14 @@ import (
 
 // TrackedStorage wraps storage operations with performance tracking
 type TrackedStorage struct {
-	storage storage.Storage
+	storage storage.RubixDB
 	c       *Core
 }
 
 // NewTrackedStorage creates a new tracked storage wrapper
-func NewTrackedStorage(s storage.Storage, c *Core) *TrackedStorage {
+func NewTrackedStorage(rubixDB storage.RubixDB, c *Core) *TrackedStorage {
 	return &TrackedStorage{
-		storage: s,
+		storage: rubixDB,
 		c:       c,
 	}
 }

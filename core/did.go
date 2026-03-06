@@ -179,12 +179,7 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		c.log.Error("Failed to create did in the wallet", "err", err)
 		return "", err
 	}
-	newDID := &ExplorerDID{
-		PeerID:  c.peerID,
-		DID:     did,
-		Balance: 0,
-	}
-	c.ec.ExplorerUserCreate(newDID)
+
 	return did, nil
 }
 
@@ -221,11 +216,7 @@ func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
 		br.Message = err.Error()
 		return br
 	}
-	newDID := &ExplorerDID{
-		PeerID: c.peerID,
-		DID:    ds,
-	}
-	c.ec.ExplorerUserCreate(newDID)
+
 	br.Status = true
 	br.Message = "DID added successfully"
 	br.Result = ds
@@ -242,7 +233,7 @@ func (c *Core) RegisterDID(reqID string, did string) {
 		br.Status = false
 		br.Message = err.Error()
 	}
-	c.UpdateUserInfo([]string{did}) //Updating the balance
+
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")
@@ -313,12 +304,6 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 		return "", err
 	}
 
-	newDID := &ExplorerDID{
-		PeerID:  c.peerID,
-		DID:     did,
-		Balance: 0,
-	}
-	c.ec.ExplorerUserCreate(newDID)
 	return did, nil
 }
 
@@ -333,7 +318,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 
 	// In case of xell wallet, TRIE testnet and Rubix testnet have same swarm key but different peerIDs.
 	// So, an user should find another user's Rubix testnet DID-info in DIDTable and TRIE testnet DID-info in PeerDIDTable.
-	if c.testNet {
+	if c.testnet {
 		// 1. try DID table first
 		if _, err := c.w.GetDID(didStr); err == nil {
 			return &wallet.DIDPeerMap{
@@ -365,7 +350,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 
 	// If peerID still missing, try resolving (via explorer or peer fetch)
 	if peerID == "" {
-		if !c.testNet {
+		if !c.testnet {
 			peerInfo, err := c.GetPeerFromExplorer(didStr)
 			if err != nil {
 				return nil, fmt.Errorf("explorer lookup failed: %w", err)
