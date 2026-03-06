@@ -33,7 +33,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
 
         CREATE TABLE IF NOT EXISTS dids (
             did         TEXT PRIMARY KEY,
-            peer_did    TEXT,
+            peer_id    TEXT,
             local       BOOLEAN DEFAULT TRUE,
             algo_id     SMALLINT,
             CONSTRAINT algo_id_fk FOREIGN KEY (algo_id) REFERENCES did_algo(id)

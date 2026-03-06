@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Transaction struct {
+type Transactions struct {
 	ID        string          `db:"id"`
 	Info      json.RawMessage `db:"info"`
 	Signature json.RawMessage `db:"signature"`
@@ -32,10 +32,10 @@ type DIDAlgo struct {
 }
 
 type DID struct {
-	DID     string      `db:"did"`
-	PeerDID pgtype.Text `db:"peer_did"`
-	Local   bool        `db:"local"`
-	AlgoID  pgtype.Int2 `db:"algo_id"`
+	DID    string      `db:"did"`
+	PeerID pgtype.Text `db:"peer_id"`
+	Local  bool        `db:"local"`
+	AlgoID pgtype.Int2 `db:"algo_id"`
 }
 
 type TokenStatus struct {
