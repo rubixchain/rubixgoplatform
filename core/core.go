@@ -139,10 +139,6 @@ type Core struct {
 	qc                   map[string]did.DIDCrypto
 	pqc                  map[string]did.DIDCrypto
 	sd                   map[string]*ServiceDetials
-	s                    storage.Storage
-	fullNodeStorage      storage.Storage
-	fullNodeTokensDB     storage.Storage
-	as                   storage.Storage
 	srv                  *service.Service
 	secret               []byte
 	quorumCount          int
@@ -164,6 +160,7 @@ type Core struct {
 	faucetURL            string // for faucet url
 	mainnet              bool
 	localnet             bool
+	s                    *storage.RubixDB
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -316,19 +313,6 @@ func NewCore(cfg *config.Config, dbConfig *types.DBConfig, cfgFile string, encKe
 		c.updateConfig()
 	}
 
-	switch dbConfig.DBType {
-	case constants.DBType_PostgreSQL:
-		c.s, err = storage.NewStorageDB(dbConfig)
-		if err != nil {
-			c.log.Error("Failed to create storage DB", "err", err)
-			return nil, fmt.Errorf("failed to create storage DB")
-		}
-	default:
-		errMsg := fmt.Sprintf("Unsupported DB type: %s", dbConfig.DBType)
-		c.log.Error(errMsg)
-		return nil, fmt.Errorf(errMsg)
-	}
-
 	rubixContext := context.Background()
 
 	rubixDB, err := storage.NewRubixDB(rubixContext, dbConfig, storage.DefaultPoolOptions())
@@ -342,7 +326,7 @@ func NewCore(cfg *config.Config, dbConfig *types.DBConfig, cfgFile string, encKe
 		return nil, err
 	}
 
-	c.qm, err = NewQuorumManager(c.s, c.log)
+	c.qm, err = NewQuorumManager(rubixDB, c.log)
 	if err != nil {
 		c.log.Error("Failed to setup quorum manager", "err", err)
 		return nil, err
@@ -389,9 +373,10 @@ func NewCore(cfg *config.Config, dbConfig *types.DBConfig, cfgFile string, encKe
 	c.pendingTokenMonitor = NewPendingTokenMonitor(c, 5*time.Minute, 10*time.Minute)
 
 	// Wrap storage with tracking if performance tracker is enabled
-	if c.perfTracker != nil && c.perfTracker.enabled && c.s != nil {
-		c.s = NewTrackedStorage(c.s, c)
-	}
+	// TODO: update the following
+	// if c.perfTracker != nil && c.perfTracker.enabled && c.s != nil {
+	// 	c.s = NewTrackedStorage(*rubixDB, c)
+	// }
 
 	return c, nil
 }
