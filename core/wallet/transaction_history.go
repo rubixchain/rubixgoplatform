@@ -31,22 +31,16 @@ func (w *Wallet) AddTransactionHistory(td *model.TransactionDetails) error {
 }
 
 func (w *Wallet) AddTransactionsToFullNodeTransactionHistoryTable(transaction *model.FullNodeTxnHistoryInfo) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Write(FullNodeTxnHistoryTable, transaction)
 }
 
 func (w *Wallet) ReadFullNodeTransactionHistoryTable(transactionId string) (*model.FullNodeTxnHistoryInfo, error) {
 	var txn *model.FullNodeTxnHistoryInfo
-	w.l.Lock()
-	defer w.l.Unlock()
 	err := w.fullNodeSQLDB.Read(FullNodeTxnHistoryTable, &txn, "transaction_id=?", transactionId)
 	return txn, err
 }
 
 func (w *Wallet) UpdateFullNodeTransactionHistoryTable(transaction *model.FullNodeTxnHistoryInfo) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 	return w.fullNodeSQLDB.Update(FullNodeTxnHistoryTable, transaction, "transaction_id=?", transaction.TransactionID)
 }
 

@@ -7,30 +7,27 @@ import (
 	"sync"
 	"time"
 
+	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/util"
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 )
 
 // OptimizedTokensReceived processes received tokens with batch IPFS Get operations
 func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell) ([]string, error) {
 	startTime := time.Now()
-	w.l.Lock()
-	defer w.l.Unlock()
-	
-	w.log.Info("Starting optimized token receive", 
+	w.log.Info("Starting optimized token receive",
 		"token_count", len(ti),
 		"transaction_id", b.GetTid(),
 		"sender", senderPeerId,
 		"receiver", receiverPeerId)
-	
+
 	// Create token block first
 	err := w.CreateTokenBlock(b)
 	if err != nil {
 		blockId, _ := b.GetBlockID(ti[0].Token)
-		w.log.Error("Failed to create token block", 
+		w.log.Error("Failed to create token block",
 			"block_id", blockId,
 			"error", err)
 		return nil, err
@@ -40,36 +37,36 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 	updatedtokenhashes := make([]string, len(ti))
 	tokenHashMap := make(map[string]string)
 	providerMaps := make([]model.TokenProviderMap, 0, len(ti))
-	
+
 	// First pass: Add token states to IPFS
 	addStart := time.Now()
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	semaphore := make(chan struct{}, 10) // Limit concurrent IPFS operations
-	
+
 	for idx, info := range ti {
 		wg.Add(1)
 		go func(i int, tokenInfo contract.TokenInfo) {
 			defer wg.Done()
-			
+
 			// Rate limiting
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
-			
+
 			t := tokenInfo.Token
 			b := w.GetLatestTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
 			blockId, _ := b.GetBlockID(t)
 			tokenIDTokenStateData := t + blockId
 			tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
 			tokenIDTokenStateHash, tpm, err := w.AddWithProviderMap(tokenIDTokenStateBuffer, did, OwnerRole)
-			
+
 			if err != nil {
-				w.log.Error("Failed to add token state", 
+				w.log.Error("Failed to add token state",
 					"token", t,
 					"error", err)
 				return
 			}
-			
+
 			mu.Lock()
 			updatedtokenhashes[i] = tokenIDTokenStateHash
 			tokenHashMap[t] = tokenIDTokenStateHash
@@ -84,8 +81,8 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 		}(idx, info)
 	}
 	wg.Wait()
-	
-	w.log.Info("Token state addition completed", 
+
+	w.log.Info("Token state addition completed",
 		"count", len(ti),
 		"duration", time.Since(addStart))
 
@@ -186,46 +183,46 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 		downloadStart := time.Now()
 		downloadProviderMaps, err = w.BatchGetWithProviderMaps(getRequests)
 		if err != nil {
-			w.log.Error("Batch download failed, cleaning up", 
+			w.log.Error("Batch download failed, cleaning up",
 				"error", err)
-			
+
 			// Cleanup created directories
 			for _, dir := range downloadDirs {
 				if rmErr := os.RemoveAll(dir); rmErr != nil {
-					w.log.Error("Failed to cleanup directory", 
+					w.log.Error("Failed to cleanup directory",
 						"dir", dir,
 						"error", rmErr)
 				}
 			}
-			
+
 			// Ensure no orphaned DB records
 			tokenIDs := make([]string, len(getRequests))
 			for i, req := range getRequests {
 				tokenIDs[i] = req.Hash
 			}
 			if cleanupErr := w.ensureNoOrphanedRecords(tokenIDs, b.GetTid()); cleanupErr != nil {
-				w.log.Error("Failed to cleanup orphaned records", 
+				w.log.Error("Failed to cleanup orphaned records",
 					"error", cleanupErr)
 			}
-			
+
 			return nil, fmt.Errorf("failed to download tokens: %v", err)
 		}
-		
-		w.log.Info("Batch download completed successfully", 
+
+		w.log.Info("Batch download completed successfully",
 			"count", len(getRequests),
 			"duration", time.Since(downloadStart))
 	}
-	
+
 	// Merge provider maps
 	allProviderMaps := append(providerMaps, downloadProviderMaps...)
 
 	// Phase 4: Process downloaded tokens
 	processStart := time.Now()
 	processedCount := 0
-	
+
 	for _, req := range getRequests {
 		tokenInfo := ti[req.Index]
-		
+
 		// Get parent token details
 		var parentTokenID string
 		gb := w.GetGenesisTokenBlock(tokenInfo.Token, tokenInfo.TokenType)
@@ -247,13 +244,13 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 
 		err = w.s.Write(TokenStorage, &t)
 		if err != nil {
-			w.log.Error("Failed to write token to db", 
+			w.log.Error("Failed to write token to db",
 				"token", tokenInfo.Token,
 				"error", err)
 			// Continue processing other tokens
 			continue
 		}
-		
+
 		// Update token status
 		tokenStatus := TokenIsPending // Changed from TokenIsFree to prevent premature spending
 		role := OwnerRole
@@ -272,12 +269,12 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 
 		err = w.s.Update(TokenStorage, &t, "token_id=?", tokenInfo.Token)
 		if err != nil {
-			w.log.Error("Failed to update token in db", 
+			w.log.Error("Failed to update token in db",
 				"token", tokenInfo.Token,
 				"error", err)
 			continue
 		}
-		
+
 		senderAddress := senderPeerId + "." + b.GetSenderDID()
 		receiverAddress := receiverPeerId + "." + b.GetOwner()
 
@@ -290,19 +287,19 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 		}
 		_, err = w.Pin(tokenHash, role, did, b.GetTid(), senderAddress, receiverAddress, tokenInfo.TokenValue, true)
 		if err != nil {
-			w.log.Error("Failed to pin token", 
+			w.log.Error("Failed to pin token",
 				"token", tokenInfo.Token,
 				"error", err)
 			continue
 		}
-		
+
 		processedCount++
-		
+
 		// Cleanup the download directory
 		os.RemoveAll(req.Path)
 	}
-	
-	w.log.Info("Token processing completed", 
+
+	w.log.Info("Token processing completed",
 		"processed", processedCount,
 		"total", len(getRequests),
 		"duration", time.Since(processStart))
@@ -312,21 +309,21 @@ func (w *Wallet) OptimizedTokensReceived(did string, ti []contract.TokenInfo, b 
 	if len(allProviderMaps) > 100 && w.asyncProviderMgr != nil {
 		err := w.asyncProviderMgr.SubmitProviderDetails(allProviderMaps, b.GetTid())
 		if err != nil {
-			w.log.Error("Failed to submit provider details to async queue, falling back to sync", 
+			w.log.Error("Failed to submit provider details to async queue, falling back to sync",
 				"count", len(allProviderMaps),
 				"error", err)
 			goto syncProcessing
 		}
-		w.log.Info("Provider details submitted for async processing", 
+		w.log.Info("Provider details submitted for async processing",
 			"transaction_id", b.GetTid(),
 			"count", len(allProviderMaps),
 			"duration", time.Since(providerStart))
-		
-		w.log.Info("Optimized token receive completed", 
+
+		w.log.Info("Optimized token receive completed",
 			"total_tokens", len(ti),
 			"downloaded", len(getRequests),
 			"total_duration", time.Since(startTime))
-		
+
 		return updatedtokenhashes, nil
 	}
 
@@ -336,24 +333,23 @@ syncProcessing:
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		err := w.AddProviderDetailsBatch(allProviderMaps)
 		if err == nil {
-			w.log.Info("Provider details batch write successful", 
+			w.log.Info("Provider details batch write successful",
 				"count", len(allProviderMaps),
 				"attempt", attempt+1,
 				"duration", time.Since(providerStart))
-			
-			w.log.Info("Optimized token receive completed", 
+
+			w.log.Info("Optimized token receive completed",
 				"total_tokens", len(ti),
 				"downloaded", len(getRequests),
 				"total_duration", time.Since(startTime))
-			
+
 			return updatedtokenhashes, nil
 		}
-		w.log.Error("Batch AddProviderDetails failed, retrying", 
+		w.log.Error("Batch AddProviderDetails failed, retrying",
 			"attempt", attempt+1,
 			"error", err)
 		time.Sleep(backoff(attempt))
 	}
-	
+
 	return nil, fmt.Errorf("failed to batch add provider details after retries")
 }
-

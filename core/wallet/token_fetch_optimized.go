@@ -233,9 +233,6 @@ func calculateTokensNeeded(availableTokens []Token, requiredAmount float64) []To
 
 // GetTokensForOptimizedTransfer is the main entry point for optimized token fetching
 func (w *Wallet) GetTokensForOptimizedTransfer(did string, amount float64, txnMode int) ([]Token, error) {
-	w.l.Lock()
-	defer w.l.Unlock()
-
 	startTime := time.Now()
 
 	// Step 1: Batch fetch all free tokens

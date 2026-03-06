@@ -19,8 +19,6 @@ type LevelDBRollbackInfo struct {
 
 // RemoveTokenStateHashByTransaction removes token state hash entries for a failed transaction
 func (w *Wallet) RemoveTokenStateHashByTransaction(txID string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	w.log.Info("Removing token state hash entries",
 		"transaction_id", txID)
@@ -40,7 +38,7 @@ func (w *Wallet) RemoveTokenStateHashByTransaction(txID string) error {
 	// Delete each token state hash entry
 	deletedCount := 0
 	for _, ts := range tokenStates {
-		err = w.s.Delete(TokenStateHash, &TokenStateDetails{}, 
+		err = w.s.Delete(TokenStateHash, &TokenStateDetails{},
 			"token_state_hash=? AND transaction_id=?", ts.TokenStateHash, txID)
 		if err != nil {
 			w.log.Error("Failed to delete token state hash",
@@ -61,8 +59,6 @@ func (w *Wallet) RemoveTokenStateHashByTransaction(txID string) error {
 
 // RemoveBlocksForTransaction removes blocks added during a failed transaction
 func (w *Wallet) RemoveBlocksForTransaction(txID string, tokenType int) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	w.log.Info("Removing blocks for failed transaction",
 		"transaction_id", txID,
@@ -75,7 +71,7 @@ func (w *Wallet) RemoveBlocksForTransaction(txID string, tokenType int) error {
 
 	// Track blocks to remove
 	blocksToRemove := make(map[string][]byte)
-	
+
 	// Iterate through all token chains to find blocks with this transaction ID
 	iter := db.NewIterator(nil, nil)
 	defer iter.Release()
@@ -157,8 +153,6 @@ func (w *Wallet) GetLatestBlockBeforeTransaction(tokenID string, txID string, to
 
 // CreateLevelDBSnapshot creates a snapshot of LevelDB state for a transaction
 func (w *Wallet) CreateLevelDBSnapshot(txID string) (*LevelDBRollbackInfo, error) {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	snapshot := &LevelDBRollbackInfo{
 		TransactionID: txID,
@@ -218,9 +212,6 @@ func (w *Wallet) ExecuteLevelDBRollback(snapshot *LevelDBRollbackInfo) error {
 
 // VerifyTokenCanBeUsed checks if a token can be used after a failed transaction
 func (w *Wallet) VerifyTokenCanBeUsed(tokenID string, tokenType int) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-
 	// Check token status in SQLite
 	var t Token
 	err := w.s.Read(TokenStorage, &t, "token_id=?", tokenID)
@@ -260,8 +251,6 @@ func (w *Wallet) VerifyTokenCanBeUsed(tokenID string, tokenType int) error {
 
 // CleanupOrphanedBlocks removes blocks that don't have corresponding token entries
 func (w *Wallet) CleanupOrphanedBlocks(tokenType int) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	db := w.getChainDB(tokenType)
 	if db == nil {
@@ -274,7 +263,7 @@ func (w *Wallet) CleanupOrphanedBlocks(tokenType int) error {
 
 	for iter.Next() {
 		key := string(iter.Key())
-		
+
 		// Extract token ID from key
 		parts := strings.Split(key, ":")
 		if len(parts) < 2 {

@@ -57,8 +57,6 @@ func (w *Wallet) CreateSmartContractToken(sc *SmartContract) error {
 }
 
 func (w *Wallet) GetSmartContractToken(smartContractToken string) ([]SmartContract, error) {
-	w.dtl.Lock()
-	defer w.dtl.Unlock()
 	var sc []SmartContract
 	w.log.Debug("smart_contract_hash=?", smartContractToken)
 	err := w.s.Read(SmartContractStorage, &sc, "smart_contract_hash=?", smartContractToken)
@@ -74,8 +72,6 @@ func (w *Wallet) GetSmartContractToken(smartContractToken string) ([]SmartContra
 }
 
 func (w *Wallet) GetSmartContractTokenByDeployer(did string) ([]SmartContract, error) {
-	w.dtl.Lock()
-	defer w.dtl.Unlock()
 	var sc []SmartContract
 	err := w.s.Read(SmartContractStorage, &sc, "deployer=?", did)
 	if err != nil {
@@ -88,8 +84,6 @@ func (w *Wallet) GetSmartContractTokenByDeployer(did string) ([]SmartContract, e
 }
 
 func (w *Wallet) UpdateSmartContractStatus(smartContractToken string, tokenStatus int) error {
-	w.dtl.Lock()
-	defer w.dtl.Unlock()
 	var sc SmartContract
 	err := w.s.Read(SmartContractStorage, &sc, "smart_contract_hash=?", smartContractToken)
 	if err != nil {

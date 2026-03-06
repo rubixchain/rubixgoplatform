@@ -104,9 +104,7 @@ func (pfr *ParallelFTReceiver) ParallelFTTokensReceived(
 		"workers", pfr.batchWorkers)
 
 	// Create token block first (still needs wallet lock for this)
-	pfr.w.l.Lock()
 	err := pfr.w.CreateTokenBlock(b)
-	pfr.w.l.Unlock()
 	if err != nil {
 		pfr.log.Error("Failed to create token block", "error", err)
 		return nil, err
@@ -771,8 +769,6 @@ func (pfr *ParallelFTReceiver) processSingleToken(
 // Helper methods
 
 func (pfr *ParallelFTReceiver) withMinimalLock(fn func() error) error {
-	pfr.w.l.Lock()
-	defer pfr.w.l.Unlock()
 	return fn()
 }
 

@@ -16,8 +16,6 @@ import (
 
 // ParallelTokensReceived processes received tokens in parallel for better performance
 func (w *Wallet) ParallelTokensReceived(did string, ti []contract.TokenInfo, b *block.Block, senderPeerId string, receiverPeerId string, pinningServiceMode bool, ipfsShell *ipfsnode.Shell) ([]string, error) {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	// Create token block first
 	err := w.CreateTokenBlock(b)

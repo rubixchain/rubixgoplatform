@@ -78,8 +78,6 @@ func (w *Wallet) GetNFTsByDid(did string) ([]NFT, error) {
 }
 
 func (w *Wallet) GetNFTToken(nftID string) (*NFT, error) {
-	w.dtl.Lock()
-	defer w.dtl.Unlock()
 	var tokens *NFT
 
 	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nftID)
@@ -91,8 +89,6 @@ func (w *Wallet) GetNFTToken(nftID string) (*NFT, error) {
 }
 
 func (w *Wallet) IsNFTExists(nftID string) bool {
-	w.dtl.Lock()
-	defer w.dtl.Unlock()
 	var tokens *NFT
 
 	err := w.s.Read(NFTTokenStorage, &tokens, "token_id=?", nftID)
@@ -107,8 +103,6 @@ func (w *Wallet) UpdateNFTStatus(nft string, tokenStatus int, local bool, receiv
 	// Empty receiver DID indicates self execution of NFT and hence
 	// any change in NFTToken table must be skipped
 	if receiverDid != "" {
-		w.dtl.Lock()
-		defer w.dtl.Unlock()
 		var nftToken NFT
 		err := w.s.Read(NFTTokenStorage, &nftToken, "token_id=?", nft)
 		if err != nil {

@@ -7,9 +7,6 @@ import (
 
 // ConfirmPendingTokens updates tokens from pending to free status after consensus finality
 func (w *Wallet) ConfirmPendingTokens(txID string, tokenIDs []string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-
 	w.log.Info("Confirming pending tokens",
 		"transaction_id", txID,
 		"token_count", len(tokenIDs))
@@ -65,9 +62,6 @@ func (w *Wallet) ConfirmPendingTokens(txID string, tokenIDs []string) error {
 
 // ConfirmPendingFTTokens updates FT tokens from pending to free status after consensus finality
 func (w *Wallet) ConfirmPendingFTTokens(txID string, tokenIDs []string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-
 	w.log.Info("Confirming pending FT tokens",
 		"transaction_id", txID,
 		"token_count", len(tokenIDs))
@@ -121,9 +115,6 @@ func (w *Wallet) ConfirmPendingFTTokens(txID string, tokenIDs []string) error {
 
 // RollbackPendingTokens removes pending tokens if consensus fails
 func (w *Wallet) RollbackPendingTokens(txID string, tokenIDs []string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-
 	w.log.Info("Rolling back pending tokens",
 		"transaction_id", txID,
 		"token_count", len(tokenIDs))
@@ -167,9 +158,6 @@ func (w *Wallet) RollbackPendingTokens(txID string, tokenIDs []string) error {
 
 // RollbackPendingFTTokens removes pending FT tokens if consensus fails
 func (w *Wallet) RollbackPendingFTTokens(txID string, tokenIDs []string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-
 	w.log.Info("Rolling back pending FT tokens",
 		"transaction_id", txID,
 		"token_count", len(tokenIDs))
@@ -213,9 +201,6 @@ func (w *Wallet) RollbackPendingFTTokens(txID string, tokenIDs []string) error {
 
 // CleanupExpiredPendingTokens removes pending tokens older than the specified duration
 func (w *Wallet) CleanupExpiredPendingTokens(expiry time.Duration) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-
 	expiryTime := time.Now().Add(-expiry)
 	w.log.Info("Cleaning up expired pending tokens",
 		"expiry_time", expiryTime)

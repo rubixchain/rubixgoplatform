@@ -33,9 +33,7 @@ func (w *Wallet) OptimizedFTTokensReceived(did string, ti []contract.TokenInfo, 
 	}
 
 	// Create token block with minimal locking
-	w.l.Lock()
 	err := w.CreateTokenBlock(b)
-	w.l.Unlock()
 	if err != nil {
 		w.log.Error("Failed to create token block", "error", err)
 		return nil, err
@@ -103,9 +101,7 @@ func (w *Wallet) OptimizedFTTokensReceived(did string, ti []contract.TokenInfo, 
 			for _, info := range batch {
 				t := info.Token
 				// Lock only for reading block
-				w.l.Lock()
 				b := w.GetLatestTokenBlock(info.Token, info.TokenType)
-				w.l.Unlock()
 
 				if b == nil {
 					w.log.Error("No block found for token", "token", t)

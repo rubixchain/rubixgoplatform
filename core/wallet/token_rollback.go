@@ -9,8 +9,6 @@ import (
 
 // RollbackTokenLock rolls back locked tokens to free state
 func (w *Wallet) RollbackTokenLock(tokenIDs []string, txID string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	w.log.Info("Rolling back token locks",
 		"transaction_id", txID,
@@ -51,8 +49,6 @@ func (w *Wallet) RollbackTokenLock(tokenIDs []string, txID string) error {
 
 // RollbackTokenPledge rolls back pledged tokens to free state (for quorums)
 func (w *Wallet) RollbackTokenPledge(tokenIDs []string, txID string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	w.log.Info("Rolling back token pledges",
 		"transaction_id", txID,
@@ -93,8 +89,6 @@ func (w *Wallet) RollbackTokenPledge(tokenIDs []string, txID string) error {
 
 // RollbackFTTokenLock rolls back locked FT tokens to free state
 func (w *Wallet) RollbackFTTokenLock(tokenIDs []string, txID string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	w.log.Info("Rolling back FT token locks",
 		"transaction_id", txID,
@@ -135,8 +129,6 @@ func (w *Wallet) RollbackFTTokenLock(tokenIDs []string, txID string) error {
 
 // RollbackFTTokenPledge rolls back pledged FT tokens to free state (for quorums)
 func (w *Wallet) RollbackFTTokenPledge(tokenIDs []string, txID string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	w.log.Info("Rolling back FT token pledges",
 		"transaction_id", txID,
@@ -177,13 +169,11 @@ func (w *Wallet) RollbackFTTokenPledge(tokenIDs []string, txID string) error {
 
 // RollbackTransaction removes a transaction from the transaction details table
 func (w *Wallet) RollbackTransaction(txID string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	w.log.Info("Rolling back transaction record",
 		"transaction_id", txID)
 
-	// Delete from TransactionHistory table 
+	// Delete from TransactionHistory table
 	err := w.s.Delete(TransactionStorage, &model.TransactionDetails{}, "transaction_id=?", txID)
 	if err != nil {
 		w.log.Error("Failed to delete transaction record",
@@ -197,8 +187,6 @@ func (w *Wallet) RollbackTransaction(txID string) error {
 
 // RollbackPledgeDetails removes pledge details for a failed transaction (for quorums)
 func (w *Wallet) RollbackPledgeDetails(txID string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	w.log.Info("Rolling back pledge details",
 		"transaction_id", txID)
@@ -212,8 +200,6 @@ func (w *Wallet) RollbackPledgeDetails(txID string) error {
 
 // GetTransactionTokens returns all tokens associated with a transaction
 func (w *Wallet) GetTransactionTokens(txID string) ([]Token, error) {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	var tokens []Token
 	err := w.s.Read(TokenStorage, &tokens, "transaction_id=?", txID)
@@ -226,8 +212,6 @@ func (w *Wallet) GetTransactionTokens(txID string) ([]Token, error) {
 
 // GetTransactionFTTokens returns all FT tokens associated with a transaction
 func (w *Wallet) GetTransactionFTTokens(txID string) ([]FTToken, error) {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	var ftTokens []FTToken
 	err := w.s.Read(FTTokenStorage, &ftTokens, "transaction_id=?", txID)
@@ -240,8 +224,6 @@ func (w *Wallet) GetTransactionFTTokens(txID string) ([]FTToken, error) {
 
 // RollbackTokenBlocks removes token blocks added for a failed transaction
 func (w *Wallet) RollbackTokenBlocks(tokenIDs []string, blockHashes []string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	w.log.Info("Rolling back token blocks",
 		"token_count", len(tokenIDs),
@@ -263,19 +245,17 @@ func (w *Wallet) RollbackTokenBlocks(tokenIDs []string, blockHashes []string) er
 
 // RollbackStateInfo contains information needed for rollback
 type RollbackStateInfo struct {
-	TransactionID    string                `json:"transaction_id"`
-	TokenIDs         []string              `json:"token_ids"`
-	FTTokenIDs       []string              `json:"ft_token_ids"`
-	BlockHashes      []string              `json:"block_hashes"`
-	Role             string                `json:"role"` // "sender", "quorum", or "receiver"
-	Timestamp        time.Time             `json:"timestamp"`
-	LevelDBSnapshot  *LevelDBRollbackInfo  `json:"leveldb_snapshot,omitempty"`
+	TransactionID   string               `json:"transaction_id"`
+	TokenIDs        []string             `json:"token_ids"`
+	FTTokenIDs      []string             `json:"ft_token_ids"`
+	BlockHashes     []string             `json:"block_hashes"`
+	Role            string               `json:"role"` // "sender", "quorum", or "receiver"
+	Timestamp       time.Time            `json:"timestamp"`
+	LevelDBSnapshot *LevelDBRollbackInfo `json:"leveldb_snapshot,omitempty"`
 }
 
 // CreateRollbackSnapshot creates a snapshot of current state for potential rollback
 func (w *Wallet) CreateRollbackSnapshot(txID string, role string) (*RollbackStateInfo, error) {
-	w.l.Lock()
-	defer w.l.Unlock()
 
 	snapshot := &RollbackStateInfo{
 		TransactionID: txID,

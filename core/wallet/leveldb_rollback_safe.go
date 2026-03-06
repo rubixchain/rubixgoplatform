@@ -12,18 +12,18 @@ import (
 
 // BlockAdditionRecord tracks blocks added during a transaction
 type BlockAdditionRecord struct {
-	TokenID      string    `json:"token_id"`
-	BlockNumber  int       `json:"block_number"`
-	BlockHash    string    `json:"block_hash"`
-	Key          string    `json:"key"`
-	AddedAt      time.Time `json:"added_at"`
-	TokenType    int       `json:"token_type"`
+	TokenID     string    `json:"token_id"`
+	BlockNumber int       `json:"block_number"`
+	BlockHash   string    `json:"block_hash"`
+	Key         string    `json:"key"`
+	AddedAt     time.Time `json:"added_at"`
+	TokenType   int       `json:"token_type"`
 }
 
 // TransactionBlockTracker tracks all blocks added during a transaction
 type TransactionBlockTracker struct {
-	mu            sync.RWMutex
-	transactions  map[string][]BlockAdditionRecord // txID -> blocks added
+	mu           sync.RWMutex
+	transactions map[string][]BlockAdditionRecord // txID -> blocks added
 }
 
 // NewTransactionBlockTracker creates a new block tracker
@@ -187,9 +187,6 @@ func (slr *SafeLevelDBRollback) RemoveTrackedBlocks(txID string) error {
 
 // SafeRemoveTokenStateHash removes only token state hashes we can verify belong to this transaction
 func (w *Wallet) SafeRemoveTokenStateHash(txID string, expectedHashes []string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-
 	w.log.Info("Safely removing token state hashes",
 		"transaction_id", txID,
 		"expected_count", len(expectedHashes))
@@ -219,7 +216,7 @@ func (w *Wallet) SafeRemoveTokenStateHash(txID string, expectedHashes []string) 
 	for _, ts := range tokenStates {
 		if expectedMap[ts.TokenStateHash] {
 			// This is one we added, safe to remove
-			err = w.s.Delete(TokenStateHash, &TokenStateDetails{}, 
+			err = w.s.Delete(TokenStateHash, &TokenStateDetails{},
 				"token_state_hash=? AND transaction_id=?", ts.TokenStateHash, txID)
 			if err != nil {
 				w.log.Error("Failed to delete expected token state hash",
@@ -297,9 +294,6 @@ func (w *Wallet) VerifyTokenChainIntegrity(tokenID string, tokenType int) error 
 
 // CreateSafeLevelDBSnapshot creates a snapshot with exact tracking
 func (w *Wallet) CreateSafeLevelDBSnapshot(txID string, tracker *TransactionBlockTracker) (*SafeLevelDBSnapshot, error) {
-	w.l.Lock()
-	defer w.l.Unlock()
-
 	snapshot := &SafeLevelDBSnapshot{
 		TransactionID: txID,
 		Timestamp:     time.Now(),
@@ -324,8 +318,8 @@ func (w *Wallet) CreateSafeLevelDBSnapshot(txID string, tracker *TransactionBloc
 
 // SafeLevelDBSnapshot contains exact tracking of what was added
 type SafeLevelDBSnapshot struct {
-	TransactionID    string                 `json:"transaction_id"`
-	Timestamp        time.Time              `json:"timestamp"`
-	TrackedBlocks    []BlockAdditionRecord  `json:"tracked_blocks"`
-	TokenStateHashes []string               `json:"token_state_hashes"`
+	TransactionID    string                `json:"transaction_id"`
+	Timestamp        time.Time             `json:"timestamp"`
+	TrackedBlocks    []BlockAdditionRecord `json:"tracked_blocks"`
+	TokenStateHashes []string              `json:"token_state_hashes"`
 }

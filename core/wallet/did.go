@@ -99,8 +99,6 @@ func (w *Wallet) IsDIDExist(did string) bool {
 }
 
 func (w *Wallet) RemoveDID(did string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
 	err := w.s.Delete(DIDStorage, &DID{}, "did=?", did)
 	if err != nil {
 		errMsg := fmt.Sprintf("DID could not be removed from DIDTable, did : %v, err : %v", did, err)
@@ -154,9 +152,6 @@ func (w *Wallet) AddDIDPeerMap(did string, peerID string) error {
 
 // remove stale peer
 func (w *Wallet) RemoveStalePeerDID(peerDID, peerId string) error {
-	w.l.Lock()
-	defer w.l.Unlock()
-
 	err := w.s.Delete(DIDPeerStorage, &DIDPeerMap{}, "did=? AND peer_id=?", peerDID, peerId)
 	if err != nil {
 		errMsg := fmt.Sprintf("peer-DID could not be removed from DIDPeerTable, peer-did : %v, err : %v", peerDID, err)

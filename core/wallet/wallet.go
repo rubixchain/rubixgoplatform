@@ -72,10 +72,7 @@ type Wallet struct {
 	s                              storage.Storage
 	fullNodeSQLDB                  storage.Storage
 	fullNodePSQLTokensDB           storage.Storage
-	l                              sync.Mutex
-	dtl                            sync.Mutex
 	log                            logger.Logger
-	wl                             sync.Mutex
 	tcs                            *ChainDB
 	ntcs                           *ChainDB
 	smartContractTokenChainStorage *ChainDB
