@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/types"
-	"github.com/rubixchain/rubixgoplatform/wrapper/adapter"
 )
 
 const (
@@ -16,7 +14,7 @@ const (
 
 type ServiceDetials struct {
 	running bool
-	db      *adapter.Adapter
+	db      *struct{}
 }
 
 const (
@@ -77,21 +75,8 @@ func (c *Core) initServices() error {
 			return err
 		}
 
-		adaptorConfig := &types.DBConfig{
-			DBName:     cfg.DBName,
-			DBType:     cfg.DBType,
-			DBAddress:  cfg.DBAddress,
-			DBUserName: cfg.DBUserName,
-			DBPassword: cfg.DBPassword,
-			DBPort:     cfg.DBPort,
-		}
-
-		db, err := adapter.NewAdapter(adaptorConfig)
-		if err != nil {
-			return err
-		}
 		sd := &ServiceDetials{
-			db: db,
+			db: nil,
 		}
 		c.lock.Lock()
 		c.sd[sn] = sd
