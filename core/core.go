@@ -161,6 +161,7 @@ type Core struct {
 	mainnet              bool
 	localnet             bool
 	s                    *storage.RubixDB
+	Ctx              	 context.Context
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -195,6 +196,10 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
+func newRubixContext() context.Context {
+	return context.Background()
+}
+
 func NewCore(cfg *config.Config, dbConfig *types.DBConfig, cfgFile string, encKey string, log logger.Logger,
 	networkMode string, testNetKey string, defaultSetup bool, publishTokenChainDetails bool,
 	fullNode bool, faucetURL string,
@@ -218,6 +223,7 @@ func NewCore(cfg *config.Config, dbConfig *types.DBConfig, cfgFile string, encKe
 		publishTokenChain: publishTokenChainDetails,
 		fullNode:          fullNode,
 		faucetURL:         faucetURL,
+		Ctx:               newRubixContext(),
 	}
 
 	switch networkMode {
@@ -313,14 +319,12 @@ func NewCore(cfg *config.Config, dbConfig *types.DBConfig, cfgFile string, encKe
 		c.updateConfig()
 	}
 
-	rubixContext := context.Background()
-
-	rubixDB, err := storage.NewRubixDB(rubixContext, dbConfig, storage.DefaultPoolOptions())
+	rubixDB, err := storage.NewRubixDB(c.Ctx, dbConfig, storage.DefaultPoolOptions())
 	if err != nil {
 		return nil, fmt.Errorf("failed to define Rubix DB: %v", err)
 	}
 
-	c.w, err = wallet.NewWallet(rubixContext, rubixDB, c.log)
+	c.w, err = wallet.NewWallet(c.Ctx, rubixDB, c.log)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
@@ -421,7 +425,6 @@ func (c *Core) SetupCore() error {
 	c.CheckQuorumStatusSetup()
 	c.peerSetup()
 	c.removePeerSetup()
-	c.w.AddDIDLastChar()
 	c.SetupToken()
 	c.QuroumSetup()
 	c.PinService()

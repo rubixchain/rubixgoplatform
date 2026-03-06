@@ -16,6 +16,7 @@ type Wallet struct {
 	log              logger.Logger
 	asyncProviderMgr *AsyncProviderDetailsManager
 	db               *storage.RubixDB
+	Ctx              context.Context
 }
 
 // GetIpfsOps returns the IPFS operations interface
@@ -27,14 +28,15 @@ func NewWallet(ctx context.Context, db *storage.RubixDB, log logger.Logger) (*Wa
 	w := &Wallet{
 		log: log.Named("wallet"),
 		db:  db,
+		Ctx: ctx,
 	}
 
-	err := w.db.InitSchema(ctx)
+	err := w.db.InitSchema(w.Ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise table schema: %v", err)
 	}
 
-	err = w.addProtocolValuesToLookupTables(ctx)
+	err = w.addProtocolValuesToLookupTables()
 	if err != nil {
 		return nil, fmt.Errorf("failed to add protocol values to lookup tables: %v", err)
 	}
