@@ -17,41 +17,6 @@ import (
 
 const pledgePeriodInSeconds int = 7 * 24 * 60 * 60 // Pledging period: 7 days
 
-func (c *Core) ForceUnpledgePOWBasedPledgedTokens() error {
-	// Load data from UnpledgeQueueInfo table
-	unpledgeQueueInfo, err := c.w.Migration_GetUnpledgeQueueInfo()
-	if err != nil {
-		return err
-	}
-
-	// unpledge all POW based pledged tokens
-	for _, info := range unpledgeQueueInfo {
-		pledgeToken := info.Token
-		pledgeTokenType, err := getTokenType(c.w, pledgeToken, c.testNet)
-		if err != nil {
-			return fmt.Errorf("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
-		}
-		pledgeTokenOwner, err := getTokenOwner(c.w, pledgeToken)
-		if err != nil {
-			return fmt.Errorf("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
-		}
-
-		_, _, err = unpledgeToken(c, pledgeToken, pledgeTokenType, pledgeTokenOwner, "")
-		if err != nil {
-			c.log.Error("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
-			return fmt.Errorf("failed to unpledge POW based pledge token %v, err: %v", pledgeToken, err)
-		}
-	}
-
-	// Drop the UnpledgeSequence table
-	tableDropErr := c.w.Migration_DropUnpledgeQueueTable()
-	if tableDropErr != nil {
-		return tableDropErr
-	}
-
-	return nil
-}
-
 func (c *Core) InititateUnpledgeProcess() (string, error) {
 	c.log.Info("Unpledging process has started...")
 	var totalUnpledgeAmount float64 = 0.0
@@ -123,7 +88,7 @@ func (c *Core) InititateUnpledgeProcess() (string, error) {
 
 				return "", errMsg
 			}
-			c.UpdatePledgeStatus(strings.Split(info.PledgeTokens, ","), info.QuorumDID)
+
 			unpledgeAmountForTransaction, err := c.getTotalAmountFromTokenHashes(strings.Split(info.PledgeTokens, ","))
 			if err != nil {
 				return "", fmt.Errorf("failed while getting total pledge amount for transaction id: %v, err: %v", info.TransactionID, err)
@@ -308,7 +273,7 @@ func unpledgeAllTokens(c *Core, transactionID string, pledgeTokens string, quoru
 	}
 
 	for _, pledgeToken := range pledgeTokensList {
-		pledgeTokenType, err := getTokenType(c.w, pledgeToken, c.testNet)
+		pledgeTokenType, err := getTokenType(c.w, pledgeToken, c.testnet)
 		if err != nil {
 			return nil, fmt.Errorf("failed while unpledging token %v, err: %v", pledgeToken, err)
 		}

@@ -15,13 +15,14 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/client"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/did"
 	_ "github.com/rubixchain/rubixgoplatform/docs"
 	"github.com/rubixchain/rubixgoplatform/server"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/apiconfig"
 	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -269,11 +270,13 @@ type Command struct {
 	encKey                       string
 	start                        bool
 	node                         uint
-	runDir                       string
+	nodeConfigPath                       string
 	logFile                      string
 	logLevel                     string
 	cfgFile                      string
-	testNet                      bool
+	testnet                      bool
+	mainnet                      bool
+	localnet                     bool
 	testNetKey                   string
 	addr                         string
 	port                         string
@@ -289,11 +292,11 @@ type Command struct {
 	pubKeyFile                   string
 	quorumList                   string
 	srvName                      string
-	storageType                  int
+	storageType                  string
 	dbName                       string
 	dbType                       string
 	dbAddress                    string
-	dbPort                       string
+	dbPort                       uint64
 	dbUserName                   string
 	dbPassword                   string
 	senderAddr                   string
@@ -359,9 +362,6 @@ type Command struct {
 	publishTokenChainDetails     bool
 	dumpFullnodeTokenChain       bool
 	assetType                    string
-	pgsqlDBName                  string
-	pgsqlDBUserName              string
-	pgsqlDBPassword              string
 	enableDeExp                  bool
 	deExpURL                     string
 	operationType                int
@@ -395,7 +395,7 @@ func (cmd *Command) backupDatabase() error {
 		dbPath = cmd.cfg.CfgData.StorageConfig.DBAddress
 		if dbPath == "" {
 			// Default SQLite database path
-			dbPath = filepath.Join(cmd.runDir, "rubixdata.db")
+			dbPath = filepath.Join(cmd.nodeConfigPath, "rubixdata.db")
 		}
 	} else {
 		// For other database types, we can't do file-based backup
@@ -410,7 +410,7 @@ func (cmd *Command) backupDatabase() error {
 	}
 
 	// Create backup directory
-	backupDir := filepath.Join(cmd.runDir, "db_backups")
+	backupDir := filepath.Join(cmd.nodeConfigPath, "db_backups")
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
 	}
@@ -536,15 +536,16 @@ func (cmd *Command) getURL(url string) string {
 }
 
 func (cmd *Command) runApp() {
-	core.InitConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, uint16(cmd.node), cmd.addr)
-	err := apiconfig.LoadAPIConfig(cmd.runDir+cmd.cfgFile, cmd.encKey, &cmd.cfg)
-
+	core.InitConfig(cmd.nodeConfigPath+cmd.cfgFile, cmd.encKey, uint16(cmd.node), cmd.addr)
+	err := apiconfig.LoadAPIConfig(cmd.nodeConfigPath+cmd.cfgFile, cmd.encKey, &cmd.cfg)
 	if err != nil {
 		cmd.log.Error("Configfile is either currupted or cipher is wrong", "err", err)
 		return
 	}
-	// Override directory path
-	cmd.cfg.DirPath = cmd.runDir
+
+	// Directory path for storing
+	cmd.cfg.NodeConfigDir = cmd.nodeConfigPath
+	postgresDBPort := cmd.dbPort+uint64(cmd.node)
 
 	// Backup database if flag is set
 	if cmd.backupDB {
@@ -554,8 +555,6 @@ func (cmd *Command) runApp() {
 		}
 	}
 
-	// Apply trusted network setting (enabled by default)
-	// Check if user explicitly wants to disable trusted network
 	if cmd.disableTrustedNetwork {
 		cmd.cfg.CfgData.TrustedNetwork = false
 		cmd.log.Info("Trusted network mode explicitly disabled via -disableTrustedNetwork flag")
@@ -566,66 +565,76 @@ func (cmd *Command) runApp() {
 	}
 
 	sc := make(chan bool, 1)
-	c, err := core.NewCore(&cmd.cfg, cmd.runDir+cmd.cfgFile, cmd.encKey, cmd.log, cmd.testNet, cmd.testNetKey, cmd.arbitaryMode, cmd.defaultSetup, cmd.publishTokenChainDetails, cmd.fullNode, cmd.pgsqlDBName, cmd.pgsqlDBUserName, cmd.pgsqlDBPassword, cmd.enableDeExp, cmd.deExpURL, cmd.faucetURL)
+	dbConfig := &types.DBConfig{
+		DBType:   cmd.dbType,
+		DBAddress: cmd.dbAddress,
+		DBPort:    postgresDBPort,
+		DBUserName: cmd.dbUserName,
+		DBPassword: cmd.dbPassword,
+		DBName:    cmd.dbName,
+	}
+
+	networkMode, err := getNetworkMode(cmd.testnet, cmd.mainnet, cmd.localnet)	
+	if err != nil {
+		cmd.log.Error(fmt.Sprintf("failed to get the network mode: %v", err.Error()))
+		return
+	}
+
+	rubixCore, err := core.NewCore(
+		&cmd.cfg, 
+		dbConfig, 
+		cmd.nodeConfigPath+cmd.cfgFile, 
+		cmd.encKey, 
+		cmd.log, 
+		networkMode, cmd.testNetKey, cmd.defaultSetup, 
+		cmd.publishTokenChainDetails, cmd.fullNode, cmd.faucetURL,
+	)
 	if err != nil {
 		cmd.log.Error(err.Error())
 		cmd.log.Error("failed to create core")
 		return
 	}
-	addr := fmt.Sprintf(cmd.grpcAddr+":%d", cmd.grpcPort)
-	scfg := &server.Config{
+
+	serverConfig := &server.Config{
 		Config: srvcfg.Config{
 			HostAddress: cmd.cfg.NodeAddress,
 			HostPort:    cmd.cfg.NodePort,
 			Production:  "false",
+
+			DBName: dbConfig.DBName,
+			DBType: dbConfig.DBType,
+			DBAddress: dbConfig.DBAddress,
+			DBPort: postgresDBPort,
+			DBUserName: dbConfig.DBUserName,
+			DBPassword: dbConfig.DBPassword,
 		},
-		GRPCAddr:   addr,
-		GRPCSecure: cmd.grpcSecure,
+		EnableAuth: cmd.enableAuth,
 	}
-	scfg.EnableAuth = cmd.enableAuth
-	if cmd.enableAuth {
-		scfg.DBType = "Sqlite3"
-		scfg.DBAddress = cmd.cfg.DirPath + "rubix.db"
-	}
-	// scfg := &srvcfg.Config{
-	// 	HostAddress: cmd.cfg.NodeAddress,
-	// 	HostPort:    cmd.cfg.NodePort,
-	// }
-	s, err := server.NewServer(c, scfg, cmd.log, cmd.start, sc, cmd.timeout)
+
+	s, err := server.NewServer(rubixCore, serverConfig, cmd.log, cmd.start, sc, cmd.timeout)
 	if err != nil {
 		cmd.log.Error("Failed to create server")
 		return
 	}
-
 	s.EnableSWagger(cmd.getURL(s.GetServerURL()))
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
-	go s.Start()
+	go s.Start()	
 
 	// Start the pending token monitor for self-healing
-	c.StartPendingTokenMonitor()
+	rubixCore.StartPendingTokenMonitor()
 
-	cmd.log.Info("Syncing Details...")
-	dids := c.ExplorerUserCreate() //Checking if all the DIDs are in the ExplorerUserDetailtable or not.
-	if len(dids) != 0 {
-		c.UnlockFTs()
-		c.UpdateUserInfo(dids)     //Updating the balance
-		c.GenerateUserAPIKey(dids) //Regenerating the API Key for DID
-	}
-	// c.UpdateTokenInfo()
-	cmd.log.Info("Syncing Complete...")
+	// Unlock any locked FTs
+	rubixCore.UnlockFTs()
 
 	if cmd.publishTokenChainDetails {
-		c.PublishTCDetails()
-	}
-	if cmd.fullNode {
-		cmd.log.Info("**calling SubscribeTCDetails function***")
-		c.SubscribeTCDetails()
+		rubixCore.PublishTCDetails()
 	}
 
-	// Start background job: retry failed-to-sync tokens every 1 hour
 	if cmd.fullNode {
-		c.RetryFailedTokenSync()
+		cmd.log.Info("Node is running as a Full node")
+		rubixCore.SubscribeTCDetails()
+		rubixCore.RetryFailedTokenSync()
 	}
 
 	ch := make(chan os.Signal, 1)
@@ -637,28 +646,28 @@ func (cmd *Command) runApp() {
 		// close(sc) // closing sc will unblock the ticker goroutine's case <-sc:
 	case <-sc:
 	}
+
 	// Stop the pending token monitor
-	c.StopPendingTokenMonitor()
+	rubixCore.StopPendingTokenMonitor()
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
-	//c.ExpireUserAPIKey()
 }
 
 func (cmd *Command) validateOptions() bool {
-	if cmd.runDir == "" {
-		cmd.runDir = "./"
+	if cmd.nodeConfigPath == "" {
+		cmd.nodeConfigPath = "./"
 	}
-	if !strings.HasPrefix(cmd.runDir, "\\") {
-		if !strings.HasPrefix(cmd.runDir, "/") {
-			cmd.runDir = cmd.runDir + "/"
+	if !strings.HasPrefix(cmd.nodeConfigPath, "\\") {
+		if !strings.HasPrefix(cmd.nodeConfigPath, "/") {
+			cmd.nodeConfigPath = cmd.nodeConfigPath + "/"
 		}
 	}
-	_, err := os.Stat(cmd.runDir)
+	_, err := os.Stat(cmd.nodeConfigPath)
 	if err == nil {
 		return true
 	}
 	if os.IsNotExist(err) {
-		err := os.MkdirAll(cmd.runDir, os.ModeDir|os.ModePerm)
+		err := os.MkdirAll(cmd.nodeConfigPath, os.ModeDir|os.ModePerm)
 		if err == nil || os.IsExist(err) {
 			return true
 		} else {
@@ -675,14 +684,16 @@ func Run(args []string) {
 	var timeout int
 	var links string
 
-	flag.StringVar(&cmd.runDir, "p", "./", "Working directory path")
+	flag.StringVar(&cmd.nodeConfigPath, "p", "./", "Working directory path")
 	flag.StringVar(&cmd.logFile, "logFile", "", "Log file name")
 	flag.StringVar(&cmd.logLevel, "logLevel", "debug", "Log level")
 	flag.StringVar(&cmd.cfgFile, "c", ConfigFile, "Configuration file for the core")
 	flag.UintVar(&cmd.node, "n", 0, "Node number")
 	flag.StringVar(&cmd.encKey, "k", "TestKeyBasic#2022", "Config file encryption key")
 	flag.BoolVar(&cmd.start, "s", false, "Start the core")
-	flag.BoolVar(&cmd.testNet, "testNet", false, "Run as test net")
+	flag.BoolVar(&cmd.testnet, "testnet", false, "Run as testnet")
+	flag.BoolVar(&cmd.localnet, "localnet", false, "Run as local network")
+	flag.BoolVar(&cmd.mainnet, "mainnet", false, "Run as main network")
 	flag.StringVar(&cmd.testNetKey, "testNetKey", "testswarm.key", "Test net key")
 	flag.StringVar(&cmd.addr, "addr", "localhost", "Server/Host Address")
 	flag.StringVar(&cmd.port, "port", "20000", "Server/Host port")
@@ -699,13 +710,13 @@ func Run(args []string) {
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
 	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
 	flag.StringVar(&cmd.srvName, "srvName", "explorer_service", "Service name")
-	flag.IntVar(&cmd.storageType, "storageType", storage.StorageDBType, "Storage type")
-	flag.StringVar(&cmd.dbName, "dbName", "ServiceDB", "Service database name")
-	flag.StringVar(&cmd.dbType, "dbType", "SQLServer", "DB Type, supported database are SQLServer, PostgressSQL, MySQL & Sqlite3")
-	flag.StringVar(&cmd.dbAddress, "dbAddress", "localhost", "Database address")
-	flag.StringVar(&cmd.dbPort, "dbPort", "1433", "Database port number")
-	flag.StringVar(&cmd.dbUserName, "dbUsername", "sa", "Database username")
-	flag.StringVar(&cmd.dbPassword, "dbPassword", "password", "Database password")
+	flag.StringVar(&cmd.storageType, "storageType", constants.DBType_PostgreSQL, "Storage type")
+	flag.StringVar(&cmd.dbName, "dbName", "rubix", "Service database name")
+	flag.StringVar(&cmd.dbType, "dbType", constants.DBType_PostgreSQL, "DB Type, supported database are: postgres")
+	flag.StringVar(&cmd.dbAddress, "dbAddress", constants.DefaultPostgresHost, "Database address")
+	flag.Uint64Var(&cmd.dbPort, "dbPort", constants.DefaultPostgresPort, "Database port number")
+	flag.StringVar(&cmd.dbUserName, "dbUsername", constants.DefaultPostgresUsername, "Database username")
+	flag.StringVar(&cmd.dbPassword, "dbPassword", constants.DefaultPostgresPassword, "Database password")
 	flag.StringVar(&cmd.senderAddr, "senderAddr", "", "Sender address")
 	flag.StringVar(&cmd.receiverAddr, "receiverAddr", "", "Receiver address")
 	flag.Float64Var(&cmd.rbtAmount, "rbtAmount", 0.0, "RBT amount")
@@ -726,9 +737,9 @@ func Run(args []string) {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
-	flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
-	flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
-	flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")
+	// flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
+	// flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
+	// flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")
 	flag.StringVar(&cmd.deployerAddr, "deployerAddr", "", "Smart contract Deployer Address")
 	flag.StringVar(&cmd.binaryCodePath, "binCode", "", "Binary code path")
 	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
@@ -766,9 +777,6 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.fullNode, "fullnode", false, "receive all published transactions and tokenchain details")
 	flag.BoolVar(&cmd.dumpFullnodeTokenChain, "fullnodetoken", false, "dump tokenchain from fullnode storage")
 	flag.StringVar(&cmd.assetType, "assettype", "rbt", "DID of the signer")
-	flag.StringVar(&cmd.pgsqlDBName, "pgsqlDBName", "", "Postgress Tokens database name")
-	flag.StringVar(&cmd.pgsqlDBUserName, "pgsqlDBUserName", "myuser", "Postgress Tokens Database username")
-	flag.StringVar(&cmd.pgsqlDBPassword, "pgsqlDBPassword", "mypassword", "Postgress Tokens Database password")
 	flag.BoolVar(&cmd.enableDeExp, "deexp", false, "Host a decentralized explorer from fullnode")
 	flag.StringVar(&cmd.deExpURL, "deexpURL", "", "Decentralized explorer Server URL")
 	flag.IntVar(&cmd.operationType, "operationType", 0, "this defines the underlying transaction type")
@@ -804,7 +812,7 @@ func Run(args []string) {
 	}
 
 	if cmd.logFile == "" {
-		cmd.logFile = cmd.runDir + "log.txt"
+		cmd.logFile = cmd.nodeConfigPath + "log.txt"
 	}
 
 	level := logger.Debug
@@ -888,8 +896,6 @@ func Run(args []string) {
 		cmd.SetupDIDCmd()
 	case ShutDownCmd:
 		cmd.ShutDownCmd()
-	case SetupDBCmd:
-		cmd.setupDB()
 	case GetTxnDetailsCmd:
 		cmd.getTxnDetails()
 	case PublishContractCmd:
@@ -920,12 +926,6 @@ func Run(args []string) {
 		cmd.releaseAllLockedTokens()
 	case CheckQuorumStatusCmd:
 		cmd.checkQuorumStatus()
-	case AddExplorerCmd:
-		cmd.addExplorer()
-	case RemoveExplorerCmd:
-		cmd.removeExplorer()
-	case GetAllExplorerCmd:
-		cmd.getAllExplorer()
 	case AddPeerDetailsCmd:
 		cmd.AddPeerDetails()
 	case GetPledgedTokenDetailsCmd:

@@ -57,9 +57,9 @@ def cmd_run_rubix_servers(node_name, server_port_idx, concurrent=False):
 
     cmd_string = ""
     if is_windows_os():
-        cmd_string = f"powershell -Command  Start-Process -FilePath '.\\rubixgoplatform.exe' -ArgumentList 'run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}'"
+        cmd_string = f"powershell -Command  Start-Process -FilePath '.\\rubixgoplatform.exe' -ArgumentList 'run -p {node_name} -n {server_port_idx} -localnet'"
     else:
-        cmd_string = f"tmux new -s {node_name} -d ./rubixgoplatform run -p {node_name} -n {server_port_idx} -s -testNet -grpcPort {grpc_port}"
+        cmd_string = f"tmux new -s {node_name} -d ./rubixgoplatform run -p {node_name} -n {server_port_idx} -localnet"
     
     _, code = run_command(cmd_string)
     if code != 0:

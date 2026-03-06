@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/wrapper/adapter"
-	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 )
 
 const (
@@ -16,7 +14,7 @@ const (
 
 type ServiceDetials struct {
 	running bool
-	db      *adapter.Adapter
+	db      *struct{}
 }
 
 const (
@@ -76,20 +74,9 @@ func (c *Core) initServices() error {
 		if err != nil {
 			return err
 		}
-		dcfg := &srvcfg.Config{
-			DBName:     cfg.DBName,
-			DBAddress:  cfg.DBAddress,
-			DBPort:     cfg.DBPort,
-			DBType:     cfg.DBType,
-			DBUserName: cfg.DBUserName,
-			DBPassword: cfg.DBPassword,
-		}
-		db, err := adapter.NewAdapter(dcfg)
-		if err != nil {
-			return err
-		}
+
 		sd := &ServiceDetials{
-			db: db,
+			db: nil,
 		}
 		c.lock.Lock()
 		c.sd[sn] = sd
@@ -105,23 +92,14 @@ func (c *Core) initServices() error {
 
 func (c *Core) startService(sn string) error {
 	c.lock.Lock()
-	sd, ok := c.sd[sn]
+	_, ok := c.sd[sn]
 	c.lock.Unlock()
 	if !ok {
 		return fmt.Errorf("failed to get service detials")
 	}
 	switch sn {
 	case ExplorerService:
-		err := sd.db.InitTable(NodeStatusTable, &ExplorerNodeStatus{}, false)
-		if err != nil {
-			return err
-		}
-		err = sd.db.InitTable(NodeDIDMapTable, &ExplorerNodeDIDMap{}, false)
-		if err != nil {
-			return err
-		}
-		sd.running = true
-		return c.ps.SubscribeTopic(ExplorerService, c.exploreCallback)
+		return nil
 	default:
 		return fmt.Errorf("unknown service %s", sn)
 	}

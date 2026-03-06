@@ -191,9 +191,10 @@ func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int) (st
 }
 
 func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex int) error {
-	if !c.testNet {
-		return fmt.Errorf("generate test token is available in test net")
+	if !c.localnet {
+		return fmt.Errorf("generate test token is available in 'localnet' mode. Run rubix in localnet mode by providing -localnet flag")
 	}
+
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		return fmt.Errorf("DID is not exist")
@@ -1854,7 +1855,7 @@ func (c *Core) getFaucetTestTokensID(tokenLevel int, tokenNumber int) (string, e
 
 func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
 
-	if !c.testNet {
+	if !c.testnet {
 		return nil, fmt.Errorf("generate test token is available in test net")
 	}
 	dc, err := c.SetupDID(reqID, did)

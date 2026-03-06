@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/contract"
@@ -178,7 +176,7 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		TransactionEpoch: txEpoch,
 	}
 
-	txnDetails, _, pds, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)
+	txnDetails, _, _, err := c.initiateConsensus(conensusRequest, consensusContract, didCryptoLib)
 
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
@@ -219,29 +217,6 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	txnDetails.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(txnDetails)
 
-	blockNoPart := strings.Split(txnDetails.BlockID, "-")[0]
-	// Convert the string part to an int
-	blockNoInt, _ := strconv.Atoi(blockNoPart)
-	//Rename : TODO
-	eTrans := &ExplorerNFTDeploy{
-		NFT:            deployReq.NFT,
-		NFTBlockNumber: blockNoInt,
-		NFTBlockHash:   strings.Split(txnDetails.BlockID, "-")[1],
-		TransactionID:  txnDetails.TransactionID,
-		Network:        conensusRequest.Type,
-		NFTValue:       nftInfo.TokenValue,
-		DeployerDID:    did,
-		OwnerDID:       nftInfo.OwnerDID,
-		PledgeAmount:   consensusContractDetails.TotalRBTs,
-		QuorumList:     extractQuorumDID(conensusRequest.QuorumList),
-		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
-		Comments:       txnDetails.Comment,
-		SCTokenHash:    "' '",
-	}
-	explorerErr := c.ec.ExplorerNFTDeploy(eTrans)
-	if explorerErr != nil {
-		c.log.Error("Failed to send NFT transaction to explorer ", "err", explorerErr)
-	}
 
 	c.log.Info("NFT Deployed successfully", "duration", dif)
 	resp.Status = true
@@ -387,7 +362,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		TransactionEpoch: txEpoch,
 	}
 
-	txnDetails, _, pds, err := c.initiateConsensus(consensusRequest, consensusContract, didCryptoLib)
+	txnDetails, _, _, err := c.initiateConsensus(consensusRequest, consensusContract, didCryptoLib)
 	if err != nil {
 		c.log.Error("Consensus failed", "err", err)
 		resp.Message = "Consensus failed" + err.Error()
@@ -433,32 +408,6 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	txnDetails.TotalTime = float64(dif.Milliseconds())
 
 	c.w.AddTransactionHistory(txnDetails)
-	blockNoPart := strings.Split(txnDetails.BlockID, "-")[0]
-	// Convert the string part to an int
-	blockNoInt, _ := strconv.Atoi(blockNoPart)
-	//Rename : TODO
-	eTrans := &ExplorerNFTExecute{
-		NFT:            executeReq.NFT,
-		ExecutorDID:    executeReq.Executor,
-		ReceiverDID:    receiver,
-		Network:        executeReq.QuorumType,
-		Comments:       executeReq.Comment,
-		NFTValue:       executeReq.NFTValue,
-		NFTData:        executeReq.NFTData,
-		NFTBlockNumber: blockNoInt,
-		NFTBlockHash:   strings.Split(txnDetails.BlockID, "-")[1],
-		PledgeAmount:   consensusContractDetails.TotalRBTs,
-		TransactionID:  txnDetails.TransactionID,
-		QuorumList:     extractQuorumDID(consensusRequest.QuorumList),
-		PledgeInfo:     PledgeInfo{PledgeDetails: pds.PledgedTokens, PledgedTokenList: pds.TokenList},
-		SCTokenHash:    "' '",
-		Amount:         executeReq.NFTValue,
-	}
-
-	explorerErr := c.ec.ExplorerNFTTransaction(eTrans)
-	if explorerErr != nil {
-		c.log.Error("Failed to send NFT transaction to explorer ", "err", explorerErr)
-	}
 
 	c.log.Info("NFT Executed successfully", "duration", dif)
 	resp.Status = true
@@ -654,7 +603,7 @@ func (c *Core) GetNFTsByDid(did string) model.NFTList {
 }
 
 func (c *Core) CheckNFTFolderExists(nft string) (string, error) {
-	dirPath := c.cfg.DirPath + "NFT/" + nft
+	dirPath := c.cfg.NodeConfigDir + "NFT/" + nft
 	_, err := os.Stat(dirPath)
 	if err == nil {
 		return dirPath, nil // Folder exists

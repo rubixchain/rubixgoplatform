@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/protos"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -185,7 +184,7 @@ func runCommand() {
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
 	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
 	flag.StringVar(&cmd.srvName, "srvName", "explorer_service", "Service name")
-	flag.IntVar(&cmd.storageType, "storageType", storage.StorageDBType, "Storage type")
+	flag.IntVar(&cmd.storageType, "storageType", 1, "Storage type")
 	flag.StringVar(&cmd.dbName, "dbName", "ServiceDB", "Service database name")
 	flag.StringVar(&cmd.dbType, "dbType", "SQLServer", "DB Type, supported database are SQLServer, PostgressSQL, MySQL & Sqlite3")
 	flag.StringVar(&cmd.dbAddress, "dbAddress", "localhost", "Database address")

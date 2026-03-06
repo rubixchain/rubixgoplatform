@@ -501,13 +501,13 @@ func (c *Core) RemoveTokenChainBlock(removeReq *model.TCRemoveRequest) *model.TC
 		},
 	}
 	tt := token.RBTTokenType
-	if c.testNet {
+	if c.testnet {
 		tt = token.TestTokenType
 	}
 	err := c.w.RemoveTokenChainBlocklatest(removeReq.Token, tt)
 	if err != nil {
 		tt = token.PartTokenType
-		if c.testNet {
+		if c.testnet {
 			tt = token.TestPartTokenType
 		}
 		err = c.w.RemoveTokenChainBlocklatest(removeReq.Token, tt)

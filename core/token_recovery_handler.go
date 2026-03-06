@@ -695,7 +695,7 @@ func (c *Core) getConfiguredExplorers() []string {
 	// Return hardcoded explorer URLs based on network type
 	var explorers []string
 
-	if c.testNet {
+	if c.testnet {
 		// TestNet explorer
 		explorers = []string{"https://testnet-app-api.rubixexplorer.com"}
 	} else {
@@ -705,7 +705,7 @@ func (c *Core) getConfiguredExplorers() []string {
 
 	c.log.Debug("Using configured network",
 		"explorers", explorers,
-		"testnet", c.testNet)
+		"testnet", c.testnet)
 
 	return explorers
 }

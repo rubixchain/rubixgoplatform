@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
@@ -22,9 +24,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	didm "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/apiconfig"
-	econfig "github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -79,7 +81,9 @@ const (
 	FullNodeTokensDBPort     string = "5432"
 	MainNetDir               string = "MainNet"
 	TestNetDir               string = "TestNet"
+	LocalNetDir              string = "LocalNet"
 	TestNetDIDDir            string = "TestNetDID/"
+	LocalNetDIDDir           string = "LocalNetDID/"
 	MaxDecimalPlaces         int    = 3
 )
 
@@ -125,7 +129,7 @@ type Core struct {
 	ps                   *pubsub.PubSub
 	started              bool
 	ipfsApp              string
-	testNet              bool
+	testnet              bool
 	testNetKey           string
 	version              string
 	quorumRequest        map[string]*ConsensusStatus
@@ -135,14 +139,7 @@ type Core struct {
 	qc                   map[string]did.DIDCrypto
 	pqc                  map[string]did.DIDCrypto
 	sd                   map[string]*ServiceDetials
-	s                    storage.Storage
-	fullNodeStorage      storage.Storage
-	fullNodeTokensDB     storage.Storage
-	as                   storage.Storage
 	srv                  *service.Service
-	arbitaryMode         bool
-	arbitaryAddr         []string
-	ec                   *ExplorerClient
 	secret               []byte
 	quorumCount          int
 	noBalanceQuorumCount int
@@ -160,8 +157,10 @@ type Core struct {
 	fullNode             bool
 	txnProcessor         *DynamicTxnProcessor
 	RetryTokenSyncTicker *time.Ticker
-	DeExp                bool
 	faucetURL            string // for faucet url
+	mainnet              bool
+	localnet             bool
+	s                    *storage.RubixDB
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {
@@ -169,9 +168,9 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 		nodePort := NodePort + node
 		portOffset := MaxPeerConn * node
 		cfg := config.Config{
-			NodeAddress: addr,
-			NodePort:    fmt.Sprintf("%d", nodePort),
-			DirPath:     "./",
+			NodeAddress:   addr,
+			NodePort:      fmt.Sprintf("%d", nodePort),
+			NodeConfigDir: "./",
 			CfgData: config.ConfigData{
 				Ports: config.Ports{
 					SendPort:     (SendPort + node),
@@ -196,37 +195,17 @@ func InitConfig(configFile string, encKey string, node uint16, addr string) erro
 	return nil
 }
 
-func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logger, testNet bool, testNetKey string, am bool, defaultSetup bool, publishTokenChainDetails bool, fullNode bool, passedPSQLdbName string, passedPSQLdbUserName string, passedPSQLdbPassword string, enableDeExp bool, deExpURL string, faucetURL string) (*Core, error) {
+func NewCore(cfg *config.Config, dbConfig *types.DBConfig, cfgFile string, encKey string, log logger.Logger,
+	networkMode string, testNetKey string, defaultSetup bool, publishTokenChainDetails bool,
+	fullNode bool, faucetURL string,
+) (*Core, error) {
 	var err error
-	update := false
-
-	if enableDeExp && deExpURL == "" {
-		return nil, fmt.Errorf("De-Exp URL required when De-Exp is enabled (-deexp), use `-deexpURL` flag to pass De-Exp URL")
-	}
-
-	if !enableDeExp && deExpURL != "" {
-		return nil, fmt.Errorf("De-Exp flag required when passing De-Exp URL (-deexpURL), use `-deexp` flag to enable De-Exp")
-	}
-
-	if cfg.CfgData.StorageConfig.StorageType == 0 {
-		cfg.CfgData.StorageConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.StorageConfig.DBAddress = cfg.DirPath + RubixRootDir + DefaultMainNetDB
-		cfg.CfgData.StorageConfig.DBType = "Sqlite3"
-		update = true
-	}
-
-	if cfg.CfgData.TestStorageConfig.StorageType == 0 {
-		cfg.CfgData.TestStorageConfig.StorageType = storage.StorageDBType
-		cfg.CfgData.TestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + DefaultTestNetDB
-		cfg.CfgData.TestStorageConfig.DBType = "Sqlite3"
-		update = true
-	}
+	update := true
 
 	c := &Core{
 		cfg:               cfg,
 		cfgFile:           cfgFile,
 		encKey:            encKey,
-		testNet:           testNet,
 		testNetKey:        testNetKey,
 		quorumRequest:     make(map[string]*ConsensusStatus),
 		pd:                make(map[string]*PledgeDetails),
@@ -234,66 +213,91 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 		qc:                make(map[string]did.DIDCrypto),
 		pqc:               make(map[string]did.DIDCrypto),
 		sd:                make(map[string]*ServiceDetials),
-		arbitaryMode:      am,
 		secret:            util.GetRandBytes(32),
 		defaultSetup:      defaultSetup,
 		publishTokenChain: publishTokenChainDetails,
 		fullNode:          fullNode,
-		DeExp:             enableDeExp,
 		faucetURL:         faucetURL,
 	}
 
-	if c.fullNode {
-		if c.DeExp {
-			wallet.ExplorerHost = deExpURL
-		} else {
-			wallet.ExplorerHost = "No De-Explorer Host"
-		}
-		if c.testNet {
-			if cfg.CfgData.FullnodeTestStorageConfig.StorageType == 0 {
-				cfg.CfgData.FullnodeTestStorageConfig.StorageType = storage.StorageDBType
-				cfg.CfgData.FullnodeTestStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + FullNodeTestNetDB
-				cfg.CfgData.FullnodeTestStorageConfig.DBType = "Sqlite3"
-				update = true
-			}
-			if cfg.CfgData.FullnodeTestTokenStorageConfig.StorageType == 0 {
-				cfg.CfgData.FullnodeTestTokenStorageConfig.StorageType = storage.StorageDBType
-				cfg.CfgData.FullnodeTestTokenStorageConfig.DBAddress = "localhost"
-				cfg.CfgData.FullnodeTestTokenStorageConfig.DBType = "PostgressSQL"
-				cfg.CfgData.FullnodeTestTokenStorageConfig.DBPort = FullNodeTokensDBPort
-				cfg.CfgData.FullnodeTestTokenStorageConfig.DBName = FullNodeTokensDBName
-				cfg.CfgData.FullnodeTestTokenStorageConfig.DBUserName = passedPSQLdbUserName
-				cfg.CfgData.FullnodeTestTokenStorageConfig.DBPassword = passedPSQLdbPassword
-				update = true
-			}
+	switch networkMode {
+	case constants.NetworkMode_Testnet:
+		c.testnet = true
+	case constants.NetworkMode_Mainnet:
+		c.mainnet = true
+	case constants.NetworkMode_Local:
+		c.localnet = true
+	default:
+		errMsg := fmt.Sprintf("Invalid network mode: %s", networkMode)
+		return nil, fmt.Errorf(errMsg)
+	}
 
-		} else {
+	var tcDir string
 
-			if cfg.CfgData.FullnodeStorageConfig.StorageType == 0 {
-				cfg.CfgData.FullnodeStorageConfig.StorageType = storage.StorageDBType
-				cfg.CfgData.FullnodeStorageConfig.DBAddress = cfg.DirPath + RubixRootDir + FullNodeMainNetDB
-				cfg.CfgData.FullnodeStorageConfig.DBType = "Sqlite3"
-				update = true
-			}
+	if c.mainnet {
+		c.cfg.CfgData.StorageConfig.StorageType = dbConfig.DBType
+		c.cfg.CfgData.StorageConfig.DBAddress = dbConfig.DBAddress
+		c.cfg.CfgData.StorageConfig.DBType = dbConfig.DBType
+		c.cfg.CfgData.StorageConfig.DBName = dbConfig.DBName
+		c.cfg.CfgData.StorageConfig.DBUserName = dbConfig.DBUserName
+		c.cfg.CfgData.StorageConfig.DBPassword = dbConfig.DBPassword
+		c.cfg.CfgData.StorageConfig.DBPort = dbConfig.DBPort
 
-			if cfg.CfgData.FullnodeTokenStorageConfig.StorageType == 0 {
-				cfg.CfgData.FullnodeTokenStorageConfig.StorageType = storage.StorageDBType
-				cfg.CfgData.FullnodeTokenStorageConfig.DBAddress = "localhost"
-				cfg.CfgData.FullnodeTokenStorageConfig.DBType = "PostgressSQL"
-				cfg.CfgData.FullnodeTokenStorageConfig.DBPort = FullNodeTokensDBPort
-				cfg.CfgData.FullnodeTokenStorageConfig.DBName = FullNodeTokensDBName
-				cfg.CfgData.FullnodeTokenStorageConfig.DBUserName = passedPSQLdbUserName
-				cfg.CfgData.FullnodeTokenStorageConfig.DBPassword = passedPSQLdbPassword
-				update = true
+		c.didDir = c.cfg.NodeConfigDir + RubixRootDir
+
+		//TODO: To be removed since LevelDB is not in use
+		tcDir = c.cfg.NodeConfigDir + RubixRootDir + MainNetDir + "/"
+		if _, err := os.Stat(tcDir); os.IsNotExist(err) {
+			err := os.MkdirAll(tcDir, os.ModeDir|os.ModePerm)
+			if err != nil {
+				c.log.Error("Failed to create main net directory", "err", err)
+				return nil, err
 			}
 		}
 	}
 
-	c.didDir = c.cfg.DirPath + RubixRootDir
-	if c.testNet {
-		c.didDir = c.cfg.DirPath + RubixRootDir + TestNetDIDDir
+	if c.testnet {
+		c.cfg.CfgData.TestStorageConfig.StorageType = dbConfig.DBType
+		c.cfg.CfgData.TestStorageConfig.DBAddress = dbConfig.DBAddress
+		c.cfg.CfgData.TestStorageConfig.DBType = dbConfig.DBType
+		c.cfg.CfgData.TestStorageConfig.DBName = dbConfig.DBName
+		c.cfg.CfgData.TestStorageConfig.DBUserName = dbConfig.DBUserName
+		c.cfg.CfgData.TestStorageConfig.DBPassword = dbConfig.DBPassword
+		c.cfg.CfgData.TestStorageConfig.DBPort = dbConfig.DBPort
 
+		c.didDir = c.cfg.NodeConfigDir + RubixRootDir + TestNetDIDDir
+
+		tcDir = c.cfg.NodeConfigDir + RubixRootDir + TestNetDir + "/"
+		if _, err := os.Stat(tcDir); os.IsNotExist(err) {
+			err := os.MkdirAll(tcDir, os.ModeDir|os.ModePerm)
+			if err != nil {
+				c.log.Error("Failed to create test net directory", "err", err)
+				return nil, err
+			}
+		}
 	}
+
+	if c.localnet {
+		c.cfg.CfgData.LocalStorageConfig.StorageType = dbConfig.DBType
+		c.cfg.CfgData.LocalStorageConfig.DBAddress = dbConfig.DBAddress
+		c.cfg.CfgData.LocalStorageConfig.DBType = dbConfig.DBType
+		c.cfg.CfgData.LocalStorageConfig.DBName = dbConfig.DBName
+		c.cfg.CfgData.LocalStorageConfig.DBUserName = dbConfig.DBUserName
+		c.cfg.CfgData.LocalStorageConfig.DBPassword = dbConfig.DBPassword
+		c.cfg.CfgData.LocalStorageConfig.DBPort = dbConfig.DBPort
+
+		c.didDir = c.cfg.NodeConfigDir + RubixRootDir + LocalNetDIDDir
+
+		tcDir = c.cfg.NodeConfigDir + RubixRootDir + LocalNetDir + "/"
+		if _, err := os.Stat(tcDir); os.IsNotExist(err) {
+			err := os.MkdirAll(tcDir, os.ModeDir|os.ModePerm)
+			if err != nil {
+				c.log.Error("Failed to create local net directory", "err", err)
+				return nil, err
+			}
+		}
+	}
+
 	if _, err := os.Stat(c.didDir); os.IsNotExist(err) {
 		err := os.MkdirAll(c.didDir, os.ModeDir|os.ModePerm)
 		if err != nil {
@@ -301,137 +305,34 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 			return nil, err
 		}
 	}
-	c.arbitaryAddr = []string{"12D3KooWHwsKu3GS9rh5X5eS9RTKGFy6NcdX1bV1UHcH8sQ8WqCM.bafybmicttgw2qx4grueyytrgln35vq2hbyhznv6ks4fabeakm47u72c26u",
-		"12D3KooWQ2as3FNtvL1MKTeo7XAuBZxSv8QqobxX4AmURxyNe5mX.bafybmicro2m4kove5vsetej63xq4csobtlzchb2c34lp6dnakzkwtq2mmy",
-		"12D3KooWJUJz2ipK78LAiwhc1QUVDvSMjZNBHt4vSAeVAq6FsneA.bafybmics43ef7ldgrogzurh7vukormpgscq4um44bss6mfuopsbjorbyaq",
-		"12D3KooWC5fHUg2yzAHydgenodN52MYPKhpK4DKRfS8TSm3idSUV.bafybmif5qnkfnkkrffxvoofah3fjzkmieohjbgyte35rrjrn3goufaiykq",
-		"12D3KooWDd7c7DAVb38a9vfCFpqxh5nHbDQ4CYjMJuFfBgzpiagK.bafybmie4iynumz2v3obbtkqirxrejjoljjs3l76frvl43wgalqqgprze6q"}
 
 	c.log = log.Named("Core")
-
 	c.ipfsChan = make(chan bool)
 
 	if update {
 		c.updateConfig()
 	}
-	if _, err := os.Stat(cfg.DirPath + RubixRootDir + MainNetDir); os.IsNotExist(err) {
-		err := os.MkdirAll(cfg.DirPath+RubixRootDir+MainNetDir, os.ModeDir|os.ModePerm)
-		if err != nil {
-			c.log.Error("Failed to create main net directory", "err", err)
-			return nil, err
-		}
-	}
-	tcDir := cfg.DirPath + RubixRootDir + MainNetDir + "/"
-	if testNet {
-		if _, err := os.Stat(cfg.DirPath + RubixRootDir + TestNetDir); os.IsNotExist(err) {
-			err := os.MkdirAll(cfg.DirPath+RubixRootDir+TestNetDir, os.ModeDir|os.ModePerm)
-			if err != nil {
-				c.log.Error("Failed to create test net directory", "err", err)
-				return nil, err
-			}
-		}
-		tcDir = cfg.DirPath + RubixRootDir + TestNetDir + "/"
+
+	rubixContext := context.Background()
+
+	rubixDB, err := storage.NewRubixDB(rubixContext, dbConfig, storage.DefaultPoolOptions())
+	if err != nil {
+		return nil, fmt.Errorf("failed to define Rubix DB: %v", err)
 	}
 
-	sc := cfg.CfgData.StorageConfig
-	if c.testNet {
-		sc = cfg.CfgData.TestStorageConfig
-	}
-
-	switch sc.StorageType {
-
-	case storage.StorageDBType:
-		scfg := &econfig.Config{
-			DBName:     sc.DBName,
-			DBAddress:  sc.DBAddress,
-			DBPort:     sc.DBPort,
-			DBType:     sc.DBType,
-			DBUserName: sc.DBUserName,
-			DBPassword: sc.DBPassword,
-		}
-		c.s, err = storage.NewStorageDB(scfg)
-		if err != nil {
-			c.log.Error("Failed to create storage DB", "err", err)
-			return nil, fmt.Errorf("failed to create storage DB")
-		}
-		if c.arbitaryMode {
-			scfg.DBName = "ArbitaryDB"
-			c.as, err = storage.NewStorageDB(scfg)
-			if err != nil {
-				c.log.Error("Failed to create storage DB", "err", err)
-				return nil, fmt.Errorf("failed to create storage DB")
-			}
-		}
-		if c.fullNode {
-			fullNodeDBName := FullNodeMainNetDB
-			if c.testNet {
-				fullNodeDBName = FullNodeTestNetDB
-			}
-			fullNodeStoragecfg := &econfig.Config{
-				DBAddress: cfg.DirPath + RubixRootDir + fullNodeDBName,
-				DBType:    "Sqlite3",
-				// Other fields like DBUserName, DBPassword, etc., can be copied from sc if needed, but defaults are fine for Sqlite3.
-			}
-			c.fullNodeStorage, err = storage.NewStorageDB(fullNodeStoragecfg)
-			if err != nil {
-				c.log.Error("Failed to create full node storage DB", "err", err)
-				return nil, fmt.Errorf("failed to create full node storage DB")
-			}
-
-			// postgresql to store tokens
-			var fullNodePostgressDBName string
-			if passedPSQLdbName == "" {
-				fullNodePostgressDBName = FullNodeTokensDBName
-				if c.testNet {
-					fullNodePostgressDBName = FullNodeTestTokensDBName
-				}
-			} else {
-				fullNodePostgressDBName = passedPSQLdbName
-			}
-			fullNodeTokenStoragecfg := &econfig.Config{
-				DBAddress:  "localhost",
-				DBPort:     FullNodeTokensDBPort,
-				DBName:     fullNodePostgressDBName,
-				DBUserName: passedPSQLdbUserName,
-				DBPassword: passedPSQLdbPassword,
-				DBType:     "PostgressSQL",
-			}
-			c.fullNodeTokensDB, err = storage.NewStorageDB(fullNodeTokenStoragecfg)
-			if err != nil {
-				c.log.Error("Failed to create full node storage DB", "err", err)
-				return nil, fmt.Errorf("failed to create full node storage DB")
-			}
-		}
-
-	default:
-		c.log.Error("Unsupported DB type, please check the configuration", "type", sc.StorageType)
-		return nil, fmt.Errorf("unsupported DB type, please check the configuration")
-	}
-
-	c.w, err = wallet.InitWallet(c.s, c.fullNodeStorage, c.fullNodeTokensDB, tcDir, c.log, c.fullNode)
+	c.w, err = wallet.NewWallet(rubixContext, rubixDB, c.log)
 	if err != nil {
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
 	}
-	c.qm, err = NewQuorumManager(c.s, c.log)
+
+	c.qm, err = NewQuorumManager(rubixDB, c.log)
 	if err != nil {
 		c.log.Error("Failed to setup quorum manager", "err", err)
 		return nil, err
 	}
-	if c.arbitaryMode {
-		c.srv, err = service.NewService(c.s, c.as, c.log)
-		if err != nil {
-			c.log.Error("Failed to setup service", "err", err)
-			return nil, err
-		}
-		c.log.Info("Arbitary mode is enabled")
-	}
-	err = c.InitRubixExplorer()
-	if err != nil {
-		c.log.Error("Failed to init explorer", "err", err)
-		return nil, err
-	}
-	if c.testNet && c.defaultSetup {
+
+	if c.testnet && c.defaultSetup {
 		c.AddDefaulTestnetQuorums()
 	}
 
@@ -444,7 +345,7 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	// Initialize performance tracker
 	perfConfig := &PerformanceConfig{
 		Enabled:        true, // TODO: Make this configurable
-		DataPath:       c.cfg.DirPath,
+		DataPath:       c.cfg.NodeConfigDir,
 		RetentionHours: 24,
 		MaxFileSize:    100, // 100MB
 		DetailLevel:    "detailed",
@@ -472,12 +373,10 @@ func NewCore(cfg *config.Config, cfgFile string, encKey string, log logger.Logge
 	c.pendingTokenMonitor = NewPendingTokenMonitor(c, 5*time.Minute, 10*time.Minute)
 
 	// Wrap storage with tracking if performance tracker is enabled
-	if c.perfTracker != nil && c.perfTracker.enabled && c.s != nil {
-		c.s = NewTrackedStorage(c.s, c)
-		if c.arbitaryMode && c.as != nil {
-			c.as = NewTrackedStorage(c.as, c)
-		}
-	}
+	// TODO: update the following
+	// if c.perfTracker != nil && c.perfTracker.enabled && c.s != nil {
+	// 	c.s = NewTrackedStorage(*rubixDB, c)
+	// }
 
 	return c, nil
 }
@@ -496,7 +395,7 @@ func (c *Core) SetupCore() error {
 		return err
 	}
 	bs := c.cfg.CfgData.BootStrap
-	if c.testNet {
+	if c.testnet || c.localnet {
 		bs = c.cfg.CfgData.TestBootStrap
 	}
 	c.pm = ipfsport.NewPeerManager(c.cfg.CfgData.Ports.ReceiverPort+11, c.cfg.CfgData.Ports.ReceiverPort+10, 5000, c.ipfs, c.log, bs, c.peerID)
@@ -638,25 +537,25 @@ func (c *Core) StopCore() {
 }
 
 func (c *Core) CreateTempFolder() (string, error) {
-	folderName := c.cfg.DirPath + "temp/" + uuid.New().String()
+	folderName := c.cfg.NodeConfigDir + "temp/" + uuid.New().String()
 	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
 	return folderName, err
 }
 
 func (c *Core) CreateSCTempFolder() (string, error) {
-	folderName := c.cfg.DirPath + "SmartContract/" + uuid.New().String()
+	folderName := c.cfg.NodeConfigDir + "SmartContract/" + uuid.New().String()
 	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
 	return folderName, err
 }
 
 func (c *Core) CreateNFTTempFolder() (string, error) {
-	folderName := c.cfg.DirPath + "NFT/" + uuid.New().String()
+	folderName := c.cfg.NodeConfigDir + "NFT/" + uuid.New().String()
 	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
 	return folderName, err
 }
 
 func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
-	scFolderName := filepath.Join(c.cfg.DirPath, "SmartContract", smartContractName)
+	scFolderName := filepath.Join(c.cfg.NodeConfigDir, "SmartContract", smartContractName)
 	info, _ := os.Stat(scFolderName)
 
 	// Check if the Smart Contract Folder exists
@@ -674,7 +573,7 @@ func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (
 
 func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error) {
 
-	nftFolderName := c.cfg.DirPath + "NFT/" + nft
+	nftFolderName := c.cfg.NodeConfigDir + "NFT/" + nft
 	err := os.Rename(tempFolderPath, nftFolderName)
 	if err != nil {
 		c.log.Error("Unable to rename ", tempFolderPath, " to ", nftFolderName, "error ", err)
@@ -840,7 +739,7 @@ func (c *Core) FetchDID(did string) error {
 }
 
 func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
-	dirPath := c.cfg.DirPath + "NFT/" + nftTokenHash
+	dirPath := c.cfg.NodeConfigDir + "NFT/" + nftTokenHash
 	// Check if the directory exists
 	_, err := os.Stat(dirPath)
 	if os.IsNotExist(err) {

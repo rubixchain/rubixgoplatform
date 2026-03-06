@@ -245,14 +245,6 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIRequestSigningHash, "GET", c.requestSigningHash)
 	c.l.AddRoute(APISendFTToken, "POST", c.updateReceiverFTHandle)
 	c.l.AddRoute(APICheckPinRole, "GET", c.checkPinRole)
-	if c.arbitaryMode {
-		c.l.AddRoute(APIMapDIDArbitration, "POST", c.mapDIDArbitration)
-		c.l.AddRoute(APICheckDIDArbitration, "GET", c.chekDIDArbitration)
-		// c.l.AddRoute(APITokenArbitration, "POST", c.tokenArbitration)
-		c.l.AddRoute(APIGetTokenNumber, "POST", c.getTokenNumber)
-		c.l.AddRoute(APIGetMigratedTokenStatus, "POST", c.getMigratedTokenStatus)
-		c.l.AddRoute(APISyncDIDArbitration, "POST", c.syncDIDArbitration)
-	}
 }
 
 // calculateTokenBasedTimeout calculates timeout based on the number of tokens and workers

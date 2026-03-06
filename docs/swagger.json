@@ -1447,30 +1447,6 @@
                 }
             }
         },
-        "/api/unpledge-pow-unpledge-tokens": {
-            "post": {
-                "description": "This API will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Unpledge POW Based pledge Tokens",
-                "operationId": "unpledge-pow-unpledge-tokens",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/verify-signature": {
             "get": {
                 "description": "Verifies a signature for a given DID and signed message.",
