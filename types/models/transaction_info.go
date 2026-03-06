@@ -8,8 +8,8 @@ type TransactionInfo struct {
 	Tokens          []string              `json:"tokens"`
 	CommittedTokens []string              `json:"committedTokens"`
 	Quorums         map[string][]string   `json:"quorums"`
-	Memo            string                `json:"memo,omitempty"`
-	Data            string                `json:"data,omitempty"`
+	Memo            string                `json:"memo"`
+	Data            string                `json:"data"`
 }
 
 type QuorumSignature struct {
