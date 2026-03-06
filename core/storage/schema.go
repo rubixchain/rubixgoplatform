@@ -15,11 +15,10 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
         );
 
         CREATE TABLE IF NOT EXISTS tokenchain (
-            token_id       TEXT   NOT NULL,
-            transaction_id TEXT   NOT NULL,
-            role           TEXT   NOT NULL,
-            type           TEXT   NOT NULL,
-            position       BIGINT NOT NULL,
+            token_id       TEXT       NOT NULL,
+            transaction_id TEXT       NOT NULL,
+            role           SMALLINT   NOT NULL,
+            height         BIGINT     NOT NULL,
             created_at     TIMESTAMPTZ DEFAULT NOW(),
             updated_at     TIMESTAMPTZ DEFAULT NOW(),
             PRIMARY KEY (token_id, position)
