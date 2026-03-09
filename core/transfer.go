@@ -12,6 +12,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
@@ -23,6 +24,121 @@ type ConsensusReturns struct {
 	TxnDetails    *model.TransactionDetails
 	PledgeDetails *PledgeDetails
 	Msg           string
+}
+
+func (c *Core) InitiateTransfer(reqID string, req *models.TransferRequest) {
+	br := c.initiateTransfer(reqID, req)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
+
+func (c *Core) initiateTransfer(reqID string, req *models.TransferRequest) *model.BasicResponse {
+
+	resp := &model.BasicResponse{
+		Status: false,
+	}
+
+	initiatorDID := req.Initiator
+	nextOwnerDID := req.Owner
+
+	dc, err := c.SetupDID(reqID, initiatorDID)
+	if err != nil {
+		resp.Message = "Failed to setup DID: " + err.Error()
+		return resp
+	}
+
+	var errFetch bool
+
+	collectedRBTs, errFetch := c.fetchTokens(
+		req.HasRBT(),
+		c.w.GetRBTTokens,
+		"InitiateTransfer: Failed to get RBT for transfer: ",
+		resp,
+	)
+	if !errFetch {
+		return resp
+	}
+
+	collectedFTs, errFetch := c.fetchTokens(
+		req.HasFT(),
+		c.w.GetFTTokens,
+		"InitiateTransfer: Failed to get FT for transfer: ",
+		resp,
+	)
+	if !errFetch {
+		return resp
+	}
+
+	collectedNFTs, errFetch := c.fetchTokens(
+		req.HasNFT(),
+		c.w.GetNFTTokens,
+		"InitiateTransfer: Failed to get NFT for transfer: ",
+		resp,
+	)
+	if !errFetch {
+		return resp
+	}
+
+	collectedSmartContracts, errFetch := c.fetchTokens(
+		req.HasSmartContract(),
+		c.w.GetSmartContractTokens,
+		"InitiateTransfer: Failed to get SC for execution: ",
+		resp,
+	)
+	if !errFetch {
+		return resp
+	}
+	// Whatever implemented above are placeholder functions. These needs to be changed with proper functions which fetches the required tokens according to the set conditions
+	//TODO
+	// Need to form the TransactionTokens struct here from the info collected above.
+	// The steps would be to get the token and the previous transaction id for each of the tokens. We will get that from []models.Token, just need to write a function to fetch those
+	// Implement functions which fetches the required tokens according to the owner did from db
+	// Then we need to create a function to make this TransactionInfo struct with all the informatiosn we have.
+
+	// The api calls with the quorum
+
+	//Concern:
+	// The concern we have at the moment is if there is a smart contract execution and nft execution happening in the same transaction
+	// then we have a problem. We only have a single data field in TransactionInfo.
+
+	transacrionInfo := models.TransactionInfo{
+		Initiator: initiatorDID,
+		Owner:     nextOwnerDID,
+		Epoch:     int(st.Unix()),
+		Network:   "",
+		Tokens:    nil,
+	}
+
+	return resp
+}
+
+// This helper function will help us fetch different types of token from the db
+// Here we are passing the GETFunctions we already have for the different types of tokens.
+// This needs to be updated. The existing functions are used as placeholders for now.
+func (c *Core) fetchTokens(
+	enabled bool,
+	getTokens func() ([]models.Token, error),
+	errMsg string,
+	resp *model.BasicResponse,
+) ([]models.Token, bool) {
+
+	if !enabled {
+		return nil, true
+	}
+
+	tokens, err := getTokens()
+	if err != nil {
+		msg := errMsg + err.Error()
+		c.log.Error(msg)
+		resp.Message = msg
+		return nil, false
+	}
+
+	return tokens, true
 }
 
 func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) {

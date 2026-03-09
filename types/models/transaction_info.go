@@ -15,7 +15,7 @@ type TransactionTokens struct {
 	RBT           []*TokenInfo `json:"rbt"`
 	NFT           []*TokenInfo `json:"nft"`
 	FT            []*TokenInfo `json:"ft"`
-	SmartContract []*TokenInfo `json:"smart_contract"`
+	SmartContract []*TokenInfo `json:"smartContract"`
 }
 
 type TokenInfo struct {
@@ -32,4 +32,41 @@ type QuorumSignature struct {
 type Signature struct {
 	InitiatorSignature string            `json:"initiatorSignature"`
 	Quorums            []QuorumSignature `json:"quorums"`
+}
+
+// Request to initiate transfer
+type TransferRequest struct {
+	Initiator string       `json:"initiator"`
+	Owner     string       `json:"owner"`
+	Tokens    TransferInfo `json:"tokens"`
+	Memo      string       `json:"memo"`
+}
+
+// The struct which contains all the information of the tokens that are being transferred
+// This struct contains all the informations to facilitate transfer of multiple types of tokens via a single request
+type TransferInfo struct {
+	RBT           float64             `json:"rbt"`
+	FT            []FTInfo            `json:"ft"`
+	NFT           []NFTInfo           `json:"nft"`
+	SmartContract []SmartContractInfo `json:"smartContract"`
+}
+
+// Gave the key names as FTInfo, NFTInfo and SmartContract info for now as these are the informations which are required to perform the transfer operation
+type FTInfo struct {
+	FTName      string  `json:"ftName"`
+	NumberOfFts float64 `json:"numberOfFts"`
+	CreatorDID  string  `json:"creatorDID"`
+}
+
+type NFTInfo struct {
+	NFTId             string  `json:"nftId"`
+	Value             float64 `json:"value"`
+	Data              string  `json:"data"`
+	TransferOwnerShip bool    `json:"transferOwnerShip"`
+}
+
+type SmartContractInfo struct {
+	SmartContractId string  `json:"smartContractId"`
+	Value           float64 `json:"value"`
+	Data            string  `json:"data"`
 }
