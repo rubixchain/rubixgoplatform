@@ -38,7 +38,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             CONSTRAINT algo_id_fk FOREIGN KEY (algo_id) REFERENCES did_algo(id)
         );
 
-        CREATE TABLE IF NOT EXISTS token_status (
+        CREATE TABLE IF NOT EXISTS token_role (
             id SMALLINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
             name TEXT NOT NULL,
             is_active BOOLEAN DEFAULT TRUE
@@ -63,7 +63,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             updated_at       TIMESTAMPTZ DEFAULT NOW(),
             CONSTRAINT transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES transactions(id) DEFERRABLE INITIALLY DEFERRED,
             CONSTRAINT token_status_fk FOREIGN KEY (token_status) REFERENCES token_status(id),
-            CONSTRAINT token_type_fk FOREIGN KEY (token_type) REFERENCES token_type(id),
+            CONSTRAINT token_type_fk FOREIGN KEY (token_type) REFERENCES token_type(id)
         );
 
         CREATE INDEX IF NOT EXISTS idx_tokens_did_status ON tokens(did, token_status);
