@@ -85,8 +85,8 @@ CREATE TABLE IF NOT EXISTS tokenchain (
                 FOREIGN KEY (role) 
                 REFERENCES token_role(id)
             -- A tokenchain entry can reference a token_id that doesn't exist in tokens
-            CONSTRAINT fk_tc_token F
-                OREIGN KEY (token_id) 
+            CONSTRAINT fk_tc_token 
+                FOREIGN KEY (token_id) 
                 REFERENCES tokens(token_id) 
                 DEFERRABLE INITIALLY DEFERRED
 
