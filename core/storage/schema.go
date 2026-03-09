@@ -62,7 +62,6 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW(),
             CONSTRAINT transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES transactions(id) DEFERRABLE INITIALLY DEFERRED,
-            CONSTRAINT token_status_fk FOREIGN KEY (token_status) REFERENCES token_status(id),
             CONSTRAINT token_type_fk FOREIGN KEY (token_type) REFERENCES token_type(id)
         );
 
