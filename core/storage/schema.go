@@ -141,7 +141,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
 
 		CREATE TABLE IF NOT EXISTS requests (
 			id TEXT PRIMARY KEY,
-			transaction_id TEXT NOT NULL,
+			transaction_id TEXT,
 			status SMALLINT NOT NULL,
 			created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()

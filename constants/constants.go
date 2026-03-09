@@ -69,3 +69,11 @@ const (
 	TokenStatus_Burnt = 2
 	TokenStatus_Committed = 3
 )
+
+// Requests Status
+const (
+	RequestStatus_Initated = 0
+	RequestStatus_InProgress = 1
+	RequestStatus_Completed = 2
+	RequestStatus_Unknown = 3
+)

@@ -135,9 +135,9 @@ type QuorumManager struct {
 }
 
 type Request struct {
-	ID            string    `db:"id"`
-	TransactionID string    `db:"transaction_id"`
-	Status        int16     `db:"status"`
-	CreatedAt     time.Time `db:"created_at"`
-	UpdatedAt     time.Time `db:"updated_at"`
+	ID            string      `db:"id"`
+	TransactionID pgtype.Text `db:"transaction_id"`
+	Status        int16       `db:"status"`
+	CreatedAt     time.Time   `db:"created_at"`
+	UpdatedAt     time.Time   `db:"updated_at"`
 }
