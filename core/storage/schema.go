@@ -56,8 +56,6 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             token_value      NUMERIC NOT NULL,
             token_status     SMALLINT NOT NULL,
             did              TEXT NOT NULL,
-            data             TEXT NOT NULL,
-            memo             TEXT,
             transaction_id   TEXT NOT NULL,
             token_state_hash TEXT NOT NULL,
             token_type       SMALLINT NOT NULL,

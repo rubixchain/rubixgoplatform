@@ -36,3 +36,36 @@ const (
 	NetworkMode_Testnet string = "testnet"
 	NetworkMode_Local   string = "local"
 )
+
+// Supported crypto algorithms for DID (Address)
+const DidAlgo_SECP256K1 = "secp256k1"
+
+// List of Token Roles
+const (
+	TokenRole_Mint = "mint"
+	TokenRole_Transfer = "transfer"
+	TokenRole_Execute = "execute"
+	TokenRole_Deploy = "deploy"
+	TokenRole_Burn = "burn"
+	TokenRole_Commit = "commit" // TODO: need a better name for it
+	TokenRole_Uncommit = "uncommit"
+	TokenRole_Pledge = "pledge"
+	TokenRole_Unpledge = "unpledge"
+)
+
+// List of Token Types
+const (
+	TokenType_RBT = "rbt"
+	TokenType_NFT = "nft"
+	TokenType_FT = "ft"
+	TokenType_SmartContract = "smart_contract"
+)
+
+
+// Token Statuses
+const (
+	TokenStatus_Free = 0
+	TokenStatus_Locked = 1
+	TokenStatus_Burnt = 2
+	TokenStatus_Committed = 3
+)

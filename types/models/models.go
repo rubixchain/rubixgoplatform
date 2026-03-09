@@ -55,8 +55,6 @@ type Token struct {
 	TokenValue     pgtype.Numeric `db:"token_value"`
 	TokenStatus    int16          `db:"token_status"`
 	DID            string         `db:"did"`
-	Data           string         `db:"data"`
-	Memo           pgtype.Text    `db:"memo"`
 	TransactionID  string         `db:"transaction_id"`
 	TokenStateHash string         `db:"token_state_hash"`
 	TokenType      int16          `db:"token_type"`
