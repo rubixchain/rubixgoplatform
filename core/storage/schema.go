@@ -14,19 +14,9 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             updated_at  TIMESTAMPTZ DEFAULT NOW()
         );
 
-        CREATE TABLE IF NOT EXISTS tokenchain (
-            token_id       TEXT       NOT NULL,
-            transaction_id TEXT       NOT NULL,
-            role           SMALLINT   NOT NULL,
-            height         BIGINT     NOT NULL,
-            created_at     TIMESTAMPTZ DEFAULT NOW(),
-            updated_at     TIMESTAMPTZ DEFAULT NOW(),
-            PRIMARY KEY (token_id, height)
-        );
-
         CREATE TABLE IF NOT EXISTS did_algo (
             id SMALLINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-            name TEXT NOT NULL,
+            name TEXT NOT NULL UNIQUE,
             is_active BOOLEAN DEFAULT TRUE
         );
 
@@ -35,18 +25,20 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             peer_id    TEXT,
             local       BOOLEAN DEFAULT TRUE,
             algo_id     SMALLINT,
-            CONSTRAINT algo_id_fk FOREIGN KEY (algo_id) REFERENCES did_algo(id)
+            CONSTRAINT algo_id_fk 
+            FOREIGN KEY (algo_id) 
+            REFERENCES did_algo(id)
         );
 
         CREATE TABLE IF NOT EXISTS token_role (
             id SMALLINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-            name TEXT NOT NULL,
+            name TEXT NOT NULL UNIQUE,
             is_active BOOLEAN DEFAULT TRUE
         );
 
         CREATE TABLE IF NOT EXISTS token_type (
             id SMALLINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-            name TEXT NOT NULL,
+            name TEXT NOT NULL UNIQUE,
             is_active BOOLEAN DEFAULT TRUE
         );
 
@@ -61,11 +53,45 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             token_type       SMALLINT NOT NULL,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW(),
-            CONSTRAINT transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES transactions(id) DEFERRABLE INITIALLY DEFERRED,
-            CONSTRAINT token_type_fk FOREIGN KEY (token_type) REFERENCES token_type(id)
+            CONSTRAINT tokens_did_fk 
+            FOREIGN KEY (did) 
+            REFERENCES dids(did),
+            CONSTRAINT transaction_id_fk 
+            FOREIGN KEY (transaction_id) 
+            REFERENCES transactions(id) 
+            DEFERRABLE INITIALLY DEFERRED,
+            CONSTRAINT token_type_fk 
+            FOREIGN KEY (token_type) 
+            REFERENCES token_type(id)
         );
 
+        -- moving tokenchain below so that all referenced tables are defined before it. tokenchain has FKs to transactions, token_role, and tokens.
         CREATE INDEX IF NOT EXISTS idx_tokens_did_status ON tokens(did, token_status);
+CREATE TABLE IF NOT EXISTS tokenchain (
+            token_id       TEXT       NOT NULL,
+            transaction_id TEXT       NOT NULL,
+            role           SMALLINT   NOT NULL,
+            height         BIGINT     NOT NULL,
+            created_at     TIMESTAMPTZ DEFAULT NOW(),
+            updated_at     TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (token_id, height),
+            -- No constraint prevents orphaned tokenchain entries pointing to non-existent transactions
+            CONSTRAINT fk_tc_tx 
+                FOREIGN KEY (transaction_id) 
+                REFERENCES transactions(id) 
+                DEFERRABLE INITIALLY DEFERRED
+            -- role is SMALLINT but has no FK to token_role(id). Invalid role IDs can be inserted silently.
+            CONSTRAINT fk_tc_role 
+                FOREIGN KEY (role) 
+                REFERENCES token_role(id)
+            -- A tokenchain entry can reference a token_id that doesn't exist in tokens
+            CONSTRAINT fk_tc_token F
+                OREIGN KEY (token_id) 
+                REFERENCES tokens(token_id) 
+                DEFERRABLE INITIALLY DEFERRED
+
+        );
+
 
         CREATE TABLE IF NOT EXISTS token_provider_map (
             token          TEXT PRIMARY KEY,
@@ -82,7 +108,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
 
         CREATE TABLE IF NOT EXISTS unpledge_sequence_info (
             tx_id          TEXT PRIMARY KEY,
-            pledge_tokens  TEXT,
+            pledge_tokens  TEXT, -- might have to move to somthing like an array
             epoch          INTEGER,
             quorum_did     TEXT,
             created_at     TIMESTAMPTZ DEFAULT NOW(),
@@ -131,6 +157,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             transaction_id   TEXT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW()
+
         );
 
         CREATE TABLE IF NOT EXISTS quorum_manager (
@@ -141,7 +168,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
 
 		CREATE TABLE IF NOT EXISTS requests (
 			id TEXT PRIMARY KEY,
-			transaction_id TEXT     ,
+			transaction_id TEXT,
 			status SMALLINT NOT NULL,
 			created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
