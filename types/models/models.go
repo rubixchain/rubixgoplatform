@@ -37,7 +37,7 @@ type DID struct {
 	AlgoID pgtype.Int2 `db:"algo_id"`
 }
 
-type TokenStatus struct {
+type TokenRole struct {
 	ID       int16  `db:"id"`
 	Name     string `db:"name"`
 	IsActive bool   `db:"is_active"`

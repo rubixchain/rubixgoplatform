@@ -21,7 +21,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             height         BIGINT     NOT NULL,
             created_at     TIMESTAMPTZ DEFAULT NOW(),
             updated_at     TIMESTAMPTZ DEFAULT NOW(),
-            PRIMARY KEY (token_id, position)
+            PRIMARY KEY (token_id, height)
         );
 
         CREATE TABLE IF NOT EXISTS did_algo (
@@ -53,19 +53,20 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
         CREATE TABLE IF NOT EXISTS tokens (
             token_id         TEXT PRIMARY KEY,
             parent_token_id  TEXT REFERENCES tokens(token_id) ON DELETE SET NULL,
-            token_value      NUMERIC NOT NULL,
-            token_status     SMALLINT NOT NULL,
+            token_value      NUMERIC NOT NULL CHECK (token_value >= 0),
+            token_status     SMALLINT NOT NULL DEFAULT 99,
             did              TEXT NOT NULL,
             transaction_id   TEXT NOT NULL,
             token_state_hash TEXT NOT NULL,
             token_type       SMALLINT NOT NULL,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW(),
-            CONSTRAINT did_fk FOREIGN KEY (did) REFERENCES dids(did),
-            CONSTRAINT transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES transactions(id),
+            CONSTRAINT transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES transactions(id) DEFERRABLE INITIALLY DEFERRED,
             CONSTRAINT token_status_fk FOREIGN KEY (token_status) REFERENCES token_status(id),
-            CONSTRAINT token_type_fk FOREIGN KEY (token_type) REFERENCES token_type(id)
+            CONSTRAINT token_type_fk FOREIGN KEY (token_type) REFERENCES token_type(id),
         );
+
+        CREATE INDEX IF NOT EXISTS idx_tokens_did_status ON tokens(did, token_status);
 
         CREATE TABLE IF NOT EXISTS token_provider_map (
             token          TEXT PRIMARY KEY,
@@ -141,7 +142,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
 
 		CREATE TABLE IF NOT EXISTS requests (
 			id TEXT PRIMARY KEY,
-			transaction_id TEXT,
+			transaction_id TEXT     ,
 			status SMALLINT NOT NULL,
 			created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
