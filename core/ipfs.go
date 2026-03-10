@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"runtime"
 	"strings"
 	"time"
@@ -18,7 +19,9 @@ import (
 
 const (
 	IPFSConfigFilename string = "config"
-	SwarmKeyFilename   string = "swarm.key"
+	MainnetSwarmKeyFilename   string = "swarm.key"
+	TestnetSwarmKeyFilename string = "testnetswarm.key"
+	LocalnetSwarmKeyFilename string  = "localnetswarm.key"
 )
 
 type DHTAddr struct {
@@ -48,42 +51,52 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			return err
 		}
 		time.Sleep(2 * time.Second)
-		ipfsConfigFile := ipfsdir + "/" + IPFSConfigFilename
+		ipfsConfigFile := path.Join(ipfsdir, IPFSConfigFilename)
 		configData, err := ioutil.ReadFile(ipfsConfigFile)
 		if err != nil {
 			c.log.Error("failed to read ipfs config file", "err", err)
 			return err
 		}
+
 		// Replace ports more precisely to avoid unintended replacements
-		swarmPort := fmt.Sprintf("%d", c.cfg.CfgData.Ports.SwarmPort)
+		swarmPort := fmt.Sprintf("%d", c.cfg.PortConfig.SwarmPort)
 		configData = []byte(strings.Replace(string(configData), "/tcp/4001", "/tcp/"+swarmPort, -1))
 
-		apiPort := fmt.Sprintf("%d", c.cfg.CfgData.Ports.IPFSPort)
+		apiPort := fmt.Sprintf("%d", c.cfg.PortConfig.IPFSPort)
 		configData = []byte(strings.Replace(string(configData), "/tcp/5001", "/tcp/"+apiPort, -1))
 
-		gatewayPort := fmt.Sprintf("%d", c.cfg.CfgData.Ports.IPFSAPIPort)
+		gatewayPort := fmt.Sprintf("%d", c.cfg.PortConfig.IPFSAPIPort)
 		configData = []byte(strings.Replace(string(configData), "/tcp/8080", "/tcp/"+gatewayPort, -1))
+		
 		f, err := os.OpenFile(ipfsConfigFile,
 			os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			return err
 		}
+
 		_, err = f.WriteString(string(configData))
 		if err != nil {
 			return err
 		}
 		f.Close()
-		if c.testnet || c.localnet {
-			_, err = util.Filecopy(c.testNetKey, ipfsdir+"/"+SwarmKeyFilename)
+
+		destSwarmKeyLocation := path.Join(ipfsdir, "swarm.key")
+		if c.testnet {
+			_, err = util.Filecopy(TestnetSwarmKeyFilename, destSwarmKeyLocation)
+			time.Sleep(2 * time.Second)
+		} else if c.localnet {
+			_, err = util.Filecopy(LocalnetSwarmKeyFilename, destSwarmKeyLocation)
 		} else {
-			_, err = util.Filecopy(SwarmKeyFilename, ipfsdir+"/"+SwarmKeyFilename)
+			_, err = util.Filecopy(MainnetSwarmKeyFilename, destSwarmKeyLocation)
 		}
 		if err != nil {
+			c.log.Error(fmt.Sprintf("failed to copy swarm key file to destination, err: %v", err))
 			return err
 		}
+
 		time.Sleep(1 * time.Second)
 		c.runIPFS()
-		c.ipfs = ipfsnode.NewShell(fmt.Sprintf("localhost:%d", c.cfg.CfgData.Ports.IPFSPort))
+		c.ipfs = ipfsnode.NewShell(fmt.Sprintf("localhost:%d", c.cfg.PortConfig.IPFSPort))
 		if c.ipfs == nil {
 			c.log.Error("failed create ipfs shell")
 			return fmt.Errorf("failed create ipfs shell")
@@ -93,10 +106,13 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			c.log.Error("unable to remove bootstrap", "err", err)
 			return err
 		}
-		if c.testnet || c.localnet {
-			_, err = c.ipfs.BootstrapAdd(c.cfg.CfgData.TestBootStrap)
+
+		if c.testnet {
+			_, err = c.ipfs.BootstrapAdd(c.cfg.TestnetBootstrap)
+		} else if c.localnet {
+			_, err = c.ipfs.BootstrapAdd(c.cfg.LocalnetBootStrap)
 		} else {
-			_, err = c.ipfs.BootstrapAdd(c.cfg.CfgData.BootStrap)
+			_, err = c.ipfs.BootstrapAdd(c.cfg.MainnetBootstrap)
 		}
 
 		if err != nil {
@@ -113,14 +129,17 @@ func (c *Core) initIPFS(ipfsdir string) error {
 		c.log.Info("IPFS Initialized")
 		return nil
 	} else {
-		if c.testnet || c.localnet {
-			_, err = util.Filecopy(c.testNetKey, ipfsdir+"/"+SwarmKeyFilename)
+		destSwarmKeyLocation := path.Join(ipfsdir, "swarm.key")
+		if c.testnet {
+			_, err = util.Filecopy(TestnetSwarmKeyFilename, destSwarmKeyLocation)
 			time.Sleep(2 * time.Second)
+		} else if c.localnet {
+			_, err = util.Filecopy(LocalnetSwarmKeyFilename, destSwarmKeyLocation)
 		} else {
-			_, err = util.Filecopy(SwarmKeyFilename, ipfsdir+"/"+SwarmKeyFilename)
+			_, err = util.Filecopy(MainnetSwarmKeyFilename, destSwarmKeyLocation)
 		}
 		if err != nil {
-			c.log.Error("failed to copy the test net key", "err", err)
+			c.log.Error(fmt.Sprintf("failed to copy swarm key file to destination, err: %v", err))
 			return err
 		}
 	}
@@ -168,7 +187,7 @@ func (c *Core) runIPFS() {
 	// Store the process PID
 	if cmd.Process != nil {
 		c.ipfsPID = cmd.Process.Pid
-		c.log.Info("IPFS daemon started", "pid", c.ipfsPID, "repo", c.cfg.NodeConfigDir+".ipfs")
+		c.log.Info("IPFS daemon started", "pid", c.ipfsPID, "repo", path.Join(c.cfg.NodeDir, ".ipfs"))
 	}
 
 	go func() {
@@ -247,9 +266,11 @@ func (c *Core) runIPFS() {
 
 // RunIPFS will run the IPFS daemon
 func (c *Core) RunIPFS() error {
-	os.Setenv("IPFS_PATH", c.cfg.NodeConfigDir+".ipfs")
+	ipfsDir := path.Join(c.cfg.NodeDir, ".ipfs")
+	os.Setenv("IPFS_PATH", ipfsDir)
 	os.Setenv("LIBP2P_FORCE_PNET", "1")
-	err := c.initIPFS(c.cfg.NodeConfigDir + ".ipfs")
+
+	err := c.initIPFS(ipfsDir)
 	if err != nil {
 		c.log.Error("failed to initialize IPFS", "err", err)
 		return err
@@ -260,7 +281,7 @@ func (c *Core) RunIPFS() error {
 	// Wait for IPFS daemon to be ready
 	time.Sleep(5 * time.Second)
 
-	c.ipfs = ipfsnode.NewShell(fmt.Sprintf("localhost:%d", c.cfg.CfgData.Ports.IPFSPort))
+	c.ipfs = ipfsnode.NewShell(fmt.Sprintf("localhost:%d", c.cfg.PortConfig.IPFSPort))
 
 	if c.ipfs == nil {
 		c.log.Error("failed create ipfs shell")
@@ -351,38 +372,53 @@ func (c *Core) stopIPFS() {
 }
 
 func (c *Core) AddBootStrap(peers []string) error {
-	if c.testnet || c.localnet {
+	if c.mainnet {
 		for _, p := range peers {
 			alreadyExists := false
-			for _, existing := range c.cfg.CfgData.TestBootStrap {
+			for _, existing := range c.cfg.MainnetBootstrap {
 				if existing == p {
 					alreadyExists = true
 					break
 				}
 			}
 			if !alreadyExists {
-				c.cfg.CfgData.TestBootStrap = append(c.cfg.CfgData.TestBootStrap, p)
+				c.cfg.MainnetBootstrap = append(c.cfg.MainnetBootstrap, peers...)
 			}
 		}
-	} else {
+	}
+
+
+	if c.testnet {
 		for _, p := range peers {
 			alreadyExists := false
-			for _, existing := range c.cfg.CfgData.BootStrap {
+			for _, existing := range c.cfg.TestnetBootstrap {
 				if existing == p {
 					alreadyExists = true
 					break
 				}
 			}
 			if !alreadyExists {
-				c.cfg.CfgData.BootStrap = append(c.cfg.CfgData.BootStrap, peers...)
+				c.cfg.TestnetBootstrap = append(c.cfg.TestnetBootstrap, p)
+			}
+		}
+	} 
+
+	if c.localnet {
+		for _, p := range peers {
+			alreadyExists := false
+			for _, existing := range c.cfg.LocalnetBootStrap {
+				if existing == p {
+					alreadyExists = true
+					break
+				}
+			}
+			if !alreadyExists {
+				c.cfg.LocalnetBootStrap = append(c.cfg.LocalnetBootStrap, p)
 			}
 		}
 	}
-	err := c.updateConfig()
-	if err != nil {
-		return err
-	}
-	_, err = c.ipfsOps.BootstrapAdd(peers)
+	
+	_, err := c.ipfsOps.BootstrapAdd(peers)
 	return err
 }
 
@@ -391,7 +427,7 @@ func (c *Core) RemoveBootStrap(peers []string) error {
 	for _, peer := range peers {
 		newitems := []string{}
 		update := false
-		for _, i := range c.cfg.CfgData.BootStrap {
+		for _, i := range c.cfg.MainnetBootstrap {
 			if i != peer {
 				newitems = append(newitems, i)
 			} else {
@@ -399,21 +435,17 @@ func (c *Core) RemoveBootStrap(peers []string) error {
 			}
 		}
 		if update {
-			c.cfg.CfgData.BootStrap = newitems
+			c.cfg.MainnetBootstrap = newitems
 			updated = true
 		}
 	}
 	if updated {
-		err := c.updateConfig()
+		_, err := c.ipfsOps.BootstrapRmAll()
 		if err != nil {
 			return err
 		}
-		_, err = c.ipfsOps.BootstrapRmAll()
-		if err != nil {
-			return err
-		}
-		if len(c.cfg.CfgData.BootStrap) != 0 {
-			_, err = c.ipfsOps.BootstrapAdd(c.cfg.CfgData.BootStrap)
+		if len(c.cfg.MainnetBootstrap) != 0 {
+			_, err = c.ipfsOps.BootstrapAdd(c.cfg.MainnetBootstrap)
 		}
 		return err
 	}
@@ -421,12 +453,8 @@ func (c *Core) RemoveBootStrap(peers []string) error {
 }
 
 func (c *Core) RemoveAllBootStrap() error {
-	c.cfg.CfgData.BootStrap = make([]string, 0)
-	err := c.updateConfig()
-	if err != nil {
-		return err
-	}
-	_, err = c.ipfsOps.BootstrapRmAll()
+	c.cfg.MainnetBootstrap = make([]string, 0)
+	_, err := c.ipfsOps.BootstrapRmAll()
 	if err != nil {
 		return err
 	}
@@ -434,10 +462,15 @@ func (c *Core) RemoveAllBootStrap() error {
 }
 
 func (c *Core) GetAllBootStrap() []string {
-	if c.testnet || c.localnet {
-		return c.cfg.CfgData.TestBootStrap
+	if c.localnet {
+		return c.cfg.LocalnetBootStrap
 	}
-	return c.cfg.CfgData.BootStrap
+
+	if c.testnet {
+		return c.cfg.TestnetBootstrap
+	}
+
+	return c.cfg.MainnetBootstrap
 }
 
 func (c *Core) GetDHTddrs(cid string) ([]string, error) {
