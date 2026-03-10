@@ -66,4 +66,13 @@ const (
 	TokenStatus_Locked    = 1
 	TokenStatus_Burnt     = 2
 	TokenStatus_Committed = 3
+	TokenStatus_Seed      = 99
+)
+
+// Requests Status
+const (
+	RequestStatus_Initated   = 0
+	RequestStatus_InProgress = 1
+	RequestStatus_Completed  = 2
+	RequestStatus_Unknown    = 3
 )

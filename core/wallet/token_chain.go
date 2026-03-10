@@ -10,7 +10,7 @@ import (
 func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT token_id, transaction_id, role, height, created_at, updated_at
-		 FROM tokenchain WHERE token_id = $1 ORDER BY position`, tokenID,
+		 FROM tokenchain WHERE token_id = $1 ORDER BY height`, tokenID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GetTokenChainByTokenID: %w", err)
@@ -31,7 +31,7 @@ func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, er
 
 func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.Transactions, int16, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
-		`SELECT transaction_id, role FROM tokenchain WHERE token_id = $1 ORDER BY position DESC LIMIT 1`, tokenID,
+		`SELECT transaction_id, role FROM tokenchain WHERE token_id = $1 ORDER BY height DESC LIMIT 1`, tokenID,
 	)
 
 	var txID string
@@ -47,7 +47,7 @@ func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.T
 	if err != nil {
 		return nil, -1, fmt.Errorf("GetLatestTransactionByTokenID GetTransactionByID: %w", err)
 	}
-	
+
 	return tx, tokenRoleInTx, nil
 }
 
@@ -63,8 +63,8 @@ func (w *Wallet) AddTokenChainEntry(entry *models.TokenChain) error {
 }
 
 func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*models.Transactions, int16, error) {
-	row := w.db.Pool().QueryRow(w.Ctx,`
-		SELECT transaction_id FROM tokenchain WHERE token_id = $1 AND height = $2 
+	row := w.db.Pool().QueryRow(w.Ctx, `
+		SELECT transaction_id,role FROM tokenchain WHERE token_id = $1 AND height = $2 
 		ORDER BY created_at DESC LIMIT 1`, tokenID, height,
 	)
 	var txID string
