@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -38,13 +37,6 @@ func NewShutdownManager(core *Core) *ShutdownManager {
 
 	// Define shutdown steps in order
 	sm.shutdownSteps = []ShutdownStep{
-		{
-			Name: "Shutdown Explorer Notifications",
-			Function: func() error {
-				return wallet.ShutdownExplorerNotifications()
-			},
-			Timeout: 30 * time.Second,
-		},
 		{
 			Name: "Stop IPFS Scalability Manager",
 			Function: func() error {

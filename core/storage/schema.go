@@ -51,6 +51,8 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             transaction_id   TEXT NOT NULL,
             token_state_hash TEXT NOT NULL,
             token_type       SMALLINT NOT NULL,
+            latest_position BIGINT NOT NULL DEFAULT 0,
+            latest_role SMALLINT
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW(),
             CONSTRAINT tokens_did_fk 
@@ -64,9 +66,10 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             FOREIGN KEY (token_type) 
             REFERENCES token_type(id)
         );
+        CREATE INDEX IF NOT EXISTS idx_tokens_did_status ON tokens(did, token_status);
+
 
         -- moving tokenchain below so that all referenced tables are defined before it. tokenchain has FKs to transactions, token_role, and tokens.
-        CREATE INDEX IF NOT EXISTS idx_tokens_did_status ON tokens(did, token_status);
 CREATE TABLE IF NOT EXISTS tokenchain (
             token_id       TEXT       NOT NULL,
             transaction_id TEXT       NOT NULL,
@@ -79,11 +82,11 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             CONSTRAINT fk_tc_tx 
                 FOREIGN KEY (transaction_id) 
                 REFERENCES transactions(id) 
-                DEFERRABLE INITIALLY DEFERRED
+                DEFERRABLE INITIALLY DEFERRED,
             -- role is SMALLINT but has no FK to token_role(id). Invalid role IDs can be inserted silently.
             CONSTRAINT fk_tc_role 
                 FOREIGN KEY (role) 
-                REFERENCES token_role(id)
+                REFERENCES token_role(id),
             -- A tokenchain entry can reference a token_id that doesn't exist in tokens
             CONSTRAINT fk_tc_token 
                 FOREIGN KEY (token_id) 
