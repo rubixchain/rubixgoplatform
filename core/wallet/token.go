@@ -28,8 +28,8 @@ func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, error) {
 		`SELECT * FROM tokens WHERE token_type = (
 			SELECT id
 			FROM token_type
-			WHERE name = $1
-		) AND did = $2
+			WHERE name = $1 
+		) AND did = $2 AND token_status = 0
 		`, constants.TokenType_RBT, ownerDid,
 	)
 	if err != nil {
@@ -40,9 +40,9 @@ func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, error) {
 	for rows.Next() {
 		var freeToken models.Token
 		err := rows.Scan(
-			&freeToken.TokenID, &freeToken.ParentTokenID, &freeToken.TokenValue, 
+			&freeToken.TokenID, &freeToken.ParentTokenID, &freeToken.TokenValue, &freeToken.TokenStatus,
 			&freeToken.DID, &freeToken.TransactionID, &freeToken.TokenStateHash, &freeToken.TokenType,
-		 	&freeToken.CreatedAt, &freeToken.UpdatedAt,
+			&freeToken.CreatedAt, &freeToken.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -76,9 +76,10 @@ func (w *Wallet) queryTokensByType(tokenType string) ([]models.Token, error) {
 	for rows.Next() {
 		var token models.Token
 		err := rows.Scan(
-			&token.TokenID, &token.ParentTokenID, &token.TokenValue, 
+			&token.TokenID, &token.ParentTokenID, &token.TokenValue,
+			&token.TokenStatus, //missed to add token status. expecting 10 but only sharing 9. resolved
 			&token.DID, &token.TransactionID, &token.TokenStateHash, &token.TokenType,
-		 	&token.CreatedAt, &token.UpdatedAt,
+			&token.CreatedAt, &token.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("GetRBTTokens: error occured while scanning rows: %v", err)

@@ -60,7 +60,6 @@ func (w *Wallet) GetAllTransactions() ([]models.Transactions, error) {
 	return transactions, nil
 }
 
-
 // GetAllTransactions retrieves all transactions with optional limit and offset.
 func (w *Wallet) GetAllTransactionsByOffset(limit, offset int) ([]models.Transactions, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
@@ -84,4 +83,3 @@ func (w *Wallet) GetAllTransactionsByOffset(limit, offset int) ([]models.Transac
 	}
 	return transactions, nil
 }
-
