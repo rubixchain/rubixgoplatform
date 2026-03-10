@@ -75,3 +75,13 @@ type SmartContractInfo struct {
 	Value           float64 `json:"value"`
 	Data            string  `json:"data"`
 }
+
+type PledgeTokenRequest struct {
+	ReferenceId string `json:"referenceId"`
+	TransactionValue float64 `json:"transactionValue"`
+}
+
+type PledgeTokenResponse struct {
+	ReferenceId string `json:"referenceId"`
+	PledgeTokens []TokenInfo `json:"pledgeTokens"`
+}
