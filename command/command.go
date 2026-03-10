@@ -23,7 +23,6 @@ import (
 	_ "github.com/rubixchain/rubixgoplatform/docs"
 	"github.com/rubixchain/rubixgoplatform/server"
 	"github.com/rubixchain/rubixgoplatform/types"
-	"github.com/rubixchain/rubixgoplatform/wrapper/apiconfig"
 	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -55,7 +54,6 @@ const (
 	GenerateTestRBTCmd             string = "generatetestrbt"
 	TransferRBTCmd                 string = "transferrbt"
 	GetAccountInfoCmd              string = "getaccountinfo"
-	SetupServiceCmd                string = "setupservice"
 	DumpTokenChainCmd              string = "dumptokenchain"
 	DecodeTokenChainCmd            string = "decodetokenchain"
 	RegsiterDIDCmd                 string = "registerdid"
@@ -117,6 +115,7 @@ const (
 	FixFTCreatorCmd                string = "fix-ft-creator"
 	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
 	RemoveStaleDIDCmd              string = "removedid"
+	InitCmd                        string = "init"
 )
 
 var commands = []string{VersionCmd,
@@ -136,7 +135,6 @@ var commands = []string{VersionCmd,
 	GenerateTestRBTCmd,
 	TransferRBTCmd,
 	GetAccountInfoCmd,
-	SetupServiceCmd,
 	DumpTokenChainCmd,
 	DecodeTokenChainCmd,
 	RegsiterDIDCmd,
@@ -264,13 +262,13 @@ var commandsHelp = []string{"To get tool version",
 }
 
 type Command struct {
-	cfg                          config.Config
+	cfg                          types.RubixConfig
 	c                            *client.Client
 	sc                           *contract.Contract
 	encKey                       string
 	start                        bool
 	node                         uint
-	nodeConfigPath                       string
+	nodeConfigPath               string
 	logFile                      string
 	logLevel                     string
 	cfgFile                      string
@@ -387,82 +385,82 @@ func showHelp() {
 }
 
 // backupDatabase creates a timestamped backup of the database
-func (cmd *Command) backupDatabase() error {
-	// Determine database path based on config
-	var dbPath string
-	if cmd.cfg.CfgData.StorageConfig.DBType == "sqlite3" || cmd.cfg.CfgData.StorageConfig.DBType == "" {
-		// For SQLite, DBAddress contains the file path
-		dbPath = cmd.cfg.CfgData.StorageConfig.DBAddress
-		if dbPath == "" {
-			// Default SQLite database path
-			dbPath = filepath.Join(cmd.nodeConfigPath, "rubixdata.db")
-		}
-	} else {
-		// For other database types, we can't do file-based backup
-		cmd.log.Info("Database backup is only supported for SQLite databases")
-		return nil
-	}
+// func (cmd *Command) backupDatabase() error {
+// 	// Determine database path based on config
+// 	var dbPath string
+// 	if cmd.cfg.CfgData.StorageConfig.DBType == "sqlite3" || cmd.cfg.CfgData.StorageConfig.DBType == "" {
+// 		// For SQLite, DBAddress contains the file path
+// 		dbPath = cmd.cfg.CfgData.StorageConfig.DBAddress
+// 		if dbPath == "" {
+// 			// Default SQLite database path
+// 			dbPath = filepath.Join(cmd.nodeConfigPath, "rubixdata.db")
+// 		}
+// 	} else {
+// 		// For other database types, we can't do file-based backup
+// 		cmd.log.Info("Database backup is only supported for SQLite databases")
+// 		return nil
+// 	}
 
-	// Check if database file exists
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		cmd.log.Info("No database file found to backup", "path", dbPath)
-		return nil
-	}
+// 	// Check if database file exists
+// 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+// 		cmd.log.Info("No database file found to backup", "path", dbPath)
+// 		return nil
+// 	}
 
-	// Create backup directory
-	backupDir := filepath.Join(cmd.nodeConfigPath, "db_backups")
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
-		return fmt.Errorf("failed to create backup directory: %w", err)
-	}
+// 	// Create backup directory
+// 	backupDir := filepath.Join(cmd.nodeConfigPath, "db_backups")
+// 	if err := os.MkdirAll(backupDir, 0755); err != nil {
+// 		return fmt.Errorf("failed to create backup directory: %w", err)
+// 	}
 
-	// Generate backup filename with timestamp
-	timestamp := time.Now().Format("20060102_150405")
-	backupFileName := fmt.Sprintf("rubixdata_backup_%s.db", timestamp)
-	backupPath := filepath.Join(backupDir, backupFileName)
+// 	// Generate backup filename with timestamp
+// 	timestamp := time.Now().Format("20060102_150405")
+// 	backupFileName := fmt.Sprintf("rubixdata_backup_%s.db", timestamp)
+// 	backupPath := filepath.Join(backupDir, backupFileName)
 
-	// Copy database file
-	sourceFile, err := os.Open(dbPath)
-	if err != nil {
-		return fmt.Errorf("failed to open source database: %w", err)
-	}
-	defer sourceFile.Close()
+// 	// Copy database file
+// 	sourceFile, err := os.Open(dbPath)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to open source database: %w", err)
+// 	}
+// 	defer sourceFile.Close()
 
-	destFile, err := os.Create(backupPath)
-	if err != nil {
-		return fmt.Errorf("failed to create backup file: %w", err)
-	}
-	defer destFile.Close()
+// 	destFile, err := os.Create(backupPath)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create backup file: %w", err)
+// 	}
+// 	defer destFile.Close()
 
-	// Copy the file
-	_, err = io.Copy(destFile, sourceFile)
-	if err != nil {
-		return fmt.Errorf("failed to copy database: %w", err)
-	}
+// 	// Copy the file
+// 	_, err = io.Copy(destFile, sourceFile)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to copy database: %w", err)
+// 	}
 
-	// Also backup WAL and SHM files if they exist (for SQLite WAL mode)
-	walPath := dbPath + "-wal"
-	if _, err := os.Stat(walPath); err == nil {
-		if err := cmd.copyFile(walPath, backupPath+"-wal"); err != nil {
-			cmd.log.Warn("Failed to backup WAL file", "err", err)
-		}
-	}
+// 	// Also backup WAL and SHM files if they exist (for SQLite WAL mode)
+// 	walPath := dbPath + "-wal"
+// 	if _, err := os.Stat(walPath); err == nil {
+// 		if err := cmd.copyFile(walPath, backupPath+"-wal"); err != nil {
+// 			cmd.log.Warn("Failed to backup WAL file", "err", err)
+// 		}
+// 	}
 
-	shmPath := dbPath + "-shm"
-	if _, err := os.Stat(shmPath); err == nil {
-		if err := cmd.copyFile(shmPath, backupPath+"-shm"); err != nil {
-			cmd.log.Warn("Failed to backup SHM file", "err", err)
-		}
-	}
+// 	shmPath := dbPath + "-shm"
+// 	if _, err := os.Stat(shmPath); err == nil {
+// 		if err := cmd.copyFile(shmPath, backupPath+"-shm"); err != nil {
+// 			cmd.log.Warn("Failed to backup SHM file", "err", err)
+// 		}
+// 	}
 
-	cmd.log.Info("Database backup completed successfully", "backup_path", backupPath)
+// 	cmd.log.Info("Database backup completed successfully", "backup_path", backupPath)
 
-	// Clean up old backups (keep only last 10)
-	if err := cmd.cleanupOldBackups(backupDir); err != nil {
-		cmd.log.Warn("Failed to cleanup old backups", "err", err)
-	}
+// 	// Clean up old backups (keep only last 10)
+// 	if err := cmd.cleanupOldBackups(backupDir); err != nil {
+// 		cmd.log.Warn("Failed to cleanup old backups", "err", err)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // copyFile is a helper function to copy a file
 func (cmd *Command) copyFile(src, dst string) error {
@@ -535,59 +533,51 @@ func (cmd *Command) getURL(url string) string {
 	return url
 }
 
+func (cmd *Command) init() {
+	if err := config.CreateConfigFileFromTemplate(cmd.nodeConfigPath); err != nil {
+		cmd.log.Error(fmt.Sprintf("failed to create config.toml file at path: %v, err: %v", cmd.nodeConfigPath, err))
+		return
+	}
+}
+
 func (cmd *Command) runApp() {
-	core.InitConfig(cmd.nodeConfigPath+cmd.cfgFile, cmd.encKey, uint16(cmd.node), cmd.addr)
-	err := apiconfig.LoadAPIConfig(cmd.nodeConfigPath+cmd.cfgFile, cmd.encKey, &cmd.cfg)
+	userConfig, err := config.ParseConfigFromPath(cmd.nodeConfigPath)
 	if err != nil {
-		cmd.log.Error("Configfile is either currupted or cipher is wrong", "err", err)
+		cmd.log.Error(fmt.Sprintf("failed to parse config.toml, err: %v", err))
 		return
 	}
 
-	// Directory path for storing
-	cmd.cfg.NodeConfigDir = cmd.nodeConfigPath
-	postgresDBPort := cmd.dbPort+uint64(cmd.node)
-
-	// Backup database if flag is set
-	if cmd.backupDB {
-		if err := cmd.backupDatabase(); err != nil {
-			cmd.log.Error("Failed to backup database", "err", err)
-			return
-		}
+	rubixConfig, err := config.CreateRubixConfigFromUserConfig(userConfig, cmd.nodeConfigPath)
+	if err != nil {
+		cmd.log.Error(fmt.Sprintf("failed to get rubix config, err: %v", err))
 	}
+	cmd.cfg = rubixConfig
 
 	if cmd.disableTrustedNetwork {
-		cmd.cfg.CfgData.TrustedNetwork = false
+		cmd.cfg.TrustedNetwork = false
 		cmd.log.Info("Trusted network mode explicitly disabled via -disableTrustedNetwork flag")
 	} else {
 		// Trusted network is enabled by default
-		cmd.cfg.CfgData.TrustedNetwork = true
+		cmd.cfg.TrustedNetwork = true
 		cmd.log.Info("Trusted network mode enabled (default)")
 	}
 
 	sc := make(chan bool, 1)
-	dbConfig := &types.DBConfig{
-		DBType:   cmd.dbType,
-		DBAddress: cmd.dbAddress,
-		DBPort:    postgresDBPort,
-		DBUserName: cmd.dbUserName,
-		DBPassword: cmd.dbPassword,
-		DBName:    cmd.dbName,
-	}
 
-	networkMode, err := getNetworkMode(cmd.testnet, cmd.mainnet, cmd.localnet)	
+	networkMode, err := getNetworkMode(cmd.testnet, cmd.mainnet, cmd.localnet)
 	if err != nil {
 		cmd.log.Error(fmt.Sprintf("failed to get the network mode: %v", err.Error()))
 		return
 	}
 
 	rubixCore, err := core.NewCore(
-		&cmd.cfg, 
-		dbConfig, 
-		cmd.nodeConfigPath+cmd.cfgFile, 
-		cmd.encKey, 
-		cmd.log, 
-		networkMode, cmd.testNetKey, cmd.defaultSetup, 
-		cmd.publishTokenChainDetails, cmd.fullNode, cmd.faucetURL,
+		&cmd.cfg,
+		cmd.log,
+		networkMode,
+		cmd.defaultSetup,
+		cmd.publishTokenChainDetails,
+		cmd.fullNode,
+		cmd.faucetURL,
 	)
 	if err != nil {
 		cmd.log.Error(err.Error())
@@ -597,16 +587,15 @@ func (cmd *Command) runApp() {
 
 	serverConfig := &server.Config{
 		Config: srvcfg.Config{
-			HostAddress: cmd.cfg.NodeAddress,
-			HostPort:    cmd.cfg.NodePort,
+			HostAddress: "localhost",
+			HostPort:    string(cmd.cfg.PortConfig.RubixServerPort),
 			Production:  "false",
 
-			DBName: dbConfig.DBName,
-			DBType: dbConfig.DBType,
-			DBAddress: dbConfig.DBAddress,
-			DBPort: postgresDBPort,
-			DBUserName: dbConfig.DBUserName,
-			DBPassword: dbConfig.DBPassword,
+			DBName:     cmd.cfg.DBConfig.DBName,
+			DBAddress:  cmd.cfg.DBConfig.Host,
+			DBPort:     uint64(cmd.cfg.DBConfig.Port),
+			DBUserName: cmd.cfg.DBConfig.Username,
+			DBPassword: cmd.cfg.DBConfig.Password,
 		},
 		EnableAuth: cmd.enableAuth,
 	}
@@ -619,7 +608,7 @@ func (cmd *Command) runApp() {
 	s.EnableSWagger(cmd.getURL(s.GetServerURL()))
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
-	go s.Start()	
+	go s.Start()
 
 	// Start the pending token monitor for self-healing
 	rubixCore.StartPendingTokenMonitor()
@@ -878,8 +867,6 @@ func Run(args []string) {
 		cmd.RemoveAllQuorum()
 	case SetupQuorumCmd:
 		cmd.SetupQuorum()
-	case SetupServiceCmd:
-		cmd.SetupService()
 	case GenerateTestRBTCmd:
 		cmd.GenerateTestRBT()
 	case TransferRBTCmd:
@@ -1001,6 +988,8 @@ func Run(args []string) {
 		cmd.getFTCreatorStats()
 	case RemoveStaleDIDCmd:
 		cmd.RemoveStaleDID()
+	case InitCmd:
+		cmd.init()
 	default:
 		cmd.log.Error("Invalid command")
 	}

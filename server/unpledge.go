@@ -24,7 +24,7 @@ func (s *Server) RunUnpledgeHandle(req *ensweb.Request) *ensweb.Result {
 	var err error
 	
 	// Check if optimized unpledging is enabled
-	if s.c.GetConfig() != nil && s.c.GetConfig().CfgData.EnableOptimizedUnpledge {
+	if s.c.GetConfig() != nil && s.c.GetConfig().EnableOptimizedUnpledge {
 		msg, err = s.c.InitiateOptimizedUnpledgeProcess()
 	} else {
 		msg, err = s.c.InititateUnpledgeProcess()

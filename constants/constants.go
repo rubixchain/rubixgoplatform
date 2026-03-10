@@ -31,9 +31,9 @@ const (
 
 // Network mode
 const (
-	NetworkMode_Mainnet string = "mainnet"
-	NetworkMode_Testnet string = "testnet"
-	NetworkMode_Local   string = "local"
+	NetworkMode_Mainnet  string = "mainnet"
+	NetworkMode_Testnet  string = "testnet"
+	NetworkMode_Localnet string = "localnet"
 )
 
 // Supported crypto algorithms for DID (Address)

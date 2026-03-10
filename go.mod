@@ -16,6 +16,7 @@ require (
 
 require (
 	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/btcsuite/btcd v0.23.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible

@@ -16,36 +16,24 @@ type RubixDB struct {
 func GetRubixDBConnectionString(dbConfig *types.DBConfig) string {
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		dbConfig.DBAddress,
-		dbConfig.DBPort,
-		dbConfig.DBUserName,
-		dbConfig.DBPassword,
+		dbConfig.Host,
+		dbConfig.Port,
+		dbConfig.Username,
+		dbConfig.Password,
 		dbConfig.DBName,
 	)
 }
 
-// PoolOptions configures the pgxpool connection pool.
-type PoolOptions struct {
-    MaxConns         int32
-    MinConns         int32
-    MaxConnLifetime  time.Duration
-    MaxConnIdleTime  time.Duration
-    StatementTimeout time.Duration
+// DBOpts configures the pgxpool connection pool.
+type DBOpts struct {
+	MaxConns                  int
+	MinConns                  int
+	MaxConnLifetimeInSeconds  time.Duration
+	MaxConnIdleTimeInSeconds  time.Duration
+	StatementTimeoutInSeconds time.Duration
 }
 
-// DefaultPoolOptions returns production-safe defaults.
-// These can be overridden via environment variables or config file.
-func DefaultPoolOptions() PoolOptions {
-    return PoolOptions{
-        MaxConns:         50,
-        MinConns:         5,
-        MaxConnLifetime:  1 * time.Hour,
-        MaxConnIdleTime:  10 * time.Minute,
-        StatementTimeout: 5 * time.Second,
-    }
-}
-
-func NewRubixDB(ctx context.Context, dbConfig *types.DBConfig, opts PoolOptions) (*RubixDB, error) {
+func NewRubixDB(ctx context.Context, dbConfig *types.DBConfig, opts DBOpts) (*RubixDB, error) {
 	connStr := GetRubixDBConnectionString(dbConfig)
 
 	config, err := pgxpool.ParseConfig(connStr)
@@ -54,14 +42,14 @@ func NewRubixDB(ctx context.Context, dbConfig *types.DBConfig, opts PoolOptions)
 	}
 
 	// Pool tuning (adjust depending on workload)
-	config.MaxConns = opts.MaxConns
-	config.MinConns = opts.MinConns
-	config.MaxConnLifetime = opts.MaxConnLifetime
-	config.MaxConnIdleTime = opts.MaxConnIdleTime
+	config.MaxConns = int32(opts.MaxConns)
+	config.MinConns = int32(opts.MinConns)
+	config.MaxConnLifetime = opts.MaxConnLifetimeInSeconds
+	config.MaxConnIdleTime = opts.MaxConnIdleTimeInSeconds
 
-	if opts.StatementTimeout > 0 {
-        config.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprintf("%d", opts.StatementTimeout.Milliseconds())
-    }
+	if opts.StatementTimeoutInSeconds > 0 {
+		config.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprintf("%d", opts.StatementTimeoutInSeconds.Milliseconds())
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
