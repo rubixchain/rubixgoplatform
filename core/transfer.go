@@ -92,6 +92,31 @@ func (c *Core) initiateTransfer(reqID string, req *models.TransferRequest) *mode
 	if !errFetch {
 		return resp
 	}
+
+	// Need to get the quorumAddress from the db
+	p, err := c.getPeer(quorumAddress)
+	if err != nil {
+		return err
+	}
+	defer p.Close()
+
+	// Data need to be properly uipdated here
+	request := models.PledgeTokenRequest{
+		TransactionValue : 0.0      
+	}
+	var response models.PledgeTokenResponse
+
+	// Make API call
+	err = p.SendJSONRequest("POST", APIReqPledgeToken, nil, &request, &response, true)
+	if err != nil {
+		return err
+	}
+
+	// Check response
+	if !response.Status {
+		return fmt.Errorf("failed: %s", response.Message)
+	}
+
 	// Whatever implemented above are placeholder functions. These needs to be changed with proper functions which fetches the required tokens according to the set conditions
 	//TODO
 	// Need to form the TransactionTokens struct here from the info collected above.
@@ -104,8 +129,9 @@ func (c *Core) initiateTransfer(reqID string, req *models.TransferRequest) *mode
 	//Concern:
 	// The concern we have at the moment is if there is a smart contract execution and nft execution happening in the same transaction
 	// then we have a problem. We only have a single data field in TransactionInfo.
-
-	transacrionInfo := models.TransactionInfo{
+	pledgeTokens := response.PledgeTokens
+	// need to form the QuorumInfo struct {} with the pledgeToken information
+	transactionInfo := models.TransactionInfo{
 		Initiator: initiatorDID,
 		Owner:     nextOwnerDID,
 		Epoch:     int(st.Unix()),
