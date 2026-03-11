@@ -28,6 +28,6 @@ func getNetworkMode(testnet, mainnet, localnet bool) (string, error) {
 	case mainnet:
 		return constants.NetworkMode_Mainnet, nil
 	default:
-		return constants.NetworkMode_Local, nil
+		return constants.NetworkMode_Localnet, nil
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Transaction struct {
+type Transactions struct {
 	ID        string          `db:"id"`
 	Info      json.RawMessage `db:"info"`
 	Signature json.RawMessage `db:"signature"`
@@ -18,9 +18,8 @@ type Transaction struct {
 type TokenChain struct {
 	TokenID       string    `db:"token_id"`
 	TransactionID string    `db:"transaction_id"`
-	Role          string    `db:"role"`
-	Type          string    `db:"type"`
-	Position      int64     `db:"position"`
+	Role          int16     `db:"role"`
+	Height        int64     `db:"height"`
 	CreatedAt     time.Time `db:"created_at"`
 	UpdatedAt     time.Time `db:"updated_at"`
 }
@@ -32,13 +31,13 @@ type DIDAlgo struct {
 }
 
 type DID struct {
-	DID     string      `db:"did"`
-	PeerDID pgtype.Text `db:"peer_did"`
-	Local   bool        `db:"local"`
-	AlgoID  pgtype.Int2 `db:"algo_id"`
+	DID    string      `db:"did"`
+	PeerID pgtype.Text `db:"peer_id"`
+	Local  bool        `db:"local"`
+	AlgoID pgtype.Int2 `db:"algo_id"`
 }
 
-type TokenStatus struct {
+type TokenRole struct {
 	ID       int16  `db:"id"`
 	Name     string `db:"name"`
 	IsActive bool   `db:"is_active"`
@@ -56,8 +55,6 @@ type Token struct {
 	TokenValue     pgtype.Numeric `db:"token_value"`
 	TokenStatus    int16          `db:"token_status"`
 	DID            string         `db:"did"`
-	Data           string         `db:"data"`
-	Memo           pgtype.Text    `db:"memo"`
 	TransactionID  string         `db:"transaction_id"`
 	TokenStateHash string         `db:"token_state_hash"`
 	TokenType      int16          `db:"token_type"`
@@ -138,9 +135,9 @@ type QuorumManager struct {
 }
 
 type Request struct {
-	ID            string    `db:"id"`
-	TransactionID string    `db:"transaction_id"`
-	Status        int16     `db:"status"`
-	CreatedAt     time.Time `db:"created_at"`
-	UpdatedAt     time.Time `db:"updated_at"`
+	ID            string      `db:"id"`
+	TransactionID pgtype.Text `db:"transaction_id"`
+	Status        int16       `db:"status"`
+	CreatedAt     time.Time   `db:"created_at"`
+	UpdatedAt     time.Time   `db:"updated_at"`
 }

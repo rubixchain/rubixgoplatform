@@ -1,86 +1,127 @@
 package config
 
-import "time"
+import (
+	"fmt"
+	"os"
+	"path"
+	"path/filepath"
 
-// Ports defines varies ports used
-type Ports struct {
-	SendPort     uint16 `json:"sender_port"`
-	ReceiverPort uint16 `json:"receiver_port"`
-	IPFSPort     uint16 `json:"ipfs_port"`
-	SwarmPort    uint16 `json:"swarm_port"`
-	IPFSAPIPort  uint16 `json:"ipfs_api_port"`
-}
+	"github.com/BurntSushi/toml"
+	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
+)
 
-type DIDConfigType struct {
-	Type   int                    `json:"TYPE"`
-	Config map[string]interface{} `json:"CONFIG"`
-}
+// ---------------------------------------------------------------------------------------------------------- //
 
-type StorageConfig struct {
-	StorageType string `json:"stroage_type"`
-	DBName      string `json:"db_name"`
-	DBAddress   string `json:"db_address"`
-	DBPort      uint64 `json:"db_port"`
-	DBType      string `json:"db_type"`
-	DBUserName  string `json:"db_user_name"`
-	DBPassword  string `json:"db_password"`
-}
+const userConfigTemplate = `
+[core]
+node_index = 0
+network_mode = "mainnet|testnet|localnet"
+enable_trusted_network = false
 
-// IPFSRecoveryConfig defines IPFS recovery configuration
-type IPFSRecoveryConfig struct {
-	MaxRecoveries   int           `json:"max_recoveries"`   // Maximum recovery attempts
-	RestartDelay    time.Duration `json:"restart_delay"`    // Delay between restart attempts
-	HealthTimeout   time.Duration `json:"health_timeout"`   // Timeout for health checks
-	MonitorInterval time.Duration `json:"monitor_interval"` // Health monitoring interval
-}
+[db]
+host = "localhost"
+username = "rubix"
+password = "rubixpass"
+db_name = "rubix"
 
-// UnpledgePoolConfig defines unpledge worker pool configuration
-type UnpledgePoolConfig struct {
-	MaxWorkers       int           `json:"max_workers"`
-	QueueSize        int           `json:"queue_size"`
-	BatchSize        int           `json:"batch_size"`
-	TokenConcurrency int           `json:"token_concurrency"`
-	ShutdownTimeout  time.Duration `json:"shutdown_timeout"`
-	EnableMetrics    bool          `json:"enable_metrics"`
-}
+[db.config]
+max_connections = 50
+min_connections = 5
+max_connection_lifetime_seconds = 1
+max_connection_idletime_seconds = 1
+statement_timeout_seconds = 5
 
-// ConfigData defines configuration data
-type ConfigData struct {
-	Ports                   Ports               `json:"ports"`
-	BootStrap               []string            `json:"bootstrap"`
-	TestBootStrap           []string            `json:"test_bootstrap"`
-	Services                map[string]string   `json:"services"`
-	StorageConfig           StorageConfig       `json:"storage_config"`
-	TestStorageConfig       StorageConfig       `json:"test_storage_config"`
-	LocalStorageConfig      StorageConfig       `json:"local_storage_config"`
-	AsyncFTResponse         bool                `json:"async_ft_response"`
-	IPFSRecovery            *IPFSRecoveryConfig `json:"ipfs_recovery"`
-	TrustedNetwork          bool                `json:"trusted_network"` // Skip DHT/pin checks for trusted networks
-	UnpledgeConfig          *UnpledgePoolConfig `json:"unpledge_config"`
-	EnableOptimizedUnpledge bool                `json:"enable_optimized_unpledge"`
-}
+[ipfs]
+mainnet_bootstrap_nodes = [
+	"/ip4/161.35.169.251/tcp/4001/p2p/12D3KooWPhZEYEw4jG3kSRuwgMEHcVt7KMkm1ui2ddu4fgSgwvDq", 
+	"/ip4/103.127.158.120/tcp/4001/p2p/12D3KooWSQ94HRDzFf6W2rp7P8gzP6efZQHTaSU8uaQjskVBHiWP", 
+	"/ip4/172.104.191.191/tcp/4001/p2p/12D3KooWFudnWZY1v1m4YXCzDWZSbNt7nvf5F42uzM6vErZ4NwqJ",
+]
+testnet_bootstrap_nodes = [
+	"/ip4/103.209.145.177/tcp/4001/p2p/12D3KooWD8Rw7Fwo4n7QdXTCjbh6fua8dTqjXBvorNz3bu7d9xMc", 
+	"/ip4/98.70.52.158/tcp/4001/p2p/12D3KooWQyWFABF3CKFnzX85hf5ZwrT5zPsy4rWHdGPZ8bBpRVCK", 
+	"/ip4/20.244.16.143/tcp/4001/p2p/12D3KooWAydFDJeSW5qupmp3AjRxc82Dq1AnjfJT1zwy4hg2TuNn", 
+	"/ip4/40.81.232.217/tcp/4001/p2p/12D3KooWK6V21GQotbub3cfgb5qAK1uUoUGPexf3vsLqw6yBJfen",
+]
+localnet_bootstrap_nodes = []
+`
 
-func NewDefaultConfigData() ConfigData {
-	return ConfigData{
-		AsyncFTResponse:         true,
-		EnableOptimizedUnpledge: true,
+func ParseConfigFromPath(configPath string) (types.UserConfig, error) {
+	configFilePath := path.Join(configPath, "config.toml")
+	configDataBytes, err := os.ReadFile(configFilePath)
+	if err != nil {
+		return types.UserConfig{}, fmt.Errorf("failed to read config.toml file from path: %v, err: %v", configFilePath, err)
 	}
+
+	var rubixConfig types.UserConfig
+	if err := toml.Unmarshal(configDataBytes, &rubixConfig); err != nil {
+		return types.UserConfig{}, fmt.Errorf("failed to marshal config, err: %v", err)
+	}
+
+	return rubixConfig, nil
 }
 
-type Config struct {
-	NodeAddress   string     `json:"node_address"`
-	NodePort      string     `json:"node_port"`
-	NodeConfigDir string     `json:"dir_path"`
-	CfgData       ConfigData `json:"cfg_data"`
+func CreateConfigFileFromTemplate(configPath string) error {
+	configFilePath := path.Join(configPath, "config.toml")
+	if _, err := os.Stat(configFilePath); err == nil {
+		return nil
+	}
+
+	err := os.WriteFile(configFilePath, []byte(userConfigTemplate), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create config file: %w", err)
+	}
+
+	return nil
 }
 
-type ServiceConfig struct {
-	ServiceSettings string `json:"service_settings"` // ServiceSettings settings for the service
-	ServiceName     string `json:"service_name"`     // ServiceName name of the service
-	DBName          string `json:"db_name"`          // DBName is the name of the db.
-	DBAddress       string `json:"db_address"`       // DBPath is the name of the database itself.
-	DBPort          uint64 `json:"db_port"`          // DBPath is the name of the database itself.
-	DBType          string `json:"db_type"`          // DBType is type of database to use
-	DBUserName      string `json:"db_user_name"`     // DBUserName is the user name for the DB
-	DBPassword      string `json:"db_password"`      // DBPassword is the password  for the user
+func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string) (types.RubixConfig, error) {
+	var rubixConfig types.RubixConfig
+
+	rubixConfig.NodeDir = nodeDir
+
+	// Set DID Directory based on the network
+	var networkDirName string
+	switch userConfig.Core.NetworkMode {
+	case constants.NetworkMode_Mainnet:
+		networkDirName = constants.NetworkMode_Mainnet
+	case constants.NetworkMode_Testnet:
+		networkDirName = constants.NetworkMode_Testnet
+	case constants.NetworkMode_Localnet:
+		networkDirName = constants.NetworkMode_Localnet
+	default:
+		return types.RubixConfig{}, fmt.Errorf("failed while creating RubixConfig, invalid network type: %v", userConfig.Core.NetworkMode)
+	}
+
+	rubixConfig.NetworkDir = filepath.Join(nodeDir, networkDirName) 
+	rubixConfig.DidDir = filepath.Join(rubixConfig.NetworkDir, "dids")
+	rubixConfig.TrustedNetwork = userConfig.Core.EnableTrustedNetwork
+
+	rubixConfig.PortConfig.IPFSPort = (constants.IPFSPort + uint16(userConfig.Core.NodeIndex))
+	rubixConfig.PortConfig.SendPort = (constants.SendPort + uint16(userConfig.Core.NodeIndex))
+	rubixConfig.PortConfig.ReceiverPort = (constants.RecvPort + uint16(userConfig.Core.NodeIndex))
+	rubixConfig.PortConfig.SwarmPort = (constants.SwarmPort + uint16(userConfig.Core.NodeIndex))
+	rubixConfig.PortConfig.IPFSAPIPort = (constants.IPFSAPIPort + uint16(userConfig.Core.NodeIndex))
+	rubixConfig.PortConfig.RubixServerPort = (constants.RubixServerPort + uint16(userConfig.Core.NodeIndex))
+	rubixConfig.DBConfig.Port = (int(constants.PostgresBasePort) + int(userConfig.Core.NodeIndex))
+
+	rubixConfig.MainnetBootstrap = userConfig.Ipfs.MainnetBootstrapNodes
+	rubixConfig.TestnetBootstrap = userConfig.Ipfs.TestnetBootstrapNodes
+	rubixConfig.LocalnetBootStrap = userConfig.Ipfs.LocalnetBootstrapNodes
+
+	// Postgres DB Config
+	rubixConfig.DBConfig.DBName = userConfig.Db.DBName
+	rubixConfig.DBConfig.Host = userConfig.Db.Host
+	rubixConfig.DBConfig.Password = userConfig.Db.Password
+	rubixConfig.DBConfig.Username = userConfig.Db.Username
+
+	// Postgres DB Params
+	rubixConfig.DBConfig.Params.MaxConnectionIdletimeSeconds = userConfig.Db.Params.MaxConnectionIdletimeSeconds
+	rubixConfig.DBConfig.Params.MaxConnectionLifetimeSeconds = userConfig.Db.Params.MaxConnectionLifetimeSeconds
+	rubixConfig.DBConfig.Params.MaxConnections = userConfig.Db.Params.MaxConnections
+	rubixConfig.DBConfig.Params.MinConnections = userConfig.Db.Params.MinConnections
+	rubixConfig.DBConfig.Params.StatementTimeoutSeconds = userConfig.Db.Params.StatementTimeoutSeconds
+
+	return rubixConfig, nil
 }
