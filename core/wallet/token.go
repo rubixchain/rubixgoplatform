@@ -25,10 +25,10 @@ func (w *Wallet) GetSmartContractTokens() ([]models.Token, error) {
 
 func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT * FROM tokens WHERE token_type = (
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id, token_state_hash, token_type, latest_position, latest_role, created_at, updated_at FROM tokens WHERE token_type = (
 			SELECT id
 			FROM token_type
-			WHERE name = $1 
+			WHERE name = $1
 		) AND did = $2 AND token_status = 0
 		`, constants.TokenType_RBT, ownerDid,
 	)
@@ -42,6 +42,7 @@ func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, error) {
 		err := rows.Scan(
 			&freeToken.TokenID, &freeToken.ParentTokenID, &freeToken.TokenValue, &freeToken.TokenStatus,
 			&freeToken.DID, &freeToken.TransactionID, &freeToken.TokenStateHash, &freeToken.TokenType,
+			&freeToken.LatestPosition, &freeToken.LatestRole,
 			&freeToken.CreatedAt, &freeToken.UpdatedAt,
 		)
 		if err != nil {
@@ -59,7 +60,7 @@ func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, error) {
 
 func (w *Wallet) queryTokensByType(tokenType string) ([]models.Token, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT * FROM tokens WHERE token_type = (
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id, token_state_hash, token_type, latest_position, latest_role, created_at, updated_at FROM tokens WHERE token_type = (
 			SELECT id
 			FROM token_type
 			WHERE name = $1
@@ -77,8 +78,9 @@ func (w *Wallet) queryTokensByType(tokenType string) ([]models.Token, error) {
 		var token models.Token
 		err := rows.Scan(
 			&token.TokenID, &token.ParentTokenID, &token.TokenValue,
-			&token.TokenStatus, //missed to add token status. expecting 10 but only sharing 9. resolved
+			&token.TokenStatus,
 			&token.DID, &token.TransactionID, &token.TokenStateHash, &token.TokenType,
+			&token.LatestPosition, &token.LatestRole,
 			&token.CreatedAt, &token.UpdatedAt,
 		)
 		if err != nil {

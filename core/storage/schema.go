@@ -52,7 +52,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             token_state_hash TEXT NOT NULL,
             token_type       SMALLINT NOT NULL,
             latest_position BIGINT NOT NULL DEFAULT 0,
-            latest_role SMALLINT
+            latest_role SMALLINT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW(),
             CONSTRAINT tokens_did_fk 

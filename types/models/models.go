@@ -58,6 +58,8 @@ type Token struct {
 	TransactionID  string         `db:"transaction_id"`
 	TokenStateHash string         `db:"token_state_hash"`
 	TokenType      int16          `db:"token_type"`
+	LatestPosition int64          `db:"latest_position"`
+	LatestRole     pgtype.Int2    `db:"latest_role"`
 	CreatedAt      time.Time      `db:"created_at"`
 	UpdatedAt      time.Time      `db:"updated_at"`
 }
