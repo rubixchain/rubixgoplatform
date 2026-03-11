@@ -9,19 +9,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-func BuildTokenInfos(tokens []models.Token) []models.TokenInfo {
-	tokenInfos := make([]TokenInfo, len(tokens))
-
-	for i, t := range tokens {
-		tokenInfos[i] = TokenInfo{
-			TokenID:               t.TokenID,
-			PreviousTransactionID: t.TransactionID,
-		}
-	}
-
-	return tokenInfos
-}
-
 func (c *Core) reqPledgeToken(request *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuery(request, "did")
 
@@ -75,4 +62,8 @@ func (c *Core) reqPledgeToken(request *ensweb.Request) *ensweb.Result {
 	}
 
 	return c.l.RenderJSON(request, &pledgeResponse, http.StatusOK)
+}
+
+func (c *Core) initiateConsensus(request *ensweb.Request) *ensweb.Result {
+	
 }

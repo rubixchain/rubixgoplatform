@@ -234,6 +234,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIRequestSigningHash, "GET", c.requestSigningHash)
 	c.l.AddRoute(APISendFTToken, "POST", c.updateReceiverFTHandle)
 	c.l.AddRoute(APICheckPinRole, "GET", c.checkPinRole)
+	c.l.AddRoute(APIInitiateConsensus, "POST", c.initiateConsensus)
 }
 
 // calculateTokenBasedTimeout calculates timeout based on the number of tokens and workers

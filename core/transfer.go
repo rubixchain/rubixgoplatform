@@ -36,14 +36,14 @@ func (c *Core) InitiateTransfer(reqID string, req *models.TransferRequest) {
 	dc.OutChan <- br
 }
 
-func (c *Core) initiateTransfer(reqID string, req *models.TransferRequest) *model.BasicResponse {
+func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *model.BasicResponse {
 
 	resp := &model.BasicResponse{
 		Status: false,
 	}
 
-	initiatorDID := req.Initiator
-	nextOwnerDID := req.Owner
+	initiatorDID := request.Initiator
+	nextOwnerDID := request.Owner
 
 	dc, err := c.SetupDID(reqID, initiatorDID)
 	if err != nil {
@@ -51,96 +51,206 @@ func (c *Core) initiateTransfer(reqID string, req *models.TransferRequest) *mode
 		return resp
 	}
 
-	var errFetch bool
-
-	collectedRBTs, errFetch := c.fetchTokens(
-		req.HasRBT(),
-		c.w.GetRBTTokens,
-		"InitiateTransfer: Failed to get RBT for transfer: ",
-		resp,
-	)
-	if !errFetch {
+	// Build transaction info
+	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(request)
+	if err != nil {
+		c.log.Error("InitiateTransfer: Failed to build transaction info", "err", err)
+		resp.Message = err.Error()
 		return resp
 	}
 
-	collectedFTs, errFetch := c.fetchTokens(
-		req.HasFT(),
-		c.w.GetFTTokens,
-		"InitiateTransfer: Failed to get FT for transfer: ",
-		resp,
-	)
-	if !errFetch {
-		return resp
-	}
+	// TODO: Fetch the quorum address from the corresponding table
+	quorumAddress := "This needs to be added "
 
-	collectedNFTs, errFetch := c.fetchTokens(
-		req.HasNFT(),
-		c.w.GetNFTTokens,
-		"InitiateTransfer: Failed to get NFT for transfer: ",
-		resp,
-	)
-	if !errFetch {
-		return resp
-	}
-
-	collectedSmartContracts, errFetch := c.fetchTokens(
-		req.HasSmartContract(),
-		c.w.GetSmartContractTokens,
-		"InitiateTransfer: Failed to get SC for execution: ",
-		resp,
-	)
-	if !errFetch {
-		return resp
-	}
-
-	// Need to get the quorumAddress from the db
 	p, err := c.getPeer(quorumAddress)
 	if err != nil {
-		return err
+		resp.Message = err.Error()
+		return resp
 	}
 	defer p.Close()
 
-	// Data need to be properly uipdated here
-	request := models.PledgeTokenRequest{
-		TransactionValue : 0.0      
+	// Pledge request
+	pledgeTokenRequest := models.PledgeTokenRequest{
+		ReferenceId:      reqID,
+		TransactionValue: transactionValue,
 	}
-	var response models.PledgeTokenResponse
 
-	// Make API call
-	err = p.SendJSONRequest("POST", APIReqPledgeToken, nil, &request, &response, true)
+	var pledgeTokenResponse models.PledgeTokenResponse
+
+	err = p.SendJSONRequest(
+		"POST",
+		APIReqPledgeToken,
+		nil,
+		&pledgeTokenRequest,
+		&pledgeTokenResponse,
+		true,
+	)
+
 	if err != nil {
-		return err
+		resp.Message = err.Error()
+		return resp
 	}
 
-	// Check response
-	if !response.Status {
-		return fmt.Errorf("failed: %s", response.Message)
+	if !pledgeTokenResponse.Status {
+		resp.Message = pledgeTokenResponse.Message
+		return resp
 	}
 
-	// Whatever implemented above are placeholder functions. These needs to be changed with proper functions which fetches the required tokens according to the set conditions
-	//TODO
-	// Need to form the TransactionTokens struct here from the info collected above.
-	// The steps would be to get the token and the previous transaction id for each of the tokens. We will get that from []models.Token, just need to write a function to fetch those
-	// Implement functions which fetches the required tokens according to the owner did from db
-	// Then we need to create a function to make this TransactionInfo struct with all the informatiosn we have.
+	// Attach quorum tokens
+	transactionInfo.Quorums = pledgeTokenResponse.PledgeTokens
 
-	// The api calls with the quorum
-
-	//Concern:
-	// The concern we have at the moment is if there is a smart contract execution and nft execution happening in the same transaction
-	// then we have a problem. We only have a single data field in TransactionInfo.
-	pledgeTokens := response.PledgeTokens
-	// need to form the QuorumInfo struct {} with the pledgeToken information
-	transactionInfo := models.TransactionInfo{
-		Initiator: initiatorDID,
-		Owner:     nextOwnerDID,
-		Epoch:     int(st.Unix()),
-		Network:   "",
-		Tokens:    nil,
+	// Create transaction hash
+	jsonBytes, err := json.Marshal(transactionInfo)
+	if err != nil {
+		resp.Message = "Failed to marshal transaction info: " + err.Error()
+		return resp
 	}
+
+	hashBytes := util.CalculateHash(jsonBytes, "SHA3-256")
+	txHash := util.HexToStr(hashBytes)
+
+	c.log.Info("Transaction hash created", "hash", txHash)
+
+	// Sign transaction
+	signatureBytes, err := dc.PvtSign([]byte(txHash))
+	if err != nil {
+		c.log.Error("Failed to sign transaction", "err", err)
+		resp.Message = "Failed to sign transaction: " + err.Error()
+		return resp
+	}
+
+	initiatorSignature := util.HexToStr(signatureBytes)
+
+	// Consensus request
+	consensusRequest := models.ConsensusRequest{
+		ReferenceId:        reqID,
+		TransactionInfo:    transactionInfo,
+		InitiatorSignature: initiatorSignature,
+	}
+
+	var consensusResponse models.ConsensusResponse
+
+	err = p.SendJSONRequest(
+		"POST",
+		APIInitiateConsensus,
+		nil,
+		&consensusRequest,
+		&consensusResponse,
+		true,
+	)
+
+	if err != nil {
+		resp.Message = err.Error()
+		return resp
+	}
+
+	if !consensusResponse.Status {
+		resp.Message = consensusResponse.Message
+		return resp
+	}
+
+	resp.Status = true
+	resp.Message = "Transfer initiated successfully"
 
 	return resp
 }
+
+// func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *model.BasicResponse {
+
+// 	resp := &model.BasicResponse{
+// 		Status: false,
+// 	}
+
+// 	initiatorDID := req.Initiator
+// 	nextOwnerDID := req.Owner
+
+// 	dc, err := c.SetupDID(reqID, initiatorDID)
+// 	if err != nil {
+// 		resp.Message = "Failed to setup DID: " + err.Error()
+// 		return resp
+// 	}
+
+// 	var errFetch bool
+// 	// here these will change and will be returing transInfo struct directly, so I just need to get that and add
+
+// 	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(request)
+// 	if err != nil {
+// 		c.log.Error("InitiateTransfer: Failed to build transaction info from request")
+// 	}
+
+// 	// Need to get the quorumAddress from the db
+// 	p, err := c.getPeer(quorumAddress)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer p.Close()
+
+// 	// Data need to be properly uipdated here
+// 	pledgeTokenRequest := models.PledgeTokenRequest{
+// 		ReferenceId:      requestId,
+// 		TransactionValue: transactionValue,
+// 	}
+// 	var pledgeTokenResponse models.PledgeTokenResponse
+
+// 	// Make API call
+// 	err = p.SendJSONRequest("POST", APIReqPledgeToken, nil, &pledgeTokenRequest, &pledgeTokenResponse, true)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	// Check response
+// 	if !response.Status {
+// 		return fmt.Errorf("failed: %s", response.Message)
+// 	}
+
+// 	// Whatever implemented above are placeholder functions. These needs to be changed with proper functions which fetches the required tokens according to the set conditions
+// 	//TODO
+// 	// Need to form the TransactionTokens struct here from the info collected above.
+// 	// The steps would be to get the token and the previous transaction id for each of the tokens. We will get that from []models.Token, just need to write a function to fetch those
+// 	// Implement functions which fetches the required tokens according to the owner did from db
+// 	// Then we need to create a function to make this TransactionInfo struct with all the informatiosn we have.
+
+// 	// The api calls with the quorum
+// 	// pledgeTokens := response.PledgeTokens
+
+// 	transactionInfo.Quorums = response.PledgeTokens
+
+// 	 jsonBytes, err := json.Marshal(transactionInfo)
+//       if err != nil {
+//           resp.Message = "Failed to marshal transaction info: " + err.Error()
+//           return resp
+//       }
+
+//       hashBytes := util.CalculateHash(jsonBytes, "SHA3-256")
+//       txHash := util.HexToStr(hashBytes)
+
+//       c.log.Info("Transaction hash created", "hash", txHash)
+
+//       signatureBytes, err := dc.PvtSign([]byte(txHash))
+//       if err != nil {
+//           c.log.Error("Failed to sign transaction", "err", err)
+//           resp.Message = "Failed to sign transaction: " + err.Error()
+//           return resp
+//       }
+
+//       initiatorSignature := util.HexToStr(signatureBytes)
+// 	  consensusRequest := models.ConsensusRequest {
+// 		ReferenceId : requestId,
+// 		TransactionInfo : transactionInfo,
+// 		InitiatorSignature : initiatorSignature,
+// 	  }
+// 	  var consensusResponse ConsensusResponse
+// 	  err = p.SendJSONRequest("POST", APIInitiateConsensus, nil, &consensusRequest, &consensusResponse, true)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	// Check response
+// 	if !response.Status {
+// 		return fmt.Errorf("failed: %s", response.Message)
+// 	}
+// 	return resp
+// }
 
 // This helper function will help us fetch different types of token from the db
 // Here we are passing the GETFunctions we already have for the different types of tokens.
