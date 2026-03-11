@@ -70,8 +70,8 @@ type TokenProviderMap struct {
 	FuncID        pgtype.Int4    `db:"func_id"`
 	Role          pgtype.Int4    `db:"role"`
 	TransactionID pgtype.Text    `db:"transaction_id"`
-	Sender        pgtype.Text    `db:"sender"`
-	Receiver      pgtype.Text    `db:"receiver"`
+	Initiator     pgtype.Text    `db:"initiator"`
+	Owner         pgtype.Text    `db:"owner"`
 	TokenValue    pgtype.Numeric `db:"token_value"`
 	CreatedAt     time.Time      `db:"created_at"`
 	UpdatedAt     time.Time      `db:"updated_at"`

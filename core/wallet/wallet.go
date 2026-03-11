@@ -5,18 +5,18 @@ import (
 	"fmt"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 type Wallet struct {
-	ipfs             *ipfsnode.Shell
-	ipfsOps          types.IPFSOperations
-	log              logger.Logger
-	asyncProviderMgr *AsyncProviderDetailsManager
-	db               *storage.RubixDB
-	Ctx              context.Context
+	ipfs    *ipfsnode.Shell
+	ipfsOps types.IPFSOperations
+	log     logger.Logger
+	db      *storage.RubixDB
+	Ctx     context.Context
 }
 
 // GetIpfsOps returns the IPFS operations interface
@@ -41,9 +41,6 @@ func NewWallet(ctx context.Context, db *storage.RubixDB, log logger.Logger) (*Wa
 		return nil, fmt.Errorf("failed to add protocol values to lookup tables: %v", err)
 	}
 
-	// Initialize async provider details manager with 2 workers
-	w.asyncProviderMgr = NewAsyncProviderDetailsManager(w, 2)
-
 	return w, nil
 }
 
@@ -58,4 +55,10 @@ func (w *Wallet) SetupWallet(ipfs *ipfsnode.Shell) {
 // SetIPFSOperations sets the IPFS operations interface (for health-managed operations)
 func (w *Wallet) SetIPFSOperations(ops types.IPFSOperations) {
 	w.ipfsOps = ops
+}
+
+// BeginTx starts a new database transaction. The caller is responsible for
+// committing or rolling back the returned transaction.
+func (w *Wallet) BeginTx(ctx context.Context) (pgx.Tx, error) {
+	return w.db.BeginTx(ctx)
 }

@@ -102,8 +102,8 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             func_id        INTEGER,
             role           INTEGER,
             transaction_id TEXT,
-            sender         TEXT,
-            receiver       TEXT,
+            initiator      TEXT,
+            owner          TEXT,
             token_value    NUMERIC,
             created_at     TIMESTAMPTZ DEFAULT NOW(),
             updated_at     TIMESTAMPTZ DEFAULT NOW()
