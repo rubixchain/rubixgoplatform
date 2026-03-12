@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
@@ -52,7 +54,7 @@ func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *
 	}
 
 	// Build transaction info
-	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(request)
+	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(request) //keptTransactionInfo
 	if err != nil {
 		c.log.Error("InitiateTransfer: Failed to build transaction info", "err", err)
 		resp.Message = err.Error()
@@ -60,7 +62,7 @@ func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *
 	}
 
 	// TODO: Fetch the quorum address from the corresponding table
-	quorumAddress := "This needs to be added "
+	quorumAddress := "This needs to be added " // 
 
 	p, err := c.getPeer(quorumAddress)
 	if err != nil {
@@ -98,8 +100,8 @@ func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *
 
 	// Attach quorum tokens
 	pledegTokenInfo := models.QuorumInfo{
-		DID : quorumAddress,
-		Tokens : pledgeTokenResponse.PledgeTokens,
+		DID:    quorumAddress,
+		Tokens: pledgeTokenResponse.PledgeTokens,
 	}
 	transactionInfo.Quorums = pledegTokenInfo
 
