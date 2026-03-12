@@ -19,7 +19,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/pubsub"
-	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -100,46 +99,46 @@ const (
 var dbWriteSem = make(chan struct{}, 1)
 
 type Core struct {
-	cfg                  *config.Config
-	cfgFile              string
-	encKey               string
-	log                  logger.Logger
-	peerID               string
-	lock                 sync.RWMutex
-	ipfsLock             sync.RWMutex
-	qlock                sync.RWMutex
-	rlock                sync.Mutex
-	ipfs                 *ipfsnode.Shell
-	ipfsState            bool
-	ipfsChan             chan bool
-	ipfsCmd              *exec.Cmd
-	ipfsPID              int
-	ipfsHealth           *IPFSHealthManager
-	ipfsRecovery         *IPFSRecoveryManager
-	ipfsOps              *IPFSOperations
-	ipfsScalability      *IPFSScalabilityManager
-	connRecovery         *ConnectionRecovery
-	p2pReconnect         *P2PReconnectManager
-	shutdownMgr          *ShutdownManager
-	d                    *did.DID
-	didDir               string
-	pm                   *ipfsport.PeerManager
-	qm                   *QuorumManager
-	l                    *ipfsport.Listener
-	ps                   *pubsub.PubSub
-	started              bool
-	ipfsApp              string
-	testnet              bool
-	testNetKey           string
-	version              string
-	quorumRequest        map[string]*ConsensusStatus
-	pd                   map[string]*PledgeDetails
-	webReq               map[string]*did.DIDChan
-	w                    *wallet.Wallet
-	qc                   map[string]did.DIDCrypto
-	pqc                  map[string]did.DIDCrypto
-	sd                   map[string]*ServiceDetials
-	srv                  *service.Service
+	cfg             *config.Config
+	cfgFile         string
+	encKey          string
+	log             logger.Logger
+	peerID          string
+	lock            sync.RWMutex
+	ipfsLock        sync.RWMutex
+	qlock           sync.RWMutex
+	rlock           sync.Mutex
+	ipfs            *ipfsnode.Shell
+	ipfsState       bool
+	ipfsChan        chan bool
+	ipfsCmd         *exec.Cmd
+	ipfsPID         int
+	ipfsHealth      *IPFSHealthManager
+	ipfsRecovery    *IPFSRecoveryManager
+	ipfsOps         *IPFSOperations
+	ipfsScalability *IPFSScalabilityManager
+	connRecovery    *ConnectionRecovery
+	p2pReconnect    *P2PReconnectManager
+	shutdownMgr     *ShutdownManager
+	d               *did.DID
+	didDir          string
+	pm              *ipfsport.PeerManager
+	qm              *QuorumManager
+	l               *ipfsport.Listener
+	ps              *pubsub.PubSub
+	started         bool
+	ipfsApp         string
+	testnet         bool
+	testNetKey      string
+	version         string
+	quorumRequest   map[string]*ConsensusStatus
+	pd              map[string]*PledgeDetails
+	webReq          map[string]*did.DIDChan
+	w               *wallet.Wallet
+	qc              map[string]did.DIDCrypto
+	pqc             map[string]did.DIDCrypto
+	sd              map[string]*ServiceDetials
+	//srv                  *service.Service
 	secret               []byte
 	quorumCount          int
 	noBalanceQuorumCount int
@@ -161,7 +160,7 @@ type Core struct {
 	mainnet              bool
 	localnet             bool
 	s                    *storage.RubixDB
-	Ctx              	 context.Context
+	Ctx                  context.Context
 }
 
 func InitConfig(configFile string, encKey string, node uint16, addr string) error {

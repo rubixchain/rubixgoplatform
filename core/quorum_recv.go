@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,8 +17,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/parts"
-	"github.com/rubixchain/rubixgoplatform/core/service"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -1379,7 +1376,7 @@ func (c *Core) updateReceiverToken(
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
 			BlockID:         bid,
-			Mode:            wallet.RecvMode,
+			Mode:            constants.TokenMode_Recv,
 			Amount:          b.GetTokenValue(),
 			SenderDID:       b.GetSenderDID(),
 			ReceiverDID:     b.GetOwner(),
@@ -1458,7 +1455,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 	// 		if err != nil {
 	// 			c.log.Error("failed to fetch parent token value, err ", err)
 	// 			// update token sync status
-	// 			c.w.UpdateTokenSyncStatus(tokenInfo.ParentTokenID, wallet.SyncIncomplete)
+	// 			c.w.UpdateTokenSyncStatus(tokenInfo.ParentTokenID, constants.TokenSync_Incomplete)
 	// 			continue
 	// 		}
 	// 		if parentTokenInfo.TokenValue != 1.0 {

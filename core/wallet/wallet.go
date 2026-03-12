@@ -6,10 +6,28 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
+
+// Querier is the common interface satisfied by both *pgxpool.Pool and pgx.Tx.
+// Methods that accept ...pgx.Tx use this to run inside or outside a transaction.
+type Querier interface {
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
+}
+
+// q returns the provided transaction if given, otherwise the connection pool.
+func (w *Wallet) q(tx ...pgx.Tx) Querier {
+	if len(tx) > 0 && tx[0] != nil {
+		return tx[0]
+	}
+	return w.db.Pool()
+}
 
 type Wallet struct {
 	ipfs    *ipfsnode.Shell

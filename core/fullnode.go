@@ -10,6 +10,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/constants"
 )
 
 // Enhanced subscription setup with error handling
@@ -200,7 +201,7 @@ func (c *Core) processTransferToken(newEvent *model.PubSubTxnInfo, txnBlock *blo
 			c.log.Error("failed to get block height")
 		}
 		newEvent.LatestBlockHeight = latestBlockHeight
-		syncStatus := wallet.SyncCompleted
+		syncStatus := constants.TokenSync_Completed
 		receivedBlocks := ReceivedBlock{
 			GenesisBlock: txnBlock,
 			LatestBlock:  txnBlock,
@@ -371,7 +372,7 @@ func (c *Core) processRegularTransfer(newEvent *model.PubSubTxnInfo, txnBlock *b
 		c.log.Error("failed to get block height")
 	}
 	newEvent.LatestBlockHeight = latestBlockHeight
-	syncStatus := wallet.SyncCompleted
+	syncStatus := constants.TokenSync_Completed
 	// Add to database and blockchain
 
 	if err := c.AddTokenToRespectiveTable(tokenId, receiverDid, receivedBlock, newEvent, syncStatus); err != nil {
@@ -406,7 +407,7 @@ func (c *Core) processContractTransaction(newEvent *model.PubSubTxnInfo, txnBloc
 			c.log.Error("failed to get block height")
 		}
 		newEvent.LatestBlockHeight = latestBlockHeight
-		syncStatus := wallet.SyncCompleted
+		syncStatus := constants.TokenSync_Completed
 		receivedBlock := ReceivedBlock{
 			LatestBlock:  txnBlock,
 			GenesisBlock: txnBlock,
@@ -488,7 +489,7 @@ func (c *Core) processContractExecution(newEvent *model.PubSubTxnInfo, txnBlock 
 		c.log.Error("failed to get block height")
 	}
 	newEvent.LatestBlockHeight = latestBlockHeight
-	syncStatus := wallet.SyncCompleted
+	syncStatus := constants.TokenSync_Completed
 	receivedBlock := ReceivedBlock{
 		LatestBlock: txnBlock,
 	}

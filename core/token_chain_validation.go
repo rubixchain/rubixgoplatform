@@ -12,6 +12,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -444,7 +445,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 		parentTokenInfo = &wallet.Token{
 			TokenID:     parentTokenId,
 			TokenValue:  tv,
-			TokenStatus: wallet.TokenIsBurnt,
+			TokenStatus: constants.TokenStatus_Burnt,
 			DID:         ownerDID,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
@@ -458,7 +459,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 		parentTokenType = c.TokenType(typeString)
 	}
 
-	if parentTokenInfo.TokenStatus != wallet.TokenIsBurnt {
+	if parentTokenInfo.TokenStatus != constants.TokenStatus_Burnt {
 		response.Message = "parent token not in burnt state"
 		c.log.Error("msg", response.Message)
 		return response, err

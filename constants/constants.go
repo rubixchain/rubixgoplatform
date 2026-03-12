@@ -62,11 +62,65 @@ const (
 
 // Token Statuses
 const (
-	TokenStatus_Free      = 0
-	TokenStatus_Locked    = 1
-	TokenStatus_Burnt     = 2
-	TokenStatus_Committed = 3
-	TokenStatus_Seed      = 99
+	TokenStatus_Free             = 0
+	TokenStatus_Locked           = 1
+	TokenStatus_Burnt            = 2
+	TokenStatus_Committed        = 3
+	TokenStatus_Pledged          = 4
+	TokenStatus_UnPledged        = 5
+	TokenStatus_Transferred      = 6
+	TokenStatus_Generated        = 7
+	TokenStatus_Deployed         = 8
+	TokenStatus_Fetched          = 9
+	TokenStatus_Executed         = 10
+	TokenStatus_Orphaned         = 11
+	TokenStatus_ChainSyncIssue   = 12
+	TokenStatus_PledgeIssue      = 13
+	TokenStatus_BeingDoubleSpent = 14
+	TokenStatus_PinnedAsService  = 15
+	TokenStatus_BurntForFT       = 16
+	TokenStatus_Pending          = 17
+	TokenStatus_QuorumPledged    = 20
+	TokenStatus_Seed             = 99
+)
+
+// IPFS provider detail function identifiers
+const (
+	ProviderFunc_Pin   = iota + 1 // 1
+	ProviderFunc_UnPin            // 2
+	ProviderFunc_Cat              // 3
+	ProviderFunc_Get              // 4
+	ProviderFunc_Add              // 5
+)
+
+// IPFS provider detail role identifiers
+const (
+	ProviderRole_Owner                  = iota + 1 // 1
+	ProviderRole_Quorum                            // 2
+	ProviderRole_PrevSender                        // 3
+	ProviderRole_Receiver                          // 4
+	ProviderRole_ParentTokenLock                   // 5
+	ProviderRole_DID                               // 6
+	ProviderRole_Staking                           // 7
+	ProviderRole_Pledging                          // 8
+	ProviderRole_QuorumPin                         // 9
+	ProviderRole_QuorumUnpin                       // 10
+	ProviderRole_ParentTokenPinByQuorum            // 11
+	ProviderRole_Pinning                           // 12
+	ProviderRole_FullNode                          // 13
+)
+
+// Token operation mode
+const (
+	TokenMode_Send = 0
+	TokenMode_Recv = 1
+)
+
+// Token chain sync status
+const (
+	TokenSync_Unrequired = 0
+	TokenSync_Incomplete = 1
+	TokenSync_Completed  = 2
 )
 
 // Requests Status

@@ -11,6 +11,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	signModule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -173,7 +174,7 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 			ParentTokenID: pt,
 			TokenValue:    tokenInfo.TokenValue,
 			DID:           tokenInfo.OwnerDID,
-			TokenStatus:   wallet.TokenIsFree,
+			TokenStatus:   constants.TokenStatus_Free,
 			CreatedAt:     time.Now(),
 			UpdatedAt:     time.Now(),
 		}

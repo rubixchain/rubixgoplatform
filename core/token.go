@@ -148,16 +148,16 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	}
 	for _, t := range wt {
 		switch t.TokenStatus {
-		case wallet.TokenIsFree:
+		case constants.TokenStatus_Free:
 			info.RBTAmount = info.RBTAmount + t.TokenValue
 			info.RBTAmount = floatPrecision(info.RBTAmount, MaxDecimalPlaces)
-		case wallet.TokenIsLocked:
+		case constants.TokenStatus_Locked:
 			info.LockedRBT = info.LockedRBT + t.TokenValue
 			info.LockedRBT = floatPrecision(info.LockedRBT, MaxDecimalPlaces)
-		case wallet.TokenIsPledged:
+		case constants.TokenStatus_Pledged:
 			info.PledgedRBT = info.PledgedRBT + t.TokenValue
 			info.PledgedRBT = floatPrecision(info.PledgedRBT, MaxDecimalPlaces)
-		case wallet.TokenIsPinnedAsService:
+		case constants.TokenStatus_PinnedAsService:
 			info.PinnedRBT = info.PinnedRBT + t.TokenValue
 			info.PinnedRBT = floatPrecision(info.PinnedRBT, MaxDecimalPlaces)
 		}
@@ -278,7 +278,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 			TokenID:     id,
 			DID:         did,
 			TokenValue:  1,
-			TokenStatus: wallet.TokenIsFree,
+			TokenStatus: constants.TokenStatus_Free,
 		}
 		err = c.w.CreateTokenBlock(blk)
 		if err != nil {
@@ -287,12 +287,12 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 		}
 
 		tokenIDBuffer := bytes.NewBufferString(id)
-		tokenHash, err := c.w.Add(tokenIDBuffer, did, wallet.AddFunc, true)
+		tokenHash, err := c.w.Add(tokenIDBuffer, did, constants.ProviderFunc_Add, true)
 		if err != nil {
 			return fmt.Errorf("createTokensAtLevel: failed to add token to ipfs: %v, err: %v", id, err)
 		}
 
-		if _, err := c.w.Pin(tokenHash, wallet.OwnerRole, did, "NA", did, "NA", t.TokenValue); err != nil {
+		if _, err := c.w.Pin(tokenHash, constants.ProviderRole_Owner, did, "NA", did, "NA", t.TokenValue); err != nil {
 			return fmt.Errorf("createChildTokensAtLevel: failed to pin child token: %v, err: %v", id, err)
 		}
 
@@ -755,7 +755,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 						}
 					}
 
-					c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
+					c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, constants.TokenSync_Unrequired)
 					continue
 				}
 
@@ -812,7 +812,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				}
 			}
 
-			c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, wallet.SyncUnrequired)
+			c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, constants.TokenSync_Unrequired)
 		}
 	}
 
@@ -903,18 +903,18 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // processRole handles specific roles (as integers) and returns a message
 func (c *Core) processRole(role int) string {
 	roleMessages := map[int]string{
-		wallet.OwnerRole:                  "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
-		wallet.QuorumRole:                 "Token chain block does not exist, the pinned role is QuorumRole",
-		wallet.PrevSenderRole:             "Token chain block does not exist, the pinned role is PrevSenderRole",
-		wallet.ReceiverRole:               "Token chain block does not exist, the pinned role is ReceiverRole",
-		wallet.ParentTokenLockRole:        "Token chain block does not exist, the pinned role is ParentTokenLockRole",
-		wallet.DIDRole:                    "Token chain block does not exist, the pinned role is DIDRole",
-		wallet.StakingRole:                "Token chain block does not exist, the pinned role is StakingRole",
-		wallet.PledgingRole:               "Token chain block does not exist, the pinned role is PledgingRole",
-		wallet.QuorumPinRole:              "Token chain block does not exist, the pinned role is QuorumPinRole",
-		wallet.QuorumUnpinRole:            "Token chain block does not exist, the pinned role is QuorumUnpinRole",
-		wallet.ParentTokenPinByQuorumRole: "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
-		wallet.PinningRole:                "Token chain block does not exist, the pinned role is PinningRole",
+		constants.ProviderRole_Owner:                  "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
+		constants.ProviderRole_Quorum:                 "Token chain block does not exist, the pinned role is QuorumRole",
+		constants.ProviderRole_PrevSender:             "Token chain block does not exist, the pinned role is PrevSenderRole",
+		constants.ProviderRole_Receiver:               "Token chain block does not exist, the pinned role is ReceiverRole",
+		constants.ProviderRole_ParentTokenLock:        "Token chain block does not exist, the pinned role is ParentTokenLockRole",
+		constants.ProviderRole_DID:                    "Token chain block does not exist, the pinned role is DIDRole",
+		constants.ProviderRole_Staking:                "Token chain block does not exist, the pinned role is StakingRole",
+		constants.ProviderRole_Pledging:               "Token chain block does not exist, the pinned role is PledgingRole",
+		constants.ProviderRole_QuorumPin:              "Token chain block does not exist, the pinned role is QuorumPinRole",
+		constants.ProviderRole_QuorumUnpin:            "Token chain block does not exist, the pinned role is QuorumUnpinRole",
+		constants.ProviderRole_ParentTokenPinByQuorum: "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
+		constants.ProviderRole_Pinning:                "Token chain block does not exist, the pinned role is PinningRole",
 	}
 
 	if message, exists := roleMessages[role]; exists {
@@ -1127,7 +1127,7 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 	// 		return err
 	// 	}
 	// 	// update sync status to incomplete
-	// 	err = c.w.UpdateTokenSyncStatus(syncReq.Token, wallet.SyncIncomplete)
+	// 	err = c.w.UpdateTokenSyncStatus(syncReq.Token, constants.TokenSync_Incomplete)
 	// 	if err != nil {
 	// 		if !strings.Contains(err.Error(), "no records found") {
 	// 			c.log.Error("failed to update token sync status as incomplete, token ", token)
@@ -1269,7 +1269,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	var blockHash, transactionID string
 	var latestBlockHeight uint64
 
-	// syncStatus := wallet.SyncCompleted
+	// syncStatus := constants.TokenSync_Completed
 	latestBlockAfterSync := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 	if latestBlockAfterSync != nil {
 		ownerDid = latestBlockAfterSync.GetOwner()
@@ -1300,7 +1300,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				PublisherDID:      p.GetPeerDID(),
 				TokenValue:        tokenSyncInfo.TokenValue,
 			}
-			syncStatus := wallet.SyncCompleted
+			syncStatus := constants.TokenSync_Completed
 			if genesisBlock != nil {
 				blocks := ReceivedBlock{
 					GenesisBlock: genesisBlock,
@@ -1318,7 +1318,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 				}
 			}
 			//If sync is completed remove those tokens from the FullNodeFailedToSyncTokens table of the fullnode.
-			if syncStatus == wallet.SyncCompleted {
+			if syncStatus == constants.TokenSync_Completed {
 
 				err := c.w.DeleteFailedToSyncTokenFromTable(tokenSyncInfo.TokenID)
 				if err != nil {
@@ -1349,7 +1349,7 @@ func (c *Core) syncMissingBlocks(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo) 
 	if minMissingBlockId == "" && maxMissingblockId == "" {
 		c.log.Debug("token chain is completely synced")
 		// update token sync status
-		err = c.w.UpdateTokenSyncStatus(tokenSyncInfo.TokenID, wallet.SyncCompleted)
+		err = c.w.UpdateTokenSyncStatus(tokenSyncInfo.TokenID, constants.TokenSync_Completed)
 		if err != nil {
 			c.log.Error("failed to update token sync status for token ", tokenSyncInfo.TokenID)
 			return err
@@ -1414,11 +1414,11 @@ func (c *Core) syncMissingBlocksOfTokenChains(tokenSyncMap map[string][]TokenSyn
 			if err != nil {
 				c.log.Error("failed to sync token chain for token ", tokenToSync.TokenID, "error", err)
 				// update sync status to incomplete
-				_ = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, wallet.SyncIncomplete)
+				_ = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, constants.TokenSync_Incomplete)
 				continue
 			}
 			// update sync status to completed
-			err = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, wallet.SyncCompleted)
+			err = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, constants.TokenSync_Completed)
 			if err != nil {
 				c.log.Error("failed to update sync status after sync completed, token ", tokenToSync.TokenID)
 				continue
@@ -1445,13 +1445,13 @@ func (c *Core) syncFullTokenChains(tokenSyncMap map[string][]TokenSyncInfo) {
 			if err != nil {
 				c.log.Error("failed to sync token chain for token ", tokenToSync.TokenID, "error", err)
 				// // update sync status to incomplete
-				// _ = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, wallet.SyncIncomplete)
+				// _ = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, constants.TokenSync_Incomplete)
 				continue
 			}
 			//Add a logic to write the token details into tokenstorage table
 
 			// // update sync status to completed
-			// err = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, wallet.SyncCompleted)
+			// err = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, constants.TokenSync_Completed)
 			// if err != nil {
 			// 	c.log.Error("failed to update sync status after sync completed, token ", tokenToSync.TokenID, "error: ", err)
 			// 	continue
@@ -1939,7 +1939,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			if err != nil {
 				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
 			}
-			c.w.UnPin(tokenHash, wallet.OwnerRole, did)
+			c.w.UnPin(tokenHash, constants.ProviderRole_Owner, did)
 			return &tokendetail, fmt.Errorf("failed to create new token chain block")
 		}
 
@@ -1950,7 +1950,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			if err != nil {
 				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
 			}
-			c.w.UnPin(tokenHash, wallet.OwnerRole, did)
+			c.w.UnPin(tokenHash, constants.ProviderRole_Owner, did)
 			return &tokendetail, fmt.Errorf("failed to update did signature")
 		}
 
@@ -1958,7 +1958,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			TokenID:     id,
 			DID:         did,
 			TokenValue:  1,
-			TokenStatus: wallet.TokenIsFree,
+			TokenStatus: constants.TokenStatus_Free,
 		}
 
 		err = c.w.CreateTokenBlock(blk)
@@ -1968,7 +1968,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			if err != nil {
 				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
 			}
-			c.w.UnPin(tokenHash, wallet.OwnerRole, did)
+			c.w.UnPin(tokenHash, constants.ProviderRole_Owner, did)
 			return &tokendetail, err
 		}
 
@@ -1980,7 +1980,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			if err != nil {
 				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
 			}
-			c.w.UnPin(tokenHash, wallet.OwnerRole, did)
+			c.w.UnPin(tokenHash, constants.ProviderRole_Owner, did)
 			return &tokendetail, err
 		}
 
@@ -2292,7 +2292,7 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 		tokenType := c.TokenType(tokenTypeStr)
 		// fetch sender did for the respective txn id
 		var senderDID string
-		if token.TokenStatus == wallet.QuorumPledgedForThisToken || token.TokenStatus == wallet.TokenIsBurnt {
+		if token.TokenStatus == constants.TokenStatus_QuorumPledged || token.TokenStatus == constants.TokenStatus_Burnt {
 			senderDID = token.DID
 		} else if token.TransactionID != "" {
 			txnInfo, err := c.w.GetTransactionDetailsbyTransactionId(token.TransactionID)
@@ -2302,7 +2302,7 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 			senderDID = txnInfo.SenderDID
 		}
 		if c.IsDIDExist("", senderDID) {
-			_ = c.w.UpdateTokenSyncStatus(token.TokenID, wallet.SyncUnrequired)
+			_ = c.w.UpdateTokenSyncStatus(token.TokenID, constants.TokenSync_Unrequired)
 			continue
 		}
 
@@ -2322,24 +2322,24 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 	if receivedBlock.LatestBlock != nil {
 		switch txnBlockType {
 		case block.TokenBurntType:
-			tokenStatus = wallet.TokenIsBurnt
+			tokenStatus = constants.TokenStatus_Burnt
 		case block.TokenGeneratedType, block.TokenTransferredType,
 			block.TokenUnpledgedType, block.TokenMintedType, block.TokenMigratedType:
-			tokenStatus = wallet.TokenIsFree
+			tokenStatus = constants.TokenStatus_Free
 		case block.TokenPledgedType:
-			tokenStatus = wallet.TokenIsPledged
+			tokenStatus = constants.TokenStatus_Pledged
 		case block.TokenDeployedType:
-			tokenStatus = wallet.TokenIsDeployed
+			tokenStatus = constants.TokenStatus_Deployed
 		case block.TokenExecutedType:
-			tokenStatus = wallet.TokenIsExecuted
+			tokenStatus = constants.TokenStatus_Executed
 		case block.TokenIsBurntForFT:
-			tokenStatus = wallet.TokenIsBurntForFT
+			tokenStatus = constants.TokenStatus_BurntForFT
 		case block.TokenCommittedType:
-			tokenStatus = wallet.TokenIsCommitted
+			tokenStatus = constants.TokenStatus_Committed
 		case block.TokenContractCommited:
-			tokenStatus = wallet.TokenIsCommitted
+			tokenStatus = constants.TokenStatus_Committed
 		case block.TokenPinnedAsService:
-			tokenStatus = wallet.TokenIsPinnedAsService
+			tokenStatus = constants.TokenStatus_PinnedAsService
 
 		}
 
@@ -2601,7 +2601,7 @@ func (c *Core) AddTokenContentToPSQL(tokenId string, assetType int) error {
 			bytes.NewBufferString(tokenId),
 		)
 
-		tokenContent, err = c.w.Cat(tokenHash, wallet.FullNodeRole, c.peerID)
+		tokenContent, err = c.w.Cat(tokenHash, constants.ProviderRole_FullNode, c.peerID)
 		if err == nil {
 			break
 		}

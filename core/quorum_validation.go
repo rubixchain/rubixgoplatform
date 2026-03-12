@@ -19,6 +19,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -167,7 +168,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 			TokenID:     parentTokenID,
 			TokenValue:  tv,
 			DID:         p.GetPeerDID(),
-			TokenStatus: wallet.TokenIsBurnt,
+			TokenStatus: constants.TokenStatus_Burnt,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}
@@ -186,12 +187,12 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 		}
 		c.w.CreateToken(td)
 	} else {
-		td.TokenStatus = wallet.TokenIsBurnt
+		td.TokenStatus = constants.TokenStatus_Burnt
 		c.w.UpdateToken(td)
 	}
 	// update sync status to incomplete
-	if td.SyncStatus == wallet.SyncUnrequired {
-		err = c.w.UpdateTokenSyncStatus(parentTokenID, wallet.SyncIncomplete)
+	if td.SyncStatus == constants.TokenSync_Unrequired {
+		err = c.w.UpdateTokenSyncStatus(parentTokenID, constants.TokenSync_Incomplete)
 		if err != nil {
 			if !strings.Contains(err.Error(), "no records found") {
 				c.log.Error("failed to update parent token sync status as incomplete, token ", parentTokenID)
@@ -258,7 +259,7 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 			c.log.Error(fmt.Sprintf("Unable to do IPFS Add operation on Token: %v", err))
 			return nil, false
 		}
-		_, err = c.w.Pin(parentTokenHash, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
+		_, err = c.w.Pin(parentTokenHash, constants.ProviderRole_ParentTokenPinByQuorum, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
 		if err != nil {
 			c.log.Error("Failed to pin parent token for token", "token", ti.Token, "err", err)
 			return err, false
@@ -343,9 +344,9 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	}
 
 	tokenInfo.DID = sc.GetSenderDID()
-	tokenInfo.TokenStatus = wallet.QuorumPledgedForThisToken
+	tokenInfo.TokenStatus = constants.TokenStatus_QuorumPledged
 	tokenInfo.TransactionID = b.GetTid()
-	tokenInfo.SyncStatus = wallet.SyncIncomplete
+	tokenInfo.SyncStatus = constants.TokenSync_Incomplete
 	dbWriteSem <- struct{}{}
 	err = util.RetrySQLiteWrite(func() error {
 		return c.w.UpdateToken(tokenInfo)
@@ -1338,13 +1339,13 @@ func (c *Core) pinTokenState(
 					tokenIDTokenStateHash, tpm, retryErr = c.w.AddWithProviderMap(
 						bytes.NewBuffer([]byte(data)),
 						did,
-						wallet.QuorumPinRole,
+						constants.ProviderRole_QuorumPin,
 					)
 					// Fill in extra fields for pinning
-					tpm.FuncID = wallet.PinFunc
+					tpm.FuncID = constants.ProviderFunc_Pin
 					tpm.TransactionID = transactionId
-					tpm.Sender = sender
-					tpm.Receiver = receiver
+					tpm.Initiator = sender
+					tpm.Owner = receiver
 					tpm.TokenValue = tokenValue
 					return retryErr
 				})
@@ -1368,7 +1369,7 @@ func (c *Core) pinTokenState(
 
 				// Retry block for Pin (but skip AddProviderDetails inside Pin)
 				err = retry(func() error {
-					_, retryErr := c.w.Pin(tokenIDTokenStateHash, wallet.QuorumPinRole, did, transactionId, sender, receiver, tokenValue, true)
+					_, retryErr := c.w.Pin(tokenIDTokenStateHash, constants.ProviderRole_QuorumPin, did, transactionId, sender, receiver, tokenValue, true)
 					return retryErr
 				})
 				if err != nil {
@@ -1447,7 +1448,7 @@ func (c *Core) pinTokenState(
 
 func (c *Core) unPinTokenState(ids []string, did string) error {
 	for _, id := range ids {
-		_, err := c.w.UnPin(id, wallet.QuorumRole, did)
+		_, err := c.w.UnPin(id, constants.ProviderRole_Quorum, did)
 		if err != nil {
 			c.log.Warn("Error unpinning token state", "id", id, "err", err)
 			return err
