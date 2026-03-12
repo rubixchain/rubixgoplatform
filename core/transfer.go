@@ -97,9 +97,13 @@ func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *
 	}
 
 	// Attach quorum tokens
-	transactionInfo.Quorums = pledgeTokenResponse.PledgeTokens
+	pledegTokenInfo := models.QuorumInfo{
+		DID : quorumAddress,
+		Tokens : pledgeTokenResponse.PledgeTokens,
+	}
+	transactionInfo.Quorums = pledegTokenInfo
 
-	// Create transaction hash
+	// Create transaction info
 	jsonBytes, err := json.Marshal(transactionInfo)
 	if err != nil {
 		resp.Message = "Failed to marshal transaction info: " + err.Error()
@@ -107,12 +111,12 @@ func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *
 	}
 
 	hashBytes := util.CalculateHash(jsonBytes, "SHA3-256")
-	txHash := util.HexToStr(hashBytes)
+	transactionId := util.HexToStr(hashBytes)
 
-	c.log.Info("Transaction hash created", "hash", txHash)
+	c.log.Info("Transaction hash created", "hash", transactionId)
 
 	// Sign transaction
-	signatureBytes, err := dc.PvtSign([]byte(txHash))
+	signatureBytes, err := dc.PvtSign([]byte(transactionId))
 	if err != nil {
 		c.log.Error("Failed to sign transaction", "err", err)
 		resp.Message = "Failed to sign transaction: " + err.Error()
