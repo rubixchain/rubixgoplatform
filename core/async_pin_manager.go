@@ -10,6 +10,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -34,32 +35,32 @@ type AsyncPinJob struct {
 	Error            error
 	TokenStateChecks []TokenStateCheckResult
 	DID              string
-	Sender           string
-	Receiver         string
+	Initator         string
+	Owner            string
 	TokenValue       float64
 }
 
 // AsyncPinManager manages background token pinning
 type AsyncPinManager struct {
-	core      *Core
-	log       logger.Logger
-	jobs      sync.Map // transactionID -> *AsyncPinJob
-	jobQueue  chan *AsyncPinJob
-	workers   int
-	wg        sync.WaitGroup
-	ctx       context.Context
-	cancel    context.CancelFunc
-	mu        sync.RWMutex
+	core     *Core
+	log      logger.Logger
+	jobs     sync.Map // transactionID -> *AsyncPinJob
+	jobQueue chan *AsyncPinJob
+	workers  int
+	wg       sync.WaitGroup
+	ctx      context.Context
+	cancel   context.CancelFunc
+	mu       sync.RWMutex
 }
 
 // NewAsyncPinManager creates a new async pin manager
 func NewAsyncPinManager(core *Core, workers int) *AsyncPinManager {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	if workers <= 0 {
 		workers = 4 // Default workers
 	}
-	
+
 	apm := &AsyncPinManager{
 		core:     core,
 		log:      core.log.Named("AsyncPinManager"),
@@ -68,24 +69,24 @@ func NewAsyncPinManager(core *Core, workers int) *AsyncPinManager {
 		ctx:      ctx,
 		cancel:   cancel,
 	}
-	
+
 	// Start worker pool
 	for i := 0; i < workers; i++ {
 		apm.wg.Add(1)
 		go apm.worker(i)
 	}
-	
+
 	// Start status monitor
 	apm.wg.Add(1)
 	go apm.statusMonitor()
-	
+
 	return apm
 }
 
 // SubmitPinJob submits a new pinning job to the background queue
 func (apm *AsyncPinManager) SubmitPinJob(
 	tokenStateCheckResult []TokenStateCheckResult,
-	did, transactionId, sender, receiver string,
+	did, transactionId, initator, owner string,
 	tokenValue float64,
 ) error {
 	job := &AsyncPinJob{
@@ -95,18 +96,18 @@ func (apm *AsyncPinManager) SubmitPinJob(
 		Status:           PinStatusQueued,
 		TokenStateChecks: tokenStateCheckResult,
 		DID:              did,
-		Sender:           sender,
-		Receiver:         receiver,
+		Initator:         initator,
+		Owner:            owner,
 		TokenValue:       tokenValue,
 	}
-	
+
 	// Store job
 	apm.jobs.Store(transactionId, job)
-	
+
 	// Queue for processing
 	select {
 	case apm.jobQueue <- job:
-		apm.log.Info("Pin job queued", 
+		apm.log.Info("Pin job queued",
 			"transaction_id", transactionId,
 			"token_count", job.TokenCount)
 		return nil
@@ -128,7 +129,7 @@ func (apm *AsyncPinManager) GetJobStatus(transactionID string) (*AsyncPinJob, bo
 // worker processes pinning jobs
 func (apm *AsyncPinManager) worker(id int) {
 	defer apm.wg.Done()
-	
+
 	for {
 		select {
 		case <-apm.ctx.Done():
@@ -143,73 +144,73 @@ func (apm *AsyncPinManager) worker(id int) {
 func (apm *AsyncPinManager) processJob(job *AsyncPinJob) {
 	job.Status = PinStatusInProgress
 	startTime := time.Now()
-	
+
 	apm.log.Info("Starting async pin job",
 		"transaction_id", job.TransactionID,
 		"token_count", job.TokenCount)
-	
+
 	// Process in batches optimized for different token counts
 	batchSize := 100
 	if job.TokenCount > 500 {
 		batchSize = 50 // Smaller batches for larger transactions to maintain responsiveness
 	}
-	
+
 	var (
-		providerMaps     []model.TokenProviderMap
-		providerMapMutex sync.Mutex
-		wg               sync.WaitGroup
-		semaphore        = make(chan struct{}, 5) // Limit concurrent pins
+		providerMaps      []model.TokenProviderMap
+		providerMapMutex  sync.Mutex
+		wg                sync.WaitGroup
+		semaphore               = make(chan struct{}, 5) // Limit concurrent pins
 		lastLoggedPercent int32 = 0
 	)
-	
+
 	for i := 0; i < job.TokenCount; i += batchSize {
 		end := i + batchSize
 		if end > job.TokenCount {
 			end = job.TokenCount
 		}
-		
+
 		// Process batch
 		for j := i; j < end; j++ {
 			if job.TokenStateChecks[j].Error != nil || job.TokenStateChecks[j].Exhausted {
 				continue
 			}
-			
+
 			wg.Add(1)
 			go func(index int) {
 				defer wg.Done()
-				
+
 				// Rate limit
 				semaphore <- struct{}{}
 				defer func() { <-semaphore }()
-				
+
 				data := job.TokenStateChecks[index].tokenIDTokenStateData
-				
+
 				// Pin with retry
 				err := retryAsync(func() error {
 					_, tpm, err := apm.core.w.AddWithProviderMap(
 						bytes.NewBuffer([]byte(data)),
 						job.DID,
-						wallet.QuorumPinRole,
+						constants.ProviderRole_QuorumPin,
 					)
 					if err != nil {
 						return err
 					}
-					
+
 					// Fill in extra fields
-					tpm.FuncID = wallet.PinFunc
+					tpm.FuncID = constants.ProviderFunc_Pin
 					tpm.TransactionID = job.TransactionID
-					tpm.Sender = job.Sender
-					tpm.Receiver = job.Receiver
+					tpm.Initiator = job.Initator
+					tpm.Owner = job.Owner
 					tpm.TokenValue = job.TokenValue
-					
+
 					// Add to collection
 					providerMapMutex.Lock()
 					providerMaps = append(providerMaps, tpm)
 					providerMapMutex.Unlock()
-					
+
 					return nil
 				}, 3, 2*time.Second)
-				
+
 				if err != nil {
 					atomic.AddInt32(&job.FailedCount, 1)
 					apm.log.Error("Failed to pin token state",
@@ -220,22 +221,22 @@ func (apm *AsyncPinManager) processJob(job *AsyncPinJob) {
 				}
 			}(j)
 		}
-		
+
 		// Wait for batch to complete
 		wg.Wait()
-		
+
 		// Log progress based on percentage
 		completed := atomic.LoadInt32(&job.CompletedCount)
 		failed := atomic.LoadInt32(&job.FailedCount)
 		processed := completed + failed
 		currentPercent := int32((float64(processed) * 100) / float64(job.TokenCount))
-		
+
 		// Log every 20% or at completion for large jobs, every 10% for smaller ones
 		logInterval := int32(10)
 		if job.TokenCount > 1000 {
 			logInterval = 20
 		}
-		
+
 		if currentPercent >= lastLoggedPercent+logInterval || processed == int32(job.TokenCount) {
 			apm.log.Info("Async pin progress",
 				"transaction_id", job.TransactionID,
@@ -245,13 +246,13 @@ func (apm *AsyncPinManager) processJob(job *AsyncPinJob) {
 				"total", job.TokenCount)
 			lastLoggedPercent = (currentPercent / logInterval) * logInterval
 		}
-		
+
 		// Small delay between batches
 		if end < job.TokenCount {
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
-	
+
 	// Update final status
 	if job.FailedCount > 0 {
 		job.Status = PinStatusFailed
@@ -259,7 +260,7 @@ func (apm *AsyncPinManager) processJob(job *AsyncPinJob) {
 	} else {
 		job.Status = PinStatusCompleted
 	}
-	
+
 	duration := time.Since(startTime)
 	apm.log.Info("Async pin job completed",
 		"transaction_id", job.TransactionID,
@@ -267,7 +268,7 @@ func (apm *AsyncPinManager) processJob(job *AsyncPinJob) {
 		"completed", job.CompletedCount,
 		"failed", job.FailedCount,
 		"status", job.Status)
-	
+
 	// Store provider maps if successful
 	if len(providerMaps) > 0 && job.FailedCount == 0 {
 		// Provider maps are already stored by AddWithProviderMap
@@ -280,10 +281,10 @@ func (apm *AsyncPinManager) processJob(job *AsyncPinJob) {
 // statusMonitor periodically logs status of active jobs
 func (apm *AsyncPinManager) statusMonitor() {
 	defer apm.wg.Done()
-	
+
 	ticker := time.NewTicker(60 * time.Second) // Reduced frequency to minimize log noise
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-apm.ctx.Done():
@@ -297,7 +298,7 @@ func (apm *AsyncPinManager) statusMonitor() {
 // logStatus logs the current status of all jobs
 func (apm *AsyncPinManager) logStatus() {
 	var queued, inProgress, completed, failed int
-	
+
 	apm.jobs.Range(func(key, value interface{}) bool {
 		job := value.(*AsyncPinJob)
 		switch job.Status {
@@ -312,7 +313,7 @@ func (apm *AsyncPinManager) logStatus() {
 		}
 		return true
 	})
-	
+
 	if queued > 0 || inProgress > 0 {
 		apm.log.Info("Async pin manager status",
 			"queued", queued,
@@ -325,7 +326,7 @@ func (apm *AsyncPinManager) logStatus() {
 // WaitForJob waits for a specific job to complete with timeout
 func (apm *AsyncPinManager) WaitForJob(transactionID string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
-	
+
 	for time.Now().Before(deadline) {
 		if job, ok := apm.GetJobStatus(transactionID); ok {
 			switch job.Status {
@@ -337,7 +338,7 @@ func (apm *AsyncPinManager) WaitForJob(transactionID string, timeout time.Durati
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	
+
 	return fmt.Errorf("timeout waiting for pin job %s", transactionID)
 }
 
@@ -354,21 +355,21 @@ func (apm *AsyncPinManager) Shutdown() {
 func (apm *AsyncPinManager) CleanupOldJobs(olderThan time.Duration) int {
 	cutoff := time.Now().Add(-olderThan)
 	cleaned := 0
-	
+
 	apm.jobs.Range(func(key, value interface{}) bool {
 		job := value.(*AsyncPinJob)
-		if (job.Status == PinStatusCompleted || job.Status == PinStatusFailed) && 
+		if (job.Status == PinStatusCompleted || job.Status == PinStatusFailed) &&
 			job.StartTime.Before(cutoff) {
 			apm.jobs.Delete(key)
 			cleaned++
 		}
 		return true
 	})
-	
+
 	if cleaned > 0 {
 		apm.log.Info("Cleaned up old pin jobs", "count", cleaned)
 	}
-	
+
 	return cleaned
 }
 
