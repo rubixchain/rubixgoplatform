@@ -50,29 +50,31 @@ type TokenType struct {
 }
 
 type Token struct {
-	TokenID        string         `db:"token_id"`
-	ParentTokenID  pgtype.Text    `db:"parent_token_id"`
-	TokenValue     pgtype.Numeric `db:"token_value"`
-	TokenStatus    int16          `db:"token_status"`
-	DID            string         `db:"did"`
-	TransactionID  string         `db:"transaction_id"`
-	TokenStateHash string         `db:"token_state_hash"`
-	TokenType      int16          `db:"token_type"`
-	CreatedAt      time.Time      `db:"created_at"`
-	UpdatedAt      time.Time      `db:"updated_at"`
+	TokenID        string      `db:"token_id"`
+	ParentTokenID  pgtype.Text `db:"parent_token_id"`
+	TokenValue     float64     `db:"token_value"`
+	TokenStatus    int16       `db:"token_status"`
+	DID            string      `db:"did"`
+	TransactionID  string      `db:"transaction_id"`
+	TokenStateHash string      `db:"token_state_hash"`
+	TokenType      int16       `db:"token_type"`
+	LatestPosition int64       `db:"latest_position"`
+	LatestRole     int16       `db:"latest_role"`
+	CreatedAt      time.Time   `db:"created_at"`
+	UpdatedAt      time.Time   `db:"updated_at"`
 }
 
 type TokenProviderMap struct {
-	Token         string         `db:"token"`
-	DID           pgtype.Text    `db:"did"`
-	FuncID        pgtype.Int4    `db:"func_id"`
-	Role          pgtype.Int4    `db:"role"`
-	TransactionID pgtype.Text    `db:"transaction_id"`
-	Sender        pgtype.Text    `db:"sender"`
-	Receiver      pgtype.Text    `db:"receiver"`
-	TokenValue    pgtype.Numeric `db:"token_value"`
-	CreatedAt     time.Time      `db:"created_at"`
-	UpdatedAt     time.Time      `db:"updated_at"`
+	Token         string    `db:"token"`
+	DID           string    `db:"did"`
+	FuncID        int       `db:"func_id"`
+	Role          int       `db:"role"`
+	TransactionID string    `db:"transaction_id"`
+	Sender        string    `db:"sender"`
+	Receiver      string    `db:"receiver"`
+	TokenValue    float64   `db:"token_value"`
+	CreatedAt     time.Time `db:"created_at"`
+	UpdatedAt     time.Time `db:"updated_at"`
 }
 
 type UnpledgeSequenceInfo struct {
@@ -140,4 +142,13 @@ type Request struct {
 	Status        int16       `db:"status"`
 	CreatedAt     time.Time   `db:"created_at"`
 	UpdatedAt     time.Time   `db:"updated_at"`
+}
+
+type TokenDenom struct {
+	ID         int64     `db:"id"`
+	DID        string    `db:"did"`
+	TokenDemom float64   `db:"denom"`
+	Count      int64     `db:"count"`
+	CreatedAt  time.Time `db:"created_at"`
+	UpdatedAt  time.Time `db:"updated_at"`
 }

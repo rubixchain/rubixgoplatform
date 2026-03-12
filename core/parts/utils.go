@@ -5,26 +5,11 @@ import (
 	"math"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/token"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
+	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func getTokenType(isTestnet bool, tokenValue float64) int {
-	if isTestnet {
-		if tokenValue == 1 {
-			return token.TestTokenType
-		} else {
-			return token.TestPartTokenType
-		}
-	} else {
-		if tokenValue == 1 {
-			return token.RBTTokenType
-		} else {
-			return token.PartTokenType
-		}
-	}
-}
 
 func scaledFloatDiv(a float64, b float64) (int, error) {
 	scaledA := scaleFloat(a)
@@ -56,7 +41,6 @@ func scaleFloat(f float64) int {
 	return int(rubixmath.FloatPrecision(f * expVal))
 }
 
-
 func MaxTokensAtLevel(level int) int {
 	if level%2 == 1 {
 		return 2
@@ -72,7 +56,7 @@ func GetTokenValueFromIndexedID(indexedID string) (float64, error) {
 	if err != nil {
 		return rubixmath.ZeroFloat(), fmt.Errorf("GetTokenValueFromIndexedID: failed to convert indexed ID to hierarchical ID, err: %v", err)
 	}
-	
+
 	return GetTokenValueFromHierarchicalID(string(hierarchicalID))
 }
 
@@ -83,7 +67,7 @@ func GetTokenValueFromIndexedID(indexedID string) (float64, error) {
 func GetTokenValueFromHierarchicalID(heirarchicalID string) (float64, error) {
 	token := TokenID(heirarchicalID)
 	tokenLevel := token.Level()
-	tokenValue, err := wallet.LevelToDenom(tokenLevel)
+	tokenValue, err := util.LevelToDenom(tokenLevel)
 	if err != nil {
 		return 0.0, fmt.Errorf(
 			"GetTokenValueFromHierarchicalID: failed to get token value for level: %v, token: %v",
@@ -95,8 +79,7 @@ func GetTokenValueFromHierarchicalID(heirarchicalID string) (float64, error) {
 	return tokenValue, nil
 }
 
-
-func removeTokensFromList(tokens []wallet.Token, tokenIDsToRemove []wallet.Token) []wallet.Token {
+func removeTokensFromList(tokens []models.Token, tokenIDsToRemove []models.Token) []models.Token {
 	if len(tokenIDsToRemove) == 0 {
 		return tokens
 	}
@@ -106,7 +89,7 @@ func removeTokensFromList(tokens []wallet.Token, tokenIDsToRemove []wallet.Token
 		tokenIDSet[token.TokenID] = struct{}{}
 	}
 
-	var filteredTokens []wallet.Token
+	var filteredTokens []models.Token
 	for _, token := range tokens {
 		if _, found := tokenIDSet[token.TokenID]; !found {
 			filteredTokens = append(filteredTokens, token)
