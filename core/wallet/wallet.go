@@ -47,6 +47,10 @@ func NewWallet(ctx context.Context, db *storage.RubixDB, log logger.Logger) (*Wa
 	return w, nil
 }
 
+func (w *Wallet) InitFullNodeSchema() error {
+	return w.db.InitFullNodeSchema(w.Ctx)
+}
+
 func (w *Wallet) SetupWallet(ipfs *ipfsnode.Shell) {
 	w.ipfs = ipfs
 	// Default to direct IPFS operations if no health-managed operations are set
