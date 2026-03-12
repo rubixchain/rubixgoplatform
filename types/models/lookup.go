@@ -12,6 +12,16 @@ var DidAlgoTypes []DIDAlgo = []DIDAlgo{
 	{Name: constants.DidAlgo_SECP256K1, IsActive: true},
 }
 
+func GetDidAlgoType(didAlgo string) int {
+	for idx, entry := range DidAlgoTypes {
+		if entry.Name == didAlgo {
+			return idx + 1
+		}
+	}
+
+	return -1
+}
+
 // CAUTION: DO NOT CHANGE THE ORDER SINCE THE
 // DATABASE ID IS GENERATED BASED ON THE POSITION IN THE ARRAY.
 //
@@ -28,6 +38,16 @@ var TokenRoleTypes []TokenRole = []TokenRole{
 	{Name: constants.TokenRole_Unpledge, IsActive: true},
 }
 
+func GetTokenRoleID(tokenRole string) int {
+	for idx, entry := range TokenRoleTypes {
+		if entry.Name == tokenRole {
+			return idx + 1
+		}
+	}
+
+	return -1
+}
+
 // CAUTION: DO NOT CHANGE THE ORDER SINCE THE
 // DATABASE ID IS GENERATED BASED ON THE POSITION IN THE ARRAY.
 //
@@ -37,4 +57,14 @@ var TokenTypeTypes []TokenType = []TokenType{
 	{Name: constants.TokenType_NFT, IsActive: true},
 	{Name: constants.TokenType_FT, IsActive: true},
 	{Name: constants.TokenType_SmartContract, IsActive: true},
+}
+
+func GetTokenTypeID(tokenType string) int {
+	for idx, entry := range TokenTypeTypes {
+		if entry.Name == tokenType {
+			return idx + 1
+		}
+	}
+
+	return -1
 }

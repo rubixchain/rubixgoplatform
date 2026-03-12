@@ -25,3 +25,13 @@ var (
 		"/ip4/40.81.232.217/tcp/4001/p2p/12D3KooWK6V21GQotbub3cfgb5qAK1uUoUGPexf3vsLqw6yBJfen",
 	}
 )
+
+// Token Provider Roles
+const (
+	TokenProviderFunc_Add = 1
+	TokenProviderFunc_Pin = 2
+)
+
+const (
+	TokenProviderRole_Owner = 1
+)

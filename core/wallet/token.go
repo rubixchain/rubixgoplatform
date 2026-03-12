@@ -3,7 +3,9 @@ package wallet
 import (
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -23,7 +25,8 @@ func (w *Wallet) GetSmartContractTokens() ([]models.Token, error) {
 	return w.queryTokensByType(constants.TokenType_SmartContract)
 }
 
-func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, error) {
+// GetFreeRBTTokens returns tokens along with their IDs
+func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, []string, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT * FROM tokens WHERE token_type = (
 			SELECT id
@@ -33,10 +36,11 @@ func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, error) {
 		`, constants.TokenType_RBT, ownerDid,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var freeTokens []models.Token
+	var freeTokenIDs []string
 	for rows.Next() {
 		var freeToken models.Token
 		err := rows.Scan(
@@ -45,16 +49,106 @@ func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, error) {
 			&freeToken.CreatedAt, &freeToken.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		freeTokens = append(freeTokens, freeToken)
+		freeTokenIDs = append(freeTokenIDs, freeToken.TokenID)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return freeTokens, nil
+	return freeTokens, freeTokenIDs, nil
+}
+
+func (w *Wallet) GetRBTToken(tokenID string) (models.Token, error) {
+	row := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens WHERE token_id=$1`, tokenID,
+	)
+
+	var rbtToken models.Token
+	if err := row.Scan(
+		&rbtToken.TokenID, &rbtToken.ParentTokenID, &rbtToken.TokenValue, &rbtToken.TokenStatus,
+		&rbtToken.DID, &rbtToken.TransactionID, &rbtToken.TokenStateHash, &rbtToken.TokenType,
+		&rbtToken.LatestPosition, &rbtToken.LatestRole, &rbtToken.CreatedAt, &rbtToken.UpdatedAt,
+	); err != nil {
+		if err == pgx.ErrNoRows {
+			return models.Token{}, fmt.Errorf("GetRBTToken: token with id %v not found", tokenID)
+		}
+		return models.Token{}, fmt.Errorf("GetLatestTransactionByTokenID scan: %w", err)
+	}
+
+	return rbtToken, nil
+}
+
+func (w *Wallet) GetRBTTokenByStatus(tokenID string, tokenStatus int) (models.Token, error) {
+	row := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens WHERE token_id=$1 AND token_status=$2`, tokenID, tokenStatus,
+	)
+
+	var rbtToken models.Token
+	if err := row.Scan(
+		&rbtToken.TokenID, &rbtToken.ParentTokenID, &rbtToken.TokenValue, &rbtToken.TokenStatus,
+		&rbtToken.DID, &rbtToken.TransactionID, &rbtToken.TokenStateHash, &rbtToken.TokenType,
+		&rbtToken.LatestPosition, &rbtToken.LatestRole, &rbtToken.CreatedAt, &rbtToken.UpdatedAt,
+	); err != nil {
+		if err == pgx.ErrNoRows {
+			return models.Token{}, fmt.Errorf("GetRBTToken: token with id %v not found", tokenID)
+		}
+		return models.Token{}, fmt.Errorf("GetLatestTransactionByTokenID scan: %w", err)
+	}
+
+	return rbtToken, nil
+}
+
+func (w *Wallet) LockTokensByID(tokenIDs []string) error {
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET token_status=$1 where token_id = ANY($2)`, constants.TokenStatus_Locked, tokenIDs,
+	); err != nil {
+		return fmt.Errorf("unable to lock tokens, err: %v", err)
+	}
+
+	return nil
+}
+
+func (w *Wallet) LockTokens(tokens []models.Token) error {
+	var tokenIds []string
+	for _, token := range tokens {
+		tokenIds = append(tokenIds, token.TokenID)
+	}
+
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET token_status=$1 where token_id = ANY($2)`, constants.TokenStatus_Locked, tokenIds,
+	); err != nil {
+		return fmt.Errorf("unable to lock tokens, err: %v", err)
+	}
+
+	return nil
+}
+
+func (w *Wallet) LockToken(token models.Token) error {
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET token_status=$1 where token_id = $2`, constants.TokenStatus_Locked, token.TokenID,
+	); err != nil {
+		return fmt.Errorf("unable to lock tokens, err: %v", err)
+	}
+
+	return nil
+}
+
+func (w *Wallet) BurnToken(tokenID string) error {
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET token_status=$1 where token_id = $2`, constants.TokenStatus_Burnt, token.TokenID,
+	); err != nil {
+		return fmt.Errorf("unable to lock tokens, err: %v", err)
+	}
+
+	return nil
 }
 
 func (w *Wallet) queryTokensByType(tokenType string) ([]models.Token, error) {
@@ -92,4 +186,54 @@ func (w *Wallet) queryTokensByType(tokenType string) ([]models.Token, error) {
 	}
 
 	return tokens, nil
+}
+
+
+func (w *Wallet) GetTokensFromDenomMap(denomMap map[types.DenomValue]types.DenomCount, did string) ([]models.Token, error) {
+	var tokens []models.Token = make([]models.Token, 0)
+	
+	for denomValue, denomCount := range denomMap {
+		if denomCount == 0 {
+			continue
+		}
+		
+		rows, _ := w.db.Pool().Query(w.Ctx,
+			`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+			 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+			 FROM tokens WHERE token_value=$1 AND did=$2 AND token_status=$3 LIMIT=$4 `, 
+			 denomValue,
+			 did,
+			 constants.TokenStatus_Free,
+			 denomCount,
+		)
+		for rows.Next() {
+			var rbtToken models.Token
+			if err := rows.Scan(
+				&rbtToken.TokenID, &rbtToken.ParentTokenID, &rbtToken.TokenValue, &rbtToken.TokenStatus,
+				&rbtToken.DID, &rbtToken.TransactionID, &rbtToken.TokenStateHash, &rbtToken.TokenType,
+				&rbtToken.LatestPosition, &rbtToken.LatestRole, &rbtToken.CreatedAt, &rbtToken.UpdatedAt,
+			); err != nil {
+				return nil, fmt.Errorf("GetTokensFromDenomMap scan: %w", err)
+			}
+
+			tokens = append(tokens, rbtToken)
+		}
+	}
+
+	return tokens, nil
+}
+
+func (w *Wallet) CreateRBTToken(token models.Token) error {
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		token.TokenID, token.ParentTokenID, token.TokenValue, token.TokenStatus,
+		token.DID, token.TransactionID, token.TokenStateHash, token.TokenType,
+		token.LatestPosition, token.LatestRole, token.CreatedAt, token.UpdatedAt,
+	); err != nil {
+		return fmt.Errorf("failed to create token with id: %v, err: %v", token.TokenID, err)
+	}
+
+	return nil
 }
