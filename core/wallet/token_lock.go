@@ -8,34 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
-
-// scanToken scans a single row from a token query into a wallet.Token.
-// Uses *string and *int16 for nullable columns (parent_token_id, latest_role)
-// to avoid importing pgtype in the wallet package.
-func scanToken(row interface{ Scan(dest ...interface{}) error }) (Token, error) {
-	var tok Token
-	var parentTokenID *string
-	var latestRole *int16
-
-	err := row.Scan(
-		&tok.TokenID, &parentTokenID, &tok.TokenValue, &tok.TokenStatus,
-		&tok.DID, &tok.TransactionID, &tok.TokenStateHash, &tok.TokenType,
-		&tok.LatestPosition, &latestRole, &tok.CreatedAt, &tok.UpdatedAt,
-	)
-	if err != nil {
-		return Token{}, err
-	}
-
-	if parentTokenID != nil {
-		tok.ParentTokenID = *parentTokenID
-	}
-	if latestRole != nil {
-		tok.LatestRole = *latestRole
-	}
-
-	return tok, nil
-}
 
 // ── Tx-accepting query helpers ─────────────────────────────────────────
 // These run SELECT ... FOR UPDATE within a caller-managed transaction.
@@ -44,7 +18,7 @@ func scanToken(row interface{ Scan(dest ...interface{}) error }) (Token, error) 
 // QueryAndLockFTs selects and locks FT tokens within an existing transaction.
 // Joins with the fts table to filter by ft_name and creator_did.
 // Returns exactly `count` tokens or an error.
-func (w *Wallet) QueryAndLockFTs(ctx context.Context, tx pgx.Tx, ownerDID string, ftName string, creatorDID string, count int) ([]Token, error) {
+func (w *Wallet) QueryAndLockFTs(ctx context.Context, tx pgx.Tx, ownerDID string, ftName string, creatorDID string, count int) ([]models.Token, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT t.token_id, t.parent_token_id, t.token_value, t.token_status,
 		       t.did, t.transaction_id, t.token_state_hash, t.token_type,
@@ -62,18 +36,10 @@ func (w *Wallet) QueryAndLockFTs(ctx context.Context, tx pgx.Tx, ownerDID string
 	if err != nil {
 		return nil, fmt.Errorf("QueryAndLockFTs: query: %w", err)
 	}
-	defer rows.Close()
 
-	var tokens []Token
-	for rows.Next() {
-		tok, err := scanToken(rows)
-		if err != nil {
-			return nil, fmt.Errorf("QueryAndLockFTs: scan: %w", err)
-		}
-		tokens = append(tokens, tok)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("QueryAndLockFTs: rows: %w", err)
+	tokens, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Token])
+	if err != nil {
+		return nil, fmt.Errorf("QueryAndLockFTs: collect: %w", err)
 	}
 
 	if len(tokens) < count {
@@ -87,7 +53,7 @@ func (w *Wallet) QueryAndLockFTs(ctx context.Context, tx pgx.Tx, ownerDID string
 // QueryAndLockByIDs selects and locks tokens by their IDs within an existing transaction.
 // tokenIDs must be pre-sorted by the caller for deadlock prevention.
 // Returns all matched tokens or an error if any are missing/not-free/not-owned.
-func (w *Wallet) QueryAndLockByIDs(ctx context.Context, tx pgx.Tx, ownerDID string, tokenIDs []string, tokenTypeName string) ([]Token, error) {
+func (w *Wallet) QueryAndLockByIDs(ctx context.Context, tx pgx.Tx, ownerDID string, tokenIDs []string, tokenTypeName string) ([]models.Token, error) {
 	if len(tokenIDs) == 0 {
 		return nil, nil
 	}
@@ -107,18 +73,10 @@ func (w *Wallet) QueryAndLockByIDs(ctx context.Context, tx pgx.Tx, ownerDID stri
 	if err != nil {
 		return nil, fmt.Errorf("QueryAndLockByIDs(%s): query: %w", tokenTypeName, err)
 	}
-	defer rows.Close()
 
-	var locked []Token
-	for rows.Next() {
-		tok, err := scanToken(rows)
-		if err != nil {
-			return nil, fmt.Errorf("QueryAndLockByIDs(%s): scan: %w", tokenTypeName, err)
-		}
-		locked = append(locked, tok)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("QueryAndLockByIDs(%s): rows: %w", tokenTypeName, err)
+	locked, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Token])
+	if err != nil {
+		return nil, fmt.Errorf("QueryAndLockByIDs(%s): collect: %w", tokenTypeName, err)
 	}
 
 	if len(locked) != len(tokenIDs) {
@@ -146,7 +104,7 @@ func (w *Wallet) QueryAndLockByIDs(ctx context.Context, tx pgx.Tx, ownerDID stri
 // lockTokensByIDs is the internal batch lock helper. Opens a DB transaction,
 // locks all tokens matching the given IDs + type + owner + free status,
 // validates all were found, updates status to Locked, and commits.
-func (w *Wallet) lockTokensByIDs(ctx context.Context, ownerDID string, tokenIDs []string, tokenTypeName string, label string) ([]Token, error) {
+func (w *Wallet) lockTokensByIDs(ctx context.Context, ownerDID string, tokenIDs []string, tokenTypeName string, label string) ([]models.Token, error) {
 	if len(tokenIDs) == 0 {
 		return nil, nil
 	}
@@ -185,7 +143,7 @@ func (w *Wallet) lockTokensByIDs(ctx context.Context, ownerDID string, tokenIDs 
 
 // LockFTTokens selects and locks FT tokens matching ft_name and creator_did.
 // Self-contained: opens its own transaction.
-func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName string, creatorDID string, count int) ([]Token, error) {
+func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName string, creatorDID string, count int) ([]models.Token, error) {
 	tx, err := w.db.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("LockFTTokens: begin tx: %w", err)
@@ -222,29 +180,29 @@ func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName strin
 }
 
 // LockNFTTokens locks NFT tokens by IDs. Self-contained.
-func (w *Wallet) LockNFTTokens(ctx context.Context, ownerDID string, tokenIDs []string) ([]Token, error) {
+func (w *Wallet) LockNFTTokens(ctx context.Context, ownerDID string, tokenIDs []string) ([]models.Token, error) {
 	return w.lockTokensByIDs(ctx, ownerDID, tokenIDs, constants.TokenType_NFT, "LockNFTTokens")
 }
 
 // LockSmartContractTokens locks SC tokens by IDs. Self-contained.
-func (w *Wallet) LockSmartContractTokens(ctx context.Context, ownerDID string, tokenIDs []string) ([]Token, error) {
+func (w *Wallet) LockSmartContractTokens(ctx context.Context, ownerDID string, tokenIDs []string) ([]models.Token, error) {
 	return w.lockTokensByIDs(ctx, ownerDID, tokenIDs, constants.TokenType_SmartContract, "LockSmartContractTokens")
 }
 
 // LockNFTToken locks a single NFT token. Convenience wrapper.
-func (w *Wallet) LockNFTToken(ctx context.Context, ownerDID string, tokenID string) (Token, error) {
+func (w *Wallet) LockNFTToken(ctx context.Context, ownerDID string, tokenID string) (models.Token, error) {
 	tokens, err := w.LockNFTTokens(ctx, ownerDID, []string{tokenID})
 	if err != nil {
-		return Token{}, err
+		return models.Token{}, err
 	}
 	return tokens[0], nil
 }
 
 // LockSmartContractToken locks a single SC token. Convenience wrapper.
-func (w *Wallet) LockSmartContractToken(ctx context.Context, ownerDID string, tokenID string) (Token, error) {
+func (w *Wallet) LockSmartContractToken(ctx context.Context, ownerDID string, tokenID string) (models.Token, error) {
 	tokens, err := w.LockSmartContractTokens(ctx, ownerDID, []string{tokenID})
 	if err != nil {
-		return Token{}, err
+		return models.Token{}, err
 	}
 	return tokens[0], nil
 }

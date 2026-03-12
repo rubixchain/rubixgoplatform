@@ -15,18 +15,8 @@ func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, er
 	if err != nil {
 		return nil, fmt.Errorf("GetTokenChainByTokenID: %w", err)
 	}
-	defer rows.Close()
 
-	var entries []models.TokenChain
-	for rows.Next() {
-		var tc models.TokenChain
-		if err := rows.Scan(&tc.TokenID, &tc.TransactionID, &tc.Role, &tc.Height, &tc.CreatedAt, &tc.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("GetTokenChainByTokenID scan: %w", err)
-		}
-		entries = append(entries, tc)
-	}
-
-	return entries, rows.Err()
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
 }
 
 func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.Transactions, int16, error) {

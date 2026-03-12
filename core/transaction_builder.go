@@ -15,26 +15,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-// tokenToInfo maps a wallet.Token to a models.TokenInfo.
-// PreviousTransactionID is sourced from the token's TransactionID field,
-// which represents the latest transaction for that token in the DB.
-func tokenToInfo(t wallet.Token) *models.TokenInfo {
-	return &models.TokenInfo{
-		TokenID:               t.TokenID,
-		PreviousTransactionID: t.TransactionID,
-	}
-}
-
-// tokenToInfoWithData maps a wallet.Token to a models.TokenInfo with additional data.
-// Used for NFT and SmartContract tokens where the request carries execution data.
-func tokenToInfoWithData(t wallet.Token, data string) *models.TokenInfo {
-	return &models.TokenInfo{
-		TokenID:               t.TokenID,
-		PreviousTransactionID: t.TransactionID,
-		Data:                  data,
-	}
-}
-
 // BuildTransactionInfoFromRequest prepares a transaction by collecting and locking tokens
 // for a multi-asset transfer request. This is the single entry point for all token types:
 //
@@ -68,7 +48,10 @@ func BuildTransactionInfoFromRequest(
 
 		rbtInfos := make([]*models.TokenInfo, len(rbtTokens))
 		for i, tok := range rbtTokens {
-			rbtInfos[i] = tokenToInfo(tok)
+			rbtInfos[i] = &models.TokenInfo{
+				TokenID:               tok.TokenID,
+				PreviousTransactionID: tok.TransactionID,
+			}
 			totalAmount += tok.TokenValue
 		}
 		txTokens.RBT = rbtInfos
@@ -98,9 +81,14 @@ func BuildTransactionInfoFromRequest(
 					return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: FT lock failed for ft_name=%s: %w", ftInfo.FTName, err)
 				}
 				for _, tok := range selected {
-					txTokens.FT = append(txTokens.FT, tokenToInfo(tok))
+					txTokens.FT = append(txTokens.FT, &models.TokenInfo{
+						TokenID:               tok.TokenID,
+						PreviousTransactionID: tok.TransactionID,
+					})
 					allLockedIDs = append(allLockedIDs, tok.TokenID)
-					totalAmount += tok.TokenValue
+					if f, err := tok.TokenValue.Float64Value(); err == nil {
+						totalAmount += f.Float64
+					}
 				}
 			}
 		}
@@ -121,9 +109,15 @@ func BuildTransactionInfoFromRequest(
 				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: NFT lock failed: %w", err)
 			}
 			for _, tok := range locked {
-				txTokens.NFT = append(txTokens.NFT, tokenToInfoWithData(tok, nftDataMap[tok.TokenID]))
+				txTokens.NFT = append(txTokens.NFT, &models.TokenInfo{
+					TokenID:               tok.TokenID,
+					PreviousTransactionID: tok.TransactionID,
+					Data:                  nftDataMap[tok.TokenID],
+				})
 				allLockedIDs = append(allLockedIDs, tok.TokenID)
-				totalAmount += tok.TokenValue
+				if f, err := tok.TokenValue.Float64Value(); err == nil {
+					totalAmount += f.Float64
+				}
 			}
 		}
 
@@ -143,9 +137,15 @@ func BuildTransactionInfoFromRequest(
 				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: SC lock failed: %w", err)
 			}
 			for _, tok := range locked {
-				txTokens.SmartContract = append(txTokens.SmartContract, tokenToInfoWithData(tok, scDataMap[tok.TokenID]))
+				txTokens.SmartContract = append(txTokens.SmartContract, &models.TokenInfo{
+					TokenID:               tok.TokenID,
+					PreviousTransactionID: tok.TransactionID,
+					Data:                  scDataMap[tok.TokenID],
+				})
 				allLockedIDs = append(allLockedIDs, tok.TokenID)
-				totalAmount += tok.TokenValue
+				if f, err := tok.TokenValue.Float64Value(); err == nil {
+					totalAmount += f.Float64
+				}
 			}
 		}
 

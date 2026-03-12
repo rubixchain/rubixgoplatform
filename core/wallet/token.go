@@ -190,23 +190,22 @@ func (w *Wallet) queryTokensByType(tokenType string) ([]models.Token, error) {
 	return tokens, nil
 }
 
-
 func (w *Wallet) GetTokensFromDenomMap(denomMap map[types.DenomValue]types.DenomCount, did string) ([]models.Token, error) {
 	var tokens []models.Token = make([]models.Token, 0)
-	
+
 	for denomValue, denomCount := range denomMap {
 		if denomCount == 0 {
 			continue
 		}
-		
+
 		rows, _ := w.db.Pool().Query(w.Ctx,
 			`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
 			 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
-			 FROM tokens WHERE token_value=$1 AND did=$2 AND token_status=$3 LIMIT=$4 `, 
-			 denomValue,
-			 did,
-			 constants.TokenStatus_Free,
-			 denomCount,
+			 FROM tokens WHERE token_value=$1 AND did=$2 AND token_status=$3 LIMIT=$4 `,
+			denomValue,
+			did,
+			constants.TokenStatus_Free,
+			denomCount,
 		)
 		for rows.Next() {
 			var rbtToken models.Token
