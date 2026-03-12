@@ -7,7 +7,7 @@ type TransactionInfo struct {
 	Network         string                 `json:"network"`
 	Tokens          *TransactionTokens     `json:"tokens"`
 	CommittedTokens []*TokenInfo            `json:"committedTokens"`
-	Quorums         map[string][]*TokenInfo `json:"quorums"`
+	Quorums         []*QuorumInfo `json:"quorums"`
 	Memo            string                 `json:"memo"`
 }
 
@@ -22,6 +22,11 @@ type TokenInfo struct {
 	TokenID               string `json:"tokenId"`
 	PreviousTransactionID string `json:"previousTransactionID"`
 	Data string `json:"data"`
+}
+
+type QuorumInfo struct {
+	Did string `json:"did"`
+	Tokens []*TokenInfo `json:"tokens"`
 }
 
 type QuorumSignature struct {
