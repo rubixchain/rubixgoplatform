@@ -7,6 +7,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
+	"github.com/rubixchain/rubixgoplatform/types"
 )
 
 // GetMaxDenomTreeLevel gets the max level of a Denom Tree
@@ -202,4 +203,40 @@ func GetTokenIdFromPath(pathStr string) (int, error) {
 	}
 
 	return levelStart + pos, nil
+}
+
+func GetSplitAndNonsplitTokenDenom(
+	inputTokenDenom map[types.DenomValue]types.DenomCount, 
+	transferAmount float64,
+) (targetDenomArr map[types.DenomValue]types.DenomCount, updatedDenomArr map[types.DenomValue]types.DenomCount, remaining float64, err error) {
+		
+	targetDenomArr = make(map[types.DenomValue]types.DenomCount)
+	updatedDenomArr = make(map[types.DenomValue]types.DenomCount)
+
+	for k, v := range inputTokenDenom {
+		updatedDenomArr[k] = v
+	}
+
+	remaining = rubixmath.FloatPrecision(transferAmount)
+
+	for denomValue, denomCount := range updatedDenomArr {
+		if remaining <= 0 {
+			break
+		}
+
+		maxByTarget := int(math.Floor(remaining / denomValue))
+
+		canTake := rubixmath.Min(int(denomCount), maxByTarget)
+
+		if canTake > 0 {
+			amount := float64(canTake) * denomValue
+
+			targetDenomArr[denomValue] = int64(canTake)
+			updatedDenomArr[denomValue] -= int64(canTake)
+
+			remaining = rubixmath.FloatPrecision(remaining - amount)
+		}
+	}
+
+	return targetDenomArr, updatedDenomArr, remaining, nil
 }

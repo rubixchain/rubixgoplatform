@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/block"
-	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
+	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -30,7 +33,7 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 		}
 
 		childLevel := currentLevel + 1
-		childValue, err := wallet.LevelToDenom(childLevel)
+		childValue, err := util.LevelToDenom(childLevel)
 		if err != nil {
 			return nil, fmt.Errorf("planSplit: err occured while getting current child value: %v", err)
 		}
@@ -52,6 +55,7 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 
 		childrenToTransfer := make([]int, 0)
 		childrenToKeep := make([]int, 0)
+		tokensBeingBurnt := make([]int, 0)
 
 		needToSplitChild := (remainder > 0)
 		childToSplit := 0
@@ -64,7 +68,7 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 			if i <= childrenNeeded {
 				childrenToTransfer = append(childrenToTransfer, i)
 			} else if i == childToSplit {
-				childrenToKeep = append(childrenToKeep, i)
+				tokensBeingBurnt = append(tokensBeingBurnt, i)
 			} else {
 				childrenToKeep = append(childrenToKeep, i)
 			}
@@ -74,6 +78,7 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 			HierarchicalTokenID: currentTokenID,
 			ChildrenToTransfer:  childrenToTransfer,
 			ChildrenToKeep:      childrenToKeep,
+			TokensBeingBurnt:    tokensBeingBurnt,
 		})
 
 		if needToSplitChild {
@@ -87,69 +92,74 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 	return splits, nil
 }
 
+// performTokenSplit - transferFree, transferBurn, keepFree, keepBurnt
 func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto,
-	splitOp SplitOp, tokenCache map[string]*wallet.Token, isTestnet bool,
-	tokenDenomArr []int, publishFn func(*model.PubSubTxnInfo) error,
-) ([]wallet.Token, error) {
-	var parentToken *wallet.Token
-	var networkID string
+	splitOp SplitOp, tokenCache map[string]models.Token, tokenDenomArr map[types.DenomValue]types.DenomCount,
+) ([]models.Token, []models.Token, []models.Token, []models.Token, error) {
+	var parentToken models.Token
 	parentTokenHeirarchicalID := splitOp.HierarchicalTokenID
 	parentTokenIndexedID, err := HeirarchicalToIndexed(parentTokenHeirarchicalID)
 	if err != nil {
-		return nil, fmt.Errorf("performTokenSplit: failed to convert parent token hierarchical ID to indexed ID: %v", err)
+		return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: failed to convert parent token hierarchical ID to indexed ID: %v", err)
 	}
 
 	if cachedToken, exists := tokenCache[parentTokenIndexedID]; exists {
 		parentToken = cachedToken
 	} else {
 		var err error
-		parentToken, err = w.GetToken(parentTokenIndexedID, wallet.TokenIsFree)
+		parentToken, err = w.GetRBTToken(parentTokenIndexedID)
 		if err != nil {
-			return nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v with id: %v; indexid: %v, err: %v", splitOp.HierarchicalTokenID.String(), parentTokenIndexedID, parentTokenIndexedID, err)
+			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v with id: %v; indexid: %v, err: %v", splitOp.HierarchicalTokenID.String(), parentTokenIndexedID, parentTokenIndexedID, err)
 		}
 
-		parentTokenType := getTokenType(isTestnet, parentToken.TokenValue)
-
-		networkID, err = w.GetTokenNetworkID(parentToken.TokenID, parentTokenType)
-		if err != nil {
-			return nil, fmt.Errorf("performTokenSplit: failed to get network ID for parent token: %v, err: %v", parentToken.TokenID, err)
+		if err := w.LockToken(parentToken); err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to local parent token: %v, err: %v", parentToken.TokenID, err)
 		}
 	}
 
 	childLevel := parentTokenHeirarchicalID.Level() + 1
 
-	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentTokenHeirarchicalID, parentTokenIndexedID, childLevel, isTestnet, publishFn, tokenDenomArr, networkID)
+	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentTokenHeirarchicalID, parentTokenIndexedID, childLevel, tokenDenomArr)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 
-	childTokenIDs := func() []string {
-		var tokenList []string = make([]string, 0)
-
-		for _, token := range childTokensCreatedMap {
-			tokenList = append(tokenList, token.TokenID)
-		}
-
-		return tokenList
-	}()
-
-	err = burnParentToken(dc, w, parentToken.TokenID, parentToken.TokenValue, childTokenIDs, dc.GetDID(), isTestnet, tokenDenomArr, publishFn)
+	err = burnParentToken(dc, w, parentToken.TokenID, parentToken.TokenValue, dc.GetDID(), tokenDenomArr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenIndexedID, dc.GetDID(), err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenIndexedID, dc.GetDID(), err)
 	}
 
-	childTokensToTransfer := make([]wallet.Token, 0)
+	childTokensToTransfer := make([]models.Token, 0)
+	burntForTransferTokens := make([]models.Token, 0)
+	childTokensToKeep := make([]models.Token, 0)
+	burntForKeptTokens := make([]models.Token, 0)
 
 	for _, transferIdx := range splitOp.ChildrenToTransfer {
 		childTokenToTransfer, exists := childTokensCreatedMap[transferIdx]
 		if !exists {
-			return nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenIndexedID)
+			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenIndexedID)
 		}
 
 		childTokensToTransfer = append(childTokensToTransfer, childTokenToTransfer)
 	}
 
-	return childTokensToTransfer, nil
+	if len(childTokensToTransfer) != 0 {
+		burntForTransferTokens = append(burntForTransferTokens, parentToken)
+	}
+
+	for _, keepIdx := range splitOp.ChildrenToKeep {
+		childTokenToKeep, exists := childTokensCreatedMap[keepIdx]
+		if !exists {
+			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token to keep at index: %v for parent token: %v", keepIdx, parentToken)
+		}
+
+		childTokensToKeep = append(childTokensToKeep, childTokenToKeep)
+	}
+
+	if len(childTokensToKeep) != 0 {
+		burntForKeptTokens = append(burntForKeptTokens, parentToken)
+	}
+	return childTokensToTransfer, burntForTransferTokens, childTokensToKeep, burntForKeptTokens, nil
 }
 
 func createHierarchicalChildTokenContent(hierarchicalParentTokenContent string, index int) string {
@@ -168,96 +178,30 @@ func createChildTokenAtIndex(parentTokenHierarchicalID string, index int) (strin
 }
 
 func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
-	parentTokenValue float64, partTokenIDs []string, did string, isTestnet bool,
-	tokenDenomArr []int, publishFn func(*model.PubSubTxnInfo) error,
+	parentTokenValue float64, did string, tokenDenomArr map[types.DenomValue]types.DenomCount,
 ) error {
-	parentTokenType := getTokenType(isTestnet, parentTokenValue)
-
-	parentTokenLevel, err := wallet.DenomToLevel(parentTokenValue)
+	parentTokenLevel, err := util.DenomToLevel(parentTokenValue)
 	if err != nil {
 		return err
 	}
 
-	// Burn the parent token
-	bti := &block.TransInfo{
-		Tokens: []block.TransTokens{
-			{
-				Token:     parentTokenID,
-				TokenType: parentTokenType,
-			},
-		},
-		Comment: "Token burnt at : " + time.Now().String(),
-	}
-
-	parentTokenChainBlock := &block.TokenChainBlock{
-		BlockType:   block.TokenBurntType,
-		TokenOwner:  did,
-		TransInfo:   bti,
-		TokenValue:  parentTokenValue,
-		ChildTokens: partTokenIDs,
-		Epoch:       int(time.Now().Unix()),
-	}
-
-	ctcb := make(map[string]*block.Block)
-	ctcb[parentTokenID] = w.GetLatestTokenBlock(parentTokenID, parentTokenType)
-	burntParentTokenBlock := block.CreateNewBlock(ctcb, parentTokenChainBlock)
-	if burntParentTokenBlock == nil {
-		return fmt.Errorf("burnParentToken: failed to create new burnt block for parent token: %v", parentTokenID)
-	}
-
-	err = burntParentTokenBlock.UpdateSignature(dc)
-	if err != nil {
-		return fmt.Errorf("burnParentToken: failed to sign the burnt block for parent token, err: %v", err)
-	}
-
-	err = w.AddTokenBlock(parentTokenID, burntParentTokenBlock)
-	if err != nil {
-		return fmt.Errorf("burnParentToken: failed to token block, err: %v", err)
-	}
-
-	burntParentTokenBlockHash, err := burntParentTokenBlock.GetHash()
-	if err != nil {
-		return fmt.Errorf("burnParentToken: failed to get the hash of burnt block for parent token, err: %v", err)
-	}
-
-	burntBlockPublishInfo := &model.PubSubTxnInfo{
-		BlockHash:    burntParentTokenBlockHash,
-		BlockType:    parentTokenChainBlock.BlockType,
-		AssetType:    RBTTokenType,
-		PublisherDID: dc.GetDID(),
-		TxnBlock:     burntParentTokenBlock.GetBlock(),
-	}
-
-	err = publishFn(burntBlockPublishInfo)
-	if err != nil {
-		return fmt.Errorf("burnParentToken: failed to publish burnt block info for token: %v, err: %v", parentTokenID, err)
-	}
-
-	parentTokenInfo, err := w.GetToken(parentTokenID, wallet.TokenIsLocked)
-	if err != nil {
-		return fmt.Errorf(`burnParentToken: unexpected error: failed to fetch parent token info from SQL, err: %v. If,
-		error is 'no records found', it is possibly due to the token having invalid token_status as it,
-		is expected to be Locked state`, err)
-	}
-
-	parentTokenInfo.TokenStatus = wallet.TokenIsBurnt
-	err = w.UpdateToken(parentTokenInfo)
+	err = w.BurnToken(parentTokenID)
 	if err != nil {
 		return fmt.Errorf("burnParentToken: failed while updating Parent token %v status to burnt, err: %v", parentTokenID, err)
 	}
 
 	parentTokenIDBuffer := bytes.NewBufferString(parentTokenID)
-	parentTokenHash, err := w.Add(parentTokenIDBuffer, did, wallet.AddFunc, true)
+	parentTokenHash, err := w.Add(parentTokenIDBuffer, did, constants.TokenProviderFunc_Add, true)
 	if err != nil {
 		return fmt.Errorf("burnParentToken: failed to add parent token to ipfs: %v, err: %v", parentTokenID, err)
 	}
 
-	if _, err := w.Pin(parentTokenHash, wallet.OwnerRole, did, "NA", did, "NA", parentTokenValue); err != nil {
+	if _, err := w.Pin(parentTokenHash, constants.TokenProviderRole_Owner, did, "NA", did, "NA", parentTokenValue); err != nil {
 		return fmt.Errorf("burnParentToken: failed to pin parent token: %v, err: %v", parentTokenID, err)
 	}
 
 	// Immediate update of token denom array for the burnt token
-	tokenDenomArr[parentTokenLevel] -= 1
+	tokenDenomArr[parentTokenValue] -= 1
 	if err != nil {
 		return fmt.Errorf(
 			"burnParentToken: unable to decrement token denom array index for level %v, token %v, err: %v",
@@ -271,14 +215,13 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 }
 
 func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHierarchicalID TokenID, parenTokenIndexedID string,
-	level int, isTestnet bool, publishFn func(*model.PubSubTxnInfo) error,
-	tokenDenomArr []int, networkID string,
-) (map[int]wallet.Token, error) {
-	var childTokenIndexMap map[int]wallet.Token = make(map[int]wallet.Token)
+	level int, tokenDenomArr map[types.DenomValue]types.DenomCount,
+) (map[int]models.Token, error) {
+	var childTokenIndexMap map[int]models.Token = make(map[int]models.Token)
 
 	maxTokenCount := MaxTokensAtLevel(level)
 
-	childTokenValue, err := wallet.LevelToDenom(level)
+	childTokenValue, err := util.LevelToDenom(level)
 	if err != nil {
 		return nil, fmt.Errorf("createChildTokensAtLevel: failed to fetch the denom for level: %v, err: %v", level, err)
 	}
@@ -292,90 +235,33 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to create child token with ID: %v, err: %v", childTokenID, err)
 		}
 
-		childTokenType := getTokenType(isTestnet, childTokenValue)
-		bti := &block.TransInfo{
-			Tokens: []block.TransTokens{
-				{
-					Token:     childTokenID,
-					TokenType: childTokenType,
-				},
-			},
-			Comment: "Part token generated at : " + time.Now().String(),
-		}
-
-		tcb := &block.TokenChainBlock{
-			BlockType:  block.TokenGeneratedType,
-			TokenOwner: did,
-			TransInfo:  bti,
-			GenesisBlock: &block.GenesisBlock{
-				Info: []block.GenesisTokenInfo{
-					{
-						Token:     childTokenID,
-						ParentID:  parenTokenIndexedID,
-						NetworkID: networkID,
-					},
-				},
-			},
-			TokenValue: childTokenValue,
-			Epoch:      int(time.Now().Unix()),
-		}
-
-		ctcb := make(map[string]*block.Block)
-		ctcb[childTokenID] = nil
-		childTokenBlock := block.CreateNewBlock(ctcb, tcb)
-		if childTokenBlock == nil {
-			return nil, fmt.Errorf("createChildTokensAtLevel: failed to create new block for child token: %v", childTokenID)
-		}
-
-		err = childTokenBlock.UpdateSignature(dc)
-		if err != nil {
-			return nil, fmt.Errorf("createChildTokensAtLevel: failed to update the signature of child Token: %v, err: %v", childTokenBlock, err)
-		}
-
-		err = w.AddTokenBlock(childTokenID, childTokenBlock)
-		if err != nil {
-			return nil, fmt.Errorf("createChildTokensAtLevel: failed to add token block for child token: %v, err: %v", childTokenID, err)
-		}
-
-		partTokenBlockHash, err := childTokenBlock.GetHash()
-		if err != nil {
-			return nil, fmt.Errorf("createChildTokensAtLevel: failed to get the hash of child block for child token: %v, err: %v", childTokenID, err)
-		}
-
-		partTokenWalletInfo := &model.PubSubTxnInfo{
-			BlockHash:    partTokenBlockHash,
-			BlockType:    tcb.BlockType,
-			AssetType:    RBTTokenType,
-			PublisherDID: dc.GetDID(),
-			TxnBlock:     childTokenBlock.GetBlock(),
-		}
-
-		err = publishFn(partTokenWalletInfo)
-		if err != nil {
-			return nil, fmt.Errorf("createChildTokensAtLevel: failed to publish part token info for token: %v, err: %v", childTokenID, err)
-		}
-
 		childTokenIDBuffer := bytes.NewBufferString(childTokenID)
-		childTokenHash, err := w.Add(childTokenIDBuffer, did, wallet.AddFunc, true)
+		childTokenHash, err := w.Add(childTokenIDBuffer, did, constants.TokenProviderFunc_Add, true)
 		if err != nil {
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to add child token to ipfs: %v, err: %v", childTokenID, err)
 		}
 
-		if _, err := w.Pin(childTokenHash, wallet.OwnerRole, did, "NA", did, "NA", childTokenValue); err != nil {
+		if _, err := w.Pin(childTokenHash, constants.TokenProviderRole_Owner, did, "NA", did, "NA", childTokenValue); err != nil {
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to pin child token: %v, err: %v", childTokenID, err)
 		}
 
-		childToken := wallet.Token{
-			TokenID:       childTokenID,
-			ParentTokenID: parenTokenIndexedID,
-			TokenValue:    childTokenValue,
-			DID:           did,
-			TokenStatus:   wallet.TokenIsFree,
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
+		childToken := models.Token{
+			TokenID: childTokenID,
+			ParentTokenID: pgtype.Text{
+				String: parenTokenIndexedID,
+				Valid:  true,
+			},
+			TokenValue:     childTokenValue,
+			DID:            did,
+			TokenStatus:    constants.TokenStatus_Free,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+			LatestPosition: 0,
+			LatestRole:     int16(models.GetTokenRoleID(constants.TokenRole_Mint)),
+			TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
 		}
 
-		err = w.CreateToken(&childToken)
+		err = w.CreateRBTToken(childToken)
 		if err != nil {
 			return nil, fmt.Errorf("createChildTokensAtLevel: failed to add child token %v to DB, err: %v", childToken, err)
 		}
@@ -383,7 +269,7 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 		childTokenIndexMap[index] = childToken
 	}
 
-	tokenDenomArr[level] += maxTokenCount
+	tokenDenomArr[childTokenValue] += int64(maxTokenCount)
 
 	return childTokenIndexMap, nil
 }

@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS tokenchain (
 
 
         CREATE TABLE IF NOT EXISTS token_provider_map (
-            token          TEXT PRIMARY KEY,
+            token          TEXT,
             did            TEXT,
             func_id        INTEGER,
             role           INTEGER,
@@ -176,6 +176,15 @@ CREATE TABLE IF NOT EXISTS tokenchain (
 			created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
 		);
+
+        CREATE TABLE IF NOT EXISTS token_denom (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY
+            did TEXT NOT NULL,
+            denom NUMERIC(4, 3) NOT NULL,
+            count BIGINT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
     `)
 	return err
 }

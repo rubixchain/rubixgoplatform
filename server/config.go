@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core"
-	cc "github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -135,20 +134,6 @@ func (s *Server) APIRemoveAllQuorum(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.BasicResponse(req, true, "Removed all quorums successfully", nil)
 }
-
-func (s *Server) APISetupDB(req *ensweb.Request) *ensweb.Result {
-	var sc cc.StorageConfig
-	err := s.ParseJSON(req, &sc)
-	if err != nil {
-		return s.BasicResponse(req, false, "invlid input request", nil)
-	}
-	err = s.c.SetupDB(&sc)
-	if err != nil {
-		return s.BasicResponse(req, false, "Failed to setup DB, "+err.Error(), nil)
-	}
-	return s.BasicResponse(req, true, "DB setup done successfully", nil)
-}
-
 
 // APIAddPeerDetailsFromExplorer will add peer details from explorer
 func (s *Server) APIAddPeerDetailsFromExplorer(req *ensweb.Request) *ensweb.Result {

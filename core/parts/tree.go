@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 type DenomTreeNode struct {
 	HierarchicalID TokenID
-	Token          wallet.Token
+	Token          models.Token
 	IsLeaf         bool
 }
 
@@ -18,7 +18,7 @@ type DenomTree struct {
 	OwnerDID string
 }
 
-func BuildDenomTree(tokens []wallet.Token, ownerDID string) (*DenomTree, error) {
+func BuildDenomTree(tokens []models.Token, ownerDID string) (*DenomTree, error) {
 	denomTree := &DenomTree{
 		OwnerDID: ownerDID,
 	}
