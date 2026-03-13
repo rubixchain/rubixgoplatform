@@ -113,11 +113,14 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 	return nil
 }
 
-func (c *Core) IsparentTokenBurnt(isFullNode bool) (error, bool) {
-	//First try to get the parent token from the tokens table, if fullnode calls this function it should it from
-	//the fullnode's tokens table.
+func (c *Core) IsparentTokenBurnt(isFullNode bool, tokenID string) (error, bool) {
+	//First try to get the parent token from the tokens table,If token details are not there in the FullNodeRBT table
+	//then it should compute  the parent tokenID from the given tokenID(currently assume a place holder function for that), 
+	//then from the tokenchain table we have to get the genesis txnID of the given tokenID(assume a place holder function for that), 
+	//then from the transactions table we have to get the parent tokenID of the given tokenID for the given txnID(assume a place holder function for that), 
 	if isFullNode {
-
+		tokenDetails,err := c.w.GetFullNodeRBTToken(tokenID)
+		if err!
 		return nil, false
 	}
 	return nil, true
