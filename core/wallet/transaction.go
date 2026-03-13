@@ -38,29 +38,19 @@ func (w *Wallet) GetTransactionByID(id string) (*models.Transactions, error) {
 	return &tx, nil
 }
 
-// GetAllTransactions retrieves all transactions with optional limit and offset.
+// GetAllTransactions retrieves all transactions.
 func (w *Wallet) GetAllTransactions() ([]models.Transactions, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT id, info, signature, created_at, updated_at FROM transactions`,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get transactions: %w", err)
+		return nil, fmt.Errorf("GetAllTransactions: query: %w", err)
 	}
-	defer rows.Close()
 
-	var transactions []models.Transactions
-	for rows.Next() {
-		var tx models.Transactions
-		err := rows.Scan(&tx.ID, &tx.Info, &tx.Signature, &tx.CreatedAt, &tx.UpdatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan transaction: %w", err)
-		}
-		transactions = append(transactions, tx)
-	}
-	return transactions, nil
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Transactions])
 }
 
-// GetAllTransactions retrieves all transactions with optional limit and offset.
+// GetAllTransactionsByOffset retrieves transactions with limit and offset.
 func (w *Wallet) GetAllTransactionsByOffset(limit, offset int) ([]models.Transactions, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT id, info, signature, created_at, updated_at
@@ -68,18 +58,8 @@ func (w *Wallet) GetAllTransactionsByOffset(limit, offset int) ([]models.Transac
 		limit, offset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get transactions: %w", err)
+		return nil, fmt.Errorf("GetAllTransactionsByOffset: query: %w", err)
 	}
-	defer rows.Close()
 
-	var transactions []models.Transactions
-	for rows.Next() {
-		var tx models.Transactions
-		err := rows.Scan(&tx.ID, &tx.Info, &tx.Signature, &tx.CreatedAt, &tx.UpdatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan transaction: %w", err)
-		}
-		transactions = append(transactions, tx)
-	}
-	return transactions, nil
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Transactions])
 }

@@ -61,6 +61,7 @@ const (
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
+	APIInitiateConsensus            string = "/api/initiate-consensus"
 )
 
 const (
