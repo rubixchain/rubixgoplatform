@@ -130,10 +130,6 @@ type PledgeDetails struct {
 	TokenList              []Token
 }
 
-type PledgeRequest struct {
-	TokensRequired float64 `json:"tokens_required"`
-}
-
 type SignatureRequest struct {
 	TokenChainBlock []byte `json:"token_chain_block"`
 }
@@ -180,13 +176,6 @@ type SendFTRequest struct {
 	QuorumInfo       []QuorumDIDPeerMap   `json:"quorum_info"`
 	TransactionEpoch int                  `json:"transaction_epoch"`
 	FTInfo           model.FTInfo         `json:"ft_info"`
-}
-
-type PledgeReply struct {
-	model.BasicResponse
-	Tokens          []string  `json:"tokens"`
-	TokenValue      []float64 `json:"token_value"`
-	TokenChainBlock [][]byte  `json:"token_chain_block"`
 }
 
 type PledgeToken struct {
@@ -245,6 +234,7 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIRequestSigningHash, "GET", c.requestSigningHash)
 	c.l.AddRoute(APISendFTToken, "POST", c.updateReceiverFTHandle)
 	c.l.AddRoute(APICheckPinRole, "GET", c.checkPinRole)
+	c.l.AddRoute(APIInitiateConsensus, "POST", c.initiateConsensus)
 }
 
 // calculateTokenBasedTimeout calculates timeout based on the number of tokens and workers

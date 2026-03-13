@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
@@ -23,6 +26,161 @@ type ConsensusReturns struct {
 	TxnDetails    *model.TransactionDetails
 	PledgeDetails *PledgeDetails
 	Msg           string
+}
+
+func (c *Core) InitiateTransfer(reqID string, req *models.TransferRequest) {
+	br := c.initiateTransfer(reqID, req)
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- br
+}
+
+func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *model.BasicResponse {
+
+	resp := &model.BasicResponse{
+		Status: false,
+	}
+
+	initiatorDID := request.Initiator
+	nextOwnerDID := request.Owner
+
+	dc, err := c.SetupDID(reqID, initiatorDID)
+	if err != nil {
+		resp.Message = "Failed to setup DID: " + err.Error()
+		return resp
+	}
+
+	// Build transaction info
+	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(request) //keptTransactionInfo
+	if err != nil {
+		c.log.Error("InitiateTransfer: Failed to build transaction info", "err", err)
+		resp.Message = err.Error()
+		return resp
+	}
+
+	// TODO: Fetch the quorum address from the corresponding table
+	quorumAddress := "This needs to be added " // 
+
+	p, err := c.getPeer(quorumAddress)
+	if err != nil {
+		resp.Message = err.Error()
+		return resp
+	}
+	defer p.Close()
+
+	// Pledge request
+	pledgeTokenRequest := models.PledgeTokenRequest{
+		ReferenceId:      reqID,
+		TransactionValue: transactionValue,
+	}
+
+	var pledgeTokenResponse models.PledgeTokenResponse
+
+	err = p.SendJSONRequest(
+		"POST",
+		APIReqPledgeToken,
+		nil,
+		&pledgeTokenRequest,
+		&pledgeTokenResponse,
+		true,
+	)
+
+	if err != nil {
+		resp.Message = err.Error()
+		return resp
+	}
+
+	if !pledgeTokenResponse.Status {
+		resp.Message = pledgeTokenResponse.Message
+		return resp
+	}
+
+	// Attach quorum tokens
+	pledegTokenInfo := models.QuorumInfo{
+		DID:    quorumAddress,
+		Tokens: pledgeTokenResponse.PledgeTokens,
+	}
+	transactionInfo.Quorums = pledegTokenInfo
+
+	// Create transaction info
+	jsonBytes, err := json.Marshal(transactionInfo)
+	if err != nil {
+		resp.Message = "Failed to marshal transaction info: " + err.Error()
+		return resp
+	}
+
+	hashBytes := util.CalculateHash(jsonBytes, "SHA3-256")
+	transactionId := util.HexToStr(hashBytes)
+
+	c.log.Info("Transaction hash created", "hash", transactionId)
+
+	// Sign transaction
+	signatureBytes, err := dc.PvtSign([]byte(transactionId))
+	if err != nil {
+		c.log.Error("Failed to sign transaction", "err", err)
+		resp.Message = "Failed to sign transaction: " + err.Error()
+		return resp
+	}
+
+	initiatorSignature := util.HexToStr(signatureBytes)
+
+	// Consensus request
+	consensusRequest := models.ConsensusRequest{
+		ReferenceId:        reqID,
+		TransactionInfo:    transactionInfo,
+		InitiatorSignature: initiatorSignature,
+	}
+
+	var consensusResponse models.ConsensusResponse
+
+	err = p.SendJSONRequest(
+		"POST",
+		APIInitiateConsensus,
+		nil,
+		&consensusRequest,
+		&consensusResponse,
+		true,
+	)
+
+	if err != nil {
+		resp.Message = err.Error()
+		return resp
+	}
+
+	if !consensusResponse.Status {
+		resp.Message = consensusResponse.Message
+		return resp
+	}
+
+	resp.Status = true
+	resp.Message = "Transfer initiated successfully"
+
+	return resp
+}
+
+func (c *Core) fetchTokens(
+	enabled bool,
+	getTokens func() ([]models.Token, error),
+	errMsg string,
+	resp *model.BasicResponse,
+) ([]models.Token, bool) {
+
+	if !enabled {
+		return nil, true
+	}
+
+	tokens, err := getTokens()
+	if err != nil {
+		msg := errMsg + err.Error()
+		c.log.Error(msg)
+		resp.Message = msg
+		return nil, false
+	}
+
+	return tokens, true
 }
 
 func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) {

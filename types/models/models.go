@@ -65,16 +65,16 @@ type Token struct {
 }
 
 type TokenProviderMap struct {
-	Token         string    `db:"token"`
-	DID           string    `db:"did"`
-	FuncID        int       `db:"func_id"`
-	Role          int       `db:"role"`
-	TransactionID string    `db:"transaction_id"`
-	Sender        string    `db:"sender"`
-	Receiver      string    `db:"receiver"`
-	TokenValue    float64   `db:"token_value"`
-	CreatedAt     time.Time `db:"created_at"`
-	UpdatedAt     time.Time `db:"updated_at"`
+	Token         string         `db:"token"`
+	DID           pgtype.Text    `db:"did"`
+	FuncID        pgtype.Int4    `db:"func_id"`
+	Role          pgtype.Int4    `db:"role"`
+	TransactionID pgtype.Text    `db:"transaction_id"`
+	Initiator     pgtype.Text    `db:"initiator"`
+	Owner         pgtype.Text    `db:"owner"`
+	TokenValue    pgtype.Numeric `db:"token_value"`
+	CreatedAt     time.Time      `db:"created_at"`
+	UpdatedAt     time.Time      `db:"updated_at"`
 }
 
 type UnpledgeSequenceInfo struct {

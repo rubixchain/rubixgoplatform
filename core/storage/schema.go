@@ -52,7 +52,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             token_state_hash TEXT NOT NULL,
             token_type       SMALLINT NOT NULL,
             latest_position BIGINT NOT NULL DEFAULT 0,
-            latest_role SMALLINT
+            latest_role SMALLINT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW(),
             CONSTRAINT tokens_did_fk 
@@ -102,8 +102,8 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             func_id        INTEGER,
             role           INTEGER,
             transaction_id TEXT,
-            sender         TEXT,
-            receiver       TEXT,
+            initiator      TEXT,
+            owner          TEXT,
             token_value    NUMERIC,
             created_at     TIMESTAMPTZ DEFAULT NOW(),
             updated_at     TIMESTAMPTZ DEFAULT NOW()

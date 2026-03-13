@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rubixchain/rubixgoplatform/types"
 )
@@ -77,4 +78,8 @@ func (r *RubixDB) Close() {
 
 func (r *RubixDB) Ping(ctx context.Context) error {
 	return r.pool.Ping(ctx)
+}
+
+func (r *RubixDB) BeginTx(ctx context.Context) (pgx.Tx, error) {
+	return r.pool.Begin(ctx)
 }
