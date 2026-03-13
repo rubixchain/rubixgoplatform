@@ -153,6 +153,13 @@ type TokenDenom struct {
 	UpdatedAt  time.Time `db:"updated_at"`
 }
 
+type TokenchainIndex struct {
+	TokenID   string `db:"token_id"`
+	Index     []int  `db:"index"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
+}
+
 type FullNodeRBT struct {
 	TokenID        string      `db:"token_id"`
 	ParentTokenID  pgtype.Text `db:"parent_token_id"`

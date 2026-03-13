@@ -96,6 +96,13 @@ CREATE TABLE IF NOT EXISTS tokenchain (
         );
 
 
+        CREATE TABLE IF NOT EXISTS tokenchain_index (
+            token_id   TEXT PRIMARY KEY,
+            index      INTEGER[] NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
         CREATE TABLE IF NOT EXISTS token_provider_map (
             token          TEXT,
             did            TEXT,
