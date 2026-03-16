@@ -1,14 +1,14 @@
 package models
 
 type TransactionInfo struct {
-	Initiator       string                 `json:"initiator"`
-	Owner           string                 `json:"owner"`
-	Epoch           int                    `json:"epoch"`
-	Network         string                 `json:"network"`
-	Tokens          *TransactionTokens     `json:"tokens"`
-	CommittedTokens []*TokenInfo            `json:"committedTokens"`
-	Quorums         []*QuorumInfo `json:"quorums"`
-	Memo            string                 `json:"memo"`
+	Initiator       string             `json:"initiator"`
+	Owner           string             `json:"owner"`
+	Epoch           int                `json:"epoch"`
+	Network         string             `json:"network"`
+	Tokens          *TransactionTokens `json:"tokens"`
+	CommittedTokens []*TokenInfo       `json:"committedTokens"`
+	Quorums         []*QuorumInfo      `json:"quorums"`
+	Memo            string             `json:"memo"`
 }
 
 type TransactionTokens struct {
@@ -21,11 +21,11 @@ type TransactionTokens struct {
 type TokenInfo struct {
 	TokenID               string `json:"tokenId"`
 	PreviousTransactionID string `json:"previousTransactionID"`
-	Data string `json:"data"`
+	Data                  string `json:"data"`
 }
 
 type QuorumInfo struct {
-	Did string `json:"did"`
+	Did    string       `json:"did"`
 	Tokens []*TokenInfo `json:"tokens"`
 }
 
@@ -40,16 +40,16 @@ type Signature struct {
 }
 
 // Request to initiate transfer
-type TransferRequest struct {
-	Initiator string       `json:"initiator"`
-	Owner     string       `json:"owner"`
-	Tokens    TransferInfo `json:"tokens"`
-	Memo      string       `json:"memo"`
+type TransactionRequest struct {
+	Initiator string                  `json:"initiator"`
+	Owner     string                  `json:"owner"`
+	Tokens    TransactionTokenDetails `json:"tokens"`
+	Memo      string                  `json:"memo"`
 }
 
 // The struct which contains all the information of the tokens that are being transferred
 // This struct contains all the informations to facilitate transfer of multiple types of tokens via a single request
-type TransferInfo struct {
+type TransactionTokenDetails struct {
 	RBT           float64             `json:"rbt"`
 	FT            []FTInfo            `json:"ft"`
 	NFT           []NFTInfo           `json:"nft"`
@@ -77,11 +77,11 @@ type SmartContractInfo struct {
 }
 
 type PledgeTokenRequest struct {
-	ReferenceId string `json:"referenceId"`
+	ReferenceId      string  `json:"referenceId"`
 	TransactionValue float64 `json:"transactionValue"`
 }
 
 type PledgeTokenResponse struct {
-	ReferenceId string `json:"referenceId"`
+	ReferenceId  string      `json:"referenceId"`
 	PledgeTokens []TokenInfo `json:"pledgeTokens"`
 }
