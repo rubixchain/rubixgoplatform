@@ -36,8 +36,33 @@ func (w *Wallet) GetTokenDenomArray(did string) (map[types.DenomValue]types.Deno
 	return tokenDenomMap, nil
 }
 
-func (w *Wallet) UpdateTokenDenomArray(did string, denom types.DenomValue, count types.DenomCount) error
-func (w *Wallet) UpdateAllTokenDenomArray(did string, denomMap map[types.DenomValue]types.DenomCount) error
+func (w *Wallet) UpdateTokenDenomArray(did string, denomMap map[types.DenomValue]types.DenomCount) error {
+	if len(denomMap) == 0 {
+		return nil
+	}
+
+	denoms := make([]types.DenomValue, 0)
+	counts := make([]types.DenomCount, 0)
+	for denom, count := range denomMap {
+		denoms = append(denoms, denom)
+		counts = append(counts, count)
+	}
+
+	_, err := w.db.Pool().Exec(w.Ctx, `
+		UPDATE token_denom t
+		SET
+			count = v.count
+			updated_at = NOW()
+		FROM unset($2::numeric[], $3::bigint[]) AS v(denom, count)
+		WHERE
+			t.did = $1
+		AND t.denom = v.denom
+	`, did, denoms, counts)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // The following function should only used when a new DID is created
 func (w *Wallet) InitNewTokenDenomArrayForDID(did string, denomMap map[types.DenomValue]types.DenomCount) error

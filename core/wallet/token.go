@@ -117,6 +117,16 @@ func (w *Wallet) LockTokensByID(tokenIDs []string) error {
 	return nil
 }
 
+func (w *Wallet) LockTokenByID(tokenID string) error {
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET token_status=$1 where token_id = 2`, constants.TokenStatus_Locked, tokenID,
+	); err != nil {
+		return fmt.Errorf("unable to lock tokens, err: %v", err)
+	}
+
+	return nil
+}
+
 func (w *Wallet) LockTokens(tokens []models.Token) error {
 	var tokenIds []string
 	for _, token := range tokens {
@@ -144,7 +154,7 @@ func (w *Wallet) LockToken(token models.Token) error {
 
 func (w *Wallet) BurnToken(tokenID string) error {
 	if _, err := w.db.Pool().Exec(w.Ctx,
-		`UPDATE tokens SET token_status=$1 where token_id = $2`, constants.TokenStatus_Burnt, token.TokenID,
+		`UPDATE tokens SET token_status=$1 where token_id = $2`, constants.TokenStatus_Burnt, tokenID,
 	); err != nil {
 		return fmt.Errorf("unable to lock tokens, err: %v", err)
 	}
