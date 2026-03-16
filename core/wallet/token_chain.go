@@ -97,6 +97,28 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, position int64) (
 	return tx, tokenRoleInTx, nil
 }
 
+func (w *Wallet) GetFullNodeTransactionAndRoleAtHeight(tokenID string, height int64) (*models.Transactions, int16, error) {
+	row := w.db.Pool().QueryRow(w.Ctx, `
+		SELECT transaction_id, role FROM fullnode_tokenchain WHERE token_id = $1 AND height = $2
+		ORDER BY created_at DESC LIMIT 1`, tokenID, height,
+	)
+	var txID string
+	var tokenRoleInTx int16
+	if err := row.Scan(&txID, &tokenRoleInTx); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, -1, fmt.Errorf("fullnode transaction not found at height %d for token %s", height, tokenID)
+		}
+		return nil, -1, fmt.Errorf("GetFullNodeTransactionAndRoleAtHeight scan: %w", err)
+	}
+
+	tx, err := w.GetTransactionByID(txID)
+	if err != nil {
+		return nil, -1, fmt.Errorf("GetFullNodeTransactionAndRoleAtHeight transaction details not found for transaction_id: %v, err %w", txID, err)
+	}
+
+	return tx, tokenRoleInTx, nil
+}
+
 // GetAllTransactionInfoInBytesByTokenId fetches entire token chain, fetches each transaction by transactionId and
 // converts into bytes, and returns the chain of ordered transactions with a limit of 100 transactions,
 // and the last transaction id of the array in order
