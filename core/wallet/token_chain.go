@@ -20,6 +20,27 @@ func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, er
 }
 
 // get latest transaction id of the given token id
+func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string) (string, error) {
+	row, err := w.db.Pool().Query(w.Ctx,
+		`SELECT index[1]
+			FROM tokenchain_index
+			WHERE token_id = $1`, tokenID,
+	)
+	if err != nil {
+		return "", fmt.Errorf("GetGenesisTransactionIdByTokenId: %w", err)
+	}
+	var genesisTxnIdIndex int
+	if err := row.Scan(&genesisTxnIdIndex); err != nil {
+		if err == pgx.ErrNoRows {
+			return "", fmt.Errorf("latest transaction id not found for token %s", tokenID)
+		}
+		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
+	}
+
+	return w.GetTransactionIdByIndex(int16(genesisTxnIdIndex))
+}
+
+// get latest transaction id of the given token id
 func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string) (string, error) {
 	row, err := w.db.Pool().Query(w.Ctx,
 		`SELECT index[array_upper(index, 1)]
@@ -27,7 +48,7 @@ func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string) (string, error)
 			WHERE token_id = $1`, tokenID,
 	)
 	if err != nil {
-		return "", fmt.Errorf("GetTokenChainByTokenID: %w", err)
+		return "", fmt.Errorf("GetLatestTransactionIdByTokenId: %w", err)
 	}
 	var latestTxnIdIndex int
 	if err := row.Scan(&latestTxnIdIndex); err != nil {
@@ -40,7 +61,7 @@ func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string) (string, error)
 	return w.GetTransactionIdByIndex(int16(latestTxnIdIndex))
 }
 
-// ********TODO: provide index column name as in tokenchain table
+// ********TODO: provide index column name as in tokenchain table;
 // get transaction id by Index id
 func (w *Wallet) GetTransactionIdByIndex(index int16) (string, error) {
 	row, err := w.db.Pool().Query(w.Ctx,
@@ -49,7 +70,7 @@ func (w *Wallet) GetTransactionIdByIndex(index int16) (string, error) {
 		WHERE index = $1`, index,
 	)
 	if err != nil {
-		return "", fmt.Errorf("GetTokenChainByTokenID: %w", err)
+		return "", fmt.Errorf("GetTransactionIdByIndex: %w", err)
 	}
 	var txnId string
 	if err := row.Scan(&txnId); err != nil {
@@ -69,7 +90,7 @@ func (w *Wallet) GetRoleOfTokenIdInLatestTxn(tokenID string) (int16, error) {
 		WHERE token_id = $1`, tokenID,
 	)
 	if err != nil {
-		return -1, fmt.Errorf("GetTokenChainByTokenID: %w", err)
+		return -1, fmt.Errorf("GetRoleOfTokenIdInLatestTxn: %w", err)
 	}
 	var role int16
 	if err := row.Scan(&role); err != nil {
