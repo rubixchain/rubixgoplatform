@@ -76,3 +76,14 @@ const (
 	RequestStatus_Completed  = 2
 	RequestStatus_Unknown    = 3
 )
+
+// TreeLevelRanges defines the [min, max] global-index range for each tree level.
+var TreeLevelRanges = [7][2]int{
+	{0, 0},      // L0 (whole token)
+	{1, 2},      // L1
+	{3, 12},     // L2
+	{13, 32},    // L3
+	{33, 132},   // L4
+	{133, 332},  // L5
+	{333, 1332}, // L6
+}
