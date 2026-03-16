@@ -27,6 +27,60 @@ func (c *Core) ValidateOwnershipOfTheToken(assetType int, tokenID string, initia
 	return nil
 }
 
+// ValidateTokenOwnershipByPrevTxn groups all RBT, FT and NFT tokens by their
+// PreviousTransactionID, fetches each distinct previous transaction once, and
+// verifies that its owner matches the current transaction's initiator.
+func (c *Core) ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo) error {
+	if txnInfo.Tokens == nil {
+		return nil
+	}
+
+	prevTxnTokensMap := make(map[string][]string)
+
+	tokenLists := [][]*models.TokenInfo{
+		txnInfo.Tokens.RBT,
+		txnInfo.Tokens.NFT,
+		txnInfo.Tokens.FT,
+	}
+
+	for _, tokens := range tokenLists {
+		for _, t := range tokens {
+			if t.PreviousTransactionID == "" {
+				continue
+			}
+			prevTxnTokensMap[t.PreviousTransactionID] = append(
+				prevTxnTokensMap[t.PreviousTransactionID], t.TokenID,
+			)
+		}
+	}
+
+	for prevTxnID, tokenIDs := range prevTxnTokensMap {
+		prevTx, err := c.w.GetTransactionByID(prevTxnID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch previous transaction %s: %w", prevTxnID, err)
+		}
+		if prevTx == nil {
+			return fmt.Errorf("previous transaction %s not found for tokens %v", prevTxnID, tokenIDs)
+		}
+
+		var prevTxnInfo models.TransactionInfo
+		if err := json.Unmarshal(prevTx.Info, &prevTxnInfo); err != nil {
+			return fmt.Errorf("failed to unmarshal info of previous transaction %s: %w", prevTxnID, err)
+		}
+
+		if prevTxnInfo.Owner != txnInfo.Initiator {
+			return fmt.Errorf(
+				"ownership mismatch: initiator %s does not match owner %s of previous transaction %s (affected tokens: %v)",
+				txnInfo.Initiator, prevTxnInfo.Owner, prevTxnID, tokenIDs,
+			)
+		}
+	}
+
+	return nil
+}
+
+
+
 func (c *Core) TransactionIDIntegrityCheck(transactionID string, transactionInfo *models.TransactionInfo) error {
 
 	computedTransactionID, err := util.GetTransactionID(transactionInfo)
