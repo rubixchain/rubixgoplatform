@@ -115,63 +115,73 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 	return nil
 }
 
-func (c *Core) IsparentTokenBurnt(isFullNode bool, tokenID string) (error, bool) {
-	
-	if isFullNode {
-	//First try to get the parent token from the tokens table,If token details are not there in the FullNodeRBT table
+func (c *Core) IsParentTokenBurnt(isFullNode bool, tokenID string) (error, bool) {
+   //First try to get the parent token from the tokens table,If token details are not there in the FullNodeRBT table
     //then it should compute  the parent tokenID from the given tokenID(currently assume a place holder function for that), 
     //then from the tokenchain table we have to get the genesis txnID of the given tokenID(assume a place holder function for that), 
     //then from the transactions table we have to get transactionInfo corresponding to genesisTxnID, 
     // then check whether the parent tokenID is there in the committed tokens list. 
     // if it is ther it should output nil,true. If it is not there it should output nil,false. 
     // For any other error it should output error,false.
-		var parentTokenID string
+	var parentTokenID string
 
+	if isFullNode {
 		tokenDetails, err := c.w.GetFullNodeRBTToken(tokenID)
 		if err == nil {
-			if !tokenDetails.ParentTokenID.Valid || tokenDetails.ParentTokenID.String == "" {
-				//instead of return, it should compute parent tokenID from the tokenID
-						// TODO: replace with proper parent tokenID computation once available
-			partTokenID := parts.TokenID(tokenID)
-			parentPtr := partTokenID.Parent()
-			if parentPtr == nil {
-				return nil, false
-			}
-			parentTokenID = parentPtr.String()
-				
-			}
-			parentTokenID = tokenDetails.ParentTokenID.String
-		} else {
-			// TODO: replace with proper parent tokenID computation once available
-			partTokenID := parts.TokenID(tokenID)
-			parentPtr := partTokenID.Parent()
-			if parentPtr == nil {
-				return nil, false
-			}
-			parentTokenID = parentPtr.String()
-		}
-
-		// TODO: replace with proper fullnode genesis txnID retrieval once available
-		genesisTx, _, err := c.w.GetFullNodeTransactionAndRoleAtHeight(tokenID, 0)
-		if err != nil {
-			return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err), false
-		}
-		if genesisTx == nil {
-			return fmt.Errorf("genesis transaction not found for token %s", tokenID), false
-		}
-
-		var txInfo models.TransactionInfo
-		if err := json.Unmarshal(genesisTx.Info, &txInfo); err != nil {
-			return fmt.Errorf("failed to unmarshal transaction info for token %s: %w", tokenID, err), false
-		}
-
-		for _, committedToken := range txInfo.CommittedTokens {
-			if committedToken.TokenID == parentTokenID {
-				return nil, true
+			if tokenDetails.ParentTokenID.Valid && tokenDetails.ParentTokenID.String != "" {
+				parentTokenID = tokenDetails.ParentTokenID.String
 			}
 		}
-
-		return nil, false
+	} else {
+		tokenDetails, err := c.w.GetRBTToken(tokenID)
+		if err == nil {
+			if tokenDetails.ParentTokenID.Valid && tokenDetails.ParentTokenID.String != "" {
+				parentTokenID = tokenDetails.ParentTokenID.String
+			}
+		}
 	}
+
+	if parentTokenID == "" {
+		partTokenID := parts.TokenID(tokenID)
+		parentPtr := partTokenID.Parent()
+		if parentPtr == nil {
+			return nil, false
+		}
+		parentTokenID = parentPtr.String()
+	}
+
+	var genesisTx *models.Transactions
+	var err error
+	if isFullNode {
+		genesisTx, _, err = c.w.GetFullNodeTransactionAndRoleAtHeight(tokenID, 0)
+	} else {
+		genesisTx, _, err = c.w.GetTransactionAndRoleAtHeight(tokenID, 0)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err), false
+	}
+	if genesisTx == nil {
+		return fmt.Errorf("genesis transaction not found for token %s", tokenID), false
+	}
+
+	var txInfo models.TransactionInfo
+	if err := json.Unmarshal(genesisTx.Info, &txInfo); err != nil {
+		return fmt.Errorf("failed to unmarshal transaction info for token %s: %w", tokenID, err), false
+	}
+
+	 //If it is not a fullnode, it should get the parent token from the tokens table,
+    //If token details are not there in the tokens table
+    //then it should compute  the parent tokenID from the given tokenID(currently assume a place holder function for that), 
+    //then from the tokenchain table we have to get the genesis txnID of the given tokenID(assume a place holder function for that), 
+    //then from the transactions table we have to get transactionInfo corresponding to genesisTxnID, 
+    // then check whether the parent tokenID is there in the committed tokens list. 
+    // if it is ther it should output nil,true. If it is not there it should output nil,false. 
+    // For any other error it should output error,false.
+	for _, committedToken := range txInfo.CommittedTokens {
+		if committedToken.TokenID == parentTokenID {
+			return nil, true
+		}
+	}
+
 	return nil, false
 }
