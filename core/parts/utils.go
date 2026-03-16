@@ -79,7 +79,25 @@ func GetTokenValueFromHierarchicalID(heirarchicalID string) (float64, error) {
 	return tokenValue, nil
 }
 
-func removeTokensFromList(tokens []models.Token, tokenIDsToRemove []models.Token) []models.Token {
+func ValidationOfTokenValue(tokenID string, assetType int, tokenValue float64) bool {
+	if assetType == RBTTokenType {
+		computedValue, err := GetTokenValueFromIndexedID(tokenID)
+		if err != nil {
+			return false
+		}
+
+		return computedValue == tokenValue
+	}
+	if assetType == FTTokenType {
+		//TODO: Get the token value from the genesis transaction info from the tokenchain table of the tokenID
+	}
+	if assetType == NFTTokenType || assetType == SmartContractTokenType {
+		//TODO: Get the token value from the json file by doing ipfs cat operation on the tokenID
+	}
+	return false
+}
+
+func removeTokensFromList(tokens []wallet.Token, tokenIDsToRemove []wallet.Token) []wallet.Token {
 	if len(tokenIDsToRemove) == 0 {
 		return tokens
 	}
