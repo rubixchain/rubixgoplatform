@@ -3,8 +3,6 @@ package parts
 import (
 	"fmt"
 	"strings"
-
-	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 type TokenID string
@@ -169,10 +167,4 @@ type SplitOp struct {
 	HierarchicalTokenID TokenID
 	ChildrenToTransfer  []int // Which child indices (1-based) go to recipient
 	ChildrenToKeep      []int // Which child indices stay with sender
-	TokensBeingBurnt    []int // Which will stay with sender in a burnt state
-}
-
-type TokenSplitInfo struct {
-	TransferTokens []models.Token
-	BurntTokens    []models.Token
 }

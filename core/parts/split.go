@@ -78,7 +78,6 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 			HierarchicalTokenID: currentTokenID,
 			ChildrenToTransfer:  childrenToTransfer,
 			ChildrenToKeep:      childrenToKeep,
-			TokensBeingBurnt:    tokensBeingBurnt,
 		})
 
 		if needToSplitChild {
@@ -95,12 +94,16 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 // performTokenSplit - transferFree, transferBurn, keepFree, keepBurnt
 func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto,
 	splitOp SplitOp, tokenCache map[string]models.Token, tokenDenomArr map[types.DenomValue]types.DenomCount,
-) ([]models.Token, []models.Token, []models.Token, []models.Token, error) {
+) (freeTokens []models.Token, keepTokens []models.Token, burnTokens []models.Token, err error) {
+	freeTokens = make([]models.Token, 0)
+	keepTokens = make([]models.Token, 0)
+	burnTokens = make([]models.Token, 0)
+
 	var parentToken models.Token
 	parentTokenHeirarchicalID := splitOp.HierarchicalTokenID
 	parentTokenIndexedID, err := HeirarchicalToIndexed(parentTokenHeirarchicalID)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: failed to convert parent token hierarchical ID to indexed ID: %v", err)
+		return nil, nil, nil, fmt.Errorf("performTokenSplit: failed to convert parent token hierarchical ID to indexed ID: %v", err)
 	}
 
 	if cachedToken, exists := tokenCache[parentTokenIndexedID]; exists {
@@ -109,11 +112,11 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto,
 		var err error
 		parentToken, err = w.GetRBTToken(parentTokenIndexedID)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v with id: %v; indexid: %v, err: %v", splitOp.HierarchicalTokenID.String(), parentTokenIndexedID, parentTokenIndexedID, err)
+			return nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v with id: %v; indexid: %v, err: %v", splitOp.HierarchicalTokenID.String(), parentTokenIndexedID, parentTokenIndexedID, err)
 		}
 
 		if err := w.LockToken(parentToken); err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to local parent token: %v, err: %v", parentToken.TokenID, err)
+			return nil, nil, nil, fmt.Errorf("performTokenSplit: unable to local parent token: %v, err: %v", parentToken.TokenID, err)
 		}
 	}
 
@@ -121,45 +124,35 @@ func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto,
 
 	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, parentTokenHeirarchicalID, parentTokenIndexedID, childLevel, tokenDenomArr)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	err = burnParentToken(dc, w, parentToken.TokenID, parentToken.TokenValue, dc.GetDID(), tokenDenomArr)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenIndexedID, dc.GetDID(), err)
+		return nil, nil, nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenIndexedID, dc.GetDID(), err)
 	}
-
-	childTokensToTransfer := make([]models.Token, 0)
-	burntForTransferTokens := make([]models.Token, 0)
-	childTokensToKeep := make([]models.Token, 0)
-	burntForKeptTokens := make([]models.Token, 0)
 
 	for _, transferIdx := range splitOp.ChildrenToTransfer {
 		childTokenToTransfer, exists := childTokensCreatedMap[transferIdx]
 		if !exists {
-			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenIndexedID)
+			return nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenIndexedID)
 		}
 
-		childTokensToTransfer = append(childTokensToTransfer, childTokenToTransfer)
-	}
-
-	if len(childTokensToTransfer) != 0 {
-		burntForTransferTokens = append(burntForTransferTokens, parentToken)
+		freeTokens = append(freeTokens, childTokenToTransfer)
 	}
 
 	for _, keepIdx := range splitOp.ChildrenToKeep {
 		childTokenToKeep, exists := childTokensCreatedMap[keepIdx]
 		if !exists {
-			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token to keep at index: %v for parent token: %v", keepIdx, parentToken)
+			return nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v to keep", keepIdx, parentTokenIndexedID)
 		}
 
-		childTokensToKeep = append(childTokensToKeep, childTokenToKeep)
+		keepTokens = append(keepTokens, childTokenToKeep)
 	}
 
-	if len(childTokensToKeep) != 0 {
-		burntForKeptTokens = append(burntForKeptTokens, parentToken)
-	}
-	return childTokensToTransfer, burntForTransferTokens, childTokensToKeep, burntForKeptTokens, nil
+	burnTokens = append(burnTokens, parentToken)
+
+	return freeTokens, burnTokens, burnTokens, nil
 }
 
 func createHierarchicalChildTokenContent(hierarchicalParentTokenContent string, index int) string {
@@ -209,6 +202,10 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 			parentTokenID,
 			err,
 		)
+	}
+
+	if err := w.UpdateTokenDenomArray(did, tokenDenomArr); err != nil {
+		return fmt.Errorf("createChildTokensAtLevel: failed to update token denom")
 	}
 
 	return nil
@@ -271,5 +268,9 @@ func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHie
 
 	tokenDenomArr[childTokenValue] += int64(maxTokenCount)
 
+	if err := w.UpdateTokenDenomArray(did, tokenDenomArr); err != nil {
+		return nil, fmt.Errorf("createChildTokensAtLevel: failed to update token denom")
+	}
+	
 	return childTokenIndexMap, nil
 }
