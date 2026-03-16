@@ -160,6 +160,22 @@ type TokenchainIndex struct {
 	UpdatedAt time.Time `db:"updated_at"`
 }
 
+type FullNodeTokenChain struct {
+	TokenID       string    `db:"token_id"`
+	TransactionID string    `db:"transaction_id"`
+	Role          int16     `db:"role"`
+	Height        int64     `db:"height"`
+	CreatedAt     time.Time `db:"created_at"`
+	UpdatedAt     time.Time `db:"updated_at"`
+}
+
+type FullNodeTokenchainIndex struct {
+	TokenID   string    `db:"token_id"`
+	Index     []int     `db:"index"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
+}
+
 type FullNodeRBT struct {
 	TokenID        string      `db:"token_id"`
 	ParentTokenID  pgtype.Text `db:"parent_token_id"`

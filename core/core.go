@@ -209,13 +209,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		return nil, err
 	}
 
-	if c.fullNode {
-		if err := c.w.InitFullNodeSchema(); err != nil {
-			c.log.Error("Failed to initialise full node schema", "err", err)
-			return nil, err
-		}
-	}
-
 	if c.testnet && c.defaultSetup {
 		c.AddDefaulTestnetQuorums()
 	}

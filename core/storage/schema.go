@@ -192,12 +192,7 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
         );
-    `)
-	return err
-}
 
-func (r *RubixDB) InitFullNodeSchema(ctx context.Context) error {
-	_, err := r.pool.Exec(ctx, `
         CREATE TABLE IF NOT EXISTS fullnode_rbt (
             token_id         TEXT PRIMARY KEY,
             parent_token_id  TEXT,
@@ -248,6 +243,23 @@ func (r *RubixDB) InitFullNodeSchema(ctx context.Context) error {
             latest_role      SMALLINT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS fullnode_tokenchain (
+            token_id       TEXT       NOT NULL,
+            transaction_id TEXT       NOT NULL,
+            role           SMALLINT   NOT NULL,
+            height         BIGINT     NOT NULL,
+            created_at     TIMESTAMPTZ DEFAULT NOW(),
+            updated_at     TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (token_id, height)
+        );
+
+        CREATE TABLE IF NOT EXISTS fullnode_tokenchain_index (
+            token_id   TEXT PRIMARY KEY,
+            index      INTEGER[] NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
         );
     `)
 	return err
