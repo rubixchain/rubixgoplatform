@@ -1,4 +1,4 @@
-package command
+package util
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 )
 
-func getNetworkMode(testnet, mainnet, localnet bool) (string, error) {
+func GetNetworkMode(testnet, mainnet, localnet bool) (string, error) {
 	count := 0
 	if testnet {
 		count++

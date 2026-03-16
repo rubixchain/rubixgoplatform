@@ -63,7 +63,7 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 
 	result.Token = tokenHash
 	var owners []string
-	
+
 	// Skip DHT check in trusted network mode
 	if c.cfg.CfgData.TrustedNetwork {
 		c.log.Debug("Skipping multi-pin check in trusted network mode", "token", tokenID)
@@ -175,7 +175,7 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 }
 
 func (c *Core) checkPinRole(req *ensweb.Request) *ensweb.Result {
-	token := c.l.GetQuerry(req, "token")
+	token := c.l.GetQuery(req, "token")
 	details, err := c.w.GetProviderDetails(token)
 	if err != nil {
 		c.log.Error("Failed to get provider details", "err", err)

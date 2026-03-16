@@ -44,14 +44,6 @@ type DID struct {
 	ipfs *ipfsnode.Shell
 }
 
-type DIDCrypto interface {
-	GetDID() string
-	GetSignType() int
-	Sign(hash string) ([]byte, []byte, error)
-	PvtSign(hash []byte) ([]byte, error)
-	PvtVerify(hash []byte, sign []byte) (bool, error)
-}
-
 func InitDID(dir string, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 	did := &DID{
 		dir:  dir,

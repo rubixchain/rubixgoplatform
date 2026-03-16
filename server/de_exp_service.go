@@ -43,7 +43,7 @@ func (s *Server) APIGetAllFreeSmartContracts(req *ensweb.Request) *ensweb.Result
 }
 
 func (s *Server) APIGetRBTbyDID(req *ensweb.Request) *ensweb.Result {
-	did := strings.TrimSpace(s.GetQuerry(req, "did"))
+	did := strings.TrimSpace(s.GetQuery(req, "did"))
 	if strings.Compare(did, "") == 0 {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
@@ -55,7 +55,7 @@ func (s *Server) APIGetRBTbyDID(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIGetFTbyDID(req *ensweb.Request) *ensweb.Result {
-	did := strings.TrimSpace(s.GetQuerry(req, "did"))
+	did := strings.TrimSpace(s.GetQuery(req, "did"))
 	if strings.Compare(did, "") == 0 {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
@@ -68,7 +68,7 @@ func (s *Server) APIGetFTbyDID(req *ensweb.Request) *ensweb.Result {
 
 // to fetch the NFTs(syncedNFT) by did
 func (s *Server) APIGetNFTbyDID(req *ensweb.Request) *ensweb.Result {
-	did := strings.TrimSpace(s.GetQuerry(req, "did"))
+	did := strings.TrimSpace(s.GetQuery(req, "did"))
 	if strings.Compare(did, "") == 0 {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
@@ -81,7 +81,7 @@ func (s *Server) APIGetNFTbyDID(req *ensweb.Request) *ensweb.Result {
 
 // to fetch the SmartContracts(syncedSmartContract) by did
 func (s *Server) APIGetSmartContractbyDID(req *ensweb.Request) *ensweb.Result {
-	did := strings.TrimSpace(s.GetQuerry(req, "did"))
+	did := strings.TrimSpace(s.GetQuery(req, "did"))
 	if strings.Compare(did, "") == 0 {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
@@ -93,8 +93,8 @@ func (s *Server) APIGetSmartContractbyDID(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
-	TokenID := strings.TrimSpace(s.GetQuerry(req, "tokenID"))
-	TokenType := strings.TrimSpace(s.GetQuerry(req, "tokenType"))
+	TokenID := strings.TrimSpace(s.GetQuery(req, "tokenID"))
+	TokenType := strings.TrimSpace(s.GetQuery(req, "tokenType"))
 
 	// Log entry point
 	s.log.Info("APIGetFullTokenChain called", "TokenID", TokenID, "TokenType", TokenType)
@@ -123,7 +123,7 @@ func (s *Server) APIGetFullTokenChain(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIGetTxnAmountFromFullNode(req *ensweb.Request) *ensweb.Result {
-	txnID := strings.TrimSpace(s.GetQuerry(req, "txnID"))
+	txnID := strings.TrimSpace(s.GetQuery(req, "txnID"))
 	if strings.Compare(txnID, "") == 0 {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
@@ -135,12 +135,12 @@ func (s *Server) APIGetTxnAmountFromFullNode(req *ensweb.Request) *ensweb.Result
 }
 
 func (s *Server) APIGetFullTokenChainHeight(req *ensweb.Request) *ensweb.Result {
-	tokenID := strings.TrimSpace(s.GetQuerry(req, "tokenID"))
+	tokenID := strings.TrimSpace(s.GetQuery(req, "tokenID"))
 	if strings.Compare(tokenID, "") == 0 {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
 
-	tokenType := strings.TrimSpace(s.GetQuerry(req, "tokenType"))
+	tokenType := strings.TrimSpace(s.GetQuery(req, "tokenType"))
 	if strings.Compare(tokenType, "") == 0 {
 		return s.BasicResponse(req, false, "Invalid input token type", nil)
 	}

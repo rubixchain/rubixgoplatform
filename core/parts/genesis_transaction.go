@@ -5,15 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func createGenesisTransaction(dc did.DIDCrypto,
+func createGenesisTransaction(dc types.DIDCrypto,
 	freeTokens []models.Token, committedTokens []models.Token,
 	did string, network string,
 ) (*models.TransactionInfo, *models.Signature, error) {
@@ -60,40 +58,6 @@ func createGenesisTransaction(dc did.DIDCrypto,
 	}
 
 	return txInfo, signature, nil
-}
-
-func publishTransaction(pubsub types.PubSub, tx *models.TransactionInfo, signature *models.Signature) (*models.Transactions, error) {
-	txID, err := util.GetTransactionID(tx)
-	if err != nil {
-		return nil, fmt.Errorf("publishTransaction: failed to get transaction ID: %v", err)
-	}
-
-	txInfoBytes, err := json.Marshal(tx)
-	if err != nil {
-		return nil, fmt.Errorf("publishTransaction: failed to marshal transactionInfo, err: %v", err)
-	}
-
-	signatureBytes, err := json.Marshal(signature)
-	if err != nil {
-		return nil, fmt.Errorf("publishTransaction: failed to marshal Signature, err: %v", err)
-	}
-
-	transaction := &models.Transactions{
-		ID:        txID,
-		Info:      txInfoBytes,
-		Signature: signatureBytes,
-	}
-
-	eventTx := models.EventTransaction{
-		Status:      true,
-		Transaction: transaction,
-	}
-
-	if err := pubsub.Publish(constants.Event_RubixTxns, eventTx); err != nil {
-		return nil, fmt.Errorf("publishTransaction: failed to publish genesis transaction, err: %v", err)
-	}
-
-	return transaction, nil
 }
 
 func storeGenesisTx(w *wallet.Wallet, transaction models.Transactions) error {
