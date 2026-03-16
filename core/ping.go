@@ -68,7 +68,7 @@ func (c *Core) PingPeer(peerID string) (string, error) {
 
 // CheckQuorumStatusResponse is the handler for CheckQuorumStatus request
 func (c *Core) CheckQuorumStatusResponse(req *ensweb.Request) *ensweb.Result { //PingRecevied
-	did := c.l.GetQuerry(req, "did")
+	did := c.l.GetQuery(req, "did")
 	c.log.Info("Checking Quorum Status")
 	resp := &PingResponse{
 		BasicResponse: model.BasicResponse{
@@ -123,7 +123,7 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error
 
 func (c *Core) GetPeerInfoResponse(req *ensweb.Request) *ensweb.Result { //PingRecevied
 	//fetch peer details from DIDPeerTable
-	peerDID := c.l.GetQuerry(req, "did")
+	peerDID := c.l.GetQuery(req, "did")
 
 	resp := &GetPeerInfoResponse{
 		BasicResponse: model.BasicResponse{

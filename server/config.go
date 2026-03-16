@@ -137,7 +137,7 @@ func (s *Server) APIRemoveAllQuorum(req *ensweb.Request) *ensweb.Result {
 
 // APIAddPeerDetailsFromExplorer will add peer details from explorer
 func (s *Server) APIAddPeerDetailsFromExplorer(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuerry(req, "did")
+	did := s.GetQuery(req, "did")
 	if did == "" {
 		s.log.Error("DID cannot be empty")
 		return s.BasicResponse(req, false, "DID cannot be empty", nil)
@@ -153,4 +153,3 @@ func (s *Server) APIAddPeerDetailsFromExplorer(req *ensweb.Request) *ensweb.Resu
 	}
 	return s.BasicResponse(req, true, "Peer details added successfully", nil)
 }
-

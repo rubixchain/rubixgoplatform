@@ -77,10 +77,10 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 }
 
 func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuerry(req, "did")
-	// peerPeerID := c.l.GetQuerry(req, "self_peerId")
-	// peerDID := c.l.GetQuerry(req, "selfDID")
-	// peerDIDType := c.l.GetQuerry(req, "selfDID_type")
+	did := c.l.GetQuery(req, "did")
+	// peerPeerID := c.l.GetQuery(req, "self_peerId")
+	// peerDID := c.l.GetQuery(req, "selfDID")
+	// peerDIDType := c.l.GetQuery(req, "selfDID_type")
 
 	// //If the peer's DID type string is not empty, register the peer, if not already registered
 	// if peerDIDType != "" {

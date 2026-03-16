@@ -91,7 +91,7 @@ func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 // @Success      200  {object}  model.GetFTInfo
 // @Router       /api/get-ft-info-by-did [get]
 func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuerry(req, "did")
+	did := s.GetQuery(req, "did")
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have access", nil)
 	}
@@ -119,14 +119,14 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 
 func (s *Server) APIFixFTCreator(req *ensweb.Request) *ensweb.Result {
 	s.log.Info("Fixing FT tokens with peer ID as CreatorDID")
-	
+
 	// Run the fix utility
 	results, err := s.c.FixAllFTTokensWithPeerIDAsCreator()
 	if err != nil {
 		s.log.Error("Failed to fix FT creators", "err", err)
 		return s.BasicResponse(req, false, "Failed to fix FT creators: "+err.Error(), nil)
 	}
-	
+
 	// Convert results to a format suitable for JSON response
 	var responseResults []map[string]interface{}
 	successCount := 0
@@ -145,24 +145,24 @@ func (s *Server) APIFixFTCreator(req *ensweb.Request) *ensweb.Result {
 		}
 		responseResults = append(responseResults, r)
 	}
-	
+
 	message := fmt.Sprintf("Fixed %d of %d FT tokens", successCount, len(results))
 	if len(results) == 0 {
 		message = "No FT tokens found with peer ID as CreatorDID"
 	}
-	
+
 	return s.BasicResponse(req, true, message, responseResults)
 }
 
 func (s *Server) APIGetFTCreatorStats(req *ensweb.Request) *ensweb.Result {
 	s.log.Info("Getting FT creator statistics")
-	
+
 	// Get the statistics
 	stats, err := s.c.GetFTTokenCreatorStats()
 	if err != nil {
 		s.log.Error("Failed to get FT creator stats", "err", err)
 		return s.BasicResponse(req, false, "Failed to get FT creator statistics: "+err.Error(), nil)
 	}
-	
+
 	return s.BasicResponse(req, true, "FT creator statistics retrieved successfully", stats)
 }

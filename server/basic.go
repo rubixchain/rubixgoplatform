@@ -57,7 +57,7 @@ func (s *Server) shutDown() {
 
 // APIPing will ping to given peer
 func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
-	peerID := s.GetQuerry(req, "peerID")
+	peerID := s.GetQuery(req, "peerID")
 	if peerID == "" {
 		s.log.Error("PeerID cannot be empty")
 		return s.BasicResponse(req, false, "PeerID cannot be empty", nil)
@@ -77,7 +77,7 @@ func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 
 // APIPing will ping to given peer
 func (s *Server) APICheckQuorumStatus(req *ensweb.Request) *ensweb.Result {
-	qAddress := s.GetQuerry(req, "quorumAddress")
+	qAddress := s.GetQuery(req, "quorumAddress")
 	DID := qAddress
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(DID)
 	if !strings.HasPrefix(DID, "bafybmi") || len(DID) != 59 || !is_alphanumeric {
