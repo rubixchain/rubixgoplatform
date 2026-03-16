@@ -92,7 +92,7 @@ func planTokenSplit(heirarchicalID TokenID, needed float64, log logger.Logger) (
 }
 
 // performTokenSplit - transferFree, transferBurn, keepFree, keepBurnt
-func performTokenSplit(w *wallet.Wallet, dc did.DIDCrypto,
+func performTokenSplit(w *wallet.Wallet, dc types.DIDCrypto,
 	splitOp SplitOp, tokenCache map[string]models.Token, tokenDenomArr map[types.DenomValue]types.DenomCount,
 ) (freeTokens []models.Token, keepTokens []models.Token, burnTokens []models.Token, err error) {
 	freeTokens = make([]models.Token, 0)
@@ -170,7 +170,7 @@ func createChildTokenAtIndex(parentTokenHierarchicalID string, index int) (strin
 	return indexedChildTokenContent, nil
 }
 
-func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
+func burnParentToken(dc types.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 	parentTokenValue float64, did string, tokenDenomArr map[types.DenomValue]types.DenomCount,
 ) error {
 	parentTokenLevel, err := util.DenomToLevel(parentTokenValue)
@@ -211,7 +211,7 @@ func burnParentToken(dc did.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 	return nil
 }
 
-func createChildTokensAtLevel(dc did.DIDCrypto, w *wallet.Wallet, parentTokenHierarchicalID TokenID, parenTokenIndexedID string,
+func createChildTokensAtLevel(dc types.DIDCrypto, w *wallet.Wallet, parentTokenHierarchicalID TokenID, parenTokenIndexedID string,
 	level int, tokenDenomArr map[types.DenomValue]types.DenomCount,
 ) (map[int]models.Token, error) {
 	var childTokenIndexMap map[int]models.Token = make(map[int]models.Token)

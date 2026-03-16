@@ -35,9 +35,9 @@ type QuorumDIDPeerMap struct {
 }
 
 type QuorumManager struct {
-	ql  []string
-	rubixDB   storage.RubixDB
-	log logger.Logger
+	ql      []string
+	rubixDB storage.RubixDB
+	log     logger.Logger
 }
 
 type QuorumData struct {
@@ -52,8 +52,8 @@ func isOldAddressFormat(address string) bool {
 
 func NewQuorumManager(r *storage.RubixDB, log logger.Logger) (*QuorumManager, error) {
 	qm := &QuorumManager{
-		rubixDB:   r,
-		log: log.Named("quorum_manager"),
+		rubixDB: r,
+		log:     log.Named("quorum_manager"),
 	}
 	// TODO: Update the following
 	// err := qm.s.Init(QuorumStorage, &QuorumData{}, true)
@@ -262,3 +262,5 @@ func saveQuorumsToFile(qds []QuorumData, fileName string) error {
 
 	return nil
 }
+
+func (c *Core) GetQuorums() ([]string, error) {}
