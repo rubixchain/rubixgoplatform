@@ -284,7 +284,7 @@ func (c *Core) SetupCore() error {
 
 	c.pm = ipfsport.NewPeerManager(c.cfg.PortConfig.ReceiverPort+11, c.cfg.PortConfig.ReceiverPort+10, 5000, c.ipfs, c.log, bs, c.peerID)
 	c.d = did.InitDID(c.didDir, c.log, c.ipfs)
-	c.ps, err = pubsub.NewPubSub(c.ipfs, c.log)
+	c.ps, err = types.NewPubSub(c.ipfs, c.log)
 	if err != nil {
 		return err
 	}
