@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -173,7 +174,7 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 			ParentTokenID: pt,
 			TokenValue:    tokenInfo.TokenValue,
 			DID:           tokenInfo.OwnerDID,
-			TokenStatus:   wallet.TokenIsFree,
+			TokenStatus:   constants.TokenStatus_Free,
 			CreatedAt:     time.Now(),
 			UpdatedAt:     time.Now(),
 		}

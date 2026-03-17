@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
@@ -46,7 +46,7 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 	var result MultiPinCheckRes
 
 	// Convert tokenID to token hash
-	tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(tokenID), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(tokenID), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 	if err != nil {
 		errMsg := fmt.Sprintf(
 			"pinCheck: unable to get IPFS hash for tokenID: %v, ensure tokenID being passed has correct structure, err: %v",
@@ -156,7 +156,7 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 			}
 
 			for peerId := range peerIdRolemap {
-				if peerIdRolemap[peerId] == wallet.OwnerRole {
+				if peerIdRolemap[peerId] == constants.TokenProviderRole_Owner {
 					// c.log.Error("Token has multiple Pins")
 					result.Status = true
 					result.Owners = provList

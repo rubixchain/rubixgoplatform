@@ -32,6 +32,44 @@ const (
 	TokenProviderFunc_Pin = 2
 )
 
+// Token pinning role constants (stored in ipfs_providers.role column).
 const (
-	TokenProviderRole_Owner = 1
+	TokenProviderRole_Owner           = 1
+	TokenProviderRole_Quorum          = 2
+	TokenProviderRole_Receiver        = 3
+	TokenProviderRole_PrevSender      = 4
+	TokenProviderRole_ParentTokenLock = 5
+	TokenProviderRole_ParentTokenPin  = 6
+	TokenProviderRole_DID             = 7
+	TokenProviderRole_Staking         = 8
+	TokenProviderRole_Pledging        = 9
+	TokenProviderRole_QuorumPin       = 10
+	TokenProviderRole_QuorumUnpin     = 11
+	TokenProviderRole_Pinning         = 12
+	TokenProviderRole_FullNode        = 13
+)
+
+// IPFS provider resource type constants.
+// These identify what kind of resource a CID represents.
+const (
+	IPFSResourceTokenState    = "token_state"
+	IPFSResourceTokenChain    = "token_chain"
+	IPFSResourceNFT           = "nft"
+	IPFSResourceSmartContract = "smart_contract"
+	IPFSResourceDID           = "did"
+	IPFSResourceGeneric       = "generic"
+	IPFSResourceFT            = "ft"
+)
+
+// IPFS provider operation constants.
+const (
+	IPFSProviderOpAdd   = "add"
+	IPFSProviderOpPin   = "pin"
+	IPFSProviderOpUnpin = "unpin"
+)
+
+// IPFS provider status constants.
+const (
+	IPFSProviderStatusActive   = "active"
+	IPFSProviderStatusUnpinned = "unpinned"
 )

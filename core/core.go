@@ -124,6 +124,7 @@ type Core struct {
 	noBalanceQuorumCount int
 	defaultSetup         bool
 	tokenSyncManager     *TokenSyncManager
+	ipfsProviderStore    *IPFSProviderStore
 	asyncPinManager      *AsyncPinManager
 	perfTracker          *PerformanceTracker
 	txStateMgr           *TransactionStateManager
@@ -208,6 +209,10 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
 	}
+
+	c.ipfsProviderStore = NewIPFSProviderStore(rubixDB.Pool(), c.log, func() string {
+		return c.peerID
+	})
 
 	if c.testnet && c.defaultSetup {
 		c.AddDefaulTestnetQuorums()

@@ -631,7 +631,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			blockId, _ := nb.GetBlockID(t)
 			tokenIDTokenStateData := t + blockId
 			tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
-			tokenIDTokenStateHash, _ := c.ipfsOps.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			tokenIDTokenStateHash, _ := c.ipfsOps.Add(tokenIDTokenStateBuffer, nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			txnTokenHashes = append(txnTokenHashes, tokenIDTokenStateHash)
 		}
 		// calling quorum pledge finality before calling the APISendReceiver Token
@@ -726,7 +726,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
 			if issueTypeInt == TokenChainNotSynced {
-				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+				syncIssueTokenDetails.TokenStatus = constants.TokenStatus_ChainSyncIssue
 				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
 				c.w.UpdateToken(syncIssueTokenDetails)
 				return nil, nil, nil, errors.New(br.Message)
@@ -862,11 +862,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// already pinned it
 		if cr.SenderPeerID != cr.ReceiverPeerID {
 			for _, t := range ti {
-				tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(t.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+				tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(t.Token), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("Unable to do IPFS Add operation on Token: %v", err)
 				}
-				c.w.UnPin(tokenHash, wallet.PrevSenderRole, sc.GetSenderDID())
+				c.w.Unpin(tokenHash, constants.TokenProviderRole_PrevSender, sc.GetSenderDID())
 			}
 			//call ipfs repo gc after unpinnning
 			c.ipfsRepoGc()
@@ -882,7 +882,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
-			Mode:            wallet.SendMode,
+			Mode:            constants.TxnMode_Send,
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetReceiverDID(),
 			Comment:         sc.GetComment(),
@@ -893,7 +893,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// to filter out migration transactions in xell wallet
 		if cr.OperationType == TokenSelfTransferredType {
-			td.Mode = wallet.RBTSelfTransferMode
+			td.Mode = constants.TxnMode_RBTSelfTransfer
 		}
 
 		go func() {
@@ -935,7 +935,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			blockId, _ := nb.GetBlockID(t)
 			tokenIDTokenStateData := t + blockId
 			tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
-			tokenIDTokenStateHash, _ := c.ipfsOps.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			tokenIDTokenStateHash, _ := c.ipfsOps.Add(tokenIDTokenStateBuffer, nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			txnTokenHashes = append(txnTokenHashes, tokenIDTokenStateHash)
 		}
 		// trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
@@ -1039,7 +1039,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
 
 			if issueTypeInt == TokenChainNotSynced {
-				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+				syncIssueTokenDetails.TokenStatus = constants.TokenStatus_ChainSyncIssue
 				c.log.Debug("Token sync issue details updated:", syncIssueTokenDetails)
 				c.w.UpdateFTToken(syncIssueTokenDetails)
 				return nil, nil, nil, errors.New(br.Message)
@@ -1308,11 +1308,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		if !rp.IsLocal() {
 			for _, t := range ti {
-				tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(t.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+				tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(t.Token), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("unable to do IPFS Add operation on Token: %v", err)
 				}
-				c.w.UnPin(tokenHash, wallet.PrevSenderRole, sc.GetSenderDID())
+				c.w.Unpin(tokenHash, constants.TokenProviderRole_PrevSender, sc.GetSenderDID())
 			}
 			// call ipfs repo gc after unpinnning
 			c.ipfsRepoGc()
@@ -1328,7 +1328,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
-			Mode:            wallet.FTTransferMode,
+			Mode:            constants.TxnMode_FTTransfer,
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetReceiverDID(),
 			Comment:         sc.GetComment(),
@@ -1339,7 +1339,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// xell migration
 		if cr.OperationType == TokenSelfTransferredType {
-			td.Mode = wallet.FTSelfTransferMode
+			td.Mode = constants.TxnMode_FTSelfTransfer
 		}
 		// publish txn
 		publishingTxn.AssetType = FTTokenType
@@ -1429,7 +1429,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
 			if issueTypeInt == TokenChainNotSynced {
-				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+				syncIssueTokenDetails.TokenStatus = constants.TokenStatus_ChainSyncIssue
 				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
 				c.w.UpdateToken(syncIssueTokenDetails)
 				return nil, nil, nil, errors.New(br.Message)
@@ -1536,7 +1536,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		// Commented out this unpinning part so that the unpin is not done from the sender side
 		// for _, t := range ti {
-		// 	c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+		// 	c.w.Unpin(t.Token, constants.TokenProviderRole_PrevSender, sc.GetSenderDID())
 		// }
 		// call ipfs repo gc after unpinnning
 		// c.ipfsRepoGc()
@@ -1550,7 +1550,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
-			Mode:            wallet.PinningServiceMode,
+			Mode:            constants.TxnMode_PinningService,
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetPinningServiceDID(),
 			Comment:         sc.GetComment(),
@@ -1699,7 +1699,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
-			Mode:            wallet.SendMode,
+			Mode:            constants.TxnMode_Send,
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetReceiverDID(),
 			Comment:         sc.GetComment(),
@@ -1758,7 +1758,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 		// update smart contracttoken status to deployed in DB
-		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsDeployed)
+		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, constants.TokenStatus_Deployed)
 		if err != nil {
 			c.log.Error("Failed to update smart contract Token deploy detail in storage", err)
 			return nil, nil, nil, err
@@ -1819,7 +1819,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         newBlockId,
-			Mode:            wallet.DeployMode,
+			Mode:            constants.TxnMode_Deploy,
 			DeployerDID:     sc.GetDeployerDID(),
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
@@ -1859,7 +1859,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 		// update smart contracttoken status to deployed in DB
-		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsExecuted)
+		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, constants.TokenStatus_Executed)
 		if err != nil {
 			c.log.Error("Failed to update smart contract Token execute detail in storage", err)
 			return nil, nil, nil, err
@@ -1938,7 +1938,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         newBlockId,
-			Mode:            wallet.ExecuteMode,
+			Mode:            constants.TxnMode_Execute,
 			DeployerDID:     sc.GetExecutorDID(),
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
@@ -1991,7 +1991,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         newBlockId,
-			Mode:            wallet.DeployMode,
+			Mode:            constants.TxnMode_Deploy,
 			DeployerDID:     sc.GetDeployerDID(),
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
@@ -2084,7 +2084,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         newBlockId,
-			Mode:            wallet.ExecuteMode,
+			Mode:            constants.TxnMode_Execute,
 			DeployerDID:     sc.GetExecutorDID(),
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
@@ -2384,7 +2384,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.log.Debug("Orphan token list ", orphanChildTokenList)
 		if issueTypeInt == ParentTokenNotBurned {
 			for _, orphanChild := range orphanChildTokenList {
-				orphanChild.TokenStatus = wallet.TokenIsOrphaned
+				orphanChild.TokenStatus = constants.TokenStatus_Orphaned
 				c.log.Debug("Orphan token list status updated", orphanChild)
 				c.w.UpdateToken(&orphanChild)
 			}
@@ -2423,7 +2423,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 				}
 				c.log.Debug("In connectQuorum, sync issue token details ", FTsyncIssueTokenDetails)
 				if issueTypeInt == TokenChainNotSynced {
-					FTsyncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+					FTsyncIssueTokenDetails.TokenStatus = constants.TokenStatus_ChainSyncIssue
 					c.log.Debug("In connectQuorum, sync issue token details status updated", FTsyncIssueTokenDetails)
 					c.w.UpdateFTToken(FTsyncIssueTokenDetails)
 				}
@@ -2436,7 +2436,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 				}
 				c.log.Debug("In connectQuorum, sync issue token details ", syncIssueTokenDetails)
 				if issueTypeInt == TokenChainNotSynced {
-					syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+					syncIssueTokenDetails.TokenStatus = constants.TokenStatus_ChainSyncIssue
 					c.log.Debug("In connectQuorum, sync issue token details status updated", syncIssueTokenDetails)
 					c.w.UpdateToken(syncIssueTokenDetails)
 					// c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
@@ -2464,7 +2464,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 				return
 			}
 			c.log.Debug("Double spend token details ", doubleSpendFTDetails)
-			doubleSpendFTDetails.TokenStatus = wallet.TokenIsBeingDoubleSpent
+			doubleSpendFTDetails.TokenStatus = constants.TokenStatus_BeingDoubleSpent
 			c.log.Debug("Double spend token details status updated", doubleSpendFTDetails)
 			c.w.UpdateFTToken(doubleSpendFTDetails)
 			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
@@ -2477,7 +2477,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 			return
 		}
 		c.log.Debug("Double spend token details ", doubleSpendTokenDetails)
-		doubleSpendTokenDetails.TokenStatus = wallet.TokenIsBeingDoubleSpent
+		doubleSpendTokenDetails.TokenStatus = constants.TokenStatus_BeingDoubleSpent
 		c.log.Debug("Double spend token details status updated", doubleSpendTokenDetails)
 		c.w.UpdateToken(doubleSpendTokenDetails)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)

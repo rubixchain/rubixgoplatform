@@ -8,8 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -155,7 +154,7 @@ func (apm *AsyncPinManager) processJob(job *AsyncPinJob) {
 	}
 	
 	var (
-		providerMaps     []model.TokenProviderMap
+		providerMaps     []BatchProviderRecord
 		providerMapMutex sync.Mutex
 		wg               sync.WaitGroup
 		semaphore        = make(chan struct{}, 5) // Limit concurrent pins
@@ -186,27 +185,30 @@ func (apm *AsyncPinManager) processJob(job *AsyncPinJob) {
 				
 				// Pin with retry
 				err := retryAsync(func() error {
-					_, tpm, err := apm.core.w.AddWithProviderMap(
+					hash, provCtx, err := apm.core.w.AddWithProviderMap(
 						bytes.NewBuffer([]byte(data)),
 						job.DID,
-						wallet.QuorumPinRole,
+						constants.TokenProviderRole_QuorumPin,
 					)
 					if err != nil {
 						return err
 					}
-					
+
 					// Fill in extra fields
-					tpm.FuncID = wallet.PinFunc
-					tpm.TransactionID = job.TransactionID
-					tpm.Sender = job.Sender
-					tpm.Receiver = job.Receiver
-					tpm.TokenValue = job.TokenValue
-					
+					provCtx.TransactionID = job.TransactionID
+					provCtx.Initiator = job.Sender
+					provCtx.Owner = job.Receiver
+					provCtx.TokenValue = job.TokenValue
+
 					// Add to collection
 					providerMapMutex.Lock()
-					providerMaps = append(providerMaps, tpm)
+					providerMaps = append(providerMaps, BatchProviderRecord{
+						CID:       hash,
+						Context:   &provCtx,
+						Operation: "pin",
+					})
 					providerMapMutex.Unlock()
-					
+
 					return nil
 				}, 3, 2*time.Second)
 				
