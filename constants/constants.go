@@ -62,11 +62,52 @@ const (
 
 // Token Statuses
 const (
-	TokenStatus_Free      = 0
-	TokenStatus_Locked    = 1
-	TokenStatus_Burnt     = 2
-	TokenStatus_Committed = 3
-	TokenStatus_Seed      = 99
+	TokenStatus_Free               = 0
+	TokenStatus_Locked             = 1
+	TokenStatus_Burnt              = 2
+	TokenStatus_Committed          = 3
+	TokenStatus_Pledged            = 4
+	TokenStatus_BurntForFT         = 5
+	TokenStatus_Deployed           = 6
+	TokenStatus_Executed           = 7
+	TokenStatus_PinnedAsService    = 8
+	TokenStatus_Orphaned           = 9
+	TokenStatus_ChainSyncIssue     = 10
+	TokenStatus_BeingDoubleSpent   = 11
+	TokenStatus_QuorumPledged      = 12
+	TokenStatus_Seed               = 99
+)
+
+// Token sync status constants.
+const (
+	SyncStatus_Completed  = 0
+	SyncStatus_Incomplete = 1
+	SyncStatus_Unrequired = 2
+)
+
+// Transaction mode constants.
+const (
+	TxnMode_Send            = 0
+	TxnMode_Recv            = 1
+	TxnMode_FTTransfer      = 2
+	TxnMode_RBTSelfTransfer = 3
+	TxnMode_FTSelfTransfer  = 4
+	TxnMode_PinningService  = 5
+	TxnMode_Deploy          = 6
+	TxnMode_Execute         = 7
+)
+
+// Storage table name constants.
+// These map old wallet storage names to PostgreSQL table names.
+const (
+	Storage_Tokens               = "tokens"
+	Storage_Transactions         = "transactions"
+	Storage_FTTokens             = "tokens"              // FT tokens live in the main tokens table (token_type distinguishes)
+	Storage_FTTransactionHistory = "ft_transaction_history"
+	Storage_DIDPeer              = "did_peer_map"
+	Storage_DIDs                 = "dids"
+	Storage_FTs                  = "fts"                  // FT definitions (name, count, creator)
+	Storage_FTTokenFixResult     = "ft_token_fix_result"
 )
 
 // Requests Status

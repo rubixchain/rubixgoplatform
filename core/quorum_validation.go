@@ -14,13 +14,14 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -103,7 +104,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string) (bool, error) {
 func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, error) {
 	var issueType int
 	parentTokenHash, err := c.ipfsOps.Add(
-		bytes.NewBufferString(parentTokenID),
+		bytes.NewBufferString(parentTokenID), nil,
 	)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to add parent token to ipfs for syncing, err: %v, token: %v", err, parentTokenID)
@@ -167,7 +168,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 			TokenID:     parentTokenID,
 			TokenValue:  tv,
 			DID:         p.GetPeerDID(),
-			TokenStatus: wallet.TokenIsBurnt,
+			TokenStatus: constants.TokenStatus_Burnt,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}
@@ -186,12 +187,12 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 		}
 		c.w.CreateToken(td)
 	} else {
-		td.TokenStatus = wallet.TokenIsBurnt
+		td.TokenStatus = constants.TokenStatus_Burnt
 		c.w.UpdateToken(td)
 	}
 	// update sync status to incomplete
-	if td.SyncStatus == wallet.SyncUnrequired {
-		err = c.w.UpdateTokenSyncStatus(parentTokenID, wallet.SyncIncomplete)
+	if td.SyncStatus == constants.SyncStatus_Unrequired {
+		err = c.w.UpdateTokenSyncStatus(parentTokenID, constants.SyncStatus_Incomplete)
 		if err != nil {
 			if !strings.Contains(err.Error(), "no records found") {
 				c.log.Error("failed to update parent token sync status as incomplete, token ", parentTokenID)
@@ -212,7 +213,7 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	// Skip DHT check in trusted network mode
 	if !c.cfg.CfgData.TrustedNetwork {
 
-		tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(ti.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(ti.Token), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 		if err != nil {
 			c.log.Debug(fmt.Sprintf("validateSingleToken: unable to create IPFS hash of token: %v, err: %v", ti.Token, err))
 			return nil, false
@@ -253,12 +254,12 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 		}
 		// The parent token passed in the pin function is the ipfs Hash itself.
 		// We are adding the parent token details to ipfs in the syncParentToken function above.
-		parentTokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(parentToken), ipfsnode.Pin(false))
+		parentTokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(parentToken), nil, ipfsnode.Pin(false))
 		if err != nil {
 			c.log.Error(fmt.Sprintf("Unable to do IPFS Add operation on Token: %v", err))
 			return nil, false
 		}
-		_, err = c.w.Pin(parentTokenHash, wallet.ParentTokenPinByQuorumRole, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
+		_, err = c.w.Pin(parentTokenHash, constants.TokenProviderRole_ParentTokenPin, quorumDID, cr.TransactionID, address, receiverAddress, ti.TokenValue)
 		if err != nil {
 			c.log.Error("Failed to pin parent token for token", "token", ti.Token, "err", err)
 			return err, false
@@ -343,9 +344,9 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	}
 
 	tokenInfo.DID = sc.GetSenderDID()
-	tokenInfo.TokenStatus = wallet.QuorumPledgedForThisToken
+	tokenInfo.TokenStatus = constants.TokenStatus_QuorumPledged
 	tokenInfo.TransactionID = b.GetTid()
-	tokenInfo.SyncStatus = wallet.SyncIncomplete
+	tokenInfo.SyncStatus = constants.SyncStatus_Incomplete
 	dbWriteSem <- struct{}{}
 	err = util.RetrySQLiteWrite(func() error {
 		return c.w.UpdateToken(tokenInfo)
@@ -1293,7 +1294,7 @@ func (c *Core) pinTokenState(
 		firstErr         error
 		tasks            = make(chan int, total)
 		cancelableCtx, _ = context.WithCancel(ctx) // In case you want to cancel all on first error
-		providerMaps     = make([]model.TokenProviderMap, 0, total)
+		providerMaps     = make([]BatchProviderRecord, 0, total)
 	)
 
 	// Use dynamic worker sizing based on available resources
@@ -1329,23 +1330,22 @@ func (c *Core) pinTokenState(
 				data := tokenStateCheckResult[i].tokenIDTokenStateData
 
 				var tokenIDTokenStateHash string
-				var tpm model.TokenProviderMap
+				var provCtx types.IPFSProviderContext
 				var err error
 
 				// Retry block for AddWithProviderMap
 				err = retry(func() error {
 					var retryErr error
-					tokenIDTokenStateHash, tpm, retryErr = c.w.AddWithProviderMap(
+					tokenIDTokenStateHash, provCtx, retryErr = c.w.AddWithProviderMap(
 						bytes.NewBuffer([]byte(data)),
 						did,
-						wallet.QuorumPinRole,
+						constants.TokenProviderRole_QuorumPin,
 					)
 					// Fill in extra fields for pinning
-					tpm.FuncID = wallet.PinFunc
-					tpm.TransactionID = transactionId
-					tpm.Sender = sender
-					tpm.Receiver = receiver
-					tpm.TokenValue = tokenValue
+					provCtx.TransactionID = transactionId
+					provCtx.Initiator = sender
+					provCtx.Owner = receiver
+					provCtx.TokenValue = tokenValue
 					return retryErr
 				})
 				if err != nil {
@@ -1366,9 +1366,9 @@ func (c *Core) pinTokenState(
 					time.Sleep(25 * time.Millisecond) // 25ms for medium batches
 				}
 
-				// Retry block for Pin (but skip AddProviderDetails inside Pin)
+				// Retry block for Pin (skip provider tracking inside Pin, batch-recorded later)
 				err = retry(func() error {
-					_, retryErr := c.w.Pin(tokenIDTokenStateHash, wallet.QuorumPinRole, did, transactionId, sender, receiver, tokenValue, true)
+					_, retryErr := c.w.Pin(tokenIDTokenStateHash, constants.TokenProviderRole_QuorumPin, did, transactionId, sender, receiver, tokenValue, true)
 					return retryErr
 				})
 				if err != nil {
@@ -1381,9 +1381,13 @@ func (c *Core) pinTokenState(
 					return
 				}
 
-				// Collect provider map for batch
+				// Collect provider record for batch
 				providerMapMutex.Lock()
-				providerMaps = append(providerMaps, tpm)
+				providerMaps = append(providerMaps, BatchProviderRecord{
+					CID:       tokenIDTokenStateHash,
+					Context:   &provCtx,
+					Operation: constants.IPFSProviderOpPin,
+				})
 				providerMapMutex.Unlock()
 
 				newCount := atomic.AddInt32(&completed, 1)
@@ -1428,16 +1432,11 @@ func (c *Core) pinTokenState(
 		return fmt.Errorf("pinning failed: %w", firstErr)
 	}
 
-	// Batch write provider details with retry/backoff
-	// Note: AddProviderDetailsBatch now handles UNIQUE constraints gracefully
-	err := c.w.AddProviderDetailsBatch(providerMaps)
-	if err != nil {
-		// Log the error but don't fail the validation
-		// UNIQUE constraint errors are expected when multiple quorums process the same tokens
-		c.log.Warn("Failed to add some provider details", "err", err, "total_tokens", len(providerMaps))
-		if strings.Contains(err.Error(), "all provider detail operations failed") {
-			// Only fail if ALL operations failed
-			return fmt.Errorf("critical error in provider details: %w", err)
+	// Batch write provider details
+	if c.ipfsProviderStore != nil {
+		err := c.ipfsProviderStore.RecordProviderBatch(providerMaps)
+		if err != nil {
+			c.log.Warn("Failed to add some provider details", "err", err, "total_tokens", len(providerMaps))
 		}
 	}
 
@@ -1447,7 +1446,7 @@ func (c *Core) pinTokenState(
 
 func (c *Core) unPinTokenState(ids []string, did string) error {
 	for _, id := range ids {
-		_, err := c.w.UnPin(id, wallet.QuorumRole, did)
+		_, err := c.w.Unpin(id, constants.TokenProviderRole_Quorum, did)
 		if err != nil {
 			c.log.Warn("Error unpinning token state", "id", id, "err", err)
 			return err

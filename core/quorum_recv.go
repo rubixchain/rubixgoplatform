@@ -1378,7 +1378,7 @@ func (c *Core) updateReceiverToken(
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
 			BlockID:         bid,
-			Mode:            wallet.RecvMode,
+			Mode:            constants.TxnMode_Recv,
 			Amount:          b.GetTokenValue(),
 			SenderDID:       b.GetSenderDID(),
 			ReceiverDID:     b.GetOwner(),
@@ -1392,7 +1392,7 @@ func (c *Core) updateReceiverToken(
 		}
 		// maintain transaction mode as per transaction type
 		if td.TransactionType == block.TokenSelfTransferredType {
-			td.Mode = wallet.RBTSelfTransferMode
+			td.Mode = constants.TxnMode_RBTSelfTransfer
 		}
 		err = c.w.AddTransactionHistory(td)
 		if err != nil {
@@ -1609,7 +1609,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
 			BlockID:         bid,
-			Mode:            wallet.FTTransferMode,
+			Mode:            constants.TxnMode_FTTransfer,
 			Amount:          float64(len(b.GetTransTokens())),
 			SenderDID:       b.GetSenderDID(),
 			ReceiverDID:     b.GetOwner(),
@@ -1623,7 +1623,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		}
 		// maintain transaction mode as per transaction type
 		if td.TransactionType == block.TokenSelfTransferredType {
-			td.Mode = wallet.FTSelfTransferMode
+			td.Mode = constants.TxnMode_FTSelfTransfer
 		}
 		err = c.w.AddTransactionHistory(td)
 		if err != nil {
