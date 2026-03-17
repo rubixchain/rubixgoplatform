@@ -59,6 +59,7 @@ const (
 	APIGetPrevQrmFromPrevSenderPath string = "/api/get-prev-qrms-info-from-sender"
 	APICheckPinRole                 string = "/api/check-pin-role"
 	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
+	APISyncGenesisAndLatestTransaction string = "/api/sync-genesis-n-lastest-transaction"
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
 	APIInitiateConsensus            string = "/api/initiate-consensus"
