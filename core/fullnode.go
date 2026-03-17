@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -18,7 +19,7 @@ func (c *Core) SubscribeTxnSetup() {
 	// Initialize the transaction processor
 	c.initDynamicTxnProcessor()
 
-	topic := RubixTxnTopic
+	topic := constants.Event_RubixTxns
 	err := c.ps.SubscribeTopic(topic, c.TxnCallBack)
 	if err != nil {
 		c.log.Error("Unable to subscribe to topic", "topic", topic, "error", err)
