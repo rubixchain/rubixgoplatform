@@ -102,28 +102,6 @@ func (w *Wallet) GetRoleOfTokenIdInLatestTxn(tokenID string) (int16, error) {
 	return role, nil
 }
 
-// func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.Transactions, int16, error) {
-// 	row := w.db.Pool().QueryRow(w.Ctx,
-// 		`SELECT transaction_id, role FROM tokenchain WHERE token_id = $1 ORDER BY height DESC LIMIT 1`, tokenID,
-// 	)
-
-// 	var txID string
-// 	var tokenRoleInTx int16
-// 	if err := row.Scan(&txID, &tokenRoleInTx); err != nil {
-// 		if err == pgx.ErrNoRows {
-// 			return nil, -1, nil
-// 		}
-// 		return nil, -1, fmt.Errorf("GetLatestTransactionByTokenID scan: %w", err)
-// 	}
-
-// 	tx, err := w.GetTransactionByID(txID)
-// 	if err != nil {
-// 		return nil, -1, fmt.Errorf("GetLatestTransactionByTokenID GetTransactionByID: %w", err)
-// 	}
-
-// 	return tx, tokenRoleInTx, nil
-// }
-
 func (w *Wallet) AddTokenChainEntry(entry *models.TokenChain) error {
 	_, err := w.db.Pool().Exec(w.Ctx, `
 		INSERT INTO tokenchain (token_id, transaction_id, role, height, created_at, updated_at)
@@ -157,9 +135,9 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*m
 	return tx, tokenRoleInTx, nil
 }
 
-// GetAllTransactionsInBytesByTokenId fetches entire token chain, fetches each transaction by transactionId and 
+// GetAllTransactionInfoInBytesByTokenId fetches entire token chain, fetches each transaction by transactionId and 
 // converts into bytes, and returns the chain of transactions in byte array
-func (w *Wallet) GetAllTransactionsInBytesByTokenId(tokenID string) ([][]byte, error) {
+func (w *Wallet) GetAllTransactionInfoInBytesByTokenId(tokenID string) ([][]byte, error) {
 	txnChain := make([][]byte, 0)
 	// get entire token chain of the token
 	tokenChain, err := w.GetTokenChainByTokenID(tokenID)

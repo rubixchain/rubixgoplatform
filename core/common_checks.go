@@ -95,7 +95,7 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 		c.log.Debug("token content validated for "+network, tokenContent)
 	}
 
-	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces(uint(MaxDecimalPlaces))
+	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces()
 	if tokenTypeString == PartString {
 		partTokenNumber, err := strconv.Atoi(devidedParts[2])
 		if err != nil {
@@ -152,7 +152,7 @@ func (c *Core) IsparentTokenBurnt(isFullNode bool, tokenID string) (error, bool)
 		}
 
 		// TODO: replace with proper fullnode genesis txnID retrieval once available
-		genesisTx, _, err := c.w.GetFullNodeTransactionAndRoleAtHeight(tokenID, 0)
+		genesisTx, err := c.w.GetGenesisTransaction(tokenID)
 		if err != nil {
 			return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err), false
 		}

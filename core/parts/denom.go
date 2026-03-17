@@ -12,7 +12,7 @@ import (
 )
 
 // get level, token number and part index from the RBT token id
-func (id TokenID) GetRbtIDFields() (types.RbtIDElements, error) {
+func (id TokenID) GetRbtIDElements() (types.RbtIDElements, error) {
 	var err error
 	rbtElems := types.RbtIDElements{}
 
@@ -55,7 +55,7 @@ func GetMaxDenomTreeLevel() int {
 }
 
 func getLowestPossibleDenom() float64 {
-	return rubixmath.FloatPrecision(math.Pow10(-constants.MaxSupportedDecimalPlaces))
+	return rubixmath.FloatPrecision(math.Pow10(-(constants.MaxSupportedDecimalPlaces)))
 }
 
 // getLevelStart returns the BFS start index for the given level.
@@ -317,7 +317,7 @@ func GetNumberOfChildren(parentLevel int) int {
 //  6. parentLevelIndex = childLevelIndex / numChildren   (integer division)
 //  7. parentPartIndex= Min(Lp) + parentLevelIndex
 func (id TokenID) GetParentToken() (string, error) {
-	child, err := id.GetRbtIDFields()
+	child, err := id.GetRbtIDElements()
 	if err != nil {
 		return "", err
 	}
@@ -360,7 +360,7 @@ func (id TokenID) GetParentToken() (string, error) {
 //  5. firstChild = (levelIndex * numChildren) + Min(Lx+1)
 //  6. lastChild  = firstChild + (numChildren - 1)
 func (id TokenID) GetChildrenIndexRange() (types.ChildrenRange, error) {
-	parent, err := id.GetRbtIDFields()
+	parent, err := id.GetRbtIDElements()
 	if err != nil {
 		return types.ChildrenRange{}, err
 	}
