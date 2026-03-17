@@ -19,9 +19,10 @@ import (
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	tkn "github.com/rubixchain/rubixgoplatform/token"
-	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 const (
@@ -223,7 +224,6 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APICreditStatus, "GET", c.creditStatus)
 	c.l.AddRoute(APIQuorumConsensus, "POST", c.quorumConensus)
 	c.l.AddRoute(APIQuorumCredit, "POST", c.quorumCredit)
-	c.l.AddRoute(APIReqPledgeToken, "POST", c.reqPledgeToken)
 	c.l.AddRoute(APIUpdatePledgeToken, "POST", c.updatePledgeToken)
 	c.l.AddRoute(APISignatureRequest, "POST", c.signatureRequest)
 	c.l.AddRoute(APISendReceiverToken, "POST", c.updateReceiverTokenHandle)
@@ -319,6 +319,9 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 		return fmt.Errorf("failed to setup quorum")
 	}
 	c.pqc[didStr] = dc
+
+	// Subscribe to "rubix_txns" event
+	c.SubscribeTxnSetup()
 
 	return nil
 }
