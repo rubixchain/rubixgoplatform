@@ -1,17 +1,17 @@
 package token
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/rubixchain/rubixgoplatform/constants"
+)
 
 const FaucetName = "faucettestrbt"
 
-// LocalTestTokenLevelBase is the starting level for local test tokens. Level 10000
-// corresponds to TokenMap level 0 (56 tokens), 10001 to level 1 (4300000 tokens), etc.
-const LocalTestTokenLevelBase = 10000
+// LocalTestTokenLevelBase is the starting level for local test tokens. Level 10001 corresponds to level 1 (4300000 tokens), etc.
 
-// TokenMap maps RBT token level to Tokens Awarded per the official RBT Tokenomics sheet.
-// Ref: https://learn.rubix.net/docs/tools-downloads/tokenomics
+
 var TokenMap = map[int]int{
-	0:  56,
 	1:  4300000,
 	2:  2425000,
 	3:  2303750,
@@ -106,7 +106,7 @@ func GetTokenLevelAndNumberForGlobalIndex(globalIndex int) (tokenLevel int, numI
 			return 0, 0, fmt.Errorf("global index %d exceeds max token levels", globalIndex)
 		}
 		if globalIndex <= cumulative+maxCount {
-			tokenLevel = LocalTestTokenLevelBase + mapLevel
+			tokenLevel = constants.LocalRBT_Level + mapLevel
 			numInLevel = globalIndex - cumulative
 			return tokenLevel, numInLevel, nil
 		}

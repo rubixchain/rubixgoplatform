@@ -20,6 +20,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/did"
 	tkn "github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -349,7 +350,7 @@ func (c *Core) RemoveAllQuorum() error {
 	return c.w.RemoveAllQuorums()
 }
 
-func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
+func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc types.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
 	// Track overall consensus time
 	defer c.TrackOperation("tx.rbt_transfer.consensus", map[string]interface{}{
 		"mode":           cr.Mode,
@@ -2495,7 +2496,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, nil, cresp.Signature)
 }
 
-func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid string, dc did.DIDCrypto) (*block.Block, error) {
+func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid string, dc types.DIDCrypto) (*block.Block, error) {
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
 	cs, ok2 := c.quorumRequest[cr.ReqID]
@@ -3008,7 +3009,7 @@ func (c *Core) checkIsUnpledged(tcb *block.Block) bool {
 	return false
 }
 
-func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractToken string, didCryptoLib did.DIDCrypto) error {
+func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractToken string, didCryptoLib types.DIDCrypto) error {
 	commitedTokens, err := newBlock.GetCommitedTokenDetials(smartContractToken)
 	if err != nil {
 		c.log.Error("error fetching commited token details", err)

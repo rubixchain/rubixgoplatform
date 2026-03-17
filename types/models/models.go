@@ -152,3 +152,82 @@ type TokenDenom struct {
 	CreatedAt  time.Time `db:"created_at"`
 	UpdatedAt  time.Time `db:"updated_at"`
 }
+
+type TokenchainIndex struct {
+	TokenID   string `db:"token_id"`
+	Index     []int  `db:"index"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
+}
+
+type FullNodeTokenChain struct {
+	TokenID       string    `db:"token_id"`
+	TransactionID string    `db:"transaction_id"`
+	Role          int16     `db:"role"`
+	Height        int64     `db:"height"`
+	CreatedAt     time.Time `db:"created_at"`
+	UpdatedAt     time.Time `db:"updated_at"`
+}
+
+type FullNodeTokenchainIndex struct {
+	TokenID   string    `db:"token_id"`
+	Index     []int     `db:"index"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
+}
+
+type FullNodeRBT struct {
+	TokenID        string      `db:"token_id"`
+	ParentTokenID  pgtype.Text `db:"parent_token_id"`
+	TokenValue     float64     `db:"token_value"`
+	TokenStatus    int16       `db:"token_status"`
+	DID            string      `db:"did"`
+	TransactionID  string      `db:"transaction_id"`
+	TokenStateHash string      `db:"token_state_hash"`
+	TokenType      int16       `db:"token_type"`
+	LatestPosition int64       `db:"latest_position"`
+	LatestRole     int16       `db:"latest_role"`
+	CreatedAt      time.Time   `db:"created_at"`
+	UpdatedAt      time.Time   `db:"updated_at"`
+}
+
+type FullNodeFT struct {
+	TokenID        string    `db:"token_id"`
+	TokenValue     float64   `db:"token_value"`
+	TokenStatus    int16     `db:"token_status"`
+	DID            string    `db:"did"`
+	TransactionID  string    `db:"transaction_id"`
+	TokenStateHash string    `db:"token_state_hash"`
+	TokenType      int16     `db:"token_type"`
+	LatestPosition int64     `db:"latest_position"`
+	LatestRole     int16     `db:"latest_role"`
+	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
+}
+
+type FullNodeNFT struct {
+	TokenID        string    `db:"token_id"`
+	TokenValue     float64   `db:"token_value"`
+	TokenStatus    int16     `db:"token_status"`
+	DID            string    `db:"did"`
+	TransactionID  string    `db:"transaction_id"`
+	TokenStateHash string    `db:"token_state_hash"`
+	TokenType      int16     `db:"token_type"`
+	LatestPosition int64     `db:"latest_position"`
+	LatestRole     int16     `db:"latest_role"`
+	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
+}
+
+type FullNodeSmartContract struct {
+	TokenID        string    `db:"token_id"`
+	TokenValue     float64   `db:"token_value"`
+	TokenStatus    int16     `db:"token_status"`
+	TransactionID  string    `db:"transaction_id"`
+	TokenStateHash string    `db:"token_state_hash"`
+	TokenType      int16     `db:"token_type"`
+	LatestPosition int64     `db:"latest_position"`
+	LatestRole     int16     `db:"latest_role"`
+	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
+}

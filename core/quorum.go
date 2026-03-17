@@ -60,3 +60,39 @@ func (c *Core) AddDefaulTestnetQuorums() {
 
 	c.log.Info("Default quorums have been added successfully and their info is save under %v", completeDefaultQuorumFilePath)
 }
+<<<<<<< HEAD
+=======
+
+func saveQuorumsToFile(qds []QuorumData, fileName string) error {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	completeDefaultQuorumFilePath := path.Join(currentDir, fileName)
+
+	// If file already exists, do nothing
+	if _, err := os.Stat(completeDefaultQuorumFilePath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check file existence: %w", err)
+	}
+
+	file, err := os.Create(completeDefaultQuorumFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "    ")
+
+	if err := encoder.Encode(qds); err != nil {
+		return fmt.Errorf("failed to write JSON to file: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Core) GetQuorums() ([]string, error) {}
+>>>>>>> a9242c22ead45d4581f3fc61d81454b743d6d422

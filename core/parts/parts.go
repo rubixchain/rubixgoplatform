@@ -7,7 +7,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -32,11 +31,11 @@ func checkSufficientBalance(w *wallet.Wallet, did string, transferAmount float64
 	return nil
 }
 
-func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64,
-	isTestnet bool, network string, log logger.Logger, pubsub types.PubSub,
-) ([]models.TokenInfo, map[types.DenomValue]types.DenomCount, error) {
+func CollectRBTTokens(dc types.DIDCrypto, w *wallet.Wallet, transferAmount float64,
+	network string, log logger.Logger, pubsub *types.PubSub,
+) ([]*models.TokenInfo, map[types.DenomValue]types.DenomCount, error) {
 	var splitOps []SplitOp = make([]SplitOp, 0)
-	var tokensTransfer []models.TokenInfo = make([]models.TokenInfo, 0)
+	var tokensTransfer []*models.TokenInfo = make([]*models.TokenInfo, 0)
 
 	var did string = dc.GetDID()
 
@@ -79,7 +78,7 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64
 		}
 
 		for _, nonSplit := range nonSplitTokenTransfer {
-			tokensTransfer = append(tokensTransfer, models.TokenInfo{
+			tokensTransfer = append(tokensTransfer, &models.TokenInfo{
 				TokenID:               nonSplit.TokenID,
 				PreviousTransactionID: nonSplit.TransactionID,
 			})
@@ -136,7 +135,7 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64
 			tokensBeingBurntList = append(tokensBeingBurntList, tokensBeingBurnt...)
 
 			for _, partToken := range partTokensToTransfer {
-				tokensTransfer = append(tokensTransfer, models.TokenInfo{
+				tokensTransfer = append(tokensTransfer, &models.TokenInfo{
 					TokenID:               partToken.TokenID,
 					PreviousTransactionID: partToken.TransactionID,
 				})
@@ -155,7 +154,7 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64
 		return nil, nil, fmt.Errorf("CollectRBTTokens: failed to get genesis transaction info, err: %v", err)
 	}
 
-	transaction, err := publishTransaction(pubsub, transactionInfo, signature)
+	transaction, err := util.PublishTransaction(pubsub, transactionInfo, signature)
 	if err != nil {
 		return nil, nil, fmt.Errorf("CollectRBTTokens: failed to publish transaction, err: %v", err)
 	}
@@ -163,7 +162,6 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64
 	if err := storeGenesisTx(w, *transaction); err != nil {
 		return nil, nil, fmt.Errorf("CollectRBTTokens: failed to store genesis transaction, err: %v", err)
 	}
-
 
 	var tokenIDsToUnlock []string = make([]string, 0)
 	for _, tokenInfo := range tokensTransfer {
@@ -175,4 +173,23 @@ func CollectRBTTokens(dc did.DIDCrypto, w *wallet.Wallet, transferAmount float64
 	}
 
 	return tokensTransfer, remainingBalanceDenomArr, nil
+}
+
+//This function returns the max possible parts index by the max decimal places, For 3 decimal places, it will be 1332
+func MaxPossiblePartsIndexByMaxDecimalPlaces(maxDecimalPlaces uint) int {
+	totalPossibleLevels := 2 * maxDecimalPlaces //Actually 2*maxDecimalPlaces+1 will be the total possible levels but 1st level is about whole token so we are ignoring
+	sum := 0
+	nodesInLevel := make([]int, totalPossibleLevels+1)
+	nodesInLevel[0] = 1 // level 0 has 1 node
+	for i := uint(1); i <= totalPossibleLevels; i++ {
+		if i%2 == 1 {
+			nodesInLevel[i] = 2 * nodesInLevel[i-1]
+		} else {
+			nodesInLevel[i] = 5 * nodesInLevel[i-1]
+		}
+		sum += nodesInLevel[i]
+
+	}
+	return sum
+
 }

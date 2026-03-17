@@ -96,6 +96,13 @@ CREATE TABLE IF NOT EXISTS tokenchain (
         );
 
 
+        CREATE TABLE IF NOT EXISTS tokenchain_index (
+            token_id   TEXT PRIMARY KEY,
+            index      INTEGER[] NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
         CREATE TABLE IF NOT EXISTS token_provider_map (
             token          TEXT,
             did            TEXT,
@@ -182,6 +189,75 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             did TEXT NOT NULL,
             denom NUMERIC(4, 3) NOT NULL,
             count BIGINT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS fullnode_rbt (
+            token_id         TEXT PRIMARY KEY,
+            parent_token_id  TEXT,
+            token_value      NUMERIC NOT NULL CHECK (token_value >= 0),
+            token_status     SMALLINT NOT NULL DEFAULT 99,
+            did              TEXT NOT NULL,
+            transaction_id   TEXT NOT NULL,
+            token_state_hash TEXT NOT NULL,
+            latest_position  BIGINT NOT NULL DEFAULT 0,
+            latest_role      SMALLINT,
+            created_at       TIMESTAMPTZ DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS fullnode_ft (
+            token_id         TEXT PRIMARY KEY,
+            token_value      NUMERIC NOT NULL CHECK (token_value >= 0),
+            token_status     SMALLINT NOT NULL DEFAULT 99,
+            did              TEXT NOT NULL,
+            transaction_id   TEXT NOT NULL,
+            token_state_hash TEXT NOT NULL,
+            latest_position  BIGINT NOT NULL DEFAULT 0,
+            latest_role      SMALLINT,
+            created_at       TIMESTAMPTZ DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS fullnode_nft (
+            token_id         TEXT PRIMARY KEY,
+            token_value      NUMERIC NOT NULL CHECK (token_value >= 0),
+            token_status     SMALLINT NOT NULL DEFAULT 99,
+            did              TEXT NOT NULL,
+            transaction_id   TEXT NOT NULL,
+            token_state_hash TEXT NOT NULL,
+            latest_position  BIGINT NOT NULL DEFAULT 0,
+            latest_role      SMALLINT,
+            created_at       TIMESTAMPTZ DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS fullnode_smart_contract (
+            token_id         TEXT PRIMARY KEY,
+            token_value      NUMERIC NOT NULL CHECK (token_value >= 0),
+            token_status     SMALLINT NOT NULL DEFAULT 99,
+            transaction_id   TEXT NOT NULL,
+            token_state_hash TEXT NOT NULL,
+            latest_position  BIGINT NOT NULL DEFAULT 0,
+            latest_role      SMALLINT,
+            created_at       TIMESTAMPTZ DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS fullnode_tokenchain (
+            token_id       TEXT       NOT NULL,
+            transaction_id TEXT       NOT NULL,
+            role           SMALLINT   NOT NULL,
+            height         BIGINT     NOT NULL,
+            created_at     TIMESTAMPTZ DEFAULT NOW(),
+            updated_at     TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (token_id, height)
+        );
+
+        CREATE TABLE IF NOT EXISTS fullnode_tokenchain_index (
+            token_id   TEXT PRIMARY KEY,
+            index      INTEGER[] NOT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
         );

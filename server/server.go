@@ -106,7 +106,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRemoveAllQuorum, "GET", s.AuthHandle(s.APIRemoveAllQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APIGenerateTestToken, "POST", s.AuthHandle(s.APIGenerateTestToken, true, s.AuthError, false))
-	s.AddRoute(setup.APIInitiateRBTTransfer, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, true, s.AuthError, false))
+	s.AddRoute(setup.APIInitiateTransaction, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetAccountInfo, "GET", s.AuthHandle(s.APIGetAccountInfo, true, s.AuthError, false))
 	s.AddRoute(setup.APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, true, s.AuthError, false))
 	s.AddRoute(setup.APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, true, s.AuthError, false))
@@ -191,6 +191,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetTokenChainHeight, "GET", s.AuthHandle(s.APIGetFullTokenChainHeight, false, s.AuthError, false))
 
 	s.AddRoute(setup.APIRemoveStaleDID, "POST", s.AuthHandle(s.APIRemoveStaleDID, true, s.AuthError, false))
+
+	s.AddRoute(setup.APIInitiateTransaction, "POST", s.AuthHandle(s.APIInitiateTransaction, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {
