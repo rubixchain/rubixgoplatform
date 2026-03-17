@@ -61,13 +61,12 @@ func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string) (string, error)
 	return w.GetTransactionIdByIndex(int16(latestTxnIdIndex))
 }
 
-// ********TODO: provide index column name as in tokenchain table;
 // get transaction id by Index id
 func (w *Wallet) GetTransactionIdByIndex(index int16) (string, error) {
 	row, err := w.db.Pool().Query(w.Ctx,
 		`SELECT transaction_id
 		FROM tokenchain
-		WHERE index = $1`, index,
+		WHERE id = $1`, index,
 	)
 	if err != nil {
 		return "", fmt.Errorf("GetTransactionIdByIndex: %w", err)
