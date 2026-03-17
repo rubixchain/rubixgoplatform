@@ -71,13 +71,15 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
 
         -- moving tokenchain below so that all referenced tables are defined before it. tokenchain has FKs to transactions, token_role, and tokens.
 CREATE TABLE IF NOT EXISTS tokenchain (
-            id             INT         GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-            token_id       TEXT        NOT NULL,
-            transaction_id TEXT        NOT NULL,
-            role           SMALLINT    NOT NULL,
+            id             INT         GENERATED ALWAYS AS IDENTITY,
+            token_id       TEXT       NOT NULL,
+            transaction_id TEXT       NOT NULL,
+            role           SMALLINT   NOT NULL,
+            height         BIGINT     NOT NULL,
             created_at     TIMESTAMPTZ DEFAULT NOW(),
             updated_at     TIMESTAMPTZ DEFAULT NOW(),
-            UNIQUE (token_id, transaction_id),  -- enforce uniqueness without being PK
+            PRIMARY KEY (token_id, height),
+            UNIQUE (id),  -- enforce uniqueness without being PK
             -- No constraint prevents orphaned tokenchain entries pointing to non-existent transactions
             CONSTRAINT fk_tc_tx 
                 FOREIGN KEY (transaction_id) 
