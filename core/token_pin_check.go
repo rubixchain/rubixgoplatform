@@ -176,10 +176,10 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 
 func (c *Core) checkPinRole(req *ensweb.Request) *ensweb.Result {
 	token := c.l.GetQuery(req, "token")
-	details, err := c.w.GetProviderDetails(token)
+	record, err := c.ipfsProviderStore.GetProviderByCID(token)
 	if err != nil {
 		c.log.Error("Failed to get provider details", "err", err)
-		c.l.RenderJSON(req, &model.PinCheckReply{Status: false, Message: "Failed to get provider details", PinDetails: nil}, http.StatusNoContent)
+		return c.l.RenderJSON(req, &model.PinCheckReply{Status: false, Message: "Failed to get provider details", PinDetails: nil}, http.StatusNoContent)
 	}
-	return c.l.RenderJSON(req, &model.PinCheckReply{Status: true, Message: "Got all blocks", PinDetails: details}, http.StatusOK)
+	return c.l.RenderJSON(req, &model.PinCheckReply{Status: true, Message: "Got all blocks", PinDetails: record}, http.StatusOK)
 }
