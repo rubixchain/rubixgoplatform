@@ -7,7 +7,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -22,7 +22,7 @@ type PingResponse struct {
 }
 
 type GetPeerInfoResponse struct {
-	PeerInfo wallet.DIDPeerMap
+	PeerInfo models.DID
 	model.BasicResponse
 }
 
@@ -130,7 +130,7 @@ func (c *Core) GetPeerInfoResponse(req *ensweb.Request) *ensweb.Result { //PingR
 			Status: false,
 		},
 	}
-	var pInfo wallet.DIDPeerMap
+	var pInfo models.DID
 
 	pInfo.PeerID = c.w.GetPeerID(peerDID)
 	if pInfo.PeerID == "" {

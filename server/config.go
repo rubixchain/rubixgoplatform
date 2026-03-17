@@ -97,22 +97,12 @@ func (s *Server) APIGetAllBootStrap(req *ensweb.Request) *ensweb.Result {
 
 // APIAddQuorum will add quorum list to node
 func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
-	var ql []core.QuorumData
-	err := s.ParseJSON(req, &ql)
+	var reqMap map[string]interface{}
+	err := s.ParseJSON(req, &reqMap)
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
 	}
-	if len(ql) < core.MinQuorumRequired {
-		s.log.Error("Length of Quorum list should be atleast 1")
-		return s.BasicResponse(req, false, "Length of Quorum list should be atleast 5", nil)
-	}
-	for _, q := range ql {
-		is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(q.Address)
-		if !strings.HasPrefix(q.Address, "bafybmi") || len(q.Address) != 59 || !is_alphanumeric {
-			s.log.Error(fmt.Sprintf("Invalid quorum DID : %s", q.Address))
-			return s.BasicResponse(req, false, fmt.Sprintf("Invalid quorum DID : %s", q.Address), nil)
-		}
-	}
+
 	err = s.c.AddQuorum(ql)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to add quorums, "+err.Error(), nil)
@@ -122,7 +112,10 @@ func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
 
 // APIGetAllQuorum will get quorum list from node
 func (s *Server) APIGetAllQuorum(req *ensweb.Request) *ensweb.Result {
-	ql := s.c.GetAllQuorum()
+	ql, err := s.c.GetAllQuorum()
+	if err != nil {
+		return s.BasicResponse(req, false, fmt.Sprintf("Failed to get quorums, err: %v ", err.Error()), nil)
+	}
 	return s.BasicResponse(req, true, "Got all quorums successfully", ql)
 }
 

@@ -165,8 +165,6 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	pubKeySer := pubkeyback.ToECDSA()
 	if !crypto.BIPVerify(pubKeySer, []byte("test"), pvtKeySign) {
 		return "", fmt.Errorf("failed to verify private key singature")
-	} else {
-		fmt.Println(" BIP sign tested successfully")
 	}
 
 	//passing the diroctory of public key file to add it to ipfs and exctract the hash

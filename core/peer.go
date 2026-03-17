@@ -7,9 +7,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -22,6 +23,7 @@ const (
 type PeerMap struct {
 	PeerID    string `json:"peer_id"`
 	DID       string `json:"did"`
+	DIDAlgo   int    `json:"did_algo"`
 	Signature []byte `json:"signature"`
 	Time      string `json:"time"`
 }
@@ -56,7 +58,7 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 		c.log.Error("failed to parse explorer data", "err", err)
 		return
 	}
-	h := util.CalculateHashString(m.PeerID+m.DID+m.Time, "SHA3-256")
+	h := util.CalculateHash([]byte(m.PeerID+m.DID+m.Time), constants.HashAlgorithm_SHA3_256)
 	dc, err := c.InitialiseDID(m.DID)
 	if err != nil {
 		return
@@ -73,7 +75,20 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 	if !st {
 		return
 	}
-	c.w.AddDIDPeerMap(m.DID, m.PeerID)
+
+	didInfo := &models.DID{
+		DID:    m.DID,
+		PeerID: m.PeerID,
+		AlgoID: int64(m.DIDAlgo),
+		Local:  false,
+	}
+
+	if exists, _ := c.w.IsDIDExists(didInfo.DID); !exists {
+		if err := c.w.CreateOrUpdateDID(didInfo); err != nil {
+			c.log.Error("peerCallback: failed to update DID information, err: %v", err)
+			return
+		}
+	}
 }
 
 func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
@@ -93,7 +108,10 @@ func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	// 		c.log.Debug("could not add quorum details to DID peer table:", err2)
 	// 	}
 	// }
-	exist := c.w.IsDIDExist(did)
+	exist, err := c.w.IsDIDExists(did)
+	if err != nil {
+
+	}
 	ps := model.PeerStatusResponse{
 		Version:   c.version,
 		DIDExists: exist,
@@ -178,8 +196,8 @@ func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
 	return p, nil
 }
 
-func (c *Core) AddPeerDetails(peerDetail wallet.DIDPeerMap) error {
-	err := c.w.AddDIDPeerMap(peerDetail.DID, peerDetail.PeerID)
+func (c *Core) AddPeerDetails(peerDetail models.DID) error {
+	err := c.w.CreateOrUpdateDID(&peerDetail)
 	if err != nil {
 		c.log.Error("Failed to add PeerDetails to DIDPeerTable", "err", err)
 		return err
@@ -188,7 +206,7 @@ func (c *Core) AddPeerDetails(peerDetail wallet.DIDPeerMap) error {
 	return nil
 }
 
-func (c *Core) isDIDInArbitaryAddr(peerDID string) (bool, *wallet.DIDPeerMap, error) {
+func (c *Core) isDIDInArbitaryAddr(peerDID string) (bool, *models.DID, error) {
 	arbitaryAddr := []string{"12D3KooWHwsKu3GS9rh5X5eS9RTKGFy6NcdX1bV1UHcH8sQ8WqCM.bafybmicttgw2qx4grueyytrgln35vq2hbyhznv6ks4fabeakm47u72c26u",
 		"12D3KooWQ2as3FNtvL1MKTeo7XAuBZxSv8QqobxX4AmURxyNe5mX.bafybmicro2m4kove5vsetej63xq4csobtlzchb2c34lp6dnakzkwtq2mmy",
 		"12D3KooWJUJz2ipK78LAiwhc1QUVDvSMjZNBHt4vSAeVAq6FsneA.bafybmics43ef7ldgrogzurh7vukormpgscq4um44bss6mfuopsbjorbyaq",
@@ -204,7 +222,7 @@ func (c *Core) isDIDInArbitaryAddr(peerDID string) (bool, *wallet.DIDPeerMap, er
 		}
 		// Compare the arbitrary DID (second part) with the peerDID
 		if arbDID == peerDID {
-			peer := wallet.DIDPeerMap{
+			peer := models.DID{
 				DID:    arbDID,
 				PeerID: arbPeerID,
 			}

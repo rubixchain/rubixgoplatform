@@ -19,6 +19,7 @@ import (
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	tkn "github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -294,10 +295,14 @@ func calculateTokenBasedTimeout(tokenCount int) time.Duration {
 }
 
 func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
-	if !c.w.IsDIDExist(didStr) {
-		c.log.Error("DID does not exist", "did", didStr)
-		return fmt.Errorf("DID does not exist")
+	didExists, err := c.w.IsDIDExists(didStr)
+	if err != nil {
+		return fmt.Errorf("unable to check if DID exists, err: %v", err)
 	}
+	if !didExists {
+		return fmt.Errorf("DID %v meant to act as quorum doesn't exists", didStr)
+	}
+
 	if pvtKeyPwd == "" {
 		c.log.Error("Failed to setup lite quorum as privPWD is not privided")
 		return fmt.Errorf("failed to setup lite quorum, as privPWD is not provided")
@@ -318,48 +323,31 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	return nil
 }
 
-func (c *Core) GetAllQuorum() []string {
-	return c.qm.GetQuorum(QuorumTypeTwo, "", c.peerID)
+func (c *Core) GetAllQuorum() ([]string, error) {
+	qmList, err := c.w.GetAllQuorums()
+	if err != nil {
+		return nil, err
+	}
+
+	var quorumList []string = make([]string, 0)
+
+	for _, quorum := range qmList {
+		quorumList = append(quorumList, quorum.Did)
+	}
+
+	return quorumList, nil
 }
 
-func (c *Core) AddQuorum(ql []QuorumData) error {
-	return c.qm.AddQuorum(ql)
+func (c *Core) AddQuorum(quorumDid string) error {
+	quormManager := models.QuorumManager{
+		Did: quorumDid,
+	}
+
+	return c.w.AddQuorum(quormManager)
 }
 
 func (c *Core) RemoveAllQuorum() error {
-	// TODO:: needs to handle other types
-	return c.qm.RemoveAllQuorum(QuorumTypeTwo)
-}
-
-func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
-	c.qlock.Lock()
-	cs, ok := c.quorumRequest[cr.ReqID]
-	c.qlock.Unlock()
-	if !ok {
-		c.log.Error("No quorum exist")
-		return
-	}
-	for _, v := range cs.Credit.Credit {
-		p, ok := cs.P[v.DID]
-		if !ok {
-			c.log.Error("Failed to get peer connection, not able to send credit", "addr", v.DID)
-			continue
-		}
-		var resp model.BasicResponse
-		err := p.SendJSONRequest("POST", APIQuorumCredit, nil, &cs.Credit, &resp, true)
-		p.Close()
-		if err != nil {
-			c.log.Error("Failed to send quorum credits", "err", err)
-			continue
-		}
-		if !resp.Status {
-			c.log.Error("Quorum failed to accept credits", "msg", resp.Message)
-			continue
-		}
-	}
-	// c.qlock.Lock()
-	// delete(c.quorumRequest, cr.ReqID)
-	// c.qlock.Unlock()
+	return c.w.RemoveAllQuorums()
 }
 
 func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc types.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
@@ -789,7 +777,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
 		// Optimization: Local cache for previousQuorumDID -> PeerInfo
 		go func() {
-			peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+			peerInfoCache := make(map[string]*models.DID)
 			for _, tokeninfo := range ti {
 				b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 
@@ -836,7 +824,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				// send this exhausted hash to old quorums to unpledge
 				for _, previousQuorumDID := range previousQuorumDIDs {
 					// fetch previous quorum's peer Id with local cache
-					var previousQuorumInfo *wallet.DIDPeerMap
+					var previousQuorumInfo *models.DID
 					var ok bool
 					if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 						previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -1232,7 +1220,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// Optimization: Local cache for previousQuorumDID -> PeerInfo
 
 		go func() {
-			peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+			peerInfoCache := make(map[string]*models.DID)
 			for _, tokeninfo := range ti {
 				b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 				if b == nil {
@@ -1280,7 +1268,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				// send this exhausted hash to old quorums to unpledge
 				for _, previousQuorumDID := range previousQuorumDIDs {
 					// fetch previous quorum's peer Id with local cache
-					var previousQuorumInfo *wallet.DIDPeerMap
+					var previousQuorumInfo *models.DID
 					var ok bool
 					if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 						previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -1478,7 +1466,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
 		// Optimization: Local cache for previousQuorumDID -> PeerInfo
-		peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+		peerInfoCache := make(map[string]*models.DID)
 		for _, tokeninfo := range ti {
 			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 
@@ -1518,7 +1506,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			// send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
 				// fetch previous quorum's peer Id with local cache
-				var previousQuorumInfo *wallet.DIDPeerMap
+				var previousQuorumInfo *models.DID
 				var ok bool
 				if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 					previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -1634,7 +1622,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
 		// Optimization: Local cache for previousQuorumDID -> PeerInfo
-		peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+		peerInfoCache := make(map[string]*models.DID)
 		for _, tokeninfo := range ti {
 			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 
@@ -1677,7 +1665,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			// send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
 				// fetch previous quorum's peer Id with local cache
-				var previousQuorumInfo *wallet.DIDPeerMap
+				var previousQuorumInfo *models.DID
 				var ok bool
 				if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 					previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -1862,7 +1850,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.SmartContractToken, err)
 		}
-		peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+		peerInfoCache := make(map[string]*models.DID)
 
 		// Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
@@ -1923,7 +1911,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		for _, previousQuorumDID := range previousQuorumDIDs {
 			// fetch previous quorum's peer Id with local cache
-			var previousQuorumInfo *wallet.DIDPeerMap
+			var previousQuorumInfo *models.DID
 			var ok bool
 			if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 				previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -2033,7 +2021,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.NFT, err)
 		}
-		peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+		peerInfoCache := make(map[string]*models.DID)
 
 		err = c.w.AddTokenBlock(cr.NFT, nb)
 		if err != nil {
@@ -2069,7 +2057,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		for _, previousQuorumDID := range previousQuorumDIDs {
 			// fetch previous quorum's peer Id with local cache
-			var previousQuorumInfo *wallet.DIDPeerMap
+			var previousQuorumInfo *models.DID
 			var ok bool
 			if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 				previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)

@@ -179,7 +179,7 @@ func (s *Server) APIGetTxnByNode(req *ensweb.Request) *ensweb.Result {
 		BasicResponse: model.BasicResponse{
 			Status: false,
 		}}
-	DIDInNode := s.c.GetDIDs(dir)
+	DIDInNode := s.c.GetDIDs()
 	for _, d := range DIDInNode {
 		txnCount, err := s.c.GetCountofTxn(d.DID)
 		if err != nil {

@@ -89,18 +89,12 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 
 // APIGetAllDID will get all DID
 func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
-	dir, ok := s.validateAccess(req)
+	_, ok := s.validateAccess(req)
 	if !ok {
 		return s.BasicResponse(req, false, "Unathuriozed access", nil)
 	}
-	if s.cfg.EnableAuth {
-		// always expect client token to present
-		token, ok := req.ClientToken.Model.(*setup.BearerToken)
-		if ok {
-			dir = token.DID
-		}
-	}
-	dt := s.c.GetDIDs(dir)
+
+	dt := s.c.GetDIDs()
 	ai := model.GetAccountInfo{
 		BasicResponse: model.BasicResponse{
 			Status:  true,

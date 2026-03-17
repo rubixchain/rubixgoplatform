@@ -4,7 +4,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -24,7 +25,7 @@ type DIDPeerMapTemp struct {
 // @Router      /api/add-peer-details [post]
 func (s *Server) APIAddPeerDetails(req *ensweb.Request) *ensweb.Result {
 	var pd DIDPeerMapTemp
-	var peer_detail wallet.DIDPeerMap
+	var peerDetails models.DID
 	err := s.ParseJSON(req, &pd)
 	if err != nil {
 		return s.BasicResponse(req, false, "invalid input request", nil)
@@ -37,9 +38,12 @@ func (s *Server) APIAddPeerDetails(req *ensweb.Request) *ensweb.Result {
 	if !strings.HasPrefix(pd.DID, "bafybmi") || len(pd.DID) != 59 || !is_alphanumeric {
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
-	peer_detail.DID = pd.DID
-	peer_detail.PeerID = pd.PeerID
-	err = s.c.AddPeerDetails(peer_detail)
+	peerDetails.DID = pd.DID
+	peerDetails.PeerID = pd.PeerID
+	peerDetails.Local = false
+	peerDetails.AlgoID = int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1))
+
+	err = s.c.AddPeerDetails(peerDetails)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to add peers in DB, "+err.Error(), nil)
 	}

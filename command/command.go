@@ -288,7 +288,6 @@ type Command struct {
 	quorumPWD                    string
 	privKeyFile                  string
 	pubKeyFile                   string
-	quorumList                   string
 	srvName                      string
 	storageType                  string
 	dbName                       string
@@ -697,7 +696,6 @@ func Run(args []string) {
 	flag.StringVar(&cmd.mnemonicFile, "mnemonicKeyFile", "", "Mnemonic key file")
 	flag.StringVar(&cmd.privKeyFile, "privKeyFile", did.PvtKeyFileName, "Private key file")
 	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
-	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
 	flag.StringVar(&cmd.srvName, "srvName", "explorer_service", "Service name")
 	flag.StringVar(&cmd.storageType, "storageType", constants.DBType_PostgreSQL, "Storage type")
 	flag.StringVar(&cmd.dbName, "dbName", "rubix", "Service database name")

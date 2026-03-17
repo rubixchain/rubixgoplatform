@@ -23,6 +23,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -663,7 +664,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 		publisherPeerId := c.w.GetPeerID(detail.Did)
 		if publisherPeerId != event.PublisherPeerID {
 
-			publisherDetails := &wallet.DIDPeerMap{
+			publisherDetails := &models.DID{
 				DID:    detail.Did,
 				PeerID: event.PublisherPeerID,
 			}

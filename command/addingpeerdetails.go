@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 func (cmd *Command) AddPeerDetails() {
@@ -44,7 +44,7 @@ func (cmd *Command) AddPeerDetails() {
 		return
 	}
 
-	peerDetail := wallet.DIDPeerMap{
+	peerDetail := models.DID{
 		PeerID: peerID,
 		DID:    did,
 	}
