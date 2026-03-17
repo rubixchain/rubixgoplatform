@@ -10,6 +10,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 // Enhanced subscription setup with error handling
@@ -36,7 +37,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 
 	// add publisher to peer did table
-	publisherDetails := &wallet.DIDPeerMap{
+	publisherDetails := &models.DID{
 		DID:    newEvent.PublisherDID,
 		PeerID: peerID,
 	}

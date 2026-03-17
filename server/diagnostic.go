@@ -47,7 +47,7 @@ func (s *Server) APIDumpFTTokenChainBlock(req *ensweb.Request) *ensweb.Result {
 // @Success      200  {object}  model.GetTokenChainResponce "Successful response with token chain data"
 // @Router       /api/get-ft-token-chain [get]
 func (s *Server) APIGetFTTokenchain(req *ensweb.Request) *ensweb.Result {
-	TokenID := s.GetQuerry(req, "tokenID")
+	TokenID := s.GetQuery(req, "tokenID")
 	if TokenID == "" {
 		return s.BasicResponse(req, false, "Invalid input", nil)
 	}
@@ -76,12 +76,12 @@ func (s *Server) APIDumpSmartContractTokenChainBlock(req *ensweb.Request) *enswe
 }
 
 func (s *Server) APIDumpNFTTokenChain(req *ensweb.Request) *ensweb.Result {
-	nft := s.GetQuerry(req, "nft")
+	nft := s.GetQuery(req, "nft")
 	if nft == "" {
 		s.log.Error("NFT token details not provided")
 		return s.BasicResponse(req, false, "NFT token details not provided", nil)
 	}
-	blockId := s.GetQuerry(req, "blockId")
+	blockId := s.GetQuery(req, "blockId")
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(nft)
 	if len(nft) != 46 || !strings.HasPrefix(nft, "Qm") || !is_alphanumeric {
 		s.log.Error("Invalid NFT")
@@ -137,13 +137,13 @@ type GetNFTTokenChainDataSwaggoInput struct {
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/get-nft-token-chain-data [get]
 func (s *Server) APIGetNFTTokenChainData(req *ensweb.Request) *ensweb.Result {
-	nft := s.GetQuerry(req, "nft")
+	nft := s.GetQuery(req, "nft")
 	if nft == "" {
 		s.log.Error("NFT token details not provided")
 		return s.BasicResponse(req, false, "NFT token details not provided", nil)
 	}
 	islatest := false
-	latestBlock := s.GetQuerry(req, "latest")
+	latestBlock := s.GetQuery(req, "latest")
 	if latestBlock != "" {
 		var err error
 		islatest, err = strconv.ParseBool(latestBlock)

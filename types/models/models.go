@@ -31,10 +31,10 @@ type DIDAlgo struct {
 }
 
 type DID struct {
-	DID    string      `db:"did"`
-	PeerID pgtype.Text `db:"peer_id"`
-	Local  bool        `db:"local"`
-	AlgoID pgtype.Int2 `db:"algo_id"`
+	DID    string `db:"did"`
+	PeerID string `db:"peer_id"`
+	Local  bool   `db:"local"`
+	AlgoID int64  `db:"algo_id"`
 }
 
 type TokenRole struct {
@@ -131,7 +131,7 @@ type TokenStateHash struct {
 }
 
 type QuorumManager struct {
-	Address   string    `db:"address"`
+	Did       string    `db:"did"`
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`
 }

@@ -29,7 +29,7 @@ func (s *Server) APIGetDIDAccess(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIGetDIDChallenge(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuerry(req, "did")
+	did := s.GetQuery(req, "did")
 	resp := s.c.GetDIDChallenge(did)
 	return s.RenderJSON(req, resp, http.StatusOK)
 }
@@ -89,18 +89,12 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 
 // APIGetAllDID will get all DID
 func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
-	dir, ok := s.validateAccess(req)
+	_, ok := s.validateAccess(req)
 	if !ok {
 		return s.BasicResponse(req, false, "Unathuriozed access", nil)
 	}
-	if s.cfg.EnableAuth {
-		// always expect client token to present
-		token, ok := req.ClientToken.Model.(*setup.BearerToken)
-		if ok {
-			dir = token.DID
-		}
-	}
-	dt := s.c.GetDIDs(dir)
+
+	dt := s.c.GetDIDs()
 	ai := model.GetAccountInfo{
 		BasicResponse: model.BasicResponse{
 			Status:  true,
@@ -296,9 +290,9 @@ func (s *Server) APIArbitrarySignature(req *ensweb.Request) *ensweb.Result {
 // @Router      /api/verify-signature [get]
 func (s *Server) APISignVerification(req *ensweb.Request) *ensweb.Result {
 	var verificationReq model.SignVerificationRequest
-	verificationReq.SignerDID = s.GetQuerry(req, "signer_did")
-	verificationReq.SignedMsg = s.GetQuerry(req, "signed_msg")
-	verificationReq.Signature = s.GetQuerry(req, "signature")
+	verificationReq.SignerDID = s.GetQuery(req, "signer_did")
+	verificationReq.SignedMsg = s.GetQuery(req, "signed_msg")
+	verificationReq.Signature = s.GetQuery(req, "signature")
 
 	verificationResp, err := s.c.ArbitrarySignVerification(req.ID, &verificationReq)
 	if err != nil {

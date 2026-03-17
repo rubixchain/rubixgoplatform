@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS tokenchain (
         );
 
         CREATE TABLE IF NOT EXISTS quorum_manager (
-            address TEXT PRIMARY KEY,
+            did TEXT PRIMARY KEY,
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
         );

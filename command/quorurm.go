@@ -7,7 +7,7 @@ import (
 )
 
 func (cmd *Command) AddQuorurm() {
-	msg, status := cmd.c.AddQuorum(cmd.quorumList)
+	msg, status := cmd.c.AddQuorum(cmd.did)
 	if !status {
 		cmd.log.Error("Failed to add quorum list to node", "msg", msg)
 		return
