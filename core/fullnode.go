@@ -30,19 +30,40 @@ func (c *Core) SubscribeTxnSetup() {
 
 // Enhanced callback with dynamic scaling integration
 func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
-	var newEvent model.PubSubTxnInfo
+	var newEvent models.EventTransaction
 	err := json.Unmarshal(data, &newEvent)
 	if err != nil {
 		c.log.Error("Failed to parse published event", "error", err, "data", string(data))
 		return
 	}
 
+	// Ignore failed transaction IDs
+	// Valid condition for both full node and Quorum nodes
+	if !newEvent.Status {
+		return
+	}
+
+	var txInfo models.TransactionInfo
+	if err := json.Unmarshal(newEvent.Transaction.Info, &txInfo); err != nil {
+		c.log.Error(fmt.Sprintf("failed to unmarshal transaction info, err: %v", err))
+		return
+	}
+
+	// If the current node is setup as quorum, we check the records in token_state_hashes
+	// table to see if any previous transaction id from TransactionInfo is present in the
+	// current node's table. If so, then its removed 
+	if len(c.qc) > 0 {
+		if err := c.CallBackQuorumUnpledge(txInfo); err != nil {
+			c.log.Error(fmt.Sprintf("failed to check token state hashes records, err: %v", err))
+		}
+	}
+
 	// add publisher to peer did table
-	publisherDetails := &models.DID{
-		DID:    newEvent.PublisherDID,
+	publisherDetails := models.DID{
+		DID:    txInfo.Initiator,
 		PeerID: peerID,
 	}
-	err = c.AddPeerDetails(*publisherDetails)
+	err = c.AddPeerDetails(publisherDetails)
 	if err != nil {
 		c.log.Error("failed to add publisher info to DB")
 	}
