@@ -75,10 +75,9 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             token_id       TEXT        NOT NULL,
             transaction_id TEXT        NOT NULL,
             role           SMALLINT    NOT NULL,
-            height         BIGINT      NOT NULL,
             created_at     TIMESTAMPTZ DEFAULT NOW(),
             updated_at     TIMESTAMPTZ DEFAULT NOW(),
-            UNIQUE (token_id, height),  -- enforce uniqueness without being PK
+            UNIQUE (token_id, transaction_id),  -- enforce uniqueness without being PK
             -- No constraint prevents orphaned tokenchain entries pointing to non-existent transactions
             CONSTRAINT fk_tc_tx 
                 FOREIGN KEY (transaction_id) 
