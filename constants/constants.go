@@ -118,7 +118,7 @@ const (
 	RequestStatus_Unknown    = 3
 )
 
-// TreeLevelRanges defines the [min, max] global-index range for each tree level.
+// TreeLevelRanges defines the [min, max] part-index range for each tree level.
 var TreeLevelRanges = [7][2]int{
 	{0, 0},      // L0 (whole token)
 	{1, 2},      // L1

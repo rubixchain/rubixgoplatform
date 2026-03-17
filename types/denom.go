@@ -3,11 +3,11 @@ package types
 type DenomValue = float64
 type DenomCount = int64
 
-// RbtIDElements represents a node as <level>_<tokenNumber>_<globalIndex>.
+// RbtIDElements represents a node as <level>_<tokenNumber>_<partIndex>.
 type RbtIDElements struct {
 	Level       int
 	TokenNumber int
-	GlobalIndex int
+	PartIndex   int
 }
 
 // ChildrenRange holds the first and last part index of a node's children.

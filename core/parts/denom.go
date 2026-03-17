@@ -16,7 +16,7 @@ func (id TokenID) GetRbtIDFields() (types.RbtIDElements, error) {
 	var err error
 	rbtElems := types.RbtIDElements{}
 
-	// check if token id is ft id, by checking if the length of the id is more than legth of DID (59)  
+	// check if token id is ft id, by checking if the length of the id is more than legth of DID (59)
 	if len(id) > 59 {
 		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id length should be <= 15 (<max 2 digits level>_<max 7 digits token number>_<max 4 digits part index>)", id)
 	}
@@ -25,7 +25,7 @@ func (id TokenID) GetRbtIDFields() (types.RbtIDElements, error) {
 	if len(idElems) < 2 || len(idElems) > 3 { // ensure id is in proper RBT id format
 		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", id)
 	}
-	
+
 	rbtElems.Level, err = strconv.Atoi(idElems[0])
 	if err != nil {
 		return types.RbtIDElements{}, fmt.Errorf("failed to convert level into int for rbt: %s, error: %v", id, err)
@@ -37,9 +37,9 @@ func (id TokenID) GetRbtIDFields() (types.RbtIDElements, error) {
 
 	switch len(idElems) {
 	case 2:
-		rbtElems.GlobalIndex = 0 // Case for whole token
+		rbtElems.PartIndex = 0 // Case for whole token
 	case 3:
-		rbtElems.GlobalIndex, err = strconv.Atoi(idElems[2]) // Case for part token
+		rbtElems.PartIndex, err = strconv.Atoi(idElems[2]) // Case for part token
 		if err != nil {
 			return types.RbtIDElements{}, fmt.Errorf("failed to convert part index into int for rbt: %s, error: %v", id, err)
 		}
@@ -245,10 +245,10 @@ func GetTokenIdFromPath(pathStr string) (int, error) {
 }
 
 func GetSplitAndNonsplitTokenDenom(
-	inputTokenDenom map[types.DenomValue]types.DenomCount, 
+	inputTokenDenom map[types.DenomValue]types.DenomCount,
 	transferAmount float64,
 ) (targetDenomArr map[types.DenomValue]types.DenomCount, updatedDenomArr map[types.DenomValue]types.DenomCount, remaining float64, err error) {
-		
+
 	targetDenomArr = make(map[types.DenomValue]types.DenomCount)
 	updatedDenomArr = make(map[types.DenomValue]types.DenomCount)
 
@@ -286,8 +286,8 @@ func LevelMin(level int) int {
 	return constants.TreeLevelRanges[level][0]
 }
 
-// GetTreeLevelFromGlobalIndex returns the tree level (1–6) for a given part index x.
-func GetTreeLevelFromGlobalIndex(x int) (int, error) {
+// GetTreeLevelFromPartIndex returns the tree level (1–6) for a given part index x.
+func GetTreeLevelFromPartIndex(x int) (int, error) {
 	for level, r := range constants.TreeLevelRanges {
 		if x >= r[0] && x <= r[1] {
 			return level, nil // levels are 1-indexed
@@ -309,13 +309,13 @@ func GetNumberOfChildren(parentLevel int) int {
 // GetParentToken derives the parent TokenID from a child's part index.
 //
 // Steps:
-//  1. x          = globalIndex
-//  2. Lx         = GetTreeLevelFromGlobalIndex(x)
+//  1. x          = PartIndex
+//  2. Lx         = GetTreeLevelFromPartIndex(x)
 //  3. childLevelIndex = x - Min(Lx)
 //  4. Lp         = Lx - 1                          (parent level)
 //  5. numChildren= GetNumberOfChildren(Lp)
 //  6. parentLevelIndex = childLevelIndex / numChildren   (integer division)
-//  7. parentGlobalIndex= Min(Lp) + parentLevelIndex
+//  7. parentPartIndex= Min(Lp) + parentLevelIndex
 func (id TokenID) GetParentToken() (string, error) {
 	child, err := id.GetRbtIDFields()
 	if err != nil {
@@ -323,10 +323,10 @@ func (id TokenID) GetParentToken() (string, error) {
 	}
 
 	// x: child part index
-	x := child.GlobalIndex
+	x := child.PartIndex
 
 	// lx: child level on tree
-	lx, err := GetTreeLevelFromGlobalIndex(x)
+	lx, err := GetTreeLevelFromPartIndex(x)
 	if err != nil {
 		return "", fmt.Errorf("invalid token: %s, error: %v", id, err)
 	}
@@ -344,16 +344,16 @@ func (id TokenID) GetParentToken() (string, error) {
 
 	// parent position in the level
 	parentLevelIndex := childLevelIndex / numChildren
-	parentGlobalIndex := LevelMin(lp) + parentLevelIndex
+	parentPartIndex := LevelMin(lp) + parentLevelIndex
 
-	return fmt.Sprintf("%d_%d_%d", child.Level, child.TokenNumber, parentGlobalIndex), nil
+	return fmt.Sprintf("%d_%d_%d", child.Level, child.TokenNumber, parentPartIndex), nil
 }
 
-// GetChildrenIndexRange returns the global-index range [first, last] of the children
-// of the node identified by parentGlobalIndex.
+// GetChildrenIndexRange returns the part-index range [first, last] of the children
+// of the node identified by parentPartIndex.
 //
 // Steps:
-//  1. x          = parentGlobalIndex
+//  1. x          = parentPartIndex
 //  2. Lx         = GetTreeLevelFromTreeMap(x)
 //  3. levelIndex = x - Min(Lx)
 //  4. numChildren= GetNumberOfChildren(Lx)
@@ -366,10 +366,10 @@ func (id TokenID) GetChildrenIndexRange() (types.ChildrenRange, error) {
 	}
 
 	// part index of parent token
-	x := parent.GlobalIndex
+	x := parent.PartIndex
 
 	// tree level of parent token
-	lx, err := GetTreeLevelFromGlobalIndex(x)
+	lx, err := GetTreeLevelFromPartIndex(x)
 	if err != nil {
 		return types.ChildrenRange{}, err
 	}
