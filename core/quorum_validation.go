@@ -19,7 +19,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -71,7 +70,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string) (bool, error) {
 	}
 	c.log.Debug("Signers", signers)
 	for _, signer := range signers {
-		var dc did.DIDCrypto
+		var dc types.DIDCrypto
 		switch b.GetTransType() {
 		case block.TokenGeneratedType, block.TokenBurntType:
 			dc, err = c.SetupForienDID(signer, selfDID)
@@ -961,7 +960,7 @@ func (c *Core) logOptimizationStats(totalTokens int, uniqueBlocks int, syncNeede
 	}
 }
 
-func (c *Core) validateSignature(dc did.DIDCrypto, h string, s string) bool {
+func (c *Core) validateSignature(dc types.DIDCrypto, h string, s string) bool {
 	if dc == nil {
 		c.log.Error("Invalid DID setup")
 		return false

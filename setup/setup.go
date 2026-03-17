@@ -125,6 +125,8 @@ const (
 	APINotifyDeExpTokenUpdate string = "/api/token-update"
 
 	APIRemoveStaleDID string = "/api/remove-stale-did"
+
+	APIInitiateTransaction string = "/rubix/v1/token/tx"
 )
 
 // jwt.RegisteredClaims

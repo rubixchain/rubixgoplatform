@@ -1,7 +1,7 @@
 package core
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -28,8 +28,8 @@ type ConsensusReturns struct {
 	Msg           string
 }
 
-func (c *Core) InitiateTransfer(reqID string, req *models.TransferRequest) {
-	br := c.initiateTransfer(reqID, req)
+func (c *Core) InitiateTransaction(reqID string, req *models.TransactionRequest) {
+	br := c.initiateTransaction(reqID, req)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")
@@ -38,12 +38,12 @@ func (c *Core) InitiateTransfer(reqID string, req *models.TransferRequest) {
 	dc.OutChan <- br
 }
 
-func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *model.BasicResponse {
+func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequest) *model.BasicResponse {
 
 	resp := &model.BasicResponse{
 		Status: false,
 	}
-
+	ctx := context.TODO()
 	initiatorDID := request.Initiator
 	nextOwnerDID := request.Owner
 
@@ -52,9 +52,16 @@ func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *
 		resp.Message = "Failed to setup DID: " + err.Error()
 		return resp
 	}
-
+	// This needs to be passed to the BuildTransactionInfoFromRequest to be given as an input to the function CollectRBTTokens
+	// Can't call this inside BuildTransactionInfoFromRequest since it is a standalone function not a methiod of Core.
+	networkMode, err := util.GetNetworkMode(c.testnet, c.mainnet, c.localnet)
+	if err != nil {
+		resp.Message = "Failed to determine network mode: " + err.Error()
+		return resp
+	}
 	// Build transaction info
-	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(request) //keptTransactionInfo
+	//Here the c.publishTxn must be verified because the input type is *model.PubSubTxnInfo which need to be updated
+	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(ctx, c.w, request, dc, networkMode, c.log, c.ps)
 	if err != nil {
 		c.log.Error("InitiateTransfer: Failed to build transaction info", "err", err)
 		resp.Message = err.Error()
@@ -62,9 +69,21 @@ func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *
 	}
 
 	// TODO: Fetch the quorum address from the corresponding table
-	quorumAddress := "This needs to be added " // 
+	// Fetch the listt if dids from quorum_m,anager tavble
+	//	We then loop over that list and queried from did table and pfetch the peerid
+	quorumAddresses, err := c.GetQuorums()
+	if err != nil {
+		c.log.Error("Failed to get quorum address", "err", err)
+		resp.Message = "Failed to get quorum address: " + err.Error()
+		return resp
+	}
+	if len(quorumAddresses) == 0 {
+		resp.Message = "No quorums available for transaction"
+		return resp
+	}
 
-	p, err := c.getPeer(quorumAddress)
+	// this will be a list of *ipfsport.Peer since we can have multiple quorums, we need to loop over them
+	p, err := c.getPeer(quorumAddresses[0])
 	if err != nil {
 		resp.Message = err.Error()
 		return resp
@@ -93,39 +112,55 @@ func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *
 		return resp
 	}
 
-	if !pledgeTokenResponse.Status {
-		resp.Message = pledgeTokenResponse.Message
-		return resp
-	}
+	// if !pledgeTokenResponse.Status {
+	// 	resp.Message = pledgeTokenResponse.Message
+	// 	return resp
+	// }
 
 	// Attach quorum tokens
-	pledegTokenInfo := models.QuorumInfo{
-		DID:    quorumAddress,
-		Tokens: pledgeTokenResponse.PledgeTokens,
+	pledgeTokenPtrs := make([]*models.TokenInfo, len(pledgeTokenResponse.PledgeTokens))
+	for i := range pledgeTokenResponse.PledgeTokens {
+		pledgeTokenPtrs[i] = &pledgeTokenResponse.PledgeTokens[i]
 	}
-	transactionInfo.Quorums = pledegTokenInfo
-
-	// Create transaction info
-	jsonBytes, err := json.Marshal(transactionInfo)
+	pledegTokenInfo := &models.QuorumInfo{
+		Did:    quorumAddresses[0],
+		Tokens: pledgeTokenPtrs,
+	}
+	transactionInfo.Quorums = []*models.QuorumInfo{pledegTokenInfo}
+	transactionId, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
-		resp.Message = "Failed to marshal transaction info: " + err.Error()
+		c.log.Error("Failed to get transaction ID", "err", err)
+		resp.Message = "Failed to get transaction ID: " + err.Error()
 		return resp
 	}
+	// Create transaction info
+	// jsonBytes, err := json.Marshal(transactionInfo)
+	// if err != nil {
+	// 	resp.Message = "Failed to marshal transaction info: " + err.Error()
+	// 	return resp
+	// }
 
-	hashBytes := util.CalculateHash(jsonBytes, "SHA3-256")
-	transactionId := util.HexToStr(hashBytes)
+	// hashBytes := util.CalculateHash(jsonBytes, "SHA3-256")
+	// transactionId := util.HexToStr(ha
 
-	c.log.Info("Transaction hash created", "hash", transactionId)
+	c.log.Info("Transaction ID created", "hash", transactionId)
 
 	// Sign transaction
-	signatureBytes, err := dc.PvtSign([]byte(transactionId))
+	// SignTransactionId to be added to util and that should return a base64 encoded string
+	// signatureBytes, err := dc.PvtSign([]byte(transactionId))
+	// if err != nil {
+	// 	c.log.Error("Failed to sign transaction", "err", err)
+	// 	resp.Message = "Failed to sign transaction: " + err.Error()
+	// 	return resp
+	// }
+	// //Here when the SignTransactionId function gets called this will be removed.
+	// initiatorSignature := base64.StdEncoding.EncodeToString(signatureBytes)
+	initiatorSignature, err := util.SignTransaction(dc, transactionInfo)
 	if err != nil {
 		c.log.Error("Failed to sign transaction", "err", err)
 		resp.Message = "Failed to sign transaction: " + err.Error()
 		return resp
 	}
-
-	initiatorSignature := util.HexToStr(signatureBytes)
 
 	// Consensus request
 	consensusRequest := models.ConsensusRequest{
@@ -154,7 +189,23 @@ func (c *Core) initiateTransfer(reqID string, request *models.TransferRequest) *
 		resp.Message = consensusResponse.Message
 		return resp
 	}
-
+	// When multiple transaction situation comes into picture this quorum signature part will change.
+	// We have kept this as an array to accomodate multiple quorums in future.
+	// Right now we are only accomodating a single quorum.
+	quorumSignature := []models.QuorumSignature{{
+		Did:       quorumAddresses[0],
+		Signature: consensusResponse.QuorumSignature,
+	}}
+	signatureTobePublished := &models.Signature{
+		InitiatorSignature: initiatorSignature,
+		Quorums:            quorumSignature,
+	}
+	//Publish transaction to the network
+	util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished)
+	// Sending token information to the receiver
+	// We need to send the genesis information, the previous transaction information and the latest transaction information.
+	//sync api :
+	// 1. Send information to receiver
 	resp.Status = true
 	resp.Message = "Transfer initiated successfully"
 

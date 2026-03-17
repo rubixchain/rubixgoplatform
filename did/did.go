@@ -44,14 +44,6 @@ type DID struct {
 	ipfs *ipfsnode.Shell
 }
 
-type DIDCrypto interface {
-	GetDID() string
-	GetSignType() int
-	Sign(hash string) ([]byte, []byte, error)
-	PvtSign(hash []byte) ([]byte, error)
-	PvtVerify(hash []byte, sign []byte) (bool, error)
-}
-
 func InitDID(dir string, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 	did := &DID{
 		dir:  dir,
@@ -173,8 +165,6 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	pubKeySer := pubkeyback.ToECDSA()
 	if !crypto.BIPVerify(pubKeySer, []byte("test"), pvtKeySign) {
 		return "", fmt.Errorf("failed to verify private key singature")
-	} else {
-		fmt.Println(" BIP sign tested successfully")
 	}
 
 	//passing the diroctory of public key file to add it to ipfs and exctract the hash

@@ -13,8 +13,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -607,7 +607,7 @@ func (c *Core) ValidateTokenOwner(b *block.Block, userDID string) (*model.BasicR
 		return response, err
 	}
 	for _, signer := range signers {
-		var dc did.DIDCrypto
+		var dc types.DIDCrypto
 		switch b.GetTransType() {
 		case block.TokenGeneratedType, block.TokenBurntType:
 			dc, err = c.SetupForienDID(signer, userDID)

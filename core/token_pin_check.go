@@ -175,7 +175,7 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 }
 
 func (c *Core) checkPinRole(req *ensweb.Request) *ensweb.Result {
-	token := c.l.GetQuerry(req, "token")
+	token := c.l.GetQuery(req, "token")
 	details, err := c.w.GetProviderDetails(token)
 	if err != nil {
 		c.log.Error("Failed to get provider details", "err", err)

@@ -11,6 +11,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 // Enhanced subscription setup with error handling
@@ -18,7 +19,7 @@ func (c *Core) SubscribeTxnSetup() {
 	// Initialize the transaction processor
 	c.initDynamicTxnProcessor()
 
-	topic := RubixTxnTopic
+	topic := constants.Event_RubixTxns
 	err := c.ps.SubscribeTopic(topic, c.TxnCallBack)
 	if err != nil {
 		c.log.Error("Unable to subscribe to topic", "topic", topic, "error", err)
@@ -37,7 +38,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 
 	// add publisher to peer did table
-	publisherDetails := &wallet.DIDPeerMap{
+	publisherDetails := &models.DID{
 		DID:    newEvent.PublisherDID,
 		PeerID: peerID,
 	}
