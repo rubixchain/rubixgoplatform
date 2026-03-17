@@ -32,16 +32,15 @@ func (c *Core) checkProviderStatus(req *ensweb.Request) *ensweb.Result {
 		c.log.Error("error parsing incoming request", "error", err)
 		return c.l.RenderJSON(req, &res, http.StatusOK)
 	}
-	providerMap, err := c.w.GetProviderDetails(reqObj.TokenHash)
+	record, err := c.ipfsProviderStore.GetProviderByCID(reqObj.TokenHash)
 	if err != nil {
-		c.log.Error("eror getting provider info for token hash ", reqObj.TokenHash, "error", err)
+		c.log.Error("error getting provider info for token hash ", reqObj.TokenHash, "error", err)
 		return c.l.RenderJSON(req, &res, http.StatusOK)
 	}
 	res.Status = true
-	res.TokenHash = providerMap.TokenHash
-	res.DID = providerMap.DID
-	res.FuncID = providerMap.FuncID
-	res.Role = providerMap.Role
+	res.TokenHash = record.CID
+	res.DID = record.DID
+	res.Role = record.Role
 
 	return c.l.RenderJSON(req, &res, http.StatusOK)
 }

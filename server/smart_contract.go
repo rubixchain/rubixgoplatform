@@ -260,7 +260,7 @@ func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 	var fetchSC core.FetchSmartContractRequest
 	var err error
 
-	fetchSC.SmartContractToken = s.GetQuerry(req, "smartContractToken")
+	fetchSC.SmartContractToken = s.GetQuery(req, "smartContractToken")
 
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(fetchSC.SmartContractToken)
 	if len(fetchSC.SmartContractToken) != 46 || !strings.HasPrefix(fetchSC.SmartContractToken, "Qm") || !is_alphanumeric {

@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/rubixchain/rubixgoplatform/wrapper/helper/jsonutil"
-	"github.com/rubixchain/rubixgoplatform/wrapper/wraperr"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -16,6 +14,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/rubixchain/rubixgoplatform/wrapper/helper/jsonutil"
+	"github.com/rubixchain/rubixgoplatform/wrapper/wraperr"
 )
 
 // bufferedReader can be used to replace a request body with a buffered
@@ -241,7 +242,7 @@ func (s *Server) ParseFORM(req *Request) (map[string]interface{}, error) {
 	return formData, nil
 }
 
-//This was GetQuerry[typo] fixed to GetQuery
+// This was GetQuery[typo] fixed to GetQuery
 func (s *Server) GetQuery(req *Request, key string) string {
 	return req.r.URL.Query().Get(key)
 }

@@ -20,7 +20,7 @@ import (
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-by-txnId [get]
 func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
-	txnID := s.GetQuerry(req, "txnID")
+	txnID := s.GetQuery(req, "txnID")
 	res, err := s.c.GetTxnDetailsByID(txnID)
 	if err != nil {
 		if err.Error() == "no records found" {
@@ -69,15 +69,15 @@ func (s *Server) APIGetTxnByTxnID(req *ensweb.Request) *ensweb.Result {
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-by-did [get]
 func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuerry(req, "DID")
+	did := s.GetQuery(req, "DID")
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
 	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid DID")
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
-	role := s.GetQuerry(req, "Role")
-	startDate := s.GetQuerry(req, "StartDate")
-	endDate := s.GetQuerry(req, "EndDate")
+	role := s.GetQuery(req, "Role")
+	startDate := s.GetQuery(req, "StartDate")
+	endDate := s.GetQuery(req, "EndDate")
 
 	res, err := s.c.GetTxnDetailsByDID(did, role, startDate, endDate)
 	if err != nil {
@@ -116,7 +116,7 @@ func (s *Server) APIGetTxnByDID(req *ensweb.Request) *ensweb.Result {
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-by-comment [get]
 func (s *Server) APIGetTxnByComment(req *ensweb.Request) *ensweb.Result {
-	comment := s.GetQuerry(req, "Comment")
+	comment := s.GetQuery(req, "Comment")
 	res, err := s.c.GetTxnDetailsByComment(comment)
 	if err != nil {
 		if err.Error() == "no records found" {
@@ -179,7 +179,7 @@ func (s *Server) APIGetTxnByNode(req *ensweb.Request) *ensweb.Result {
 		BasicResponse: model.BasicResponse{
 			Status: false,
 		}}
-	DIDInNode := s.c.GetDIDs(dir)
+	DIDInNode := s.c.GetDIDs()
 	for _, d := range DIDInNode {
 		txnCount, err := s.c.GetCountofTxn(d.DID)
 		if err != nil {
@@ -205,15 +205,15 @@ func (s *Server) APIGetTxnByNode(req *ensweb.Request) *ensweb.Result {
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-ft-txn-by-did [get]
 func (s *Server) APIGetFTTxnByDID(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuerry(req, "DID")
+	did := s.GetQuery(req, "DID")
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
 	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid DID")
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
-	role := s.GetQuerry(req, "Role")
-	startDate := s.GetQuerry(req, "StartDate")
-	endDate := s.GetQuerry(req, "EndDate")
+	role := s.GetQuery(req, "Role")
+	startDate := s.GetQuery(req, "StartDate")
+	endDate := s.GetQuery(req, "EndDate")
 
 	results, err := s.c.GetFTTransactionsByDID(did, role, startDate, endDate)
 	if err != nil {

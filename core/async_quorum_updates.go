@@ -8,7 +8,7 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/contract"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -56,8 +56,8 @@ func (c *Core) UpdatePreviousQuorumsAsync(updates []PreviousQuorumUpdate) {
 				previousQuorumAddress := u.PreviousQuorumPeerID + "." + u.PreviousQuorumDID
 				previousQuorumPeer, err := c.getPeer(previousQuorumAddress)
 				if err != nil {
-					c.log.Debug("Failed to connect to previous quorum", 
-						"address", previousQuorumAddress, 
+					c.log.Debug("Failed to connect to previous quorum",
+						"address", previousQuorumAddress,
 						"error", err)
 					mu.Lock()
 					failCount++
@@ -68,14 +68,14 @@ func (c *Core) UpdatePreviousQuorumsAsync(updates []PreviousQuorumUpdate) {
 
 				updateTokenHashDetailsQuery := make(map[string]string)
 				updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = u.TokenIDTokenStateHash
-				
-				err = previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, 
+
+				err = previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails,
 					updateTokenHashDetailsQuery, nil, nil, true)
-				
+
 				mu.Lock()
 				if err != nil {
 					failCount++
-					c.log.Debug("Failed to update previous quorum", 
+					c.log.Debug("Failed to update previous quorum",
 						"did", u.PreviousQuorumDID,
 						"error", err)
 				} else {
@@ -86,7 +86,7 @@ func (c *Core) UpdatePreviousQuorumsAsync(updates []PreviousQuorumUpdate) {
 		}
 
 		wg.Wait()
-		
+
 		c.log.Info("Async previous quorum updates completed",
 			"total", len(updates),
 			"success", successCount,
@@ -101,15 +101,15 @@ func (c *Core) updatePreviousQuorumsSynchronous(updates []PreviousQuorumUpdate) 
 		previousQuorumAddress := update.PreviousQuorumPeerID + "." + update.PreviousQuorumDID
 		previousQuorumPeer, err := c.getPeer(previousQuorumAddress)
 		if err != nil {
-			c.log.Error("Unable to retrieve peer information", 
-				"peerID", update.PreviousQuorumPeerID, 
+			c.log.Error("Unable to retrieve peer information",
+				"peerID", update.PreviousQuorumPeerID,
 				"error", err)
 			continue
 		}
 
 		updateTokenHashDetailsQuery := make(map[string]string)
 		updateTokenHashDetailsQuery["tokenIDTokenStateHash"] = update.TokenIDTokenStateHash
-		previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails, 
+		previousQuorumPeer.SendJSONRequest("POST", APIUpdateTokenHashDetails,
 			updateTokenHashDetailsQuery, nil, nil, true)
 		previousQuorumPeer.Close()
 	}
@@ -118,7 +118,7 @@ func (c *Core) updatePreviousQuorumsSynchronous(updates []PreviousQuorumUpdate) 
 // BuildPreviousQuorumUpdates prepares the list of updates for previous quorums
 func (c *Core) BuildPreviousQuorumUpdates(ti []contract.TokenInfo, sc *contract.Contract) ([]PreviousQuorumUpdate, error) {
 	var updates []PreviousQuorumUpdate
-	peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+	peerInfoCache := make(map[string]*models.DID)
 
 	for _, tokeninfo := range ti {
 		b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
@@ -152,7 +152,7 @@ func (c *Core) BuildPreviousQuorumUpdates(ti []contract.TokenInfo, sc *contract.
 
 		prevtokenIDTokenStateData := tokeninfo.Token + bid
 		prevtokenIDTokenStateBuffer := bytes.NewBuffer([]byte(prevtokenIDTokenStateData))
-		prevtokenIDTokenStateHash, err := IpfsAddWithBackoff(c.ipfs, prevtokenIDTokenStateBuffer, 
+		prevtokenIDTokenStateHash, err := IpfsAddWithBackoff(c.ipfs, prevtokenIDTokenStateBuffer,
 			ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 		if err != nil {
 			return nil, fmt.Errorf("unable to get previous token state hash for token: %v, err: %v", tokeninfo.Token, err)
@@ -160,9 +160,9 @@ func (c *Core) BuildPreviousQuorumUpdates(ti []contract.TokenInfo, sc *contract.
 
 		// Create updates for each previous quorum
 		for _, previousQuorumDID := range previousQuorumDIDs {
-			var previousQuorumInfo *wallet.DIDPeerMap
+			var previousQuorumInfo *models.DID
 			var ok bool
-			
+
 			if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 				previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
 				if previousQuorumInfo.PeerID == "" || err != nil {

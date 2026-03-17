@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
@@ -216,7 +217,7 @@ func (c *Core) getTransactionFromHistory(senderDID, transactionID string) (*mode
 
 	// First try to get from FT transaction history
 	var ftHistory []model.FTTransactionHistory
-	err := c.w.GetStorage().Read(wallet.FTTransactionHistoryStorage, &ftHistory,
+	err := c.w.GetStorage().Read(constants.Storage_FTTransactionHistory, &ftHistory,
 		"sender_did=? AND transaction_id=?", senderDID, transactionID)
 
 	if err == nil && len(ftHistory) > 0 {
@@ -236,7 +237,7 @@ func (c *Core) getTransactionFromHistory(senderDID, transactionID string) (*mode
 
 	// If not found in FT history, try regular transaction history
 	var txHistory []model.TransactionDetails
-	err = c.w.GetStorage().Read(wallet.TransactionStorage, &txHistory,
+	err = c.w.GetStorage().Read(constants.Storage_Transactions, &txHistory,
 		"sender_did=? AND transaction_id=?", senderDID, transactionID)
 
 	if err != nil || len(txHistory) == 0 {
@@ -345,8 +346,8 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 	if transactionDetails.TransactionType == "FT" {
 		// For FT tokens, we need to find the tokens in the FT token storage
 		var ftTokens []wallet.FTToken
-		err := c.w.GetStorage().Read(wallet.FTTokenStorage, &ftTokens,
-			"transaction_id=? AND token_status=?", transactionID, wallet.TokenIsPledged)
+		err := c.w.GetStorage().Read(constants.Storage_FTTokens, &ftTokens,
+			"transaction_id=? AND token_status=?", transactionID, constants.TokenStatus_Pledged)
 
 		if err != nil || len(ftTokens) == 0 {
 			// If tokens not found locally, try to get from explorer
@@ -373,8 +374,8 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 	} else {
 		// For RBT tokens
 		var tokens []wallet.Token
-		err := c.w.GetStorage().Read(wallet.TokenStorage, &tokens,
-			"transaction_id=? AND token_status=?", transactionID, wallet.TokenIsPledged)
+		err := c.w.GetStorage().Read(constants.Storage_Tokens, &tokens,
+			"transaction_id=? AND token_status=?", transactionID, constants.TokenStatus_Pledged)
 
 		if err != nil || len(tokens) == 0 {
 			// If tokens not found locally, try to get from explorer
@@ -414,7 +415,7 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 		if transactionDetails.TransactionType == "FT" {
 			// Try to read FT token
 			var ftToken wallet.FTToken
-			err := c.w.GetStorage().Read(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
+			err := c.w.GetStorage().Read(constants.Storage_FTTokens, &ftToken, "token_id=?", tokenID)
 			if err != nil {
 				// Token doesn't exist locally (was fetched from explorer), create it
 				c.log.Info("Creating FT token from explorer data",
@@ -435,13 +436,13 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 				ftToken = wallet.FTToken{
 					TokenID:       tokenID,
 					DID:           senderDID, // Owner DID
-					TokenStatus:   wallet.TokenIsFree,
+					TokenStatus:   constants.TokenStatus_Free,
 					TransactionID: "", // Clear - token is now free
 					CreatorDID:    ftInfo.CreatorDID,
 					FTName:        ftInfo.FTName,
 					TokenValue:    0.001, // Standard FT token value
 				}
-				err = c.w.GetStorage().Write(wallet.FTTokenStorage, &ftToken)
+				err = c.w.GetStorage().Write(constants.Storage_FTTokens, &ftToken)
 				if err != nil {
 					c.log.Error("Failed to create recovered FT token",
 						"token_id", tokenID,
@@ -466,8 +467,8 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 				needsUpdate := false
 
 				// If token is pledged with this transaction ID, it needs recovery
-				if ftToken.TransactionID == transactionID || ftToken.TokenStatus == wallet.TokenIsPledged {
-					ftToken.TokenStatus = wallet.TokenIsFree
+				if ftToken.TransactionID == transactionID || ftToken.TokenStatus == constants.TokenStatus_Pledged {
+					ftToken.TokenStatus = constants.TokenStatus_Free
 					ftToken.TransactionID = "" // Clear transaction ID
 					needsUpdate = true
 				}
@@ -479,7 +480,7 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 						"old_owner", ftToken.DID,
 						"new_owner", senderDID)
 					ftToken.DID = senderDID
-					ftToken.TokenStatus = wallet.TokenIsFree
+					ftToken.TokenStatus = constants.TokenStatus_Free
 					ftToken.TransactionID = "" // Clear transaction ID
 					needsUpdate = true
 				}
@@ -490,14 +491,14 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 						"token_id", tokenID,
 						"stored_txn_id", ftToken.TransactionID,
 						"recovery_txn_id", transactionID)
-					ftToken.TokenStatus = wallet.TokenIsFree
+					ftToken.TokenStatus = constants.TokenStatus_Free
 					ftToken.TransactionID = "" // Clear transaction ID
 					ftToken.DID = senderDID    // Update owner
 					needsUpdate = true
 				}
 
 				if needsUpdate {
-					err = c.w.GetStorage().Update(wallet.FTTokenStorage, &ftToken, "token_id=?", tokenID)
+					err = c.w.GetStorage().Update(constants.Storage_FTTokens, &ftToken, "token_id=?", tokenID)
 					if err != nil {
 						c.log.Error("Failed to update FT token during recovery",
 							"token_id", tokenID,
@@ -518,11 +519,11 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 		} else {
 			// Update regular token status
 			var token wallet.Token
-			err := c.w.GetStorage().Read(wallet.TokenStorage, &token, "token_id=?", tokenID)
-			if err == nil && token.TokenStatus == wallet.TokenIsPledged {
-				token.TokenStatus = wallet.TokenIsFree
+			err := c.w.GetStorage().Read(constants.Storage_Tokens, &token, "token_id=?", tokenID)
+			if err == nil && token.TokenStatus == constants.TokenStatus_Pledged {
+				token.TokenStatus = constants.TokenStatus_Free
 				token.TransactionID = "" // Clear transaction ID
-				err = c.w.GetStorage().Update(wallet.TokenStorage, &token, "token_id=?", tokenID)
+				err = c.w.GetStorage().Update(constants.Storage_Tokens, &token, "token_id=?", tokenID)
 				if err != nil {
 					c.log.Error("Failed to update token status",
 						"token_id", tokenID,
@@ -558,7 +559,7 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 		// Remove from FT transaction history - transaction never happened
 		// Remove ALL instances of this transaction ID, regardless of sender/receiver
 		// Use empty model instance like in token_rollback.go
-		err := c.w.GetStorage().Delete(wallet.FTTransactionHistoryStorage,
+		err := c.w.GetStorage().Delete(constants.Storage_FTTransactionHistory,
 			&model.FTTransactionHistory{}, "transaction_id = ?", transactionID)
 		if err != nil {
 			c.log.Error("Failed to remove FT transaction from history",
@@ -573,7 +574,7 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 		}
 
 		// Also remove from regular transaction history (FT transactions are stored in both)
-		err = c.w.GetStorage().Delete(wallet.TransactionStorage,
+		err = c.w.GetStorage().Delete(constants.Storage_Transactions,
 			&model.TransactionDetails{}, "transaction_id = ?", transactionID)
 		if err != nil {
 			c.log.Error("Failed to remove transaction from regular history",
@@ -586,7 +587,7 @@ func (c *Core) performTokenRecovery(senderDID, transactionID string, transaction
 	} else {
 		// Remove from regular transaction history - transaction never happened
 		// Remove ALL instances of this transaction ID, regardless of sender/receiver
-		err := c.w.GetStorage().Delete(wallet.TransactionStorage,
+		err := c.w.GetStorage().Delete(constants.Storage_Transactions,
 			&model.TransactionDetails{}, "transaction_id = ?", transactionID)
 		if err != nil {
 			c.log.Error("Failed to remove transaction from history",

@@ -9,11 +9,12 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -396,7 +397,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 	var parentTokenType int
 
 	if err != nil {
-		parentTokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(parentTokenId), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+		parentTokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(parentTokenId), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 		if err != nil {
 			return response, fmt.Errorf("Unable to do IPFS Add operation on Token: %v", err)
 		}
@@ -444,7 +445,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 		parentTokenInfo = &wallet.Token{
 			TokenID:     parentTokenId,
 			TokenValue:  tv,
-			TokenStatus: wallet.TokenIsBurnt,
+			TokenStatus: constants.TokenStatus_Burnt,
 			DID:         ownerDID,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
@@ -458,7 +459,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 		parentTokenType = c.TokenType(typeString)
 	}
 
-	if parentTokenInfo.TokenStatus != wallet.TokenIsBurnt {
+	if parentTokenInfo.TokenStatus != constants.TokenStatus_Burnt {
 		response.Message = "parent token not in burnt state"
 		c.log.Error("msg", response.Message)
 		return response, err
@@ -606,7 +607,7 @@ func (c *Core) ValidateTokenOwner(b *block.Block, userDID string) (*model.BasicR
 		return response, err
 	}
 	for _, signer := range signers {
-		var dc did.DIDCrypto
+		var dc types.DIDCrypto
 		switch b.GetTransType() {
 		case block.TokenGeneratedType, block.TokenBurntType:
 			dc, err = c.SetupForienDID(signer, userDID)

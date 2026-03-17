@@ -8,6 +8,8 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
 )
 
 // IPFSOperations provides health-managed IPFS operations
@@ -43,8 +45,10 @@ func (ops *IPFSOperations) executeWithMetrics(ctx context.Context, operationName
 	return err
 }
 
-// Add adds data to IPFS with health checks and retry logic
-func (ops *IPFSOperations) Add(data io.Reader, opts ...ipfsnode.AddOpts) (string, error) {
+// Add adds data to IPFS with health checks and retry logic.
+// If provCtx is non-nil, a provider record is created after a successful add.
+// Pass nil for OnlyHash or infrastructure calls that don't need tracking.
+func (ops *IPFSOperations) Add(data io.Reader, provCtx *types.IPFSProviderContext, opts ...ipfsnode.AddOpts) (string, error) {
 	var result string
 	var operationErr error
 
@@ -73,6 +77,10 @@ func (ops *IPFSOperations) Add(data io.Reader, opts ...ipfsnode.AddOpts) (string
 
 	if err != nil {
 		return "", err
+	}
+
+	if provCtx != nil && ops.core.ipfsProviderStore != nil {
+		ops.core.ipfsProviderStore.RecordProvider(result, provCtx, constants.IPFSProviderOpAdd)
 	}
 
 	return result, operationErr
@@ -119,7 +127,7 @@ func (ops *IPFSOperations) Cat(hash string) (io.ReadCloser, error) {
 	inputHash := hash
 	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
 		var err error
-		inputHash, err = ops.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		inputHash, err = ops.Add(bytes.NewBufferString(hash), nil, ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
 		if err != nil {
 			return nil, err
 		}
@@ -154,7 +162,7 @@ func (ops *IPFSOperations) Get(hash, path string) error {
 	inputHash := hash
 	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
 		var err error
-		inputHash, err = ops.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		inputHash, err = ops.Add(bytes.NewBufferString(hash), nil, ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
 		if err != nil {
 			return err
 		}
@@ -170,15 +178,16 @@ func (ops *IPFSOperations) Get(hash, path string) error {
 	})
 }
 
-// Pin pins a hash in IPFS with health checks
-func (ops *IPFSOperations) Pin(hash string) error {
+// Pin pins a hash in IPFS with health checks.
+// If provCtx is non-nil, a provider record is created after a successful pin.
+func (ops *IPFSOperations) Pin(hash string, provCtx *types.IPFSProviderContext) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	inputHash := hash
 	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
 		var err error
-		inputHash, err = ops.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		inputHash, err = ops.Add(bytes.NewBufferString(hash), nil, ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
 		if err != nil {
 			return err
 		}
@@ -188,20 +197,27 @@ func (ops *IPFSOperations) Pin(hash string) error {
 		"hash": inputHash,
 	}
 
-	return ops.executeWithMetrics(ctx, "ipfs.pin", metadata, func() error {
+	err := ops.executeWithMetrics(ctx, "ipfs.pin", metadata, func() error {
 		return ops.core.ipfs.Pin(inputHash)
 	})
+
+	if err == nil && provCtx != nil && ops.core.ipfsProviderStore != nil {
+		ops.core.ipfsProviderStore.RecordProvider(inputHash, provCtx, constants.IPFSProviderOpPin)
+	}
+
+	return err
 }
 
-// Unpin unpins a hash in IPFS with health checks
-func (ops *IPFSOperations) Unpin(hash string) error {
+// Unpin unpins a hash in IPFS with health checks.
+// If provCtx is non-nil, a provider record is created and existing records are marked unpinned.
+func (ops *IPFSOperations) Unpin(hash string, provCtx *types.IPFSProviderContext) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	inputHash := hash
 	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
 		var err error
-		inputHash, err = ops.Add(bytes.NewBufferString(hash), ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
+		inputHash, err = ops.Add(bytes.NewBufferString(hash), nil, ipfsnode.OnlyHash(true), ipfsnode.Pin(false))
 		if err != nil {
 			return err
 		}
@@ -211,9 +227,18 @@ func (ops *IPFSOperations) Unpin(hash string) error {
 		"hash": inputHash,
 	}
 
-	return ops.executeWithMetrics(ctx, "ipfs.unpin", metadata, func() error {
+	err := ops.executeWithMetrics(ctx, "ipfs.unpin", metadata, func() error {
 		return ops.core.ipfs.Unpin(inputHash)
 	})
+
+	if err == nil && ops.core.ipfsProviderStore != nil {
+		if provCtx != nil {
+			ops.core.ipfsProviderStore.RecordProvider(inputHash, provCtx, constants.IPFSProviderOpUnpin)
+		}
+		ops.core.ipfsProviderStore.MarkUnpinned(inputHash)
+	}
+
+	return err
 }
 
 // ID gets the IPFS node ID with health checks
