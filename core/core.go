@@ -117,13 +117,14 @@ type Core struct {
 	pd                   map[string]*PledgeDetails
 	webReq               map[string]*did.DIDChan
 	w                    *wallet.Wallet
-	qc                   map[string]did.DIDCrypto
-	pqc                  map[string]did.DIDCrypto
+	qc                   map[string]types.DIDCrypto
+	pqc                  map[string]types.DIDCrypto
 	secret               []byte
 	quorumCount          int
 	noBalanceQuorumCount int
 	defaultSetup         bool
 	tokenSyncManager     *TokenSyncManager
+	ipfsProviderStore    *IPFSProviderStore
 	asyncPinManager      *AsyncPinManager
 	perfTracker          *PerformanceTracker
 	txStateMgr           *TransactionStateManager
@@ -157,8 +158,8 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		quorumRequest:     make(map[string]*ConsensusStatus),
 		pd:                make(map[string]*PledgeDetails),
 		webReq:            make(map[string]*did.DIDChan),
-		qc:                make(map[string]did.DIDCrypto),
-		pqc:               make(map[string]did.DIDCrypto),
+		qc:                make(map[string]types.DIDCrypto),
+		pqc:               make(map[string]types.DIDCrypto),
 		secret:            util.GetRandBytes(32),
 		defaultSetup:      defaultSetup,
 		publishTokenChain: publishTokenChainDetails,
@@ -208,6 +209,10 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
 	}
+
+	c.ipfsProviderStore = NewIPFSProviderStore(rubixDB.Pool(), c.log, func() string {
+		return c.peerID
+	})
 
 	if c.testnet && c.defaultSetup {
 		c.AddDefaulTestnetQuorums()
@@ -523,7 +528,7 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 	return req.Req
 }
 
-func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
+func (c *Core) SetupDID(reqID string, didStr string) (types.DIDCrypto, error) {
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")
@@ -533,7 +538,7 @@ func (c *Core) SetupDID(reqID string, didStr string) (did.DIDCrypto, error) {
 }
 
 // Initializes the did in it's corresponding did mode (basic/ lite)
-func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, error) {
+func (c *Core) SetupForienDID(didStr string, selfDID string) (types.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		c.log.Error("couldn't fetch did")
@@ -555,7 +560,7 @@ func (c *Core) SetupForienDID(didStr string, selfDID string) (did.DIDCrypto, err
 }
 
 // Initializes the quorum in it's corresponding did mode (basic/ lite)
-func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (did.DIDCrypto, error) {
+func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (types.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err
@@ -625,7 +630,7 @@ func (c *Core) GetPeerID() string {
 }
 
 // Initializes the DID in it's corresponding did mode
-func (c *Core) InitialiseDID(didStr string) (did.DIDCrypto, error) {
+func (c *Core) InitialiseDID(didStr string) (types.DIDCrypto, error) {
 	err := c.FetchDID(didStr)
 	if err != nil {
 		return nil, err

@@ -10,11 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -29,7 +31,7 @@ type DIDInfo struct {
 	PeerID  string `json:"peer_id"`
 }
 
-func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
+func (c *Core) GetPeerFromExplorer(didStr string) (*models.DID, error) {
 	c.log.Debug("Fetching peer from explorer", "did", didStr)
 
 	url := "https://rexplorer.azurewebsites.net/api/user/get-did-info/" + didStr
@@ -78,7 +80,7 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*wallet.DIDPeerMap, error) {
 		return nil, fmt.Errorf("failed to fetch DID from network: %w", err)
 	}
 
-	peerInfo := &wallet.DIDPeerMap{
+	peerInfo := &models.DID{
 		DID:    apiResp.Data.UserDID,
 		PeerID: apiResp.Data.PeerID,
 	}
@@ -154,10 +156,6 @@ func (c *Core) checkPassword(didStr string, pwd string) bool {
 }
 
 func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
-	if didCreate.RootDID && c.w.IsRootDIDExist() {
-		c.log.Error("root did is already exist")
-		return "", fmt.Errorf("root did is already exist")
-	}
 	did, err := c.d.CreateDID(didCreate)
 	if err != nil {
 		return "", err
@@ -166,15 +164,14 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 		didCreate.Dir = did
 	}
 
-	dt := wallet.DID{
+	dt := &models.DID{
 		DID:    did,
-		DIDDir: didCreate.Dir,
-		Config: didCreate.Config,
+		PeerID: c.peerID,
+		Local:  true,
+		AlgoID: int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1)),
 	}
-	if didCreate.RootDID {
-		dt.RootDID = 1
-	}
-	err = c.w.CreateDID(&dt)
+
+	err = c.w.CreateOrUpdateDID(dt)
 	if err != nil {
 		c.log.Error("Failed to create did in the wallet", "err", err)
 		return "", err
@@ -183,8 +180,8 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	return did, nil
 }
 
-func (c *Core) GetDIDs(dir string) []wallet.DID {
-	dt, err := c.w.GetDIDs(dir)
+func (c *Core) GetDIDs() []models.DID {
+	dt, err := c.w.GetAllDID()
 	if err != nil {
 		return nil
 	}
@@ -248,7 +245,7 @@ func (c *Core) registerDID(reqID string, did string) error {
 		return fmt.Errorf("DID is not exist")
 	}
 	t := time.Now().String()
-	h := util.CalculateHashString(c.peerID+did+t, "SHA3-256")
+	h := util.CalculateHash([]byte(c.peerID+did+t), constants.HashAlgorithm_SHA3_256)
 	sig, err := dc.PvtSign([]byte(h))
 	if err != nil {
 		return fmt.Errorf("register did, failed to do signature")
@@ -309,9 +306,9 @@ func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (str
 
 // This function, GetPeerDIDInfo, retrieves information about a peer's DID (Decentralized Identifier)
 // from various sources, including the local database, an explorer, or directly from the peer.
-// It returns a wallet.DIDPeerMap containing the peer's DID, Peer ID, and DID type,
+// It returns a models.DID containing the peer's DID, Peer ID, and DID type,
 // or an error if the information cannot be found.
-func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
+func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 	c.log.Debug("Resolving peer info", "did", didStr)
 
 	var peerID string
@@ -321,7 +318,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 	if c.testnet {
 		// 1. try DID table first
 		if _, err := c.w.GetDID(didStr); err == nil {
-			return &wallet.DIDPeerMap{
+			return &models.DID{
 				DID:    didStr,
 				PeerID: c.peerID,
 			}, nil
@@ -331,7 +328,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 		peerID = c.w.GetPeerID(didStr)
 
 		if peerID != "" {
-			return &wallet.DIDPeerMap{
+			return &models.DID{
 				DID:    didStr,
 				PeerID: peerID,
 			}, nil
@@ -341,7 +338,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 		peerID = c.w.GetPeerID(didStr)
 
 		if peerID != "" {
-			return &wallet.DIDPeerMap{
+			return &models.DID{
 				DID:    didStr,
 				PeerID: peerID,
 			}, nil
@@ -366,7 +363,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*wallet.DIDPeerMap, error) {
 		return nil, fmt.Errorf("peerID of  DID %s not found in local storage. Peer information not registered. register did to continue", didStr)
 	}
 
-	return &wallet.DIDPeerMap{
+	return &models.DID{
 		DID:    didStr,
 		PeerID: peerID,
 	}, nil

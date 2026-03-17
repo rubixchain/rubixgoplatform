@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,7 +17,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -68,7 +66,7 @@ func (c *Core) addUnpledgeDetails(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 	// ::TODO:: Get proper credit score
-	did := c.l.GetQuerry(req, "did")
+	did := c.l.GetQuery(req, "did")
 	credits, err := c.w.GetCredit(did)
 	var cs model.CreditStatus
 	cs.Score = 0
@@ -1188,7 +1186,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 }
 
 func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuerry(req, "did")
+	did := c.l.GetQuery(req, "did")
 	var cr ConensusRequest
 	err := c.l.ParseJSON(req, &cr)
 	crep := ConensusReply{
@@ -1378,7 +1376,7 @@ func (c *Core) updateReceiverToken(
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
 			BlockID:         bid,
-			Mode:            wallet.RecvMode,
+			Mode:            constants.TxnMode_Recv,
 			Amount:          b.GetTokenValue(),
 			SenderDID:       b.GetSenderDID(),
 			ReceiverDID:     b.GetOwner(),
@@ -1392,7 +1390,7 @@ func (c *Core) updateReceiverToken(
 		}
 		// maintain transaction mode as per transaction type
 		if td.TransactionType == block.TokenSelfTransferredType {
-			td.Mode = wallet.RBTSelfTransferMode
+			td.Mode = constants.TxnMode_RBTSelfTransfer
 		}
 		err = c.w.AddTransactionHistory(td)
 		if err != nil {
@@ -1408,7 +1406,7 @@ func (c *Core) updateReceiverToken(
 }
 
 func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuerry(req, "did")
+	did := c.l.GetQuery(req, "did")
 	var sr SendTokenRequest
 
 	err := c.l.ParseJSON(req, &sr)
@@ -1609,7 +1607,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 			TransactionID:   b.GetTid(),
 			TransactionType: b.GetTransType(),
 			BlockID:         bid,
-			Mode:            wallet.FTTransferMode,
+			Mode:            constants.TxnMode_FTTransfer,
 			Amount:          float64(len(b.GetTransTokens())),
 			SenderDID:       b.GetSenderDID(),
 			ReceiverDID:     b.GetOwner(),
@@ -1623,7 +1621,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 		}
 		// maintain transaction mode as per transaction type
 		if td.TransactionType == block.TokenSelfTransferredType {
-			td.Mode = wallet.FTSelfTransferMode
+			td.Mode = constants.TxnMode_FTSelfTransfer
 		}
 		err = c.w.AddTransactionHistory(td)
 		if err != nil {
@@ -1664,7 +1662,7 @@ func (c *Core) updateFTToken(senderAddress string, receiverAddress string, token
 }
 
 func (c *Core) updateReceiverFTHandle(req *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuerry(req, "did")
+	did := c.l.GetQuery(req, "did")
 	var sr SendTokenRequest
 
 	err := c.l.ParseJSON(req, &sr)
@@ -1703,7 +1701,7 @@ func (c *Core) updateReceiverFTHandle(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuerry(req, "did")
+	did := c.l.GetQuery(req, "did")
 	var sr SignatureRequest
 	err := c.l.ParseJSON(req, &sr)
 	srep := SignatureReply{
@@ -1742,7 +1740,7 @@ func (c *Core) signatureRequest(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	c.log.Debug("incoming request for pledge finlaity")
-	did := c.l.GetQuerry(req, "did")
+	did := c.l.GetQuery(req, "did")
 	c.log.Debug("DID from query", did)
 	var ur UpdatePledgeRequest
 	err := c.l.ParseJSON(req, &ur)
@@ -1909,7 +1907,7 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuerry(req, "did")
+	did := c.l.GetQuery(req, "did")
 	var credit CreditScore
 	err := c.l.ParseJSON(req, &credit)
 	crep := model.BasicResponse{
@@ -1986,7 +1984,7 @@ func (c *Core) mapDIDArbitration(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) chekDIDArbitration(req *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuerry(req, "olddid")
+	did := c.l.GetQuery(req, "olddid")
 	br := model.BasicResponse{
 		Status: true,
 	}
@@ -2085,7 +2083,7 @@ func (c *Core) syncDIDArbitration(req *ensweb.Request) *ensweb.Result {
 }
 
 // func (c *Core) tokenArbitration(req *ensweb.Request) *ensweb.Result {
-// 	did := c.l.GetQuerry(req, "did")
+// 	did := c.l.GetQuery(req, "did")
 // 	var sr SignatureRequest
 // 	err := c.l.ParseJSON(req, &sr)
 // 	srep := SignatureReply{
@@ -2228,7 +2226,7 @@ func (c *Core) unlockTokens(req *ensweb.Request) *ensweb.Result {
 
 func (c *Core) updateTokenHashDetails(req *ensweb.Request) *ensweb.Result {
 	// c.log.Debug("Updating tokenStateHashDetails in DB")
-	tokenIDTokenStateHash := c.l.GetQuerry(req, "tokenIDTokenStateHash")
+	tokenIDTokenStateHash := c.l.GetQuery(req, "tokenIDTokenStateHash")
 	// c.log.Debug("tokenIDTokenStateHash from query", tokenIDTokenStateHash)
 
 	err := c.w.RemoveTokenStateHash(tokenIDTokenStateHash)

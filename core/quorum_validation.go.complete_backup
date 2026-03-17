@@ -114,7 +114,7 @@ func (c *Core) validateSigner(b *block.Block, selfDID string, p *ipfsport.Peer) 
 				peerUpdateResult, err := c.w.UpdatePeerDIDType(signer, did.LiteDIDMode)
 				if !peerUpdateResult || err != nil {
 					liteDID := did.LiteDIDMode
-					signerInfo := wallet.DIDPeerMap{
+					signerInfo := models.DID{
 						DID:     signer,
 						DIDType: &liteDID,
 					}

@@ -7,10 +7,9 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
@@ -29,11 +28,11 @@ import (
 func BuildTransactionInfoFromRequest(
 	ctx context.Context,
 	w *wallet.Wallet,
-	req *models.TransferRequest,
-	dc did.DIDCrypto,
-	isTestnet bool,
+	req *models.TransactionRequest,
+	dc types.DIDCrypto,
+	networkMode string, // The isTestNet bool changed to networkMode string to be passed to CollectRBTTokens
 	log logger.Logger,
-	publishFn func(*model.PubSubTxnInfo) error,
+	pubsub *types.PubSub, // punishFn which was of type func(*model.PubSubTxnInfo)  is change to types.PubSub to be passed to CollectRBTTokens
 ) (*models.TransactionInfo, float64, error) {
 
 	txTokens := &models.TransactionTokens{}
@@ -41,20 +40,12 @@ func BuildTransactionInfoFromRequest(
 
 	// --- RBT path (separate — CollectRBTTokens manages its own locking) ---
 	if req.HasRBT() {
-		rbtTokens, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), isTestnet, log, publishFn)
+		// The underscore here is the denom count map.
+		rbtTokens, _, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), networkMode, log, pubsub)
 		if err != nil {
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: RBT collection failed: %w", err)
 		}
-
-		rbtInfos := make([]*models.TokenInfo, len(rbtTokens))
-		for i, tok := range rbtTokens {
-			rbtInfos[i] = &models.TokenInfo{
-				TokenID:               tok.TokenID,
-				PreviousTransactionID: tok.TransactionID,
-			}
-			totalAmount += tok.TokenValue
-		}
-		txTokens.RBT = rbtInfos
+		txTokens.RBT = rbtTokens
 	}
 
 	// --- FT/NFT/SC: single DB transaction for all non-RBT assets ---
@@ -86,9 +77,7 @@ func BuildTransactionInfoFromRequest(
 						PreviousTransactionID: tok.TransactionID,
 					})
 					allLockedIDs = append(allLockedIDs, tok.TokenID)
-					if f, err := tok.TokenValue.Float64Value(); err == nil {
-						totalAmount += f.Float64
-					}
+					totalAmount += tok.TokenValue
 				}
 			}
 		}
@@ -115,9 +104,7 @@ func BuildTransactionInfoFromRequest(
 					Data:                  nftDataMap[tok.TokenID],
 				})
 				allLockedIDs = append(allLockedIDs, tok.TokenID)
-				if f, err := tok.TokenValue.Float64Value(); err == nil {
-					totalAmount += f.Float64
-				}
+				totalAmount += tok.TokenValue
 			}
 		}
 
@@ -143,9 +130,7 @@ func BuildTransactionInfoFromRequest(
 					Data:                  scDataMap[tok.TokenID],
 				})
 				allLockedIDs = append(allLockedIDs, tok.TokenID)
-				if f, err := tok.TokenValue.Float64Value(); err == nil {
-					totalAmount += f.Float64
-				}
+				totalAmount += tok.TokenValue
 			}
 		}
 

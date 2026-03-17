@@ -19,6 +19,8 @@ import (
 	wallet "github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	tkn "github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -293,10 +295,14 @@ func calculateTokenBasedTimeout(tokenCount int) time.Duration {
 }
 
 func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
-	if !c.w.IsDIDExist(didStr) {
-		c.log.Error("DID does not exist", "did", didStr)
-		return fmt.Errorf("DID does not exist")
+	didExists, err := c.w.IsDIDExists(didStr)
+	if err != nil {
+		return fmt.Errorf("unable to check if DID exists, err: %v", err)
 	}
+	if !didExists {
+		return fmt.Errorf("DID %v meant to act as quorum doesn't exists", didStr)
+	}
+
 	if pvtKeyPwd == "" {
 		c.log.Error("Failed to setup lite quorum as privPWD is not privided")
 		return fmt.Errorf("failed to setup lite quorum, as privPWD is not provided")
@@ -317,51 +323,34 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	return nil
 }
 
-func (c *Core) GetAllQuorum() []string {
-	return c.qm.GetQuorum(QuorumTypeTwo, "", c.peerID)
+func (c *Core) GetAllQuorum() ([]string, error) {
+	qmList, err := c.w.GetAllQuorums()
+	if err != nil {
+		return nil, err
+	}
+
+	var quorumList []string = make([]string, 0)
+
+	for _, quorum := range qmList {
+		quorumList = append(quorumList, quorum.Did)
+	}
+
+	return quorumList, nil
 }
 
-func (c *Core) AddQuorum(ql []QuorumData) error {
-	return c.qm.AddQuorum(ql)
+func (c *Core) AddQuorum(quorumDid string) error {
+	quormManager := models.QuorumManager{
+		Did: quorumDid,
+	}
+
+	return c.w.AddQuorum(quormManager)
 }
 
 func (c *Core) RemoveAllQuorum() error {
-	// TODO:: needs to handle other types
-	return c.qm.RemoveAllQuorum(QuorumTypeTwo)
+	return c.w.RemoveAllQuorums()
 }
 
-func (c *Core) sendQuorumCredit(cr *ConensusRequest) {
-	c.qlock.Lock()
-	cs, ok := c.quorumRequest[cr.ReqID]
-	c.qlock.Unlock()
-	if !ok {
-		c.log.Error("No quorum exist")
-		return
-	}
-	for _, v := range cs.Credit.Credit {
-		p, ok := cs.P[v.DID]
-		if !ok {
-			c.log.Error("Failed to get peer connection, not able to send credit", "addr", v.DID)
-			continue
-		}
-		var resp model.BasicResponse
-		err := p.SendJSONRequest("POST", APIQuorumCredit, nil, &cs.Credit, &resp, true)
-		p.Close()
-		if err != nil {
-			c.log.Error("Failed to send quorum credits", "err", err)
-			continue
-		}
-		if !resp.Status {
-			c.log.Error("Quorum failed to accept credits", "msg", resp.Message)
-			continue
-		}
-	}
-	// c.qlock.Lock()
-	// delete(c.quorumRequest, cr.ReqID)
-	// c.qlock.Unlock()
-}
-
-func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc did.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
+func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc types.DIDCrypto) (*model.TransactionDetails, map[string]map[string]float64, *PledgeDetails, error) {
 	// Track overall consensus time
 	defer c.TrackOperation("tx.rbt_transfer.consensus", map[string]interface{}{
 		"mode":           cr.Mode,
@@ -642,7 +631,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			blockId, _ := nb.GetBlockID(t)
 			tokenIDTokenStateData := t + blockId
 			tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
-			tokenIDTokenStateHash, _ := c.ipfsOps.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			tokenIDTokenStateHash, _ := c.ipfsOps.Add(tokenIDTokenStateBuffer, nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			txnTokenHashes = append(txnTokenHashes, tokenIDTokenStateHash)
 		}
 		// calling quorum pledge finality before calling the APISendReceiver Token
@@ -737,7 +726,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
 			if issueTypeInt == TokenChainNotSynced {
-				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+				syncIssueTokenDetails.TokenStatus = constants.TokenStatus_ChainSyncIssue
 				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
 				c.w.UpdateToken(syncIssueTokenDetails)
 				return nil, nil, nil, errors.New(br.Message)
@@ -788,7 +777,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
 		// Optimization: Local cache for previousQuorumDID -> PeerInfo
 		go func() {
-			peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+			peerInfoCache := make(map[string]*models.DID)
 			for _, tokeninfo := range ti {
 				b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 
@@ -835,7 +824,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				// send this exhausted hash to old quorums to unpledge
 				for _, previousQuorumDID := range previousQuorumDIDs {
 					// fetch previous quorum's peer Id with local cache
-					var previousQuorumInfo *wallet.DIDPeerMap
+					var previousQuorumInfo *models.DID
 					var ok bool
 					if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 						previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -873,11 +862,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// already pinned it
 		if cr.SenderPeerID != cr.ReceiverPeerID {
 			for _, t := range ti {
-				tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(t.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+				tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(t.Token), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("Unable to do IPFS Add operation on Token: %v", err)
 				}
-				c.w.UnPin(tokenHash, wallet.PrevSenderRole, sc.GetSenderDID())				
+				c.w.Unpin(tokenHash, constants.TokenProviderRole_PrevSender, sc.GetSenderDID())
 			}
 			//call ipfs repo gc after unpinnning
 			c.ipfsRepoGc()
@@ -893,7 +882,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
-			Mode:            wallet.SendMode,
+			Mode:            constants.TxnMode_Send,
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetReceiverDID(),
 			Comment:         sc.GetComment(),
@@ -904,7 +893,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// to filter out migration transactions in xell wallet
 		if cr.OperationType == TokenSelfTransferredType {
-			td.Mode = wallet.RBTSelfTransferMode
+			td.Mode = constants.TxnMode_RBTSelfTransfer
 		}
 
 		go func() {
@@ -946,7 +935,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			blockId, _ := nb.GetBlockID(t)
 			tokenIDTokenStateData := t + blockId
 			tokenIDTokenStateBuffer := bytes.NewBuffer([]byte(tokenIDTokenStateData))
-			tokenIDTokenStateHash, _ := c.ipfsOps.Add(tokenIDTokenStateBuffer, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+			tokenIDTokenStateHash, _ := c.ipfsOps.Add(tokenIDTokenStateBuffer, nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 			txnTokenHashes = append(txnTokenHashes, tokenIDTokenStateHash)
 		}
 		// trigger pledge finality to the quorum and also adding the new tokenstate hash details for transferred tokens to quorum
@@ -1050,7 +1039,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
 
 			if issueTypeInt == TokenChainNotSynced {
-				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+				syncIssueTokenDetails.TokenStatus = constants.TokenStatus_ChainSyncIssue
 				c.log.Debug("Token sync issue details updated:", syncIssueTokenDetails)
 				c.w.UpdateFTToken(syncIssueTokenDetails)
 				return nil, nil, nil, errors.New(br.Message)
@@ -1231,7 +1220,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		// Optimization: Local cache for previousQuorumDID -> PeerInfo
 
 		go func() {
-			peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+			peerInfoCache := make(map[string]*models.DID)
 			for _, tokeninfo := range ti {
 				b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 				if b == nil {
@@ -1279,7 +1268,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 				// send this exhausted hash to old quorums to unpledge
 				for _, previousQuorumDID := range previousQuorumDIDs {
 					// fetch previous quorum's peer Id with local cache
-					var previousQuorumInfo *wallet.DIDPeerMap
+					var previousQuorumInfo *models.DID
 					var ok bool
 					if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 						previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -1319,11 +1308,11 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		if !rp.IsLocal() {
 			for _, t := range ti {
-				tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(t.Token), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+				tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(t.Token), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("unable to do IPFS Add operation on Token: %v", err)
 				}
-				c.w.UnPin(tokenHash, wallet.PrevSenderRole, sc.GetSenderDID())
+				c.w.Unpin(tokenHash, constants.TokenProviderRole_PrevSender, sc.GetSenderDID())
 			}
 			// call ipfs repo gc after unpinnning
 			c.ipfsRepoGc()
@@ -1339,7 +1328,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
-			Mode:            wallet.FTTransferMode,
+			Mode:            constants.TxnMode_FTTransfer,
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetReceiverDID(),
 			Comment:         sc.GetComment(),
@@ -1350,7 +1339,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// xell migration
 		if cr.OperationType == TokenSelfTransferredType {
-			td.Mode = wallet.FTSelfTransferMode
+			td.Mode = constants.TxnMode_FTSelfTransfer
 		}
 		// publish txn
 		publishingTxn.AssetType = FTTokenType
@@ -1440,7 +1429,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			}
 			c.log.Debug("sync issue token details ", syncIssueTokenDetails)
 			if issueTypeInt == TokenChainNotSynced {
-				syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+				syncIssueTokenDetails.TokenStatus = constants.TokenStatus_ChainSyncIssue
 				c.log.Debug("sync issue token details status updated", syncIssueTokenDetails)
 				c.w.UpdateToken(syncIssueTokenDetails)
 				return nil, nil, nil, errors.New(br.Message)
@@ -1477,7 +1466,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
 		// Optimization: Local cache for previousQuorumDID -> PeerInfo
-		peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+		peerInfoCache := make(map[string]*models.DID)
 		for _, tokeninfo := range ti {
 			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 
@@ -1517,7 +1506,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			// send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
 				// fetch previous quorum's peer Id with local cache
-				var previousQuorumInfo *wallet.DIDPeerMap
+				var previousQuorumInfo *models.DID
 				var ok bool
 				if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 					previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -1547,7 +1536,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		// Commented out this unpinning part so that the unpin is not done from the sender side
 		// for _, t := range ti {
-		// 	c.w.UnPin(t.Token, wallet.PrevSenderRole, sc.GetSenderDID())
+		// 	c.w.Unpin(t.Token, constants.TokenProviderRole_PrevSender, sc.GetSenderDID())
 		// }
 		// call ipfs repo gc after unpinnning
 		// c.ipfsRepoGc()
@@ -1561,7 +1550,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
-			Mode:            wallet.PinningServiceMode,
+			Mode:            constants.TxnMode_PinningService,
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetPinningServiceDID(),
 			Comment:         sc.GetComment(),
@@ -1633,7 +1622,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		// Checking prev block details (i.e. the latest block before transferring) by sender. Sender will connect with old quorums, and update about the exhausted token state hashes to quorums for them to unpledge their tokens.
 		// Optimization: Local cache for previousQuorumDID -> PeerInfo
-		peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+		peerInfoCache := make(map[string]*models.DID)
 		for _, tokeninfo := range ti {
 			b := c.w.GetLatestTokenBlock(tokeninfo.Token, tokeninfo.TokenType)
 
@@ -1676,7 +1665,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			// send this exhausted hash to old quorums to unpledge
 			for _, previousQuorumDID := range previousQuorumDIDs {
 				// fetch previous quorum's peer Id with local cache
-				var previousQuorumInfo *wallet.DIDPeerMap
+				var previousQuorumInfo *models.DID
 				var ok bool
 				if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 					previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -1710,7 +1699,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         nbid,
-			Mode:            wallet.SendMode,
+			Mode:            constants.TxnMode_Send,
 			SenderDID:       sc.GetSenderDID(),
 			ReceiverDID:     sc.GetReceiverDID(),
 			Comment:         sc.GetComment(),
@@ -1769,7 +1758,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 		// update smart contracttoken status to deployed in DB
-		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsDeployed)
+		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, constants.TokenStatus_Deployed)
 		if err != nil {
 			c.log.Error("Failed to update smart contract Token deploy detail in storage", err)
 			return nil, nil, nil, err
@@ -1830,7 +1819,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         newBlockId,
-			Mode:            wallet.DeployMode,
+			Mode:            constants.TxnMode_Deploy,
 			DeployerDID:     sc.GetDeployerDID(),
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
@@ -1861,7 +1850,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.SmartContractToken, err)
 		}
-		peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+		peerInfoCache := make(map[string]*models.DID)
 
 		// Create tokechain for the smart contract token and add genesys block
 		err = c.w.AddTokenBlock(cr.SmartContractToken, nb)
@@ -1870,7 +1859,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			return nil, nil, nil, err
 		}
 		// update smart contracttoken status to deployed in DB
-		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, wallet.TokenIsExecuted)
+		err = c.w.UpdateSmartContractStatus(cr.SmartContractToken, constants.TokenStatus_Executed)
 		if err != nil {
 			c.log.Error("Failed to update smart contract Token execute detail in storage", err)
 			return nil, nil, nil, err
@@ -1922,7 +1911,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		}
 		for _, previousQuorumDID := range previousQuorumDIDs {
 			// fetch previous quorum's peer Id with local cache
-			var previousQuorumInfo *wallet.DIDPeerMap
+			var previousQuorumInfo *models.DID
 			var ok bool
 			if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 				previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -1949,7 +1938,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         newBlockId,
-			Mode:            wallet.ExecuteMode,
+			Mode:            constants.TxnMode_Execute,
 			DeployerDID:     sc.GetExecutorDID(),
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
@@ -2002,7 +1991,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         newBlockId,
-			Mode:            wallet.DeployMode,
+			Mode:            constants.TxnMode_Deploy,
 			DeployerDID:     sc.GetDeployerDID(),
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
@@ -2032,7 +2021,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("unable to fetch previous quorum's DIDs for token: %v, err: %v", cr.NFT, err)
 		}
-		peerInfoCache := make(map[string]*wallet.DIDPeerMap)
+		peerInfoCache := make(map[string]*models.DID)
 
 		err = c.w.AddTokenBlock(cr.NFT, nb)
 		if err != nil {
@@ -2068,7 +2057,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 
 		for _, previousQuorumDID := range previousQuorumDIDs {
 			// fetch previous quorum's peer Id with local cache
-			var previousQuorumInfo *wallet.DIDPeerMap
+			var previousQuorumInfo *models.DID
 			var ok bool
 			if previousQuorumInfo, ok = peerInfoCache[previousQuorumDID]; !ok {
 				previousQuorumInfo, err = c.GetPeerDIDInfo(previousQuorumDID)
@@ -2095,7 +2084,7 @@ func (c *Core) initiateConsensus(cr *ConensusRequest, sc *contract.Contract, dc 
 			TransactionID:   tid,
 			TransactionType: nb.GetTransType(),
 			BlockID:         newBlockId,
-			Mode:            wallet.ExecuteMode,
+			Mode:            constants.TxnMode_Execute,
 			DeployerDID:     sc.GetExecutorDID(),
 			Comment:         sc.GetComment(),
 			DateTime:        time.Now(),
@@ -2395,7 +2384,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 		c.log.Debug("Orphan token list ", orphanChildTokenList)
 		if issueTypeInt == ParentTokenNotBurned {
 			for _, orphanChild := range orphanChildTokenList {
-				orphanChild.TokenStatus = wallet.TokenIsOrphaned
+				orphanChild.TokenStatus = constants.TokenStatus_Orphaned
 				c.log.Debug("Orphan token list status updated", orphanChild)
 				c.w.UpdateToken(&orphanChild)
 			}
@@ -2434,7 +2423,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 				}
 				c.log.Debug("In connectQuorum, sync issue token details ", FTsyncIssueTokenDetails)
 				if issueTypeInt == TokenChainNotSynced {
-					FTsyncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+					FTsyncIssueTokenDetails.TokenStatus = constants.TokenStatus_ChainSyncIssue
 					c.log.Debug("In connectQuorum, sync issue token details status updated", FTsyncIssueTokenDetails)
 					c.w.UpdateFTToken(FTsyncIssueTokenDetails)
 				}
@@ -2447,7 +2436,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 				}
 				c.log.Debug("In connectQuorum, sync issue token details ", syncIssueTokenDetails)
 				if issueTypeInt == TokenChainNotSynced {
-					syncIssueTokenDetails.TokenStatus = wallet.TokenChainSyncIssue
+					syncIssueTokenDetails.TokenStatus = constants.TokenStatus_ChainSyncIssue
 					c.log.Debug("In connectQuorum, sync issue token details status updated", syncIssueTokenDetails)
 					c.w.UpdateToken(syncIssueTokenDetails)
 					// c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
@@ -2475,7 +2464,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 				return
 			}
 			c.log.Debug("Double spend token details ", doubleSpendFTDetails)
-			doubleSpendFTDetails.TokenStatus = wallet.TokenIsBeingDoubleSpent
+			doubleSpendFTDetails.TokenStatus = constants.TokenStatus_BeingDoubleSpent
 			c.log.Debug("Double spend token details status updated", doubleSpendFTDetails)
 			c.w.UpdateFTToken(doubleSpendFTDetails)
 			c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
@@ -2488,7 +2477,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 			return
 		}
 		c.log.Debug("Double spend token details ", doubleSpendTokenDetails)
-		doubleSpendTokenDetails.TokenStatus = wallet.TokenIsBeingDoubleSpent
+		doubleSpendTokenDetails.TokenStatus = constants.TokenStatus_BeingDoubleSpent
 		c.log.Debug("Double spend token details status updated", doubleSpendTokenDetails)
 		c.w.UpdateToken(doubleSpendTokenDetails)
 		c.finishConsensus(cr.ReqID, qt, p, false, "", nil, nil)
@@ -2507,7 +2496,7 @@ func (c *Core) connectQuorum(cr *ConensusRequest, addr string, qt int, sc *contr
 	c.finishConsensus(cr.ReqID, qt, p, true, cresp.Hash, nil, cresp.Signature)
 }
 
-func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid string, dc did.DIDCrypto) (*block.Block, error) {
+func (c *Core) pledgeQuorumToken(cr *ConensusRequest, sc *contract.Contract, tid string, dc types.DIDCrypto) (*block.Block, error) {
 	c.qlock.Lock()
 	pd, ok1 := c.pd[cr.ReqID]
 	cs, ok2 := c.quorumRequest[cr.ReqID]
@@ -3020,7 +3009,7 @@ func (c *Core) checkIsUnpledged(tcb *block.Block) bool {
 	return false
 }
 
-func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractToken string, didCryptoLib did.DIDCrypto) error {
+func (c *Core) createCommitedTokensBlock(newBlock *block.Block, smartContractToken string, didCryptoLib types.DIDCrypto) error {
 	commitedTokens, err := newBlock.GetCommitedTokenDetials(smartContractToken)
 	if err != nil {
 		c.log.Error("error fetching commited token details", err)

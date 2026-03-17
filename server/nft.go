@@ -103,13 +103,13 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 }
 
 type DeployNFTSwaggoInput struct {
-	NFT        string  `json:"nft"`
-	DID        string  `json:"did"`
-	QuorumType int     `json:"quorum_type"`
-	NFTValue   float64 `json:"nft_value"`
-	NFTData    string  `json:"nft_data"`
-	NFTMetadata string `json:"nft_metadata"`
-	NFTFileName string `json:"nft_file_name"`
+	NFT         string  `json:"nft"`
+	DID         string  `json:"did"`
+	QuorumType  int     `json:"quorum_type"`
+	NFTValue    float64 `json:"nft_value"`
+	NFTData     string  `json:"nft_data"`
+	NFTMetadata string  `json:"nft_metadata"`
+	NFTFileName string  `json:"nft_file_name"`
 }
 
 // NFT godoc
@@ -183,7 +183,7 @@ type GetNFTSwaggoInput struct {
 // @Success      200  {object}  model.NFTList
 // @Router       /api/get-nfts-by-did [get]
 func (s *Server) APIGetNFTsByDid(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuerry(req, "did")
+	did := s.GetQuery(req, "did")
 	resp := s.c.GetNFTsByDid(did)
 	return s.RenderJSON(req, resp, http.StatusOK)
 }
@@ -198,7 +198,7 @@ func (s *Server) APIGetNFTsByDid(req *ensweb.Request) *ensweb.Result {
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/addnftsale [post]
 // func (s *Server) APIAddNFTSale(req *ensweb.Request) *ensweb.Result {
-// 	did := s.GetQuerry(req, "did")
+// 	did := s.GetQuery(req, "did")
 // 	resp := s.c.GetAllNFT(did)
 // 	return s.RenderJSON(req, resp, http.StatusOK)
 // }
@@ -300,7 +300,7 @@ func (s *Server) APIFetchNft(req *ensweb.Request) *ensweb.Result {
 	var err error
 
 	// Get the NFT id from the request
-	fetchNft.NFT = s.GetQuerry(req, "nft")
+	fetchNft.NFT = s.GetQuery(req, "nft")
 
 	// Validate the NFT id
 	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(fetchNft.NFT)

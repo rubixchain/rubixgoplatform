@@ -14,8 +14,8 @@ import (
 )
 
 func (s *Server) APIGetAllTokens(req *ensweb.Request) *ensweb.Result {
-	tokenType := s.GetQuerry(req, "type")
-	did := s.GetQuerry(req, "did")
+	tokenType := s.GetQuery(req, "type")
+	did := s.GetQuery(req, "did")
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
 	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid DID")
@@ -197,7 +197,7 @@ func (s *Server) APIRecoverRBT(req *ensweb.Request) *ensweb.Result {
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-account-info [get]
 func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuerry(req, "did")
+	did := s.GetQuery(req, "did")
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
@@ -287,7 +287,7 @@ func (s *Server) APIGetPledgedTokenDetails(req *ensweb.Request) *ensweb.Result {
 // @Success 	200		{object}	model.BasicResponse
 // @Router /api/check-pinned-state [delete]
 func (s *Server) APICheckPinnedState(req *ensweb.Request) *ensweb.Result {
-	tokenstatehash := s.GetQuerry(req, "tokenstatehash")
+	tokenstatehash := s.GetQuery(req, "tokenstatehash")
 
 	provList, err := s.c.GetDHTddrs(tokenstatehash)
 	if err != nil {
@@ -312,10 +312,10 @@ func (s *Server) APICheckPinnedState(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
-	userDID := s.GetQuerry(req, "did")
-	token := s.GetQuerry(req, "token")
-	blockCountStr := s.GetQuerry(req, "blockcount")
-	smartContractChainValidationStr := s.GetQuerry(req, "SCChainValidation")
+	userDID := s.GetQuery(req, "did")
+	token := s.GetQuery(req, "token")
+	blockCountStr := s.GetQuery(req, "blockcount")
+	smartContractChainValidationStr := s.GetQuery(req, "SCChainValidation")
 	blockCount, err := strconv.Atoi(blockCountStr)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to convert blockCount string into integer", nil)
@@ -373,15 +373,15 @@ func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result 
 }
 
 func (s *Server) APIFaucetTokenCheck(req *ensweb.Request) *ensweb.Result {
-	token := s.GetQuerry(req, "token")
-	did := s.GetQuerry(req, "did")
+	token := s.GetQuery(req, "token")
+	did := s.GetQuery(req, "did")
 
 	br := s.c.FaucetTokenCheck(token, did)
 	return s.RenderJSON(req, br, http.StatusOK)
 }
 
 func (s *Server) APIValidateToken(req *ensweb.Request) *ensweb.Result {
-	token := s.GetQuerry(req, "token")
+	token := s.GetQuery(req, "token")
 	br, err := s.c.ValidateToken(token)
 	if err != nil {
 		s.log.Error("Failed to validate token ", err)

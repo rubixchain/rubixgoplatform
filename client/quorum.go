@@ -1,50 +1,26 @@
 package client
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"regexp"
-	"strings"
-
-	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
-func (c *Client) AddQuorum(quorumList string) (string, bool) {
-	if quorumList == "" {
+func (c *Client) AddQuorum(quorumDid string) (string, bool) {
+	if quorumDid == "" {
 		c.log.Error("Quorum list required")
 		return "Quorum list required", false
 	}
-	qlb, err := os.ReadFile(quorumList)
-	if err != nil {
-		c.log.Error("Invalid file", "err", err)
-		return "Invalid file, failed to add quorum list", false
-	}
-	var ql []core.QuorumData
-	err = json.Unmarshal(qlb, &ql)
-	if err != nil {
-		c.log.Error("Invalid file, failed to add quorum list", "err", err)
-		return "Invalid file, failed to add quorum list", false
-	}
-	if len(ql) < core.MinQuorumRequired {
-		c.log.Error("Length of Quorum list should be atleast 5")
-		return "Length of Quorum list should be atleast 5", false
-	}
-	for _, q := range ql {
-		isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(q.Address)
-		if !strings.HasPrefix(q.Address, "bafybmi") || len(q.Address) != 59 || !isAlphanumeric {
-			c.log.Error(fmt.Sprintf("Invalid quorum DID : %s", q.Address))
-			return fmt.Sprintf("Invalid quorum DID : %s", q.Address), false
-		}
-	}
+
+	req := make(map[string]interface{})
+	req["did"] = quorumDid
+
 	var resp model.BasicResponse
-	err = c.sendJSONRequest("POST", setup.APIAddQuorum, nil, &ql, &resp)
+	err := c.sendJSONRequest("POST", setup.APIAddQuorum, nil, &req, &resp)
 	if err != nil {
 		c.log.Error("Failed to add quorum list", "err", err)
 		return "Failed to add quorum list, " + err.Error(), false
 	}
+
 	if !resp.Status {
 		c.log.Error("Failed to add quorum list", "msg", resp.Message)
 		return "Failed to add quorum list, " + resp.Message, false

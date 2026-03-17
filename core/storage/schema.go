@@ -104,19 +104,6 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             updated_at TIMESTAMPTZ DEFAULT NOW()
         );
 
-        CREATE TABLE IF NOT EXISTS token_provider_map (
-            token          TEXT,
-            did            TEXT,
-            func_id        INTEGER,
-            role           INTEGER,
-            transaction_id TEXT,
-            initiator      TEXT,
-            owner          TEXT,
-            token_value    NUMERIC,
-            created_at     TIMESTAMPTZ DEFAULT NOW(),
-            updated_at     TIMESTAMPTZ DEFAULT NOW()
-        );
-
         CREATE TABLE IF NOT EXISTS unpledge_sequence_info (
             tx_id          TEXT PRIMARY KEY,
             pledge_tokens  TEXT, -- might have to move to somthing like an array
@@ -172,7 +159,7 @@ CREATE TABLE IF NOT EXISTS tokenchain (
         );
 
         CREATE TABLE IF NOT EXISTS quorum_manager (
-            address TEXT PRIMARY KEY,
+            did TEXT PRIMARY KEY,
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
         );
@@ -186,7 +173,7 @@ CREATE TABLE IF NOT EXISTS tokenchain (
 		);
 
         CREATE TABLE IF NOT EXISTS token_denom (
-            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
             did TEXT NOT NULL,
             denom NUMERIC(4, 3) NOT NULL,
             count BIGINT NOT NULL,
@@ -262,6 +249,26 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
         );
+
+        CREATE TABLE IF NOT EXISTS ipfs_providers (
+            id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            cid            TEXT NOT NULL,
+            peer_id        TEXT NOT NULL,
+            did            TEXT,
+            role           INTEGER,
+            operation      TEXT NOT NULL,
+            status         TEXT NOT NULL DEFAULT 'active',
+            transaction_id TEXT,
+            resource_type  TEXT,
+            resource_id    TEXT,
+            initiator      TEXT,
+            owner          TEXT,
+            token_value    NUMERIC,
+            created_at     TIMESTAMPTZ DEFAULT NOW(),
+            updated_at     TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_ipfs_providers_cid ON ipfs_providers(cid);
+        CREATE INDEX IF NOT EXISTS idx_ipfs_providers_did ON ipfs_providers(did);
     `)
 	return err
 }

@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
@@ -46,7 +46,7 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 	var result MultiPinCheckRes
 
 	// Convert tokenID to token hash
-	tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(tokenID), ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
+	tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(tokenID), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
 	if err != nil {
 		errMsg := fmt.Sprintf(
 			"pinCheck: unable to get IPFS hash for tokenID: %v, ensure tokenID being passed has correct structure, err: %v",
@@ -63,7 +63,7 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 
 	result.Token = tokenHash
 	var owners []string
-	
+
 	// Skip DHT check in trusted network mode
 	if c.cfg.CfgData.TrustedNetwork {
 		c.log.Debug("Skipping multi-pin check in trusted network mode", "token", tokenID)
@@ -156,7 +156,7 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 			}
 
 			for peerId := range peerIdRolemap {
-				if peerIdRolemap[peerId] == wallet.OwnerRole {
+				if peerIdRolemap[peerId] == constants.TokenProviderRole_Owner {
 					// c.log.Error("Token has multiple Pins")
 					result.Status = true
 					result.Owners = provList
@@ -175,11 +175,11 @@ func (c *Core) pinCheck(tokenID string, index int, senderPeerId string, receiver
 }
 
 func (c *Core) checkPinRole(req *ensweb.Request) *ensweb.Result {
-	token := c.l.GetQuerry(req, "token")
-	details, err := c.w.GetProviderDetails(token)
+	token := c.l.GetQuery(req, "token")
+	record, err := c.ipfsProviderStore.GetProviderByCID(token)
 	if err != nil {
 		c.log.Error("Failed to get provider details", "err", err)
-		c.l.RenderJSON(req, &model.PinCheckReply{Status: false, Message: "Failed to get provider details", PinDetails: nil}, http.StatusNoContent)
+		return c.l.RenderJSON(req, &model.PinCheckReply{Status: false, Message: "Failed to get provider details", PinDetails: nil}, http.StatusNoContent)
 	}
-	return c.l.RenderJSON(req, &model.PinCheckReply{Status: true, Message: "Got all blocks", PinDetails: details}, http.StatusOK)
+	return c.l.RenderJSON(req, &model.PinCheckReply{Status: true, Message: "Got all blocks", PinDetails: record}, http.StatusOK)
 }
