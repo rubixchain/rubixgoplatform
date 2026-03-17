@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, error) {
@@ -154,4 +155,32 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*m
 	}
 
 	return tx, tokenRoleInTx, nil
+}
+
+// GetAllTransactionsInBytesByTokenId fetches entire token chain, fetches each transaction by transactionId and 
+// converts into bytes, and returns the chain of transactions in byte array
+func (w *Wallet) GetAllTransactionsInBytesByTokenId(tokenID string) ([][]byte, error) {
+	txnChain := make([][]byte, 0)
+	// get entire token chain of the token
+	tokenChain, err := w.GetTokenChainByTokenID(tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get token chain; error: %v ", err)
+	}
+
+	// process each txn in the chain in a loop
+	for _, txnInfo := range tokenChain {
+		// fetch the txn by txnId
+		txn, err := w.GetTransactionByID(txnInfo.TransactionID)
+		if err != nil {
+			return nil, fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get transaction by id; error: %v ", err)
+		}
+
+		// convert txn to bytes
+		txnBytes, err := util.TransactionToBytes(txn)
+		if err != nil {
+			return nil, fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to convert transaction into bytes; error: %v ", err)
+		}
+		txnChain = append(txnChain, txnBytes)
+	}
+	return txnChain, nil
 }
