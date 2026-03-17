@@ -16,7 +16,16 @@ func (id TokenID) GetRbtIDFields() (types.RbtIDElements, error) {
 	var err error
 	rbtElems := types.RbtIDElements{}
 
+	// check if token id is ft id, by checking if the length of the id is more than legth of DID (59)  
+	if len(id) > 59 {
+		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id length should be <= 15 (<max 2 digits level>_<max 7 digits token number>_<max 4 digits part index>)", id)
+	}
+
 	idElems := strings.Split(id.String(), "_")
+	if len(idElems) < 2 || len(idElems) > 3 { // ensure id is in proper RBT id format
+		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", id)
+	}
+	
 	rbtElems.Level, err = strconv.Atoi(idElems[0])
 	if err != nil {
 		return types.RbtIDElements{}, fmt.Errorf("failed to convert level into int for rbt: %s, error: %v", id, err)
