@@ -9,6 +9,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 // get level, token number and part index from the RBT token id
@@ -280,32 +281,6 @@ func GetSplitAndNonsplitTokenDenom(
 	return targetDenomArr, updatedDenomArr, remaining, nil
 }
 
-// ********* replacement for : getLevelStart()
-// LevelMin returns the minimum part index for a given level (1-indexed).
-func LevelMin(level int) int {
-	return constants.TreeLevelRanges[level][0]
-}
-
-// GetTreeLevelFromPartIndex returns the tree level (1–6) for a given part index x.
-func GetTreeLevelFromPartIndex(x int) (int, error) {
-	for level, r := range constants.TreeLevelRanges {
-		if x >= r[0] && x <= r[1] {
-			return level, nil // levels are 1-indexed
-		}
-	}
-	return 0, fmt.Errorf("part index %d is out of range (valid: 1–1332)", x)
-}
-
-// ********* replacement for : getSuffixProduct()
-// GetNumberOfChildren returns the number of children for a node at parentLevel.
-// n = parentLevel % 2:  n==0 → 2 children,  n==1 → 5 children.
-func GetNumberOfChildren(parentLevel int) int {
-	if parentLevel%2 == 0 {
-		return 2 // when parent level is even
-	}
-	return 5 // when parent level is odd
-}
-
 // GetParentToken derives the parent TokenID from a child's part index.
 //
 // Steps:
@@ -326,7 +301,7 @@ func (id TokenID) GetParentToken() (string, error) {
 	x := child.PartIndex
 
 	// lx: child level on tree
-	lx, err := GetTreeLevelFromPartIndex(x)
+	lx, err := util.GetTreeLevelFromPartIndex(x)
 	if err != nil {
 		return "", fmt.Errorf("invalid token: %s, error: %v", id, err)
 	}
@@ -336,15 +311,15 @@ func (id TokenID) GetParentToken() (string, error) {
 		return parentToken, nil
 	}
 
-	childLevelIndex := x - LevelMin(lx)
+	childLevelIndex := x - util.LevelMin(lx)
 
 	// lp: parent level on tree
 	lp := lx - 1
-	numChildren := GetNumberOfChildren(lp)
+	numChildren := util.GetNumberOfChildren(lp)
 
 	// parent position in the level
 	parentLevelIndex := childLevelIndex / numChildren
-	parentPartIndex := LevelMin(lp) + parentLevelIndex
+	parentPartIndex := util.LevelMin(lp) + parentLevelIndex
 
 	return fmt.Sprintf("%d_%d_%d", child.Level, child.TokenNumber, parentPartIndex), nil
 }
@@ -369,7 +344,7 @@ func (id TokenID) GetChildrenIndexRange() (types.ChildrenRange, error) {
 	x := parent.PartIndex
 
 	// tree level of parent token
-	lx, err := GetTreeLevelFromPartIndex(x)
+	lx, err := util.GetTreeLevelFromPartIndex(x)
 	if err != nil {
 		return types.ChildrenRange{}, err
 	}
@@ -378,9 +353,9 @@ func (id TokenID) GetChildrenIndexRange() (types.ChildrenRange, error) {
 	}
 
 	// parent position in the level
-	levelIndex := x - LevelMin(lx)
-	numChildren := GetNumberOfChildren(lx)
-	firstChild := (levelIndex * numChildren) + LevelMin(lx+1)
+	levelIndex := x - util.LevelMin(lx)
+	numChildren := util.GetNumberOfChildren(lx)
+	firstChild := (levelIndex * numChildren) + util.LevelMin(lx+1)
 	lastChild := firstChild + (numChildren - 1)
 
 	return types.ChildrenRange{First: firstChild, Last: lastChild}, nil
