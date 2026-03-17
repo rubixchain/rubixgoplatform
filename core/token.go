@@ -45,6 +45,26 @@ type TCBSyncRequest struct {
 	BlockHeight uint64 `json:"block_height"`
 }
 
+type GenesisAndLatestTransactionSyncRequest struct {
+	Token string `json:"token"`
+}
+type TransactionChainSyncRequest struct {
+	TokenID       string `json:"token_id"`
+	TransactionID string `json:"transaction_id"`
+}
+type TransactionChainSyncReply struct {
+	Status            bool     `json:"status"`
+	Message           string   `json:"message"`
+	NextTransactionID string   `json:"next_transaction_id"`
+	Transactions      [][]byte `json:"transactions"`
+}
+type GenesisAndLatestTransactionSyncReply struct {
+	Status             bool   `json:"status"`
+	Message            string `json:"message"`
+	GenesisTransaction []byte `json:"genesis_transaction"`
+	LatestTransaction  []byte `json:"latest_transaction"`
+}
+
 type TCBSyncReply struct {
 	Status      bool     `json:"status"`
 	Message     string   `json:"message"`
@@ -90,7 +110,9 @@ type PubSubEnvelope struct {
 
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
+	c.l.AddRoute(APISyncTransactionChain, "POST", c.syncTransactionChain)
 	c.l.AddRoute(APISyncGenesisAndLatestBlock, "POST", c.syncGenesisAndLatestBlock)
+	c.l.AddRoute(APISyncGenesisAndLatestTransaction, "POST", c.syncGenesisAndLatestTransaction)
 	c.l.AddRoute(APIUpdateStatus, "PUT", c.updateStatus)
 	c.l.AddRoute(APIGetTokenStatus, "GET", c.getTokenStatus)
 	c.l.AddRoute(setup.APIRecoverLostTokens, "POST", c.recoverLostTokensHandler)
@@ -364,7 +386,6 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 		// }
 	}
 
-	c.log.Debug("no.of blocks sending through sync token chain API ", len(blks))
 	/* // Handle case where both error occurred and blocks are nil
 	if err != nil && blks == nil {
 		c.log.Warn("Token blocks missing and error occurred, falling back to role-based logic", "token", tr.Token)
@@ -384,6 +405,27 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 		TCBlock:     blks,
 		NextBlockID: nextID,
 	}, http.StatusOK)
+}
+
+func (c *Core) syncTransactionChain(req *ensweb.Request) *ensweb.Result {
+	var syncRequest TransactionChainSyncRequest
+	var syncReply TransactionChainSyncReply
+	err := c.l.ParseJSON(req, &syncRequest)
+	if err != nil {
+		c.log.Error("failed to parse transaction chain sync request")
+		return c.l.RenderJSON(req, &TransactionChainSyncReply{Status: false, Message: "Failed to parse sync request"}, http.StatusOK)
+	}
+	//TODO: Implement GetTransactions function
+	transactions, nextTransactionID, err := c.w.GetTransactions(syncRequest.TokenID, syncRequest.TransactionID)
+	if err != nil {
+		c.log.Error("failed to get transactions")
+		return c.l.RenderJSON(req, &TransactionChainSyncReply{Status: false, Message: "Failed to get transactions"}, http.StatusOK)
+	}
+	syncReply.Transactions = transactions
+	syncReply.NextTransactionID = nextTransactionID
+	syncReply.Status = true
+	syncReply.Message = "Successfully got transactions"
+	return c.l.RenderJSON(req, &syncReply, http.StatusOK)
 }
 
 // This function fetches all DIDs from the DID table and it publishes RBT tokens, FT Tokens, NFT Tokens and smart contracts tokens in batches with batch size 500 corresponding to each DID.
@@ -1428,42 +1470,6 @@ func (c *Core) syncMissingBlocksOfTokenChains(tokenSyncMap map[string][]TokenSyn
 	}
 
 }
-func (c *Core) syncFullTokenChains(tokenSyncMap map[string][]TokenSyncInfo) {
-	start := time.Now()
-	// sync sequencially for each peer
-	for peerAddr, tokenSyncInfo := range tokenSyncMap {
-		p, err := c.getPeer(peerAddr)
-		if err != nil {
-			c.log.Error("failed to sync full token chain, failed to open peer connection with peer ", peerAddr)
-			return
-		}
-		defer p.Close()
-		// start syncing all tokens in queue
-		for _, tokenToSync := range tokenSyncInfo {
-			c.log.Debug("syncing token: " + tokenToSync.TokenID)
-			err := c.SyncFullTokenChainForFullNode(p, tokenToSync)
-			if err != nil {
-				c.log.Error("failed to sync token chain for token ", tokenToSync.TokenID, "error", err)
-				// // update sync status to incomplete
-				// _ = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, wallet.SyncIncomplete)
-				continue
-			}
-			//Add a logic to write the token details into tokenstorage table
-
-			// // update sync status to completed
-			// err = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, wallet.SyncCompleted)
-			// if err != nil {
-			// 	c.log.Error("failed to update sync status after sync completed, token ", tokenToSync.TokenID, "error: ", err)
-			// 	continue
-			// }
-			c.log.Debug("sync completed, token: " + tokenToSync.TokenID)
-		}
-	}
-	timeTaken := time.Since(start)
-
-	c.log.Info("Time taken to sync all tokens is: ", timeTaken)
-
-}
 
 func (c *Core) syncGenesisAndLatestBlock(req *ensweb.Request) *ensweb.Result {
 	var tr TCBSyncRequest
@@ -1507,6 +1513,36 @@ func (c *Core) syncGenesisAndLatestBlock(req *ensweb.Request) *ensweb.Result {
 		c.log.Debug("adding latest block bytes ")
 	}
 	return c.l.RenderJSON(req, &trep, http.StatusOK)
+}
+
+// TODO: Implement this function and complete syncTransaction API
+func (c *Core) syncGenesisAndLatestTransaction(req *ensweb.Request) *ensweb.Result {
+	var syncRequest GenesisAndLatestTransactionSyncRequest
+	var syncReply GenesisAndLatestTransactionSyncReply
+	err := c.l.ParseJSON(req, &syncRequest)
+	if err != nil {
+		c.log.Error("failed to parse latest transaction sync request")
+		return c.l.RenderJSON(req, &GenesisAndLatestTransactionSyncReply{Status: false, Message: "Failed to parse sync request"}, http.StatusOK)
+	}
+	//TODO: Implement GetGenesisTransaction function
+	genesisTransaction := c.w.GetGenesisTransaction(syncRequest.Token)
+	if genesisTransaction == nil {
+		c.log.Error("genesis transaction is nil, invalid token chain, failed to share token chain")
+		return c.l.RenderJSON(req, &GenesisAndLatestTransactionSyncReply{Status: false, Message: "genesis transaction is nil, invalid token chain"}, http.StatusOK)
+	}
+
+	//TODO: Implement GetLatestTransaction function
+	latestTransaction := c.w.GetLatestTransaction(syncRequest.Token)
+	if latestTransaction == nil {
+		c.log.Error("latest transaction is nil, invalid token chain, failed to share token chain")
+		return c.l.RenderJSON(req, &GenesisAndLatestTransactionSyncReply{Status: false, Message: "latest transaction is nil, invalid token chain"}, http.StatusOK)
+	}
+	syncReply.GenesisTransaction = util.TransactionToBytes(genesisTransaction)
+	syncReply.LatestTransaction = util.TransactionToBytes(latestTransaction)
+	syncReply.Status = true
+	syncReply.Message = "Successfully got genesis and latest transaction"
+	return c.l.RenderJSON(req, &syncReply, http.StatusOK)
+
 }
 
 func (c *Core) syncGenesisAndLatestBlockFrom(p *ipfsport.Peer, syncReq TCBSyncRequest) error {
@@ -1565,192 +1601,6 @@ func (c *Core) getFromIPFS(path string) ([]byte, error) {
 	b := buf.Bytes()
 	return b, nil
 }
-
-// func (c *Core) tokenStatusCallback(peerID string, topic string, data []byte) {
-// 	// c.log.Debug("Recevied token status request")
-// 	// var tp TokenPublish
-// 	// err := json.Unmarshal(data, &tp)
-// 	// if err != nil {
-// 	// 	return
-// 	// }
-// 	// c.log.Debug("Token recevied", "token", tp.Token)
-// }
-
-// func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]wallet.Token, float64, error) {
-// 	// Use optimized version for large amounts
-// 	if txnAmount > 100 {
-// 		c.log.Info("Using optimized token fetch for large amount", "amount", txnAmount)
-
-// 		// Use the wallet's own optimized method
-// 		tokens, err := c.w.GetTokensForOptimizedTransfer(did, txnAmount, txnMode)
-// 		if err != nil {
-// 			return nil, 0, err
-// 		}
-
-// 		// Calculate if we have exact amount or need to create change
-// 		var totalValue float64
-// 		for _, t := range tokens {
-// 			totalValue += t.TokenValue
-// 		}
-// 		totalValue = floatPrecision(totalValue, MaxDecimalPlaces)
-// 		remainingAmount := floatPrecision(totalValue-txnAmount, MaxDecimalPlaces)
-// 		return tokens, remainingAmount, nil
-// 	}
-
-// 	// Original logic for smaller amounts
-// 	requiredTokens := make([]wallet.Token, 0)
-// 	var remainingAmount float64
-// 	wholeValue := int(txnAmount)
-// 	//fv := float64(txnAmount)
-// 	decimalValue := txnAmount - float64(wholeValue)
-// 	decimalValue = floatPrecision(decimalValue, MaxDecimalPlaces)
-// 	reqAmt := floatPrecision(txnAmount, MaxDecimalPlaces)
-// 	//check if whole value exists
-// 	if wholeValue != 0 {
-// 		//extract the whole amount part that is the integer value of txn amount
-// 		//serach for the required whole amount
-// 		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode)
-// 		if err != nil && err.Error() != "no records found" {
-// 			c.w.ReleaseTokens(wholeTokens)
-// 			c.log.Error("failed to search for whole tokens", "err", err)
-// 			return nil, 0.0, err
-// 		}
-
-// 		//if whole tokens are found add thgem to the variable required Tokens
-// 		if len(wholeTokens) != 0 {
-// 			c.log.Debug("found whole tokens in wallet adding them to required tokens list")
-// 			requiredTokens = append(requiredTokens, wholeTokens...)
-// 			//wholeValue = wholeValue - len(requiredTokens)
-// 			reqAmt = reqAmt - float64(len(wholeTokens))
-// 			reqAmt = floatPrecision(reqAmt, MaxDecimalPlaces)
-// 		}
-
-// 		if (len(wholeTokens) != 0 && remWhole > 0) || (len(wholeTokens) != 0 && remWhole == 0) {
-// 			if reqAmt == 0 {
-// 				return requiredTokens, remainingAmount, nil
-// 			}
-// 			c.log.Debug("No more whole token left in wallet , rest of needed amt ", reqAmt)
-// 			allPartTokens, err := c.w.GetAllPartTokens(did)
-// 			if err != nil {
-// 				// In GetAllPartTokens, we first check if there are any part tokens present in
-// 				// TokensTable. Now there could be a situation, where there aren't any part tokens
-// 				// and it Should not error out, but proceed further. The "no records found" error string
-// 				// is usually received from the Read() method the db.
-// 				// Hence, in this case, we simply return with whatever values requiredTokens and reqAmt holds
-// 				if strings.Contains(err.Error(), "no records found") {
-// 					return requiredTokens, reqAmt, nil
-// 				}
-// 				c.w.ReleaseTokens(wholeTokens)
-// 				c.log.Error("failed to lock part tokens", "err", err)
-// 				return nil, 0.0, err
-// 			}
-// 			var sum float64
-// 			for _, partToken := range allPartTokens {
-// 				sum = sum + partToken.TokenValue
-// 				sum = floatPrecision(sum, MaxDecimalPlaces)
-// 			}
-// 			if sum < reqAmt {
-// 				c.w.ReleaseTokens(wholeTokens)
-// 				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
-// 				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
-// 			}
-// 			// Create a slice to store the indices of elements to be removed
-// 			var indicesToRemove []int
-// 			// Iterate through allPartTokens
-// 			defer c.w.ReleaseTokens(allPartTokens)
-// 			for i, partToken := range allPartTokens {
-// 				// Subtract the partToken value from the txnAmount
-// 				// If the transaction amount is less than the partToken.TokenValue, skip
-// 				if reqAmt < partToken.TokenValue {
-// 					continue
-// 				}
-// 				reqAmt -= partToken.TokenValue
-// 				reqAmt = floatPrecision(reqAmt, MaxDecimalPlaces)
-// 				// Add the partToken to the requiredTokens
-// 				requiredTokens = append(requiredTokens, partToken)
-// 				// Store the index of the element to be removed
-// 				indicesToRemove = append(indicesToRemove, i)
-// 				// Check if txnAmount goes negative
-// 				if reqAmt == 0 {
-// 					break
-// 				}
-// 			}
-// 			// Remove elements from allPartTokens using copy
-// 			for i, idx := range indicesToRemove {
-// 				copy(allPartTokens[idx-i:], allPartTokens[idx-i+1:])
-// 			}
-// 			allPartTokens = allPartTokens[:len(allPartTokens)-len(indicesToRemove)]
-// 			c.w.ReleaseTokens(allPartTokens)
-
-// 			if reqAmt > 0 {
-// 				// Add the remaining amount to the remainingAmount variable
-// 				remainingAmount += reqAmt
-// 				remainingAmount = floatPrecision(remainingAmount, MaxDecimalPlaces)
-// 			}
-// 		}
-
-// 		//if no parts found anf remWhole is also not 0
-// 		if len(wholeTokens) == 0 && remWhole > 0 {
-// 			c.log.Debug("No whole tokens found. proceeding to get part tokens for txn")
-
-// 			allPartTokens, err := c.w.GetAllPartTokens(did)
-// 			if err != nil && err.Error() != "no records found" {
-// 				c.log.Error("failed to search for part tokens", "err", err)
-// 				return nil, 0.0, err
-// 			}
-// 			if len(allPartTokens) == 0 {
-// 				c.log.Error("No part Tokens found , This wallet is empty", "err", err)
-// 				return nil, 0.0, err
-// 			}
-// 			var sum float64
-// 			for _, partToken := range allPartTokens {
-// 				sum = sum + partToken.TokenValue
-// 			}
-// 			if sum < txnAmount {
-// 				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
-// 				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
-// 			}
-// 			// Create a slice to store the indices of elements to be removed
-// 			var indicesToRemove []int
-// 			// Iterate through allPartTokens
-// 			defer c.w.ReleaseTokens(allPartTokens)
-// 			for i, partToken := range allPartTokens {
-// 				// Subtract the partToken value from the txnAmount
-// 				// If the transaction amount is less than the partToken.TokenValue, skip
-// 				if txnAmount < partToken.TokenValue {
-// 					continue
-// 				}
-// 				txnAmount -= partToken.TokenValue
-// 				txnAmount = floatPrecision(txnAmount, MaxDecimalPlaces)
-// 				// Add the partToken to the requiredTokens
-// 				requiredTokens = append(requiredTokens, partToken)
-// 				// Store the index of the element to be removed
-// 				indicesToRemove = append(indicesToRemove, i)
-// 				// Check if txnAmount goes negative
-// 				if txnAmount == 0 {
-// 					break
-// 				}
-// 			}
-// 			// Remove elements from allPartTokens using copy
-// 			for i, idx := range indicesToRemove {
-// 				copy(allPartTokens[idx-i:], allPartTokens[idx-i+1:])
-// 			}
-// 			allPartTokens = allPartTokens[:len(allPartTokens)-len(indicesToRemove)]
-// 			c.w.ReleaseTokens(allPartTokens)
-// 			if txnAmount > 0 {
-// 				// Add the remaining amount to the remainingAmount variable
-// 				remainingAmount += txnAmount
-// 				remainingAmount = floatPrecision(remainingAmount, MaxDecimalPlaces)
-// 			}
-
-// 		}
-// 	} else {
-// 		return make([]wallet.Token, 0), reqAmt, nil
-// 	}
-// 	defer c.w.ReleaseTokens(requiredTokens)
-// 	remainingAmount = floatPrecision(remainingAmount, MaxDecimalPlaces)
-// 	return requiredTokens, remainingAmount, nil
-// }
 
 func (c *Core) GetPledgedInfo() ([]model.PledgedTokenStateDetails, error) {
 	wt, err := c.w.GetAllTokenStateHash()
