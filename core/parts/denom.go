@@ -11,7 +11,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types"
 )
 
-// get level, token number and global index from the RBT token id
+// get level, token number and part index from the RBT token id
 func (id TokenID) GetRbtIDFields() (types.RbtIDElements, error) {
 	var err error
 	rbtElems := types.RbtIDElements{}
@@ -41,7 +41,7 @@ func (id TokenID) GetRbtIDFields() (types.RbtIDElements, error) {
 	case 3:
 		rbtElems.GlobalIndex, err = strconv.Atoi(idElems[2]) // Case for part token
 		if err != nil {
-			return types.RbtIDElements{}, fmt.Errorf("failed to convert global index into int for rbt: %s, error: %v", id, err)
+			return types.RbtIDElements{}, fmt.Errorf("failed to convert part index into int for rbt: %s, error: %v", id, err)
 		}
 	default:
 		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", id)
@@ -281,19 +281,19 @@ func GetSplitAndNonsplitTokenDenom(
 }
 
 // ********* replacement for : getLevelStart()
-// LevelMin returns the minimum global index for a given level (1-indexed).
+// LevelMin returns the minimum part index for a given level (1-indexed).
 func LevelMin(level int) int {
 	return constants.TreeLevelRanges[level][0]
 }
 
-// GetTreeLevelFromGlobalIndex returns the tree level (1–6) for a given global index x.
+// GetTreeLevelFromGlobalIndex returns the tree level (1–6) for a given part index x.
 func GetTreeLevelFromGlobalIndex(x int) (int, error) {
 	for level, r := range constants.TreeLevelRanges {
 		if x >= r[0] && x <= r[1] {
 			return level, nil // levels are 1-indexed
 		}
 	}
-	return 0, fmt.Errorf("global index %d is out of range (valid: 1–1332)", x)
+	return 0, fmt.Errorf("part index %d is out of range (valid: 1–1332)", x)
 }
 
 // ********* replacement for : getSuffixProduct()
@@ -306,7 +306,7 @@ func GetNumberOfChildren(parentLevel int) int {
 	return 5 // when parent level is odd
 }
 
-// GetParentToken derives the parent TokenID from a child's global index.
+// GetParentToken derives the parent TokenID from a child's part index.
 //
 // Steps:
 //  1. x          = globalIndex
@@ -322,7 +322,7 @@ func (id TokenID) GetParentToken() (string, error) {
 		return "", err
 	}
 
-	// x: child global index
+	// x: child part index
 	x := child.GlobalIndex
 
 	// lx: child level on tree
@@ -330,7 +330,7 @@ func (id TokenID) GetParentToken() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid token: %s, error: %v", id, err)
 	}
-	// if child has tree level 1, then the parent is the whole token, which does not have any global index in tokenID
+	// if child has tree level 1, then the parent is the whole token, which does not have any part index in tokenID
 	if lx == 1 {
 		parentToken := fmt.Sprintf("%d_%d", child.Level, child.TokenNumber)
 		return parentToken, nil
@@ -365,7 +365,7 @@ func (id TokenID) GetChildrenIndexRange() (types.ChildrenRange, error) {
 		return types.ChildrenRange{}, err
 	}
 
-	// global index of parent token
+	// part index of parent token
 	x := parent.GlobalIndex
 
 	// tree level of parent token
@@ -374,7 +374,7 @@ func (id TokenID) GetChildrenIndexRange() (types.ChildrenRange, error) {
 		return types.ChildrenRange{}, err
 	}
 	if lx == 6 {
-		return types.ChildrenRange{}, fmt.Errorf("global index %d is at level 6 — leaf nodes have no children", x)
+		return types.ChildrenRange{}, fmt.Errorf("part index %d is at level 6 — leaf nodes have no children", x)
 	}
 
 	// parent position in the level

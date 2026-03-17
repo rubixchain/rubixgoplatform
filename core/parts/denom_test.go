@@ -304,8 +304,8 @@ func TestGetChildrenIndex(t *testing.T) {
 			expectError: true,
 		},
 		{
-			// Out of range global index → error
-			name:        "out of range global index returns error",
+			// Out of range part index → error
+			name:        "out of range part index returns error",
 			parent:      "1_1_9999",
 			expected:    types.ChildrenRange{},
 			expectError: true,
@@ -416,8 +416,8 @@ func TestGetParentToken(t *testing.T) {
 			expectError: false,
 		},
 		{
-			// Out of range global index
-			name:        "out of range global index returns error",
+			// Out of range part index
+			name:        "out of range part index returns error",
 			child:       "25_1_9999",
 			expected:    "",
 			expectError: true,

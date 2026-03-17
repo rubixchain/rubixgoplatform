@@ -10,7 +10,7 @@ type RbtIDElements struct {
 	GlobalIndex int
 }
 
-// ChildrenRange holds the first and last global index of a node's children.
+// ChildrenRange holds the first and last part index of a node's children.
 type ChildrenRange struct {
 	First int
 	Last  int
