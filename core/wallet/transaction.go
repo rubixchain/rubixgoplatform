@@ -63,3 +63,21 @@ func (w *Wallet) GetAllTransactionsByOffset(limit, offset int) ([]models.Transac
 
 	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Transactions])
 }
+
+// GetGenesisTransaction retrieves genesis transaction info for the given token id
+func (w *Wallet) GetGenesisTransaction(tokenId string) (*models.Transactions, error) {
+	genesisTxnId, err := w.GetGenesisTransactionIdByTokenId(tokenId)
+	if err != nil {
+
+	}
+	return w.GetTransactionByID(genesisTxnId) 
+}
+
+// GetLatestTransaction retrieves genesis transaction info for the given token id
+func (w *Wallet) GetLatestTransaction(tokenId string) (*models.Transactions, error) {
+	latestTxnId, err := w.GetLatestTransactionIdByTokenId(tokenId)
+	if err != nil {
+
+	}
+	return w.GetTransactionByID(latestTxnId) 
+}
