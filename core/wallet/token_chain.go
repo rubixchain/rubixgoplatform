@@ -20,6 +20,28 @@ func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, er
 	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
 }
 
+// GetTokenChainByTokenIDAndChainHeight fetches the token chain from the input height, with a limit of 100 transactions  
+func (w *Wallet) GetTokenChainByTokenIDAndChainHeight(tokenID string, chainHeight int) ([]models.TokenChain, error) {
+	// 1. `unnest(...)` : expands the subarray into individual rows
+	// 2. `WITH ORDINALITY` : adds an `ord` column tracking the original position in the array
+	// 3. `JOIN tokenchain tc ON tc.id = u.id` : fetches the full row for each id
+	// 4. `ORDER BY u.ord` : returns rows in the same order as the subarray
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT tc.*
+			FROM tokenchain_index tci
+			JOIN LATERAL unnest(tci.index[$1:array_length(tci.index, 1)]) WITH ORDINALITY AS u(id, ord) ON true
+			JOIN tokenchain tc ON tc.id = u.id
+			WHERE tci.token_id = $2
+			ORDER BY u.ord
+			LIMIT 100`, chainHeight, tokenID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetTokenChainByTokenIDAndChainHeight: %w", err)
+	}
+
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
+}
+
 // get latest transaction id of the given token id
 func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string) (string, error) {
 	row, err := w.db.Pool().Query(w.Ctx,
@@ -135,12 +157,12 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*m
 	return tx, tokenRoleInTx, nil
 }
 
-// GetAllTransactionInfoInBytesByTokenId fetches entire token chain, fetches each transaction by transactionId and 
+// GetAllTransactionInfoInBytesByTokenId fetches entire token chain, fetches each transaction by transactionId and
 // converts into bytes, and returns the chain of transactions in byte array
-func (w *Wallet) GetAllTransactionInfoInBytesByTokenId(tokenID string) ([][]byte, error) {
+func (w *Wallet) GetAllTransactionInfoInBytesByTokenId(tokenID string, initialChainHeight int) ([][]byte, error) {
 	txnChain := make([][]byte, 0)
 	// get entire token chain of the token
-	tokenChain, err := w.GetTokenChainByTokenID(tokenID)
+	tokenChain, err := w.GetTokenChainByTokenIDAndChainHeight(tokenID, initialChainHeight)
 	if err != nil {
 		return nil, fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get token chain; error: %v ", err)
 	}

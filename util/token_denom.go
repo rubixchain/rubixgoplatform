@@ -44,7 +44,7 @@ func GetMaxLevel() int {
 	return (2 * constants.MaxSupportedDecimalPlaces) + 1
 }
 
-// computeTreeLevelRanges dynamically builds the [min, max] global-index range
+// computeTreeLevelRanges dynamically builds the [min, max] part-index range
 // for each level of the token-subdivision tree.
 //
 // The tree subdivides 1 token down to maxDecimalPlaces decimal places:
