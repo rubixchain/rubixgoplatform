@@ -19,7 +19,7 @@ type TokenChain struct {
 	ID                    int16     `db:"id"`
 	TokenID               string    `db:"token_id"`
 	TransactionID         string    `db:"transaction_id"`
-	PreviousTransactionID string    `db:"prev_txn_id"`
+	PreviousTransactionID string    `db:"previous_transaction_id"`
 	Role                  int16     `db:"role"`
 	Position              int64     `db:"position"`
 	CreatedAt             time.Time `db:"created_at"`

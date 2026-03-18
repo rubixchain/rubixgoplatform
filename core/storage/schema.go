@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             id             INT         GENERATED ALWAYS AS IDENTITY,
             token_id       TEXT       NOT NULL,
             transaction_id TEXT       NOT NULL,
-            prev_txn_id    TEXT       NOT NULL,
+            previous_transaction_id    TEXT       NOT NULL,
             role           SMALLINT   NOT NULL,
             position       BIGINT     NOT NULL,
             created_at     TIMESTAMPTZ DEFAULT NOW(),
