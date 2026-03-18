@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/did"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -271,6 +270,6 @@ func createChildTokensAtLevel(dc types.DIDCrypto, w *wallet.Wallet, parentTokenH
 	if err := w.UpdateTokenDenomArray(did, tokenDenomArr); err != nil {
 		return nil, fmt.Errorf("createChildTokensAtLevel: failed to update token denom")
 	}
-	
+
 	return childTokenIndexMap, nil
 }

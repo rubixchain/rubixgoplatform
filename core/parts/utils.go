@@ -10,7 +10,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-
 func scaledFloatDiv(a float64, b float64) (int, error) {
 	scaledA := scaleFloat(a)
 	scaledB := scaleFloat(b)
@@ -97,7 +96,7 @@ func ValidationOfTokenValue(tokenID string, assetType int, tokenValue float64) b
 	return false
 }
 
-func removeTokensFromList(tokens []wallet.Token, tokenIDsToRemove []wallet.Token) []wallet.Token {
+func removeTokensFromList(tokens []models.Token, tokenIDsToRemove []models.Token) []models.Token {
 	if len(tokenIDsToRemove) == 0 {
 		return tokens
 	}

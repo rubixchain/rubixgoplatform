@@ -62,6 +62,8 @@ const (
 	APIUpdateStatus                 string = "/api/update-status"
 	APIGetTokenStatus               string = "/api/get-token-status"
 	APIInitiateConsensus            string = "/api/initiate-consensus"
+	APISendTokens                   string = "/api/send-tokens"
+	APIRequestPledgeToken           string = "/api/request-pledge-token"
 )
 
 const (
@@ -127,8 +129,6 @@ type Core struct {
 	ipfsProviderStore    *IPFSProviderStore
 	asyncPinManager      *AsyncPinManager
 	perfTracker          *PerformanceTracker
-	txStateMgr           *TransactionStateManager
-	rollbackMgr          *RollbackManager
 	tokenPool            *TokenInfoPool
 	batchSyncTokenPool   *BatchSyncTokenInfoPool
 	tokenSlicePool       *TokenSlicePool
@@ -238,12 +238,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		// Continue without performance tracking
 		c.perfTracker = &PerformanceTracker{enabled: false}
 	}
-
-	// Initialize transaction state manager
-	c.txStateMgr = NewTransactionStateManager(c)
-
-	// Initialize rollback manager
-	c.rollbackMgr = NewRollbackManager(c, c.txStateMgr)
 
 	// Initialize token pools for memory optimization
 	c.tokenPool = NewTokenInfoPool()
