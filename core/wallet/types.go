@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -29,55 +28,38 @@ func TokenFromModel(m models.Token) Token {
 		parentTokenID = m.ParentTokenID.String
 	}
 
-	var tokenValue float64
-	f8, err := m.TokenValue.Float64Value()
-	if err == nil {
-		tokenValue = f8.Float64
-	}
-
-	var latestRole int16
-	if m.LatestRole.Valid {
-		latestRole = m.LatestRole.Int16
-	}
-
 	return Token{
 		TokenID:        m.TokenID,
 		ParentTokenID:  parentTokenID,
-		TokenValue:     tokenValue,
+		TokenValue:     m.TokenValue,
 		TokenStatus:    m.TokenStatus,
 		DID:            m.DID,
 		TransactionID:  m.TransactionID,
 		TokenStateHash: m.TokenStateHash,
 		TokenType:      m.TokenType,
 		LatestPosition: m.LatestPosition,
-		LatestRole:     latestRole,
+		LatestRole:     m.LatestRole,
 		CreatedAt:      m.CreatedAt,
 		UpdatedAt:      m.UpdatedAt,
 	}
 }
 
 func (t Token) ToModel() models.Token {
-	var n pgtype.Numeric
-	n.Scan(strconv.FormatFloat(t.TokenValue, 'f', -1, 64)) //nolint:errcheck
-
 	return models.Token{
 		TokenID: t.TokenID,
 		ParentTokenID: pgtype.Text{
 			String: t.ParentTokenID,
 			Valid:  t.ParentTokenID != "",
 		},
-		TokenValue:     n,
+		TokenValue:     t.TokenValue,
 		TokenStatus:    t.TokenStatus,
 		DID:            t.DID,
 		TransactionID:  t.TransactionID,
 		TokenStateHash: t.TokenStateHash,
 		TokenType:      t.TokenType,
 		LatestPosition: t.LatestPosition,
-		LatestRole: pgtype.Int2{
-			Int16: t.LatestRole,
-			Valid: t.LatestRole != 0,
-		},
-		CreatedAt: t.CreatedAt,
-		UpdatedAt: t.UpdatedAt,
+		LatestRole:     t.LatestRole,
+		CreatedAt:      t.CreatedAt,
+		UpdatedAt:      t.UpdatedAt,
 	}
 }
